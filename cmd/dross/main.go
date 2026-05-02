@@ -9,16 +9,15 @@ import (
 	"github.com/Rivil/dross/internal/cmd"
 )
 
-var version = "0.1.0.0"
-
 func main() {
 	root := &cobra.Command{
 		Use:           "dross",
 		Short:         "Dross — refine intent into verified code",
-		Version:       version,
+		Version:       cmd.VersionString(),
 		SilenceUsage:  true,
 		SilenceErrors: false,
 	}
+	root.SetVersionTemplate("{{.Version}}\n")
 
 	root.AddCommand(
 		cmd.Init(),
@@ -35,6 +34,7 @@ func main() {
 		cmd.Status(),
 		cmd.Codex(),
 		cmd.Profile(),
+		cmd.VersionCmd(),
 	)
 
 	if err := root.Execute(); err != nil {

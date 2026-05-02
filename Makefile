@@ -1,11 +1,23 @@
-.PHONY: build install uninstall clean test tidy doctor
+.PHONY: build install uninstall clean test tidy doctor release-snapshot
 
 BIN_DIR     ?= $(HOME)/.local/bin
 SKILLS_DIR  ?= $(HOME)/.claude/skills
 PROMPTS_DIR ?= $(HOME)/.claude/dross/prompts
 
+# Build metadata injected into internal/cmd version vars. Version stays at
+# whatever the source default is for dev builds; releases override all three
+# from goreleaser.
+COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -X github.com/Rivil/dross/internal/cmd.Commit=$(COMMIT) \
+           -X github.com/Rivil/dross/internal/cmd.Date=$(DATE)
+
 build:
-	go build -o dross ./cmd/dross
+	go build -ldflags "$(LDFLAGS)" -o dross ./cmd/dross
+
+# Local snapshot via goreleaser — does not push or tag, just produces dist/.
+release-snapshot:
+	goreleaser release --snapshot --clean
 
 tidy:
 	go mod tidy
