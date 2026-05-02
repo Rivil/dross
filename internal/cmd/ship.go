@@ -29,6 +29,7 @@ func Ship() *cobra.Command {
 		draft           bool
 		forceUnverified bool
 		forceBranch     bool
+		printBody       bool
 	)
 	c := &cobra.Command{
 		Use:   "ship [phase-id]",
@@ -99,6 +100,11 @@ func Ship() *cobra.Command {
 			}
 			if body == "" {
 				body = ship.BuildPRBody(spec, vrf)
+			}
+
+			if printBody {
+				Print(body)
+				return nil
 			}
 
 			// 5) Build the squash branch.
@@ -175,6 +181,7 @@ func Ship() *cobra.Command {
 	c.Flags().BoolVar(&draft, "draft", false, "open the PR as draft")
 	c.Flags().BoolVar(&forceUnverified, "force-unverified", false, "skip the 'verify must be pass' gate")
 	c.Flags().BoolVar(&forceBranch, "force-branch", false, "overwrite an existing pr/<id> branch")
+	c.Flags().BoolVar(&printBody, "print-body", false, "print the generated PR body and exit (no push, no branch)")
 	return c
 }
 

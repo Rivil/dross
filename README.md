@@ -37,6 +37,7 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-init` | 6,507 | **~1,630** |
 | Dross `/dross-onboard` | 4,687 | **~1,170** |
 | Dross `/dross-options` | 6,234 | **~1,560** |
+| Dross `/dross-ship` | 3,354 | **~840** |
 | Dross `/dross-rule` | 2,119 | **~530** |
 | Dross `/dross-spec` | 4,494 | **~1,120** |
 | Dross `/dross-plan` | 5,755 | **~1,440** |
@@ -50,8 +51,8 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 52,323 | ~13,080 |
-| **Ratio** | | **≈ 48×** |
+| Dross (commands + prompts) | 55,677 | ~13,920 |
+| **Ratio** | | **≈ 45×** |
 
 **Being honest about these numbers:**
 
@@ -167,6 +168,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross doctor` | Project-level health check (`[remote]` ↔ git, `auth_env` exported) | ✅ |
 | `dross defaults {show,save}` | Read/write `~/.claude/dross/defaults.toml` (cross-project pre-fills) | ✅ |
 | `dross env {list,set,unset}` | Manage env keys in `~/.claude/settings.json` (hidden input, never echoed) | ✅ |
+| `dross ship <phase-id>` | Filter `.dross/`, push `pr/<id>`, open PR via provider, request reviewers | ✅ |
 | `dross version` | Print version, commit, and build date | ✅ |
 
 **Slash commands:**
@@ -183,6 +185,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `/dross-verify` | ✅ |
 | `/dross-status` | ✅ |
 | `/dross-options` | ✅ |
+| `/dross-ship` | ✅ |
 
 Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 
@@ -197,7 +200,8 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] GoReleaser cross-compile (darwin/arm64 primary, +amd64, linux arm64/amd64) on `v*` tags
 - [x] `[remote]` capture in init/onboard with two-tier defaults (Forgejo / GitHub / Gitea / Bitbucket)
 - [x] `/dross-options` full settings editor + secret-safe `dross env` for `~/.claude/settings.json`
-- [ ] `/dross-ship` — clean PR branch, provider-aware PR open, subagent + human review fan-out
+- [x] `/dross-ship` — squash + filter `.dross/`, provider-aware PR open (GitHub + Forgejo), human reviewer assignment
+- [ ] `/dross-ship` subagent review panel (security / code-quality / test-efficacy / spec-fidelity lenses posting PR comments)
 - [ ] Mutation adapter: Stryker.NET (C#)
 - [ ] Codex: tree-sitter indexer for TS/Svelte/Go/C#/GDScript/HTML/CSS
 
