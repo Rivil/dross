@@ -33,21 +33,23 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-init` | 4,784 | **~1,200** |
 | Dross `/dross-onboard` | 3,383 | **~850** |
 | Dross `/dross-rule` | 2,119 | **~530** |
+| Dross `/dross-spec` | 4,494 | **~1,120** |
+| Dross `/dross-plan` | 5,676 | **~1,420** |
 
 **Total prompt-surface** (everything that could ever load):
 
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 10,286 | ~2,600 |
-| **Ratio** | | **≈ 240×** |
+| Dross (commands + prompts) | 20,456 | ~5,100 |
+| **Ratio** | | **≈ 122×** |
 
 **Being honest about these numbers:**
 
-- **Dross is incomplete.** No `/dross-execute`, no `/dross-verify`, no `/dross-spec`/`/dross-plan` yet. The hard work — and the bulk of the prompt — is still ahead. A finished `/dross-execute` will likely land at 1,500–2,500 tokens (still ~25× cheaper than GSD's 46k, but not 250×).
-- **Per-invocation isn't the runtime cost.** GSD spawns subagents (planner, plan-checker, executor, verifier). Each loads its own agent prompt + references in fresh context, multiplying the real per-flow cost by 2-3×. The 25.9k for `/gsd-plan-phase` is closer to ~60-80k of total prompt material per phase.
+- **Dross is incomplete.** `/dross-execute` and `/dross-verify` are still pending. The hard work — and the bulk of the remaining prompt — is still ahead. A finished `/dross-execute` will likely land at ~2,000-3,000 tokens (still ~15-20× cheaper than GSD's 46k, but the ratio narrows as more commands ship).
+- **Per-invocation isn't the runtime cost.** GSD spawns subagents (planner, plan-checker, executor, verifier). Each loads its own agent prompt + references in fresh context, multiplying the real per-flow cost by 2-3×. The 25.9k for `/gsd-plan-phase` is closer to ~60-80k of total prompt material per phase. Dross runs inline — no subagent multiplication.
 - **Prompt caching mitigates this.** Anthropic's prompt cache amortises repeats, so steady-state cost is much lower than the load surface implies. Cold starts, branch switches, and subagent spawns break the cache; that's where the bill actually shows up.
-- **240× is the worst-case load surface, not a runtime bill.** It's still directionally meaningful — fewer files, smaller files, fewer spawns add up — but don't expect a 240× cost reduction in your monthly Anthropic invoice.
+- **The ratio is the worst-case load surface, not a runtime bill.** It's still directionally meaningful — fewer files, smaller files, fewer spawns add up — but don't expect the same multiplier in your monthly Anthropic invoice.
 
 ## Concept
 
@@ -126,8 +128,8 @@ make test        # go test ./...
 | `/dross-init` | ✅ |
 | `/dross-onboard` | ✅ |
 | `/dross-rule` | ✅ |
-| `/dross-spec` | ⏳ not started |
-| `/dross-plan` | ⏳ not started |
+| `/dross-spec` | ✅ |
+| `/dross-plan` | ✅ |
 | `/dross-execute` | ⏳ not started |
 | `/dross-verify` | ⏳ not started |
 
@@ -136,8 +138,8 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 ## Roadmap
 
 - [x] Skeleton: types, CLI, rules system, init/onboard, validate
-- [ ] Tests: round-trip, merge, parser, validate checks
-- [ ] `/dross-spec` and `/dross-plan` slash commands
+- [x] Tests: round-trip, merge, parser, validate checks
+- [x] `/dross-spec` and `/dross-plan` slash commands
 - [ ] Codex: tree-sitter indexer for TS/Svelte/Go/C#/GDScript/HTML/CSS
 - [ ] Mutation adapters: Stryker (TS), Gremlins (Go), Stryker.NET (C#)
 - [ ] `dross execute` (pair-mode default, `--solo` opt-in)
