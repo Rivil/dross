@@ -35,14 +35,15 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-rule` | 2,119 | **~530** |
 | Dross `/dross-spec` | 4,494 | **~1,120** |
 | Dross `/dross-plan` | 5,676 | **~1,420** |
+| Dross `/dross-plan-review` | 5,524 | **~1,380** |
 
 **Total prompt-surface** (everything that could ever load):
 
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 20,456 | ~5,100 |
-| **Ratio** | | **≈ 122×** |
+| Dross (commands + prompts) | 25,980 | ~6,500 |
+| **Ratio** | | **≈ 96×** |
 
 **Being honest about these numbers:**
 
@@ -130,6 +131,7 @@ make test        # go test ./...
 | `/dross-rule` | ✅ |
 | `/dross-spec` | ✅ |
 | `/dross-plan` | ✅ |
+| `/dross-plan-review` | ✅ |
 | `/dross-execute` | ⏳ not started |
 | `/dross-verify` | ⏳ not started |
 
