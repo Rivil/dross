@@ -120,7 +120,7 @@ dross state touch "plan locked: <id> (<task-count> tasks across <wave-count> wav
 
 End with one line:
 ```
-Plan ready. Next: /dross-execute (when wired) — for now, dross execute is not implemented yet.
+Plan ready. Next: /dross-execute to run the first task (pair-mode by default; pass --solo for autonomous), or /dross-plan-review for an independent second-opinion audit first.
 ```
 
 ## Hard rules
