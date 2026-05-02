@@ -18,6 +18,7 @@ type Project struct {
 	Stack       Stack             `toml:"stack"`
 	Runtime     Runtime           `toml:"runtime"`
 	Repo        Repo              `toml:"repo"`
+	Remote      Remote            `toml:"remote,omitempty"`
 	Paths       Paths             `toml:"paths"`
 	Env         Env               `toml:"env"`
 	Goals       Goals             `toml:"goals"`
@@ -84,6 +85,19 @@ type Repo struct {
 	BranchPattern    string   `toml:"branch_pattern,omitempty"`
 	CommitConvention string   `toml:"commit_convention,omitempty"` // conventional | freeform
 	SquashMerge      bool     `toml:"squash_merge"`
+}
+
+// Remote describes the canonical hosting destination for the repo.
+// Separated from Repo (which holds branch/layout policy) because hosting
+// + auth + reviewer config travels with the code, not the local checkout.
+type Remote struct {
+	URL       string   `toml:"url,omitempty"`        // canonical https URL of the repo
+	Provider  string   `toml:"provider,omitempty"`   // forgejo | github | gitea | bitbucket | none
+	Public    bool     `toml:"public,omitempty"`     // true if cloud agents can clone
+	APIBase   string   `toml:"api_base,omitempty"`   // override; default derived from provider+URL
+	LogAPI    bool     `toml:"log_api,omitempty"`    // instance exposes CI logs via API
+	AuthEnv   string   `toml:"auth_env,omitempty"`   // env var name (NEVER the value)
+	Reviewers []string `toml:"reviewers,omitempty"`  // default human reviewers for /dross-ship
 }
 
 type Paths struct {
