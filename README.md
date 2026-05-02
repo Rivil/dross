@@ -42,14 +42,15 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-plan-review` | 5,524 | **~1,380** |
 | Dross `/dross-execute` | 7,697 | **~1,920** |
 | Dross `/dross-verify` | 7,540 | **~1,890** |
+| Dross `/dross-status` | 1,635 | **~410** |
 
 **Total prompt-surface** (everything that could ever load):
 
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 41,217 | ~10,300 |
-| **Ratio** | | **≈ 60×** |
+| Dross (commands + prompts) | 42,886 | ~10,700 |
+| **Ratio** | | **≈ 58×** |
 
 **Being honest about these numbers:**
 
@@ -125,6 +126,7 @@ make test        # go test ./...
 | `dross task {next,show,status}` | Inspect / update tasks within a plan | ✅ |
 | `dross changes {record,show}` | Per-phase append-only log of what was touched | ✅ |
 | `dross verify <phase>` | Run mutation tests + write tests.json + verify.toml skeleton | ✅ |
+| `dross status` | Where am I — project, phase, last activity, suggested next step | ✅ |
 | `dross profile {show,seed}` | User profile (with GSD import) | ✅ |
 | `dross validate` | Schema-check every artefact | ✅ |
 | `dross codex` | Polyglot code insight (tree-sitter) | 🚧 |
@@ -141,6 +143,7 @@ make test        # go test ./...
 | `/dross-plan-review` | ✅ |
 | `/dross-execute` | ✅ |
 | `/dross-verify` | ✅ |
+| `/dross-status` | ✅ |
 
 Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 

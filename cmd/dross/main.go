@@ -32,6 +32,7 @@ func main() {
 		cmd.Task(),
 		cmd.Changes(),
 		cmd.Verify(),
+		cmd.Status(),
 		cmd.Codex(),
 		cmd.Profile(),
 	)

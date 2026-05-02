@@ -76,7 +76,11 @@ func stateTouch() *cobra.Command {
 				return err
 			}
 			s.Touch(args[0])
-			return s.Save(path)
+			if err := s.Save(path); err != nil {
+				return err
+			}
+			Printf("touched: %s (history now %d entries)\n", args[0], len(s.History))
+			return nil
 		},
 	}
 }
