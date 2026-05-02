@@ -34,8 +34,8 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | GSD `/gsd-plan-phase` | 103,413 | ~25,900 |
 | GSD `/gsd-new-project` | 69,637 | ~17,400 |
 | GSD `/gsd-progress` | 37,864 | ~9,500 |
-| Dross `/dross-init` | 4,784 | **~1,200** |
-| Dross `/dross-onboard` | 3,383 | **~850** |
+| Dross `/dross-init` | 6,507 | **~1,630** |
+| Dross `/dross-onboard` | 4,687 | **~1,170** |
 | Dross `/dross-rule` | 2,119 | **~530** |
 | Dross `/dross-spec` | 4,494 | **~1,120** |
 | Dross `/dross-plan` | 5,755 | **~1,440** |
@@ -49,8 +49,8 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 42,965 | ~10,700 |
-| **Ratio** | | **≈ 58×** |
+| Dross (commands + prompts) | 45,958 | ~11,490 |
+| **Ratio** | | **≈ 54×** |
 
 **Being honest about these numbers:**
 
@@ -163,6 +163,8 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross profile {show,seed}` | User profile (with GSD import) | ✅ |
 | `dross validate` | Schema-check every artefact | ✅ |
 | `dross codex` | Polyglot code insight (tree-sitter) | 🚧 |
+| `dross doctor` | Project-level health check (`[remote]` ↔ git, `auth_env` exported) | ✅ |
+| `dross version` | Print version, commit, and build date | ✅ |
 
 **Slash commands:**
 
@@ -189,6 +191,8 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] `/dross-verify` + Stryker adapter for TS/JS/Svelte mutation testing
 - [x] Gremlins adapter for Go mutation testing
 - [x] GoReleaser cross-compile (darwin/arm64 primary, +amd64, linux arm64/amd64) on `v*` tags
+- [x] `[remote]` capture in init/onboard with two-tier defaults (Forgejo / GitHub / Gitea / Bitbucket)
+- [ ] `/dross-ship` — clean PR branch, provider-aware PR open, subagent + human review fan-out
 - [ ] Mutation adapter: Stryker.NET (C#)
 - [ ] Codex: tree-sitter indexer for TS/Svelte/Go/C#/GDScript/HTML/CSS
 
