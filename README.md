@@ -118,14 +118,23 @@ assets/prompts/    Prompt instructions (installed to ~/.claude/dross/prompts/)
 
 Symlinks mean edits to `assets/` in the dross repo apply immediately — no re-install on prompt tweaks.
 
-## Build
+## Install
+
+### Prebuilt binary (recommended)
+
+GoReleaser publishes archives for `darwin/arm64` (primary), `darwin/amd64`, `linux/arm64`, and `linux/amd64` on every `v*` tag. Grab the matching `.tar.gz` from [releases](https://github.com/Rivil/dross/releases), extract, drop the `dross` binary on your PATH, and run `dross --help`.
+
+This installs the binary only — slash commands and prompts still need a checkout (`make install`) until those ship as a separate package.
+
+### From source
 
 ```sh
-make build       # builds ./dross for current arch
+make build       # builds ./dross for current arch (with commit + build date in `dross version`)
 make test        # go test -count=1 ./...
 make install     # builds + installs binary + symlinks all slash commands & prompts
 make doctor      # verifies install: PATH, binary freshness, symlink targets — exits non-zero on any issue
 make uninstall   # removes binary, all dross-* skills, and the prompts symlink
+make release-snapshot  # local goreleaser dry-run — produces dist/, never tags or pushes
 ```
 
 After `make install`, ensure `~/.local/bin` is on your PATH:
@@ -179,9 +188,9 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] `/dross-execute` (pair-mode default, `--solo` opt-in) + task/changes CLI helpers
 - [x] `/dross-verify` + Stryker adapter for TS/JS/Svelte mutation testing
 - [x] Gremlins adapter for Go mutation testing
+- [x] GoReleaser cross-compile (darwin/arm64 primary, +amd64, linux arm64/amd64) on `v*` tags
 - [ ] Mutation adapter: Stryker.NET (C#)
 - [ ] Codex: tree-sitter indexer for TS/Svelte/Go/C#/GDScript/HTML/CSS
-- [ ] GoReleaser cross-compile (darwin/arm64 primary)
 
 ## License
 

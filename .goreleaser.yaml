@@ -1,0 +1,75 @@
+version: 2
+
+project_name: dross
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: dross
+    main: ./cmd/dross
+    binary: dross
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - arm64
+      - amd64
+    ldflags:
+      - -s -w
+      - -X github.com/Rivil/dross/internal/cmd.Version={{.Version}}
+      - -X github.com/Rivil/dross/internal/cmd.Commit={{.ShortCommit}}
+      - -X github.com/Rivil/dross/internal/cmd.Date={{.Date}}
+
+archives:
+  - id: dross
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  sort: asc
+  use: git
+  filters:
+    exclude:
+      - "^chore:"
+      - "^docs: typo"
+      - "^test:"
+      - "Merge pull request"
+  groups:
+    - title: Features
+      regexp: '^feat'
+      order: 0
+    - title: Fixes
+      regexp: '^fix'
+      order: 1
+    - title: Other
+      order: 999
+
+release:
+  github:
+    owner: Rivil
+    name: dross
+  draft: false
+  prerelease: auto
+  header: |
+    Dross {{ .Tag }} — see commit log for changes.
+
+    Built for darwin/arm64 (primary), darwin/amd64, linux/arm64, linux/amd64.
+    Install: download the archive matching your OS+arch, extract, and place
+    `dross` on your PATH (e.g. `~/.local/bin`).
+  footer: |
+    ---
+    `dross version` reports the embedded commit and build date.
