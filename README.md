@@ -14,6 +14,10 @@ Dross is a rebuild around three pivots:
 2. **Pair-mode execute by default.** Code is authored *with* you, not delivered *to* you. Subagent spawns kept to genuinely independent work (parallel mutation runs, multi-language audits).
 3. **Test efficacy as a first-class gate.** GSD checks that tests *exist*. Dross checks that tests *catch breakage* — via mutation testing (Stryker / Gremlins), coverage delta, and an LLM judge mapping each acceptance criterion to a specific test.
 
+## The name
+
+Dross is the AI sidekick from Will Wight's [Cradle](https://www.willwight.com/cradle) series — a Presence that lives in the protagonist's head, compiling battle plans, predicting opponents, crafting illusions, and handling "unimportant thoughts" to free up his bandwidth. Sarcastic, dramatic, fond of his person.
+
 ## Footprint vs GSD
 
 Measured by recursively resolving `@`-imports for each command and summing bytes. Token estimate is `bytes ÷ 4`, the standard heuristic for English+markdown — accurate to ±15% vs an exact tokenizer.
@@ -38,16 +42,12 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross (commands + prompts) | 10,286 | ~2,600 |
 | **Ratio** | | **≈ 240×** |
 
-**Be honest about these numbers:**
+**Being honest about these numbers:**
 
 - **Dross is incomplete.** No `/dross-execute`, no `/dross-verify`, no `/dross-spec`/`/dross-plan` yet. The hard work — and the bulk of the prompt — is still ahead. A finished `/dross-execute` will likely land at 1,500–2,500 tokens (still ~25× cheaper than GSD's 46k, but not 250×).
 - **Per-invocation isn't the runtime cost.** GSD spawns subagents (planner, plan-checker, executor, verifier). Each loads its own agent prompt + references in fresh context, multiplying the real per-flow cost by 2-3×. The 25.9k for `/gsd-plan-phase` is closer to ~60-80k of total prompt material per phase.
 - **Prompt caching mitigates this.** Anthropic's prompt cache amortises repeats, so steady-state cost is much lower than the load surface implies. Cold starts, branch switches, and subagent spawns break the cache; that's where the bill actually shows up.
 - **240× is the worst-case load surface, not a runtime bill.** It's still directionally meaningful — fewer files, smaller files, fewer spawns add up — but don't expect a 240× cost reduction in your monthly Anthropic invoice.
-
-## The name
-
-Dross is the AI sidekick from Will Wight's [Cradle](https://www.willwight.com/cradle) series — a Presence that lives in the protagonist's head, compiling battle plans, predicting opponents, crafting illusions, and handling "unimportant thoughts" to free up his bandwidth. Sarcastic, dramatic, fond of his person.
 
 ## Concept
 
