@@ -52,6 +52,7 @@ func Onboard() *cobra.Command {
 
 			scan := scanRepo(cwd)
 			p := scan.toProject()
+			p.Remote, _ = seedRemote(cwd)
 			if err := p.Save(filepath.Join(root, project.File)); err != nil {
 				return err
 			}
@@ -73,6 +74,9 @@ func Onboard() *cobra.Command {
 			Print("Detected:")
 			for _, line := range scan.summary() {
 				Printf("  • %s\n", line)
+			}
+			if p.Remote.URL != "" {
+				Printf("  • git remote: %s (provider: %s)\n", p.Remote.URL, providerOrUnknown(p.Remote.Provider))
 			}
 			Print("\nNext: /dross-onboard to confirm captured runtime + rules")
 			return nil

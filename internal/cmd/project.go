@@ -131,6 +131,20 @@ func readDotted(p *project.Project, path string) (string, bool) {
 		return p.Repo.Layout, true
 	case "goals.core_value":
 		return p.Goals.CoreValue, true
+	case "remote.url":
+		return p.Remote.URL, true
+	case "remote.provider":
+		return p.Remote.Provider, true
+	case "remote.public":
+		return fmt.Sprintf("%t", p.Remote.Public), true
+	case "remote.api_base":
+		return p.Remote.APIBase, true
+	case "remote.log_api":
+		return fmt.Sprintf("%t", p.Remote.LogAPI), true
+	case "remote.auth_env":
+		return p.Remote.AuthEnv, true
+	case "remote.reviewers":
+		return strings.Join(p.Remote.Reviewers, ","), true
 	}
 	return "", false
 }
@@ -179,8 +193,40 @@ func writeDotted(p *project.Project, path, value string) error {
 		p.Repo.Layout = value
 	case "goals.core_value":
 		p.Goals.CoreValue = value
+	case "remote.url":
+		p.Remote.URL = value
+	case "remote.provider":
+		p.Remote.Provider = value
+	case "remote.public":
+		b, err := parseBool(value)
+		if err != nil {
+			return err
+		}
+		p.Remote.Public = b
+	case "remote.api_base":
+		p.Remote.APIBase = value
+	case "remote.log_api":
+		b, err := parseBool(value)
+		if err != nil {
+			return err
+		}
+		p.Remote.LogAPI = b
+	case "remote.auth_env":
+		p.Remote.AuthEnv = value
+	case "remote.reviewers":
+		p.Remote.Reviewers = splitCSV(value)
 	default:
 		return fmt.Errorf("unknown or unsettable field: %s", path)
 	}
 	return nil
+}
+
+func parseBool(v string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "yes", "y", "1":
+		return true, nil
+	case "false", "no", "n", "0", "":
+		return false, nil
+	}
+	return false, fmt.Errorf("invalid bool: %q (use true/false)", v)
 }

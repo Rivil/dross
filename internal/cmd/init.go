@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/defaults"
 	"github.com/Rivil/dross/internal/profile"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/rules"
@@ -62,6 +65,7 @@ fill it in conversationally. For adopting an existing repo, use ` + "`dross onbo
 					GitMainBranch: "main",
 				},
 			}
+			p.Remote, _ = seedRemote(cwd)
 			if err := p.Save(filepath.Join(root, project.File)); err != nil {
 				return err
 			}
@@ -90,10 +94,49 @@ fill it in conversationally. For adopting an existing repo, use ` + "`dross onbo
 			if seeded {
 				Print("• Seeded profile.toml from GSD USER-PROFILE.md")
 			}
+			if p.Remote.URL != "" {
+				Printf("• Detected git remote: %s (provider: %s)\n", p.Remote.URL, providerOrUnknown(p.Remote.Provider))
+			}
 			Print("Next: run /dross-init to fill in project.toml conversationally")
 			return nil
 		},
 	}
 	c.Flags().BoolVar(&force, "force", false, "remove existing .dross/ before init")
 	return c
+}
+
+// seedRemote resolves a project.Remote by combining git auto-detection with
+// global defaults. Returns the remote and a bool indicating whether the git
+// remote was found. Empty Remote is a valid result — the slash command will
+// prompt the user.
+func seedRemote(cwd string) (project.Remote, bool) {
+	url := gitRemoteOriginURL(cwd)
+	r := project.DetectRemote(url)
+	gotRemote := url != ""
+
+	// Overlay global defaults onto fields the detection didn't fill.
+	dir, err := GlobalDir()
+	if err == nil {
+		if d, err := defaults.LoadFile(filepath.Join(dir, defaults.File)); err == nil {
+			r = d.Apply(r)
+		}
+	}
+	return r, gotRemote
+}
+
+// gitRemoteOriginURL returns the origin URL or "" if no remote / no git.
+func gitRemoteOriginURL(cwd string) string {
+	cmd := exec.Command("git", "-C", cwd, "remote", "get-url", "origin")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func providerOrUnknown(p string) string {
+	if p == "" {
+		return "unknown — slash command will ask"
+	}
+	return p
 }

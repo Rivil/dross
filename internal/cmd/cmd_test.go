@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -112,6 +113,95 @@ func TestInitForceOverwrites(t *testing.T) {
 	}
 	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
 		t.Errorf("sentinel should have been wiped: err=%v", err)
+	}
+}
+
+// gitInit shells out to set up a real git repo with an origin URL.
+// Tests in this package run sequentially because they chdir; that's fine
+// for a few git invocations.
+func gitInit(t *testing.T, dir, originURL string) {
+	t.Helper()
+	for _, cmd := range [][]string{
+		{"git", "init", "-q"},
+		{"git", "remote", "add", "origin", originURL},
+	} {
+		c := exec.Command(cmd[0], cmd[1:]...)
+		c.Dir = dir
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v\n%s", cmd, err, out)
+		}
+	}
+}
+
+func TestInitCapturesRemoteFromGit(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "git@github.com:Rivil/dross.git")
+	chdir(t, dir)
+
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	body := mustRead(t, filepath.Join(dir, ".dross", "project.toml"))
+	for _, want := range []string{
+		`url = "https://github.com/Rivil/dross"`,
+		`provider = "github"`,
+		`public = true`,
+		`api_base = "https://api.github.com"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("project.toml missing %q\n--- body ---\n%s", want, body)
+		}
+	}
+}
+
+func TestInitLeavesRemoteEmptyWhenNoGit(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	body := mustRead(t, filepath.Join(dir, ".dross", "project.toml"))
+	if strings.Contains(body, "[remote]") {
+		t.Errorf("expected no [remote] section without git origin\n--- body ---\n%s", body)
+	}
+}
+
+func TestInitAppliesGlobalDefaults(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://forge.example.internal/me/p.git") // unknown host
+	chdir(t, dir)
+
+	// Fake HOME so GlobalDir() points at our tmp.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	defaultsDir := filepath.Join(home, ".claude", "dross")
+	if err := os.MkdirAll(defaultsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(defaultsDir, "defaults.toml"),
+		`[remote_defaults]
+provider = "forgejo"
+api_base = "https://forge.example.internal/api/v1"
+log_api  = true
+auth_env = "FORGEJO_TOKEN"
+`)
+
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	body := mustRead(t, filepath.Join(dir, ".dross", "project.toml"))
+	for _, want := range []string{
+		`url = "https://forge.example.internal/me/p"`,
+		`provider = "forgejo"`,
+		`api_base = "https://forge.example.internal/api/v1"`,
+		`log_api = true`,
+		`auth_env = "FORGEJO_TOKEN"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("project.toml missing %q\n--- body ---\n%s", want, body)
+		}
 	}
 }
 
