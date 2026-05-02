@@ -2,7 +2,7 @@
 
 A leaner successor to [GSD](https://github.com/gsd-build/get-shit-done) for working with Claude Code on real projects.
 
-> **Status:** v0 — full plan → execute → verify loop is wired (with Stryker for TS/JS/Svelte mutation testing). Tree-sitter codex and Go/C# mutation adapters are still stubs. Hasn't been used on a real project yet, expect rough edges in the prompts.
+> **Status:** v0.1.0 — full plan → execute → verify loop is wired (Stryker for TS/JS/Svelte mutation testing). Tree-sitter codex and Go/C# mutation adapters are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised.
 
 > Scope: Dross is built for my workflow. It's public because there's no reason not to be, but I'm not marketing it and I'm not trying to grow it into a general-purpose tool. The roadmap is a flat list because my todo list is — if Dross ever picks up users, I'll think about structure (semver, milestones, contribution guidelines) then.
 
@@ -71,8 +71,8 @@ intent ─► SPEC ─► PLAN ─► CODE ─► TESTS ─► EFFICACY PROOF �
 
 ```
 cmd/dross/         Go CLI entrypoint
-internal/          project, state, rules, profile, phase, milestone, codex, mutation
-assets/commands/   Slash command markdown (installed to ~/.claude/dross/commands/)
+internal/          project, state, rules, profile, phase, milestone, changes, verify, mutation, codex
+assets/commands/   Slash command markdown (installed to ~/.claude/skills/dross-<name>/SKILL.md)
 assets/prompts/    Prompt instructions (installed to ~/.claude/dross/prompts/)
 ```
 
@@ -94,23 +94,47 @@ assets/prompts/    Prompt instructions (installed to ~/.claude/dross/prompts/)
         └── verify.toml    # auto, written during verify
 ```
 
-### Global artefacts
+### Global install layout (after `make install`)
 
 ```
+~/.local/bin/dross                     # CLI binary
+
+~/.claude/skills/                      # one skill dir per slash command
+├── dross-init/SKILL.md                # symlink → assets/commands/dross-init.md
+├── dross-onboard/SKILL.md
+├── dross-spec/SKILL.md
+├── dross-plan/SKILL.md
+├── dross-plan-review/SKILL.md
+├── dross-execute/SKILL.md
+├── dross-verify/SKILL.md
+├── dross-status/SKILL.md
+└── dross-rule/SKILL.md
+
 ~/.claude/dross/
-├── profile.toml      # cross-project user profile
-├── rules.toml        # cross-project rules
-├── commands/
-└── prompts/
+├── profile.toml                       # cross-project user profile (planned, not yet wired)
+├── rules.toml                         # cross-project rules
+└── prompts/                           # symlink → assets/prompts/
 ```
+
+Symlinks mean edits to `assets/` in the dross repo apply immediately — no re-install on prompt tweaks.
 
 ## Build
 
 ```sh
 make build       # builds ./dross for current arch
-make install     # builds + installs to ~/.local/bin and links assets to ~/.claude/dross
-make test        # go test ./...
+make test        # go test -count=1 ./...
+make install     # builds + installs binary + symlinks all slash commands & prompts
+make doctor      # verifies every /dross-* command is correctly installed
+make uninstall   # removes binary, all dross-* skills, and the prompts symlink
 ```
+
+After `make install`, ensure `~/.local/bin` is on your PATH:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` (existing repo).
 
 ## Available commands
 
