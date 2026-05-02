@@ -36,6 +36,7 @@ func main() {
 		cmd.Profile(),
 		cmd.VersionCmd(),
 		cmd.Doctor(),
+		cmd.Defaults(),
 	)
 
 	if err := root.Execute(); err != nil {

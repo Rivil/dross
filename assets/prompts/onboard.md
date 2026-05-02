@@ -66,7 +66,7 @@ For each field, present the resolved value and ask "confirm or change?":
 
 Persist any changes with `dross project set remote.<field> "<value>"` (booleans = `true`/`false`; reviewers = csv).
 
-If `~/.claude/dross/defaults.toml` doesn't exist yet and the user just confirmed values they'd want to reuse, suggest: *"Save these as defaults so the next project pre-fills them?"* — currently a manual edit; `dross defaults save` is on the roadmap.
+If `~/.claude/dross/defaults.toml` doesn't exist yet (check with `dross defaults show`), ask: *"Save these as defaults so the next project pre-fills them?"* If yes, run `dross defaults save` — extracts provider/api_base/log_api/auth_env/reviewers from project.toml and writes them globally. URL and public flag are project-specific and never copied.
 
 ## 5. Functionality verification
 

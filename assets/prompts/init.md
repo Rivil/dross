@@ -59,7 +59,7 @@ Then for fields the global defaults didn't seed (check `dross project get remote
 
 Persist with `dross project set remote.<field> "<value>"`. For booleans use `true` / `false`; reviewers is csv.
 
-If `~/.claude/dross/defaults.toml` doesn't exist yet and the user just answered the auth/provider questions for the first time, suggest: *"Save these as defaults so the next project pre-fills them?"* — for now this is a manual edit of `~/.claude/dross/defaults.toml` (a `dross defaults save` helper is on the roadmap).
+If `~/.claude/dross/defaults.toml` doesn't exist yet (check with `dross defaults show`), ask: *"Save these as defaults so the next project pre-fills them?"* If yes, run `dross defaults save` — extracts provider/api_base/log_api/auth_env/reviewers from project.toml and writes them globally. URL and public flag are project-specific and never copied.
 
 ## 5. Rules import
 
