@@ -2,7 +2,7 @@
 
 A leaner successor to [GSD](https://github.com/gsd-build/get-shit-done) for working with Claude Code on real projects.
 
-> **Status:** v0.1.0 — full plan → execute → verify loop is wired (Stryker for TS/JS/Svelte mutation testing). Tree-sitter codex and Go/C# mutation adapters are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised.
+> **Status:** v0.1.x — full plan → execute → verify loop is wired. Mutation testing covers TS/JS/Svelte (Stryker) and Go (Gremlins). Tree-sitter codex and C# (Stryker.NET) are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised.
 
 > Scope: Dross is built for my workflow. It's public because there's no reason not to be, but I'm not marketing it and I'm not trying to grow it into a general-purpose tool. The roadmap is a flat list because my todo list is — if Dross ever picks up users, I'll think about structure (semver, milestones, contribution guidelines) then.
 
@@ -54,7 +54,7 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 
 **Being honest about these numbers:**
 
-- **Dross is still incomplete.** The codex tree-sitter indexer is a stub; only the Stryker (TS/JS/Svelte) mutation adapter is wired — Go (Gremlins) and C# (Stryker.NET) are designed but not implemented. `/dross-verify` landed at ~1,890 tokens — ~24× cheaper than GSD's 46,500 — though that's slash-command boot only; the verify loop reads project test files at runtime, which adds variable cost.
+- **Dross is still incomplete.** The codex tree-sitter indexer is a stub; Stryker (TS/JS/Svelte) and Gremlins (Go) are wired — C# (Stryker.NET), GDScript, HTML/CSS visual diffs are still designed-only. `/dross-verify` landed at ~1,890 tokens — ~24× cheaper than GSD's 46,500 — though that's slash-command boot only; the verify loop reads project test files at runtime, which adds variable cost.
 - **Per-invocation isn't the runtime cost.** GSD spawns subagents (planner, plan-checker, executor, verifier). Each loads its own agent prompt + references in fresh context, multiplying the real per-flow cost by 2-3×. The 25.9k for `/gsd-plan-phase` is closer to ~60-80k of total prompt material per phase. Dross runs inline — no subagent multiplication.
 - **Prompt caching mitigates this.** Anthropic's prompt cache amortises repeats, so steady-state cost is much lower than the load surface implies. Cold starts, branch switches, and subagent spawns break the cache; that's where the bill actually shows up.
 - **The ratio is the worst-case load surface, not a runtime bill.** It's still directionally meaningful — fewer files, smaller files, fewer spawns add up — but don't expect the same multiplier in your monthly Anthropic invoice.
@@ -178,7 +178,8 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] `/dross-spec` and `/dross-plan` slash commands
 - [x] `/dross-execute` (pair-mode default, `--solo` opt-in) + task/changes CLI helpers
 - [x] `/dross-verify` + Stryker adapter for TS/JS/Svelte mutation testing
-- [ ] Mutation adapters: Gremlins (Go), Stryker.NET (C#)
+- [x] Gremlins adapter for Go mutation testing
+- [ ] Mutation adapter: Stryker.NET (C#)
 - [ ] Codex: tree-sitter indexer for TS/Svelte/Go/C#/GDScript/HTML/CSS
 - [ ] GoReleaser cross-compile (darwin/arm64 primary)
 
