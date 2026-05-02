@@ -1,6 +1,6 @@
 # Dross
 
-A leaner successor to [GSD](https://github.com/anthropics/get-shit-done) for working with Claude Code on real projects.
+A leaner successor to [GSD](https://github.com/gsd-build/get-shit-done) for working with Claude Code on real projects.
 
 > **Status:** v0 skeleton — CLI builds and the rules system works end-to-end, but `execute`, `verify`, and the tree-sitter indexer are not implemented yet. Not ready for real use.
 
@@ -104,20 +104,34 @@ make test        # go test ./...
 
 ## Available commands
 
-| Command | Status |
-|---|---|
-| `dross init` | Bootstrap `.dross/` (greenfield) |
-| `dross onboard` | Adopt an existing repo (signal scan) |
-| `dross project {show,get,set}` | Read/write `project.toml` fields |
-| `dross state {show,set,touch}` | Read/write `state.json` |
-| `dross rule {add,list,remove,promote,disable,enable,show}` | Two-tier rules system |
-| `dross phase {create,list,show}` | Phase directories |
-| `dross milestone {create,list,show}` | Milestones |
-| `dross profile {show,seed}` | User profile (with GSD import) |
-| `dross validate` | Schema-check every artefact |
-| `dross codex` | Polyglot code insight — **stub** |
+| Command | What it does | Status |
+|---|---|:---:|
+| `dross init` | Bootstrap `.dross/` (greenfield) | ✅ |
+| `dross onboard` | Adopt an existing repo (signal scan) | ✅ |
+| `dross project {show,get,set}` | Read/write `project.toml` fields | ✅ |
+| `dross state {show,set,touch}` | Read/write `state.json` | ✅ |
+| `dross rule {add,list,remove,promote,disable,enable,show}` | Two-tier rules system | ✅ |
+| `dross phase {create,list,show}` | Phase directories | ✅ |
+| `dross milestone {create,list,show}` | Milestones | ✅ |
+| `dross profile {show,seed}` | User profile (with GSD import) | ✅ |
+| `dross validate` | Schema-check every artefact | ✅ |
+| `dross codex` | Polyglot code insight (tree-sitter) | 🚧 |
+| `dross execute` | Pair-mode phase execution | ⏳ not started |
+| `dross verify` | Mutation + coverage + criterion mapping | ⏳ not started |
 
-Slash commands wired so far: `/dross-init`, `/dross-onboard`, `/dross-rule`.
+**Slash commands:**
+
+| Command | Status |
+|---|:---:|
+| `/dross-init` | ✅ |
+| `/dross-onboard` | ✅ |
+| `/dross-rule` | ✅ |
+| `/dross-spec` | ⏳ not started |
+| `/dross-plan` | ⏳ not started |
+| `/dross-execute` | ⏳ not started |
+| `/dross-verify` | ⏳ not started |
+
+Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 
 ## Roadmap
 
@@ -132,4 +146,8 @@ Slash commands wired so far: `/dross-init`, `/dross-onboard`, `/dross-rule`.
 
 ## License
 
-TBD.
+[AGPL-3.0](LICENSE).
+
+## Acknowledgements
+
+Dross is conceptually inspired by [GSD](https://github.com/gsd-build/get-shit-done) by TÂCHES (Lex Christopherson), distributed under the MIT License. No code or prompt text is copied; this is a clean Go reimplementation built around different design pivots (lean prompts, pair-mode execution, mutation testing as a first-class gate). If you want the full-featured, well-trodden tool, GSD is excellent — Dross is a fork of the *idea*, not the implementation.
