@@ -51,11 +51,28 @@ If `runtime.mode = docker`, prefix correctly (e.g. `docker compose exec app pnpm
 
 Service URLs (app, db, redis, etc.) — edit `[runtime.services]` directly.
 
-## 4. Functionality verification
+## 4. Remote / git host
 
-Run each captured command, report pass/fail in a table. Same rules as `/dross-init` step 7. Failing rows must be either fixed or explicitly waived before continuing.
+`dross onboard` already detected `[remote]` from `git remote get-url origin` and overlaid `~/.claude/dross/defaults.toml`. Run `dross project show` and look at the `[remote]` block.
 
-## 5. Conventions
+For each field, present the resolved value and ask "confirm or change?":
+- **url** — should match the canonical clone URL.
+- **provider** — github / forgejo / gitea / bitbucket / none. If empty (self-hosted unknown host), ask the user.
+- **public** — can a cloud-side agent (no VPN, no SSH key) `git clone` it? Default no for self-hosted forges.
+- **api_base** — REST base URL. github → `https://api.github.com`. Forgejo/Gitea → `https://<host>/api/v1`.
+- **log_api** — does the instance expose CI logs via API?
+- **auth_env** — env-var name (e.g. `FORGEJO_TOKEN`, `GITHUB_TOKEN`). **Never the token value.**
+- **reviewers** — csv of human reviewer usernames `/dross-ship` should auto-assign. Empty = none.
+
+Persist any changes with `dross project set remote.<field> "<value>"` (booleans = `true`/`false`; reviewers = csv).
+
+If `~/.claude/dross/defaults.toml` doesn't exist yet and the user just confirmed values they'd want to reuse, suggest: *"Save these as defaults so the next project pre-fills them?"* — currently a manual edit; `dross defaults save` is on the roadmap.
+
+## 5. Functionality verification
+
+Run each captured command, report pass/fail in a table. Same rules as `/dross-init` step 8. Failing rows must be either fixed or explicitly waived before continuing.
+
+## 6. Conventions
 
 Ask:
 - Main branch (default detected from `git symbolic-ref refs/remotes/origin/HEAD` if available)
@@ -66,7 +83,7 @@ Ask:
 
 Edit `[repo]` block directly.
 
-## 6. Rules intake
+## 7. Rules intake
 
 `dross rule list --scope global` — show inherited rules.
 
@@ -76,11 +93,11 @@ dross rule add --scope project "<exact rule text>"
 ```
 Tag obvious cross-project ones with `--scope global` instead.
 
-## 7. Goals + non-goals + competition
+## 8. Goals + non-goals + competition
 
 Optional but valuable. If skipped, mark a TODO and move on.
 
-## 8. Wrap
+## 9. Wrap
 
 Run `dross validate`. Print summary:
 ```

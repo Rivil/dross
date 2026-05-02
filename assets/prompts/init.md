@@ -42,12 +42,31 @@ locked_at = "<today>"
 ```
 Edit `project.toml` directly for these blocks.
 
-## 4. Rules import
+## 4. Remote / git host
+
+`dross init` already tried to detect the canonical git remote via `git remote get-url origin`. Run `dross project show` and look at the `[remote]` block.
+
+If `[remote]` is missing or empty (no git origin yet — fresh greenfield), ask:
+- **URL** — `https://<host>/<owner>/<repo>` of where this code will live.
+- **Provider** — github / forgejo / gitea / bitbucket / none. If host is `github.com` → `github`; `codeberg.org` → `forgejo`; `bitbucket.org` → `bitbucket`; otherwise ask.
+- **Public** — can a cloud-side agent (no VPN, no SSH key) `git clone` it? Default no for self-hosted forges.
+
+Then for fields the global defaults didn't seed (check `dross project get remote.auth_env` etc.):
+- **api_base** — REST base URL. github → `https://api.github.com`. Forgejo/Gitea → `https://<host>/api/v1`. Confirm with user.
+- **log_api** — does this instance expose CI logs via API? (User's Forgejo customisation: yes.)
+- **auth_env** — env-var name holding the API token. **Never the token value.** For github use `GITHUB_TOKEN`; for the user's Forgejo: `FORGEJO_TOKEN`.
+- **reviewers** — comma-separated list of human reviewer usernames `/dross-ship` should auto-assign. Skip if the user doesn't want this.
+
+Persist with `dross project set remote.<field> "<value>"`. For booleans use `true` / `false`; reviewers is csv.
+
+If `~/.claude/dross/defaults.toml` doesn't exist yet and the user just answered the auth/provider questions for the first time, suggest: *"Save these as defaults so the next project pre-fills them?"* — for now this is a manual edit of `~/.claude/dross/defaults.toml` (a `dross defaults save` helper is on the roadmap).
+
+## 5. Rules import
 
 `dross rule list --scope global` — show what already applies. Ask: "any project-specific rules to add up front? (e.g. 'always run db migrations via docker compose exec', 'never push to main')"
 For each rule: `dross rule add --scope project "<text>"`.
 
-## 5. Scaffold
+## 6. Scaffold
 
 Run the actual scaffold commands:
 - TS/SvelteKit: `pnpm create svelte@latest <name>`
@@ -59,7 +78,7 @@ For docker-from-day-1 projects, write a starter `Dockerfile` and `docker-compose
 
 Confirm each scaffold command before running. Show output. If anything fails, stop and surface it.
 
-## 6. Runtime capture
+## 7. Runtime capture
 
 Now that the scaffold exists, derive runtime commands from `package.json` / `Makefile` / detected files. For each: present detected default, ask user to confirm or correct.
 
@@ -77,7 +96,7 @@ dross project set runtime.migrate_command   "<exact command>"
 
 Service URLs (`runtime.services`) and paths (`paths.*`) are written by editing `project.toml` directly.
 
-## 7. Functionality verification
+## 8. Functionality verification
 
 For each captured command, run it and report:
 - `dev_command` → background, then `curl <runtime.services.app.url><health>` expects 2xx within 30s. Stop the dev server after.
@@ -94,7 +113,7 @@ Print a table:
 ```
 Don't proceed until 100% green or the user explicitly waives a row.
 
-## 8. Repo init
+## 9. Repo init
 
 If not already a git repo: `git init`, create `.gitignore` from a sensible default for the chosen stack, write the initial commit:
 ```
@@ -102,7 +121,7 @@ git add . && git commit -m "chore: initialise project via dross"
 ```
 Ask before committing.
 
-## 9. Wrap
+## 10. Wrap
 
 Run `dross validate`. Should be green. Print:
 ```
