@@ -2,7 +2,7 @@
 
 A leaner successor to [GSD](https://github.com/gsd-build/get-shit-done) for working with Claude Code on real projects.
 
-> **Status:** v0 skeleton — CLI builds and the rules system works end-to-end, but `execute`, `verify`, and the tree-sitter indexer are not implemented yet. Not ready for real use.
+> **Status:** v0 — full plan → execute → verify loop is wired (with Stryker for TS/JS/Svelte mutation testing). Tree-sitter codex and Go/C# mutation adapters are still stubs. Hasn't been used on a real project yet, expect rough edges in the prompts.
 
 > Scope: Dross is built for my workflow. It's public because there's no reason not to be, but I'm not marketing it and I'm not trying to grow it into a general-purpose tool. The roadmap is a flat list because my todo list is — if Dross ever picks up users, I'll think about structure (semver, milestones, contribution guidelines) then.
 
@@ -41,18 +41,19 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-plan` | 5,676 | **~1,420** |
 | Dross `/dross-plan-review` | 5,524 | **~1,380** |
 | Dross `/dross-execute` | 7,697 | **~1,920** |
+| Dross `/dross-verify` | 7,540 | **~1,890** |
 
 **Total prompt-surface** (everything that could ever load):
 
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 33,677 | ~8,400 |
-| **Ratio** | | **≈ 74×** |
+| Dross (commands + prompts) | 41,217 | ~10,300 |
+| **Ratio** | | **≈ 60×** |
 
 **Being honest about these numbers:**
 
-- **Dross is incomplete.** `/dross-verify` and the codex tree-sitter indexer are still pending. `/dross-execute` landed at ~1,920 tokens — ~24× cheaper than GSD's 46,500 — though that's the slash-command boot only; the loop reads project files per task at runtime, which adds variable cost.
+- **Dross is still incomplete.** The codex tree-sitter indexer is a stub; only the Stryker (TS/JS/Svelte) mutation adapter is wired — Go (Gremlins) and C# (Stryker.NET) are designed but not implemented. `/dross-verify` landed at ~1,890 tokens — ~24× cheaper than GSD's 46,500 — though that's slash-command boot only; the verify loop reads project test files at runtime, which adds variable cost.
 - **Per-invocation isn't the runtime cost.** GSD spawns subagents (planner, plan-checker, executor, verifier). Each loads its own agent prompt + references in fresh context, multiplying the real per-flow cost by 2-3×. The 25.9k for `/gsd-plan-phase` is closer to ~60-80k of total prompt material per phase. Dross runs inline — no subagent multiplication.
 - **Prompt caching mitigates this.** Anthropic's prompt cache amortises repeats, so steady-state cost is much lower than the load surface implies. Cold starts, branch switches, and subagent spawns break the cache; that's where the bill actually shows up.
 - **The ratio is the worst-case load surface, not a runtime bill.** It's still directionally meaningful — fewer files, smaller files, fewer spawns add up — but don't expect the same multiplier in your monthly Anthropic invoice.
@@ -123,10 +124,10 @@ make test        # go test ./...
 | `dross milestone {create,list,show}` | Milestones | ✅ |
 | `dross task {next,show,status}` | Inspect / update tasks within a plan | ✅ |
 | `dross changes {record,show}` | Per-phase append-only log of what was touched | ✅ |
+| `dross verify <phase>` | Run mutation tests + write tests.json + verify.toml skeleton | ✅ |
 | `dross profile {show,seed}` | User profile (with GSD import) | ✅ |
 | `dross validate` | Schema-check every artefact | ✅ |
 | `dross codex` | Polyglot code insight (tree-sitter) | 🚧 |
-| `dross verify` | Mutation + coverage + criterion mapping | ⏳ not started |
 
 **Slash commands:**
 
@@ -139,7 +140,7 @@ make test        # go test ./...
 | `/dross-plan` | ✅ |
 | `/dross-plan-review` | ✅ |
 | `/dross-execute` | ✅ |
-| `/dross-verify` | ⏳ not started |
+| `/dross-verify` | ✅ |
 
 Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 
@@ -149,9 +150,9 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Tests: round-trip, merge, parser, validate checks
 - [x] `/dross-spec` and `/dross-plan` slash commands
 - [x] `/dross-execute` (pair-mode default, `--solo` opt-in) + task/changes CLI helpers
+- [x] `/dross-verify` + Stryker adapter for TS/JS/Svelte mutation testing
+- [ ] Mutation adapters: Gremlins (Go), Stryker.NET (C#)
 - [ ] Codex: tree-sitter indexer for TS/Svelte/Go/C#/GDScript/HTML/CSS
-- [ ] Mutation adapters: Stryker (TS), Gremlins (Go), Stryker.NET (C#)
-- [ ] `/dross-verify` — mutation + coverage + criterion mapping
 - [ ] GoReleaser cross-compile (darwin/arm64 primary)
 
 ## License
