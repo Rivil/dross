@@ -112,26 +112,31 @@ func configuredAdapters(p *project.Project, _ string, skip bool) []mutation.Adap
 // dockerPrefix returns the runtime command prefix for docker mode.
 // For native, returns "". For docker, derives from runtime.test_command
 // (which already has the right shape: "docker compose exec app pnpm test").
+//
+// We strip the trailing runner+args to get the prefix. Field-based
+// (not substring) so a container name that happens to match a runner
+// name (e.g. "docker compose exec node node test.js") doesn't fool us.
 func dockerPrefix(p *project.Project) string {
 	if p.Runtime.Mode != "docker" {
 		return ""
 	}
-	// Strip the trailing test-runner from runtime.test_command to get
-	// the docker exec prefix. Pragmatic heuristic — if it doesn't start
-	// with "docker", fall back to empty (warns later).
 	tc := p.Runtime.TestCommand
 	if !strings.HasPrefix(tc, "docker") {
 		return "docker compose exec app"
 	}
-	// Take everything before the last "pnpm "/"npm "/"yarn "/"bun " token,
-	// or the first 4 fields, whichever is shorter — we want the prefix
-	// that gets us inside the container, then we'll append "npx stryker..."
-	for _, runner := range []string{" pnpm ", " npm ", " yarn ", " bun ", " node "} {
-		if i := strings.Index(tc, runner); i > 0 {
-			return tc[:i]
+	runners := map[string]bool{
+		"pnpm": true, "npm": true, "yarn": true, "bun": true,
+		"node": true, "deno": true,
+		"go": true, "make": true,
+	}
+	fields := strings.Fields(tc)
+	// We need at minimum [docker, compose, exec, <service>] before any
+	// runner, so start scanning from index 4.
+	for i := 4; i < len(fields); i++ {
+		if runners[fields[i]] {
+			return strings.Join(fields[:i], " ")
 		}
 	}
-	// Default: "docker compose exec app"
 	return "docker compose exec app"
 }
 

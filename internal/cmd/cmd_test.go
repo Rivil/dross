@@ -24,18 +24,39 @@ func chdir(t *testing.T, dir string) {
 	t.Cleanup(func() { _ = os.Chdir(prev) })
 }
 
-// runCmd executes a cobra command tree with args, capturing stdout and stderr.
-// Note: handlers in this package use fmt.Print* directly (the Print/Printf
-// helpers in root.go), so we can't intercept the actual binary output via
-// cmd.SetOut. Tests that need to assert on stdout should use os.Pipe wrapping
-// — left for a follow-up. For now the tests below assert on filesystem effects
-// and returned errors.
+// runCmd executes a cobra command tree with args. Handlers in this package
+// use fmt.Print* directly via Print/Printf helpers, so cobra's SetOut/SetErr
+// don't capture them. Use captureStdout when you need to assert on output;
+// otherwise rely on filesystem effects + the returned error.
 func runCmd(t *testing.T, cmd *cobra.Command, args ...string) error {
 	t.Helper()
 	cmd.SetArgs(args)
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
 	return cmd.Execute()
+}
+
+// captureStdout swaps os.Stdout for a pipe during the call to fn, returning
+// what was printed. Cmd handlers write to os.Stdout directly via fmt.Print*,
+// so this is the only way to assert on their output.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	done := make(chan string)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		done <- buf.String()
+	}()
+	fn()
+	_ = w.Close()
+	os.Stdout = orig
+	return <-done
 }
 
 func TestInitCreatesArtefacts(t *testing.T) {
