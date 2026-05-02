@@ -38,7 +38,7 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-onboard` | 3,383 | **~850** |
 | Dross `/dross-rule` | 2,119 | **~530** |
 | Dross `/dross-spec` | 4,494 | **~1,120** |
-| Dross `/dross-plan` | 5,676 | **~1,420** |
+| Dross `/dross-plan` | 5,755 | **~1,440** |
 | Dross `/dross-plan-review` | 5,524 | **~1,380** |
 | Dross `/dross-execute` | 7,697 | **~1,920** |
 | Dross `/dross-verify` | 7,540 | **~1,890** |
@@ -49,7 +49,7 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 42,886 | ~10,700 |
+| Dross (commands + prompts) | 42,965 | ~10,700 |
 | **Ratio** | | **≈ 58×** |
 
 **Being honest about these numbers:**
