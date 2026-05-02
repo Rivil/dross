@@ -1,0 +1,114 @@
+# /dross-init
+
+Bootstrap dross in a **greenfield** repo. Walk the user through vision → market → stack → scaffold → runtime → verify → rules. Run once per project; expect ~30 minutes.
+
+## 0. Pre-flight
+
+1. Run `dross rule show` and treat the output as MUST-FOLLOW for the rest of this session.
+2. Confirm cwd is the intended project root. If `.dross/` already exists, stop and tell the user to use `/dross-onboard` or `dross init --force`.
+3. Run `dross init`. It creates `.dross/`, the empty `project.toml`, `state.json`, `rules.toml`, and seeds `profile.toml` from GSD if available.
+
+## 1. Vision
+
+Ask via `AskUserQuestion`:
+- Project name?
+- One-sentence description?
+- Core value: what changes for the user when this exists?
+- Target audience?
+- Three explicit non-goals (things this project will NOT do)?
+
+Save:
+```
+dross project set project.name           "<name>"
+dross project set project.description    "<description>"
+dross project set goals.core_value       "<core value>"
+```
+Non-goals + audience: edit `.dross/project.toml` directly under `[goals]`.
+
+## 2. Market scan
+
+Use `WebFetch` to look up 2-3 similar tools by description. Summarise each in one line. Add to `[[competition]]` blocks in `project.toml`. Ask the user for 1-3 differentiators and write them to `goals.differentiators`.
+
+## 3. Stack choice
+
+Propose 2-3 viable stacks based on the description. For each: 3 lines max — what it is, why it fits, the cost. Surface trade-offs honestly. If the merged profile shows locked stack preferences (sveltekit, drizzle, betterauth, paraglide, pnpm, self-hosted), use those by default and only diverge if the project description requires it.
+
+After the user picks, lock each non-trivial choice with a `why`:
+```
+[[stack.locked]]
+choice = "..."
+why    = "..."
+locked_at = "<today>"
+```
+Edit `project.toml` directly for these blocks.
+
+## 4. Rules import
+
+`dross rule list --scope global` — show what already applies. Ask: "any project-specific rules to add up front? (e.g. 'always run db migrations via docker compose exec', 'never push to main')"
+For each rule: `dross rule add --scope project "<text>"`.
+
+## 5. Scaffold
+
+Run the actual scaffold commands:
+- TS/SvelteKit: `pnpm create svelte@latest <name>`
+- Go: `go mod init <module>`
+- C# .NET: `dotnet new <template>`
+- Godot: open editor manually; we just write a placeholder `project.godot`
+
+For docker-from-day-1 projects, write a starter `Dockerfile` and `docker-compose.yml` based on the chosen stack.
+
+Confirm each scaffold command before running. Show output. If anything fails, stop and surface it.
+
+## 6. Runtime capture
+
+Now that the scaffold exists, derive runtime commands from `package.json` / `Makefile` / detected files. For each: present detected default, ask user to confirm or correct.
+
+Set with:
+```
+dross project set runtime.mode              "<docker|native|hybrid>"
+dross project set runtime.dev_command       "<exact command>"
+dross project set runtime.test_command      "<exact command>"
+dross project set runtime.typecheck_command "<exact command>"
+dross project set runtime.lint_command      "<exact command>"
+dross project set runtime.format_command    "<exact command>"
+dross project set runtime.build_command     "<exact command>"
+dross project set runtime.migrate_command   "<exact command>"
+```
+
+Service URLs (`runtime.services`) and paths (`paths.*`) are written by editing `project.toml` directly.
+
+## 7. Functionality verification
+
+For each captured command, run it and report:
+- `dev_command` → background, then `curl <runtime.services.app.url><health>` expects 2xx within 30s. Stop the dev server after.
+- `test_command` → expect exit 0
+- `typecheck_command` → expect 0 errors
+- `lint_command` → expect 0 errors
+
+Print a table:
+```
+✓ dev_command          : health 200 in 4.2s
+✓ test_command         : exit 0, 47 passed
+✗ typecheck_command    : 3 errors
+                         → user to fix or correct the command
+```
+Don't proceed until 100% green or the user explicitly waives a row.
+
+## 8. Repo init
+
+If not already a git repo: `git init`, create `.gitignore` from a sensible default for the chosen stack, write the initial commit:
+```
+git add . && git commit -m "chore: initialise project via dross"
+```
+Ask before committing.
+
+## 9. Wrap
+
+Run `dross validate`. Should be green. Print:
+```
+Project bootstrapped.
+Next steps:
+  /dross-milestone v0.1   — scope the first milestone
+  /dross-spec             — clarify the first phase
+```
+Update state: `dross state touch "init complete"`.
