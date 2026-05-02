@@ -38,6 +38,7 @@ func main() {
 		cmd.Doctor(),
 		cmd.Defaults(),
 		cmd.Env(),
+		cmd.Ship(),
 	)
 
 	if err := root.Execute(); err != nil {

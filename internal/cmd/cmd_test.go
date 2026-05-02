@@ -122,7 +122,10 @@ func TestInitForceOverwrites(t *testing.T) {
 func gitInit(t *testing.T, dir, originURL string) {
 	t.Helper()
 	for _, cmd := range [][]string{
-		{"git", "init", "-q"},
+		{"git", "init", "-q", "-b", "main"},
+		{"git", "config", "user.email", "test@example.com"},
+		{"git", "config", "user.name", "Test"},
+		{"git", "config", "commit.gpgsign", "false"},
 		{"git", "remote", "add", "origin", originURL},
 	} {
 		c := exec.Command(cmd[0], cmd[1:]...)
@@ -131,6 +134,17 @@ func gitInit(t *testing.T, dir, originURL string) {
 			t.Fatalf("%v: %v\n%s", cmd, err, out)
 		}
 	}
+}
+
+// mustGit runs git in dir and fails the test on non-zero exit, returning trimmed stdout.
+func mustGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	full := append([]string{"-C", dir}, args...)
+	out, err := exec.Command("git", full...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func TestInitCapturesRemoteFromGit(t *testing.T) {
