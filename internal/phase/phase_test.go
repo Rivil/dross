@@ -123,3 +123,108 @@ func TestDir(t *testing.T) {
 		t.Errorf("Dir: got %q want %q", got, want)
 	}
 }
+
+func TestNextRunnableEmptyPlan(t *testing.T) {
+	p := &Plan{}
+	if p.NextRunnable() != nil {
+		t.Error("empty plan should have nothing runnable")
+	}
+}
+
+func TestNextRunnableLowestWaveFirst(t *testing.T) {
+	p := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 2},
+		{ID: "t-2", Wave: 1},
+		{ID: "t-3", Wave: 1},
+	}}
+	got := p.NextRunnable()
+	if got == nil || got.ID != "t-2" {
+		t.Errorf("expected t-2 (wave 1, alphabetic first); got %v", got)
+	}
+}
+
+func TestNextRunnableSkipsDoneAndInProgress(t *testing.T) {
+	p := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 1, Status: StatusDone},
+		{ID: "t-2", Wave: 1, Status: StatusInProgress},
+		{ID: "t-3", Wave: 1, Status: StatusPending},
+	}}
+	got := p.NextRunnable()
+	if got == nil || got.ID != "t-3" {
+		t.Errorf("expected t-3, got %v", got)
+	}
+}
+
+func TestNextRunnableRespectsDeps(t *testing.T) {
+	p := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 1, Status: StatusPending},
+		{ID: "t-2", Wave: 2, Status: StatusPending, DependsOn: []string{"t-1"}},
+	}}
+	if got := p.NextRunnable(); got == nil || got.ID != "t-1" {
+		t.Errorf("expected t-1 (only one with no blocking deps); got %v", got)
+	}
+
+	p.SetTaskStatus("t-1", StatusDone)
+	if got := p.NextRunnable(); got == nil || got.ID != "t-2" {
+		t.Errorf("expected t-2 after t-1 done; got %v", got)
+	}
+}
+
+func TestNextRunnableNothingWhenAllDone(t *testing.T) {
+	p := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 1, Status: StatusDone},
+		{ID: "t-2", Wave: 1, Status: StatusDone},
+	}}
+	if got := p.NextRunnable(); got != nil {
+		t.Errorf("expected nil; got %v", got)
+	}
+}
+
+func TestNextRunnableNothingWhenAllBlocked(t *testing.T) {
+	p := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 2, Status: StatusFailed},
+		{ID: "t-2", Wave: 3, Status: StatusPending, DependsOn: []string{"t-1"}},
+	}}
+	// t-1 failed (not done) — t-2 is blocked. nothing else pending.
+	if got := p.NextRunnable(); got != nil {
+		t.Errorf("expected nil when all pending tasks are blocked; got %v", got)
+	}
+}
+
+func TestSetTaskStatusReturnsFalseForMissing(t *testing.T) {
+	p := &Plan{Task: []Task{{ID: "t-1"}}}
+	if !p.SetTaskStatus("t-1", StatusDone) {
+		t.Error("expected true for existing task")
+	}
+	if p.Task[0].Status != StatusDone {
+		t.Errorf("status not set: %q", p.Task[0].Status)
+	}
+	if p.SetTaskStatus("nope", StatusDone) {
+		t.Error("expected false for missing task")
+	}
+}
+
+func TestFindTask(t *testing.T) {
+	p := &Plan{Task: []Task{{ID: "t-1", Title: "x"}, {ID: "t-2", Title: "y"}}}
+	if got := p.FindTask("t-2"); got == nil || got.Title != "y" {
+		t.Errorf("FindTask: %v", got)
+	}
+	if got := p.FindTask("nope"); got != nil {
+		t.Errorf("FindTask missing: %v", got)
+	}
+}
+
+func TestSummaryCounts(t *testing.T) {
+	p := &Plan{Task: []Task{
+		{ID: "t-1", Status: StatusDone},
+		{ID: "t-2", Status: StatusDone},
+		{ID: "t-3", Status: StatusInProgress},
+		{ID: "t-4", Status: StatusFailed},
+		{ID: "t-5", Status: StatusPending},
+		{ID: "t-6"}, // empty status counts as pending
+	}}
+	pending, inProgress, done, failed := p.Summary()
+	if done != 2 || inProgress != 1 || failed != 1 || pending != 2 {
+		t.Errorf("got d=%d ip=%d f=%d p=%d", done, inProgress, failed, pending)
+	}
+}

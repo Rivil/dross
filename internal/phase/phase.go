@@ -118,7 +118,89 @@ type Task struct {
 	Covers        []string `toml:"covers,omitempty"`         // criterion ids
 	DependsOn     []string `toml:"depends_on,omitempty"`     // task ids
 	TestContract  []string `toml:"test_contract,omitempty"`
-	Status        string   `toml:"status,omitempty"` // pending | in_progress | done
+	Status        string   `toml:"status,omitempty"` // pending | in_progress | done | failed
+}
+
+// Task statuses.
+const (
+	StatusPending    = "pending"
+	StatusInProgress = "in_progress"
+	StatusDone       = "done"
+	StatusFailed     = "failed"
+)
+
+// NextRunnable returns the next task with status==pending whose
+// dependencies are all done, picked by lowest wave then by id.
+// Returns nil if nothing is runnable (all done, all blocked, or empty plan).
+func (p *Plan) NextRunnable() *Task {
+	doneSet := map[string]bool{}
+	for _, t := range p.Task {
+		if t.Status == StatusDone {
+			doneSet[t.ID] = true
+		}
+	}
+	var best *Task
+	for i := range p.Task {
+		t := &p.Task[i]
+		if t.Status != "" && t.Status != StatusPending {
+			continue
+		}
+		blocked := false
+		for _, dep := range t.DependsOn {
+			if !doneSet[dep] {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			continue
+		}
+		if best == nil ||
+			t.Wave < best.Wave ||
+			(t.Wave == best.Wave && t.ID < best.ID) {
+			best = t
+		}
+	}
+	return best
+}
+
+// SetTaskStatus mutates the status of a task by id.
+// Returns false if the task is not found.
+func (p *Plan) SetTaskStatus(id, status string) bool {
+	for i := range p.Task {
+		if p.Task[i].ID == id {
+			p.Task[i].Status = status
+			return true
+		}
+	}
+	return false
+}
+
+// FindTask returns a pointer to a task in-place, or nil.
+func (p *Plan) FindTask(id string) *Task {
+	for i := range p.Task {
+		if p.Task[i].ID == id {
+			return &p.Task[i]
+		}
+	}
+	return nil
+}
+
+// Summary counts tasks by status. Useful for /dross-execute wrap-up.
+func (p *Plan) Summary() (pending, inProgress, done, failed int) {
+	for _, t := range p.Task {
+		switch t.Status {
+		case StatusInProgress:
+			inProgress++
+		case StatusDone:
+			done++
+		case StatusFailed:
+			failed++
+		default:
+			pending++
+		}
+	}
+	return
 }
 
 func LoadSpec(path string) (*Spec, error) {

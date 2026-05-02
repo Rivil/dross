@@ -29,6 +29,8 @@ func main() {
 		cmd.Validate(),
 		cmd.Phase(),
 		cmd.Milestone(),
+		cmd.Task(),
+		cmd.Changes(),
 		cmd.Codex(),
 		cmd.Profile(),
 	)
