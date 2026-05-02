@@ -124,7 +124,7 @@ Symlinks mean edits to `assets/` in the dross repo apply immediately — no re-i
 make build       # builds ./dross for current arch
 make test        # go test -count=1 ./...
 make install     # builds + installs binary + symlinks all slash commands & prompts
-make doctor      # verifies every /dross-* command is correctly installed
+make doctor      # verifies install: PATH, binary freshness, symlink targets — exits non-zero on any issue
 make uninstall   # removes binary, all dross-* skills, and the prompts symlink
 ```
 
