@@ -31,6 +31,7 @@ func main() {
 		cmd.Milestone(),
 		cmd.Task(),
 		cmd.Changes(),
+		cmd.Verify(),
 		cmd.Codex(),
 		cmd.Profile(),
 	)
