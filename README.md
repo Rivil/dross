@@ -104,7 +104,7 @@ make test        # go test ./...
 
 ## Available commands
 
-| Command | What it does | Status |
+| Command | Description | Status |
 |---|---|:---:|
 | `dross init` | Bootstrap `.dross/` (greenfield) | ✅ |
 | `dross onboard` | Adopt an existing repo (signal scan) | ✅ |
