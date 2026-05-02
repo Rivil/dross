@@ -9,7 +9,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
-	"github.com/rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/project"
 )
 
 func Project() *cobra.Command {

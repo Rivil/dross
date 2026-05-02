@@ -8,7 +8,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
-	"github.com/rivil/dross/internal/profile"
+	"github.com/Rivil/dross/internal/profile"
 )
 
 func Profile() *cobra.Command {

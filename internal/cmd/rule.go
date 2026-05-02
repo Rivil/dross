@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rivil/dross/internal/rules"
+	"github.com/Rivil/dross/internal/rules"
 )
 
 // Rule registers `dross rule {add,list,remove,promote,disable,enable,show}`.

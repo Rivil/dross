@@ -8,7 +8,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
-	"github.com/rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/milestone"
 )
 
 func Milestone() *cobra.Command {

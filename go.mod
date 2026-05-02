@@ -1,4 +1,4 @@
-module github.com/rivil/dross
+module github.com/Rivil/dross
 
 go 1.23
 

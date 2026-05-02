@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rivil/dross/internal/cmd"
+	"github.com/Rivil/dross/internal/cmd"
 )
 
 var version = "0.1.0.0"

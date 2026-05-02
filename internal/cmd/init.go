@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rivil/dross/internal/profile"
-	"github.com/rivil/dross/internal/project"
-	"github.com/rivil/dross/internal/rules"
-	"github.com/rivil/dross/internal/state"
+	"github.com/Rivil/dross/internal/profile"
+	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/rules"
+	"github.com/Rivil/dross/internal/state"
 )
 
 // Init creates the .dross/ directory tree with empty skeletons.

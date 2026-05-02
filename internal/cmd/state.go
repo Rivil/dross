@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rivil/dross/internal/state"
+	"github.com/Rivil/dross/internal/state"
 )
 
 func State() *cobra.Command {

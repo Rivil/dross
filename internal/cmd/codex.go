@@ -3,7 +3,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/rivil/dross/internal/codex"
+	"github.com/Rivil/dross/internal/codex"
 )
 
 // Codex is a stub for v0. Wire-up only — the real tree-sitter-backed
