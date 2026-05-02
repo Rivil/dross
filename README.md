@@ -36,6 +36,7 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | GSD `/gsd-progress` | 37,864 | ~9,500 |
 | Dross `/dross-init` | 6,507 | **~1,630** |
 | Dross `/dross-onboard` | 4,687 | **~1,170** |
+| Dross `/dross-options` | 6,234 | **~1,560** |
 | Dross `/dross-rule` | 2,119 | **~530** |
 | Dross `/dross-spec` | 4,494 | **~1,120** |
 | Dross `/dross-plan` | 5,755 | **~1,440** |
@@ -49,8 +50,8 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 45,958 | ~11,490 |
-| **Ratio** | | **≈ 54×** |
+| Dross (commands + prompts) | 52,323 | ~13,080 |
+| **Ratio** | | **≈ 48×** |
 
 **Being honest about these numbers:**
 
@@ -164,6 +165,8 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross validate` | Schema-check every artefact | ✅ |
 | `dross codex` | Polyglot code insight (tree-sitter) | 🚧 |
 | `dross doctor` | Project-level health check (`[remote]` ↔ git, `auth_env` exported) | ✅ |
+| `dross defaults {show,save}` | Read/write `~/.claude/dross/defaults.toml` (cross-project pre-fills) | ✅ |
+| `dross env {list,set,unset}` | Manage env keys in `~/.claude/settings.json` (hidden input, never echoed) | ✅ |
 | `dross version` | Print version, commit, and build date | ✅ |
 
 **Slash commands:**
@@ -179,6 +182,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `/dross-execute` | ✅ |
 | `/dross-verify` | ✅ |
 | `/dross-status` | ✅ |
+| `/dross-options` | ✅ |
 
 Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 
@@ -192,6 +196,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Gremlins adapter for Go mutation testing
 - [x] GoReleaser cross-compile (darwin/arm64 primary, +amd64, linux arm64/amd64) on `v*` tags
 - [x] `[remote]` capture in init/onboard with two-tier defaults (Forgejo / GitHub / Gitea / Bitbucket)
+- [x] `/dross-options` full settings editor + secret-safe `dross env` for `~/.claude/settings.json`
 - [ ] `/dross-ship` — clean PR branch, provider-aware PR open, subagent + human review fan-out
 - [ ] Mutation adapter: Stryker.NET (C#)
 - [ ] Codex: tree-sitter indexer for TS/Svelte/Go/C#/GDScript/HTML/CSS
