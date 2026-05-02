@@ -165,3 +165,72 @@ func TestWriteDottedRejectsUnknownPath(t *testing.T) {
 		t.Errorf("error should mention 'unknown': %v", err)
 	}
 }
+
+// TestExpandedDottedPathsRoundTrip exercises every leaf added in the
+// /dross-options expansion. Bools and CSVs round-trip through their
+// stringified forms.
+func TestExpandedDottedPathsRoundTrip(t *testing.T) {
+	p := &project.Project{}
+	cases := map[string]string{
+		// stack
+		"stack.type_checker": "tsc",
+		"stack.linter":       "eslint",
+		"stack.formatter":    "prettier",
+		"stack.test_runner":  "vitest",
+		"stack.e2e_runner":   "playwright",
+		// runtime
+		"runtime.stop_command":   "docker compose down",
+		"runtime.test_watch":     "vitest --watch",
+		"runtime.e2e_command":    "playwright test",
+		"runtime.format_command": "prettier --write .",
+		"runtime.seed_command":   "pnpm db:seed",
+		"runtime.shell_command":  "docker compose exec app sh",
+		"runtime.logs_command":   "docker compose logs -f app",
+		// repo
+		"repo.root_run_dir":      "apps/web",
+		"repo.workspaces":        "apps/web,apps/api,packages/shared",
+		"repo.branch_pattern":    "feat/*",
+		"repo.commit_convention": "conventional",
+		"repo.squash_merge":      "true",
+		// remote (re-covered to ensure bool path stays consistent)
+		"remote.public":  "true",
+		"remote.log_api": "false",
+		// paths
+		"paths.source":     "src",
+		"paths.tests":      "src",
+		"paths.e2e":        "e2e",
+		"paths.migrations": "src/db/migrations",
+		"paths.schemas":    "src/db/schema",
+		"paths.i18n":       "src/lib/i18n",
+		"paths.public":     "static",
+		// env
+		"env.files":            ".env,.env.local",
+		"env.secrets_location": "1password",
+		"env.gitignored":       "true",
+		// goals
+		"goals.audience":         "self-hosters",
+		"goals.non_goals":        "realtime collab,mobile native",
+		"goals.differentiators":  "lean prompts,mutation testing",
+	}
+	for path, value := range cases {
+		if err := writeDotted(p, path, value); err != nil {
+			t.Errorf("writeDotted(%q, %q): %v", path, value, err)
+			continue
+		}
+		got, ok := readDotted(p, path)
+		if !ok {
+			t.Errorf("readDotted(%q): missing after write", path)
+			continue
+		}
+		if got != value {
+			t.Errorf("round-trip %q: got %q want %q", path, got, value)
+		}
+	}
+}
+
+func TestWriteDottedRejectsBadBool(t *testing.T) {
+	p := &project.Project{}
+	if err := writeDotted(p, "remote.public", "maybe"); err == nil {
+		t.Error("expected error for invalid bool")
+	}
+}
