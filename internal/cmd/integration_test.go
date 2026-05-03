@@ -63,10 +63,10 @@ func TestFullLifecycle(t *testing.T) {
 	mustRunSet(t, "runtime.test_command", "docker compose exec app pnpm test")
 	mustRunSet(t, "stack.languages", "typescript,go")
 
-	// --- status after project setup: now points at phase create ---
+	// --- status after project setup: now points at /dross-spec --new ---
 	out = captureStdout(t, func() { runCmd(t, Status()) })
-	if !strings.Contains(out, "phase create") {
-		t.Errorf("status after project complete should suggest phase create:\n%s", out)
+	if !strings.Contains(out, "/dross-spec --new") {
+		t.Errorf("status after project complete should suggest /dross-spec --new:\n%s", out)
 	}
 
 	// --- 3. phase create ---

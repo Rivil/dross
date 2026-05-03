@@ -49,7 +49,7 @@ func Status() *cobra.Command {
 			if st.CurrentPhase != "" {
 				renderPhase(root, st)
 			} else {
-				Print("phase:     (none — try `dross phase create \"<title>\"` then /dross-spec)")
+				Print("phase:     (none — try `/dross-spec --new \"<title>\"`)")
 			}
 
 			// Last activity
@@ -113,7 +113,7 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 		return "/dross-init or /dross-onboard — project.toml is incomplete"
 	}
 	if st.CurrentPhase == "" {
-		return "`dross phase create \"<title>\"` then /dross-spec"
+		return "/dross-spec --new \"<title>\" — clarify the first phase"
 	}
 	dir := phase.Dir(root, st.CurrentPhase)
 	hasSpec := fileExists(filepath.Join(dir, "spec.toml"))

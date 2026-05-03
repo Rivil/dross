@@ -47,8 +47,8 @@ func TestStatusWithProjectAndNoPhaseSuggestsPhaseCreate(t *testing.T) {
 	out := captureStdout(t, func() {
 		runCmd(t, Status())
 	})
-	if !strings.Contains(out, "phase create") {
-		t.Errorf("expected phase create suggestion:\n%s", out)
+	if !strings.Contains(out, "/dross-spec --new") {
+		t.Errorf("expected /dross-spec --new suggestion:\n%s", out)
 	}
 	if !strings.Contains(out, "feast") {
 		t.Errorf("project name should appear:\n%s", out)
