@@ -34,25 +34,26 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | GSD `/gsd-plan-phase` | 103,413 | ~25,900 |
 | GSD `/gsd-new-project` | 69,637 | ~17,400 |
 | GSD `/gsd-progress` | 37,864 | ~9,500 |
-| Dross `/dross-init` | 6,507 | **~1,630** |
-| Dross `/dross-onboard` | 4,687 | **~1,170** |
-| Dross `/dross-options` | 6,234 | **~1,560** |
-| Dross `/dross-ship` | 3,354 | **~840** |
-| Dross `/dross-rule` | 2,119 | **~530** |
-| Dross `/dross-spec` | 4,494 | **~1,120** |
-| Dross `/dross-plan` | 5,755 | **~1,440** |
-| Dross `/dross-plan-review` | 5,524 | **~1,380** |
-| Dross `/dross-execute` | 7,697 | **~1,920** |
-| Dross `/dross-verify` | 7,540 | **~1,890** |
-| Dross `/dross-status` | 1,635 | **~410** |
+| Dross `/dross-init` | 7,169 | **~1,790** |
+| Dross `/dross-onboard` | 5,147 | **~1,290** |
+| Dross `/dross-options` | 5,988 | **~1,500** |
+| Dross `/dross-milestone` | 6,034 | **~1,510** |
+| Dross `/dross-ship` | 5,786 | **~1,450** |
+| Dross `/dross-rule` | 1,936 | **~480** |
+| Dross `/dross-spec` | 5,439 | **~1,360** |
+| Dross `/dross-plan` | 5,495 | **~1,370** |
+| Dross `/dross-plan-review` | 5,264 | **~1,320** |
+| Dross `/dross-execute` | 7,391 | **~1,850** |
+| Dross `/dross-verify` | 8,456 | **~2,110** |
+| Dross `/dross-status` | 1,439 | **~360** |
 
 **Total prompt-surface** (everything that could ever load):
 
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 55,677 | ~13,920 |
-| **Ratio** | | **≈ 45×** |
+| Dross (commands + prompts) | 68,603 | ~17,150 |
+| **Ratio** | | **≈ 36×** |
 
 **Being honest about these numbers:**
 
@@ -104,17 +105,22 @@ assets/prompts/    Prompt instructions (installed to ~/.claude/dross/prompts/)
 ~/.claude/skills/                      # one skill dir per slash command
 ├── dross-init/SKILL.md                # symlink → assets/commands/dross-init.md
 ├── dross-onboard/SKILL.md
+├── dross-milestone/SKILL.md
 ├── dross-spec/SKILL.md
 ├── dross-plan/SKILL.md
 ├── dross-plan-review/SKILL.md
 ├── dross-execute/SKILL.md
 ├── dross-verify/SKILL.md
+├── dross-ship/SKILL.md
 ├── dross-status/SKILL.md
+├── dross-options/SKILL.md
 └── dross-rule/SKILL.md
 
 ~/.claude/dross/
+├── defaults.toml                      # cross-project pre-fills + telemetry toggle
 ├── profile.toml                       # cross-project user profile (planned, not yet wired)
 ├── rules.toml                         # cross-project rules
+├── telemetry.jsonl                    # local-only event log (see Telemetry section)
 └── prompts/                           # symlink → assets/prompts/
 ```
 
@@ -157,7 +163,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross state {show,set,touch}` | Read/write `state.json` | ✅ |
 | `dross rule {add,list,remove,promote,disable,enable,show}` | Two-tier rules system | ✅ |
 | `dross phase {create,list,show}` | Phase directories | ✅ |
-| `dross milestone {create,list,show}` | Milestones | ✅ |
+| `dross milestone {create,list,show,get,set,add}` | Milestones with dotted-path edits (set scalars, add to list fields) | ✅ |
 | `dross task {next,show,status}` | Inspect / update tasks within a plan | ✅ |
 | `dross changes {record,show}` | Per-phase append-only log of what was touched | ✅ |
 | `dross verify <phase>` | Run mutation tests + write tests.json + verify.toml skeleton | ✅ |
@@ -169,6 +175,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross defaults {show,save}` | Read/write `~/.claude/dross/defaults.toml` (cross-project pre-fills) | ✅ |
 | `dross env {list,set,unset}` | Manage env keys in `~/.claude/settings.json` (hidden input, never echoed) | ✅ |
 | `dross ship <phase-id>` | Filter `.dross/`, push `pr/<id>`, open PR via provider, request reviewers | ✅ |
+| `dross stats {show,path,opt-in,opt-out}` | Aggregates over the local telemetry log; toggle the recorder | ✅ |
 | `dross version` | Print version, commit, and build date | ✅ |
 
 **Slash commands:**
@@ -178,6 +185,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `/dross-init` | ✅ |
 | `/dross-onboard` | ✅ |
 | `/dross-rule` | ✅ |
+| `/dross-milestone` | ✅ |
 | `/dross-spec` | ✅ |
 | `/dross-plan` | ✅ |
 | `/dross-plan-review` | ✅ |
@@ -185,7 +193,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `/dross-verify` | ✅ |
 | `/dross-status` | ✅ |
 | `/dross-options` | ✅ |
-| `/dross-ship` | ✅ |
+| `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup) |
 
 Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 
@@ -201,9 +209,43 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] `[remote]` capture in init/onboard with two-tier defaults (Forgejo / GitHub / Gitea / Bitbucket)
 - [x] `/dross-options` full settings editor + secret-safe `dross env` for `~/.claude/settings.json`
 - [x] `/dross-ship` — squash + filter `.dross/`, provider-aware PR open (GitHub + Forgejo), human reviewer assignment
+- [x] `/dross-ship` CI watch + merge gate + branch cleanup — watches provider checks, fixes failures, prompts to merge, deletes remote and local PR branches
+- [x] `/dross-milestone` — slash command + `dross milestone {get,set,add}` dotted-path edits, Brief.md-aware scoping
+- [x] `/dross-spec` smart no-args routing — offers to scaffold the next phase when nothing else is in flight
+- [x] `dross stats` + local-only telemetry — single-developer event log to surface friction, opt-out via `dross stats opt-out` or `DROSS_NO_TELEMETRY=1`
+- [x] Builtin `.dross/` commit-hygiene rule baked into every prompt's pre-flight
+- [x] Ship filter rewrite — runs in an ephemeral worktree so the user's gitignored `.dross/` is never destroyed
 - [ ] `/dross-ship` subagent review panel (security / code-quality / test-efficacy / spec-fidelity lenses posting PR comments)
 - [ ] Mutation adapter: Stryker.NET (C#)
 - [ ] Codex: tree-sitter indexer for TS/Svelte/Go/C#/GDScript/HTML/CSS
+
+## Telemetry
+
+Dross records local-only usage events at `~/.claude/dross/telemetry.jsonl`. The intent is single-developer self-observation — a dogfood log you can read back later to find where the tool gets in your way.
+
+**What's recorded.** One JSONL event per `dross` invocation (command path, duration, exit code, error class) plus outcome events from `verify` (verdict, mutation score, file/criterion counts), `ship` (provider, result, force-flag use), and `phase create` (ordinal). All events carry a 12-character SHA-256 hash of the absolute repo path so per-project trends are visible without exposing the path itself.
+
+**What's NOT recorded.** Anything you typed. No criterion text, no decision text, no commit messages, no PR titles or bodies, no reviewer names, no file contents, no repo URLs. Counts and small enums only.
+
+**Privacy posture.** Local file. No network. No daemon. No third party. Default ON; `/dross-init` and `/dross-onboard` ask once and stamp `asked_at` so you're never re-prompted across projects.
+
+**Toggles.**
+```sh
+dross stats opt-out       # disable; persisted in defaults.toml
+dross stats opt-in        # re-enable; same file
+DROSS_NO_TELEMETRY=1      # authoritative kill-switch (env var; overrides on-disk config)
+dross stats path          # print the log file path
+```
+
+**Reading it back.**
+```sh
+dross stats               # default `show` — top commands, error buckets,
+                          #   force-flag count, verify verdicts, ship results
+dross stats show --since 7d
+dross stats show --since 2026-05-01
+```
+
+The schema is versioned and stable; the log is append-only and rotates at 10 MB. Safe to share in conversations or pastebins for ad-hoc analysis since it carries no project-identifying content.
 
 ## License
 
