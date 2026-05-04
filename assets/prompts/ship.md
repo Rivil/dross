@@ -50,15 +50,60 @@ The CLI:
 5. Requests reviewers
 6. Updates `state.json` with the shipped action + PR URL
 
-## 5. Wrap
+## 5. CI gate
 
-Print the PR URL, reviewers, and a one-line next step:
+After the PR opens, watch CI to completion. Skip this section ONLY if the repo has no `.github/workflows/`, `.forgejo/workflows/`, `.gitea/workflows/`, AND the provider reports no checks for the head SHA.
+
+**Watch checks:**
+- GitHub: `gh pr checks <pr-url> --watch --fail-fast` — blocks until all checks finish; non-zero exit on failure.
+- Forgejo / Gitea: poll every ~30s — `GET <api_base>/repos/<owner>/<repo>/commits/<sha>/status` (auth header `token $<auth_env>`). Stop when `state` ∈ `success | failure | error`. SHA = head of `pr/<phase-id>`.
+
+If the provider reports no checks were registered (CI workflow missing or not triggered), surface that to the user and ask whether to proceed without CI or stop.
+
+**On failure:**
+1. Pull failing logs:
+   - GitHub: `gh run view --log-failed` for the run linked from the PR.
+   - Forgejo: log URL is in the commit status payload (`target_url`); `WebFetch` it.
+2. Diagnose. Edit + commit the fix on the active source branch (the one you ran `dross ship` from), one commit per logical fix following `repo.commit_convention`.
+3. Update the PR head: `git push origin <source>:pr/<phase-id> --force-with-lease`. Do NOT re-run `dross ship` — that opens a second PR. (`dross ship --force-branch` rebuilds the squash branch locally if you'd rather rebuild from scratch; you still need the manual force-push.)
+4. Loop back to "Watch checks". Cap at 3 fix iterations — if checks still fail after 3 cycles, stop and hand back to the user.
+
+**On pass:** continue to §6.
+
+## 6. Merge gate
+
+`AskUserQuestion`: **"All checks passed on PR #N. Merge now?"** — options: `merge` / `hold`.
+
+If `hold`: skip to §7 with status `awaiting-merge`.
+
+If `merge`:
+
+1. **Squash-merge via provider:**
+   - GitHub: `gh pr merge <pr-url> --squash --delete-branch` — also deletes the remote `pr/<phase-id>` branch.
+   - Forgejo / Gitea: `POST <api_base>/repos/<owner>/<repo>/pulls/<n>/merge` body `{"Do":"squash"}`, then `DELETE <api_base>/repos/<owner>/<repo>/branches/pr%2F<phase-id>` to remove the remote branch.
+2. **Sync local main:** `git fetch origin && git checkout <main-branch> && git pull --ff-only` (use `repo.git_main_branch` from project.toml). If fast-forward fails (local main diverged because phase commits live on it), stop and surface to the user — don't auto-resolve.
+3. **Delete local PR branch:** `git branch -D pr/<phase-id>`.
+
+## 7. Wrap
+
+Commit the post-ship state update so `.dross/` doesn't sit dirty:
+
+```
+git add .dross/state.json
+git commit -m "chore(dross): record ship for <phase-id>"
+```
+
+(Use `repo.commit_convention` from project.toml. If a merge happened in §6, include `+ merge` in the message.)
+
+Print:
 
 ```
 Shipped 01-meal-tagging
 PR:  https://forge.example/me/proj/pulls/42
 Reviewers: alice, bob
-Next: /dross-status (or open the PR for review)
+CI:  passed
+Status: merged | awaiting-merge
+Next: /dross-status (or /dross-spec --new for the next phase)
 ```
 
 If the PR opened but reviewer-request failed, surface that — it's non-fatal but the user should know.
