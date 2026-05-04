@@ -172,7 +172,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross status` | Where am I — project, phase, last activity, suggested next step | ✅ |
 | `dross profile {show,seed}` | User profile (with GSD import) | ✅ |
 | `dross validate` | Schema-check every artefact | ✅ |
-| `dross codex` | Polyglot code insight (tree-sitter) | 🚧 |
+| `dross codex <file>` | Polyglot code insight — symbols, refs, siblings, recent activity. Go via stdlib `go/ast`; TS/TSX/Svelte/C#/GDScript via `ast-grep` shell-out (graceful no-op if ast-grep not on PATH) | ✅ |
 | `dross doctor` | Project-level health check (`[remote]` ↔ git, `auth_env` exported) | ✅ |
 | `dross defaults {show,save}` | Read/write `~/.claude/dross/defaults.toml` (cross-project pre-fills) | ✅ |
 | `dross env {list,set,unset}` | Manage env keys in `~/.claude/settings.json` (hidden input, never echoed) | ✅ |
@@ -222,7 +222,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Ship `--preserve-history` — alternative filter that keeps per-task commits, `.dross/` stripped from each
 - [x] `/dross-review` four-lens subagent panel — spawns security / code-quality / test-efficacy / spec-fidelity reviewers in parallel and posts an aggregated comment to the PR
 - [x] Mutation adapter: Stryker.NET (C#) — modeled from public Stryker.NET docs, JSON shape shared with Stryker.JS, fixture-tested; real-world verify pending a C# project to dogfood against
-- [ ] Codex: tree-sitter indexer for TS/Svelte/Go/C#/GDScript/HTML/CSS — package doc has the implementation sketch; deferred until a multi-language project drives the need
+- [x] Codex polyglot indexer — Go via stdlib `go/ast`, TS/TSX/Svelte/C#/GDScript via `ast-grep` shell-out. Graceful degradation when ast-grep isn't installed (other commands keep working). HTML/CSS get sibling + git-log enrichment only (no symbols)
 
 ## Telemetry
 

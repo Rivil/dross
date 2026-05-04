@@ -8,19 +8,11 @@ import (
 	"sort"
 )
 
-// Languages is the set of languages with first-class indexer support.
-// Files with extensions outside this set still get sibling listing and
-// git-log neighbour data, just no symbol extraction.
-//
-// v1 ships Go-only. The package doc has the implementation sketch for
-// adding TS/Svelte/C#/GDScript/HTML/CSS adapters when they're needed.
-var Languages = map[string]string{
-	".go": "go",
-}
-
-// Indexer extracts symbols + intra-file references for one language.
-// Each language has its own implementation (currently just Go via
-// go/ast). The Dispatch helper picks the right one for a file.
+// Indexer extracts symbols for one language. Each language has its
+// own implementation; allIndexers() registers them all and Index()
+// dispatches by file extension. Go uses stdlib go/ast (no external
+// dependency); the rest shell out to ast-grep when it's on PATH and
+// fall back to empty Symbols when it isn't.
 type Indexer interface {
 	Name() string
 	Supports(file string) bool
@@ -41,7 +33,7 @@ func Index(targetFiles []string) (*Result, error) {
 		return res, nil
 	}
 
-	indexers := []Indexer{&GoIndexer{}}
+	indexers := allIndexers()
 
 	dirSeen := map[string]bool{}
 	for _, f := range targetFiles {

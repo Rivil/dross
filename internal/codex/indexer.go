@@ -6,29 +6,37 @@
 //   - Sibling files in the same dir
 //   - Recent git activity for the parent dir
 //
-// # v1: Go-only via go/ast
+// # Languages
 //
-// The Go indexer uses Go's stdlib parser — no CGO, no new dependency,
-// works wherever dross compiles. Other languages return empty Symbols
-// today but still get sibling + git-log enrichment.
+// Go is handled by the stdlib parser (go/ast) — no external
+// dependency. Everything else routes through ast-grep
+// (https://ast-grep.github.io) with per-language patterns:
+//
+//   - TypeScript (.ts), TSX (.tsx)
+//   - Svelte (.svelte)
+//   - C# (.cs)
+//   - GDScript (.gd)
+//
+// When ast-grep isn't on PATH, the non-Go indexers gracefully return
+// nil Symbols and the rest of the index (siblings, git log) still
+// populates. Install via `brew install ast-grep`, `cargo install
+// ast-grep`, or whatever's right for your platform.
+//
+// HTML/CSS are not symbol-bearing in any useful sense; files of those
+// types still get sibling + git-log enrichment but no Symbols.
 //
 // # Adding more languages
 //
-// Implement the Indexer interface in a new file (one per language) and
-// add it to the slice in codex.Index. Two viable architectures for
-// non-stdlib languages:
+// Add a constructor in languages.go: pick the ast-grep language id,
+// list the file extensions, and write patterns for each kind of
+// symbol you want surfaced. Patterns use ast-grep metavariables
+// ($NAME captures, $_ wildcards, $$$ multi-token wildcards). Then
+// register the new indexer in allIndexers().
 //
-//  1. Shell out to ast-grep (preferred) — clean, multi-language,
-//     consistent with how dross already shells to gh / stryker /
-//     gremlins. Add an ast-grep adapter that takes a language name +
-//     a query pattern; one adapter covers TS/Svelte/C#/GDScript/HTML/
-//     CSS in principle. Cost: another binary on the user's PATH.
-//
-//  2. CGO tree-sitter bindings — github.com/smacker/go-tree-sitter
-//     plus per-language grammar modules. Strongest analysis but
-//     breaks the pure-Go binary distribution and complicates
-//     GoReleaser cross-compile. Defer until ast-grep proves
-//     insufficient for a real need.
+// If ast-grep's coverage of a language is too thin for your use case,
+// the alternative is CGO tree-sitter via github.com/smacker/
+// go-tree-sitter. That breaks the pure-Go binary distribution and
+// complicates GoReleaser cross-compile, so it stays a last resort.
 //
 // # CLI surface
 //
