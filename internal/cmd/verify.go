@@ -106,7 +106,7 @@ func configuredAdapters(p *project.Project, _ string, skip bool) []mutation.Adap
 	return []mutation.Adapter{
 		&mutation.Stryker{Prefix: prefix, ProjectRoot: cwd},
 		&mutation.Gremlins{Prefix: prefix, ProjectRoot: cwd},
-		// Future: &mutation.StrykerNet{...}
+		&mutation.StrykerNet{Prefix: prefix, ProjectRoot: cwd},
 	}
 }
 
