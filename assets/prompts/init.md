@@ -121,6 +121,16 @@ git add . && git commit -m "chore: initialise project via dross"
 ```
 Ask before committing.
 
+## 9.5 Telemetry
+
+Dross records local-only usage events at `~/.claude/dross/telemetry.jsonl` to help the user spot friction in their own workflow. Default ON; never sent anywhere. Logs shapes (counts, durations, error classes) — never user-typed content.
+
+If `dross stats path` shows a defaults file with `[telemetry] asked_at` already set, skip this step (user has already been prompted on a prior project).
+
+Otherwise, ask via `AskUserQuestion`: **"Dross can record local-only telemetry to `~/.claude/dross/telemetry.jsonl` (counts, durations, error classes — no file content, no project paths). It helps you spot friction in your own usage. Enable?"** Options: `enable` (default) / `disable`.
+
+Run `dross stats opt-in` or `dross stats opt-out` based on the answer. Both stamp `asked_at` so we don't ask again on the next project.
+
 ## 10. Wrap
 
 Run `dross validate`. Should be green. Print:

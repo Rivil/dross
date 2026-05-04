@@ -97,6 +97,14 @@ Tag obvious cross-project ones with `--scope global` instead.
 
 Optional but valuable. If skipped, mark a TODO and move on.
 
+## 8.5 Telemetry
+
+If `dross stats path` shows a defaults file without `[telemetry] asked_at` set (i.e. dross has never asked this user about telemetry on any project), prompt now.
+
+`AskUserQuestion`: **"Dross can record local-only telemetry to `~/.claude/dross/telemetry.jsonl` (counts, durations, error classes — never file content). It helps you spot friction in your own dross usage. Enable?"** Options: `enable` (default) / `disable`.
+
+Run `dross stats opt-in` or `dross stats opt-out` based on the answer. Both stamp `asked_at` so this prompt is shown at most once across all projects.
+
 ## 9. Wrap
 
 Run `dross validate`. Print summary:
