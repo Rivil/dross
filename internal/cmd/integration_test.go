@@ -79,6 +79,9 @@ func TestFullLifecycle(t *testing.T) {
 		t.Fatalf("phase dir %s not created", phaseDir)
 	}
 	// Set as current phase (as the slash command would after create)
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
 	if err := runCmd(t, State(), "set", "current_phase", phaseID); err != nil {
 		t.Fatal(err)
 	}

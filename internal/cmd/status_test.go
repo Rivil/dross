@@ -37,7 +37,7 @@ func TestStatusAfterInitSuggestsCompleteProject(t *testing.T) {
 	}
 }
 
-func TestStatusWithProjectAndNoPhaseSuggestsPhaseCreate(t *testing.T) {
+func TestStatusWithProjectAndNoMilestoneSuggestsMilestoneScope(t *testing.T) {
 	chdir(t, t.TempDir())
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
@@ -47,11 +47,29 @@ func TestStatusWithProjectAndNoPhaseSuggestsPhaseCreate(t *testing.T) {
 	out := captureStdout(t, func() {
 		runCmd(t, Status())
 	})
-	if !strings.Contains(out, "/dross-spec --new") {
-		t.Errorf("expected /dross-spec --new suggestion:\n%s", out)
+	if !strings.Contains(out, "/dross-milestone") {
+		t.Errorf("expected /dross-milestone suggestion when project complete but no milestone:\n%s", out)
 	}
 	if !strings.Contains(out, "feast") {
 		t.Errorf("project name should appear:\n%s", out)
+	}
+}
+
+func TestStatusWithMilestoneAndNoPhaseSuggestsPhaseCreate(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	mustRunSet(t, "project.name", "feast")
+	mustRunSet(t, "runtime.mode", "docker")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "/dross-spec --new") {
+		t.Errorf("expected /dross-spec --new suggestion once milestone is scoped:\n%s", out)
 	}
 }
 
@@ -134,6 +152,9 @@ func scaffoldPhaseWithSpecOnly(t *testing.T, phaseID string) {
 	}
 	mustRunSet(t, "project.name", "x")
 	mustRunSet(t, "runtime.mode", "native")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
 	if err := runCmd(t, State(), "set", "current_phase", phaseID); err != nil {
 		t.Fatal(err)
 	}

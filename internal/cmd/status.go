@@ -112,6 +112,9 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	if proj.Project.Name == "" || proj.Runtime.Mode == "" {
 		return "/dross-init or /dross-onboard — project.toml is incomplete"
 	}
+	if st.CurrentMilestone == "" {
+		return "/dross-milestone v0.1 — scope the first milestone before clarifying phases"
+	}
 	if st.CurrentPhase == "" {
 		return "/dross-spec --new \"<title>\" — clarify the first phase"
 	}
