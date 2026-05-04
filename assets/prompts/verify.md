@@ -127,15 +127,43 @@ dross state set current_phase_status verified
 dross state touch "verified <phase-id>: <verdict> (<criteria-covered>/<total>, mutation <score>)"
 ```
 
-If verdict is `pass`:
+Commit the verify artefacts so `.dross/` doesn't sit dirty (CLI writes the files but doesn't auto-commit):
 ```
-Phase <id> verified. Ready to merge / ship / move to next phase.
+git add .dross/state.json .dross/phases/<phase-id>/verify.toml .dross/phases/<phase-id>/tests.json
+git commit -m "chore(dross): record verify for <phase-id> (<verdict>)"
+```
+Use `repo.commit_convention` from project.toml. Skip `tests.json` from the `add` if mutation was skipped (`--skip-mutation`) and the file wasn't written.
+
+If verdict is `pass`:
+
+1. Run `dross phase list` and find the phase immediately after `<id>` in the printed order. Call it `<next-id>`. If `<id>` is the last entry, there is no next phase — the milestone is feature-complete.
+
+2. If `<next-id>` exists, print:
+```
+Phase <id> verified: pass.
+
+Next:
+  /dross-ship              — open PR for this phase (filters .dross/, opens via provider)
+  /dross-spec <next-id>    — start the next phase
+  dross phase list         — see all phases
+```
+
+3. Otherwise (last phase in the milestone), print:
+```
+Phase <id> verified: pass. This is the last phase in the milestone.
+
+Next:
+  /dross-ship              — open PR for this phase
+  dross milestone show     — review milestone status before tagging the release
 ```
 
 If `partial` or `fail`:
 ```
 Phase <id> verdict: <verdict>. Open .dross/phases/<id>/verify.toml for full detail.
-Re-run /dross-verify after addressing the blocking findings.
+
+Next:
+  /dross-execute <id>      — amend the failing task (add tests / fix code)
+  /dross-verify            — re-run after addressing blocking findings
 ```
 
 ## Hard rules

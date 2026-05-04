@@ -130,8 +130,27 @@ func TestRender(t *testing.T) {
 
 func TestRenderEmpty(t *testing.T) {
 	out := Render(nil)
-	if !strings.Contains(out, "no rules configured") {
+	if !strings.Contains(out, "no user rules configured") {
 		t.Errorf("empty render unexpected: %q", out)
+	}
+	// Builtins must still render even when there are no user rules.
+	if !strings.Contains(out, "[builtin/hard/dross-commit-hygiene]") {
+		t.Error("empty render missing dross-commit-hygiene builtin")
+	}
+}
+
+func TestRenderEmitsBuiltinsBeforeUserRules(t *testing.T) {
+	merged := []Resolved{
+		{Rule: Rule{ID: "r-01", Text: "user rule", Severity: Hard}, Scope: Global},
+	}
+	out := Render(merged)
+	builtinIdx := strings.Index(out, "dross-commit-hygiene")
+	userIdx := strings.Index(out, "r-01")
+	if builtinIdx < 0 || userIdx < 0 {
+		t.Fatalf("missing rule lines: out=%q", out)
+	}
+	if builtinIdx > userIdx {
+		t.Error("builtins must render before user rules")
 	}
 }
 

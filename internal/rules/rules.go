@@ -111,20 +111,43 @@ type Resolved struct {
 	Scope Scope
 }
 
+// Builtins are rules baked into every Render output. They are not
+// editable via `dross rule add/remove` — they encode invariants the
+// tool itself relies on (e.g. commit hygiene for .dross/ writes).
+var Builtins = []Resolved{
+	{
+		Scope: "builtin",
+		Rule: Rule{
+			ID:       "dross-commit-hygiene",
+			Severity: Hard,
+			Text:     "If your slash command (or a `dross` CLI call inside it) writes to any file under `.dross/`, commit those writes with `git add <files> && git commit` before wrapping. Use `repo.commit_convention` from project.toml; if none, prefix with `chore(dross): `. Never leave `.dross/` dirty across slash-command boundaries.",
+		},
+	},
+}
+
 // Render produces the <rules> block injected into prompt context.
+// Builtins are always emitted first, followed by user-configured rules.
 func Render(merged []Resolved) string {
-	if len(merged) == 0 {
-		return "<rules>\n(no rules configured)\n</rules>"
-	}
 	var b strings.Builder
 	b.WriteString("<rules>\n")
 	b.WriteString("These rules are MUST-FOLLOW. Hard rules are blocking; soft rules are advisories.\n\n")
-	for _, r := range merged {
+	for _, r := range Builtins {
 		sev := r.Severity
 		if sev == "" {
 			sev = Hard
 		}
 		fmt.Fprintf(&b, "[%s/%s/%s] %s\n", r.Scope, sev, r.ID, r.Text)
+	}
+	if len(merged) == 0 {
+		b.WriteString("\n(no user rules configured)\n")
+	} else {
+		for _, r := range merged {
+			sev := r.Severity
+			if sev == "" {
+				sev = Hard
+			}
+			fmt.Fprintf(&b, "[%s/%s/%s] %s\n", r.Scope, sev, r.ID, r.Text)
+		}
 	}
 	b.WriteString("</rules>")
 	return b.String()
