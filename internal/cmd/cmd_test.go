@@ -172,6 +172,9 @@ func TestInitCapturesRemoteFromGit(t *testing.T) {
 func TestInitLeavesRemoteEmptyWhenNoGit(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
+	// Isolate HOME so the user's real ~/.claude/dross/defaults.toml doesn't
+	// leak in and seed [remote] before the assertion runs.
+	t.Setenv("HOME", t.TempDir())
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatalf("init: %v", err)
 	}
