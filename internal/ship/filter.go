@@ -40,8 +40,9 @@ type FilterOpts struct {
 // git cannot restore it on branch checkout (untracked files don't
 // participate in checkout).
 //
-// v1 is squash-only. A history-preserving variant (per-commit cherry-
-// pick + drop .dross/ per commit) is a follow-up.
+// Use FilterPreserveHistory in the same package when reviewers benefit
+// from seeing the per-task commit shape; FilterSquash is the default
+// because most PRs read better as one cumulative diff.
 func FilterSquash(c *changes.Changes, opts FilterOpts) (branch, sha string, err error) {
 	if opts.RepoDir == "" {
 		return "", "", errors.New("RepoDir is required")
@@ -140,34 +141,18 @@ func FilterSquash(c *changes.Changes, opts FilterOpts) (branch, sha string, err 
 }
 
 // deriveBase returns the parent of the earliest phase commit per
-// topological order. Falls back to "<main-branch>" — but main branch
-// is unknown here, so caller passes BaseCommit explicitly when there
-// are no recorded changes.
+// ancestry order — the first commit such that no other recorded
+// commit is its ancestor. `git rev-list --topo-order --no-walk`
+// silently ignores --topo-order and emits commits in argument
+// order, which is whatever Go's map iteration produces; that bug
+// caused FilterSquash to occasionally pick a base partway through
+// the phase chain. Now we use ancestry directly.
 func deriveBase(repoDir string, c *changes.Changes) (string, error) {
-	if c == nil || len(c.Tasks) == 0 {
-		return "", errors.New("changes.json has no tasks; pass BaseCommit explicitly")
-	}
-	seen := map[string]bool{}
-	var commits []string
-	for _, t := range c.Tasks {
-		if t.Commit != "" && !seen[t.Commit] {
-			seen[t.Commit] = true
-			commits = append(commits, t.Commit)
-		}
-	}
-	if len(commits) == 0 {
-		return "", errors.New("no commits recorded in changes.json")
-	}
-	args := append([]string{"rev-list", "--reverse", "--topo-order", "--no-walk"}, commits...)
-	out, err := gitOut(repoDir, args...)
+	ordered, err := orderedPhaseCommits(repoDir, c)
 	if err != nil {
 		return "", err
 	}
-	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if len(lines) == 0 || lines[0] == "" {
-		return "", errors.New("rev-list produced no output")
-	}
-	earliest := lines[0]
+	earliest := ordered[0]
 	parent, err := gitOut(repoDir, "rev-parse", earliest+"^")
 	if err != nil {
 		return "", fmt.Errorf("earliest commit %s has no parent: %w", earliest, err)
