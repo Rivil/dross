@@ -83,6 +83,7 @@ func Verify() *cobra.Command {
 			}
 
 			printVerifySummary(t, v)
+			recordVerifyOutcome(t, v)
 			return nil
 		},
 	}
@@ -138,6 +139,40 @@ func dockerPrefix(p *project.Project) string {
 		}
 	}
 	return "docker compose exec app"
+}
+
+// recordVerifyOutcome writes a telemetry outcome event capturing the
+// shape of this verify run — verdict, mutation score, file/criterion
+// counts. Never logs file paths or criterion text.
+func recordVerifyOutcome(t *verify.Tests, v *verify.Verify) {
+	counts := map[string]int{
+		"languages":  len(t.Languages),
+		"skipped":    len(t.Skipped),
+		"criteria":   len(v.Criteria),
+		"findings":   len(v.Findings),
+	}
+	files := 0
+	killed := 0
+	survived := 0
+	for _, lr := range t.Languages {
+		files += len(lr.Files)
+		if lr.Mutation != nil {
+			killed += lr.Mutation.Killed
+			survived += lr.Mutation.Survived
+		}
+	}
+	counts["files"] = files
+	counts["mutants_killed"] = killed
+	counts["mutants_survived"] = survived
+
+	nums := map[string]float64{}
+	if total := killed + survived; total > 0 {
+		nums["mutation_score"] = float64(killed) / float64(total)
+	}
+	tags := map[string]string{
+		"verdict": v.Verify.Verdict,
+	}
+	RecordOutcomeEvent("verify", counts, nums, tags)
 }
 
 func printVerifySummary(t *verify.Tests, v *verify.Verify) {

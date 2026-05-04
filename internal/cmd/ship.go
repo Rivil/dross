@@ -171,6 +171,25 @@ func Ship() *cobra.Command {
 			if err := s.Save(filepath.Join(root, state.File)); err != nil {
 				return fmt.Errorf("save state: %w", err)
 			}
+
+			// 9) Telemetry — capture shape of this ship without leaking
+			//    repo URL, body content, or reviewer names.
+			tags := map[string]string{
+				"provider": p.Remote.Provider,
+				"result":   shipResultTag(res, err),
+			}
+			if draft {
+				tags["draft"] = "true"
+			}
+			if forceUnverified || forceBranch {
+				tags["force"] = "true"
+			}
+			counts := map[string]int{
+				"reviewers":   len(p.Remote.Reviewers),
+				"body_chars":  len(body),
+				"title_chars": len(title),
+			}
+			RecordOutcomeEvent("ship", counts, nil, tags)
 			return nil
 		},
 	}
@@ -190,4 +209,19 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// shipResultTag classifies a ship's outcome into a single token. Used
+// for the telemetry "result" tag so ship outcomes are easy to bucket.
+func shipResultTag(res *ship.OpenResult, err error) string {
+	switch {
+	case err != nil && res == nil:
+		return "failed"
+	case err != nil && res != nil:
+		return "partial" // PR opened, post-step (reviewers etc.) failed
+	case res != nil:
+		return "opened"
+	default:
+		return "noop"
+	}
 }

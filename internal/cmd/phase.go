@@ -71,6 +71,7 @@ func phaseCreate() *cobra.Command {
 			}
 			Printf("created %s\n", dir)
 			Print("Next: /dross-spec to write spec.toml, then /dross-plan")
+			RecordOutcomeEvent("phase_create", map[string]int{"ordinal": n}, nil, nil)
 			return nil
 		},
 	}
