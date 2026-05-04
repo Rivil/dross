@@ -22,14 +22,15 @@ import (
 // auto-assigned human reviewers.
 func Ship() *cobra.Command {
 	var (
-		title           string
-		body            string
-		bodyFile        string
-		noPush          bool
-		draft           bool
-		forceUnverified bool
-		forceBranch     bool
-		printBody       bool
+		title            string
+		body             string
+		bodyFile         string
+		noPush           bool
+		draft            bool
+		forceUnverified  bool
+		forceBranch      bool
+		printBody        bool
+		preserveHistory  bool
 	)
 	c := &cobra.Command{
 		Use:   "ship [phase-id]",
@@ -107,15 +108,28 @@ func Ship() *cobra.Command {
 				return nil
 			}
 
-			// 5) Build the squash branch.
-			branch, sha, err := ship.FilterSquash(ch, ship.FilterOpts{
+			// 5) Build the review branch — squash by default, or per-commit
+			//    history preserved with --preserve-history.
+			filterOpts := ship.FilterOpts{
 				RepoDir: repoDir,
 				PhaseID: phaseID,
 				Message: title,
 				Force:   forceBranch,
-			})
-			if err != nil {
-				return fmt.Errorf("filter squash: %w", err)
+			}
+			var (
+				branch string
+				sha    string
+			)
+			if preserveHistory {
+				branch, sha, err = ship.FilterPreserveHistory(ch, filterOpts)
+				if err != nil {
+					return fmt.Errorf("filter preserve-history: %w", err)
+				}
+			} else {
+				branch, sha, err = ship.FilterSquash(ch, filterOpts)
+				if err != nil {
+					return fmt.Errorf("filter squash: %w", err)
+				}
 			}
 			Printf("Built %s @ %s\n", branch, sha[:min(7, len(sha))])
 
@@ -201,6 +215,62 @@ func Ship() *cobra.Command {
 	c.Flags().BoolVar(&forceUnverified, "force-unverified", false, "skip the 'verify must be pass' gate")
 	c.Flags().BoolVar(&forceBranch, "force-branch", false, "overwrite an existing pr/<id> branch")
 	c.Flags().BoolVar(&printBody, "print-body", false, "print the generated PR body and exit (no push, no branch)")
+	c.Flags().BoolVar(&preserveHistory, "preserve-history", false,
+		"build pr/<id> by per-commit cherry-pick (drops .dross/ each commit) instead of one squash — preserves the per-task shape of the work")
+	c.AddCommand(shipComment())
+	return c
+}
+
+// shipComment posts a markdown comment to an existing PR via the
+// project's provider. Used by /dross-review to publish the aggregated
+// subagent panel findings as a single consolidated comment.
+func shipComment() *cobra.Command {
+	var (
+		prNumber int
+		body     string
+		bodyFile string
+	)
+	c := &cobra.Command{
+		Use:   "comment --pr <n> (--body \"...\" | --body-file <path>)",
+		Short: "Post a comment to a PR via the project's provider",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if prNumber <= 0 {
+				return errors.New("--pr is required")
+			}
+			if body == "" && bodyFile == "" {
+				return errors.New("either --body or --body-file is required")
+			}
+			if bodyFile != "" {
+				b, err := os.ReadFile(bodyFile)
+				if err != nil {
+					return fmt.Errorf("read --body-file: %w", err)
+				}
+				body = string(b)
+			}
+			p, _, err := loadProject()
+			if err != nil {
+				return err
+			}
+			if p.Remote.URL == "" || p.Remote.Provider == "" {
+				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
+			}
+			if err := ship.PostComment(ship.CommentOpts{
+				Provider: p.Remote.Provider,
+				URL:      p.Remote.URL,
+				APIBase:  p.Remote.APIBase,
+				AuthEnv:  p.Remote.AuthEnv,
+				PRNumber: prNumber,
+				Body:     body,
+			}); err != nil {
+				return fmt.Errorf("post comment: %w", err)
+			}
+			Printf("Posted comment to PR #%d\n", prNumber)
+			return nil
+		},
+	}
+	c.Flags().IntVar(&prNumber, "pr", 0, "PR number to comment on (required)")
+	c.Flags().StringVar(&body, "body", "", "comment body (markdown)")
+	c.Flags().StringVar(&bodyFile, "body-file", "", "read comment body from file")
 	return c
 }
 
