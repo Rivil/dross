@@ -39,6 +39,7 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-options` | 5,988 | **~1,500** |
 | Dross `/dross-milestone` | 6,034 | **~1,510** |
 | Dross `/dross-ship` | 5,786 | **~1,450** |
+| Dross `/dross-review` | 7,376 | **~1,840** |
 | Dross `/dross-rule` | 1,936 | **~480** |
 | Dross `/dross-spec` | 5,439 | **~1,360** |
 | Dross `/dross-plan` | 5,495 | **~1,370** |
@@ -52,8 +53,8 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 68,603 | ~17,150 |
-| **Ratio** | | **≈ 36×** |
+| Dross (commands + prompts) | 76,328 | ~19,080 |
+| **Ratio** | | **≈ 33×** |
 
 **Being honest about these numbers:**
 
@@ -112,6 +113,7 @@ assets/prompts/    Prompt instructions (installed to ~/.claude/dross/prompts/)
 ├── dross-execute/SKILL.md
 ├── dross-verify/SKILL.md
 ├── dross-ship/SKILL.md
+├── dross-review/SKILL.md
 ├── dross-status/SKILL.md
 ├── dross-options/SKILL.md
 └── dross-rule/SKILL.md
@@ -174,7 +176,8 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross doctor` | Project-level health check (`[remote]` ↔ git, `auth_env` exported) | ✅ |
 | `dross defaults {show,save}` | Read/write `~/.claude/dross/defaults.toml` (cross-project pre-fills) | ✅ |
 | `dross env {list,set,unset}` | Manage env keys in `~/.claude/settings.json` (hidden input, never echoed) | ✅ |
-| `dross ship <phase-id>` | Filter `.dross/`, push `pr/<id>`, open PR via provider, request reviewers | ✅ |
+| `dross ship <phase-id>` | Filter `.dross/`, push `pr/<id>`, open PR via provider, request reviewers. `--preserve-history` keeps per-task commits | ✅ |
+| `dross ship comment` | Post a markdown comment to a PR via provider (used by /dross-review) | ✅ |
 | `dross stats {show,path,opt-in,opt-out}` | Aggregates over the local telemetry log; toggle the recorder | ✅ |
 | `dross version` | Print version, commit, and build date | ✅ |
 
@@ -194,6 +197,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `/dross-status` | ✅ |
 | `/dross-options` | ✅ |
 | `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup) |
+| `/dross-review` | ✅ (4-lens subagent panel: security / quality / tests / spec-fidelity) |
 
 Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 
@@ -215,9 +219,10 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] `dross stats` + local-only telemetry — single-developer event log to surface friction, opt-out via `dross stats opt-out` or `DROSS_NO_TELEMETRY=1`
 - [x] Builtin `.dross/` commit-hygiene rule baked into every prompt's pre-flight
 - [x] Ship filter rewrite — runs in an ephemeral worktree so the user's gitignored `.dross/` is never destroyed
-- [ ] `/dross-ship` subagent review panel (security / code-quality / test-efficacy / spec-fidelity lenses posting PR comments)
-- [ ] Mutation adapter: Stryker.NET (C#)
-- [ ] Codex: tree-sitter indexer for TS/Svelte/Go/C#/GDScript/HTML/CSS
+- [x] Ship `--preserve-history` — alternative filter that keeps per-task commits, `.dross/` stripped from each
+- [x] `/dross-review` four-lens subagent panel — spawns security / code-quality / test-efficacy / spec-fidelity reviewers in parallel and posts an aggregated comment to the PR
+- [x] Mutation adapter: Stryker.NET (C#) — modeled from public Stryker.NET docs, JSON shape shared with Stryker.JS, fixture-tested; real-world verify pending a C# project to dogfood against
+- [ ] Codex: tree-sitter indexer for TS/Svelte/Go/C#/GDScript/HTML/CSS — package doc has the implementation sketch; deferred until a multi-language project drives the need
 
 ## Telemetry
 
