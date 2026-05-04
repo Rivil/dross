@@ -18,10 +18,30 @@ import (
 
 const File = "defaults.toml"
 
-// Defaults is the schema of the global defaults file. Only fields that
-// are useful as cross-project pre-fills should live here.
+// Defaults is the schema of the global defaults file. Holds both
+// cross-project pre-fills (remote_defaults) and global runtime
+// toggles (telemetry).
 type Defaults struct {
-	Remote RemoteDefaults `toml:"remote_defaults,omitempty"`
+	Remote    RemoteDefaults    `toml:"remote_defaults,omitempty"`
+	Telemetry TelemetryDefaults `toml:"telemetry,omitempty"`
+}
+
+// TelemetryDefaults controls the local-only event recorder. Default ON;
+// users are asked to confirm at init/onboard time so consent is
+// explicit. Enabled is a pointer so we can distinguish "user said yes"
+// (true), "user said no" (false), and "never asked" (nil — treated as
+// enabled per default-ON policy, but init/onboard should still ask).
+type TelemetryDefaults struct {
+	Enabled *bool  `toml:"enabled,omitempty"`
+	AskedAt string `toml:"asked_at,omitempty"` // ISO date the user was prompted
+}
+
+// TelemetryEnabled returns the effective on/off bit. Unset = on.
+func (t TelemetryDefaults) TelemetryEnabled() bool {
+	if t.Enabled == nil {
+		return true
+	}
+	return *t.Enabled
 }
 
 // RemoteDefaults seeds project.Remote at init/onboard time. Each field is

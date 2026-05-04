@@ -13,8 +13,14 @@ import (
 
 // chdir changes cwd for the duration of the test.
 // Tests using chdir cannot run in parallel — cwd is process-global.
+//
+// Side effect: also pins DROSS_NO_TELEMETRY=1 for the test, so any
+// outcome events emitted by verify/ship/phase create don't write to
+// the developer's real ~/.claude/dross/telemetry.jsonl. Tests that
+// specifically exercise telemetry should opt back in via t.Setenv.
 func chdir(t *testing.T, dir string) {
 	t.Helper()
+	t.Setenv("DROSS_NO_TELEMETRY", "1")
 	prev, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)

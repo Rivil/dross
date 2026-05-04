@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -39,9 +40,23 @@ func main() {
 		cmd.Defaults(),
 		cmd.Env(),
 		cmd.Ship(),
+		cmd.Stats(),
 	)
 
-	if err := root.Execute(); err != nil {
+	// Telemetry: capture resolved subcommand at PreRun, write the event
+	// after Execute returns so we get duration + final error class.
+	// Failures here are swallowed — telemetry never breaks the user's
+	// workflow.
+	start := time.Now()
+	var resolvedCmd *cobra.Command
+	root.PersistentPreRun = func(c *cobra.Command, _ []string) {
+		resolvedCmd = c
+	}
+
+	err := root.Execute()
+	cmd.RecordCLIEvent(resolvedCmd, time.Since(start), err)
+
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "dross:", err)
 		os.Exit(1)
 	}
