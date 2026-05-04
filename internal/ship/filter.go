@@ -3,7 +3,9 @@ package ship
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/Rivil/dross/internal/changes"
@@ -22,14 +24,21 @@ type FilterOpts struct {
 // FilterSquash creates a clean review branch by:
 //  1. Computing the base commit (parent of earliest phase commit, from
 //     changes.json — unless explicitly overridden).
-//  2. Branching off the base.
-//  3. Copying the current working tree onto that branch.
-//  4. Removing .dross/ from the index + working tree.
+//  2. Adding an ephemeral git worktree at that base commit.
+//  3. Overlaying the current tip's tree inside the worktree.
+//  4. Removing .dross/ from the worktree's index + files.
 //  5. Committing the cumulative diff as one squash with Opts.Message.
+//  6. Creating the PR branch in the main repo at the new commit SHA.
+//  7. Removing the ephemeral worktree.
 //
 // Returns the branch name and the new commit SHA. The caller is
-// responsible for pushing the branch and restoring the user's prior
-// HEAD afterwards.
+// responsible for pushing the branch.
+//
+// All destructive work happens inside the ephemeral worktree — the
+// user's working tree is never touched. This is critical because
+// .dross/ is gitignored: once removed from the user's working tree,
+// git cannot restore it on branch checkout (untracked files don't
+// participate in checkout).
 //
 // v1 is squash-only. A history-preserving variant (per-commit cherry-
 // pick + drop .dross/ per commit) is a follow-up.
@@ -60,11 +69,6 @@ func FilterSquash(c *changes.Changes, opts FilterOpts) (branch, sha string, err 
 	if err != nil {
 		return "", "", fmt.Errorf("rev-parse HEAD: %w", err)
 	}
-	originalRef, err := gitOut(opts.RepoDir, "symbolic-ref", "--quiet", "--short", "HEAD")
-	if err != nil {
-		// Detached HEAD — fall back to SHA.
-		originalRef = currentTip
-	}
 
 	// Verify branch doesn't already exist (unless --force).
 	if exists, _ := branchExists(opts.RepoDir, opts.BranchName); exists {
@@ -76,50 +80,62 @@ func FilterSquash(c *changes.Changes, opts FilterOpts) (branch, sha string, err 
 		}
 	}
 
-	// 1) checkout fresh branch at base
-	if _, err := git(opts.RepoDir, "checkout", "-b", opts.BranchName, base); err != nil {
-		return "", "", fmt.Errorf("checkout -b %s %s: %w", opts.BranchName, base, err)
+	// Create an ephemeral worktree path. MkdirTemp gives us a unique name we
+	// own; remove it so `git worktree add` can create it fresh.
+	wtDir, err := os.MkdirTemp("", "dross-ship-")
+	if err != nil {
+		return "", "", fmt.Errorf("create temp dir for worktree: %w", err)
 	}
-	// Best-effort restore on any later error.
+	if err := os.RemoveAll(wtDir); err != nil {
+		return "", "", fmt.Errorf("clear temp dir for worktree: %w", err)
+	}
+
+	if _, err := git(opts.RepoDir, "worktree", "add", "--detach", "--quiet", wtDir, base); err != nil {
+		return "", "", fmt.Errorf("worktree add %s %s: %w", wtDir, base, err)
+	}
+	// Best-effort cleanup. --force handles the case where commit failed and
+	// the worktree has uncommitted state.
 	defer func() {
-		if err != nil {
-			_, _ = git(opts.RepoDir, "checkout", originalRef)
-		}
+		_, _ = git(opts.RepoDir, "worktree", "remove", "--force", wtDir)
 	}()
 
-	// 2) overlay the tip's tree
-	if _, err := git(opts.RepoDir, "checkout", currentTip, "--", "."); err != nil {
-		return "", "", fmt.Errorf("checkout tip tree: %w", err)
+	// 1) overlay the tip's tree onto the worktree
+	if _, err := git(wtDir, "checkout", currentTip, "--", "."); err != nil {
+		return "", "", fmt.Errorf("checkout tip tree in worktree: %w", err)
 	}
 
-	// 3) drop .dross/ from index + working tree (ignore error if absent)
-	_, _ = git(opts.RepoDir, "rm", "-r", "--quiet", "--cached", "--ignore-unmatch", ".dross")
-	_, _ = exec.Command("rm", "-rf", opts.RepoDir+"/.dross").CombinedOutput()
+	// 2) drop .dross/ from index + worktree (defensive; safe because we're
+	//    operating on the ephemeral worktree, not the user's checkout)
+	_, _ = git(wtDir, "rm", "-r", "--quiet", "--cached", "--ignore-unmatch", ".dross")
+	_ = os.RemoveAll(filepath.Join(wtDir, ".dross"))
 
-	// 4) stage everything (handles deletions, additions, renames in working tree)
-	if _, err := git(opts.RepoDir, "add", "-A"); err != nil {
-		return "", "", fmt.Errorf("git add -A: %w", err)
+	// 3) stage everything (handles deletions, additions, renames)
+	if _, err := git(wtDir, "add", "-A"); err != nil {
+		return "", "", fmt.Errorf("git add -A in worktree: %w", err)
 	}
 
-	// 5) commit (amend the implicit branch checkout if there's nothing to add — git complains)
-	cmd := exec.Command("git", "-C", opts.RepoDir, "commit",
+	// 4) commit
+	cmd := exec.Command("git", "-C", wtDir, "commit",
 		"-m", opts.Message,
 		"--no-verify",
 	)
 	out, cerr := cmd.CombinedOutput()
 	if cerr != nil {
-		return "", "", fmt.Errorf("commit: %w\n%s", cerr, string(out))
+		return "", "", fmt.Errorf("commit in worktree: %w\n%s", cerr, string(out))
 	}
 
-	newSHA, err := gitOut(opts.RepoDir, "rev-parse", "HEAD")
+	newSHA, err := gitOut(wtDir, "rev-parse", "HEAD")
 	if err != nil {
-		return "", "", fmt.Errorf("rev-parse new HEAD: %w", err)
+		return "", "", fmt.Errorf("rev-parse new HEAD in worktree: %w", err)
 	}
 
-	// Return user to their original branch.
-	if _, e := git(opts.RepoDir, "checkout", originalRef); e != nil {
-		return opts.BranchName, newSHA, fmt.Errorf("created %s but failed to restore %s: %w", opts.BranchName, originalRef, e)
+	// 5) create the PR branch in the main repo at the new commit. Worktrees
+	//    share the object database with the main repo, so the new SHA is
+	//    immediately reachable here without an explicit fetch.
+	if _, err := git(opts.RepoDir, "branch", opts.BranchName, newSHA); err != nil {
+		return "", "", fmt.Errorf("create branch %s at %s: %w", opts.BranchName, newSHA, err)
 	}
+
 	return opts.BranchName, newSHA, nil
 }
 
