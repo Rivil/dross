@@ -8,7 +8,12 @@ Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
 2. Resolve the target phase from `$ARGUMENTS`:
    - `--new "Phase Title"` → run `dross phase create "<title>"`, capture the new id (`NN-slug`).
    - `<phase-id>` → use it directly. Fail if `.dross/phases/<id>/` doesn't exist.
-   - empty → read `.dross/state.json`'s `current_phase`. If unset, ask the user to pick one (or `--new`).
+   - empty → read `.dross/state.json`'s `current_phase` and decide:
+     - **set and in-progress** (spec.toml exists but no plan, OR plan exists but verify isn't `pass`) → use it directly (resume mode below). No question asked.
+     - **set, but the phase looks done** (i.e. `current_phase_status` is `verified` or `shipped`, OR `.dross/phases/<current>/verify.toml` exists with `verdict = "pass"`) → there's nothing to spec on `<current>`. `AskUserQuestion`: **"Phase `<current>` is `<status>` — nothing left to spec. Create a new phase?"** options: `new` / `resume <current>` / `cancel`. On `new`, jump to the create flow below. On `resume`, use `<current>` anyway (rare; user wants to amend a locked spec). On `cancel`, stop and exit cleanly.
+     - **unset** → there's nothing for this command to do. `AskUserQuestion`: **"No phase in progress. Create a new phase?"** options: `new` / `cancel`. On `cancel`, stop and exit cleanly. On `new`, jump to the create flow below.
+
+   **Create flow** (used by `--new`, the `new` answer above, or whenever scaffolding is needed): ask the user for a phase title in plain text (or via `AskUserQuestion`'s freeform variant), then run `dross phase create "<title>"`, capture the new id (`NN-slug`), and proceed. Do NOT tell the user to run `dross phase create` manually — this command runs it.
 3. Read `.dross/phases/<id>/spec.toml` if it exists. **Resume, don't overwrite.** Show the existing content and ask whether to extend or replace.
 
 ## 1. Read context
