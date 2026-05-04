@@ -127,7 +127,7 @@ Run `dross validate`. Should be green. Print:
 ```
 Project bootstrapped.
 Next steps:
-  dross milestone create v0.1   — scope the first milestone (CLI; no slash command yet)
-  /dross-spec             — clarify the first phase
+  /dross-milestone v0.1   — scope the first milestone (title, success criteria, non-goals, phases)
+  /dross-spec             — clarify the first phase (run after the milestone is scoped)
 ```
 Update state: `dross state touch "init complete"`.
