@@ -119,7 +119,13 @@ id = "01-x"`)
 	}
 }
 
-func TestFilterSquashRefusesExistingBranchWithoutForce(t *testing.T) {
+// TestFilterSquashAutoOverwritesStaleLocalBranch is the new default:
+// re-running ship on the same phase should silently rebuild pr/<id>
+// when the existing branch is a stale local artefact (no upstream).
+// This is the dogfood-found friction — users were reaching for
+// --force-branch reflexively in this case, dirtying the telemetry
+// signal and slowing them down.
+func TestFilterSquashAutoOverwritesStaleLocalBranch(t *testing.T) {
 	dir := makeRepo(t)
 	writeFile(t, dir, "src/a.ts", "x\n")
 	writeFile(t, dir, ".dross/phases/01/spec.toml", "x")
@@ -131,12 +137,52 @@ func TestFilterSquashRefusesExistingBranchWithoutForce(t *testing.T) {
 	if _, _, err := FilterSquash(c, FilterOpts{RepoDir: dir, PhaseID: "01", Message: "p"}); err != nil {
 		t.Fatalf("first squash: %v", err)
 	}
-	// Second call without Force should fail.
-	_, _, err := FilterSquash(c, FilterOpts{RepoDir: dir, PhaseID: "01", Message: "p"})
-	if err == nil {
-		t.Error("expected error on existing branch without Force")
+	// Second call without Force should now succeed — pr/01 has no
+	// upstream, so it's a stale local branch and auto-replaceable.
+	if _, _, err := FilterSquash(c, FilterOpts{RepoDir: dir, PhaseID: "01", Message: "p2"}); err != nil {
+		t.Fatalf("rebuild without Force should auto-overwrite local-only branch: %v", err)
 	}
-	// With Force it should overwrite.
+}
+
+// TestFilterSquashRefusesDivergedBranchWithoutForce gates the unsafe
+// case: the local pr/<id> has commits beyond its upstream, which the
+// rebuild won't reproduce. The user could be amending pr/<id> after
+// a review cycle; dropping that work silently would be a real bug.
+// Explicit --force-branch is still required.
+func TestFilterSquashRefusesDivergedBranchWithoutForce(t *testing.T) {
+	// Build a "remote" repo so we have an upstream to diverge from.
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+
+	dir := makeRepo(t)
+	mustGit(t, dir, "remote", "add", "origin", remote)
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	writeFile(t, dir, "src/a.ts", "x\n")
+	writeFile(t, dir, ".dross/phases/01/spec.toml", "x")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat")
+	sha := mustGit(t, dir, "rev-parse", "HEAD")
+
+	c := &changes.Changes{Tasks: map[string]changes.TaskRecord{"t1": {Commit: sha}}}
+	if _, _, err := FilterSquash(c, FilterOpts{RepoDir: dir, PhaseID: "01", Message: "p"}); err != nil {
+		t.Fatalf("first squash: %v", err)
+	}
+	// Push the new branch so it has an upstream, then add a divergent
+	// commit on top to simulate post-review amendments.
+	mustGit(t, dir, "push", "-q", "-u", "origin", "pr/01")
+	mustGit(t, dir, "checkout", "-q", "pr/01")
+	writeFile(t, dir, "src/a.ts", "amended\n")
+	mustGit(t, dir, "commit", "-aq", "-m", "amend after review")
+	mustGit(t, dir, "checkout", "-q", "main")
+
+	_, _, err := FilterSquash(c, FilterOpts{RepoDir: dir, PhaseID: "01", Message: "p2"})
+	if err == nil {
+		t.Error("expected error: diverged branch should require --force-branch")
+	} else if !strings.Contains(err.Error(), "unpushed local commits") {
+		t.Errorf("error should explain divergence: %v", err)
+	}
+	// With Force it should overwrite anyway.
 	if _, _, err := FilterSquash(c, FilterOpts{RepoDir: dir, PhaseID: "01", Message: "p2", Force: true}); err != nil {
 		t.Fatalf("force overwrite: %v", err)
 	}

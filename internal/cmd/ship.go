@@ -213,7 +213,10 @@ func Ship() *cobra.Command {
 	c.Flags().BoolVar(&noPush, "no-push", false, "build the squash branch locally but don't push or open PR")
 	c.Flags().BoolVar(&draft, "draft", false, "open the PR as draft")
 	c.Flags().BoolVar(&forceUnverified, "force-unverified", false, "skip the 'verify must be pass' gate")
-	c.Flags().BoolVar(&forceBranch, "force-branch", false, "overwrite an existing pr/<id> branch")
+	c.Flags().BoolVar(&forceBranch, "force-branch", false,
+		"overwrite an existing pr/<id> branch even when it has unpushed local commits "+
+			"(stale local-only branches and fully-pushed branches are auto-replaced; "+
+			"only diverged branches need this flag)")
 	c.Flags().BoolVar(&printBody, "print-body", false, "print the generated PR body and exit (no push, no branch)")
 	c.Flags().BoolVar(&preserveHistory, "preserve-history", false,
 		"build pr/<id> by per-commit cherry-pick (drops .dross/ each commit) instead of one squash — preserves the per-task shape of the work")

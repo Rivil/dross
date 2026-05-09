@@ -117,9 +117,10 @@ func TestFilterPreserveHistoryErrsOnAllDrossOnlyCommits(t *testing.T) {
 	}
 }
 
-// TestFilterPreserveHistoryRefusesExistingBranchWithoutForce mirrors
-// the squash version's behaviour.
-func TestFilterPreserveHistoryRefusesExistingBranchWithoutForce(t *testing.T) {
+// TestFilterPreserveHistoryAutoOverwritesStaleLocalBranch mirrors the
+// squash version: a local-only stale pr/<id> auto-rebuilds without
+// Force.
+func TestFilterPreserveHistoryAutoOverwritesStaleLocalBranch(t *testing.T) {
 	dir := makeRepo(t)
 	writeFile(t, dir, "src/a.ts", "x\n")
 	mustGit(t, dir, "add", "src/a.ts")
@@ -130,8 +131,39 @@ func TestFilterPreserveHistoryRefusesExistingBranchWithoutForce(t *testing.T) {
 	if _, _, err := FilterPreserveHistory(c, FilterOpts{RepoDir: dir, PhaseID: "01"}); err != nil {
 		t.Fatalf("first call: %v", err)
 	}
+	if _, _, err := FilterPreserveHistory(c, FilterOpts{RepoDir: dir, PhaseID: "01"}); err != nil {
+		t.Fatalf("rebuild without Force should auto-overwrite local-only branch: %v", err)
+	}
+}
+
+// TestFilterPreserveHistoryRefusesDivergedBranchWithoutForce gates the
+// real-work-loss case: pr/<id> has commits beyond its upstream that
+// the rebuild won't reproduce.
+func TestFilterPreserveHistoryRefusesDivergedBranchWithoutForce(t *testing.T) {
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+
+	dir := makeRepo(t)
+	mustGit(t, dir, "remote", "add", "origin", remote)
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	writeFile(t, dir, "src/a.ts", "x\n")
+	mustGit(t, dir, "add", "src/a.ts")
+	mustGit(t, dir, "commit", "-q", "-m", "feat: add a")
+	sha := mustGit(t, dir, "rev-parse", "HEAD")
+
+	c := &changes.Changes{Tasks: map[string]changes.TaskRecord{"t1": {Commit: sha}}}
+	if _, _, err := FilterPreserveHistory(c, FilterOpts{RepoDir: dir, PhaseID: "01"}); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	mustGit(t, dir, "push", "-q", "-u", "origin", "pr/01")
+	mustGit(t, dir, "checkout", "-q", "pr/01")
+	writeFile(t, dir, "src/a.ts", "amended\n")
+	mustGit(t, dir, "commit", "-aq", "-m", "amend after review")
+	mustGit(t, dir, "checkout", "-q", "main")
+
 	if _, _, err := FilterPreserveHistory(c, FilterOpts{RepoDir: dir, PhaseID: "01"}); err == nil {
-		t.Error("expected error on existing branch without Force")
+		t.Error("expected error: diverged branch should require --force-branch")
 	}
 	if _, _, err := FilterPreserveHistory(c, FilterOpts{RepoDir: dir, PhaseID: "01", Force: true}); err != nil {
 		t.Fatalf("force overwrite: %v", err)

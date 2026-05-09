@@ -71,14 +71,8 @@ func FilterSquash(c *changes.Changes, opts FilterOpts) (branch, sha string, err 
 		return "", "", fmt.Errorf("rev-parse HEAD: %w", err)
 	}
 
-	// Verify branch doesn't already exist (unless --force).
-	if exists, _ := branchExists(opts.RepoDir, opts.BranchName); exists {
-		if !opts.Force {
-			return "", "", fmt.Errorf("branch %s already exists (use Force to overwrite)", opts.BranchName)
-		}
-		if _, err := git(opts.RepoDir, "branch", "-D", opts.BranchName); err != nil {
-			return "", "", fmt.Errorf("delete existing %s: %w", opts.BranchName, err)
-		}
+	if err := prepareExistingBranch(opts.RepoDir, opts.BranchName, opts.Force); err != nil {
+		return "", "", err
 	}
 
 	// Create an ephemeral worktree path. MkdirTemp gives us a unique name we
@@ -167,6 +161,67 @@ func branchExists(repoDir, name string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// prepareExistingBranch is the auto-overwrite handler for the squash
+// branch. dross owns the `pr/*` namespace by convention — the user
+// re-running ship for the same phase clearly intends to rebuild it,
+// which previously required a `--force-branch` retry. We now drop
+// stale local-only branches and fully-in-sync branches without asking.
+//
+// We *do* still gate on diverged branches (local commits beyond the
+// upstream that wouldn't be reproduced by the upcoming filter) — that
+// is the only case where auto-overwrite could lose user work. Force
+// remains the explicit override.
+func prepareExistingBranch(repoDir, name string, force bool) error {
+	exists, _ := branchExists(repoDir, name)
+	if !exists {
+		return nil
+	}
+	if force {
+		if _, err := git(repoDir, "branch", "-D", name); err != nil {
+			return fmt.Errorf("delete existing %s: %w", name, err)
+		}
+		return nil
+	}
+	if !branchHasUnpushedWork(repoDir, name) {
+		if _, err := git(repoDir, "branch", "-D", name); err != nil {
+			return fmt.Errorf("delete existing %s: %w", name, err)
+		}
+		// Surface the auto-replacement so the user sees what we did.
+		// stderr keeps the squash branch's stdout (printed by the
+		// caller as "Built ...") clean for piping.
+		fmt.Fprintf(os.Stderr, "ship: replacing stale local %s\n", name)
+		return nil
+	}
+	return fmt.Errorf("branch %s already exists with unpushed local commits — "+
+		"run `git log origin/%s..%s` to inspect, then re-run with --force-branch "+
+		"to discard and rebuild from current HEAD", name, name, name)
+}
+
+// branchHasUnpushedWork returns true only when the branch has commits
+// beyond what's on its tracked upstream. Three "safe" cases:
+//   - no upstream tracked → branch was never pushed (stale local artefact)
+//   - upstream exists, branch is fully in sync or purely behind
+//
+// On any git error we fail closed (return true) so the caller falls
+// back to the explicit force gate. Better to make the user re-run with
+// --force-branch than to silently drop work because git refused to
+// answer.
+func branchHasUnpushedWork(repoDir, name string) bool {
+	upstream, err := gitOut(repoDir, "rev-parse", "--abbrev-ref", name+"@{upstream}")
+	if err != nil {
+		// no upstream — never pushed; safe to drop
+		return false
+	}
+	if upstream == "" {
+		return false
+	}
+	ahead, err := gitOut(repoDir, "rev-list", "--count", upstream+".."+name)
+	if err != nil {
+		return true
+	}
+	return ahead != "0"
 }
 
 func git(repoDir string, args ...string) (string, error) {

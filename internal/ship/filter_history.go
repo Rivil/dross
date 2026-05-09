@@ -72,13 +72,8 @@ func FilterPreserveHistory(c *changes.Changes, opts FilterOpts) (branch, sha str
 	}
 
 	// Existing-branch handling matches FilterSquash exactly.
-	if exists, _ := branchExists(opts.RepoDir, opts.BranchName); exists {
-		if !opts.Force {
-			return "", "", fmt.Errorf("branch %s already exists (use Force to overwrite)", opts.BranchName)
-		}
-		if _, err := git(opts.RepoDir, "branch", "-D", opts.BranchName); err != nil {
-			return "", "", fmt.Errorf("delete existing %s: %w", opts.BranchName, err)
-		}
+	if err := prepareExistingBranch(opts.RepoDir, opts.BranchName, opts.Force); err != nil {
+		return "", "", err
 	}
 
 	wtDir, err := os.MkdirTemp("", "dross-ship-history-")
