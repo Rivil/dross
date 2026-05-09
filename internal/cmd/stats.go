@@ -259,7 +259,16 @@ func renderOutcomes(events []telemetry.Event) {
 				first = false
 			}
 		}
+		if pending := verifyVerdicts["pending"]; pending > 0 {
+			if !first {
+				Printf(", ")
+			}
+			Printf("pending=%d", pending)
+		}
 		Print("")
+		if pending := verifyVerdicts["pending"]; pending > 0 {
+			Printf("  (pending verifies have not been finalized — run `dross verify finalize <phase>` after /dross-verify)\n")
+		}
 		if len(mutationScores) > 0 {
 			Printf("  mutation score: avg=%.2f n=%d\n", avg(mutationScores), len(mutationScores))
 		}

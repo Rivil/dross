@@ -121,6 +121,12 @@ If verdict is `fail` or `partial`, recommend next steps:
 
 ## 5. Wrap
 
+Record the resolved verdict in telemetry so `dross stats` and downstream gates can see the outcome:
+```
+dross verify finalize <phase-id>
+```
+This is only valid after the verdict in `verify.toml` is one of `pass | partial | fail`. If you skipped step 3 or left `verdict = "pending"`, this command will refuse — go back and finalize the file first.
+
 Update state:
 ```
 dross state set current_phase_status verified

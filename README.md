@@ -45,7 +45,7 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-plan` | 5,495 | **~1,370** |
 | Dross `/dross-plan-review` | 5,264 | **~1,320** |
 | Dross `/dross-execute` | 7,391 | **~1,850** |
-| Dross `/dross-verify` | 8,456 | **~2,110** |
+| Dross `/dross-verify` | 8,806 | **~2,200** |
 | Dross `/dross-status` | 1,439 | **~360** |
 
 **Total prompt-surface** (everything that could ever load):
@@ -53,7 +53,7 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 76,328 | ~19,080 |
+| Dross (commands + prompts) | 76,678 | ~19,170 |
 | **Ratio** | | **≈ 33×** |
 
 **Being honest about these numbers:**
@@ -169,6 +169,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross task {next,show,status}` | Inspect / update tasks within a plan | ✅ |
 | `dross changes {record,show}` | Per-phase append-only log of what was touched | ✅ |
 | `dross verify <phase>` | Run mutation tests + write tests.json + verify.toml skeleton | ✅ |
+| `dross verify finalize <phase>` | Record resolved verdict from verify.toml as a telemetry outcome event (after `/dross-verify`) | ✅ |
 | `dross status` | Where am I — project, phase, last activity, suggested next step | ✅ |
 | `dross profile {show,seed}` | User profile (with GSD import) | ✅ |
 | `dross validate` | Schema-check every artefact | ✅ |
@@ -228,7 +229,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 
 Dross records local-only usage events at `~/.claude/dross/telemetry.jsonl`. The intent is single-developer self-observation — a dogfood log you can read back later to find where the tool gets in your way.
 
-**What's recorded.** One JSONL event per `dross` invocation (command path, duration, exit code, error class) plus outcome events from `verify` (verdict, mutation score, file/criterion counts), `ship` (provider, result, force-flag use), and `phase create` (ordinal). All events carry a 12-character SHA-256 hash of the absolute repo path so per-project trends are visible without exposing the path itself.
+**What's recorded.** One JSONL event per `dross` invocation (command path, duration, exit code, error class) plus outcome events from `verify` (mechanical run emits `verdict=pending`; `dross verify finalize <phase>` later emits the resolved `pass | partial | fail` plus mutation score), `ship` (provider, result, force-flag use), and `phase create` (ordinal). All events carry a 12-character SHA-256 hash of the absolute repo path so per-project trends are visible without exposing the path itself.
 
 **What's NOT recorded.** Anything you typed. No criterion text, no decision text, no commit messages, no PR titles or bodies, no reviewer names, no file contents, no repo URLs. Counts and small enums only.
 

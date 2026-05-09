@@ -89,7 +89,56 @@ func Verify() *cobra.Command {
 	}
 	c.Flags().BoolVar(&skipMutation, "skip-mutation", false,
 		"do not run mutation tests (record what would have been mutated, skip execution)")
+	c.AddCommand(verifyFinalize())
 	return c
+}
+
+// verifyFinalize records a telemetry outcome event with the resolved
+// verdict from a verify.toml that the LLM (via /dross-verify) has
+// filled in. The mechanical `dross verify <phase>` always emits a
+// pending-verdict event; this is the second event closing the loop.
+//
+// Verdict must be pass | partial | fail. Pending or unknown verdicts
+// are rejected so the slash command can't accidentally finalize a
+// half-filled skeleton.
+func verifyFinalize() *cobra.Command {
+	return &cobra.Command{
+		Use:   "finalize <phase-id>",
+		Short: "Record the resolved verdict from verify.toml as a telemetry outcome event",
+		Long: "Reads .dross/phases/<phase>/verify.toml after /dross-verify (the LLM step) " +
+			"has written the final verdict, and emits a telemetry outcome event so " +
+			"`dross stats` and downstream gates can see the pass/partial/fail resolution.\n\n" +
+			"Verdict must be pass | partial | fail. Pending or unknown is rejected — " +
+			"finalize the verify.toml first.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			phaseID := args[0]
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			testsPath, verifyPath := verify.FilePaths(root, phaseID)
+			v, err := verify.LoadVerify(verifyPath)
+			if err != nil {
+				return fmt.Errorf("read verify.toml: %w", err)
+			}
+			if v == nil {
+				return fmt.Errorf("verify.toml not found at %s — run `dross verify %s` first", verifyPath, phaseID)
+			}
+			switch v.Verify.Verdict {
+			case "pass", "partial", "fail":
+				// ok — accepted final verdicts
+			case "pending", "":
+				return fmt.Errorf("verify.toml verdict is %q — fill in pass | partial | fail before finalizing", v.Verify.Verdict)
+			default:
+				return fmt.Errorf("verify.toml verdict %q is not one of pass | partial | fail", v.Verify.Verdict)
+			}
+			t, _ := verify.LoadTests(testsPath) // optional — may be absent under --skip-mutation manual cleanup
+			recordVerifyOutcome(t, v)
+			Printf("verify finalize: %s — verdict=%s recorded\n", phaseID, v.Verify.Verdict)
+			return nil
+		},
+	}
 }
 
 // configuredAdapters returns the list of mutation adapters appropriate
@@ -144,31 +193,44 @@ func dockerPrefix(p *project.Project) string {
 // recordVerifyOutcome writes a telemetry outcome event capturing the
 // shape of this verify run — verdict, mutation score, file/criterion
 // counts. Never logs file paths or criterion text.
+//
+// t may be nil (e.g. when finalizing after tests.json was cleaned up
+// or never written). When nil, falls back to the summary block in
+// verify.toml, which the LLM populates during /dross-verify.
 func recordVerifyOutcome(t *verify.Tests, v *verify.Verify) {
 	counts := map[string]int{
-		"languages":  len(t.Languages),
-		"skipped":    len(t.Skipped),
-		"criteria":   len(v.Criteria),
-		"findings":   len(v.Findings),
+		"criteria": len(v.Criteria),
+		"findings": len(v.Findings),
 	}
-	files := 0
-	killed := 0
-	survived := 0
-	for _, lr := range t.Languages {
-		files += len(lr.Files)
-		if lr.Mutation != nil {
-			killed += lr.Mutation.Killed
-			survived += lr.Mutation.Survived
+	nums := map[string]float64{}
+
+	if t != nil {
+		counts["languages"] = len(t.Languages)
+		counts["skipped"] = len(t.Skipped)
+		files := 0
+		killed := 0
+		survived := 0
+		for _, lr := range t.Languages {
+			files += len(lr.Files)
+			if lr.Mutation != nil {
+				killed += lr.Mutation.Killed
+				survived += lr.Mutation.Survived
+			}
+		}
+		counts["files"] = files
+		counts["mutants_killed"] = killed
+		counts["mutants_survived"] = survived
+		if total := killed + survived; total > 0 {
+			nums["mutation_score"] = float64(killed) / float64(total)
+		}
+	} else {
+		counts["mutants_killed"] = v.Summary.MutantsKilled
+		counts["mutants_survived"] = v.Summary.MutantsSurvived
+		if v.Summary.MutationScore > 0 {
+			nums["mutation_score"] = v.Summary.MutationScore
 		}
 	}
-	counts["files"] = files
-	counts["mutants_killed"] = killed
-	counts["mutants_survived"] = survived
 
-	nums := map[string]float64{}
-	if total := killed + survived; total > 0 {
-		nums["mutation_score"] = float64(killed) / float64(total)
-	}
 	tags := map[string]string{
 		"verdict": v.Verify.Verdict,
 	}
