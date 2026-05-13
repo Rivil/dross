@@ -216,6 +216,40 @@ func TestPackagesFromFiles(t *testing.T) {
 	}
 }
 
+// TestGremlinsBuildUnleashArgsDefault asserts the default
+// --timeout-coefficient override (30) is applied when the project
+// hasn't set its own. Gremlins' built-in default (~3) is too tight
+// for fast Go test suites; see DefaultTimeoutCoefficient comment.
+func TestGremlinsBuildUnleashArgsDefault(t *testing.T) {
+	g := &Gremlins{}
+	args := g.buildUnleashArgs("reports/gremlins/output.json", []string{"./internal/api"})
+	want := []string{
+		"gremlins", "unleash",
+		"--output", "reports/gremlins/output.json",
+		"--timeout-coefficient", "30",
+		"./internal/api",
+	}
+	if !reflect.DeepEqual(args, want) {
+		t.Errorf("default args:\n got %v\nwant %v", args, want)
+	}
+}
+
+// TestGremlinsBuildUnleashArgsOverride asserts a project-set
+// TimeoutCoefficient flows through to the flag.
+func TestGremlinsBuildUnleashArgsOverride(t *testing.T) {
+	g := &Gremlins{TimeoutCoefficient: 60}
+	args := g.buildUnleashArgs("reports/gremlins/output.json", []string{"./..."})
+	for i, a := range args {
+		if a == "--timeout-coefficient" {
+			if i+1 >= len(args) || args[i+1] != "60" {
+				t.Fatalf("expected --timeout-coefficient 60, got %v", args)
+			}
+			return
+		}
+	}
+	t.Fatalf("--timeout-coefficient flag missing: %v", args)
+}
+
 // TestGremlinsRunCreatesReportDir asserts the adapter pre-creates the
 // `reports/gremlins/` directory before invoking gremlins. Gremlins
 // itself won't create parent dirs for --output; without this, fresh

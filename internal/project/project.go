@@ -22,6 +22,7 @@ type Project struct {
 	Paths       Paths             `toml:"paths"`
 	Env         Env               `toml:"env"`
 	Goals       Goals             `toml:"goals"`
+	Mutation    Mutation          `toml:"mutation,omitempty"`
 	Constraints map[string]string `toml:"constraints,omitempty"`
 	Competition []Competitor      `toml:"competition,omitempty"`
 }
@@ -121,6 +122,27 @@ type Goals struct {
 	Audience        string   `toml:"audience,omitempty"`
 	NonGoals        []string `toml:"non_goals,omitempty"`
 	Differentiators []string `toml:"differentiators,omitempty"`
+}
+
+// Mutation holds per-adapter knobs for the mutation testing pipeline.
+// Each sub-table is optional; unset values fall back to the adapter's
+// built-in default.
+type Mutation struct {
+	Gremlins MutationGremlins `toml:"gremlins,omitempty"`
+}
+
+// MutationGremlins surfaces the gremlins adapter's tunable settings.
+//
+// TimeoutCoefficient overrides gremlins' --timeout-coefficient flag.
+// Gremlins multiplies this by the baseline test duration to decide
+// per-mutant timeout. The tool's built-in default (~3) is too tight
+// for Go projects with fast test suites: a 75ms baseline yields a
+// 0.22s budget per mutant, far below Go's 1–2s compile-and-test cycle,
+// and most mutants get classified TIMED OUT before they can be killed
+// or surviving. Dross overrides this default to 30 unless the project
+// sets a different value.
+type MutationGremlins struct {
+	TimeoutCoefficient int `toml:"timeout_coefficient,omitempty"`
 }
 
 type Competitor struct {

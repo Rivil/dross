@@ -9,8 +9,18 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
+
+// DefaultTimeoutCoefficient is the dross-chosen override for gremlins'
+// --timeout-coefficient flag. Gremlins' built-in default is ~3, which
+// scales poorly with fast Go test suites (a 75ms baseline gives a
+// 0.22s budget per mutant — most mutants TIME OUT before they can be
+// killed). 30 mirrors the manual workaround verified during the
+// chess-master dogfood session and keeps every mutant inside Go's
+// 1–2s compile-and-test cycle.
+const DefaultTimeoutCoefficient = 30
 
 // Gremlins adapter for Go mutation testing via go-gremlins/gremlins.
 //
@@ -22,6 +32,10 @@ import (
 type Gremlins struct {
 	Prefix      string // runtime command prefix, e.g. "docker compose exec app"
 	ProjectRoot string // host cwd; gremlins JSON is read from here
+
+	// TimeoutCoefficient overrides gremlins' --timeout-coefficient flag.
+	// Zero or negative values fall back to DefaultTimeoutCoefficient.
+	TimeoutCoefficient int
 }
 
 func (g *Gremlins) Name() string { return "gremlins" }
@@ -52,10 +66,7 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		return nil, fmt.Errorf("prepare gremlins report dir: %w", err)
 	}
 
-	args := append([]string{
-		"gremlins", "unleash",
-		"--output", reportRel,
-	}, pkgs...)
+	args := g.buildUnleashArgs(reportRel, pkgs)
 	cmd := g.buildCmd(args)
 	cmd.Stdout = os.Stderr // streamed; not captured (long-running)
 	cmd.Stderr = os.Stderr
@@ -77,6 +88,22 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		return nil, fmt.Errorf("read gremlins report: %w", err)
 	}
 	return ParseGremlinsJSON(b)
+}
+
+// buildUnleashArgs assembles the gremlins invocation for the configured
+// timeout coefficient and package set. Extracted from Run() so the flag
+// shape is unit-testable without shelling out.
+func (g *Gremlins) buildUnleashArgs(reportRel string, pkgs []string) []string {
+	coef := g.TimeoutCoefficient
+	if coef <= 0 {
+		coef = DefaultTimeoutCoefficient
+	}
+	args := []string{
+		"gremlins", "unleash",
+		"--output", reportRel,
+		"--timeout-coefficient", strconv.Itoa(coef),
+	}
+	return append(args, pkgs...)
 }
 
 func (g *Gremlins) buildCmd(args []string) *exec.Cmd {
