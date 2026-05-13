@@ -196,6 +196,9 @@ func ParseGremlinsJSON(data []byte) (*Report, error) {
 				r.Killed++
 			case "LIVED", "NOT COVERED":
 				r.Survived++
+				if m.Status == "NOT COVERED" {
+					r.NotCovered++
+				}
 				r.Surviving = append(r.Surviving, Mutant{
 					File: f.Filename,
 					Line: m.Line,

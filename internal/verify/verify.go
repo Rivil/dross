@@ -65,9 +65,15 @@ type VerifySummary struct {
 	MutationScore     float64 `toml:"mutation_score"`
 	MutantsKilled     int     `toml:"mutants_killed"`
 	MutantsSurvived   int     `toml:"mutants_survived"`
-	CriteriaTotal     int     `toml:"criteria_total"`
-	CriteriaCovered   int     `toml:"criteria_covered"`
-	CriteriaUncovered int     `toml:"criteria_uncovered"`
+	// MutantsNotCovered is a subset of MutantsSurvived: mutants the test
+	// suite never even executed. Surfaced for /dross-verify so the LLM
+	// can distinguish weak assertions ("test ran, didn't catch") from
+	// coverage blind spots ("test never ran the line"). Omitted when
+	// zero — only gremlins currently reports this status.
+	MutantsNotCovered int `toml:"mutants_not_covered,omitempty"`
+	CriteriaTotal     int `toml:"criteria_total"`
+	CriteriaCovered   int `toml:"criteria_covered"`
+	CriteriaUncovered int `toml:"criteria_uncovered"`
 }
 
 type CriterionResult struct {
@@ -231,6 +237,7 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		v.Summary.MutationScore = combineScore(v.Summary.MutationScore, lr.Mutation.Score)
 		v.Summary.MutantsKilled += lr.Mutation.Killed
 		v.Summary.MutantsSurvived += lr.Mutation.Survived
+		v.Summary.MutantsNotCovered += lr.Mutation.NotCovered
 	}
 	for _, id := range criteriaIDs {
 		v.Criteria = append(v.Criteria, CriterionResult{

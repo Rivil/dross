@@ -16,13 +16,22 @@ import "errors"
 
 // Report is the normalised result format consumed by verify.
 type Report struct {
-	Tool       string  // "stryker" | "gremlins" | ...
-	Killed     int     // mutants the tests caught — good
-	Survived   int     // mutants that escaped — theatrical tests
-	Timeout    int
-	Errors     int
-	Score      float64 // killed / (killed + survived)
-	Surviving  []Mutant
+	Tool      string // "stryker" | "gremlins" | ...
+	Killed    int    // mutants the tests caught — good
+	Survived  int    // mutants that escaped — theatrical tests (includes NotCovered)
+	Timeout   int
+	Errors    int
+	Score     float64 // killed / (killed + survived)
+	Surviving []Mutant
+
+	// NotCovered is the subset of Survived where tests never executed the
+	// mutated line at all (gremlins' "NOT COVERED" status). Tracked
+	// separately because high NotCovered + low LIVED usually means a
+	// coverage-tool blind spot (e.g. Go's package-init code in top-level
+	// `var` arrays) rather than weak assertions — actionable diagnosis
+	// the score alone can't surface. Other adapters (Stryker, Stryker.NET)
+	// don't report this status and leave the field at zero.
+	NotCovered int
 }
 
 // Mutant is one specific change that survived.

@@ -68,6 +68,10 @@ func TestParseGremlinsJSONCounts(t *testing.T) {
 	if r.Survived != 6 {
 		t.Errorf("survived: %d want 6 (LIVED + NOT COVERED rolled up)", r.Survived)
 	}
+	// 3 NOT COVERED tracked as a subset of Survived for diagnostic surfacing.
+	if r.NotCovered != 3 {
+		t.Errorf("not_covered: %d want 3", r.NotCovered)
+	}
 	if r.Timeout != 0 {
 		t.Errorf("timeout: %d want 0", r.Timeout)
 	}
