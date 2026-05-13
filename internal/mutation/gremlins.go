@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -115,28 +114,61 @@ func (g *Gremlins) buildCmd(args []string) *exec.Cmd {
 	return exec.Command(full[0], full[1:]...)
 }
 
-// packagesFromFiles converts a list of .go files into a deduped, sorted
-// list of `./<dir>/...` package paths suitable for `gremlins unleash`.
+// packagesFromFiles derives a single gremlins-compatible package path
+// from the list of source files touched in this phase. Gremlins accepts
+// exactly one positional path arg (`gremlins unleash [path]`), so when
+// files span multiple packages we walk up to the deepest shared
+// directory and pass `./<ancestor>/...` so gremlins recurses into every
+// touched package in one invocation. Files at the module root, or
+// files split across top-level dirs, degenerate to `./...`.
 //
-// Why `...`: gremlins doesn't support file-level granularity. The
-// closest we get is package-level. Sub-packages are implicit via /...
-// — if the user only wants one package, they can pass the dir directly.
+// Returns nil when given no files.
 func packagesFromFiles(files []string) []string {
-	seen := map[string]bool{}
+	if len(files) == 0 {
+		return nil
+	}
+	var prefix []string
+	first := true
 	for _, f := range files {
-		dir := filepath.Dir(f)
+		dir := filepath.ToSlash(filepath.Dir(f))
 		if dir == "" || dir == "." {
-			seen["./..."] = true
+			// File lives at the module root — no narrower scope possible.
+			prefix = nil
+			first = false
 			continue
 		}
-		seen["./"+filepath.ToSlash(dir)] = true
+		parts := strings.Split(dir, "/")
+		if first {
+			prefix = parts
+			first = false
+			continue
+		}
+		prefix = commonPrefix(prefix, parts)
+		if len(prefix) == 0 {
+			break
+		}
 	}
-	pkgs := make([]string, 0, len(seen))
-	for p := range seen {
-		pkgs = append(pkgs, p)
+	if len(prefix) == 0 {
+		return []string{"./..."}
 	}
-	sort.Strings(pkgs)
-	return pkgs
+	return []string{"./" + strings.Join(prefix, "/") + "/..."}
+}
+
+// commonPrefix returns the leading shared elements of two slices.
+// Used to find the deepest directory common to every touched file.
+func commonPrefix(a, b []string) []string {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	out := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		if a[i] != b[i] {
+			break
+		}
+		out = append(out, a[i])
+	}
+	return out
 }
 
 // gremlinsReport mirrors the JSON schema from

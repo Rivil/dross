@@ -187,36 +187,64 @@ func TestGremlinsName(t *testing.T) {
 	}
 }
 
+// TestPackagesFromFiles pins the multi-file → single-arg collapse.
+// gremlins unleash takes exactly one positional path; the adapter
+// must roll touched files up to the deepest shared directory so a
+// single invocation covers every package in scope.
 func TestPackagesFromFiles(t *testing.T) {
 	cases := []struct {
+		name string
 		in   []string
 		want []string
 	}{
 		{
+			name: "sibling packages roll up to parent",
 			in:   []string{"internal/api/tags.go", "internal/db/users.go"},
-			want: []string{"./internal/api", "./internal/db"},
+			want: []string{"./internal/..."},
 		},
 		{
-			// Same package gets deduped
+			name: "same package collapses to that package",
 			in:   []string{"internal/api/tags.go", "internal/api/users.go"},
-			want: []string{"./internal/api"},
+			want: []string{"./internal/api/..."},
 		},
 		{
-			// Files at repo root → ./...
+			name: "single subpackage",
+			in:   []string{"internal/x/y.go"},
+			want: []string{"./internal/x/..."},
+		},
+		{
+			name: "file at module root degenerates to ./...",
 			in:   []string{"main.go"},
 			want: []string{"./..."},
 		},
 		{
-			// Mix: root + subdir
+			name: "root + subdir degenerates to ./...",
 			in:   []string{"main.go", "internal/x/y.go"},
-			want: []string{"./...", "./internal/x"},
+			want: []string{"./..."},
+		},
+		{
+			name: "cross-top-level falls back to ./...",
+			in:   []string{"internal/x/y.go", "cmd/server/main.go"},
+			want: []string{"./..."},
+		},
+		{
+			name: "deep shared ancestor preserved",
+			in:   []string{"internal/svc/api/x.go", "internal/svc/db/y.go"},
+			want: []string{"./internal/svc/..."},
+		},
+		{
+			name: "empty input returns nil",
+			in:   nil,
+			want: nil,
 		},
 	}
 	for _, tc := range cases {
-		got := packagesFromFiles(tc.in)
-		if !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("packagesFromFiles(%v) = %v want %v", tc.in, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got := packagesFromFiles(tc.in)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("packagesFromFiles(%v) = %v want %v", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 
