@@ -69,22 +69,30 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 	cmd := g.buildCmd(args)
 	cmd.Stdout = os.Stderr // streamed; not captured (long-running)
 	cmd.Stderr = os.Stderr
+
+	// Echo the exact invocation before running. Cheap diagnostic — when
+	// gremlins finishes without writing output (path-scope mismatch,
+	// zero covered mutants, threshold gates, etc.) the user can copy
+	// this line and re-run manually to see what happened.
+	invocation := strings.Join(cmd.Args, " ")
+	fmt.Fprintf(os.Stderr, "gremlins: %s\n", invocation)
+
 	if err := cmd.Run(); err != nil {
 		// Gremlins exits non-zero when threshold flags fail or surviving
 		// mutants exist. Both are "ran successfully with bad results"
 		// outcomes — try to read the report regardless.
 		var exitErr *exec.ExitError
 		if !errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("gremlins invocation failed: %w (is gremlins installed? `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`)", err)
+			return nil, fmt.Errorf("gremlins invocation failed: %w\n  invocation: %s\n  (is gremlins installed? `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`)", err, invocation)
 		}
 	}
 
 	b, err := os.ReadFile(reportAbs)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("gremlins did not write a report at %s — check that --output worked", reportAbs)
+			return nil, fmt.Errorf("gremlins did not write a report at %s\n  invocation: %s\n  likely causes: (a) the path scope contains no covered mutants — try a narrower per-package path; (b) gremlins hit an internal error — re-run the invocation manually to see its output; (c) gremlins exited before writing output", reportAbs, invocation)
 		}
-		return nil, fmt.Errorf("read gremlins report: %w", err)
+		return nil, fmt.Errorf("read gremlins report: %w (invocation: %s)", err, invocation)
 	}
 	return ParseGremlinsJSON(b)
 }
