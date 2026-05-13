@@ -2,6 +2,8 @@ package mutation
 
 import (
 	"math"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -211,6 +213,33 @@ func TestPackagesFromFiles(t *testing.T) {
 		if !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("packagesFromFiles(%v) = %v want %v", tc.in, got, tc.want)
 		}
+	}
+}
+
+// TestGremlinsRunCreatesReportDir asserts the adapter pre-creates the
+// `reports/gremlins/` directory before invoking gremlins. Gremlins
+// itself won't create parent dirs for --output; without this, fresh
+// projects fail their first verify with "did not write a report".
+// Uses /usr/bin/true as a stand-in for gremlins so the test stays
+// hermetic — we don't need a real mutation run, just confirmation that
+// the path was prepared.
+func TestGremlinsRunCreatesReportDir(t *testing.T) {
+	root := t.TempDir()
+	g := &Gremlins{
+		Prefix:      "true", // swallow the gremlins exec, exit 0
+		ProjectRoot: root,
+	}
+	// Run will fail at the report-read step (true doesn't write a JSON);
+	// we don't care — we only care that the dir exists afterwards.
+	_, _ = g.Run([]string{"main.go"})
+
+	dir := filepath.Join(root, "reports", "gremlins")
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("reports/gremlins/ should exist: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatal("reports/gremlins should be a directory")
 	}
 }
 

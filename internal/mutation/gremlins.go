@@ -45,6 +45,13 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 	reportRel := filepath.Join("reports", "gremlins", "output.json")
 	reportAbs := filepath.Join(g.ProjectRoot, reportRel)
 
+	// Gremlins won't create parent dirs for --output; it errors on the
+	// first mutant write and leaves no report behind. Mkdir up front so
+	// every invocation has somewhere to land.
+	if err := os.MkdirAll(filepath.Dir(reportAbs), 0o755); err != nil {
+		return nil, fmt.Errorf("prepare gremlins report dir: %w", err)
+	}
+
 	args := append([]string{
 		"gremlins", "unleash",
 		"--output", reportRel,
