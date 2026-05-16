@@ -106,6 +106,73 @@ covers = ["c-1"]
 	}
 }
 
+func TestStatusSurfacesPendingVerdicts(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecAndPlan(t, "01-a", `[phase]
+id = "01-a"
+[[task]]
+id = "t-1"
+wave = 1
+title = "x"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+	// Two phases with verify.toml: one pending, one filled in.
+	mustWrite(t, ".dross/phases/01-a/verify.toml", `verdict = ""
+`)
+	// Create another phase dir with a finalized verdict — should NOT appear in pending list.
+	mustWrite(t, ".dross/phases/02-b/spec.toml", `[phase]
+id = "02-b"
+title = "b"
+[[criteria]]
+id = "c-1"
+text = "x"
+`)
+	mustWrite(t, ".dross/phases/02-b/verify.toml", `verdict = "pass"
+`)
+	// And one with explicit "pending" verdict.
+	mustWrite(t, ".dross/phases/03-c/spec.toml", `[phase]
+id = "03-c"
+title = "c"
+[[criteria]]
+id = "c-1"
+text = "x"
+`)
+	mustWrite(t, ".dross/phases/03-c/verify.toml", `verdict = "pending"
+`)
+
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "pending:") {
+		t.Errorf("expected pending verdict section in status:\n%s", out)
+	}
+	if !strings.Contains(out, "01-a") {
+		t.Errorf("expected 01-a (empty verdict) flagged as pending:\n%s", out)
+	}
+	if !strings.Contains(out, "03-c") {
+		t.Errorf("expected 03-c (explicit pending) flagged:\n%s", out)
+	}
+	if strings.Contains(out, "02-b") {
+		t.Errorf("02-b is pass and should NOT appear in pending list:\n%s", out)
+	}
+	if !strings.Contains(out, "dross verify finalize") {
+		t.Errorf("expected the remediation command surfaced:\n%s", out)
+	}
+}
+
+func TestStatusOmitsPendingSectionWhenNoVerifyFiles(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "01-clean")
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if strings.Contains(out, "pending:") {
+		t.Errorf("no verify files = no pending section:\n%s", out)
+	}
+}
+
 func TestStatusProgressBarReflectsDoneCount(t *testing.T) {
 	chdir(t, t.TempDir())
 	scaffoldPhaseWithSpecAndPlan(t, "01-x", `[phase]

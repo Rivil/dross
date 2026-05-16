@@ -62,6 +62,16 @@ func Status() *cobra.Command {
 				}
 			}
 
+			// Pending verify verdicts across all phases. Passive nudge for
+			// the forget-to-finalize hole — `dross verify` writes verify.toml
+			// with verdict="" or "pending", and the user is supposed to
+			// resolve it and run `dross verify finalize` later. Easy to
+			// forget. Surface them here so every status check reminds.
+			if pending := pendingVerdicts(root); len(pending) > 0 {
+				Printf("pending:   %d unfinalized verdict(s): %s\n", len(pending), strings.Join(pending, ", "))
+				Printf("           run `dross verify finalize <phase>` once verify.toml's verdict is filled in\n")
+			}
+
 			// Next suggested action — heuristic from current state
 			Print("")
 			Printf("next:      %s\n", suggestNext(root, proj, st))
@@ -172,6 +182,29 @@ func progressBar(done, total, width int) string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// pendingVerdicts returns phase IDs whose verify.toml exists but has an
+// unresolved verdict (empty or "pending"). Used by status to surface
+// the forget-to-finalize hole. Returns nil if there are no phases or no
+// verify.toml files yet — the empty case is the common one.
+func pendingVerdicts(root string) []string {
+	phases, err := phase.List(root)
+	if err != nil || len(phases) == 0 {
+		return nil
+	}
+	var pending []string
+	for _, id := range phases {
+		vp := filepath.Join(phase.Dir(root, id), "verify.toml")
+		if !fileExists(vp) {
+			continue
+		}
+		v := readVerifyVerdict(vp)
+		if v == "" || v == "pending" {
+			pending = append(pending, id)
+		}
+	}
+	return pending
 }
 
 // readVerifyVerdict extracts the verdict field from verify.toml without
