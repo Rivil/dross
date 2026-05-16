@@ -154,6 +154,37 @@ func TestClassifyError(t *testing.T) {
 		{errors.New("permission denied"), "permission"},
 		{errors.New("git push failed"), "git"},
 		{errors.New("http 500"), "network"},
+
+		// phase / plan / spec state
+		{errors.New("no phase id given and state has no current_phase"), "no_phase"},
+		{errors.New("PhaseID is required"), "no_phase"},
+		{errors.New("read spec spec.toml: open: no such file"), "no_spec"},
+		{errors.New("decode plan plan.toml: bad toml"), "no_plan"},
+
+		// verify / mutation pipeline
+		{errors.New("verify.toml not found at .dross/phases/01/verify.toml — run `dross verify 01` first"), "verify_state"},
+		{errors.New("verify verdict is \"\" — fill in pass | partial | fail"), "verify_state"},
+		{errors.New("load verify (run /dross-verify first?): open: ENOENT"), "verify_state"},
+		{errors.New("stryker invocation failed: exit 1 (is stryker installed?)"), "mutation"},
+		{errors.New("gremlins invocation failed: exec: \"gremlins\": not found"), "mutation"},
+		{errors.New("mutation adapter not yet implemented"), "mutation"},
+		{errors.New("ast-grep run: exec: \"ast-grep\": executable not found"), "mutation"},
+
+		// provider
+		{errors.New("forgejo backend needs APIBase (set [remote].api_base)"), "provider"},
+		{errors.New("unsupported provider \"bitbucket\""), "provider"},
+
+		// CLI surface
+		{errors.New("unknown field: nonsense"), "unknown_field"},
+		{errors.New("unsupported segment \"patch\" (only `internal` is bumpable)"), "unknown_field"},
+		{errors.New("--pr is required"), "cli_args"},
+		{errors.New("RepoDir is required"), "cli_args"},
+		{errors.New("KEY must be non-empty"), "cli_args"},
+		{errors.New("comment body is empty"), "cli_args"},
+
+		// cancelled
+		{errors.New("aborted: empty value"), "cancelled"},
+
 		{errors.New("something weird"), "other"},
 	}
 	for _, c := range cases {

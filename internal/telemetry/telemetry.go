@@ -192,14 +192,76 @@ func HashRepo(repoRoot string) string {
 
 // ClassifyError buckets errors into a small set of strings. Never
 // returns the raw message — that might contain user paths or content.
+//
+// Order matters: specific buckets (verify state, mutation adapters,
+// phase/plan/spec state) are checked before generic ones (invalid,
+// missing) so a "no current_phase" error doesn't end up in
+// "missing".
 func ClassifyError(err error) string {
 	if err == nil {
 		return ""
 	}
 	msg := strings.ToLower(err.Error())
 	switch {
+	// Root / scaffold state.
 	case strings.Contains(msg, "no .dross"):
 		return "no_root"
+
+	// Phase / plan / spec state — the user is somewhere the workflow
+	// can't pick up. Distinct from generic "missing" because the fix
+	// is a specific dross command, not a file path.
+	case strings.Contains(msg, "no current_phase"),
+		strings.Contains(msg, "phaseid is required"),
+		strings.Contains(msg, "no phase id given"):
+		return "no_phase"
+	case strings.Contains(msg, "load spec"),
+		strings.Contains(msg, "read spec"),
+		strings.Contains(msg, "decode spec"):
+		return "no_spec"
+	case strings.Contains(msg, "decode plan"),
+		strings.Contains(msg, "load plan"),
+		strings.Contains(msg, "read plan"):
+		return "no_plan"
+
+	// Verify / mutation pipeline — these errors actively hide what's
+	// wrong when bucketed as "other".
+	case strings.Contains(msg, "verify.toml"),
+		strings.Contains(msg, "load verify"),
+		strings.Contains(msg, "verify verdict"):
+		return "verify_state"
+	case strings.Contains(msg, "stryker"),
+		strings.Contains(msg, "gremlins"),
+		strings.Contains(msg, "mutation adapter"),
+		strings.Contains(msg, "ast-grep"):
+		return "mutation"
+
+	// Provider / remote.
+	case strings.Contains(msg, "github backend"),
+		strings.Contains(msg, "forgejo backend"),
+		strings.Contains(msg, "unsupported provider"),
+		strings.Contains(msg, "no [remote]"),
+		strings.Contains(msg, "[remote].url"):
+		return "provider"
+
+	// CLI surface: arg validation, unknown fields, user-facing config.
+	case strings.Contains(msg, "unknown field"),
+		strings.Contains(msg, "unknown or unsettable"),
+		strings.Contains(msg, "unknown scope"),
+		strings.Contains(msg, "unsupported segment"):
+		return "unknown_field"
+	case strings.Contains(msg, "is required"),
+		strings.Contains(msg, "must be set"),
+		strings.Contains(msg, "must be non-empty"),
+		strings.Contains(msg, "is empty"):
+		return "cli_args"
+
+	// User cancelled mid-flow.
+	case strings.Contains(msg, "aborted:"),
+		strings.Contains(msg, "cancelled"),
+		strings.Contains(msg, "canceled"):
+		return "cancelled"
+
+	// Generic buckets — kept for safety-net coverage.
 	case strings.Contains(msg, "already exists"):
 		return "already_exists"
 	case strings.Contains(msg, "validate"), strings.Contains(msg, "invalid"):
