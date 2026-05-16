@@ -228,12 +228,15 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Mutation adapter: Stryker.NET (C#) — modeled from public Stryker.NET docs, JSON shape shared with Stryker.JS, fixture-tested; real-world verify pending a C# project to dogfood against
 - [x] Codex polyglot indexer — Go via stdlib `go/ast`, TS/TSX/Svelte/C#/GDScript via `ast-grep` shell-out. Graceful degradation when ast-grep isn't installed (other commands keep working). HTML/CSS get sibling + git-log enrichment only (no symbols)
 - [x] `/dross-quick` — one-shot task with atomic commit + `runtime.test_command` gate, pair-mode only. Bumps `state.version`'s internal counter (`dross state bump internal`). Works inside a phase (recorded as `quick-N` in `changes.json`) or standalone
+- [x] Telemetry signal upgrades — finer error classifier (no_phase / no_spec / no_plan / verify_state / mutation / provider / unknown_field / cli_args / cancelled / check_issues), cmd path captured even when cobra fails to resolve, `dross status` surfaces unfinalized verify verdicts, doctor emits outcome events instead of bucketing as `err=other`
 
 ## Telemetry
 
 Dross records local-only usage events at `~/.claude/dross/telemetry.jsonl`. The intent is single-developer self-observation — a dogfood log you can read back later to find where the tool gets in your way.
 
-**What's recorded.** One JSONL event per `dross` invocation (command path, duration, exit code, error class) plus outcome events from `verify` (mechanical run emits `verdict=pending`; `dross verify finalize <phase>` later emits the resolved `pass | partial | fail` plus mutation score), `ship` (provider, result, force-flag use), and `phase create` (ordinal). All events carry a 12-character SHA-256 hash of the absolute repo path so per-project trends are visible without exposing the path itself.
+**What's recorded.** One JSONL event per `dross` invocation (command path, duration, exit code, error class) plus outcome events from `verify` (mechanical run emits `verdict=pending`; `dross verify finalize <phase>` later emits the resolved `pass | partial | fail` plus mutation score), `ship` (provider, result, force-flag use), `phase create` (ordinal), and `doctor` (result = `passed` | `issues_found`, issue count). All events carry a 12-character SHA-256 hash of the absolute repo path so per-project trends are visible without exposing the path itself.
+
+**Error buckets.** When a CLI invocation exits non-zero, the error is classified into one of: `no_root`, `no_phase`, `no_spec`, `no_plan`, `verify_state`, `mutation`, `provider`, `unknown_field`, `cli_args`, `cancelled`, `check_issues`, `already_exists`, `invalid`, `missing`, `permission`, `git`, `network`, `other`. The raw message is never recorded — it might contain user paths or content.
 
 **What's NOT recorded.** Anything you typed. No criterion text, no decision text, no commit messages, no PR titles or bodies, no reviewer names, no file contents, no repo URLs. Counts and small enums only.
 
@@ -250,7 +253,8 @@ dross stats path          # print the log file path
 **Reading it back.**
 ```sh
 dross stats               # default `show` — top commands, error buckets,
-                          #   force-flag count, verify verdicts, ship results
+                          #   force-flag count, verify verdicts, ship results,
+                          #   doctor runs
 dross stats show --since 7d
 dross stats show --since 2026-05-01
 ```
