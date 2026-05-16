@@ -261,6 +261,14 @@ func ClassifyError(err error) string {
 		strings.Contains(msg, "canceled"):
 		return "cancelled"
 
+	// Health-check commands (doctor) return errors to gate CI / exit
+	// non-zero, but "N issue(s) found" is a useful outcome, not a tool
+	// failure. Bucketing distinguishes the two so a noisy doctor doesn't
+	// look like a broken doctor in stats.
+	case strings.Contains(msg, "issue(s) found"),
+		strings.Contains(msg, "issues found"):
+		return "check_issues"
+
 	// Generic buckets — kept for safety-net coverage.
 	case strings.Contains(msg, "already exists"):
 		return "already_exists"

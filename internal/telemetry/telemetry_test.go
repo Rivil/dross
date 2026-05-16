@@ -185,6 +185,10 @@ func TestClassifyError(t *testing.T) {
 		// cancelled
 		{errors.New("aborted: empty value"), "cancelled"},
 
+		// health checks (doctor returns issues found as an error to gate CI)
+		{errors.New("3 project-level issue(s) found"), "check_issues"},
+		{errors.New("2 issues found"), "check_issues"},
+
 		{errors.New("something weird"), "other"},
 	}
 	for _, c := range cases {

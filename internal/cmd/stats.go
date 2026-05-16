@@ -225,6 +225,8 @@ func renderOutcomes(events []telemetry.Event) {
 	verifyVerdicts := map[string]int{}
 	mutationScores := []float64{}
 	shipResults := map[string]int{}
+	doctorResults := map[string]int{}
+	doctorIssues := 0
 	for _, e := range events {
 		if e.Kind != "outcome" {
 			continue
@@ -241,9 +243,14 @@ func renderOutcomes(events []telemetry.Event) {
 			if r := e.Tags["result"]; r != "" {
 				shipResults[r]++
 			}
+		case "doctor":
+			if r := e.Tags["result"]; r != "" {
+				doctorResults[r]++
+			}
+			doctorIssues += e.Counts["issues"]
 		}
 	}
-	if len(verifyVerdicts) == 0 && len(shipResults) == 0 {
+	if len(verifyVerdicts) == 0 && len(shipResults) == 0 && len(doctorResults) == 0 {
 		return
 	}
 	Print("## outcomes")
@@ -282,6 +289,23 @@ func renderOutcomes(events []telemetry.Event) {
 			}
 			Printf("%s=%d", k, v)
 			first = false
+		}
+		Print("")
+	}
+	if len(doctorResults) > 0 {
+		Printf("  doctor runs:     ")
+		first := true
+		for _, k := range []string{"passed", "issues_found"} {
+			if v, ok := doctorResults[k]; ok {
+				if !first {
+					Printf(", ")
+				}
+				Printf("%s=%d", k, v)
+				first = false
+			}
+		}
+		if doctorIssues > 0 {
+			Printf("  (cumulative issues across runs: %d)", doctorIssues)
 		}
 		Print("")
 	}

@@ -57,6 +57,40 @@ func TestStatsShowAggregatesEvents(t *testing.T) {
 	}
 }
 
+func TestStatsRendersDoctorOutcomes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "")
+
+	path := filepath.Join(home, ".claude", "dross", telemetry.File)
+	for _, ev := range []telemetry.Event{
+		{Kind: "outcome", Command: "doctor", Counts: map[string]int{"issues": 0}, Tags: map[string]string{"result": "passed"}},
+		{Kind: "outcome", Command: "doctor", Counts: map[string]int{"issues": 3}, Tags: map[string]string{"result": "issues_found"}},
+		{Kind: "outcome", Command: "doctor", Counts: map[string]int{"issues": 2}, Tags: map[string]string{"result": "issues_found"}},
+	} {
+		if err := telemetry.Append(path, ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Stats(), "show"); err != nil {
+			t.Fatalf("stats show: %v", err)
+		}
+	})
+	for _, want := range []string{
+		"doctor runs",
+		"passed=1",
+		"issues_found=2",
+		"cumulative issues",
+		"5",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("stats show missing %q in output:\n%s", want, out)
+		}
+	}
+}
+
 func TestStatsShowEmptyLog(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

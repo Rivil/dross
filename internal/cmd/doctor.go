@@ -65,6 +65,21 @@ func Doctor() *cobra.Command {
 			}
 
 			Print("")
+
+			// Outcome event lets `dross stats` distinguish "doctor ran and
+			// found N issues" (a useful health datapoint) from "doctor
+			// itself failed" (a tool bug). Without this, a non-zero exit
+			// gets bucketed as a generic error and the signal vanishes.
+			result := "passed"
+			if issues > 0 {
+				result = "issues_found"
+			}
+			RecordOutcomeEvent("doctor",
+				map[string]int{"issues": issues},
+				nil,
+				map[string]string{"result": result},
+			)
+
 			if issues == 0 {
 				Print("All project-level checks passed.")
 				return nil
