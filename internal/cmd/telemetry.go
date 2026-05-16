@@ -51,6 +51,26 @@ func RecordCLIEvent(c *cobra.Command, dur time.Duration, runErr error) {
 	})
 }
 
+// ResolveCmdForTelemetry returns the cobra command to record on the
+// "cli" event. Used as a fallback for main(): when PersistentPreRun
+// never fires (unknown subcommand, --help, --version, flag parse
+// error before resolution), this still walks args via cobra.Find to
+// produce the deepest match. Returns root when args can't be resolved
+// at all so the event always carries a cmd path.
+func ResolveCmdForTelemetry(root *cobra.Command, args []string) *cobra.Command {
+	if root == nil {
+		return nil
+	}
+	if len(args) == 0 {
+		return root
+	}
+	found, _, err := root.Find(args)
+	if err != nil || found == nil {
+		return root
+	}
+	return found
+}
+
 // RecordOutcomeEvent writes a "outcome" event from an in-flight command
 // (verify, ship, phase create, etc). Use Counts/Numbers/Tags to capture
 // shape without leaking content. Same swallow-on-error guarantee.
