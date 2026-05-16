@@ -84,6 +84,61 @@ func TestStateTouchAppendsHistoryAndPrintsConfirmation(t *testing.T) {
 	}
 }
 
+func TestStateBumpInternalIncrementsLastSegment(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "set", "version", "1.2.3.4"); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		runCmd(t, State(), "bump", "internal")
+	})
+	if !strings.Contains(out, "1.2.3.4 → 1.2.3.5") {
+		t.Errorf("bump output should show transition: %q", out)
+	}
+	s, err := state.Load(filepath.Join(dir, ".dross", "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Version != "1.2.3.5" {
+		t.Errorf("Version: got %q want %q", s.Version, "1.2.3.5")
+	}
+}
+
+func TestStateBumpRejectsUnsupportedSegment(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	err := runCmd(t, State(), "bump", "patch")
+	if err == nil {
+		t.Fatal("expected error for unsupported segment")
+	}
+	if !strings.Contains(err.Error(), "unsupported") {
+		t.Errorf("error should mention 'unsupported': %v", err)
+	}
+}
+
+func TestStateBumpRejectsMalformedVersion(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "set", "version", "1.2.3"); err != nil {
+		t.Fatal(err)
+	}
+	err := runCmd(t, State(), "bump", "internal")
+	if err == nil {
+		t.Fatal("expected error for non-4-part version")
+	}
+	if !strings.Contains(err.Error(), "4-part") {
+		t.Errorf("error should mention '4-part': %v", err)
+	}
+}
+
 func TestStateShowRendersJSON(t *testing.T) {
 	chdir(t, t.TempDir())
 	if err := runCmd(t, Init()); err != nil {

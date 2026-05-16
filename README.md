@@ -46,6 +46,7 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-plan-review` | 5,264 | **~1,320** |
 | Dross `/dross-execute` | 7,391 | **~1,850** |
 | Dross `/dross-verify` | 8,806 | **~2,200** |
+| Dross `/dross-quick` | 7,476 | **~1,870** |
 | Dross `/dross-status` | 1,439 | **~360** |
 
 **Total prompt-surface** (everything that could ever load):
@@ -53,8 +54,8 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 76,678 | ~19,170 |
-| **Ratio** | | **≈ 33×** |
+| Dross (commands + prompts) | 84,154 | ~21,040 |
+| **Ratio** | | **≈ 30×** |
 
 **Being honest about these numbers:**
 
@@ -112,6 +113,7 @@ assets/prompts/    Prompt instructions (installed to ~/.claude/dross/prompts/)
 ├── dross-plan-review/SKILL.md
 ├── dross-execute/SKILL.md
 ├── dross-verify/SKILL.md
+├── dross-quick/SKILL.md
 ├── dross-ship/SKILL.md
 ├── dross-review/SKILL.md
 ├── dross-status/SKILL.md
@@ -162,7 +164,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross init` | Bootstrap `.dross/` (greenfield) | ✅ |
 | `dross onboard` | Adopt an existing repo (signal scan) | ✅ |
 | `dross project {show,get,set}` | Read/write `project.toml` fields | ✅ |
-| `dross state {show,set,touch}` | Read/write `state.json` | ✅ |
+| `dross state {show,set,touch,bump}` | Read/write `state.json` (`bump internal` increments the 4th version segment) | ✅ |
 | `dross rule {add,list,remove,promote,disable,enable,show}` | Two-tier rules system | ✅ |
 | `dross phase {create,list,show}` | Phase directories | ✅ |
 | `dross milestone {create,list,show,get,set,add}` | Milestones with dotted-path edits (set scalars, add to list fields) | ✅ |
@@ -195,6 +197,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `/dross-plan-review` | ✅ |
 | `/dross-execute` | ✅ |
 | `/dross-verify` | ✅ |
+| `/dross-quick` | ✅ (one-shot task with atomic commit + test gate; bumps internal version) |
 | `/dross-status` | ✅ |
 | `/dross-options` | ✅ |
 | `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup) |
@@ -224,6 +227,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] `/dross-review` four-lens subagent panel — spawns security / code-quality / test-efficacy / spec-fidelity reviewers in parallel and posts an aggregated comment to the PR
 - [x] Mutation adapter: Stryker.NET (C#) — modeled from public Stryker.NET docs, JSON shape shared with Stryker.JS, fixture-tested; real-world verify pending a C# project to dogfood against
 - [x] Codex polyglot indexer — Go via stdlib `go/ast`, TS/TSX/Svelte/C#/GDScript via `ast-grep` shell-out. Graceful degradation when ast-grep isn't installed (other commands keep working). HTML/CSS get sibling + git-log enrichment only (no symbols)
+- [x] `/dross-quick` — one-shot task with atomic commit + `runtime.test_command` gate, pair-mode only. Bumps `state.version`'s internal counter (`dross state bump internal`). Works inside a phase (recorded as `quick-N` in `changes.json`) or standalone
 
 ## Telemetry
 

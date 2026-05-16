@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -16,7 +18,7 @@ func State() *cobra.Command {
 		Use:   "state",
 		Short: "Read and edit .dross/state.json",
 	}
-	c.AddCommand(stateShow(), stateSet(), stateTouch())
+	c.AddCommand(stateShow(), stateSet(), stateTouch(), stateBump())
 	return c
 }
 
@@ -83,6 +85,59 @@ func stateTouch() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// stateBump increments a segment of state.json's 4-part version.
+//
+// Today only `internal` is supported — the last segment, bumped per
+// /dross-quick task per the global versioning rule. `patch` and the
+// `major.minor` segments are driven by phase / milestone workflows that
+// already write the version explicitly, so they don't need a CLI bump.
+func stateBump() *cobra.Command {
+	return &cobra.Command{
+		Use:   "bump <segment>",
+		Short: "Bump a version segment (currently only `internal`)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if args[0] != "internal" {
+				return fmt.Errorf("unsupported segment %q (only `internal` is bumpable)", args[0])
+			}
+			s, path, err := loadState()
+			if err != nil {
+				return err
+			}
+			next, err := bumpInternal(s.Version)
+			if err != nil {
+				return err
+			}
+			prev := s.Version
+			s.Version = next
+			s.Touch(fmt.Sprintf("bump internal %s → %s", prev, next))
+			if err := s.Save(path); err != nil {
+				return err
+			}
+			Printf("%s → %s\n", prev, next)
+			return nil
+		},
+	}
+}
+
+// bumpInternal increments the 4th segment of a 4-part version string.
+// Rejects anything that doesn't match major.minor.patch.internal with
+// non-negative integer segments.
+func bumpInternal(v string) (string, error) {
+	parts := strings.Split(v, ".")
+	if len(parts) != 4 {
+		return "", fmt.Errorf("version %q is not 4-part (major.minor.patch.internal)", v)
+	}
+	for _, p := range parts {
+		if _, err := strconv.Atoi(p); err != nil {
+			return "", fmt.Errorf("version %q has non-integer segment %q", v, p)
+		}
+	}
+	last, _ := strconv.Atoi(parts[3])
+	parts[3] = strconv.Itoa(last + 1)
+	return strings.Join(parts, "."), nil
 }
 
 func loadState() (*state.State, string, error) {
