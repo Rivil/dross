@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -106,6 +107,37 @@ func Doctor() *cobra.Command {
 			}
 			Print("")
 
+			// --- Phase work on main ---
+			//
+			// Phase commits should live on phase/<id> branches, not on
+			// main. Legacy projects (or anyone using --no-branch) may
+			// have accumulated phase commits on local main; flag them
+			// so the user can migrate to the branch model before the
+			// next ship.
+			mainBranch := p.Repo.GitMainBranch
+			if mainBranch == "" {
+				mainBranch = "main"
+			}
+			Print("Phase branch hygiene:")
+			leaked, err := phaseCommitsOnMain(root, repoDir, mainBranch)
+			switch {
+			case err != nil:
+				Printf("  ⚠ couldn't check phase commits on %s: %v\n", mainBranch, err)
+				// not a hard issue — most likely no origin configured yet
+			case len(leaked) > 0:
+				Printf("  ⚠ %d phase commit(s) found on local %s ahead of origin/%s:\n",
+					len(leaked), mainBranch, mainBranch)
+				for _, c := range leaked {
+					Printf("      %s  (recorded in phase %s)\n", c.sha[:short7], c.phaseID)
+				}
+				Print("    Fix: move them to a phase branch, e.g.")
+				Printf("      git branch phase/<id> %s && git reset --hard origin/%s\n", mainBranch, mainBranch)
+				issues++
+			default:
+				Printf("  ✓ no recorded phase commits on local %s\n", mainBranch)
+			}
+			Print("")
+
 			return finalizeDoctor(issues)
 		},
 	}
@@ -143,6 +175,99 @@ func checkFoundationalFiles(root string) []string {
 		}
 	}
 	return missing
+}
+
+// leakedPhaseCommit pairs a phase commit SHA with the phase id whose
+// changes.json recorded it. Returned by phaseCommitsOnMain.
+type leakedPhaseCommit struct {
+	sha     string
+	phaseID string
+}
+
+// short7 caps the SHA preview in doctor output. 7 chars is enough to
+// disambiguate in any realistic repo.
+const short7 = 7
+
+// phaseCommitsOnMain returns the commits between origin/<mainBranch>
+// and local <mainBranch> that match any recorded task commit in
+// .dross/phases/*/changes.json. An empty result means main is clean
+// — either it's at origin or its ahead-commits aren't phase work.
+//
+// Returns an error if origin/<mainBranch> isn't reachable (no origin
+// configured, never pushed). Caller should treat that as a soft skip
+// rather than an issue: nothing to leak if there's no upstream.
+func phaseCommitsOnMain(root, repoDir, mainBranch string) ([]leakedPhaseCommit, error) {
+	// Collect all recorded phase commit SHAs.
+	phasesDir := filepath.Join(root, "phases")
+	entries, err := os.ReadDir(phasesDir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	recorded := make(map[string]string) // sha → phaseID
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		phaseID := e.Name()
+		body, err := os.ReadFile(filepath.Join(phasesDir, phaseID, "changes.json"))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read changes.json for %s: %w", phaseID, err)
+		}
+		for _, sha := range extractCommitSHAs(string(body)) {
+			recorded[sha] = phaseID
+		}
+	}
+	if len(recorded) == 0 {
+		return nil, nil
+	}
+
+	// List commits on local main not in origin/main.
+	out, err := exec.Command("git", "-C", repoDir,
+		"rev-list", "origin/"+mainBranch+".."+mainBranch).Output()
+	if err != nil {
+		return nil, err
+	}
+	var leaked []leakedPhaseCommit
+	for _, sha := range strings.Fields(string(out)) {
+		if pid, ok := recorded[sha]; ok {
+			leaked = append(leaked, leakedPhaseCommit{sha: sha, phaseID: pid})
+		}
+	}
+	return leaked, nil
+}
+
+// extractCommitSHAs pulls all `"commit": "<sha>"` values out of a
+// changes.json body. Cheap regex-style scan rather than a full JSON
+// parse — keeps doctor from coupling to the changes/ package shape.
+func extractCommitSHAs(body string) []string {
+	var out []string
+	const key = `"commit":`
+	for i := 0; i < len(body); {
+		j := strings.Index(body[i:], key)
+		if j < 0 {
+			break
+		}
+		j += i + len(key)
+		// Skip whitespace and the opening quote.
+		for j < len(body) && (body[j] == ' ' || body[j] == '\t' || body[j] == '"') {
+			j++
+		}
+		k := j
+		for k < len(body) && body[k] != '"' {
+			k++
+		}
+		if k > j {
+			out = append(out, body[j:k])
+		}
+		i = k
+	}
+	return out
 }
 
 // drossLinguistAttrPresent returns whether .gitattributes covers .dross/

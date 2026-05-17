@@ -124,6 +124,50 @@ func TestDoctorFlagsMissingFoundationalFile(t *testing.T) {
 	}
 }
 
+func TestDoctorFlagsPhaseCommitsOnMain(t *testing.T) {
+	// Build a repo where main has a commit recorded as a phase task —
+	// the legacy state we want users to migrate away from.
+	dir := t.TempDir()
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remoteDir)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	// Make a phase commit *on main* — the legacy pattern.
+	mustWrite(t, filepath.Join(dir, "src/leak.ts"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat: leak")
+	leakSHA := mustGit(t, dir, "rev-parse", "HEAD")
+
+	// Record that commit in a phase's changes.json so doctor can match.
+	phaseDir := filepath.Join(dir, ".dross", "phases", "01-leak")
+	if err := os.MkdirAll(phaseDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(phaseDir, "changes.json"),
+		`{"phase":"01-leak","tasks":{"t1":{"commit":"`+leakSHA+`"}}}`)
+
+	out := captureStdout(t, func() {
+		_ = runCmd(t, Doctor())
+	})
+	if !strings.Contains(out, "phase commit") || !strings.Contains(out, "ahead of origin/main") {
+		t.Errorf("output should flag phase commits on main:\n%s", out)
+	}
+	if !strings.Contains(out, leakSHA[:7]) {
+		t.Errorf("output should name the leaked SHA prefix:\n%s", out)
+	}
+	if !strings.Contains(out, "git branch phase/<id>") {
+		t.Errorf("output should suggest the branch+reset fix:\n%s", out)
+	}
+}
+
 func TestDoctorFlagsMissingGitattributes(t *testing.T) {
 	dir := t.TempDir()
 	gitInit(t, dir, "https://github.com/Rivil/dross.git")
