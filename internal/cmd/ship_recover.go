@@ -12,32 +12,42 @@ import (
 	"github.com/Rivil/dross/internal/state"
 )
 
-// shipRecover heals repos stuck in the divergent state produced by the
-// old .dross/-stripping ship filter. After such a squash-merge,
-// origin/main has the source-only commit and local main has the
-// cumulative .dross/ tree from phase commits, so `git pull --ff-only`
-// fails. This subcommand atomically resets local main to origin and
-// re-commits the .dross/ tree on top.
+// shipRecover heals legacy repos where phase commits accumulated on
+// main and the squash-merge then created a parallel history on origin.
+// The phase-branch model (phase/<id> branches via `dross phase create`,
+// `dross phase complete` after merge) prevents this from happening on
+// new work, but pre-existing repos need a one-shot reset.
 //
-// New dross projects don't need this — `.dross/` now rides along on
-// PR branches and there's no divergence to recover from. Kept as a
-// one-shot tool so the chess-perft dogfood (and any other repo
-// shipped under the old behaviour) can be healed.
+// Two distinct legacy cases this heals:
+//   1. Old strip-filter era: `.dross/` was filtered out of the PR branch,
+//      so origin/main lost it on every squash-merge. Recovery restores
+//      the full `.dross/` tree from the pre-reset HEAD.
+//   2. Pre-phase-branch era: phase commits lived on main (no phase/<id>
+//      branch), so the squash-merge diverged main from itself.
+//      Recovery resets main to origin and re-attaches `.dross/`.
+//
+// Either way: fetch + reset + restore `.dross/` + commit, atomically.
 func shipRecover() *cobra.Command {
 	var preMergeSHA string
 	c := &cobra.Command{
 		Use:   "recover [phase-id]",
-		Short: "Heal main after a legacy squash-merge wiped .dross/ (migration tool)",
-		Long: `Migration tool for repos that shipped phases under the old
-.dross/-stripping ship filter. New projects don't need this.
+		Short: "Heal main after a legacy squash-merge (one-shot migration)",
+		Long: `One-shot migration tool. New dross workflows don't need this —
+phase work lives on phase/<id> branches, ` + "`dross phase complete`" + `
+handles post-merge sync, and main never diverges.
 
-After a filtered squash-merge, origin/main has the source-only squash
-commit and local main has the cumulative .dross/ tree. ` + "`git pull --ff-only`" + `
-fails because the histories diverge. ` + "`dross ship recover`" + ` does:
+Use this only when a previously-shipped repo is stuck because:
+
+  - phase commits were made directly on main (no phase/<id>), so the
+    squash-merge created a parallel history on origin; or
+  - an older dross version stripped .dross/ from the PR branch, leaving
+    origin/main without planning artefacts.
+
+The recovery is the same in both cases:
 
   1. fetch origin
   2. reset --hard origin/<main>
-  3. checkout <pre-merge-sha> -- .dross/   (defaults to current HEAD)
+  3. checkout <pre-merge-sha> -- .dross/   (default: current HEAD)
   4. update state.json (records the merge)
   5. one atomic commit with the restored .dross/ tree
 
