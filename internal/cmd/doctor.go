@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,15 +27,34 @@ func Doctor() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			repoDir := filepath.Dir(root) // root is .dross; parent is repo cwd
+			issues := 0
+
+			// --- Foundational files ---
+			//
+			// project.toml + rules.toml + state.json must exist before
+			// loadProject can succeed. Surface their absence with a
+			// remediation hint — most common cause is a botched recovery
+			// after a legacy .dross/-stripping ship.
+			Print("Foundational files:")
+			missing := checkFoundationalFiles(root)
+			if len(missing) > 0 {
+				for _, m := range missing {
+					Printf("  ✗ %s — missing. If a recent squash-merge wiped .dross/, run `dross ship recover` to restore from the pre-merge HEAD.\n", m)
+					issues++
+				}
+				Print("")
+				return finalizeDoctor(issues)
+			}
+			Print("  ✓ project.toml, rules.toml, state.json present")
+			Print("")
+
 			p, _, err := loadProject()
 			if err != nil {
 				return err
 			}
 
-			issues := 0
-
 			// --- [remote] checks ---
-			repoDir := filepath.Dir(root) // root is .dross; parent is repo cwd
 			gitURL := gitRemoteOriginURL(repoDir)
 
 			Print("Remote:")
@@ -66,27 +87,76 @@ func Doctor() *cobra.Command {
 
 			Print("")
 
-			// Outcome event lets `dross stats` distinguish "doctor ran and
-			// found N issues" (a useful health datapoint) from "doctor
-			// itself failed" (a tool bug). Without this, a non-zero exit
-			// gets bucketed as a generic error and the signal vanishes.
-			result := "passed"
-			if issues > 0 {
-				result = "issues_found"
+			// --- .gitattributes ---
+			//
+			// Without `.dross/** linguist-generated=true`, planning artefacts
+			// flood reviewer diffs on every PR. New projects get this for
+			// free from `dross init`/`dross onboard`; legacy projects need
+			// it added explicitly.
+			Print(".gitattributes:")
+			if ok, err := drossLinguistAttrPresent(repoDir); err != nil {
+				Printf("  ⚠ couldn't read .gitattributes: %v\n", err)
+				issues++
+			} else if !ok {
+				Printf("  ⚠ .dross/ is not marked linguist-generated — PR reviews will see planning noise.\n")
+				Printf("    Fix: append `%s` to .gitattributes (or rerun `dross init` to auto-scaffold).\n", drossGitattributesLine)
+				issues++
+			} else {
+				Print("  ✓ .dross/ is marked linguist-generated")
 			}
-			RecordOutcomeEvent("doctor",
-				map[string]int{"issues": issues},
-				nil,
-				map[string]string{"result": result},
-			)
+			Print("")
 
-			if issues == 0 {
-				Print("All project-level checks passed.")
-				return nil
-			}
-			return fmt.Errorf("%d project-level issue(s) found", issues)
+			return finalizeDoctor(issues)
 		},
 	}
+}
+
+// finalizeDoctor records the doctor outcome event and returns the
+// appropriate error (or nil) for the issue count. Shared between the
+// foundational-files short-circuit path and the full-check path so the
+// telemetry shape stays consistent.
+func finalizeDoctor(issues int) error {
+	result := "passed"
+	if issues > 0 {
+		result = "issues_found"
+	}
+	RecordOutcomeEvent("doctor",
+		map[string]int{"issues": issues},
+		nil,
+		map[string]string{"result": result},
+	)
+	if issues == 0 {
+		Print("All project-level checks passed.")
+		return nil
+	}
+	return fmt.Errorf("%d project-level issue(s) found", issues)
+}
+
+// checkFoundationalFiles returns the list of missing foundational files
+// (relative paths) that loadProject would otherwise crash on. Empty
+// slice means the trio is intact.
+func checkFoundationalFiles(root string) []string {
+	var missing []string
+	for _, rel := range []string{"project.toml", "rules.toml", "state.json"} {
+		if _, err := os.Stat(filepath.Join(root, rel)); errors.Is(err, fs.ErrNotExist) {
+			missing = append(missing, ".dross/"+rel)
+		}
+	}
+	return missing
+}
+
+// drossLinguistAttrPresent returns whether .gitattributes covers .dross/
+// with linguist-generated=true. Missing file → not present. Read error
+// (permissions etc.) → propagated.
+func drossLinguistAttrPresent(repoDir string) (bool, error) {
+	body, err := os.ReadFile(filepath.Join(repoDir, ".gitattributes"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return hasDrossLinguistLine(string(body)), nil
 }
 
 // sameRemoteURL compares two git remote forms loosely — strips trailing
