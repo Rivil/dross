@@ -52,7 +52,13 @@ func writeFile(t *testing.T, dir, rel, body string) {
 	}
 }
 
-func TestFilterSquashDropsDrossDir(t *testing.T) {
+// TestFilterSquashIncludesDrossDir asserts that .dross/ rides along on
+// the squash branch when it's tracked in git. Earlier ship versions
+// stripped it to keep reviewer diffs clean, which left origin/main
+// without .dross/ and produced divergence on every ship. The
+// .gitattributes scaffold (linguist-generated=true) now collapses
+// .dross/ in PR review UIs without removing it from history.
+func TestFilterSquashIncludesDrossDir(t *testing.T) {
 	dir := makeRepo(t)
 
 	// Phase commits — each touches code AND .dross/.
@@ -69,7 +75,6 @@ id = "01-x"`)
 	mustGit(t, dir, "commit", "-q", "-m", "feat: add b")
 	sha2 := mustGit(t, dir, "rev-parse", "HEAD")
 
-	// Build a changes record naming the phase commits.
 	c := &changes.Changes{
 		Phase: "01-x",
 		Tasks: map[string]changes.TaskRecord{
@@ -99,21 +104,22 @@ id = "01-x"`)
 		t.Errorf("expected main after FilterSquash, on %q", cur)
 	}
 
-	// pr/01-x branch should have src/a.ts + src/b.ts but NO .dross/.
-	mustGit(t, dir, "checkout", "-q", "pr/01-x")
-	defer mustGit(t, dir, "checkout", "-q", "main")
-
-	for _, want := range []string{"src/a.ts", "src/b.ts", "README.md"} {
-		if _, err := os.Stat(filepath.Join(dir, want)); err != nil {
-			t.Errorf("expected %s on pr branch: %v", want, err)
+	// pr/01-x branch must contain code AND the planning artefacts.
+	prTree := mustGit(t, dir, "ls-tree", "-r", "--name-only", "pr/01-x")
+	for _, want := range []string{
+		"src/a.ts",
+		"src/b.ts",
+		"README.md",
+		".dross/phases/01-x/spec.toml",
+		".dross/phases/01-x/changes.json",
+	} {
+		if !strings.Contains(prTree, want) {
+			t.Errorf("pr/01-x missing %s:\n%s", want, prTree)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".dross")); !os.IsNotExist(err) {
-		t.Errorf(".dross/ should be absent on pr branch, err=%v", err)
-	}
 
-	// Should be a single commit on top of base (init).
-	count := mustGit(t, dir, "rev-list", "--count", "main..HEAD")
+	// Should be a single squash commit on top of base.
+	count := mustGit(t, dir, "rev-list", "--count", "main..pr/01-x")
 	if count != "1" {
 		t.Errorf("expected 1 commit on pr branch, got %s", count)
 	}

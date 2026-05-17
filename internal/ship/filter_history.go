@@ -13,23 +13,22 @@ import (
 )
 
 // FilterPreserveHistory creates a review branch that mirrors the
-// per-task commit history of the phase, but with `.dross/` stripped
-// from every commit. Use this when the reviewer benefits from seeing
-// the work in the same shape it was authored — atomic per-task — and
-// the squash form would obscure that.
+// per-task commit history of the phase. Use this when the reviewer
+// benefits from seeing the work in the same shape it was authored —
+// atomic per-task — and the squash form would obscure that.
 //
 // Algorithm
 //   1. Same base/branch/worktree setup as FilterSquash.
-//   2. For each phase commit (in topological order):
-//      a. `git cherry-pick --no-commit <commit>` into the worktree.
-//      b. Remove .dross/ from the index + worktree.
-//      c. Re-commit with the cherry-picked message + author/date.
-//   3. Empty cherry-picks (commits whose only changes were under
-//      .dross/) are skipped — they'd produce no-op commits otherwise.
+//   2. For each phase commit (in topological order), replay its full
+//      diff into the worktree and commit it with the source message +
+//      author/date.
 //
 // Returns the branch name and the SHA of the tip of the new history.
 //
 // Caller is responsible for pushing the branch.
+//
+// `.dross/` rides along (same rationale as FilterSquash). The
+// .gitattributes scaffold collapses it in review UIs.
 //
 // Limitations
 //   - Merge commits in the source range are not handled — they get
@@ -91,26 +90,20 @@ func FilterPreserveHistory(c *changes.Changes, opts FilterOpts) (branch, sha str
 	}()
 
 	for _, commit := range commits {
-		if err := cherryPickStripDross(wtDir, commit); err != nil {
+		if err := cherryPickCommit(wtDir, commit); err != nil {
 			return "", "", err
 		}
 	}
-	// Final defensive sweep: if the worktree somehow has .dross/ left
-	// over (e.g. from base, or from a path classification miss), strip
-	// it before we return. The tip commit was already made; this can't
-	// affect commit history but prevents stale files in the worktree
-	// from leaking into a follow-up commit if the caller re-uses it.
-	_ = os.RemoveAll(filepath.Join(wtDir, ".dross"))
 
 	tipSHA, err := gitOut(wtDir, "rev-parse", "HEAD")
 	if err != nil {
 		return "", "", fmt.Errorf("rev-parse new tip: %w", err)
 	}
 	// Verify we actually advanced past the base — if every cherry-pick
-	// became empty (whole phase was .dross/-only), tipSHA == base and
-	// there's nothing to ship.
+	// became empty (no real diff), tipSHA == base and there's nothing
+	// to ship.
 	if tipSHA == base {
-		return "", "", errors.New("history-preserving filter produced no commits (every phase commit touched only .dross/)")
+		return "", "", errors.New("history-preserving filter produced no commits (every phase commit was empty after replay)")
 	}
 
 	if _, err := git(opts.RepoDir, "branch", opts.BranchName, tipSHA); err != nil {
@@ -119,19 +112,15 @@ func FilterPreserveHistory(c *changes.Changes, opts FilterOpts) (branch, sha str
 	return opts.BranchName, tipSHA, nil
 }
 
-// cherryPickStripDross applies one source commit, drops .dross/ from
-// the resulting tree, and writes either:
-//   - a new commit preserving the source message + authorship, or
-//   - nothing (skipped) if the commit's only changes were under .dross/
+// cherryPickCommit applies one source commit onto the worktree and
+// writes a new commit preserving the source message + authorship.
 //
 // Implementation note: we don't use `git cherry-pick`. Cherry-pick
 // auto-commits even with --no-commit when the source matches certain
-// fast-forward conditions, and we need full control over the index
-// to strip .dross/ before the commit lands. Instead we materialize
-// the source commit's tree, apply only the non-.dross/ paths, and
-// commit explicitly via `git commit -C <source>` to preserve message
-// and authorship.
-func cherryPickStripDross(wtDir, sourceCommit string) error {
+// fast-forward conditions; we want explicit control. We materialize
+// the source commit's paths into the worktree and commit via
+// `git commit -C <source>` to preserve message and authorship.
+func cherryPickCommit(wtDir, sourceCommit string) error {
 	// 1. List paths changed by sourceCommit relative to its parent.
 	//    --diff-filter excludes nothing (we want adds, mods, deletes).
 	diffOut, err := gitOut(wtDir, "diff-tree", "--no-commit-id", "--name-only",
@@ -145,13 +134,10 @@ func cherryPickStripDross(wtDir, sourceCommit string) error {
 		if line == "" {
 			continue
 		}
-		if line == ".dross" || strings.HasPrefix(line, ".dross/") {
-			continue
-		}
 		keepPaths = append(keepPaths, line)
 	}
 	if len(keepPaths) == 0 {
-		// Whole commit was .dross/-only — skip cleanly.
+		// Empty diff — skip cleanly.
 		return nil
 	}
 
@@ -189,12 +175,9 @@ func cherryPickStripDross(wtDir, sourceCommit string) error {
 	}
 
 	// 3. Stage only the kept paths. `git add -A` would scoop up anything
-	//    sitting in the worktree (including .dross/ if a prior copy or
-	//    base checkout left it behind) — we want the index to reflect
-	//    only what we deliberately materialized. Use --force so the
-	//    user's repo-level .gitignore (which often gitignores .dross/
-	//    and could in theory ignore other phase paths too) doesn't
-	//    silently swallow legitimate adds.
+	//    sitting in the worktree — we want the index to reflect only
+	//    what we deliberately materialized. Use --force so the user's
+	//    repo-level .gitignore doesn't silently swallow legitimate adds.
 	for _, p := range keepPaths {
 		out, err := git(wtDir, "add", "--force", "--", p)
 		if err != nil {

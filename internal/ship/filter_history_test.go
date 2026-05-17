@@ -11,20 +11,16 @@ import (
 )
 
 // TestFilterPreserveHistoryProducesPerCommitBranch builds a phase with
-// three commits — two touch real source + .dross/, one is .dross/-only —
-// and asserts the resulting branch has exactly two commits in the
-// expected order, all .dross/-free.
+// three commits and asserts the resulting branch preserves them all
+// (including .dross/), in order, with authorship intact.
 //
-// Mirrors TestFilterSquashDropsDrossDir: .dross/ is committed normally
-// (no gitignore in the fixture) so the cherry-pick/strip path operates
-// on tracked files. The gitignored variant is exercised by
-// TestFilterSquashPreservesGitignoredDross — the algorithm here
-// doesn't care.
+// `.dross/` rides along now — earlier versions stripped it, which
+// caused origin/main vs local main divergence on every ship.
 func TestFilterPreserveHistoryProducesPerCommitBranch(t *testing.T) {
 	dir := makeRepo(t)
 
 	// Commit 1 — code + planning artefacts. Force author so we can
-	// assert authorship is preserved across the cherry-pick.
+	// assert authorship is preserved across the replay.
 	writeFile(t, dir, "src/a.ts", "export const a = 1\n")
 	writeFile(t, dir, ".dross/phases/01-x/spec.toml", `id = "01-x"`)
 	mustGit(t, dir, "add", "src/a.ts", ".dross/phases/01-x/spec.toml")
@@ -32,8 +28,8 @@ func TestFilterPreserveHistoryProducesPerCommitBranch(t *testing.T) {
 		"commit", "-q", "-m", "feat: add a")
 	sha1 := mustGit(t, dir, "rev-parse", "HEAD")
 
-	// Commit 2 — .dross/-only (should be skipped in the preserved
-	// history because nothing remains after stripping).
+	// Commit 2 — .dross/-only. Earlier versions skipped these (they
+	// became empty after the strip); now they ship as planning commits.
 	writeFile(t, dir, ".dross/phases/01-x/plan.toml", `id = "01-x"`)
 	mustGit(t, dir, "add", ".dross/phases/01-x/plan.toml")
 	mustGit(t, dir, "commit", "-q", "-m", "chore(plan): wip")
@@ -66,10 +62,10 @@ func TestFilterPreserveHistoryProducesPerCommitBranch(t *testing.T) {
 		t.Fatalf("unexpected return: branch=%q sha=%q", branch, tipSHA)
 	}
 
-	// Should be exactly 2 commits on the new branch (commit 2 dropped).
+	// All 3 commits should land — no longer skipping the planning-only one.
 	count := mustGit(t, dir, "rev-list", "--count", "main..pr/01-x")
-	if count != "2" {
-		t.Errorf("expected 2 commits on pr/01-x, got %s", count)
+	if count != "3" {
+		t.Errorf("expected 3 commits on pr/01-x, got %s", count)
 	}
 	_, _, _ = sha1, sha2, sha3 // referenced for debug; keep for future failures
 
@@ -79,13 +75,17 @@ func TestFilterPreserveHistoryProducesPerCommitBranch(t *testing.T) {
 		t.Errorf("source authors should survive: %q", authors)
 	}
 
-	// Tree on the new branch contains code, no .dross/.
+	// Tree on the new branch contains code AND .dross/.
 	prTree := mustGit(t, dir, "ls-tree", "-r", "--name-only", "pr/01-x")
-	if !strings.Contains(prTree, "src/a.ts") || !strings.Contains(prTree, "src/b.ts") {
-		t.Errorf("pr branch missing expected source: %s", prTree)
-	}
-	if strings.Contains(prTree, ".dross") {
-		t.Errorf("pr branch must not contain .dross/: %s", prTree)
+	for _, want := range []string{
+		"src/a.ts",
+		"src/b.ts",
+		".dross/phases/01-x/spec.toml",
+		".dross/phases/01-x/plan.toml",
+	} {
+		if !strings.Contains(prTree, want) {
+			t.Errorf("pr branch missing %s:\n%s", want, prTree)
+		}
 	}
 
 	// User's working tree untouched — .dross/ still here, still on main.
@@ -97,9 +97,10 @@ func TestFilterPreserveHistoryProducesPerCommitBranch(t *testing.T) {
 	}
 }
 
-// TestFilterPreserveHistoryErrsOnAllDrossOnlyCommits guards against a
-// silent no-op when every phase commit was .dross/-only.
-func TestFilterPreserveHistoryErrsOnAllDrossOnlyCommits(t *testing.T) {
+// TestFilterPreserveHistoryShipsPlanningOnlyPhase: a phase whose commits
+// touch only .dross/ used to error (nothing remained after the strip).
+// Now it ships cleanly — planning-only phases are valid.
+func TestFilterPreserveHistoryShipsPlanningOnlyPhase(t *testing.T) {
 	dir := makeRepo(t)
 
 	writeFile(t, dir, ".dross/phases/01/spec.toml", "x")
@@ -108,12 +109,16 @@ func TestFilterPreserveHistoryErrsOnAllDrossOnlyCommits(t *testing.T) {
 	sha := mustGit(t, dir, "rev-parse", "HEAD")
 
 	c := &changes.Changes{Tasks: map[string]changes.TaskRecord{"t1": {Commit: sha}}}
-	_, _, err := FilterPreserveHistory(c, FilterOpts{RepoDir: dir, PhaseID: "01"})
-	if err == nil {
-		t.Fatal("expected error when every phase commit was .dross/-only")
+	branch, tipSHA, err := FilterPreserveHistory(c, FilterOpts{RepoDir: dir, PhaseID: "01"})
+	if err != nil {
+		t.Fatalf("planning-only phase should ship: %v", err)
 	}
-	if !strings.Contains(err.Error(), "no commits") && !strings.Contains(err.Error(), "produced no") {
-		t.Errorf("unexpected error message: %v", err)
+	if branch != "pr/01" || tipSHA == "" {
+		t.Fatalf("unexpected return: branch=%q sha=%q", branch, tipSHA)
+	}
+	prTree := mustGit(t, dir, "ls-tree", "-r", "--name-only", "pr/01")
+	if !strings.Contains(prTree, ".dross/phases/01/spec.toml") {
+		t.Errorf("planning artefact missing on pr branch:\n%s", prTree)
 	}
 }
 

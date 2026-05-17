@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/Rivil/dross/internal/changes"
@@ -21,24 +20,25 @@ type FilterOpts struct {
 	Force      bool   // recreate BranchName if it already exists
 }
 
-// FilterSquash creates a clean review branch by:
+// FilterSquash creates a review branch by:
 //  1. Computing the base commit (parent of earliest phase commit, from
 //     changes.json — unless explicitly overridden).
 //  2. Adding an ephemeral git worktree at that base commit.
 //  3. Overlaying the current tip's tree inside the worktree.
-//  4. Removing .dross/ from the worktree's index + files.
-//  5. Committing the cumulative diff as one squash with Opts.Message.
-//  6. Creating the PR branch in the main repo at the new commit SHA.
-//  7. Removing the ephemeral worktree.
+//  4. Committing the cumulative diff as one squash with Opts.Message.
+//  5. Creating the PR branch in the main repo at the new commit SHA.
+//  6. Removing the ephemeral worktree.
 //
 // Returns the branch name and the new commit SHA. The caller is
 // responsible for pushing the branch.
 //
-// All destructive work happens inside the ephemeral worktree — the
-// user's working tree is never touched. This is critical because
-// .dross/ is gitignored: once removed from the user's working tree,
-// git cannot restore it on branch checkout (untracked files don't
-// participate in checkout).
+// `.dross/` rides along with the PR. Earlier ship versions stripped it
+// from the squash branch to keep reviewer diffs clean, but that left
+// origin/main without `.dross/` and local main with it — every ship
+// produced divergence the caller had to manually recover from. The
+// .gitattributes scaffold (linguist-generated=true on `.dross/**`)
+// collapses the directory in GitHub/Forgejo review UIs, so reviewers
+// don't see noise without losing the artefacts on main.
 //
 // Use FilterPreserveHistory in the same package when reviewers benefit
 // from seeing the per-task commit shape; FilterSquash is the default
@@ -99,17 +99,12 @@ func FilterSquash(c *changes.Changes, opts FilterOpts) (branch, sha string, err 
 		return "", "", fmt.Errorf("checkout tip tree in worktree: %w", err)
 	}
 
-	// 2) drop .dross/ from index + worktree (defensive; safe because we're
-	//    operating on the ephemeral worktree, not the user's checkout)
-	_, _ = git(wtDir, "rm", "-r", "--quiet", "--cached", "--ignore-unmatch", ".dross")
-	_ = os.RemoveAll(filepath.Join(wtDir, ".dross"))
-
-	// 3) stage everything (handles deletions, additions, renames)
+	// 2) stage everything (handles deletions, additions, renames)
 	if _, err := git(wtDir, "add", "-A"); err != nil {
 		return "", "", fmt.Errorf("git add -A in worktree: %w", err)
 	}
 
-	// 4) commit
+	// 3) commit
 	cmd := exec.Command("git", "-C", wtDir, "commit",
 		"-m", opts.Message,
 		"--no-verify",
