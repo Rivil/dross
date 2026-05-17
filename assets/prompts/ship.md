@@ -1,6 +1,6 @@
 # /dross-ship
 
-Open a PR for a verified phase. Filters `.dross/` out of the review branch, pushes, opens the PR via the project's provider (GitHub or Forgejo), and requests human reviewers.
+Open a PR for a verified phase. Pushes the `phase/<id>` branch to the provider (GitHub or Forgejo), opens the PR, and requests human reviewers. The provider's squash-merge collapses per-task commits on merge.
 
 ## 0. Pre-flight
 
@@ -10,15 +10,16 @@ Open a PR for a verified phase. Filters `.dross/` out of the review branch, push
    - missing `[remote]` config
    - mismatched git origin vs `[remote].url`
    - unset `$auth_env`
-   If anything's off, stop and have the user fix via `/dross-options` or `dross env set <KEY>` before continuing.
+   - missing `.dross/** linguist-generated=true` in `.gitattributes` (so review UIs collapse planning artefacts)
+   - phase commits leaked onto local main (legacy state — heal with `dross ship recover` first)
+   If anything's off, stop and have the user fix before continuing.
 4. Read `.dross/phases/<phase-id>/verify.toml` — `[verify].verdict` must be `pass`. If not, stop. Override only if the user explicitly accepts the risk: `dross ship --force-unverified`.
-5. `git status --porcelain` — must be empty. `dross ship`'s branch filter requires a clean working tree. If dirty, ask user to commit or stash first.
+5. **Verify HEAD is on `phase/<id>`** with `git symbolic-ref --short HEAD`. `dross ship` requires this — the phase branch is what gets pushed. If not on it: `git checkout phase/<id>` (it should exist from `dross phase create`).
+6. `git status --porcelain` — must be empty. If dirty, ask user to commit or stash first.
 
 ## 1. Preview
 
-Run `dross ship --no-push <phase-id>` — this builds the squash branch `pr/<phase-id>` locally without pushing, so the user can:
-- `git diff main..pr/<phase-id>` to inspect the actual review diff (no `.dross/`)
-- decide whether the title/body need overriding
+Run `dross ship --no-push <phase-id>` for a dry run (no push, no PR). To preview the review diff: `git diff <main>..phase/<id>`. To preview the PR body: `dross ship --print-body <phase-id>`.
 
 Show the user:
 - the resolved title (`phase <id>: <spec title>` by default)
@@ -43,12 +44,11 @@ If override:
 Run `dross ship <phase-id>`, optionally with `--draft` and/or `--body-file`.
 
 The CLI:
-1. Re-checks the verify gate
-2. FilterSquash → `pr/<phase-id>`
-3. `git push -u origin pr/<phase-id>`
-4. Opens the PR via provider API
-5. Requests reviewers
-6. Updates `state.json` with the shipped action + PR URL
+1. Re-checks the verify gate and that HEAD is on `phase/<id>`
+2. `git push -u origin phase/<id>`
+3. Opens the PR via the provider API
+4. Requests reviewers
+5. Updates `state.json` with the shipped action + PR URL
 
 ## 5. CI gate
 
@@ -56,7 +56,7 @@ After the PR opens, watch CI to completion. Skip this section ONLY if the repo h
 
 **Watch checks:**
 - GitHub: `gh pr checks <pr-url> --watch --fail-fast` — blocks until all checks finish; non-zero exit on failure.
-- Forgejo / Gitea: poll every ~30s — `GET <api_base>/repos/<owner>/<repo>/commits/<sha>/status` (auth header `token $<auth_env>`). Stop when `state` ∈ `success | failure | error`. SHA = head of `pr/<phase-id>`.
+- Forgejo / Gitea: poll every ~30s — `GET <api_base>/repos/<owner>/<repo>/commits/<sha>/status` (auth header `token $<auth_env>`). Stop when `state` ∈ `success | failure | error`. SHA = head of `phase/<id>`.
 
 If the provider reports no checks were registered (CI workflow missing or not triggered), surface that to the user and ask whether to proceed without CI or stop.
 
@@ -64,8 +64,8 @@ If the provider reports no checks were registered (CI workflow missing or not tr
 1. Pull failing logs:
    - GitHub: `gh run view --log-failed` for the run linked from the PR.
    - Forgejo: log URL is in the commit status payload (`target_url`); `WebFetch` it.
-2. Diagnose. Edit + commit the fix on the active source branch (the one you ran `dross ship` from), one commit per logical fix following `repo.commit_convention`.
-3. Update the PR head: `git push origin <source>:pr/<phase-id> --force-with-lease`. Do NOT re-run `dross ship` — that opens a second PR. (`dross ship --force-branch` rebuilds the squash branch locally if you'd rather rebuild from scratch; you still need the manual force-push.)
+2. Diagnose. Edit + commit the fix on `phase/<id>`, one commit per logical fix following `repo.commit_convention`.
+3. `git push origin phase/<id>` — appends to the open PR. Do NOT re-run `dross ship` (would open a second PR). If you rebase or amend, use `git push --force-with-lease` (or `dross ship --force`).
 4. Loop back to "Watch checks". Cap at 3 fix iterations — if checks still fail after 3 cycles, stop and hand back to the user.
 
 **On pass:** continue to §6.
@@ -79,21 +79,11 @@ If `hold`: skip to §7 with status `awaiting-merge`.
 If `merge`:
 
 1. **Squash-merge via provider:**
-   - GitHub: `gh pr merge <pr-url> --squash --delete-branch` — also deletes the remote `pr/<phase-id>` branch.
-   - Forgejo / Gitea: `POST <api_base>/repos/<owner>/<repo>/pulls/<n>/merge` body `{"Do":"squash"}`, then `DELETE <api_base>/repos/<owner>/<repo>/branches/pr%2F<phase-id>` to remove the remote branch.
-2. **Sync local main:** `git fetch origin && git checkout <main-branch> && git pull --ff-only` (use `repo.git_main_branch` from project.toml). If fast-forward fails (local main diverged because phase commits live on it), stop and surface to the user — don't auto-resolve.
-3. **Delete local PR branch:** `git branch -D pr/<phase-id>`.
+   - GitHub: `gh pr merge <pr-url> --squash --delete-branch` — also deletes the remote `phase/<id>` branch.
+   - Forgejo / Gitea: `POST <api_base>/repos/<owner>/<repo>/pulls/<n>/merge` body `{"Do":"squash"}`, then `DELETE <api_base>/repos/<owner>/<repo>/branches/phase%2F<id>` to remove the remote branch.
+2. **Finalize locally**: `dross phase complete <phase-id>` — switches to main, fast-forwards from origin (succeeds cleanly because phase work never touched main), deletes local `phase/<id>`, records the merge in state.json with a chore commit.
 
 ## 7. Wrap
-
-Commit the post-ship state update so `.dross/` doesn't sit dirty:
-
-```
-git add .dross/state.json
-git commit -m "chore(dross): record ship for <phase-id>"
-```
-
-(Use `repo.commit_convention` from project.toml. If a merge happened in §6, include `+ merge` in the message.)
 
 Print:
 

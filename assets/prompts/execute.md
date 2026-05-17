@@ -8,14 +8,17 @@ Run a phase plan to completion. **Pair-mode by default**: propose, pause, steer,
 2. Resolve target phase from `$ARGUMENTS` or `state.json`'s `current_phase`. Fail if neither is set.
 3. Read `.dross/phases/<id>/spec.toml` and `plan.toml`. If `plan.toml` is missing, route the user to `/dross-plan` and stop.
 4. Read `.dross/project.toml` — specifically `runtime.*` (test/typecheck/lint commands), `paths.*`, `repo.commit_convention`, `repo.git_main_branch`, `stack.locked`.
-5. Check git state with `git status --porcelain`. If working tree is dirty:
+5. **Verify current branch is `phase/<id>`** with `git symbolic-ref --short HEAD`. Phase work must never land on the main branch — that's the divergence pattern the phase-branch model is designed to prevent. If on a wrong branch:
+   - If `phase/<id>` exists locally: `git checkout phase/<id>` and proceed.
+   - Otherwise: stop. The phase wasn't created with `dross phase create` (which auto-checks out). Have the user run `dross phase create` or migrate existing work to a branch before executing.
+6. Check git state with `git status --porcelain`. If working tree is dirty:
    - Surface the diff to the user
    - Ask: "Commit existing work first / stash / abort"
    - Do not proceed with execute on a dirty tree — atomic commits per task require a clean baseline.
-6. Parse flags from `$ARGUMENTS`:
+7. Parse flags from `$ARGUMENTS`:
    - `--solo` → autonomous mode
    - `--from <task-id>` → start at this task (skip earlier-wave done tasks; resume mid-phase)
-7. Detect resume state: if any task has `status = "in_progress"`, ask user "continue task X / reset to pending and pick fresh".
+8. Detect resume state: if any task has `status = "in_progress"`, ask user "continue task X / reset to pending and pick fresh".
 
 Print one orientation block:
 ```
@@ -169,6 +172,7 @@ and update state status to `partial` instead.
 ## Hard rules
 
 - **Pair mode is the default.** Never write code without an explicit user `proceed` in pair mode. The whole point is the user is part of the loop.
+- **Phase work commits to `phase/<id>`, never the main branch.** If `git symbolic-ref --short HEAD` returns the main branch, stop and fix before continuing.
 - **Atomic commits.** Exactly one commit per completed task. No batched multi-task commits.
 - **Touch only `task.files`.** Plan deviation requires explicit user OK.
 - **Honor locked decisions and rules.** If a constraint conflicts with the task, surface and ask — never silently work around it.

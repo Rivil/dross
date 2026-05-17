@@ -13,10 +13,13 @@ Use when:
 1. Run `dross rule show` and treat the output as MUST-FOLLOW.
 2. Read `.dross/project.toml` — `runtime.*` (test/typecheck/lint), `paths.*`, `repo.commit_convention`, `repo.git_main_branch`, `stack.locked`.
 3. Read `.dross/state.json`. Note `current_phase` (may be empty — that's fine, standalone mode).
-4. Check `git status --porcelain`. If working tree is dirty:
+4. **Verify the current branch matches the mode** with `git symbolic-ref --short HEAD`:
+   - **In-phase** (`current_phase` set): branch must be `phase/<current_phase>`. If not, switch to it (or stop if it doesn't exist locally). Quick changes inside a phase belong on the phase branch — they ship together with the phase.
+   - **Standalone** (no `current_phase`): branch must be the configured main branch (`repo.git_main_branch`). Standalone quick changes go to main directly via small commit.
+5. Check `git status --porcelain`. If working tree is dirty:
    - Surface the diff to the user.
    - Ask via `AskUserQuestion`: "commit existing work first / stash / abort". Atomic commit semantics require a clean baseline.
-5. Parse `$ARGUMENTS`. If empty, ask for a task description and stop until the user provides one — quick can't operate without intent.
+6. Parse `$ARGUMENTS`. If empty, ask for a task description and stop until the user provides one — quick can't operate without intent.
 
 Print one orientation block:
 ```
