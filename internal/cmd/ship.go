@@ -221,6 +221,7 @@ func Ship() *cobra.Command {
 	c.Flags().BoolVar(&preserveHistory, "preserve-history", false,
 		"build pr/<id> by per-commit cherry-pick (drops .dross/ each commit) instead of one squash — preserves the per-task shape of the work")
 	c.AddCommand(shipComment())
+	c.AddCommand(shipRecover())
 	return c
 }
 
