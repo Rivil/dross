@@ -4,37 +4,35 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/verify"
 )
 
-// Ship orchestrates /dross-ship: derives a clean review branch from
-// the current phase, pushes it, and opens a provider-aware PR with
-// auto-assigned human reviewers.
+// Ship orchestrates /dross-ship: pushes the current phase/<id> branch
+// and opens a provider-aware PR with auto-assigned human reviewers.
+// The provider's squash-merge collapses the per-task commits on the
+// branch into a single commit on main — no client-side squash needed.
 func Ship() *cobra.Command {
 	var (
-		title            string
-		body             string
-		bodyFile         string
-		noPush           bool
-		draft            bool
-		forceUnverified  bool
-		forceBranch      bool
-		printBody        bool
-		preserveHistory  bool
+		title           string
+		body            string
+		bodyFile        string
+		noPush          bool
+		draft           bool
+		forceUnverified bool
+		forcePush       bool
+		printBody       bool
 	)
 	c := &cobra.Command{
 		Use:   "ship [phase-id]",
-		Short: "Open a clean PR for a phase (filter .dross/, push, open PR via provider)",
+		Short: "Push phase/<id> and open a PR via the project's provider",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			root, err := FindRoot()
@@ -61,6 +59,7 @@ func Ship() *cobra.Command {
 			if phaseID == "" {
 				return errors.New("no phase id given and state has no current_phase")
 			}
+			phaseBranch := "phase/" + phaseID
 
 			// 2) Load phase artefacts.
 			phaseDir := phase.Dir(root, phaseID)
@@ -74,10 +73,6 @@ func Ship() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load verify (run /dross-verify first?): %w", err)
 			}
-			ch, err := changes.Load(changes.FilePath(root, phaseID), phaseID)
-			if err != nil {
-				return fmt.Errorf("load changes: %w", err)
-			}
 
 			// 3) Pre-flight gates.
 			if p.Remote.URL == "" || p.Remote.Provider == "" {
@@ -86,6 +81,17 @@ func Ship() *cobra.Command {
 			if vrf.Verify.Verdict != "pass" && !forceUnverified {
 				return fmt.Errorf("verify verdict is %q (need 'pass'); use --force-unverified to override",
 					vrf.Verify.Verdict)
+			}
+
+			// Must be on the phase branch. Pushing from anywhere else is
+			// almost certainly a mistake — phase work belongs on phase/<id>.
+			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			if err != nil {
+				return fmt.Errorf("read current branch: %w", err)
+			}
+			if cur != phaseBranch {
+				return fmt.Errorf("must be on %s to ship (currently on %s); switch with `git checkout %s`",
+					phaseBranch, cur, phaseBranch)
 			}
 
 			// 4) Title + body.
@@ -108,44 +114,28 @@ func Ship() *cobra.Command {
 				return nil
 			}
 
-			// 5) Build the review branch — squash by default, or per-commit
-			//    history preserved with --preserve-history.
-			filterOpts := ship.FilterOpts{
-				RepoDir: repoDir,
-				PhaseID: phaseID,
-				Message: title,
-				Force:   forceBranch,
-			}
-			var (
-				branch string
-				sha    string
-			)
-			if preserveHistory {
-				branch, sha, err = ship.FilterPreserveHistory(ch, filterOpts)
-				if err != nil {
-					return fmt.Errorf("filter preserve-history: %w", err)
-				}
-			} else {
-				branch, sha, err = ship.FilterSquash(ch, filterOpts)
-				if err != nil {
-					return fmt.Errorf("filter squash: %w", err)
-				}
-			}
-			Printf("Built %s @ %s\n", branch, sha[:min(7, len(sha))])
-
 			if noPush {
 				Print("--no-push set; not pushing or opening PR.")
 				return nil
 			}
 
-			// 6) Push.
-			pushOut, perr := exec.Command("git", "-C", repoDir, "push", "-u", "origin", branch).CombinedOutput()
-			if perr != nil {
-				return fmt.Errorf("git push: %w\n%s", perr, string(pushOut))
+			// 5) Push phase/<id> directly. The provider's squash-merge will
+			//    collapse the per-task commits into one on main; no client-side
+			//    synthetic branch needed.
+			pushArgs := []string{"push", "-u", "origin", phaseBranch}
+			if forcePush {
+				// --force-with-lease guards against clobbering a concurrent
+				// push from another machine without requiring the user to
+				// know the remote SHA.
+				pushArgs = []string{"push", "-u", "--force-with-lease", "origin", phaseBranch}
 			}
-			Printf("Pushed %s to origin\n", branch)
+			pushOut, perr := gitCombined(repoDir, pushArgs...)
+			if perr != nil {
+				return fmt.Errorf("git push: %w\n%s", perr, pushOut)
+			}
+			Printf("Pushed %s to origin\n", phaseBranch)
 
-			// 7) Open the PR via the provider.
+			// 6) Open the PR via the provider.
 			baseBranch := p.Repo.GitMainBranch
 			if baseBranch == "" {
 				baseBranch = "main"
@@ -155,7 +145,7 @@ func Ship() *cobra.Command {
 				URL:        p.Remote.URL,
 				APIBase:    p.Remote.APIBase,
 				AuthEnv:    p.Remote.AuthEnv,
-				HeadBranch: branch,
+				HeadBranch: phaseBranch,
 				BaseBranch: baseBranch,
 				Title:      title,
 				Body:       body,
@@ -176,7 +166,7 @@ func Ship() *cobra.Command {
 				Printf("Warning: %v\n", err)
 			}
 
-			// 8) State update.
+			// 7) State update.
 			action := fmt.Sprintf("shipped %s", phaseID)
 			if res != nil {
 				action = fmt.Sprintf("shipped %s → %s", phaseID, res.URL)
@@ -186,7 +176,7 @@ func Ship() *cobra.Command {
 				return fmt.Errorf("save state: %w", err)
 			}
 
-			// 9) Telemetry — capture shape of this ship without leaking
+			// 8) Telemetry — capture shape of this ship without leaking
 			//    repo URL, body content, or reviewer names.
 			tags := map[string]string{
 				"provider": p.Remote.Provider,
@@ -195,7 +185,7 @@ func Ship() *cobra.Command {
 			if draft {
 				tags["draft"] = "true"
 			}
-			if forceUnverified || forceBranch {
+			if forceUnverified || forcePush {
 				tags["force"] = "true"
 			}
 			counts := map[string]int{
@@ -210,17 +200,14 @@ func Ship() *cobra.Command {
 	c.Flags().StringVar(&title, "title", "", "PR title (default: 'phase <id>: <spec title>')")
 	c.Flags().StringVar(&body, "body", "", "PR body override (overrides generated body)")
 	c.Flags().StringVar(&bodyFile, "body-file", "", "read PR body from file")
-	c.Flags().BoolVar(&noPush, "no-push", false, "build the squash branch locally but don't push or open PR")
+	c.Flags().BoolVar(&noPush, "no-push", false, "don't push the phase branch or open a PR")
 	c.Flags().BoolVar(&draft, "draft", false, "open the PR as draft")
 	c.Flags().BoolVar(&forceUnverified, "force-unverified", false, "skip the 'verify must be pass' gate")
-	c.Flags().BoolVar(&forceBranch, "force-branch", false,
-		"overwrite an existing pr/<id> branch even when it has unpushed local commits "+
-			"(stale local-only branches and fully-pushed branches are auto-replaced; "+
-			"only diverged branches need this flag)")
-	c.Flags().BoolVar(&printBody, "print-body", false, "print the generated PR body and exit (no push, no branch)")
-	c.Flags().BoolVar(&preserveHistory, "preserve-history", false,
-		"build pr/<id> by per-commit cherry-pick (drops .dross/ each commit) instead of one squash — preserves the per-task shape of the work")
+	c.Flags().BoolVar(&forcePush, "force", false,
+		"force-with-lease the push (use when re-pushing after rewriting phase/<id>)")
+	c.Flags().BoolVar(&printBody, "print-body", false, "print the generated PR body and exit (no push, no PR)")
 	c.AddCommand(shipComment())
+	c.AddCommand(shipRecover())
 	return c
 }
 
@@ -275,13 +262,6 @@ func shipComment() *cobra.Command {
 	c.Flags().StringVar(&body, "body", "", "comment body (markdown)")
 	c.Flags().StringVar(&bodyFile, "body-file", "", "read comment body from file")
 	return c
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // shipResultTag classifies a ship's outcome into a single token. Used

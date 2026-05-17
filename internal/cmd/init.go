@@ -83,6 +83,14 @@ fill it in conversationally. For adopting an existing repo, use ` + "`dross onbo
 				return err
 			}
 
+			// Mark .dross/ as linguist-generated so PR review UIs collapse it.
+			// Without this, planning artefacts would either flood reviewer diffs
+			// (if we ship .dross/) or get filtered out, which historically caused
+			// origin/main vs local main divergence after every squash-merge.
+			if err := ensureDrossGitattributes(cwd); err != nil {
+				return fmt.Errorf("write .gitattributes: %w", err)
+			}
+
 			// Seed profile from GSD if available — silent no-op otherwise.
 			seedErr := profile.SeedFromGSD(filepath.Join(root, profile.File))
 			seeded := seedErr == nil

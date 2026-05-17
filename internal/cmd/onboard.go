@@ -68,6 +68,10 @@ func Onboard() *cobra.Command {
 				return err
 			}
 
+			if err := ensureDrossGitattributes(cwd); err != nil {
+				return fmt.Errorf("write .gitattributes: %w", err)
+			}
+
 			_ = profile.SeedFromGSD(filepath.Join(root, profile.File))
 
 			Printf("dross onboarded at %s\n", root)

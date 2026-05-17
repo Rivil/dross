@@ -7,7 +7,8 @@ Decompose a phase's `spec.toml` into a task graph with waves, dependencies, and 
 1. Run `dross rule show` and treat output as MUST-FOLLOW.
 2. Resolve target phase: `$ARGUMENTS` if provided, else `state.json`'s `current_phase`. If unset, list phases via `dross phase list` and ask.
 3. Read `.dross/phases/<id>/spec.toml`. If missing, route the user to `/dross-spec` first and stop.
-4. Read `.dross/phases/<id>/plan.toml` if present — **resume mode**. Surface existing tasks, ask whether to extend or rewrite.
+4. **Verify current branch is `phase/<id>`** (`git symbolic-ref --short HEAD`). On resume, switch with `git checkout phase/<id>` if it exists locally. If the phase branch is missing, stop — phase work belongs off main and `dross phase create` would have set this up.
+5. Read `.dross/phases/<id>/plan.toml` if present — **resume mode**. Surface existing tasks, ask whether to extend or rewrite.
 
 ## 1. Read context (don't summarise back unless asked)
 

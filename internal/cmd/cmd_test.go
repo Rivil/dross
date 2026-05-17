@@ -81,10 +81,15 @@ func TestInitCreatesArtefacts(t *testing.T) {
 		".dross/rules.toml",
 		".dross/milestones",
 		".dross/phases",
+		".gitattributes",
 	} {
 		if _, err := os.Stat(filepath.Join(dir, want)); err != nil {
 			t.Errorf("missing %s: %v", want, err)
 		}
+	}
+	attrs := mustRead(t, filepath.Join(dir, ".gitattributes"))
+	if !strings.Contains(attrs, drossGitattributesLine) {
+		t.Errorf(".gitattributes missing %q:\n%s", drossGitattributesLine, attrs)
 	}
 }
 
@@ -253,6 +258,10 @@ func TestOnboardScansSignals(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("project.toml missing %q\n--- body ---\n%s", want, body)
 		}
+	}
+	attrs := mustRead(t, filepath.Join(dir, ".gitattributes"))
+	if !strings.Contains(attrs, drossGitattributesLine) {
+		t.Errorf(".gitattributes missing %q:\n%s", drossGitattributesLine, attrs)
 	}
 }
 

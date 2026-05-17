@@ -2,7 +2,7 @@
 
 A leaner successor to [GSD](https://github.com/gsd-build/get-shit-done) for working with Claude Code on real projects.
 
-> **Status:** v0.1.x — full plan → execute → verify loop is wired. Mutation testing covers TS/JS/Svelte (Stryker) and Go (Gremlins). Tree-sitter codex and C# (Stryker.NET) are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised.
+> **Status:** v0.1.x — full plan → execute → verify → ship loop is wired with phase-branch isolation (`dross phase create` auto-checks out `phase/<id>`; `dross phase complete` finalizes post-merge). Mutation testing covers TS/JS/Svelte (Stryker) and Go (Gremlins). Tree-sitter codex and C# (Stryker.NET) are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised.
 
 > Scope: Dross is built for my workflow. It's public because there's no reason not to be, but I'm not marketing it and I'm not trying to grow it into a general-purpose tool. The roadmap is a flat list because my todo list is — if Dross ever picks up users, I'll think about structure (semver, milestones, contribution guidelines) then.
 
@@ -34,28 +34,28 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | GSD `/gsd-plan-phase` | 103,413 | ~25,900 |
 | GSD `/gsd-new-project` | 69,637 | ~17,400 |
 | GSD `/gsd-progress` | 37,864 | ~9,500 |
-| Dross `/dross-init` | 7,169 | **~1,790** |
-| Dross `/dross-onboard` | 5,147 | **~1,290** |
-| Dross `/dross-options` | 5,988 | **~1,500** |
-| Dross `/dross-milestone` | 6,034 | **~1,510** |
-| Dross `/dross-ship` | 5,786 | **~1,450** |
-| Dross `/dross-review` | 7,376 | **~1,840** |
-| Dross `/dross-rule` | 1,936 | **~480** |
-| Dross `/dross-spec` | 5,439 | **~1,360** |
-| Dross `/dross-plan` | 5,495 | **~1,370** |
-| Dross `/dross-plan-review` | 5,264 | **~1,320** |
-| Dross `/dross-execute` | 7,391 | **~1,850** |
-| Dross `/dross-verify` | 8,806 | **~2,200** |
-| Dross `/dross-quick` | 7,476 | **~1,870** |
-| Dross `/dross-status` | 1,439 | **~360** |
+| Dross `/dross-init` | 7,423 | **~1,860** |
+| Dross `/dross-onboard` | 5,381 | **~1,350** |
+| Dross `/dross-options` | 6,234 | **~1,560** |
+| Dross `/dross-milestone` | 6,323 | **~1,580** |
+| Dross `/dross-ship` | 5,832 | **~1,460** |
+| Dross `/dross-review` | 7,725 | **~1,930** |
+| Dross `/dross-rule` | 2,119 | **~530** |
+| Dross `/dross-spec` | 6,117 | **~1,530** |
+| Dross `/dross-plan` | 6,024 | **~1,510** |
+| Dross `/dross-plan-review` | 5,524 | **~1,380** |
+| Dross `/dross-execute` | 8,354 | **~2,090** |
+| Dross `/dross-verify` | 9,095 | **~2,270** |
+| Dross `/dross-quick` | 7,973 | **~1,990** |
+| Dross `/dross-status` | 1,635 | **~410** |
 
 **Total prompt-surface** (everything that could ever load):
 
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 84,154 | ~21,040 |
-| **Ratio** | | **≈ 30×** |
+| Dross (commands + prompts) | 85,759 | ~21,440 |
+| **Ratio** | | **≈ 29×** |
 
 **Being honest about these numbers:**
 
@@ -166,7 +166,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross project {show,get,set}` | Read/write `project.toml` fields | ✅ |
 | `dross state {show,set,touch,bump}` | Read/write `state.json` (`bump internal` increments the 4th version segment) | ✅ |
 | `dross rule {add,list,remove,promote,disable,enable,show}` | Two-tier rules system | ✅ |
-| `dross phase {create,list,show}` | Phase directories | ✅ |
+| `dross phase {create,list,show,complete}` | Phase directories. `create` auto-checks out a `phase/<id>` branch off main so phase work never lands on main; `complete` finalizes after squash-merge (ff main, delete local `phase/<id>`) | ✅ |
 | `dross milestone {create,list,show,get,set,add}` | Milestones with dotted-path edits (set scalars, add to list fields) | ✅ |
 | `dross task {next,show,status}` | Inspect / update tasks within a plan | ✅ |
 | `dross changes {record,show}` | Per-phase append-only log of what was touched | ✅ |
@@ -176,11 +176,12 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross profile {show,seed}` | User profile (with GSD import) | ✅ |
 | `dross validate` | Schema-check every artefact | ✅ |
 | `dross codex <file>` | Polyglot code insight — symbols, refs, siblings, recent activity. Go via stdlib `go/ast`; TS/TSX/Svelte/C#/GDScript via `ast-grep` shell-out (graceful no-op if ast-grep not on PATH) | ✅ |
-| `dross doctor` | Project-level health check (`[remote]` ↔ git, `auth_env` exported) | ✅ |
+| `dross doctor` | Project-level health check: foundational files exist (`project.toml`, `rules.toml`, `state.json`), `[remote]` ↔ git origin matches, `auth_env` exported, `.gitattributes` marks `.dross/` linguist-generated, no phase commits leaked onto main | ✅ |
 | `dross defaults {show,save}` | Read/write `~/.claude/dross/defaults.toml` (cross-project pre-fills) | ✅ |
 | `dross env {list,set,unset}` | Manage env keys in `~/.claude/settings.json` (hidden input, never echoed) | ✅ |
-| `dross ship <phase-id>` | Filter `.dross/`, push `pr/<id>`, open PR via provider, request reviewers. `--preserve-history` keeps per-task commits | ✅ |
+| `dross ship <phase-id>` | Push `phase/<id>` to the provider, open PR, request reviewers. Provider's squash-merge collapses per-task commits | ✅ |
 | `dross ship comment` | Post a markdown comment to a PR via provider (used by /dross-review) | ✅ |
+| `dross ship recover` | One-shot migration tool for legacy repos with phase commits on main or `.dross/` stripped from prior PRs — fetch + reset + restore `.dross/` + commit, atomically | ✅ |
 | `dross stats {show,path,opt-in,opt-out}` | Aggregates over the local telemetry log; toggle the recorder | ✅ |
 | `dross version` | Print version, commit, and build date | ✅ |
 
@@ -229,6 +230,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Codex polyglot indexer — Go via stdlib `go/ast`, TS/TSX/Svelte/C#/GDScript via `ast-grep` shell-out. Graceful degradation when ast-grep isn't installed (other commands keep working). HTML/CSS get sibling + git-log enrichment only (no symbols)
 - [x] `/dross-quick` — one-shot task with atomic commit + `runtime.test_command` gate, pair-mode only. Bumps `state.version`'s internal counter (`dross state bump internal`). Works inside a phase (recorded as `quick-N` in `changes.json`) or standalone
 - [x] Telemetry signal upgrades — finer error classifier (no_phase / no_spec / no_plan / verify_state / mutation / provider / unknown_field / cli_args / cancelled / check_issues), cmd path captured even when cobra fails to resolve, `dross status` surfaces unfinalized verify verdicts, doctor emits outcome events instead of bucketing as `err=other`
+- [x] Phase-branch model — `dross phase create` auto-checks out `phase/<id>` off main; `dross phase complete` ff-merges main and deletes the local branch; `dross ship` pushes `phase/<id>` directly (no synthetic squash) and the provider's squash-merge collapses per-task commits on merge. Removes the divergence pattern that previously required manual recovery commits. `.dross/** linguist-generated=true` scaffolded into `.gitattributes` on init/onboard so review UIs collapse planning artefacts without filtering them from history. Doctor checks foundational files, the linguist attr, and phase commits leaked onto main. `dross ship recover` retained as one-shot migration for repos already in the divergent state.
 
 ## Telemetry
 

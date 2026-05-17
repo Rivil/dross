@@ -26,14 +26,11 @@ func shipFixture(t *testing.T, originURL string) string {
 		t.Fatalf("init: %v", err)
 	}
 
-	// Write a baseline file + commit so we have a parent for the phase commit.
-	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
-	gitCommit(t, dir, "initial baseline")
-
-	// Configure project [remote] for forgejo (we'll mock the API).
+	// Configure project [remote] for forgejo before the baseline commit
+	// so phase create finds a clean tree.
 	for _, set := range [][]string{
 		{"set", "remote.provider", "forgejo"},
-		{"set", "remote.api_base", "https://forge.example/api/v1"}, // overridden via t.Setenv pattern not possible; tests below override per-call
+		{"set", "remote.api_base", "https://forge.example/api/v1"},
 		{"set", "remote.log_api", "true"},
 		{"set", "remote.auth_env", "MOCK_FORGEJO_TOKEN"},
 		{"set", "remote.reviewers", "alice"},
@@ -43,21 +40,18 @@ func shipFixture(t *testing.T, originURL string) string {
 			t.Fatalf("project %v: %v", set, err)
 		}
 	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	gitCommit(t, dir, "initial baseline")
 
-	// Create phase 01-x with spec + verify + changes.
+	// Create the phase via the real CLI — this also checks us out onto
+	// phase/01-x, matching the post-create state ship expects.
+	if err := runCmd(t, Phase(), "create", "x"); err != nil {
+		t.Fatalf("phase create: %v", err)
+	}
+
+	// Drop verify.toml at pass and write phase code on the phase branch.
 	root := filepath.Join(dir, ".dross")
 	phaseDir := filepath.Join(root, "phases", "01-x")
-	if err := os.MkdirAll(phaseDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	mustWrite(t, filepath.Join(phaseDir, "spec.toml"), `[phase]
-id = "01-x"
-title = "Tagging"
-
-[[criteria]]
-id = "C1"
-text = "Tags can be added"
-`)
 	mustWrite(t, filepath.Join(phaseDir, "verify.toml"), `[verify]
 phase = "01-x"
 generated_at = 2026-05-02T10:00:00Z
@@ -76,8 +70,9 @@ id = "C1"
 status = "covered"
 tests = ["tag.test.ts:42"]
 `)
-
-	// Write phase code + record commit in changes.json.
+	// Phase create already wrote a "created" state.json entry that's
+	// staged but uncommitted — fold it into the phase commit so the
+	// working tree is clean when ship runs.
 	mustWrite(t, filepath.Join(dir, "src/tag.ts"), "export const tag = 1\n")
 	mustWrite(t, filepath.Join(phaseDir, "spec.toml"), `[phase]
 id = "01-x"
@@ -95,13 +90,7 @@ text = "Tags can be added"
     "t1": {"files": ["src/tag.ts"], "commit": "`+commitSHA+`", "completed_at": "2026-05-02T10:00:00Z"}
   }
 }`)
-
-	// Mark as current phase in state.
-	st, _ := state.Load(filepath.Join(root, state.File))
-	st.CurrentPhase = "01-x"
-	if err := st.Save(filepath.Join(root, state.File)); err != nil {
-		t.Fatal(err)
-	}
+	gitCommit(t, dir, "chore(dross): record task t1")
 	return dir
 }
 
@@ -115,25 +104,25 @@ func gitOutT(t *testing.T, dir string, args ...string) string {
 	return mustGit(t, dir, args...)
 }
 
-func TestShipNoPushBuildsBranchAndStops(t *testing.T) {
+func TestShipNoPushSkipsPushAndPR(t *testing.T) {
 	dir := shipFixture(t, "https://forge.example/me/p.git")
 
 	if err := runCmd(t, Ship(), "--no-push"); err != nil {
 		t.Fatalf("ship --no-push: %v", err)
 	}
 
-	// pr/01-x should exist locally.
-	out := mustGit(t, dir, "branch", "--list", "pr/01-x")
-	if !strings.Contains(out, "pr/01-x") {
-		t.Errorf("expected pr/01-x branch, got: %q", out)
-	}
-
-	// No state.json shipped action recorded yet (no PR opened).
+	// No state.json shipped action recorded — --no-push is a dry run.
 	st, _ := state.Load(filepath.Join(dir, ".dross", "state.json"))
 	for _, a := range st.History {
 		if strings.HasPrefix(a.Action, "shipped 01-x") {
 			t.Error("should not record shipped action under --no-push")
 		}
+	}
+
+	// We should still be on the phase branch (ship doesn't switch).
+	cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD")
+	if cur != "phase/01-x" {
+		t.Errorf("expected to stay on phase/01-x, got %q", cur)
 	}
 }
 
@@ -165,7 +154,7 @@ func TestShipForceUnverifiedSkipsGate(t *testing.T) {
 	if err := os.WriteFile(verifyPath, body, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	gitCommit(t, dir, "test: flip verdict") // FilterSquash needs clean tree
+	gitCommit(t, dir, "test: flip verdict") // ship needs clean tree
 
 	if err := runCmd(t, Ship(), "--no-push", "--force-unverified"); err != nil {
 		t.Errorf("--force-unverified should bypass gate: %v", err)
@@ -201,8 +190,9 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	// Point project.toml at the mock server, then commit (FilterSquash
-	// needs a clean working tree).
+	// Point project.toml at the mock server. project set runs from main
+	// (we're on phase/01-x and it writes to .dross/project.toml), so
+	// commit on the phase branch before shipping (clean tree required).
 	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
 		t.Fatal(err)
 	}
@@ -228,9 +218,10 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 		t.Errorf("state history should record shipped + PR URL; history: %+v", st.History)
 	}
 
-	// Remote should have received pr/01-x.
+	// Remote should have received phase/01-x directly (no synthetic
+	// pr/<id> branch any more).
 	remoteRefs := mustGit(t, remoteDir, "for-each-ref", "--format=%(refname:short)", "refs/heads")
-	if !strings.Contains(remoteRefs, "pr/01-x") {
-		t.Errorf("expected pr/01-x on remote, got: %q", remoteRefs)
+	if !strings.Contains(remoteRefs, "phase/01-x") {
+		t.Errorf("expected phase/01-x on remote, got: %q", remoteRefs)
 	}
 }
