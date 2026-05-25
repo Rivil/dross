@@ -2,7 +2,7 @@
 
 A leaner successor to [GSD](https://github.com/gsd-build/get-shit-done) for working with Claude Code on real projects.
 
-> **Status:** v0.1.x — full plan → execute → verify → ship loop is wired with phase-branch isolation (`dross phase create` auto-checks out `phase/<id>`; `dross phase complete` finalizes post-merge). Mutation testing covers TS/JS/Svelte (Stryker) and Go (Gremlins). Tree-sitter codex and C# (Stryker.NET) are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised.
+> **Status:** v0.1.x — full plan → execute → verify → ship loop is wired with phase-branch isolation (`dross phase create` auto-checks out `phase/<id>`; `dross phase complete` finalizes post-merge). Mutation testing covers TS/JS/Svelte (Stryker) and Go (Gremlins). Tree-sitter codex and C# (Stryker.NET) are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised. Opt-in Forgejo/Gitea issue-board sync (milestones/phases/quicks → board issues, inbound triage via `/dross-inbox`) landed behind `dross issue enable`.
 
 > Scope: Dross is built for my workflow. It's public because there's no reason not to be, but I'm not marketing it and I'm not trying to grow it into a general-purpose tool. The roadmap is a flat list because my todo list is — if Dross ever picks up users, I'll think about structure (semver, milestones, contribution guidelines) then.
 
@@ -37,25 +37,26 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-init` | 7,423 | **~1,860** |
 | Dross `/dross-onboard` | 5,381 | **~1,350** |
 | Dross `/dross-options` | 6,234 | **~1,560** |
-| Dross `/dross-milestone` | 6,323 | **~1,580** |
-| Dross `/dross-ship` | 5,832 | **~1,460** |
+| Dross `/dross-milestone` | 6,562 | **~1,640** |
+| Dross `/dross-ship` | 5,973 | **~1,490** |
 | Dross `/dross-review` | 7,725 | **~1,930** |
 | Dross `/dross-rule` | 2,119 | **~530** |
 | Dross `/dross-spec` | 6,117 | **~1,530** |
-| Dross `/dross-plan` | 6,024 | **~1,510** |
+| Dross `/dross-plan` | 6,325 | **~1,580** |
 | Dross `/dross-plan-review` | 5,524 | **~1,380** |
-| Dross `/dross-execute` | 8,354 | **~2,090** |
-| Dross `/dross-verify` | 9,095 | **~2,270** |
-| Dross `/dross-quick` | 7,973 | **~1,990** |
-| Dross `/dross-status` | 1,635 | **~410** |
+| Dross `/dross-execute` | 8,652 | **~2,160** |
+| Dross `/dross-verify` | 9,255 | **~2,310** |
+| Dross `/dross-quick` | 8,321 | **~2,080** |
+| Dross `/dross-inbox` | 4,344 | **~1,090** |
+| Dross `/dross-status` | 1,998 | **~500** |
 
 **Total prompt-surface** (everything that could ever load):
 
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 85,759 | ~21,440 |
-| **Ratio** | | **≈ 29×** |
+| Dross (commands + prompts) | 91,953 | ~22,990 |
+| **Ratio** | | **≈ 27×** |
 
 **Being honest about these numbers:**
 
@@ -182,6 +183,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross ship <phase-id>` | Push `phase/<id>` to the provider, open PR, request reviewers. Provider's squash-merge collapses per-task commits | ✅ |
 | `dross ship comment` | Post a markdown comment to a PR via provider (used by /dross-review) | ✅ |
 | `dross ship recover` | One-shot migration tool for legacy repos with phase commits on main or `.dross/` stripped from prior PRs — fetch + reset + restore `.dross/` + commit, atomically | ✅ |
+| `dross issue {enable,disable,milestone-sync,phase-sync,quick,pull,dismiss,link,list}` | Opt-in Forgejo/Gitea issue-board sync. Mirrors milestones/phases/quicks → board issues (idempotent), pulls inbound issues for triage. Off by default; `enable` needs `[remote].provider` (forgejo/gitea) + `api_base` + `auth_env` | ✅ |
 | `dross stats {show,path,opt-in,opt-out}` | Aggregates over the local telemetry log; toggle the recorder | ✅ |
 | `dross version` | Print version, commit, and build date | ✅ |
 
@@ -200,6 +202,7 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `/dross-verify` | ✅ |
 | `/dross-quick` | ✅ (one-shot task with atomic commit + test gate; bumps internal version) |
 | `/dross-status` | ✅ |
+| `/dross-inbox` | ✅ (triage inbound board issues → phase / milestone / quick / dismiss) |
 | `/dross-options` | ✅ |
 | `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup) |
 | `/dross-review` | ✅ (4-lens subagent panel: security / quality / tests / spec-fidelity) |
@@ -230,6 +233,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Codex polyglot indexer — Go via stdlib `go/ast`, TS/TSX/Svelte/C#/GDScript via `ast-grep` shell-out. Graceful degradation when ast-grep isn't installed (other commands keep working). HTML/CSS get sibling + git-log enrichment only (no symbols)
 - [x] `/dross-quick` — one-shot task with atomic commit + `runtime.test_command` gate, pair-mode only. Bumps `state.version`'s internal counter (`dross state bump internal`). Works inside a phase (recorded as `quick-N` in `changes.json`) or standalone
 - [x] Telemetry signal upgrades — finer error classifier (no_phase / no_spec / no_plan / verify_state / mutation / provider / unknown_field / cli_args / cancelled / check_issues), cmd path captured even when cobra fails to resolve, `dross status` surfaces unfinalized verify verdicts, doctor emits outcome events instead of bucketing as `err=other`
+- [x] Issue-board sync (opt-in) — `dross issue {enable,milestone-sync,phase-sync,quick,pull,dismiss,link}` mirrors dross planning onto a Forgejo/Gitea board: milestone → board milestone, phase → issue (with a task checklist rendered from `plan.toml`), quick → standalone issue. Status flows via a `dross` marker + `dross/status:*` label and closes on ship. Outbound push is wired into the milestone/plan/execute/verify/ship/quick prompts as a no-op-when-disabled CLI call; inbound bugs/feature-requests are pulled by `/dross-inbox` (and surfaced as a passive count in `/dross-status`) and triaged into a phase / milestone backlog / quick / dismiss. Links live in `.dross/board.json`; reuses the `ship` provider config (`api_base`/`auth_env`). GitHub issues backend deferred (`gh issue`)
 - [x] Phase-branch model — `dross phase create` auto-checks out `phase/<id>` off main; `dross phase complete` ff-merges main and deletes the local branch; `dross ship` pushes `phase/<id>` directly (no synthetic squash) and the provider's squash-merge collapses per-task commits on merge. Removes the divergence pattern that previously required manual recovery commits. `.dross/** linguist-generated=true` scaffolded into `.gitattributes` on init/onboard so review UIs collapse planning artefacts without filtering them from history. Doctor checks foundational files, the linguist attr, and phase commits leaked onto main. `dross ship recover` retained as one-shot migration for repos already in the divergent state.
 
 ## Telemetry
@@ -238,7 +242,7 @@ Dross records local-only usage events at `~/.claude/dross/telemetry.jsonl`. The 
 
 **What's recorded.** One JSONL event per `dross` invocation (command path, duration, exit code, error class) plus outcome events from `verify` (mechanical run emits `verdict=pending`; `dross verify finalize <phase>` later emits the resolved `pass | partial | fail` plus mutation score), `ship` (provider, result, force-flag use), `phase create` (ordinal), and `doctor` (result = `passed` | `issues_found`, issue count). All events carry a 12-character SHA-256 hash of the absolute repo path so per-project trends are visible without exposing the path itself.
 
-**Error buckets.** When a CLI invocation exits non-zero, the error is classified into one of: `no_root`, `no_phase`, `no_spec`, `no_plan`, `verify_state`, `mutation`, `provider`, `unknown_subcommand`, `unknown_field`, `cli_args`, `cancelled`, `check_issues`, `already_exists`, `invalid`, `missing`, `permission`, `git`, `network`, `other`. The raw message is never recorded — it might contain user paths or content.
+**Error buckets.** When a CLI invocation exits non-zero, the error is classified into one of: `no_root`, `no_phase`, `no_spec`, `no_plan`, `verify_state`, `mutation`, `provider`, `board`, `unknown_subcommand`, `unknown_field`, `cli_args`, `cancelled`, `check_issues`, `already_exists`, `invalid`, `missing`, `permission`, `git`, `network`, `other`. The raw message is never recorded — it might contain user paths or content.
 
 **What's NOT recorded.** Anything you typed. No criterion text, no decision text, no commit messages, no PR titles or bodies, no reviewer names, no file contents, no repo URLs. Counts and small enums only.
 
