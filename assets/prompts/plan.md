@@ -119,6 +119,12 @@ dross state set current_phase_status "planned"
 dross state touch "plan locked: <id> (<task-count> tasks across <wave-count> waves)"
 ```
 
+Mirror the plan onto the issue board (no-op unless `[remote].board_sync` is on — safe to always run):
+```
+dross issue phase-sync <id>
+```
+This creates (or updates) the phase issue with the acceptance criteria and a task checklist rendered from `plan.toml`, assigned to the milestone's board entry.
+
 End with one line:
 ```
 Plan ready. Next: /dross-execute to run the first task (pair-mode by default; pass --solo for autonomous), or /dross-plan-review for an independent second-opinion audit first.

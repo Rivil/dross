@@ -260,6 +260,21 @@ func TestIssueDismissPersists(t *testing.T) {
 	}
 }
 
+func TestIssueLinkAdoptsExistingIssue(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Issue(), "link", "04-rate-limit", "37"); err != nil {
+		t.Fatalf("link: %v", err)
+	}
+	bj, err := readBoardJSON(dir)
+	if err != nil || bj.Phases["04-rate-limit"] != 37 {
+		t.Errorf("link not stored: %+v err=%v", bj, err)
+	}
+}
+
 func TestIssueDismissRejectsNonInteger(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)

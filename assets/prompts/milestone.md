@@ -78,6 +78,12 @@ dross state set current_milestone <version>
 dross state touch "scoped milestone <version>: <N> criteria, <M> phases"
 ```
 
+Mirror the milestone onto the issue board (no-op unless `[remote].board_sync` is on — safe to always run):
+```
+dross issue milestone-sync <version>
+```
+Phase issues created later by `/dross-plan` attach to this milestone automatically.
+
 ## 7. Wrap
 
 Run `dross validate`. Should be green. Then print:

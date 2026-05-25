@@ -140,6 +140,11 @@ Always touch state:
 dross state touch "quick: <one-line summary of the task>"
 ```
 
+Mirror the quick task onto the issue board, keyed by the new version (no-op unless `[remote].board_sync` is on — safe to always run):
+```
+dross issue quick $NEW_VERSION "quick: <one-line summary>"
+```
+
 ## 7. Wrap-up
 
 Print:
@@ -151,6 +156,11 @@ Quick task complete.
   Files:    <touched-files>
 
 Next: continue working, or /dross-quick <another task> for another small change.
+```
+
+The quick task is committed and done, so close its board issue (no-op unless board sync is on):
+```
+dross issue quick $NEW_VERSION --close
 ```
 
 ## Hard rules

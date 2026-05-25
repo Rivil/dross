@@ -45,6 +45,7 @@ func Issue() *cobra.Command {
 		issueQuick(),
 		issuePull(),
 		issueDismiss(),
+		issueLink(),
 		issueList(),
 	)
 	return c
@@ -420,7 +421,7 @@ func issueQuick() *cobra.Command {
 
 func issuePull() *cobra.Command {
 	var labels, state string
-	var asJSON bool
+	var asJSON, mark bool
 	c := &cobra.Command{
 		Use:   "pull",
 		Short: "List open board issues not yet linked to dross work (inbound triage)",
@@ -451,9 +452,13 @@ func issuePull() *cobra.Command {
 				inbound = append(inbound, iss)
 			}
 
-			ctx.board.MarkPulled()
-			if err := ctx.board.Save(ctx.boardPath); err != nil {
-				return err
+			// Read-only by default so /dross-status can poll without
+			// mutating .dross. --mark stamps last_pull (used by /dross-inbox).
+			if mark {
+				ctx.board.MarkPulled()
+				if err := ctx.board.Save(ctx.boardPath); err != nil {
+					return err
+				}
 			}
 
 			if asJSON {
@@ -482,6 +487,7 @@ func issuePull() *cobra.Command {
 	c.Flags().StringVar(&labels, "labels", "", "only issues with these labels (csv, e.g. bug,enhancement)")
 	c.Flags().StringVar(&state, "state", "open", "issue state: open|closed|all")
 	c.Flags().BoolVar(&asJSON, "json", false, "emit a JSON array (for prompt consumption)")
+	c.Flags().BoolVar(&mark, "mark", false, "record the pull time in board.json (otherwise read-only)")
 	return c
 }
 
@@ -511,6 +517,40 @@ func issueDismiss() *cobra.Command {
 				return err
 			}
 			Printf("dismissed #%d\n", n)
+			return nil
+		},
+	}
+}
+
+// --- link (adopt an existing board issue as a phase's tracking issue) ---
+
+func issueLink() *cobra.Command {
+	return &cobra.Command{
+		Use:   "link <phase-id> <issue-number>",
+		Short: "Adopt an existing board issue as a phase's tracking issue",
+		Long: "Used by /dross-inbox triage: when an inbound bug/feature issue " +
+			"becomes a dross phase, link it so the next `phase-sync` updates that " +
+			"issue in place instead of opening a duplicate.",
+		Args: cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			n, err := strconv.Atoi(args[1])
+			if err != nil {
+				return fmt.Errorf("issue number must be an integer: %q", args[1])
+			}
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			path := filepath.Join(root, board.File)
+			bd, err := board.Load(path)
+			if err != nil {
+				return err
+			}
+			bd.SetPhase(args[0], n)
+			if err := bd.Save(path); err != nil {
+				return err
+			}
+			Printf("linked phase %s -> issue #%d\n", args[0], n)
 			return nil
 		},
 	}

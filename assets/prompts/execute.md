@@ -28,6 +28,11 @@ Mode: <pair | solo>
 Test command: <runtime.test_command or "(none — verify will catch this later)">
 ```
 
+Mark the board issue in-progress (no-op unless `[remote].board_sync` is on — safe to always run):
+```
+dross issue phase-sync <id> --status in-progress
+```
+
 ## 1. Per-task loop
 
 Repeat until `dross task next <phase>` returns nothing:
@@ -161,6 +166,11 @@ Update state:
 ```
 dross state set current_phase_status complete
 dross state touch "phase <id> executed (<done>/<total> done)"
+```
+
+Re-sync the board issue so its checklist reflects the completed tasks (no-op unless board sync is on):
+```
+dross issue phase-sync <id>
 ```
 
 If any tasks are `failed` or `pending`-but-blocked: do not mark the phase complete. Print:
