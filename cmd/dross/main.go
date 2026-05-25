@@ -41,6 +41,7 @@ func main() {
 		cmd.Env(),
 		cmd.Ship(),
 		cmd.Stats(),
+		cmd.Issue(),
 	)
 
 	// Without this, `dross phase add` (or any unknown subcommand under a

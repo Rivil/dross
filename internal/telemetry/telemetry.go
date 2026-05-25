@@ -243,6 +243,14 @@ func ClassifyError(err error) string {
 		strings.Contains(msg, "[remote].url"):
 		return "provider"
 
+	// Issue-board sync (Forgejo board mirroring). Operational failures from
+	// the forge client are wrapped "board:" so a flaky board never hides
+	// inside the generic network/other buckets. Placed after provider so
+	// config errors (missing api_base etc.) still read as provider.
+	case strings.Contains(msg, "board:"),
+		strings.Contains(msg, "issue-board"):
+		return "board"
+
 	// CLI surface: arg validation, unknown fields, user-facing config.
 	case strings.Contains(msg, "unknown subcommand"):
 		return "unknown_subcommand"

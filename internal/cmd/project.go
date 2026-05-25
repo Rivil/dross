@@ -179,6 +179,8 @@ func readDotted(p *project.Project, path string) (string, bool) {
 		return p.Remote.AuthEnv, true
 	case "remote.reviewers":
 		return strings.Join(p.Remote.Reviewers, ","), true
+	case "remote.board_sync":
+		return fmt.Sprintf("%t", p.Remote.BoardSync), true
 	// paths
 	case "paths.source":
 		return p.Paths.Source, true
@@ -317,6 +319,8 @@ func writeDotted(p *project.Project, path, value string) error {
 		p.Remote.AuthEnv = value
 	case "remote.reviewers":
 		p.Remote.Reviewers = splitCSV(value)
+	case "remote.board_sync":
+		return setBool(&p.Remote.BoardSync)
 	// paths
 	case "paths.source":
 		p.Paths.Source = value

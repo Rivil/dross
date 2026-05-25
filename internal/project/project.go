@@ -99,6 +99,7 @@ type Remote struct {
 	LogAPI    bool     `toml:"log_api,omitempty"`    // instance exposes CI logs via API
 	AuthEnv   string   `toml:"auth_env,omitempty"`   // env var name (NEVER the value)
 	Reviewers []string `toml:"reviewers,omitempty"`  // default human reviewers for /dross-ship
+	BoardSync bool     `toml:"board_sync,omitempty"` // mirror planning artefacts onto the issue board
 }
 
 type Paths struct {

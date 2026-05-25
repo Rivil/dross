@@ -174,6 +174,11 @@ func TestClassifyError(t *testing.T) {
 		{errors.New("forgejo backend needs APIBase (set [remote].api_base)"), "provider"},
 		{errors.New("unsupported provider \"bitbucket\""), "provider"},
 
+		// issue-board sync — operational failures wrapped "board:", and the
+		// not-implemented sentinel. Config errors above still read as provider.
+		{errors.New("board: create issue: HTTP 422: bad payload"), "board"},
+		{errors.New("issue-board sync is not implemented for this provider yet (forgejo/gitea only)"), "board"},
+
 		// CLI surface
 		{errors.New("unknown subcommand \"add\" for \"dross phase\""), "unknown_subcommand"},
 		{errors.New("unknown field: nonsense"), "unknown_field"},
