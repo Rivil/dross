@@ -43,6 +43,10 @@ func main() {
 		cmd.Stats(),
 	)
 
+	// Without this, `dross phase add` (or any unknown subcommand under a
+	// parent that has no Run of its own) silently prints help and exits 0.
+	cmd.EnforceSubcommandKnown(root)
+
 	// Telemetry: capture resolved subcommand at PreRun, write the event
 	// after Execute returns so we get duration + final error class.
 	// Failures here are swallowed — telemetry never breaks the user's

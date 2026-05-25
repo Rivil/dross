@@ -244,6 +244,8 @@ func ClassifyError(err error) string {
 		return "provider"
 
 	// CLI surface: arg validation, unknown fields, user-facing config.
+	case strings.Contains(msg, "unknown subcommand"):
+		return "unknown_subcommand"
 	case strings.Contains(msg, "unknown field"),
 		strings.Contains(msg, "unknown or unsettable"),
 		strings.Contains(msg, "unknown scope"),

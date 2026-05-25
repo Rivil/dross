@@ -175,6 +175,7 @@ func TestClassifyError(t *testing.T) {
 		{errors.New("unsupported provider \"bitbucket\""), "provider"},
 
 		// CLI surface
+		{errors.New("unknown subcommand \"add\" for \"dross phase\""), "unknown_subcommand"},
 		{errors.New("unknown field: nonsense"), "unknown_field"},
 		{errors.New("unsupported segment \"patch\" (only `internal` is bumpable)"), "unknown_field"},
 		{errors.New("--pr is required"), "cli_args"},

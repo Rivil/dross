@@ -238,7 +238,7 @@ Dross records local-only usage events at `~/.claude/dross/telemetry.jsonl`. The 
 
 **What's recorded.** One JSONL event per `dross` invocation (command path, duration, exit code, error class) plus outcome events from `verify` (mechanical run emits `verdict=pending`; `dross verify finalize <phase>` later emits the resolved `pass | partial | fail` plus mutation score), `ship` (provider, result, force-flag use), `phase create` (ordinal), and `doctor` (result = `passed` | `issues_found`, issue count). All events carry a 12-character SHA-256 hash of the absolute repo path so per-project trends are visible without exposing the path itself.
 
-**Error buckets.** When a CLI invocation exits non-zero, the error is classified into one of: `no_root`, `no_phase`, `no_spec`, `no_plan`, `verify_state`, `mutation`, `provider`, `unknown_field`, `cli_args`, `cancelled`, `check_issues`, `already_exists`, `invalid`, `missing`, `permission`, `git`, `network`, `other`. The raw message is never recorded — it might contain user paths or content.
+**Error buckets.** When a CLI invocation exits non-zero, the error is classified into one of: `no_root`, `no_phase`, `no_spec`, `no_plan`, `verify_state`, `mutation`, `provider`, `unknown_subcommand`, `unknown_field`, `cli_args`, `cancelled`, `check_issues`, `already_exists`, `invalid`, `missing`, `permission`, `git`, `network`, `other`. The raw message is never recorded — it might contain user paths or content.
 
 **What's NOT recorded.** Anything you typed. No criterion text, no decision text, no commit messages, no PR titles or bodies, no reviewer names, no file contents, no repo URLs. Counts and small enums only.
 
