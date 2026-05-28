@@ -281,9 +281,15 @@ func (c *Client) UpdateIssue(number int, patch IssuePatch) (*Issue, error) {
 		if err != nil {
 			return nil, err
 		}
-		// PUT replaces the issue's label set wholesale.
+		// PUT replaces the issue's label set wholesale. Forgejo/Gitea respond
+		// with the resulting LabelList ([]Label), NOT the issue — so we can't
+		// decode into &raw without tripping "cannot unmarshal array into ...
+		// issueResponse". The caller (issue phase-sync) discards the returned
+		// *Issue, so dropping the response is the right call; if a future
+		// caller needs the post-update issue state it should do a GetIssue
+		// follow-up.
 		if err := c.do("PUT", c.path(fmt.Sprintf("/issues/%d/labels", number)),
-			map[string]any{"labels": ids}, &raw); err != nil {
+			map[string]any{"labels": ids}, nil); err != nil {
 			return nil, fmt.Errorf("set labels on issue #%d: %w", number, err)
 		}
 	}

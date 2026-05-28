@@ -238,6 +238,9 @@ func recordVerifyOutcome(t *verify.Tests, v *verify.Verify) {
 	tags := map[string]string{
 		"verdict": v.Verify.Verdict,
 	}
+	if v.Summary.MutationStatus != "" {
+		tags["mutation_status"] = v.Summary.MutationStatus
+	}
 	RecordOutcomeEvent("verify", counts, nums, tags)
 }
 
@@ -269,6 +272,15 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 	}
 	for _, s := range t.Skipped {
 		Printf("  skipped %s — %s\n", s.File, s.Reason)
+	}
+	switch v.Summary.MutationStatus {
+	case verify.MutationUnmeasurable:
+		Print("  mutation status: unmeasurable — adapter ran but instrumented 0 mutants " +
+			"(likely the project's mutation scope excludes every touched file). " +
+			"Score is 0/0 — /dross-verify will base the verdict on criterion coverage alone.")
+	case verify.MutationSkipped:
+		Print("  mutation status: skipped — no adapter ran. " +
+			"Score is 0/0 — /dross-verify will base the verdict on criterion coverage alone.")
 	}
 	Printf("\nWrote tests.json + verify.toml (verdict=%s — /dross-verify will fill criterion mappings).\n", v.Verify.Verdict)
 }

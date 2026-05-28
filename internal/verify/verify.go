@@ -27,6 +27,22 @@ const (
 	VerifyFile = "verify.toml"
 )
 
+// MutationStatus values describe whether the phase's changes could be
+// mutation-tested at all. Distinct from the score so a zero score on an
+// unmeasurable phase doesn't trip the < 0.60 fail threshold.
+const (
+	// MutationMeasured — adapter ran and instrumented at least one mutant.
+	// Score is meaningful, apply thresholds.
+	MutationMeasured = "measured"
+	// MutationUnmeasurable — adapter ran but instrumented zero mutants
+	// (e.g. project Stryker scope excludes all touched files, or the
+	// changes are purely non-code). Score is 0/0; don't apply thresholds.
+	MutationUnmeasurable = "unmeasurable"
+	// MutationSkipped — no adapter ran. Either `--skip-mutation` was
+	// passed, or none of the touched files matched any configured adapter.
+	MutationSkipped = "skipped"
+)
+
 // Tests is the machine-written aggregation of mutation/coverage results.
 type Tests struct {
 	Phase       string         `json:"phase"`
@@ -62,6 +78,11 @@ type VerifyMeta struct {
 }
 
 type VerifySummary struct {
+	// MutationStatus is measured | unmeasurable | skipped. Read this
+	// before the score: when status != measured the score is a 0/0
+	// artifact, not a signal, and the verdict must be derived from
+	// criterion coverage alone.
+	MutationStatus    string  `toml:"mutation_status"`
 	MutationScore     float64 `toml:"mutation_score"`
 	MutantsKilled     int     `toml:"mutants_killed"`
 	MutantsSurvived   int     `toml:"mutants_survived"`
@@ -227,7 +248,8 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 			Verdict:     "pending",
 		},
 		Summary: VerifySummary{
-			CriteriaTotal: len(criteriaIDs),
+			CriteriaTotal:  len(criteriaIDs),
+			MutationStatus: MutationSkipped, // upgraded below if any adapter ran
 		},
 	}
 	for _, lr := range t.Languages {
@@ -238,6 +260,15 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		v.Summary.MutantsKilled += lr.Mutation.Killed
 		v.Summary.MutantsSurvived += lr.Mutation.Survived
 		v.Summary.MutantsNotCovered += lr.Mutation.NotCovered
+		// Any adapter that produced a report bumps us off `skipped`. We
+		// downgrade to `unmeasurable` until we see a non-zero mutant
+		// count, then we promote to `measured`.
+		if v.Summary.MutationStatus == MutationSkipped {
+			v.Summary.MutationStatus = MutationUnmeasurable
+		}
+		if lr.Mutation.Killed+lr.Mutation.Survived+lr.Mutation.Timeout > 0 {
+			v.Summary.MutationStatus = MutationMeasured
+		}
 	}
 	for _, id := range criteriaIDs {
 		v.Criteria = append(v.Criteria, CriterionResult{

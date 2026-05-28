@@ -160,6 +160,8 @@ func TestClassifyError(t *testing.T) {
 		{errors.New("PhaseID is required"), "no_phase"},
 		{errors.New("read spec spec.toml: open: no such file"), "no_spec"},
 		{errors.New("decode plan plan.toml: bad toml"), "no_plan"},
+		{errors.New("no version given and state has no current_milestone; run `dross milestone list` to see options"), "no_milestone"},
+		{errors.New("load milestone .dross/milestones/v0.1.toml: open: no such file"), "no_milestone"},
 
 		// phase-complete pre-flight: dirty tree, ff-only refusing because
 		// the upstream merge hasn't happened. Both used to land in "other".

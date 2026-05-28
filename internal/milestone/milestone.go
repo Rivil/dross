@@ -50,7 +50,7 @@ func SummaryDir(root, version string) string {
 func Load(path string) (*Milestone, error) {
 	var m Milestone
 	if _, err := toml.DecodeFile(path, &m); err != nil {
-		return nil, fmt.Errorf("decode %s: %w", path, err)
+		return nil, fmt.Errorf("load milestone %s: %w", path, err)
 	}
 	return &m, nil
 }

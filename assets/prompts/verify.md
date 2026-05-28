@@ -22,7 +22,7 @@ dross verify <phase> [--skip-mutation]
 This shells out to mutation tools (currently Stryker for TS/JS/Svelte; other languages skip with a reason), parses the JSON reports, and writes:
 
 - `.dross/phases/<id>/tests.json` — raw machine output, killed/survived counts per language
-- `.dross/phases/<id>/verify.toml` — skeleton verdict with `verdict = "pending"` and per-criterion `status = "unknown"`
+- `.dross/phases/<id>/verify.toml` — skeleton verdict with `verdict = "pending"`, per-criterion `status = "unknown"`, and `[summary].mutation_status` of `measured | unmeasurable | skipped` (use this — not the raw score — to decide if mutation thresholds apply in §3)
 
 **Read both files before continuing.** They're the inputs for the LLM judgement step.
 
@@ -76,6 +76,7 @@ notes  = ""               # short rationale; required for weak/uncovered
 Update `[summary]`:
 ```toml
 [summary]
+mutation_status    = <from tests.json — preserve: measured | unmeasurable | skipped>
 mutation_score     = <from tests.json — preserve>
 mutants_killed     = <preserve>
 mutants_survived   = <preserve>
@@ -84,10 +85,17 @@ criteria_covered   = <count where status=covered>
 criteria_uncovered = <count where status=uncovered or weak>
 ```
 
-Compute `[verify].verdict`:
+Compute `[verify].verdict`. **Read `mutation_status` first** — when status is not `measured`, the score is a 0/0 artifact, not a signal, and the score thresholds must NOT be applied. This is the dogfood-surfaced bug from FeastAhead phase 04/05: Stryker scoped to `src/lib/utils` only, phase touched server/Svelte files, mutation_score landed at 0.0, verdict heuristic falsely flagged `fail` despite 5/5 criteria covered.
+
+If `mutation_status == "measured"`:
 - **`pass`** if all criteria are `covered`, mutation score ≥ 0.80, no BLOCKING findings.
 - **`partial`** if at least one criterion is `weak` OR mutation score is between 0.60-0.80 OR there are FLAG findings but no BLOCKING.
 - **`fail`** if any criterion is `uncovered`, OR mutation score < 0.60, OR any BLOCKING findings exist.
+
+If `mutation_status` is `unmeasurable` or `skipped` (base verdict on criterion coverage alone):
+- **`pass`** if all criteria are `covered` and no BLOCKING findings. Add a NOTE finding recording why mutation didn't apply (e.g. "mutation unmeasurable: project scope excludes all touched files" or "mutation skipped: --skip-mutation passed").
+- **`partial`** if at least one criterion is `weak` OR there are FLAG findings but no BLOCKING.
+- **`fail`** if any criterion is `uncovered` OR any BLOCKING findings exist.
 
 Don't tune the thresholds without flagging it. The 0.80/0.60 mutation cutoffs are heuristics — if the user wants different values for their project, they can edit verify.toml manually after.
 

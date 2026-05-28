@@ -141,6 +141,9 @@ func TestSkeletonSeedsFromMachineResults(t *testing.T) {
 	if v.Summary.MutantsKilled != 9 || v.Summary.MutantsSurvived != 1 {
 		t.Errorf("mutant counts: k=%d s=%d", v.Summary.MutantsKilled, v.Summary.MutantsSurvived)
 	}
+	if v.Summary.MutationStatus != MutationMeasured {
+		t.Errorf("status: got %q want %q", v.Summary.MutationStatus, MutationMeasured)
+	}
 	if len(v.Criteria) != 2 || v.Criteria[0].Status != "unknown" {
 		t.Errorf("criteria seeded wrong: %+v", v.Criteria)
 	}
@@ -160,6 +163,69 @@ func TestSkeletonSeedsFromMachineResults(t *testing.T) {
 	if flagCount != 1 || noteCount != 1 {
 		t.Errorf("expected 1 FLAG (surviving mutant) + 1 NOTE (skip); got flags=%d notes=%d",
 			flagCount, noteCount)
+	}
+}
+
+// Mutation status must distinguish "adapter ran but instrumented zero
+// mutants" (unmeasurable — Stryker scope excludes touched files) from
+// "no adapter ran at all" (skipped — --skip-mutation or no matching ext)
+// from "real mutation results" (measured). Without this distinction the
+// verdict heuristic in the LLM prompt treats zero-score-from-no-mutants
+// as failure, which was the FeastAhead phase 04/05 dogfood bug.
+func TestSkeletonMutationStatus(t *testing.T) {
+	cases := []struct {
+		name string
+		in   *Tests
+		want string
+	}{
+		{
+			name: "no language runs at all → skipped",
+			in:   &Tests{Phase: "01-x"},
+			want: MutationSkipped,
+		},
+		{
+			name: "adapter reported but zero mutants → unmeasurable",
+			in: &Tests{
+				Phase: "01-x",
+				Languages: []LanguageRun{
+					{Tool: "stryker", Files: []string{"src/server.ts"},
+						Mutation: &mutation.Report{Tool: "stryker"}}, // 0/0/0
+				},
+			},
+			want: MutationUnmeasurable,
+		},
+		{
+			name: "adapter reported real mutants → measured",
+			in: &Tests{
+				Phase: "01-x",
+				Languages: []LanguageRun{
+					{Tool: "stryker", Files: []string{"src/x.ts"},
+						Mutation: &mutation.Report{Tool: "stryker", Killed: 4, Survived: 1, Score: 0.8}},
+				},
+			},
+			want: MutationMeasured,
+		},
+		{
+			name: "one unmeasurable + one measured run → measured",
+			in: &Tests{
+				Phase: "01-x",
+				Languages: []LanguageRun{
+					{Tool: "stryker", Files: []string{"src/server.ts"},
+						Mutation: &mutation.Report{Tool: "stryker"}}, // 0/0/0
+					{Tool: "gremlins", Files: []string{"src/main.go"},
+						Mutation: &mutation.Report{Tool: "gremlins", Killed: 3, Score: 1.0}},
+				},
+			},
+			want: MutationMeasured,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			v := Skeleton(c.in, []string{"c-1"})
+			if v.Summary.MutationStatus != c.want {
+				t.Errorf("status: got %q want %q", v.Summary.MutationStatus, c.want)
+			}
+		})
 	}
 }
 

@@ -222,6 +222,9 @@ func ClassifyError(err error) string {
 		strings.Contains(msg, "load plan"),
 		strings.Contains(msg, "read plan"):
 		return "no_plan"
+	case strings.Contains(msg, "no current_milestone"),
+		strings.Contains(msg, "load milestone"):
+		return "no_milestone"
 
 	// Phase-complete pre-flight failures — these used to land in "other"
 	// even though they're user-actionable: dirty tree, or the upstream

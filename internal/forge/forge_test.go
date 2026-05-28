@@ -183,7 +183,9 @@ func TestUpdateIssueBodyAndLabels(t *testing.T) {
 		case strings.Contains(r.URL.Path, "/issues/12/labels") && r.Method == "PUT":
 			b, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(b, &labelPutBody)
-			_, _ = w.Write([]byte(`{"number":12,"state":"open"}`))
+			// Forgejo/Gitea returns the resulting LabelList (not the issue);
+			// dross must not try to decode this into issueResponse.
+			_, _ = w.Write([]byte(`[{"id":1,"name":"dross"},{"id":2,"name":"dross/status:in-progress"}]`))
 		case strings.HasSuffix(r.URL.Path, "/issues/12") && r.Method == "PATCH":
 			b, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(b, &patchBody)
