@@ -71,7 +71,8 @@ func Ship() *cobra.Command {
 			_ = vTests
 			vrf, err := verify.LoadVerify(vToml)
 			if err != nil {
-				return fmt.Errorf("load verify (run /dross-verify first?): %w", err)
+				return fmt.Errorf("load verify for %s: %w\n\nNext: run /dross-verify to write verify.toml, then `dross verify finalize %s`, then re-run ship",
+					phaseID, err, phaseID)
 			}
 
 			// 3) Pre-flight gates.
@@ -79,8 +80,17 @@ func Ship() *cobra.Command {
 				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
 			}
 			if vrf.Verify.Verdict != "pass" && !forceUnverified {
-				return fmt.Errorf("verify verdict is %q (need 'pass'); use --force-unverified to override",
-					vrf.Verify.Verdict)
+				switch vrf.Verify.Verdict {
+				case "pending":
+					return fmt.Errorf("verify verdict is \"pending\" for %s — finalize with `dross verify finalize %s`, or pass --force-unverified to override",
+						phaseID, phaseID)
+				case "fail", "partial":
+					return fmt.Errorf("verify verdict is %q for %s — fix the failing criteria and re-run /dross-verify, or pass --force-unverified to override",
+						vrf.Verify.Verdict, phaseID)
+				default:
+					return fmt.Errorf("verify verdict is %q (need \"pass\"); use --force-unverified to override",
+						vrf.Verify.Verdict)
+				}
 			}
 
 			// Must be on the phase branch. Pushing from anywhere else is

@@ -161,6 +161,12 @@ func TestClassifyError(t *testing.T) {
 		{errors.New("read spec spec.toml: open: no such file"), "no_spec"},
 		{errors.New("decode plan plan.toml: bad toml"), "no_plan"},
 
+		// phase-complete pre-flight: dirty tree, ff-only refusing because
+		// the upstream merge hasn't happened. Both used to land in "other".
+		{errors.New("working tree is dirty; commit or stash before completing"), "dirty_tree"},
+		{errors.New("origin/main hasn't advanced past phase/04-x's base — has the PR actually merged upstream?"), "merge_pending"},
+		{errors.New("fast-forward of main from origin failed: exit 1"), "merge_pending"},
+
 		// verify / mutation pipeline
 		{errors.New("verify.toml not found at .dross/phases/01/verify.toml — run `dross verify 01` first"), "verify_state"},
 		{errors.New("verify verdict is \"\" — fill in pass | partial | fail"), "verify_state"},

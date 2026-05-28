@@ -1,14 +1,17 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/state"
 )
 
 func Milestone() *cobra.Command {
@@ -84,15 +87,28 @@ func milestoneCreate() *cobra.Command {
 
 func milestoneShow() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <version>",
-		Short: "Print a milestone toml",
-		Args:  cobra.ExactArgs(1),
+		Use:   "show [version]",
+		Short: "Print a milestone toml (defaults to state.current_milestone)",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			root, err := FindRoot()
 			if err != nil {
 				return err
 			}
-			path := milestone.FilePath(root, args[0])
+			version := ""
+			if len(args) == 1 {
+				version = args[0]
+			} else {
+				s, err := state.Load(filepath.Join(root, state.File))
+				if err != nil {
+					return fmt.Errorf("no version given and load state: %w", err)
+				}
+				version = s.CurrentMilestone
+				if version == "" {
+					return errors.New("no version given and state has no current_milestone; run `dross milestone list` to see options")
+				}
+			}
+			path := milestone.FilePath(root, version)
 			m, err := milestone.Load(path)
 			if err != nil {
 				return err

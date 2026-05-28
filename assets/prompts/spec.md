@@ -13,7 +13,14 @@ Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
      - **set, but the phase looks done** (i.e. `current_phase_status` is `verified` or `shipped`, OR `.dross/phases/<current>/verify.toml` exists with `verdict = "pass"`) → there's nothing to spec on `<current>`. `AskUserQuestion`: **"Phase `<current>` is `<status>` — nothing left to spec. Create a new phase?"** options: `new` / `resume <current>` / `cancel`. On `new`, jump to the create flow below. On `resume`, use `<current>` anyway (rare; user wants to amend a locked spec). On `cancel`, stop and exit cleanly.
      - **unset** → there's nothing for this command to do. `AskUserQuestion`: **"No phase in progress. Create a new phase?"** options: `new` / `cancel`. On `cancel`, stop and exit cleanly. On `new`, jump to the create flow below.
 
-   **Create flow** (used by `--new`, the `new` answer above, or whenever scaffolding is needed): ask the user for a phase title in plain text (or via `AskUserQuestion`'s freeform variant), then run `dross phase create "<title>"`, capture the new id (`NN-slug`), and proceed. Do NOT tell the user to run `dross phase create` manually — this command runs it. `dross phase create` also checks out the `phase/<id>` branch.
+   **Create flow** (used by `--new`, the `new` answer above, or whenever scaffolding is needed):
+   - If `state.current_milestone` is set, read `.dross/milestones/<milestone>.toml`'s `phases = [...]` and intersect against `dross phase list`. Any roadmap entry without a `.dross/phases/<id>/` directory is an **unscaffolded roadmap phase**.
+   - If there are unscaffolded entries, present them via `AskUserQuestion`: one option per entry (label `<id>`; description = the entry's one-line summary if a `Brief.md` at repo root contains a matching `### Phase <id>` section, otherwise the bare title). Last option is **"Describe a new phase"** (freeform).
+   - If the user picks a roadmap entry, the title is the entry's slug (or its Brief.md title if present) — run `dross phase create "<title>"`.
+   - If the user picks **Describe a new phase**, prompt for a freeform title, then run `dross phase create "<title>"`.
+   - If milestone is unset, roadmap is empty, or all roadmap entries are already scaffolded, fall back to the freeform title prompt directly.
+
+   In every case: capture the new id (`NN-slug`) and proceed. Do NOT tell the user to run `dross phase create` manually — this command runs it. `dross phase create` also checks out the `phase/<id>` branch.
 3. **Verify current branch is `phase/<id>`** for the resolved phase (`git symbolic-ref --short HEAD`). For a freshly-created phase this is already true. On resume, if you're not on the phase branch: `git checkout phase/<id>` if it exists, otherwise stop and surface the situation to the user (phase work belongs off main).
 4. Read `.dross/phases/<id>/spec.toml` if it exists. **Resume, don't overwrite.** Show the existing content and ask whether to extend or replace.
 

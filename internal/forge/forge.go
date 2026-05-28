@@ -35,6 +35,7 @@ type Client struct {
 	repo    string
 	apiBase string
 	token   string
+	authEnv string // env var name (kept for diagnostic error messages)
 
 	http     *http.Client
 	labelIDs map[string]int // name -> id cache, lazily populated
@@ -80,6 +81,7 @@ func New(cfg Config) (*Client, error) {
 		repo:     repo,
 		apiBase:  strings.TrimRight(cfg.APIBase, "/"),
 		token:    token,
+		authEnv:  cfg.AuthEnv,
 		http:     &http.Client{Timeout: 30 * time.Second},
 		labelIDs: map[string]int{},
 	}, nil
@@ -401,7 +403,7 @@ func (c *Client) do(method, endpoint string, body any, out any) error {
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s %s: %w", method, endpoint, err)
 	}
 	defer resp.Body.Close()
 
@@ -411,7 +413,16 @@ func (c *Client) do(method, endpoint string, body any, out any) error {
 		if len(snippet) > 500 {
 			snippet = snippet[:500]
 		}
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, snippet)
+		hint := ""
+		switch resp.StatusCode {
+		case 401:
+			hint = " (check $" + c.authEnv + " — token may be expired or wrong scope)"
+		case 403:
+			hint = " (token lacks permission for this repo or action)"
+		case 404:
+			hint = fmt.Sprintf(" (repo %s/%s or endpoint not found — check [remote].url and .api_base)", c.owner, c.repo)
+		}
+		return fmt.Errorf("%s %s: HTTP %d%s: %s", method, endpoint, resp.StatusCode, hint, snippet)
 	}
 	if out != nil && len(respBody) > 0 {
 		if err := json.Unmarshal(respBody, out); err != nil {

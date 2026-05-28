@@ -223,6 +223,18 @@ func ClassifyError(err error) string {
 		strings.Contains(msg, "read plan"):
 		return "no_plan"
 
+	// Phase-complete pre-flight failures — these used to land in "other"
+	// even though they're user-actionable: dirty tree, or the upstream
+	// merge hasn't actually landed yet so the ff-only refuses to advance.
+	// Bucketing them separately makes the friction visible in stats.
+	case strings.Contains(msg, "working tree is dirty"):
+		return "dirty_tree"
+	case strings.Contains(msg, "hasn't advanced past"),
+		strings.Contains(msg, "has the pr actually merged"),
+		strings.Contains(msg, "fast-forward of"),
+		strings.Contains(msg, "ff-only"):
+		return "merge_pending"
+
 	// Verify / mutation pipeline — these errors actively hide what's
 	// wrong when bucketed as "other".
 	case strings.Contains(msg, "verify.toml"),
