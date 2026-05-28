@@ -86,12 +86,15 @@ Write code via `Edit`/`Write`. Constraints:
 - Touch only files in `task.files`. If you need to touch others, **pause and ask** before doing so — this is a plan deviation worth surfacing.
 - Honor every `locked = true` decision in `spec.toml`. If a decision conflicts with what you'd write, stop and ask the user to either revise the task or unlock the decision in spec.
 - Respect rules.toml — especially "always run X via docker compose exec" patterns. If the rule says route through docker and you'd type `pnpm install` directly, you've violated the rule.
+- Before invoking a library API you're guessing at (Playwright matchers, Vitest/Jest assertions, Drizzle query helpers, framework hooks, etc.), if `mcp__plugin_context7_context7__query-docs` is available, query it first. Training data is often stale on APIs that have changed in the last 12 months and the failure mode is shipping a wrong signature past the test gate.
 
 Write tests too — per the `test_contract` field. A task isn't complete until the contract has at least one test that would fail if the contract broke.
 
 ### 1e. Diff + verify
 
 Show `git diff` (filtered to `task.files` if helpful). Run `dross validate` to ensure no schema drift in dross artefacts.
+
+If the touched files include `.svelte` and `mcp__svelte__svelte-autofixer` is available, run it on each touched component before the test gate and re-apply fixes until clean. The autofixer catches Svelte 4 → Svelte 5 syntax drift (runes, `onclick` vs `on:click`, snippets vs slots, deprecated APIs) that training data otherwise keeps reaching for. Same pattern for any future language-specific MCP autofixer.
 
 Run the test command:
 ```
