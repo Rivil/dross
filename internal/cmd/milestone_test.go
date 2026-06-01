@@ -161,6 +161,50 @@ func TestMilestoneAddListsAreIdempotent(t *testing.T) {
 	}
 }
 
+func TestMilestoneAddAcceptsFieldAliases(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "create", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Bare spellings and scope.phases should all resolve to the canonical
+	// field rather than failing with "not a list field".
+	aliases := map[string][2]string{
+		"success_criteria": {"perft passes", "scope.success_criteria"},
+		"non_goals":        {"no engine", "scope.non_goals"},
+		"scope.phases":     {"01-board", "phases"},
+	}
+	for alias, want := range aliases {
+		if err := runCmd(t, Milestone(), "add", "v0.1", alias, want[0]); err != nil {
+			t.Fatalf("add via alias %q: %v", alias, err)
+		}
+		out := captureStdout(t, func() {
+			runCmd(t, Milestone(), "get", "v0.1", want[1])
+		})
+		if !strings.Contains(out, want[0]) {
+			t.Errorf("alias %q did not append to %s; get returned:\n%s", alias, want[1], out)
+		}
+	}
+}
+
+func TestMilestoneAddUnknownFieldListsValid(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "create", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+	err := runCmd(t, Milestone(), "add", "v0.1", "bogus", "x")
+	if err == nil || !strings.Contains(err.Error(), "not a list field") ||
+		!strings.Contains(err.Error(), "scope.success_criteria") {
+		t.Errorf("expected actionable error listing valid fields, got: %v", err)
+	}
+}
+
 func TestMilestoneSetRejectsListPaths(t *testing.T) {
 	chdir(t, t.TempDir())
 	if err := runCmd(t, Init()); err != nil {
