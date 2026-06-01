@@ -202,7 +202,7 @@ usually mean the upstream merge hasn't actually happened yet.`,
 			// Switch to main if we aren't already there.
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
-				return fmt.Errorf("read current branch: %w", err)
+				return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 			}
 			if cur != mainBranch {
 				if out, err := gitCombined(repoDir, "checkout", mainBranch); err != nil {
@@ -223,11 +223,11 @@ usually mean the upstream merge hasn't actually happened yet.`,
 			if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+phaseBranch); err == nil {
 				mergeBase, err := gitTrim(repoDir, "merge-base", "origin/"+mainBranch, phaseBranch)
 				if err != nil {
-					return fmt.Errorf("merge-base origin/%s %s: %w", mainBranch, phaseBranch, err)
+					return fmt.Errorf("git merge-base origin/%s %s: %w", mainBranch, phaseBranch, err)
 				}
 				originHead, err := gitTrim(repoDir, "rev-parse", "origin/"+mainBranch)
 				if err != nil {
-					return fmt.Errorf("rev-parse origin/%s: %w", mainBranch, err)
+					return fmt.Errorf("git rev-parse origin/%s: %w", mainBranch, err)
 				}
 				if originHead == mergeBase {
 					return fmt.Errorf("origin/%s hasn't advanced past %s's base — has the PR actually merged upstream?",
@@ -289,7 +289,7 @@ func preflightPhaseBranch(repoDir, branchName string) error {
 
 	cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
-		return fmt.Errorf("read current branch: %w", err)
+		return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 	}
 	if cur != mainBranch {
 		return fmt.Errorf("must be on %s to start a phase (currently on %s); switch back or use --no-branch", mainBranch, cur)
