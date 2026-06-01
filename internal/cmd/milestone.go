@@ -246,7 +246,7 @@ func writeMilestoneDotted(m *milestone.Milestone, path, value string) error {
 }
 
 func appendMilestoneList(m *milestone.Milestone, path, value string) error {
-	switch path {
+	switch normalizeListField(path) {
 	case "scope.success_criteria":
 		m.Scope.SuccessCriteria = appendUnique(m.Scope.SuccessCriteria, value)
 	case "scope.non_goals":
@@ -254,9 +254,25 @@ func appendMilestoneList(m *milestone.Milestone, path, value string) error {
 	case "phases":
 		m.Phases = appendUnique(m.Phases, value)
 	default:
-		return fmt.Errorf("not a list field (or unknown): %s", path)
+		return fmt.Errorf("not a list field %q — valid: scope.success_criteria, scope.non_goals, phases", path)
 	}
 	return nil
+}
+
+// normalizeListField canonicalizes the list-field path so `dross milestone
+// add` tolerates the naming inconsistency: two fields live under scope.* but
+// phases is bare. Accept both the bare and scope-prefixed spellings of each
+// so a wrong-but-reasonable guess doesn't fail.
+func normalizeListField(path string) string {
+	switch path {
+	case "success_criteria", "scope.success_criteria":
+		return "scope.success_criteria"
+	case "non_goals", "scope.non_goals":
+		return "scope.non_goals"
+	case "phases", "scope.phases":
+		return "phases"
+	}
+	return path
 }
 
 func appendUnique(list []string, value string) []string {

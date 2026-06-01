@@ -169,6 +169,15 @@ func TestClassifyError(t *testing.T) {
 		{errors.New("origin/main hasn't advanced past phase/04-x's base — has the PR actually merged upstream?"), "merge_pending"},
 		{errors.New("fast-forward of main from origin failed: exit 1"), "merge_pending"},
 
+		// phase-create pre-flight: refused because we're not on main (still
+		// on a previous phase branch). Used to land in "other".
+		{errors.New("must be on main to start a phase (currently on phase/03-x); switch back or use --no-branch"), "wrong_branch"},
+
+		// state.json persistence failures — used to land in "other".
+		{errors.New("save state: write .dross/state.json: permission denied"), "state_io"},
+		{errors.New("unmarshal state: bad json"), "state_io"},
+		{errors.New("marshal state: cycle"), "state_io"},
+
 		// verify / mutation pipeline
 		{errors.New("verify.toml not found at .dross/phases/01/verify.toml — run `dross verify 01` first"), "verify_state"},
 		{errors.New("verify verdict is \"\" — fill in pass | partial | fail"), "verify_state"},
@@ -191,6 +200,7 @@ func TestClassifyError(t *testing.T) {
 		{errors.New("unknown subcommand \"add\" for \"dross phase\""), "unknown_subcommand"},
 		{errors.New("unknown field: nonsense"), "unknown_field"},
 		{errors.New("unsupported segment \"patch\" (only `internal` is bumpable)"), "unknown_field"},
+		{errors.New("not a list field (or unknown): scope.phases"), "unknown_field"},
 		{errors.New("--pr is required"), "cli_args"},
 		{errors.New("RepoDir is required"), "cli_args"},
 		{errors.New("KEY must be non-empty"), "cli_args"},
@@ -202,6 +212,7 @@ func TestClassifyError(t *testing.T) {
 		// health checks (doctor returns issues found as an error to gate CI)
 		{errors.New("3 project-level issue(s) found"), "check_issues"},
 		{errors.New("2 issues found"), "check_issues"},
+		{errors.New("3 problem(s) found"), "check_issues"},
 
 		{errors.New("something weird"), "other"},
 	}

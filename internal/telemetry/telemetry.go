@@ -237,6 +237,11 @@ func ClassifyError(err error) string {
 		strings.Contains(msg, "fast-forward of"),
 		strings.Contains(msg, "ff-only"):
 		return "merge_pending"
+	// Phase start refused because we're not on the main branch — usually
+	// still on a previous phase/<id> branch. User-actionable (switch back
+	// or pass --no-branch), not a tool failure. Used to land in "other".
+	case strings.Contains(msg, "to start a phase"):
+		return "wrong_branch"
 
 	// Verify / mutation pipeline — these errors actively hide what's
 	// wrong when bucketed as "other".
@@ -272,7 +277,8 @@ func ClassifyError(err error) string {
 	case strings.Contains(msg, "unknown field"),
 		strings.Contains(msg, "unknown or unsettable"),
 		strings.Contains(msg, "unknown scope"),
-		strings.Contains(msg, "unsupported segment"):
+		strings.Contains(msg, "unsupported segment"),
+		strings.Contains(msg, "not a list field"):
 		return "unknown_field"
 	case strings.Contains(msg, "is required"),
 		strings.Contains(msg, "must be set"),
@@ -291,8 +297,19 @@ func ClassifyError(err error) string {
 	// failure. Bucketing distinguishes the two so a noisy doctor doesn't
 	// look like a broken doctor in stats.
 	case strings.Contains(msg, "issue(s) found"),
-		strings.Contains(msg, "issues found"):
+		strings.Contains(msg, "issues found"),
+		strings.Contains(msg, "problem(s) found"),
+		strings.Contains(msg, "problems found"):
 		return "check_issues"
+
+	// dross state.json read/write failures — the workflow can't persist
+	// progress. Distinct from a generic file error because the fix is
+	// about the state file specifically. Used to land in "other".
+	case strings.Contains(msg, "save state"),
+		strings.Contains(msg, "marshal state"),
+		strings.Contains(msg, "unmarshal state"),
+		strings.Contains(msg, "load state"):
+		return "state_io"
 
 	// Generic buckets — kept for safety-net coverage.
 	case strings.Contains(msg, "already exists"):
