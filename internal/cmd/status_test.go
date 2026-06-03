@@ -210,6 +210,55 @@ covers = ["c-1"]
 	}
 }
 
+func TestStatusSurfacesOpenHandoff(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "01-h")
+	mustWrite(t, ".dross/handoff.md", `# Handoff — paused 2026-06-03 14:33
+phase: 01-h · branch: phase/01-h · v0.1.0.0
+
+## Next
+- [ ] apply the guard in issue.go:142
+
+## Open loops
+- [ ] delete the dead retry loop
+`)
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "handoff:") {
+		t.Errorf("expected handoff nudge in status:\n%s", out)
+	}
+	if !strings.Contains(out, "2026-06-03 14:33") {
+		t.Errorf("expected the header timestamp surfaced, not just mtime:\n%s", out)
+	}
+	if !strings.Contains(out, "2 item(s) left") {
+		t.Errorf("expected the open-item count:\n%s", out)
+	}
+	if !strings.Contains(out, "/dross-resume") {
+		t.Errorf("expected the resume command surfaced:\n%s", out)
+	}
+}
+
+func TestStatusOmitsHandoffWhenAbsentOrEmpty(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "01-clean")
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if strings.Contains(out, "handoff:") {
+		t.Errorf("no handoff file = no handoff nudge:\n%s", out)
+	}
+	// An empty file is treated as no handoff (resume deletes when cleared,
+	// but guard against a 0-byte straggler too).
+	mustWrite(t, ".dross/handoff.md", "")
+	out = captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if strings.Contains(out, "handoff:") {
+		t.Errorf("empty handoff file should not nudge:\n%s", out)
+	}
+}
+
 // ---- helpers ----
 
 func scaffoldPhaseWithSpecOnly(t *testing.T, phaseID string) {

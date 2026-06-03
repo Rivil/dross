@@ -72,6 +72,12 @@ func Status() *cobra.Command {
 				Printf("           run `dross verify finalize <phase>` once verify.toml's verdict is filled in\n")
 			}
 
+			// Open handoff. /dross-pause leaves a living note at
+			// .dross/handoff.md; surface it so you don't forget you paused.
+			if hand := openHandoff(root); hand != "" {
+				Printf("handoff:   %s\n", hand)
+			}
+
 			// Next suggested action — heuristic from current state
 			Print("")
 			Printf("next:      %s\n", suggestNext(root, proj, st))
@@ -166,6 +172,40 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 		}
 	}
 	return "phase looks complete — start a new phase or move on"
+}
+
+// openHandoff returns a one-line nudge if an unresolved handoff note exists
+// (.dross/handoff.md, written by /dross-pause and pruned by /dross-resume).
+// Returns "" when there's no handoff — the common case. Mirrors the
+// pending-verdicts nudge: status is the natural place to remember you paused.
+func openHandoff(root string) string {
+	path := filepath.Join(root, "handoff.md")
+	info, err := os.Stat(path)
+	if err != nil || info.Size() == 0 {
+		return ""
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	text := string(b)
+
+	// "Paused when": prefer the timestamp the handoff header records
+	// ("# Handoff — paused <ts>"); fall back to the file's mtime.
+	when := info.ModTime().Format("2006-01-02 15:04")
+	first, _, _ := strings.Cut(text, "\n")
+	if _, after, found := strings.Cut(first, "paused "); found {
+		if ts := strings.TrimSpace(after); ts != "" {
+			when = ts
+		}
+	}
+
+	// Count still-open checklist items so the nudge reflects remaining work.
+	line := fmt.Sprintf("⏸ open handoff (paused %s)", when)
+	if open := strings.Count(text, "- [ ]"); open > 0 {
+		line += fmt.Sprintf(", %d item(s) left", open)
+	}
+	return line + " — /dross-resume"
 }
 
 func progressBar(done, total, width int) string {
