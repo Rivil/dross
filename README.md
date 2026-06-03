@@ -2,7 +2,7 @@
 
 A leaner successor to [GSD](https://github.com/gsd-build/get-shit-done) for working with Claude Code on real projects.
 
-> **Status:** v0.1.x — full plan → execute → verify → ship loop is wired with phase-branch isolation (`dross phase create` auto-checks out `phase/<id>`; `dross phase complete` finalizes post-merge). Mutation testing covers TS/JS/Svelte (Stryker) and Go (Gremlins). Tree-sitter codex and C# (Stryker.NET) are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised. Opt-in Forgejo/Gitea issue-board sync (milestones/phases/quicks → board issues, inbound triage via `/dross-inbox`) landed behind `dross issue enable`.
+> **Status:** v0.1.x — full plan → execute → verify → ship loop is wired with phase-branch isolation (`dross phase create` auto-checks out `phase/<id>`; `dross phase complete` finalizes post-merge). Mutation testing covers TS/JS/Svelte (Stryker) and Go (Gremlins). Tree-sitter codex and C# (Stryker.NET) are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised. Opt-in Forgejo/Gitea issue-board sync (milestones/phases/quicks → board issues, inbound triage via `/dross-inbox`) landed behind `dross issue enable`. `/dross-pause` + `/dross-resume` capture and replay a mid-phase handoff so stopping and picking back up doesn't lose the mental thread.
 
 > Scope: Dross is built for my workflow. It's public because there's no reason not to be, but I'm not marketing it and I'm not trying to grow it into a general-purpose tool. The roadmap is a flat list because my todo list is — if Dross ever picks up users, I'll think about structure (semver, milestones, contribution guidelines) then.
 
@@ -49,14 +49,16 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-quick` | 8,321 | **~2,080** |
 | Dross `/dross-inbox` | 4,344 | **~1,090** |
 | Dross `/dross-status` | 1,998 | **~500** |
+| Dross `/dross-pause` | 5,282 | **~1,320** |
+| Dross `/dross-resume` | 4,473 | **~1,120** |
 
 **Total prompt-surface** (everything that could ever load):
 
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 91,953 | ~22,990 |
-| **Ratio** | | **≈ 27×** |
+| Dross (commands + prompts) | 104,519 | ~26,130 |
+| **Ratio** | | **≈ 24×** |
 
 **Being honest about these numbers:**
 
@@ -202,6 +204,8 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `/dross-verify` | ✅ |
 | `/dross-quick` | ✅ (one-shot task with atomic commit + test gate; bumps internal version) |
 | `/dross-status` | ✅ |
+| `/dross-pause` | ✅ (capture a handoff before stopping — thread + next action + open loops) |
+| `/dross-resume` | ✅ (replay the handoff, prune what's done) |
 | `/dross-inbox` | ✅ (triage inbound board issues → phase / milestone / quick / dismiss) |
 | `/dross-options` | ✅ |
 | `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup) |
@@ -235,6 +239,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Telemetry signal upgrades — finer error classifier (no_phase / no_spec / no_plan / verify_state / mutation / provider / unknown_field / cli_args / cancelled / check_issues), cmd path captured even when cobra fails to resolve, `dross status` surfaces unfinalized verify verdicts, doctor emits outcome events instead of bucketing as `err=other`
 - [x] Issue-board sync (opt-in) — `dross issue {enable,milestone-sync,phase-sync,quick,pull,dismiss,link}` mirrors dross planning onto a Forgejo/Gitea board: milestone → board milestone, phase → issue (with a task checklist rendered from `plan.toml`), quick → standalone issue. Status flows via a `dross` marker + `dross/status:*` label and closes on ship. Outbound push is wired into the milestone/plan/execute/verify/ship/quick prompts as a no-op-when-disabled CLI call; inbound bugs/feature-requests are pulled by `/dross-inbox` (and surfaced as a passive count in `/dross-status`) and triaged into a phase / milestone backlog / quick / dismiss. Links live in `.dross/board.json`; reuses the `ship` provider config (`api_base`/`auth_env`). GitHub issues backend deferred (`gh issue`)
 - [x] Phase-branch model — `dross phase create` auto-checks out `phase/<id>` off main; `dross phase complete` ff-merges main and deletes the local branch; `dross ship` pushes `phase/<id>` directly (no synthetic squash) and the provider's squash-merge collapses per-task commits on merge. Removes the divergence pattern that previously required manual recovery commits. `.dross/** linguist-generated=true` scaffolded into `.gitattributes` on init/onboard so review UIs collapse planning artefacts without filtering them from history. Doctor checks foundational files, the linguist attr, and phase commits leaked onto main. `dross ship recover` retained as one-shot migration for repos already in the divergent state.
+- [x] Handoff pause/resume — `/dross-pause` drafts a living handoff at `.dross/handoff.md` (thread + next action + open loops, gitignored, single file), `/dross-resume` replays it and prunes done items in place, and `dross status` nudges when one is open. Closes the "stop mid-phase, next session the brain blanks out" gap that mechanical state (`current_phase`, task progress) doesn't cover
 - [x] Verify verdict hardening — `[summary].mutation_status` (`measured | unmeasurable | skipped`) distinguishes a real low score from a 0/0 artefact, so a phase whose changes fall entirely outside the project's Stryker scope (or runs with `--skip-mutation`) no longer false-fails the 0.60 threshold; `/dross-verify` now bases the verdict on criterion coverage alone when nothing was measurable. Forgejo/Gitea `dross issue phase-sync` no longer spams `cannot unmarshal array into ... issueResponse` — the labels-PUT response is now correctly treated as a `LabelList` instead of an issue. New `no_milestone` error bucket peels bare `dross milestone show` failures out of the opaque `other` pile.
 
 ## Telemetry
