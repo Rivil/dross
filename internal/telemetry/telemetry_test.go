@@ -223,3 +223,34 @@ func TestClassifyError(t *testing.T) {
 		}
 	}
 }
+
+func TestDetail(t *testing.T) {
+	if got := Detail(nil); got != "" {
+		t.Errorf("Detail(nil) = %q want empty", got)
+	}
+
+	// Plain message passes through, trimmed.
+	if got := Detail(errors.New("  something weird happened  ")); got != "something weird happened" {
+		t.Errorf("Detail trim = %q", got)
+	}
+
+	// Home directory is collapsed to ~ so absolute paths don't leak.
+	t.Setenv("HOME", "/Users/someone")
+	got := Detail(errors.New("open /Users/someone/Development/proj/.dross/state.json: no such file"))
+	if strings.Contains(got, "/Users/someone") {
+		t.Errorf("Detail leaked the home dir: %q", got)
+	}
+	if !strings.Contains(got, "~/Development/proj") {
+		t.Errorf("Detail should collapse home to ~: %q", got)
+	}
+
+	// Long messages are capped (with an ellipsis) so a pathological wrap
+	// can't bloat the log.
+	long := Detail(errors.New(strings.Repeat("x", maxDetailLen+50)))
+	if r := []rune(long); len(r) > maxDetailLen+1 {
+		t.Errorf("Detail not capped: %d runes", len(r))
+	}
+	if !strings.HasSuffix(long, "…") {
+		t.Errorf("capped Detail should end with ellipsis: %q", long)
+	}
+}

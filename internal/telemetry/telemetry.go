@@ -7,6 +7,12 @@
 //   - Local-only. No network. No daemon. No third party.
 //   - Logs shapes and counts, never user-typed strings (no criterion
 //     text, no commit messages, no file paths beyond a stable hash).
+//   - One narrow exception: errors that fall into the catch-all "other"
+//     bucket also carry a redacted, length-capped copy of the message in
+//     err_detail. Without it the unclassified tail is undiagnosable —
+//     countable but opaque. The home directory is collapsed to "~" so
+//     absolute paths don't leak, and the log stays local-only. Classified
+//     errors never store their text; only "other" does.
 //   - Default ON, opt-out via DROSS_NO_TELEMETRY=1 or
 //     `dross stats opt-out`. Users are asked at init/onboard time so
 //     consent is explicit.
@@ -56,6 +62,7 @@ type Event struct {
 	DurationMS int64             `json:"dur_ms,omitempty"`  // CLI invocation duration
 	ExitCode   int               `json:"exit,omitempty"`    // 0 for success
 	ErrorClass string            `json:"err,omitempty"`     // bucketed error type, never the message
+	ErrorDetail string           `json:"err_detail,omitempty"` // redacted message, ONLY when ErrorClass == "other" — makes the unclassified tail diagnosable
 	RepoHash   string            `json:"repo,omitempty"`    // sha256 of repo root path, first 12 chars
 	Phase      string            `json:"phase,omitempty"`   // phase id when relevant
 	Counts     map[string]int    `json:"counts,omitempty"`  // size/shape data: criteria=4, tasks=12
@@ -327,4 +334,32 @@ func ClassifyError(err error) string {
 	default:
 		return "other"
 	}
+}
+
+// maxDetailLen caps the err_detail string. Error messages are short; the
+// cap guards against a pathological wrapped error blowing up the log.
+const maxDetailLen = 240
+
+// Detail returns a redacted, length-capped form of an error message,
+// intended ONLY for the "other" bucket — the unclassified tail that
+// ClassifyError couldn't place. Known buckets already describe the
+// failure, so callers must not attach a detail to them; that keeps the
+// "classified errors never store their text" half of the privacy posture.
+//
+// Redaction: the user's home directory is collapsed to "~" so absolute
+// paths don't leak. This is a deliberate, narrow exception to the
+// "never the message" rule — the "other" tail can't be analysed without
+// it, and the log is local-only, single-developer.
+func Detail(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := strings.TrimSpace(err.Error())
+	if home, herr := os.UserHomeDir(); herr == nil && home != "" {
+		msg = strings.ReplaceAll(msg, home, "~")
+	}
+	if r := []rune(msg); len(r) > maxDetailLen {
+		msg = string(r[:maxDetailLen]) + "…"
+	}
+	return msg
 }

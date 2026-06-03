@@ -36,18 +36,26 @@ func RecordCLIEvent(c *cobra.Command, dur time.Duration, runErr error) {
 
 	exit := 0
 	errClass := ""
+	errDetail := ""
 	if runErr != nil {
 		exit = 1
 		errClass = telemetry.ClassifyError(runErr)
+		// Only the catch-all bucket carries a message — known buckets
+		// already describe themselves, so attaching their text would leak
+		// for no diagnostic gain.
+		if errClass == "other" {
+			errDetail = telemetry.Detail(runErr)
+		}
 	}
 
 	_ = telemetry.Append(telemetryPath(), telemetry.Event{
-		Kind:       "cli",
-		Command:    cmdPath,
-		DurationMS: dur.Milliseconds(),
-		ExitCode:   exit,
-		ErrorClass: errClass,
-		RepoHash:   repoHash,
+		Kind:        "cli",
+		Command:     cmdPath,
+		DurationMS:  dur.Milliseconds(),
+		ExitCode:    exit,
+		ErrorClass:  errClass,
+		ErrorDetail: errDetail,
+		RepoHash:    repoHash,
 	})
 }
 
