@@ -94,6 +94,8 @@ Don't dump the whole REVIEW.md inline; let the user open the file if they want d
 
 ## 3. Wrap
 
+(When this flow runs embedded from `/dross-plan` §6.1, still do the state touch below, but skip the recommendations — the caller handles outcomes.)
+
 If BLOCKING findings exist, recommend re-running `/dross-plan` with the spec/findings in mind:
 ```
 This plan has N blocking issues. Re-run /dross-plan to address them, or open REVIEW.md to read full detail.

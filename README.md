@@ -2,7 +2,7 @@
 
 A leaner successor to [GSD](https://github.com/gsd-build/get-shit-done) for working with Claude Code on real projects.
 
-> **Status:** v0.1.x — full plan → execute → verify → ship loop is wired with phase-branch isolation (`dross phase create` auto-checks out `phase/<id>`; `dross phase complete` finalizes post-merge). Mutation testing covers TS/JS/Svelte (Stryker) and Go (Gremlins). Tree-sitter codex and C# (Stryker.NET) are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised. Opt-in Forgejo/Gitea issue-board sync (milestones/phases/quicks → board issues, inbound triage via `/dross-inbox`) landed behind `dross issue enable`. `/dross-pause` + `/dross-resume` capture and replay a mid-phase handoff so stopping and picking back up doesn't lose the mental thread.
+> **Status:** v0.1.x — full plan → execute → verify → ship loop is wired with phase-branch isolation (`dross phase create` auto-checks out `phase/<id>`; `dross phase complete` finalizes post-merge). Mutation testing covers TS/JS/Svelte (Stryker) and Go (Gremlins). Tree-sitter codex and C# (Stryker.NET) are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised. Opt-in Forgejo/Gitea issue-board sync (milestones/phases/quicks → board issues, inbound triage via `/dross-inbox`) landed behind `dross issue enable`. `/dross-pause` + `/dross-resume` capture and replay a mid-phase handoff so stopping and picking back up doesn't lose the mental thread. `/dross-plan` auto-runs the independent plan review (`--no-review` to skip) and offers `--panel` — a 3-lens planner panel merged by a cold judge, disagreements surfaced as steering questions.
 
 > Scope: Dross is built for my workflow. It's public because there's no reason not to be, but I'm not marketing it and I'm not trying to grow it into a general-purpose tool. The roadmap is a flat list because my todo list is — if Dross ever picks up users, I'll think about structure (semver, milestones, contribution guidelines) then.
 
@@ -42,8 +42,8 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-review` | 7,725 | **~1,930** |
 | Dross `/dross-rule` | 2,119 | **~530** |
 | Dross `/dross-spec` | 6,117 | **~1,530** |
-| Dross `/dross-plan` | 6,325 | **~1,580** |
-| Dross `/dross-plan-review` | 5,524 | **~1,380** |
+| Dross `/dross-plan` | 13,252 | **~3,310** |
+| Dross `/dross-plan-review` | 5,676 | **~1,420** |
 | Dross `/dross-execute` | 8,652 | **~2,160** |
 | Dross `/dross-verify` | 9,255 | **~2,310** |
 | Dross `/dross-quick` | 8,321 | **~2,080** |
@@ -57,13 +57,13 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 104,519 | ~26,130 |
-| **Ratio** | | **≈ 24×** |
+| Dross (commands + prompts) | 111,598 | ~27,900 |
+| **Ratio** | | **≈ 22×** |
 
 **Being honest about these numbers:**
 
 - **Dross is still incomplete.** The codex tree-sitter indexer is a stub; Stryker (TS/JS/Svelte) and Gremlins (Go) are wired — C# (Stryker.NET), GDScript, HTML/CSS visual diffs are still designed-only. `/dross-verify` landed at ~1,890 tokens — ~24× cheaper than GSD's 46,500 — though that's slash-command boot only; the verify loop reads project test files at runtime, which adds variable cost.
-- **Per-invocation isn't the runtime cost.** GSD spawns subagents (planner, plan-checker, executor, verifier). Each loads its own agent prompt + references in fresh context, multiplying the real per-flow cost by 2-3×. The 25.9k for `/gsd-plan-phase` is closer to ~60-80k of total prompt material per phase. Dross runs inline — no subagent multiplication.
+- **Per-invocation isn't the runtime cost.** GSD spawns subagents (planner, plan-checker, executor, verifier). Each loads its own agent prompt + references in fresh context, multiplying the real per-flow cost by 2-3×. The 25.9k for `/gsd-plan-phase` is closer to ~60-80k of total prompt material per phase. Dross runs inline by default — subagent spawns are bounded and explicit: `/dross-review`'s four lenses, `/dross-plan-review`'s single cold reviewer (also auto-run at the end of `/dross-plan` unless `--no-review`), and `/dross-plan --panel`'s three lens planners + judge (opt-in, ~4-5× a single-pass plan).
 - **Prompt caching mitigates this.** Anthropic's prompt cache amortises repeats, so steady-state cost is much lower than the load surface implies. Cold starts, branch switches, and subagent spawns break the cache; that's where the bill actually shows up.
 - **The ratio is the worst-case load surface, not a runtime bill.** It's still directionally meaningful — fewer files, smaller files, fewer spawns add up — but don't expect the same multiplier in your monthly Anthropic invoice.
 
@@ -198,8 +198,8 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `/dross-rule` | ✅ |
 | `/dross-milestone` | ✅ |
 | `/dross-spec` | ✅ |
-| `/dross-plan` | ✅ |
-| `/dross-plan-review` | ✅ |
+| `/dross-plan` | ✅ (`--panel` for 3-lens planner panel + cold judge; auto-runs plan review unless `--no-review`) |
+| `/dross-plan-review` | ✅ (own context — cold subagent; also auto-run by `/dross-plan`) |
 | `/dross-execute` | ✅ |
 | `/dross-verify` | ✅ |
 | `/dross-quick` | ✅ (one-shot task with atomic commit + test gate; bumps internal version) |
@@ -241,6 +241,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Phase-branch model — `dross phase create` auto-checks out `phase/<id>` off main; `dross phase complete` ff-merges main and deletes the local branch; `dross ship` pushes `phase/<id>` directly (no synthetic squash) and the provider's squash-merge collapses per-task commits on merge. Removes the divergence pattern that previously required manual recovery commits. `.dross/** linguist-generated=true` scaffolded into `.gitattributes` on init/onboard so review UIs collapse planning artefacts without filtering them from history. Doctor checks foundational files, the linguist attr, and phase commits leaked onto main. `dross ship recover` retained as one-shot migration for repos already in the divergent state.
 - [x] Handoff pause/resume — `/dross-pause` drafts a living handoff at `.dross/handoff.md` (thread + next action + open loops, gitignored, single file), `/dross-resume` replays it and prunes done items in place, and `dross status` nudges when one is open. Closes the "stop mid-phase, next session the brain blanks out" gap that mechanical state (`current_phase`, task progress) doesn't cover
 - [x] Verify verdict hardening — `[summary].mutation_status` (`measured | unmeasurable | skipped`) distinguishes a real low score from a 0/0 artefact, so a phase whose changes fall entirely outside the project's Stryker scope (or runs with `--skip-mutation`) no longer false-fails the 0.60 threshold; `/dross-verify` now bases the verdict on criterion coverage alone when nothing was measurable. Forgejo/Gitea `dross issue phase-sync` no longer spams `cannot unmarshal array into ... issueResponse` — the labels-PUT response is now correctly treated as a `LabelList` instead of an issue. New `no_milestone` error bucket peels bare `dross milestone show` failures out of the opaque `other` pile.
+- [x] Plan quality loops — `/dross-plan --panel` fans out three cold lens planners (risk-first / MVP-first / verification-first) over the locked spec in parallel, a fourth cold judge merges them (winner-as-skeleton + grafts) and surfaces lens *disagreements* as the steering agenda instead of auto-resolving them; artifacts kept in `.dross/phases/<id>/panel/`. `/dross-plan` now auto-runs the independent plan review (own-context cold subagent) after `plan.toml` is locked, with one bounded fix-and-re-review cycle on blocking findings; `--no-review` opts out. Panel costs ~4-5× a single-pass plan — meant for new subsystems / non-obvious task graphs, not 2-task UI phases
 
 ## Telemetry
 
