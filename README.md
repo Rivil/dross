@@ -82,6 +82,7 @@ cmd/dross/         Go CLI entrypoint
 internal/          project, state, rules, profile, phase, milestone, changes, verify, mutation, codex
 assets/commands/   Slash command markdown (installed to ~/.claude/skills/dross-<name>/SKILL.md)
 assets/prompts/    Prompt instructions (installed to ~/.claude/dross/prompts/)
+docs/dross.1       Man page — `man ./docs/dross.1`; print via `mandoc -T pdf docs/dross.1 > dross.pdf`
 ```
 
 ### Per-project artefacts

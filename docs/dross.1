@@ -1,0 +1,421 @@
+.\" dross.1 — man page for the dross CLI + slash-command workflow.
+.\" Render:  man ./docs/dross.1
+.\" Print:   man -t ./docs/dross.1 | lpr        (PostScript to printer)
+.\" PDF:     mandoc -T pdf docs/dross.1 > dross.pdf
+.TH DROSS 1 2026-06-06 "dross 0.1" "Dross Manual"
+.SH NAME
+dross \- refine intent into verified code
+.SH SYNOPSIS
+.B dross
+.I command
+.RI [ subcommand ]
+.RI [ flags ]
+.br
+.BI /dross\- name
+.RI [ args ]
+(inside a Claude Code session)
+.SH DESCRIPTION
+.B dross
+is a phase-based development workflow for AI pair programming: a small Go
+CLI that owns mechanical state, plus seventeen Claude Code slash commands
+(skills) that run the conversational workflows. All project artefacts are
+plain TOML/JSON under
+.IR .dross/ ,
+readable and diffable.
+.PP
+The core contract: intent is refined stepwise \(em milestone, then phase
+spec, then task plan, then atomic execution, then goal-backward
+verification with mutation testing, then a clean PR. Pair-mode is the
+default everywhere: the model proposes, the human steers, nothing is
+written or committed past a gate the human didn't pass.
+.SH THE LOOP
+.nf
+intent \(-> SPEC \(-> PLAN \(-> CODE \(-> TESTS \(-> EFFICACY PROOF \(-> VERIFY \(-> SHIP
+        (lock) (waves) (atomic (per   (mutation +      (goal-   (PR)
+                        commit) task)  coverage)        backward)
+.fi
+.PP
+A
+.B milestone
+(e.g. v0.1) scopes success criteria and an ordered list of phases. Each
+.B phase
+lives on its own branch
+.RI ( phase/<id> ,
+created by
+.BR "dross phase create" ),
+carries a locked
+.IR spec.toml ,
+a wave-ordered
+.IR plan.toml
+whose tasks each name the files they touch, the criteria they cover, and a
+specific test contract, and ends with
+.IR verify.toml
+recording a pass/partial/fail verdict backed by mutation testing. Shipping
+pushes the branch and opens a PR; the provider's squash-merge collapses
+per-task commits;
+.B "dross phase complete"
+fast-forwards main and deletes the branch.
+.SH CLI COMMANDS
+.SS Setup
+.TP
+.B dross init \fR[\fB--force\fR]
+Bootstrap the
+.I .dross/
+scaffold in a greenfield repo (the
+.B /dross-init
+slash command fills it in conversationally).
+.TP
+.B dross onboard \fR[\fB--force\fR]
+Adopt an existing repo by scanning signal files (package manifests, CI,
+test layout).
+.SS Orientation
+.TP
+.B dross status
+Where am I \(em project, milestone, current phase, last activity, next
+task. Also surfaces an open handoff and unfinalized verify verdicts.
+.TP
+.B dross doctor
+Check project-level health:
+.I project.toml
+vs reality, foundational files, the linguist attribute, phase commits
+leaked onto main.
+.TP
+.B dross validate
+Schema-check every dross artefact (including that each task's
+.I covers
+references a real spec criterion).
+.TP
+.B dross version
+Print version, commit, and build date.
+.SS Artefact plumbing
+.TP
+.B dross project \fR{\fBshow\fR|\fBget\fR|\fBset\fR}
+Read and edit
+.I .dross/project.toml
+by dotted path.
+.TP
+.B dross state \fR{\fBshow\fR|\fBset\fR|\fBtouch\fR|\fBbump\fR}
+Read and edit
+.IR .dross/state.json :
+version, current milestone/phase/status, activity log.
+.B bump internal
+increments the 4-part version's quick-task counter.
+.TP
+.B dross milestone \fR{\fBlist\fR|\fBshow\fR|\fBcreate\fR|\fBget\fR|\fBset\fR|\fBadd\fR}
+Manage milestones under
+.IR .dross/milestones/ .
+.B add
+appends to list fields (success_criteria, non_goals, phases).
+.TP
+.B dross phase \fR{\fBlist\fR|\fBshow\fR|\fBcreate\fR|\fBcomplete\fR}
+.B create
+makes the next phase directory and checks out
+.IR phase/<id> ;
+.B complete
+finalizes after squash-merge (ff main, delete local branch).
+.TP
+.B dross task \fR{\fBnext\fR|\fBshow\fR|\fBstatus\fR}
+Inspect and update tasks within a phase plan.
+.B next
+prints the id of the next runnable task.
+.TP
+.B dross changes \fR{\fBrecord\fR|\fBshow\fR}
+Append-only record of files touched per task during execute (commit hash
+and notes optional).
+.TP
+.B dross rule \fR{\fBadd\fR|\fBlist\fR|\fBremove\fR|\fBenable\fR|\fBdisable\fR|\fBpromote\fR|\fBshow\fR}
+Two-tier rules (global + project).
+.B show
+renders the merged set as the <rules> prompt block every workflow treats
+as MUST-FOLLOW.
+.B promote
+moves a project rule to global scope.
+.TP
+.B dross profile \fR{\fBshow\fR|\fBseed\fR}
+Read the user profile (global + project overrides).
+.TP
+.B dross defaults \fR{\fBshow\fR|\fBsave\fR}
+Cross-project defaults at
+.IR ~/.claude/dross/defaults.toml
+(e.g. saving the current project's [remote] for future projects).
+.SS Code insight
+.TP
+.B dross codex \fIfile\fR [\fIfile\fR...]
+Polyglot code insight \(em symbols, refs, siblings, recent activity. Go
+via stdlib AST; TS/TSX/Svelte/C#/GDScript via ast-grep shell-out, with
+graceful degradation when ast-grep is absent.
+.SS Verification
+.TP
+.B dross verify \fIphase-id\fR [\fB--skip-mutation\fR]
+Run mutation testing per language (Stryker for TS/JS/Svelte, Gremlins for
+Go, Stryker.NET for C#) and write
+.I tests.json
+plus a
+.I verify.toml
+skeleton.
+.B --skip-mutation
+records what would have been mutated without executing.
+.TP
+.B dross verify finalize \fIphase-id\fR
+Record the resolved verdict from
+.I verify.toml
+as a telemetry outcome event.
+.SS Shipping
+.TP
+.B dross ship \fR[\fIphase-id\fR] [\fIflags\fR]
+Push
+.I phase/<id>
+and open a PR via the project's provider (GitHub or Forgejo/Gitea).
+Gated on a
+.I pass
+verify verdict.
+.RS
+.TP
+.B --title \fIs\fR, \fB--body \fIs\fR, \fB--body-file \fIf\fR
+Override the generated PR title/body.
+.TP
+.B --draft
+Open as draft.
+.TP
+.B --print-body
+Print the generated body and exit (no push, no PR).
+.TP
+.B --no-push
+Skip pushing and opening the PR.
+.TP
+.B --force
+Force-with-lease the push after rewriting the branch.
+.TP
+.B --force-unverified
+Skip the verify gate.
+.RE
+.TP
+.B dross ship comment
+Post a markdown comment to a PR (used by
+.BR /dross-review ).
+.TP
+.B dross ship recover
+One-shot migration for legacy repos with phase commits on main or
+.I .dross/
+stripped from prior PRs.
+.SS Issue-board sync (opt-in)
+.TP
+.B dross issue \fR{\fBenable\fR|\fBdisable\fR|\fBmilestone-sync\fR|\fBphase-sync\fR|\fBquick\fR|\fBpull\fR|\fBdismiss\fR|\fBlink\fR|\fBlist\fR}
+Mirror planning onto a Forgejo/Gitea board: milestone \(-> board
+milestone, phase \(-> issue with a task checklist rendered from
+.IR plan.toml ,
+quick task \(-> standalone issue.
+.B pull
+lists inbound issues for triage. Off by default;
+.B enable
+needs [remote] provider, api_base, and auth_env. Sync calls are no-ops
+when disabled, so workflows always run them. Links live in
+.IR .dross/board.json .
+.SS Settings and telemetry
+.TP
+.B dross env \fR{\fBlist\fR|\fBset\fR|\fBunset\fR}
+Manage env keys in
+.I ~/.claude/settings.json
+\(em values are entered with hidden input and never displayed.
+.TP
+.B dross stats \fR{\fBshow\fR|\fBpath\fR|\fBopt-in\fR|\fBopt-out\fR}
+Aggregate views over the local telemetry log; toggle the recorder.
+.SH SLASH COMMANDS
+Run inside a Claude Code session. Pair-mode is the default: propose \(->
+steer \(-> write. Boldface flags are typed as part of the command's
+arguments.
+.SS Setup and settings
+.TP
+.B /dross-init
+Greenfield bootstrap \(em vision, stack, scaffold, runtime, rules,
+verification setup.
+.TP
+.B /dross-onboard
+Adopt an existing repo \(em scan signals, capture runtime, import rules.
+.TP
+.B /dross-options
+Review and update every dross-managed setting \(em project, defaults,
+rules, profile, env vars.
+.TP
+.B /dross-rule
+Add, list, remove, or promote rules in the two-tier rules system.
+.SS Planning
+.TP
+.B /dross-milestone \fIversion\fR
+Scope a milestone \(em title, success criteria, non-goals, phase order.
+.TP
+.B /dross-spec \fR[\fIphase-id\fR | \fB--new \fI"Title"\fR]
+Clarify a phase into
+.IR spec.toml :
+acceptance criteria, locked decisions, deferred ideas. With no args,
+offers to scaffold the next phase when nothing else is in flight.
+.TP
+.B /dross-plan \fR[\fIphase-id\fR] [\fB--panel\fR] [\fB--no-review\fR]
+Decompose the locked spec into a wave-ordered task graph with per-task
+test contracts. With
+.BR --panel ,
+three cold lens planners (risk-first / MVP-first / verification-first)
+draft independently in parallel and a fourth cold judge merges them,
+surfacing lens
+.I disagreements
+as the steering agenda instead of auto-resolving them (~4\(en5\(mu the
+tokens of a single-pass plan; meant for new subsystems and non-obvious
+task graphs). After
+.I plan.toml
+is locked, the independent plan review runs automatically in its own
+context unless
+.B --no-review
+is passed; blocking findings loop back into steering with exactly one
+re-review.
+.TP
+.B /dross-plan-review \fR[\fIphase-id\fR]
+Independent second-opinion audit of
+.I plan.toml
+by a fresh subagent reading the artefacts cold. Findings land in
+.I REVIEW.md
+classified BLOCKING / FLAG / NOTE. Also auto-run by
+.BR /dross-plan .
+.SS Execution
+.TP
+.B /dross-execute \fR[\fIphase-id\fR] [\fB--solo\fR] [\fB--from \fItask-id\fR]
+Execute the plan task by task: atomic commit per task, test gate before
+each commit. Pair-mode asks before every task;
+.B --solo
+runs autonomously.
+.TP
+.B /dross-quick \fI"task description"\fR
+One-shot task outside a plan, with the same atomic-commit + test-gate
+guarantees. Pair-mode only. Bumps the version's internal counter.
+.SS Verification and shipping
+.TP
+.B /dross-verify \fR[\fIphase-id\fR] [\fB--skip-mutation\fR]
+Goal-backward verification: run mutation tests, map each acceptance
+criterion to the specific tests that prove it, decide pass/partial/fail.
+.TP
+.B /dross-ship
+Open a clean PR for a verified phase \(em push, open PR via provider,
+request reviewers, watch CI, gate the merge, clean up branches.
+.TP
+.B /dross-review \fIpr-number\fR [\fB--phase \fIid\fR]
+Four-lens subagent panel (security / quality / tests / spec-fidelity)
+over an open PR; posts the aggregated findings as a single comment.
+.SS Continuity
+.TP
+.B /dross-status
+Where am I \(em project, milestone, current phase, last activity,
+suggested next step.
+.TP
+.B /dross-pause
+Capture a handoff before stopping \(em mental thread, next action, open
+loops \(->
+.IR .dross/handoff.md .
+.TP
+.B /dross-resume
+Replay the handoff, re-orient on phase/branch/diff, prune done items.
+.TP
+.B /dross-inbox \fR[\fB--labels \fIbug,enhancement\fR]
+Triage inbound board issues into milestones, phases, or quick tasks.
+.SH FILES
+.TP
+.I .dross/project.toml
+Stack, paths, runtime mode and test command, [remote] provider config.
+.TP
+.I .dross/state.json
+4-part version, current milestone/phase/status, activity log.
+.TP
+.I .dross/rules.toml
+Project-tier rules.
+.TP
+.I .dross/milestones/<version>.toml
+Milestone scope.
+.TP
+.I .dross/phases/<id>/
+.IR spec.toml ,
+.IR plan.toml ,
+.IR verify.toml ,
+.IR tests.json ,
+.I REVIEW.md
+(plan review), and
+.I panel/
+(lens drafts + synthesis when
+.B --panel
+was used).
+.TP
+.I .dross/changes.json
+Files touched per task.
+.TP
+.I .dross/board.json
+Artefact \(<-> issue links for board sync.
+.TP
+.I .dross/handoff.md
+Living pause/resume handoff (gitignored).
+.TP
+.I ~/.claude/dross/defaults.toml
+Cross-project defaults.
+.TP
+.I ~/.claude/dross/rules.toml
+Global-tier rules.
+.TP
+.I ~/.claude/dross/prompts/
+Workflow prompt files (symlinked to the checkout by
+.BR "make install" ).
+.TP
+.I ~/.claude/dross/telemetry.jsonl
+Local-only usage event log.
+.TP
+.I ~/.claude/skills/dross-*/SKILL.md
+Installed slash commands (symlinks).
+.SH ENVIRONMENT
+.TP
+.B DROSS_NO_TELEMETRY=1
+Disable telemetry for this invocation regardless of the persisted opt-in.
+.TP
+.RI [ remote ]. auth_env
+Not a fixed variable: the project's
+.I project.toml
+names which env var holds the provider token (e.g. FORGEJO_TOKEN,
+GITHUB_TOKEN). Set it via
+.BR "dross env set" .
+.SH TELEMETRY
+Local file, no network, no daemon, no third party. One JSONL event per
+invocation (command path, duration, exit code, error bucket) plus outcome
+events from verify, ship, phase create, and doctor. Nothing you typed is
+recorded \(em counts and small enums only; the catch-all
+.I other
+error bucket carries a path-redacted copy of dross's own error string.
+Default ON, asked once at init/onboard. Toggle with
+.B dross stats opt-out
+/
+.BR opt-in .
+.SH EXAMPLES
+A full phase, end to end:
+.PP
+.nf
+$ dross phase create            # scaffolds .dross/phases/NN-slug/, checks out phase/NN-slug
+> /dross-spec                   # lock criteria + decisions into spec.toml
+> /dross-plan --panel           # 3-lens panel + cold judge; auto plan review after lock
+> /dross-execute                # task by task, atomic commits, test gates
+> /dross-verify                 # mutation testing + criterion mapping
+> /dross-ship                   # PR, CI watch, merge gate
+$ dross phase complete NN-slug  # after squash-merge: ff main, delete branch
+.fi
+.PP
+Quick orientation and a one-off fix:
+.PP
+.nf
+$ dross status
+> /dross-quick "rename the legacy env var in the README and CI"
+.fi
+.SH SEE ALSO
+.IR README.md
+in the repository root (footprint numbers, roadmap, design notes);
+.I Brief.md
+for the original design brief.
+.PP
+Repository:
+.I https://github.com/Rivil/dross
+.SH COLOPHON
+Dross is the AI sidekick from Will Wight's
+.IR Cradle
+series \(em a Presence that compiles battle plans and handles unimportant
+thoughts to free up his person's bandwidth.
