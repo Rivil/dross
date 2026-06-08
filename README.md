@@ -41,7 +41,7 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | Dross `/dross-ship` | 5,973 | **~1,490** |
 | Dross `/dross-review` | 7,725 | **~1,930** |
 | Dross `/dross-rule` | 2,119 | **~530** |
-| Dross `/dross-spec` | 6,117 | **~1,530** |
+| Dross `/dross-spec` | 10,503 | **~2,630** |
 | Dross `/dross-plan` | 13,252 | **~3,310** |
 | Dross `/dross-plan-review` | 5,676 | **~1,420** |
 | Dross `/dross-execute` | 8,652 | **~2,160** |
@@ -57,7 +57,7 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 111,598 | ~27,900 |
+| Dross (commands + prompts) | 115,139 | ~28,800 |
 | **Ratio** | | **≈ 22×** |
 
 **Being honest about these numbers:**
@@ -243,6 +243,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Handoff pause/resume — `/dross-pause` drafts a living handoff at `.dross/handoff.md` (thread + next action + open loops, gitignored, single file), `/dross-resume` replays it and prunes done items in place, and `dross status` nudges when one is open. Closes the "stop mid-phase, next session the brain blanks out" gap that mechanical state (`current_phase`, task progress) doesn't cover
 - [x] Verify verdict hardening — `[summary].mutation_status` (`measured | unmeasurable | skipped`) distinguishes a real low score from a 0/0 artefact, so a phase whose changes fall entirely outside the project's Stryker scope (or runs with `--skip-mutation`) no longer false-fails the 0.60 threshold; `/dross-verify` now bases the verdict on criterion coverage alone when nothing was measurable. Forgejo/Gitea `dross issue phase-sync` no longer spams `cannot unmarshal array into ... issueResponse` — the labels-PUT response is now correctly treated as a `LabelList` instead of an issue. New `no_milestone` error bucket peels bare `dross milestone show` failures out of the opaque `other` pile.
 - [x] Plan quality loops — `/dross-plan --panel` fans out three cold lens planners (risk-first / MVP-first / verification-first) over the locked spec in parallel, a fourth cold judge merges them (winner-as-skeleton + grafts) and surfaces lens *disagreements* as the steering agenda instead of auto-resolving them; artifacts kept in `.dross/phases/<id>/panel/`. `/dross-plan` now auto-runs the independent plan review (own-context cold subagent) after `plan.toml` is locked, with one bounded fix-and-re-review cycle on blocking findings; `--no-review` opts out. Panel costs ~4-5× a single-pass plan — meant for new subsystems / non-obvious task graphs, not 2-task UI phases
+- [x] Spec gray-area discussion — `/dross-spec`'s locked-decisions step is no longer a passive "any decisions?" prompt. It analyses the phase against project goals, milestone constraints, locked stack, and the acceptance criteria, then surfaces 3–4 *phase-specific* gray areas (concrete labels, never generic categories), lets the user `multiSelect` which to pin down, and deep-dives each one at a time — outcomes land as `[[decisions]]` (locked, with a real `why`) or `[[deferred]]`. Skips anything already settled by `stack.locked` or a prior phase's decision; routes scope-creep into deferred ideas. Ported from GSD's `discuss-phase` question phase, folded into the existing spec flow rather than added as a separate command/artifact
 
 ## Telemetry
 

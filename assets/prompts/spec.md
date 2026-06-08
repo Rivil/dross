@@ -50,21 +50,58 @@ For each answer:
 
 After each criterion, show the running list. Ask "anything missing?" When the user says no, move on.
 
-## 3. Locked decisions
+## 3. Locked decisions — gray-area discussion
 
-Ask: **"Any design choices already locked at this point? Schema decisions, library picks, API shapes, anything that's NON-NEGOTIABLE for the planner?"**
+Don't just ask "any locked decisions?" and wait for the user to free-recall them. Surface this phase's **gray areas** and walk the user through the ones they care about. Each resolved area becomes a locked decision.
 
-For each:
+A gray area is an implementation decision the user has an opinion on — a choice that could go multiple ways and would change the result.
+
+### 3a. Identify gray areas
+
+Using the context from §1 (project goals, milestone constraints, locked stack) and the acceptance criteria from §2, generate **3–4 phase-specific gray areas**:
+
+- Use **concrete labels tied to this phase's domain** — never generic category names like "UI" / "Behaviour" / "Architecture".
+  - Phase "CLI for backups" → `Output format`, `Flag design`, `Progress reporting`, `Error recovery`
+  - Phase "Meal tagging" → `Tag storage`, `Duplicate handling`, `Tag input UX`, `Max tags per item`
+- **Skip what's already decided.** Don't re-ask anything settled by `stack.locked` in project.toml, a `[[decisions]]` carried in a prior phase's spec.toml, or a choice already implied by an acceptance criterion. If you skip an area for this reason, say so ("session handling is fixed by the locked auth library — not asking").
+- **Stay inside the phase boundary.** A gray area clarifies HOW to build what's already scoped — never WHETHER to add a new capability. If a candidate is really a new capability, it's a deferred idea (§4), not a gray area.
+
+**What is NOT a gray area — decide these yourself, don't ask:** internal architecture, code patterns, performance tuning, anything the planner or executor resolves. Ask only about user-facing and contract-shaping choices.
+
+If no meaningful gray areas exist (pure infra, clear-cut implementation, all already decided), say so plainly and skip to §4. Don't manufacture choices to fill space.
+
+### 3b. Present for selection
+
+`AskUserQuestion` (multiSelect: true):
+- header: `Discuss`
+- question: **"Which of these should we pin down for `<phase>`?"**
+- one option per gray area: the concrete label, with 1–2 framing questions in the description, annotated with relevant context (e.g. "stack is locked to Postgres — this is about table shape, not the DB").
+
+**Do NOT include a "skip" / "you decide" option.** The user ran this command to clarify — give real choices.
+
+### 3c. Deep-dive each selected area
+
+For each area the user picked, one focused exchange at a time — **don't batch areas into a single turn**. Offer concrete options via `AskUserQuestion` where a small set of choices exists; go freeform where it's open-ended. Keep going on an area until the decision is crisp enough to write down, then move to the next.
+
+While discussing:
+- If the user references a doc/spec/file ("follow the schema in `X`"), read it and let it inform your follow-ups.
+- If the user raises something outside the phase boundary, capture it as a deferred idea and redirect: **"`<that>` is its own capability — noting it as deferred. For now let's stay on `<phase>`."**
+
+### 3d. Capture outcomes
+
+Each resolved gray area becomes a locked decision:
 - `key` (short identifier, e.g. `tag_storage`)
 - `choice` (the decision)
 - `why` (the reason — short, but real)
 - `locked = true`
 
-If the user is unsure, skip. Decisions can be added later. Don't invent decisions to fill space.
+If the user wants to leave an area open, don't force it — skip it (decisions can be added at plan time). **Never** mark `locked = true` without a `why`. Don't invent decisions to fill space.
 
 ## 4. Deferred ideas
 
-Ask: **"Anything someone might assume is in scope that you're explicitly punting? Stuff to defer to a later phase?"**
+The §3 discussion may already have surfaced deferred ideas (scope-creep redirects, areas the user punted). Fold those in first, then ask once more to catch the rest:
+
+**"Anything someone might assume is in scope that you're explicitly punting? Stuff to defer to a later phase?"**
 
 For each:
 - `text` (the deferred thing)
@@ -121,6 +158,7 @@ Spec locked. Next: /dross-plan to break it into tasks.
 ## Hard rules
 
 - **Never** invent criteria the user didn't explicitly approve. If you propose, say so and ask confirmation before writing.
+- **Gray areas (§3) must be phase-specific and inside the phase boundary.** Generic category labels ("UI", "Behaviour") and new-capability questions ("should we also add search?") are both bugs — the first is lazy, the second is scope creep. Skip areas already settled by `stack.locked` or a prior decision rather than re-asking them.
 - **Never** mark a decision `locked = true` without an explicit `why`. Locked decisions become non-negotiable in the planner.
 - **Always** keep prose to bullet points and short sentences. Don't write paragraphs into TOML strings.
 - **If the user pushes back on the quality bar** (e.g. "I know it's vague, just write it"), comply but flag the risk once: "noted — vague criteria can pass verify trivially, may want to revisit."
