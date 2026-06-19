@@ -2,18 +2,10 @@
   "version": "0.1.0.10",
   "current_milestone": "v0.1",
   "current_phase": "03-fix-completion-chore-divergence",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-19T18:46:16.607335Z",
-  "last_action": "spec locked: 03-fix-completion-chore-divergence",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-19T18:50:28.501608Z",
+  "last_action": "plan locked: 03-fix-completion-chore-divergence (3 tasks across 2 waves)",
   "history": [
-    {
-      "at": "2026-06-19T10:14:53.630778Z",
-      "action": "quick: list available subcommands on no-match"
-    },
-    {
-      "at": "2026-06-19T10:20:38.529552Z",
-      "action": "bump internal 0.1.0.3 → 0.1.0.4"
-    },
     {
       "at": "2026-06-19T10:20:38.535586Z",
       "action": "quick: telemetry records rejected cli-arg token (A4)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-19T18:46:16.607335Z",
       "action": "spec locked: 03-fix-completion-chore-divergence"
+    },
+    {
+      "at": "2026-06-19T18:50:28.493121Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-19T18:50:28.501608Z",
+      "action": "plan locked: 03-fix-completion-chore-divergence (3 tasks across 2 waves)"
     }
   ]
 }
