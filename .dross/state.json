@@ -1,7 +1,7 @@
 {
-  "version": "0.1.0.6",
-  "last_activity": "2026-06-19T10:27:54.86661Z",
-  "last_action": "quick: reconcile prompt trailer + .dross hygiene (A5+A6)",
+  "version": "0.1.0.7",
+  "last_activity": "2026-06-19T12:16:06.682197Z",
+  "last_action": "quick: add dross-quick --solo mode + gitignore dross.pdf",
   "history": [
     {
       "at": "2026-06-19T06:51:00.002465Z",
@@ -58,6 +58,14 @@
     {
       "at": "2026-06-19T10:27:54.86661Z",
       "action": "quick: reconcile prompt trailer + .dross hygiene (A5+A6)"
+    },
+    {
+      "at": "2026-06-19T12:16:06.673998Z",
+      "action": "bump internal 0.1.0.6 → 0.1.0.7"
+    },
+    {
+      "at": "2026-06-19T12:16:06.682197Z",
+      "action": "quick: add dross-quick --solo mode + gitignore dross.pdf"
     }
   ]
 }
