@@ -98,3 +98,29 @@ func TestEnforceSubcommandKnown_Recurses(t *testing.T) {
 		t.Errorf("guard did not recurse into nested parent: %v", err)
 	}
 }
+
+func TestEnforceSubcommandKnown_ListsAvailableWhenNoSuggestion(t *testing.T) {
+	root := &cobra.Command{Use: "root"}
+	parent := &cobra.Command{Use: "parent"}
+	parent.AddCommand(
+		&cobra.Command{Use: "alpha", RunE: func(*cobra.Command, []string) error { return nil }},
+		&cobra.Command{Use: "beta", RunE: func(*cobra.Command, []string) error { return nil }},
+	)
+	root.AddCommand(parent)
+	EnforceSubcommandKnown(root)
+
+	// A far-off guess (no close match) should list what IS valid rather than
+	// only pointing at --help, and must not fabricate a suggestion.
+	err := runCmd(t, root, "parent", "zzzzz")
+	if err == nil {
+		t.Fatal("expected error for unknown far-off subcommand")
+	}
+	for _, want := range []string{"Available subcommands", "alpha", "beta"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error missing %q: %v", want, err)
+		}
+	}
+	if strings.Contains(err.Error(), "Did you mean") {
+		t.Errorf("far-off guess should not produce a suggestion: %v", err)
+	}
+}
