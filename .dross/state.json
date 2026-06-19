@@ -1,14 +1,10 @@
 {
   "version": "0.1.0.10",
   "current_phase": "02-harden-ship-merge-complete-flow",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-19T16:39:32.947611Z",
-  "last_action": "phase 02-harden-ship-merge-complete-flow executed (3/3 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-19T17:19:04.009011Z",
+  "last_action": "verified 02-harden-ship-merge-complete-flow: pass (3/3 covered; mutation package-scoped, phase diff fully killed)",
   "history": [
-    {
-      "at": "2026-06-19T06:51:00.002465Z",
-      "action": "dross onboard"
-    },
     {
       "at": "2026-06-19T07:17:25.225963Z",
       "action": "onboard complete"
@@ -200,6 +196,14 @@
     {
       "at": "2026-06-19T16:39:32.947611Z",
       "action": "phase 02-harden-ship-merge-complete-flow executed (3/3 done)"
+    },
+    {
+      "at": "2026-06-19T17:19:04.001136Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-19T17:19:04.009011Z",
+      "action": "verified 02-harden-ship-merge-complete-flow: pass (3/3 covered; mutation package-scoped, phase diff fully killed)"
     }
   ]
 }

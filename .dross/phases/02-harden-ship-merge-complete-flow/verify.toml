@@ -1,0 +1,64 @@
+[verify]
+  phase = "02-harden-ship-merge-complete-flow"
+  generated_at = 2026-06-19T17:04:27.916723Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.5820476858345021
+  mutants_killed = 415
+  mutants_survived = 297
+  mutants_not_covered = 152
+  criteria_total = 3
+  criteria_covered = 3
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/cmd/ship_test.go:TestShipFullFlowAgainstMockProvider",
+    "internal/cmd/phase_test.go:TestShipToCompleteLeavesZeroManualGit",
+  ]
+  notes = "Asserts empty `git status --porcelain` and HEAD == 'chore(dross): ship 01-x' after a real push + mock-provider PR. Mutants on the new commit block — ship.go:197 (git add err-check) and ship.go:201 (git commit err-check) — were KILLED, so dropping/altering the commit step fails a test."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/cmd/phase_test.go:TestPhaseCompleteDeletesRemoteBranch",
+    "internal/cmd/phase_test.go:TestPhaseCompleteRemoteDeleteIdempotent",
+  ]
+  notes = "Present→deleted and absent→no-error are both asserted. The idempotency branch (phase.go:260 `if remoteRef != \"\"`), the ls-remote err-check (phase.go:257), and push --delete (phase.go:261) all had their mutants KILLED — the present/absent cases are genuinely distinguished."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/cmd/phase_test.go:TestShipToCompleteLeavesZeroManualGit/provider_did_not_delete_branch",
+    "internal/cmd/phase_test.go:TestShipToCompleteLeavesZeroManualGit/provider_already_deleted_branch",
+  ]
+  notes = "End-to-end ship → squash-merge → complete asserts clean tree, on main, no local phase/* branch, and no origin phase ref — in both the provider-already-deleted and provider-did-not branch cases."
+
+# Verdict basis (read before trusting the package mutation_score):
+# Mutation here is PACKAGE-scoped — gremlins mutates all of internal/cmd, so
+# mutation_score=0.58 is dominated by pre-existing untested files unrelated to
+# this 3-file phase. Per the verify scope-mismatch guidance, the 0.80/0.60
+# score thresholds are NOT applied to that package score; the verdict rests on
+# criterion coverage + a per-changed-line mutation cross-check (all KILLED).
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation is package-scoped: gremlins mutates all of internal/cmd, so mutation_score=0.58 (efficacy 0.74 excluding 152 never-executed mutants) reflects pre-existing untested files (codex.go, doctor.go, env.go, issue.go, stats.go, status.go, rule.go, ...), NOT this phase's diff. Score thresholds intentionally not applied to the package score for this verdict."
+
+[[finding]]
+  severity = "NOTE"
+  text = "This phase's changed lines are fully mutation-covered: every mutant on ship.go:197/201 (state add + commit) and phase.go:257/260/261 (ls-remote guard, the `!= \"\"` idempotency branch, push --delete) was KILLED."
+
+[[finding]]
+  severity = "FLAG"
+  text = "Pre-existing survived mutants remain in the TWO touched files but outside this phase's changed lines: ship.go:165-174 (PR-result + reviewer reporting), ship.go:253-301 (shipComment subcommand, not covered), phase.go:34-41 & 362-398 (phaseList / nextPhaseNumber), phase.go:186/302 (arg-resolve / preflight). Not regressions from this phase — pre-existing gaps, candidates for a future test-hardening pass."
+
+[[finding]]
+  severity = "FLAG"
+  text = "internal/cmd overall mutation coverage is low — 152/713 mutants are never executed by any test, and 297 survived package-wide. Pre-existing tech debt across the cmd package, unrelated to this phase. The skeleton's ~190 per-line package-wide FLAGs were consolidated here because retaining them would misrepresent a 3-file phase as having 190 findings; see tests.json for the full raw list."
