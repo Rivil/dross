@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -43,58 +43,129 @@ func (g *Gremlins) Supports(file string) bool {
 	return strings.HasSuffix(strings.ToLower(file), ".go")
 }
 
-// Run invokes gremlins on the packages containing the given files,
-// then parses the JSON report.
+// Run invokes gremlins once per touched package, then merges the
+// per-package JSON reports into a single normalised Report.
+//
+// Gremlins is invoked per concrete package — not over one collapsed
+// `./<ancestor>/...` path — because a broad recursive scope makes
+// gremlins gather empty coverage and exit with "No results to report",
+// writing no file. That previously hard-failed the entire verify. Per
+// package, the packages gremlins CAN cover yield real results; the ones
+// it can't — no report written, or a report with zero covered mutants —
+// are excluded from the score and noted, never fatal. Only a failure to
+// execute gremlins at all (e.g. not installed) is fatal.
 func (g *Gremlins) Run(files []string) (*Report, error) {
 	if len(files) == 0 {
 		return &Report{Tool: g.Name()}, nil
 	}
 
-	// Derive unique package paths from files. Gremlins takes packages,
-	// not files. e.g. ["internal/api/tags.go", "internal/db/users.go"]
-	// → ["./internal/api/...", "./internal/db/..."]
 	pkgs := packagesFromFiles(files)
 
-	reportRel := filepath.Join("reports", "gremlins", "output.json")
-	reportAbs := filepath.Join(g.ProjectRoot, reportRel)
-
+	reportDir := filepath.Join(g.ProjectRoot, "reports", "gremlins")
 	// Gremlins won't create parent dirs for --output; it errors on the
 	// first mutant write and leaves no report behind. Mkdir up front so
 	// every invocation has somewhere to land.
-	if err := os.MkdirAll(filepath.Dir(reportAbs), 0o755); err != nil {
+	if err := os.MkdirAll(reportDir, 0o755); err != nil {
 		return nil, fmt.Errorf("prepare gremlins report dir: %w", err)
 	}
 
-	args := g.buildUnleashArgs(reportRel, pkgs)
-	cmd := g.buildCmd(args)
-	cmd.Stdout = os.Stderr // streamed; not captured (long-running)
-	cmd.Stderr = os.Stderr
+	merged := &Report{Tool: g.Name()}
+	var unmeasured []string
 
-	// Echo the exact invocation before running. Cheap diagnostic — when
-	// gremlins finishes without writing output (path-scope mismatch,
-	// zero covered mutants, threshold gates, etc.) the user can copy
-	// this line and re-run manually to see what happened.
-	invocation := strings.Join(cmd.Args, " ")
-	fmt.Fprintf(os.Stderr, "gremlins: %s\n", invocation)
+	for _, pkg := range pkgs {
+		reportRel := filepath.Join("reports", "gremlins", sanitizePkg(pkg)+".json")
+		reportAbs := filepath.Join(g.ProjectRoot, reportRel)
+		// A stale report from a prior run must not be re-read if gremlins
+		// writes nothing this time.
+		_ = os.Remove(reportAbs)
 
-	if err := cmd.Run(); err != nil {
-		// Gremlins exits non-zero when threshold flags fail or surviving
-		// mutants exist. Both are "ran successfully with bad results"
-		// outcomes — try to read the report regardless.
-		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("gremlins invocation failed: %w\n  invocation: %s\n  (is gremlins installed? `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`)", err, invocation)
+		args := g.buildUnleashArgs(reportRel, []string{pkg})
+		cmd := g.buildCmd(args)
+		cmd.Stdout = os.Stderr // streamed; not captured (long-running)
+		cmd.Stderr = os.Stderr
+
+		// Echo the exact invocation before running — cheap diagnostic for
+		// copy-paste re-runs.
+		invocation := strings.Join(cmd.Args, " ")
+		fmt.Fprintf(os.Stderr, "gremlins: %s\n", invocation)
+
+		if err := cmd.Run(); err != nil {
+			// Gremlins exits non-zero when threshold flags fail or surviving
+			// mutants exist — both are "ran, bad results"; read the report
+			// regardless. Only a failure to START the process (binary not
+			// found, etc.) is fatal.
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) {
+				return nil, fmt.Errorf("gremlins invocation failed: %w\n  invocation: %s\n  (is gremlins installed? `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`)", err, invocation)
+			}
 		}
+
+		b, err := os.ReadFile(reportAbs)
+		if err != nil {
+			// No report — gremlins gathered no covered mutants for this
+			// package and exited without writing. Exclude, don't fail.
+			unmeasured = append(unmeasured, pkg+" (no report — gremlins gathered no covered mutants)")
+			continue
+		}
+		rep, err := ParseGremlinsJSON(b)
+		if err != nil {
+			unmeasured = append(unmeasured, pkg+" (unreadable report: "+err.Error()+")")
+			continue
+		}
+		if !hasCoverage(rep) {
+			// Report exists but every mutant is NOT COVERED — gremlins
+			// instrumented zero usable coverage here (a coverage-tool blind
+			// spot, not a test-quality signal). Exclude from the score.
+			unmeasured = append(unmeasured, pkg+" (zero covered mutants — coverage blind spot)")
+			continue
+		}
+		mergeInto(merged, rep)
 	}
 
-	b, err := os.ReadFile(reportAbs)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("gremlins did not write a report at %s\n  invocation: %s\n  likely causes: (a) the path scope contains no covered mutants — try a narrower per-package path; (b) gremlins hit an internal error — re-run the invocation manually to see its output; (c) gremlins exited before writing output", reportAbs, invocation)
-		}
-		return nil, fmt.Errorf("read gremlins report: %w (invocation: %s)", err, invocation)
+	for _, u := range unmeasured {
+		fmt.Fprintf(os.Stderr, "gremlins: skipped %s\n", u)
 	}
-	return ParseGremlinsJSON(b)
+
+	return merged, nil
+}
+
+// hasCoverage reports whether gremlins instrumented at least one mutant
+// it actually ran a test against (killed, timed out, or LIVED). A report
+// with only NOT COVERED mutants (or none at all) means gremlins gathered
+// no usable coverage for the package — excluded from the merged score so
+// a coverage blind spot doesn't masquerade as theatrical tests.
+func hasCoverage(r *Report) bool {
+	lived := r.Survived - r.NotCovered
+	return r.Killed+r.Timeout+lived > 0
+}
+
+// mergeInto accumulates src into dst (counts + surviving mutants) and
+// recomputes dst's score from the running totals — same convention as
+// ParseGremlinsJSON: killed / (killed + survived + timeout).
+func mergeInto(dst, src *Report) {
+	dst.Killed += src.Killed
+	dst.Survived += src.Survived
+	dst.Timeout += src.Timeout
+	dst.Errors += src.Errors
+	dst.NotCovered += src.NotCovered
+	dst.Surviving = append(dst.Surviving, src.Surviving...)
+	denom := dst.Killed + dst.Survived + dst.Timeout
+	if denom > 0 {
+		dst.Score = float64(dst.Killed) / float64(denom)
+	}
+}
+
+// sanitizePkg turns a gremlins package path into a filesystem-safe report
+// filename stem, so per-package reports don't clobber each other.
+// e.g. "./internal/cmd" → "internal_cmd"; "." → "root".
+func sanitizePkg(pkg string) string {
+	s := strings.TrimPrefix(pkg, "./")
+	s = strings.ReplaceAll(s, "/", "_")
+	s = strings.ReplaceAll(s, ".", "_")
+	if s == "" || s == "_" {
+		return "root"
+	}
+	return s
 }
 
 // buildUnleashArgs assembles the gremlins invocation for the configured
@@ -122,61 +193,32 @@ func (g *Gremlins) buildCmd(args []string) *exec.Cmd {
 	return exec.Command(full[0], full[1:]...)
 }
 
-// packagesFromFiles derives a single gremlins-compatible package path
-// from the list of source files touched in this phase. Gremlins accepts
-// exactly one positional path arg (`gremlins unleash [path]`), so when
-// files span multiple packages we walk up to the deepest shared
-// directory and pass `./<ancestor>/...` so gremlins recurses into every
-// touched package in one invocation. Files at the module root, or
-// files split across top-level dirs, degenerate to `./...`.
-//
-// Returns nil when given no files.
+// packagesFromFiles derives one gremlins package path per unique
+// directory among the touched files. Gremlins is invoked once per
+// package (see Run) rather than once over a collapsed shared-ancestor
+// path, because a broad recursive scope makes gremlins gather empty
+// coverage and report nothing. A file at the module root maps to ".".
+// The result is deduped and sorted for deterministic invocation order;
+// nil for no files.
 func packagesFromFiles(files []string) []string {
 	if len(files) == 0 {
 		return nil
 	}
-	var prefix []string
-	first := true
+	seen := map[string]bool{}
+	var pkgs []string
 	for _, f := range files {
 		dir := filepath.ToSlash(filepath.Dir(f))
-		if dir == "" || dir == "." {
-			// File lives at the module root — no narrower scope possible.
-			prefix = nil
-			first = false
-			continue
+		pkg := "."
+		if dir != "" && dir != "." {
+			pkg = "./" + dir
 		}
-		parts := strings.Split(dir, "/")
-		if first {
-			prefix = parts
-			first = false
-			continue
-		}
-		prefix = commonPrefix(prefix, parts)
-		if len(prefix) == 0 {
-			break
+		if !seen[pkg] {
+			seen[pkg] = true
+			pkgs = append(pkgs, pkg)
 		}
 	}
-	if len(prefix) == 0 {
-		return []string{"./..."}
-	}
-	return []string{"./" + strings.Join(prefix, "/") + "/..."}
-}
-
-// commonPrefix returns the leading shared elements of two slices.
-// Used to find the deepest directory common to every touched file.
-func commonPrefix(a, b []string) []string {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
-	out := make([]string, 0, n)
-	for i := 0; i < n; i++ {
-		if a[i] != b[i] {
-			break
-		}
-		out = append(out, a[i])
-	}
-	return out
+	sort.Strings(pkgs)
+	return pkgs
 }
 
 // gremlinsReport mirrors the JSON schema from
