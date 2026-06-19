@@ -29,14 +29,22 @@ files = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
 description = """
 Remove the post-merge `chore(dross): complete <id>` commit (phase.go
 ~266-280); `phase complete` becomes ff + branch-delete only, writing no
-commit to main. Keep the upstream-not-advanced guard refusing BEFORE any
-branch deletion or state mutation. Update existing complete tests that
-asserted the now-removed commit.
+commit to main. Harden the upstream-not-advanced guard so it refuses
+BEFORE any branch deletion or state mutation AND does not depend on the
+local phase branch ref existing — today the merge-base check (phase.go
+~223) is nested inside `rev-parse --verify refs/heads/<phaseBranch>`, so
+an abandoned phase whose local branch is already gone skips the guard and
+the ff-only silently no-ops. Replace it with a branch-ref-independent
+check: verify origin/main carries this phase's completion record (the
+`completed <id>` entry that t-1's ship folds into the squash) and refuse
+otherwise. Update existing complete tests that asserted the now-removed
+commit.
 """
 covers        = ["c-1", "c-2", "c-5"]
 test_contract = [
   "if complete creates any commit on main, TestPhaseCompleteHappyPath (asserting main == origin/main with no new commit) fails",
   "if complete deletes a branch or mutates state when origin has not advanced past the phase fork, TestPhaseCompleteRefusesUnmergedUpstream fails",
+  "if complete proceeds when the local phase branch ref is absent AND origin/main lacks the phase's completion record, a new test (e.g. TestPhaseCompleteRefusesUnmergedNoLocalBranch) fails",
 ]
 status = "pending"
 

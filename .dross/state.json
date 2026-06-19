@@ -3,13 +3,9 @@
   "current_milestone": "v0.1",
   "current_phase": "03-fix-completion-chore-divergence",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-19T18:52:16.868867Z",
-  "last_action": "plan reviewed: 03-fix-completion-chore-divergence (0 blocking, 3 flags)",
+  "last_activity": "2026-06-19T18:54:19.84851Z",
+  "last_action": "plan amended: 03 t-2 guard hardened (branch-ref-independent, closes review flag 1)",
   "history": [
-    {
-      "at": "2026-06-19T10:23:21.072158Z",
-      "action": "bump internal 0.1.0.4 → 0.1.0.5"
-    },
     {
       "at": "2026-06-19T10:23:21.079103Z",
       "action": "quick: dirty-tree errors list offending paths (A3)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-19T18:52:16.868867Z",
       "action": "plan reviewed: 03-fix-completion-chore-divergence (0 blocking, 3 flags)"
+    },
+    {
+      "at": "2026-06-19T18:54:19.84851Z",
+      "action": "plan amended: 03 t-2 guard hardened (branch-ref-independent, closes review flag 1)"
     }
   ]
 }
