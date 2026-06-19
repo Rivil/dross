@@ -247,6 +247,22 @@ usually mean the upstream merge hasn't actually happened yet.`,
 				}
 			}
 
+			// Delete the remote phase branch too, so completing a phase
+			// leaves nothing behind on origin. Idempotent: the provider's
+			// PR --delete-branch may have already removed it (or it was
+			// never pushed), so we only push --delete when the ref still
+			// exists. ls-remote queries origin directly rather than trusting
+			// possibly-stale remote-tracking refs left by the earlier fetch.
+			remoteRef, err := gitTrim(repoDir, "ls-remote", "--heads", "origin", phaseBranch)
+			if err != nil {
+				return fmt.Errorf("git ls-remote origin %s: %w", phaseBranch, err)
+			}
+			if remoteRef != "" {
+				if out, err := gitCombined(repoDir, "push", "origin", "--delete", phaseBranch); err != nil {
+					return fmt.Errorf("git push origin --delete %s: %w\n%s", phaseBranch, err, out)
+				}
+			}
+
 			// Clear current_phase and audit. Then commit state.json so
 			// next dross commands don't start on a dirty tree.
 			s.CurrentPhase = ""

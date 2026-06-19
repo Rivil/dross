@@ -1,0 +1,31 @@
+{
+  "phase": "02-harden-ship-merge-complete-flow",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "c3b1d50",
+      "completed_at": "2026-06-19T16:35:35.426967Z",
+      "notes": "feature: ship lifecycle · Ship @ internal/cmd/ship.go · commits its post-push state.json write so ship returns on a clean working tree"
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "3ed94dd",
+      "completed_at": "2026-06-19T16:37:30.312773Z",
+      "notes": "feature: phase lifecycle · phaseComplete @ internal/cmd/phase.go · deletes the remote phase branch idempotently via ls-remote-guarded push --delete"
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "8cbf811",
+      "completed_at": "2026-06-19T16:39:22.954287Z",
+      "notes": "feature: phase lifecycle · TestShipToCompleteLeavesZeroManualGit @ internal/cmd/phase_test.go · end-to-end ship→squash→complete leaves clean tree, no local/remote phase branch, in both provider-delete cases"
+    }
+  }
+}

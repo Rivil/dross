@@ -1,5 +1,6 @@
 /dross
 /dist
+/reports
 *.test
 *.out
 .DS_Store

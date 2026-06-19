@@ -1,14 +1,10 @@
 {
   "version": "0.1.0.10",
-  "current_phase": "01-architecture-comprehension-layer",
+  "current_phase": "02-harden-ship-merge-complete-flow",
   "current_phase_status": "verified",
-  "last_activity": "2026-06-19T15:27:33.239044Z",
-  "last_action": "re-verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation measured 0.59 package-scoped; architecture pkg 100%)",
+  "last_activity": "2026-06-19T17:19:04.009011Z",
+  "last_action": "verified 02-harden-ship-merge-complete-flow: pass (3/3 covered; mutation package-scoped, phase diff fully killed)",
   "history": [
-    {
-      "at": "2026-06-19T06:51:00.002465Z",
-      "action": "dross onboard"
-    },
     {
       "at": "2026-06-19T07:17:25.225963Z",
       "action": "onboard complete"
@@ -152,6 +148,62 @@
     {
       "at": "2026-06-19T15:27:33.239044Z",
       "action": "re-verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation measured 0.59 package-scoped; architecture pkg 100%)"
+    },
+    {
+      "at": "2026-06-19T15:56:32.299069Z",
+      "action": "completed 01-architecture-comprehension-layer"
+    },
+    {
+      "at": "2026-06-19T16:01:00.695429Z",
+      "action": "created 02-harden-ship-merge-complete-flow"
+    },
+    {
+      "at": "2026-06-19T16:08:46.102403Z",
+      "action": "set current_phase=02-harden-ship-merge-complete-flow"
+    },
+    {
+      "at": "2026-06-19T16:08:46.110123Z",
+      "action": "spec locked: 02-harden-ship-merge-complete-flow"
+    },
+    {
+      "at": "2026-06-19T16:17:51.448811Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-19T16:17:51.456131Z",
+      "action": "plan locked: 02-harden-ship-merge-complete-flow (3 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-06-19T16:19:32.179743Z",
+      "action": "plan reviewed: 02-harden-ship-merge-complete-flow (0 blocking, 3 flags)"
+    },
+    {
+      "at": "2026-06-19T16:35:35.438311Z",
+      "action": "executed t-1 (Ship commits its post-push state write)"
+    },
+    {
+      "at": "2026-06-19T16:37:30.324832Z",
+      "action": "executed t-2 (phase complete deletes remote branch idempotently)"
+    },
+    {
+      "at": "2026-06-19T16:39:22.966753Z",
+      "action": "executed t-3 (end-to-end ship to complete leaves zero manual git)"
+    },
+    {
+      "at": "2026-06-19T16:39:32.940326Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-19T16:39:32.947611Z",
+      "action": "phase 02-harden-ship-merge-complete-flow executed (3/3 done)"
+    },
+    {
+      "at": "2026-06-19T17:19:04.001136Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-19T17:19:04.009011Z",
+      "action": "verified 02-harden-ship-merge-complete-flow: pass (3/3 covered; mutation package-scoped, phase diff fully killed)"
     }
   ]
 }

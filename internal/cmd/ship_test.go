@@ -224,4 +224,17 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	if !strings.Contains(remoteRefs, "phase/01-x") {
 		t.Errorf("expected phase/01-x on remote, got: %q", remoteRefs)
 	}
+
+	// Ship must return on a clean working tree: its post-push state write
+	// (shipped action + PR URL, asserted above) is committed as part of
+	// ship, not left uncommitted (c-1 / fix_locus). If the commit step is
+	// dropped, the state.json save dirties the tree and this fails.
+	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
+		t.Errorf("working tree should be clean after ship, got: %q", st)
+	}
+	// That write lands as a `chore(dross): ship <id>` commit at HEAD. If
+	// state isn't committed, HEAD is still the api_base test commit.
+	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); msg != "chore(dross): ship 01-x" {
+		t.Errorf("HEAD should be the ship state commit, got: %q", msg)
+	}
 }
