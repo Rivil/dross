@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -459,5 +460,138 @@ func TestShipToCompleteLeavesZeroManualGit(t *testing.T) {
 				t.Errorf("origin should have no phase/01-x ref, got: %q", r)
 			}
 		})
+	}
+}
+
+// TestConsecutivePhasesNoDivergence proves the fix eliminates main
+// divergence rather than deferring it one cycle (c-3). It runs the full
+// ship → squash → complete loop for two phases back-to-back and asserts
+// local main never diverges from origin/main. Under the old behaviour,
+// completing phase 1 left a standalone unpushed `chore(dross): complete`
+// commit on local main; phase 2 then forked off that commit, the squash
+// baked it into origin, and phase 2's completion ff aborted on diverging
+// branches. With ship folding the record into the squash and complete
+// writing no commit, both completions leave main exactly at origin.
+func TestConsecutivePhasesNoDivergence(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+	mustGit(t, dir, "remote", "set-url", "origin", remoteDir)
+	mustGit(t, dir, "push", "-q", "origin", "main")
+
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/pulls") && r.Method == "POST":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"number":99,"html_url":"https://forge.example/me/p/pulls/99"}`))
+		case strings.HasSuffix(r.URL.Path, "/requested_reviewers"):
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, dir, "test: point api_base at mock")
+
+	// cycle ships the current phase, simulates the upstream squash-merge
+	// (carrying the folded state.json), completes it, and asserts local main
+	// has not diverged from origin/main.
+	cycle := func(phaseID, branch string) {
+		t.Helper()
+		if err := runCmd(t, Ship()); err != nil {
+			t.Fatalf("ship %s: %v", phaseID, err)
+		}
+		mustGit(t, dir, "fetch", "-q", "origin")
+		mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
+		// The squash carries the phase's src/, its folded state.json, and
+		// project.toml (config lands on main via the squash in production
+		// too — without it the mock api_base wouldn't reach the next phase).
+		mustGit(t, dir, "checkout", branch, "--", "src/", ".dross/state.json", ".dross/project.toml")
+		mustGit(t, dir, "add", "src/", ".dross/state.json", ".dross/project.toml")
+		mustGit(t, dir, "commit", "-q", "-m", "feat(squash): "+phaseID)
+		mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
+		mustGit(t, dir, "checkout", "-q", branch)
+		mustGit(t, dir, "branch", "-D", "squash-sim")
+		mustGit(t, dir, "fetch", "-q", "origin")
+
+		if err := runCmd(t, Phase(), "complete", phaseID); err != nil {
+			t.Fatalf("complete %s: %v", phaseID, err)
+		}
+		// No divergence: completion left local main exactly at origin/main.
+		// Under the old behaviour these differ by a standalone unpushed
+		// `chore(dross): complete` commit.
+		localMain := mustGit(t, dir, "rev-parse", "main")
+		originMain := mustGit(t, dir, "rev-parse", "origin/main")
+		if localMain != originMain {
+			t.Fatalf("after completing %s, local main %s diverged from origin/main %s",
+				phaseID, localMain, originMain)
+		}
+	}
+
+	// Phase 1 — already set up by shipFixture (on phase/01-x).
+	cycle("01-x", "phase/01-x")
+
+	// Phase 2 — fork a fresh phase off the now-clean main and run it through
+	// the same loop. If phase 1's completion had re-seeded divergence, this
+	// phase would inherit it and its completion ff would break. Read the
+	// created id back from state rather than assuming its ordinal.
+	if err := runCmd(t, Phase(), "create", "y"); err != nil {
+		t.Fatalf("phase create y: %v", err)
+	}
+	s2, _ := state.Load(filepath.Join(dir, ".dross", "state.json"))
+	id2 := s2.CurrentPhase
+	if id2 == "" {
+		t.Fatal("phase create should set current_phase for the new phase")
+	}
+	phaseDir := filepath.Join(dir, ".dross", "phases", id2)
+	mustWrite(t, filepath.Join(phaseDir, "spec.toml"), fmt.Sprintf(`[phase]
+id = %q
+title = "Second"
+
+[[criteria]]
+id = "C1"
+text = "works"
+`, id2))
+	mustWrite(t, filepath.Join(phaseDir, "verify.toml"), fmt.Sprintf(`[verify]
+phase = %q
+generated_at = 2026-05-02T10:00:00Z
+verdict = "pass"
+
+[summary]
+mutation_score = 0.85
+mutants_killed = 17
+mutants_survived = 3
+criteria_total = 1
+criteria_covered = 1
+criteria_uncovered = 0
+
+[[criterion]]
+id = "C1"
+status = "covered"
+tests = ["y.test.ts:1"]
+`, id2))
+	mustWrite(t, filepath.Join(dir, "src/y.ts"), "export const y = 1\n")
+	gitCommit(t, dir, "feat(y): second phase")
+	cycle(id2, "phase/"+id2)
+
+	// Audit survives: both completions are recorded on main after the loop.
+	s, _ := state.Load(filepath.Join(dir, ".dross", "state.json"))
+	var has1, has2 bool
+	for _, a := range s.History {
+		if strings.Contains(a.Action, "completed 01-x") {
+			has1 = true
+		}
+		if strings.Contains(a.Action, "completed "+id2) {
+			has2 = true
+		}
+	}
+	if !has1 || !has2 {
+		t.Errorf("main should carry both completion records; has 01-x=%v %s=%v; history=%+v",
+			has1, id2, has2, s.History)
 	}
 }
