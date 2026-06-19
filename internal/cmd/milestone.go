@@ -124,17 +124,21 @@ func milestoneShow() *cobra.Command {
 // Lists are printed one entry per line.
 func milestoneGet() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <version> <dotted.path>",
-		Short: "Read a single milestone field by dotted path",
-		Args:  cobra.ExactArgs(2),
+		Use:   "get [version] <dotted.path>",
+		Short: "Read a single milestone field by dotted path (version defaults to state.current_milestone)",
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(_ *cobra.Command, args []string) error {
-			m, _, err := loadMilestone(args[0])
+			version, dotted := "", args[0]
+			if len(args) == 2 {
+				version, dotted = args[0], args[1]
+			}
+			m, _, err := loadMilestone(version)
 			if err != nil {
 				return err
 			}
-			val, ok, list := readMilestoneDotted(m, args[1])
+			val, ok, list := readMilestoneDotted(m, dotted)
 			if !ok {
-				return fmt.Errorf("unknown milestone field: %s", args[1])
+				return fmt.Errorf("unknown milestone field: %s", dotted)
 			}
 			if list != nil {
 				for _, v := range list {
@@ -151,15 +155,19 @@ func milestoneGet() *cobra.Command {
 // milestoneSet writes a scalar dotted-path field. Use `add` for list fields.
 func milestoneSet() *cobra.Command {
 	return &cobra.Command{
-		Use:   "set <version> <dotted.path> <value>",
-		Short: "Write a single scalar milestone field",
-		Args:  cobra.ExactArgs(3),
+		Use:   "set [version] <dotted.path> <value>",
+		Short: "Write a single scalar milestone field (version defaults to state.current_milestone)",
+		Args:  cobra.RangeArgs(2, 3),
 		RunE: func(_ *cobra.Command, args []string) error {
-			m, path, err := loadMilestone(args[0])
+			version, dotted, value := "", args[0], args[1]
+			if len(args) == 3 {
+				version, dotted, value = args[0], args[1], args[2]
+			}
+			m, path, err := loadMilestone(version)
 			if err != nil {
 				return err
 			}
-			if err := writeMilestoneDotted(m, args[1], args[2]); err != nil {
+			if err := writeMilestoneDotted(m, dotted, value); err != nil {
 				return err
 			}
 			return m.Save(path)
@@ -172,15 +180,19 @@ func milestoneSet() *cobra.Command {
 // slash command can re-run safely.
 func milestoneAdd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "add <version> <list.path> <value>",
-		Short: "Append a value to a list field (success_criteria, non_goals, phases)",
-		Args:  cobra.ExactArgs(3),
+		Use:   "add [version] <list.path> <value>",
+		Short: "Append a value to a list field (version defaults to state.current_milestone)",
+		Args:  cobra.RangeArgs(2, 3),
 		RunE: func(_ *cobra.Command, args []string) error {
-			m, path, err := loadMilestone(args[0])
+			version, dotted, value := "", args[0], args[1]
+			if len(args) == 3 {
+				version, dotted, value = args[0], args[1], args[2]
+			}
+			m, path, err := loadMilestone(version)
 			if err != nil {
 				return err
 			}
-			if err := appendMilestoneList(m, args[1], args[2]); err != nil {
+			if err := appendMilestoneList(m, dotted, value); err != nil {
 				return err
 			}
 			return m.Save(path)
@@ -188,10 +200,23 @@ func milestoneAdd() *cobra.Command {
 	}
 }
 
+// loadMilestone resolves the milestone version and loads it. An empty version
+// falls back to state.current_milestone, mirroring `milestone show [version]`
+// so get/set/add don't force the caller to repeat the milestone they're on.
 func loadMilestone(version string) (*milestone.Milestone, string, error) {
 	root, err := FindRoot()
 	if err != nil {
 		return nil, "", err
+	}
+	if version == "" {
+		s, err := state.Load(filepath.Join(root, state.File))
+		if err != nil {
+			return nil, "", fmt.Errorf("no version given and load state: %w", err)
+		}
+		version = s.CurrentMilestone
+		if version == "" {
+			return nil, "", errors.New("no version given and state has no current_milestone; run `dross milestone list` to see options")
+		}
 	}
 	path := milestone.FilePath(root, version)
 	m, err := milestone.Load(path)

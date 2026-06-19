@@ -232,3 +232,61 @@ func TestMilestoneGetRejectsUnknownField(t *testing.T) {
 		t.Errorf("expected unknown-field error, got: %v", err)
 	}
 }
+
+func TestMilestoneVersionDefaultsToCurrent(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "create", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// set/add without a version target the current milestone.
+	if err := runCmd(t, Milestone(), "set", "milestone.title", "Defaulted"); err != nil {
+		t.Fatalf("set without version: %v", err)
+	}
+	if err := runCmd(t, Milestone(), "add", "scope.success_criteria", "c-1 holds"); err != nil {
+		t.Fatalf("add without version: %v", err)
+	}
+
+	// get without a version reads the current milestone.
+	out := captureStdout(t, func() {
+		runCmd(t, Milestone(), "get", "milestone.title")
+	})
+	if !strings.Contains(out, "Defaulted") {
+		t.Errorf("get without version returned %q", out)
+	}
+	out = captureStdout(t, func() {
+		runCmd(t, Milestone(), "get", "scope.success_criteria")
+	})
+	if !strings.Contains(out, "c-1 holds") {
+		t.Errorf("add/get without version round-trip failed:\n%s", out)
+	}
+
+	// The explicit-version form still works and points at the same milestone.
+	out = captureStdout(t, func() {
+		runCmd(t, Milestone(), "get", "v0.1", "milestone.title")
+	})
+	if !strings.Contains(out, "Defaulted") {
+		t.Errorf("explicit-version get returned %q", out)
+	}
+}
+
+func TestMilestoneNoVersionNoCurrentErrors(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "create", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+	// No current_milestone set — omitting the version must fail clearly.
+	err := runCmd(t, Milestone(), "get", "milestone.title")
+	if err == nil || !strings.Contains(err.Error(), "current_milestone") {
+		t.Errorf("expected current_milestone error, got: %v", err)
+	}
+}
