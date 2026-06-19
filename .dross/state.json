@@ -1,7 +1,7 @@
 {
-  "version": "0.1.0.8",
-  "last_activity": "2026-06-19T12:23:23.564876Z",
-  "last_action": "quick: spec turn-boundaries (C1)",
+  "version": "0.1.0.9",
+  "last_activity": "2026-06-19T12:27:54.672933Z",
+  "last_action": "quick: agent-gate builtin rule + plan.md relaxation (D)",
   "history": [
     {
       "at": "2026-06-19T06:51:00.002465Z",
@@ -74,6 +74,14 @@
     {
       "at": "2026-06-19T12:23:23.564876Z",
       "action": "quick: spec turn-boundaries (C1)"
+    },
+    {
+      "at": "2026-06-19T12:27:54.665811Z",
+      "action": "bump internal 0.1.0.8 → 0.1.0.9"
+    },
+    {
+      "at": "2026-06-19T12:27:54.672933Z",
+      "action": "quick: agent-gate builtin rule + plan.md relaxation (D)"
     }
   ]
 }
