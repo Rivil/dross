@@ -1,0 +1,56 @@
+[phase]
+id        = "03-fix-completion-chore-divergence"
+title     = "Fix completion-chore divergence"
+milestone = "v0.1"
+
+[[criteria]]
+id   = "c-1"
+text = "After a phase's PR is squash-merged on origin, `dross phase complete` succeeds with zero manual git — no `git reset --hard`, no manual re-commit."
+
+[[criteria]]
+id   = "c-2"
+text = "After `dross phase complete`, local main and origin/main point at the same commit (no divergence)."
+
+[[criteria]]
+id   = "c-3"
+text = "The fix holds across consecutive phases: completing phase N then shipping and completing phase N+1 still needs zero manual git (divergence is eliminated, not deferred one cycle)."
+
+[[criteria]]
+id   = "c-4"
+text = "The completion audit (state.json cleared + `completed <id>` history entry) survives on main after the loop; nothing is lost to make the merge clean."
+
+[[criteria]]
+id   = "c-5"
+text = "`dross phase complete` on a phase whose PR is not merged refuses with a clear message and changes nothing — no branch deletion, no state mutation."
+
+[[decisions]]
+key    = "completion_record_placement"
+choice = "Fold the 'completed' state transition into the phase's PR squash: `dross ship` writes the cleared current_phase + `completed <id>` history onto the phase branch so the squash-merge carries the record to origin/main."
+why    = "An unpushed completion commit on local main is the root cause of divergence; carrying the record through the squash means local main is only ever fast-forwarded from origin, never seeded with a standalone commit."
+locked = true
+
+[[decisions]]
+key    = "phase_complete_role"
+choice = "`dross phase complete` becomes a no-commit local cleanup: switch to main, ff from origin, delete the phase branch (local + remote). It writes no commit to main."
+why    = "Removing the post-merge commit on main is what eliminates the recurring divergence; complete's only remaining job is the ff and branch teardown that can't happen at ship time."
+locked = true
+
+[[decisions]]
+key    = "diverged_recovery_scope"
+choice = "Prevent-only: `complete` guarantees no new divergence but does not auto-heal an already-diverged main. It hard-fails the ff with a clear pointer to `dross ship recover`."
+why    = "Keeps phase 03 scoped to the fix; auto-healing overlaps existing ship_recover logic and adds verification surface."
+locked = true
+
+[[decisions]]
+key    = "unmerged_pr_guard"
+choice = "`complete` verifies origin/main has actually advanced to include this phase's squash before deleting branches or trusting the ff; if the PR is not merged it refuses and mutates nothing. `dross ship` writes the completed state idempotently so re-ship after review edits is safe."
+why    = "Because the completion record is written pre-merge, completing an unmerged or abandoned phase would otherwise delete branches and trust an ff that never carried the squash."
+locked = true
+
+[[deferred]]
+text = "Auto-heal an already-diverged main inside `dross phase complete` (reset to origin + restore .dross/)."
+why  = "Overlaps existing `dross ship recover`; prevent-only is enough for v0.1."
+
+[[deferred]]
+text = "Resuming work on a shipped-but-unmerged phase branch whose branch-local state.json already reads 'completed'."
+why  = "main stays authoritative and abandoning the branch discards the stale state; only matters if work re-opens on the same branch."
