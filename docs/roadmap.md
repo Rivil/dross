@@ -144,6 +144,12 @@ Already half-built: `changes.json` stores a per-task `Notes` field
 - **C2 — execute reuse scan.** Folded into B: execute reads `ARCHITECTURE.md` plus
   a real "does this already exist?" grep before proposing, so `steer` becomes a
   live choice instead of `proceed` being the only viable option.
+- **C3 — broaden `dross-status` next-actions.** The `next:` line only ever points
+  along the spec→plan→ship spine, so other valuable post-phase actions (security,
+  quality, tech-debt sweeps) are invisible when between phases. Widen the heuristic
+  to surface an area menu, not just the next spine step. This is the *suggestion*
+  gap — distinct from the *capability* gap that F/G fill (the commands not existing
+  yet). Prompt/CLI-only.
 
 ---
 
@@ -273,6 +279,23 @@ we have to be conscious — we don't get to use B2's ship-merge until after B2
 ships. Onboarding also commits `.dross/` planning artifacts into the dross repo
 itself (with the `.gitattributes linguist-generated` collapsing that `dross
 doctor` checks for) — a deliberate, visible choice.
+
+### Surfaced fixes (dogfooding dross on dross)
+
+Bugs/papercuts found by running dross on dross — a category the lettered
+workstreams don't track. Each becomes a phase (or `dross-quick`).
+
+- ✅ **02 — harden ship/merge/complete** (`6c05507`, PR #4): `dross ship` commits
+  its own post-push state write so it returns on a clean tree; `dross phase
+  complete` deletes the remote phase branch idempotently (whether or not the
+  provider's `--delete-branch` already ran).
+- ⬜ **Completion-chore divergence.** `dross phase complete` leaves an unpushed
+  `chore(dross): complete <id>` on local main; it gets absorbed into the *next*
+  phase's squash, so the next ship's `gh` post-merge fast-forward aborts and
+  forces a manual `git reset --hard origin/main` (hit at phase 01→02, 2026-06-19).
+  Candidate fix: have `phase complete` push the completion chore to origin/main,
+  or fold the completion record into the squash so no separate unpushed commit
+  exists. See the `dross_ship_squash_recovery` memory.
 
 ---
 
