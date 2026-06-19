@@ -2,8 +2,8 @@
   "version": "0.1.0.10",
   "current_phase": "01-architecture-comprehension-layer",
   "current_phase_status": "verified",
-  "last_activity": "2026-06-19T14:51:43.866706Z",
-  "last_action": "quick: gremlins adapter per-package invocation",
+  "last_activity": "2026-06-19T15:27:33.239044Z",
+  "last_action": "re-verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation measured 0.59 package-scoped; architecture pkg 100%)",
   "history": [
     {
       "at": "2026-06-19T06:51:00.002465Z",
@@ -148,6 +148,10 @@
     {
       "at": "2026-06-19T14:51:43.866706Z",
       "action": "quick: gremlins adapter per-package invocation"
+    },
+    {
+      "at": "2026-06-19T15:27:33.239044Z",
+      "action": "re-verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation measured 0.59 package-scoped; architecture pkg 100%)"
     }
   ]
 }
