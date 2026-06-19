@@ -1,7 +1,7 @@
 {
-  "version": "0.1.0.3",
-  "last_activity": "2026-06-19T10:14:53.630778Z",
-  "last_action": "quick: list available subcommands on no-match",
+  "version": "0.1.0.4",
+  "last_activity": "2026-06-19T10:20:38.535586Z",
+  "last_action": "quick: telemetry records rejected cli-arg token (A4)",
   "history": [
     {
       "at": "2026-06-19T06:51:00.002465Z",
@@ -34,6 +34,14 @@
     {
       "at": "2026-06-19T10:14:53.630778Z",
       "action": "quick: list available subcommands on no-match"
+    },
+    {
+      "at": "2026-06-19T10:20:38.529552Z",
+      "action": "bump internal 0.1.0.3 → 0.1.0.4"
+    },
+    {
+      "at": "2026-06-19T10:20:38.535586Z",
+      "action": "quick: telemetry records rejected cli-arg token (A4)"
     }
   ]
 }
