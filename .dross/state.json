@@ -1,7 +1,7 @@
 {
-  "version": "0.1.0.0",
-  "last_activity": "2026-06-19T07:17:25.225963Z",
-  "last_action": "onboard complete",
+  "version": "0.1.0.1",
+  "last_activity": "2026-06-19T08:14:49.98378Z",
+  "last_action": "quick: gofmt -w the tree",
   "history": [
     {
       "at": "2026-06-19T06:51:00.002465Z",
@@ -10,6 +10,14 @@
     {
       "at": "2026-06-19T07:17:25.225963Z",
       "action": "onboard complete"
+    },
+    {
+      "at": "2026-06-19T08:14:49.977001Z",
+      "action": "bump internal 0.1.0.0 → 0.1.0.1"
+    },
+    {
+      "at": "2026-06-19T08:14:49.98378Z",
+      "action": "quick: gofmt -w the tree"
     }
   ]
 }
