@@ -22,14 +22,31 @@ telemetry review of `~/.claude/dross/telemetry.jsonl` (8.6k events, May 4 – Ju
 The `err_detail` fix (`d37d344`) is working — fresh `other`-bucket events now name
 the exact failure, and they cluster tightly.
 
-| ID | Change | Evidence | Touch points |
-|----|--------|----------|--------------|
-| A1 | `milestone get/set/add`: default `<version>` to current milestone | Dominant fresh signal — agents omit the version positional or invent `--milestone`. Inconsistent with `show [version]`, which is optional. | `internal/cmd/milestone.go` |
-| A2 | bare `dross task` → default action (`status` or `next`) | 17 `unknown_subcommand` on the hottest path in the whole log (`task status/next/show` ≈ 2,040 ok calls) | `internal/cmd/task.go` |
-| A3 | `phase complete` friction: clearer at-failure guidance; reconsider strictness | All `dirty_tree` (39) + `merge_pending` (28) errors funnel through this one command | `internal/cmd/phase.go` (needs a look before scoping) |
-| A4 | Telemetry: record the rejected token on `unknown_subcommand` / `unknown_field` | Same mechanism as the `err_detail` fix; graduates these out of opaque buckets | `internal/telemetry`, command error paths |
+**Status (2026-06-19): A1–A6 all shipped** via solo quick tasks (versions
+0.1.0.1 → 0.1.0.6). Full suite green, `dross validate` clean, `make doctor`
+passing throughout.
 
-Run as `dross-quick` one-offs — they don't need phase ceremony.
+| ID | Change | Status | Touch points |
+|----|--------|--------|--------------|
+| A1 | `milestone get/set/add`: default `<version>` to current milestone | ✅ `d44856e` | `internal/cmd/milestone.go` |
+| A2 | unknown-subcommand UX — **reframed** | ✅ `97ae2a5` | `internal/cmd/subcommand_guard.go` |
+| A3 | `phase complete` friction: dirty-tree errors list offending paths | ✅ `3590c73` | `internal/cmd/phase.go` |
+| A4 | Telemetry: record the rejected token on `unknown_subcommand` / `unknown_field` | ✅ `01fab9c` | `internal/telemetry`, `internal/cmd/telemetry.go` |
+| A5 | Prompt commit-trailer guidance → match repo convention | ✅ `81a76b3` | `assets/prompts/{quick,execute}.md` |
+| A6 | Prompts commit `.dross/` bookkeeping (no dirty tree) | ✅ `81a76b3` | `assets/prompts/{quick,execute}.md` |
+
+Notes from execution:
+- **A2 was reframed after investigation.** The original premise (bare `dross
+  task` errors) was false — bare already prints help (exit 0) and near-typos
+  already get "Did you mean". The residual `unknown_subcommand` events are
+  far-off guesses with no suggestion, so the fix lists the available
+  subcommands inline. Applies to every parent command, not just `task`.
+- **A4 also closed a classification gap:** `unknown milestone field: <path>`
+  (from `milestone get`) was falling into `other`; it now buckets as
+  `unknown_field`.
+- **A6 also fixed `execute.md`** (same gap at phase completion), not just
+  `quick.md`.
+- A1–A4 ran as `dross-quick` one-offs; A5/A6 were prompt-only.
 
 ### Prompt-hygiene fixes (surfaced by dogfooding, 2026-06-19)
 
@@ -258,10 +275,9 @@ doctor` checks for) — a deliberate, visible choice.
 
 ## Recommended sequence
 
-1. **Onboard dross** — sets up `.dross/`, runtime, rules (prerequisite for
-   dogfooding).
-2. **A** — CLI ergonomics via `dross-quick`. Cheap, immediate relief.
-3. **C1** — spec turn-boundaries. Prompt-only daily-pain fix.
+1. ~~**Onboard dross**~~ ✅ — `.dross/` scaffolded, runtime + rules captured.
+2. ~~**A** — CLI ergonomics~~ ✅ — A1–A6 shipped (0.1.0.1 → 0.1.0.6).
+3. **C1** — spec turn-boundaries. Prompt-only daily-pain fix. ← **next**
 4. **D** — agent gate policy. Unblocks B2 / E / F.
 5. **B** — `ARCHITECTURE.md` (B0 seed/backfill → B1 → B2); then run B0b on dross
    itself.
