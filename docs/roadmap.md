@@ -31,6 +31,23 @@ the exact failure, and they cluster tightly.
 
 Run as `dross-quick` one-offs — they don't need phase ceremony.
 
+### Prompt-hygiene fixes (surfaced by dogfooding, 2026-06-19)
+
+Found while running the first `dross-quick` on dross itself:
+
+- **A5 — `Co-Authored-By` contradiction.** `quick.md`, `execute.md`, and
+  `plan.md` all say *"Do not add Co-Authored-By trailers unless the user asked"*,
+  but the dross repo uses the trailer on every commit (and the harness instructs
+  it). dross's own prompts disagree with how dross is developed. Reconcile —
+  either flip the prompt guidance to "follow `repo.commit_convention` / repo
+  history" or capture a project rule. *(prompt files + possibly a project rule)*
+- **A6 — `quick.md` leaves `.dross/` dirty.** §6 bumps the version and touches
+  state but never says to commit `state.json`, while the builtin hygiene rule
+  forbids leaving `.dross/` dirty across a command boundary. A clean quick run
+  therefore always ends dirty and forces an extra `chore(dross):` commit. Fold
+  the state bump into the work commit (or instruct an explicit follow-up).
+  *(`quick.md`; check `execute.md` / others for the same gap)*
+
 ---
 
 ## Workstream B — Comprehension layer: `ARCHITECTURE.md`
