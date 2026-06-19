@@ -39,6 +39,38 @@ If override:
 
 `dross project get remote.reviewers` shows the configured list. If empty or the user wants different reviewers for this PR, run `dross project set remote.reviewers "alice,bob"` before shipping. (Per-PR overrides aren't supported in v1 — the project default applies.)
 
+## 3.5 Merge landmarks into ARCHITECTURE.md
+
+Before pushing, fold this phase's landmarks into the architecture doc so the PR
+carries an up-to-date `ARCHITECTURE.md` (c-6).
+
+1. `dross changes show <phase-id>` — each task record's `notes` is a landmark in
+   the form `feature: <capability> · <Symbol> @ <file> · <what>` (written by
+   execute §1f).
+2. If `ARCHITECTURE.md` is absent at repo root, the repo predates the doc: run
+   `/dross-architecture` to generate it first, or **skip this step with a note**
+   — a missing doc must not block the ship. Then continue.
+3. For each landmark, merge it into the entry whose **feature** matches, updating
+   that entry **in place**:
+   - Refresh the one-line description and symbol-link bullets to reflect the new
+     work. Keep the fixed entry template (heading + one-line + symbol bullets +
+     provenance) — no prose paragraphs.
+   - Update the provenance breadcrumb: append `· extended <phase-id>` (unless this
+     phase is already credited) plus the representative commit short-sha.
+   - Create a **new** entry only when no existing feature matches. **Never** add a
+     per-phase heading or a "Phase NN" section — the doc is organized by feature,
+     never by phase. A duplicate per-phase heading appearing means the merge
+     regressed.
+4. Show the `git diff` of `ARCHITECTURE.md`. On the user's OK, commit it onto
+   `phase/<id>` (it lives at repo root, so the provider squash-merge carries it
+   into the PR):
+   ```
+   git add ARCHITECTURE.md
+   git commit -m "docs(<phase-slug>): merge phase landmarks into ARCHITECTURE.md"
+   ```
+   Match the repo's existing trailer convention. The tree is clean again
+   afterwards, so §4's clean-tree re-check passes.
+
 ## 4. Ship
 
 Run `dross ship <phase-id>`, optionally with `--draft` and/or `--body-file`.

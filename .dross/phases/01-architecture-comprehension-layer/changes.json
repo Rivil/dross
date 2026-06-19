@@ -1,0 +1,52 @@
+{
+  "phase": "01-architecture-comprehension-layer",
+  "tasks": {
+    "quick-10": {
+      "files": [
+        "internal/mutation/gremlins.go",
+        "internal/mutation/gremlins_test.go"
+      ],
+      "commit": "01c10f0",
+      "completed_at": "2026-06-19T14:51:43.859242Z",
+      "notes": "feature: mutation testing · gremlins.go Run/packagesFromFiles (internal/mutation/gremlins.go) · per-package gremlins invocation, excludes uncoverable packages, no whole-run hard-fail"
+    },
+    "t-1": {
+      "files": [
+        "internal/architecture/architecture.go",
+        "internal/architecture/architecture_test.go",
+        "internal/cmd/init.go",
+        "internal/cmd/init_test.go"
+      ],
+      "commit": "3fdba37",
+      "completed_at": "2026-06-19T14:18:34.089449Z",
+      "notes": "feature: architecture doc format · architecture.Skeleton/EntryTemplate (internal/architecture/architecture.go) + dross init seeding · the fixed ARCHITECTURE.md entry template and greenfield skeleton seeding"
+    },
+    "t-2": {
+      "files": [
+        "assets/prompts/execute.md"
+      ],
+      "commit": "4f31f70",
+      "completed_at": "2026-06-19T14:19:52.732525Z",
+      "notes": "feature: per-task landmark capture · execute.md §1f · execute records a feature·symbol@file·what landmark into changes --notes"
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/architecture.md",
+        "assets/commands/dross-architecture.md",
+        "assets/prompts/onboard.md",
+        "internal/cmd/commands_parity_test.go"
+      ],
+      "commit": "ea8baca",
+      "completed_at": "2026-06-19T14:23:54.37337Z",
+      "notes": "feature: architecture backfill · architecture.md engine + /dross-architecture command + onboard §8.7 · scans code via codex+git, writes feature-organized ARCHITECTURE.md; one engine, two entry points; parity test guards command↔prompt 1:1"
+    },
+    "t-4": {
+      "files": [
+        "assets/prompts/ship.md"
+      ],
+      "commit": "a1d1aba",
+      "completed_at": "2026-06-19T14:29:33.671623Z",
+      "notes": "feature: architecture backfill · ship.md §3.5 · ship folds phase landmarks into ARCHITECTURE.md by feature in-place and commits it into the PR before push"
+    }
+  }
+}

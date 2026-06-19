@@ -105,6 +105,17 @@ If `dross stats path` shows a defaults file without `[telemetry] asked_at` set (
 
 Run `dross stats opt-in` or `dross stats opt-out` based on the answer. Both stamp `asked_at` so this prompt is shown at most once across all projects.
 
+## 8.7 Architecture backfill
+
+Backfill `ARCHITECTURE.md` from the codebase you just scanned, using the shared
+engine — the same one `/dross-architecture` runs (the `backfill_trigger`
+decision). Read `~/.claude/dross/prompts/architecture.md` and run it from its §1
+(repo root is already known). It produces a feature-organized `ARCHITECTURE.md`
+and returns here.
+
+If the repo already has an `ARCHITECTURE.md`, leave it untouched — first-creation
+only; don't clobber hand-written docs.
+
 ## 9. Wrap
 
 Run `dross validate`. Print summary:

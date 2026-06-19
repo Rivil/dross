@@ -187,10 +187,11 @@ func TestGremlinsName(t *testing.T) {
 	}
 }
 
-// TestPackagesFromFiles pins the multi-file → single-arg collapse.
-// gremlins unleash takes exactly one positional path; the adapter
-// must roll touched files up to the deepest shared directory so a
-// single invocation covers every package in scope.
+// TestPackagesFromFiles pins the per-package derivation: one concrete
+// package path per unique directory, deduped and sorted. Gremlins is
+// invoked once per package (NOT over a collapsed `./<ancestor>/...`
+// path) — a broad recursive scope makes gremlins gather empty coverage
+// and report nothing, which used to hard-fail the whole verify.
 func TestPackagesFromFiles(t *testing.T) {
 	cases := []struct {
 		name string
@@ -198,39 +199,39 @@ func TestPackagesFromFiles(t *testing.T) {
 		want []string
 	}{
 		{
-			name: "sibling packages roll up to parent",
+			name: "sibling packages each get their own path",
 			in:   []string{"internal/api/tags.go", "internal/db/users.go"},
-			want: []string{"./internal/..."},
+			want: []string{"./internal/api", "./internal/db"},
 		},
 		{
-			name: "same package collapses to that package",
+			name: "same package dedupes to one path",
 			in:   []string{"internal/api/tags.go", "internal/api/users.go"},
-			want: []string{"./internal/api/..."},
+			want: []string{"./internal/api"},
 		},
 		{
 			name: "single subpackage",
 			in:   []string{"internal/x/y.go"},
-			want: []string{"./internal/x/..."},
+			want: []string{"./internal/x"},
 		},
 		{
-			name: "file at module root degenerates to ./...",
+			name: "file at module root maps to .",
 			in:   []string{"main.go"},
-			want: []string{"./..."},
+			want: []string{"."},
 		},
 		{
-			name: "root + subdir degenerates to ./...",
+			name: "root + subdir keep both, sorted",
 			in:   []string{"main.go", "internal/x/y.go"},
-			want: []string{"./..."},
+			want: []string{".", "./internal/x"},
 		},
 		{
-			name: "cross-top-level falls back to ./...",
+			name: "cross-top-level keep both, sorted",
 			in:   []string{"internal/x/y.go", "cmd/server/main.go"},
-			want: []string{"./..."},
+			want: []string{"./cmd/server", "./internal/x"},
 		},
 		{
-			name: "deep shared ancestor preserved",
+			name: "deep packages preserved separately",
 			in:   []string{"internal/svc/api/x.go", "internal/svc/db/y.go"},
-			want: []string{"./internal/svc/..."},
+			want: []string{"./internal/svc/api", "./internal/svc/db"},
 		},
 		{
 			name: "empty input returns nil",
@@ -245,6 +246,69 @@ func TestPackagesFromFiles(t *testing.T) {
 				t.Errorf("packagesFromFiles(%v) = %v want %v", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestHasCoverage pins the predicate that decides whether a per-package
+// report contributed usable coverage. A report with only NOT COVERED
+// mutants (gremlins' coverage blind spot) must be treated as having no
+// coverage so it's excluded from the merged score.
+func TestHasCoverage(t *testing.T) {
+	cases := []struct {
+		name string
+		r    *Report
+		want bool
+	}{
+		{"has kills", &Report{Killed: 2}, true},
+		{"has a LIVED (covered) survivor", &Report{Survived: 1, NotCovered: 0}, true},
+		{"only a timeout", &Report{Timeout: 1}, true},
+		{"all NOT COVERED → no usable coverage", &Report{Survived: 5, NotCovered: 5}, false},
+		{"empty report", &Report{}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := hasCoverage(tc.r); got != tc.want {
+				t.Errorf("hasCoverage(%+v) = %v want %v", tc.r, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMergeInto pins the accumulation + score recompute used to combine
+// per-package reports into one.
+func TestMergeInto(t *testing.T) {
+	dst := &Report{Tool: "gremlins"}
+	mergeInto(dst, &Report{Killed: 2, Surviving: []Mutant{{File: "a.go", Line: 1}}})
+	mergeInto(dst, &Report{Killed: 1, Survived: 1, NotCovered: 1, Surviving: []Mutant{{File: "b.go", Line: 2}}})
+	if dst.Killed != 3 || dst.Survived != 1 || dst.NotCovered != 1 {
+		t.Fatalf("counts: killed=%d survived=%d notcovered=%d", dst.Killed, dst.Survived, dst.NotCovered)
+	}
+	if len(dst.Surviving) != 2 {
+		t.Errorf("surviving mutants not concatenated: %d", len(dst.Surviving))
+	}
+	// score = killed / (killed + survived + timeout) = 3 / (3 + 1 + 0) = 0.75
+	if math.Abs(dst.Score-0.75) > 1e-9 {
+		t.Errorf("merged score: %v want 0.75", dst.Score)
+	}
+}
+
+// TestGremlinsRunToleratesMissingReport pins the resilience contract: a
+// package whose gremlins run writes no report must NOT hard-fail the
+// whole run. It is excluded and the adapter returns a (possibly empty)
+// Report with nil error, so verify records `unmeasurable` and falls back
+// to coverage-based judgement rather than aborting. Uses `true` as a
+// stand-in for gremlins (exits 0, writes nothing).
+func TestGremlinsRunToleratesMissingReport(t *testing.T) {
+	g := &Gremlins{Prefix: "true", ProjectRoot: t.TempDir()}
+	rep, err := g.Run([]string{"internal/x/y.go"})
+	if err != nil {
+		t.Fatalf("missing report must not be fatal: %v", err)
+	}
+	if rep == nil {
+		t.Fatal("expected a non-nil (empty) report")
+	}
+	if rep.Killed != 0 || rep.Survived != 0 {
+		t.Errorf("expected empty report, got %+v", rep)
 	}
 }
 

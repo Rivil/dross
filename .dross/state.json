@@ -1,7 +1,9 @@
 {
-  "version": "0.1.0.9",
-  "last_activity": "2026-06-19T12:27:54.672933Z",
-  "last_action": "quick: agent-gate builtin rule + plan.md relaxation (D)",
+  "version": "0.1.0.10",
+  "current_phase": "01-architecture-comprehension-layer",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-19T15:27:33.239044Z",
+  "last_action": "re-verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation measured 0.59 package-scoped; architecture pkg 100%)",
   "history": [
     {
       "at": "2026-06-19T06:51:00.002465Z",
@@ -82,6 +84,74 @@
     {
       "at": "2026-06-19T12:27:54.672933Z",
       "action": "quick: agent-gate builtin rule + plan.md relaxation (D)"
+    },
+    {
+      "at": "2026-06-19T12:46:01.705365Z",
+      "action": "created 01-architecture-comprehension-layer"
+    },
+    {
+      "at": "2026-06-19T13:57:31.389663Z",
+      "action": "set current_phase=01-architecture-comprehension-layer"
+    },
+    {
+      "at": "2026-06-19T13:57:31.395131Z",
+      "action": "spec locked: 01-architecture-comprehension-layer"
+    },
+    {
+      "at": "2026-06-19T14:12:26.647088Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-19T14:12:26.653844Z",
+      "action": "plan locked: 01-architecture-comprehension-layer (4 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-06-19T14:13:59.614569Z",
+      "action": "plan reviewed: 01-architecture-comprehension-layer (0 blocking, 3 flags)"
+    },
+    {
+      "at": "2026-06-19T14:18:34.10647Z",
+      "action": "executed t-1 (Architecture format package + init skeleton)"
+    },
+    {
+      "at": "2026-06-19T14:19:52.743781Z",
+      "action": "executed t-2 (Execute captures per-task landmark)"
+    },
+    {
+      "at": "2026-06-19T14:23:54.396412Z",
+      "action": "executed t-3 (Architecture backfill engine + entry points)"
+    },
+    {
+      "at": "2026-06-19T14:29:33.685756Z",
+      "action": "executed t-4 (Ship merges landmarks into ARCHITECTURE.md)"
+    },
+    {
+      "at": "2026-06-19T14:29:56.298085Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-19T14:29:56.304506Z",
+      "action": "phase 01-architecture-comprehension-layer executed (4/4 done)"
+    },
+    {
+      "at": "2026-06-19T14:34:27.625424Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-19T14:34:27.630559Z",
+      "action": "verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation skipped — gremlins adapter)"
+    },
+    {
+      "at": "2026-06-19T14:51:43.841573Z",
+      "action": "bump internal 0.1.0.9 → 0.1.0.10"
+    },
+    {
+      "at": "2026-06-19T14:51:43.866706Z",
+      "action": "quick: gremlins adapter per-package invocation"
+    },
+    {
+      "at": "2026-06-19T15:27:33.239044Z",
+      "action": "re-verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation measured 0.59 package-scoped; architecture pkg 100%)"
     }
   ]
 }

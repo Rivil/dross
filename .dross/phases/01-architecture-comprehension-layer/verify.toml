@@ -1,0 +1,74 @@
+[verify]
+  phase = "01-architecture-comprehension-layer"
+  generated_at = 2026-06-19T15:15:25.280473Z
+  verdict = "partial"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.5874840357598978
+  mutants_killed = 460
+  mutants_survived = 322
+  mutants_not_covered = 167
+  criteria_total = 7
+  criteria_covered = 3
+  criteria_uncovered = 4
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/architecture/architecture_test.go:TestSkeletonDeclaresFeatureOrganization",
+    "internal/cmd/init_test.go:TestInitSeedsArchitectureSkeleton",
+  ]
+  notes = "Skeleton enforces feature-organization; test fails if that contract drops. architecture.go has zero surviving mutants (100% efficacy). Runtime rendering is prompt-behavioral and was dogfooded: /dross-architecture generated a 17-entry feature-organized ARCHITECTURE.md with no per-phase headings."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/architecture/architecture_test.go:TestEntryTemplateHasAllFourParts"]
+  notes = "EntryTemplate must carry all four parts; test fails if any drops. architecture.go mutation-clean. Dogfood: generated entries each carry desc + symbol links + provenance breadcrumb."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/cmd/init_test.go:TestInitSeedsArchitectureSkeleton",
+    "internal/cmd/init_test.go:TestInitDoesNotClobberExistingArchitecture",
+  ]
+  notes = "init seeds ARCHITECTURE.md (existence + header + feature-org), first-creation only. The seeding conditional (init.go:100) is mutation-killed by both tests; the 5 surviving init.go mutants (lines 109/110/121/139/162) are pre-existing GSD-seed and remote-print code untouched by this phase."
+
+[[criterion]]
+  id = "c-4"
+  status = "unknown"
+  tests = []
+  notes = "Prompt-orchestration: onboard.md §8.7 invokes the shared backfill engine. No Go surface. Dogfood-demonstrated indirectly — /dross-architecture (the same engine) ran end-to-end on this repo and produced ARCHITECTURE.md. Direct onboard path verifiable only by re-onboarding."
+
+[[criterion]]
+  id = "c-5"
+  status = "unknown"
+  tests = []
+  notes = "Prompt-orchestration: execute.md §1f formats a feature·symbol@file·what landmark into changes --notes. No Go surface. Demonstrated: this phase's own changes.json carries the landmark on every task (t-1..t-4, quick-10)."
+
+[[criterion]]
+  id = "c-6"
+  status = "unknown"
+  tests = []
+  notes = "Prompt-orchestration: ship.md §3.5 merges landmarks into ARCHITECTURE.md by feature in-place. No Go surface. Verified at ship time — this verify precedes the §3.5 merge."
+
+[[criterion]]
+  id = "c-7"
+  status = "weak"
+  tests = ["internal/cmd/commands_parity_test.go:TestCommandsPromptsParity"]
+  notes = "Parity test guarantees the /dross-architecture command + engine exist. Generation itself has no go-test, but was dogfooded successfully: an already-onboarded repo with no ARCHITECTURE.md generated one on demand (c-7's exact scenario). Strong behavioral evidence; status stays weak only because no automated test asserts the generated output."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation now MEASURES (the per-package gremlins fix, quick-10, replaced the ./internal/... scope-collapse that previously hard-failed verify). Score 0.587 is PACKAGE-SCOPED, not changed-line-scoped: gremlins mutates whole packages, so 322 survivors are overwhelmingly in untouched internal/cmd files (52 stats.go, 42 issue.go, 30 doctor.go, 29 status.go, ...). The < 0.60 fail threshold is NOT applied — this is the FeastAhead scope-artifact class. The phase's actual changed code is clean: architecture.go = 0 survivors (100%), init.go seeding block mutation-killed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The 322 package-wide survivors are pre-existing internal/cmd coverage debt, unrelated to this phase. Candidate for a future dross-quality pass; not a blocker here. Full per-mutant list is in tests.json."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-4/c-5/c-6 are prompt-orchestration criteria with no go-test surface; c-5 is demonstrated by this phase's changes.json landmarks, c-4 by the dogfooded engine, c-6 verified at ship §3.5. c-7 has strong dogfood evidence (ARCHITECTURE.md was generated) but stays weak pending an automated assertion on generated output."
