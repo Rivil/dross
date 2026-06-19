@@ -143,10 +143,33 @@ Covers: <criterion-ids>
 
 **Match the repository's existing trailer convention.** Check recent history (`git log`): include a `Co-Authored-By` trailer only if the repo already uses one, and don't strip it from a repo that does. Don't introduce it into a repo that doesn't. Do not skip hooks (`--no-verify`) unless explicitly asked. If a pre-commit hook fails, treat it the same as a test failure (step 1e red branch) — fix inline, then commit fresh, never amend.
 
+**Capture a landmark.** Before recording, write a one-line *landmark* for the
+task — the durable "what shipped here" that `/dross-ship` later merges into
+`ARCHITECTURE.md` by feature. It has three parts, aligned to that doc's entry
+template (`internal/architecture` `EntryTemplate`):
+
+```
+feature: <user-facing capability> · <Symbol> @ <file> · <one line: what it does>
+```
+
+- **feature** — the capability this task delivered, phrased as something the
+  system *does* (e.g. `phase lifecycle`, `architecture doc format`), never a
+  module name and never the phase id. Reuse an existing feature name if the task
+  extended one, so ship updates that entry in place instead of forking a new one.
+- **symbol@file** — the primary symbol introduced/changed and its file (the
+  symbol-link target). One is enough; ship resolves precise `file:line` later.
+- **what** — a single dense clause. No prose paragraphs.
+
+Pass it through the existing free-form `--notes` (there is no typed `--landmark`
+field — that's deferred). If a task genuinely has no user-facing landmark (pure
+tooling/chore), still record it with a `feature: <area>` landmark so the trail
+stays complete.
+
 After commit:
 ```
 SHA=$(git rev-parse --short HEAD)
-dross changes record <phase> <task-id> --files <task.files (csv)> --commit $SHA
+dross changes record <phase> <task-id> --files <task.files (csv)> --commit $SHA \
+  --notes "feature: <capability> · <Symbol> @ <file> · <one line what>"
 dross task status <phase> <task-id> done
 dross state touch "executed <task-id> (<task.title>)"
 ```
