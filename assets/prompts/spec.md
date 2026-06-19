@@ -2,6 +2,8 @@
 
 Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
 
+**Run this as a conversation, not a broadcast.** Every step below is a short turn the user answers — drive them one at a time with `AskUserQuestion`, never as one long composite message. The classic failure is dumping the orientation, all criteria, all decisions, and the composed TOML into a single block the user has to expand with ctrl+o. One point per turn; keep each message to a few lines.
+
 ## 0. Pre-flight
 
 1. Run `dross rule show` and treat the output as MUST-FOLLOW for this session.
@@ -36,19 +38,19 @@ Print a short orientation block: "Working on phase X. Project core value: Y. Mil
 
 ## 2. Acceptance criteria
 
-Ask the user, via `AskUserQuestion` or freeform: **"What does success look like for this phase? List 3-7 user-observable outcomes — things that would be testable."**
+Ask once (freeform): **"What does success look like for this phase? List 3-7 user-observable, testable outcomes."**
 
-For each answer:
-- Assign id `c-1`, `c-2`, ...
-- Tighten wording into a one-liner the user confirms
+Then walk the answers **one at a time** — not as a wall:
+- Tighten each into a one-liner and assign id `c-1`, `c-2`, …
+- Confirm that one criterion before moving to the next: `AskUserQuestion` (`accept` / `reword` / `drop`) when a quick gate fits, freeform when it needs discussion. **One criterion per turn.**
+- Keep each turn to the criterion in hand — don't echo the whole growing list back every time; a short "c-3 added" is enough.
+- Only after the user's list is exhausted, ask once: **"anything missing?"**
 
-**Quality bar — push back if a criterion fails any of these:**
+**Quality bar — push back (within that criterion's turn) if it fails any of these:**
 - Not testable (you can't write a test that fails when it breaks)
 - Phrased in implementation terms ("uses X library") instead of behaviour ("returns 401 when token missing")
 - Vague ("works well") instead of measurable ("loads in under 200ms on 4G")
 - Two outcomes squashed into one (split it)
-
-After each criterion, show the running list. Ask "anything missing?" When the user says no, move on.
 
 ## 3. Locked decisions — gray-area discussion
 
@@ -138,7 +140,11 @@ text = "..."
 why  = "..."                       # optional
 ```
 
-Use the `Write` tool to save to `.dross/phases/<id>/spec.toml`. Show the final file content to the user. Ask: "Lock this spec? (y / edit)".
+Use the `Write` tool to save to `.dross/phases/<id>/spec.toml`. **Don't paste the TOML back** — it's a build artifact, not a review medium, and dumping it is exactly the ctrl+o wall this command avoids. Every line was already agreed point by point in §2–§4. Confirm with a one-line summary instead:
+
+**"Spec written: N criteria, M locked decisions, K deferred — lock it? (y / edit \<what>)"**
+
+Only surface a specific field if the user asks to see or change it.
 
 ## 6. Validate + wrap
 
@@ -157,6 +163,7 @@ Spec locked. Next: /dross-plan to break it into tasks.
 
 ## Hard rules
 
+- **No walls of text; spec.toml is never a review medium.** Drive the whole command as short `AskUserQuestion`-gated turns — one criterion / one gray-area per turn — never the orientation + every criterion + the composed TOML in a single block. Never paste spec.toml back; confirm it with a one-line summary (§5). Content is agreed in prose first; the TOML is only where it lands.
 - **Never** invent criteria the user didn't explicitly approve. If you propose, say so and ask confirmation before writing.
 - **Gray areas (§3) must be phase-specific and inside the phase boundary.** Generic category labels ("UI", "Behaviour") and new-capability questions ("should we also add search?") are both bugs — the first is lazy, the second is scope creep. Skip areas already settled by `stack.locked` or a prior decision rather than re-asking them.
 - **Never** mark a decision `locked = true` without an explicit `why`. Locked decisions become non-negotiable in the planner.
