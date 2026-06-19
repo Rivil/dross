@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/architecture"
 	"github.com/Rivil/dross/internal/defaults"
 	"github.com/Rivil/dross/internal/profile"
 	"github.com/Rivil/dross/internal/project"
@@ -91,6 +92,18 @@ fill it in conversationally. For adopting an existing repo, use ` + "`dross onbo
 				return fmt.Errorf("write .gitattributes: %w", err)
 			}
 
+			// Seed a feature-organized ARCHITECTURE.md skeleton at repo root
+			// (greenfield, c-3). First-creation only — never clobber an existing
+			// doc; idempotent refresh is deferred.
+			archPath := filepath.Join(cwd, architecture.File)
+			archSeeded := false
+			if _, statErr := os.Stat(archPath); errors.Is(statErr, fs.ErrNotExist) {
+				if err := os.WriteFile(archPath, []byte(architecture.Skeleton()), 0o644); err != nil {
+					return fmt.Errorf("seed %s: %w", architecture.File, err)
+				}
+				archSeeded = true
+			}
+
 			// Seed profile from GSD if available — silent no-op otherwise.
 			seedErr := profile.SeedFromGSD(filepath.Join(root, profile.File))
 			seeded := seedErr == nil
@@ -99,6 +112,9 @@ fill it in conversationally. For adopting an existing repo, use ` + "`dross onbo
 			}
 
 			Printf("dross initialized at %s\n", root)
+			if archSeeded {
+				Printf("• Seeded %s skeleton at repo root\n", architecture.File)
+			}
 			if seeded {
 				Print("• Seeded profile.toml from GSD USER-PROFILE.md")
 			}
