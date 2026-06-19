@@ -1,9 +1,9 @@
 {
   "version": "0.1.0.10",
   "current_phase": "02-harden-ship-merge-complete-flow",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-19T16:08:46.110123Z",
-  "last_action": "spec locked: 02-harden-ship-merge-complete-flow",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-19T16:19:32.179743Z",
+  "last_action": "plan reviewed: 02-harden-ship-merge-complete-flow (0 blocking, 3 flags)",
   "history": [
     {
       "at": "2026-06-19T06:51:00.002465Z",
@@ -168,6 +168,18 @@
     {
       "at": "2026-06-19T16:08:46.110123Z",
       "action": "spec locked: 02-harden-ship-merge-complete-flow"
+    },
+    {
+      "at": "2026-06-19T16:17:51.448811Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-19T16:17:51.456131Z",
+      "action": "plan locked: 02-harden-ship-merge-complete-flow (3 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-06-19T16:19:32.179743Z",
+      "action": "plan reviewed: 02-harden-ship-merge-complete-flow (0 blocking, 3 flags)"
     }
   ]
 }

@@ -1,0 +1,55 @@
+[phase]
+id = "02-harden-ship-merge-complete-flow"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Ship commits its post-push state write"
+files         = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
+description   = """
+After ship saves state.json (shipped action + PR URL), git add that file
+and commit it as `chore(dross): ship <id>` so ship returns on a clean tree.
+Mirrors the existing commit step in phaseComplete.
+"""
+covers        = ["c-1"]
+test_contract = [
+  "if the post-push commit step is dropped, a real-ship test sees a dirty `git status --porcelain` and fails",
+  "if state isn't committed, the test asserting HEAD is a `chore(dross): ship <id>` commit containing the shipped action + PR URL fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 1
+title         = "phase complete deletes remote branch idempotently"
+files         = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+description   = """
+Add a `git push origin --delete phase/<id>` step to phaseComplete that
+succeeds whether or not the remote ref still exists (provider --delete-branch
+may have already removed it). Keep the existing local branch -D + state commit.
+"""
+covers        = ["c-2"]
+test_contract = [
+  "if the remote-delete step is missing, a test that pushes phase/<id> to origin then runs complete still finds the ref on origin and fails",
+  "if the delete isn't made idempotent, a test running complete with the remote phase branch already absent gets a non-nil error and fails",
+]
+depends_on    = []
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 2
+title         = "End-to-end: ship to complete leaves zero manual git"
+files         = ["internal/cmd/phase_test.go"]
+description   = """
+Add a flow test driving ship (push + mock provider PR) then squash-merge
+simulation then phase complete, asserting a fully clean end state in both
+the provider-already-deleted-the-branch and provider-did-not fixtures.
+"""
+covers        = ["c-3"]
+test_contract = [
+  "if either fix regresses, the combined assertion (empty `git status --porcelain`, no local phase/* branch, no phase/<id> ref on origin) fails",
+  "if the provider-already-deleted case isn't handled, the fixture where origin's phase ref is pre-removed makes complete error and the test fails",
+]
+depends_on    = ["t-1", "t-2"]
+status        = "pending"
