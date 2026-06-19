@@ -1,7 +1,7 @@
 ---
 name: dross-quick
-description: "Run a one-shot task with atomic-commit + test-gate guarantees. Pair-mode only. Bumps state.version's internal counter."
-argument-hint: "<freeform task description>"
+description: "Run a one-shot task with atomic-commit + test-gate guarantees. Pair-mode by default; pass --solo to run autonomously. Bumps state.version's internal counter."
+argument-hint: "[--solo] <freeform task description>"
 allowed-tools:
   - Read
   - Write

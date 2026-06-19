@@ -1,6 +1,6 @@
 # /dross-quick
 
-Run a one-shot task with dross's atomic-commit + test-gate guarantees, **without** the spec → plan ceremony. Pair-mode only (no `--solo`); the user IS the checker.
+Run a one-shot task with dross's atomic-commit + test-gate guarantees, **without** the spec → plan ceremony. **Pair-mode by default** — the user is the checker. Pass `--solo` to run autonomously for a trivial, well-specified change (mechanical refactor, config tweak, dependency bump): it skips only the approval gate, never the test gate or the safety rules.
 
 Use when:
 - A small change needs to land but doesn't justify a whole phase (typo fix, small refactor, dependency bump, README touch-up).
@@ -19,12 +19,14 @@ Use when:
 5. Check `git status --porcelain`. If working tree is dirty:
    - Surface the diff to the user.
    - Ask via `AskUserQuestion`: "commit existing work first / stash / abort". Atomic commit semantics require a clean baseline.
-6. Parse `$ARGUMENTS`. If empty, ask for a task description and stop until the user provides one — quick can't operate without intent.
+6. Parse `$ARGUMENTS`:
+   - Strip a leading/trailing `--solo` flag → **solo mode** (autonomous, no approval gate). Default without it is **pair mode**.
+   - The remainder is the freeform task description. If it's empty, ask for one and stop until the user provides it — quick can't operate without intent. (In solo mode an empty description is a hard stop, not a prompt — there's no one to answer.)
 
 Print one orientation block:
 ```
 Quick task: <one-line summary of $ARGUMENTS>
-Mode: pair (always)
+Mode: pair | solo
 Phase context: <phase-id> | standalone
 Test command: <runtime.test_command or "(none — quick will skip the test gate)">
 Version: <state.version> (will bump to <preview>.+1 on success)
@@ -51,13 +53,15 @@ In one block, 3-6 lines covering:
 - Patterns you'll mirror from existing code.
 - Anything you're uncertain about.
 
-Then via `AskUserQuestion`:
+**Pair mode** (default) — then via `AskUserQuestion`:
 - `proceed` — write the code as proposed
 - `steer` — user gives free-form direction; revise the proposal
 - `show me <X>` — user requests more context; treat as steer
 - `abort` — stop without writing anything
 
-Never write code without an explicit `proceed`. Pair mode is non-negotiable for quick — that's the contract.
+Never write code without an explicit `proceed` in pair mode — that's the contract.
+
+**Solo mode** (`--solo`) — skip the approval gate: still print the proposal block (it's the audit trail of intent), then proceed straight to implement. Solo is for changes trivial enough that a human gate adds nothing. It is **not** licence to guess: if §1 turns up real ambiguity, a locked-decision conflict, or scope beyond what was described, stop and surface it rather than pressing on.
 
 ## 3. Implement
 
@@ -81,13 +85,13 @@ Three outcomes:
 
 **Green** → continue to commit.
 
-**Red** → surface the failure tail (last 30-40 lines). Ask via `AskUserQuestion`:
+**Red, pair mode** → surface the failure tail (last 30-40 lines). Ask via `AskUserQuestion`:
 - `fix here` — address inline, re-run
 - `abort` — discard the working changes (`git checkout -- <files>` for tracked, `rm` for newly-written files), state stays untouched
 
-**No test command configured** → warn once, ask via `AskUserQuestion` to confirm proceeding without a gate:
-- `proceed without tests` — commit anyway, note in the body
-- `abort` — discard
+**Red, solo mode** → try **one** bounded fix (a single Edit pass), then re-run. If still red, abort: discard the working changes (`git checkout -- <files>`, `rm` newly-written files), leave state untouched, and report the failure. No version bump on a failed solo quick. Never loop on red.
+
+**No test command configured** → warn once. In pair mode, ask via `AskUserQuestion` (`proceed without tests` / `abort`). In solo mode, proceed without a gate and note `no test gate` in the commit body.
 
 ## 5. Commit
 
@@ -114,6 +118,8 @@ quick: <one-line summary of the task>
 Quick: <internal-version-after-bump>
 [Phase: <phase-id>]
 ```
+
+In **solo mode**, add a `solo: yes` line to the body (below `Quick:`) so autonomous runs are auditable in history.
 
 **Match the repository's existing trailer convention.** Check recent history (`git log -1 --format=%B`): if commits carry a `Co-Authored-By` trailer, include one; if they don't, omit it. Don't introduce the trailer into a repo that doesn't already use it, and don't strip it from one that does. Do not skip hooks (`--no-verify`). If a pre-commit hook fails, treat it as a red test (step 4) — fix inline, commit fresh, never amend.
 
@@ -172,10 +178,10 @@ dross issue quick $NEW_VERSION --close
 
 ## Hard rules
 
-- **Pair mode only.** No `--solo` flag. Quick tasks must have a human in the loop — that's how they stay "quick" without becoming sloppy.
+- **Pair mode by default; `--solo` is opt-in.** Pair keeps a human in the loop (the checker). `--solo` runs autonomously for trivial, well-specified changes — it skips *only* the approval gate, never the test gate, the atomic-commit rule, or the locked-decision / project-rule checks. If solo hits real ambiguity or a constraint conflict, stop and surface it instead of guessing.
 - **One commit per quick** for the actual work, plus a single follow-up `chore(dross):` commit for the version bump + state/changes bookkeeping (§6) — the counter only bumps after the work commit succeeds, so the two can't merge. If the *work* itself naturally splits into two commits, it's not a quick — route to a phase or run /dross-quick twice.
 - **Touch only what you proposed.** Mid-implementation scope expansion requires re-confirmation.
 - **No `git add -A`.** Always specify files explicitly.
 - **No `--no-verify`** unless the user asks. Pre-commit hook failures get fixed and re-committed, not amended away.
-- **No retries on red tests.** One fix attempt, then abort or accept the failure with explicit user OK.
+- **No retries on red tests.** One fix attempt, then: pair mode asks (fix again / abort); solo mode aborts and discards (no bump). Never loop on red.
 - **Internal counter bumps on success only.** If the user aborts mid-flow, the version stays where it was — quick tasks earn their version bump.
