@@ -186,6 +186,22 @@ func Ship() *cobra.Command {
 				return fmt.Errorf("save state: %w", err)
 			}
 
+			// Commit ship's own post-push .dross/ write so ship returns on
+			// a clean working tree (the fix_locus decision: ship owns its
+			// state write; phase complete and the provider's --delete-branch
+			// can then both rely on a clean tree). Mirrors phaseComplete's
+			// commit step. This lands on phase/<id> *after* the push, so it
+			// is local-only — discarded when phase complete deletes the
+			// branch. That's intended: c-1 requires a clean tree on return,
+			// not that the audit record reach main.
+			if out, err := gitCombined(repoDir, "add", filepath.Join(".dross", state.File)); err != nil {
+				return fmt.Errorf("git add state.json: %w\n%s", err, out)
+			}
+			shipMsg := fmt.Sprintf("chore(dross): ship %s", phaseID)
+			if out, err := gitCombined(repoDir, "commit", "-m", shipMsg); err != nil {
+				return fmt.Errorf("git commit: %w\n%s", err, out)
+			}
+
 			// 8) Telemetry — capture shape of this ship without leaking
 			//    repo URL, body content, or reviewer names.
 			tags := map[string]string{
