@@ -2,30 +2,10 @@
   "version": "0.1.0.10",
   "current_milestone": "v0.1",
   "current_phase": "03-fix-completion-chore-divergence",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-19T18:54:19.84851Z",
-  "last_action": "plan amended: 03 t-2 guard hardened (branch-ref-independent, closes review flag 1)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-19T19:12:59.553346Z",
+  "last_action": "phase 03-fix-completion-chore-divergence executed (3/3 done)",
   "history": [
-    {
-      "at": "2026-06-19T10:23:21.079103Z",
-      "action": "quick: dirty-tree errors list offending paths (A3)"
-    },
-    {
-      "at": "2026-06-19T10:27:54.858553Z",
-      "action": "bump internal 0.1.0.5 → 0.1.0.6"
-    },
-    {
-      "at": "2026-06-19T10:27:54.86661Z",
-      "action": "quick: reconcile prompt trailer + .dross hygiene (A5+A6)"
-    },
-    {
-      "at": "2026-06-19T12:16:06.673998Z",
-      "action": "bump internal 0.1.0.6 → 0.1.0.7"
-    },
-    {
-      "at": "2026-06-19T12:16:06.682197Z",
-      "action": "quick: add dross-quick --solo mode + gitignore dross.pdf"
-    },
     {
       "at": "2026-06-19T12:23:23.551182Z",
       "action": "bump internal 0.1.0.7 → 0.1.0.8"
@@ -205,6 +185,26 @@
     {
       "at": "2026-06-19T18:54:19.84851Z",
       "action": "plan amended: 03 t-2 guard hardened (branch-ref-independent, closes review flag 1)"
+    },
+    {
+      "at": "2026-06-19T19:02:33.401947Z",
+      "action": "executed t-1 (Ship folds completed-state into the squash)"
+    },
+    {
+      "at": "2026-06-19T19:08:28.991257Z",
+      "action": "executed t-2 (phase complete no-commit cleanup + unmerged guard)"
+    },
+    {
+      "at": "2026-06-19T19:12:53.192368Z",
+      "action": "executed t-3 (Consecutive-phase zero-divergence integration test)"
+    },
+    {
+      "at": "2026-06-19T19:12:59.545859Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-19T19:12:59.553346Z",
+      "action": "phase 03-fix-completion-chore-divergence executed (3/3 done)"
     }
   ]
 }

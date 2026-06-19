@@ -1,68 +1,33 @@
 [phase]
-id = "03-fix-completion-chore-divergence"
+  id = "03-fix-completion-chore-divergence"
 
 [[task]]
-id    = "t-1"
-wave  = 1
-title = "Ship folds completed-state into the squash"
-files = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
-description = """
-Write the completed-state (clear current_phase + status, append a
-`completed <id>` history entry) and commit it BEFORE the push, so the
-PR's squash-merge carries the record to origin/main. Make the write
-idempotent so re-shipping after review edits re-writes the same state
-safely. The PR URL is known only post-push, so it drops out of the
-committed message and is printed instead.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "if the completed-state commit lands after the push (not in the pushed ref), a ship_test asserting the pushed branch tip has current_phase cleared fails",
-  "if re-running ship on an already-shipped branch errors instead of no-op'ing, the idempotency test fails",
-]
-status = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Ship folds completed-state into the squash"
+  files = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
+  description = "Write the completed-state (clear current_phase + status, append a\n`completed <id>` history entry) and commit it BEFORE the push, so the\nPR's squash-merge carries the record to origin/main. Make the write\nidempotent so re-shipping after review edits re-writes the same state\nsafely. The PR URL is known only post-push, so it drops out of the\ncommitted message and is printed instead.\n"
+  covers = ["c-4"]
+  test_contract = ["if the completed-state commit lands after the push (not in the pushed ref), a ship_test asserting the pushed branch tip has current_phase cleared fails", "if re-running ship on an already-shipped branch errors instead of no-op'ing, the idempotency test fails"]
+  status = "done"
 
 [[task]]
-id    = "t-2"
-wave  = 1
-title = "phase complete: no-commit cleanup + unmerged guard"
-files = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
-description = """
-Remove the post-merge `chore(dross): complete <id>` commit (phase.go
-~266-280); `phase complete` becomes ff + branch-delete only, writing no
-commit to main. Harden the upstream-not-advanced guard so it refuses
-BEFORE any branch deletion or state mutation AND does not depend on the
-local phase branch ref existing — today the merge-base check (phase.go
-~223) is nested inside `rev-parse --verify refs/heads/<phaseBranch>`, so
-an abandoned phase whose local branch is already gone skips the guard and
-the ff-only silently no-ops. Replace it with a branch-ref-independent
-check: verify origin/main carries this phase's completion record (the
-`completed <id>` entry that t-1's ship folds into the squash) and refuse
-otherwise. Update existing complete tests that asserted the now-removed
-commit.
-"""
-covers        = ["c-1", "c-2", "c-5"]
-test_contract = [
-  "if complete creates any commit on main, TestPhaseCompleteHappyPath (asserting main == origin/main with no new commit) fails",
-  "if complete deletes a branch or mutates state when origin has not advanced past the phase fork, TestPhaseCompleteRefusesUnmergedUpstream fails",
-  "if complete proceeds when the local phase branch ref is absent AND origin/main lacks the phase's completion record, a new test (e.g. TestPhaseCompleteRefusesUnmergedNoLocalBranch) fails",
-]
-status = "pending"
+  id = "t-2"
+  wave = 1
+  title = "phase complete: no-commit cleanup + unmerged guard"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+  description = "Remove the post-merge `chore(dross): complete <id>` commit (phase.go\n~266-280); `phase complete` becomes ff + branch-delete only, writing no\ncommit to main. Harden the upstream-not-advanced guard so it refuses\nBEFORE any branch deletion or state mutation AND does not depend on the\nlocal phase branch ref existing — today the merge-base check (phase.go\n~223) is nested inside `rev-parse --verify refs/heads/<phaseBranch>`, so\nan abandoned phase whose local branch is already gone skips the guard and\nthe ff-only silently no-ops. Replace it with a branch-ref-independent\ncheck: verify origin/main carries this phase's completion record (the\n`completed <id>` entry that t-1's ship folds into the squash) and refuse\notherwise. Update existing complete tests that asserted the now-removed\ncommit.\n"
+  covers = ["c-1", "c-2", "c-5"]
+  test_contract = ["if complete creates any commit on main, TestPhaseCompleteHappyPath (asserting main == origin/main with no new commit) fails", "if complete deletes a branch or mutates state when origin has not advanced past the phase fork, TestPhaseCompleteRefusesUnmergedUpstream fails", "if complete proceeds when the local phase branch ref is absent AND origin/main lacks the phase's completion record, a new test (e.g. TestPhaseCompleteRefusesUnmergedNoLocalBranch) fails"]
+  status = "done"
 
 [[task]]
-id         = "t-3"
-wave       = 2
-depends_on = ["t-1", "t-2"]
-title      = "Consecutive-phase zero-divergence integration test"
-files      = ["internal/cmd/phase_test.go"]
-description = """
-Drive ship → simulated squash-merge → complete for phase N, then start
-phase N+1 and repeat. Assert local main == origin/main at every step and
-that the `completed <id>` audit entry is present on main after the loop.
-Proves the fix eliminates divergence rather than deferring it one cycle.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "if completion re-seeds divergence (local main carries a standalone commit origin lacks), the second-phase fast-forward in the consecutive test fails with a diverging-branches error",
-  "if the completed audit entry is missing from main after the loop, the test's audit-presence assertion fails",
-]
-status = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Consecutive-phase zero-divergence integration test"
+  files = ["internal/cmd/phase_test.go"]
+  description = "Drive ship → simulated squash-merge → complete for phase N, then start\nphase N+1 and repeat. Assert local main == origin/main at every step and\nthat the `completed <id>` audit entry is present on main after the loop.\nProves the fix eliminates divergence rather than deferring it one cycle.\n"
+  covers = ["c-3"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if completion re-seeds divergence (local main carries a standalone commit origin lacks), the second-phase fast-forward in the consecutive test fails with a diverging-branches error", "if the completed audit entry is missing from main after the loop, the test's audit-presence assertion fails"]
+  status = "done"
