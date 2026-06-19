@@ -1,0 +1,63 @@
+[phase]
+id    = "01-architecture-comprehension-layer"
+title = "Architecture comprehension layer"
+
+[[criteria]]
+id   = "c-1"
+text = "A single ARCHITECTURE.md at repo root, organized by feature/functionality — one entry per capability, never per phase."
+
+[[criteria]]
+id   = "c-2"
+text = "Each entry carries a one-line description, symbol-level location links, and an inline provenance breadcrumb."
+
+[[criteria]]
+id   = "c-3"
+text = "dross-init seeds an ARCHITECTURE.md skeleton in a greenfield repo."
+
+[[criteria]]
+id   = "c-4"
+text = "dross-onboard backfills ARCHITECTURE.md from a scan of the existing codebase and git history."
+
+[[criteria]]
+id   = "c-5"
+text = "dross-execute captures a per-task landmark (feature + symbol + one-line what) into the changes record."
+
+[[criteria]]
+id   = "c-6"
+text = "dross-ship merges the phase's landmarks into ARCHITECTURE.md by feature (updating entries in place) and commits it into the PR."
+
+[[criteria]]
+id   = "c-7"
+text = "An already-onboarded repo with no ARCHITECTURE.md can generate it on demand, without re-running onboard."
+
+[[decisions]]
+key    = "backfill_trigger"
+choice = "A standalone /dross-architecture slash command runs the backfill; dross-onboard (c-4) reuses the same engine. One backfill flow, multiple entry points."
+why    = "Backfill is LLM read-only fan-out (read code, write prose) — it must live in a prompt, not pure Go; a standalone command also serves the already-onboarded case (c-7)."
+locked = true
+
+[[decisions]]
+key    = "feature_granularity"
+choice = "An entry is a user-facing capability (e.g. 'tag management', 'phase lifecycle'), not a module or a phase. Symbol-level links inside each entry provide the 'where'."
+why    = "Matches the feature-organization intent — the doc reads as what the system does, not as a mirror of the file tree."
+locked = true
+
+[[decisions]]
+key    = "provenance_format"
+choice = "Provenance renders as one compact inline breadcrumb per entry: which phases introduced/extended it plus commit links (e.g. 'introduced 01 · extended 07 · abc1234')."
+why    = "Keeps the phase story and commit trail while staying dense; no separate metadata block."
+locked = true
+
+[[decisions]]
+key    = "entry_template"
+choice = "Every entry follows one fixed micro-template: heading + a single one-line description + symbol-link bullets + the provenance line. No free-prose paragraphs."
+why    = "Structure enforces the dense, no-waffle requirement — there is nowhere for the merge agent to ramble."
+locked = true
+
+[[deferred]]
+text = "Typed repeatable --landmark field on the task changes record."
+why  = "Reuse the existing free-form --notes for now; add structure only if notes proves too lossy."
+
+[[deferred]]
+text = "Idempotent refresh/merge of an already-existing ARCHITECTURE.md via the backfill trigger."
+why  = "c-7 is scoped to first-creation; regenerating over an existing doc without clobbering comes later."
