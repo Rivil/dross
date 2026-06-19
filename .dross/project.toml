@@ -1,0 +1,63 @@
+[project]
+  name = "dross"
+  version = "0.1.0.0"
+  description = "A leaner successor to GSD for working with Claude Code on real projects."
+  created = "2026-06-19"
+
+[stack]
+  languages = ["go"]
+
+[[stack.locked]]
+  choice = "Go, distributed as a single static binary CLI"
+  why = "No runtime dependencies for users; one install artifact."
+  locked_at = "2026-06-19"
+
+[[stack.locked]]
+  choice = "Cobra for command structure"
+  why = "Standard Go CLI framework; subcommand tree matches dross's verb model."
+  locked_at = "2026-06-19"
+
+[[stack.locked]]
+  choice = "TOML for all .dross config and state schemas"
+  why = "Hand-editable, comment-friendly, round-trips cleanly."
+  locked_at = "2026-06-19"
+
+[[stack.locked]]
+  choice = "Slash commands shipped as Claude Code skills from assets/"
+  why = "CLI provides state; markdown prompts symlinked into ~/.claude provide orchestration."
+  locked_at = "2026-06-19"
+
+[runtime]
+  mode = "native"
+  test_command = "go test -count=1 ./..."
+  typecheck_command = "go vet ./..."
+  format_command = "gofmt -l ."
+  build_command = "make build"
+
+[repo]
+  layout = "single"
+  git_main_branch = "main"
+  branch_pattern = "phase/<id>"
+  commit_convention = "conventional"
+  squash_merge = true
+
+[remote]
+  url = "https://github.com/Rivil/dross"
+  provider = "github"
+  public = true
+  api_base = "https://api.github.com"
+  log_api = true
+  auth_env = "GITHUB_TOKEN"
+
+[paths]
+
+[env]
+
+[goals]
+  core_value = "A low-overhead, pair-mode spec→plan→execute→verify→ship loop for AI-assisted development on real repos."
+  audience = "Solo developer (the author) using Claude Code on real repos; public but unmarketed."
+  non_goals = [
+    "Not a general-purpose or marketed tool",
+    "No feature PRs that don't match the author's workflow",
+    "No formal semver / milestones / contribution structure until there are real users",
+  ]

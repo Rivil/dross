@@ -1,0 +1,5 @@
+[[rule]]
+  id = "r-01"
+  text = "Prompt/command edits under assets/ are not live until 'make install' re-links them into ~/.claude; the installed dross binary can also be stale vs source (see 'make doctor'). After editing a prompt or Go code, run 'make install' before relying on the change."
+  severity = "hard"
+  created = "2026-06-19"

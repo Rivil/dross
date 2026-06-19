@@ -1,0 +1,15 @@
+{
+  "version": "0.1.0.0",
+  "last_activity": "2026-06-19T07:17:25.225963Z",
+  "last_action": "onboard complete",
+  "history": [
+    {
+      "at": "2026-06-19T06:51:00.002465Z",
+      "action": "dross onboard"
+    },
+    {
+      "at": "2026-06-19T07:17:25.225963Z",
+      "action": "onboard complete"
+    }
+  ]
+}
