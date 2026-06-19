@@ -196,7 +196,7 @@ usually mean the upstream merge hasn't actually happened yet.`,
 				return fmt.Errorf("git status: %w", err)
 			}
 			if status != "" {
-				return errors.New("working tree is dirty; commit or stash before completing")
+				return dirtyTreeError("completing", status)
 			}
 
 			// Switch to main if we aren't already there.
@@ -300,13 +300,27 @@ func preflightPhaseBranch(repoDir, branchName string) error {
 		return fmt.Errorf("git status: %w", err)
 	}
 	if status != "" {
-		return errors.New("working tree is dirty; commit or stash before starting a phase")
+		return dirtyTreeError("starting a phase", status)
 	}
 
 	if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branchName); err == nil {
 		return fmt.Errorf("branch %s already exists locally; delete it first or pass --no-branch", branchName)
 	}
 	return nil
+}
+
+// dirtyTreeError builds an actionable dirty-tree error. It keeps the
+// "working tree is dirty" prefix (so telemetry still buckets it as
+// dirty_tree) and appends the offending paths from `git status
+// --porcelain`, so the caller sees exactly what to commit or stash
+// instead of re-running git status to find out.
+func dirtyTreeError(action, status string) error {
+	lines := strings.Split(strings.TrimRight(status, "\n"), "\n")
+	for i, l := range lines {
+		lines[i] = "  " + l
+	}
+	return fmt.Errorf("working tree is dirty; commit or stash before %s:\n%s",
+		action, strings.Join(lines, "\n"))
 }
 
 // gitNoOut runs git silently, discarding output. Used when only the

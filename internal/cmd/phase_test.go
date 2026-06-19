@@ -52,6 +52,11 @@ func TestPhaseCreateRefusesDirtyTree(t *testing.T) {
 	if !strings.Contains(err.Error(), "dirty") {
 		t.Errorf("error should mention dirty tree: %v", err)
 	}
+	// The error must name the offending path so the user doesn't have to
+	// re-run git status to find what to commit or stash.
+	if !strings.Contains(err.Error(), "uncommitted.txt") {
+		t.Errorf("dirty-tree error should list the offending file: %v", err)
+	}
 }
 
 func TestPhaseCreateRefusesWrongBranch(t *testing.T) {
@@ -211,6 +216,10 @@ func TestPhaseCompleteRefusesDirtyTree(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "dirty") {
 		t.Errorf("error should mention dirty tree: %v", err)
+	}
+	// The error must name the offending path.
+	if !strings.Contains(err.Error(), "dirty.ts") {
+		t.Errorf("dirty-tree error should list the offending file: %v", err)
 	}
 }
 
