@@ -1,7 +1,9 @@
 {
   "version": "0.1.0.10",
-  "last_activity": "2026-06-19T15:56:32.299069Z",
-  "last_action": "completed 01-architecture-comprehension-layer",
+  "current_phase": "02-harden-ship-merge-complete-flow",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-19T16:08:46.110123Z",
+  "last_action": "spec locked: 02-harden-ship-merge-complete-flow",
   "history": [
     {
       "at": "2026-06-19T06:51:00.002465Z",
@@ -154,6 +156,18 @@
     {
       "at": "2026-06-19T15:56:32.299069Z",
       "action": "completed 01-architecture-comprehension-layer"
+    },
+    {
+      "at": "2026-06-19T16:01:00.695429Z",
+      "action": "created 02-harden-ship-merge-complete-flow"
+    },
+    {
+      "at": "2026-06-19T16:08:46.102403Z",
+      "action": "set current_phase=02-harden-ship-merge-complete-flow"
+    },
+    {
+      "at": "2026-06-19T16:08:46.110123Z",
+      "action": "spec locked: 02-harden-ship-merge-complete-flow"
     }
   ]
 }

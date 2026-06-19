@@ -1,0 +1,25 @@
+[phase]
+id    = "02-harden-ship-merge-complete-flow"
+title = "Harden ship merge complete flow"
+
+[[criteria]]
+id   = "c-1"
+text = "dross ship ends with a clean working tree — its post-push state.json write (shipped action + PR URL) is committed as part of ship, never left uncommitted."
+
+[[criteria]]
+id   = "c-2"
+text = "dross phase complete deletes the remote phase branch as well as the local one, and is idempotent — it succeeds (no error) when the remote branch is already gone."
+
+[[criteria]]
+id   = "c-3"
+text = "The ship → squash-merge → dross phase complete path finishes with zero manual git: clean main, both local and remote phase branches deleted, clean tree — whether the provider's --delete-branch already ran or aborted."
+
+[[decisions]]
+key    = "fix_locus"
+choice = "Fix the dirty-tree problem in dross ship: it commits its own post-push .dross/ write (shipped action + PR URL) before returning. dross phase complete continues to assume a clean tree."
+why    = "Keeps the clean-tree invariant strict everywhere — phase complete and the provider's --delete-branch can rely on it. Relaxing the invariant in phase complete instead would hide the dirty-tree smell rather than fix its source."
+locked = true
+
+[[deferred]]
+text = "A full ship/merge recovery recipe in ship.md §6.2 covering arbitrary mid-merge failure states (beyond these three specific fixes)."
+why  = "These fixes make the happy path clean; a general recovery cookbook (the dross_ship_squash_recovery memory item) is a larger doc effort for later."
