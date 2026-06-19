@@ -262,3 +262,42 @@ func TestPhaseCompleteRefusesUnmergedUpstream(t *testing.T) {
 		t.Errorf("phase/01-auth should still exist after refused complete, got: %q", branches)
 	}
 }
+
+// TestPhaseCompleteDeletesRemoteBranch covers the provider-did-NOT-delete
+// case: the phase branch is still live on origin when complete runs, and
+// complete must remove it so nothing is left behind.
+func TestPhaseCompleteDeletesRemoteBranch(t *testing.T) {
+	dir, _ := completeFixture(t)
+
+	// Publish the phase branch to origin (provider --delete-branch aborted
+	// or never ran).
+	mustGit(t, dir, "push", "-q", "origin", "phase/01-auth")
+	if out := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/01-auth"); out == "" {
+		t.Fatal("precondition: origin should have phase/01-auth after push")
+	}
+
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+
+	// If the remote-delete step is missing, the ref is still on origin here.
+	if out := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/01-auth"); out != "" {
+		t.Errorf("origin should no longer have phase/01-auth after complete, got: %q", out)
+	}
+}
+
+// TestPhaseCompleteRemoteDeleteIdempotent covers the provider-ALREADY-deleted
+// case: origin has no phase branch (completeFixture never pushes it), so the
+// remote delete must be a no-op, not an error.
+func TestPhaseCompleteRemoteDeleteIdempotent(t *testing.T) {
+	dir, _ := completeFixture(t)
+
+	if out := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/01-auth"); out != "" {
+		t.Fatalf("precondition: origin should have no phase branch, got: %q", out)
+	}
+
+	// Must not error trying to delete a remote ref that isn't there.
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete should be idempotent when remote branch absent: %v", err)
+	}
+}
