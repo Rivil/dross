@@ -254,3 +254,48 @@ func TestDetail(t *testing.T) {
 		t.Errorf("capped Detail should end with ellipsis: %q", long)
 	}
 }
+
+func TestCarriesDetail(t *testing.T) {
+	carries := []string{"other", "unknown_subcommand", "unknown_field"}
+	for _, c := range carries {
+		if !CarriesDetail(c) {
+			t.Errorf("CarriesDetail(%q) = false, want true", c)
+		}
+	}
+	// Every other classified bucket must NOT carry text — that's the
+	// privacy posture. Spot-check a representative set.
+	for _, c := range []string{"", "dirty_tree", "merge_pending", "verify_state", "mutation", "no_root", "provider", "git"} {
+		if CarriesDetail(c) {
+			t.Errorf("CarriesDetail(%q) = true, want false", c)
+		}
+	}
+}
+
+func TestUnknownSubcommandCarriesRejectedToken(t *testing.T) {
+	// The whole point of A4: the rejected token survives into err_detail so
+	// the unknown_subcommand bucket reveals WHAT was typed, not just that
+	// something was.
+	err := errors.New(`unknown subcommand "list" for "dross task"`)
+	if got := ClassifyError(err); got != "unknown_subcommand" {
+		t.Fatalf("ClassifyError = %q, want unknown_subcommand", got)
+	}
+	if !CarriesDetail("unknown_subcommand") {
+		t.Fatal("unknown_subcommand should carry detail")
+	}
+	if d := Detail(err); !strings.Contains(d, "list") {
+		t.Errorf("detail should preserve the rejected token: %q", d)
+	}
+}
+
+func TestUnknownFieldCarriesRejectedToken(t *testing.T) {
+	err := errors.New("unknown milestone field: milestone.staus")
+	if got := ClassifyError(err); got != "unknown_field" {
+		t.Fatalf("ClassifyError = %q, want unknown_field", got)
+	}
+	if !CarriesDetail("unknown_field") {
+		t.Fatal("unknown_field should carry detail")
+	}
+	if d := Detail(err); !strings.Contains(d, "milestone.staus") {
+		t.Errorf("detail should preserve the rejected field path: %q", d)
+	}
+}

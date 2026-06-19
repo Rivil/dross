@@ -7,12 +7,15 @@
 //   - Local-only. No network. No daemon. No third party.
 //   - Logs shapes and counts, never user-typed strings (no criterion
 //     text, no commit messages, no file paths beyond a stable hash).
-//   - One narrow exception: errors that fall into the catch-all "other"
-//     bucket also carry a redacted, length-capped copy of the message in
-//     err_detail. Without it the unclassified tail is undiagnosable —
-//     countable but opaque. The home directory is collapsed to "~" so
-//     absolute paths don't leak, and the log stays local-only. Classified
-//     errors never store their text; only "other" does.
+//   - A narrow exception: a small allowlist of buckets also carry a
+//     redacted, length-capped copy of the message in err_detail. "other" is
+//     the unclassified tail (countable but otherwise opaque); unknown_subcommand
+//     and unknown_field carry only the rejected CLI identifier (a bad
+//     subcommand or field path the user typed) — not content like criterion
+//     text or commit messages — which is the diagnostic needed to see WHAT
+//     was typed wrong. The home directory is collapsed to "~" so absolute
+//     paths don't leak, and the log stays local-only. Every other classified
+//     error stores no text. See CarriesDetail.
 //   - Default ON, opt-out via DROSS_NO_TELEMETRY=1 or
 //     `dross stats opt-out`. Users are asked at init/onboard time so
 //     consent is explicit.
@@ -282,6 +285,7 @@ func ClassifyError(err error) string {
 	case strings.Contains(msg, "unknown subcommand"):
 		return "unknown_subcommand"
 	case strings.Contains(msg, "unknown field"),
+		strings.Contains(msg, "unknown milestone field"),
 		strings.Contains(msg, "unknown or unsettable"),
 		strings.Contains(msg, "unknown scope"),
 		strings.Contains(msg, "unsupported segment"),
@@ -336,20 +340,38 @@ func ClassifyError(err error) string {
 	}
 }
 
+// detailBuckets are the error classes that additionally store a redacted
+// err_detail. "other" is the unclassified tail — undiagnosable without it.
+// unknown_subcommand and unknown_field carry only a CLI identifier (the
+// rejected subcommand or field path), not user content, which is exactly
+// what graduates them from "agent typed something wrong" into "agent typed
+// THIS wrong". Keep this list tight: only add a bucket whose message is
+// known to be a bounded identifier, never free-form user text.
+var detailBuckets = map[string]bool{
+	"other":              true,
+	"unknown_subcommand": true,
+	"unknown_field":      true,
+}
+
+// CarriesDetail reports whether an error class should store a redacted
+// err_detail alongside the bucket. The caller pairs this with Detail.
+func CarriesDetail(class string) bool {
+	return detailBuckets[class]
+}
+
 // maxDetailLen caps the err_detail string. Error messages are short; the
 // cap guards against a pathological wrapped error blowing up the log.
 const maxDetailLen = 240
 
 // Detail returns a redacted, length-capped form of an error message,
-// intended ONLY for the "other" bucket — the unclassified tail that
-// ClassifyError couldn't place. Known buckets already describe the
-// failure, so callers must not attach a detail to them; that keeps the
-// "classified errors never store their text" half of the privacy posture.
+// intended for the buckets CarriesDetail allows — the "other" tail plus
+// unknown_subcommand / unknown_field, whose messages are bounded CLI
+// identifiers. Callers must gate on CarriesDetail; attaching a detail to
+// any other classified bucket would leak text for no diagnostic gain.
 //
 // Redaction: the user's home directory is collapsed to "~" so absolute
 // paths don't leak. This is a deliberate, narrow exception to the
-// "never the message" rule — the "other" tail can't be analysed without
-// it, and the log is local-only, single-developer.
+// "never the message" rule — the log is local-only, single-developer.
 func Detail(err error) string {
 	if err == nil {
 		return ""

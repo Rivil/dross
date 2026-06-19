@@ -40,10 +40,11 @@ func RecordCLIEvent(c *cobra.Command, dur time.Duration, runErr error) {
 	if runErr != nil {
 		exit = 1
 		errClass = telemetry.ClassifyError(runErr)
-		// Only the catch-all bucket carries a message — known buckets
-		// already describe themselves, so attaching their text would leak
-		// for no diagnostic gain.
-		if errClass == "other" {
+		// Most known buckets describe themselves, so attaching their text
+		// would leak for no gain. The CarriesDetail allowlist is the
+		// exception: "other" (the opaque tail) plus unknown_subcommand /
+		// unknown_field, where the message is the rejected CLI identifier.
+		if telemetry.CarriesDetail(errClass) {
 			errDetail = telemetry.Detail(runErr)
 		}
 	}
