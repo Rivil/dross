@@ -149,6 +149,12 @@ Already half-built: `changes.json` stores a per-task `Notes` field
 
 ## Workstream D — Parallel-agent policy (foundational)
 
+**Status: ✅ shipped** `8c86d22` (0.1.0.9). The gate line is now the
+`dross-agent-gate` builtin hard rule (surfaces in every command's
+`dross rule show`), and `plan.md`'s blanket "no subagents in default mode"
+ban was replaced with the nuanced version citing it. B/E/F can cite the builtin
+rather than each restating it.
+
 Mostly principle + rule edits; unblocks B2, E, and F.
 
 The gate line:
@@ -275,8 +281,8 @@ doctor` checks for) — a deliberate, visible choice.
 1. ~~**Onboard dross**~~ ✅ — `.dross/` scaffolded, runtime + rules captured.
 2. ~~**A** — CLI ergonomics~~ ✅ — A1–A6 shipped (0.1.0.1 → 0.1.0.6).
 3. ~~**C1** — spec turn-boundaries~~ ✅ — `4b09ee0` (0.1.0.8).
-4. **D** — agent gate policy. Unblocks B2 / E / F. ← **next**
-5. **B** — `ARCHITECTURE.md` (B0 seed/backfill → B1 → B2); then run B0b on dross
+4. ~~**D** — agent gate policy~~ ✅ — `8c86d22` (0.1.0.9).
+5. **B** — `ARCHITECTURE.md` (B0 seed/backfill → B1 → B2); then run B0b on dross ← **next**
    itself.
 6. **F** — `dross-secure`. Heavy; rides on D.
 7. **E** — stack profiles. Last.
