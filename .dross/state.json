@@ -1,16 +1,9 @@
 {
   "version": "0.1.0.10",
-  "last_activity": "2026-06-19T17:45:45.206965Z",
-  "last_action": "completed 02-harden-ship-merge-complete-flow",
+  "current_milestone": "v0.1",
+  "last_activity": "2026-06-19T18:12:49.779788Z",
+  "last_action": "scoped milestone v0.1: 6 criteria, 5 phases",
   "history": [
-    {
-      "at": "2026-06-19T08:14:49.977001Z",
-      "action": "bump internal 0.1.0.0 → 0.1.0.1"
-    },
-    {
-      "at": "2026-06-19T08:14:49.98378Z",
-      "action": "quick: gofmt -w the tree"
-    },
     {
       "at": "2026-06-19T09:15:56.18111Z",
       "action": "bump internal 0.1.0.1 → 0.1.0.2"
@@ -202,6 +195,14 @@
     {
       "at": "2026-06-19T17:45:45.206965Z",
       "action": "completed 02-harden-ship-merge-complete-flow"
+    },
+    {
+      "at": "2026-06-19T18:12:49.772211Z",
+      "action": "set current_milestone=v0.1"
+    },
+    {
+      "at": "2026-06-19T18:12:49.779788Z",
+      "action": "scoped milestone v0.1: 6 criteria, 5 phases"
     }
   ]
 }

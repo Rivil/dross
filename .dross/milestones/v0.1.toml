@@ -1,0 +1,11 @@
+phases = ["03-fix-completion-chore-divergence", "04-status-action-surfaces", "05-dross-secure", "06-dross-quality", "07-stack-profiles"]
+
+[milestone]
+  version = "v0.1"
+  title = "Comprehension, security & quality surfaces"
+  status = "active"
+  started = "2026-06-19"
+
+[scope]
+  success_criteria = ["dross-secure runs real scanners (govulncheck/osv-scanner/semgrep…) plus adversarial review and emits a verified findings report that scaffolds a remediation phase — tool-grounded, no LLM-guessed findings", "dross-quality emits a comparable verified code-quality report that scaffolds a remediation phase", "ARCHITECTURE.md is fully backfilled for the dross codebase (every shipped feature has an entry) and stays current via ship-time merge", "The phase complete → ship → squash-merge → complete loop needs zero manual git (completion-chore divergence fixed)", "dross-status surfaces non-spine action areas (security/quality/tech-debt) when between phases, not just the spec→ship spine", "dross supports per-stack profiles that tune runtime/commands by detected stack"]
+  non_goals = ["No auto-remediation — dross-secure/dross-quality stay read-only audits that emit a remediation phase; they never apply fixes directly", "Stack profiles ship Go-first — E delivers the profile mechanism plus the Go profile; no broad multi-language profile library in v0.1", "No new provider or board-sync expansion — work within the existing GitHub/Forgejo surface; the deferred ship review-panel stays deferred"]
