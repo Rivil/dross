@@ -158,10 +158,25 @@ func completeFixture(t *testing.T) (string, string) {
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
 	// Simulate the upstream squash-merge: build a synthetic squash on
-	// top of origin/main and push it.
+	// top of origin/main and push it. The squash must carry the completion
+	// record `dross ship` folds in (current_phase cleared + `completed
+	// 01-auth` history) — phase complete reads that off origin/main as its
+	// merge guard, so without it complete would refuse.
 	mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
 	mustGit(t, dir, "checkout", "phase/01-auth", "--", "src/")
 	mustGit(t, dir, "add", "src/")
+	stPath := filepath.Join(dir, ".dross", "state.json")
+	sqState, err := state.Load(stPath)
+	if err != nil {
+		t.Fatalf("load state for squash sim: %v", err)
+	}
+	sqState.CurrentPhase = ""
+	sqState.CurrentPhaseStatus = ""
+	sqState.Touch("completed 01-auth")
+	if err := sqState.Save(stPath); err != nil {
+		t.Fatalf("save squash state: %v", err)
+	}
+	mustGit(t, dir, "add", filepath.Join(".dross", "state.json"))
 	mustGit(t, dir, "commit", "-q", "-m", "feat(squash): auth")
 	mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
 	mustGit(t, dir, "checkout", "-q", "phase/01-auth")
@@ -254,14 +269,66 @@ func TestPhaseCompleteRefusesUnmergedUpstream(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when upstream merge hasn't actually happened")
 	}
-	if !strings.Contains(err.Error(), "hasn't advanced") {
-		t.Errorf("error should mention upstream hasn't advanced: %v", err)
+	if !strings.Contains(err.Error(), "has the PR merged") {
+		t.Errorf("error should question whether the PR merged upstream: %v", err)
 	}
 
 	// Phase branch must still exist — we didn't lose the work.
 	branches := mustGit(t, dir, "branch", "--list", "phase/01-auth")
 	if !strings.Contains(branches, "phase/01-auth") {
 		t.Errorf("phase/01-auth should still exist after refused complete, got: %q", branches)
+	}
+}
+
+// TestPhaseCompleteRefusesUnmergedNoLocalBranch closes the escape hatch the
+// old guard left open: it was nested under "local phase branch ref exists",
+// so an abandoned phase whose local branch was already deleted skipped the
+// check entirely and the ff-only silently no-op'd — letting complete
+// "succeed" on a never-merged phase. The branch-ref-independent guard reads
+// origin/<main> directly, so it must still refuse and touch nothing.
+func TestPhaseCompleteRefusesUnmergedNoLocalBranch(t *testing.T) {
+	dir := t.TempDir()
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remoteDir)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("phase create: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "src/auth.ts"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
+
+	// Drop the local phase branch (switch to main first) — origin never got
+	// a squash, so there's no `completed 01-auth` record anywhere.
+	mustGit(t, dir, "checkout", "-q", "main")
+	mustGit(t, dir, "branch", "-D", "phase/01-auth")
+	originMain := mustGit(t, dir, "rev-parse", "main")
+
+	// Name the phase explicitly: neither current_phase nor a phase branch
+	// can supply it now.
+	err := runCmd(t, Phase(), "complete", "01-auth")
+	if err == nil {
+		t.Fatal("expected refusal when local branch is gone AND origin lacks the completion record")
+	}
+	if !strings.Contains(err.Error(), "has the PR merged") {
+		t.Errorf("error should question whether the PR merged upstream: %v", err)
+	}
+
+	// Nothing destructive: main is unchanged and the tree is clean.
+	if now := mustGit(t, dir, "rev-parse", "main"); now != originMain {
+		t.Errorf("main should be untouched by a refused complete: %q != %q", now, originMain)
+	}
+	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
+		t.Errorf("tree should be clean after refused complete, got: %q", st)
 	}
 }
 
@@ -354,11 +421,15 @@ func TestShipToCompleteLeavesZeroManualGit(t *testing.T) {
 				t.Fatalf("ship: %v", err)
 			}
 
-			// 2) Simulate the upstream squash-merge onto origin/main.
+			// 2) Simulate the upstream squash-merge onto origin/main. The
+			//    squash carries phase/01-x's src/ AND its .dross/state.json —
+			//    ship (t-1) folded the cleared current_phase + `completed
+			//    01-x` record into that state.json, and complete reads it off
+			//    origin/main as its merge guard.
 			mustGit(t, dir, "fetch", "-q", "origin")
 			mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
-			mustGit(t, dir, "checkout", "phase/01-x", "--", "src/")
-			mustGit(t, dir, "add", "src/")
+			mustGit(t, dir, "checkout", "phase/01-x", "--", "src/", ".dross/state.json")
+			mustGit(t, dir, "add", "src/", ".dross/state.json")
 			mustGit(t, dir, "commit", "-q", "-m", "feat(squash): tagging")
 			mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
 			mustGit(t, dir, "checkout", "-q", "phase/01-x")

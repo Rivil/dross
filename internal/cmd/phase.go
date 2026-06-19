@@ -150,12 +150,15 @@ func phaseComplete() *cobra.Command {
   1. switch to the configured main branch (if not already there)
   2. fetch origin
   3. fast-forward main from origin/<main>
-  4. delete the local phase/<id> branch
-  5. clear state.current_phase + record a "completed <id>" history
-     entry, then commit state.json as a chore
+  4. delete the local phase/<id> branch (and the remote one)
 
-Refuses on a dirty tree or when the fast-forward isn't clean — both
-usually mean the upstream merge hasn't actually happened yet.`,
+'dross ship' folds the cleared current_phase + "completed <id>" record
+into the PR squash, so the fast-forward above already brings the
+completion onto main — complete writes no commit of its own. This is
+what eliminates the completion-chore divergence.
+
+Refuses on a dirty tree, or when origin/<main> carries no "completed
+<id>" record (the upstream merge hasn't actually happened yet).`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			root, err := FindRoot()
@@ -172,14 +175,25 @@ usually mean the upstream merge hasn't actually happened yet.`,
 				return err
 			}
 
+			// Resolve the phase id. `dross ship` now folds the completion
+			// record into the squash and clears current_phase, so the
+			// post-ship state can't supply it — fall back to the phase
+			// branch we're sitting on.
 			phaseID := ""
-			if len(args) == 1 {
+			switch {
+			case len(args) == 1:
 				phaseID = args[0]
-			} else {
+			case s.CurrentPhase != "":
 				phaseID = s.CurrentPhase
+			default:
+				if cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD"); err == nil {
+					if rest, ok := strings.CutPrefix(cur, "phase/"); ok {
+						phaseID = rest
+					}
+				}
 			}
 			if phaseID == "" {
-				return errors.New("no phase id given and state has no current_phase")
+				return errors.New("no phase id given, state has no current_phase, and not on a phase/<id> branch")
 			}
 
 			mainBranch := p.Repo.GitMainBranch
@@ -214,25 +228,22 @@ usually mean the upstream merge hasn't actually happened yet.`,
 				return fmt.Errorf("git fetch: %w\n%s", err, out)
 			}
 
-			// Guard against the "branch deleted but never merged" trap:
-			// ff-only happily no-ops when origin/main hasn't advanced,
-			// then we'd delete phase/<id> and lose the work. Verify
-			// origin/main is strictly past the merge-base with phase/<id>
-			// (i.e. the upstream merge actually happened) before
-			// touching anything destructive.
-			if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+phaseBranch); err == nil {
-				mergeBase, err := gitTrim(repoDir, "merge-base", "origin/"+mainBranch, phaseBranch)
-				if err != nil {
-					return fmt.Errorf("git merge-base origin/%s %s: %w", mainBranch, phaseBranch, err)
-				}
-				originHead, err := gitTrim(repoDir, "rev-parse", "origin/"+mainBranch)
-				if err != nil {
-					return fmt.Errorf("git rev-parse origin/%s: %w", mainBranch, err)
-				}
-				if originHead == mergeBase {
-					return fmt.Errorf("origin/%s hasn't advanced past %s's base — has the PR actually merged upstream?",
-						mainBranch, phaseBranch)
-				}
+			// Branch-ref-independent merge guard. `dross ship` folds the
+			// `completed <id>` record into the squash, so a genuinely merged
+			// phase shows that record on origin/<main>. Verify it's there
+			// before touching anything destructive. The old guard nested
+			// this under "local phase branch ref exists", so an abandoned
+			// phase whose local branch was already deleted skipped the check
+			// and the ff-only silently no-op'd — letting complete "succeed"
+			// on an unmerged phase. Reading origin/<main> directly closes
+			// that gap regardless of whether any branch ref survives.
+			originState, err := gitTrim(repoDir, "show", "origin/"+mainBranch+":.dross/"+state.File)
+			if err != nil {
+				return fmt.Errorf("read origin/%s:.dross/%s: %w — has the PR merged upstream?", mainBranch, state.File, err)
+			}
+			if !strings.Contains(originState, "completed "+phaseID) {
+				return fmt.Errorf("origin/%s carries no `completed %s` record — has the PR merged upstream? Refusing so the phase branch isn't lost",
+					mainBranch, phaseID)
 			}
 
 			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+mainBranch); err != nil {
@@ -263,21 +274,11 @@ usually mean the upstream merge hasn't actually happened yet.`,
 				}
 			}
 
-			// Clear current_phase and audit. Then commit state.json so
-			// next dross commands don't start on a dirty tree.
-			s.CurrentPhase = ""
-			s.CurrentPhaseStatus = ""
-			s.Touch(fmt.Sprintf("completed %s", phaseID))
-			if err := s.Save(filepath.Join(root, state.File)); err != nil {
-				return fmt.Errorf("save state: %w", err)
-			}
-			if out, err := gitCombined(repoDir, "add", filepath.Join(".dross", state.File)); err != nil {
-				return fmt.Errorf("git add state.json: %w\n%s", err, out)
-			}
-			msg := fmt.Sprintf("chore(dross): complete %s", phaseID)
-			if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
-				return fmt.Errorf("git commit: %w\n%s", err, out)
-			}
+			// No state write here: `dross ship` already folded the cleared
+			// current_phase + "completed <id>" record into the squash, and
+			// the ff above brought it onto local main. Writing (and
+			// committing) it again is exactly the standalone unpushed commit
+			// that used to re-seed main divergence on every completion.
 
 			RecordOutcomeEvent("phase_complete",
 				map[string]int{},
