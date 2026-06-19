@@ -1,0 +1,47 @@
+{
+  "phase": "01-architecture-comprehension-layer",
+  "generated_at": "2026-06-19T14:32:42.259482Z",
+  "languages": null,
+  "skipped": [
+    {
+      "file": "assets/commands/dross-architecture.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/architecture.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/execute.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/onboard.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/ship.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "internal/architecture/architecture.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/architecture/architecture_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/cmd/commands_parity_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/cmd/init.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/cmd/init_test.go",
+      "reason": "no mutation adapter for .go"
+    }
+  ]
+}

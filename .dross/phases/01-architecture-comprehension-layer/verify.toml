@@ -1,0 +1,78 @@
+[verify]
+  phase = "01-architecture-comprehension-layer"
+  generated_at = 2026-06-19T14:32:42.259482Z
+  verdict = "partial"
+
+[summary]
+  mutation_status = "skipped"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  criteria_total = 7
+  criteria_covered = 3
+  criteria_uncovered = 4
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/architecture/architecture_test.go:TestSkeletonDeclaresFeatureOrganization",
+    "internal/cmd/init_test.go:TestInitSeedsArchitectureSkeleton",
+  ]
+  notes = "Skeleton enforces feature-organization (organized by feature / per capability / never one per phase); test fails if that contract drops. Runtime rendering of a populated doc is prompt-behavioral (engine/merge), not machine-tested."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/architecture/architecture_test.go:TestEntryTemplateHasAllFourParts"]
+  notes = "EntryTemplate must carry all four parts (heading + one-line desc + symbol-link bullet + provenance breadcrumb incl. the · separator); test fails if any part drops."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/cmd/init_test.go:TestInitSeedsArchitectureSkeleton",
+    "internal/cmd/init_test.go:TestInitDoesNotClobberExistingArchitecture",
+  ]
+  notes = "dross init seeds ARCHITECTURE.md at repo root (existence + header + feature-org), first-creation only (no clobber). Strongest coverage in the phase."
+
+[[criterion]]
+  id = "c-4"
+  status = "unknown"
+  tests = []
+  notes = "Prompt-orchestration: onboard.md §8.7 invokes the shared backfill engine. The parity test proves the engine prompt exists, but nothing asserts onboard runs it or that a backfilled doc results. Verify by dogfooding /dross-onboard (or /dross-architecture, the same engine)."
+
+[[criterion]]
+  id = "c-5"
+  status = "unknown"
+  tests = []
+  notes = "Prompt-orchestration: execute.md §1f formats a feature·symbol@file·what landmark into changes --notes. Reuses free-form --notes (deferred typed field), so there is no Go surface to test. Verify by inspecting changes.json after a real /dross-execute task (this phase's own changes.json already shows the format)."
+
+[[criterion]]
+  id = "c-6"
+  status = "unknown"
+  tests = []
+  notes = "Prompt-orchestration: ship.md §3.5 merges landmarks into ARCHITECTURE.md by feature in-place and commits into the PR. No Go surface. Verify by dogfooding /dross-ship and confirming the doc updates in place (no per-phase heading)."
+
+[[criterion]]
+  id = "c-7"
+  status = "weak"
+  tests = ["internal/cmd/commands_parity_test.go:TestCommandsPromptsParity"]
+  notes = "Parity test guarantees the /dross-architecture command + architecture.md engine exist (a real precondition for on-demand generation), but does not exercise generation itself. Verify by running /dross-architecture on this repo (no ARCHITECTURE.md yet) end-to-end."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-4, c-5, c-6 are prompt-orchestration criteria with no automated go-test surface (consistent with plan + plan-review). Verify by dogfooding: /dross-architecture (engine, also covers c-4 reuse), changes.json after /dross-execute (c-5), /dross-ship merge (c-6)."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-7 (on-demand generation) is only structurally covered — TestCommandsPromptsParity asserts the command+engine exist but not that generation works. Dogfood /dross-architecture on this repo (it has no ARCHITECTURE.md; init only seeds greenfield) to confirm end-to-end."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Tree-wide mutation skipped: the gremlins adapter returns 'No results to report' and writes no file for ./internal/... from repo root, while a per-package run works. Diagnosed manually — internal/architecture mutation-tests at 100% efficacy (2/2 killed), confirming the c-1/c-2/c-3 template tests catch breakage. Adapter scope fix tracked separately."
+
+[[finding]]
+  severity = "NOTE"
+  text = "verify --skip-mutation emitted per-file 'no mutation adapter' skip notices for all 10 touched files (5 .md prompts + 5 .go); .md has no adapter by design, .go was skipped because mutation was skipped tree-wide. Not a coverage gap."
