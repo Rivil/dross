@@ -1,6 +1,15 @@
 {
   "phase": "01-architecture-comprehension-layer",
   "tasks": {
+    "quick-10": {
+      "files": [
+        "internal/mutation/gremlins.go",
+        "internal/mutation/gremlins_test.go"
+      ],
+      "commit": "01c10f0",
+      "completed_at": "2026-06-19T14:51:43.859242Z",
+      "notes": "feature: mutation testing · gremlins.go Run/packagesFromFiles (internal/mutation/gremlins.go) · per-package gremlins invocation, excludes uncoverable packages, no whole-run hard-fail"
+    },
     "t-1": {
       "files": [
         "internal/architecture/architecture.go",
