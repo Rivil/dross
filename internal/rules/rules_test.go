@@ -139,6 +139,17 @@ func TestRenderEmpty(t *testing.T) {
 	}
 }
 
+func TestRenderEmitsAgentGateBuiltin(t *testing.T) {
+	out := Render(nil)
+	if !strings.Contains(out, "[builtin/hard/dross-agent-gate]") {
+		t.Error("render missing dross-agent-gate builtin")
+	}
+	// The gating half is the hard part — make sure it survives.
+	if !strings.Contains(out, "writing and deciding stay gated") {
+		t.Errorf("agent-gate rule missing its gating clause: %q", out)
+	}
+}
+
 func TestRenderEmitsBuiltinsBeforeUserRules(t *testing.T) {
 	merged := []Resolved{
 		{Rule: Rule{ID: "r-01", Text: "user rule", Severity: Hard}, Scope: Global},

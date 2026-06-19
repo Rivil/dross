@@ -123,6 +123,14 @@ var Builtins = []Resolved{
 			Text:     "If your slash command (or a `dross` CLI call inside it) writes to any file under `.dross/`, commit those writes with `git add <files> && git commit` before wrapping. Use `repo.commit_convention` from project.toml; if none, prefix with `chore(dross): `. Never leave `.dross/` dirty across slash-command boundaries.",
 		},
 	},
+	{
+		Scope: "builtin",
+		Rule: Rule{
+			ID:       "dross-agent-gate",
+			Severity: Hard,
+			Text:     "Subagents may fan out freely for read-only work — search, code-mapping, analysis, independent verification — and you should when it widens coverage or saves wall-clock. But writing and deciding stay gated: in pair mode, get explicit user approval before writing code or finalizing; only `--solo` authorizes unattended writes. A fan-out agent returns findings to the main loop and never silently edits, commits, or finalizes on the user's behalf.",
+		},
+	},
 }
 
 // Render produces the <rules> block injected into prompt context.
