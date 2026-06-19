@@ -136,14 +136,11 @@ Already half-built: `changes.json` stores a per-task `Notes` field
 
 ## Workstream C — Interaction quality (prompt-only)
 
-- **C1 — spec turn-boundaries.** Kill the wall-of-text. The `spec.md` prompt
-  *already* mandates a step-by-step flow (§2 criteria one at a time; §3c "one
-  focused exchange at a time — don't batch"), but nothing *forces* a turn
-  boundary, so the model collapses it into one mega-message hidden behind ctrl+o.
-  Fix: hard `AskUserQuestion` gates per criterion and per gray-area, and **never
-  display the full TOML** — agree content in plain language, write silently,
-  confirm with a one-liner. Same root cause as the "shrink the observe→act loop"
-  rule.
+- **C1 — spec turn-boundaries.** ✅ `4b09ee0` (0.1.0.8). Killed the
+  wall-of-text in `spec.md`: a top-of-file "conversation not broadcast" posture,
+  §2 walks criteria one at a time (accept/reword/drop per turn), §5 never pastes
+  the TOML (one-line summary instead), plus a hard rule encoding all of it. Same
+  root cause as the "shrink the observe→act loop" rule.
 - **C2 — execute reuse scan.** Folded into B: execute reads `ARCHITECTURE.md` plus
   a real "does this already exist?" grep before proposing, so `steer` becomes a
   live choice instead of `proceed` being the only viable option.
@@ -277,8 +274,8 @@ doctor` checks for) — a deliberate, visible choice.
 
 1. ~~**Onboard dross**~~ ✅ — `.dross/` scaffolded, runtime + rules captured.
 2. ~~**A** — CLI ergonomics~~ ✅ — A1–A6 shipped (0.1.0.1 → 0.1.0.6).
-3. **C1** — spec turn-boundaries. Prompt-only daily-pain fix. ← **next**
-4. **D** — agent gate policy. Unblocks B2 / E / F.
+3. ~~**C1** — spec turn-boundaries~~ ✅ — `4b09ee0` (0.1.0.8).
+4. **D** — agent gate policy. Unblocks B2 / E / F. ← **next**
 5. **B** — `ARCHITECTURE.md` (B0 seed/backfill → B1 → B2); then run B0b on dross
    itself.
 6. **F** — `dross-secure`. Heavy; rides on D.
