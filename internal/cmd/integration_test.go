@@ -13,17 +13,17 @@ import (
 // dangling /dross-status reference if it had existed earlier.
 //
 // What it covers:
-//   1. dross init   — bootstrap
-//   2. dross project set ... — runtime + identity (as /dross-onboard would)
-//   3. dross phase create — phase dir
-//   4. spec.toml written (as /dross-spec would)
-//   5. plan.toml written (as /dross-plan would)
-//   6. dross validate — schema + cross-file checks pass
-//   7. simulated execute: task next → status in_progress → done →
-//      changes record, looped per task
-//   8. dross verify --skip-mutation — tests.json + verify.toml skeleton
-//   9. dross status at every phase boundary — suggestNext heuristic
-//      points at the right next slash command
+//  1. dross init   — bootstrap
+//  2. dross project set ... — runtime + identity (as /dross-onboard would)
+//  3. dross phase create — phase dir
+//  4. spec.toml written (as /dross-spec would)
+//  5. plan.toml written (as /dross-plan would)
+//  6. dross validate — schema + cross-file checks pass
+//  7. simulated execute: task next → status in_progress → done →
+//     changes record, looped per task
+//  8. dross verify --skip-mutation — tests.json + verify.toml skeleton
+//  9. dross status at every phase boundary — suggestNext heuristic
+//     points at the right next slash command
 //
 // What it does NOT cover (intentional, marked clearly):
 //   - real mutation runs (Stryker/Gremlins would need installs)

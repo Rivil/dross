@@ -121,4 +121,3 @@ func TestChangesRecordOverwritesOnRerun(t *testing.T) {
 		t.Errorf("new commit missing\n%s", out)
 	}
 }
-

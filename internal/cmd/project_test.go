@@ -208,9 +208,9 @@ func TestExpandedDottedPathsRoundTrip(t *testing.T) {
 		"env.secrets_location": "1password",
 		"env.gitignored":       "true",
 		// goals
-		"goals.audience":         "self-hosters",
-		"goals.non_goals":        "realtime collab,mobile native",
-		"goals.differentiators":  "lean prompts,mutation testing",
+		"goals.audience":        "self-hosters",
+		"goals.non_goals":       "realtime collab,mobile native",
+		"goals.differentiators": "lean prompts,mutation testing",
 	}
 	for path, value := range cases {
 		if err := writeDotted(p, path, value); err != nil {

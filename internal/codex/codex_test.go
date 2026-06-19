@@ -77,15 +77,15 @@ func (u User) Quiet() {}
 		got[s.Name] = s.Kind
 	}
 	want := map[string]string{
-		"Pi":          "const",
-		"MaxRetries":  "const",
-		"MinDelay":    "const",
-		"Counter":     "var",
-		"User":        "type",
-		"Stringer":    "type",
-		"New":         "function",
-		"User.Greet":  "method",
-		"User.Quiet":  "method",
+		"Pi":         "const",
+		"MaxRetries": "const",
+		"MinDelay":   "const",
+		"Counter":    "var",
+		"User":       "type",
+		"Stringer":   "type",
+		"New":        "function",
+		"User.Greet": "method",
+		"User.Quiet": "method",
 	}
 	for name, kind := range want {
 		if got[name] != kind {

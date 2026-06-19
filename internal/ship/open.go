@@ -16,12 +16,12 @@ import (
 
 // OpenOpts is everything OpenPR needs across providers.
 type OpenOpts struct {
-	Provider   string   // "github" | "forgejo" | "gitea"
-	URL        string   // canonical https URL of the repo
-	APIBase    string   // forgejo/gitea: base of the REST API; ignored for github
-	AuthEnv    string   // env var name holding the token; only used for forgejo/gitea
-	HeadBranch string   // e.g. "pr/01-x"
-	BaseBranch string   // e.g. "main"
+	Provider   string // "github" | "forgejo" | "gitea"
+	URL        string // canonical https URL of the repo
+	APIBase    string // forgejo/gitea: base of the REST API; ignored for github
+	AuthEnv    string // env var name holding the token; only used for forgejo/gitea
+	HeadBranch string // e.g. "pr/01-x"
+	BaseBranch string // e.g. "main"
 	Title      string
 	Body       string
 	Reviewers  []string

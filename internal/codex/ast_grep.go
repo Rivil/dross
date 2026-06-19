@@ -86,8 +86,8 @@ func (a *AstGrepIndexer) Symbols(file string) ([]Symbol, error) {
 // Schema: ast-grep uses a stable JSON shape — see `ast-grep --help` for
 // the latest. We're tolerant: missing fields don't fail the whole run.
 type astGrepMatch struct {
-	File     string `json:"file"`
-	Range    struct {
+	File  string `json:"file"`
+	Range struct {
 		Start struct {
 			Line   int `json:"line"`
 			Column int `json:"column"`

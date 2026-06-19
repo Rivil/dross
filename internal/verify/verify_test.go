@@ -112,7 +112,7 @@ func TestSkeletonSeedsFromMachineResults(t *testing.T) {
 		Phase: "01-x",
 		Languages: []LanguageRun{
 			{
-				Tool: "stryker",
+				Tool:  "stryker",
 				Files: []string{"src/x.ts"},
 				Mutation: &mutation.Report{
 					Tool: "stryker", Killed: 9, Survived: 1, Score: 0.9,

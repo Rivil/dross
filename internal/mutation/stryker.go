@@ -91,8 +91,8 @@ func (s *Stryker) buildCmd(args []string) *exec.Cmd {
 // Schema: github.com/stryker-mutator/mutation-testing-elements
 // (mutation-testing-report-schema)
 type strykerReport struct {
-	SchemaVersion string                  `json:"schemaVersion"`
-	Files         map[string]strykerFile  `json:"files"`
+	SchemaVersion string                 `json:"schemaVersion"`
+	Files         map[string]strykerFile `json:"files"`
 }
 
 type strykerFile struct {
@@ -102,13 +102,13 @@ type strykerFile struct {
 }
 
 type strykerMutant struct {
-	ID           string                 `json:"id"`
-	MutatorName  string                 `json:"mutatorName"`
-	Replacement  string                 `json:"replacement"`
-	Status       string                 `json:"status"`
-	StatusReason string                 `json:"statusReason,omitempty"`
-	Location     strykerLocation        `json:"location"`
-	Description  string                 `json:"description,omitempty"`
+	ID           string          `json:"id"`
+	MutatorName  string          `json:"mutatorName"`
+	Replacement  string          `json:"replacement"`
+	Status       string          `json:"status"`
+	StatusReason string          `json:"statusReason,omitempty"`
+	Location     strykerLocation `json:"location"`
+	Description  string          `json:"description,omitempty"`
 }
 
 type strykerLocation struct {
@@ -125,12 +125,13 @@ type strykerPos struct {
 // normalised Report shape verify uses.
 //
 // Status mapping (Stryker → Report):
-//   Killed                  → killed
-//   Survived                → survived (recorded with snippet)
-//   Timeout                 → timeout
-//   RuntimeError, CompileError → errors
-//   NoCoverage              → survived (test never even ran the mutant)
-//   Pending, Ignored        → ignored (not counted)
+//
+//	Killed                  → killed
+//	Survived                → survived (recorded with snippet)
+//	Timeout                 → timeout
+//	RuntimeError, CompileError → errors
+//	NoCoverage              → survived (test never even ran the mutant)
+//	Pending, Ignored        → ignored (not counted)
 //
 // Score uses Stryker's convention: killed / (killed + survived + timeout)
 // — the "mutation score" excluding errors and ignored mutants.

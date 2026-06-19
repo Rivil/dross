@@ -45,10 +45,10 @@ const (
 
 // Tests is the machine-written aggregation of mutation/coverage results.
 type Tests struct {
-	Phase       string         `json:"phase"`
-	GeneratedAt time.Time      `json:"generated_at"`
-	Languages   []LanguageRun  `json:"languages"`
-	Skipped     []SkippedFile  `json:"skipped,omitempty"`
+	Phase       string        `json:"phase"`
+	GeneratedAt time.Time     `json:"generated_at"`
+	Languages   []LanguageRun `json:"languages"`
+	Skipped     []SkippedFile `json:"skipped,omitempty"`
 }
 
 type LanguageRun struct {
@@ -82,10 +82,10 @@ type VerifySummary struct {
 	// before the score: when status != measured the score is a 0/0
 	// artifact, not a signal, and the verdict must be derived from
 	// criterion coverage alone.
-	MutationStatus    string  `toml:"mutation_status"`
-	MutationScore     float64 `toml:"mutation_score"`
-	MutantsKilled     int     `toml:"mutants_killed"`
-	MutantsSurvived   int     `toml:"mutants_survived"`
+	MutationStatus  string  `toml:"mutation_status"`
+	MutationScore   float64 `toml:"mutation_score"`
+	MutantsKilled   int     `toml:"mutants_killed"`
+	MutantsSurvived int     `toml:"mutants_survived"`
 	// MutantsNotCovered is a subset of MutantsSurvived: mutants the test
 	// suite never even executed. Surfaced for /dross-verify so the LLM
 	// can distinguish weak assertions ("test ran, didn't catch") from

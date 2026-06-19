@@ -9,12 +9,12 @@ import (
 
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
-		"Meal Tagging System":        "meal-tagging-system",
-		"  Auth   middleware  ":      "auth-middleware",
-		"v1.0 — Bootstrap!":          "v1-0-bootstrap",
-		"already-slug":               "already-slug",
-		"with/slashes\\and:colons":   "with-slashes-and-colons",
-		"":                           "",
+		"Meal Tagging System":      "meal-tagging-system",
+		"  Auth   middleware  ":    "auth-middleware",
+		"v1.0 — Bootstrap!":        "v1-0-bootstrap",
+		"already-slug":             "already-slug",
+		"with/slashes\\and:colons": "with-slashes-and-colons",
+		"":                         "",
 	}
 	for in, want := range cases {
 		if got := Slugify(in); got != want {

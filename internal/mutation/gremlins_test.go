@@ -166,13 +166,13 @@ func TestParseGremlinsJSONMalformed(t *testing.T) {
 func TestGremlinsSupports(t *testing.T) {
 	g := &Gremlins{}
 	cases := map[string]bool{
-		"main.go":            true,
-		"internal/x/y.go":    true,
-		"src/api.GO":         true, // case-insensitive
-		"src/api.ts":         false,
-		"src/Button.tsx":     false,
-		"static/index.html":  false,
-		"main_test.go":       true, // gremlins handles tests itself but file is .go
+		"main.go":           true,
+		"internal/x/y.go":   true,
+		"src/api.GO":        true, // case-insensitive
+		"src/api.ts":        false,
+		"src/Button.tsx":    false,
+		"static/index.html": false,
+		"main_test.go":      true, // gremlins handles tests itself but file is .go
 	}
 	for file, want := range cases {
 		if got := g.Supports(file); got != want {

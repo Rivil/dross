@@ -210,13 +210,14 @@ type gremlinsMutation struct {
 // normalised Report shape.
 //
 // Status mapping:
-//   KILLED       → killed
-//   LIVED        → survived (with snippet)
-//   NOT COVERED  → survived (mutant the tests never even ran)
-//   TIMED OUT    → timeout
-//   NOT VIABLE   → not counted (compile error, not a test-quality signal)
-//   SKIPPED      → not counted
-//   RUNNABLE     → not counted (state, not a result)
+//
+//	KILLED       → killed
+//	LIVED        → survived (with snippet)
+//	NOT COVERED  → survived (mutant the tests never even ran)
+//	TIMED OUT    → timeout
+//	NOT VIABLE   → not counted (compile error, not a test-quality signal)
+//	SKIPPED      → not counted
+//	RUNNABLE     → not counted (state, not a result)
 //
 // Score uses the same convention as Stryker: killed/(killed+survived+timeout).
 // Note this differs from gremlins' own `test_efficacy`, which is killed/

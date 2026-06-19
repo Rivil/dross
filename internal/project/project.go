@@ -113,9 +113,9 @@ type Paths struct {
 }
 
 type Env struct {
-	Files            []string `toml:"files,omitempty"`             // load order
-	SecretsLocation  string   `toml:"secrets_location,omitempty"`  // vault | doppler | 1password | local
-	Gitignored       bool     `toml:"gitignored,omitempty"`
+	Files           []string `toml:"files,omitempty"`            // load order
+	SecretsLocation string   `toml:"secrets_location,omitempty"` // vault | doppler | 1password | local
+	Gitignored      bool     `toml:"gitignored,omitempty"`
 }
 
 type Goals struct {

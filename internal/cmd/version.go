@@ -7,9 +7,11 @@ import (
 )
 
 // Build metadata. Overridden at link time via:
-//   -ldflags "-X github.com/Rivil/dross/internal/cmd.Version=...
-//             -X github.com/Rivil/dross/internal/cmd.Commit=...
-//             -X github.com/Rivil/dross/internal/cmd.Date=..."
+//
+//	-ldflags "-X github.com/Rivil/dross/internal/cmd.Version=...
+//	          -X github.com/Rivil/dross/internal/cmd.Commit=...
+//	          -X github.com/Rivil/dross/internal/cmd.Date=..."
+//
 // GoReleaser sets all three; `make build` sets Commit and Date.
 var (
 	Version = "0.1.0.0"

@@ -53,13 +53,13 @@ func TestAstGrepIndexerSkipsWhenBinaryAbsent(t *testing.T) {
 func TestAstGrepIndexerExtractsTypeScriptSymbols(t *testing.T) {
 	const file = "src/api.ts"
 	fakeAstGrep(t, map[string][]astGrepMatch{
-		"function $NAME($$$ARGS) { $$$ }":            {mkMatch(file, "parseToken", 12)},
-		"export function $NAME($$$ARGS) { $$$ }":     {mkMatch(file, "loadConfig", 30)},
-		"export const $NAME = ($$$) => $$$":          {mkMatch(file, "withRetry", 45)},
-		"class $NAME { $$$ }":                        {mkMatch(file, "ApiClient", 60)},
-		"interface $NAME { $$$ }":                    {mkMatch(file, "RequestOpts", 5)},
-		"export type $NAME = $$$":                    {mkMatch(file, "Outcome", 8)},
-		"export enum $NAME { $$$ }":                  {mkMatch(file, "Status", 10)},
+		"function $NAME($$$ARGS) { $$$ }":        {mkMatch(file, "parseToken", 12)},
+		"export function $NAME($$$ARGS) { $$$ }": {mkMatch(file, "loadConfig", 30)},
+		"export const $NAME = ($$$) => $$$":      {mkMatch(file, "withRetry", 45)},
+		"class $NAME { $$$ }":                    {mkMatch(file, "ApiClient", 60)},
+		"interface $NAME { $$$ }":                {mkMatch(file, "RequestOpts", 5)},
+		"export type $NAME = $$$":                {mkMatch(file, "Outcome", 8)},
+		"export enum $NAME { $$$ }":              {mkMatch(file, "Status", 10)},
 	})
 
 	syms, err := TypeScriptIndexer().Symbols(file)

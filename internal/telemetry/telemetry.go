@@ -54,20 +54,20 @@ const OptOutEnv = "DROSS_NO_TELEMETRY"
 // Event is one line in the JSONL log. Keep fields stable — readers
 // (including future-me with `dross stats`) parse this directly.
 type Event struct {
-	Schema     int               `json:"schema"`
-	Timestamp  time.Time         `json:"ts"`
-	Kind       string            `json:"kind"`              // "cli" | "outcome"
-	Command    string            `json:"cmd,omitempty"`     // resolved cobra path, e.g. "milestone create"
-	Args       []string          `json:"args,omitempty"`    // sanitized: keys only for flag values that might leak content
-	DurationMS int64             `json:"dur_ms,omitempty"`  // CLI invocation duration
-	ExitCode   int               `json:"exit,omitempty"`    // 0 for success
-	ErrorClass string            `json:"err,omitempty"`     // bucketed error type, never the message
-	ErrorDetail string           `json:"err_detail,omitempty"` // redacted message, ONLY when ErrorClass == "other" — makes the unclassified tail diagnosable
-	RepoHash   string            `json:"repo,omitempty"`    // sha256 of repo root path, first 12 chars
-	Phase      string            `json:"phase,omitempty"`   // phase id when relevant
-	Counts     map[string]int    `json:"counts,omitempty"`  // size/shape data: criteria=4, tasks=12
-	Numbers    map[string]float64 `json:"nums,omitempty"`   // floats: mutation_score=0.83
-	Tags       map[string]string `json:"tags,omitempty"`    // small enums: verdict=pass, provider=github
+	Schema      int                `json:"schema"`
+	Timestamp   time.Time          `json:"ts"`
+	Kind        string             `json:"kind"`                 // "cli" | "outcome"
+	Command     string             `json:"cmd,omitempty"`        // resolved cobra path, e.g. "milestone create"
+	Args        []string           `json:"args,omitempty"`       // sanitized: keys only for flag values that might leak content
+	DurationMS  int64              `json:"dur_ms,omitempty"`     // CLI invocation duration
+	ExitCode    int                `json:"exit,omitempty"`       // 0 for success
+	ErrorClass  string             `json:"err,omitempty"`        // bucketed error type, never the message
+	ErrorDetail string             `json:"err_detail,omitempty"` // redacted message, ONLY when ErrorClass == "other" — makes the unclassified tail diagnosable
+	RepoHash    string             `json:"repo,omitempty"`       // sha256 of repo root path, first 12 chars
+	Phase       string             `json:"phase,omitempty"`      // phase id when relevant
+	Counts      map[string]int     `json:"counts,omitempty"`     // size/shape data: criteria=4, tasks=12
+	Numbers     map[string]float64 `json:"nums,omitempty"`       // floats: mutation_score=0.83
+	Tags        map[string]string  `json:"tags,omitempty"`       // small enums: verdict=pass, provider=github
 }
 
 // Append writes one event to the configured path. Rotates if the file

@@ -70,7 +70,7 @@ func List(root string) ([]string, error) {
 
 // Spec is the acceptance contract for a phase.
 type Spec struct {
-	Phase     SpecPhase  `toml:"phase"`
+	Phase     SpecPhase   `toml:"phase"`
 	Criteria  []Criterion `toml:"criteria"`
 	Decisions []Decision  `toml:"decisions,omitempty"`
 	Deferred  []Deferred  `toml:"deferred,omitempty"`
@@ -110,15 +110,15 @@ type PlanPhase struct {
 }
 
 type Task struct {
-	ID            string   `toml:"id"`
-	Wave          int      `toml:"wave"`
-	Title         string   `toml:"title"`
-	Files         []string `toml:"files"`
-	Description   string   `toml:"description,omitempty"`
-	Covers        []string `toml:"covers,omitempty"`         // criterion ids
-	DependsOn     []string `toml:"depends_on,omitempty"`     // task ids
-	TestContract  []string `toml:"test_contract,omitempty"`
-	Status        string   `toml:"status,omitempty"` // pending | in_progress | done | failed
+	ID           string   `toml:"id"`
+	Wave         int      `toml:"wave"`
+	Title        string   `toml:"title"`
+	Files        []string `toml:"files"`
+	Description  string   `toml:"description,omitempty"`
+	Covers       []string `toml:"covers,omitempty"`     // criterion ids
+	DependsOn    []string `toml:"depends_on,omitempty"` // task ids
+	TestContract []string `toml:"test_contract,omitempty"`
+	Status       string   `toml:"status,omitempty"` // pending | in_progress | done | failed
 }
 
 // Task statuses.

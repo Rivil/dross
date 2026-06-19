@@ -34,12 +34,12 @@ func TestRemoteRoundTrip(t *testing.T) {
 
 func TestDetectRemote(t *testing.T) {
 	tests := []struct {
-		name           string
-		input          string
-		wantURL        string
-		wantProvider   string
-		wantPublic     bool
-		wantAPIBase    string
+		name         string
+		input        string
+		wantURL      string
+		wantProvider string
+		wantPublic   bool
+		wantAPIBase  string
 	}{
 		{
 			name:         "github https",

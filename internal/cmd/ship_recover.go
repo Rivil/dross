@@ -19,12 +19,12 @@ import (
 // new work, but pre-existing repos need a one-shot reset.
 //
 // Two distinct legacy cases this heals:
-//   1. Old strip-filter era: `.dross/` was filtered out of the PR branch,
-//      so origin/main lost it on every squash-merge. Recovery restores
-//      the full `.dross/` tree from the pre-reset HEAD.
-//   2. Pre-phase-branch era: phase commits lived on main (no phase/<id>
-//      branch), so the squash-merge diverged main from itself.
-//      Recovery resets main to origin and re-attaches `.dross/`.
+//  1. Old strip-filter era: `.dross/` was filtered out of the PR branch,
+//     so origin/main lost it on every squash-merge. Recovery restores
+//     the full `.dross/` tree from the pre-reset HEAD.
+//  2. Pre-phase-branch era: phase commits lived on main (no phase/<id>
+//     branch), so the squash-merge diverged main from itself.
+//     Recovery resets main to origin and re-attaches `.dross/`.
 //
 // Either way: fetch + reset + restore `.dross/` + commit, atomically.
 func shipRecover() *cobra.Command {

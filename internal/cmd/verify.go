@@ -18,12 +18,12 @@ import (
 // Verify registers `dross verify <phase>`.
 //
 // What this command does (mechanical only — LLM does criterion mapping):
-//   1. Read project.toml + phases/<id>/spec.toml + phases/<id>/changes.json
-//   2. Group touched files by language
-//   3. For each language with an adapter: run mutation testing
-//   4. Aggregate into tests.json
-//   5. Write a verify.toml skeleton (verdict = pending) for /dross-verify
-//      to fill in criterion-to-test mappings + final verdict.
+//  1. Read project.toml + phases/<id>/spec.toml + phases/<id>/changes.json
+//  2. Group touched files by language
+//  3. For each language with an adapter: run mutation testing
+//  4. Aggregate into tests.json
+//  5. Write a verify.toml skeleton (verdict = pending) for /dross-verify
+//     to fill in criterion-to-test mappings + final verdict.
 func Verify() *cobra.Command {
 	var skipMutation bool
 	c := &cobra.Command{

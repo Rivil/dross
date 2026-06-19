@@ -42,10 +42,10 @@ func TestParseGSDProfile(t *testing.T) {
 
 func TestNormaliseDim(t *testing.T) {
 	cases := map[string]string{
-		"Communication Style":   "communication",
-		"UX Philosophy":         "ux",
-		"Frustration Triggers":  "frustration",
-		"Vendor Choices":        "vendor_choices",
+		"Communication Style":  "communication",
+		"UX Philosophy":        "ux",
+		"Frustration Triggers": "frustration",
+		"Vendor Choices":       "vendor_choices",
 	}
 	for in, want := range cases {
 		if got := normaliseDim(in); got != want {

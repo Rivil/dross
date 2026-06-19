@@ -11,9 +11,9 @@ import (
 
 func TestSplitOwnerRepo(t *testing.T) {
 	tests := []struct {
-		url           string
-		owner, repo   string
-		wantErr       bool
+		url         string
+		owner, repo string
+		wantErr     bool
 	}{
 		{"https://github.com/Rivil/dross", "Rivil", "dross", false},
 		{"https://github.com/Rivil/dross.git", "Rivil", "dross", false},
