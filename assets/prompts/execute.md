@@ -141,7 +141,7 @@ Task: <task-id>
 Covers: <criterion-ids>
 ```
 
-Do **not** add Co-Authored-By trailers unless the user has asked for them. Do not skip hooks (`--no-verify`) unless explicitly asked. If a pre-commit hook fails, treat it the same as a test failure (step 1e red branch) — fix inline, then commit fresh, never amend.
+**Match the repository's existing trailer convention.** Check recent history (`git log`): include a `Co-Authored-By` trailer only if the repo already uses one, and don't strip it from a repo that does. Don't introduce it into a repo that doesn't. Do not skip hooks (`--no-verify`) unless explicitly asked. If a pre-commit hook fails, treat it the same as a test failure (step 1e red branch) — fix inline, then commit fresh, never amend.
 
 After commit:
 ```
@@ -169,6 +169,12 @@ Update state:
 ```
 dross state set current_phase_status complete
 dross state touch "phase <id> executed (<done>/<total> done)"
+```
+
+**Commit the dross bookkeeping.** Each task's `dross changes record` + `state touch` (§1f) wrote under `.dross/` after its code commit, so `.dross/` is now dirty. Commit it once here, matching the repo's trailer convention, so the phase hands a clean tree to `/dross-verify` and `/dross-ship` (the commit-hygiene rule — ship refuses a dirty tree):
+```
+git add .dross/
+git commit -m "chore(dross): execute <id> bookkeeping"
 ```
 
 Re-sync the board issue so its checklist reflects the completed tasks (no-op unless board sync is on):

@@ -115,7 +115,7 @@ Quick: <internal-version-after-bump>
 [Phase: <phase-id>]
 ```
 
-Do **not** add Co-Authored-By trailers unless the user asked for them. Do not skip hooks (`--no-verify`). If a pre-commit hook fails, treat it as a red test (step 4) — fix inline, commit fresh, never amend.
+**Match the repository's existing trailer convention.** Check recent history (`git log -1 --format=%B`): if commits carry a `Co-Authored-By` trailer, include one; if they don't, omit it. Don't introduce the trailer into a repo that doesn't already use it, and don't strip it from one that does. Do not skip hooks (`--no-verify`). If a pre-commit hook fails, treat it as a red test (step 4) — fix inline, commit fresh, never amend.
 
 ## 6. Record + bump version
 
@@ -145,6 +145,13 @@ Mirror the quick task onto the issue board, keyed by the new version (no-op unle
 dross issue quick $NEW_VERSION "quick: <one-line summary>"
 ```
 
+**Commit the dross bookkeeping.** The bump, the changes record (if any), and the state touch all wrote under `.dross/` *after* the work commit — the internal counter only bumps once the work commit succeeds (see Hard rules), so they can't fold into it. Commit them now so the quick never ends with a dirty `.dross/`, which the commit-hygiene rule forbids and which would trip the next `phase create`/`complete`:
+```
+git add .dross/
+git commit -m "chore(dross): record quick <NEW_VERSION>"
+```
+Match the repo's trailer convention, as in §5.
+
 ## 7. Wrap-up
 
 Print:
@@ -166,7 +173,7 @@ dross issue quick $NEW_VERSION --close
 ## Hard rules
 
 - **Pair mode only.** No `--solo` flag. Quick tasks must have a human in the loop — that's how they stay "quick" without becoming sloppy.
-- **One commit per quick.** If the task naturally splits into two commits, it's not a quick — route to a phase or run /dross-quick twice.
+- **One commit per quick** for the actual work, plus a single follow-up `chore(dross):` commit for the version bump + state/changes bookkeeping (§6) — the counter only bumps after the work commit succeeds, so the two can't merge. If the *work* itself naturally splits into two commits, it's not a quick — route to a phase or run /dross-quick twice.
 - **Touch only what you proposed.** Mid-implementation scope expansion requires re-confirmation.
 - **No `git add -A`.** Always specify files explicitly.
 - **No `--no-verify`** unless the user asks. Pre-commit hook failures get fixed and re-committed, not amended away.
