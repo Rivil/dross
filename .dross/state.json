@@ -1,7 +1,7 @@
 {
-  "version": "0.1.0.4",
-  "last_activity": "2026-06-19T10:20:38.535586Z",
-  "last_action": "quick: telemetry records rejected cli-arg token (A4)",
+  "version": "0.1.0.5",
+  "last_activity": "2026-06-19T10:23:21.079103Z",
+  "last_action": "quick: dirty-tree errors list offending paths (A3)",
   "history": [
     {
       "at": "2026-06-19T06:51:00.002465Z",
@@ -42,6 +42,14 @@
     {
       "at": "2026-06-19T10:20:38.535586Z",
       "action": "quick: telemetry records rejected cli-arg token (A4)"
+    },
+    {
+      "at": "2026-06-19T10:23:21.072158Z",
+      "action": "bump internal 0.1.0.4 → 0.1.0.5"
+    },
+    {
+      "at": "2026-06-19T10:23:21.079103Z",
+      "action": "quick: dirty-tree errors list offending paths (A3)"
     }
   ]
 }
