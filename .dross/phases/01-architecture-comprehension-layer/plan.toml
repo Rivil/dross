@@ -1,0 +1,85 @@
+[phase]
+id = "01-architecture-comprehension-layer"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Architecture format package + init skeleton"
+files         = [
+  "internal/architecture/architecture.go",
+  "internal/architecture/architecture_test.go",
+  "internal/cmd/init.go",
+  "internal/cmd/init_test.go",
+]
+description   = """
+New internal/architecture package is the single source of truth for the fixed
+entry micro-template (heading + one-line desc + symbol-link bullets + provenance
+breadcrumb) and a feature-organized skeleton. dross init seeds ARCHITECTURE.md
+at repo root from it.
+"""
+covers        = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "if dross init stops writing ARCHITECTURE.md at repo root, the init test asserting the seeded file exists fails",
+  "if the entry template drops any of {one-line description, symbol-link bullet, provenance breadcrumb}, the architecture package test checking all four parts is present fails",
+  "if the skeleton stops declaring feature-organization (one entry per capability, not per phase), the template test fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 1
+title         = "Execute captures per-task landmark"
+files         = ["assets/prompts/execute.md"]
+description   = """
+After a task commit, execute.md formats the dross changes record --notes value as
+a one-line landmark (feature + symbol + one-line what), reusing the existing
+free-form --notes per the spec's deferred decision (no new typed field).
+"""
+covers        = ["c-5"]
+test_contract = [
+  "if execute.md stops emitting a landmark, dross changes show <phase> for a freshly executed task has a record whose notes lacks the feature+symbol+what landmark line",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 2
+depends_on    = ["t-1"]
+title         = "Architecture backfill engine + entry points"
+files         = [
+  "assets/prompts/architecture.md",
+  "assets/commands/dross-architecture.md",
+  "assets/prompts/onboard.md",
+  "internal/cmd/commands_parity_test.go",
+]
+description   = """
+New architecture.md engine scans the codebase via dross codex + git history and
+writes a feature-organized ARCHITECTURE.md conforming to t-1's template. The
+standalone /dross-architecture command (c-7, on-demand) and onboard.md (c-4) both
+invoke this one engine, per the backfill_trigger locked decision.
+"""
+covers        = ["c-4", "c-7"]
+test_contract = [
+  "if assets/commands/dross-architecture.md or assets/prompts/architecture.md is missing, the commands<->prompts parity test fails",
+  "running /dross-architecture on a repo with no ARCHITECTURE.md produces one with at least one feature entry carrying desc + symbol links + provenance; if the engine omits provenance, generated entries lack the breadcrumb line",
+  "onboard.md invokes the architecture engine — if it stops, an onboarded repo finishes with no ARCHITECTURE.md",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-4"
+wave          = 2
+depends_on    = ["t-1", "t-2"]
+title         = "Ship merges landmarks into ARCHITECTURE.md"
+files         = ["assets/prompts/ship.md"]
+description   = """
+ship.md reads the phase's landmarks (dross changes show), merges them into
+ARCHITECTURE.md by feature in place, and commits the updated file into the PR
+branch.
+"""
+covers        = ["c-6"]
+test_contract = [
+  "if ship.md stops merging, after ship the phase's landmarks are absent from ARCHITECTURE.md and the file is unchanged in the PR diff",
+  "merge is by-feature in-place — a duplicate per-phase heading appearing instead of an updated existing entry means the merge regressed",
+]
+status        = "pending"
