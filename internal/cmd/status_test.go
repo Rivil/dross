@@ -259,6 +259,50 @@ func TestStatusOmitsHandoffWhenAbsentOrEmpty(t *testing.T) {
 	}
 }
 
+// Milestone-level progress: status must surface how many of the milestone's
+// phases are verified (N/M phases), distinct from the current phase's task
+// count. Pins the bug where only per-phase task progress (2/2) was shown and
+// the milestone looked complete when phases remained.
+func TestStatusShowsMilestonePhaseProgress(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "01-a")
+	// A milestone toml listing five phases, two of which are verified.
+	mustWrite(t, ".dross/milestones/v0.1.toml", `phases = ["01-a", "02-b", "03-c", "04-d", "05-e"]
+
+[milestone]
+  version = "v0.1"
+  title = "First release"
+`)
+	mustWrite(t, ".dross/phases/01-a/verify.toml", "verdict = \"pass\"\n")
+	mustWrite(t, ".dross/phases/02-b/verify.toml", "verdict = \"pass\"\n")
+	mustWrite(t, ".dross/phases/03-c/verify.toml", "verdict = \"partial\"\n")
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "2/5 phases") {
+		t.Errorf("expected milestone phase progress '2/5 phases' (only 01-a and 02-b are pass):\n%s", out)
+	}
+	if !strings.Contains(out, "First release") {
+		t.Errorf("expected milestone title surfaced:\n%s", out)
+	}
+}
+
+// When the milestone toml is absent (current_milestone set but not scoped),
+// status falls back to the bare name with no phase bar — no crash.
+func TestStatusMilestoneFallsBackToBareNameWhenNoToml(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "01-a") // sets current_milestone=v0.1, no toml written
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "milestone: v0.1") {
+		t.Errorf("expected bare milestone name fallback:\n%s", out)
+	}
+	if strings.Contains(out, "phases") {
+		t.Errorf("no milestone toml = no phase progress bar:\n%s", out)
+	}
+}
+
 // The actions block is shown only when the spine is idle. These three pin
 // c-1 (shown between phases / when verified) and c-3 (suppressed mid-phase).
 
