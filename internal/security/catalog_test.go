@@ -2,6 +2,8 @@ package security
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -68,5 +70,41 @@ func TestScannersForGoIsComplete(t *testing.T) {
 		if !names[want] {
 			t.Errorf("ScannersFor(\"go\") missing %q", want)
 		}
+	}
+}
+
+// overrideGoProfile points the user profile dir at a temp HOME holding a go.toml
+// that replaces the embedded Go profile, so a test can prove the catalog tracks
+// the profile rather than an inline table.
+func overrideGoProfile(t *testing.T, body string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".claude", "dross", "profiles")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.toml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestScannersTrackProfile(t *testing.T) {
+	// Override the Go profile with a single scanner. If ScannersFor still read an
+	// inline map, gosec would survive — it must not.
+	overrideGoProfile(t, "id = \"go\"\n[[tools]]\n  name = \"govulncheck\"\n  kind = \"scanner\"\n")
+
+	names := map[string]bool{}
+	for _, s := range ScannersFor("go") {
+		names[s.Name] = true
+	}
+	if !names["govulncheck"] {
+		t.Error("profile-declared scanner govulncheck missing from ScannersFor(\"go\")")
+	}
+	if names["gosec"] {
+		t.Error("gosec survived after being removed from the profile — list is not profile-derived")
+	}
+	if !names["gitleaks"] {
+		t.Error("agnostic scanner gitleaks must remain available")
 	}
 }

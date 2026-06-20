@@ -2,6 +2,8 @@ package quality
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -86,5 +88,41 @@ func TestDetectMissingHasHint(t *testing.T) {
 		if st.Install == "" {
 			t.Errorf("missing analyzer %q has no install instruction", st.Name)
 		}
+	}
+}
+
+// overrideGoProfile points the user profile dir at a temp HOME holding a go.toml
+// that replaces the embedded Go profile, so a test can prove the catalog tracks
+// the profile rather than an inline table.
+func overrideGoProfile(t *testing.T, body string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".claude", "dross", "profiles")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.toml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAnalyzersTrackProfile(t *testing.T) {
+	// Override the Go profile with a single analyzer. If AnalyzersFor still read an
+	// inline map, dupl would survive — it must not.
+	overrideGoProfile(t, "id = \"go\"\n[[tools]]\n  name = \"gocyclo\"\n  kind = \"analyzer\"\n  dimension = \"complexity\"\n")
+
+	names := map[string]bool{}
+	for _, a := range AnalyzersFor("go") {
+		names[a.Name] = true
+	}
+	if !names["gocyclo"] {
+		t.Error("profile-declared analyzer gocyclo missing from AnalyzersFor(\"go\")")
+	}
+	if names["dupl"] {
+		t.Error("dupl survived after being removed from the profile — list is not profile-derived")
+	}
+	if !names["scc"] {
+		t.Error("agnostic analyzer scc must remain available")
 	}
 }
