@@ -1,0 +1,15 @@
+{
+  "phase": "04-status-action-surfaces",
+  "generated_at": "2026-06-20T09:35:20.522486Z",
+  "languages": null,
+  "skipped": [
+    {
+      "file": "internal/cmd/status.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/cmd/status_test.go",
+      "reason": "no mutation adapter for .go"
+    }
+  ]
+}

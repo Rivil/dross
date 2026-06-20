@@ -1,0 +1,52 @@
+[verify]
+  phase = "04-status-action-surfaces"
+  generated_at = 2026-06-20T09:35:20.522486Z
+  verdict = "partial"
+
+[summary]
+  mutation_status = "skipped"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  criteria_total = 3
+  criteria_covered = 2
+  criteria_uncovered = 1
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/status_test.go:TestStatusShowsActionsBetweenPhases", "internal/cmd/status_test.go:TestStatusShowsActionsWhenVerifiedPass"]
+  notes = "Idle surface shown between phases (current_phase unset) and when the verify verdict is pass; both fail if the block disappears."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/status_test.go:TestRenderActionAreasUnavailableShowsPlannedNotRunnable", "internal/cmd/status_test.go:TestRenderActionAreasAvailableEmitsCommand"]
+  notes = "Both branches pinned: unavailable area -> (planned) marker (never runnable), available area -> its command with no marker."
+
+[[criterion]]
+  id = "c-3"
+  status = "weak"
+  tests = ["internal/cmd/status_test.go:TestStatusSuppressesActionsMidPhase"]
+  notes = "Suppression asserted only for the execute-pending state (runnable task). spineIdle treats an absent/empty verify.toml as idle (verdict==\"\"), so the surface leaks during the verify-pending window — contradicting c-3. spec-only, plan-only, and fail/partial-verdict suppression rely on untested spineIdle branches."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-3 verify-pending leak: spineIdle (internal/cmd/status.go:194) returns idle when no verify.toml exists (verdict==\"\"), so `dross status` shows the actions block after execute but before verify runs — c-3 says suppress. Fix: in-phase idle should require verify.toml with verdict==\"pass\"; absent/empty = not idle."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-3 sub-state coverage: suppression is only asserted for the execute-pending (runnable task) state; spec-only, plan-only, and fail/partial-verdict suppression rely on untested spineIdle branches."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation run manually via gremlins (dross verify has no .go adapter). Package-scoped internal/cmd, --workers 14: 0 survivors in status.go (0 LIVED across spineIdle/renderActionAreas/wiring), but 539 of ~575 package mutants TIMED OUT under worker contention — contention timeouts can mask survivors, so efficacy is NOT cleanly measured. Clean re-run pending after the c-3 fix."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/status.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/status_test.go: no mutation adapter for .go"
