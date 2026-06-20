@@ -1,19 +1,11 @@
 {
-  "version": "0.1.0.10",
+  "version": "0.1.0.11",
   "current_milestone": "v0.1",
   "current_phase": "04-status-action-surfaces",
   "current_phase_status": "verified",
-  "last_activity": "2026-06-20T09:52:35.494859Z",
-  "last_action": "re-verified 04-status-action-surfaces: pass (3/3 covered after c-3 fix; mutation clean 0 survivors, efficacy 100%)",
+  "last_activity": "2026-06-20T10:12:12.653864Z",
+  "last_action": "quick: parallelize gremlins mutation via --workers/--test-cpu",
   "history": [
-    {
-      "at": "2026-06-19T16:01:00.695429Z",
-      "action": "created 02-harden-ship-merge-complete-flow"
-    },
-    {
-      "at": "2026-06-19T16:08:46.102403Z",
-      "action": "set current_phase=02-harden-ship-merge-complete-flow"
-    },
     {
       "at": "2026-06-19T16:08:46.110123Z",
       "action": "spec locked: 02-harden-ship-merge-complete-flow"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-20T09:52:35.494859Z",
       "action": "re-verified 04-status-action-surfaces: pass (3/3 covered after c-3 fix; mutation clean 0 survivors, efficacy 100%)"
+    },
+    {
+      "at": "2026-06-20T10:12:12.626431Z",
+      "action": "bump internal 0.1.0.10 → 0.1.0.11"
+    },
+    {
+      "at": "2026-06-20T10:12:12.653864Z",
+      "action": "quick: parallelize gremlins mutation via --workers/--test-cpu"
     }
   ]
 }

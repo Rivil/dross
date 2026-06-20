@@ -40,5 +40,5 @@
   text = "status.go not-covered mutants are non-criterion: 300/302 are conditional-operand mutants gremlins mis-attributes (Go coverage shows those switch lines covered); 314 is progressBar's pre-existing empty-bar branch; plus renderActionAreas' empty-input guard. None affect c-1/c-2/c-3."
 
 [[finding]]
-  severity = "FLAG"
-  text = "dross gap (not phase-blocking): dross verify has no .go mutation adapter, and internal/mutation/gremlins.go invokes gremlins without --workers, so Go mutation neither runs via verify nor parallelizes. Worth a follow-up task to wire the gremlins adapter into the .go verify path with a worker flag."
+  severity = "NOTE"
+  text = "dross gap (resolved by quick 0.1.0.11, commit b54e37f): correction — the gremlins adapter IS wired into the .go verify path (the earlier 'no adapter for .go' message was an artifact of --skip-mutation, which returns no adapters). The real gap was that internal/mutation/gremlins.go invoked gremlins without --workers, so Go mutation ran single-threaded. buildUnleashArgs now passes --workers (default NumCPU/2) and --test-cpu (default 1)."

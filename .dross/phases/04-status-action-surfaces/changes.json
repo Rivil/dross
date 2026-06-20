@@ -1,6 +1,15 @@
 {
   "phase": "04-status-action-surfaces",
   "tasks": {
+    "quick-11": {
+      "files": [
+        "internal/mutation/gremlins.go",
+        "internal/mutation/gremlins_test.go"
+      ],
+      "commit": "b54e37f",
+      "completed_at": "2026-06-20T10:12:12.64569Z",
+      "notes": "quick: parallelize gremlins via --workers/--test-cpu (default NumCPU/2, test-cpu 1)"
+    },
     "t-1": {
       "files": [
         "internal/cmd/status.go",
