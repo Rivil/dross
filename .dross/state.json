@@ -1,13 +1,9 @@
 {
   "version": "0.1.0.10",
   "current_milestone": "v0.1",
-  "last_activity": "2026-06-20T08:31:48.088049Z",
-  "last_action": "completed 03-fix-completion-chore-divergence",
+  "last_activity": "2026-06-20T08:36:41.228384Z",
+  "last_action": "resumed — v0.1 feature-complete; next is milestone wrap",
   "history": [
-    {
-      "at": "2026-06-19T13:57:31.389663Z",
-      "action": "set current_phase=01-architecture-comprehension-layer"
-    },
     {
       "at": "2026-06-19T13:57:31.395131Z",
       "action": "spec locked: 01-architecture-comprehension-layer"
@@ -203,6 +199,10 @@
     {
       "at": "2026-06-20T08:31:48.088049Z",
       "action": "completed 03-fix-completion-chore-divergence"
+    },
+    {
+      "at": "2026-06-20T08:36:41.228384Z",
+      "action": "resumed — v0.1 feature-complete; next is milestone wrap"
     }
   ]
 }
