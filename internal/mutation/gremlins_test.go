@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -323,11 +324,44 @@ func TestGremlinsBuildUnleashArgsDefault(t *testing.T) {
 		"gremlins", "unleash",
 		"--output", "reports/gremlins/output.json",
 		"--timeout-coefficient", "30",
+		"--workers", strconv.Itoa(defaultWorkers()),
+		"--test-cpu", "1",
 		"./internal/api",
 	}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("default args:\n got %v\nwant %v", args, want)
 	}
+}
+
+// TestGremlinsBuildUnleashArgsWorkers asserts explicit Workers/TestCPU
+// flow through to the flags, and that the defaults (NumCPU/2, 1) apply
+// when unset — the parallelism that avoids the oversubscription timeouts.
+func TestGremlinsBuildUnleashArgsWorkers(t *testing.T) {
+	args := (&Gremlins{Workers: 4, TestCPU: 2}).buildUnleashArgs("r.json", []string{"./x"})
+	if !argHasFlag(args, "--workers", "4") {
+		t.Errorf("expected --workers 4, got %v", args)
+	}
+	if !argHasFlag(args, "--test-cpu", "2") {
+		t.Errorf("expected --test-cpu 2, got %v", args)
+	}
+
+	def := (&Gremlins{}).buildUnleashArgs("r.json", []string{"./x"})
+	if !argHasFlag(def, "--workers", strconv.Itoa(defaultWorkers())) {
+		t.Errorf("expected default --workers %d, got %v", defaultWorkers(), def)
+	}
+	if !argHasFlag(def, "--test-cpu", "1") {
+		t.Errorf("expected default --test-cpu 1, got %v", def)
+	}
+}
+
+// argHasFlag reports whether args contains flag immediately followed by val.
+func argHasFlag(args []string, flag, val string) bool {
+	for i, a := range args {
+		if a == flag {
+			return i+1 < len(args) && args[i+1] == val
+		}
+	}
+	return false
 }
 
 // TestGremlinsBuildUnleashArgsOverride asserts a project-set
