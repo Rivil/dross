@@ -1,0 +1,118 @@
+{
+  "phase": "07-stack-profiles",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/stack/profile.go",
+        "internal/stack/profile_test.go"
+      ],
+      "commit": "6f5a31b",
+      "completed_at": "2026-06-20T17:53:41.27466Z",
+      "notes": "feature: stack profiles · Profile @ internal/stack/profile.go · declarative per-stack schema (runtime/tools/loadout) with validating loader"
+    },
+    "t-10": {
+      "files": [
+        "assets/prompts/execute.md",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "1b74571",
+      "completed_at": "2026-06-20T18:28:34.561017Z",
+      "notes": "feature: phase execution · execute.md loadout step · execute prompt calls dross stack loadout and injects the block as standing stack guidance"
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/stack.go",
+        "internal/cmd/stack_test.go"
+      ],
+      "commit": "ab8ed70",
+      "completed_at": "2026-06-20T18:29:44.001756Z",
+      "notes": "feature: stack profiles · stackApply @ internal/cmd/stack.go · dross stack apply re-syncs [runtime] from current profile on demand, unsupported errors"
+    },
+    "t-2": {
+      "files": [
+        "internal/stack/detect.go",
+        "internal/stack/detect_test.go"
+      ],
+      "commit": "c7a6a2a",
+      "completed_at": "2026-06-20T17:55:17.565072Z",
+      "notes": "feature: stack profiles · Detect @ internal/stack/detect.go · signal-scored stack detection returning matched profile id or Unsupported sentinel"
+    },
+    "t-3": {
+      "files": [
+        "internal/stack/embed.go",
+        "internal/stack/profiles/go.toml",
+        "internal/stack/profiles/README.md",
+        "internal/stack/embed_test.go",
+        "internal/stack/profile.go"
+      ],
+      "commit": "4c89285",
+      "completed_at": "2026-06-20T17:59:32.500276Z",
+      "notes": "feature: stack profiles · Embedded/LoadAll/Merge @ internal/stack/embed.go · go:embed built-ins + user-dir override (user wins), Go profile go.toml, drop-in README"
+    },
+    "t-4": {
+      "files": [
+        "internal/stack/runtime.go",
+        "internal/stack/runtime_test.go"
+      ],
+      "commit": "65587e2",
+      "completed_at": "2026-06-20T18:00:18.448908Z",
+      "notes": "feature: stack profiles · ResolveRuntime/ResolveCommand @ internal/stack/runtime.go · derives [runtime] commands from profile, picks first available variant per slot"
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/stack.go",
+        "cmd/dross/main.go",
+        "internal/project/project.go",
+        "internal/cmd/stack_test.go"
+      ],
+      "commit": "195d6f6",
+      "completed_at": "2026-06-20T18:02:39.930146Z",
+      "notes": "feature: stack profiles · Stack() command @ internal/cmd/stack.go · dross stack detect/show/list (+apply/loadout stubs); project.Stack.Profile stores matched id"
+    },
+    "t-6": {
+      "files": [
+        "internal/security/catalog.go",
+        "internal/quality/catalog.go",
+        "internal/security/catalog_test.go",
+        "internal/quality/catalog_test.go"
+      ],
+      "commit": "4f240a0",
+      "completed_at": "2026-06-20T18:06:19.41341Z",
+      "notes": "feature: security \u0026 quality audits · ScannersFor/AnalyzersFor @ internal/security/catalog.go,internal/quality/catalog.go · language-dedicated tools sourced from stack profile loadout, agnostic tools inline"
+    },
+    "t-7": {
+      "files": [
+        "internal/stack/detect.go",
+        "internal/security/recon.go",
+        "internal/quality/recon.go",
+        "internal/security/recon_test.go",
+        "internal/quality/recon_test.go"
+      ],
+      "commit": "9c6955c",
+      "completed_at": "2026-06-20T18:22:52.832681Z",
+      "notes": "feature: stack profiles · DetectLanguages @ internal/stack/detect.go · canonical ext-\u003elang language-set detector; security/quality recon delegate, duplicate maps removed"
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/init.go",
+        "internal/cmd/onboard.go",
+        "internal/cmd/init_test.go",
+        "internal/cmd/onboard_test.go"
+      ],
+      "commit": "eb602f1",
+      "completed_at": "2026-06-20T18:25:24.532513Z",
+      "notes": "feature: project bootstrap · seedRuntimeFromProfile @ internal/cmd/init.go · init/onboard seed [runtime] + [stack].profile from matched profile, unsupported left unseeded"
+    },
+    "t-9": {
+      "files": [
+        "internal/stack/loadout.go",
+        "internal/stack/loadout_test.go",
+        "internal/cmd/stack.go",
+        "internal/cmd/stack_test.go"
+      ],
+      "commit": "0d1d948",
+      "completed_at": "2026-06-20T18:26:57.737013Z",
+      "notes": "feature: stack profiles · RenderLoadout @ internal/stack/loadout.go · dross stack loadout emits agent loadout markdown block (MCP tools/guardrails/conventions + tool availability)"
+    }
+  }
+}

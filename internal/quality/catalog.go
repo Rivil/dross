@@ -1,6 +1,11 @@
 package quality
 
-import "os/exec"
+import (
+	"os/exec"
+	"runtime"
+
+	"github.com/Rivil/dross/internal/stack"
+)
 
 // Dimension is a substantive maintainability axis a quality finding can belong
 // to. The catalog maps each analyzer to the dimension it measures; the set is
@@ -83,44 +88,75 @@ func (a Analyzer) AppliesTo(lang string) bool {
 	return false
 }
 
-// catalog is the master analyzer table. Go is complete; the agnostic tools (scc,
-// jscpd) apply everywhere. Other languages get the agnostic set until a dedicated
-// catalog is added for them.
-var catalog = []Analyzer{
-	{Name: "gocyclo", Bin: "gocyclo", Dimension: Complexity, Languages: []string{"go"}, Core: true,
-		Install: "go install github.com/fzipp/gocyclo/cmd/gocyclo@latest"},
-	{Name: "dupl", Bin: "dupl", Dimension: Duplication, Languages: []string{"go"}, Core: true,
-		Install: "go install github.com/mibk/dupl@latest"},
-	{Name: "deadcode", Bin: "deadcode", Dimension: DeadCode, Languages: []string{"go"}, Core: true,
-		Install: "go install golang.org/x/tools/cmd/deadcode@latest"},
-	{Name: "errcheck", Bin: "errcheck", Dimension: ErrorHandling, Languages: []string{"go"}, Core: true,
-		Install: "go install github.com/kisielk/errcheck@latest"},
-	{Name: "ineffassign", Bin: "ineffassign", Dimension: ErrorHandling, Languages: []string{"go"}, Core: true,
-		Install: "go install github.com/gordonklaus/ineffassign@latest"},
+// agnosticCatalog holds the analyzers that apply to every codebase regardless of
+// language (scc, jscpd). Language-dedicated analyzers are NOT here — they live in
+// the stack profile for that language (internal/stack), so go.toml is the single
+// source for which Go analyzers run and adding a language's analyzers is a profile
+// drop-in, not a code edit (c-3).
+var agnosticCatalog = []Analyzer{
 	{Name: "scc", Bin: "scc", Dimension: Complexity, Core: true,
 		Install: "brew install scc  (or go install github.com/boyter/scc/v3@latest)"},
 	{Name: "jscpd", Bin: "jscpd", Dimension: Duplication, Core: true,
 		Install: "npm install -g jscpd  (or see github.com/kucherenko/jscpd)"},
 }
 
-// Catalog returns a copy of the full analyzer table.
+// toAnalyzer converts a profile tool into a language-dedicated Analyzer, carrying
+// its declared maintainability dimension through unchanged — so a cosmetic
+// dimension smuggled into a profile is still caught by TestCatalogExcludesCosmetic.
+func toAnalyzer(t stack.Tool, lang string) Analyzer {
+	return Analyzer{
+		Name:      t.Name,
+		Bin:       t.EffectiveBin(runtime.GOOS),
+		Dimension: Dimension(t.Dimension),
+		Languages: []string{lang},
+		Install:   t.Install,
+		Core:      t.Core,
+	}
+}
+
+// profileAnalyzers returns the dedicated analyzers declared in the stack profile
+// whose id == lang. A missing profile yields none, so the caller falls back to the
+// agnostic set.
+func profileAnalyzers(lang string) []Analyzer {
+	if lang == "" {
+		return nil
+	}
+	profiles, _ := stack.LoadAll()
+	p := stack.ByID(profiles, lang)
+	if p == nil {
+		return nil
+	}
+	var out []Analyzer
+	for _, tool := range p.Tools {
+		if tool.Kind == "analyzer" {
+			out = append(out, toAnalyzer(tool, lang))
+		}
+	}
+	return out
+}
+
+// Catalog returns the full analyzer table: the agnostic set plus every
+// language-dedicated analyzer contributed by a shipped stack profile.
 func Catalog() []Analyzer {
-	out := make([]Analyzer, len(catalog))
-	copy(out, catalog)
+	out := append([]Analyzer{}, agnosticCatalog...)
+	profiles, _ := stack.LoadAll()
+	for _, p := range profiles {
+		for _, tool := range p.Tools {
+			if tool.Kind == "analyzer" {
+				out = append(out, toAnalyzer(tool, p.ID))
+			}
+		}
+	}
 	return out
 }
 
 // AnalyzersFor returns the analyzers that apply to lang: every agnostic analyzer
-// plus any dedicated to that language. An unknown / stub language still gets the
-// agnostic set, so a run is never left with zero applicable analyzers.
+// plus any dedicated to that language by its profile. An unknown / stub language
+// still gets the agnostic set, so a run is never left with zero applicable
+// analyzers.
 func AnalyzersFor(lang string) []Analyzer {
-	var out []Analyzer
-	for _, a := range catalog {
-		if a.AppliesTo(lang) {
-			out = append(out, a)
-		}
-	}
-	return out
+	out := append([]Analyzer{}, agnosticCatalog...)
+	return append(out, profileAnalyzers(lang)...)
 }
 
 // ToolStatus pairs an analyzer with whether it was found on PATH.

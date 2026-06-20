@@ -33,6 +33,17 @@ Mark the board issue in-progress (no-op unless `[remote].board_sync` is on — s
 dross issue phase-sync <id> --status in-progress
 ```
 
+Load the stack loadout once and keep it in working context for the whole phase:
+```
+dross stack loadout
+```
+This prints a markdown block — the recommended MCP tools, guardrails, and locked
+conventions for the detected stack, plus which tools are installed. **Inject that
+block inline** and treat it as standing guidance while you implement every task
+(e.g. honour the guardrails before guessing an API, prefer the listed MCP tools).
+If it prints `no stack profile matches here`, there's no profile for this stack
+yet — skip it and proceed.
+
 ## 1. Per-task loop
 
 Repeat until `dross task next <phase>` returns nothing:

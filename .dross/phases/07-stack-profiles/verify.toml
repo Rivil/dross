@@ -1,0 +1,99 @@
+[verify]
+  phase = "07-stack-profiles"
+  generated_at = 2026-06-20T18:34:09.631019Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8180790960451978
+  mutants_killed = 724
+  mutants_survived = 161
+  mutants_not_covered = 161
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/stack/detect_test.go:TestDetectNonGoFixtureUnsupported",
+    "internal/stack/detect_test.go:TestDetect_GoRepoMatchesGo",
+    "internal/stack/detect_test.go:TestDetectPolyglotPrefersSignal",
+    "internal/cmd/stack_test.go:TestStackDetectNonGoExitsZeroUnsupported",
+    "internal/security/recon_test.go:TestSecurityReconDelegatesToStack",
+    "internal/quality/recon_test.go:TestQualityReconDelegatesToStack",
+    "internal/security/recon_test.go:TestNoDuplicateExtLangMap",
+  ]
+  notes = "Detection is signal-scored (not a Go switch); matches Go, returns Unsupported for non-Go, polyglot prefers the marker file; recon in both audit packages delegates to the single stack detector."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/stack/runtime_test.go:TestGoRuntimeMatchesLocked",
+    "internal/stack/runtime_test.go:TestRuntimeSlotPicksAvailableVariant",
+    "internal/cmd/init_test.go:TestInitSeedsRuntimeFromProfile",
+    "internal/cmd/init_test.go:TestInitUnsupportedLeavesRuntimeUnseeded",
+    "internal/cmd/onboard_test.go:TestOnboardSeedsRuntimeFromProfile",
+    "internal/cmd/stack_test.go:TestStackApplyResyncsRuntime",
+    "internal/cmd/stack_test.go:TestStackApplyUnsupportedDoesNotFabricate",
+  ]
+  notes = "Go profile resolves to the exact locked [runtime] strings; init/onboard seed [runtime]+[stack].profile from it; unsupported leaves slots empty (no fabricated commands); apply re-syncs."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/security/catalog_test.go:TestScannersTrackProfile",
+    "internal/quality/catalog_test.go:TestAnalyzersTrackProfile",
+    "internal/stack/profile_test.go:TestProfileSchemaShapes",
+  ]
+  notes = "ScannersFor/AnalyzersFor derive language-dedicated tools from the profile loadout — removing a tool from the profile drops it from the live list (proven via user-dir override); agnostic tools stay; cosmetic guard preserved."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/stack/loadout_test.go:TestLoadoutRendersFromLocked",
+    "internal/stack/loadout_test.go:TestLoadoutMarksUnavailableGatedTool",
+    "internal/stack/loadout_test.go:TestLoadoutEmptyRendersNone",
+    "internal/cmd/stack_test.go:TestStackLoadoutCommandRenders",
+    "internal/cmd/execute_prompt_test.go:TestExecutePromptInvokesLoadout",
+  ]
+  notes = "dross stack loadout renders the markdown block (MCP tools/guardrails/conventions + tool availability, empty→(none)); execute.md wires the invocation + inject instruction — c-4 proven end-to-end. No agent .md files."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [
+    "internal/stack/detect_test.go:TestDetect_SecondProfileSelected",
+    "internal/stack/embed_test.go:TestUserDirWinsOnIDCollision",
+    "internal/stack/embed_test.go:TestReadmeDocumentsZeroCodeDropIn",
+    "internal/stack/profile_test.go:TestProfileSchemaShapes",
+  ]
+  notes = "Extensibility keystone: a second non-Go profile loads and is selected by detection purely from data; user-dir drop-in overrides by id; README documents zero-code drop-in; schema carries all four extensibility shapes (pkg-mgr variants, multi-command slots, gated tools, per-OS names)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation efficacy on the phase diff is 100% — gremlins reports Lived=0 (no COVERED mutant survived anywhere). All 161 'survivors' are NOT-COVERED mutants (tests never execute those lines), so the rollup score 0.82 understates efficacy; efficacy excluding not-covered = 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The mutation run is package-scoped: gremlins mutates whole changed packages, so the not-covered survivors are dominated by PRE-EXISTING files this phase never touched (verify.go, ship.go, issue.go, stats.go, rule.go, codex.go, doctor.go, env.go, milestone.go, phase.go, status.go, telemetry.go, validate.go) swept in because internal/cmd changed. Not a phase signal."
+
+[[finding]]
+  severity = "FLAG"
+  text = "A few not-covered branches in NEW stack code have no exercising test (error/edge paths): internal/stack/detect.go (rootFilenames/extsInTree error returns, normalizeExt), internal/stack/embed.go (read-error branches), internal/cmd/stack.go:78/82 (list Title branch). Optional follow-up; none affects a criterion's covering assertions."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/execute.md: no mutation adapter for .md (content asserted by TestExecutePromptInvokesLoadout)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profiles/README.md: no mutation adapter for .md (content asserted by TestReadmeDocumentsZeroCodeDropIn)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profiles/go.toml: no mutation adapter for .toml (behaviour asserted via runtime/catalog/loadout tests)"

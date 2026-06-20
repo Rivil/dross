@@ -70,7 +70,9 @@ Calibrate-only, read-only multi-pass code-quality audit: real analyzers plus an 
 - `quality.ScaffoldSpec` — `internal/quality/scaffold.go:15`
 - `Quality` (CLI) — `internal/cmd/quality.go:20`
 
-_introduced 06-dross-quality · 715b3f2_
+The analyzer catalog now sources language-dedicated tools from the active stack profile (agnostic tools stay inline); `recon.DetectLanguages` delegates to the single `stack.DetectLanguages`.
+
+_introduced 06-dross-quality · extended 07-stack-profiles · 4f240a0_
 
 ### Configuration
 
@@ -85,12 +87,13 @@ _c8b346e_
 
 ### Greenfield bootstrap
 
-Seed the .dross/ scaffold and an ARCHITECTURE.md skeleton in a new repo.
+Seed the .dross/ scaffold and an ARCHITECTURE.md skeleton in a new repo, and seed `[runtime]` + `[stack].profile` from the detected stack profile (unsupported stacks are left unseeded, never fabricated).
 
 - `Init` — `internal/cmd/init.go:28`
+- `seedRuntimeFromProfile` — `internal/cmd/init.go`
 - `project.Project` — `internal/project/project.go:16`
 
-_c8b346e_
+_c8b346e · extended 07-stack-profiles · eb602f1_
 
 ### Issue board sync
 
@@ -134,13 +137,13 @@ _c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-compl
 
 ### Repo onboarding
 
-Scan an existing repo's signal files (Dockerfile, package.json, go.mod, …) into a draft project.toml.
+Scan an existing repo's signal files (Dockerfile, package.json, go.mod, …) into a draft project.toml, seeding `[runtime]` + `[stack].profile` from the matched stack profile.
 
 - `Onboard` — `internal/cmd/onboard.go:26`
 - `scanRepo` — `internal/cmd/onboard.go:109`
 - `toProject` — `internal/cmd/onboard.go:140`
 
-_c8b346e_
+_c8b346e · extended 07-stack-profiles · eb602f1_
 
 ### Rules system
 
@@ -163,7 +166,9 @@ Context-free, read-only multi-pass security audit: real scanners plus an adversa
 - `security.ScaffoldSpec` — `internal/security/scaffold.go`
 - `Security` (CLI) — `internal/cmd/security.go:18`
 
-_introduced 05-dross-secure · 37fde7f_
+The scanner catalog now sources language-dedicated tools from the active stack profile (agnostic tools stay inline); `recon.DetectLanguages` delegates to the single `stack.DetectLanguages`.
+
+_introduced 05-dross-secure · extended 07-stack-profiles · 4f240a0_
 
 ### Ship recovery
 
@@ -182,6 +187,19 @@ Push the phase branch and open a provider-aware PR (GitHub/Forgejo) with reviewe
 - `ship.BuildPRBody` — `internal/ship/body.go:20`
 
 _introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · 77220f5_
+
+### Stack profiles
+
+Declarative per-stack profiles — embedded built-ins plus `~/.claude/dross/profiles/` drop-ins (user wins on id) — that tune dross to a detected stack: runtime commands, the security/quality tool loadout, and the agent loadout. `dross stack detect/show/list/apply/loadout`; detection is signal-scored (marker files + source extensions), returning a matched profile id or an `unsupported` sentinel rather than a guess. `apply` re-syncs `[runtime]`; `loadout` emits a markdown block the execute prompt injects inline. Adding a stack is a single TOML drop-in — zero code change.
+
+- `stack.Profile` / `stack.Load` — `internal/stack/profile.go:26`
+- `stack.Detect` / `stack.DetectLanguages` — `internal/stack/detect.go`
+- `stack.Embedded` / `stack.LoadAll` / `stack.Merge` — `internal/stack/embed.go`
+- `stack.ResolveRuntime` — `internal/stack/runtime.go`
+- `stack.RenderLoadout` — `internal/stack/loadout.go`
+- `Stack` (CLI) — `internal/cmd/stack.go`
+
+_introduced 07-stack-profiles · 6f5a31b_
 
 ### State & status
 

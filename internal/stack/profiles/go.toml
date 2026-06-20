@@ -1,0 +1,97 @@
+# Go stack profile — the built-in, shipped-embedded reference profile.
+# To add or override a stack, drop a sibling <id>.toml into
+# ~/.claude/dross/profiles/ — no recompile, zero code change. See README.md.
+
+id    = "go"
+title = "Go"
+
+[signals]
+  files    = ["go.mod"]
+  exts     = [".go"]
+  priority = 10
+
+[[package_managers]]
+  name     = "go"
+  bin      = "go"
+  lockfile = "go.sum"
+
+# Runtime command set seeded into project.toml [runtime] at init/onboard.
+[runtime.test]
+  run = "go test -count=1 ./..."
+[runtime.typecheck]
+  run = "go vet ./..."
+[runtime.format]
+  run = "gofmt -l ."
+[runtime.build]
+  run = "make build"
+
+# Tool loadout: the Go-dedicated scanners and analyzers. Agnostic tools
+# (gitleaks, semgrep, trivy, scc, jscpd) apply to every stack and stay in the
+# security/quality catalogs — they are intentionally NOT listed here.
+
+[[tools]]
+  name    = "govulncheck"
+  kind    = "scanner"
+  core    = true
+  install = "go install golang.org/x/vuln/cmd/govulncheck@latest"
+[[tools]]
+  name    = "gosec"
+  kind    = "scanner"
+  core    = true
+  install = "go install github.com/securego/gosec/v2/cmd/gosec@latest"
+[[tools]]
+  name    = "staticcheck"
+  kind    = "scanner"
+  install = "go install honnef.co/go/tools/cmd/staticcheck@latest"
+[[tools]]
+  name    = "osv-scanner"
+  kind    = "scanner"
+  install = "go install github.com/google/osv-scanner/cmd/osv-scanner@latest"
+
+[[tools]]
+  name      = "gocyclo"
+  kind      = "analyzer"
+  dimension = "complexity"
+  core      = true
+  install   = "go install github.com/fzipp/gocyclo/cmd/gocyclo@latest"
+[[tools]]
+  name      = "dupl"
+  kind      = "analyzer"
+  dimension = "duplication"
+  core      = true
+  install   = "go install github.com/mibk/dupl@latest"
+[[tools]]
+  name      = "deadcode"
+  kind      = "analyzer"
+  dimension = "dead-code"
+  core      = true
+  install   = "go install golang.org/x/tools/cmd/deadcode@latest"
+[[tools]]
+  name      = "errcheck"
+  kind      = "analyzer"
+  dimension = "error-handling"
+  core      = true
+  install   = "go install github.com/kisielk/errcheck@latest"
+[[tools]]
+  name      = "ineffassign"
+  kind      = "analyzer"
+  dimension = "error-handling"
+  core      = true
+  install   = "go install github.com/gordonklaus/ineffassign@latest"
+
+# Agent loadout rendered by `dross stack loadout` (c-4): the bundle a coding agent
+# should carry for this stack — not a persona, a loadout.
+[loadout]
+  mcp_tools = [
+    "context7 (resolve-library-id + query-docs) — verify Go stdlib / module API signatures before calling them",
+  ]
+  guardrails = [
+    "Verify a library/API signature before guessing it — Go module APIs drift across versions.",
+    "Run `go vet ./...` and the test suite before claiming a change works.",
+    "Single static binary: no runtime dependencies — don't introduce one.",
+  ]
+  conventions = [
+    "Cobra for command structure; each subcommand returns a *cobra.Command.",
+    "TOML (BurntSushi) for all config/state; structs use toml tags and round-trip cleanly.",
+    "Errors wrapped with fmt.Errorf(\"context: %w\", err); table-driven, data-first design.",
+  ]

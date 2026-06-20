@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/Rivil/dross/internal/profile"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/rules"
+	"github.com/Rivil/dross/internal/stack"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -67,6 +69,7 @@ fill it in conversationally. For adopting an existing repo, use ` + "`dross onbo
 				},
 			}
 			p.Remote, _ = seedRemote(cwd)
+			profID := seedRuntimeFromProfile(cwd, p)
 			if err := p.Save(filepath.Join(root, project.File)); err != nil {
 				return err
 			}
@@ -121,6 +124,9 @@ fill it in conversationally. For adopting an existing repo, use ` + "`dross onbo
 			if p.Remote.URL != "" {
 				Printf("• Detected git remote: %s (provider: %s)\n", p.Remote.URL, providerOrUnknown(p.Remote.Provider))
 			}
+			if profID != stack.Unsupported {
+				Printf("• Seeded [runtime] from the %q stack profile\n", profID)
+			}
 			Print("Next: run /dross-init to fill in project.toml conversationally")
 			return nil
 		},
@@ -163,4 +169,28 @@ func providerOrUnknown(p string) string {
 		return "unknown — slash command will ask"
 	}
 	return p
+}
+
+// seedRuntimeFromProfile detects the stack at root and, when a profile matches,
+// fills project.toml [runtime] (test/typecheck/format/build) and [stack].profile
+// from that profile instead of a hardcoded guess. On an unsupported stack it seeds
+// nothing — no fabricated commands — so an unknown repo is left honestly empty for
+// the slash command to fill. Returns the matched profile id (or stack.Unsupported).
+func seedRuntimeFromProfile(root string, p *project.Project) string {
+	profiles, _ := stack.LoadAll() // merged set includes embedded even on user error
+	id := stack.Detect(root, profiles)
+	if id == stack.Unsupported {
+		return id
+	}
+	prof := stack.ByID(profiles, id)
+	if prof == nil {
+		return stack.Unsupported
+	}
+	rt := stack.ResolveRuntime(prof, runtime.GOOS, exec.LookPath)
+	p.Stack.Profile = id
+	p.Runtime.TestCommand = rt.Test
+	p.Runtime.TypecheckCommand = rt.Typecheck
+	p.Runtime.FormatCommand = rt.Format
+	p.Runtime.BuildCommand = rt.Build
+	return id
 }

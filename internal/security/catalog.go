@@ -1,6 +1,11 @@
 package security
 
-import "os/exec"
+import (
+	"os/exec"
+	"runtime"
+
+	"github.com/Rivil/dross/internal/stack"
+)
 
 // Scanner is one security tool dross knows how to run. The catalog is data-driven
 // so adding a tool (or a whole language) is an edit to this table, not a code
@@ -39,18 +44,12 @@ func (s Scanner) AppliesTo(lang string) bool {
 	return false
 }
 
-// catalog is the master scanner table. Go is complete; the agnostic tools
-// (gitleaks, semgrep, trivy) apply everywhere. Other languages get the agnostic
-// set until a dedicated catalog is added for them.
-var catalog = []Scanner{
-	{Name: "govulncheck", Bin: "govulncheck", Languages: []string{"go"}, Core: true,
-		Install: "go install golang.org/x/vuln/cmd/govulncheck@latest"},
-	{Name: "gosec", Bin: "gosec", Languages: []string{"go"}, Core: true,
-		Install: "go install github.com/securego/gosec/v2/cmd/gosec@latest"},
-	{Name: "staticcheck", Bin: "staticcheck", Languages: []string{"go"},
-		Install: "go install honnef.co/go/tools/cmd/staticcheck@latest"},
-	{Name: "osv-scanner", Bin: "osv-scanner", Languages: []string{"go"},
-		Install: "go install github.com/google/osv-scanner/cmd/osv-scanner@latest"},
+// agnosticCatalog holds the scanners that apply to every codebase regardless of
+// language (secret/SAST/dependency tools). Language-dedicated scanners are NOT
+// here — they live in the stack profile for that language (internal/stack), so
+// `dross stack`'s go.toml is the single source for which Go scanners run and
+// adding a language's scanners is a profile drop-in, not a code edit (c-3).
+var agnosticCatalog = []Scanner{
 	{Name: "gitleaks", Bin: "gitleaks", Core: true,
 		Install: "brew install gitleaks  (or see github.com/gitleaks/gitleaks)"},
 	{Name: "semgrep", Bin: "semgrep", Core: true,
@@ -59,24 +58,60 @@ var catalog = []Scanner{
 		Install: "brew install trivy  (or see github.com/aquasecurity/trivy)"},
 }
 
-// Catalog returns a copy of the full scanner table.
+// toScanner converts a profile tool into a language-dedicated Scanner.
+func toScanner(t stack.Tool, lang string) Scanner {
+	return Scanner{
+		Name:      t.Name,
+		Bin:       t.EffectiveBin(runtime.GOOS),
+		Languages: []string{lang},
+		Install:   t.Install,
+		Core:      t.Core,
+	}
+}
+
+// profileScanners returns the dedicated scanners declared in the stack profile
+// whose id == lang. A missing profile (unknown/stub language) yields none, so the
+// caller falls back to the agnostic set.
+func profileScanners(lang string) []Scanner {
+	if lang == "" {
+		return nil
+	}
+	profiles, _ := stack.LoadAll() // merged set still includes embedded on user error
+	p := stack.ByID(profiles, lang)
+	if p == nil {
+		return nil
+	}
+	var out []Scanner
+	for _, tool := range p.Tools {
+		if tool.Kind == "scanner" {
+			out = append(out, toScanner(tool, lang))
+		}
+	}
+	return out
+}
+
+// Catalog returns the full scanner table: the agnostic set plus every
+// language-dedicated scanner contributed by a shipped stack profile.
 func Catalog() []Scanner {
-	out := make([]Scanner, len(catalog))
-	copy(out, catalog)
+	out := append([]Scanner{}, agnosticCatalog...)
+	profiles, _ := stack.LoadAll()
+	for _, p := range profiles {
+		for _, tool := range p.Tools {
+			if tool.Kind == "scanner" {
+				out = append(out, toScanner(tool, p.ID))
+			}
+		}
+	}
 	return out
 }
 
 // ScannersFor returns the scanners that apply to lang: every agnostic scanner
-// plus any dedicated to that language. An unknown / stub language still gets the
-// agnostic set, so a run is never left with zero applicable scanners.
+// plus any dedicated to that language by its profile. An unknown / stub language
+// still gets the agnostic set, so a run is never left with zero applicable
+// scanners.
 func ScannersFor(lang string) []Scanner {
-	var out []Scanner
-	for _, s := range catalog {
-		if s.AppliesTo(lang) {
-			out = append(out, s)
-		}
-	}
-	return out
+	out := append([]Scanner{}, agnosticCatalog...)
+	return append(out, profileScanners(lang)...)
 }
 
 // ToolStatus pairs a scanner with whether it was found on PATH.

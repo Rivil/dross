@@ -1,97 +1,9 @@
 {
   "version": "0.1.0.13",
   "current_milestone": "v0.1",
-  "last_activity": "2026-06-20T16:50:38.121585Z",
-  "last_action": "completed 06-dross-quality",
+  "last_activity": "2026-06-20T18:51:12.226629Z",
+  "last_action": "completed 07-stack-profiles",
   "history": [
-    {
-      "at": "2026-06-20T09:47:48.815366Z",
-      "action": "fixed c-3 verify-pending leak (t-2 amended): spineIdle now requires verdict==pass for in-phase idle"
-    },
-    {
-      "at": "2026-06-20T09:52:35.48788Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-20T09:52:35.494859Z",
-      "action": "re-verified 04-status-action-surfaces: pass (3/3 covered after c-3 fix; mutation clean 0 survivors, efficacy 100%)"
-    },
-    {
-      "at": "2026-06-20T10:12:12.626431Z",
-      "action": "bump internal 0.1.0.10 → 0.1.0.11"
-    },
-    {
-      "at": "2026-06-20T10:12:12.653864Z",
-      "action": "quick: parallelize gremlins mutation via --workers/--test-cpu"
-    },
-    {
-      "at": "2026-06-20T10:38:31.666966Z",
-      "action": "completed 04-status-action-surfaces"
-    },
-    {
-      "at": "2026-06-20T10:42:41.040804Z",
-      "action": "created 05-dross-secure"
-    },
-    {
-      "at": "2026-06-20T11:15:40.314425Z",
-      "action": "set current_phase=05-dross-secure"
-    },
-    {
-      "at": "2026-06-20T11:15:40.32118Z",
-      "action": "spec locked: 05-dross-secure"
-    },
-    {
-      "at": "2026-06-20T11:52:06.514498Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-20T11:52:06.522283Z",
-      "action": "plan locked: 05-dross-secure (9 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-06-20T12:22:16.455104Z",
-      "action": "plan reviewed: 05-dross-secure (0 blocking, 4 flags; applied 1/3/4, t-9 kept per D-3)"
-    },
-    {
-      "at": "2026-06-20T12:29:29.784476Z",
-      "action": "executed t-1 (run-dir + collision-safe run-id)"
-    },
-    {
-      "at": "2026-06-20T12:34:48.709777Z",
-      "action": "executed t-2 (scanner catalog + availability detection)"
-    },
-    {
-      "at": "2026-06-20T12:37:15.057121Z",
-      "action": "executed t-3 (findings ledger schema + malformed-input guard)"
-    },
-    {
-      "at": "2026-06-20T12:43:20.236472Z",
-      "action": "executed t-7 (author secure.md + dross-secure.md prompts)"
-    },
-    {
-      "at": "2026-06-20T12:45:15.094432Z",
-      "action": "executed t-9 (gitignore security run artifacts)"
-    },
-    {
-      "at": "2026-06-20T12:47:22.287486Z",
-      "action": "executed t-4 (language detection + tool-coverage manifest)"
-    },
-    {
-      "at": "2026-06-20T12:49:51.934919Z",
-      "action": "executed t-8 (secure prompt content harness)"
-    },
-    {
-      "at": "2026-06-20T12:53:36.231574Z",
-      "action": "executed t-5 (findings→spec.toml scaffold writer)"
-    },
-    {
-      "at": "2026-06-20T12:57:49.066172Z",
-      "action": "executed t-6 (wire dross security subcommand)"
-    },
-    {
-      "at": "2026-06-20T12:58:02.814642Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-06-20T12:58:02.824193Z",
       "action": "phase 05-dross-secure executed (9/9 done)"
@@ -203,6 +115,94 @@
     {
       "at": "2026-06-20T16:50:38.121585Z",
       "action": "completed 06-dross-quality"
+    },
+    {
+      "at": "2026-06-20T16:54:00.71112Z",
+      "action": "created 07-stack-profiles"
+    },
+    {
+      "at": "2026-06-20T17:33:37.280013Z",
+      "action": "set current_phase=07-stack-profiles"
+    },
+    {
+      "at": "2026-06-20T17:33:37.286271Z",
+      "action": "spec locked: 07-stack-profiles"
+    },
+    {
+      "at": "2026-06-20T17:45:07.533269Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-20T17:45:07.539867Z",
+      "action": "plan locked: 07-stack-profiles (10 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-20T17:50:59.395959Z",
+      "action": "plan reviewed: 07-stack-profiles (0 blocking, 0 flags after 1 amend; 11 tasks)"
+    },
+    {
+      "at": "2026-06-20T17:53:41.285619Z",
+      "action": "executed t-1 (stack profile schema + loader)"
+    },
+    {
+      "at": "2026-06-20T17:55:17.578238Z",
+      "action": "executed t-2 (centralize stack detection)"
+    },
+    {
+      "at": "2026-06-20T17:59:32.5123Z",
+      "action": "executed t-3 (embed Go profile + user-dir merge + README)"
+    },
+    {
+      "at": "2026-06-20T18:00:18.46163Z",
+      "action": "executed t-4 (resolve runtime command set from profile)"
+    },
+    {
+      "at": "2026-06-20T18:02:39.942048Z",
+      "action": "executed t-5 (dross stack command tree)"
+    },
+    {
+      "at": "2026-06-20T18:06:19.423838Z",
+      "action": "executed t-6 (catalogs consume Go profile loadout)"
+    },
+    {
+      "at": "2026-06-20T18:22:52.844375Z",
+      "action": "executed t-7 (de-duplicate recon DetectLanguages onto stack)"
+    },
+    {
+      "at": "2026-06-20T18:25:24.543658Z",
+      "action": "executed t-8 (seed init/onboard runtime from profile)"
+    },
+    {
+      "at": "2026-06-20T18:26:57.748356Z",
+      "action": "executed t-9 (dross stack loadout emitter)"
+    },
+    {
+      "at": "2026-06-20T18:28:34.570463Z",
+      "action": "executed t-10 (wire loadout into execute prompt)"
+    },
+    {
+      "at": "2026-06-20T18:29:44.01158Z",
+      "action": "executed t-11 (dross stack apply re-sync)"
+    },
+    {
+      "at": "2026-06-20T18:30:16.432859Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-20T18:30:16.438599Z",
+      "action": "phase 07-stack-profiles executed (11/11 done)"
+    },
+    {
+      "at": "2026-06-20T18:39:32.541905Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-20T18:39:32.547552Z",
+      "action": "verified 07-stack-profiles: pass (5/5 covered; phase-diff mutation efficacy 100% / Lived=0; rollup 0.82 package-scoped — not a phase signal)"
+    },
+    {
+      "at": "2026-06-20T18:51:12.226629Z",
+      "action": "completed 07-stack-profiles"
     }
   ]
 }

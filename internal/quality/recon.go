@@ -1,78 +1,13 @@
 package quality
 
-import (
-	"io/fs"
-	"path/filepath"
-	"sort"
-)
+import "github.com/Rivil/dross/internal/stack"
 
-// extLang maps source-file extensions to languages. Unknown extensions are
-// simply ignored — recon never crashes on an extension it doesn't recognise.
-var extLang = map[string]string{
-	".go":    "go",
-	".py":    "python",
-	".js":    "javascript",
-	".jsx":   "javascript",
-	".ts":    "typescript",
-	".tsx":   "typescript",
-	".rb":    "ruby",
-	".rs":    "rust",
-	".java":  "java",
-	".kt":    "kotlin",
-	".c":     "c",
-	".h":     "c",
-	".cc":    "cpp",
-	".cpp":   "cpp",
-	".cs":    "csharp",
-	".php":   "php",
-	".swift": "swift",
-}
-
-// skipDirs are never descended into during recon. The tool sweep stays code-only
-// — .dross is excluded so the sweep reads no planning artifacts (the locked
-// context_model keeps the sweep code-only; calibrate-only context lives in the
-// prompt half). The rest are build/vendor noise that would only pollute language
-// detection.
-var skipDirs = map[string]bool{
-	".dross":       true,
-	".git":         true,
-	"node_modules": true,
-	"vendor":       true,
-	"dist":         true,
-	".idea":        true,
-	".vscode":      true,
-}
-
-// DetectLanguages walks the tree at root and returns the sorted, de-duplicated set
-// of languages found, mapped from file extensions. It never descends into .dross/
-// (keeping the tool sweep code-only) or other noise dirs, and silently ignores
-// files with unknown extensions.
+// DetectLanguages returns the sorted, de-duplicated set of languages under root.
+// It delegates to internal/stack so the ext->lang mapping lives in exactly one
+// place — security and quality recon share the same canonical detector and can
+// never drift.
 func DetectLanguages(root string) ([]string, error) {
-	set := map[string]bool{}
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if path != root && skipDirs[d.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if lang, ok := extLang[filepath.Ext(d.Name())]; ok {
-			set[lang] = true
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]string, 0, len(set))
-	for l := range set {
-		out = append(out, l)
-	}
-	sort.Strings(out)
-	return out, nil
+	return stack.DetectLanguages(root)
 }
 
 // Manifest is the tool-coverage record for a run: which analyzers ran (installed)
