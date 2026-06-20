@@ -1,22 +1,24 @@
 [verify]
   phase = "05-dross-secure"
-  generated_at = 2026-06-20T12:59:00.281019Z
-  verdict = "partial"
+  generated_at = 2026-06-20T13:08:35.11079Z
+  verdict = "pass"
 
 [summary]
   mutation_status = "measured"
-  mutation_score = 0.8
-  mutants_killed = 616
-  mutants_survived = 154
-  mutants_not_covered = 154
+  mutation_score = 0.8064935064935065
+  mutants_killed = 621
+  mutants_survived = 149
+  mutants_not_covered = 149
   criteria_total = 6
   criteria_covered = 6
   criteria_uncovered = 0
 
-# Phase-diff mutation (the signal): internal/security/* killed 23/23 COVERED
-# mutants — 100% efficacy, 0 survived. The package-scoped 0.80 rollup is NOT a
-# phase signal: all 154 "survived" are NOT-COVERED mutants in pre-existing
-# internal/cmd files this phase never touched (see the package-scoped NOTE).
+# Phase-diff mutation is CLEAN: every covered mutant in this phase's own files
+# (internal/security/* and internal/cmd/security.go) is killed — 0 survived, 0
+# not-covered after the amend. The 0.806 rollup is package-scoped noise: all 149
+# "survived" are NOT-COVERED mutants in pre-existing internal/cmd files this phase
+# never touched (see the package-scoped NOTE). Per the established practice on
+# phases 02/03/04, the package rollup is not the phase signal.
 
 [[criterion]]
   id = "c-1"
@@ -26,9 +28,10 @@
     "internal/security/run_test.go:TestNewRunCollision",
     "internal/security/run_test.go:TestNewRunWriteBoundary",
     "internal/security/run_test.go:TestShortSHAFallback",
+    "internal/security/run_test.go:TestNormalizeSHA",
     "internal/cmd/security_test.go:TestSecurityRunCreatesDir",
   ]
-  notes = "Run-id format, collision suffix, write-boundary, and no-git fallback all killed. FLAG: run.go:40 empty-sha branch (git outputs empty string, no error) is not covered — only the error path is exercised."
+  notes = "Run-id format, collision suffix, write-boundary, no-git fallback, and the empty-output fallback (normalizeSHA) all killed."
 
 [[criterion]]
   id = "c-2"
@@ -70,8 +73,10 @@
     "internal/security/scaffold_test.go:TestScaffoldCriterionCitesLedger",
     "internal/security/scaffold_test.go:TestScaffoldEmptyRefuses",
     "internal/security/scaffold_test.go:TestScaffoldRoundTripsLoadSpec",
+    "internal/cmd/security_test.go:TestSecurityScaffoldCommand",
+    "internal/cmd/security_test.go:TestSecurityScaffoldEmptyLedgerErrors",
   ]
-  notes = "One-criterion-per-finding, criticals-first ordering, ledger-id citation, empty-scaffold guard, and LoadSpec round-trip all killed. FLAG: the dross security scaffold CLI command's error-forwarding branches (security.go:93,97,101,104) are untested — the scaffold subcommand is never invoked with a bad run-dir."
+  notes = "One-criterion-per-finding, criticals-first ordering, ledger-id citation, empty-scaffold guard, and LoadSpec round-trip killed; the scaffold CLI command's happy path + zero-survivor error path now exercised (kills the former error-branch survivors)."
 
 [[criterion]]
   id = "c-6"
@@ -84,16 +89,12 @@
   notes = "Behavioural git check-ignore, containedPath traversal refusal (../main.go) + run-stays-in-sandbox walk, and the prompt's read-only/no--fix rule all killed."
 
 [[finding]]
-  severity = "FLAG"
-  text = "Phase-diff surviving mutants: internal/cmd/security.go:93,97,101,104 (CONDITIONALS_NEGATION) — the `dross security scaffold` command's `if err != nil` error-forwarding branches are never exercised; no test invokes the scaffold subcommand with a missing/garbled findings.toml. The underlying ScaffoldSpec logic is fully killed in internal/security/scaffold.go."
-
-[[finding]]
-  severity = "FLAG"
-  text = "Phase-diff not-covered branch: internal/security/run.go:40 (CONDITIONALS_NEGATION) — ShortSHA's empty-string fallback (git returns empty output with no error) is never run; TestShortSHAFallback covers the error path only."
+  severity = "NOTE"
+  text = "Phase-diff mutation clean: every covered mutant in internal/security/* and internal/cmd/security.go is killed (0 survived, 0 not-covered) after amending the scaffold-command and normalizeSHA tests."
 
 [[finding]]
   severity = "NOTE"
-  text = "Package-scoped mutation noise: all 154 'survived' mutants are NOT-COVERED lines in pre-existing internal/cmd files this phase never touched (status.go, issue.go, ship.go, verify.go, rule.go, codex.go, env.go, doctor.go, stats.go, milestone.go, phase.go, profile.go, project.go, etc.). The 0.80 rollup is the package-scope artifact, not a phase signal — consistent with the package-scoped mutation notes on phases 02/03/04. Phase-diff efficacy on internal/security/* = 100% (23/23 covered killed)."
+  text = "Package-scoped mutation noise: all 149 'survived' mutants are NOT-COVERED lines in pre-existing internal/cmd files this phase never touched (status.go, issue.go, ship.go, verify.go, rule.go, codex.go, env.go, doctor.go, stats.go, milestone.go, phase.go, profile.go, project.go, root.go, etc.). The 0.806 rollup is the package-scope artifact, not a phase signal — consistent with the package-scoped mutation notes on phases 02/03/04."
 
 [[finding]]
   severity = "NOTE"
