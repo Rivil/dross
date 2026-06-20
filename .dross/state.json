@@ -1,15 +1,9 @@
 {
   "version": "0.1.0.13",
   "current_milestone": "v0.1",
-  "current_phase": "07-stack-profiles",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-20T18:39:32.547552Z",
-  "last_action": "verified 07-stack-profiles: pass (5/5 covered; phase-diff mutation efficacy 100% / Lived=0; rollup 0.82 package-scoped — not a phase signal)",
+  "last_activity": "2026-06-20T18:51:12.226629Z",
+  "last_action": "completed 07-stack-profiles",
   "history": [
-    {
-      "at": "2026-06-20T12:58:02.814642Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-06-20T12:58:02.824193Z",
       "action": "phase 05-dross-secure executed (9/9 done)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-20T18:39:32.547552Z",
       "action": "verified 07-stack-profiles: pass (5/5 covered; phase-diff mutation efficacy 100% / Lived=0; rollup 0.82 package-scoped — not a phase signal)"
+    },
+    {
+      "at": "2026-06-20T18:51:12.226629Z",
+      "action": "completed 07-stack-profiles"
     }
   ]
 }
