@@ -99,3 +99,63 @@ func TestStackLoadoutCommandRenders(t *testing.T) {
 		t.Errorf("loadout command did not render the markdown block; got:\n%s", out)
 	}
 }
+
+func TestStackApplyResyncsRuntime(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	drossDir := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(drossDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stale := &project.Project{
+		Stack:   project.Stack{Languages: []string{"go"}},
+		Runtime: project.Runtime{Mode: "native", TestCommand: "STALE test", BuildCommand: "STALE build"},
+	}
+	if err := stale.Save(filepath.Join(drossDir, project.File)); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+
+	if err := runCmd(t, Stack(), "apply"); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	p, err := project.Load(filepath.Join(drossDir, project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Runtime.TestCommand != "go test -count=1 ./..." {
+		t.Errorf("stale [runtime].test not overwritten: %q", p.Runtime.TestCommand)
+	}
+	if p.Stack.Profile != "go" {
+		t.Errorf("[stack].profile = %q, want \"go\"", p.Stack.Profile)
+	}
+}
+
+func TestStackApplyUnsupportedDoesNotFabricate(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	drossDir := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(drossDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p0 := &project.Project{Runtime: project.Runtime{Mode: "native"}}
+	if err := p0.Save(filepath.Join(drossDir, project.File)); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+
+	if err := runCmd(t, Stack(), "apply"); err == nil {
+		t.Fatal("apply on an unsupported stack must error, not fabricate commands")
+	}
+	p, err := project.Load(filepath.Join(drossDir, project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Runtime.TestCommand != "" {
+		t.Errorf("fabricated a command on an unsupported stack: %q", p.Runtime.TestCommand)
+	}
+}

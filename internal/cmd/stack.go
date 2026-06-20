@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/stack"
 )
 
@@ -88,15 +90,34 @@ func stackList() *cobra.Command {
 	}
 }
 
-// stackApply is wired here so the subcommand set is complete; its body lands in
-// t-11 (re-sync [runtime] from the current profile).
+// stackApply re-syncs project.toml [runtime] from the current stack profile so an
+// existing repo can pick up profile improvements on demand. An unsupported stack
+// errors rather than fabricating commands.
 func stackApply() *cobra.Command {
 	return &cobra.Command{
 		Use:   "apply",
 		Short: "Re-sync project.toml [runtime] from the current stack profile",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return errors.New("stack apply: not yet implemented")
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			repoDir := filepath.Dir(root)
+			projPath := filepath.Join(root, project.File)
+			p, err := project.Load(projPath)
+			if err != nil {
+				return err
+			}
+			id := seedRuntimeFromProfile(repoDir, p)
+			if id == stack.Unsupported {
+				return errors.New("no stack profile matches this repo — nothing to apply")
+			}
+			if err := p.Save(projPath); err != nil {
+				return err
+			}
+			Printf("re-synced [runtime] from the %q stack profile\n", id)
+			return nil
 		},
 	}
 }
