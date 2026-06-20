@@ -3,13 +3,9 @@
   "current_milestone": "v0.1",
   "current_phase": "04-status-action-surfaces",
   "current_phase_status": "verified",
-  "last_activity": "2026-06-20T09:45:12.837947Z",
-  "last_action": "verified 04-status-action-surfaces: partial (2/3 covered, c-3 weak — verify-pending leak; mutation 0 survivors but timeout-contaminated)",
+  "last_activity": "2026-06-20T09:47:48.815366Z",
+  "last_action": "fixed c-3 verify-pending leak (t-2 amended): spineIdle now requires verdict==pass for in-phase idle",
   "history": [
-    {
-      "at": "2026-06-19T14:51:43.866706Z",
-      "action": "quick: gremlins adapter per-package invocation"
-    },
     {
       "at": "2026-06-19T15:27:33.239044Z",
       "action": "re-verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation measured 0.59 package-scoped; architecture pkg 100%)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-20T09:45:12.837947Z",
       "action": "verified 04-status-action-surfaces: partial (2/3 covered, c-3 weak — verify-pending leak; mutation 0 survivors but timeout-contaminated)"
+    },
+    {
+      "at": "2026-06-20T09:47:48.815366Z",
+      "action": "fixed c-3 verify-pending leak (t-2 amended): spineIdle now requires verdict==pass for in-phase idle"
     }
   ]
 }
