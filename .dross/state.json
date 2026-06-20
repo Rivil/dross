@@ -1,15 +1,9 @@
 {
   "version": "0.1.0.10",
   "current_milestone": "v0.1",
-  "current_phase": "03-fix-completion-chore-divergence",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-20T08:26:39.963654Z",
-  "last_action": "verified 03-fix-completion-chore-divergence: pass (5/5 covered, mutation 0.58 package-scoped — not a phase signal)",
+  "last_activity": "2026-06-20T08:31:48.088049Z",
+  "last_action": "completed 03-fix-completion-chore-divergence",
   "history": [
-    {
-      "at": "2026-06-19T12:46:01.705365Z",
-      "action": "created 01-architecture-comprehension-layer"
-    },
     {
       "at": "2026-06-19T13:57:31.389663Z",
       "action": "set current_phase=01-architecture-comprehension-layer"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-20T08:26:39.963654Z",
       "action": "verified 03-fix-completion-chore-divergence: pass (5/5 covered, mutation 0.58 package-scoped — not a phase signal)"
+    },
+    {
+      "at": "2026-06-20T08:31:48.088049Z",
+      "action": "completed 03-fix-completion-chore-divergence"
     }
   ]
 }
