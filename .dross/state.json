@@ -2,62 +2,10 @@
   "version": "0.1.0.13",
   "current_milestone": "v0.1",
   "current_phase": "07-stack-profiles",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-20T17:50:59.395959Z",
-  "last_action": "plan reviewed: 07-stack-profiles (0 blocking, 0 flags after 1 amend; 11 tasks)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-20T18:30:16.438599Z",
+  "last_action": "phase 07-stack-profiles executed (11/11 done)",
   "history": [
-    {
-      "at": "2026-06-20T10:42:41.040804Z",
-      "action": "created 05-dross-secure"
-    },
-    {
-      "at": "2026-06-20T11:15:40.314425Z",
-      "action": "set current_phase=05-dross-secure"
-    },
-    {
-      "at": "2026-06-20T11:15:40.32118Z",
-      "action": "spec locked: 05-dross-secure"
-    },
-    {
-      "at": "2026-06-20T11:52:06.514498Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-20T11:52:06.522283Z",
-      "action": "plan locked: 05-dross-secure (9 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-06-20T12:22:16.455104Z",
-      "action": "plan reviewed: 05-dross-secure (0 blocking, 4 flags; applied 1/3/4, t-9 kept per D-3)"
-    },
-    {
-      "at": "2026-06-20T12:29:29.784476Z",
-      "action": "executed t-1 (run-dir + collision-safe run-id)"
-    },
-    {
-      "at": "2026-06-20T12:34:48.709777Z",
-      "action": "executed t-2 (scanner catalog + availability detection)"
-    },
-    {
-      "at": "2026-06-20T12:37:15.057121Z",
-      "action": "executed t-3 (findings ledger schema + malformed-input guard)"
-    },
-    {
-      "at": "2026-06-20T12:43:20.236472Z",
-      "action": "executed t-7 (author secure.md + dross-secure.md prompts)"
-    },
-    {
-      "at": "2026-06-20T12:45:15.094432Z",
-      "action": "executed t-9 (gitignore security run artifacts)"
-    },
-    {
-      "at": "2026-06-20T12:47:22.287486Z",
-      "action": "executed t-4 (language detection + tool-coverage manifest)"
-    },
-    {
-      "at": "2026-06-20T12:49:51.934919Z",
-      "action": "executed t-8 (secure prompt content harness)"
-    },
     {
       "at": "2026-06-20T12:53:36.231574Z",
       "action": "executed t-5 (findings→spec.toml scaffold writer)"
@@ -205,6 +153,58 @@
     {
       "at": "2026-06-20T17:50:59.395959Z",
       "action": "plan reviewed: 07-stack-profiles (0 blocking, 0 flags after 1 amend; 11 tasks)"
+    },
+    {
+      "at": "2026-06-20T17:53:41.285619Z",
+      "action": "executed t-1 (stack profile schema + loader)"
+    },
+    {
+      "at": "2026-06-20T17:55:17.578238Z",
+      "action": "executed t-2 (centralize stack detection)"
+    },
+    {
+      "at": "2026-06-20T17:59:32.5123Z",
+      "action": "executed t-3 (embed Go profile + user-dir merge + README)"
+    },
+    {
+      "at": "2026-06-20T18:00:18.46163Z",
+      "action": "executed t-4 (resolve runtime command set from profile)"
+    },
+    {
+      "at": "2026-06-20T18:02:39.942048Z",
+      "action": "executed t-5 (dross stack command tree)"
+    },
+    {
+      "at": "2026-06-20T18:06:19.423838Z",
+      "action": "executed t-6 (catalogs consume Go profile loadout)"
+    },
+    {
+      "at": "2026-06-20T18:22:52.844375Z",
+      "action": "executed t-7 (de-duplicate recon DetectLanguages onto stack)"
+    },
+    {
+      "at": "2026-06-20T18:25:24.543658Z",
+      "action": "executed t-8 (seed init/onboard runtime from profile)"
+    },
+    {
+      "at": "2026-06-20T18:26:57.748356Z",
+      "action": "executed t-9 (dross stack loadout emitter)"
+    },
+    {
+      "at": "2026-06-20T18:28:34.570463Z",
+      "action": "executed t-10 (wire loadout into execute prompt)"
+    },
+    {
+      "at": "2026-06-20T18:29:44.01158Z",
+      "action": "executed t-11 (dross stack apply re-sync)"
+    },
+    {
+      "at": "2026-06-20T18:30:16.432859Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-20T18:30:16.438599Z",
+      "action": "phase 07-stack-profiles executed (11/11 done)"
     }
   ]
 }

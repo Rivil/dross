@@ -1,205 +1,121 @@
 [phase]
-id = "07-stack-profiles"
+  id = "07-stack-profiles"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Define stack profile schema + loader"
-files         = ["internal/stack/profile.go", "internal/stack/profile_test.go"]
-description   = """
-New internal/stack package: the stack-profile TOML schema (runtime command slots,
-tool loadout, agent loadout) and its loader. Schema supports the four extensibility
-shapes: package-manager variants, multiple commands per slot, optional/availability-
-gated tools, per-OS tool names. Pure data + load/validate; no embed, no command yet.
-"""
-covers        = ["c-3", "c-5"]
-test_contract = [
-  "A profile exercising a package-manager variant, two commands in one runtime slot, an availability-gated tool, and a per-OS tool name all round-trip into the struct; dropping any shape fails TestProfileSchemaShapes (pins locked schema_extensibility).",
-  "A profile with empty id is rejected with an error, not loaded nameless — TestProfileRejectsEmptyID.",
-  "A profile tool with no bin is rejected at load — TestProfileToolRequiresBin.",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Define stack profile schema + loader"
+  files = ["internal/stack/profile.go", "internal/stack/profile_test.go"]
+  description = "New internal/stack package: the stack-profile TOML schema (runtime command slots,\ntool loadout, agent loadout) and its loader. Schema supports the four extensibility\nshapes: package-manager variants, multiple commands per slot, optional/availability-\ngated tools, per-OS tool names. Pure data + load/validate; no embed, no command yet.\n"
+  covers = ["c-3", "c-5"]
+  test_contract = ["A profile exercising a package-manager variant, two commands in one runtime slot, an availability-gated tool, and a per-OS tool name all round-trip into the struct; dropping any shape fails TestProfileSchemaShapes (pins locked schema_extensibility).", "A profile with empty id is rejected with an error, not loaded nameless — TestProfileRejectsEmptyID.", "A profile tool with no bin is rejected at load — TestProfileToolRequiresBin."]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "Centralize language detection in stack pkg"
-files         = ["internal/stack/detect.go", "internal/stack/detect_test.go"]
-description   = """
-Single source of stack detection in internal/stack: walk signals (go.mod, .go files,
-etc.) and resolve to a profile id or an explicit unsupported result. Detection keys off
-declared profile signals, not a hardcoded language switch, so a second profile is
-selectable by data alone.
-"""
-covers        = ["c-1", "c-5"]
-test_contract = [
-  "Detect on a package.json-only fixture (no go.mod, no .go) returns explicit unsupported — not 'go', not empty, no panic — TestDetectNonGoFixtureUnsupported.",
-  "Detect on this repo root (go.mod) returns id 'go' — TestDetect_GoRepoMatchesGo.",
-  "On a polyglot fixture (go.mod + stray .py) the go.mod signal wins — TestDetectPolyglotPrefersSignal.",
-  "A loaded second-profile fixture is selectable by detection on its matching fixture — TestDetect_SecondProfileSelected (c-5: selectable by data, not code).",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Centralize language detection in stack pkg"
+  files = ["internal/stack/detect.go", "internal/stack/detect_test.go"]
+  description = "Single source of stack detection in internal/stack: walk signals (go.mod, .go files,\netc.) and resolve to a profile id or an explicit unsupported result. Detection keys off\ndeclared profile signals, not a hardcoded language switch, so a second profile is\nselectable by data alone.\n"
+  covers = ["c-1", "c-5"]
+  test_contract = ["Detect on a package.json-only fixture (no go.mod, no .go) returns explicit unsupported — not 'go', not empty, no panic — TestDetectNonGoFixtureUnsupported.", "Detect on this repo root (go.mod) returns id 'go' — TestDetect_GoRepoMatchesGo.", "On a polyglot fixture (go.mod + stray .py) the go.mod signal wins — TestDetectPolyglotPrefersSignal.", "A loaded second-profile fixture is selectable by detection on its matching fixture — TestDetect_SecondProfileSelected (c-5: selectable by data, not code)."]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Embed Go profile + merge user-dir + document drop-in"
-files         = ["internal/stack/embed.go", "internal/stack/profiles/go.toml", "internal/stack/profiles/README.md", "internal/stack/embed_test.go"]
-description   = """
-Embed built-in profiles via go:embed (ship the Go profile), and merge ~/.claude/dross/
-profiles/*.toml over them with the user dir winning. README documents that adding a stack
-is a single TOML drop-in with zero code change.
-"""
-covers        = ["c-2", "c-3", "c-5"]
-test_contract = [
-  "A user-dir profile sharing the embedded Go id but a different test_command makes Load return the USER value — TestUserDirWinsOnIDCollision (pins locked profile_home).",
-  "A malformed *.toml in the user dir is reported as an error naming the file and does NOT silently drop the embedded profile — TestMalformedUserProfileSurfacedNotSwallowed.",
-  "HOME with no profiles/ subdir still yields the embedded Go profile — TestUserDirAbsentFallsBack.",
-  "profiles/README.md states a new stack is a single TOML drop-in with zero code change, or the c-5 documentation requirement is unmet.",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Embed Go profile + merge user-dir + document drop-in"
+  files = ["internal/stack/embed.go", "internal/stack/profiles/go.toml", "internal/stack/profiles/README.md", "internal/stack/embed_test.go"]
+  description = "Embed built-in profiles via go:embed (ship the Go profile), and merge ~/.claude/dross/\nprofiles/*.toml over them with the user dir winning. README documents that adding a stack\nis a single TOML drop-in with zero code change.\n"
+  covers = ["c-2", "c-3", "c-5"]
+  depends_on = ["t-1"]
+  test_contract = ["A user-dir profile sharing the embedded Go id but a different test_command makes Load return the USER value — TestUserDirWinsOnIDCollision (pins locked profile_home).", "A malformed *.toml in the user dir is reported as an error naming the file and does NOT silently drop the embedded profile — TestMalformedUserProfileSurfacedNotSwallowed.", "HOME with no profiles/ subdir still yields the embedded Go profile — TestUserDirAbsentFallsBack.", "profiles/README.md states a new stack is a single TOML drop-in with zero code change, or the c-5 documentation requirement is unmet."]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Resolve runtime command set from profile"
-files         = ["internal/stack/runtime.go", "internal/stack/runtime_test.go"]
-description   = """
-Derive the runtime command set (test/typecheck/format/build) from a stack profile,
-resolving multi-command slots to the first available variant.
-"""
-covers        = ["c-2"]
-test_contract = [
-  "The Go profile resolves test/typecheck/format/build to today's exact [runtime] strings ('go test -count=1 ./...', 'go vet ./...', 'gofmt -l .', 'make build') — TestGoRuntimeMatchesLocked; editing a command in go.toml changes the derived value.",
-  "A slot with multiple commands resolves to the first available variant — TestRuntimeSlotPicksAvailableVariant fails if it picks an unavailable one or concatenates.",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 2
+  title = "Resolve runtime command set from profile"
+  files = ["internal/stack/runtime.go", "internal/stack/runtime_test.go"]
+  description = "Derive the runtime command set (test/typecheck/format/build) from a stack profile,\nresolving multi-command slots to the first available variant.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["The Go profile resolves test/typecheck/format/build to today's exact [runtime] strings ('go test -count=1 ./...', 'go vet ./...', 'gofmt -l .', 'make build') — TestGoRuntimeMatchesLocked; editing a command in go.toml changes the derived value.", "A slot with multiple commands resolves to the first available variant — TestRuntimeSlotPicksAvailableVariant fails if it picks an unavailable one or concatenates."]
+  status = "done"
 
 [[task]]
-id            = "t-5"
-wave          = 2
-depends_on    = ["t-1", "t-2"]
-title         = "Add dross stack command tree"
-files         = ["internal/cmd/stack.go", "cmd/dross/main.go", "internal/project/project.go", "internal/cmd/stack_test.go"]
-description   = """
-New 'dross stack' command with subcommands detect/show/list/apply/loadout, registered
-in cmd/dross/main.go. Wires detect/show/list; apply and loadout bodies land in t-11 and
-t-9 but the subcommand set is present and guarded here. Adds the `Profile` field to
-project.Stack so the matched id can be stored at project.toml [stack].profile.
-"""
-covers        = ["c-1"]
-test_contract = [
-  "'dross stack detect' on a package.json-only path prints 'unsupported' and exits 0 (advisory) — TestStackDetectNonGoExitsZeroUnsupported fails if it exits non-zero or prints 'go'.",
-  "'dross stack show <unknown-id>' exits non-zero with id-not-found — TestStackShowUnknownIDErrors.",
-  "project.Stack.Profile round-trips through project.toml as [stack].profile — TestStackProfileFieldRoundTrips fails if the field is dropped on encode/decode.",
-  "Subcommand set detect/show/list/apply/loadout is present and the subcommand guard rejects 'dross stack bogus' — TestStackRejectsUnknownSubcommand.",
-]
-status        = "pending"
+  id = "t-5"
+  wave = 2
+  title = "Add dross stack command tree"
+  files = ["internal/cmd/stack.go", "cmd/dross/main.go", "internal/project/project.go", "internal/cmd/stack_test.go"]
+  description = "New 'dross stack' command with subcommands detect/show/list/apply/loadout, registered\nin cmd/dross/main.go. Wires detect/show/list; apply and loadout bodies land in t-11 and\nt-9 but the subcommand set is present and guarded here. Adds the `Profile` field to\nproject.Stack so the matched id can be stored at project.toml [stack].profile.\n"
+  covers = ["c-1"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["'dross stack detect' on a package.json-only path prints 'unsupported' and exits 0 (advisory) — TestStackDetectNonGoExitsZeroUnsupported fails if it exits non-zero or prints 'go'.", "'dross stack show <unknown-id>' exits non-zero with id-not-found — TestStackShowUnknownIDErrors.", "project.Stack.Profile round-trips through project.toml as [stack].profile — TestStackProfileFieldRoundTrips fails if the field is dropped on encode/decode.", "Subcommand set detect/show/list/apply/loadout is present and the subcommand guard rejects 'dross stack bogus' — TestStackRejectsUnknownSubcommand."]
+  status = "done"
 
 [[task]]
-id            = "t-6"
-wave          = 3
-depends_on    = ["t-3"]
-title         = "Catalogs consume the Go profile tool loadout"
-files         = ["internal/security/catalog.go", "internal/quality/catalog.go", "internal/security/catalog_test.go", "internal/quality/catalog_test.go"]
-description   = """
-Route the security scanner and quality analyzer catalogs through the profile's tool
-loadout (read live from internal/stack) instead of their inline language->tool maps.
-Reads the profile's tool list (t-1 schema / t-3 embed); does not touch loadout.go.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "ScannersFor('go') derives from the profile tool loadout, so removing a tool entry from go.toml drops it from the live list — TestScannersTrackProfile fails if the inline map is still authoritative.",
-  "AnalyzersFor('go') tracks the profile the same way — TestAnalyzersTrackProfile.",
-  "Agnostic tools (gitleaks/scc) stay available and the existing cosmetic guard still excludes cosmetic tools — TestCatalogExcludesCosmetic still passes with profile-sourced data.",
-]
-status        = "pending"
+  id = "t-6"
+  wave = 3
+  title = "Catalogs consume the Go profile tool loadout"
+  files = ["internal/security/catalog.go", "internal/quality/catalog.go", "internal/security/catalog_test.go", "internal/quality/catalog_test.go"]
+  description = "Route the security scanner and quality analyzer catalogs through the profile's tool\nloadout (read live from internal/stack) instead of their inline language->tool maps.\nReads the profile's tool list (t-1 schema / t-3 embed); does not touch loadout.go.\n"
+  covers = ["c-3"]
+  depends_on = ["t-3"]
+  test_contract = ["ScannersFor('go') derives from the profile tool loadout, so removing a tool entry from go.toml drops it from the live list — TestScannersTrackProfile fails if the inline map is still authoritative.", "AnalyzersFor('go') tracks the profile the same way — TestAnalyzersTrackProfile.", "Agnostic tools (gitleaks/scc) stay available and the existing cosmetic guard still excludes cosmetic tools — TestCatalogExcludesCosmetic still passes with profile-sourced data."]
+  status = "done"
 
 [[task]]
-id            = "t-7"
-wave          = 3
-depends_on    = ["t-3"]
-title         = "De-duplicate recon DetectLanguages onto stack pkg"
-files         = ["internal/security/recon.go", "internal/quality/recon.go", "internal/security/recon_test.go", "internal/quality/recon_test.go"]
-description   = """
-Both security and quality recon DetectLanguages delegate to internal/stack rather than
-keeping their own ext->lang walk, eliminating the duplicate (and preventing a third) copy.
-"""
-covers        = ["c-1"]
-test_contract = [
-  "TestSecurityReconDelegatesToStack and TestQualityReconDelegatesToStack assert byte-identical results to stack.Detect on a shared fixture table (including the non-Go-only case).",
-  "A grep/CI assertion (not a unit test) fails if a standalone ext->lang map literal reappears in either recon.go — TestNoDuplicateExtLangMap scans the two files' source for the map literal and fails if present.",
-]
-status        = "pending"
+  id = "t-7"
+  wave = 3
+  title = "De-duplicate recon DetectLanguages onto stack pkg"
+  files = ["internal/security/recon.go", "internal/quality/recon.go", "internal/security/recon_test.go", "internal/quality/recon_test.go"]
+  description = "Both security and quality recon DetectLanguages delegate to internal/stack rather than\nkeeping their own ext->lang walk, eliminating the duplicate (and preventing a third) copy.\n"
+  covers = ["c-1"]
+  depends_on = ["t-3"]
+  test_contract = ["TestSecurityReconDelegatesToStack and TestQualityReconDelegatesToStack assert byte-identical results to stack.Detect on a shared fixture table (including the non-Go-only case).", "A grep/CI assertion (not a unit test) fails if a standalone ext->lang map literal reappears in either recon.go — TestNoDuplicateExtLangMap scans the two files' source for the map literal and fails if present."]
+  status = "done"
 
 [[task]]
-id            = "t-8"
-wave          = 3
-depends_on    = ["t-2", "t-3", "t-4", "t-5"]
-title         = "Seed init/onboard runtime from profile"
-files         = ["internal/cmd/init.go", "internal/cmd/onboard.go", "internal/cmd/init_test.go", "internal/cmd/onboard_test.go"]
-description   = """
-init and onboard seed project.toml [runtime] and [stack].profile from the matched stack
-profile instead of hardcoded guesses. Needs detection (t-2), the embedded profile (t-3),
-the runtime resolver (t-4), and the project.Stack.Profile field (t-5).
-"""
-covers        = ["c-2"]
-test_contract = [
-  "After 'dross init' in a Go repo, [runtime] test/typecheck/format/build equal the Go profile values and [stack].profile == the matched id — TestInitSeedsRuntimeFromProfile fails on any hardcoded guess.",
-  "When detection returns unsupported, init writes NO fabricated runtime commands (empty slots, not Go defaults) — TestInitUnsupportedLeavesRuntimeUnseeded.",
-]
-status        = "pending"
+  id = "t-8"
+  wave = 3
+  title = "Seed init/onboard runtime from profile"
+  files = ["internal/cmd/init.go", "internal/cmd/onboard.go", "internal/cmd/init_test.go", "internal/cmd/onboard_test.go"]
+  description = "init and onboard seed project.toml [runtime] and [stack].profile from the matched stack\nprofile instead of hardcoded guesses. Needs detection (t-2), the embedded profile (t-3),\nthe runtime resolver (t-4), and the project.Stack.Profile field (t-5).\n"
+  covers = ["c-2"]
+  depends_on = ["t-2", "t-3", "t-4", "t-5"]
+  test_contract = ["After 'dross init' in a Go repo, [runtime] test/typecheck/format/build equal the Go profile values and [stack].profile == the matched id — TestInitSeedsRuntimeFromProfile fails on any hardcoded guess.", "When detection returns unsupported, init writes NO fabricated runtime commands (empty slots, not Go defaults) — TestInitUnsupportedLeavesRuntimeUnseeded."]
+  status = "done"
 
 [[task]]
-id            = "t-9"
-wave          = 3
-depends_on    = ["t-3", "t-5"]
-title         = "dross stack loadout markdown emitter"
-files         = ["internal/cmd/stack.go", "internal/stack/loadout.go", "internal/stack/loadout_test.go", "internal/cmd/stack_test.go"]
-description   = """
-'dross stack loadout' renders a markdown block from stack.locked: recommended MCP tools,
-guardrails, locked conventions. Markdown only — no generated agent .md files.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "'dross stack loadout' emits a markdown block built from stack.locked with the expected headings and a known declared convention line — TestLoadoutRendersFromLocked fails if a locked convention is missing (pins agent_loadout_shape: markdown block, no agent files).",
-  "An availability-gated tool absent from PATH is marked unavailable, not presented as ready — TestLoadoutMarksUnavailableGatedTool.",
-  "An empty loadout renders '(none)', not blank — TestLoadoutEmptyRendersNone.",
-]
-status        = "pending"
+  id = "t-9"
+  wave = 3
+  title = "dross stack loadout markdown emitter"
+  files = ["internal/cmd/stack.go", "internal/stack/loadout.go", "internal/stack/loadout_test.go", "internal/cmd/stack_test.go"]
+  description = "'dross stack loadout' renders a markdown block from stack.locked: recommended MCP tools,\nguardrails, locked conventions. Markdown only — no generated agent .md files.\n"
+  covers = ["c-4"]
+  depends_on = ["t-3", "t-5"]
+  test_contract = ["'dross stack loadout' emits a markdown block built from stack.locked with the expected headings and a known declared convention line — TestLoadoutRendersFromLocked fails if a locked convention is missing (pins agent_loadout_shape: markdown block, no agent files).", "An availability-gated tool absent from PATH is marked unavailable, not presented as ready — TestLoadoutMarksUnavailableGatedTool.", "An empty loadout renders '(none)', not blank — TestLoadoutEmptyRendersNone."]
+  status = "done"
 
 [[task]]
-id            = "t-10"
-wave          = 3
-depends_on    = ["t-9"]
-title         = "Wire stack loadout into execute prompt"
-files         = ["assets/prompts/execute.md"]
-description   = """
-Wire 'dross stack loadout' into the execute orchestration prompt so the loadout block is
-injected inline at execution time, proving c-4 end-to-end with a real consumer. Per r-01,
-not live until 'make install'.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "assets/prompts/execute.md instructs the orchestration to call 'dross stack loadout' and inject the block — TestExecutePromptInvokesLoadout fails if the invocation string is absent.",
-]
-status        = "pending"
+  id = "t-10"
+  wave = 3
+  title = "Wire stack loadout into execute prompt"
+  files = ["assets/prompts/execute.md"]
+  description = "Wire 'dross stack loadout' into the execute orchestration prompt so the loadout block is\ninjected inline at execution time, proving c-4 end-to-end with a real consumer. Per r-01,\nnot live until 'make install'.\n"
+  covers = ["c-4"]
+  depends_on = ["t-9"]
+  test_contract = ["assets/prompts/execute.md instructs the orchestration to call 'dross stack loadout' and inject the block — TestExecutePromptInvokesLoadout fails if the invocation string is absent."]
+  status = "done"
 
 [[task]]
-id            = "t-11"
-wave          = 3
-depends_on    = ["t-4", "t-5"]
-title         = "dross stack apply re-syncs runtime"
-files         = ["internal/cmd/stack.go", "internal/cmd/stack_test.go"]
-description   = """
-Fill the 'dross stack apply' subcommand body (scaffolded in t-5): re-derive the runtime
-command set from the current profile (t-4 resolver) and overwrite project.toml [runtime]
-on demand, so an existing repo can pick up profile improvements.
-"""
-covers        = ["c-2"]
-test_contract = [
-  "'dross stack apply' re-writes [runtime] from the current profile, overwriting a stale value — TestStackApplyResyncsRuntime fails if it leaves the stale value or fabricates commands for an unsupported stack.",
-]
-status        = "pending"
+  id = "t-11"
+  wave = 3
+  title = "dross stack apply re-syncs runtime"
+  files = ["internal/cmd/stack.go", "internal/cmd/stack_test.go"]
+  description = "Fill the 'dross stack apply' subcommand body (scaffolded in t-5): re-derive the runtime\ncommand set from the current profile (t-4 resolver) and overwrite project.toml [runtime]\non demand, so an existing repo can pick up profile improvements.\n"
+  covers = ["c-2"]
+  depends_on = ["t-4", "t-5"]
+  test_contract = ["'dross stack apply' re-writes [runtime] from the current profile, overwriting a stale value — TestStackApplyResyncsRuntime fails if it leaves the stale value or fabricates commands for an unsupported stack."]
+  status = "done"
