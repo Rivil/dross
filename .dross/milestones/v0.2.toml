@@ -1,0 +1,11 @@
+phases = ["08-language-profiles", "09-marker-file-detection"]
+
+[milestone]
+  version = "v0.2"
+  title = "Multi-language stack profiles"
+  status = "active"
+  started = "2026-06-20"
+
+[scope]
+  success_criteria = ["dross ships embedded stack profiles for Kotlin, Dart, Svelte, and SQL, each detected from its source files and contributing its dedicated scanners/analyzers to dross-secure and dross-quality", "Stack detection recognises Dart, Svelte, and SQL source files (extLang additions) so audits run their tools with no manual config; Kotlin works via the existing mapping", "dross detects marker-file stacks (Dockerfile / compose), not just source extensions, so a Docker profile's tools (hadolint/dockle) run on repos with no Docker source extension", "Every new profile is verified by tests: detection resolves the right profile id and ScannersFor/AnalyzersFor surface its dedicated tools"]
+  non_goals = ["No language-specific mutation adapters — v0.2 adds profiles (tool loadouts + detection), not new mutation runners; Stryker/Gremlins stay the mutation backends", "No exhaustive per-language tool coverage — ship a sensible first-cut loadout per stack (security + substantive quality), not every analyzer in each ecosystem", "PostgreSQL support is SQL-lint-level only (sqlfluff) — no schema/migration-aware or live-database analysis"]

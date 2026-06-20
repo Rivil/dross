@@ -3,7 +3,7 @@ phases = ["03-fix-completion-chore-divergence", "04-status-action-surfaces", "05
 [milestone]
   version = "v0.1"
   title = "Comprehension, security & quality surfaces"
-  status = "active"
+  status = "complete"
   started = "2026-06-19"
 
 [scope]

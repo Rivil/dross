@@ -1,21 +1,9 @@
 {
-  "version": "0.1.0.13",
-  "current_milestone": "v0.1",
-  "last_activity": "2026-06-20T18:51:12.226629Z",
-  "last_action": "completed 07-stack-profiles",
+  "version": "0.2.0.0",
+  "current_milestone": "v0.2",
+  "last_activity": "2026-06-20T19:22:31.162181Z",
+  "last_action": "milestone v0.2 scoped (Multi-language stack profiles): phases 08-language-profiles, 09-marker-file-detection; v0.1 complete; version 0.1.0.13 → 0.2.0.0",
   "history": [
-    {
-      "at": "2026-06-20T12:58:02.824193Z",
-      "action": "phase 05-dross-secure executed (9/9 done)"
-    },
-    {
-      "at": "2026-06-20T13:04:48.14353Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-20T13:04:48.149026Z",
-      "action": "verified 05-dross-secure: partial (6/6 covered; phase-diff mutation 100% on internal/security, 2 FLAG gaps in CLI glue; rollup 0.80 package-scoped — not a phase signal)"
-    },
     {
       "at": "2026-06-20T13:12:42.121735Z",
       "action": "set current_phase_status=verified"
@@ -203,6 +191,18 @@
     {
       "at": "2026-06-20T18:51:12.226629Z",
       "action": "completed 07-stack-profiles"
+    },
+    {
+      "at": "2026-06-20T19:22:00.03447Z",
+      "action": "set current_milestone=v0.2"
+    },
+    {
+      "at": "2026-06-20T19:22:00.040937Z",
+      "action": "set version=0.2.0.0"
+    },
+    {
+      "at": "2026-06-20T19:22:31.162181Z",
+      "action": "milestone v0.2 scoped (Multi-language stack profiles): phases 08-language-profiles, 09-marker-file-detection; v0.1 complete; version 0.1.0.13 → 0.2.0.0"
     }
   ]
 }
