@@ -133,6 +133,8 @@ Reviewed PR #<n> — <phase-id>
   Subagents: security, code quality, test efficacy, spec fidelity
   Findings:  <total> (B blocking, F flags, N notes)
   Comment:   posted | saved to .dross/phases/<phase-id>/review-comment.md
+
+Next: /dross-status — or address blocking findings, then /dross-ship once the PR is clean.
 ```
 
 ## Hard rules

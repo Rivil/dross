@@ -98,12 +98,12 @@ Don't dump the whole REVIEW.md inline; let the user open the file if they want d
 
 If BLOCKING findings exist, recommend re-running `/dross-plan` with the spec/findings in mind:
 ```
-This plan has N blocking issues. Re-run /dross-plan to address them, or open REVIEW.md to read full detail.
+This plan has N blocking issues. Next: /dross-plan — address them (or open REVIEW.md for full detail).
 ```
 
 If only FLAG/NOTE: recommend the user skim and decide:
 ```
-Plan is reviewable. M flags + K notes captured in REVIEW.md. Decide what's worth acting on, then proceed to /dross-execute when ready.
+Plan is reviewable. M flags + K notes captured in REVIEW.md. Next: /dross-execute when ready — decide what's worth acting on first.
 ```
 
 Update state:

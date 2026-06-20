@@ -136,7 +136,8 @@ Run `dross stats opt-in` or `dross stats opt-out` based on the answer. Both stam
 Run `dross validate`. Should be green. Print:
 ```
 Project bootstrapped.
-Next steps:
+
+Next:
   /dross-milestone v0.1   — scope the first milestone (title, success criteria, non-goals, phases)
   /dross-spec             — clarify the first phase (run after the milestone is scoped)
 ```

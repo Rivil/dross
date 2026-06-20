@@ -77,6 +77,9 @@ say so in the surrounding command's output — the gate is the caller's to relax
 - Run `dross validate`.
 - **Standalone** (`/dross-architecture`): suggest the user commit
   `ARCHITECTURE.md` (it lives at repo root, outside `.dross/`, so it rides normal
-  commits and ships in PRs).
+  commits and ships in PRs). End with a bottom-anchored `Next:` line:
+  ```
+  ARCHITECTURE.md generated. Next: commit it, then /dross-status.
+  ```
 - **Embedded in onboard**: return control to onboard's wrap step — don't print a
   separate completion block.

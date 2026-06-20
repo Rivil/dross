@@ -65,7 +65,7 @@ Resumed.
   Next:    <the next action>
   Handoff: <N item(s) still open | cleared — handoff.md removed>
 
-Pick up with <suggested command>.
+Next: <suggested command> — pick up where the handoff points.
 ```
 
 ## Hard rules

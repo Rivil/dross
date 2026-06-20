@@ -48,4 +48,7 @@ Always ask the user to confirm the id before calling the destructive command.
 
 ## After any change
 
-Run `dross rule show` and print the result so the user sees the new merged set.
+Run `dross rule show` and print the result so the user sees the new merged set. End with a bottom-anchored `Next:` line:
+```
+Rule <added | removed | promoted | toggled>. Next: /dross-status — back to where you were.
+```

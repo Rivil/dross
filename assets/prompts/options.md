@@ -107,3 +107,7 @@ If the user asks to add an entirely new env var dross doesn't currently know abo
    No changes: 7
    ```
 4. `dross state touch "options reviewed"`.
+5. End with a bottom-anchored `Next:` line:
+   ```
+   Options reviewed. Next: /dross-status — confirm where you are, then back to the spec→plan→execute loop.
+   ```

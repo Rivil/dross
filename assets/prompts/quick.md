@@ -168,7 +168,8 @@ Quick task complete.
   Phase:    <phase-id> (recorded as quick-N in changes.json) | standalone
   Files:    <touched-files>
 
-Next: continue working, or /dross-quick <another task> for another small change.
+Next: continue working, or /dross-quick "<another task>" — another small change.
+      ↳ --solo — run it autonomously when the change is trivial and well-specified.
 ```
 
 The quick task is committed and done, so close its board issue (no-op unless board sync is on):

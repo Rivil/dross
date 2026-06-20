@@ -86,7 +86,7 @@ Handoff saved → .dross/handoff.md
   Next:   <the ## Next item>
   Loops:  <N> open
 
-Resume next session with /dross-resume.
+Next: /dross-resume — replay this handoff next session.
 ```
 
 Then stop. Pause does not commit, stash, or change branches — it only records. If the working tree is dirty, that's expected and the `## Dirty` section captured it; leave the user's in-flight edits exactly as they are.

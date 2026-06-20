@@ -124,6 +124,6 @@ Onboarded. Detected and verified:
   - <languages, frameworks, package manager, runtime mode>
   - <N> commands runtime-verified
   - <N> rules loaded (M global, K project)
-Next: /dross-status to see where to focus first.
+Next: /dross-status — see where to focus first.
 ```
 Update state: `dross state touch "onboard complete"`.

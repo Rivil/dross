@@ -126,7 +126,9 @@ PR:  https://forge.example/me/proj/pulls/42
 Reviewers: alice, bob
 CI:  passed
 Status: merged | awaiting-merge
-Next: /dross-status (or /dross-spec --new for the next phase)
+
+Next: /dross-status — see where things stand.
+      ↳ /dross-spec --new "<title>" — start the next phase.
 ```
 
 If the PR opened but reviewer-request failed, surface that — it's non-fatal but the user should know.

@@ -185,7 +185,11 @@ Phase <id> execution complete.
   Failed:  <M>     (use `dross task show <phase> <id>` to inspect)
   Skipped: <K>
 
-Next: /dross-verify <phase> to check criterion coverage and test efficacy.
+Next: /dross-verify <phase> — check criterion coverage and test efficacy.
+```
+When this phase changed no measurable Go (or Stryker isn't installed), append the conditional hint under the `Next:` line:
+```
+      ↳ --skip-mutation — skip the mutation pass when there's nothing for it to measure.
 ```
 
 Update state:

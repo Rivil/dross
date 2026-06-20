@@ -156,9 +156,15 @@ dross state set current_phase <id>
 dross state touch "spec locked: <id>"
 ```
 
-End with one line:
+End with the standard next block — the `Next:` line, plus the conditional flag hint **only when it applies**:
 ```
-Spec locked. Next: /dross-plan to break it into tasks.
+Spec locked.
+
+Next: /dross-plan — break the locked spec into tasks.
+```
+When the phase is a new subsystem, has multiple plausible architectures, or looks like 4+ tasks, append the hint under the `Next:` line:
+```
+      ↳ --panel — independent 3-lens planning, worth the ~4–5× cost at this size.
 ```
 
 ## Hard rules

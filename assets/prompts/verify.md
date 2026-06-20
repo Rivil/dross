@@ -163,6 +163,8 @@ Phase <id> verified: pass.
 
 Next:
   /dross-ship              — open PR for this phase (filters .dross/, opens via provider)
+      ↳ --draft            — open the PR in draft (work-in-progress, not ready for review)
+      ↳ --no-push          — preview the PR body and diff without pushing
   /dross-spec <next-id>    — start the next phase
   dross phase list         — see all phases
 ```
@@ -173,6 +175,8 @@ Phase <id> verified: pass. This is the last phase in the milestone.
 
 Next:
   /dross-ship              — open PR for this phase
+      ↳ --draft            — open the PR in draft (work-in-progress)
+      ↳ --no-push          — preview the PR body and diff without pushing
   dross milestone show     — review milestone status before tagging the release
 ```
 
@@ -182,6 +186,7 @@ Phase <id> verdict: <verdict>. Open .dross/phases/<id>/verify.toml for full deta
 
 Next:
   /dross-execute <id>      — amend the failing task (add tests / fix code)
+      ↳ --from <task-id>   — resume at the failing task, skipping earlier done tasks
   /dross-verify            — re-run after addressing blocking findings
 ```
 

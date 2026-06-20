@@ -229,11 +229,17 @@ If `--no-review` was passed, mention `/dross-plan-review` is available manually.
 
 ### 6.2 Close
 
-End with one line:
+End with the standard next block:
 ```
-Plan ready and reviewed (B blocking resolved, F flags in REVIEW.md). Next: /dross-execute to run the first task (pair-mode by default; pass --solo for autonomous).
+Plan ready and reviewed (B blocking resolved, F flags in REVIEW.md).
+
+Next: /dross-execute — run the first task (pair-mode by default).
 ```
-(Adjust the parenthetical to match what actually happened — reviewed clean, flags pending, or review skipped via --no-review.)
+When the plan is trivial or purely mechanical, append the hint under the `Next:` line:
+```
+      ↳ --solo — skip the per-task approval gate for a well-specified, low-risk plan.
+```
+(Adjust the summary line to match what actually happened — reviewed clean, flags pending, or review skipped via --no-review.)
 
 ## Hard rules
 

@@ -11,6 +11,7 @@ One-line answer to "where am I?". Uses `dross status` for the mechanical read, s
 5. After the status block, add one short paragraph (2-3 sentences max) that:
    - Names the most likely next action and why
    - Flags anything off (e.g. uncommitted git changes, failed tasks) the user should know about
+6. **End with a bottom-anchored `Next:` line** mirroring `dross status`'s own `next:` field, so the suggested command is the last thing on screen. When that next command has a flag worth surfacing for the current state, append a `↳ --flag — <when>` hint under it (e.g. `/dross-plan` → `↳ --panel` for a new-subsystem phase; `/dross-verify` → `↳ --skip-mutation` when nothing measurable changed; `/dross-execute` → `↳ --from <task-id>` to resume mid-phase). Only surface flags the target command actually accepts — never invent one.
 
 If the user asks a follow-up like "show me failed tasks" or "what's the verify verdict", route to:
 - `dross task show <phase> <task-id>` for task detail

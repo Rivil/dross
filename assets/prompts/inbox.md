@@ -48,7 +48,7 @@ Triaged <N> issue(s):
   → dismissed: #21, #22
   → skipped:   #25
 
-Next: /dross-spec --new for the phases you adopted, or /dross-status.
+Next: /dross-spec --new "<title>" — scaffold the phases you adopted (or /dross-status).
 ```
 
 ## Hard rules
