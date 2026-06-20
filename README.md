@@ -2,7 +2,7 @@
 
 A leaner successor to [GSD](https://github.com/gsd-build/get-shit-done) for working with Claude Code on real projects.
 
-> **Status:** v0.1.x — full plan → execute → verify → ship loop is wired with phase-branch isolation (`dross phase create` auto-checks out `phase/<id>`; `dross phase complete` finalizes post-merge). Mutation testing covers TS/JS/Svelte (Stryker) and Go (Gremlins). Tree-sitter codex and C# (Stryker.NET) are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised. Opt-in Forgejo/Gitea issue-board sync (milestones/phases/quicks → board issues, inbound triage via `/dross-inbox`) landed behind `dross issue enable`. `/dross-pause` + `/dross-resume` capture and replay a mid-phase handoff so stopping and picking back up doesn't lose the mental thread. `/dross-plan` auto-runs the independent plan review (`--no-review` to skip) and offers `--panel` — a 3-lens planner panel merged by a cold judge, disagreements surfaced as steering questions.
+> **Status:** v0.2.x — full plan → execute → verify → ship loop is wired with phase-branch isolation (`dross phase create` auto-checks out `phase/<id>`; `dross phase complete` finalizes post-merge). Mutation testing covers TS/JS/Svelte (Stryker) and Go (Gremlins). Tree-sitter codex and C# (Stryker.NET) are still stubs. First real-project onboarding done; expect ongoing prompt fixes as more flows are exercised. Opt-in Forgejo/Gitea issue-board sync (milestones/phases/quicks → board issues, inbound triage via `/dross-inbox`) landed behind `dross issue enable`. `/dross-pause` + `/dross-resume` capture and replay a mid-phase handoff so stopping and picking back up doesn't lose the mental thread. `/dross-plan` auto-runs the independent plan review (`--no-review` to skip) and offers `--panel` — a 3-lens planner panel merged by a cold judge, disagreements surfaced as steering questions. Milestone v0.1 (complete) added context-free `dross-secure` / `dross-quality` audits (real scanners/analyzers + adversarial refute-panels that scaffold a remediation phase), a feature-organized `ARCHITECTURE.md` kept current at ship time, and stack profiles (`dross stack`) that tune runtime + tool loadouts to the detected stack — Go-first, with multi-language profiles in v0.2.
 
 > Scope: Dross is built for my workflow. It's public because there's no reason not to be, but I'm not marketing it and I'm not trying to grow it into a general-purpose tool. The roadmap is a flat list because my todo list is — if Dross ever picks up users, I'll think about structure (semver, milestones, contribution guidelines) then.
 
@@ -79,7 +79,7 @@ intent ─► SPEC ─► PLAN ─► CODE ─► TESTS ─► EFFICACY PROOF �
 
 ```
 cmd/dross/         Go CLI entrypoint
-internal/          project, state, rules, profile, phase, milestone, changes, verify, mutation, codex
+internal/          project, state, rules, profile, phase, milestone, changes, verify, mutation, codex, architecture, security, quality, stack, board
 assets/commands/   Slash command markdown (installed to ~/.claude/skills/dross-<name>/SKILL.md)
 assets/prompts/    Prompt instructions (installed to ~/.claude/dross/prompts/)
 docs/dross.1       Man page — `man ./docs/dross.1`; print via `mandoc -T pdf docs/dross.1 > dross.pdf`
@@ -120,6 +120,12 @@ docs/dross.1       Man page — `man ./docs/dross.1`; print via `mandoc -T pdf d
 ├── dross-quick/SKILL.md
 ├── dross-ship/SKILL.md
 ├── dross-review/SKILL.md
+├── dross-secure/SKILL.md
+├── dross-quality/SKILL.md
+├── dross-architecture/SKILL.md
+├── dross-inbox/SKILL.md
+├── dross-pause/SKILL.md
+├── dross-resume/SKILL.md
 ├── dross-status/SKILL.md
 ├── dross-options/SKILL.md
 └── dross-rule/SKILL.md
@@ -180,6 +186,9 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `dross profile {show,seed}` | User profile (with GSD import) | ✅ |
 | `dross validate` | Schema-check every artefact | ✅ |
 | `dross codex <file>` | Polyglot code insight — symbols, refs, siblings, recent activity. Go via stdlib `go/ast`; TS/TSX/Svelte/C#/GDScript via `ast-grep` shell-out (graceful no-op if ast-grep not on PATH) | ✅ |
+| `dross security {detect,run,scaffold}` | Deterministic surface of the `dross-secure` audit — run dirs, scanner detection, findings→spec scaffold (audit orchestration lives in `secure.md`) | ✅ |
+| `dross quality {detect,run,scaffold}` | Deterministic surface of the `dross-quality` audit — run dirs, analyzer detection, maintainability-risk scaffold (orchestration in `quality.md`) | ✅ |
+| `dross stack {detect,show,list,apply,loadout}` | Stack profiles — detect the stack, show/list profiles, `apply` re-syncs `[runtime]`, `loadout` emits the agent loadout block. Embedded built-ins + `~/.claude/dross/profiles/` drop-ins (user wins). Go profile ships; Kotlin/Dart/Svelte/SQL land in v0.2 | ✅ |
 | `dross doctor` | Project-level health check: foundational files exist (`project.toml`, `rules.toml`, `state.json`), `[remote]` ↔ git origin matches, `auth_env` exported, `.gitattributes` marks `.dross/` linguist-generated, no phase commits leaked onto main | ✅ |
 | `dross defaults {show,save}` | Read/write `~/.claude/dross/defaults.toml` (cross-project pre-fills) | ✅ |
 | `dross env {list,set,unset}` | Manage env keys in `~/.claude/settings.json` (hidden input, never echoed) | ✅ |
@@ -211,6 +220,9 @@ Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` 
 | `/dross-options` | ✅ |
 | `/dross-ship` | ✅ (CI watch + merge gate + branch cleanup) |
 | `/dross-review` | ✅ (4-lens subagent panel: security / quality / tests / spec-fidelity) |
+| `/dross-secure` | ✅ (context-free multi-pass security audit: real scanners + adversarial refute-panel; scaffolds a remediation phase) |
+| `/dross-quality` | ✅ (multi-pass code-quality audit: real analyzers + refute-panel over substantive maintainability dimensions; scaffolds a remediation phase) |
+| `/dross-architecture` | ✅ (generate/refresh the feature-organized `ARCHITECTURE.md` from a scan of code + git history) |
 
 Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 
@@ -244,6 +256,19 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Verify verdict hardening — `[summary].mutation_status` (`measured | unmeasurable | skipped`) distinguishes a real low score from a 0/0 artefact, so a phase whose changes fall entirely outside the project's Stryker scope (or runs with `--skip-mutation`) no longer false-fails the 0.60 threshold; `/dross-verify` now bases the verdict on criterion coverage alone when nothing was measurable. Forgejo/Gitea `dross issue phase-sync` no longer spams `cannot unmarshal array into ... issueResponse` — the labels-PUT response is now correctly treated as a `LabelList` instead of an issue. New `no_milestone` error bucket peels bare `dross milestone show` failures out of the opaque `other` pile.
 - [x] Plan quality loops — `/dross-plan --panel` fans out three cold lens planners (risk-first / MVP-first / verification-first) over the locked spec in parallel, a fourth cold judge merges them (winner-as-skeleton + grafts) and surfaces lens *disagreements* as the steering agenda instead of auto-resolving them; artifacts kept in `.dross/phases/<id>/panel/`. `/dross-plan` now auto-runs the independent plan review (own-context cold subagent) after `plan.toml` is locked, with one bounded fix-and-re-review cycle on blocking findings; `--no-review` opts out. Panel costs ~4-5× a single-pass plan — meant for new subsystems / non-obvious task graphs, not 2-task UI phases
 - [x] Spec gray-area discussion — `/dross-spec`'s locked-decisions step is no longer a passive "any decisions?" prompt. It analyses the phase against project goals, milestone constraints, locked stack, and the acceptance criteria, then surfaces 3–4 *phase-specific* gray areas (concrete labels, never generic categories), lets the user `multiSelect` which to pin down, and deep-dives each one at a time — outcomes land as `[[decisions]]` (locked, with a real `why`) or `[[deferred]]`. Skips anything already settled by `stack.locked` or a prior phase's decision; routes scope-creep into deferred ideas. Ported from GSD's `discuss-phase` question phase, folded into the existing spec flow rather than added as a separate command/artifact
+
+### Milestone v0.1 — comprehension, security & quality surfaces (complete)
+
+- [x] `ARCHITECTURE.md` comprehension layer — a single feature-organized doc at repo root (one entry per capability, never per phase/module) with a fixed entry template (heading + one-line + symbol links + provenance). Seeded greenfield at `dross init`, backfilled by `/dross-architecture` from a code + git-history scan, and kept current by `/dross-ship` folding each phase's landmarks into the matching feature entry in place
+- [x] `dross status` non-spine action surfaces — when the spec→ship spine has nothing runnable, status surfaces idle-gated action areas (security / quality / tech-debt) instead of dead-ending; gated so it only shows between phases, not mid-flow
+- [x] `/dross-secure` + `dross security` — context-free, read-only multi-pass security audit: real scanners (govulncheck/gosec/gitleaks/semgrep/trivy/osv-scanner…) plus an adversarial refute-panel over cold subagents, emitting a verified findings ledger that scaffolds a remediation phase. Tool-grounded (no LLM-guessed findings), no `--fix`
+- [x] `/dross-quality` + `dross quality` — comparable multi-pass code-quality audit: real analyzers (gocyclo/dupl/deadcode/errcheck/ineffassign + agnostic scc/jscpd) over substantive maintainability dimensions, refute-panel verified, scaffolds a remediation phase. Diverges from secure on a downrank-only (never-suppress) context model
+- [x] Stack profiles + `dross stack` — declarative per-stack profiles (embedded built-ins + `~/.claude/dross/profiles/` drop-ins, user wins on id) that tune runtime commands, the security/quality tool loadout, and the agent loadout to a detected stack. Signal-scored detection → matched id or `unsupported`; `apply` re-syncs `[runtime]`; `loadout` emits a markdown block the execute prompt injects inline. Adding a stack is a single TOML drop-in. Go-first
+
+### Milestone v0.2 — multi-language stack profiles (active)
+
+- [ ] Embedded profiles for Kotlin / Dart / Svelte / SQL + `extLang` detection additions, each feeding its dedicated scanners/analyzers into `dross-secure` / `dross-quality`
+- [ ] Marker-file stack detection (`Dockerfile` / compose) so a Docker profile's tools run on repos with no source extension
 
 ## Telemetry
 
