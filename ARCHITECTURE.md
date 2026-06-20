@@ -139,6 +139,19 @@ Two-tier (builtin + project) MUST-FOLLOW rules, merged and rendered via `dross r
 
 _c8b346e_
 
+### Security audit (dross-secure)
+
+Context-free, read-only multi-pass security audit: real scanners plus an adversarial refute-panel over cold subagents, emitting a verified findings ledger and scaffolding a remediation phase. The `dross security` CLI is the deterministic surface (run dirs, scanner detection, findings→spec scaffold); `secure.md` orchestrates the audit.
+
+- `security.NewRun` — `internal/security/run.go`
+- `security.Catalog` / `security.Detect` — `internal/security/catalog.go`
+- `security.Ledger` — `internal/security/findings.go`
+- `security.BuildManifest` — `internal/security/recon.go`
+- `security.ScaffoldSpec` — `internal/security/scaffold.go`
+- `Security` (CLI) — `internal/cmd/security.go:18`
+
+_introduced 05-dross-secure · 37fde7f_
+
 ### Ship recovery
 
 Heal origin/main vs local main divergence after a squash-merge.
