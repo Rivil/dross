@@ -27,14 +27,17 @@ depends_on    = ["t-1"]
 title         = "Surface actions block when spine is idle"
 files         = ["internal/cmd/status.go", "internal/cmd/status_test.go"]
 description   = """
-Add a spine-idle predicate: true when current_phase is unset, OR the phase
-is verified/pass/complete/shipped with no remaining spine step. When idle,
-print the `actions:` block above the `next:` line; otherwise suppress it.
+Add a spine-idle predicate derived from the real spine state, NOT the
+free-text CurrentPhaseStatus enum: idle == current_phase unset, OR
+(plan.NextRunnable() == nil AND no failed tasks AND verify verdict in
+{"", "pass"}) — the same signal suggestNext already uses for its terminal
+"start a new phase or move on" branch; factor it out and reuse it. When
+idle, print the `actions:` block above the `next:` line; otherwise suppress.
 """
 covers        = ["c-1", "c-3"]
 test_contract = [
   "if the actions block is absent between phases (current_phase unset), the between-phases test fails",
   "if the actions block leaks into an active phase with a runnable task, the suppression test fails",
-  "if a verified/pass phase stops showing the actions block, the verified-phase test fails",
+  "a phase whose verify.toml verdict is pass and whose plan has no runnable task shows the actions block — test fails if it's absent",
 ]
 status        = "pending"
