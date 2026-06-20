@@ -53,6 +53,7 @@ func Onboard() *cobra.Command {
 			scan := scanRepo(cwd)
 			p := scan.toProject()
 			p.Remote, _ = seedRemote(cwd)
+			seedRuntimeFromProfile(cwd, p)
 			if err := p.Save(filepath.Join(root, project.File)); err != nil {
 				return err
 			}
