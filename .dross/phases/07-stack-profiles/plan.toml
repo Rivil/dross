@@ -82,16 +82,18 @@ id            = "t-5"
 wave          = 2
 depends_on    = ["t-1", "t-2"]
 title         = "Add dross stack command tree"
-files         = ["internal/cmd/stack.go", "cmd/dross/main.go", "internal/cmd/stack_test.go"]
+files         = ["internal/cmd/stack.go", "cmd/dross/main.go", "internal/project/project.go", "internal/cmd/stack_test.go"]
 description   = """
 New 'dross stack' command with subcommands detect/show/list/apply/loadout, registered
-in cmd/dross/main.go. This task wires detect/show/list; apply and loadout bodies land in
-t-8 and t-9 respectively but the subcommand set is present and guarded here.
+in cmd/dross/main.go. Wires detect/show/list; apply and loadout bodies land in t-11 and
+t-9 but the subcommand set is present and guarded here. Adds the `Profile` field to
+project.Stack so the matched id can be stored at project.toml [stack].profile.
 """
 covers        = ["c-1"]
 test_contract = [
   "'dross stack detect' on a package.json-only path prints 'unsupported' and exits 0 (advisory) — TestStackDetectNonGoExitsZeroUnsupported fails if it exits non-zero or prints 'go'.",
   "'dross stack show <unknown-id>' exits non-zero with id-not-found — TestStackShowUnknownIDErrors.",
+  "project.Stack.Profile round-trips through project.toml as [stack].profile — TestStackProfileFieldRoundTrips fails if the field is dropped on encode/decode.",
   "Subcommand set detect/show/list/apply/loadout is present and the subcommand guard rejects 'dross stack bogus' — TestStackRejectsUnknownSubcommand.",
 ]
 status        = "pending"
@@ -127,34 +129,33 @@ keeping their own ext->lang walk, eliminating the duplicate (and preventing a th
 """
 covers        = ["c-1"]
 test_contract = [
-  "TestSecurityReconDelegatesToStack and TestQualityReconDelegatesToStack assert identical results to stack.Detect on a shared fixture (including the non-Go-only case).",
-  "The tests fail if an independent ext->lang map reappears in either recon.go (no third copy).",
+  "TestSecurityReconDelegatesToStack and TestQualityReconDelegatesToStack assert byte-identical results to stack.Detect on a shared fixture table (including the non-Go-only case).",
+  "A grep/CI assertion (not a unit test) fails if a standalone ext->lang map literal reappears in either recon.go — TestNoDuplicateExtLangMap scans the two files' source for the map literal and fails if present.",
 ]
 status        = "pending"
 
 [[task]]
 id            = "t-8"
 wave          = 3
-depends_on    = ["t-3"]
+depends_on    = ["t-2", "t-3", "t-4", "t-5"]
 title         = "Seed init/onboard runtime from profile"
 files         = ["internal/cmd/init.go", "internal/cmd/onboard.go", "internal/cmd/init_test.go", "internal/cmd/onboard_test.go"]
 description   = """
 init and onboard seed project.toml [runtime] and [stack].profile from the matched stack
-profile instead of hardcoded guesses. 'dross stack apply' (t-5 subcommand) re-syncs
-[runtime] from the current profile on demand; its body lands here.
+profile instead of hardcoded guesses. Needs detection (t-2), the embedded profile (t-3),
+the runtime resolver (t-4), and the project.Stack.Profile field (t-5).
 """
 covers        = ["c-2"]
 test_contract = [
   "After 'dross init' in a Go repo, [runtime] test/typecheck/format/build equal the Go profile values and [stack].profile == the matched id — TestInitSeedsRuntimeFromProfile fails on any hardcoded guess.",
   "When detection returns unsupported, init writes NO fabricated runtime commands (empty slots, not Go defaults) — TestInitUnsupportedLeavesRuntimeUnseeded.",
-  "'dross stack apply' re-writes [runtime] from the current profile, overwriting a stale value — TestStackApplyResyncsRuntime.",
 ]
 status        = "pending"
 
 [[task]]
 id            = "t-9"
 wave          = 3
-depends_on    = ["t-3"]
+depends_on    = ["t-3", "t-5"]
 title         = "dross stack loadout markdown emitter"
 files         = ["internal/cmd/stack.go", "internal/stack/loadout.go", "internal/stack/loadout_test.go", "internal/cmd/stack_test.go"]
 description   = """
@@ -183,5 +184,22 @@ not live until 'make install'.
 covers        = ["c-4"]
 test_contract = [
   "assets/prompts/execute.md instructs the orchestration to call 'dross stack loadout' and inject the block — TestExecutePromptInvokesLoadout fails if the invocation string is absent.",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-11"
+wave          = 3
+depends_on    = ["t-4", "t-5"]
+title         = "dross stack apply re-syncs runtime"
+files         = ["internal/cmd/stack.go", "internal/cmd/stack_test.go"]
+description   = """
+Fill the 'dross stack apply' subcommand body (scaffolded in t-5): re-derive the runtime
+command set from the current profile (t-4 resolver) and overwrite project.toml [runtime]
+on demand, so an existing repo can pick up profile improvements.
+"""
+covers        = ["c-2"]
+test_contract = [
+  "'dross stack apply' re-writes [runtime] from the current profile, overwriting a stale value — TestStackApplyResyncsRuntime fails if it leaves the stale value or fabricates commands for an unsupported stack.",
 ]
 status        = "pending"

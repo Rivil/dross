@@ -3,13 +3,9 @@
   "current_milestone": "v0.1",
   "current_phase": "07-stack-profiles",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-20T17:45:07.539867Z",
-  "last_action": "plan locked: 07-stack-profiles (10 tasks across 3 waves)",
+  "last_activity": "2026-06-20T17:50:59.395959Z",
+  "last_action": "plan reviewed: 07-stack-profiles (0 blocking, 0 flags after 1 amend; 11 tasks)",
   "history": [
-    {
-      "at": "2026-06-20T10:38:31.666966Z",
-      "action": "completed 04-status-action-surfaces"
-    },
     {
       "at": "2026-06-20T10:42:41.040804Z",
       "action": "created 05-dross-secure"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-20T17:45:07.539867Z",
       "action": "plan locked: 07-stack-profiles (10 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-20T17:50:59.395959Z",
+      "action": "plan reviewed: 07-stack-profiles (0 blocking, 0 flags after 1 amend; 11 tasks)"
     }
   ]
 }
