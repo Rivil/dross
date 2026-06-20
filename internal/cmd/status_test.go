@@ -324,6 +324,53 @@ status = "done"
 	}
 }
 
+func TestStatusSuppressesActionsWhenVerifyPending(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecAndPlan(t, "01-pend", `[phase]
+id = "01-pend"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+	// Tasks done but no verify.toml yet → verify is a pending spine step, so the
+	// non-spine surface must stay suppressed (c-3).
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if strings.Contains(out, "actions:") {
+		t.Errorf("verify-pending phase (tasks done, no verify.toml) must suppress the actions block:\n%s", out)
+	}
+}
+
+func TestStatusSuppressesActionsWhenVerifyNotPass(t *testing.T) {
+	for _, verdict := range []string{"", "pending", "partial", "fail"} {
+		t.Run(verdict, func(t *testing.T) {
+			chdir(t, t.TempDir())
+			scaffoldPhaseWithSpecAndPlan(t, "01-v", `[phase]
+id = "01-v"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+			mustWrite(t, ".dross/phases/01-v/verify.toml", "verdict = \""+verdict+"\"\n")
+			out := captureStdout(t, func() {
+				runCmd(t, Status())
+			})
+			if strings.Contains(out, "actions:") {
+				t.Errorf("verdict %q is not pass → actions block must be suppressed:\n%s", verdict, out)
+			}
+		})
+	}
+}
+
 // renderActionAreas is the pure formatter for the non-spine `actions:` block.
 // These two tests pin its contract: unavailable areas are never shown as
 // runnable, available areas emit their command.

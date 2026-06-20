@@ -213,13 +213,16 @@ func spineIdle(root string, proj *project.Project, st *state.State) bool {
 			return false // execute / fix-failed step still pending
 		}
 	}
-	// No runnable task and nothing failed. Idle iff the verify verdict is absent
-	// or pass; fail/partial/pending all leave a spine step to do.
-	verdict := ""
-	if vp := filepath.Join(dir, "verify.toml"); fileExists(vp) {
-		verdict = readVerifyVerdict(vp)
+	// No runnable task and nothing failed, but verify is still a spine step
+	// until it passes. A missing verify.toml means verify hasn't run; any
+	// non-"pass" verdict (empty/pending/partial/fail) leaves work to do. Only a
+	// finalized pass counts as in-phase idle. (Between-phases idle is handled
+	// above by the empty current_phase.)
+	vp := filepath.Join(dir, "verify.toml")
+	if !fileExists(vp) {
+		return false // verify step still pending
 	}
-	return verdict == "" || verdict == "pass"
+	return readVerifyVerdict(vp) == "pass"
 }
 
 // openHandoff returns a one-line nudge if an unresolved handoff note exists
