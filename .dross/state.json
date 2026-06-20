@@ -1,15 +1,9 @@
 {
   "version": "0.1.0.12",
   "current_milestone": "v0.1",
-  "current_phase": "04-status-action-surfaces",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-20T10:12:12.653864Z",
-  "last_action": "quick: parallelize gremlins mutation via --workers/--test-cpu",
+  "last_activity": "2026-06-20T10:38:31.666966Z",
+  "last_action": "completed 04-status-action-surfaces",
   "history": [
-    {
-      "at": "2026-06-19T16:08:46.110123Z",
-      "action": "spec locked: 02-harden-ship-merge-complete-flow"
-    },
     {
       "at": "2026-06-19T16:17:51.448811Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-20T10:12:12.653864Z",
       "action": "quick: parallelize gremlins mutation via --workers/--test-cpu"
+    },
+    {
+      "at": "2026-06-20T10:38:31.666966Z",
+      "action": "completed 04-status-action-surfaces"
     }
   ]
 }
