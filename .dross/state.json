@@ -2,18 +2,10 @@
   "version": "0.1.0.13",
   "current_milestone": "v0.1",
   "current_phase": "07-stack-profiles",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-20T17:33:37.286271Z",
-  "last_action": "spec locked: 07-stack-profiles",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-20T17:45:07.539867Z",
+  "last_action": "plan locked: 07-stack-profiles (10 tasks across 3 waves)",
   "history": [
-    {
-      "at": "2026-06-20T10:12:12.626431Z",
-      "action": "bump internal 0.1.0.10 → 0.1.0.11"
-    },
-    {
-      "at": "2026-06-20T10:12:12.653864Z",
-      "action": "quick: parallelize gremlins mutation via --workers/--test-cpu"
-    },
     {
       "at": "2026-06-20T10:38:31.666966Z",
       "action": "completed 04-status-action-surfaces"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-20T17:33:37.286271Z",
       "action": "spec locked: 07-stack-profiles"
+    },
+    {
+      "at": "2026-06-20T17:45:07.533269Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-20T17:45:07.539867Z",
+      "action": "plan locked: 07-stack-profiles (10 tasks across 3 waves)"
     }
   ]
 }
