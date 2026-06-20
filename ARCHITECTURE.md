@@ -159,13 +159,16 @@ _introduced d392501 · extended 01-architecture-comprehension-layer · extended 
 
 ### State & status
 
-Track current milestone/phase/version + activity in state.json; summarise "where am I".
+Track current milestone/phase/version + activity in state.json; summarise "where am I" — including milestone phase-progress (N/M phases verified) and an idle-gated non-spine action surface (security/quality/tech-debt) shown only when the spec→ship spine has nothing runnable left.
 
 - `state.State` — `internal/state/state.go:17`
 - `State` (CLI) — `internal/cmd/state.go:16`
 - `Status` — `internal/cmd/status.go:18`
+- `renderMilestone` — `internal/cmd/status.go:108`
+- `spineIdle` — `internal/cmd/status.go:222`
+- `renderActionAreas` — `internal/cmd/status.go:312`
 
-_c8b346e_
+_c8b346e · extended 04-status-action-surfaces · 2ee9736_
 
 ### Telemetry & stats
 
