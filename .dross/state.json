@@ -3,17 +3,9 @@
   "current_milestone": "v0.1",
   "current_phase": "03-fix-completion-chore-divergence",
   "current_phase_status": "complete",
-  "last_activity": "2026-06-19T19:12:59.553346Z",
-  "last_action": "phase 03-fix-completion-chore-divergence executed (3/3 done)",
+  "last_activity": "2026-06-20T07:58:40.796821Z",
+  "last_action": "resumed — verify→ship phase 03 next",
   "history": [
-    {
-      "at": "2026-06-19T12:23:23.551182Z",
-      "action": "bump internal 0.1.0.7 → 0.1.0.8"
-    },
-    {
-      "at": "2026-06-19T12:23:23.564876Z",
-      "action": "quick: spec turn-boundaries (C1)"
-    },
     {
       "at": "2026-06-19T12:27:54.665811Z",
       "action": "bump internal 0.1.0.8 → 0.1.0.9"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-19T19:12:59.553346Z",
       "action": "phase 03-fix-completion-chore-divergence executed (3/3 done)"
+    },
+    {
+      "at": "2026-06-19T19:51:55.790053Z",
+      "action": "paused — phase 03 fix executed \u0026 green; next is /dross-verify"
+    },
+    {
+      "at": "2026-06-20T07:58:40.796821Z",
+      "action": "resumed — verify→ship phase 03 next"
     }
   ]
 }
