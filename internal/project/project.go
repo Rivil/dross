@@ -36,6 +36,7 @@ type ProjectMeta struct {
 
 type Stack struct {
 	Languages      []string       `toml:"languages"`
+	Profile        string         `toml:"profile,omitempty"` // matched stack-profile id (internal/stack)
 	Frameworks     []string       `toml:"frameworks,omitempty"`
 	PackageManager string         `toml:"package_manager,omitempty"`
 	TypeChecker    string         `toml:"type_checker,omitempty"`
