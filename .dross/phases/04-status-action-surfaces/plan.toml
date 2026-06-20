@@ -1,0 +1,40 @@
+[phase]
+id = "04-status-action-surfaces"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Add action-area catalog + actions block renderer"
+files         = ["internal/cmd/status.go", "internal/cmd/status_test.go"]
+description   = """
+Define a fixed in-code catalog of action areas: security → /dross-secure,
+quality → /dross-quality, tech-debt → placeholder. All marked
+not-yet-available in this phase. Add a pure render function for the
+`actions:` block: an available area emits its command line; an unavailable
+area emits a "(planned)" marker with no runnable command pointer.
+"""
+covers        = ["c-2"]
+test_contract = [
+  "if an unavailable area renders a runnable command instead of the (planned) marker, the renderer test fails",
+  "if an available area stops emitting its `/dross-…` command line, the renderer test fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 2
+depends_on    = ["t-1"]
+title         = "Surface actions block when spine is idle"
+files         = ["internal/cmd/status.go", "internal/cmd/status_test.go"]
+description   = """
+Add a spine-idle predicate: true when current_phase is unset, OR the phase
+is verified/pass/complete/shipped with no remaining spine step. When idle,
+print the `actions:` block above the `next:` line; otherwise suppress it.
+"""
+covers        = ["c-1", "c-3"]
+test_contract = [
+  "if the actions block is absent between phases (current_phase unset), the between-phases test fails",
+  "if the actions block leaks into an active phase with a runnable task, the suppression test fails",
+  "if a verified/pass phase stops showing the actions block, the verified-phase test fails",
+]
+status        = "pending"
