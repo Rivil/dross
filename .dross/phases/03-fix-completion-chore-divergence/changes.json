@@ -1,0 +1,31 @@
+{
+  "phase": "03-fix-completion-chore-divergence",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "77220f5",
+      "completed_at": "2026-06-19T19:02:33.378374Z",
+      "notes": "feature: phase ship/completion handoff · Ship @ internal/cmd/ship.go · ship folds the completed-state transition into the phase branch so the squash-merge carries it to main"
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "1b883bf",
+      "completed_at": "2026-06-19T19:08:28.973813Z",
+      "notes": "feature: phase ship/completion handoff · phaseComplete @ internal/cmd/phase.go · complete is ff + branch-delete only, guarded by origin's completion record — writes no commit to main"
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "f8f06dc",
+      "completed_at": "2026-06-19T19:12:53.177261Z",
+      "notes": "feature: phase ship/completion handoff · TestConsecutivePhasesNoDivergence @ internal/cmd/phase_test.go · proves two back-to-back ship→squash→complete cycles leave local main == origin/main (no re-seeded divergence)"
+    }
+  }
+}

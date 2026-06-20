@@ -129,7 +129,38 @@ func Ship() *cobra.Command {
 				return nil
 			}
 
-			// 5) Push phase/<id> directly. The provider's squash-merge will
+			// 5) Fold the completion record into the squash. Write the
+			//    completed-state transition (clear current_phase + status,
+			//    append a `completed <id>` history entry) and commit it
+			//    *before* the push, so the pushed ref carries it and the
+			//    provider's squash-merge lands it on main. This is what
+			//    eliminates the completion-chore divergence: phase complete
+			//    no longer writes a standalone post-merge commit to local
+			//    main (it becomes ff + branch-delete only — see t-2). The PR
+			//    URL is known only post-push, so it drops out of the commit
+			//    and is printed instead.
+			//
+			//    Idempotent: re-shipping after review edits re-writes the
+			//    same state and only commits when something actually staged,
+			//    so a no-op re-ship doesn't error on "nothing to commit".
+			s.CurrentPhase = ""
+			s.CurrentPhaseStatus = ""
+			s.Touch(fmt.Sprintf("completed %s", phaseID))
+			if err := s.Save(filepath.Join(root, state.File)); err != nil {
+				return fmt.Errorf("save state: %w", err)
+			}
+			if out, err := gitCombined(repoDir, "add", filepath.Join(".dross", state.File)); err != nil {
+				return fmt.Errorf("git add state.json: %w\n%s", err, out)
+			}
+			if err := gitNoOut(repoDir, "diff", "--cached", "--quiet"); err != nil {
+				// Non-nil err means there IS a staged change to commit.
+				shipMsg := fmt.Sprintf("chore(dross): ship %s", phaseID)
+				if out, err := gitCombined(repoDir, "commit", "-m", shipMsg); err != nil {
+					return fmt.Errorf("git commit: %w\n%s", err, out)
+				}
+			}
+
+			// 6) Push phase/<id> directly. The provider's squash-merge will
 			//    collapse the per-task commits into one on main; no client-side
 			//    synthetic branch needed.
 			pushArgs := []string{"push", "-u", "origin", phaseBranch}
@@ -145,7 +176,7 @@ func Ship() *cobra.Command {
 			}
 			Printf("Pushed %s to origin\n", phaseBranch)
 
-			// 6) Open the PR via the provider.
+			// 7) Open the PR via the provider.
 			baseBranch := p.Repo.GitMainBranch
 			if baseBranch == "" {
 				baseBranch = "main"
@@ -175,32 +206,7 @@ func Ship() *cobra.Command {
 				// Non-fatal post-PR errors (e.g. reviewer add failed).
 				Printf("Warning: %v\n", err)
 			}
-
-			// 7) State update.
-			action := fmt.Sprintf("shipped %s", phaseID)
-			if res != nil {
-				action = fmt.Sprintf("shipped %s → %s", phaseID, res.URL)
-			}
-			s.Touch(action)
-			if err := s.Save(filepath.Join(root, state.File)); err != nil {
-				return fmt.Errorf("save state: %w", err)
-			}
-
-			// Commit ship's own post-push .dross/ write so ship returns on
-			// a clean working tree (the fix_locus decision: ship owns its
-			// state write; phase complete and the provider's --delete-branch
-			// can then both rely on a clean tree). Mirrors phaseComplete's
-			// commit step. This lands on phase/<id> *after* the push, so it
-			// is local-only — discarded when phase complete deletes the
-			// branch. That's intended: c-1 requires a clean tree on return,
-			// not that the audit record reach main.
-			if out, err := gitCombined(repoDir, "add", filepath.Join(".dross", state.File)); err != nil {
-				return fmt.Errorf("git add state.json: %w\n%s", err, out)
-			}
-			shipMsg := fmt.Sprintf("chore(dross): ship %s", phaseID)
-			if out, err := gitCombined(repoDir, "commit", "-m", shipMsg); err != nil {
-				return fmt.Errorf("git commit: %w\n%s", err, out)
-			}
+			Printf("Completion record folded into %s — squash-merge will land it on %s\n", phaseBranch, baseBranch)
 
 			// 8) Telemetry — capture shape of this ship without leaking
 			//    repo URL, body content, or reviewer names.

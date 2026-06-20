@@ -206,16 +206,22 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 		t.Errorf("PR title should reference phase id, got: %q", openedTitle)
 	}
 
-	// State should record the shipped action with the PR URL.
+	// Ship folds the completion record into the branch: state.json now
+	// clears current_phase and records `completed 01-x`, written and
+	// committed BEFORE the push so the provider's squash-merge carries it
+	// to main (c-4). The PR URL is printed, not persisted.
 	st, _ := state.Load(filepath.Join(dir, ".dross", "state.json"))
-	found := false
+	if st.CurrentPhase != "" {
+		t.Errorf("ship should clear current_phase, got %q", st.CurrentPhase)
+	}
+	foundCompleted := false
 	for _, a := range st.History {
-		if strings.Contains(a.Action, "shipped 01-x") && strings.Contains(a.Action, "pulls/99") {
-			found = true
+		if strings.Contains(a.Action, "completed 01-x") {
+			foundCompleted = true
 		}
 	}
-	if !found {
-		t.Errorf("state history should record shipped + PR URL; history: %+v", st.History)
+	if !foundCompleted {
+		t.Errorf("state history should record `completed 01-x`; history: %+v", st.History)
 	}
 
 	// Remote should have received phase/01-x directly (no synthetic
@@ -225,9 +231,22 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 		t.Errorf("expected phase/01-x on remote, got: %q", remoteRefs)
 	}
 
-	// Ship must return on a clean working tree: its post-push state write
-	// (shipped action + PR URL, asserted above) is committed as part of
-	// ship, not left uncommitted (c-1 / fix_locus). If the commit step is
+	// The completion record must live in the PUSHED ref, not a local-only
+	// post-push commit. Read state.json at the pushed branch tip in the bare
+	// remote and assert current_phase is cleared there. If the commit landed
+	// after the push (the old behaviour), the pushed tree still carries
+	// current_phase and this fails.
+	pushedState := mustGit(t, remoteDir, "show", "phase/01-x:.dross/state.json")
+	var pushed state.State
+	if err := json.Unmarshal([]byte(pushedState), &pushed); err != nil {
+		t.Fatalf("parse pushed state.json: %v", err)
+	}
+	if pushed.CurrentPhase != "" {
+		t.Errorf("pushed ref should carry cleared current_phase, got %q", pushed.CurrentPhase)
+	}
+
+	// Ship must return on a clean working tree: the completion write is
+	// committed as part of ship, not left uncommitted. If the commit step is
 	// dropped, the state.json save dirties the tree and this fails.
 	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
 		t.Errorf("working tree should be clean after ship, got: %q", st)
@@ -236,5 +255,55 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	// state isn't committed, HEAD is still the api_base test commit.
 	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); msg != "chore(dross): ship 01-x" {
 		t.Errorf("HEAD should be the ship state commit, got: %q", msg)
+	}
+}
+
+// TestShipReshipIsIdempotent ships the same phase twice. Because the first
+// ship clears current_phase (folded into the squash), the re-ship must name
+// the phase explicitly — and must not error on the second commit/push. A
+// re-ship after review edits has to re-write the same completed state safely
+// and return on a clean tree, never bail on "nothing to commit".
+func TestShipReshipIsIdempotent(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare")
+	mustGit(t, dir, "remote", "set-url", "origin", remoteDir)
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/pulls") && r.Method == "POST" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"number":99,"html_url":"https://forge.example/me/p/pulls/99"}`))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/requested_reviewers") {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, dir, "test: point api_base at mock")
+
+	// First ship — resolves the phase from current_phase, then clears it.
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("first ship: %v", err)
+	}
+	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
+		t.Fatalf("tree dirty after first ship: %q", st)
+	}
+
+	// Second ship — current_phase is now cleared, so name the phase. It must
+	// succeed and leave a clean tree (re-writes the same completed state).
+	if err := runCmd(t, Ship(), "01-x"); err != nil {
+		t.Fatalf("re-ship should be idempotent, got: %v", err)
+	}
+	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
+		t.Errorf("tree should be clean after re-ship, got: %q", st)
 	}
 }

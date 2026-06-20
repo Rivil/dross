@@ -7,3 +7,6 @@
 STATUS.md
 Brief.md
 docs/dross.pdf
+
+# dross handoff — local working memory, not tracked
+.dross/handoff.md
