@@ -13,3 +13,6 @@ docs/dross.pdf
 
 # dross security run artifacts — local audit output; never pre-disclose on a public repo
 .dross/security/
+
+# dross quality run artifacts — local audit output; the committed record is the remediation spec
+.dross/quality/

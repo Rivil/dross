@@ -1,0 +1,101 @@
+[verify]
+  phase = "06-dross-quality"
+  generated_at = 2026-06-20T16:43:20.827647Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.808974358974359
+  mutants_killed = 631
+  mutants_survived = 149
+  mutants_not_covered = 149
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/quality/run_test.go:TestRunID",
+    "internal/quality/run_test.go:TestNewRunNoClobber",
+    "internal/cmd/quality_test.go:TestQualityRunCreatesDir",
+    "internal/cmd/quality_test.go:TestQualityRunWritesManifest",
+    "internal/quality/findings_test.go:TestLedgerRoundTrip",
+    "internal/quality/findings_test.go:TestSurvivorsRiskOrder",
+  ]
+  notes = "run-id <timestamp>-<short-sha> shape + nogit fallback (TestRunID); one run dir under .dross/quality/ with report.md (TestNewRunCreatesDir/WritesManifest); findings carry Risk/Dimension/File/Line/Evidence (TestLedgerRoundTrip) ranked highest-risk-first (TestSurvivorsRiskOrder)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/quality/findings_test.go:TestUnrefutedIsNotSurvivor",
+    "internal/cmd/quality_prompt_test.go:TestQualityPromptMandatedSections/c-2_refute-panel_majority-vote_drop",
+  ]
+  notes = "Code gate: a candidate with no refutation never reaches Survivors() (TestUnrefutedIsNotSurvivor). The refute/majority-vote/drop orchestration rule is asserted present in quality.md by the prompt content-gate."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/quality/catalog_test.go:TestCatalogCompleteness",
+    "internal/quality/catalog_test.go:TestAnalyzersForAgnosticFallback",
+    "internal/quality/catalog_test.go:TestDetectMissingHasHint",
+    "internal/quality/recon_test.go:TestDetectLanguages",
+    "internal/quality/recon_test.go:TestManifestRecordsSkipped",
+    "internal/cmd/quality_test.go:TestQualityDetectOutput",
+    "internal/cmd/quality_test.go:TestQualityRunWritesManifest",
+    "internal/cmd/quality_prompt_test.go:TestQualityPromptMandatedSections/c-3_detect-gate-sweep_+_tool-coverage_manifest_gate",
+  ]
+  notes = "Detection + catalog completeness + agnostic fallback + install hints (catalog_test); language detection skips .dross + manifest records ran vs skipped (recon_test); CLI prints installed/missing markers and writes the manifest into report.md (quality_test); continue/install gate asserted in the prompt."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/quality/scaffold_test.go:TestScaffoldOnePerFinding",
+    "internal/quality/scaffold_test.go:TestScaffoldRiskOrder",
+    "internal/quality/scaffold_test.go:TestScaffoldCitesLedger",
+    "internal/quality/scaffold_test.go:TestScaffoldEmptyRefuses",
+    "internal/quality/scaffold_test.go:TestScaffoldRoundTrips",
+    "internal/cmd/quality_test.go:TestQualityScaffold",
+    "internal/cmd/quality_test.go:TestQualityScaffoldEmptyErrors",
+    "internal/cmd/quality_prompt_test.go:TestQualityPromptMandatedSections/c-4_propose-then-ask_before_locking_the_scaffold",
+  ]
+  notes = "One criterion per surviving finding, highest-risk-first, each citing its ledger id; zero survivors refuses; spec round-trips through phase.LoadSpec (scaffold_test). CLI scaffold writes spec.toml on a valid ledger and errors on a zero-survivor ledger (quality_test). propose-then-ask asserted in the prompt."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [
+    "internal/quality/run_test.go:TestNewRunWriteBoundary",
+    "internal/cmd/quality_test.go:TestQualityRunReadOnly",
+    "internal/quality/gitignore_test.go:TestQualityArtifactsGitignored",
+    "internal/cmd/quality_prompt_test.go:TestQualityPromptMandatedSections/c-5_read-only_no_--fix_never_edits",
+  ]
+  notes = "Write boundary enforced at the writer (TestNewRunWriteBoundary) and the CLI (containedPath traversal refusal + full-run prefix walk, TestQualityRunReadOnly); run artifacts gitignored (TestQualityArtifactsGitignored); no-`--fix`/never-edit asserted in the prompt. Defense-in-depth on the safety-critical criterion."
+
+# ── Mutation interpretation ──────────────────────────────────────────
+# Phase-diff signal is clean; the package-scoped rollup is contaminated by
+# untouched code and is NOT the phase signal (the documented gremlins pattern).
+
+[[finding]]
+  severity = "NOTE"
+  text = "Phase-diff mutation on CHANGED files is clean: internal/quality/{run,catalog,findings,recon,scaffold}.go — 24 mutants generated, 24 killed, 0 survived, 100% efficacy. internal/cmd/quality.go had no surviving mutants. cmd/dross/main.go skipped (zero covered mutants — command registration only)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Rollup score 0.81 (631 killed / 149 survived) is NOT a phase signal: gremlins mutates the whole internal/cmd package, so all 149 survivors are in pre-existing untouched files (ship.go, status.go, verify.go, issue.go, rule.go, env.go, stats.go, codex.go, doctor.go, phase.go, profile.go, milestone.go, onboard.go, project.go, root.go, subcommand_guard.go, telemetry.go, validate.go). Verified: zero survivors lie in any phase-changed line. All 149 are not_covered; efficacy excluding them = 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .gitignore: no mutation adapter for .gitignore"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/commands/dross-quality.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/quality.md: no mutation adapter for .md"

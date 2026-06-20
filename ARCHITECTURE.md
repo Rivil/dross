@@ -59,6 +59,19 @@ Polyglot symbol / cross-file reference / sibling / recent-git insight for given 
 
 _4b6e027_
 
+### Code-quality audit (dross-quality)
+
+Calibrate-only, read-only multi-pass code-quality audit: real analyzers plus an adversarial refute-panel over cold subagents, emitting a verified maintainability-risk ledger and scaffolding a remediation phase. The `dross quality` CLI is the deterministic surface (run dirs, analyzer detection, findings→spec scaffold); `quality.md` orchestrates the audit. Sibling of the security audit, diverging on the locked context model (downrank-only, never suppress) and ranking (blast-radius-weighted maintainability-risk).
+
+- `quality.NewRun` — `internal/quality/run.go:65`
+- `quality.Catalog` / `quality.Detect` — `internal/quality/catalog.go:107`
+- `quality.Ledger` — `internal/quality/findings.go:69`
+- `quality.BuildManifest` — `internal/quality/recon.go:112`
+- `quality.ScaffoldSpec` — `internal/quality/scaffold.go:15`
+- `Quality` (CLI) — `internal/cmd/quality.go:20`
+
+_introduced 06-dross-quality · 715b3f2_
+
 ### Configuration
 
 Read/write project settings, global defaults, environment variables, and the GSD-seeded profile.

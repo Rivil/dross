@@ -1,0 +1,86 @@
+{
+  "phase": "06-dross-quality",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/quality/run.go",
+        "internal/quality/run_test.go"
+      ],
+      "commit": "2bc20c6",
+      "completed_at": "2026-06-20T15:55:05.73493Z",
+      "notes": "feature: code-quality audit · NewRun @ internal/quality/run.go · collision-safe per-run dir + \u003ctimestamp\u003e-\u003cshort-sha\u003e run-id under .dross/quality/"
+    },
+    "t-2": {
+      "files": [
+        "internal/quality/catalog.go",
+        "internal/quality/catalog_test.go"
+      ],
+      "commit": "a00e633",
+      "completed_at": "2026-06-20T15:56:58.667904Z",
+      "notes": "feature: code-quality audit · Catalog @ internal/quality/catalog.go · data-driven dimension→analyzer table (Go-complete + agnostic), substantive-only, installed-vs-missing detection"
+    },
+    "t-3": {
+      "files": [
+        "internal/quality/findings.go",
+        "internal/quality/findings_test.go"
+      ],
+      "commit": "b5e6755",
+      "completed_at": "2026-06-20T15:58:32.793901Z",
+      "notes": "feature: code-quality audit · Ledger @ internal/quality/findings.go · maintainability-risk findings ledger (refutation-gated survivors, blast-weighted risk order, malformed-input guard)"
+    },
+    "t-4": {
+      "files": [
+        "internal/quality/recon.go",
+        "internal/quality/recon_test.go"
+      ],
+      "commit": "4ffb17b",
+      "completed_at": "2026-06-20T16:00:13.122035Z",
+      "notes": "feature: code-quality audit · BuildManifest @ internal/quality/recon.go · code-only language detection + tool-coverage manifest recording ran vs skipped analyzers"
+    },
+    "t-5": {
+      "files": [
+        "internal/quality/scaffold.go",
+        "internal/quality/scaffold_test.go"
+      ],
+      "commit": "ce5a0da",
+      "completed_at": "2026-06-20T16:01:15.846209Z",
+      "notes": "feature: code-quality audit · ScaffoldSpec @ internal/quality/scaffold.go · turns surviving findings into a remediation spec.toml, one risk-ordered criterion per finding citing its ledger id"
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/quality.go",
+        "internal/cmd/quality_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "715b3f2",
+      "completed_at": "2026-06-20T16:03:15.205366Z",
+      "notes": "feature: code-quality audit · Quality @ internal/cmd/quality.go · dross quality detect/run/scaffold subcommands, sandboxed to .dross/quality/, partial-coverage run never hard-errors"
+    },
+    "t-7": {
+      "files": [
+        "assets/prompts/quality.md",
+        "assets/commands/dross-quality.md"
+      ],
+      "commit": "e467675",
+      "completed_at": "2026-06-20T16:04:56.887778Z",
+      "notes": "feature: code-quality audit · quality.md @ assets/prompts/quality.md · /dross-quality orchestration prompt — calibrate-only context, refute-panel, detect→gate→sweep, propose-then-ask scaffold, read-only"
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/quality_prompt_test.go"
+      ],
+      "commit": "edfaa1c",
+      "completed_at": "2026-06-20T16:06:38.747972Z",
+      "notes": "feature: code-quality audit · TestQualityPromptMandatedSections @ internal/cmd/quality_prompt_test.go · per-rule sub-tests content-gating the locked quality.md prompt rules (refute, calibrate-only, gate, propose-then-ask, read-only)"
+    },
+    "t-9": {
+      "files": [
+        ".gitignore",
+        "internal/quality/gitignore_test.go"
+      ],
+      "commit": "f5466da",
+      "completed_at": "2026-06-20T15:59:06.755483Z",
+      "notes": "feature: code-quality audit · TestQualityArtifactsGitignored @ internal/quality/gitignore_test.go · gitignores .dross/quality/ so raw per-run findings are never committed"
+    }
+  }
+}

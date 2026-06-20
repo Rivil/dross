@@ -1,89 +1,9 @@
 {
   "version": "0.1.0.13",
   "current_milestone": "v0.1",
-  "last_activity": "2026-06-20T13:36:58.014301Z",
-  "last_action": "quick: flag-aware Next: convention (re-recorded after phase-05 merge)",
+  "last_activity": "2026-06-20T16:50:38.121585Z",
+  "last_action": "completed 06-dross-quality",
   "history": [
-    {
-      "at": "2026-06-19T19:12:59.553346Z",
-      "action": "phase 03-fix-completion-chore-divergence executed (3/3 done)"
-    },
-    {
-      "at": "2026-06-19T19:51:55.790053Z",
-      "action": "paused — phase 03 fix executed \u0026 green; next is /dross-verify"
-    },
-    {
-      "at": "2026-06-20T07:58:40.796821Z",
-      "action": "resumed — verify→ship phase 03 next"
-    },
-    {
-      "at": "2026-06-20T08:26:39.956857Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-20T08:26:39.963654Z",
-      "action": "verified 03-fix-completion-chore-divergence: pass (5/5 covered, mutation 0.58 package-scoped — not a phase signal)"
-    },
-    {
-      "at": "2026-06-20T08:31:48.088049Z",
-      "action": "completed 03-fix-completion-chore-divergence"
-    },
-    {
-      "at": "2026-06-20T08:36:41.228384Z",
-      "action": "resumed — v0.1 feature-complete; next is milestone wrap"
-    },
-    {
-      "at": "2026-06-20T08:39:50.315466Z",
-      "action": "created 04-status-action-surfaces"
-    },
-    {
-      "at": "2026-06-20T09:01:00.084422Z",
-      "action": "set current_phase=04-status-action-surfaces"
-    },
-    {
-      "at": "2026-06-20T09:01:00.091766Z",
-      "action": "spec locked: 04-status-action-surfaces"
-    },
-    {
-      "at": "2026-06-20T09:02:32.54642Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-20T09:02:32.553127Z",
-      "action": "plan locked: 04-status-action-surfaces (2 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-06-20T09:04:08.783248Z",
-      "action": "plan reviewed: 04-status-action-surfaces (0 blocking, 3 flags)"
-    },
-    {
-      "at": "2026-06-20T09:05:01.529015Z",
-      "action": "plan amended: 04 t-2 idle-signal derived from spine state, not status enum (closes review flag 1+3)"
-    },
-    {
-      "at": "2026-06-20T09:07:48.991337Z",
-      "action": "executed t-1 (action-area catalog + renderer)"
-    },
-    {
-      "at": "2026-06-20T09:10:23.319903Z",
-      "action": "executed t-2 (spine-idle actions block)"
-    },
-    {
-      "at": "2026-06-20T09:10:37.501631Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-20T09:10:37.507099Z",
-      "action": "phase 04-status-action-surfaces executed (2/2 done)"
-    },
-    {
-      "at": "2026-06-20T09:45:12.832323Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-20T09:45:12.837947Z",
-      "action": "verified 04-status-action-surfaces: partial (2/3 covered, c-3 weak — verify-pending leak; mutation 0 survivors but timeout-contaminated)"
-    },
     {
       "at": "2026-06-20T09:47:48.815366Z",
       "action": "fixed c-3 verify-pending leak (t-2 amended): spineIdle now requires verdict==pass for in-phase idle"
@@ -203,6 +123,86 @@
     {
       "at": "2026-06-20T13:36:58.014301Z",
       "action": "quick: flag-aware Next: convention (re-recorded after phase-05 merge)"
+    },
+    {
+      "at": "2026-06-20T14:06:54.598781Z",
+      "action": "created 06-dross-quality"
+    },
+    {
+      "at": "2026-06-20T15:32:49.417954Z",
+      "action": "set current_phase=06-dross-quality"
+    },
+    {
+      "at": "2026-06-20T15:32:49.426641Z",
+      "action": "spec locked: 06-dross-quality"
+    },
+    {
+      "at": "2026-06-20T15:49:08.716127Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-20T15:49:08.723582Z",
+      "action": "plan locked: 06-dross-quality (9 tasks across 5 waves)"
+    },
+    {
+      "at": "2026-06-20T15:50:46.132111Z",
+      "action": "plan reviewed: 06-dross-quality (0 blocking, 3 flags)"
+    },
+    {
+      "at": "2026-06-20T15:55:05.752606Z",
+      "action": "executed t-1 (run-dir + run-id writer)"
+    },
+    {
+      "at": "2026-06-20T15:56:58.68559Z",
+      "action": "executed t-2 (dimension→analyzer catalog + detection)"
+    },
+    {
+      "at": "2026-06-20T15:58:32.805989Z",
+      "action": "executed t-3 (maintainability-risk findings ledger)"
+    },
+    {
+      "at": "2026-06-20T15:59:06.77072Z",
+      "action": "executed t-9 (gitignore quality run artifacts)"
+    },
+    {
+      "at": "2026-06-20T16:00:13.136183Z",
+      "action": "executed t-4 (tool-coverage manifest + language recon)"
+    },
+    {
+      "at": "2026-06-20T16:01:15.860003Z",
+      "action": "executed t-5 (risk-ordered remediation scaffold writer)"
+    },
+    {
+      "at": "2026-06-20T16:03:15.217068Z",
+      "action": "executed t-6 (dross quality command + containment)"
+    },
+    {
+      "at": "2026-06-20T16:04:56.898973Z",
+      "action": "executed t-7 (quality orchestration prompt content)"
+    },
+    {
+      "at": "2026-06-20T16:06:38.759896Z",
+      "action": "executed t-8 (prompt-content assertions + parity)"
+    },
+    {
+      "at": "2026-06-20T16:07:04.461111Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-20T16:07:04.466848Z",
+      "action": "phase 06-dross-quality executed (9/9 done)"
+    },
+    {
+      "at": "2026-06-20T16:48:41.10571Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-20T16:48:41.11225Z",
+      "action": "verified 06-dross-quality: pass (5/5 covered; phase-diff mutation 100% on internal/quality, 0 survivors in changed code; rollup 0.81 package-scoped — not a phase signal)"
+    },
+    {
+      "at": "2026-06-20T16:50:38.121585Z",
+      "action": "completed 06-dross-quality"
     }
   ]
 }
