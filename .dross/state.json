@@ -1,21 +1,11 @@
 {
   "version": "0.1.0.10",
   "current_milestone": "v0.1",
-  "last_activity": "2026-06-20T08:36:41.228384Z",
-  "last_action": "resumed — v0.1 feature-complete; next is milestone wrap",
+  "current_phase": "04-status-action-surfaces",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-20T09:01:00.091766Z",
+  "last_action": "spec locked: 04-status-action-surfaces",
   "history": [
-    {
-      "at": "2026-06-19T13:57:31.395131Z",
-      "action": "spec locked: 01-architecture-comprehension-layer"
-    },
-    {
-      "at": "2026-06-19T14:12:26.647088Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-19T14:12:26.653844Z",
-      "action": "plan locked: 01-architecture-comprehension-layer (4 tasks across 2 waves)"
-    },
     {
       "at": "2026-06-19T14:13:59.614569Z",
       "action": "plan reviewed: 01-architecture-comprehension-layer (0 blocking, 3 flags)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-20T08:36:41.228384Z",
       "action": "resumed — v0.1 feature-complete; next is milestone wrap"
+    },
+    {
+      "at": "2026-06-20T08:39:50.315466Z",
+      "action": "created 04-status-action-surfaces"
+    },
+    {
+      "at": "2026-06-20T09:01:00.084422Z",
+      "action": "set current_phase=04-status-action-surfaces"
+    },
+    {
+      "at": "2026-06-20T09:01:00.091766Z",
+      "action": "spec locked: 04-status-action-surfaces"
     }
   ]
 }
