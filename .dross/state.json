@@ -1,97 +1,9 @@
 {
   "version": "0.1.0.12",
   "current_milestone": "v0.1",
-  "last_activity": "2026-06-20T10:38:31.666966Z",
-  "last_action": "completed 04-status-action-surfaces",
+  "last_activity": "2026-06-20T13:31:18.310941Z",
+  "last_action": "completed 05-dross-secure",
   "history": [
-    {
-      "at": "2026-06-19T16:17:51.448811Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-19T16:17:51.456131Z",
-      "action": "plan locked: 02-harden-ship-merge-complete-flow (3 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-06-19T16:19:32.179743Z",
-      "action": "plan reviewed: 02-harden-ship-merge-complete-flow (0 blocking, 3 flags)"
-    },
-    {
-      "at": "2026-06-19T16:35:35.438311Z",
-      "action": "executed t-1 (Ship commits its post-push state write)"
-    },
-    {
-      "at": "2026-06-19T16:37:30.324832Z",
-      "action": "executed t-2 (phase complete deletes remote branch idempotently)"
-    },
-    {
-      "at": "2026-06-19T16:39:22.966753Z",
-      "action": "executed t-3 (end-to-end ship to complete leaves zero manual git)"
-    },
-    {
-      "at": "2026-06-19T16:39:32.940326Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-19T16:39:32.947611Z",
-      "action": "phase 02-harden-ship-merge-complete-flow executed (3/3 done)"
-    },
-    {
-      "at": "2026-06-19T17:19:04.001136Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-19T17:19:04.009011Z",
-      "action": "verified 02-harden-ship-merge-complete-flow: pass (3/3 covered; mutation package-scoped, phase diff fully killed)"
-    },
-    {
-      "at": "2026-06-19T17:45:45.206965Z",
-      "action": "completed 02-harden-ship-merge-complete-flow"
-    },
-    {
-      "at": "2026-06-19T18:12:49.772211Z",
-      "action": "set current_milestone=v0.1"
-    },
-    {
-      "at": "2026-06-19T18:12:49.779788Z",
-      "action": "scoped milestone v0.1: 6 criteria, 5 phases"
-    },
-    {
-      "at": "2026-06-19T18:15:13.736229Z",
-      "action": "created 03-fix-completion-chore-divergence"
-    },
-    {
-      "at": "2026-06-19T18:46:16.59989Z",
-      "action": "set current_phase=03-fix-completion-chore-divergence"
-    },
-    {
-      "at": "2026-06-19T18:46:16.607335Z",
-      "action": "spec locked: 03-fix-completion-chore-divergence"
-    },
-    {
-      "at": "2026-06-19T18:50:28.493121Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-19T18:50:28.501608Z",
-      "action": "plan locked: 03-fix-completion-chore-divergence (3 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-06-19T18:52:16.868867Z",
-      "action": "plan reviewed: 03-fix-completion-chore-divergence (0 blocking, 3 flags)"
-    },
-    {
-      "at": "2026-06-19T18:54:19.84851Z",
-      "action": "plan amended: 03 t-2 guard hardened (branch-ref-independent, closes review flag 1)"
-    },
-    {
-      "at": "2026-06-19T19:02:33.401947Z",
-      "action": "executed t-1 (Ship folds completed-state into the squash)"
-    },
-    {
-      "at": "2026-06-19T19:08:28.991257Z",
-      "action": "executed t-2 (phase complete no-commit cleanup + unmerged guard)"
-    },
     {
       "at": "2026-06-19T19:12:53.192368Z",
       "action": "executed t-3 (Consecutive-phase zero-divergence integration test)"
@@ -203,6 +115,94 @@
     {
       "at": "2026-06-20T10:38:31.666966Z",
       "action": "completed 04-status-action-surfaces"
+    },
+    {
+      "at": "2026-06-20T10:42:41.040804Z",
+      "action": "created 05-dross-secure"
+    },
+    {
+      "at": "2026-06-20T11:15:40.314425Z",
+      "action": "set current_phase=05-dross-secure"
+    },
+    {
+      "at": "2026-06-20T11:15:40.32118Z",
+      "action": "spec locked: 05-dross-secure"
+    },
+    {
+      "at": "2026-06-20T11:52:06.514498Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-20T11:52:06.522283Z",
+      "action": "plan locked: 05-dross-secure (9 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-20T12:22:16.455104Z",
+      "action": "plan reviewed: 05-dross-secure (0 blocking, 4 flags; applied 1/3/4, t-9 kept per D-3)"
+    },
+    {
+      "at": "2026-06-20T12:29:29.784476Z",
+      "action": "executed t-1 (run-dir + collision-safe run-id)"
+    },
+    {
+      "at": "2026-06-20T12:34:48.709777Z",
+      "action": "executed t-2 (scanner catalog + availability detection)"
+    },
+    {
+      "at": "2026-06-20T12:37:15.057121Z",
+      "action": "executed t-3 (findings ledger schema + malformed-input guard)"
+    },
+    {
+      "at": "2026-06-20T12:43:20.236472Z",
+      "action": "executed t-7 (author secure.md + dross-secure.md prompts)"
+    },
+    {
+      "at": "2026-06-20T12:45:15.094432Z",
+      "action": "executed t-9 (gitignore security run artifacts)"
+    },
+    {
+      "at": "2026-06-20T12:47:22.287486Z",
+      "action": "executed t-4 (language detection + tool-coverage manifest)"
+    },
+    {
+      "at": "2026-06-20T12:49:51.934919Z",
+      "action": "executed t-8 (secure prompt content harness)"
+    },
+    {
+      "at": "2026-06-20T12:53:36.231574Z",
+      "action": "executed t-5 (findings→spec.toml scaffold writer)"
+    },
+    {
+      "at": "2026-06-20T12:57:49.066172Z",
+      "action": "executed t-6 (wire dross security subcommand)"
+    },
+    {
+      "at": "2026-06-20T12:58:02.814642Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-20T12:58:02.824193Z",
+      "action": "phase 05-dross-secure executed (9/9 done)"
+    },
+    {
+      "at": "2026-06-20T13:04:48.14353Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-20T13:04:48.149026Z",
+      "action": "verified 05-dross-secure: partial (6/6 covered; phase-diff mutation 100% on internal/security, 2 FLAG gaps in CLI glue; rollup 0.80 package-scoped — not a phase signal)"
+    },
+    {
+      "at": "2026-06-20T13:12:42.121735Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-20T13:12:42.129611Z",
+      "action": "re-verified 05-dross-secure: pass (6/6 covered; phase-diff mutation clean after amend; rollup 0.81 package-scoped — not a phase signal)"
+    },
+    {
+      "at": "2026-06-20T13:31:18.310941Z",
+      "action": "completed 05-dross-secure"
     }
   ]
 }

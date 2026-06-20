@@ -1,0 +1,105 @@
+[verify]
+  phase = "05-dross-secure"
+  generated_at = 2026-06-20T13:08:35.11079Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8064935064935065
+  mutants_killed = 621
+  mutants_survived = 149
+  mutants_not_covered = 149
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+# Phase-diff mutation is CLEAN: every covered mutant in this phase's own files
+# (internal/security/* and internal/cmd/security.go) is killed — 0 survived, 0
+# not-covered after the amend. The 0.806 rollup is package-scoped noise: all 149
+# "survived" are NOT-COVERED mutants in pre-existing internal/cmd files this phase
+# never touched (see the package-scoped NOTE). Per the established practice on
+# phases 02/03/04, the package rollup is not the phase signal.
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/security/run_test.go:TestRunID",
+    "internal/security/run_test.go:TestNewRunCollision",
+    "internal/security/run_test.go:TestNewRunWriteBoundary",
+    "internal/security/run_test.go:TestShortSHAFallback",
+    "internal/security/run_test.go:TestNormalizeSHA",
+    "internal/cmd/security_test.go:TestSecurityRunCreatesDir",
+  ]
+  notes = "Run-id format, collision suffix, write-boundary, no-git fallback, and the empty-output fallback (normalizeSHA) all killed."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/security/findings_test.go:TestSurvivorsRequireRefutation",
+    "internal/security/findings_test.go:TestLedgerValidateSeverity",
+    "internal/cmd/secure_prompt_test.go:TestSecurePromptMandatedSections/c-2",
+  ]
+  notes = "Refutation-gated survivors (no-evidence finding dropped) killed; prompt mandates the majority-vote refute-panel."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/security/recon_test.go:TestDetectLanguagesContextFree",
+    "internal/cmd/secure_prompt_test.go:TestSecurePromptMandatedSections/c-3",
+  ]
+  notes = "Executable guard: planted .dross/evil.py must not surface — proves recon never descends into .dross/. Prompt asserts 'read no .dross/ planning artifacts'. recon.go fully killed."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/security/catalog_test.go:TestCatalogCompleteness",
+    "internal/security/catalog_test.go:TestAvailabilityMissingHasHint",
+    "internal/security/catalog_test.go:TestScannersForAgnosticFallback",
+    "internal/security/recon_test.go:TestBuildManifestRecordsMissing",
+    "internal/cmd/security_test.go:TestSecurityDetectOutput",
+  ]
+  notes = "Core scanner set, missing-tool install hints, agnostic fallback, and the ran/skipped coverage manifest all killed."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [
+    "internal/security/scaffold_test.go:TestScaffoldOnePerFinding",
+    "internal/security/scaffold_test.go:TestScaffoldSeverityOrder",
+    "internal/security/scaffold_test.go:TestScaffoldCriterionCitesLedger",
+    "internal/security/scaffold_test.go:TestScaffoldEmptyRefuses",
+    "internal/security/scaffold_test.go:TestScaffoldRoundTripsLoadSpec",
+    "internal/cmd/security_test.go:TestSecurityScaffoldCommand",
+    "internal/cmd/security_test.go:TestSecurityScaffoldEmptyLedgerErrors",
+  ]
+  notes = "One-criterion-per-finding, criticals-first ordering, ledger-id citation, empty-scaffold guard, and LoadSpec round-trip killed; the scaffold CLI command's happy path + zero-survivor error path now exercised (kills the former error-branch survivors)."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = [
+    "internal/security/gitignore_test.go:TestSecurityArtifactsGitignored",
+    "internal/cmd/security_test.go:TestSecurityRunReadOnly",
+    "internal/cmd/secure_prompt_test.go:TestSecurePromptMandatedSections/c-6",
+  ]
+  notes = "Behavioural git check-ignore, containedPath traversal refusal (../main.go) + run-stays-in-sandbox walk, and the prompt's read-only/no--fix rule all killed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Phase-diff mutation clean: every covered mutant in internal/security/* and internal/cmd/security.go is killed (0 survived, 0 not-covered) after amending the scaffold-command and normalizeSHA tests."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Package-scoped mutation noise: all 149 'survived' mutants are NOT-COVERED lines in pre-existing internal/cmd files this phase never touched (status.go, issue.go, ship.go, verify.go, rule.go, codex.go, env.go, doctor.go, stats.go, milestone.go, phase.go, profile.go, project.go, root.go, etc.). The 0.806 rollup is the package-scope artifact, not a phase signal — consistent with the package-scoped mutation notes on phases 02/03/04."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .gitignore: no mutation adapter for .gitignore"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/commands/dross-secure.md + assets/prompts/secure.md: no mutation adapter for .md (the secure prompt is content-gated by internal/cmd/secure_prompt_test.go instead)"
