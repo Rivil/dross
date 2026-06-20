@@ -53,13 +53,16 @@ files         = ["internal/stack/detect_test.go"]
 description   = """
 Table test over the shipped profiles via stack.Embedded(): a fixture for each of
 kotlin/dart/svelte/sql resolves to its id through Detect(). Plus two control
-guards: an unsupported repo and a polyglot repo.
+guards (unsupported repo, polyglot repo) and a CLI-surface assertion that the
+four ids list and load through LoadAll/ByID (the path `dross stack list`/`show`
+delegate to).
 """
-covers        = ["c-1", "c-5"]
+covers        = ["c-1", "c-2", "c-5"]
 test_contract = [
   "Detect(fixture, Embedded()) returns \"kotlin\"/\"dart\"/\"svelte\"/\"sql\" for a fixture of each stack; deleting kotlin.toml fails the kotlin row",
   "an unsupported fixture (only foo.rb / README.txt) returns stack.Unsupported, not one of the four (false-match guard)",
   "a .sql file beside a go.mod still detects \"go\" — a file signal outweighs an extension, so SQL can't hijack a Go repo (polyglot guard)",
+  "LoadAll() (what `dross stack list` enumerates) contains all four ids and ByID(LoadAll(), <id>) resolves each non-nil (what `dross stack show <id>` loads); removing svelte.toml drops it from the list and fails the svelte row",
 ]
 status        = "pending"
 
