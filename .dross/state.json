@@ -2,18 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.2",
   "current_phase": "08-language-profiles",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-20T19:44:12.880139Z",
-  "last_action": "spec locked: 08-language-profiles",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-20T19:52:04.5748Z",
+  "last_action": "plan locked: 08-language-profiles (6 tasks across 2 waves)",
   "history": [
-    {
-      "at": "2026-06-20T13:36:58.005881Z",
-      "action": "bump internal 0.1.0.12 → 0.1.0.13"
-    },
-    {
-      "at": "2026-06-20T13:36:58.014301Z",
-      "action": "quick: flag-aware Next: convention (re-recorded after phase-05 merge)"
-    },
     {
       "at": "2026-06-20T14:06:54.598781Z",
       "action": "created 06-dross-quality"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-20T19:44:12.880139Z",
       "action": "spec locked: 08-language-profiles"
+    },
+    {
+      "at": "2026-06-20T19:52:04.568307Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-20T19:52:04.5748Z",
+      "action": "plan locked: 08-language-profiles (6 tasks across 2 waves)"
     }
   ]
 }
