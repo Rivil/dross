@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -110,6 +111,63 @@ func extsInTree(root string) map[string]bool {
 		return nil
 	})
 	return out
+}
+
+// extLang maps source-file extensions to languages. Unknown extensions are
+// ignored — detection never crashes on an extension it doesn't recognise. This is
+// the single canonical map: security and quality recon both delegate to
+// DetectLanguages so the ext->lang mapping can never drift across copies.
+var extLang = map[string]string{
+	".go":    "go",
+	".py":    "python",
+	".js":    "javascript",
+	".jsx":   "javascript",
+	".ts":    "typescript",
+	".tsx":   "typescript",
+	".rb":    "ruby",
+	".rs":    "rust",
+	".java":  "java",
+	".kt":    "kotlin",
+	".c":     "c",
+	".h":     "c",
+	".cc":    "cpp",
+	".cpp":   "cpp",
+	".cs":    "csharp",
+	".php":   "php",
+	".swift": "swift",
+}
+
+// DetectLanguages walks the tree at root and returns the sorted, de-duplicated set
+// of languages found, mapped from file extensions. It skips VCS/vendor/build noise
+// (including .dross, keeping audit sweeps context-free) and silently ignores files
+// with unknown extensions. Unlike Detect (which resolves a single best profile),
+// this returns every language present — what the security/quality tool sweeps need.
+func DetectLanguages(root string) ([]string, error) {
+	set := map[string]bool{}
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if path != root && skipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if lang, ok := extLang[filepath.Ext(d.Name())]; ok {
+			set[lang] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(set))
+	for l := range set {
+		out = append(out, l)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func normalizeExt(e string) string {

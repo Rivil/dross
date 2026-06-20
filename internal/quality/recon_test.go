@@ -4,7 +4,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	"github.com/Rivil/dross/internal/stack"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -70,6 +73,31 @@ func TestManifestRecordsSkipped(t *testing.T) {
 	for _, want := range []string{"gocyclo", "scc"} {
 		if !names[want] {
 			t.Errorf("manifest Skipped() missing %q (main.go → go, so the Go core + agnostic tools must appear)", want)
+		}
+	}
+}
+
+func TestQualityReconDelegatesToStack(t *testing.T) {
+	// Polyglot plus a non-Go-only fixture — both must match stack.DetectLanguages
+	// exactly, proving recon owns no second ext->lang map.
+	for _, files := range [][]string{
+		{"main.go", "app.py"},
+		{"app.py", "lib.rb"},
+	} {
+		root := t.TempDir()
+		for _, f := range files {
+			writeFile(t, filepath.Join(root, f), "x")
+		}
+		got, err := DetectLanguages(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := stack.DetectLanguages(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("quality recon DetectLanguages=%v, stack.DetectLanguages=%v — recon is not delegating", got, want)
 		}
 	}
 }
