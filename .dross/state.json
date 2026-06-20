@@ -1,21 +1,11 @@
 {
   "version": "0.1.0.12",
   "current_milestone": "v0.1",
-  "last_activity": "2026-06-20T10:38:31.666966Z",
-  "last_action": "completed 04-status-action-surfaces",
+  "current_phase": "05-dross-secure",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-20T11:15:40.32118Z",
+  "last_action": "spec locked: 05-dross-secure",
   "history": [
-    {
-      "at": "2026-06-19T16:17:51.448811Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-19T16:17:51.456131Z",
-      "action": "plan locked: 02-harden-ship-merge-complete-flow (3 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-06-19T16:19:32.179743Z",
-      "action": "plan reviewed: 02-harden-ship-merge-complete-flow (0 blocking, 3 flags)"
-    },
     {
       "at": "2026-06-19T16:35:35.438311Z",
       "action": "executed t-1 (Ship commits its post-push state write)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-20T10:38:31.666966Z",
       "action": "completed 04-status-action-surfaces"
+    },
+    {
+      "at": "2026-06-20T10:42:41.040804Z",
+      "action": "created 05-dross-secure"
+    },
+    {
+      "at": "2026-06-20T11:15:40.314425Z",
+      "action": "set current_phase=05-dross-secure"
+    },
+    {
+      "at": "2026-06-20T11:15:40.32118Z",
+      "action": "spec locked: 05-dross-secure"
     }
   ]
 }
