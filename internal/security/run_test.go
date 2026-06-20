@@ -26,6 +26,20 @@ func TestShortSHAFallback(t *testing.T) {
 	}
 }
 
+func TestNormalizeSHA(t *testing.T) {
+	// Empty / whitespace-only git output falls back to "nogit"; a real sha is
+	// trimmed and returned. (Covers the empty-output branch ShortSHA can't force.)
+	if got := normalizeSHA("   \n"); got != "nogit" {
+		t.Errorf("normalizeSHA(blank) = %q, want \"nogit\"", got)
+	}
+	if got := normalizeSHA(""); got != "nogit" {
+		t.Errorf("normalizeSHA(empty) = %q, want \"nogit\"", got)
+	}
+	if got := normalizeSHA("abc1234\n"); got != "abc1234" {
+		t.Errorf("normalizeSHA(sha) = %q, want \"abc1234\"", got)
+	}
+}
+
 func TestNewRunCollision(t *testing.T) {
 	root := t.TempDir()
 	now := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)

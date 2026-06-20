@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/security"
 )
 
 func TestSecurityCommandRegistered(t *testing.T) {
@@ -68,6 +70,43 @@ func TestSecurityRunCreatesDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(secDir, entries[0].Name(), "report.md")); err != nil {
 		t.Errorf("run did not write report.md in the run dir: %v", err)
+	}
+}
+
+func TestSecurityScaffoldCommand(t *testing.T) {
+	runDir := t.TempDir()
+	ledger := security.Ledger{Findings: []security.Finding{
+		{ID: "f-1", Title: "cmd injection in git shell-out", Severity: security.SeverityCritical,
+			Class: "cmd-injection", Refutation: "panel: confirmed reachable"},
+	}}
+	if err := security.Save(filepath.Join(runDir, "findings.toml"), ledger); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runCmd(t, Security(), "scaffold", runDir); err != nil {
+		t.Fatalf("scaffold on a valid ledger errored: %v", err)
+	}
+	// The happy path must actually write spec.toml — this fails if any of the
+	// command's `if err != nil` guards were negated (an early return would skip
+	// the write).
+	if _, err := os.Stat(filepath.Join(runDir, "spec.toml")); err != nil {
+		t.Fatalf("scaffold did not write spec.toml: %v", err)
+	}
+}
+
+func TestSecurityScaffoldEmptyLedgerErrors(t *testing.T) {
+	runDir := t.TempDir()
+	// A finding with no refutation is not a survivor → zero survivors → the
+	// scaffold writer's empty guard fires, and the command must surface that error
+	// (this kills the negation of the WriteScaffoldSpec error guard).
+	ledger := security.Ledger{Findings: []security.Finding{
+		{ID: "f-1", Severity: security.SeverityHigh, Refutation: ""},
+	}}
+	if err := security.Save(filepath.Join(runDir, "findings.toml"), ledger); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Security(), "scaffold", runDir); err == nil {
+		t.Fatal("scaffold on a zero-survivor ledger returned nil; want an error")
 	}
 }
 

@@ -36,7 +36,14 @@ func ShortSHA(repoDir string) string {
 	if err != nil {
 		return "nogit"
 	}
-	sha := strings.TrimSpace(string(out))
+	return normalizeSHA(string(out))
+}
+
+// normalizeSHA trims git's output and falls back to "nogit" when it is empty —
+// the empty-but-no-error case (which real git won't reliably produce on demand),
+// extracted so the fallback branch is unit-testable.
+func normalizeSHA(out string) string {
+	sha := strings.TrimSpace(out)
 	if sha == "" {
 		return "nogit"
 	}
