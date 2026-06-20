@@ -1,85 +1,9 @@
 {
-  "version": "0.1.0.10",
+  "version": "0.1.0.12",
   "current_milestone": "v0.1",
-  "last_activity": "2026-06-20T08:36:41.228384Z",
-  "last_action": "resumed — v0.1 feature-complete; next is milestone wrap",
+  "last_activity": "2026-06-20T10:38:31.666966Z",
+  "last_action": "completed 04-status-action-surfaces",
   "history": [
-    {
-      "at": "2026-06-19T13:57:31.395131Z",
-      "action": "spec locked: 01-architecture-comprehension-layer"
-    },
-    {
-      "at": "2026-06-19T14:12:26.647088Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-19T14:12:26.653844Z",
-      "action": "plan locked: 01-architecture-comprehension-layer (4 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-06-19T14:13:59.614569Z",
-      "action": "plan reviewed: 01-architecture-comprehension-layer (0 blocking, 3 flags)"
-    },
-    {
-      "at": "2026-06-19T14:18:34.10647Z",
-      "action": "executed t-1 (Architecture format package + init skeleton)"
-    },
-    {
-      "at": "2026-06-19T14:19:52.743781Z",
-      "action": "executed t-2 (Execute captures per-task landmark)"
-    },
-    {
-      "at": "2026-06-19T14:23:54.396412Z",
-      "action": "executed t-3 (Architecture backfill engine + entry points)"
-    },
-    {
-      "at": "2026-06-19T14:29:33.685756Z",
-      "action": "executed t-4 (Ship merges landmarks into ARCHITECTURE.md)"
-    },
-    {
-      "at": "2026-06-19T14:29:56.298085Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-19T14:29:56.304506Z",
-      "action": "phase 01-architecture-comprehension-layer executed (4/4 done)"
-    },
-    {
-      "at": "2026-06-19T14:34:27.625424Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-19T14:34:27.630559Z",
-      "action": "verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation skipped — gremlins adapter)"
-    },
-    {
-      "at": "2026-06-19T14:51:43.841573Z",
-      "action": "bump internal 0.1.0.9 → 0.1.0.10"
-    },
-    {
-      "at": "2026-06-19T14:51:43.866706Z",
-      "action": "quick: gremlins adapter per-package invocation"
-    },
-    {
-      "at": "2026-06-19T15:27:33.239044Z",
-      "action": "re-verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation measured 0.59 package-scoped; architecture pkg 100%)"
-    },
-    {
-      "at": "2026-06-19T15:56:32.299069Z",
-      "action": "completed 01-architecture-comprehension-layer"
-    },
-    {
-      "at": "2026-06-19T16:01:00.695429Z",
-      "action": "created 02-harden-ship-merge-complete-flow"
-    },
-    {
-      "at": "2026-06-19T16:08:46.102403Z",
-      "action": "set current_phase=02-harden-ship-merge-complete-flow"
-    },
-    {
-      "at": "2026-06-19T16:08:46.110123Z",
-      "action": "spec locked: 02-harden-ship-merge-complete-flow"
-    },
     {
       "at": "2026-06-19T16:17:51.448811Z",
       "action": "set current_phase_status=planned"
@@ -203,6 +127,82 @@
     {
       "at": "2026-06-20T08:36:41.228384Z",
       "action": "resumed — v0.1 feature-complete; next is milestone wrap"
+    },
+    {
+      "at": "2026-06-20T08:39:50.315466Z",
+      "action": "created 04-status-action-surfaces"
+    },
+    {
+      "at": "2026-06-20T09:01:00.084422Z",
+      "action": "set current_phase=04-status-action-surfaces"
+    },
+    {
+      "at": "2026-06-20T09:01:00.091766Z",
+      "action": "spec locked: 04-status-action-surfaces"
+    },
+    {
+      "at": "2026-06-20T09:02:32.54642Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-20T09:02:32.553127Z",
+      "action": "plan locked: 04-status-action-surfaces (2 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-06-20T09:04:08.783248Z",
+      "action": "plan reviewed: 04-status-action-surfaces (0 blocking, 3 flags)"
+    },
+    {
+      "at": "2026-06-20T09:05:01.529015Z",
+      "action": "plan amended: 04 t-2 idle-signal derived from spine state, not status enum (closes review flag 1+3)"
+    },
+    {
+      "at": "2026-06-20T09:07:48.991337Z",
+      "action": "executed t-1 (action-area catalog + renderer)"
+    },
+    {
+      "at": "2026-06-20T09:10:23.319903Z",
+      "action": "executed t-2 (spine-idle actions block)"
+    },
+    {
+      "at": "2026-06-20T09:10:37.501631Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-20T09:10:37.507099Z",
+      "action": "phase 04-status-action-surfaces executed (2/2 done)"
+    },
+    {
+      "at": "2026-06-20T09:45:12.832323Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-20T09:45:12.837947Z",
+      "action": "verified 04-status-action-surfaces: partial (2/3 covered, c-3 weak — verify-pending leak; mutation 0 survivors but timeout-contaminated)"
+    },
+    {
+      "at": "2026-06-20T09:47:48.815366Z",
+      "action": "fixed c-3 verify-pending leak (t-2 amended): spineIdle now requires verdict==pass for in-phase idle"
+    },
+    {
+      "at": "2026-06-20T09:52:35.48788Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-20T09:52:35.494859Z",
+      "action": "re-verified 04-status-action-surfaces: pass (3/3 covered after c-3 fix; mutation clean 0 survivors, efficacy 100%)"
+    },
+    {
+      "at": "2026-06-20T10:12:12.626431Z",
+      "action": "bump internal 0.1.0.10 → 0.1.0.11"
+    },
+    {
+      "at": "2026-06-20T10:12:12.653864Z",
+      "action": "quick: parallelize gremlins mutation via --workers/--test-cpu"
+    },
+    {
+      "at": "2026-06-20T10:38:31.666966Z",
+      "action": "completed 04-status-action-surfaces"
     }
   ]
 }

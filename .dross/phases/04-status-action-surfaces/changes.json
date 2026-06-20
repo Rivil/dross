@@ -1,0 +1,32 @@
+{
+  "phase": "04-status-action-surfaces",
+  "tasks": {
+    "quick-11": {
+      "files": [
+        "internal/mutation/gremlins.go",
+        "internal/mutation/gremlins_test.go"
+      ],
+      "commit": "b54e37f",
+      "completed_at": "2026-06-20T10:12:12.64569Z",
+      "notes": "quick: parallelize gremlins via --workers/--test-cpu (default NumCPU/2, test-cpu 1)"
+    },
+    "t-1": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go"
+      ],
+      "commit": "f109ba6",
+      "completed_at": "2026-06-20T09:07:48.979641Z",
+      "notes": "feature: status action surfaces · renderActionAreas @ internal/cmd/status.go · fixed action-area catalog + pure renderer marking unavailable areas (planned)"
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go"
+      ],
+      "commit": "2ee9736",
+      "completed_at": "2026-06-20T09:10:23.307487Z",
+      "notes": "feature: status action surfaces · spineIdle @ internal/cmd/status.go · gates the actions: block on real spine-idle signal (NextRunnable/failed/verdict, not status enum)"
+    }
+  }
+}

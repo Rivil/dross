@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,6 +21,22 @@ import (
 // chess-master dogfood session and keeps every mutant inside Go's
 // 1–2s compile-and-test cycle.
 const DefaultTimeoutCoefficient = 30
+
+// DefaultTestCPU pins each mutant's test run to a single CPU (--test-cpu)
+// so the worker count alone governs total CPU use; see Gremlins.TestCPU.
+const DefaultTestCPU = 1
+
+// defaultWorkers returns the parallelism gremlins uses when Workers is
+// unset: half the machine's CPUs (at least 1). Half leaves headroom so
+// concurrent test runs don't oversubscribe the box and time out
+// spuriously — a clean 6-worker run measured 0 timeouts where 14 workers
+// produced 539 false timeouts that masked real survivors.
+func defaultWorkers() int {
+	if w := runtime.NumCPU() / 2; w > 0 {
+		return w
+	}
+	return 1
+}
 
 // Gremlins adapter for Go mutation testing via go-gremlins/gremlins.
 //
@@ -35,6 +52,14 @@ type Gremlins struct {
 	// TimeoutCoefficient overrides gremlins' --timeout-coefficient flag.
 	// Zero or negative values fall back to DefaultTimeoutCoefficient.
 	TimeoutCoefficient int
+
+	// Workers caps how many mutants gremlins runs in parallel (--workers).
+	// Zero or negative falls back to defaultWorkers() (NumCPU/2).
+	Workers int
+
+	// TestCPU caps the CPUs each mutant's test run may use (--test-cpu).
+	// Zero or negative falls back to DefaultTestCPU (1).
+	TestCPU int
 }
 
 func (g *Gremlins) Name() string { return "gremlins" }
@@ -176,10 +201,20 @@ func (g *Gremlins) buildUnleashArgs(reportRel string, pkgs []string) []string {
 	if coef <= 0 {
 		coef = DefaultTimeoutCoefficient
 	}
+	workers := g.Workers
+	if workers <= 0 {
+		workers = defaultWorkers()
+	}
+	testCPU := g.TestCPU
+	if testCPU <= 0 {
+		testCPU = DefaultTestCPU
+	}
 	args := []string{
 		"gremlins", "unleash",
 		"--output", reportRel,
 		"--timeout-coefficient", strconv.Itoa(coef),
+		"--workers", strconv.Itoa(workers),
+		"--test-cpu", strconv.Itoa(testCPU),
 	}
 	return append(args, pkgs...)
 }

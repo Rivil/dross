@@ -1,0 +1,44 @@
+[verify]
+  phase = "04-status-action-surfaces"
+  generated_at = 2026-06-20T09:47:57.406363Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 1.0
+  mutants_killed = 78
+  mutants_survived = 0
+  mutants_not_covered = 4
+  criteria_total = 3
+  criteria_covered = 3
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/status_test.go:TestStatusShowsActionsBetweenPhases", "internal/cmd/status_test.go:TestStatusShowsActionsWhenVerifiedPass"]
+  notes = "Idle surface shown between phases (current_phase unset) and when the verify verdict is pass; both fail if the block disappears."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/status_test.go:TestRenderActionAreasUnavailableShowsPlannedNotRunnable", "internal/cmd/status_test.go:TestRenderActionAreasAvailableEmitsCommand"]
+  notes = "Both branches pinned: unavailable area -> (planned) marker (never runnable), available area -> its command with no marker. Go coverage of renderActionAreas 93.8% (only the empty-input guard is unexercised)."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/status_test.go:TestStatusSuppressesActionsMidPhase", "internal/cmd/status_test.go:TestStatusSuppressesActionsWhenVerifyPending", "internal/cmd/status_test.go:TestStatusSuppressesActionsWhenVerifyNotPass"]
+  notes = "After the t-2 fix, in-phase idle requires verify.toml verdict==pass. Suppression now tested for execute-pending (runnable task), verify-pending (no verify.toml), and non-pass verdicts (empty/pending/partial/fail). spineIdle 100% Go coverage; its 8 mutants all KILLED in the clean gremlins run."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation measured manually via gremlins (dross verify has no .go adapter). Clean run: --workers 6 --test-cpu 1 --timeout-coefficient 8 over internal/cmd — 578 killed / 0 lived / 0 timed-out package-wide (efficacy 100%, mutator coverage 79.5%). status.go scope: 78 killed, 0 survivors, 4 not-covered. Numbers above are status.go-scoped."
+
+[[finding]]
+  severity = "NOTE"
+  text = "status.go not-covered mutants are non-criterion: 300/302 are conditional-operand mutants gremlins mis-attributes (Go coverage shows those switch lines covered); 314 is progressBar's pre-existing empty-bar branch; plus renderActionAreas' empty-input guard. None affect c-1/c-2/c-3."
+
+[[finding]]
+  severity = "NOTE"
+  text = "dross gap (resolved by quick 0.1.0.11, commit b54e37f): correction — the gremlins adapter IS wired into the .go verify path (the earlier 'no adapter for .go' message was an artifact of --skip-mutation, which returns no adapters). The real gap was that internal/mutation/gremlins.go invoked gremlins without --workers, so Go mutation ran single-threaded. buildUnleashArgs now passes --workers (default NumCPU/2) and --test-cpu (default 1)."

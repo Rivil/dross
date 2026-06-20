@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
@@ -42,7 +43,7 @@ func Status() *cobra.Command {
 			Printf("project:   %s  v%s\n", name, st.Version)
 
 			if st.CurrentMilestone != "" {
-				Printf("milestone: %s\n", st.CurrentMilestone)
+				renderMilestone(root, st.CurrentMilestone)
 			}
 
 			// Phase block
@@ -78,12 +79,51 @@ func Status() *cobra.Command {
 				Printf("handoff:   %s\n", hand)
 			}
 
+			// Non-spine action areas — surfaced only when the spine is idle
+			// (between phases, or the current phase is done with nothing left
+			// to do), so live work isn't cluttered (c-1, c-3).
+			if spineIdle(root, proj, st) {
+				if lines := renderActionAreas(actionCatalog); len(lines) > 0 {
+					Printf("actions:   %s\n", lines[0])
+					for _, l := range lines[1:] {
+						Printf("           %s\n", l)
+					}
+				}
+			}
+
 			// Next suggested action — heuristic from current state
 			Print("")
 			Printf("next:      %s\n", suggestNext(root, proj, st))
 			return nil
 		},
 	}
+}
+
+// renderMilestone prints the milestone line, augmented with phase-level
+// progress — how many of the milestone's phases are verified (verdict="pass")
+// out of the total it lists. This is the milestone view (N/M phases), distinct
+// from the phase block below it (which shows the current phase's task count).
+// Falls back to the bare name when the milestone toml is missing or lists no
+// phases (e.g. a freshly-set current_milestone with no scoped toml yet).
+func renderMilestone(root, version string) {
+	m, err := milestone.Load(milestone.FilePath(root, version))
+	if err != nil || len(m.Phases) == 0 {
+		Printf("milestone: %s\n", version)
+		return
+	}
+	done := 0
+	for _, id := range m.Phases {
+		if readVerifyVerdict(filepath.Join(phase.Dir(root, id), "verify.toml")) == "pass" {
+			done++
+		}
+	}
+	total := len(m.Phases)
+	if title := strings.TrimSpace(m.Milestone.Title); title != "" {
+		Printf("milestone: %s — %s\n", version, title)
+	} else {
+		Printf("milestone: %s\n", version)
+	}
+	Printf("           %s %d/%d phases\n", progressBar(done, total, 20), done, total)
 }
 
 // renderPhase prints the phase line plus task progress if a plan exists.
@@ -174,6 +214,45 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	return "phase looks complete — start a new phase or move on"
 }
 
+// spineIdle reports whether the spec→ship spine has no actionable step left —
+// the moment to surface non-spine action areas (c-1/c-3). It derives the answer
+// from the same real signals suggestNext uses (NextRunnable, failed tasks,
+// verify verdict), NOT from the free-text CurrentPhaseStatus field, which isn't
+// reliably set to a terminal value.
+func spineIdle(root string, proj *project.Project, st *state.State) bool {
+	// Project/milestone setup still pending → the spine has a setup step.
+	if proj.Project.Name == "" || proj.Runtime.Mode == "" {
+		return false
+	}
+	if st.CurrentMilestone == "" {
+		return false
+	}
+	// Between phases — the canonical idle moment.
+	if st.CurrentPhase == "" {
+		return true
+	}
+	dir := phase.Dir(root, st.CurrentPhase)
+	if !fileExists(filepath.Join(dir, "spec.toml")) || !fileExists(filepath.Join(dir, "plan.toml")) {
+		return false // spec/plan step still pending
+	}
+	if plan, err := phase.LoadPlan(filepath.Join(dir, "plan.toml")); err == nil {
+		_, _, _, failed := plan.Summary()
+		if plan.NextRunnable() != nil || failed > 0 {
+			return false // execute / fix-failed step still pending
+		}
+	}
+	// No runnable task and nothing failed, but verify is still a spine step
+	// until it passes. A missing verify.toml means verify hasn't run; any
+	// non-"pass" verdict (empty/pending/partial/fail) leaves work to do. Only a
+	// finalized pass counts as in-phase idle. (Between-phases idle is handled
+	// above by the empty current_phase.)
+	vp := filepath.Join(dir, "verify.toml")
+	if !fileExists(vp) {
+		return false // verify step still pending
+	}
+	return readVerifyVerdict(vp) == "pass"
+}
+
 // openHandoff returns a one-line nudge if an unresolved handoff note exists
 // (.dross/handoff.md, written by /dross-pause and pruned by /dross-resume).
 // Returns "" when there's no handoff — the common case. Mirrors the
@@ -206,6 +285,56 @@ func openHandoff(root string) string {
 		line += fmt.Sprintf(", %d item(s) left", open)
 	}
 	return line + " — /dross-resume"
+}
+
+// actionArea is one non-spine area of work surfaced when the spine is idle
+// (security, quality, tech-debt). The catalog is fixed in code — no config —
+// and each later phase flips its area `available` once the backing command
+// ships.
+type actionArea struct {
+	label     string
+	command   string // slash command or short hint; "" when none exists yet
+	available bool
+}
+
+// actionCatalog is the fixed set of non-spine areas. All are not-yet-available
+// in this phase: security/quality land their commands in later phases and the
+// tech-debt scanner is deferred, so each renders with a "(planned)" marker.
+var actionCatalog = []actionArea{
+	{label: "security", command: "/dross-secure", available: false},
+	{label: "quality", command: "/dross-quality", available: false},
+	{label: "tech-debt", command: "", available: false},
+}
+
+// renderActionAreas formats the `actions:` block body for the given areas.
+// An available area emits its runnable command; an unavailable one is marked
+// "(planned)" and is never presented as runnable. Returns nil for no areas.
+func renderActionAreas(areas []actionArea) []string {
+	if len(areas) == 0 {
+		return nil
+	}
+	// Align labels into a column so the block scans like the other status rows.
+	width := 0
+	for _, a := range areas {
+		if len(a.label) > width {
+			width = len(a.label)
+		}
+	}
+	var lines []string
+	for _, a := range areas {
+		label := fmt.Sprintf("%-*s", width, a.label)
+		var detail string
+		switch {
+		case a.available && a.command != "":
+			detail = a.command
+		case a.command != "":
+			detail = a.command + " (planned)"
+		default:
+			detail = "(planned)"
+		}
+		lines = append(lines, fmt.Sprintf("%s — %s", label, detail))
+	}
+	return lines
 }
 
 func progressBar(done, total, width int) string {

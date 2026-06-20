@@ -259,6 +259,193 @@ func TestStatusOmitsHandoffWhenAbsentOrEmpty(t *testing.T) {
 	}
 }
 
+// Milestone-level progress: status must surface how many of the milestone's
+// phases are verified (N/M phases), distinct from the current phase's task
+// count. Pins the bug where only per-phase task progress (2/2) was shown and
+// the milestone looked complete when phases remained.
+func TestStatusShowsMilestonePhaseProgress(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "01-a")
+	// A milestone toml listing five phases, two of which are verified.
+	mustWrite(t, ".dross/milestones/v0.1.toml", `phases = ["01-a", "02-b", "03-c", "04-d", "05-e"]
+
+[milestone]
+  version = "v0.1"
+  title = "First release"
+`)
+	mustWrite(t, ".dross/phases/01-a/verify.toml", "verdict = \"pass\"\n")
+	mustWrite(t, ".dross/phases/02-b/verify.toml", "verdict = \"pass\"\n")
+	mustWrite(t, ".dross/phases/03-c/verify.toml", "verdict = \"partial\"\n")
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "2/5 phases") {
+		t.Errorf("expected milestone phase progress '2/5 phases' (only 01-a and 02-b are pass):\n%s", out)
+	}
+	if !strings.Contains(out, "First release") {
+		t.Errorf("expected milestone title surfaced:\n%s", out)
+	}
+}
+
+// When the milestone toml is absent (current_milestone set but not scoped),
+// status falls back to the bare name with no phase bar — no crash.
+func TestStatusMilestoneFallsBackToBareNameWhenNoToml(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "01-a") // sets current_milestone=v0.1, no toml written
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "milestone: v0.1") {
+		t.Errorf("expected bare milestone name fallback:\n%s", out)
+	}
+	if strings.Contains(out, "phases") {
+		t.Errorf("no milestone toml = no phase progress bar:\n%s", out)
+	}
+}
+
+// The actions block is shown only when the spine is idle. These three pin
+// c-1 (shown between phases / when verified) and c-3 (suppressed mid-phase).
+
+func TestStatusShowsActionsBetweenPhases(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	mustRunSet(t, "project.name", "feast")
+	mustRunSet(t, "runtime.mode", "native")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "actions:") {
+		t.Errorf("expected actions block between phases:\n%s", out)
+	}
+	if !strings.Contains(out, "security") || !strings.Contains(out, "(planned)") {
+		t.Errorf("expected non-spine areas with planned marker:\n%s", out)
+	}
+}
+
+func TestStatusSuppressesActionsMidPhase(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecAndPlan(t, "01-auth", `[phase]
+id = "01-auth"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+`)
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if strings.Contains(out, "actions:") {
+		t.Errorf("active phase with a runnable task must not show the actions block:\n%s", out)
+	}
+}
+
+func TestStatusShowsActionsWhenVerifiedPass(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecAndPlan(t, "01-done", `[phase]
+id = "01-done"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+	mustWrite(t, ".dross/phases/01-done/verify.toml", `verdict = "pass"
+`)
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "actions:") {
+		t.Errorf("verified/pass phase with no runnable task must show the actions block:\n%s", out)
+	}
+}
+
+func TestStatusSuppressesActionsWhenVerifyPending(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecAndPlan(t, "01-pend", `[phase]
+id = "01-pend"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+	// Tasks done but no verify.toml yet → verify is a pending spine step, so the
+	// non-spine surface must stay suppressed (c-3).
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if strings.Contains(out, "actions:") {
+		t.Errorf("verify-pending phase (tasks done, no verify.toml) must suppress the actions block:\n%s", out)
+	}
+}
+
+func TestStatusSuppressesActionsWhenVerifyNotPass(t *testing.T) {
+	for _, verdict := range []string{"", "pending", "partial", "fail"} {
+		t.Run(verdict, func(t *testing.T) {
+			chdir(t, t.TempDir())
+			scaffoldPhaseWithSpecAndPlan(t, "01-v", `[phase]
+id = "01-v"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+			mustWrite(t, ".dross/phases/01-v/verify.toml", "verdict = \""+verdict+"\"\n")
+			out := captureStdout(t, func() {
+				runCmd(t, Status())
+			})
+			if strings.Contains(out, "actions:") {
+				t.Errorf("verdict %q is not pass → actions block must be suppressed:\n%s", verdict, out)
+			}
+		})
+	}
+}
+
+// renderActionAreas is the pure formatter for the non-spine `actions:` block.
+// These two tests pin its contract: unavailable areas are never shown as
+// runnable, available areas emit their command.
+
+func TestRenderActionAreasUnavailableShowsPlannedNotRunnable(t *testing.T) {
+	lines := renderActionAreas([]actionArea{
+		{label: "security", command: "/dross-secure", available: false},
+	})
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 line, got %d: %v", len(lines), lines)
+	}
+	if !strings.Contains(lines[0], "(planned)") {
+		t.Errorf("unavailable area must be marked (planned), not presented as runnable:\n%s", lines[0])
+	}
+}
+
+func TestRenderActionAreasAvailableEmitsCommand(t *testing.T) {
+	lines := renderActionAreas([]actionArea{
+		{label: "security", command: "/dross-secure", available: true},
+	})
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 line, got %d: %v", len(lines), lines)
+	}
+	if !strings.Contains(lines[0], "/dross-secure") {
+		t.Errorf("available area must emit its command line:\n%s", lines[0])
+	}
+	if strings.Contains(lines[0], "(planned)") {
+		t.Errorf("available area must NOT be marked planned:\n%s", lines[0])
+	}
+}
+
 // ---- helpers ----
 
 func scaffoldPhaseWithSpecOnly(t *testing.T, phaseID string) {
