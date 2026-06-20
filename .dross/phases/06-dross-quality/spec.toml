@@ -1,0 +1,88 @@
+[phase]
+id        = "06-dross-quality"
+title     = "dross-quality"
+milestone = "v0.1"
+
+# ── Acceptance criteria ──────────────────────────────────────────────
+
+[[criteria]]
+id   = "c-1"
+text = "Running /dross-quality produces an impact-ranked report at .dross/quality/<run>/report.md (run-id = <timestamp>-<short-sha>); each finding carries its maintainability-risk rank, location, and evidence."
+
+[[criteria]]
+id   = "c-2"
+text = "No LLM-guessed findings reach the report: every candidate passes an adversarial refute-panel and any that fail majority vote are dropped."
+
+[[criteria]]
+id   = "c-3"
+text = "A pre-sweep triage detects the codebase's languages, maps each to its recommended quality analyzers (complexity, duplication, dead-code, coupling, test-gap, plus risky-lint categories), reports installed-vs-missing with install instructions, and gates (continue / install) before running; the sweep then runs available analyzers and records a tool-coverage manifest in the report."
+
+[[criteria]]
+id   = "c-4"
+text = "On completion /dross-quality scaffolds a remediation phase: a pre-filled spec.toml where each surviving finding is one impact-ordered acceptance criterion backed by a findings.toml ledger entry, with maintainability-risk driving wave order; it proposes-then-asks before locking."
+
+[[criteria]]
+id   = "c-5"
+text = "Read-only: no --fix; the audit never edits or commits application code, only the (gitignored) run artifacts and the gated phase scaffold."
+
+# ── Locked decisions ─────────────────────────────────────────────────
+
+[[decisions]]
+key    = "testable_surface"
+choice = "Thin `dross quality` Go CLI owns the deterministic parts (run-dir/run-id creation, tool-availability detection, findings→spec.toml scaffold writer); the prompt (assets/prompts/quality.md + assets/commands/dross-quality.md) orchestrates recon, fan-out audit, and the refute-panel."
+why    = "Gives real unit tests and matches dross's CLI-provides-state / prompt-orchestrates split. Pure-prompt would leave verify with only weak content assertions. Carried over from 05-dross-secure."
+locked = true
+
+[[decisions]]
+key    = "context_model"
+choice = "Calibrate-only: the judgment/refute panel MAY read .dross/project.toml conventions and rules to calibrate what is idiomatic or intentional (a locked pattern is not 'debt'), but context can only DOWNRANK a finding, never suppress it. The tool sweep itself is code-only and reads no .dross/ planning artifacts."
+why    = "Unlike a security audit (deliberately context-free), what counts as quality debt depends on project intent — but unrestricted context lets the audit rationalize real debt away. Downrank-only keeps judgment honest while honoring documented design choices."
+locked = true
+
+[[decisions]]
+key    = "quality_scope"
+choice = "Findings cover substantive maintainability dimensions — complexity, duplication, dead code, coupling/cohesion, test gaps, error-handling smells — plus only risky-lint categories that signal real defects (unhandled errors, ineffectual assignments, resource leaks). Pure cosmetic/naming/format rules already owned by the language formatter + basic vet are excluded."
+why    = "High-value findings without a nit-flood that drowns real debt in the remediation scaffold; risky-lint adds genuine defect signal without the cosmetic long tail."
+locked = true
+
+[[decisions]]
+key    = "catalog_scope"
+choice = "The dimension→tool catalog is data-driven and multi-language by construction, but ships Go-complete plus language-agnostic tools. Other detected languages are mapped to whatever agnostic tools apply; their dedicated catalogs are stubs marked for later extension. The prompt orients on the detected stack and selects the idiomatic toolbelt for that language rather than assuming Go."
+why    = "Honors the milestone's Go-first non-goal (no broad multi-language library in v0.1) while keeping the mechanism extensible so adding a language later is a data change, not a rewrite. Mirrors 05-dross-secure's catalog_scope."
+locked = true
+
+[[decisions]]
+key    = "ranking_model"
+choice = "Findings are ranked by contextual maintainability-risk — panel-judged change-cost / bug-likelihood weighted by blast radius (how central or hot the affected code is), not nominal category. A complex function on a cold path ranks low; the same on a core path ranks high. The report and scaffold lead with highest risk, and risk drives wave order."
+why    = "Nominal category ordering mis-prioritizes: a trivial instance of a 'severe' category can outrank a genuinely damaging one. Contextual, blast-radius-weighted risk keeps prioritization honest. Quality analog of secure's contextual severity_model."
+locked = true
+
+[[decisions]]
+key    = "criterion_unit"
+choice = "Each surviving finding becomes its own acceptance criterion in the scaffolded remediation phase, listed highest-risk-first; the findings.toml ledger tracks every finding by id and verify requires a killing test (or equivalent check) for each. Maintainability-risk drives wave order (highest risk → wave 1)."
+why    = "Per-finding criteria ensure every issue is a first-class, individually-testable line item that can't slip green. Coarse tier criteria would pass once a single finding in the tier had a test, hiding the rest. Carried over from 05-dross-secure."
+locked = true
+
+[[decisions]]
+key    = "report_artifact"
+choice = "Run artifacts live under .dross/quality/<run>/ (gitignored by default); run-id = <timestamp>-<short-sha>; each run dir holds report.md (human, impact-ranked) and findings.toml (machine-readable ledger consumed by the scaffold writer). The committed public-facing artifact is the remediation phase's spec.toml."
+why    = "Per-run reports are churny and duplicate what the scaffolded spec.toml already records in-git; gitignoring keeps the repo clean. Quality findings aren't sensitive, but consistency with secure and the scaffold-is-the-record principle both favor gitignored. Cross-run trend tracking is explicitly deferred."
+locked = true
+
+# ── Deferred ─────────────────────────────────────────────────────────
+
+[[deferred]]
+text = "Dedicated dimension→tool quality catalogs for non-Go languages (JS/Python/Rust/etc.)"
+why  = "Mechanism is multi-language now; populating dedicated per-language catalogs is later work (Go-first non-goal)."
+
+[[deferred]]
+text = "Cross-run quality trend tracking / scoring over time"
+why  = "Chose gitignored per-run artifacts; durable trend tracking is a deliberate later call."
+
+[[deferred]]
+text = "Full `dross quality` findings-state / lifecycle CLI"
+why  = "This phase ships only the thin slice (run-dir, tool detection, scaffold writer); richer findings-state tracking is a later phase."
+
+[[deferred]]
+text = "Auto-remediation (applying fixes directly)"
+why  = "Hard milestone non-goal — dross-quality stays a read-only audit that emits a remediation phase; recorded as a boundary marker so no planner adds it."

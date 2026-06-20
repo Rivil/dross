@@ -1,21 +1,11 @@
 {
   "version": "0.1.0.13",
   "current_milestone": "v0.1",
-  "last_activity": "2026-06-20T13:36:58.014301Z",
-  "last_action": "quick: flag-aware Next: convention (re-recorded after phase-05 merge)",
+  "current_phase": "06-dross-quality",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-20T15:32:49.426641Z",
+  "last_action": "spec locked: 06-dross-quality",
   "history": [
-    {
-      "at": "2026-06-19T19:12:59.553346Z",
-      "action": "phase 03-fix-completion-chore-divergence executed (3/3 done)"
-    },
-    {
-      "at": "2026-06-19T19:51:55.790053Z",
-      "action": "paused — phase 03 fix executed \u0026 green; next is /dross-verify"
-    },
-    {
-      "at": "2026-06-20T07:58:40.796821Z",
-      "action": "resumed — verify→ship phase 03 next"
-    },
     {
       "at": "2026-06-20T08:26:39.956857Z",
       "action": "set current_phase_status=verified"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-20T13:36:58.014301Z",
       "action": "quick: flag-aware Next: convention (re-recorded after phase-05 merge)"
+    },
+    {
+      "at": "2026-06-20T14:06:54.598781Z",
+      "action": "created 06-dross-quality"
+    },
+    {
+      "at": "2026-06-20T15:32:49.417954Z",
+      "action": "set current_phase=06-dross-quality"
+    },
+    {
+      "at": "2026-06-20T15:32:49.426641Z",
+      "action": "spec locked: 06-dross-quality"
     }
   ]
 }
