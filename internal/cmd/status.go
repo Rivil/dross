@@ -78,6 +78,18 @@ func Status() *cobra.Command {
 				Printf("handoff:   %s\n", hand)
 			}
 
+			// Non-spine action areas — surfaced only when the spine is idle
+			// (between phases, or the current phase is done with nothing left
+			// to do), so live work isn't cluttered (c-1, c-3).
+			if spineIdle(root, proj, st) {
+				if lines := renderActionAreas(actionCatalog); len(lines) > 0 {
+					Printf("actions:   %s\n", lines[0])
+					for _, l := range lines[1:] {
+						Printf("           %s\n", l)
+					}
+				}
+			}
+
 			// Next suggested action — heuristic from current state
 			Print("")
 			Printf("next:      %s\n", suggestNext(root, proj, st))
@@ -172,6 +184,42 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 		}
 	}
 	return "phase looks complete — start a new phase or move on"
+}
+
+// spineIdle reports whether the spec→ship spine has no actionable step left —
+// the moment to surface non-spine action areas (c-1/c-3). It derives the answer
+// from the same real signals suggestNext uses (NextRunnable, failed tasks,
+// verify verdict), NOT from the free-text CurrentPhaseStatus field, which isn't
+// reliably set to a terminal value.
+func spineIdle(root string, proj *project.Project, st *state.State) bool {
+	// Project/milestone setup still pending → the spine has a setup step.
+	if proj.Project.Name == "" || proj.Runtime.Mode == "" {
+		return false
+	}
+	if st.CurrentMilestone == "" {
+		return false
+	}
+	// Between phases — the canonical idle moment.
+	if st.CurrentPhase == "" {
+		return true
+	}
+	dir := phase.Dir(root, st.CurrentPhase)
+	if !fileExists(filepath.Join(dir, "spec.toml")) || !fileExists(filepath.Join(dir, "plan.toml")) {
+		return false // spec/plan step still pending
+	}
+	if plan, err := phase.LoadPlan(filepath.Join(dir, "plan.toml")); err == nil {
+		_, _, _, failed := plan.Summary()
+		if plan.NextRunnable() != nil || failed > 0 {
+			return false // execute / fix-failed step still pending
+		}
+	}
+	// No runnable task and nothing failed. Idle iff the verify verdict is absent
+	// or pass; fail/partial/pending all leave a spine step to do.
+	verdict := ""
+	if vp := filepath.Join(dir, "verify.toml"); fileExists(vp) {
+		verdict = readVerifyVerdict(vp)
+	}
+	return verdict == "" || verdict == "pass"
 }
 
 // openHandoff returns a one-line nudge if an unresolved handoff note exists

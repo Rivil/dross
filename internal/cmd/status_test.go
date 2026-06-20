@@ -259,6 +259,71 @@ func TestStatusOmitsHandoffWhenAbsentOrEmpty(t *testing.T) {
 	}
 }
 
+// The actions block is shown only when the spine is idle. These three pin
+// c-1 (shown between phases / when verified) and c-3 (suppressed mid-phase).
+
+func TestStatusShowsActionsBetweenPhases(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	mustRunSet(t, "project.name", "feast")
+	mustRunSet(t, "runtime.mode", "native")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "actions:") {
+		t.Errorf("expected actions block between phases:\n%s", out)
+	}
+	if !strings.Contains(out, "security") || !strings.Contains(out, "(planned)") {
+		t.Errorf("expected non-spine areas with planned marker:\n%s", out)
+	}
+}
+
+func TestStatusSuppressesActionsMidPhase(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecAndPlan(t, "01-auth", `[phase]
+id = "01-auth"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+`)
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if strings.Contains(out, "actions:") {
+		t.Errorf("active phase with a runnable task must not show the actions block:\n%s", out)
+	}
+}
+
+func TestStatusShowsActionsWhenVerifiedPass(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecAndPlan(t, "01-done", `[phase]
+id = "01-done"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+	mustWrite(t, ".dross/phases/01-done/verify.toml", `verdict = "pass"
+`)
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "actions:") {
+		t.Errorf("verified/pass phase with no runnable task must show the actions block:\n%s", out)
+	}
+}
+
 // renderActionAreas is the pure formatter for the non-spine `actions:` block.
 // These two tests pin its contract: unavailable areas are never shown as
 // runnable, available areas emit their command.
