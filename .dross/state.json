@@ -2,22 +2,10 @@
   "version": "0.1.0.13",
   "current_milestone": "v0.1",
   "current_phase": "06-dross-quality",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-20T15:32:49.426641Z",
-  "last_action": "spec locked: 06-dross-quality",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-20T15:50:46.132111Z",
+  "last_action": "plan reviewed: 06-dross-quality (0 blocking, 3 flags)",
   "history": [
-    {
-      "at": "2026-06-20T08:26:39.956857Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-20T08:26:39.963654Z",
-      "action": "verified 03-fix-completion-chore-divergence: pass (5/5 covered, mutation 0.58 package-scoped — not a phase signal)"
-    },
-    {
-      "at": "2026-06-20T08:31:48.088049Z",
-      "action": "completed 03-fix-completion-chore-divergence"
-    },
     {
       "at": "2026-06-20T08:36:41.228384Z",
       "action": "resumed — v0.1 feature-complete; next is milestone wrap"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-20T15:32:49.426641Z",
       "action": "spec locked: 06-dross-quality"
+    },
+    {
+      "at": "2026-06-20T15:49:08.716127Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-20T15:49:08.723582Z",
+      "action": "plan locked: 06-dross-quality (9 tasks across 5 waves)"
+    },
+    {
+      "at": "2026-06-20T15:50:46.132111Z",
+      "action": "plan reviewed: 06-dross-quality (0 blocking, 3 flags)"
     }
   ]
 }
