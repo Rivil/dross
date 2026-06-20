@@ -1,0 +1,86 @@
+{
+  "phase": "05-dross-secure",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/security/run.go",
+        "internal/security/run_test.go"
+      ],
+      "commit": "4ce576e",
+      "completed_at": "2026-06-20T12:29:29.767649Z",
+      "notes": "feature: security audit run dirs · NewRun @ internal/security/run.go · creates collision-safe .dross/security/\u003crun\u003e dirs with sortable \u003ctimestamp\u003e-\u003cshort-sha\u003e ids"
+    },
+    "t-2": {
+      "files": [
+        "internal/security/catalog.go",
+        "internal/security/catalog_test.go"
+      ],
+      "commit": "7e92172",
+      "completed_at": "2026-06-20T12:34:48.693929Z",
+      "notes": "feature: scanner tooling sweep · Catalog/ScannersFor/Detect @ internal/security/catalog.go · data-driven Go-complete+agnostic scanner catalog with PATH availability detection"
+    },
+    "t-3": {
+      "files": [
+        "internal/security/findings.go",
+        "internal/security/findings_test.go"
+      ],
+      "commit": "3ff9fb4",
+      "completed_at": "2026-06-20T12:37:15.038091Z",
+      "notes": "feature: findings ledger · Ledger/Finding/Severity @ internal/security/findings.go · per-finding findings.toml with contextual severity, refutation-gated survivors, malformed-input guard"
+    },
+    "t-4": {
+      "files": [
+        "internal/security/recon.go",
+        "internal/security/recon_test.go"
+      ],
+      "commit": "d08f3d3",
+      "completed_at": "2026-06-20T12:47:22.269788Z",
+      "notes": "feature: context-free recon · DetectLanguages/BuildManifest @ internal/security/recon.go · code-only language detection that skips .dross/ + a ran/skipped tool-coverage manifest"
+    },
+    "t-5": {
+      "files": [
+        "internal/security/scaffold.go",
+        "internal/security/scaffold_test.go"
+      ],
+      "commit": "116bf97",
+      "completed_at": "2026-06-20T12:53:36.215059Z",
+      "notes": "feature: remediation scaffold · ScaffoldSpec @ internal/security/scaffold.go · findings.toml ledger → spec.toml, one criticals-first criterion per finding citing its ledger id; refuses zero-survivor scaffolds"
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/security.go",
+        "internal/cmd/security_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "37fde7f",
+      "completed_at": "2026-06-20T12:57:49.049936Z",
+      "notes": "feature: dross security CLI · Security/detect/run/scaffold @ internal/cmd/security.go · cobra surface for run-dir creation, scanner detection, and sandboxed (containedPath) findings→spec scaffold"
+    },
+    "t-7": {
+      "files": [
+        "assets/prompts/secure.md",
+        "assets/commands/dross-secure.md"
+      ],
+      "commit": "fb442b8",
+      "completed_at": "2026-06-20T12:43:20.219045Z",
+      "notes": "feature: dross-secure audit command · secure.md @ assets/prompts/secure.md · context-free multi-pass security audit prompt — scanners + refute-panel, read-only, scaffolds a remediation phase"
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/secure_prompt_test.go"
+      ],
+      "commit": "d5a4f4f",
+      "completed_at": "2026-06-20T12:49:51.918969Z",
+      "notes": "feature: secure prompt content gate · TestSecurePromptMandatedSections @ internal/cmd/secure_prompt_test.go · per-criterion sub-assertions pinning the four mandated secure.md rules"
+    },
+    "t-9": {
+      "files": [
+        ".gitignore",
+        "internal/security/gitignore_test.go"
+      ],
+      "commit": "ff00cba",
+      "completed_at": "2026-06-20T12:45:15.078596Z",
+      "notes": "feature: security report privacy · .dross/security/ gitignored · run artifacts kept local (behavioural git check-ignore test) so raw findings never pre-disclose on a public repo"
+    }
+  }
+}

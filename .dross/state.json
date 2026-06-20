@@ -2,54 +2,10 @@
   "version": "0.1.0.12",
   "current_milestone": "v0.1",
   "current_phase": "05-dross-secure",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-20T12:22:16.455104Z",
-  "last_action": "plan reviewed: 05-dross-secure (0 blocking, 4 flags; applied 1/3/4, t-9 kept per D-3)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-20T12:58:02.824193Z",
+  "last_action": "phase 05-dross-secure executed (9/9 done)",
   "history": [
-    {
-      "at": "2026-06-19T16:39:32.940326Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-19T16:39:32.947611Z",
-      "action": "phase 02-harden-ship-merge-complete-flow executed (3/3 done)"
-    },
-    {
-      "at": "2026-06-19T17:19:04.001136Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-19T17:19:04.009011Z",
-      "action": "verified 02-harden-ship-merge-complete-flow: pass (3/3 covered; mutation package-scoped, phase diff fully killed)"
-    },
-    {
-      "at": "2026-06-19T17:45:45.206965Z",
-      "action": "completed 02-harden-ship-merge-complete-flow"
-    },
-    {
-      "at": "2026-06-19T18:12:49.772211Z",
-      "action": "set current_milestone=v0.1"
-    },
-    {
-      "at": "2026-06-19T18:12:49.779788Z",
-      "action": "scoped milestone v0.1: 6 criteria, 5 phases"
-    },
-    {
-      "at": "2026-06-19T18:15:13.736229Z",
-      "action": "created 03-fix-completion-chore-divergence"
-    },
-    {
-      "at": "2026-06-19T18:46:16.59989Z",
-      "action": "set current_phase=03-fix-completion-chore-divergence"
-    },
-    {
-      "at": "2026-06-19T18:46:16.607335Z",
-      "action": "spec locked: 03-fix-completion-chore-divergence"
-    },
-    {
-      "at": "2026-06-19T18:50:28.493121Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-19T18:50:28.501608Z",
       "action": "plan locked: 03-fix-completion-chore-divergence (3 tasks across 2 waves)"
@@ -205,6 +161,50 @@
     {
       "at": "2026-06-20T12:22:16.455104Z",
       "action": "plan reviewed: 05-dross-secure (0 blocking, 4 flags; applied 1/3/4, t-9 kept per D-3)"
+    },
+    {
+      "at": "2026-06-20T12:29:29.784476Z",
+      "action": "executed t-1 (run-dir + collision-safe run-id)"
+    },
+    {
+      "at": "2026-06-20T12:34:48.709777Z",
+      "action": "executed t-2 (scanner catalog + availability detection)"
+    },
+    {
+      "at": "2026-06-20T12:37:15.057121Z",
+      "action": "executed t-3 (findings ledger schema + malformed-input guard)"
+    },
+    {
+      "at": "2026-06-20T12:43:20.236472Z",
+      "action": "executed t-7 (author secure.md + dross-secure.md prompts)"
+    },
+    {
+      "at": "2026-06-20T12:45:15.094432Z",
+      "action": "executed t-9 (gitignore security run artifacts)"
+    },
+    {
+      "at": "2026-06-20T12:47:22.287486Z",
+      "action": "executed t-4 (language detection + tool-coverage manifest)"
+    },
+    {
+      "at": "2026-06-20T12:49:51.934919Z",
+      "action": "executed t-8 (secure prompt content harness)"
+    },
+    {
+      "at": "2026-06-20T12:53:36.231574Z",
+      "action": "executed t-5 (findings→spec.toml scaffold writer)"
+    },
+    {
+      "at": "2026-06-20T12:57:49.066172Z",
+      "action": "executed t-6 (wire dross security subcommand)"
+    },
+    {
+      "at": "2026-06-20T12:58:02.814642Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-20T12:58:02.824193Z",
+      "action": "phase 05-dross-secure executed (9/9 done)"
     }
   ]
 }
