@@ -208,6 +208,56 @@ func openHandoff(root string) string {
 	return line + " — /dross-resume"
 }
 
+// actionArea is one non-spine area of work surfaced when the spine is idle
+// (security, quality, tech-debt). The catalog is fixed in code — no config —
+// and each later phase flips its area `available` once the backing command
+// ships.
+type actionArea struct {
+	label     string
+	command   string // slash command or short hint; "" when none exists yet
+	available bool
+}
+
+// actionCatalog is the fixed set of non-spine areas. All are not-yet-available
+// in this phase: security/quality land their commands in later phases and the
+// tech-debt scanner is deferred, so each renders with a "(planned)" marker.
+var actionCatalog = []actionArea{
+	{label: "security", command: "/dross-secure", available: false},
+	{label: "quality", command: "/dross-quality", available: false},
+	{label: "tech-debt", command: "", available: false},
+}
+
+// renderActionAreas formats the `actions:` block body for the given areas.
+// An available area emits its runnable command; an unavailable one is marked
+// "(planned)" and is never presented as runnable. Returns nil for no areas.
+func renderActionAreas(areas []actionArea) []string {
+	if len(areas) == 0 {
+		return nil
+	}
+	// Align labels into a column so the block scans like the other status rows.
+	width := 0
+	for _, a := range areas {
+		if len(a.label) > width {
+			width = len(a.label)
+		}
+	}
+	var lines []string
+	for _, a := range areas {
+		label := fmt.Sprintf("%-*s", width, a.label)
+		var detail string
+		switch {
+		case a.available && a.command != "":
+			detail = a.command
+		case a.command != "":
+			detail = a.command + " (planned)"
+		default:
+			detail = "(planned)"
+		}
+		lines = append(lines, fmt.Sprintf("%s — %s", label, detail))
+	}
+	return lines
+}
+
 func progressBar(done, total, width int) string {
 	if total == 0 {
 		return "[" + strings.Repeat("·", width) + "]"

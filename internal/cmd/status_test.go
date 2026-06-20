@@ -259,6 +259,37 @@ func TestStatusOmitsHandoffWhenAbsentOrEmpty(t *testing.T) {
 	}
 }
 
+// renderActionAreas is the pure formatter for the non-spine `actions:` block.
+// These two tests pin its contract: unavailable areas are never shown as
+// runnable, available areas emit their command.
+
+func TestRenderActionAreasUnavailableShowsPlannedNotRunnable(t *testing.T) {
+	lines := renderActionAreas([]actionArea{
+		{label: "security", command: "/dross-secure", available: false},
+	})
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 line, got %d: %v", len(lines), lines)
+	}
+	if !strings.Contains(lines[0], "(planned)") {
+		t.Errorf("unavailable area must be marked (planned), not presented as runnable:\n%s", lines[0])
+	}
+}
+
+func TestRenderActionAreasAvailableEmitsCommand(t *testing.T) {
+	lines := renderActionAreas([]actionArea{
+		{label: "security", command: "/dross-secure", available: true},
+	})
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 line, got %d: %v", len(lines), lines)
+	}
+	if !strings.Contains(lines[0], "/dross-secure") {
+		t.Errorf("available area must emit its command line:\n%s", lines[0])
+	}
+	if strings.Contains(lines[0], "(planned)") {
+		t.Errorf("available area must NOT be marked planned:\n%s", lines[0])
+	}
+}
+
 // ---- helpers ----
 
 func scaffoldPhaseWithSpecOnly(t *testing.T, phaseID string) {
