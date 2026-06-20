@@ -3,13 +3,9 @@
   "current_milestone": "v0.2",
   "current_phase": "08-language-profiles",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-20T19:52:04.5748Z",
-  "last_action": "plan locked: 08-language-profiles (6 tasks across 2 waves)",
+  "last_activity": "2026-06-20T19:54:11.736276Z",
+  "last_action": "plan reviewed: 08-language-profiles (0 blocking, 1 flag)",
   "history": [
-    {
-      "at": "2026-06-20T14:06:54.598781Z",
-      "action": "created 06-dross-quality"
-    },
     {
       "at": "2026-06-20T15:32:49.417954Z",
       "action": "set current_phase=06-dross-quality"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-20T19:52:04.5748Z",
       "action": "plan locked: 08-language-profiles (6 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-06-20T19:54:11.736276Z",
+      "action": "plan reviewed: 08-language-profiles (0 blocking, 1 flag)"
     }
   ]
 }
