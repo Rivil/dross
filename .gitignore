@@ -10,3 +10,6 @@ docs/dross.pdf
 
 # dross handoff — local working memory, not tracked
 .dross/handoff.md
+
+# dross security run artifacts — local audit output; never pre-disclose on a public repo
+.dross/security/
