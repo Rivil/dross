@@ -111,13 +111,13 @@ _introduced c8b346e · extended 01c10f0_
 
 ### Phase lifecycle
 
-Create, list, and complete phases on dedicated phase/<id> git branches; complete deletes both the local and the remote phase branch, idempotent when the remote is already gone.
+Create, list, and complete phases on dedicated phase/<id> git branches; complete is fast-forward + branch-delete only (no commit to main), guarded by origin's `completed <id>` record so it refuses an unmerged phase and mutates nothing, then deletes both the local and the remote phase branch idempotently.
 
 - `Phase` (CLI) — `internal/cmd/phase.go:19`
 - `phaseCreate` — `internal/cmd/phase.go:60`
 - `phaseComplete` — `internal/cmd/phase.go:144`
 
-_c8b346e · extended 02-harden-ship-merge-complete-flow · 3ed94dd_
+_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · 1b883bf_
 
 ### Repo onboarding
 
@@ -149,13 +149,13 @@ _52f6c75_
 
 ### Shipping / pull requests
 
-Push the phase branch and open a provider-aware PR (GitHub/Forgejo) with reviewers, merging the phase's landmarks into ARCHITECTURE.md first; commits its own post-push state write so ship returns on a clean tree; squash-merge collapses per-task commits.
+Push the phase branch and open a provider-aware PR (GitHub/Forgejo) with reviewers, merging the phase's landmarks into ARCHITECTURE.md first; folds the completed-state transition (cleared current_phase + `completed <id>` history) into the phase branch and commits it BEFORE the push, so the squash-merge carries the completion record to main and ship returns on a clean tree; squash-merge collapses per-task commits.
 
 - `Ship` (CLI) — `internal/cmd/ship.go:22`
 - `ship.OpenPR` — `internal/ship/open.go:38`
 - `ship.BuildPRBody` — `internal/ship/body.go:20`
 
-_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · c3b1d50_
+_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · 77220f5_
 
 ### State & status
 
