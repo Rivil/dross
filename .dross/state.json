@@ -2,18 +2,10 @@
   "version": "0.1.0.12",
   "current_milestone": "v0.1",
   "current_phase": "05-dross-secure",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-20T12:58:02.824193Z",
-  "last_action": "phase 05-dross-secure executed (9/9 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-20T13:04:48.149026Z",
+  "last_action": "verified 05-dross-secure: partial (6/6 covered; phase-diff mutation 100% on internal/security, 2 FLAG gaps in CLI glue; rollup 0.80 package-scoped — not a phase signal)",
   "history": [
-    {
-      "at": "2026-06-19T18:50:28.501608Z",
-      "action": "plan locked: 03-fix-completion-chore-divergence (3 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-06-19T18:52:16.868867Z",
-      "action": "plan reviewed: 03-fix-completion-chore-divergence (0 blocking, 3 flags)"
-    },
     {
       "at": "2026-06-19T18:54:19.84851Z",
       "action": "plan amended: 03 t-2 guard hardened (branch-ref-independent, closes review flag 1)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-20T12:58:02.824193Z",
       "action": "phase 05-dross-secure executed (9/9 done)"
+    },
+    {
+      "at": "2026-06-20T13:04:48.14353Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-20T13:04:48.149026Z",
+      "action": "verified 05-dross-secure: partial (6/6 covered; phase-diff mutation 100% on internal/security, 2 FLAG gaps in CLI glue; rollup 0.80 package-scoped — not a phase signal)"
     }
   ]
 }
