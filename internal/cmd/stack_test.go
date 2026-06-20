@@ -86,3 +86,16 @@ func TestStackRejectsUnknownSubcommand(t *testing.T) {
 		t.Fatal("unknown subcommand 'bogus' must error")
 	}
 }
+
+func TestStackLoadoutCommandRenders(t *testing.T) {
+	var err error
+	out := captureStdout(t, func() {
+		err = runCmd(t, Stack(), "loadout", "go")
+	})
+	if err != nil {
+		t.Fatalf("loadout go: %v", err)
+	}
+	if !strings.Contains(out, "## Stack loadout (go)") {
+		t.Errorf("loadout command did not render the markdown block; got:\n%s", out)
+	}
+}

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
@@ -99,15 +101,33 @@ func stackApply() *cobra.Command {
 	}
 }
 
-// stackLoadout is wired here so the subcommand set is complete; its body lands in
-// t-9 (emit the agent loadout as a markdown block).
+// stackLoadout emits the agent loadout for the named stack (or the detected one)
+// as a markdown block for prompts to inject inline.
 func stackLoadout() *cobra.Command {
 	return &cobra.Command{
 		Use:   "loadout [id]",
 		Short: "Emit the agent loadout for the stack as a markdown block",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return errors.New("stack loadout: not yet implemented")
+		RunE: func(_ *cobra.Command, args []string) error {
+			profiles, err := stack.LoadAll()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "dross: warning: %v\n", err)
+			}
+			id := ""
+			if len(args) == 1 {
+				id = args[0]
+			} else {
+				id = stack.Detect(".", profiles)
+			}
+			if id == stack.Unsupported {
+				return errors.New("no stack profile matches here — pass an id (see 'dross stack list')")
+			}
+			p := stack.ByID(profiles, id)
+			if p == nil {
+				return fmt.Errorf("stack profile %q not found", id)
+			}
+			Print(stack.RenderLoadout(p, runtime.GOOS, exec.LookPath))
+			return nil
 		},
 	}
 }
