@@ -34,35 +34,38 @@ Measured by recursively resolving `@`-imports for each command and summing bytes
 | GSD `/gsd-plan-phase` | 103,413 | ~25,900 |
 | GSD `/gsd-new-project` | 69,637 | ~17,400 |
 | GSD `/gsd-progress` | 37,864 | ~9,500 |
-| Dross `/dross-init` | 7,423 | **~1,860** |
-| Dross `/dross-onboard` | 5,381 | **~1,350** |
-| Dross `/dross-options` | 6,234 | **~1,560** |
+| Dross `/dross-init` | 7,418 | **~1,850** |
+| Dross `/dross-onboard` | 5,872 | **~1,470** |
+| Dross `/dross-options` | 6,405 | **~1,600** |
 | Dross `/dross-milestone` | 6,562 | **~1,640** |
-| Dross `/dross-ship` | 5,973 | **~1,490** |
-| Dross `/dross-review` | 7,725 | **~1,930** |
-| Dross `/dross-rule` | 2,119 | **~530** |
-| Dross `/dross-spec` | 10,503 | **~2,630** |
-| Dross `/dross-plan` | 13,252 | **~3,310** |
-| Dross `/dross-plan-review` | 5,676 | **~1,420** |
-| Dross `/dross-execute` | 8,652 | **~2,160** |
-| Dross `/dross-verify` | 9,255 | **~2,310** |
-| Dross `/dross-quick` | 8,321 | **~2,080** |
-| Dross `/dross-inbox` | 4,344 | **~1,090** |
-| Dross `/dross-status` | 1,998 | **~500** |
-| Dross `/dross-pause` | 5,282 | **~1,320** |
-| Dross `/dross-resume` | 4,473 | **~1,120** |
+| Dross `/dross-ship` | 7,753 | **~1,940** |
+| Dross `/dross-review` | 7,819 | **~1,950** |
+| Dross `/dross-secure` | 7,163 | **~1,790** |
+| Dross `/dross-quality` | 8,077 | **~2,020** |
+| Dross `/dross-architecture` | 4,259 | **~1,060** |
+| Dross `/dross-rule` | 2,261 | **~570** |
+| Dross `/dross-spec` | 12,248 | **~3,060** |
+| Dross `/dross-plan` | 13,682 | **~3,420** |
+| Dross `/dross-plan-review` | 5,672 | **~1,420** |
+| Dross `/dross-execute` | 12,056 | **~3,010** |
+| Dross `/dross-verify` | 10,853 | **~2,710** |
+| Dross `/dross-quick` | 11,020 | **~2,760** |
+| Dross `/dross-inbox` | 4,364 | **~1,090** |
+| Dross `/dross-status` | 2,548 | **~640** |
+| Dross `/dross-pause` | 5,300 | **~1,330** |
+| Dross `/dross-resume` | 4,503 | **~1,130** |
 
 **Total prompt-surface** (everything that could ever load):
 
 | | Bytes | Est. tokens |
 |---|---:|---:|
 | GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 115,139 | ~28,800 |
-| **Ratio** | | **≈ 22×** |
+| Dross (commands + prompts) | 145,835 | ~36,500 |
+| **Ratio** | | **≈ 17×** |
 
 **Being honest about these numbers:**
 
-- **Dross is still incomplete.** The codex tree-sitter indexer is a stub; Stryker (TS/JS/Svelte) and Gremlins (Go) are wired — C# (Stryker.NET), GDScript, HTML/CSS visual diffs are still designed-only. `/dross-verify` landed at ~1,890 tokens — ~24× cheaper than GSD's 46,500 — though that's slash-command boot only; the verify loop reads project test files at runtime, which adds variable cost.
+- **Dross is still incomplete.** The codex tree-sitter indexer is a stub; Stryker (TS/JS/Svelte) and Gremlins (Go) are wired — C# (Stryker.NET), GDScript, HTML/CSS visual diffs are still designed-only. `/dross-verify` sits at ~2,710 tokens — ~17× cheaper than GSD's 46,500 — though that's slash-command boot only; the verify loop reads project test files at runtime, which adds variable cost.
 - **Per-invocation isn't the runtime cost.** GSD spawns subagents (planner, plan-checker, executor, verifier). Each loads its own agent prompt + references in fresh context, multiplying the real per-flow cost by 2-3×. The 25.9k for `/gsd-plan-phase` is closer to ~60-80k of total prompt material per phase. Dross runs inline by default — subagent spawns are bounded and explicit: `/dross-review`'s four lenses, `/dross-plan-review`'s single cold reviewer (also auto-run at the end of `/dross-plan` unless `--no-review`), and `/dross-plan --panel`'s three lens planners + judge (opt-in, ~4-5× a single-pass plan).
 - **Prompt caching mitigates this.** Anthropic's prompt cache amortises repeats, so steady-state cost is much lower than the load surface implies. Cold starts, branch switches, and subagent spawns break the cache; that's where the bill actually shows up.
 - **The ratio is the worst-case load surface, not a runtime bill.** It's still directionally meaningful — fewer files, smaller files, fewer spawns add up — but don't expect the same multiplier in your monthly Anthropic invoice.
