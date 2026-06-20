@@ -81,13 +81,14 @@ type CommandVariant struct {
 // absence warrants a prominent warning). BinByOS overrides the looked-up binary
 // name per GOOS (e.g. a tool packaged under a different name on macOS vs Linux).
 type Tool struct {
-	Name     string            `toml:"name"`
-	Bin      string            `toml:"bin,omitempty"`       // defaults to Name
-	BinByOS  map[string]string `toml:"bin_by_os,omitempty"` // GOOS -> binary name
-	Kind     string            `toml:"kind,omitempty"`      // "scanner" | "analyzer"
-	Optional bool              `toml:"optional,omitempty"`
-	Core     bool              `toml:"core,omitempty"`
-	Install  string            `toml:"install,omitempty"`
+	Name      string            `toml:"name"`
+	Bin       string            `toml:"bin,omitempty"`       // defaults to Name
+	BinByOS   map[string]string `toml:"bin_by_os,omitempty"` // GOOS -> binary name
+	Kind      string            `toml:"kind,omitempty"`      // "scanner" | "analyzer"
+	Dimension string            `toml:"dimension,omitempty"` // for analyzers: the maintainability axis measured
+	Optional  bool              `toml:"optional,omitempty"`
+	Core      bool              `toml:"core,omitempty"`
+	Install   string            `toml:"install,omitempty"`
 }
 
 // Loadout is the agent loadout rendered by `dross stack loadout` (c-4).
