@@ -1,177 +1,97 @@
 [phase]
-id = "06-dross-quality"
-
-# ── Wave 1 ───────────────────────────────────────────────────────────
+  id = "06-dross-quality"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Run-dir + run-id writer"
-files         = ["internal/quality/run.go", "internal/quality/run_test.go"]
-description   = """
-Create the per-run output dir under .dross/quality/<id> and the run-id
-(<timestamp>-<short-sha>). Mirror internal/security/run.go.
-"""
-covers        = ["c-1", "c-5"]
-test_contract = [
-  "RunID(now, sha) == \"<timestamp>-<short-sha>\", and == \"<ts>-nogit\" when sha==\"\"; drop the shape or the empty-sha fallback and TestRunID fails",
-  "NewRun creates exactly one dir under .dross/quality/; called twice in the same second on the same sha it appends a collision suffix instead of clobbering — break the suffix loop and TestNewRunNoClobber sees one dir overwritten and fails",
-  "NewRun writing anything outside .dross/quality/<id>/ fails TestNewRunWriteBoundary's path-set walk (c-5 owned at the writer)",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Run-dir + run-id writer"
+  files = ["internal/quality/run.go", "internal/quality/run_test.go"]
+  description = "Create the per-run output dir under .dross/quality/<id> and the run-id\n(<timestamp>-<short-sha>). Mirror internal/security/run.go.\n"
+  covers = ["c-1", "c-5"]
+  test_contract = ["RunID(now, sha) == \"<timestamp>-<short-sha>\", and == \"<ts>-nogit\" when sha==\"\"; drop the shape or the empty-sha fallback and TestRunID fails", "NewRun creates exactly one dir under .dross/quality/; called twice in the same second on the same sha it appends a collision suffix instead of clobbering — break the suffix loop and TestNewRunNoClobber sees one dir overwritten and fails", "NewRun writing anything outside .dross/quality/<id>/ fails TestNewRunWriteBoundary's path-set walk (c-5 owned at the writer)"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "Dimension→analyzer catalog + detection"
-files         = ["internal/quality/catalog.go", "internal/quality/catalog_test.go"]
-description   = """
-Data-driven dimension→analyzer catalog (Go-complete + agnostic), with
-installed-vs-missing detection and install hints. Mirror security/catalog.go.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "Catalog() carries every core Go analyzer (gocyclo/complexity, dupl, deadcode, errcheck, ineffassign) flagged Core; drop one → TestCatalogCompleteness fails",
-  "AnalyzersFor(\"go\") returns the full Go toolbelt; AnalyzersFor(stub-lang) returns ONLY the agnostic set, never empty — break the fallback → TestAnalyzersForAgnosticFallback fails",
-  "A cosmetic/naming-only lint added to the table → TestCatalogExcludesCosmetic fails (guards locked quality_scope)",
-  "Detect() under an all-missing lookPath marks every analyzer !Installed and keeps a non-empty Install hint",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Dimension→analyzer catalog + detection"
+  files = ["internal/quality/catalog.go", "internal/quality/catalog_test.go"]
+  description = "Data-driven dimension→analyzer catalog (Go-complete + agnostic), with\ninstalled-vs-missing detection and install hints. Mirror security/catalog.go.\n"
+  covers = ["c-3"]
+  test_contract = ["Catalog() carries every core Go analyzer (gocyclo/complexity, dupl, deadcode, errcheck, ineffassign) flagged Core; drop one → TestCatalogCompleteness fails", "AnalyzersFor(\"go\") returns the full Go toolbelt; AnalyzersFor(stub-lang) returns ONLY the agnostic set, never empty — break the fallback → TestAnalyzersForAgnosticFallback fails", "A cosmetic/naming-only lint added to the table → TestCatalogExcludesCosmetic fails (guards locked quality_scope)", "Detect() under an all-missing lookPath marks every analyzer !Installed and keeps a non-empty Install hint"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 1
-title         = "Maintainability-risk findings ledger"
-files         = ["internal/quality/findings.go", "internal/quality/findings_test.go"]
-description   = """
-Findings ledger schema: each finding carries Risk (contextual maintainability-
-risk, NOT nominal category), File, Line, Evidence, Refutation. Survivors() sorts
-highest-risk-first with blast-radius weighting. Malformed-input guard on Load.
-"""
-covers        = ["c-1", "c-2"]
-test_contract = [
-  "Survived() is false with empty Refutation → TestUnrefutedIsNotSurvivor: an unrefuted candidate never reaches Survivors() (c-2)",
-  "Ledger.Validate() rejects empty/duplicate ids and unknown Risk → TestLedgerDuplicateID and TestLedgerInvalidRisk fail if negated",
-  "Survivors() returns highest-risk-first regardless of input order; a high-complexity finding on a cold path sorts BELOW a moderate one on a core/hot path, and an unknown rank sorts last → TestSurvivorsRiskOrder",
-  "Load() on garbled TOML returns an error, never panics → TestLoadMalformed",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 1
+  title = "Maintainability-risk findings ledger"
+  files = ["internal/quality/findings.go", "internal/quality/findings_test.go"]
+  description = "Findings ledger schema: each finding carries Risk (contextual maintainability-\nrisk, NOT nominal category), File, Line, Evidence, Refutation. Survivors() sorts\nhighest-risk-first with blast-radius weighting. Malformed-input guard on Load.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["Survived() is false with empty Refutation → TestUnrefutedIsNotSurvivor: an unrefuted candidate never reaches Survivors() (c-2)", "Ledger.Validate() rejects empty/duplicate ids and unknown Risk → TestLedgerDuplicateID and TestLedgerInvalidRisk fail if negated", "Survivors() returns highest-risk-first regardless of input order; a high-complexity finding on a cold path sorts BELOW a moderate one on a core/hot path, and an unknown rank sorts last → TestSurvivorsRiskOrder", "Load() on garbled TOML returns an error, never panics → TestLoadMalformed"]
+  status = "done"
 
 [[task]]
-id            = "t-9"
-wave          = 1
-title         = "Gitignore quality run artifacts"
-files         = [".gitignore", "internal/quality/gitignore_test.go"]
-description   = """
-Add .dross/quality/ to .gitignore so raw run artifacts are never committed,
-with a behavioural test. Independent of all other tasks. Mirror security's
-standalone gitignore_test.go.
-"""
-covers        = ["c-5"]
-test_contract = [
-  "If \".dross/quality/\" is absent or wrong in .gitignore, TestQualityArtifactsGitignored fails — `git check-ignore .dross/quality/x/report.md` exits non-zero, proving raw findings would be committable",
-]
-status        = "pending"
-
-# ── Wave 2 ───────────────────────────────────────────────────────────
+  id = "t-9"
+  wave = 1
+  title = "Gitignore quality run artifacts"
+  files = [".gitignore", "internal/quality/gitignore_test.go"]
+  description = "Add .dross/quality/ to .gitignore so raw run artifacts are never committed,\nwith a behavioural test. Independent of all other tasks. Mirror security's\nstandalone gitignore_test.go.\n"
+  covers = ["c-5"]
+  test_contract = ["If \".dross/quality/\" is absent or wrong in .gitignore, TestQualityArtifactsGitignored fails — `git check-ignore .dross/quality/x/report.md` exits non-zero, proving raw findings would be committable"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 2
-depends_on    = ["t-2", "t-3"]
-title         = "Tool-coverage manifest + language recon"
-files         = ["internal/quality/recon.go", "internal/quality/recon_test.go"]
-description   = """
-Detect languages from the tree and build the tool-coverage manifest recording
-both ran (installed) and skipped (missing) analyzers. Mirror security/recon.go.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "DetectLanguages walks a tree, returns sorted de-duped langs, and never descends .dross/.git/node_modules/vendor → TestDetectLanguages on main.go + .dross/x.go asserts [\"go\"] and proves .dross is skipped",
-  "BuildManifest records BOTH ran and skipped analyzers → under an all-missing lookPath, TestManifestRecordsSkipped has len(Ran())==0 and len(Skipped())>0; if Skipped() silently dropped missing tools a thin toolbelt would read 'all clear' and this fails",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 2
+  title = "Tool-coverage manifest + language recon"
+  files = ["internal/quality/recon.go", "internal/quality/recon_test.go"]
+  description = "Detect languages from the tree and build the tool-coverage manifest recording\nboth ran (installed) and skipped (missing) analyzers. Mirror security/recon.go.\n"
+  covers = ["c-3"]
+  depends_on = ["t-2", "t-3"]
+  test_contract = ["DetectLanguages walks a tree, returns sorted de-duped langs, and never descends .dross/.git/node_modules/vendor → TestDetectLanguages on main.go + .dross/x.go asserts [\"go\"] and proves .dross is skipped", "BuildManifest records BOTH ran and skipped analyzers → under an all-missing lookPath, TestManifestRecordsSkipped has len(Ran())==0 and len(Skipped())>0; if Skipped() silently dropped missing tools a thin toolbelt would read 'all clear' and this fails"]
+  status = "done"
 
 [[task]]
-id            = "t-5"
-wave          = 2
-depends_on    = ["t-3"]
-title         = "Risk-ordered remediation scaffold writer"
-files         = ["internal/quality/scaffold.go", "internal/quality/scaffold_test.go"]
-description   = """
-Write a remediation phase spec.toml: one criterion per surviving finding,
-highest-risk-first, each citing its findings.toml ledger id. Mirror
-security/scaffold.go.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "ScaffoldSpec emits exactly one criterion per SURVIVING finding, highest-risk first → TestScaffoldOnePerFinding + TestScaffoldRiskOrder (a low-before-critical ledger ⇒ criterion[0] cites the critical's id)",
-  "Each criterion cites its findings.toml ledger id → TestScaffoldCitesLedger (no finding hides behind a tier-level test)",
-  "Zero survivors → ScaffoldSpec returns an error and writes nothing → TestScaffoldEmptyRefuses",
-  "Emitted spec.toml round-trips through phase.LoadSpec → TestScaffoldRoundTrips",
-]
-status        = "pending"
-
-# ── Wave 3 ───────────────────────────────────────────────────────────
+  id = "t-5"
+  wave = 2
+  title = "Risk-ordered remediation scaffold writer"
+  files = ["internal/quality/scaffold.go", "internal/quality/scaffold_test.go"]
+  description = "Write a remediation phase spec.toml: one criterion per surviving finding,\nhighest-risk-first, each citing its findings.toml ledger id. Mirror\nsecurity/scaffold.go.\n"
+  covers = ["c-4"]
+  depends_on = ["t-3"]
+  test_contract = ["ScaffoldSpec emits exactly one criterion per SURVIVING finding, highest-risk first → TestScaffoldOnePerFinding + TestScaffoldRiskOrder (a low-before-critical ledger ⇒ criterion[0] cites the critical's id)", "Each criterion cites its findings.toml ledger id → TestScaffoldCitesLedger (no finding hides behind a tier-level test)", "Zero survivors → ScaffoldSpec returns an error and writes nothing → TestScaffoldEmptyRefuses", "Emitted spec.toml round-trips through phase.LoadSpec → TestScaffoldRoundTrips"]
+  status = "done"
 
 [[task]]
-id            = "t-6"
-wave          = 3
-depends_on    = ["t-1", "t-2", "t-3", "t-4", "t-5"]
-title         = "dross quality command + containment"
-files         = ["internal/cmd/quality.go", "internal/cmd/quality_test.go", "cmd/dross/main.go"]
-description   = """
-Wire `dross quality {detect,run,scaffold}` onto the quality package and register
-it in main. Enforce read-only containment (write only under .dross/quality/).
-Mirror internal/cmd/security.go.
-"""
-covers        = ["c-1", "c-3", "c-5"]
-test_contract = [
-  "Quality() registers detect/run/scaffold → TestQualityCommandRegistered; `quality detect <dir>` prints a scanners section with installed/missing markers → TestQualityDetectOutput",
-  "`quality run .` succeeds with ZERO analyzers installed (partial coverage, no hard-error) and writes report.md containing the tool-coverage manifest under one .dross/quality/ run dir → TestQualityRunCreatesDir + TestQualityRunWritesManifest",
-  "containedPath refuses a finding-derived \"../x\" / deep traversal, accepts \"report.md\" → TestQualityRunReadOnly; a full run touches only paths under .dross/quality/ (prefix walk) — c-5 at the CLI",
-  "scaffold on a valid ledger writes spec.toml; on a zero-survivor ledger returns an error → TestQualityScaffold / TestQualityScaffoldEmptyErrors",
-]
-status        = "pending"
-
-# ── Wave 4 ───────────────────────────────────────────────────────────
+  id = "t-6"
+  wave = 3
+  title = "dross quality command + containment"
+  files = ["internal/cmd/quality.go", "internal/cmd/quality_test.go", "cmd/dross/main.go"]
+  description = "Wire `dross quality {detect,run,scaffold}` onto the quality package and register\nit in main. Enforce read-only containment (write only under .dross/quality/).\nMirror internal/cmd/security.go.\n"
+  covers = ["c-1", "c-3", "c-5"]
+  depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5"]
+  test_contract = ["Quality() registers detect/run/scaffold → TestQualityCommandRegistered; `quality detect <dir>` prints a scanners section with installed/missing markers → TestQualityDetectOutput", "`quality run .` succeeds with ZERO analyzers installed (partial coverage, no hard-error) and writes report.md containing the tool-coverage manifest under one .dross/quality/ run dir → TestQualityRunCreatesDir + TestQualityRunWritesManifest", "containedPath refuses a finding-derived \"../x\" / deep traversal, accepts \"report.md\" → TestQualityRunReadOnly; a full run touches only paths under .dross/quality/ (prefix walk) — c-5 at the CLI", "scaffold on a valid ledger writes spec.toml; on a zero-survivor ledger returns an error → TestQualityScaffold / TestQualityScaffoldEmptyErrors"]
+  status = "done"
 
 [[task]]
-id            = "t-7"
-wave          = 4
-depends_on    = ["t-5", "t-6"]
-title         = "Quality orchestration prompt content"
-files         = ["assets/prompts/quality.md", "assets/commands/dross-quality.md"]
-description   = """
-Author the /dross-quality orchestration prompt + command shim, against the
-as-built CLI/scaffold surface so subcommand wording can't drift. Mirror
-assets/prompts/secure.md and assets/commands/dross-secure.md.
-"""
-covers        = ["c-2", "c-3", "c-4", "c-5"]
-test_contract = [
-  "Prompt must contain the refute-panel rule (refute / majority vote / drop) for c-2",
-  "Prompt must contain the calibrate-only context rule (calibrate / downrank / never suppress) AND the code-only-sweep note that the tool sweep reads no .dross planning artifacts (locked context_model)",
-  "Prompt must contain detect→plan→gate→sweep with the tool-coverage manifest continue/install gate (c-3), the propose-then-ask-before-locking scaffold step (c-4), and the read-only no-`--fix`/never-edit guarantee (c-5)",
-  "Command shim @-includes the prompt and declares a read-only-plus-Write/AskUserQuestion tool set; verified by t-8's content assertions",
-]
-status        = "pending"
-
-# ── Wave 5 ───────────────────────────────────────────────────────────
+  id = "t-7"
+  wave = 4
+  title = "Quality orchestration prompt content"
+  files = ["assets/prompts/quality.md", "assets/commands/dross-quality.md"]
+  description = "Author the /dross-quality orchestration prompt + command shim, against the\nas-built CLI/scaffold surface so subcommand wording can't drift. Mirror\nassets/prompts/secure.md and assets/commands/dross-secure.md.\n"
+  covers = ["c-2", "c-3", "c-4", "c-5"]
+  depends_on = ["t-5", "t-6"]
+  test_contract = ["Prompt must contain the refute-panel rule (refute / majority vote / drop) for c-2", "Prompt must contain the calibrate-only context rule (calibrate / downrank / never suppress) AND the code-only-sweep note that the tool sweep reads no .dross planning artifacts (locked context_model)", "Prompt must contain detect→plan→gate→sweep with the tool-coverage manifest continue/install gate (c-3), the propose-then-ask-before-locking scaffold step (c-4), and the read-only no-`--fix`/never-edit guarantee (c-5)", "Command shim @-includes the prompt and declares a read-only-plus-Write/AskUserQuestion tool set; verified by t-8's content assertions"]
+  status = "done"
 
 [[task]]
-id            = "t-8"
-wave          = 5
-depends_on    = ["t-7"]
-title         = "Prompt-content assertions + parity"
-files         = ["internal/cmd/quality_prompt_test.go"]
-description   = """
-Content-gate the quality prompt: a separate sub-test per locked prompt rule.
-Mirror internal/cmd/secure_prompt_test.go; the existing TestCommandsPromptsParity
-already guards dross-quality.md ↔ quality.md pairing.
-"""
-covers        = ["c-2", "c-3", "c-4", "c-5"]
-test_contract = [
-  "For each locked prompt rule a separate sub-test fails if its phrase is absent from a normalised (lowercased, backtick/emphasis-stripped) quality.md: {c-2 refute/majority-vote/drop}, {context calibrate-only/downrank/never-suppress}, {c-5 read-only/no-`--fix`/never-edit}, {c-4 propose-then-ask-before-locking}, {c-3 tool-coverage-manifest gate}",
-  "Removing any one mandated section fails exactly that sub-test (no catch-all assertion that passes when a section is missing)",
-]
-status        = "pending"
+  id = "t-8"
+  wave = 5
+  title = "Prompt-content assertions + parity"
+  files = ["internal/cmd/quality_prompt_test.go"]
+  description = "Content-gate the quality prompt: a separate sub-test per locked prompt rule.\nMirror internal/cmd/secure_prompt_test.go; the existing TestCommandsPromptsParity\nalready guards dross-quality.md ↔ quality.md pairing.\n"
+  covers = ["c-2", "c-3", "c-4", "c-5"]
+  depends_on = ["t-7"]
+  test_contract = ["For each locked prompt rule a separate sub-test fails if its phrase is absent from a normalised (lowercased, backtick/emphasis-stripped) quality.md: {c-2 refute/majority-vote/drop}, {context calibrate-only/downrank/never-suppress}, {c-5 read-only/no-`--fix`/never-edit}, {c-4 propose-then-ask-before-locking}, {c-3 tool-coverage-manifest gate}", "Removing any one mandated section fails exactly that sub-test (no catch-all assertion that passes when a section is missing)"]
+  status = "done"
