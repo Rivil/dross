@@ -2,26 +2,10 @@
   "version": "0.1.0.10",
   "current_milestone": "v0.1",
   "current_phase": "04-status-action-surfaces",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-20T09:05:01.529015Z",
-  "last_action": "plan amended: 04 t-2 idle-signal derived from spine state, not status enum (closes review flag 1+3)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-20T09:10:37.507099Z",
+  "last_action": "phase 04-status-action-surfaces executed (2/2 done)",
   "history": [
-    {
-      "at": "2026-06-19T14:29:33.685756Z",
-      "action": "executed t-4 (Ship merges landmarks into ARCHITECTURE.md)"
-    },
-    {
-      "at": "2026-06-19T14:29:56.298085Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-19T14:29:56.304506Z",
-      "action": "phase 01-architecture-comprehension-layer executed (4/4 done)"
-    },
-    {
-      "at": "2026-06-19T14:34:27.625424Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-06-19T14:34:27.630559Z",
       "action": "verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation skipped — gremlins adapter)"
@@ -205,6 +189,22 @@
     {
       "at": "2026-06-20T09:05:01.529015Z",
       "action": "plan amended: 04 t-2 idle-signal derived from spine state, not status enum (closes review flag 1+3)"
+    },
+    {
+      "at": "2026-06-20T09:07:48.991337Z",
+      "action": "executed t-1 (action-area catalog + renderer)"
+    },
+    {
+      "at": "2026-06-20T09:10:23.319903Z",
+      "action": "executed t-2 (spine-idle actions block)"
+    },
+    {
+      "at": "2026-06-20T09:10:37.501631Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-20T09:10:37.507099Z",
+      "action": "phase 04-status-action-surfaces executed (2/2 done)"
     }
   ]
 }
