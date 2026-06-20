@@ -1,17 +1,17 @@
 [verify]
   phase = "04-status-action-surfaces"
-  generated_at = 2026-06-20T09:35:20.522486Z
-  verdict = "partial"
+  generated_at = 2026-06-20T09:47:57.406363Z
+  verdict = "pass"
 
 [summary]
-  mutation_status = "skipped"
-  mutation_score = 0.0
-  mutants_killed = 0
+  mutation_status = "measured"
+  mutation_score = 1.0
+  mutants_killed = 78
   mutants_survived = 0
-  mutants_not_covered = 0
+  mutants_not_covered = 4
   criteria_total = 3
-  criteria_covered = 2
-  criteria_uncovered = 1
+  criteria_covered = 3
+  criteria_uncovered = 0
 
 [[criterion]]
   id = "c-1"
@@ -23,30 +23,22 @@
   id = "c-2"
   status = "covered"
   tests = ["internal/cmd/status_test.go:TestRenderActionAreasUnavailableShowsPlannedNotRunnable", "internal/cmd/status_test.go:TestRenderActionAreasAvailableEmitsCommand"]
-  notes = "Both branches pinned: unavailable area -> (planned) marker (never runnable), available area -> its command with no marker."
+  notes = "Both branches pinned: unavailable area -> (planned) marker (never runnable), available area -> its command with no marker. Go coverage of renderActionAreas 93.8% (only the empty-input guard is unexercised)."
 
 [[criterion]]
   id = "c-3"
-  status = "weak"
-  tests = ["internal/cmd/status_test.go:TestStatusSuppressesActionsMidPhase"]
-  notes = "Suppression asserted only for the execute-pending state (runnable task). spineIdle treats an absent/empty verify.toml as idle (verdict==\"\"), so the surface leaks during the verify-pending window — contradicting c-3. spec-only, plan-only, and fail/partial-verdict suppression rely on untested spineIdle branches."
+  status = "covered"
+  tests = ["internal/cmd/status_test.go:TestStatusSuppressesActionsMidPhase", "internal/cmd/status_test.go:TestStatusSuppressesActionsWhenVerifyPending", "internal/cmd/status_test.go:TestStatusSuppressesActionsWhenVerifyNotPass"]
+  notes = "After the t-2 fix, in-phase idle requires verify.toml verdict==pass. Suppression now tested for execute-pending (runnable task), verify-pending (no verify.toml), and non-pass verdicts (empty/pending/partial/fail). spineIdle 100% Go coverage; its 8 mutants all KILLED in the clean gremlins run."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation measured manually via gremlins (dross verify has no .go adapter). Clean run: --workers 6 --test-cpu 1 --timeout-coefficient 8 over internal/cmd — 578 killed / 0 lived / 0 timed-out package-wide (efficacy 100%, mutator coverage 79.5%). status.go scope: 78 killed, 0 survivors, 4 not-covered. Numbers above are status.go-scoped."
+
+[[finding]]
+  severity = "NOTE"
+  text = "status.go not-covered mutants are non-criterion: 300/302 are conditional-operand mutants gremlins mis-attributes (Go coverage shows those switch lines covered); 314 is progressBar's pre-existing empty-bar branch; plus renderActionAreas' empty-input guard. None affect c-1/c-2/c-3."
 
 [[finding]]
   severity = "FLAG"
-  text = "c-3 verify-pending leak: spineIdle (internal/cmd/status.go:194) returns idle when no verify.toml exists (verdict==\"\"), so `dross status` shows the actions block after execute but before verify runs — c-3 says suppress. Fix: in-phase idle should require verify.toml with verdict==\"pass\"; absent/empty = not idle."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-3 sub-state coverage: suppression is only asserted for the execute-pending (runnable task) state; spec-only, plan-only, and fail/partial-verdict suppression rely on untested spineIdle branches."
-
-[[finding]]
-  severity = "NOTE"
-  text = "Mutation run manually via gremlins (dross verify has no .go adapter). Package-scoped internal/cmd, --workers 14: 0 survivors in status.go (0 LIVED across spineIdle/renderActionAreas/wiring), but 539 of ~575 package mutants TIMED OUT under worker contention — contention timeouts can mask survivors, so efficacy is NOT cleanly measured. Clean re-run pending after the c-3 fix."
-
-[[finding]]
-  severity = "NOTE"
-  text = "skipped internal/cmd/status.go: no mutation adapter for .go"
-
-[[finding]]
-  severity = "NOTE"
-  text = "skipped internal/cmd/status_test.go: no mutation adapter for .go"
+  text = "dross gap (not phase-blocking): dross verify has no .go mutation adapter, and internal/mutation/gremlins.go invokes gremlins without --workers, so Go mutation neither runs via verify nor parallelizes. Worth a follow-up task to wire the gremlins adapter into the .go verify path with a worker flag."

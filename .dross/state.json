@@ -3,17 +3,9 @@
   "current_milestone": "v0.1",
   "current_phase": "04-status-action-surfaces",
   "current_phase_status": "verified",
-  "last_activity": "2026-06-20T09:47:48.815366Z",
-  "last_action": "fixed c-3 verify-pending leak (t-2 amended): spineIdle now requires verdict==pass for in-phase idle",
+  "last_activity": "2026-06-20T09:52:35.494859Z",
+  "last_action": "re-verified 04-status-action-surfaces: pass (3/3 covered after c-3 fix; mutation clean 0 survivors, efficacy 100%)",
   "history": [
-    {
-      "at": "2026-06-19T15:27:33.239044Z",
-      "action": "re-verified 01-architecture-comprehension-layer: partial (3/7 covered, mutation measured 0.59 package-scoped; architecture pkg 100%)"
-    },
-    {
-      "at": "2026-06-19T15:56:32.299069Z",
-      "action": "completed 01-architecture-comprehension-layer"
-    },
     {
       "at": "2026-06-19T16:01:00.695429Z",
       "action": "created 02-harden-ship-merge-complete-flow"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-20T09:47:48.815366Z",
       "action": "fixed c-3 verify-pending leak (t-2 amended): spineIdle now requires verdict==pass for in-phase idle"
+    },
+    {
+      "at": "2026-06-20T09:52:35.48788Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-20T09:52:35.494859Z",
+      "action": "re-verified 04-status-action-surfaces: pass (3/3 covered after c-3 fix; mutation clean 0 survivors, efficacy 100%)"
     }
   ]
 }
