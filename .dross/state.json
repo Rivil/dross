@@ -1,15 +1,9 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
-  "current_phase": "12-retrofit-setup-commands",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-21T19:20:23.701995Z",
-  "last_action": "verified 12-retrofit-setup-commands: pass (5/5 covered; mutation 0.81 package-scoped, not a phase signal — Lived=0)",
+  "last_activity": "2026-06-21T19:26:01.077319Z",
+  "last_action": "completed 12-retrofit-setup-commands",
   "history": [
-    {
-      "at": "2026-06-21T16:07:39.080784Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-06-21T16:07:39.086307Z",
       "action": "verified 10-interaction-contract: pass (4/4 covered, c-3 weak-\u003ecovered via emitter; mutation Lived=0/efficacy 1.00, rollup 0.81 not-covered conflation)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-21T19:20:23.701995Z",
       "action": "verified 12-retrofit-setup-commands: pass (5/5 covered; mutation 0.81 package-scoped, not a phase signal — Lived=0)"
+    },
+    {
+      "at": "2026-06-21T19:26:01.077319Z",
+      "action": "completed 12-retrofit-setup-commands"
     }
   ]
 }
