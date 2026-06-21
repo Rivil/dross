@@ -72,3 +72,14 @@
   depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5", "t-6"]
   test_contract = ["if any of the 5 prompts lacks the emitter call or contract reference, this test fails", "if any core-loop audit section regresses to non-conforming, this test fails"]
   status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 4
+  title = "Add prompt-sentinel tests for c-3/c-4"
+  files = ["internal/cmd/interaction_coreloop_test.go"]
+  description = "Extend the guard test with direct prompt assertions that graduate c-3/c-4 from\nweak to covered. c-3: ship.md keeps body-override, reviewers, and merge as\nseparate turns and drives reviewers via AskUserQuestion (not a silent\nconfig-write). c-4: plan.md §5 confirms with a one-line summary and carries no\nartifact-dump cue (e.g. \"Show final content\").\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-1", "t-4", "t-7"]
+  test_contract = ["if ship.md collapses body-override and reviewers into one turn, or reverts reviewers to a silent config-write, the c-3 sentinel test fails", "if plan.md §5 re-adds an artifact-dump cue instead of the one-line confirm, the c-4 sentinel test fails"]
+  status = "pending"

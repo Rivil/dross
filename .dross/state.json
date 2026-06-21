@@ -2,18 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "11-retrofit-core-loop",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-21T17:39:23.139998Z",
-  "last_action": "verified 11-retrofit-core-loop: partial (3/5 covered, c-3/c-4 weak — audit-proxy only; mutation Lived=0/0.81 package-scoped not a phase signal)",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-21T18:21:55.347512Z",
+  "last_action": "plan amended: 11-retrofit-core-loop (+t-8 prompt-sentinel tests for c-3/c-4; 8 tasks, 4 waves)",
   "history": [
-    {
-      "at": "2026-06-21T12:04:22.526276Z",
-      "action": "verified 09-marker-file-detection: pass (7/7 covered; phase-diff mutation efficacy 100% / Lived=0; rollup 0.83 package-scoped — not a phase signal)"
-    },
-    {
-      "at": "2026-06-21T13:04:46.388765Z",
-      "action": "completed 09-marker-file-detection"
-    },
     {
       "at": "2026-06-21T13:13:14.289712Z",
       "action": "resumed — handoff cleared (stale, v0.2 shipped); ready to scope v0.3 conversational-command-UX"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-21T17:39:23.139998Z",
       "action": "verified 11-retrofit-core-loop: partial (3/5 covered, c-3/c-4 weak — audit-proxy only; mutation Lived=0/0.81 package-scoped not a phase signal)"
+    },
+    {
+      "at": "2026-06-21T18:21:55.341475Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T18:21:55.347512Z",
+      "action": "plan amended: 11-retrofit-core-loop (+t-8 prompt-sentinel tests for c-3/c-4; 8 tasks, 4 waves)"
     }
   ]
 }
