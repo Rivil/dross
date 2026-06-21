@@ -2,18 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "11-retrofit-core-loop",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-21T17:16:23.750299Z",
-  "last_action": "phase 11-retrofit-core-loop executed (7/7 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-21T17:39:23.139998Z",
+  "last_action": "verified 11-retrofit-core-loop: partial (3/5 covered, c-3/c-4 weak — audit-proxy only; mutation Lived=0/0.81 package-scoped not a phase signal)",
   "history": [
-    {
-      "at": "2026-06-21T11:29:29.251498Z",
-      "action": "phase 09-marker-file-detection executed (7/7 done)"
-    },
-    {
-      "at": "2026-06-21T12:04:22.518739Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-06-21T12:04:22.526276Z",
       "action": "verified 09-marker-file-detection: pass (7/7 covered; phase-diff mutation efficacy 100% / Lived=0; rollup 0.83 package-scoped — not a phase signal)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-21T17:16:23.750299Z",
       "action": "phase 11-retrofit-core-loop executed (7/7 done)"
+    },
+    {
+      "at": "2026-06-21T17:39:23.134296Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-21T17:39:23.139998Z",
+      "action": "verified 11-retrofit-core-loop: partial (3/5 covered, c-3/c-4 weak — audit-proxy only; mutation Lived=0/0.81 package-scoped not a phase signal)"
     }
   ]
 }

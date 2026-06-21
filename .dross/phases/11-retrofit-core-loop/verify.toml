@@ -1,0 +1,64 @@
+[verify]
+  phase = "11-retrofit-core-loop"
+  generated_at = 2026-06-21T17:33:24.500257Z
+  verdict = "partial"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8069948186528497
+  mutants_killed = 623
+  mutants_survived = 0
+  mutants_not_covered = 149
+  criteria_total = 5
+  criteria_covered = 3
+  criteria_uncovered = 2
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/interaction_coreloop_test.go:TestCoreLoopPromptsWireEmitter"]
+  notes = "Greps each of the 5 prompts for `dross interaction show` and asserts no dead nested @-include; fails if any prompt drops the emitter call."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/interaction_coreloop_test.go:TestCoreLoopPromptsReferenceContract"]
+  notes = "Asserts the contract phrase 'interaction playbook' appears in each of the 5 prompts; fails if a prompt loses its reference."
+
+[[criterion]]
+  id = "c-3"
+  status = "weak"
+  tests = ["internal/cmd/interaction_coreloop_test.go:TestCoreLoopAuditSectionsConform", "internal/cmd/interaction_audit_test.go:TestInteractionAuditEnumeratesEveryInteractiveCommand"]
+  notes = "Guarded only by the audit-doc proxy: the tests assert each command's section enumerates decision points one-per-row and is marked conforming. No test directly parses a prompt's AskUserQuestion turns, so a prompt that re-bundles two decisions would not fail any test unless the audit doc were also edited. Theatrical-coverage risk — weak, not covered."
+
+[[criterion]]
+  id = "c-4"
+  status = "weak"
+  tests = ["internal/cmd/interaction_coreloop_test.go:TestCoreLoopAuditSectionsConform"]
+  notes = "Same audit-doc proxy as c-3. The prompts' prose now says 'don't paste the toml/verify.toml back', and the audit rows record no-dump conformance, but no test asserts the absence of an artifact dump in a prompt. A regression re-adding 'Show final content' to plan.md would not fail any test. Weak."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/interaction_coreloop_test.go:TestCoreLoopAuditSectionsConform", "internal/cmd/interaction_audit_test.go:TestInteractionAuditEnumeratesEveryInteractiveCommand"]
+  notes = "c-5 is about the audit doc itself gaining a mapped, conforming entry per command — exactly what these tests assert (per-decision-point table present; the 5 core-loop sections marked ✅ with no pending/partial/violates markers). Directly covered."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation scope is package-wide, not phase-diff. This phase's diff is one _test.go file (tests are not mutated) + six .md files (no mutation adapter), so there is no phase-diff production code to mutate. gremlins mutated the whole internal/cmd package only because the new test file lives there."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Lived=0: zero true surviving mutants (efficacy excluding not-covered = 1.00). The 149 the adapter labeled 'survived' are NOT_COVERED mutants (the known gremlins-adapter conflation), every one in an internal/cmd file outside this phase's diff (issue.go, rule.go, ship.go, stats.go, phase.go, doctor.go, env.go, verify.go, codex.go, milestone.go, profile.go, status.go, etc.). They are pre-existing package coverage gaps, not a phase-quality signal — consistent with phases 09/10."
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation_score 0.81 ≥ 0.80 threshold, but per the FeastAhead phase-04/05 lesson the score is not applied as a phase signal here: it measures unrelated package code, not this phase's changes."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-3 and c-4 are prose-conformance criteria guarded only by the audit-doc proxy. The spec anticipated audit-based verification, but no test cross-checks prompt↔audit. To harden: add a test asserting each retrofitted prompt carries its decision-specific sentinels (e.g. ship.md has separate body/reviewers/merge turns; plan.md §5 has no 'Show final content' artifact dump)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/{plan,execute,verify,ship,review}.md and docs/interaction-audit.md: no mutation adapter for .md (expected — content guarded by grep tests in interaction_coreloop_test.go)."
