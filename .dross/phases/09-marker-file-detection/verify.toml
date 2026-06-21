@@ -1,0 +1,95 @@
+[verify]
+  phase = "09-marker-file-detection"
+  generated_at = 2026-06-21T11:58:12.707447Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8256880733944955
+  mutants_killed = 720
+  mutants_survived = 152
+  mutants_not_covered = 152
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/stack/embed_test.go:TestEmbeddedDocker",
+    "internal/stack/detect_test.go:TestMarkerProfiles",
+  ]
+  notes = "TestEmbeddedDocker proves the docker profile ships embedded with its file_patterns; TestMarkerProfiles/marker-only resolves docker on a Dockerfile-only tree (no source extension)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/security/recon_test.go:TestBuildManifestMarkerDocker",
+    "internal/security/recon_test.go:TestBuildManifestMarkerDedup",
+  ]
+  notes = "Dockerfile-only repo surfaces hadolint + trivy config in the security manifest; dedup test proves trivy config survives distinctly from agnostic trivy. Mutation: union code in recon.go has no surviving mutant."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/quality/recon_test.go:TestQualityManifestMarkerDocker"]
+  notes = "Dockerfile-only repo surfaces the hadolint analyzer on top of the agnostic scc/jscpd set in the quality manifest."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/stack/profile_test.go:TestFilePatternMatch",
+    "internal/stack/profile_test.go:TestFilePatternNoBraceExpansion",
+  ]
+  notes = "Table asserts the Dockerfile/compose families match (incl. suffixed/prefixed/case variants) and unrelated files do not (over-broad guard); brace-expansion test proves .yml/.yaml are distinct. Matcher conditional (profile.go:60) KILLED."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [
+    "internal/stack/detect_test.go:TestMarkerProfiles",
+    "internal/stack/detect_test.go:TestNoDockerHardcode",
+  ]
+  notes = "TestMarkerProfiles/data-driven surfaces a synthetic {id:widget, FilePatterns:[*.widget]} profile (no docker special-case) through the same MarkerProfiles seam the recon manifest consumes; TestNoDockerHardcode greps detect.go + both recon.go for any literal docker/Dockerfile."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = [
+    "internal/security/recon_test.go:TestBuildManifestNoMarkerRegression",
+    "internal/quality/recon_test.go:TestQualityNoMarkerRegression",
+    "internal/stack/detect_test.go:TestMarkerProfiles",
+    "internal/security/recon_test.go:TestBuildManifestMarkerDedup",
+  ]
+  notes = "Marker-less repos surface no docker (MarkerProfiles/marker-less + both NoMarkerRegression tests keep the Go+agnostic set intact); dedup test proves a Go+Dockerfile repo gains docker tools without duplicating or losing existing entries."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = [
+    "internal/cmd/stack_test.go:TestStackListIncludesDocker",
+    "internal/cmd/stack_test.go:TestStackShowDocker",
+  ]
+  notes = "stack list surfaces docker; stack show docker loads cleanly and encodes its file_patterns + hadolint tool."
+
+# Findings. The mechanical pass auto-seeded a FLAG per gremlins not-covered mutant
+# across the whole package set. The criterion cross-check (verify §2) found NONE of
+# them on lines this phase changed or in any criterion's covering test, so they are
+# reclassified as package-scoped NOTEs, not phase-09 test-quality FLAGs. Phase-diff
+# mutation efficacy is 100% (Lived=0); the 0.83 rollup is package-scoped — not a phase
+# signal (same pattern recorded for phases 07/08).
+
+[[finding]]
+  severity = "NOTE"
+  text = "Package-scoped gremlins rollup: 152/872 mutants NOT COVERED, all in files OUTSIDE this phase's diff (cmd: onboard/issue/stats/ship/rule/verify/doctor/status/env/phase/milestone/project/codex/root/subcommand_guard/validate; internal: telemetry, security/catalog). Pre-existing coverage gaps, not introduced by phase 09. Phase-diff efficacy = 100% (Lived=0)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "detect.go:219 (normalizeExt, ARITHMETIC_BASE) not covered — a pre-existing helper used only by Detect/scoreProfile, untouched by this phase. The phase-added MarkerProfiles (detect.go:186-212) and Signals.MatchesFile (profile.go:57-65) have no surviving mutant."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profiles/docker.toml: no mutation adapter for .toml (data file; its loadout is asserted by TestEmbeddedDocker instead)."

@@ -1,0 +1,58 @@
+[phase]
+id        = "09-marker-file-detection"
+title     = "marker-file-detection"
+milestone = "v0.2"
+
+[[criteria]]
+id   = "c-1"
+text = "An embedded `docker` stack profile ships; stack detection resolves profile id `docker` on a repo whose only Docker signal is a marker file (a Dockerfile or a compose file), with no Docker source extension present."
+
+[[criteria]]
+id   = "c-2"
+text = "`dross secure`'s recon manifest surfaces the Docker scanner(s) (hadolint, trivy config) on a Dockerfile-only repo, closing the extension-only blind spot in the manifest path (DetectLanguages today is extLang-only, so a marker-only Docker repo currently gets no Docker tools)."
+
+[[criteria]]
+id   = "c-3"
+text = "`dross quality`'s recon manifest surfaces the Docker profile's analyzer (hadolint, kind=analyzer) on a marker-only repo, on top of the agnostic analyzer set."
+
+[[criteria]]
+id   = "c-4"
+text = "Docker detection matches conventional Docker filename families via patterns, not a fixed list: `Dockerfile`, `Dockerfile.<suffix>` (e.g. Dockerfile.dev), `*.dockerfile`/`*.Dockerfile` (e.g. app.Dockerfile), and compose files `docker-compose*.{yml,yaml}` / `compose*.{yml,yaml}` (e.g. docker-compose-prod.yaml, compose.override.yml). An unrelated file does not trigger Docker detection (over-broad-pattern guard)."
+
+[[criteria]]
+id   = "c-5"
+text = "Marker detection is generic and data-driven by any profile's `[signals].file_patterns`, with no Docker-specific hardcode in the detection/manifest code; a synthetic profile declaring only file/pattern signals (no source extensions) is surfaced by the recon manifest path — so future marker-only profiles require only a new `.toml`."
+
+[[criteria]]
+id   = "c-6"
+text = "No regression: a repo with no Docker markers never surfaces `docker`, and existing single-language repos (e.g. a pure-Go repo) resolve to exactly the same languages and tool manifest as before this phase."
+
+[[criteria]]
+id   = "c-7"
+text = "`dross stack list` includes the docker profile and `dross stack show docker` loads it cleanly, reflecting its marker patterns and tools."
+
+[[decisions]]
+key    = "marker_detection_additive"
+choice = "Marker-matched profiles are unioned additively on top of detected source languages in the secure/quality recon manifest: a Go repo with a Dockerfile surfaces BOTH the Go tools and the Docker tools. stack.Detect()'s winner-take-all single-id selection stays unchanged for the 'primary stack' question (runtime seeding etc.)."
+why    = "The common real-world case is source code plus a Dockerfile; winner-take-all would suppress one tool set or the other. Additive surfacing keeps c-6 regression-clean and matches how Docker actually appears in repos."
+locked = true
+
+[[decisions]]
+key    = "marker_pattern_syntax"
+choice = "Markers are matched with case-insensitive glob patterns (filename and pattern both lowercased before matching), not regex, in a NEW `[signals].file_patterns` field; the existing exact-match `[signals].files` field is left untouched. No brace expansion — `.yml` and `.yaml` are listed as separate patterns."
+why    = "Globs stay readable in TOML and avoid regex footguns; case-insensitive matching covers Dockerfile/dockerfile without doubling patterns; a dedicated field keeps exact-match `files` semantics crisp and makes 'pattern-only profile' a clean contract for c-5."
+locked = true
+
+[[decisions]]
+key    = "docker_tool_loadout"
+choice = "The docker profile ships hadolint (declared twice: kind=scanner and kind=analyzer) and trivy config (kind=scanner). hadolint lints Dockerfiles for both security and quality; trivy config covers compose-only repos that hadolint cannot lint. Both are static, single-binary, no image build. dockle and checkov are not included."
+why    = "hadolint + trivy give static Dockerfile + compose coverage across both the security and quality dimensions with single-binary installs. dockle needs a built image (docker build in the scan path) and checkov is a heavier Python/exhaustive tool — both against the static first-cut loadout (milestone non-goal: sensible first-cut, not exhaustive)."
+locked = true
+
+[[deferred]]
+text = "dockle / container image-layer scanning (CIS benchmark on a built image)."
+why  = "Needs a built image (docker build) in the scan path — beyond the static source loadout; revisit if image-level scanning is wanted."
+
+[[deferred]]
+text = "checkov / exhaustive IaC misconfiguration coverage."
+why  = "Python dependency and broader than the first-cut loadout (hadolint + trivy config); not needed to close the marker-detection gap."

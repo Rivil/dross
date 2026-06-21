@@ -1,0 +1,50 @@
+# Docker stack profile — a MARKER-FILE stack: it is detected from container build
+# files (Dockerfile / compose), not a source extension. It declares only
+# [signals].file_patterns (no exts), so it is surfaced additively by MarkerProfiles
+# into the security/quality manifests — never as a primary stack via Detect.
+# To add or override a stack, drop a sibling <id>.toml into
+# ~/.claude/dross/profiles/ — no recompile, zero code change. See README.md.
+
+id    = "docker"
+title = "Docker"
+
+[signals]
+  # Case-insensitive globs matched against any filename in the tree (no brace
+  # expansion — .yml and .yaml are listed separately). Covers Dockerfile and its
+  # suffixed/prefixed forms plus the compose filename families.
+  file_patterns = [
+    "Dockerfile",
+    "Dockerfile.*",
+    "*.dockerfile",
+    "docker-compose*.yml",
+    "docker-compose*.yaml",
+    "compose*.yml",
+    "compose*.yaml",
+  ]
+
+# Tool loadout. hadolint lints Dockerfiles for both security (root user, unpinned
+# base image, leaked secrets) and quality (layer hygiene, pinned versions), so it
+# is declared in both kinds. trivy in `config` mode covers compose files hadolint
+# cannot lint — its Name is distinct from the agnostic "trivy" scanner so the
+# manifest dedup keeps both. dockle/checkov are intentionally out (need a built
+# image / heavier Python toolchain). Agnostic tools (gitleaks, semgrep, trivy,
+# scc, jscpd) apply to every stack and stay in the catalogs — not listed here.
+
+[[tools]]
+  name    = "hadolint"
+  kind    = "scanner"
+  core    = true
+  install = "brew install hadolint  (or see github.com/hadolint/hadolint)"
+[[tools]]
+  name    = "trivy config"
+  bin     = "trivy"
+  kind    = "scanner"
+  core    = true
+  install = "brew install trivy  (or see github.com/aquasecurity/trivy)"
+
+[[tools]]
+  name      = "hadolint"
+  kind      = "analyzer"
+  dimension = "error-handling"
+  core      = true
+  install   = "brew install hadolint  (or see github.com/hadolint/hadolint)"

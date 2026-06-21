@@ -1,81 +1,9 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.2",
-  "last_activity": "2026-06-21T10:14:16.123353Z",
-  "last_action": "completed 08-language-profiles",
+  "last_activity": "2026-06-21T13:04:46.388765Z",
+  "last_action": "completed 09-marker-file-detection",
   "history": [
-    {
-      "at": "2026-06-20T16:07:04.461111Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-20T16:07:04.466848Z",
-      "action": "phase 06-dross-quality executed (9/9 done)"
-    },
-    {
-      "at": "2026-06-20T16:48:41.10571Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-20T16:48:41.11225Z",
-      "action": "verified 06-dross-quality: pass (5/5 covered; phase-diff mutation 100% on internal/quality, 0 survivors in changed code; rollup 0.81 package-scoped — not a phase signal)"
-    },
-    {
-      "at": "2026-06-20T16:50:38.121585Z",
-      "action": "completed 06-dross-quality"
-    },
-    {
-      "at": "2026-06-20T16:54:00.71112Z",
-      "action": "created 07-stack-profiles"
-    },
-    {
-      "at": "2026-06-20T17:33:37.280013Z",
-      "action": "set current_phase=07-stack-profiles"
-    },
-    {
-      "at": "2026-06-20T17:33:37.286271Z",
-      "action": "spec locked: 07-stack-profiles"
-    },
-    {
-      "at": "2026-06-20T17:45:07.533269Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-20T17:45:07.539867Z",
-      "action": "plan locked: 07-stack-profiles (10 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-06-20T17:50:59.395959Z",
-      "action": "plan reviewed: 07-stack-profiles (0 blocking, 0 flags after 1 amend; 11 tasks)"
-    },
-    {
-      "at": "2026-06-20T17:53:41.285619Z",
-      "action": "executed t-1 (stack profile schema + loader)"
-    },
-    {
-      "at": "2026-06-20T17:55:17.578238Z",
-      "action": "executed t-2 (centralize stack detection)"
-    },
-    {
-      "at": "2026-06-20T17:59:32.5123Z",
-      "action": "executed t-3 (embed Go profile + user-dir merge + README)"
-    },
-    {
-      "at": "2026-06-20T18:00:18.46163Z",
-      "action": "executed t-4 (resolve runtime command set from profile)"
-    },
-    {
-      "at": "2026-06-20T18:02:39.942048Z",
-      "action": "executed t-5 (dross stack command tree)"
-    },
-    {
-      "at": "2026-06-20T18:06:19.423838Z",
-      "action": "executed t-6 (catalogs consume Go profile loadout)"
-    },
-    {
-      "at": "2026-06-20T18:22:52.844375Z",
-      "action": "executed t-7 (de-duplicate recon DetectLanguages onto stack)"
-    },
     {
       "at": "2026-06-20T18:25:24.543658Z",
       "action": "executed t-8 (seed init/onboard runtime from profile)"
@@ -203,6 +131,78 @@
     {
       "at": "2026-06-21T10:14:16.123353Z",
       "action": "completed 08-language-profiles"
+    },
+    {
+      "at": "2026-06-21T10:34:59.035399Z",
+      "action": "created 09-marker-file-detection"
+    },
+    {
+      "at": "2026-06-21T10:51:08.478804Z",
+      "action": "set current_phase=09-marker-file-detection"
+    },
+    {
+      "at": "2026-06-21T10:51:08.486028Z",
+      "action": "spec locked: 09-marker-file-detection"
+    },
+    {
+      "at": "2026-06-21T11:06:02.586547Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T11:06:02.593378Z",
+      "action": "plan locked: 09-marker-file-detection (7 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-21T11:16:26.866919Z",
+      "action": "plan reviewed: 09-marker-file-detection (1 blocking found+resolved [hadolint analyzer dimension], 1 flag remaining)"
+    },
+    {
+      "at": "2026-06-21T11:21:19.713738Z",
+      "action": "executed t-1 (Add file_patterns field + glob matcher)"
+    },
+    {
+      "at": "2026-06-21T11:23:01.643581Z",
+      "action": "executed t-2 (Add generic MarkerProfiles detector)"
+    },
+    {
+      "at": "2026-06-21T11:24:55.871187Z",
+      "action": "executed t-3 (Ship embedded docker stack profile)"
+    },
+    {
+      "at": "2026-06-21T11:26:25.712676Z",
+      "action": "executed t-4 (Union marker profiles into security manifest)"
+    },
+    {
+      "at": "2026-06-21T11:27:40.558552Z",
+      "action": "executed t-5 (Union marker profiles into quality manifest)"
+    },
+    {
+      "at": "2026-06-21T11:28:13.8569Z",
+      "action": "executed t-7 (Verify docker profile on stack CLI)"
+    },
+    {
+      "at": "2026-06-21T11:29:12.924707Z",
+      "action": "executed t-6 (Guard: no Docker hardcode in detect/recon)"
+    },
+    {
+      "at": "2026-06-21T11:29:29.243901Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-21T11:29:29.251498Z",
+      "action": "phase 09-marker-file-detection executed (7/7 done)"
+    },
+    {
+      "at": "2026-06-21T12:04:22.518739Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-21T12:04:22.526276Z",
+      "action": "verified 09-marker-file-detection: pass (7/7 covered; phase-diff mutation efficacy 100% / Lived=0; rollup 0.83 package-scoped — not a phase signal)"
+    },
+    {
+      "at": "2026-06-21T13:04:46.388765Z",
+      "action": "completed 09-marker-file-detection"
     }
   ]
 }

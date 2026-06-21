@@ -20,6 +20,54 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
+// manifestNames returns the set of analyzer names in the manifest.
+func manifestNames(m Manifest) map[string]bool {
+	out := map[string]bool{}
+	for _, t := range m.Tools {
+		out[t.Name] = true
+	}
+	return out
+}
+
+// TestQualityManifestMarkerDocker proves a marker-only repo surfaces the Docker
+// analyzer ON TOP of the agnostic set — the analyzer side of closing the blind spot.
+func TestQualityManifestMarkerDocker(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "Dockerfile"), "FROM scratch\n")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := manifestNames(m)
+	if !names["hadolint"] {
+		t.Errorf("Dockerfile-only repo: quality manifest missing hadolint analyzer (c-3); names=%v", names)
+	}
+	// The agnostic set must remain — a marker-only repo never loses scc/jscpd.
+	for _, want := range []string{"scc", "jscpd"} {
+		if !names[want] {
+			t.Errorf("marker-only repo lost the agnostic analyzer %q; names=%v", want, names)
+		}
+	}
+}
+
+// TestQualityNoMarkerRegression guards c-6: a marker-less repo surfaces no Docker
+// analyzer.
+func TestQualityNoMarkerRegression(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "main.go"), "package main")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifestNames(m)["hadolint"] {
+		t.Error("marker-less repo surfaced the hadolint analyzer — no Docker tools must leak in (c-6)")
+	}
+}
+
 func TestDetectLanguages(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "main.go"), "package main")

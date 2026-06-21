@@ -84,6 +84,85 @@ func TestBuildManifestRecordsMissing(t *testing.T) {
 	}
 }
 
+// toolNames counts how many times each scanner name appears in the manifest.
+func toolNames(m Manifest) map[string]int {
+	counts := map[string]int{}
+	for _, t := range m.Tools {
+		counts[t.Name]++
+	}
+	return counts
+}
+
+func allMissingLookup(string) (string, error) { return "", errors.New("not found") }
+
+// TestBuildManifestMarkerDocker proves the manifest-path blind spot is closed: a repo
+// whose only Docker signal is a marker file (no source extension) surfaces the Docker
+// scanners. Before this, DetectLanguages was extension-only and missed it entirely.
+func TestBuildManifestMarkerDocker(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "Dockerfile"), "FROM scratch\n")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := toolNames(m)
+	for _, want := range []string{"hadolint", "trivy config"} {
+		if names[want] == 0 {
+			t.Errorf("Dockerfile-only repo: manifest missing %q — marker-stack scanners must surface (c-2); tools=%v", want, names)
+		}
+	}
+}
+
+// TestBuildManifestNoMarkerRegression guards c-6: a marker-less repo gets exactly the
+// language + agnostic set and no Docker tools leak in.
+func TestBuildManifestNoMarkerRegression(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "main.go"), "package main")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := toolNames(m)
+	for _, want := range []string{"govulncheck", "gitleaks", "trivy"} {
+		if names[want] == 0 {
+			t.Errorf("Go repo: expected the Go core + agnostic scanner %q, got tools=%v", want, names)
+		}
+	}
+	for _, absent := range []string{"hadolint", "trivy config"} {
+		if names[absent] != 0 {
+			t.Errorf("marker-less repo surfaced %q — no Docker tools must leak in (c-6)", absent)
+		}
+	}
+}
+
+// TestBuildManifestMarkerDedup proves the additive union dedups by name and that the
+// Docker "trivy config" scanner survives distinctly alongside the agnostic "trivy".
+func TestBuildManifestMarkerDedup(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go.mod"), "module x\n")
+	writeFile(t, filepath.Join(root, "main.go"), "package main")
+	writeFile(t, filepath.Join(root, "Dockerfile"), "FROM scratch\n")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := toolNames(m)
+	for name, n := range names {
+		if n != 1 {
+			t.Errorf("scanner %q appears %d times — the seen dedup failed on the marker union", name, n)
+		}
+	}
+	if names["trivy"] == 0 {
+		t.Error("agnostic trivy scanner missing")
+	}
+	if names["trivy config"] == 0 {
+		t.Error(`"trivy config" was deduped away — it must surface distinctly from the agnostic "trivy" (c-2)`)
+	}
+}
+
 func contains(ss []string, want string) bool {
 	for _, s := range ss {
 		if s == want {

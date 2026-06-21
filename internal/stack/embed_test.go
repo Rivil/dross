@@ -17,6 +17,74 @@ func TestEmbeddedIncludesGo(t *testing.T) {
 	}
 }
 
+// TestEmbeddedDocker proves the docker marker profile ships with exactly the locked
+// loadout: hadolint as both a scanner and an analyzer, plus a distinctly-named trivy
+// config scanner — and nothing from outside that set (no dockle/checkov).
+func TestEmbeddedDocker(t *testing.T) {
+	emb, err := Embedded()
+	if err != nil {
+		t.Fatalf("Embedded: %v", err)
+	}
+	d := ByID(emb, "docker")
+	if d == nil {
+		t.Fatal("embedded profiles must include the docker profile")
+	}
+	// It is a marker stack: pattern signals, no source extensions.
+	if len(d.Signals.FilePatterns) == 0 {
+		t.Error("docker profile must declare file_patterns (marker stack)")
+	}
+	if len(d.Signals.Exts) != 0 {
+		t.Errorf("docker profile must declare no exts (marker stack), got %v", d.Signals.Exts)
+	}
+
+	// Group tools by kind and assert the exact loadout.
+	scanners, analyzers := map[string]Tool{}, map[string]Tool{}
+	for _, tool := range d.Tools {
+		switch tool.Kind {
+		case "scanner":
+			scanners[tool.Name] = tool
+		case "analyzer":
+			analyzers[tool.Name] = tool
+		default:
+			t.Errorf("tool %q has unexpected kind %q", tool.Name, tool.Kind)
+		}
+		if tool.Name == "dockle" || tool.Name == "checkov" {
+			t.Errorf("docker loadout must not ship %q (out of scope)", tool.Name)
+		}
+	}
+
+	// hadolint must appear as BOTH a scanner and an analyzer.
+	if _, ok := scanners["hadolint"]; !ok {
+		t.Error("docker loadout missing the hadolint scanner")
+	}
+	if _, ok := analyzers["hadolint"]; !ok {
+		t.Error("docker loadout missing the hadolint analyzer")
+	}
+	// The compose-covering scanner must be named distinctly from the agnostic
+	// "trivy" scanner, or the manifest dedup would collapse it away.
+	tc, ok := scanners["trivy config"]
+	if !ok {
+		t.Error(`docker loadout missing the "trivy config" scanner (distinct from agnostic "trivy")`)
+	} else if tc.EffectiveBin("") != "trivy" {
+		t.Errorf(`"trivy config" must resolve to the trivy binary, got %q`, tc.EffectiveBin(""))
+	}
+
+	// The hadolint analyzer's dimension must be in the substantive allowlist, or the
+	// existing quality TestCatalogExcludesCosmetic guard goes red once docker embeds.
+	if got := analyzers["hadolint"].Dimension; got != "error-handling" {
+		t.Errorf("hadolint analyzer dimension = %q, want a substantive dimension (error-handling)", got)
+	}
+}
+
+// TestMalformedDockerLikeProfileErrors proves the load path surfaces a malformed
+// profile as an error rather than silently shipping a broken loadout — the guarantee
+// that protects the embedded docker.toml.
+func TestMalformedDockerLikeProfileErrors(t *testing.T) {
+	if _, err := Decode([]byte("id = \"docker\"\n[signals]\n  file_patterns = [unterminated\n")); err == nil {
+		t.Fatal("a malformed profile must surface a decode error")
+	}
+}
+
 func TestUserDirWinsOnIDCollision(t *testing.T) {
 	dir := t.TempDir()
 	// A user profile with the same id as the embedded Go profile but a different

@@ -105,6 +105,92 @@ func TestProfileToolRequiresBin(t *testing.T) {
 	}
 }
 
+// dockerFilePatterns is the marker pattern set the docker profile (t-3) will ship.
+// Pinning it here keeps the matcher's contract honest independent of the TOML file.
+var dockerFilePatterns = []string{
+	"Dockerfile", "Dockerfile.*", "*.dockerfile",
+	"docker-compose*.yml", "docker-compose*.yaml",
+	"compose*.yml", "compose*.yaml",
+}
+
+func TestFilePatternMatch(t *testing.T) {
+	s := Signals{FilePatterns: dockerFilePatterns}
+	cases := []struct {
+		name string
+		want bool
+	}{
+		// MUST match — including case variants (capital D) and suffixed/prefixed forms.
+		{"Dockerfile", true},
+		{"Dockerfile.dev", true},
+		{"app.Dockerfile", true},
+		{"app.dockerfile", true},
+		{"docker-compose-prod.yaml", true},
+		{"compose.override.yml", true},
+		{"compose.yaml", true},
+		// MUST NOT match — guards against an over-broad (substring) glob.
+		{"notes.txt", false},
+		{"README.md", false},
+		{"mydockerfile.go", false},
+		{"compose.go", false},
+	}
+	for _, c := range cases {
+		if got := s.MatchesFile(c.name); got != c.want {
+			t.Errorf("MatchesFile(%q) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestFilePatternNoBraceExpansion(t *testing.T) {
+	// .yml and .yaml are distinct patterns — there is no brace expansion. A
+	// *.yml-only pattern must NOT match a .yaml file; collapsing them breaks this.
+	ymlOnly := Signals{FilePatterns: []string{"compose*.yml"}}
+	if ymlOnly.MatchesFile("compose.yaml") {
+		t.Error(`"compose*.yml" must not match "compose.yaml" — .yml/.yaml are separate patterns`)
+	}
+	if !ymlOnly.MatchesFile("compose.yml") {
+		t.Error(`"compose*.yml" should match "compose.yml"`)
+	}
+}
+
+func TestFilePatternsDecodeRoundTrip(t *testing.T) {
+	const src = `id = "demo"
+[signals]
+  file_patterns = ["Dockerfile", "compose*.yaml"]
+`
+	p, err := Decode([]byte(src))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	want := []string{"Dockerfile", "compose*.yaml"}
+	if got := p.Signals.FilePatterns; !equalStrs(got, want) {
+		t.Fatalf("file_patterns decode: got %v, want %v (wrong toml tag?)", got, want)
+	}
+	// Round-trip: encode then decode and assert the patterns survive.
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(p); err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	rt, err := Decode(buf.Bytes())
+	if err != nil {
+		t.Fatalf("decode round-trip: %v", err)
+	}
+	if got := rt.Signals.FilePatterns; !equalStrs(got, want) {
+		t.Fatalf("file_patterns lost on round-trip: got %v, want %v", got, want)
+	}
+}
+
+func equalStrs(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func findTool(p *Profile, name string) *Tool {
 	for i := range p.Tools {
 		if p.Tools[i].Name == name {

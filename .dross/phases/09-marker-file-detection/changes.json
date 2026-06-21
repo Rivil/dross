@@ -1,0 +1,66 @@
+{
+  "phase": "09-marker-file-detection",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/stack/profile.go",
+        "internal/stack/profile_test.go"
+      ],
+      "commit": "4680b18",
+      "completed_at": "2026-06-21T11:21:19.701063Z",
+      "notes": "feature: marker-file detection · Signals.MatchesFile @ internal/stack/profile.go · case-insensitive glob matcher + file_patterns signal field"
+    },
+    "t-2": {
+      "files": [
+        "internal/stack/detect.go",
+        "internal/stack/detect_test.go"
+      ],
+      "commit": "358d4ff",
+      "completed_at": "2026-06-21T11:23:01.630017Z",
+      "notes": "feature: marker-file detection · MarkerProfiles @ internal/stack/detect.go · subtree glob walk surfacing marker-stack ids additively"
+    },
+    "t-3": {
+      "files": [
+        "internal/stack/profiles/docker.toml",
+        "internal/stack/embed_test.go"
+      ],
+      "commit": "e2cc0d1",
+      "completed_at": "2026-06-21T11:24:55.859797Z",
+      "notes": "feature: marker-file detection · docker.toml @ internal/stack/profiles/docker.toml · Docker marker profile (hadolint scanner+analyzer, trivy config scanner)"
+    },
+    "t-4": {
+      "files": [
+        "internal/security/recon.go",
+        "internal/security/recon_test.go"
+      ],
+      "commit": "b10f28b",
+      "completed_at": "2026-06-21T11:26:25.698839Z",
+      "notes": "feature: marker-file detection · BuildManifest @ internal/security/recon.go · unions marker-stack scanners additively into the security manifest"
+    },
+    "t-5": {
+      "files": [
+        "internal/quality/recon.go",
+        "internal/quality/recon_test.go"
+      ],
+      "commit": "9b6c14d",
+      "completed_at": "2026-06-21T11:27:40.546545Z",
+      "notes": "feature: marker-file detection · BuildManifest @ internal/quality/recon.go · unions marker-stack analyzers additively into the quality manifest"
+    },
+    "t-6": {
+      "files": [
+        "internal/stack/detect_test.go"
+      ],
+      "commit": "4d0e7bf",
+      "completed_at": "2026-06-21T11:29:12.911757Z",
+      "notes": "feature: marker-file detection · TestNoDockerHardcode @ internal/stack/detect_test.go · guards data-driven detection (no docker literal in mechanism code)"
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/stack_test.go"
+      ],
+      "commit": "dc24e8d",
+      "completed_at": "2026-06-21T11:28:13.845808Z",
+      "notes": "feature: marker-file detection · TestStackShowDocker @ internal/cmd/stack_test.go · CLI list/show surfaces the docker profile"
+    }
+  }
+}
