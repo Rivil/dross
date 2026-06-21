@@ -64,6 +64,27 @@ func TestInteractionRuleStaysTerse(t *testing.T) {
 	}
 }
 
+// TestInteractionRuleUsesEmitter — the snippet_delivery decision replaced nested
+// @-include (the pilot proved it does not expand) with the `dross interaction
+// show` emitter. The shipped rule text and the snippet header must point at the
+// emitter and must not instruct the dead @-include mechanism.
+func TestInteractionRuleUsesEmitter(t *testing.T) {
+	rule := interactionRuleText(t)
+	if strings.Contains(rule, "@-include") {
+		t.Error("interaction-contract rule still mentions @-include — nested expansion was disproven; point at `dross interaction show`")
+	}
+	if !strings.Contains(rule, "dross interaction show") {
+		t.Error("interaction-contract rule must name the `dross interaction show` delivery mechanism")
+	}
+	b, err := os.ReadFile(filepath.Join(repoRoot(t), "assets", "prompts", "_interaction.md"))
+	if err != nil {
+		t.Fatalf("read _interaction.md: %v", err)
+	}
+	if strings.Contains(string(b), "@-include") {
+		t.Error("_interaction.md still instructs prompts to @-include it — the header must point at `dross interaction show`")
+	}
+}
+
 // TestInteractionContractNoDrift — the canonical phrases must appear in BOTH the
 // rule and the snippet. If either side is reworded, rule and snippet have drifted.
 func TestInteractionContractNoDrift(t *testing.T) {

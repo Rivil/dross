@@ -136,7 +136,7 @@ var Builtins = []Resolved{
 		Rule: Rule{
 			ID:       "dross-interaction-contract",
 			Severity: Hard,
-			Text:     "Drive interactive slash commands as a conversation, not a broadcast: surface one decision per turn, propose a default and let the user react (accept / steer), and never wall-of-text them with batched questions or a composed artifact. Confirm a written artifact in a one-line summary and never paste the build artifact back. The full playbook lives in the `_interaction.md` snippet that interactive prompts @-include.",
+			Text:     "Drive interactive slash commands as a conversation, not a broadcast: surface one decision per turn, propose a default and let the user react (accept / steer), and never wall-of-text them with batched questions or a composed artifact. Confirm a written artifact in a one-line summary and never paste the build artifact back. The full playbook lives in the `_interaction.md` snippet, emitted verbatim by `dross interaction show`.",
 		},
 	},
 }

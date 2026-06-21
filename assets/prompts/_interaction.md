@@ -3,8 +3,8 @@
 
   This file is the detailed counterpart to the `dross-interaction-contract`
   builtin rule (see `dross rule show`). The rule states the terse invariant; this
-  snippet is the how-to. Interactive prompts @-include it so the pattern lives in
-  one place and every command behaves the same way.
+  snippet is the how-to. Interactive prompts pull it in via `dross interaction
+  show` so the pattern lives in one place and every command behaves the same way.
 
   Underscore prefix keeps it sorting/reading as a partial, not a command prompt.
 -->
