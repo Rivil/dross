@@ -2,18 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "12-retrofit-setup-commands",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-21T18:44:45.884089Z",
-  "last_action": "spec locked: 12-retrofit-setup-commands",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-21T18:54:19.146452Z",
+  "last_action": "plan locked: 12-retrofit-setup-commands (10 tasks across 3 waves)",
   "history": [
-    {
-      "at": "2026-06-21T15:17:07.863613Z",
-      "action": "executed t-4 (Seed interaction-audit checklist)"
-    },
-    {
-      "at": "2026-06-21T15:20:14.555277Z",
-      "action": "executed t-3 (Reconcile rule/snippet/spec.md; cross-reference)"
-    },
     {
       "at": "2026-06-21T15:22:18.076566Z",
       "action": "executed t-5 (Wire snippet into install; verify symlink)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-21T18:44:45.884089Z",
       "action": "spec locked: 12-retrofit-setup-commands"
+    },
+    {
+      "at": "2026-06-21T18:54:19.138777Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T18:54:19.146452Z",
+      "action": "plan locked: 12-retrofit-setup-commands (10 tasks across 3 waves)"
     }
   ]
 }
