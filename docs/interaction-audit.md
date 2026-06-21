@@ -174,32 +174,41 @@ retrofitted under Setup & config in phase 12.)
 
 ## Other interactive commands (audited in phase 13)
 
+The read-only-leaning commands one tier out from the loop: the two heavy audits
+(`secure`/`quality`), the backfill engine (`architecture`), and the handoff pair
+(`pause`/`resume`). Each has essentially **one gated decision**, so the retrofit is
+uniform — wire `dross interaction show` into the pre-flight (per the
+`scan_command_emitter` and `handoff_emitter_exception` decisions) and confirm the
+single propose-and-react turn. Two carry a deliberate artifact-preview exception
+(the drafted doc / handoff *is* the thing being confirmed, like `ship`'s PR-body
+preview).
+
 ### dross-architecture
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Scope of backfill | options | ⬜ | |
+| ARCHITECTURE.md write approval | §3 propose→approve→write, leads with the drafted doc, single proceed/steer gate | ✅ | pre-flight runs `dross interaction show`; read-only fan-out maps features, the write is the only gated turn. Showing the full drafted doc is a deliberate artifact-preview exception (the deliverable), like ship's PR-body preview |
 
 ### dross-secure
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Remediation phase scaffold | confirm | ⬜ | |
+| Remediation-phase scaffold | §7 propose-then-ask — show criteria, confirm before locking, exactly like /dross-spec | ✅ | pre-flight runs `dross interaction show`; the emitter shapes only this gated turn — audit scope stays context-free |
 
 ### dross-quality
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Remediation phase scaffold | confirm | ⬜ | |
+| Remediation-phase scaffold | §7 propose-then-ask — show criteria, confirm before locking, exactly like /dross-spec | ✅ | pre-flight runs `dross interaction show`; the emitter shapes only this gated turn — tool sweep stays code-only, calibrate-only context |
 
 ### dross-pause
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Handoff contents | confirm draft | ⬜ | |
+| Confirm + amend handoff | §2 single AskUserQuestion (save / amend / cancel) | ✅ | pre-flight runs `dross interaction show`. Inline handoff-draft preview is a documented exception — the user confirms their own working memory, like ship's PR-body preview, not an artifact-dump violation |
 
 ### dross-resume
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Resume vs fresh | options | ⬜ | |
+| Prune handoff items | §2 walks each ## Next / ## Open-loops item one at a time (done / keep / edit) | ✅ | pre-flight runs `dross interaction show`; "pruning is the user's call, item by item" — never a batched dump |
