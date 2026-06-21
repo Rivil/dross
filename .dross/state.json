@@ -1,21 +1,11 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
-  "last_activity": "2026-06-21T19:26:01.077319Z",
-  "last_action": "completed 12-retrofit-setup-commands",
+  "current_phase": "13-audit-and-readme",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-21T19:43:14.966974Z",
+  "last_action": "spec locked: 13-audit-and-readme",
   "history": [
-    {
-      "at": "2026-06-21T16:07:39.086307Z",
-      "action": "verified 10-interaction-contract: pass (4/4 covered, c-3 weak-\u003ecovered via emitter; mutation Lived=0/efficacy 1.00, rollup 0.81 not-covered conflation)"
-    },
-    {
-      "at": "2026-06-21T16:40:33.3508Z",
-      "action": "completed 10-interaction-contract"
-    },
-    {
-      "at": "2026-06-21T16:45:46.99458Z",
-      "action": "created 11-retrofit-core-loop"
-    },
     {
       "at": "2026-06-21T16:55:51.346631Z",
       "action": "set current_phase=11-retrofit-core-loop"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-21T19:26:01.077319Z",
       "action": "completed 12-retrofit-setup-commands"
+    },
+    {
+      "at": "2026-06-21T19:30:08.506505Z",
+      "action": "created 13-audit-and-readme"
+    },
+    {
+      "at": "2026-06-21T19:43:14.960544Z",
+      "action": "set current_phase=13-audit-and-readme"
+    },
+    {
+      "at": "2026-06-21T19:43:14.966974Z",
+      "action": "spec locked: 13-audit-and-readme"
     }
   ]
 }
