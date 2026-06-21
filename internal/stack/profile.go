@@ -16,6 +16,7 @@ package stack
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -37,9 +38,30 @@ type Profile struct {
 // detect.go) keys off these declared signals rather than a hardcoded language
 // switch, so a new profile is selectable by data alone.
 type Signals struct {
-	Files    []string `toml:"files,omitempty"` // root filenames, e.g. "go.mod"
-	Exts     []string `toml:"exts,omitempty"`  // file extensions, e.g. ".go"
-	Priority int      `toml:"priority,omitempty"`
+	Files        []string `toml:"files,omitempty"`         // exact root filenames, e.g. "go.mod"
+	FilePatterns []string `toml:"file_patterns,omitempty"` // glob patterns matched case-insensitively against any filename (marker stacks like Docker)
+	Exts         []string `toml:"exts,omitempty"`          // file extensions, e.g. ".go"
+	Priority     int      `toml:"priority,omitempty"`
+}
+
+// MatchesFile reports whether the base filename name matches any of this profile's
+// FilePatterns. Matching is case-insensitive glob (filepath.Match) — both the
+// pattern and the filename are lowercased first — so "Dockerfile.*" matches
+// "Dockerfile.dev" and "*.dockerfile" matches "app.Dockerfile". There is no brace
+// expansion: ".yml" and ".yaml" must be listed as separate patterns. A malformed
+// pattern never matches (and never panics). name must be a base filename, not a path.
+//
+// This is the marker-file seam: Detect/scoreProfile deliberately do NOT consult
+// FilePatterns (they stay winner-take-all over Files/Exts); MarkerProfiles uses this
+// to surface marker stacks additively. See the marker_detection_additive decision.
+func (s Signals) MatchesFile(name string) bool {
+	lname := strings.ToLower(name)
+	for _, pat := range s.FilePatterns {
+		if ok, err := filepath.Match(strings.ToLower(pat), lname); err == nil && ok {
+			return true
+		}
+	}
+	return false
 }
 
 // PackageManager is one package-manager variant the stack may use (npm/pnpm/yarn,
