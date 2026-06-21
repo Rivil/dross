@@ -2,6 +2,12 @@
 
 Manage the two-tier rules system conversationally. The CLI does the heavy lifting; this prompt only handles intent → flags + confirmation.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): take scope, severity, and wording as separate proposal turns, confirming the composed rule with a one-line summary.
+
+## 0. Pre-flight
+
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
+
 ## Parse intent
 
 Read the user's freeform input. Recognise these intents:

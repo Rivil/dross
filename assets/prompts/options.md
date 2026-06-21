@@ -2,9 +2,11 @@
 
 Full editor for every dross-managed setting. Designed to be run rarely (after milestone changes, when adopting new conventions, when something feels stale) and to take its time. **Save-per-option:** every change persists immediately via the relevant `dross X set` — stopping mid-way never loses prior edits.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): a section-pick gate first, then walk each setting one decision per turn — never one mega-form over every setting.
+
 ## 0. Pre-flight
 
-1. `dross rule show` — treat as MUST-FOLLOW.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Confirm `.dross/` exists. If not, suggest `/dross-init` (greenfield) or `/dross-onboard` (existing repo) and stop.
 3. Capture current state once, up front:
    - `dross project show` — every project.toml field

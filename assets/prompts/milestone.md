@@ -2,9 +2,11 @@
 
 Scope a milestone — populate `.dross/milestones/<version>.toml` with title, success criteria, non-goals, and the ordered phase list. Run once per milestone; expect ~5-15 minutes depending on whether a `Brief.md`-style source doc exists.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): walk success criteria one at a time, then non-goals, then phase order — each its own segment, never one batched dump.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat the output as MUST-FOLLOW for this session.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Resolve the milestone version from `$ARGUMENTS`:
    - `<version>` (e.g. `v0.1`, `v1.0`) → use it directly.
    - empty → ask the user via `AskUserQuestion`. Default to next minor if a previous milestone exists, else `v0.1`.

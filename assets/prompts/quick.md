@@ -8,9 +8,11 @@ Use when:
 
 `$ARGUMENTS` is the **freeform task description** — what you want done, in plain prose. The model interprets the intent and proposes the change.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): in pair mode, surface the approach and any red-test choice as their own propose-and-react turns.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat the output as MUST-FOLLOW.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Read `.dross/project.toml` — `runtime.*` (test/typecheck/lint), `paths.*`, `repo.commit_convention`, `repo.git_main_branch`, `stack.locked`.
 3. Read `.dross/state.json`. Note `current_phase` (may be empty — that's fine, standalone mode).
 4. **Verify the current branch matches the mode** with `git symbolic-ref --short HEAD`:

@@ -2,9 +2,11 @@
 
 Bootstrap dross in a **greenfield** repo. Walk the user through vision → market → stack → scaffold → runtime → verify → rules. Run once per project; expect ~30 minutes.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): walk vision → stack → runtime one decision at a time, proposing a default the user accepts or steers — never one batched questionnaire.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat the output as MUST-FOLLOW for the rest of this session.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Confirm cwd is the intended project root. If `.dross/` already exists, stop and tell the user to use `/dross-onboard` or `dross init --force`.
 3. Run `dross init`. It creates `.dross/`, the empty `project.toml`, `state.json`, `rules.toml`, and seeds `profile.toml` from GSD if available.
 

@@ -4,9 +4,11 @@ Triage inbound issues from the project's issue board — bugs and feature reques
 
 This is the inbound half of board sync. The outbound half (planning artefacts → board issues) is automatic in `/dross-milestone`, `/dross-plan`, `/dross-execute`, `/dross-verify`, `/dross-ship`. This command pulls the other direction.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): triage one issue per turn, leading with a recommended destination the user accepts or redirects.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat output as MUST-FOLLOW.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Confirm board sync is on: `dross project get remote.board_sync`. If `false`, tell the user to run `dross issue enable` (and set `[remote].provider`, `api_base`, `auth_env` if unset) and stop — there's no board to read otherwise.
 
 ## 1. Pull the inbox
