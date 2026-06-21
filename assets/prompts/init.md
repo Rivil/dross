@@ -2,28 +2,31 @@
 
 Bootstrap dross in a **greenfield** repo. Walk the user through vision → market → stack → scaffold → runtime → verify → rules. Run once per project; expect ~30 minutes.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): walk vision → stack → runtime one decision at a time, proposing a default the user accepts or steers — never one batched questionnaire.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat the output as MUST-FOLLOW for the rest of this session.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Confirm cwd is the intended project root. If `.dross/` already exists, stop and tell the user to use `/dross-onboard` or `dross init --force`.
 3. Run `dross init`. It creates `.dross/`, the empty `project.toml`, `state.json`, `rules.toml`, and seeds `profile.toml` from GSD if available.
 
 ## 1. Vision
 
-Ask via `AskUserQuestion`:
-- Project name?
-- One-sentence description?
-- Core value: what changes for the user when this exists?
-- Target audience?
-- Three explicit non-goals (things this project will NOT do)?
+Walk the identity fields **one field per turn** — never one bundled questionnaire. For each, propose a sensible default and ask via `AskUserQuestion` (accept / change), then move to the next:
 
-Save:
+1. Project name (default = directory name)
+2. One-sentence description
+3. Core value — what changes for the user when this exists
+4. Target audience
+5. Three explicit non-goals (things this project will NOT do)
+
+Save each as it lands:
 ```
 dross project set project.name           "<name>"
 dross project set project.description    "<description>"
 dross project set goals.core_value       "<core value>"
 ```
-Non-goals + audience: edit `.dross/project.toml` directly under `[goals]`.
+Non-goals + audience: edit `.dross/project.toml` directly under `[goals]`. Confirm the captured identity with a **one-line summary** — never paste `project.toml` back.
 
 ## 2. Market scan
 

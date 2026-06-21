@@ -1,93 +1,9 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
-  "last_activity": "2026-06-21T18:34:42.739854Z",
-  "last_action": "completed 11-retrofit-core-loop",
+  "last_activity": "2026-06-21T19:26:01.077319Z",
+  "last_action": "completed 12-retrofit-setup-commands",
   "history": [
-    {
-      "at": "2026-06-21T15:09:18.35654Z",
-      "action": "plan reviewed: 10-interaction-contract (0 blocking, 3 flags)"
-    },
-    {
-      "at": "2026-06-21T15:12:18.233264Z",
-      "action": "executed t-1 (Add interaction-contract builtin rule)"
-    },
-    {
-      "at": "2026-06-21T15:15:11.330323Z",
-      "action": "executed t-2 (Author reusable interaction snippet)"
-    },
-    {
-      "at": "2026-06-21T15:17:07.863613Z",
-      "action": "executed t-4 (Seed interaction-audit checklist)"
-    },
-    {
-      "at": "2026-06-21T15:20:14.555277Z",
-      "action": "executed t-3 (Reconcile rule/snippet/spec.md; cross-reference)"
-    },
-    {
-      "at": "2026-06-21T15:22:18.076566Z",
-      "action": "executed t-5 (Wire snippet into install; verify symlink)"
-    },
-    {
-      "at": "2026-06-21T15:24:50.259715Z",
-      "action": "set current_phase_status=partial"
-    },
-    {
-      "at": "2026-06-21T15:24:50.267073Z",
-      "action": "phase 10 executed (5/6 done; t-6 mechanical landed, manual @-include pilot pending human)"
-    },
-    {
-      "at": "2026-06-21T15:31:56.469466Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-21T15:31:56.475921Z",
-      "action": "verified 10-interaction-contract: partial (3/4 covered, c-3 weak pending manual pilot, mutation 0.81 no true survivors)"
-    },
-    {
-      "at": "2026-06-21T15:38:26.449819Z",
-      "action": "set current_phase=10-interaction-contract"
-    },
-    {
-      "at": "2026-06-21T15:38:26.457019Z",
-      "action": "spec amended: 10-interaction-contract snippet_delivery -\u003e dross interaction show CLI emitter (pilot disproved nested @-expansion)"
-    },
-    {
-      "at": "2026-06-21T15:42:25.390992Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-21T15:42:25.397233Z",
-      "action": "plan amended: 10-interaction-contract (+t-7 dross interaction show emitter, t-6 reworked to wire emitter; 7 tasks across 4 waves)"
-    },
-    {
-      "at": "2026-06-21T15:49:27.629981Z",
-      "action": "plan reviewed: 10-interaction-contract (0 blocking, 1 flag — t-6 audit-date contract weak)"
-    },
-    {
-      "at": "2026-06-21T15:53:54.275767Z",
-      "action": "executed t-7 (Add dross interaction show emitter)"
-    },
-    {
-      "at": "2026-06-21T15:56:39.618259Z",
-      "action": "executed t-8 (Purge stale @-include from shipped rule + snippet)"
-    },
-    {
-      "at": "2026-06-21T16:00:56.372556Z",
-      "action": "executed t-6 (Wire emitter into spec.md pre-flight; pilot resolved)"
-    },
-    {
-      "at": "2026-06-21T16:01:10.097625Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-21T16:01:10.103918Z",
-      "action": "phase 10-interaction-contract executed (8/8 done; emitter delivery wired, pilot resolved)"
-    },
-    {
-      "at": "2026-06-21T16:07:39.080784Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-06-21T16:07:39.086307Z",
       "action": "verified 10-interaction-contract: pass (4/4 covered, c-3 weak-\u003ecovered via emitter; mutation Lived=0/efficacy 1.00, rollup 0.81 not-covered conflation)"
@@ -203,6 +119,90 @@
     {
       "at": "2026-06-21T18:34:42.739854Z",
       "action": "completed 11-retrofit-core-loop"
+    },
+    {
+      "at": "2026-06-21T18:38:05.190986Z",
+      "action": "created 12-retrofit-setup-commands"
+    },
+    {
+      "at": "2026-06-21T18:44:45.877645Z",
+      "action": "set current_phase=12-retrofit-setup-commands"
+    },
+    {
+      "at": "2026-06-21T18:44:45.884089Z",
+      "action": "spec locked: 12-retrofit-setup-commands"
+    },
+    {
+      "at": "2026-06-21T18:54:19.138777Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T18:54:19.146452Z",
+      "action": "plan locked: 12-retrofit-setup-commands (10 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-21T18:56:42.863398Z",
+      "action": "plan reviewed: 12-retrofit-setup-commands (0 blocking, 4 flags); t-1/t-9 patched"
+    },
+    {
+      "at": "2026-06-21T19:01:50.621711Z",
+      "action": "executed t-1 (Wire emitter + contract phrase into 7 prompts)"
+    },
+    {
+      "at": "2026-06-21T19:02:42.89635Z",
+      "action": "executed t-2 (Add grep guards for emitter + contract)"
+    },
+    {
+      "at": "2026-06-21T19:04:45.499597Z",
+      "action": "executed t-3 (Rewrite init + onboard identity walks)"
+    },
+    {
+      "at": "2026-06-21T19:05:59.596671Z",
+      "action": "executed t-4 (Rewrite options section-pick gate + walk)"
+    },
+    {
+      "at": "2026-06-21T19:07:09.789515Z",
+      "action": "executed t-5 (Rewrite milestone scoping walk)"
+    },
+    {
+      "at": "2026-06-21T19:08:38.519106Z",
+      "action": "executed t-6 (Mirror execute gates into quick; walk inbox)"
+    },
+    {
+      "at": "2026-06-21T19:10:16.036832Z",
+      "action": "executed t-7 (Rewrite rule.md interactive turns)"
+    },
+    {
+      "at": "2026-06-21T19:11:57.138849Z",
+      "action": "executed t-8 (Add anchor tests + generic no-bundle net)"
+    },
+    {
+      "at": "2026-06-21T19:13:26.486189Z",
+      "action": "executed t-9 (Flip 7 audit rows to conforming)"
+    },
+    {
+      "at": "2026-06-21T19:14:27.494458Z",
+      "action": "executed t-10 (Add audit guard; make install; observe green)"
+    },
+    {
+      "at": "2026-06-21T19:14:38.10669Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-21T19:14:38.112973Z",
+      "action": "phase 12-retrofit-setup-commands executed (10/10 done)"
+    },
+    {
+      "at": "2026-06-21T19:20:23.694996Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-21T19:20:23.701995Z",
+      "action": "verified 12-retrofit-setup-commands: pass (5/5 covered; mutation 0.81 package-scoped, not a phase signal — Lived=0)"
+    },
+    {
+      "at": "2026-06-21T19:26:01.077319Z",
+      "action": "completed 12-retrofit-setup-commands"
     }
   ]
 }

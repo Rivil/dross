@@ -2,9 +2,11 @@
 
 Adopt dross into an **existing** repo. Lighter than `/dross-init`: no scaffolding, just signal scan → confirm → capture → verify.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): confirm each detected signal and captured setting one at a time, proposing a default the user accepts or corrects.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat the output as MUST-FOLLOW.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Stop if `.dross/` already exists (suggest `dross onboard --force`).
 3. Run `dross onboard`. It scans signal files (Dockerfile, package.json, lockfiles, tsconfig, go.mod, *.csproj, project.godot, .github/workflows) and writes a draft `project.toml`.
 
@@ -12,14 +14,14 @@ Read the printed "Detected" list and use it to inform the questions below.
 
 ## 1. Identity
 
-Ask: name (default = directory name), one-line description, core value, audience, non-goals.
+Walk the identity fields **one field per turn** — never one bundled ask. For each, propose a default and confirm via `AskUserQuestion` (accept / change), then move on: name (default = directory name), one-line description, core value, audience, non-goals.
 
 ```
 dross project set project.name        "<name>"
 dross project set project.description "<description>"
 dross project set goals.core_value    "<core value>"
 ```
-Audience + non-goals: edit `project.toml` directly.
+Audience + non-goals: edit `project.toml` directly. Confirm the captured identity with a **one-line summary** — never paste `project.toml` back.
 
 ## 2. Stack confirmation
 

@@ -114,56 +114,61 @@ retrofitted under Setup & config in phase 12.)
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Resolve milestone version | single AskUserQuestion, default = next minor | 🟡 | not yet emitter-wired |
-| Title | proposed default, accept/override | 🟡 | |
-| Success criteria | accept/revise set | 🟡 | could go per-criterion |
-| Non-goals | accept/revise set | 🟡 | |
-| Phase breakdown | confirm/revise order | 🟡 | |
+| Resolve milestone version | single AskUserQuestion, default = next minor | ✅ | pre-flight runs `dross interaction show` |
+| Title | proposed default, accept/override | ✅ | own turn |
+| Success criteria | one criterion per turn, accept/reword/drop | ✅ | `milestone_walk` — per-criterion walk like spec |
+| Non-goals | own segment, accept/revise | ✅ | separate segment, not bundled with criteria |
+| Phase breakdown | confirm/revise order | ✅ | own turn; wrap confirms via count line, never a toml dump |
 
 ### dross-quick
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Approach approval | proceed/steer (pair-mode) | 🟡 | not yet emitter-wired |
-| Red test outcome | fix/mark-failed/abort | 🟡 | |
+| Approach approval | proceed/steer/show/abort (pair-mode) | ✅ | `quick_inbox_mirror` — mirrors execute §1c, adapted to a single task |
+| Red test outcome | fix/abort | ✅ | mirrors execute §1e (no task-loop mark-failed) |
 
 ### dross-init
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Vision / core value | freeform + proposal | ⬜ | |
-| Stack choices | per-choice confirmation | ⬜ | |
-| Runtime mode | options | ⬜ | |
-| Rules import | accept/edit | ⬜ | |
+| Identity walk | one field per turn (name → … → non-goals) | ✅ | per-field, not one bundled questionnaire; confirmed by one-line summary |
+| Stack choices | per-choice confirmation | ✅ | one decision per turn |
+| Runtime mode | options | ✅ | own turn |
+| Rules import | accept/edit | ✅ | own turn |
 
 ### dross-onboard
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Detected-signal confirmation | per-signal accept/correct | ⬜ | |
-| Runtime capture | options | ⬜ | |
-| Rule import | accept/edit | ⬜ | |
+| Identity capture | one field per turn | ✅ | summary-confirm, never a `project.toml` paste-back |
+| Detected-signal confirmation | per-signal accept/correct | ✅ | one signal per turn |
+| Runtime capture | options | ✅ | own turn |
+| Rule import | accept/edit | ✅ | own turn |
 
 ### dross-options
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Which setting to change | picklist | ⬜ | |
-| New value per setting | proposal + react | ⬜ | |
+| Section pick | section-pick gate (multiSelect), its own turn | ✅ | `options_walk` — gate distinct from the per-setting turn |
+| Which setting to change | Keep · Change · Skip, one setting at a time | ✅ | walked within chosen section only |
+| New value per setting | proposal + react | ✅ | save-per-option |
+| Wrap summary | compact one-line-per-category | ✅ | never pastes the full `project.toml` |
 
 ### dross-rule
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Add / list / remove / promote | action select | ⬜ | |
-| Rule text + severity | proposal | ⬜ | |
+| Action select | intent → add/list/remove/promote | ✅ | resolved in Parse intent, its own step |
+| Scope | proposal turn (project / global) | ✅ | separate proposal turn |
+| Severity | proposal turn (hard / soft) | ✅ | separate proposal turn |
+| Wording | proposal turn (accept / reword) | ✅ | confirmed by one-line summary, never a rules-block dump |
 
 ### dross-inbox
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Per-issue triage | milestone/phase/quick/drop | ⬜ | |
-| Target destination | picklist | ⬜ | |
+| Per-issue triage | one issue per turn (phase / milestone / quick / dismiss / skip) | ✅ | never bundles multiple issues into one turn |
+| Target destination | routed by the triage choice | ✅ | follows from the per-issue decision |
 
 ---
 

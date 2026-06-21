@@ -2,9 +2,11 @@
 
 Scope a milestone — populate `.dross/milestones/<version>.toml` with title, success criteria, non-goals, and the ordered phase list. Run once per milestone; expect ~5-15 minutes depending on whether a `Brief.md`-style source doc exists.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): walk success criteria one at a time, then non-goals, then phase order — each its own segment, never one batched dump.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat the output as MUST-FOLLOW for this session.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Resolve the milestone version from `$ARGUMENTS`:
    - `<version>` (e.g. `v0.1`, `v1.0`) → use it directly.
    - empty → ask the user via `AskUserQuestion`. Default to next minor if a previous milestone exists, else `v0.1`.
@@ -34,9 +36,9 @@ Save: `dross milestone set <version> milestone.title "<title>"`
 
 The acceptance bar for "this milestone is done." Aim for 2-5 criteria — sharp, testable, observable from outside the system.
 
-If `Brief.md` is present, extract candidates from any "Milestone done when:" / "Acceptance:" / "v0.1 complete when:" section. Propose them; user accepts/edits/adds.
+If `Brief.md` is present, extract candidates from any "Milestone done when:" / "Acceptance:" / "v0.1 complete when:" section as the proposal. Otherwise ask once (freeform): **"What has to be true for this milestone to be considered done? 2-5 outcomes that you could write a test or observation for."**
 
-Otherwise ask: **"What has to be true for this milestone to be considered done? 2-5 outcomes that you could write a test or observation for."**
+Then walk the candidates **one criterion per turn** — mirroring `/dross-spec`: tighten each into a one-liner and confirm it via `AskUserQuestion` (accept / reword / drop) before moving to the next. Don't echo the whole growing list back each turn; a short "added" is enough.
 
 **Quality bar — push back if a criterion fails any of these:**
 - Not externally observable (e.g. "code is clean" — not testable)
@@ -86,7 +88,7 @@ Phase issues created later by `/dross-plan` attach to this milestone automatical
 
 ## 7. Wrap
 
-Run `dross validate`. Should be green. Then print:
+Run `dross validate`. Should be green. Then confirm with the count-line summary below — never paste `milestone.toml` back:
 
 ```
 Milestone <version> scoped: <title>

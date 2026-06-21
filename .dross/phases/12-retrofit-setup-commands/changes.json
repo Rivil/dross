@@ -1,0 +1,93 @@
+{
+  "phase": "12-retrofit-setup-commands",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "assets/prompts/init.md",
+        "assets/prompts/onboard.md",
+        "assets/prompts/options.md",
+        "assets/prompts/rule.md",
+        "assets/prompts/inbox.md",
+        "assets/prompts/quick.md",
+        "assets/prompts/milestone.md"
+      ],
+      "commit": "c69f501",
+      "completed_at": "2026-06-21T19:01:50.607419Z",
+      "notes": "feature: interaction contract delivery · 7 setup prompts @ assets/prompts/ · wire dross interaction show emitter + contract reference into init/onboard/options/rule/inbox/quick/milestone pre-flights"
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/interaction_setupcmds_test.go"
+      ],
+      "commit": "325aba3",
+      "completed_at": "2026-06-21T19:14:27.472473Z",
+      "notes": "feature: interaction audit · TestSetupAuditSectionsConform @ internal/cmd/interaction_setupcmds_test.go · guards that all 7 setup audit rows stay conforming; suite observed green after make install re-link"
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/interaction_setupcmds_test.go"
+      ],
+      "commit": "71d1a62",
+      "completed_at": "2026-06-21T19:02:42.882073Z",
+      "notes": "feature: interaction contract delivery · TestSetupPromptsWireEmitter/ReferenceContract @ internal/cmd/interaction_setupcmds_test.go · per-prompt grep guards that the emitter call and contract phrase are present in all 7 setup prompts"
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/init.md",
+        "assets/prompts/onboard.md"
+      ],
+      "commit": "b9b9d1f",
+      "completed_at": "2026-06-21T19:04:45.485295Z",
+      "notes": "feature: conversational setup UX · init §1 Vision / onboard §1 Identity @ assets/prompts/ · identity captured one field per turn, confirmed by one-line summary instead of a bundled questionnaire or toml paste-back"
+    },
+    "t-4": {
+      "files": [
+        "assets/prompts/options.md"
+      ],
+      "commit": "33f86b1",
+      "completed_at": "2026-06-21T19:05:59.581877Z",
+      "notes": "feature: conversational setup UX · options Section pick gate @ assets/prompts/options.md · a section-pick gate turn precedes the per-setting Keep/Change/Skip walk so a one-setting change skips the other ten sections"
+    },
+    "t-5": {
+      "files": [
+        "assets/prompts/milestone.md"
+      ],
+      "commit": "032e10c",
+      "completed_at": "2026-06-21T19:07:09.777481Z",
+      "notes": "feature: conversational setup UX · milestone §3 Success criteria @ assets/prompts/milestone.md · criteria walked one per turn (accept/reword/drop) like spec, scoping confirmed by count-line summary not a toml dump"
+    },
+    "t-6": {
+      "files": [
+        "assets/prompts/quick.md",
+        "assets/prompts/inbox.md"
+      ],
+      "commit": "e135347",
+      "completed_at": "2026-06-21T19:08:38.505412Z",
+      "notes": "feature: conversational setup UX · quick §2 gates / inbox §2 triage @ assets/prompts/ · quick reuses execute's proceed/steer/show/abort + fix/abort shape; inbox triages one issue per turn, never bundling"
+    },
+    "t-7": {
+      "files": [
+        "assets/prompts/rule.md"
+      ],
+      "commit": "dfea03b",
+      "completed_at": "2026-06-21T19:10:16.025741Z",
+      "notes": "feature: conversational setup UX · rule §Add @ assets/prompts/rule.md · scope/severity/wording walked as separate proposal turns, written rule confirmed by one-line summary instead of dumping the merged rules block"
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/interaction_setupcmds_test.go"
+      ],
+      "commit": "287f6f9",
+      "completed_at": "2026-06-21T19:11:57.125721Z",
+      "notes": "feature: interaction contract delivery · TestSetupPromptDecisionAnchors/NoBundledTurns/NoArtifactDump @ internal/cmd/interaction_setupcmds_test.go · per-prompt anchors + generic one-AskUserQuestion net + no-paste directive guards for the setup family's c-3/c-4"
+    },
+    "t-9": {
+      "files": [
+        "docs/interaction-audit.md"
+      ],
+      "commit": "ef04168",
+      "completed_at": "2026-06-21T19:13:26.474216Z",
+      "notes": "feature: interaction audit · Setup \u0026 config section @ docs/interaction-audit.md · all 7 setup commands marked conforming with decision points reconciled to the retrofitted prompts"
+    }
+  }
+}

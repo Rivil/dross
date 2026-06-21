@@ -1,0 +1,58 @@
+[verify]
+  phase = "12-retrofit-setup-commands"
+  generated_at = 2026-06-21T19:15:20.345304Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8069948186528497
+  mutants_killed = 623
+  mutants_survived = 149
+  mutants_not_covered = 149
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/interaction_setupcmds_test.go:TestSetupPromptsWireEmitter"]
+  notes = "Per-prompt assertion that each of the 7 setup prompts contains `dross interaction show` and no dead @-include. Fails if any prompt drops the emitter."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/interaction_setupcmds_test.go:TestSetupPromptsReferenceContract"]
+  notes = "Per-prompt assertion that each prompt carries the contract phrase 'interaction playbook'. Fails if a prompt drops the reference."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/cmd/interaction_setupcmds_test.go:TestSetupPromptDecisionAnchors",
+    "internal/cmd/interaction_setupcmds_test.go:TestSetupNoBundledTurns",
+  ]
+  notes = "Per-prompt anchors (one field/criterion/issue per turn; options gate; quick tokens; rule separate turns) plus a generic exactly-one-AskUserQuestion net over single-decision sections. Fails if a turn bundles unrelated decisions."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/interaction_setupcmds_test.go:TestSetupNoArtifactDump"]
+  notes = "Asserts each of the 5 config-composing prompts (init/onboard/options/rule/milestone) carries a 'never paste ... back' directive. Fails if a prompt would dump the composed artifact instead of a summary."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [
+    "internal/cmd/interaction_setupcmds_test.go:TestSetupAuditSectionsConform",
+    "internal/cmd/interaction_audit_test.go:TestInteractionAuditEnumeratesEveryInteractiveCommand",
+  ]
+  notes = "Audit doc has a per-decision-point table for each of the 7 setup commands, all marked conforming (✅, no ⬜/🟡/❌). Fails if a section regresses or is missing."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran package-wide over internal/cmd (gremlins is not diff-scoped), so the 0.81 score and all 149 surviving mutants are PRE-EXISTING gaps in production Go files this phase did not touch (profile.go, ship.go, stats.go, issue.go, codex.go, env.go, rule.go, verify.go, doctor.go and more). Lived=0 means every COVERED mutant was killed (efficacy 1.00); the 149 are NOT-COVERED (no test exercises them) and are unrelated to phase 12. This phase changed only prompt/doc markdown (no mutation adapter) and Go test files (gremlins does not mutate tests). Not a phase signal — same package-scoping artifact recorded for phase 11. Package-wide mutation gaps are a /dross-quality concern, not this phase's verify."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped 7 prompts + interaction-audit.md: no mutation adapter for .md (the entire phase-12 diff). Criterion coverage is enforced by the grep/anchor tests in interaction_setupcmds_test.go, which read the markdown directly."
