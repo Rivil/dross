@@ -3,13 +3,9 @@
   "current_milestone": "v0.3",
   "current_phase": "12-retrofit-setup-commands",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-21T18:54:19.146452Z",
-  "last_action": "plan locked: 12-retrofit-setup-commands (10 tasks across 3 waves)",
+  "last_activity": "2026-06-21T18:56:42.863398Z",
+  "last_action": "plan reviewed: 12-retrofit-setup-commands (0 blocking, 4 flags); t-1/t-9 patched",
   "history": [
-    {
-      "at": "2026-06-21T15:22:18.076566Z",
-      "action": "executed t-5 (Wire snippet into install; verify symlink)"
-    },
     {
       "at": "2026-06-21T15:24:50.259715Z",
       "action": "set current_phase_status=partial"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-21T18:54:19.146452Z",
       "action": "plan locked: 12-retrofit-setup-commands (10 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-21T18:56:42.863398Z",
+      "action": "plan reviewed: 12-retrofit-setup-commands (0 blocking, 4 flags); t-1/t-9 patched"
     }
   ]
 }

@@ -16,9 +16,10 @@ files         = [
 ]
 description   = """
 Add `dross interaction show` beside `dross rule show` in each prompt's pre-flight,
-and an intro line carrying the literal phrase "interaction playbook". rule.md and
-inbox.md have no pre-flight section yet — add the emitter under a new pre-flight
-step, NOT as a dead @-include.
+and an intro line carrying the literal phrase "interaction playbook". Most prompts
+already have a pre-flight; rule.md has none yet — add the emitter under a new
+pre-flight step there, NOT as a dead @-include. inbox.md already has `## 0.
+Pre-flight` — add the emitter to the existing step, don't duplicate it.
 """
 covers        = ["c-1", "c-2"]
 test_contract = [
@@ -178,7 +179,6 @@ covers        = ["c-5"]
 depends_on    = ["t-3", "t-4", "t-5", "t-6", "t-7"]
 test_contract = [
   "if any of the 7 setup rows keeps a ⬜/🟡/❌ marker, t-10 TestSetupAuditSectionsConform fails for that command",
-  "if a rewritten prompt's decision points don't match its audit row, the reconciliation is incomplete (caught in review)",
 ]
 status        = "pending"
 
