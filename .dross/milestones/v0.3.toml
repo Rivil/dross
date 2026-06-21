@@ -1,0 +1,11 @@
+phases = ["10-interaction-contract", "11-retrofit-core-loop", "12-retrofit-setup-commands", "13-audit-and-readme"]
+
+[milestone]
+  version = "v0.3"
+  title = "Conversational command UX across the dross loop"
+  status = "active"
+  started = "2026-06-21"
+
+[scope]
+  success_criteria = ["A single interaction contract — 'propose-and-react, one decision per turn' — is documented as a rule plus a reusable prompt snippet, and every interactive dross command prompt references it (grep-verifiable).", "Each interactive command (milestone, spec, plan, execute, options, rule, init, onboard, quick, inbox) surfaces decisions one at a time with a proposed default the user accepts or steers — never batching unrelated questions or dumping a full multi-step plan for blanket approval.", "No interactive prompt fires a single AskUserQuestion bundling multiple unrelated decisions; an audit checklist maps each command to its decision points and confirms the propose-and-react pattern.", "The interaction model is documented in the README as a first-class behaviour of the dross loop."]
+  non_goals = ["No new commands or verbs — this is a behaviour-preserving refactor of existing interactive commands' interaction style, not a surface expansion.", "No changes to the underlying spec→plan→execute→verify→ship semantics or .dross/ state schemas; only the question/approval choreography changes.", "No runtime enforcement linter — the contract is verified by audit/review, not a Go-level check that blocks a command for violating it."]

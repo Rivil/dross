@@ -131,6 +131,14 @@ var Builtins = []Resolved{
 			Text:     "Subagents may fan out freely for read-only work — search, code-mapping, analysis, independent verification — and you should when it widens coverage or saves wall-clock. But writing and deciding stay gated: in pair mode, get explicit user approval before writing code or finalizing; only `--solo` authorizes unattended writes. A fan-out agent returns findings to the main loop and never silently edits, commits, or finalizes on the user's behalf.",
 		},
 	},
+	{
+		Scope: "builtin",
+		Rule: Rule{
+			ID:       "dross-interaction-contract",
+			Severity: Hard,
+			Text:     "Drive interactive slash commands as a conversation, not a broadcast: surface one decision per turn, propose a default and let the user react (accept / steer), and never wall-of-text them with batched questions or a composed artifact. Confirm a written artifact in a one-line summary and never paste the build artifact back. The full playbook lives in the `_interaction.md` snippet, emitted verbatim by `dross interaction show`.",
+		},
+	},
 }
 
 // Render produces the <rules> block injected into prompt context.

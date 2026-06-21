@@ -1,0 +1,82 @@
+{
+  "phase": "10-interaction-contract",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/rules/rules.go",
+        "internal/rules/rules_test.go"
+      ],
+      "commit": "9e64ac0",
+      "completed_at": "2026-06-21T15:12:18.215974Z",
+      "notes": "feature: interaction contract · dross-interaction-contract builtin @ internal/rules/rules.go · terse propose-and-react invariant injected into every dross rule show, names _interaction.md"
+    },
+    "t-2": {
+      "files": [
+        "assets/prompts/_interaction.md",
+        "internal/cmd/interaction_snippet_test.go",
+        "internal/cmd/commands_parity_test.go"
+      ],
+      "commit": "843d285",
+      "completed_at": "2026-06-21T15:15:11.317066Z",
+      "notes": "feature: interaction contract · _interaction.md @ assets/prompts/_interaction.md · shared propose-and-react playbook (one decision/turn, no-walls, never-paste-artifact) that interactive prompts @-include"
+    },
+    "t-3": {
+      "files": [
+        "internal/rules/rules_test.go",
+        "assets/prompts/_interaction.md",
+        "assets/prompts/spec.md"
+      ],
+      "commit": "0f3ddfe",
+      "completed_at": "2026-06-21T15:20:14.54108Z",
+      "notes": "feature: interaction contract · TestInteractionContractNoDrift @ internal/rules/rules_test.go · drift guards (terse-cap, canonical phrases in both rule+snippet, spec.md defers to snippet)"
+    },
+    "t-4": {
+      "files": [
+        "docs/interaction-audit.md",
+        "internal/cmd/interaction_audit_test.go"
+      ],
+      "commit": "fe9f9bb",
+      "completed_at": "2026-06-21T15:17:07.850757Z",
+      "notes": "feature: interaction contract · docs/interaction-audit.md · per-decision-point conformance checklist for all 18 interactive commands, enforced so a new interactive command without a section fails"
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/install_symlink_test.go"
+      ],
+      "commit": "3f8df05",
+      "completed_at": "2026-06-21T15:22:18.063604Z",
+      "notes": "feature: interaction contract · TestMakeInstallLinksInteractionSnippet @ internal/cmd/install_symlink_test.go · proves make install symlinks _interaction.md into the prompts dir (no Makefile change needed)"
+    },
+    "t-6": {
+      "files": [
+        "assets/prompts/spec.md",
+        "docs/interaction-audit.md",
+        "internal/cmd/interaction_pilot_test.go"
+      ],
+      "commit": "33c7520",
+      "completed_at": "2026-06-21T16:00:56.35959Z",
+      "notes": "feature: interaction playbook delivery · TestSpecPilotUsesEmitter @ internal/cmd/interaction_pilot_test.go · wire dross interaction show into spec.md pre-flight; pilot resolved (nested @-include failed, emitter adopted)"
+    },
+    "t-7": {
+      "files": [
+        "assets/embed.go",
+        "internal/cmd/interaction.go",
+        "cmd/dross/main.go",
+        "internal/cmd/interaction_test.go"
+      ],
+      "commit": "af06596",
+      "completed_at": "2026-06-21T15:53:54.263982Z",
+      "notes": "feature: interaction playbook delivery · interactionShow @ internal/cmd/interaction.go · dross interaction show prints the embedded propose-and-react playbook verbatim from the binary for prompt injection"
+    },
+    "t-8": {
+      "files": [
+        "internal/rules/rules.go",
+        "internal/rules/rules_test.go",
+        "assets/prompts/_interaction.md"
+      ],
+      "commit": "6334c60",
+      "completed_at": "2026-06-21T15:56:39.606389Z",
+      "notes": "feature: interaction playbook delivery · dross-interaction-contract @ internal/rules/rules.go · repoint shipped rule + snippet header from dead @-include to the dross interaction show emitter"
+    }
+  }
+}

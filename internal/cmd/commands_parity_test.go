@@ -66,6 +66,8 @@ func repoRootFromTest(t *testing.T) string {
 
 // mdNamesIn returns the set of *.md basenames in dir, with prefix and the .md
 // suffix stripped. Non-.md files and entries lacking the prefix are skipped.
+// Underscore-prefixed files (e.g. _interaction.md) are partials @-included by
+// other prompts — they are not command-backed and are excluded from parity.
 func mdNamesIn(t *testing.T, dir, prefix string) map[string]bool {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
@@ -77,6 +79,9 @@ func mdNamesIn(t *testing.T, dir, prefix string) map[string]bool {
 		n := e.Name()
 		if e.IsDir() || !strings.HasSuffix(n, ".md") || !strings.HasPrefix(n, prefix) {
 			continue
+		}
+		if strings.HasPrefix(n, "_") {
+			continue // @-included partial, not a command-backed prompt
 		}
 		out[strings.TrimSuffix(strings.TrimPrefix(n, prefix), ".md")] = true
 	}

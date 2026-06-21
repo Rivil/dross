@@ -3,7 +3,7 @@ phases = ["08-language-profiles", "09-marker-file-detection"]
 [milestone]
   version = "v0.2"
   title = "Multi-language stack profiles"
-  status = "active"
+  status = "complete"
   started = "2026-06-20"
 
 [scope]

@@ -1,0 +1,52 @@
+[phase]
+id        = "10-interaction-contract"
+title     = "Interaction contract"
+milestone = "v0.3"
+
+[[criteria]]
+id   = "c-1"
+text = "The propose-and-react contract is encoded as a rule that appears in `dross rule show` output at hard severity, with crisp do/don't text, and internal/rules tests assert its presence."
+
+[[criteria]]
+id   = "c-2"
+text = "A single reusable prompt snippet (e.g. assets/prompts/_interaction.md) spells out the full pattern — propose-default-and-react, one decision per turn, no walls of text, never paste the build artifact back — and `make install` links it into ~/.claude/dross/prompts/ so any command can reference it."
+
+[[criteria]]
+id   = "c-3"
+text = "The mechanism by which a command references the snippet is decided and demonstrated working end-to-end on one pilot command: the installed prompt resolves the reference and the contract text reaches the model, so phases 11-13 repeat a proven pattern instead of inventing one."
+
+[[criteria]]
+id   = "c-4"
+text = "An audit-checklist artifact (docs/interaction-audit.md) enumerates every interactive command and its decision points at per-decision-point granularity, seeded and ready for phases 11-13 to tick off, giving the milestone's anti-batching audit a concrete home."
+
+[[decisions]]
+key    = "rule_tier"
+choice = "Encode the contract as a Go builtin rule in internal/rules/rules.go (alongside dross-agent-gate), not a project rule in .dross/rules.toml."
+why    = "It is a tool-wide behavioural invariant that must ship with dross and be present on every install, non-removable per-repo — exactly the builtin category. Trade-off accepted: editing it needs a recompile rather than a CLI call."
+locked = true
+
+[[decisions]]
+key    = "snippet_delivery"
+choice = "Interactive prompts pull the contract in via a `dross interaction show` CLI emitter (mirroring `dross rule show`), called in each prompt's pre-flight; it prints the playbook verbatim from the binary. The c-3 pilot wires it into spec.md's pre-flight and proves the text reaches the model end-to-end."
+why    = "Pilot in a fresh session disproved nested @-expansion: the wrapper expands the top-level @-include of the prompt, but the prompt's own @-include of the snippet arrives as literal text and never reaches the model. CLI injection is the robust path — guaranteed verbatim, no model-obedience or nesting dependency, grep-verifiable — matching the proven `dross rule show` mechanism. Trade-off accepted: editing the playbook needs a recompile."
+locked = true
+
+[[decisions]]
+key    = "rule_snippet_split"
+choice = "Rule = a few-sentence self-contained invariant (one decision per turn, propose-and-react, no walls, never paste the artifact back), shown to every command via rule show. Snippet = the full playbook with AskUserQuestion patterns and accept/reword/drop examples, pulled in only by interactive prompts. The rule may name the snippet; minimal content overlap."
+why    = "`dross rule show` is injected into every command including non-interactive ones (ship/verify/status), so the rule must stay terse; the heavy playbook belongs in the snippet that only interactive prompts @-include."
+locked = true
+
+[[decisions]]
+key    = "checklist_home"
+choice = "The audit checklist lives at docs/interaction-audit.md (version-controlled, independent of phase lifecycle), with per-decision-point rows mapping each interactive command to its decision points and pattern-conformance."
+why    = "A stable docs/ home survives after v0.3 closes as living documentation, and phases 11-13 reference and tick it off without reaching into a not-yet-scaffolded phase dir. Per-decision-point granularity is mandated by milestone criterion 3."
+locked = true
+
+[[deferred]]
+text = "The actual per-command retrofit of the interactive commands to the propose-and-react pattern."
+why  = "That is phases 11 (core loop) and 12 (setup commands); phase 10 only ships the rule, snippet, one pilot, and the seeded checklist."
+
+[[deferred]]
+text = "Documenting the interaction model in the README as a first-class behaviour of the loop."
+why  = "That is phase 13 (audit-and-readme), after the retrofits land."

@@ -1,133 +1,9 @@
 {
   "version": "0.2.0.0",
-  "current_milestone": "v0.2",
-  "last_activity": "2026-06-21T13:04:46.388765Z",
-  "last_action": "completed 09-marker-file-detection",
+  "current_milestone": "v0.3",
+  "last_activity": "2026-06-21T16:40:33.3508Z",
+  "last_action": "completed 10-interaction-contract",
   "history": [
-    {
-      "at": "2026-06-20T18:25:24.543658Z",
-      "action": "executed t-8 (seed init/onboard runtime from profile)"
-    },
-    {
-      "at": "2026-06-20T18:26:57.748356Z",
-      "action": "executed t-9 (dross stack loadout emitter)"
-    },
-    {
-      "at": "2026-06-20T18:28:34.570463Z",
-      "action": "executed t-10 (wire loadout into execute prompt)"
-    },
-    {
-      "at": "2026-06-20T18:29:44.01158Z",
-      "action": "executed t-11 (dross stack apply re-sync)"
-    },
-    {
-      "at": "2026-06-20T18:30:16.432859Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-20T18:30:16.438599Z",
-      "action": "phase 07-stack-profiles executed (11/11 done)"
-    },
-    {
-      "at": "2026-06-20T18:39:32.541905Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-20T18:39:32.547552Z",
-      "action": "verified 07-stack-profiles: pass (5/5 covered; phase-diff mutation efficacy 100% / Lived=0; rollup 0.82 package-scoped — not a phase signal)"
-    },
-    {
-      "at": "2026-06-20T18:51:12.226629Z",
-      "action": "completed 07-stack-profiles"
-    },
-    {
-      "at": "2026-06-20T19:22:00.03447Z",
-      "action": "set current_milestone=v0.2"
-    },
-    {
-      "at": "2026-06-20T19:22:00.040937Z",
-      "action": "set version=0.2.0.0"
-    },
-    {
-      "at": "2026-06-20T19:22:31.162181Z",
-      "action": "milestone v0.2 scoped (Multi-language stack profiles): phases 08-language-profiles, 09-marker-file-detection; v0.1 complete; version 0.1.0.13 → 0.2.0.0"
-    },
-    {
-      "at": "2026-06-20T19:34:19.606825Z",
-      "action": "created 08-language-profiles"
-    },
-    {
-      "at": "2026-06-20T19:44:12.872928Z",
-      "action": "set current_phase=08-language-profiles"
-    },
-    {
-      "at": "2026-06-20T19:44:12.880139Z",
-      "action": "spec locked: 08-language-profiles"
-    },
-    {
-      "at": "2026-06-20T19:52:04.568307Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-20T19:52:04.5748Z",
-      "action": "plan locked: 08-language-profiles (6 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-06-20T19:54:11.736276Z",
-      "action": "plan reviewed: 08-language-profiles (0 blocking, 1 flag)"
-    },
-    {
-      "at": "2026-06-20T19:54:58.153613Z",
-      "action": "plan amended: 08-language-profiles (t-3 adds CLI list/show assertion for c-2)"
-    },
-    {
-      "at": "2026-06-20T19:56:33.783895Z",
-      "action": "paused — spec+plan locked for 08-language-profiles, ready to execute t-1"
-    },
-    {
-      "at": "2026-06-21T09:42:19.567884Z",
-      "action": "resumed — ready to execute t-1 (extLang map: .dart/.svelte/.sql)"
-    },
-    {
-      "at": "2026-06-21T09:46:32.852529Z",
-      "action": "executed t-1 (Add .dart/.svelte/.sql to extLang)"
-    },
-    {
-      "at": "2026-06-21T09:53:02.560544Z",
-      "action": "executed t-2 (five embedded language profiles incl. typescript)"
-    },
-    {
-      "at": "2026-06-21T09:54:34.719279Z",
-      "action": "executed t-3 (detection resolves each profile id)"
-    },
-    {
-      "at": "2026-06-21T09:56:43.66003Z",
-      "action": "executed t-4 (AnalyzersFor surfaces each analyzer)"
-    },
-    {
-      "at": "2026-06-21T09:57:35.279875Z",
-      "action": "executed t-5 (ScannersFor stays agnostic-only)"
-    },
-    {
-      "at": "2026-06-21T09:58:37.150008Z",
-      "action": "executed t-6 (runtime seeded for 4, empty for sql)"
-    },
-    {
-      "at": "2026-06-21T09:58:45.913979Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-21T09:58:45.920828Z",
-      "action": "phase 08-language-profiles executed (6/6 done)"
-    },
-    {
-      "at": "2026-06-21T10:03:39.170619Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-21T10:03:39.177503Z",
-      "action": "verified 08-language-profiles: pass (5/5 covered, mutation 0.97)"
-    },
     {
       "at": "2026-06-21T10:14:16.123353Z",
       "action": "completed 08-language-profiles"
@@ -203,6 +79,130 @@
     {
       "at": "2026-06-21T13:04:46.388765Z",
       "action": "completed 09-marker-file-detection"
+    },
+    {
+      "at": "2026-06-21T13:13:14.289712Z",
+      "action": "resumed — handoff cleared (stale, v0.2 shipped); ready to scope v0.3 conversational-command-UX"
+    },
+    {
+      "at": "2026-06-21T13:18:06.655454Z",
+      "action": "set current_milestone=v0.3"
+    },
+    {
+      "at": "2026-06-21T13:18:06.661792Z",
+      "action": "scoped milestone v0.3: 4 criteria, 4 phases (conversational command UX)"
+    },
+    {
+      "at": "2026-06-21T13:53:54.743662Z",
+      "action": "created 10-interaction-contract"
+    },
+    {
+      "at": "2026-06-21T14:44:06.163175Z",
+      "action": "set current_phase=10-interaction-contract"
+    },
+    {
+      "at": "2026-06-21T14:44:06.169539Z",
+      "action": "spec locked: 10-interaction-contract"
+    },
+    {
+      "at": "2026-06-21T15:07:41.73542Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T15:07:41.743506Z",
+      "action": "plan locked: 10-interaction-contract (6 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-21T15:09:18.35654Z",
+      "action": "plan reviewed: 10-interaction-contract (0 blocking, 3 flags)"
+    },
+    {
+      "at": "2026-06-21T15:12:18.233264Z",
+      "action": "executed t-1 (Add interaction-contract builtin rule)"
+    },
+    {
+      "at": "2026-06-21T15:15:11.330323Z",
+      "action": "executed t-2 (Author reusable interaction snippet)"
+    },
+    {
+      "at": "2026-06-21T15:17:07.863613Z",
+      "action": "executed t-4 (Seed interaction-audit checklist)"
+    },
+    {
+      "at": "2026-06-21T15:20:14.555277Z",
+      "action": "executed t-3 (Reconcile rule/snippet/spec.md; cross-reference)"
+    },
+    {
+      "at": "2026-06-21T15:22:18.076566Z",
+      "action": "executed t-5 (Wire snippet into install; verify symlink)"
+    },
+    {
+      "at": "2026-06-21T15:24:50.259715Z",
+      "action": "set current_phase_status=partial"
+    },
+    {
+      "at": "2026-06-21T15:24:50.267073Z",
+      "action": "phase 10 executed (5/6 done; t-6 mechanical landed, manual @-include pilot pending human)"
+    },
+    {
+      "at": "2026-06-21T15:31:56.469466Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-21T15:31:56.475921Z",
+      "action": "verified 10-interaction-contract: partial (3/4 covered, c-3 weak pending manual pilot, mutation 0.81 no true survivors)"
+    },
+    {
+      "at": "2026-06-21T15:38:26.449819Z",
+      "action": "set current_phase=10-interaction-contract"
+    },
+    {
+      "at": "2026-06-21T15:38:26.457019Z",
+      "action": "spec amended: 10-interaction-contract snippet_delivery -\u003e dross interaction show CLI emitter (pilot disproved nested @-expansion)"
+    },
+    {
+      "at": "2026-06-21T15:42:25.390992Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T15:42:25.397233Z",
+      "action": "plan amended: 10-interaction-contract (+t-7 dross interaction show emitter, t-6 reworked to wire emitter; 7 tasks across 4 waves)"
+    },
+    {
+      "at": "2026-06-21T15:49:27.629981Z",
+      "action": "plan reviewed: 10-interaction-contract (0 blocking, 1 flag — t-6 audit-date contract weak)"
+    },
+    {
+      "at": "2026-06-21T15:53:54.275767Z",
+      "action": "executed t-7 (Add dross interaction show emitter)"
+    },
+    {
+      "at": "2026-06-21T15:56:39.618259Z",
+      "action": "executed t-8 (Purge stale @-include from shipped rule + snippet)"
+    },
+    {
+      "at": "2026-06-21T16:00:56.372556Z",
+      "action": "executed t-6 (Wire emitter into spec.md pre-flight; pilot resolved)"
+    },
+    {
+      "at": "2026-06-21T16:01:10.097625Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-21T16:01:10.103918Z",
+      "action": "phase 10-interaction-contract executed (8/8 done; emitter delivery wired, pilot resolved)"
+    },
+    {
+      "at": "2026-06-21T16:07:39.080784Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-21T16:07:39.086307Z",
+      "action": "verified 10-interaction-contract: pass (4/4 covered, c-3 weak-\u003ecovered via emitter; mutation Lived=0/efficacy 1.00, rollup 0.81 not-covered conflation)"
+    },
+    {
+      "at": "2026-06-21T16:40:33.3508Z",
+      "action": "completed 10-interaction-contract"
     }
   ]
 }
