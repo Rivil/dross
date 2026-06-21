@@ -117,6 +117,99 @@ func TestDetectLanguagesKotlinRegression(t *testing.T) {
 	}
 }
 
+// TestDetectResolvesEmbeddedProfiles proves each shipped profile is selectable by
+// its declared signals through the real embedded set — the c-5 keystone: a stack
+// becomes detectable purely by its TOML, with no detect.go change. Deleting any
+// <id>.toml drops it from Embedded() and fails that row.
+func TestDetectResolvesEmbeddedProfiles(t *testing.T) {
+	profiles, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		id    string
+		setup func(dir string)
+	}{
+		{"kotlin", func(d string) {
+			writeFile(t, d, "build.gradle.kts", "")
+			writeFile(t, d, "Main.kt", "fun main() {}\n")
+		}},
+		{"dart", func(d string) {
+			writeFile(t, d, "pubspec.yaml", "name: x\n")
+			writeFile(t, d, "main.dart", "void main() {}\n")
+		}},
+		{"svelte", func(d string) {
+			writeFile(t, d, "svelte.config.js", "export default {}\n")
+			writeFile(t, d, "App.svelte", "<script></script>\n")
+		}},
+		{"sql", func(d string) {
+			writeFile(t, d, "schema.sql", "select 1;\n")
+		}},
+		{"typescript", func(d string) {
+			writeFile(t, d, "tsconfig.json", "{}\n")
+			writeFile(t, d, "index.ts", "export {}\n")
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.id, func(t *testing.T) {
+			dir := t.TempDir()
+			tc.setup(dir)
+			if got := Detect(dir, profiles); got != tc.id {
+				t.Fatalf("Detect = %q, want %q", got, tc.id)
+			}
+		})
+	}
+}
+
+// TestDetectUnsupportedFixture guards against a profile false-matching a repo it
+// has no signal for: a Ruby/text fixture matches none of the shipped profiles.
+func TestDetectUnsupportedFixture(t *testing.T) {
+	profiles, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	writeFile(t, dir, "foo.rb", "puts 1\n")
+	writeFile(t, dir, "README.txt", "hi\n")
+
+	if got := Detect(dir, profiles); got != Unsupported {
+		t.Fatalf("unsupported fixture detected as %q, want %q", got, Unsupported)
+	}
+}
+
+// TestDetectPolyglotSQLDoesNotHijackGo proves a root marker file outweighs a
+// stray extension: a .sql file beside go.mod still detects "go", so SQL (an
+// extension-only profile) can't hijack a Go repo.
+func TestDetectPolyglotSQLDoesNotHijackGo(t *testing.T) {
+	profiles, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module x\n")
+	writeFile(t, dir, "schema.sql", "select 1;\n")
+
+	if got := Detect(dir, profiles); got != "go" {
+		t.Fatalf("go.mod marker should beat a .sql extension, got %q", got)
+	}
+}
+
+// TestStackCLISurfaceListsAndLoadsProfiles exercises the path `dross stack list`
+// and `dross stack show <id>` delegate to: LoadAll() enumerates the profiles and
+// ByID resolves a single one. Removing an <id>.toml drops it from the list and
+// fails its row.
+func TestStackCLISurfaceListsAndLoadsProfiles(t *testing.T) {
+	all, err := LoadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"kotlin", "dart", "svelte", "sql", "typescript"} {
+		if ByID(all, id) == nil {
+			t.Errorf("LoadAll()/ByID: profile %q missing — `dross stack list`/`show %s` would not surface it", id, id)
+		}
+	}
+}
+
 // repoRoot walks up from the test working directory to the nearest go.mod.
 func repoRoot(t *testing.T) string {
 	t.Helper()
