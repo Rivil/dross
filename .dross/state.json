@@ -1,13 +1,9 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.2",
-  "last_activity": "2026-06-21T13:04:46.388765Z",
-  "last_action": "completed 09-marker-file-detection",
+  "last_activity": "2026-06-21T13:13:14.289712Z",
+  "last_action": "resumed — handoff cleared (stale, v0.2 shipped); ready to scope v0.3 conversational-command-UX",
   "history": [
-    {
-      "at": "2026-06-20T18:25:24.543658Z",
-      "action": "executed t-8 (seed init/onboard runtime from profile)"
-    },
     {
       "at": "2026-06-20T18:26:57.748356Z",
       "action": "executed t-9 (dross stack loadout emitter)"
@@ -203,6 +199,10 @@
     {
       "at": "2026-06-21T13:04:46.388765Z",
       "action": "completed 09-marker-file-detection"
+    },
+    {
+      "at": "2026-06-21T13:13:14.289712Z",
+      "action": "resumed — handoff cleared (stale, v0.2 shipped); ready to scope v0.3 conversational-command-UX"
     }
   ]
 }
