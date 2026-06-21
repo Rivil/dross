@@ -1,21 +1,11 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
-  "last_activity": "2026-06-21T13:18:06.661792Z",
-  "last_action": "scoped milestone v0.3: 4 criteria, 4 phases (conversational command UX)",
+  "current_phase": "10-interaction-contract",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-21T14:44:06.169539Z",
+  "last_action": "spec locked: 10-interaction-contract",
   "history": [
-    {
-      "at": "2026-06-20T18:29:44.01158Z",
-      "action": "executed t-11 (dross stack apply re-sync)"
-    },
-    {
-      "at": "2026-06-20T18:30:16.432859Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-20T18:30:16.438599Z",
-      "action": "phase 07-stack-profiles executed (11/11 done)"
-    },
     {
       "at": "2026-06-20T18:39:32.541905Z",
       "action": "set current_phase_status=verified"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-21T13:18:06.661792Z",
       "action": "scoped milestone v0.3: 4 criteria, 4 phases (conversational command UX)"
+    },
+    {
+      "at": "2026-06-21T13:53:54.743662Z",
+      "action": "created 10-interaction-contract"
+    },
+    {
+      "at": "2026-06-21T14:44:06.163175Z",
+      "action": "set current_phase=10-interaction-contract"
+    },
+    {
+      "at": "2026-06-21T14:44:06.169539Z",
+      "action": "spec locked: 10-interaction-contract"
     }
   ]
 }
