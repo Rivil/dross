@@ -9,9 +9,15 @@ reuses it during onboarding — one engine, multiple entry points (the
 **read-only** subagents freely to map features; the write of `ARCHITECTURE.md`
 itself is gated behind explicit approval (the `dross-agent-gate` rule).
 
+**Run the gated approval as a conversation, not a broadcast.** Follow the shared
+interaction playbook (`_interaction.md`, printed by `dross interaction show` in the
+pre-flight below): when you reach the §3 propose→approve→write gate, lead with a
+proposed default and let the user react — one decision, not a wall.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat output as MUST-FOLLOW.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as
+   MUST-FOLLOW and follow the printed interaction playbook for the §3 approval gate.
 2. Find the repo root — the directory holding `.dross/`.
 3. **First-creation only.** If `ARCHITECTURE.md` already exists at repo root,
    stop: this engine is scoped to generating the doc when it's absent. Merging

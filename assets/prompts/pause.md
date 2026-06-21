@@ -10,9 +10,11 @@ Use when:
 
 The handoff is a **living document** at `.dross/handoff.md`: one file, gitignored, pruned by resume. Not an archive — pausing again updates the same file.
 
+**Confirm the handoff as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by `dross interaction show` in the pre-flight below): the §2 confirm+amend is a single propose-and-react turn. Showing the drafted handoff inline is a deliberate exception — the user is confirming their own working memory, like ship's PR-body preview — not an artifact-dump violation.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat the output as MUST-FOLLOW.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for the §2 confirm+amend turn.
 2. Read `.dross/state.json`. Note `current_phase`, `current_phase_status`, `version`. (May be empty — that's fine, you can pause standalone work too.)
 3. Capture the mechanical snapshot:
    ```
