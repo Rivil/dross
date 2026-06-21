@@ -27,8 +27,8 @@ locked = true
 
 [[decisions]]
 key    = "snippet_delivery"
-choice = "Interactive prompts reference the snippet via an @-include line (e.g. @~/.claude/dross/prompts/_interaction.md) expanded by Claude Code at load. The c-3 pilot must specifically prove the NESTED expansion resolves (the prompt is itself @-included by its command wrapper). Fallback if nesting does not expand: a `dross` CLI emitter called in each prompt's pre-flight, like `dross rule show`."
-why    = "Single source, verbatim text reaches the model, and the reference is grep-verifiable per the milestone. The pilot de-risks the one uncertainty (nested @-expansion) before the bulk retrofit, with a known robust fallback."
+choice = "Interactive prompts pull the contract in via a `dross interaction show` CLI emitter (mirroring `dross rule show`), called in each prompt's pre-flight; it prints the playbook verbatim from the binary. The c-3 pilot wires it into spec.md's pre-flight and proves the text reaches the model end-to-end."
+why    = "Pilot in a fresh session disproved nested @-expansion: the wrapper expands the top-level @-include of the prompt, but the prompt's own @-include of the snippet arrives as literal text and never reaches the model. CLI injection is the robust path — guaranteed verbatim, no model-obedience or nesting dependency, grep-verifiable — matching the proven `dross rule show` mechanism. Trade-off accepted: editing the playbook needs a recompile."
 locked = true
 
 [[decisions]]
