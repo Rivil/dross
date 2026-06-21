@@ -97,17 +97,19 @@ _c8b346e · extended 07-stack-profiles · eb602f1_
 
 ### Interaction contract
 
-The propose-and-react contract for interactive commands — a terse builtin rule in every `dross rule show`, the full `_interaction.md` playbook, and a `dross interaction show` emitter that injects the playbook verbatim into interactive prompts (the c-3 pilot disproved nested @-include, so delivery is the CLI emitter), plus a per-decision-point audit checklist. The five core-loop prompts (plan/execute/verify/ship/review) and the seven setup/config prompts (init/onboard/options/rule/inbox/quick/milestone) are wired to the emitter and restructured to one-decision-per-turn — per-field identity walks, an options section-pick gate, per-criterion milestone scoping, summary-confirm instead of artifact paste-back — guarded by grep + per-section prompt-sentinel tests.
+The propose-and-react contract for interactive commands — a terse builtin rule in every `dross rule show`, the full `_interaction.md` playbook, and a `dross interaction show` emitter that injects the playbook verbatim into interactive prompts (the c-3 pilot disproved nested @-include, so delivery is the CLI emitter), plus a per-decision-point audit checklist. **Every** interactive command is now wired and audited: the five core-loop prompts (plan/execute/verify/ship/review), the seven setup/config prompts (init/onboard/options/rule/inbox/quick/milestone), and the five remaining audit/handoff prompts (architecture/secure/quality/pause/resume) — each restructured to one-decision-per-turn (per-field identity walks, an options section-pick gate, per-criterion milestone scoping, single-gated-turn scaffolds, summary-confirm instead of artifact paste-back), guarded by grep + per-section prompt-sentinel tests. The model is documented as a first-class loop behaviour in the README's `## Interaction` section.
 
 - `Interaction` / `interactionShow` (CLI) — `internal/cmd/interaction.go:10`
 - `assets.InteractionPlaybook` (`go:embed _interaction.md`) — `assets/embed.go:17`
 - `dross-interaction-contract` builtin — `internal/rules/rules.go:137`
 - `_interaction.md` playbook — `assets/prompts/_interaction.md`
-- per-decision-point checklist — `docs/interaction-audit.md`
+- per-decision-point checklist (all commands ✅) — `docs/interaction-audit.md`
+- README first-class write-up — `README.md` `## Interaction`
 - core-loop wiring + prompt-sentinel guards — `internal/cmd/interaction_coreloop_test.go`
 - setup/config wiring + anchor + no-bundle guards — `internal/cmd/interaction_setupcmds_test.go`
+- audit/handoff wiring + audit-conformance + README guards — `internal/cmd/interaction_othercmds_test.go`
 
-_introduced 10-interaction-contract · extended 11-retrofit-core-loop · extended 12-retrofit-setup-commands · c69f501_
+_introduced 10-interaction-contract · extended 11-retrofit-core-loop · extended 12-retrofit-setup-commands · extended 13-audit-and-readme · e26131b_
 
 ### Issue board sync
 
