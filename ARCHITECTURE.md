@@ -70,9 +70,9 @@ Calibrate-only, read-only multi-pass code-quality audit: real analyzers plus an 
 - `quality.ScaffoldSpec` — `internal/quality/scaffold.go:15`
 - `Quality` (CLI) — `internal/cmd/quality.go:20`
 
-The analyzer catalog now sources language-dedicated tools from the active stack profile (agnostic tools stay inline); `recon.DetectLanguages` delegates to the single `stack.DetectLanguages`.
+The analyzer catalog now sources language-dedicated tools from the active stack profile (agnostic tools stay inline); `recon.DetectLanguages` delegates to the single `stack.DetectLanguages`. `BuildManifest` also unions any marker-file stack's analyzers (via `stack.MarkerProfiles`) additively on top of the detected languages, so a marker-only repo (e.g. a Dockerfile) still gets its analyzers (hadolint) atop the agnostic set.
 
-_introduced 06-dross-quality · extended 07-stack-profiles · 4f240a0_
+_introduced 06-dross-quality · extended 07-stack-profiles · extended 09-marker-file-detection · 9b6c14d_
 
 ### Configuration
 
@@ -166,9 +166,9 @@ Context-free, read-only multi-pass security audit: real scanners plus an adversa
 - `security.ScaffoldSpec` — `internal/security/scaffold.go`
 - `Security` (CLI) — `internal/cmd/security.go:18`
 
-The scanner catalog now sources language-dedicated tools from the active stack profile (agnostic tools stay inline); `recon.DetectLanguages` delegates to the single `stack.DetectLanguages`.
+The scanner catalog now sources language-dedicated tools from the active stack profile (agnostic tools stay inline); `recon.DetectLanguages` delegates to the single `stack.DetectLanguages`. `BuildManifest` also unions any marker-file stack's scanners (via `stack.MarkerProfiles`) additively on top of the detected languages, so a marker-only repo (e.g. a Dockerfile with no source extension) still gets its scanners.
 
-_introduced 05-dross-secure · extended 07-stack-profiles · 4f240a0_
+_introduced 05-dross-secure · extended 07-stack-profiles · extended 09-marker-file-detection · b10f28b_
 
 ### Ship recovery
 
@@ -190,17 +190,19 @@ _introduced d392501 · extended 01-architecture-comprehension-layer · extended 
 
 ### Stack profiles
 
-Declarative per-stack profiles — embedded built-ins plus `~/.claude/dross/profiles/` drop-ins (user wins on id) — that tune dross to a detected stack: runtime commands, the security/quality tool loadout, and the agent loadout. `dross stack detect/show/list/apply/loadout`; detection is signal-scored (marker files + source extensions), returning a matched profile id or an `unsupported` sentinel rather than a guess. `apply` re-syncs `[runtime]`; `loadout` emits a markdown block the execute prompt injects inline. Adding a stack is a single TOML drop-in — zero code change. Built-ins ship for Go plus Kotlin/Dart/Svelte/SQL/TypeScript, each with one dedicated quality analyzer (detekt/dcm/eslint/sqlfluff) and agnostic-only security; the v0.2 set landed as pure data behind one `extLang` edit, proving the zero-mechanism-change keystone.
+Declarative per-stack profiles — embedded built-ins plus `~/.claude/dross/profiles/` drop-ins (user wins on id) — that tune dross to a detected stack: runtime commands, the security/quality tool loadout, and the agent loadout. `dross stack detect/show/list/apply/loadout`; primary detection is signal-scored (exact marker files + source extensions), returning a matched profile id or an `unsupported` sentinel rather than a guess. `apply` re-syncs `[runtime]`; `loadout` emits a markdown block the execute prompt injects inline. Adding a stack is a single TOML drop-in — zero code change. Built-ins ship for Go plus Kotlin/Dart/Svelte/SQL/TypeScript, each with one dedicated quality analyzer (detekt/dcm/eslint/sqlfluff) and agnostic-only security; the v0.2 set landed as pure data behind one `extLang` edit, proving the zero-mechanism-change keystone. Marker-file stacks (e.g. Docker, detected from `Dockerfile`/compose files via case-insensitive `[signals].file_patterns` globs, no source extension) are surfaced *additively* by `MarkerProfiles` on top of the source languages in the secure/quality manifests — leaving primary `Detect` winner-take-all unchanged — so their tools (the docker profile ships hadolint as scanner+analyzer + trivy config) run on repos that have no matching source extension.
 
 - `stack.Profile` / `stack.Load` — `internal/stack/profile.go:26`
+- `stack.Signals.MatchesFile` (case-insensitive glob matcher) — `internal/stack/profile.go:57`
 - `stack.Detect` / `stack.DetectLanguages` (`extLang` map) — `internal/stack/detect.go`
+- `stack.MarkerProfiles` (additive pattern-based seam) — `internal/stack/detect.go:186`
 - `stack.Embedded` / `stack.LoadAll` / `stack.Merge` — `internal/stack/embed.go`
-- embedded profile TOMLs (`go:embed profiles/*.toml`) — `internal/stack/profiles/`
+- embedded profile TOMLs (`go:embed profiles/*.toml`, incl. `docker.toml`) — `internal/stack/profiles/`
 - `stack.ResolveRuntime` — `internal/stack/runtime.go`
 - `stack.RenderLoadout` — `internal/stack/loadout.go`
 - `Stack` (CLI) — `internal/cmd/stack.go`
 
-_introduced 07-stack-profiles · extended 08-language-profiles · 08fd1a1_
+_introduced 07-stack-profiles · extended 08-language-profiles · extended 09-marker-file-detection · e2cc0d1_
 
 ### State & status
 
