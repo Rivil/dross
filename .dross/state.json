@@ -2,18 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "10-interaction-contract",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-21T14:44:06.169539Z",
-  "last_action": "spec locked: 10-interaction-contract",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-21T15:07:41.743506Z",
+  "last_action": "plan locked: 10-interaction-contract (6 tasks across 3 waves)",
   "history": [
-    {
-      "at": "2026-06-20T18:39:32.541905Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-20T18:39:32.547552Z",
-      "action": "verified 07-stack-profiles: pass (5/5 covered; phase-diff mutation efficacy 100% / Lived=0; rollup 0.82 package-scoped — not a phase signal)"
-    },
     {
       "at": "2026-06-20T18:51:12.226629Z",
       "action": "completed 07-stack-profiles"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-21T14:44:06.169539Z",
       "action": "spec locked: 10-interaction-contract"
+    },
+    {
+      "at": "2026-06-21T15:07:41.73542Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T15:07:41.743506Z",
+      "action": "plan locked: 10-interaction-contract (6 tasks across 3 waves)"
     }
   ]
 }
