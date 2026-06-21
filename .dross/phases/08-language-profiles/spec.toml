@@ -5,19 +5,19 @@ milestone = "v0.2"
 
 [[criteria]]
 id   = "c-1"
-text = "Stack detection recognises Kotlin, Dart, Svelte, and SQL: the extLang map gains .dart/.svelte/.sql (.kt already maps), and a fixture repo for each resolves to the correct profile id while an unsupported (non-matching) repo does not false-match one of them."
+text = "Stack detection recognises Kotlin, Dart, Svelte, SQL, and TypeScript: the extLang map gains .dart/.svelte/.sql (.kt and .ts/.tsx already map), and a fixture repo for each resolves to the correct profile id while an unsupported (non-matching) repo does not false-match one of them."
 
 [[criteria]]
 id   = "c-2"
-text = "Four new profiles (kotlin, dart, svelte, sql) ship embedded via go:embed and surface through the CLI: each appears in 'dross stack list' and loads cleanly via 'dross stack show <id>'."
+text = "Five new profiles (kotlin, dart, svelte, sql, typescript) ship embedded via go:embed and surface through the CLI: each appears in 'dross stack list' and loads cleanly via 'dross stack show <id>'."
 
 [[criteria]]
 id   = "c-3"
-text = "AnalyzersFor(\"<id>\") surfaces each profile's dedicated analyzer (detekt / dcm / eslint+eslint-plugin-svelte / sqlfluff) on top of the agnostic set, each carrying a valid substantive dimension; ScannersFor(\"<id>\") returns only the agnostic scanner set (no dedicated security scanner is added)."
+text = "AnalyzersFor(\"<id>\") surfaces each profile's dedicated analyzer (detekt / dcm / eslint+eslint-plugin-svelte / sqlfluff / eslint+typescript-eslint) on top of the agnostic set, each carrying a valid substantive dimension; ScannersFor(\"<id>\") returns only the agnostic scanner set (no dedicated security scanner is added)."
 
 [[criteria]]
 id   = "c-4"
-text = "The Kotlin, Dart, and Svelte profiles declare runtime commands (test/typecheck/format/build) appropriate to the stack, so init/onboard and 'dross stack apply' seed project.toml [runtime] from them; the SQL profile declares no runtime."
+text = "The Kotlin, Dart, Svelte, and TypeScript profiles declare runtime commands (test/typecheck/format/build) appropriate to the stack, so init/onboard and 'dross stack apply' seed project.toml [runtime] from them; the SQL profile declares no runtime."
 
 [[criteria]]
 id   = "c-5"
@@ -51,6 +51,12 @@ locked = true
 key    = "profile_id_equals_lang"
 choice = "Each profile's id equals its extLang language token (kotlin/dart/svelte/sql) so security/quality recon, which maps extensions to a language string via extLang, resolves the matching profile in ScannersFor/AnalyzersFor. extLang gains .dart->dart, .svelte->svelte, .sql->sql; .kt->kotlin already exists."
 why    = "Profile selection is data-driven via [signals], but the audit-recon path keys catalogs off the extLang language token; the id must match that token or dedicated tools won't load even when detection succeeds."
+locked = true
+
+[[decisions]]
+key    = "typescript_profile"
+choice = "A fifth profile (id=typescript: eslint+typescript-eslint analyzer, dimension=complexity, JS runtime vitest/tsc/prettier/build) ships alongside the four, and the svelte profile lists .ts/.tsx in [signals].exts. extLang already maps .ts/.tsx->typescript."
+why    = "Svelte work is TypeScript-intertwined, and audit recon (quality.BuildManifest) calls AnalyzersFor per detected language keyed on profile id == language token; without an id=typescript profile, .ts files in a Svelte (or any TS) repo would get only the agnostic analyzers, never the dedicated eslint. Approved inline during execute on 2026-06-21."
 locked = true
 
 [[deferred]]
