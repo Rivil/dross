@@ -2,18 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "10-interaction-contract",
-  "current_phase_status": "partial",
-  "last_activity": "2026-06-21T15:24:50.267073Z",
-  "last_action": "phase 10 executed (5/6 done; t-6 mechanical landed, manual @-include pilot pending human)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-21T15:31:56.475921Z",
+  "last_action": "verified 10-interaction-contract: partial (3/4 covered, c-3 weak pending manual pilot, mutation 0.81 no true survivors)",
   "history": [
-    {
-      "at": "2026-06-20T19:52:04.5748Z",
-      "action": "plan locked: 08-language-profiles (6 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-06-20T19:54:11.736276Z",
-      "action": "plan reviewed: 08-language-profiles (0 blocking, 1 flag)"
-    },
     {
       "at": "2026-06-20T19:54:58.153613Z",
       "action": "plan amended: 08-language-profiles (t-3 adds CLI list/show assertion for c-2)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-21T15:24:50.267073Z",
       "action": "phase 10 executed (5/6 done; t-6 mechanical landed, manual @-include pilot pending human)"
+    },
+    {
+      "at": "2026-06-21T15:31:56.469466Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-21T15:31:56.475921Z",
+      "action": "verified 10-interaction-contract: partial (3/4 covered, c-3 weak pending manual pilot, mutation 0.81 no true survivors)"
     }
   ]
 }
