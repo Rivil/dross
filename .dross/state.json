@@ -3,13 +3,9 @@
   "current_milestone": "v0.3",
   "current_phase": "10-interaction-contract",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-21T15:07:41.743506Z",
-  "last_action": "plan locked: 10-interaction-contract (6 tasks across 3 waves)",
+  "last_activity": "2026-06-21T15:09:18.35654Z",
+  "last_action": "plan reviewed: 10-interaction-contract (0 blocking, 3 flags)",
   "history": [
-    {
-      "at": "2026-06-20T18:51:12.226629Z",
-      "action": "completed 07-stack-profiles"
-    },
     {
       "at": "2026-06-20T19:22:00.03447Z",
       "action": "set current_milestone=v0.2"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-21T15:07:41.743506Z",
       "action": "plan locked: 10-interaction-contract (6 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-21T15:09:18.35654Z",
+      "action": "plan reviewed: 10-interaction-contract (0 blocking, 3 flags)"
     }
   ]
 }
