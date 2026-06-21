@@ -2,18 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "11-retrofit-core-loop",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-21T18:27:41.779378Z",
-  "last_action": "phase 11-retrofit-core-loop executed (8/8 done; t-8 hardened c-3/c-4 to direct coverage)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-21T18:32:28.612628Z",
+  "last_action": "verified 11-retrofit-core-loop: pass (5/5 covered; c-3/c-4 graduated weak→covered via t-8; mutation skipped — no production Go in diff)",
   "history": [
-    {
-      "at": "2026-06-21T14:44:06.169539Z",
-      "action": "spec locked: 10-interaction-contract"
-    },
-    {
-      "at": "2026-06-21T15:07:41.73542Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-21T15:07:41.743506Z",
       "action": "plan locked: 10-interaction-contract (6 tasks across 3 waves)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-21T18:27:41.779378Z",
       "action": "phase 11-retrofit-core-loop executed (8/8 done; t-8 hardened c-3/c-4 to direct coverage)"
+    },
+    {
+      "at": "2026-06-21T18:32:28.605587Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-21T18:32:28.612628Z",
+      "action": "verified 11-retrofit-core-loop: pass (5/5 covered; c-3/c-4 graduated weak→covered via t-8; mutation skipped — no production Go in diff)"
     }
   ]
 }
