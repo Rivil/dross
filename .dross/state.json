@@ -2,18 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "10-interaction-contract",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-21T15:38:26.457019Z",
-  "last_action": "spec amended: 10-interaction-contract snippet_delivery -\u003e dross interaction show CLI emitter (pilot disproved nested @-expansion)",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-21T15:42:25.397233Z",
+  "last_action": "plan amended: 10-interaction-contract (+t-7 dross interaction show emitter, t-6 reworked to wire emitter; 7 tasks across 4 waves)",
   "history": [
-    {
-      "at": "2026-06-21T09:42:19.567884Z",
-      "action": "resumed — ready to execute t-1 (extLang map: .dart/.svelte/.sql)"
-    },
-    {
-      "at": "2026-06-21T09:46:32.852529Z",
-      "action": "executed t-1 (Add .dart/.svelte/.sql to extLang)"
-    },
     {
       "at": "2026-06-21T09:53:02.560544Z",
       "action": "executed t-2 (five embedded language profiles incl. typescript)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-21T15:38:26.457019Z",
       "action": "spec amended: 10-interaction-contract snippet_delivery -\u003e dross interaction show CLI emitter (pilot disproved nested @-expansion)"
+    },
+    {
+      "at": "2026-06-21T15:42:25.390992Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T15:42:25.397233Z",
+      "action": "plan amended: 10-interaction-contract (+t-7 dross interaction show emitter, t-6 reworked to wire emitter; 7 tasks across 4 waves)"
     }
   ]
 }

@@ -54,12 +54,23 @@
   status = "done"
 
 [[task]]
-  id = "t-6"
+  id = "t-7"
   wave = 3
-  title = "Pilot @-include in spec.md; prove expansion"
-  files = ["assets/prompts/spec.md", "docs/interaction-audit.md"]
-  description = "Wire spec.md to @-include the snippet and prove the two-level expansion delivers\nthe text to the model. Record resolved-vs-fell-back result + date in the audit\ndoc. If nested expansion fails, apply the CLI-emitter fallback and re-test.\n"
+  title = "Add `dross interaction show` emitter"
+  files = ["assets/embed.go", "internal/cmd/interaction.go", "internal/cmd/root.go", "internal/cmd/interaction_test.go"]
+  description = "Embed the canonical assets/prompts/_interaction.md into the binary (new assets\npackage, go:embed) and add `dross interaction show` that prints it verbatim,\nmirroring `dross rule show`. Register the command on root. Single source: the\nemitted bytes are the same file make install links.\n"
   covers = ["c-3"]
-  depends_on = ["t-3", "t-5"]
-  test_contract = ["if spec.md lacks the literal line @~/.claude/dross/prompts/_interaction.md, or that path doesn't resolve against the installed symlink to a readable file, the mechanical grep+resolve check fails", "if the manual pilot (load /dross-spec for real) does not surface the snippet sentinel string through the two-level include and the CLI-emitter fallback also fails to deliver it, the pilot is recorded as FAIL in docs/interaction-audit.md"]
-  status = "in_progress"
+  depends_on = ["t-2"]
+  test_contract = ["if `dross interaction show` is unregistered or prints empty, a cmd test capturing its output and asserting the four playbook markers plus the accept/reword/drop sentinel fails", "if the embedded bytes diverge from assets/prompts/_interaction.md on disk, the single-source assertion comparing emitter output to the file fails"]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 4
+  title = "Wire emitter into spec.md pre-flight; pilot"
+  files = ["assets/prompts/spec.md", "docs/interaction-audit.md", "internal/cmd/interaction_pilot_test.go"]
+  description = "Replace spec.md's dead @-include with a pre-flight `dross interaction show` step\n(mirroring `dross rule show`). Record the pilot result in the audit doc: @-include\nnesting FAILED, emitter adopted, with date. Invert the mechanical pilot test.\n"
+  covers = ["c-3"]
+  depends_on = ["t-7"]
+  test_contract = ["if spec.md's pre-flight stops invoking `dross interaction show`, or still carries the dead @~/.claude/dross/prompts/_interaction.md line, the inverted pilot test fails", "if docs/interaction-audit.md does not record the pilot as resolved-via-emitter (nested @-include FAILED) with a date, the audit-result assertion fails"]
+  status = "pending"
