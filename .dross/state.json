@@ -1,15 +1,9 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.2",
-  "current_phase": "09-marker-file-detection",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-21T12:04:22.526276Z",
-  "last_action": "verified 09-marker-file-detection: pass (7/7 covered; phase-diff mutation efficacy 100% / Lived=0; rollup 0.83 package-scoped — not a phase signal)",
+  "last_activity": "2026-06-21T13:04:46.388765Z",
+  "last_action": "completed 09-marker-file-detection",
   "history": [
-    {
-      "at": "2026-06-20T18:22:52.844375Z",
-      "action": "executed t-7 (de-duplicate recon DetectLanguages onto stack)"
-    },
     {
       "at": "2026-06-20T18:25:24.543658Z",
       "action": "executed t-8 (seed init/onboard runtime from profile)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-21T12:04:22.526276Z",
       "action": "verified 09-marker-file-detection: pass (7/7 covered; phase-diff mutation efficacy 100% / Lived=0; rollup 0.83 package-scoped — not a phase signal)"
+    },
+    {
+      "at": "2026-06-21T13:04:46.388765Z",
+      "action": "completed 09-marker-file-detection"
     }
   ]
 }
