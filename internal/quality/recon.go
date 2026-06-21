@@ -63,5 +63,13 @@ func BuildManifest(root string, lookPath func(string) (string, error)) (Manifest
 	for _, lang := range langs {
 		add(AnalyzersFor(lang))
 	}
+	// Marker-file stacks (detected by filename pattern, not source extension) are
+	// unioned in additively: their dedicated analyzers run on top of the language
+	// set, deduped by name, with Languages left unchanged. Mirrors the security
+	// recon so the manifest path honours marker stacks consistently.
+	profiles, _ := stack.LoadAll()
+	for _, id := range stack.MarkerProfiles(root, profiles) {
+		add(profileAnalyzers(id))
+	}
 	return Manifest{Languages: langs, Tools: Detect(analyzers, lookPath)}, nil
 }
