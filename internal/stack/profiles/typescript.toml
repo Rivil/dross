@@ -1,0 +1,58 @@
+# TypeScript stack profile. Drop a sibling <id>.toml into ~/.claude/dross/
+# profiles/ to add or override a stack — no recompile, zero code change.
+#
+# Ships as a peer of svelte so .ts files get a dedicated analyzer: audit recon
+# (quality.BuildManifest) calls AnalyzersFor per detected language keyed on
+# profile id == language token, and extLang maps .ts/.tsx -> typescript.
+
+id    = "typescript"
+title = "TypeScript"
+
+[signals]
+  files    = ["tsconfig.json"]
+  exts     = [".ts", ".tsx"]
+  priority = 4
+
+[[package_managers]]
+  name     = "pnpm"
+  bin      = "pnpm"
+  lockfile = "pnpm-lock.yaml"
+[[package_managers]]
+  name     = "npm"
+  bin      = "npm"
+  lockfile = "package-lock.json"
+[[package_managers]]
+  name     = "yarn"
+  bin      = "yarn"
+  lockfile = "yarn.lock"
+
+# Runtime command set seeded into project.toml [runtime] at init/onboard.
+[runtime.test]
+  run = "vitest run"
+[runtime.typecheck]
+  run = "tsc --noEmit"
+[runtime.format]
+  run = "prettier --check ."
+[runtime.build]
+  run = "tsc -b"
+
+# Dedicated quality analyzer. Agnostic tools (gitleaks, semgrep, trivy, scc,
+# jscpd) apply to every stack and are intentionally NOT listed here.
+[[tools]]
+  name      = "eslint"
+  kind      = "analyzer"
+  dimension = "complexity"
+  core      = true
+  install   = "npm i -D eslint typescript-eslint"
+
+[loadout]
+  mcp_tools = [
+    "context7 (resolve-library-id + query-docs) — verify TypeScript / library API signatures before calling them",
+  ]
+  guardrails = [
+    "Prefer strict mode; avoid `any` (use `unknown` + narrowing); let inference work but annotate public APIs.",
+    "Run `tsc --noEmit` and the vitest suite before claiming a change works.",
+  ]
+  conventions = [
+    "ESM modules; discriminated unions over enums where it reads cleaner; type-only imports with `import type`.",
+  ]

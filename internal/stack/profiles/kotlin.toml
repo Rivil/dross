@@ -1,0 +1,46 @@
+# Kotlin stack profile. Drop a sibling <id>.toml into ~/.claude/dross/profiles/
+# to add or override a stack — no recompile, zero code change. See README.md.
+
+id    = "kotlin"
+title = "Kotlin"
+
+[signals]
+  files    = ["build.gradle.kts", "settings.gradle.kts", "build.gradle"]
+  exts     = [".kt", ".kts"]
+  priority = 5
+
+[[package_managers]]
+  name     = "gradle"
+  bin      = "gradle"
+  lockfile = "gradle.lockfile"
+
+# Runtime command set seeded into project.toml [runtime] at init/onboard.
+[runtime.test]
+  run = "./gradlew test"
+[runtime.typecheck]
+  run = "./gradlew compileKotlin"
+[runtime.format]
+  run = "./gradlew ktlintCheck"
+[runtime.build]
+  run = "./gradlew build"
+
+# Dedicated quality analyzer. Agnostic tools (gitleaks, semgrep, trivy, scc,
+# jscpd) apply to every stack and are intentionally NOT listed here.
+[[tools]]
+  name      = "detekt"
+  kind      = "analyzer"
+  dimension = "complexity"
+  core      = true
+  install   = "brew install detekt  (or see detekt.dev)"
+
+[loadout]
+  mcp_tools = [
+    "context7 (resolve-library-id + query-docs) — verify Kotlin / Gradle / library API signatures before calling them",
+  ]
+  guardrails = [
+    "Prefer null-safety and immutability (val over var); let the type system carry intent.",
+    "Run `./gradlew test` and `compileKotlin` before claiming a change works.",
+  ]
+  conventions = [
+    "Idiomatic Kotlin: data classes, sealed hierarchies, extension functions, coroutines for async.",
+  ]
