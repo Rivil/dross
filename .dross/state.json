@@ -1,73 +1,9 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
-  "last_activity": "2026-06-21T19:26:01.077319Z",
-  "last_action": "completed 12-retrofit-setup-commands",
+  "last_activity": "2026-06-21T20:02:21.729748Z",
+  "last_action": "completed 13-audit-and-readme",
   "history": [
-    {
-      "at": "2026-06-21T16:07:39.086307Z",
-      "action": "verified 10-interaction-contract: pass (4/4 covered, c-3 weak-\u003ecovered via emitter; mutation Lived=0/efficacy 1.00, rollup 0.81 not-covered conflation)"
-    },
-    {
-      "at": "2026-06-21T16:40:33.3508Z",
-      "action": "completed 10-interaction-contract"
-    },
-    {
-      "at": "2026-06-21T16:45:46.99458Z",
-      "action": "created 11-retrofit-core-loop"
-    },
-    {
-      "at": "2026-06-21T16:55:51.346631Z",
-      "action": "set current_phase=11-retrofit-core-loop"
-    },
-    {
-      "at": "2026-06-21T16:55:51.353551Z",
-      "action": "spec locked: 11-retrofit-core-loop"
-    },
-    {
-      "at": "2026-06-21T17:02:19.717536Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-21T17:02:19.723353Z",
-      "action": "plan locked: 11-retrofit-core-loop (7 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-06-21T17:04:58.154658Z",
-      "action": "plan reviewed: 11-retrofit-core-loop (0 blocking, 4 flags)"
-    },
-    {
-      "at": "2026-06-21T17:09:06.864593Z",
-      "action": "executed t-1 (Retrofit plan.md interaction)"
-    },
-    {
-      "at": "2026-06-21T17:10:08.091957Z",
-      "action": "executed t-2 (Retrofit execute.md interaction)"
-    },
-    {
-      "at": "2026-06-21T17:11:16.407648Z",
-      "action": "executed t-3 (Retrofit verify.md interaction)"
-    },
-    {
-      "at": "2026-06-21T17:12:26.964399Z",
-      "action": "executed t-4 (Retrofit ship.md interaction)"
-    },
-    {
-      "at": "2026-06-21T17:13:13.717764Z",
-      "action": "executed t-5 (Retrofit review.md interaction)"
-    },
-    {
-      "at": "2026-06-21T17:15:11.438553Z",
-      "action": "executed t-6 (Update audit doc core-loop sections)"
-    },
-    {
-      "at": "2026-06-21T17:16:15.068977Z",
-      "action": "executed t-7 (Add core-loop wiring guard test)"
-    },
-    {
-      "at": "2026-06-21T17:16:23.743363Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-06-21T17:16:23.750299Z",
       "action": "phase 11-retrofit-core-loop executed (7/7 done)"
@@ -203,6 +139,70 @@
     {
       "at": "2026-06-21T19:26:01.077319Z",
       "action": "completed 12-retrofit-setup-commands"
+    },
+    {
+      "at": "2026-06-21T19:30:08.506505Z",
+      "action": "created 13-audit-and-readme"
+    },
+    {
+      "at": "2026-06-21T19:43:14.960544Z",
+      "action": "set current_phase=13-audit-and-readme"
+    },
+    {
+      "at": "2026-06-21T19:43:14.966974Z",
+      "action": "spec locked: 13-audit-and-readme"
+    },
+    {
+      "at": "2026-06-21T19:46:43.719121Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T19:46:43.727048Z",
+      "action": "plan locked: 13-audit-and-readme (4 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-21T19:48:45.846935Z",
+      "action": "plan reviewed: 13-audit-and-readme (0 blocking, 2 flags)"
+    },
+    {
+      "at": "2026-06-21T19:49:17.439071Z",
+      "action": "plan amended: 13-audit-and-readme (t-4 +README placement guard per review flag)"
+    },
+    {
+      "at": "2026-06-21T19:51:50.52322Z",
+      "action": "executed t-1 (Wire emitter + contract phrase into 5 prompts)"
+    },
+    {
+      "at": "2026-06-21T19:52:35.533582Z",
+      "action": "executed t-2 (Add README ## Interaction section)"
+    },
+    {
+      "at": "2026-06-21T19:54:09.164218Z",
+      "action": "executed t-3 (Fill the 5 audit-doc rows to conforming)"
+    },
+    {
+      "at": "2026-06-21T19:55:31.694627Z",
+      "action": "executed t-4 (Add guard tests; make install; observe green)"
+    },
+    {
+      "at": "2026-06-21T19:55:38.665037Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-21T19:55:38.671783Z",
+      "action": "phase 13-audit-and-readme executed (4/4 done)"
+    },
+    {
+      "at": "2026-06-21T20:00:03.649343Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-21T20:00:03.655956Z",
+      "action": "verified 13-audit-and-readme: pass (3/3 covered; mutation 0.81 package-scoped, Lived=0/efficacy 1.00 — not a phase signal; no production Go in diff)"
+    },
+    {
+      "at": "2026-06-21T20:02:21.729748Z",
+      "action": "completed 13-audit-and-readme"
     }
   ]
 }

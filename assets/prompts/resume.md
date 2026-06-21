@@ -4,9 +4,11 @@ Pick up where you left off. Read the handoff `/dross-pause` left, replay the thr
 
 Use at the start of a session when a handoff exists (`dross status` nudges you when one does).
 
+**Walk the handoff as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by `dross interaction show` in the pre-flight below): the §2 prune walks open loops one at a time, each a propose-and-react turn — never one batched dump.
+
 ## 0. Read the handoff
 
-1. Run `dross rule show` and treat the output as MUST-FOLLOW.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for the §2 prune walk.
 2. Read `.dross/handoff.md`.
    - **Missing** → there's nothing to resume. Say so in one line and fall back to `/dross-status` for a cold-start orientation. Stop.
    - **Present** → continue.

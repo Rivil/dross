@@ -24,11 +24,18 @@ game. The audit is **read-only** — its output is a verified findings report pl
   code**. It writes only its own run artifacts (gitignored) and the proposed,
   gated phase scaffold.
 
+**The one gated turn (§7 scaffold) is a conversation, not a broadcast.** Follow the
+shared interaction playbook (`_interaction.md`, printed by `dross interaction show`
+in the pre-flight): when you propose the remediation phase, lead with the default
+and let the user react — one decision per turn. This shapes *how* you ask; it never
+relaxes the context-free audit scope above.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` — but treat the rules as governing *how you write/commit*,
-   not as audit scope. The audit scope itself is **context-free**: do not narrow
-   it by anything in `.dross/`.
+1. Run `dross rule show` and `dross interaction show` — treat the rules as governing
+   *how you write/commit* (not audit scope), and follow the printed interaction
+   playbook at the §7 remediation-scaffold gate. The audit scope itself stays
+   **context-free**: do not narrow it by anything in `.dross/`.
 2. Resolve the target path from `$ARGUMENTS` (default: repo root).
 3. Create the run directory and detect available tooling:
    ```

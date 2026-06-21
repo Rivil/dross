@@ -31,10 +31,18 @@ findings report plus a *proposed* remediation phase, never a direct fix.
   code**. It writes only its own run artifacts (gitignored) and the proposed,
   gated phase scaffold.
 
+**The one gated turn (§7 scaffold) is a conversation, not a broadcast.** Follow the
+shared interaction playbook (`_interaction.md`, printed by `dross interaction show`
+in the pre-flight): when you propose the remediation phase, lead with the default
+and let the user react — one decision per turn. This shapes *how* you ask; it never
+relaxes the calibrate-only scope above.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` — these govern *how you write/commit*, and (calibrate-only)
-   may inform risk calibration, but never let "out of scope" suppress a real finding.
+1. Run `dross rule show` and `dross interaction show` — the rules govern *how you
+   write/commit* and (calibrate-only) may inform risk calibration but never let
+   "out of scope" suppress a real finding; follow the printed interaction playbook
+   at the §7 remediation-scaffold gate.
 2. Resolve the target path from `$ARGUMENTS` (default: repo root).
 3. Create the run directory and detect available tooling:
    ```

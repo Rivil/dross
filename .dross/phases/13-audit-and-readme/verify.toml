@@ -1,0 +1,47 @@
+[verify]
+  phase = "13-audit-and-readme"
+  generated_at = 2026-06-21T19:56:00.054686Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8069948186528497
+  mutants_killed = 623
+  mutants_survived = 149
+  mutants_not_covered = 149
+  criteria_total = 3
+  criteria_covered = 3
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/interaction_othercmds_test.go:TestOtherCmdsAuditSectionsConform"]
+  notes = "Asserts each of the 5 audit sections (architecture/secure/quality/pause/resume) carries ✅ and none of ⬜/🟡/❌ — fails if any row reverts to pending."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/cmd/interaction_othercmds_test.go:TestOtherCmdsWireEmitter",
+    "internal/cmd/interaction_othercmds_test.go:TestOtherCmdsReferenceContract",
+    "internal/cmd/interaction_othercmds_test.go:TestOtherCmdsAuditSectionsConform",
+  ]
+  notes = "Emitter + 'interaction playbook' phrase asserted in all 5 prompts (the retrofit that earns ✅); audit-conformance test fails on any leftover ❌."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/cmd/interaction_othercmds_test.go:TestReadmeInteractionSection",
+    "internal/cmd/interaction_othercmds_test.go:TestReadmeInteractionPlacement",
+  ]
+  notes = "Guards the top-level '## Interaction' section + its propose-and-react / one-decision-per-turn phrasing, and its locked placement immediately after '## Concept'."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran package-scoped on internal/cmd (the package holding this phase's only .go file). Killed=623, Lived=0, efficacy on covered mutants = 1.00. The 149 'survived' are all NOT_COVERED (tests never ran them) and live in files outside this phase's diff (doctor/stats/rule/ship/issue/phase/env/codex/profile/telemetry/...). They are a pre-existing standing coverage gap in internal/cmd, not introduced by this phase — score 0.81 is a package signal, not a phase signal. This phase added no production Go (only a test file + markdown), so it contributes zero new mutants."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation skipped 7 non-Go files (README.md, the 5 retrofitted prompts, docs/interaction-audit.md) — no mutation adapter for .md. These are the phase's actual deliverables; their guards are the structural tests in interaction_othercmds_test.go, not mutation."
