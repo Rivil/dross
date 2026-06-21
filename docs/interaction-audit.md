@@ -12,8 +12,8 @@ interactive command has no section here.
 
 **Conformance legend** (filled in by phases 11–13):
 
-- ✅ conforms — one decision per turn, proposes a default, references the snippet
-- 🟡 partial — drives conversationally but doesn't yet `@`-include the snippet
+- ✅ conforms — one decision per turn, proposes a default, references the playbook via `dross interaction show`
+- 🟡 partial — drives conversationally but doesn't yet invoke the `dross interaction show` emitter
 - ⬜ pending — not yet audited
 - ❌ violates — batches decisions or dumps an artifact/agenda wall
 
@@ -53,53 +53,79 @@ dependency on nested include expansion.
 
 ## Core loop (phase 11 — retrofit-core-loop)
 
-### dross-milestone
-
-| Decision point | Current pattern | Conforms | Notes |
-|---|---|---|---|
-| Resolve milestone version | single AskUserQuestion, default = next minor | 🟡 | doesn't @-include snippet yet |
-| Title | proposed default, accept/override | 🟡 | |
-| Success criteria | accept/revise set | 🟡 | could go per-criterion |
-| Non-goals | accept/revise set | 🟡 | |
-| Phase breakdown | confirm/revise order | 🟡 | |
+The spec→plan→execute→verify→ship pipeline plus the PR-review panel. `dross-spec`
+is the phase-10 pilot; `dross-plan/execute/verify/ship/review` are retrofitted in
+phase 11. (`dross-milestone` and `dross-quick` are scoping/one-off commands —
+retrofitted under Setup & config in phase 12.)
 
 ### dross-spec
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Phase resolution / create | AskUserQuestion new/resume | 🟡 | reference pilot lands here (t-6) |
-| Each acceptance criterion | one criterion per turn, accept/reword/drop | 🟡 | already one-at-a-time |
-| Gray-area selection | multiSelect AskUserQuestion | 🟡 | |
-| Each gray-area deep-dive | one focused exchange per area | 🟡 | |
-| Lock spec | one-line summary, y/edit | 🟡 | never pastes the TOML — good |
+| Phase resolution / create | AskUserQuestion new/resume | ✅ | pilot — pre-flight runs `dross interaction show` |
+| Each acceptance criterion | one criterion per turn, accept/reword/drop | ✅ | one-at-a-time |
+| Gray-area selection | multiSelect AskUserQuestion | ✅ | |
+| Each gray-area deep-dive | one focused exchange per area | ✅ | |
+| Lock spec | one-line summary, y/edit | ✅ | never pastes the TOML |
 
 ### dross-plan
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Panel disagreements | walk each divergence | 🟡 | |
-| Steer-or-proceed | iterate until accept | 🟡 | |
-| Coverage gap resolution | add task / move to deferred | 🟡 | |
-| Lock plan | y/edit | 🟡 | |
+| Panel disagreements | one propose-and-react turn per divergence, leads with judge's pick | ✅ | `panel_disagreement_walk`; no full-list wall |
+| Steer-or-proceed | single AskUserQuestion, leads with `proceed` | ✅ | |
+| Coverage gap resolution | add task / move to deferred | ✅ | |
+| Lock plan | one-line summary, y/edit — no toml dump | ✅ | c-4 |
 
 ### dross-execute
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Per-task approach | proceed/steer/show/skip | 🟡 | pair-mode only |
-| Red test outcome | fix/mark-failed/abort | 🟡 | |
-| Dirty-tree pre-flight | commit/stash/abort | 🟡 | |
+| Per-task approach | proceed/steer/show/skip, leads with `proceed` | ✅ | pair-mode; next task never bundled behind current |
+| Red test outcome | fix/mark-failed/abort | ✅ | own turn |
+| Dirty-tree pre-flight | commit/stash/abort | ✅ | |
+
+### dross-verify
+
+| Decision point | Current pattern | Conforms | Notes |
+|---|---|---|---|
+| Verdict + criterion-map surface | verdict + compact criterion→test/status map, no `verify.toml` dump | ✅ | `verify_surface`; surfaced as a report, not asked (no AskUserQuestion turn — c-3 satisfied by absence) |
+
+### dross-ship
+
+| Decision point | Current pattern | Conforms | Notes |
+|---|---|---|---|
+| PR-body preview | shown in full before the post is authorized | ✅ | `ship_body_preview` — deliberate outward-facing exception to c-4 |
+| Body override | AskUserQuestion generated/own | ✅ | own turn |
+| Reviewer selection | propose-and-react turn (use these / change / none) | ✅ | converted from a silent config-write |
+| Merge gate | merge/hold | ✅ | own turn |
+
+### dross-review
+
+| Decision point | Current pattern | Conforms | Notes |
+|---|---|---|---|
+| Post findings comment | single post/skip turn, leads with default | ✅ | composed comment shown in full before posting (outward-facing exception) |
+
+---
+
+## Setup & config (phase 12 — retrofit-setup-commands)
+
+### dross-milestone
+
+| Decision point | Current pattern | Conforms | Notes |
+|---|---|---|---|
+| Resolve milestone version | single AskUserQuestion, default = next minor | 🟡 | not yet emitter-wired |
+| Title | proposed default, accept/override | 🟡 | |
+| Success criteria | accept/revise set | 🟡 | could go per-criterion |
+| Non-goals | accept/revise set | 🟡 | |
+| Phase breakdown | confirm/revise order | 🟡 | |
 
 ### dross-quick
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
-| Approach approval | proceed/steer (pair-mode) | 🟡 | |
+| Approach approval | proceed/steer (pair-mode) | 🟡 | not yet emitter-wired |
 | Red test outcome | fix/mark-failed/abort | 🟡 | |
-
----
-
-## Setup & config (phase 12 — retrofit-setup-commands)
 
 ### dross-init
 
@@ -160,25 +186,6 @@ dependency on nested include expansion.
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
 | Remediation phase scaffold | confirm | ⬜ | |
-
-### dross-review
-
-| Decision point | Current pattern | Conforms | Notes |
-|---|---|---|---|
-| Post findings comment | confirm | ⬜ | |
-
-### dross-verify
-
-| Decision point | Current pattern | Conforms | Notes |
-|---|---|---|---|
-| Pass/fail/partial verdict | confirm proposed verdict | ⬜ | |
-
-### dross-ship
-
-| Decision point | Current pattern | Conforms | Notes |
-|---|---|---|---|
-| Reviewer selection | picklist | ⬜ | |
-| Open PR confirmation | confirm | ⬜ | |
 
 ### dross-pause
 
