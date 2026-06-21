@@ -97,15 +97,16 @@ _c8b346e · extended 07-stack-profiles · eb602f1_
 
 ### Interaction contract
 
-The propose-and-react contract for interactive commands — a terse builtin rule in every `dross rule show`, the full `_interaction.md` playbook, and a `dross interaction show` emitter that injects the playbook verbatim into interactive prompts (the c-3 pilot disproved nested @-include, so delivery is the CLI emitter), plus a per-decision-point audit checklist for the phase 11-13 retrofit.
+The propose-and-react contract for interactive commands — a terse builtin rule in every `dross rule show`, the full `_interaction.md` playbook, and a `dross interaction show` emitter that injects the playbook verbatim into interactive prompts (the c-3 pilot disproved nested @-include, so delivery is the CLI emitter), plus a per-decision-point audit checklist. The five core-loop prompts (plan/execute/verify/ship/review) are wired to the emitter and restructured to one-decision-per-turn, guarded by grep + per-section prompt-sentinel tests.
 
 - `Interaction` / `interactionShow` (CLI) — `internal/cmd/interaction.go:10`
 - `assets.InteractionPlaybook` (`go:embed _interaction.md`) — `assets/embed.go:17`
 - `dross-interaction-contract` builtin — `internal/rules/rules.go:137`
 - `_interaction.md` playbook — `assets/prompts/_interaction.md`
 - per-decision-point checklist — `docs/interaction-audit.md`
+- core-loop wiring + prompt-sentinel guards — `internal/cmd/interaction_coreloop_test.go`
 
-_introduced 10-interaction-contract · 33c7520_
+_introduced 10-interaction-contract · extended 11-retrofit-core-loop · 4c5ef5a_
 
 ### Issue board sync
 
