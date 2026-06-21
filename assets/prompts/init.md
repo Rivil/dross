@@ -12,20 +12,21 @@ Bootstrap dross in a **greenfield** repo. Walk the user through vision → marke
 
 ## 1. Vision
 
-Ask via `AskUserQuestion`:
-- Project name?
-- One-sentence description?
-- Core value: what changes for the user when this exists?
-- Target audience?
-- Three explicit non-goals (things this project will NOT do)?
+Walk the identity fields **one field per turn** — never one bundled questionnaire. For each, propose a sensible default and ask via `AskUserQuestion` (accept / change), then move to the next:
 
-Save:
+1. Project name (default = directory name)
+2. One-sentence description
+3. Core value — what changes for the user when this exists
+4. Target audience
+5. Three explicit non-goals (things this project will NOT do)
+
+Save each as it lands:
 ```
 dross project set project.name           "<name>"
 dross project set project.description    "<description>"
 dross project set goals.core_value       "<core value>"
 ```
-Non-goals + audience: edit `.dross/project.toml` directly under `[goals]`.
+Non-goals + audience: edit `.dross/project.toml` directly under `[goals]`. Confirm the captured identity with a **one-line summary** — never paste `project.toml` back.
 
 ## 2. Market scan
 

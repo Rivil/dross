@@ -14,14 +14,14 @@ Read the printed "Detected" list and use it to inform the questions below.
 
 ## 1. Identity
 
-Ask: name (default = directory name), one-line description, core value, audience, non-goals.
+Walk the identity fields **one field per turn** — never one bundled ask. For each, propose a default and confirm via `AskUserQuestion` (accept / change), then move on: name (default = directory name), one-line description, core value, audience, non-goals.
 
 ```
 dross project set project.name        "<name>"
 dross project set project.description "<description>"
 dross project set goals.core_value    "<core value>"
 ```
-Audience + non-goals: edit `project.toml` directly.
+Audience + non-goals: edit `project.toml` directly. Confirm the captured identity with a **one-line summary** — never paste `project.toml` back.
 
 ## 2. Stack confirmation
 
