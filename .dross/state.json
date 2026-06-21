@@ -2,18 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "13-audit-and-readme",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-21T19:43:14.966974Z",
-  "last_action": "spec locked: 13-audit-and-readme",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-21T19:46:43.727048Z",
+  "last_action": "plan locked: 13-audit-and-readme (4 tasks across 3 waves)",
   "history": [
-    {
-      "at": "2026-06-21T16:55:51.346631Z",
-      "action": "set current_phase=11-retrofit-core-loop"
-    },
-    {
-      "at": "2026-06-21T16:55:51.353551Z",
-      "action": "spec locked: 11-retrofit-core-loop"
-    },
     {
       "at": "2026-06-21T17:02:19.717536Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-21T19:43:14.966974Z",
       "action": "spec locked: 13-audit-and-readme"
+    },
+    {
+      "at": "2026-06-21T19:46:43.719121Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T19:46:43.727048Z",
+      "action": "plan locked: 13-audit-and-readme (4 tasks across 3 waves)"
     }
   ]
 }
