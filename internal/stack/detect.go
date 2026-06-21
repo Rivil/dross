@@ -173,6 +173,44 @@ func DetectLanguages(root string) ([]string, error) {
 	return out, nil
 }
 
+// MarkerProfiles returns the sorted ids of every profile whose Signals.FilePatterns
+// match a filename anywhere in the tree at root. Unlike Detect (winner-take-all over
+// a profile's Files/Exts), this is additive and pattern-driven: a marker-file stack is
+// surfaced ON TOP of any source languages rather than instead of them, so the security
+// and quality manifests can union its tools in. The walk reuses skipDirs to ignore
+// VCS/vendor/build noise and descends the whole subtree, so a marker file in a
+// subdirectory is still caught. A missing or unreadable root yields an empty slice.
+//
+// This deliberately touches neither Detect nor DetectLanguages — it is a separate,
+// data-driven seam (the marker_detection_additive decision).
+func MarkerProfiles(root string, profiles []*Profile) []string {
+	matched := map[string]bool{}
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if path != root && skipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		name := d.Name()
+		for _, p := range profiles {
+			if !matched[p.ID] && p.Signals.MatchesFile(name) {
+				matched[p.ID] = true
+			}
+		}
+		return nil
+	})
+	out := make([]string, 0, len(matched))
+	for id := range matched {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func normalizeExt(e string) string {
 	if e == "" {
 		return e

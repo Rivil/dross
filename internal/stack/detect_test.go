@@ -210,6 +210,55 @@ func TestStackCLISurfaceListsAndLoadsProfiles(t *testing.T) {
 	}
 }
 
+// TestMarkerProfiles exercises the additive marker seam. It injects in-memory
+// profiles (MarkerProfiles is parameterized) so it tests the mechanism independent
+// of which profiles ship embedded: a marker-patterned profile is surfaced, ANY
+// pattern profile is surfaced (no special-casing), subdirectory markers are caught
+// by the subtree walk, and a marker-less tree surfaces nothing.
+func TestMarkerProfiles(t *testing.T) {
+	markerProfile := &Profile{ID: "marker", Signals: Signals{FilePatterns: dockerFilePatterns}}
+	widgetProfile := &Profile{ID: "widget", Signals: Signals{FilePatterns: []string{"*.widget"}}}
+	// goProfile has Files/Exts but NO FilePatterns — it must never surface here.
+	profiles := []*Profile{goProfile(), markerProfile, widgetProfile}
+
+	t.Run("marker-only repo surfaces the marker profile (c-1)", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, dir, "Dockerfile", "FROM scratch\n")
+		if got := MarkerProfiles(dir, profiles); !containsLang(got, "marker") {
+			t.Fatalf("MarkerProfiles = %v, want it to include %q", got, "marker")
+		}
+	})
+
+	t.Run("data-driven, not special-cased (c-5 keystone)", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, dir, "x.widget", "")
+		if got := MarkerProfiles(dir, profiles); !containsLang(got, "widget") {
+			t.Fatalf("MarkerProfiles = %v, want %q — any FilePatterns profile must surface, proving no hardcode", got, "widget")
+		}
+	})
+
+	t.Run("subdir marker is caught by the subtree walk", func(t *testing.T) {
+		dir := t.TempDir()
+		sub := filepath.Join(dir, "services", "api")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, sub, "Dockerfile.dev", "FROM scratch\n")
+		if got := MarkerProfiles(dir, profiles); !containsLang(got, "marker") {
+			t.Fatalf("MarkerProfiles = %v, want %q — a subdir marker must be detected (subtree, not root-only)", got, "marker")
+		}
+	})
+
+	t.Run("marker-less repo surfaces nothing (c-6)", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, dir, "main.go", "package main\n")
+		writeFile(t, dir, "go.mod", "module x\n")
+		if got := MarkerProfiles(dir, profiles); len(got) != 0 {
+			t.Fatalf("MarkerProfiles = %v, want empty — a marker-less repo must surface nothing", got)
+		}
+	})
+}
+
 // repoRoot walks up from the test working directory to the nearest go.mod.
 func repoRoot(t *testing.T) string {
 	t.Helper()
