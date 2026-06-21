@@ -1,17 +1,9 @@
 {
   "version": "0.2.0.0",
-  "current_milestone": "v0.2",
-  "last_activity": "2026-06-21T13:13:14.289712Z",
-  "last_action": "resumed — handoff cleared (stale, v0.2 shipped); ready to scope v0.3 conversational-command-UX",
+  "current_milestone": "v0.3",
+  "last_activity": "2026-06-21T13:18:06.661792Z",
+  "last_action": "scoped milestone v0.3: 4 criteria, 4 phases (conversational command UX)",
   "history": [
-    {
-      "at": "2026-06-20T18:26:57.748356Z",
-      "action": "executed t-9 (dross stack loadout emitter)"
-    },
-    {
-      "at": "2026-06-20T18:28:34.570463Z",
-      "action": "executed t-10 (wire loadout into execute prompt)"
-    },
     {
       "at": "2026-06-20T18:29:44.01158Z",
       "action": "executed t-11 (dross stack apply re-sync)"
@@ -203,6 +195,14 @@
     {
       "at": "2026-06-21T13:13:14.289712Z",
       "action": "resumed — handoff cleared (stale, v0.2 shipped); ready to scope v0.3 conversational-command-UX"
+    },
+    {
+      "at": "2026-06-21T13:18:06.655454Z",
+      "action": "set current_milestone=v0.3"
+    },
+    {
+      "at": "2026-06-21T13:18:06.661792Z",
+      "action": "scoped milestone v0.3: 4 criteria, 4 phases (conversational command UX)"
     }
   ]
 }
