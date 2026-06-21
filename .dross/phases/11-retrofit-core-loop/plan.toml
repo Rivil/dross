@@ -78,8 +78,8 @@
   wave = 4
   title = "Add prompt-sentinel tests for c-3/c-4"
   files = ["internal/cmd/interaction_coreloop_test.go"]
-  description = "Extend the guard test with direct prompt assertions that graduate c-3/c-4 from\nweak to covered. c-3: ship.md keeps body-override, reviewers, and merge as\nseparate turns and drives reviewers via AskUserQuestion (not a silent\nconfig-write). c-4: plan.md §5 confirms with a one-line summary and carries no\nartifact-dump cue (e.g. \"Show final content\").\n"
+  description = "Extend the guard test with direct prompt assertions (anchored on stable strings,\nper plan-review) that graduate c-3/c-4 from weak to covered. c-3: slice ship.md\nby heading and require §2/§3/§6 to each hold exactly one AskUserQuestion keyed on\nstable anchors, plus §3 carries 'rather than silently writing config'. c-4:\nplan.md §5 holds the one-line confirm and the no-paste directive, and the §5\nregion contains no [[task]] artifact-dump literal.\n"
   covers = ["c-3", "c-4"]
   depends_on = ["t-1", "t-4", "t-7"]
-  test_contract = ["if ship.md collapses body-override and reviewers into one turn, or reverts reviewers to a silent config-write, the c-3 sentinel test fails", "if plan.md §5 re-adds an artifact-dump cue instead of the one-line confirm, the c-4 sentinel test fails"]
+  test_contract = ["c-3: if ship.md's §2/§3/§6 sections don't each contain exactly one AskUserQuestion keyed on the anchors ('Use generated body, or write your own?' / 'Request reviewers' / 'Merge now?'), or §3 loses 'rather than silently writing config', the c-3 sentinel test fails", "c-4: if plan.md §5 loses 'Plan written: N tasks across W waves' or 'Don't paste the toml back', or the §5 region gains a [[task]] artifact-dump literal, the c-4 sentinel test fails"]
   status = "pending"

@@ -3,17 +3,9 @@
   "current_milestone": "v0.3",
   "current_phase": "11-retrofit-core-loop",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-21T18:21:55.347512Z",
-  "last_action": "plan amended: 11-retrofit-core-loop (+t-8 prompt-sentinel tests for c-3/c-4; 8 tasks, 4 waves)",
+  "last_activity": "2026-06-21T18:24:24.648863Z",
+  "last_action": "plan amended: t-8 contract hardened per review (anchored sentinels for c-3/c-4)",
   "history": [
-    {
-      "at": "2026-06-21T13:13:14.289712Z",
-      "action": "resumed — handoff cleared (stale, v0.2 shipped); ready to scope v0.3 conversational-command-UX"
-    },
-    {
-      "at": "2026-06-21T13:18:06.655454Z",
-      "action": "set current_milestone=v0.3"
-    },
     {
       "at": "2026-06-21T13:18:06.661792Z",
       "action": "scoped milestone v0.3: 4 criteria, 4 phases (conversational command UX)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-21T18:21:55.347512Z",
       "action": "plan amended: 11-retrofit-core-loop (+t-8 prompt-sentinel tests for c-3/c-4; 8 tasks, 4 waves)"
+    },
+    {
+      "at": "2026-06-21T18:23:51.49683Z",
+      "action": "plan reviewed: 11-retrofit-core-loop t-8 (0 blocking, 2 flags)"
+    },
+    {
+      "at": "2026-06-21T18:24:24.648863Z",
+      "action": "plan amended: t-8 contract hardened per review (anchored sentinels for c-3/c-4)"
     }
   ]
 }
