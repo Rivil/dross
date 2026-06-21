@@ -23,7 +23,7 @@ If the array is empty: print `Inbox clear — no new board issues.` and stop.
 
 ## 2. Triage each issue
 
-Show the user a compact list first (number, title, labels). Then walk them one at a time. For each issue, use `AskUserQuestion`:
+Show the user a compact list first (number, title, labels). Then walk them **one issue per turn** — never bundle multiple issues into a single triage decision. For each issue, use `AskUserQuestion`:
 
 **"#<n> <title> — what should happen?"**
 

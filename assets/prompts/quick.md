@@ -61,7 +61,7 @@ In one block, 3-6 lines covering:
 - `show me <X>` — user requests more context; treat as steer
 - `abort` — stop without writing anything
 
-Never write code without an explicit `proceed` in pair mode — that's the contract.
+Never write code without an explicit `proceed` in pair mode — that's the contract. These gates mirror `/dross-execute`'s shape — the §1c approval (proceed/steer/show/abort) and the §4 red-test gate below the §1e fix/abort — adapted to a single task with no task-loop `skip`/`mark failed`.
 
 **Solo mode** (`--solo`) — skip the approval gate: still print the proposal block (it's the audit trail of intent), then proceed straight to implement. Solo is for changes trivial enough that a human gate adds nothing. It is **not** licence to guess: if §1 turns up real ambiguity, a locked-decision conflict, or scope beyond what was described, stop and surface it rather than pressing on.
 
