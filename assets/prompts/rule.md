@@ -21,25 +21,22 @@ Read the user's freeform input. Recognise these intents:
 | "disable X" / "turn off X" | `dross rule disable <id>` |
 | "show what claude sees" | `dross rule show` |
 
-## Add — ask the right questions
+## Add — one decision per turn
 
-When adding:
+When adding, walk these as **separate proposal turns** — never bundle scope, severity, and wording into one question:
 
-1. **Scope.** Default to project. Promote to global only if the rule clearly applies across all repos (e.g. "never amend pushed commits", "always prefer docker over direct package managers"). Confirm scope with the user before writing.
-2. **Severity.** Default to `hard`. Use `soft` if the user says "warn me" / "flag" / "remind me" rather than "never".
-3. **Wording.** Tighten the user's phrasing into an unambiguous rule. Show the proposed text and ask for confirmation before calling `dross rule add`.
+1. **Scope.** Propose `project` (the default); promote to `global` only if the rule clearly applies across all repos (e.g. "never amend pushed commits", "always prefer docker over direct package managers"). Confirm via `AskUserQuestion` (project / global) before moving on.
+2. **Severity.** Propose `hard` (the default); use `soft` if the user said "warn me" / "flag" / "remind me" rather than "never". Its own `AskUserQuestion` turn (hard / soft).
+3. **Wording.** Tighten the user's phrasing into an unambiguous rule. Propose the text and confirm via `AskUserQuestion` (accept / reword) before writing.
 
-Example:
+Each line below was its own turn:
 ```
-User: "add a rule that says always run migrations through docker not directly"
-Assistant proposes:
   Scope:    project
   Severity: hard
   Text:     "always run drizzle migrations via `docker compose exec app pnpm db:migrate`; never invoke drizzle-kit directly"
-Confirm? (y / edit)
 ```
 
-After confirmation:
+After the three turns:
 ```
 dross rule add --scope <scope> --severity <hard|soft> "<text>"
 ```
@@ -54,7 +51,7 @@ Always ask the user to confirm the id before calling the destructive command.
 
 ## After any change
 
-Run `dross rule show` and print the result so the user sees the new merged set. End with a bottom-anchored `Next:` line:
+Confirm with a **one-line summary** — e.g. `Rule added: [project/hard] "<short text>"` — never paste the full merged rules block back; point the user at `dross rule show` if they want to see it. End with a bottom-anchored `Next:` line:
 ```
 Rule <added | removed | promoted | toggled>. Next: /dross-status — back to where you were.
 ```
