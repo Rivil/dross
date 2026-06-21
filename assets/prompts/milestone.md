@@ -36,9 +36,9 @@ Save: `dross milestone set <version> milestone.title "<title>"`
 
 The acceptance bar for "this milestone is done." Aim for 2-5 criteria — sharp, testable, observable from outside the system.
 
-If `Brief.md` is present, extract candidates from any "Milestone done when:" / "Acceptance:" / "v0.1 complete when:" section. Propose them; user accepts/edits/adds.
+If `Brief.md` is present, extract candidates from any "Milestone done when:" / "Acceptance:" / "v0.1 complete when:" section as the proposal. Otherwise ask once (freeform): **"What has to be true for this milestone to be considered done? 2-5 outcomes that you could write a test or observation for."**
 
-Otherwise ask: **"What has to be true for this milestone to be considered done? 2-5 outcomes that you could write a test or observation for."**
+Then walk the candidates **one criterion per turn** — mirroring `/dross-spec`: tighten each into a one-liner and confirm it via `AskUserQuestion` (accept / reword / drop) before moving to the next. Don't echo the whole growing list back each turn; a short "added" is enough.
 
 **Quality bar — push back if a criterion fails any of these:**
 - Not externally observable (e.g. "code is clean" — not testable)
@@ -88,7 +88,7 @@ Phase issues created later by `/dross-plan` attach to this milestone automatical
 
 ## 7. Wrap
 
-Run `dross validate`. Should be green. Then print:
+Run `dross validate`. Should be green. Then confirm with the count-line summary below — never paste `milestone.toml` back:
 
 ```
 Milestone <version> scoped: <title>
