@@ -3,6 +3,7 @@ package stack
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -257,6 +258,30 @@ func TestMarkerProfiles(t *testing.T) {
 			t.Fatalf("MarkerProfiles = %v, want empty — a marker-less repo must surface nothing", got)
 		}
 	})
+}
+
+// TestNoDockerHardcode proves marker detection is purely data-driven: the
+// mechanism source (detect.go) and both recon paths must carry no literal
+// "docker"/"Dockerfile" — the docker stack lives entirely in docker.toml, and a
+// special-case slipped into the mechanism code would trip this. Mirrors the
+// TestNoDuplicateExtLangMap idiom (reading source via os.ReadFile). Note it reads
+// the production .go files, not _test.go files, so test fixtures may name Docker.
+func TestNoDockerHardcode(t *testing.T) {
+	paths := []string{
+		"detect.go",
+		filepath.Join("..", "security", "recon.go"),
+		filepath.Join("..", "quality", "recon.go"),
+	}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		src := strings.ToLower(string(data))
+		if strings.Contains(src, "docker") {
+			t.Errorf("%s contains a literal \"docker\"/\"Dockerfile\" — marker detection must be data-driven (move it to docker.toml), not hardcoded in mechanism code", path)
+		}
+	}
 }
 
 // repoRoot walks up from the test working directory to the nearest go.mod.
