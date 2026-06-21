@@ -1,117 +1,9 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
-  "last_activity": "2026-06-21T16:40:33.3508Z",
-  "last_action": "completed 10-interaction-contract",
+  "last_activity": "2026-06-21T18:34:42.739854Z",
+  "last_action": "completed 11-retrofit-core-loop",
   "history": [
-    {
-      "at": "2026-06-21T10:14:16.123353Z",
-      "action": "completed 08-language-profiles"
-    },
-    {
-      "at": "2026-06-21T10:34:59.035399Z",
-      "action": "created 09-marker-file-detection"
-    },
-    {
-      "at": "2026-06-21T10:51:08.478804Z",
-      "action": "set current_phase=09-marker-file-detection"
-    },
-    {
-      "at": "2026-06-21T10:51:08.486028Z",
-      "action": "spec locked: 09-marker-file-detection"
-    },
-    {
-      "at": "2026-06-21T11:06:02.586547Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-21T11:06:02.593378Z",
-      "action": "plan locked: 09-marker-file-detection (7 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-06-21T11:16:26.866919Z",
-      "action": "plan reviewed: 09-marker-file-detection (1 blocking found+resolved [hadolint analyzer dimension], 1 flag remaining)"
-    },
-    {
-      "at": "2026-06-21T11:21:19.713738Z",
-      "action": "executed t-1 (Add file_patterns field + glob matcher)"
-    },
-    {
-      "at": "2026-06-21T11:23:01.643581Z",
-      "action": "executed t-2 (Add generic MarkerProfiles detector)"
-    },
-    {
-      "at": "2026-06-21T11:24:55.871187Z",
-      "action": "executed t-3 (Ship embedded docker stack profile)"
-    },
-    {
-      "at": "2026-06-21T11:26:25.712676Z",
-      "action": "executed t-4 (Union marker profiles into security manifest)"
-    },
-    {
-      "at": "2026-06-21T11:27:40.558552Z",
-      "action": "executed t-5 (Union marker profiles into quality manifest)"
-    },
-    {
-      "at": "2026-06-21T11:28:13.8569Z",
-      "action": "executed t-7 (Verify docker profile on stack CLI)"
-    },
-    {
-      "at": "2026-06-21T11:29:12.924707Z",
-      "action": "executed t-6 (Guard: no Docker hardcode in detect/recon)"
-    },
-    {
-      "at": "2026-06-21T11:29:29.243901Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-21T11:29:29.251498Z",
-      "action": "phase 09-marker-file-detection executed (7/7 done)"
-    },
-    {
-      "at": "2026-06-21T12:04:22.518739Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-21T12:04:22.526276Z",
-      "action": "verified 09-marker-file-detection: pass (7/7 covered; phase-diff mutation efficacy 100% / Lived=0; rollup 0.83 package-scoped — not a phase signal)"
-    },
-    {
-      "at": "2026-06-21T13:04:46.388765Z",
-      "action": "completed 09-marker-file-detection"
-    },
-    {
-      "at": "2026-06-21T13:13:14.289712Z",
-      "action": "resumed — handoff cleared (stale, v0.2 shipped); ready to scope v0.3 conversational-command-UX"
-    },
-    {
-      "at": "2026-06-21T13:18:06.655454Z",
-      "action": "set current_milestone=v0.3"
-    },
-    {
-      "at": "2026-06-21T13:18:06.661792Z",
-      "action": "scoped milestone v0.3: 4 criteria, 4 phases (conversational command UX)"
-    },
-    {
-      "at": "2026-06-21T13:53:54.743662Z",
-      "action": "created 10-interaction-contract"
-    },
-    {
-      "at": "2026-06-21T14:44:06.163175Z",
-      "action": "set current_phase=10-interaction-contract"
-    },
-    {
-      "at": "2026-06-21T14:44:06.169539Z",
-      "action": "spec locked: 10-interaction-contract"
-    },
-    {
-      "at": "2026-06-21T15:07:41.73542Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-21T15:07:41.743506Z",
-      "action": "plan locked: 10-interaction-contract (6 tasks across 3 waves)"
-    },
     {
       "at": "2026-06-21T15:09:18.35654Z",
       "action": "plan reviewed: 10-interaction-contract (0 blocking, 3 flags)"
@@ -203,6 +95,114 @@
     {
       "at": "2026-06-21T16:40:33.3508Z",
       "action": "completed 10-interaction-contract"
+    },
+    {
+      "at": "2026-06-21T16:45:46.99458Z",
+      "action": "created 11-retrofit-core-loop"
+    },
+    {
+      "at": "2026-06-21T16:55:51.346631Z",
+      "action": "set current_phase=11-retrofit-core-loop"
+    },
+    {
+      "at": "2026-06-21T16:55:51.353551Z",
+      "action": "spec locked: 11-retrofit-core-loop"
+    },
+    {
+      "at": "2026-06-21T17:02:19.717536Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T17:02:19.723353Z",
+      "action": "plan locked: 11-retrofit-core-loop (7 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-21T17:04:58.154658Z",
+      "action": "plan reviewed: 11-retrofit-core-loop (0 blocking, 4 flags)"
+    },
+    {
+      "at": "2026-06-21T17:09:06.864593Z",
+      "action": "executed t-1 (Retrofit plan.md interaction)"
+    },
+    {
+      "at": "2026-06-21T17:10:08.091957Z",
+      "action": "executed t-2 (Retrofit execute.md interaction)"
+    },
+    {
+      "at": "2026-06-21T17:11:16.407648Z",
+      "action": "executed t-3 (Retrofit verify.md interaction)"
+    },
+    {
+      "at": "2026-06-21T17:12:26.964399Z",
+      "action": "executed t-4 (Retrofit ship.md interaction)"
+    },
+    {
+      "at": "2026-06-21T17:13:13.717764Z",
+      "action": "executed t-5 (Retrofit review.md interaction)"
+    },
+    {
+      "at": "2026-06-21T17:15:11.438553Z",
+      "action": "executed t-6 (Update audit doc core-loop sections)"
+    },
+    {
+      "at": "2026-06-21T17:16:15.068977Z",
+      "action": "executed t-7 (Add core-loop wiring guard test)"
+    },
+    {
+      "at": "2026-06-21T17:16:23.743363Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-21T17:16:23.750299Z",
+      "action": "phase 11-retrofit-core-loop executed (7/7 done)"
+    },
+    {
+      "at": "2026-06-21T17:39:23.134296Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-21T17:39:23.139998Z",
+      "action": "verified 11-retrofit-core-loop: partial (3/5 covered, c-3/c-4 weak — audit-proxy only; mutation Lived=0/0.81 package-scoped not a phase signal)"
+    },
+    {
+      "at": "2026-06-21T18:21:55.341475Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T18:21:55.347512Z",
+      "action": "plan amended: 11-retrofit-core-loop (+t-8 prompt-sentinel tests for c-3/c-4; 8 tasks, 4 waves)"
+    },
+    {
+      "at": "2026-06-21T18:23:51.49683Z",
+      "action": "plan reviewed: 11-retrofit-core-loop t-8 (0 blocking, 2 flags)"
+    },
+    {
+      "at": "2026-06-21T18:24:24.648863Z",
+      "action": "plan amended: t-8 contract hardened per review (anchored sentinels for c-3/c-4)"
+    },
+    {
+      "at": "2026-06-21T18:27:35.255689Z",
+      "action": "executed t-8 (Add prompt-sentinel tests for c-3/c-4)"
+    },
+    {
+      "at": "2026-06-21T18:27:41.773015Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-21T18:27:41.779378Z",
+      "action": "phase 11-retrofit-core-loop executed (8/8 done; t-8 hardened c-3/c-4 to direct coverage)"
+    },
+    {
+      "at": "2026-06-21T18:32:28.605587Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-21T18:32:28.612628Z",
+      "action": "verified 11-retrofit-core-loop: pass (5/5 covered; c-3/c-4 graduated weak→covered via t-8; mutation skipped — no production Go in diff)"
+    },
+    {
+      "at": "2026-06-21T18:34:42.739854Z",
+      "action": "completed 11-retrofit-core-loop"
     }
   ]
 }

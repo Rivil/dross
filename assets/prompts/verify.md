@@ -4,9 +4,11 @@ Decide whether a phase actually delivered what its `spec.toml` promised — not 
 
 Three checks, in order: mutation efficacy (mechanical), criterion-to-test mapping (LLM judgement), final verdict.
 
+**Surface results as a report, not a raw artifact.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): §4 emits the verdict plus a compact criterion→test/status mapping — the judgement the user must trust — and never pastes the raw `verify.toml` back.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat output as MUST-FOLLOW.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for this command.
 2. Resolve target phase from `$ARGUMENTS` or `state.json`'s `current_phase`. Fail if neither resolves.
 3. Read `.dross/phases/<id>/spec.toml` and `plan.toml`. If either is missing, route to `/dross-spec` or `/dross-plan` first.
 4. Read `.dross/phases/<id>/changes.json`. If missing or empty: `/dross-execute` hasn't touched anything for this phase yet — stop and route there.
@@ -109,13 +111,18 @@ text     = "criterion c-2 (case-insensitive lookup) has no covering test"
 
 ## 4. Surface to user
 
-Print a compact summary, not the full file:
+Surface the verdict plus a **compact criterion→test/status mapping** — the judgement the user is being asked to trust. Print this report, never the raw `verify.toml` (per the `verify_surface` decision; the file is the artifact, this is the report):
 
 ```
 verify <phase-id> — <verdict>
 
   Mutation:    score=<X.XX> killed=<N> survived=<M>
   Criteria:    <covered>/<total> covered, <weak> weak, <uncovered> uncovered
+
+  Criterion map:
+    c-1  covered   <test name / surface that catches it>
+    c-2  weak      <test name — what breakage it misses>
+    c-3  uncovered <no test exercises this>
 
   Findings:
     BLOCKING (<count>):
@@ -126,6 +133,8 @@ verify <phase-id> — <verdict>
 
   Verdict: <pass | partial | fail>
 ```
+
+Keep the map to one line per criterion; if the user wants the surviving-mutant detail behind a `weak`/`uncovered` row, point them at `verify.toml` rather than dumping it.
 
 If verdict is `fail` or `partial`, recommend next steps:
 - For `uncovered` criteria: "add tests that exercise <criterion> and re-run /dross-verify"
@@ -192,6 +201,7 @@ Next:
 
 ## Hard rules
 
+- **Follow the interaction playbook (`_interaction.md`); verify.toml is never a review medium.** §4 surfaces the verdict plus a compact criterion→test/status mapping — the report the user must trust — and never pastes the raw `verify.toml` back. Point the user at the file for surviving-mutant detail rather than dumping it.
 - **Don't fake coverage.** If you can't find a test that maps to a criterion, mark it `uncovered`. Better to have an honest `fail` verdict than a false `pass`.
 - **Don't tune thresholds silently.** If the user pushes back ("0.80 is too strict for this codebase"), capture that as a project-scope rule via `/dross-rule` ("mutation score threshold is 0.70 for this project") so future verifies inherit it consistently.
 - **Don't write tests yourself.** /dross-verify is a check, not a fix. If criteria are uncovered, point the user back to /dross-execute (which can amend the failing task) or /dross-plan (to add a test-writing task).

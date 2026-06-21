@@ -2,9 +2,11 @@
 
 Run a phase plan to completion. **Pair-mode by default**: propose, pause, steer, then write. `--solo` opts into autonomous execution for trivial phases.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): in pair mode, surface one decision per turn — the §1c approach approval and the §1e red-path choice are each their own `AskUserQuestion`, leading with the default and letting the user react. Never batch the next task's approval behind the current one.
+
 ## 0. Pre-flight (run once)
 
-1. Run `dross rule show` and treat output as MUST-FOLLOW.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Resolve target phase from `$ARGUMENTS` or `state.json`'s `current_phase`. Fail if neither is set.
 3. Read `.dross/phases/<id>/spec.toml` and `plan.toml`. If `plan.toml` is missing, route the user to `/dross-plan` and stop.
 4. Read `.dross/project.toml` — specifically `runtime.*` (test/typecheck/lint commands), `paths.*`, `repo.commit_convention`, `repo.git_main_branch`, `stack.locked`.
@@ -228,6 +230,7 @@ and update state status to `partial` instead.
 
 ## Hard rules
 
+- **Follow the interaction playbook (`_interaction.md`).** Drive each pair-mode turn as a single-decision `AskUserQuestion` that leads with the default — the §1c approval and §1e red-path are separate turns, never bundled, and the next task's approval never rides along behind the current one.
 - **Pair mode is the default.** Never write code without an explicit user `proceed` in pair mode. The whole point is the user is part of the loop.
 - **Phase work commits to `phase/<id>`, never the main branch.** If `git symbolic-ref --short HEAD` returns the main branch, stop and fix before continuing.
 - **Atomic commits.** Exactly one commit per completed task. No batched multi-task commits.

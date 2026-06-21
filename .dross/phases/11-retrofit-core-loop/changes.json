@@ -1,0 +1,69 @@
+{
+  "phase": "11-retrofit-core-loop",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "assets/prompts/plan.md"
+      ],
+      "commit": "2af5691",
+      "completed_at": "2026-06-21T17:09:06.85186Z",
+      "notes": "feature: interaction contract · /dross-plan @ assets/prompts/plan.md · wires dross interaction show + playbook reference, one-turn panel-disagreement walk, no toml dump"
+    },
+    "t-2": {
+      "files": [
+        "assets/prompts/execute.md"
+      ],
+      "commit": "1618f6f",
+      "completed_at": "2026-06-21T17:10:08.080952Z",
+      "notes": "feature: interaction contract · /dross-execute @ assets/prompts/execute.md · wires dross interaction show + playbook reference; §1c/§1e confirmed single-decision turns"
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/verify.md"
+      ],
+      "commit": "bf54255",
+      "completed_at": "2026-06-21T17:11:16.395787Z",
+      "notes": "feature: interaction contract · /dross-verify @ assets/prompts/verify.md · wires emitter + playbook; §4 adds compact criterion→test/status map, no verify.toml dump"
+    },
+    "t-4": {
+      "files": [
+        "assets/prompts/ship.md"
+      ],
+      "commit": "f067bdf",
+      "completed_at": "2026-06-21T17:12:26.953557Z",
+      "notes": "feature: interaction contract · /dross-ship @ assets/prompts/ship.md · wires emitter + playbook; §3 reviewers now a propose-and-react turn; §1 PR-body preview kept as ship_body_preview exception"
+    },
+    "t-5": {
+      "files": [
+        "assets/prompts/review.md"
+      ],
+      "commit": "7147041",
+      "completed_at": "2026-06-21T17:13:13.707494Z",
+      "notes": "feature: interaction contract · /dross-review @ assets/prompts/review.md · wires emitter + playbook; §5 post gate now single lead-with-default propose-and-react turn"
+    },
+    "t-6": {
+      "files": [
+        "docs/interaction-audit.md"
+      ],
+      "commit": "42ca27d",
+      "completed_at": "2026-06-21T17:15:11.428255Z",
+      "notes": "feature: interaction contract · interaction-audit.md @ docs/interaction-audit.md · plan/execute/verify/ship/review marked conforming; phase grouping reconciled (milestone/quick→ph12)"
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/interaction_coreloop_test.go"
+      ],
+      "commit": "fd1094e",
+      "completed_at": "2026-06-21T17:16:15.058054Z",
+      "notes": "feature: interaction contract · interaction_coreloop_test.go @ internal/cmd/interaction_coreloop_test.go · table-driven grep guard: emitter call + playbook reference + audit conformance over the 5 prompts"
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/interaction_coreloop_test.go"
+      ],
+      "commit": "4c5ef5a",
+      "completed_at": "2026-06-21T18:27:35.246346Z",
+      "notes": "feature: interaction contract · TestShipPromptDecisionTurnsSeparate+TestPlanPromptNoArtifactDump @ internal/cmd/interaction_coreloop_test.go · per-section sentinels graduating c-3/c-4 from audit-proxy to direct prompt coverage"
+    }
+  }
+}

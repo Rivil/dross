@@ -9,9 +9,11 @@ The four lenses (intentionally narrow scopes — each subagent stays in its lane
 3. **test efficacy** — do tests actually exercise the change? (mutation-style reasoning, not coverage). Cross-reference `verify.toml` if present.
 4. **spec fidelity** — does the diff deliver the criteria in `spec.toml`? Anything outside the spec? Anything missing?
 
+**Surface the post decision as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): the §5 post-or-skip gate is a single propose-and-react turn that leads with a default. The composed comment is outward-facing content about to be published, so it's shown in full before posting — that's the deliberate exception, not a contract violation.
+
 ## 0. Pre-flight
 
-1. `dross rule show` — MUST-FOLLOW. The builtin commit-hygiene rule applies if you write any `.dross/` files during this run.
+1. `dross rule show` and `dross interaction show` — treat the rules as MUST-FOLLOW (the builtin commit-hygiene rule applies if you write any `.dross/` files during this run) and follow the printed interaction playbook for the post gate.
 2. Resolve the PR number from `$ARGUMENTS`. Required.
 3. Resolve the phase id from `--phase <id>` or, if absent, from `state.json`'s `current_phase`. The phase context is essential — without it the spec-fidelity lens has no spec to compare against.
 4. Read `.dross/phases/<phase-id>/spec.toml`, `plan.toml`, and `verify.toml` if present. Surface the criteria + any verify findings — these become inputs the lenses cite.
@@ -109,7 +111,7 @@ Save the composed comment to `.dross/phases/<phase-id>/review-comment.md` for po
 
 ## 5. Post
 
-Ask the user via `AskUserQuestion`: **"Post the panel's findings as a comment on PR #<n>?"** Options: `post` / `skip`.
+Drive a single propose-and-react turn (`AskUserQuestion`), leading with the default: **"Post the panel's findings as a comment on PR #<n>?"** — `post` (the recommended default once the comment is shown) / `skip`. One decision; don't bundle anything else into this turn.
 
 If `post`:
 ```
@@ -139,6 +141,7 @@ Next: /dross-status — or address blocking findings, then /dross-ship once the 
 
 ## Hard rules
 
+- **Follow the interaction playbook (`_interaction.md`).** The §5 post-or-skip gate is a single propose-and-react turn leading with a default; the composed comment is shown in full before posting as the deliberate outward-facing exception.
 - **Spawn all four subagents in one tool block.** Sequential spawns triple the wall-clock cost without changing the analysis.
 - **Each lens stays in its lane.** Cross-lens findings are noise; the review value comes from independent perspectives. If a lens proposes a finding outside its scope, drop it.
 - **Don't auto-fix.** Findings are advisory. The phase author decides what to act on.

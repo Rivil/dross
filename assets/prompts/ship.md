@@ -2,9 +2,11 @@
 
 Open a PR for a verified phase. Pushes the `phase/<id>` branch to the provider (GitHub or Forgejo), opens the PR, and requests human reviewers. The provider's squash-merge collapses per-task commits on merge.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): surface one decision per turn — the §2 body override, §3 reviewers, and §6 merge gate are each their own `AskUserQuestion`, never bundled. The §1 PR-body preview is the deliberate exception to the no-dump rule: it's outward-facing content about to be published, so the user sees it in full before authorizing the post.
+
 ## 0. Pre-flight
 
-1. `dross rule show` — MUST-FOLLOW.
+1. `dross rule show` and `dross interaction show` — treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. `dross status` — confirm a current phase exists; resolve its id (or accept user's `<phase-id>` argument).
 3. `dross doctor` — must exit 0. Surfaces:
    - missing `[remote]` config
@@ -21,9 +23,9 @@ Open a PR for a verified phase. Pushes the `phase/<id>` branch to the provider (
 
 Run `dross ship --no-push <phase-id>` for a dry run (no push, no PR). To preview the review diff: `git diff <main>..phase/<id>`. To preview the PR body: `dross ship --print-body <phase-id>`.
 
-Show the user:
+Show the user — the PR body is outward-facing content about to be published, so show it **in full** here (the deliberate `ship_body_preview` exception to the no-dump rule):
 - the resolved title (`phase <id>: <spec title>` by default)
-- the resolved body (`dross ship --print-body <phase-id>` — prints the generated markdown without building or pushing)
+- the resolved body in full (`dross ship --print-body <phase-id>` — prints the generated markdown without building or pushing)
 - the reviewers list (`dross project get remote.reviewers`)
 
 ## 2. Body override (optional)
@@ -35,9 +37,9 @@ If override:
 2. Wait for the user to confirm they're done editing.
 3. Pass `--body-file .dross/phases/<phase-id>/pr-body.md` to `dross ship`.
 
-## 3. Reviewers (optional)
+## 3. Reviewers
 
-`dross project get remote.reviewers` shows the configured list. If empty or the user wants different reviewers for this PR, run `dross project set remote.reviewers "alice,bob"` before shipping. (Per-PR overrides aren't supported in v1 — the project default applies.)
+Read the configured list (`dross project get remote.reviewers`) and drive a single propose-and-react turn rather than silently writing config. `AskUserQuestion`: **"Request reviewers `<alice,bob>`?"** — lead with `use these` (the configured default), offer `change` (user names the list) and, if the list is empty, `none for now`. Only on `change` run `dross project set remote.reviewers "alice,bob"` before shipping. (Per-PR overrides aren't supported in v1 — the project default applies, so this write updates the project default.)
 
 ## 3.5 Merge landmarks into ARCHITECTURE.md
 

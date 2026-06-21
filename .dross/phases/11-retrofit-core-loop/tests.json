@@ -1,0 +1,35 @@
+{
+  "phase": "11-retrofit-core-loop",
+  "generated_at": "2026-06-21T18:31:40.153212Z",
+  "languages": null,
+  "skipped": [
+    {
+      "file": "assets/prompts/execute.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/plan.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/review.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/ship.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/verify.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "docs/interaction-audit.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "internal/cmd/interaction_coreloop_test.go",
+      "reason": "no mutation adapter for .go"
+    }
+  ]
+}

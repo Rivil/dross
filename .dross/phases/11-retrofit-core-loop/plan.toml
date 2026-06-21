@@ -1,0 +1,85 @@
+[phase]
+  id = "11-retrofit-core-loop"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Retrofit plan.md interaction"
+  files = ["assets/prompts/plan.md"]
+  description = "Add `dross interaction show` to §0 pre-flight (MUST-FOLLOW) and a contract\nreference in the intro. Uniform-restructure interactive turns: §3 propose as\nsingle-decision propose-and-react, §2P.3 walk one turn per panel disagreement\n(panel_disagreement_walk), §5 confirm with a one-line summary instead of pasting\nplan.toml (c-4).\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  test_contract = ["if plan.md drops the `dross interaction show` pre-flight call, the core-loop wiring test (t-7) fails", "if plan.md loses its interaction-contract reference phrase, the wiring test (t-7) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Retrofit execute.md interaction"
+  files = ["assets/prompts/execute.md"]
+  description = "Add `dross interaction show` to §0 pre-flight (MUST-FOLLOW) and a contract\nreference in the intro. Uniform-restructure §1c approach-approval and §1e\nred-path turns into single-decision propose-and-react form (retrofit_depth).\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  test_contract = ["if execute.md drops the `dross interaction show` pre-flight call, the wiring test (t-7) fails", "if execute.md loses its interaction-contract reference phrase, the wiring test (t-7) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Retrofit verify.md interaction"
+  files = ["assets/prompts/verify.md"]
+  description = "Add `dross interaction show` to §0 pre-flight (MUST-FOLLOW) and a contract\nreference in the intro. Restructure §4 surface to emit verdict + a compact\ncriterion→test/status mapping, not the raw verify.toml (verify_surface, c-4).\nNote: verify.md has no AskUserQuestion turns, so c-3 is satisfied by absence —\nnot claimed here.\n"
+  covers = ["c-1", "c-2", "c-4"]
+  test_contract = ["if verify.md drops the `dross interaction show` pre-flight call, the wiring test (t-7) fails", "if verify.md loses its interaction-contract reference phrase, the wiring test (t-7) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Retrofit ship.md interaction"
+  files = ["assets/prompts/ship.md"]
+  description = "Add `dross interaction show` to §0 pre-flight (MUST-FOLLOW) and a contract\nreference in the intro. ship's existing turns (§2 body-override, §6 merge gate)\nare already separate single-decision turns — confirm and keep them so (c-3).\nConvert §3 reviewers from a silent `dross project get/set` config-write into a\npropose-and-react turn: propose the reviewers, user accepts/steers\n(retrofit_depth, c-3). Keep the §1 PR-body preview shown in full as the explicit\noutward-facing exception to c-4 (ship_body_preview).\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  test_contract = ["if ship.md drops the `dross interaction show` pre-flight call, the wiring test (t-7) fails", "if ship.md loses its interaction-contract reference phrase, the wiring test (t-7) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Retrofit review.md interaction"
+  files = ["assets/prompts/review.md"]
+  description = "Add `dross interaction show` to §0 pre-flight (MUST-FOLLOW) and a contract\nreference in the intro. Restructure the §5 post-or-skip gate into a single-\ndecision propose-and-react turn (retrofit_depth).\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  test_contract = ["if review.md drops the `dross interaction show` pre-flight call, the wiring test (t-7) fails", "if review.md loses its interaction-contract reference phrase, the wiring test (t-7) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Update audit doc core-loop sections"
+  files = ["docs/interaction-audit.md"]
+  description = "Fill the decision-point rows + conformance for dross-plan/execute/verify/ship/\nreview reflecting the post-retrofit pattern, and reconcile the phase grouping so\nverify/ship/review sit under phase 11 (not 13) to match the actual scope.\n"
+  covers = ["c-5"]
+  depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5"]
+  test_contract = ["if any of the 5 core-loop sections loses its decision-point table, the existing audit enumeration test fails", "if a retrofitted command's conformance cell isn't marked conforming, the t-7 conformance assertion fails"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Add core-loop wiring guard test"
+  files = ["internal/cmd/interaction_coreloop_test.go"]
+  description = "New table-driven test over plan/execute/verify/ship/review: assert each prompt\ninvokes `dross interaction show`, carries no dead nested @-include line, and\ncontains the interaction-contract reference phrase. Also assert the 5 audit-doc\nsections are marked conforming. This is the grep-verification for c-1/c-2/c-5.\n"
+  covers = ["c-1", "c-2", "c-5"]
+  depends_on = ["t-1", "t-2", "t-3", "t-4", "t-5", "t-6"]
+  test_contract = ["if any of the 5 prompts lacks the emitter call or contract reference, this test fails", "if any core-loop audit section regresses to non-conforming, this test fails"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 4
+  title = "Add prompt-sentinel tests for c-3/c-4"
+  files = ["internal/cmd/interaction_coreloop_test.go"]
+  description = "Extend the guard test with direct prompt assertions (anchored on stable strings,\nper plan-review) that graduate c-3/c-4 from weak to covered. c-3: slice ship.md\nby heading and require §2/§3/§6 to each hold exactly one AskUserQuestion keyed on\nstable anchors, plus §3 carries 'rather than silently writing config'. c-4:\nplan.md §5 holds the one-line confirm and the no-paste directive. (The review's\n'no [[task]] in §5' negative is dropped — §5 legitimately documents the schema\nwith [[task]]; the positive no-paste directive is the load-bearing guard.)\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-1", "t-4", "t-7"]
+  test_contract = ["c-3: if ship.md's §2/§3/§6 sections don't each contain exactly one AskUserQuestion keyed on the anchors ('Use generated body, or write your own?' / 'Request reviewers' / 'Merge now?'), or §3 loses 'rather than silently writing config', the c-3 sentinel test fails", "c-4: if plan.md §5 loses 'Plan written: N tasks across W waves' or the 'Don't paste the toml back' directive, the c-4 sentinel test fails"]
+  status = "done"

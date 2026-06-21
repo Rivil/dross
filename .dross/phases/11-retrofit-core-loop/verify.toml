@@ -1,0 +1,52 @@
+[verify]
+  phase = "11-retrofit-core-loop"
+  generated_at = 2026-06-21T18:31:40.153212Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "skipped"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/interaction_coreloop_test.go:TestCoreLoopPromptsWireEmitter"]
+  notes = "Greps each of the 5 prompts for `dross interaction show` and asserts no dead nested @-include; fails if any prompt drops the emitter call."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/interaction_coreloop_test.go:TestCoreLoopPromptsReferenceContract"]
+  notes = "Asserts the contract phrase 'interaction playbook' appears in each of the 5 prompts; fails if a prompt loses its reference."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/interaction_coreloop_test.go:TestShipPromptDecisionTurnsSeparate"]
+  notes = "Graduated weak→covered by t-8. Slices ship.md by heading and requires §2/§3/§6 to each hold exactly one AskUserQuestion keyed on a stable anchor, plus §3 carries 'rather than silently writing config'. Bundling two decisions into one turn (count != 1) or reverting reviewers to a silent config-write fails the test — a direct prompt check, not the audit-doc proxy. Verifies the spec's own c-3 example (ship body-override and reviewers are separate turns)."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/interaction_coreloop_test.go:TestPlanPromptNoArtifactDump"]
+  notes = "Graduated weak→covered by t-8. Slices plan.md §5 and requires the one-line confirm ('Plan written: N tasks across W waves') and the no-paste directive (\"Don't paste the toml back\"). Re-adding a wholesale toml dump removes/contradicts the directive and fails the test. No negative [[task]] assertion — §5 legitimately documents the schema with [[task]]; the positive no-paste directive is the load-bearing guard."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/interaction_coreloop_test.go:TestCoreLoopAuditSectionsConform", "internal/cmd/interaction_audit_test.go:TestInteractionAuditEnumeratesEveryInteractiveCommand"]
+  notes = "The audit doc gains a mapped, conforming entry per command — exactly what these tests assert (per-decision-point table present; the 5 core-loop sections marked conforming with no pending/partial/violates markers)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation skipped (--skip-mutation): this phase's diff is .md prompts/docs + one _test.go, none of which is mutable production code. The first verify already established the package-wide pass was Lived=0 noise unrelated to the diff; re-running would reproduce that noise. Verdict is based on criterion coverage alone, all 5 covered by direct tests."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-3 and c-4 were 'weak' at the first verify (audit-doc proxy only). t-8 added direct prompt-sentinel tests, graduating both to 'covered' — closing the theatrical-coverage gap rather than accepting partial."
