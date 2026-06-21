@@ -46,8 +46,10 @@ description   = """
 Add `dross interaction show` to §0 pre-flight (MUST-FOLLOW) and a contract
 reference in the intro. Restructure §4 surface to emit verdict + a compact
 criterion→test/status mapping, not the raw verify.toml (verify_surface, c-4).
+Note: verify.md has no AskUserQuestion turns, so c-3 is satisfied by absence —
+not claimed here.
 """
-covers        = ["c-1", "c-2", "c-3", "c-4"]
+covers        = ["c-1", "c-2", "c-4"]
 test_contract = [
   "if verify.md drops the `dross interaction show` pre-flight call, the wiring test (t-7) fails",
   "if verify.md loses its interaction-contract reference phrase, the wiring test (t-7) fails",
@@ -61,9 +63,12 @@ title         = "Retrofit ship.md interaction"
 files         = ["assets/prompts/ship.md"]
 description   = """
 Add `dross interaction show` to §0 pre-flight (MUST-FOLLOW) and a contract
-reference in the intro. Split §2 body-override and §3 reviewers into separate
-single-decision turns (c-3). Keep the §1 PR-body preview shown in full as the
-explicit outward-facing exception to c-4 (ship_body_preview).
+reference in the intro. ship's existing turns (§2 body-override, §6 merge gate)
+are already separate single-decision turns — confirm and keep them so (c-3).
+Convert §3 reviewers from a silent `dross project get/set` config-write into a
+propose-and-react turn: propose the reviewers, user accepts/steers
+(retrofit_depth, c-3). Keep the §1 PR-body preview shown in full as the explicit
+outward-facing exception to c-4 (ship_body_preview).
 """
 covers        = ["c-1", "c-2", "c-3", "c-4"]
 test_contract = [

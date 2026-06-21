@@ -3,13 +3,9 @@
   "current_milestone": "v0.3",
   "current_phase": "11-retrofit-core-loop",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-21T17:02:19.723353Z",
-  "last_action": "plan locked: 11-retrofit-core-loop (7 tasks across 3 waves)",
+  "last_activity": "2026-06-21T17:04:58.154658Z",
+  "last_action": "plan reviewed: 11-retrofit-core-loop (0 blocking, 4 flags)",
   "history": [
-    {
-      "at": "2026-06-21T11:06:02.593378Z",
-      "action": "plan locked: 09-marker-file-detection (7 tasks across 3 waves)"
-    },
     {
       "at": "2026-06-21T11:16:26.866919Z",
       "action": "plan reviewed: 09-marker-file-detection (1 blocking found+resolved [hadolint analyzer dimension], 1 flag remaining)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-21T17:02:19.723353Z",
       "action": "plan locked: 11-retrofit-core-loop (7 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-21T17:04:58.154658Z",
+      "action": "plan reviewed: 11-retrofit-core-loop (0 blocking, 4 flags)"
     }
   ]
 }
