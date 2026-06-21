@@ -3,13 +3,9 @@
   "current_milestone": "v0.3",
   "current_phase": "13-audit-and-readme",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-21T19:46:43.727048Z",
-  "last_action": "plan locked: 13-audit-and-readme (4 tasks across 3 waves)",
+  "last_activity": "2026-06-21T19:48:45.846935Z",
+  "last_action": "plan reviewed: 13-audit-and-readme (0 blocking, 2 flags)",
   "history": [
-    {
-      "at": "2026-06-21T17:02:19.717536Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-21T17:02:19.723353Z",
       "action": "plan locked: 11-retrofit-core-loop (7 tasks across 3 waves)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-21T19:46:43.727048Z",
       "action": "plan locked: 13-audit-and-readme (4 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-21T19:48:45.846935Z",
+      "action": "plan reviewed: 13-audit-and-readme (0 blocking, 2 flags)"
     }
   ]
 }
