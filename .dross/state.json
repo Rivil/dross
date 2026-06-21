@@ -2,30 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "10-interaction-contract",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-21T15:49:27.629981Z",
-  "last_action": "plan reviewed: 10-interaction-contract (0 blocking, 1 flag — t-6 audit-date contract weak)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-21T16:01:10.103918Z",
+  "last_action": "phase 10-interaction-contract executed (8/8 done; emitter delivery wired, pilot resolved)",
   "history": [
-    {
-      "at": "2026-06-21T09:54:34.719279Z",
-      "action": "executed t-3 (detection resolves each profile id)"
-    },
-    {
-      "at": "2026-06-21T09:56:43.66003Z",
-      "action": "executed t-4 (AnalyzersFor surfaces each analyzer)"
-    },
-    {
-      "at": "2026-06-21T09:57:35.279875Z",
-      "action": "executed t-5 (ScannersFor stays agnostic-only)"
-    },
-    {
-      "at": "2026-06-21T09:58:37.150008Z",
-      "action": "executed t-6 (runtime seeded for 4, empty for sql)"
-    },
-    {
-      "at": "2026-06-21T09:58:45.913979Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-06-21T09:58:45.920828Z",
       "action": "phase 08-language-profiles executed (6/6 done)"
@@ -205,6 +185,26 @@
     {
       "at": "2026-06-21T15:49:27.629981Z",
       "action": "plan reviewed: 10-interaction-contract (0 blocking, 1 flag — t-6 audit-date contract weak)"
+    },
+    {
+      "at": "2026-06-21T15:53:54.275767Z",
+      "action": "executed t-7 (Add dross interaction show emitter)"
+    },
+    {
+      "at": "2026-06-21T15:56:39.618259Z",
+      "action": "executed t-8 (Purge stale @-include from shipped rule + snippet)"
+    },
+    {
+      "at": "2026-06-21T16:00:56.372556Z",
+      "action": "executed t-6 (Wire emitter into spec.md pre-flight; pilot resolved)"
+    },
+    {
+      "at": "2026-06-21T16:01:10.097625Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-21T16:01:10.103918Z",
+      "action": "phase 10-interaction-contract executed (8/8 done; emitter delivery wired, pilot resolved)"
     }
   ]
 }

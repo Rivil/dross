@@ -62,7 +62,7 @@
   covers = ["c-3"]
   depends_on = ["t-2"]
   test_contract = ["if `dross interaction show` is unregistered (absent from root.AddCommand in cmd/dross/main.go) or prints empty, a cmd test capturing its output and asserting the four playbook markers plus the accept/reword/drop sentinel fails", "if the embedded bytes diverge from assets/prompts/_interaction.md on disk, the single-source assertion comparing emitter output to the file fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-6"
@@ -73,7 +73,7 @@
   covers = ["c-3"]
   depends_on = ["t-7"]
   test_contract = ["if spec.md's pre-flight stops invoking `dross interaction show`, or still carries the dead @~/.claude/dross/prompts/_interaction.md line, the inverted pilot test fails", "if docs/interaction-audit.md does not record the pilot as resolved-via-emitter (nested @-include FAILED) with a date, the audit-result assertion fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-8"
@@ -84,4 +84,4 @@
   covers = ["c-1"]
   depends_on = ["t-1"]
   test_contract = ["if the rendered dross-interaction-contract rule text still contains \"@-include\" (or stops pointing at the `dross interaction show` delivery mechanism), a rules_test assertion fails", "if the rule text stops naming \"_interaction.md\" or breaches the terse length cap, the existing pointer/length assertions fail", "if assets/prompts/_interaction.md's header comment still instructs prompts to @-include it, the snippet-content check fails"]
-  status = "pending"
+  status = "done"

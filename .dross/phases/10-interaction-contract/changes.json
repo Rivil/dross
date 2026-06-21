@@ -53,9 +53,30 @@
         "docs/interaction-audit.md",
         "internal/cmd/interaction_pilot_test.go"
       ],
-      "commit": "1328a46",
-      "completed_at": "2026-06-21T15:24:24.228029Z",
-      "notes": "feature: interaction contract · spec.md @-include pilot · mechanical proof the snippet reference resolves; live nested-expansion left pending human verification in docs/interaction-audit.md"
+      "commit": "33c7520",
+      "completed_at": "2026-06-21T16:00:56.35959Z",
+      "notes": "feature: interaction playbook delivery · TestSpecPilotUsesEmitter @ internal/cmd/interaction_pilot_test.go · wire dross interaction show into spec.md pre-flight; pilot resolved (nested @-include failed, emitter adopted)"
+    },
+    "t-7": {
+      "files": [
+        "assets/embed.go",
+        "internal/cmd/interaction.go",
+        "cmd/dross/main.go",
+        "internal/cmd/interaction_test.go"
+      ],
+      "commit": "af06596",
+      "completed_at": "2026-06-21T15:53:54.263982Z",
+      "notes": "feature: interaction playbook delivery · interactionShow @ internal/cmd/interaction.go · dross interaction show prints the embedded propose-and-react playbook verbatim from the binary for prompt injection"
+    },
+    "t-8": {
+      "files": [
+        "internal/rules/rules.go",
+        "internal/rules/rules_test.go",
+        "assets/prompts/_interaction.md"
+      ],
+      "commit": "6334c60",
+      "completed_at": "2026-06-21T15:56:39.606389Z",
+      "notes": "feature: interaction playbook delivery · dross-interaction-contract @ internal/rules/rules.go · repoint shipped rule + snippet header from dead @-include to the dross interaction show emitter"
     }
   }
 }
