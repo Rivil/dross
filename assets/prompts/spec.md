@@ -2,7 +2,7 @@
 
 Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
 
-**Run this as a conversation, not a broadcast.** Every step below is a short turn the user answers — drive them one at a time with `AskUserQuestion`, never as one long composite message. The classic failure is dumping the orientation, all criteria, all decisions, and the composed TOML into a single block the user has to expand with ctrl+o. One point per turn; keep each message to a few lines.
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`): propose one point at a time via `AskUserQuestion` and let the user react. For `/dross-spec` that means walking §2's criteria and §3's gray-areas individually, and confirming the composed `spec.toml` with a one-line summary — never dumping the orientation, criteria, and TOML into one block.
 
 ## 0. Pre-flight
 
@@ -169,7 +169,7 @@ When the phase is a new subsystem, has multiple plausible architectures, or look
 
 ## Hard rules
 
-- **No walls of text; spec.toml is never a review medium.** Drive the whole command as short `AskUserQuestion`-gated turns — one criterion / one gray-area per turn — never the orientation + every criterion + the composed TOML in a single block. Never paste spec.toml back; confirm it with a one-line summary (§5). Content is agreed in prose first; the TOML is only where it lands.
+- **Follow the interaction playbook (`_interaction.md`); spec.toml is never a review medium.** Drive the command as short `AskUserQuestion`-gated turns — one criterion / one gray-area at a time — and confirm the composed `spec.toml` with a one-line summary (§5) rather than pasting it back. Content is agreed in prose first; the TOML is only where it lands.
 - **Never** invent criteria the user didn't explicitly approve. If you propose, say so and ask confirmation before writing.
 - **Gray areas (§3) must be phase-specific and inside the phase boundary.** Generic category labels ("UI", "Behaviour") and new-capability questions ("should we also add search?") are both bugs — the first is lazy, the second is scope creep. Skip areas already settled by `stack.locked` or a prior decision rather than re-asking them.
 - **Never** mark a decision `locked = true` without an explicit `why`. Locked decisions become non-negotiable in the planner.

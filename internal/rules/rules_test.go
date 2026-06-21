@@ -1,10 +1,106 @@
 package rules
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// repoRoot walks up from the test's working dir to the module root (the dir
+// containing go.mod) so cross-tree files like assets/prompts/*.md are reachable.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("could not find module root (no go.mod above %s)", dir)
+		}
+		dir = parent
+	}
+}
+
+// interactionRuleText returns the Text of the dross-interaction-contract builtin.
+func interactionRuleText(t *testing.T) string {
+	t.Helper()
+	for _, r := range Builtins {
+		if r.ID == "dross-interaction-contract" {
+			return r.Text
+		}
+	}
+	t.Fatal("dross-interaction-contract builtin not found")
+	return ""
+}
+
+// canonicalContractPhrases are the load-bearing phrases that MUST appear
+// verbatim in both the rule and the snippet, and live ONLY in the snippet among
+// the prompts. They are the anchor against drift.
+var canonicalContractPhrases = []string{
+	"one decision per turn",
+	"never paste the build artifact back",
+}
+
+// TestInteractionRuleNamesSnippet — the rule must name the snippet so the
+// rule→snippet pointer can't silently vanish.
+func TestInteractionRuleNamesSnippet(t *testing.T) {
+	if !strings.Contains(interactionRuleText(t), "_interaction.md") {
+		t.Error("interaction-contract rule must name _interaction.md")
+	}
+}
+
+// TestInteractionRuleStaysTerse — the rule renders into EVERY command's context
+// (including non-interactive ones), so the heavy playbook must stay in the
+// snippet. A length cap keeps it from leaking back into the rule.
+func TestInteractionRuleStaysTerse(t *testing.T) {
+	if n := len(interactionRuleText(t)); n >= 600 {
+		t.Errorf("interaction-contract rule text is %d chars; keep it < 600 — heavy playbook belongs in _interaction.md", n)
+	}
+}
+
+// TestInteractionContractNoDrift — the canonical phrases must appear in BOTH the
+// rule and the snippet. If either side is reworded, rule and snippet have drifted.
+func TestInteractionContractNoDrift(t *testing.T) {
+	rule := interactionRuleText(t)
+	b, err := os.ReadFile(filepath.Join(repoRoot(t), "assets", "prompts", "_interaction.md"))
+	if err != nil {
+		t.Fatalf("read _interaction.md: %v", err)
+	}
+	snippet := string(b)
+	for _, p := range canonicalContractPhrases {
+		if !strings.Contains(rule, p) {
+			t.Errorf("canonical phrase %q missing from the rule (drift)", p)
+		}
+		if !strings.Contains(snippet, p) {
+			t.Errorf("canonical phrase %q missing from the snippet (drift)", p)
+		}
+	}
+}
+
+// TestSpecPromptDefersToSnippet — spec.md must point at the snippet and must NOT
+// carry its own divergent copy of the canonical phrasing; the playbook lives in
+// _interaction.md, not duplicated per-prompt.
+func TestSpecPromptDefersToSnippet(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRoot(t), "assets", "prompts", "spec.md"))
+	if err != nil {
+		t.Fatalf("read spec.md: %v", err)
+	}
+	spec := string(b)
+	if !strings.Contains(spec, "_interaction.md") {
+		t.Error("spec.md must point at the shared snippet (_interaction.md)")
+	}
+	for _, p := range canonicalContractPhrases {
+		if strings.Contains(spec, p) {
+			t.Errorf("spec.md carries canonical phrase %q verbatim — it should defer to _interaction.md, not duplicate the playbook", p)
+		}
+	}
+}
 
 func TestAddRejectsDuplicateID(t *testing.T) {
 	s := &Set{}

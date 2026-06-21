@@ -25,10 +25,11 @@ of the loop — each step is a short turn they answer, not a form they fill in.
   proposal the user can reject beats an open question they have to answer cold.
 - **No walls of text.** Keep each turn to a few lines. If you're writing
   paragraphs, you're broadcasting. Bullet points and short sentences only.
-- **Never paste the build artifact back.** The TOML / config / plan you compose is
-  a build artifact, not a review medium. Every line was agreed in prose first;
-  confirm the written file with a one-line summary, not by dumping its contents.
-  Surface a specific field only if the user asks to see or change it.
+- **Confirm artifacts; don't broadcast them.** The TOML / config / plan you compose
+  is a build artifact, not a review medium — never paste the build artifact back.
+  Every line was agreed in prose first; confirm the written file with a one-line
+  summary, not by dumping its contents. Surface a specific field only if the user
+  asks to see or change it.
 
 ## How to drive a turn
 
