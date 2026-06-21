@@ -7,38 +7,45 @@ import (
 	"testing"
 )
 
-// interactionIncludeLine is the literal @-include the spec.md pilot uses to pull
-// in the shared playbook. Phases 11-13 repeat this exact line for every other
-// interactive prompt, so it is asserted verbatim here.
-const interactionIncludeLine = "@~/.claude/dross/prompts/_interaction.md"
+// deadIncludeLine is the nested @-include the pilot disproved: the command
+// wrapper expands the top-level @-include of spec.md, but spec.md's own
+// @-include of the snippet arrives as literal text and never reaches the model.
+// spec.md must no longer carry it — delivery is via `dross interaction show`.
+const deadIncludeLine = "@~/.claude/dross/prompts/_interaction.md"
 
-// TestSpecPilotIncludesSnippet proves c-3's mechanical half: spec.md carries the
-// literal @-include line, and the path it points at resolves (through the
-// installed prompts symlink) to a readable file. The live two-level expansion —
-// whether the text actually reaches the model — is the irreducibly manual half,
-// recorded in docs/interaction-audit.md.
-func TestSpecPilotIncludesSnippet(t *testing.T) {
+// TestSpecPilotUsesEmitter proves c-3's delivery half post-pilot: spec.md's
+// pre-flight invokes `dross interaction show` and no longer carries the dead
+// nested @-include line. Phases 11-13 repeat this emitter call for every other
+// interactive prompt.
+func TestSpecPilotUsesEmitter(t *testing.T) {
 	root := repoRootFromTest(t)
 	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "spec.md"))
 	if err != nil {
 		t.Fatalf("read spec.md: %v", err)
 	}
-	if !strings.Contains(string(b), interactionIncludeLine) {
-		t.Fatalf("spec.md is missing the pilot @-include line %q", interactionIncludeLine)
+	spec := string(b)
+	if strings.Contains(spec, deadIncludeLine) {
+		t.Errorf("spec.md still carries the dead nested @-include line %q — delivery is via `dross interaction show`", deadIncludeLine)
 	}
+	if !strings.Contains(spec, "dross interaction show") {
+		t.Error("spec.md pre-flight must invoke `dross interaction show` to deliver the interaction playbook")
+	}
+}
 
-	// Resolve the ~-path against the installed symlink. If dross isn't installed
-	// in this environment, skip rather than fail — the line presence above is the
-	// repo-level invariant; resolution depends on `make install` having run.
-	home, err := os.UserHomeDir()
+// TestPilotResultRecorded proves the c-3 pilot outcome is recorded as resolved in
+// the audit doc — not left pending. The sentinel is a concrete resolution phrase,
+// not a date format, so it stays falsifiable.
+func TestPilotResultRecorded(t *testing.T) {
+	root := repoRootFromTest(t)
+	b, err := os.ReadFile(filepath.Join(root, "docs", "interaction-audit.md"))
 	if err != nil {
-		t.Skipf("no home dir to resolve install path: %v", err)
+		t.Fatalf("read interaction-audit.md: %v", err)
 	}
-	installed := filepath.Join(home, ".claude", "dross", "prompts", "_interaction.md")
-	if _, err := os.Stat(installed); err != nil {
-		t.Skipf("snippet not installed at %s (run `make install`): %v", installed, err)
+	audit := string(b)
+	if !strings.Contains(audit, "resolved via the `dross interaction show` emitter") {
+		t.Error("interaction-audit.md must record the pilot as resolved via the `dross interaction show` emitter")
 	}
-	if _, err := os.ReadFile(installed); err != nil {
-		t.Errorf("installed snippet at %s is not readable: %v", installed, err)
+	if strings.Contains(audit, "⬜ pending human verification") {
+		t.Error("interaction-audit.md still marks the pilot pending — the pilot has run; record the outcome")
 	}
 }

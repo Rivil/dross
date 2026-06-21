@@ -2,13 +2,11 @@
 
 Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
 
-**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`): propose one point at a time via `AskUserQuestion` and let the user react. For `/dross-spec` that means walking §2's criteria and §3's gray-areas individually, and confirming the composed `spec.toml` with a one-line summary — never dumping the orientation, criteria, and TOML into one block.
-
-@~/.claude/dross/prompts/_interaction.md
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): propose one point at a time via `AskUserQuestion` and let the user react. For `/dross-spec` that means walking §2's criteria and §3's gray-areas individually, and confirming the composed `spec.toml` with a one-line summary — never dumping the orientation, criteria, and TOML into one block.
 
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat the output as MUST-FOLLOW for this session.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Resolve the target phase from `$ARGUMENTS`:
    - `--new "Phase Title"` → run `dross phase create "<title>"`, capture the new id (`NN-slug`).
    - `<phase-id>` → use it directly. Fail if `.dross/phases/<id>/` doesn't exist.

@@ -25,24 +25,29 @@ pattern point by point.
 
 ## Pilot result (phase 10 — c-3)
 
-`dross-spec` is the pilot that proves the `@`-include delivery mechanism before
-phases 11–13 repeat it. The reference line is `@~/.claude/dross/prompts/_interaction.md`.
+`dross-spec` is the pilot that proved the snippet-delivery mechanism before
+phases 11–13 repeat it. The pilot ran in a fresh `/dross-spec` session on
+**2026-06-21**.
+
+**Outcome: nested `@`-include FAILED; resolved via the `dross interaction show`
+emitter.** Loading `/dross-spec` expands the command wrapper's top-level
+`@`-include of `spec.md`, but `spec.md`'s own `@`-include of the snippet
+(`@~/.claude/dross/prompts/_interaction.md`) arrives as literal text — the
+two-level (wrapper → spec.md → _interaction.md) expansion does **not** resolve,
+so the snippet sentinel never reaches the model through the include. Per the
+locked `snippet_delivery` decision, the `dross interaction show` CLI emitter
+(embeds `_interaction.md`, prints it verbatim, mirrors `dross rule show`) was
+adopted and wired into `spec.md`'s pre-flight.
 
 | Check | Result | When |
 |---|---|---|
-| Mechanical — spec.md carries the literal `@`-include line and the path resolves to a readable installed file (`TestSpecPilotIncludesSnippet`) | ✅ pass | 2026-06-21 |
-| Manual — load `/dross-spec` in a fresh Claude Code session and confirm a snippet sentinel (e.g. the `accept / reword / drop` example) reaches the model through the two-level include (wrapper → spec.md → _interaction.md) | ⬜ pending human verification | — |
+| Nested `@`-include delivers the snippet to the model | ❌ FAILED — arrives as literal text | 2026-06-21 |
+| `dross interaction show` prints the playbook verbatim from the binary (`TestInteractionShowEmitsPlaybook`, single-source `TestInteractionPlaybookSingleSource`) | ✅ resolved via the `dross interaction show` emitter | 2026-06-21 |
+| `spec.md` pre-flight invokes the emitter and dropped the dead `@`-include (`TestSpecPilotUsesEmitter`) | ✅ pass | 2026-06-21 |
 
-**Sentinel to look for** when running the manual check: the phrase
-*"the canonical gate for 'is this item right?' is accept / reword / drop"* — it
-exists only in `_interaction.md`, so seeing it in `/dross-spec`'s loaded context
-proves the nested include expanded.
-
-**If the manual check fails** (nested `@`-expansion not supported): apply the
-`snippet_delivery` fallback from the spec — a `dross`-CLI emitter line in the
-prompt's pre-flight that prints the snippet, like `dross rule show` — and re-run
-the mechanical check against the emitter output. Record the outcome (resolved /
-fell-back) and date here.
+**Pattern for phases 11–13:** each interactive prompt's pre-flight runs
+`dross interaction show` (alongside `dross rule show`) — grep-verifiable, no
+dependency on nested include expansion.
 
 ---
 
