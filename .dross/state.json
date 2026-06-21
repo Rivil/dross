@@ -2,38 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "10-interaction-contract",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-21T15:09:18.35654Z",
-  "last_action": "plan reviewed: 10-interaction-contract (0 blocking, 3 flags)",
+  "current_phase_status": "partial",
+  "last_activity": "2026-06-21T15:24:50.267073Z",
+  "last_action": "phase 10 executed (5/6 done; t-6 mechanical landed, manual @-include pilot pending human)",
   "history": [
-    {
-      "at": "2026-06-20T19:22:00.03447Z",
-      "action": "set current_milestone=v0.2"
-    },
-    {
-      "at": "2026-06-20T19:22:00.040937Z",
-      "action": "set version=0.2.0.0"
-    },
-    {
-      "at": "2026-06-20T19:22:31.162181Z",
-      "action": "milestone v0.2 scoped (Multi-language stack profiles): phases 08-language-profiles, 09-marker-file-detection; v0.1 complete; version 0.1.0.13 → 0.2.0.0"
-    },
-    {
-      "at": "2026-06-20T19:34:19.606825Z",
-      "action": "created 08-language-profiles"
-    },
-    {
-      "at": "2026-06-20T19:44:12.872928Z",
-      "action": "set current_phase=08-language-profiles"
-    },
-    {
-      "at": "2026-06-20T19:44:12.880139Z",
-      "action": "spec locked: 08-language-profiles"
-    },
-    {
-      "at": "2026-06-20T19:52:04.568307Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-20T19:52:04.5748Z",
       "action": "plan locked: 08-language-profiles (6 tasks across 2 waves)"
@@ -205,6 +177,34 @@
     {
       "at": "2026-06-21T15:09:18.35654Z",
       "action": "plan reviewed: 10-interaction-contract (0 blocking, 3 flags)"
+    },
+    {
+      "at": "2026-06-21T15:12:18.233264Z",
+      "action": "executed t-1 (Add interaction-contract builtin rule)"
+    },
+    {
+      "at": "2026-06-21T15:15:11.330323Z",
+      "action": "executed t-2 (Author reusable interaction snippet)"
+    },
+    {
+      "at": "2026-06-21T15:17:07.863613Z",
+      "action": "executed t-4 (Seed interaction-audit checklist)"
+    },
+    {
+      "at": "2026-06-21T15:20:14.555277Z",
+      "action": "executed t-3 (Reconcile rule/snippet/spec.md; cross-reference)"
+    },
+    {
+      "at": "2026-06-21T15:22:18.076566Z",
+      "action": "executed t-5 (Wire snippet into install; verify symlink)"
+    },
+    {
+      "at": "2026-06-21T15:24:50.259715Z",
+      "action": "set current_phase_status=partial"
+    },
+    {
+      "at": "2026-06-21T15:24:50.267073Z",
+      "action": "phase 10 executed (5/6 done; t-6 mechanical landed, manual @-include pilot pending human)"
     }
   ]
 }
