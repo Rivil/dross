@@ -51,6 +51,49 @@ func TestGoRuntimeMatchesLocked(t *testing.T) {
 	}
 }
 
+// TestRuntimeSeededForLanguageProfiles proves the stacks meant to be runnable
+// declare a runtime command set: ResolveRuntime over each yields a non-empty Test
+// and Build, so init/onboard/apply seed project.toml [runtime] from them.
+func TestRuntimeSeededForLanguageProfiles(t *testing.T) {
+	emb, err := Embedded()
+	if err != nil {
+		t.Fatalf("Embedded: %v", err)
+	}
+	for _, id := range []string{"kotlin", "dart", "svelte", "typescript"} {
+		t.Run(id, func(t *testing.T) {
+			p := ByID(emb, id)
+			if p == nil {
+				t.Fatalf("no %q profile", id)
+			}
+			rt := ResolveRuntime(p, runtime.GOOS, fakeLookPath())
+			if rt.Test == "" {
+				t.Errorf("%s profile declares no runtime.test", id)
+			}
+			if rt.Build == "" {
+				t.Errorf("%s profile declares no runtime.build", id)
+			}
+		})
+	}
+}
+
+// TestSQLProfileHasNoRuntime pins the seed_runtime decision: SQL has no
+// meaningful test/build runtime, so it declares none. A sneaked-in [runtime]
+// block in sql.toml makes Test/Build non-empty and fails this.
+func TestSQLProfileHasNoRuntime(t *testing.T) {
+	emb, err := Embedded()
+	if err != nil {
+		t.Fatalf("Embedded: %v", err)
+	}
+	p := ByID(emb, "sql")
+	if p == nil {
+		t.Fatal("no sql profile")
+	}
+	rt := ResolveRuntime(p, runtime.GOOS, fakeLookPath())
+	if rt.Test != "" || rt.Build != "" {
+		t.Errorf("sql profile must declare no runtime; got Test=%q Build=%q", rt.Test, rt.Build)
+	}
+}
+
 func TestRuntimeSlotPicksAvailableVariant(t *testing.T) {
 	slot := Command{Variants: []CommandVariant{
 		{Run: "pnpm test", Bin: "pnpm"},
