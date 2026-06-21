@@ -26,6 +26,7 @@ func main() {
 		cmd.Project(),
 		cmd.State(),
 		cmd.Rule(),
+		cmd.Interaction(),
 		cmd.Validate(),
 		cmd.Phase(),
 		cmd.Milestone(),
