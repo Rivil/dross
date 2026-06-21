@@ -1,21 +1,11 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
-  "last_activity": "2026-06-21T16:40:33.3508Z",
-  "last_action": "completed 10-interaction-contract",
+  "current_phase": "11-retrofit-core-loop",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-21T16:55:51.353551Z",
+  "last_action": "spec locked: 11-retrofit-core-loop",
   "history": [
-    {
-      "at": "2026-06-21T10:14:16.123353Z",
-      "action": "completed 08-language-profiles"
-    },
-    {
-      "at": "2026-06-21T10:34:59.035399Z",
-      "action": "created 09-marker-file-detection"
-    },
-    {
-      "at": "2026-06-21T10:51:08.478804Z",
-      "action": "set current_phase=09-marker-file-detection"
-    },
     {
       "at": "2026-06-21T10:51:08.486028Z",
       "action": "spec locked: 09-marker-file-detection"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-21T16:40:33.3508Z",
       "action": "completed 10-interaction-contract"
+    },
+    {
+      "at": "2026-06-21T16:45:46.99458Z",
+      "action": "created 11-retrofit-core-loop"
+    },
+    {
+      "at": "2026-06-21T16:55:51.346631Z",
+      "action": "set current_phase=11-retrofit-core-loop"
+    },
+    {
+      "at": "2026-06-21T16:55:51.353551Z",
+      "action": "spec locked: 11-retrofit-core-loop"
     }
   ]
 }
