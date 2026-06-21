@@ -2,22 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "11-retrofit-core-loop",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-21T18:24:24.648863Z",
-  "last_action": "plan amended: t-8 contract hardened per review (anchored sentinels for c-3/c-4)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-21T18:27:41.779378Z",
+  "last_action": "phase 11-retrofit-core-loop executed (8/8 done; t-8 hardened c-3/c-4 to direct coverage)",
   "history": [
-    {
-      "at": "2026-06-21T13:18:06.661792Z",
-      "action": "scoped milestone v0.3: 4 criteria, 4 phases (conversational command UX)"
-    },
-    {
-      "at": "2026-06-21T13:53:54.743662Z",
-      "action": "created 10-interaction-contract"
-    },
-    {
-      "at": "2026-06-21T14:44:06.163175Z",
-      "action": "set current_phase=10-interaction-contract"
-    },
     {
       "at": "2026-06-21T14:44:06.169539Z",
       "action": "spec locked: 10-interaction-contract"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-21T18:24:24.648863Z",
       "action": "plan amended: t-8 contract hardened per review (anchored sentinels for c-3/c-4)"
+    },
+    {
+      "at": "2026-06-21T18:27:35.255689Z",
+      "action": "executed t-8 (Add prompt-sentinel tests for c-3/c-4)"
+    },
+    {
+      "at": "2026-06-21T18:27:41.773015Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-21T18:27:41.779378Z",
+      "action": "phase 11-retrofit-core-loop executed (8/8 done; t-8 hardened c-3/c-4 to direct coverage)"
     }
   ]
 }

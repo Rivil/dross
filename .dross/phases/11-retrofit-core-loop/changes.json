@@ -56,6 +56,14 @@
       "commit": "fd1094e",
       "completed_at": "2026-06-21T17:16:15.058054Z",
       "notes": "feature: interaction contract · interaction_coreloop_test.go @ internal/cmd/interaction_coreloop_test.go · table-driven grep guard: emitter call + playbook reference + audit conformance over the 5 prompts"
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/interaction_coreloop_test.go"
+      ],
+      "commit": "4c5ef5a",
+      "completed_at": "2026-06-21T18:27:35.246346Z",
+      "notes": "feature: interaction contract · TestShipPromptDecisionTurnsSeparate+TestPlanPromptNoArtifactDump @ internal/cmd/interaction_coreloop_test.go · per-section sentinels graduating c-3/c-4 from audit-proxy to direct prompt coverage"
     }
   }
 }
