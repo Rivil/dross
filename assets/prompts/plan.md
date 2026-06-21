@@ -2,9 +2,11 @@
 
 Decompose a phase's `spec.toml` into a task graph with waves, dependencies, and per-task test contracts. Pair-mode: **propose → steer → write**. Never write `plan.toml` until the user has accepted the decomposition.
 
+**Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`, printed by the `dross interaction show` pre-flight step below): propose one point at a time and let the user react. For `/dross-plan` that means walking the §2P panel disagreements one at a time, steering the proposed decomposition in §3, and confirming the written `plan.toml` with a one-line summary — never dumping the toml back for review.
+
 ## 0. Pre-flight
 
-1. Run `dross rule show` and treat output as MUST-FOLLOW.
+1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Parse flags from `$ARGUMENTS`: `--panel` switches decomposition to panel mode (see §2P); `--no-review` skips the automatic plan review in §6. Strip both before resolving the phase id.
 3. Resolve target phase: remaining `$ARGUMENTS` if provided, else `state.json`'s `current_phase`. If unset, list phases via `dross phase list` and ask.
 4. Read `.dross/phases/<id>/spec.toml`. If missing, route the user to `/dross-spec` first and stop.
@@ -139,7 +141,7 @@ Return one line: "synthesis: N tasks across W waves, D disagreements".
 
 ### 2P.3 Present
 
-Read `panel/synthesis.md`. Print the merged plan and the **full** disagreements list. The disagreements are the steering agenda — walk them with the user first (`AskUserQuestion` works well for binary divergences), then continue with §3 steering as normal. From here the flow is identical: coverage check → write → validate.
+Read `panel/synthesis.md`. Print the merged plan, then drive the disagreements as the steering agenda **one at a time** — never dump the full list as a wall. For each divergence, surface a single `AskUserQuestion` turn that leads with the judge's provisional pick and lets the user accept or steer (e.g. "`risk` split t-2 in two, `mvp` kept it merged; I took the merge — keep merged / split?"). Walk them in order, one turn each; `synthesis.md` stays the source list. Once the disagreements are resolved, continue with §3 steering as normal. From here the flow is identical: coverage check → write → validate.
 
 Leave `panel/` in place — it's the audit trail for why the plan looks the way it does.
 
@@ -161,7 +163,7 @@ Wave 2 (depends t-1)
        ...
 ```
 
-Then ask: **"Steer or proceed? Things I might've got wrong: granularity, wave order, missed files, missing test contracts, missed criteria."**
+Then, as a single propose-and-react turn, ask via `AskUserQuestion`: **"Steer or proceed?"** — lead with `proceed` and offer concrete steer handles as the other options (granularity, wave order, missed files, missing test contracts, missed criteria). One decision per turn; if the user steers, revise and re-ask rather than bundling follow-ups.
 
 Iterate until the user says proceed. Do not be sycophantic — if the user accepts a poor decomposition, flag the risk once before writing.
 
@@ -199,7 +201,7 @@ depends_on = ["t-1"]
 ...
 ```
 
-Use `Write` tool to save to `.dross/phases/<id>/plan.toml`. Show final content. Ask: "Lock this plan? (y / edit)".
+Use the `Write` tool to save to `.dross/phases/<id>/plan.toml`. **Don't paste the toml back** — it's a build artifact, agreed task by task in §3, not a review medium. Confirm with a one-line summary instead: **"Plan written: N tasks across W waves — lock it? (y / edit \<what>)"**. Surface a specific task only if the user asks to see or change it.
 
 ## 6. Validate + wrap
 
@@ -243,6 +245,7 @@ When the plan is trivial or purely mechanical, append the hint under the `Next:`
 
 ## Hard rules
 
+- **Follow the interaction playbook (`_interaction.md`); plan.toml is never a review medium.** Drive the command as a conversation — walk panel disagreements (§2P.3) and the §3 proposal as one-decision-per-turn `AskUserQuestion` turns, and confirm the written `plan.toml` with a one-line summary (§5) rather than pasting it back.
 - **Pair-mode default.** Never write `plan.toml` before the user accepts the proposed decomposition. If the user wants autonomous mode, they'll say so explicitly.
 - **Subagents: read-only fan-out is fine; authoring `plan.toml` is not.** Per the `dross-agent-gate` builtin, you may fan out subagents for read-only work — research, pattern-mapping, independent review — when it sharpens the plan, and should when it widens coverage or saves wall-clock. What stays gated is the decomposition itself: never let an unattended agent author or finalize `plan.toml` — it's agreed with the user (pair mode) or by you (`--solo`). The `--panel` flow (§2P) and the §6 plan-review are the worked examples: independent agents draft or critique, the user steers the result. For a small, pattern-following plan, staying inline is still the right call — fan out when it earns its keep, not by default.
 - **Test contracts are mandatory.** A task without a `test_contract` is a task verify can't check. Refuse to write the plan with empty contracts unless the user explicitly accepts the gap.
