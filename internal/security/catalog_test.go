@@ -73,6 +73,33 @@ func TestScannersForGoIsComplete(t *testing.T) {
 	}
 }
 
+// TestScannersForLanguageProfilesAgnosticOnly enforces the locked
+// security_agnostic_only decision: none of the v0.2 profiles contributes a
+// dedicated scanner, so each profile's scanner set EQUALS the agnostic set
+// exactly. Equality (not membership) means an accidentally-added kind="scanner"
+// tool in any of the five profiles fails this test.
+func TestScannersForLanguageProfilesAgnosticOnly(t *testing.T) {
+	agnostic := map[string]bool{"gitleaks": true, "semgrep": true, "trivy": true}
+	for _, id := range []string{"kotlin", "dart", "svelte", "sql", "typescript"} {
+		t.Run(id, func(t *testing.T) {
+			names := map[string]bool{}
+			for _, s := range ScannersFor(id) {
+				names[s.Name] = true
+			}
+			for want := range agnostic {
+				if !names[want] {
+					t.Errorf("ScannersFor(%q) missing agnostic scanner %q", id, want)
+				}
+			}
+			for name := range names {
+				if !agnostic[name] {
+					t.Errorf("ScannersFor(%q) has unexpected dedicated scanner %q (security_agnostic_only)", id, name)
+				}
+			}
+		})
+	}
+}
+
 // overrideGoProfile points the user profile dir at a temp HOME holding a go.toml
 // that replaces the embedded Go profile, so a test can prove the catalog tracks
 // the profile rather than an inline table.
