@@ -76,5 +76,6 @@ test_contract = [
   "if an \"other\" command loses the emitter or contract phrase, the new emitter/contract test fails",
   "if an \"other\" audit section regresses to a non-conforming marker, the new audit-conformance test fails",
   "if the README \"## Interaction\" section or its key phrasing is removed, the new README test fails",
+  "if the README \"## Interaction\" heading is moved out of its locked placement (its index must fall between \"## Concept\" and the next top-level \"## \" heading), the README placement test fails",
 ]
 status        = "pending"
