@@ -190,16 +190,17 @@ _introduced d392501 · extended 01-architecture-comprehension-layer · extended 
 
 ### Stack profiles
 
-Declarative per-stack profiles — embedded built-ins plus `~/.claude/dross/profiles/` drop-ins (user wins on id) — that tune dross to a detected stack: runtime commands, the security/quality tool loadout, and the agent loadout. `dross stack detect/show/list/apply/loadout`; detection is signal-scored (marker files + source extensions), returning a matched profile id or an `unsupported` sentinel rather than a guess. `apply` re-syncs `[runtime]`; `loadout` emits a markdown block the execute prompt injects inline. Adding a stack is a single TOML drop-in — zero code change.
+Declarative per-stack profiles — embedded built-ins plus `~/.claude/dross/profiles/` drop-ins (user wins on id) — that tune dross to a detected stack: runtime commands, the security/quality tool loadout, and the agent loadout. `dross stack detect/show/list/apply/loadout`; detection is signal-scored (marker files + source extensions), returning a matched profile id or an `unsupported` sentinel rather than a guess. `apply` re-syncs `[runtime]`; `loadout` emits a markdown block the execute prompt injects inline. Adding a stack is a single TOML drop-in — zero code change. Built-ins ship for Go plus Kotlin/Dart/Svelte/SQL/TypeScript, each with one dedicated quality analyzer (detekt/dcm/eslint/sqlfluff) and agnostic-only security; the v0.2 set landed as pure data behind one `extLang` edit, proving the zero-mechanism-change keystone.
 
 - `stack.Profile` / `stack.Load` — `internal/stack/profile.go:26`
-- `stack.Detect` / `stack.DetectLanguages` — `internal/stack/detect.go`
+- `stack.Detect` / `stack.DetectLanguages` (`extLang` map) — `internal/stack/detect.go`
 - `stack.Embedded` / `stack.LoadAll` / `stack.Merge` — `internal/stack/embed.go`
+- embedded profile TOMLs (`go:embed profiles/*.toml`) — `internal/stack/profiles/`
 - `stack.ResolveRuntime` — `internal/stack/runtime.go`
 - `stack.RenderLoadout` — `internal/stack/loadout.go`
 - `Stack` (CLI) — `internal/cmd/stack.go`
 
-_introduced 07-stack-profiles · 6f5a31b_
+_introduced 07-stack-profiles · extended 08-language-profiles · 08fd1a1_
 
 ### State & status
 
