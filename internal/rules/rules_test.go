@@ -150,6 +150,25 @@ func TestRenderEmitsAgentGateBuiltin(t *testing.T) {
 	}
 }
 
+func TestRenderEmitsInteractionContractBuiltin(t *testing.T) {
+	out := Render(nil)
+	if !strings.Contains(out, "[builtin/hard/dross-interaction-contract]") {
+		t.Error("render missing dross-interaction-contract builtin")
+	}
+	// The canonical do/don't phrases are the load-bearing part of the contract —
+	// if any is reworded away, the rule has drifted from the snippet (t-3 guards
+	// the other direction).
+	for _, phrase := range []string{"one decision per turn", "propose", "never paste the build artifact back"} {
+		if !strings.Contains(out, phrase) {
+			t.Errorf("interaction-contract rule missing phrase %q: %q", phrase, out)
+		}
+	}
+	// The rule must name the snippet so the rule→snippet pointer can't silently vanish.
+	if !strings.Contains(out, "_interaction.md") {
+		t.Error("interaction-contract rule must name _interaction.md")
+	}
+}
+
 func TestRenderEmitsBuiltinsBeforeUserRules(t *testing.T) {
 	merged := []Resolved{
 		{Rule: Rule{ID: "r-01", Text: "user rule", Severity: Hard}, Scope: Global},
