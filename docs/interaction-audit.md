@@ -23,6 +23,29 @@ pattern point by point.
 
 ---
 
+## Pilot result (phase 10 — c-3)
+
+`dross-spec` is the pilot that proves the `@`-include delivery mechanism before
+phases 11–13 repeat it. The reference line is `@~/.claude/dross/prompts/_interaction.md`.
+
+| Check | Result | When |
+|---|---|---|
+| Mechanical — spec.md carries the literal `@`-include line and the path resolves to a readable installed file (`TestSpecPilotIncludesSnippet`) | ✅ pass | 2026-06-21 |
+| Manual — load `/dross-spec` in a fresh Claude Code session and confirm a snippet sentinel (e.g. the `accept / reword / drop` example) reaches the model through the two-level include (wrapper → spec.md → _interaction.md) | ⬜ pending human verification | — |
+
+**Sentinel to look for** when running the manual check: the phrase
+*"the canonical gate for 'is this item right?' is accept / reword / drop"* — it
+exists only in `_interaction.md`, so seeing it in `/dross-spec`'s loaded context
+proves the nested include expanded.
+
+**If the manual check fails** (nested `@`-expansion not supported): apply the
+`snippet_delivery` fallback from the spec — a `dross`-CLI emitter line in the
+prompt's pre-flight that prints the snippet, like `dross rule show` — and re-run
+the mechanical check against the emitter output. Record the outcome (resolved /
+fell-back) and date here.
+
+---
+
 ## Core loop (phase 11 — retrofit-core-loop)
 
 ### dross-milestone

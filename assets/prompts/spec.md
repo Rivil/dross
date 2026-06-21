@@ -4,6 +4,8 @@ Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
 
 **Run this as a conversation, not a broadcast.** Follow the shared interaction playbook (`_interaction.md`): propose one point at a time via `AskUserQuestion` and let the user react. For `/dross-spec` that means walking §2's criteria and §3's gray-areas individually, and confirming the composed `spec.toml` with a one-line summary — never dumping the orientation, criteria, and TOML into one block.
 
+@~/.claude/dross/prompts/_interaction.md
+
 ## 0. Pre-flight
 
 1. Run `dross rule show` and treat the output as MUST-FOLLOW for this session.
