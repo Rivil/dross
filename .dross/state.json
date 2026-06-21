@@ -2,46 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
   "current_phase": "11-retrofit-core-loop",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-21T17:04:58.154658Z",
-  "last_action": "plan reviewed: 11-retrofit-core-loop (0 blocking, 4 flags)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-21T17:16:23.750299Z",
+  "last_action": "phase 11-retrofit-core-loop executed (7/7 done)",
   "history": [
-    {
-      "at": "2026-06-21T11:16:26.866919Z",
-      "action": "plan reviewed: 09-marker-file-detection (1 blocking found+resolved [hadolint analyzer dimension], 1 flag remaining)"
-    },
-    {
-      "at": "2026-06-21T11:21:19.713738Z",
-      "action": "executed t-1 (Add file_patterns field + glob matcher)"
-    },
-    {
-      "at": "2026-06-21T11:23:01.643581Z",
-      "action": "executed t-2 (Add generic MarkerProfiles detector)"
-    },
-    {
-      "at": "2026-06-21T11:24:55.871187Z",
-      "action": "executed t-3 (Ship embedded docker stack profile)"
-    },
-    {
-      "at": "2026-06-21T11:26:25.712676Z",
-      "action": "executed t-4 (Union marker profiles into security manifest)"
-    },
-    {
-      "at": "2026-06-21T11:27:40.558552Z",
-      "action": "executed t-5 (Union marker profiles into quality manifest)"
-    },
-    {
-      "at": "2026-06-21T11:28:13.8569Z",
-      "action": "executed t-7 (Verify docker profile on stack CLI)"
-    },
-    {
-      "at": "2026-06-21T11:29:12.924707Z",
-      "action": "executed t-6 (Guard: no Docker hardcode in detect/recon)"
-    },
-    {
-      "at": "2026-06-21T11:29:29.243901Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-06-21T11:29:29.251498Z",
       "action": "phase 09-marker-file-detection executed (7/7 done)"
@@ -205,6 +169,42 @@
     {
       "at": "2026-06-21T17:04:58.154658Z",
       "action": "plan reviewed: 11-retrofit-core-loop (0 blocking, 4 flags)"
+    },
+    {
+      "at": "2026-06-21T17:09:06.864593Z",
+      "action": "executed t-1 (Retrofit plan.md interaction)"
+    },
+    {
+      "at": "2026-06-21T17:10:08.091957Z",
+      "action": "executed t-2 (Retrofit execute.md interaction)"
+    },
+    {
+      "at": "2026-06-21T17:11:16.407648Z",
+      "action": "executed t-3 (Retrofit verify.md interaction)"
+    },
+    {
+      "at": "2026-06-21T17:12:26.964399Z",
+      "action": "executed t-4 (Retrofit ship.md interaction)"
+    },
+    {
+      "at": "2026-06-21T17:13:13.717764Z",
+      "action": "executed t-5 (Retrofit review.md interaction)"
+    },
+    {
+      "at": "2026-06-21T17:15:11.438553Z",
+      "action": "executed t-6 (Update audit doc core-loop sections)"
+    },
+    {
+      "at": "2026-06-21T17:16:15.068977Z",
+      "action": "executed t-7 (Add core-loop wiring guard test)"
+    },
+    {
+      "at": "2026-06-21T17:16:23.743363Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-21T17:16:23.750299Z",
+      "action": "phase 11-retrofit-core-loop executed (7/7 done)"
     }
   ]
 }
