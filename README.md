@@ -78,6 +78,28 @@ intent ─► SPEC ─► PLAN ─► CODE ─► TESTS ─► EFFICACY PROOF �
                           commit)   task)    coverage)        backward)
 ```
 
+## Interaction
+
+Every interactive dross command runs as a **conversation, not a broadcast**. The
+contract is **propose-and-react, one decision per turn**: a command surfaces a
+single decision, proposes the default it would pick, and lets you accept or steer
+— never a wall of batched questions, and never a composed artifact (a spec, a
+plan, a config) dumped back for blanket approval. Written artifacts are confirmed
+with a one-line summary, not pasted in full.
+
+So `/dross-spec` walks acceptance criteria one at a time rather than asking for all
+seven at once:
+
+```
+spec › c-3  "returns 401 when the token is missing"
+        accept · reword · drop ?            ‹ you pick, then it moves to c-4
+```
+
+That's the whole loop — you stay in it, steering as you go, instead of reviewing a
+finished blob at the end. The invariant is the `dross-interaction-contract` rule
+(`dross rule show`); the how-to playbook lives in `assets/prompts/_interaction.md`
+and is delivered to each command verbatim via `dross interaction show`.
+
 ## Layout
 
 ```
