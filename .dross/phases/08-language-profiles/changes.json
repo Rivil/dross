@@ -1,0 +1,58 @@
+{
+  "phase": "08-language-profiles",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/stack/detect.go",
+        "internal/stack/detect_test.go"
+      ],
+      "commit": "2d11e7c",
+      "completed_at": "2026-06-21T09:46:32.84013Z",
+      "notes": "feature: stack detection · extLang @ internal/stack/detect.go · maps .dart/.svelte/.sql to dart/svelte/sql so DetectLanguages recognises the v0.2 stacks"
+    },
+    "t-2": {
+      "files": [
+        "internal/stack/profiles/kotlin.toml",
+        "internal/stack/profiles/dart.toml",
+        "internal/stack/profiles/svelte.toml",
+        "internal/stack/profiles/sql.toml",
+        "internal/stack/profiles/typescript.toml"
+      ],
+      "commit": "08fd1a1",
+      "completed_at": "2026-06-21T09:53:02.547745Z",
+      "notes": "feature: stack profiles · profiles/*.toml @ internal/stack/profiles · five embedded go:embed profiles (kotlin/dart/svelte/sql/typescript) each with one dedicated analyzer; svelte+typescript share eslint, sql declares no runtime"
+    },
+    "t-3": {
+      "files": [
+        "internal/stack/detect_test.go"
+      ],
+      "commit": "2f40811",
+      "completed_at": "2026-06-21T09:54:34.705997Z",
+      "notes": "feature: stack detection · TestDetectResolvesEmbeddedProfiles @ internal/stack/detect_test.go · proves each embedded profile (incl. typescript) is detectable by signal + CLI list/show surface, with unsupported and go-polyglot guards"
+    },
+    "t-4": {
+      "files": [
+        "internal/quality/catalog_test.go"
+      ],
+      "commit": "ac3c5e7",
+      "completed_at": "2026-06-21T09:56:43.6462Z",
+      "notes": "feature: quality analyzer catalog · TestAnalyzersForLanguageProfiles @ internal/quality/catalog_test.go · proves each profile's dedicated analyzer (detekt/dcm/eslint/sqlfluff/eslint) surfaces with a substantive dimension; pins svelte vs typescript eslint install hints apart"
+    },
+    "t-5": {
+      "files": [
+        "internal/security/catalog_test.go"
+      ],
+      "commit": "e42694e",
+      "completed_at": "2026-06-21T09:57:35.266092Z",
+      "notes": "feature: security scanner catalog · TestScannersForLanguageProfilesAgnosticOnly @ internal/security/catalog_test.go · enforces security_agnostic_only: each of the five profiles' scanner set equals {gitleaks,semgrep,trivy} exactly"
+    },
+    "t-6": {
+      "files": [
+        "internal/stack/runtime_test.go"
+      ],
+      "commit": "b8943bb",
+      "completed_at": "2026-06-21T09:58:37.138119Z",
+      "notes": "feature: runtime seeding · TestRuntimeSeededForLanguageProfiles @ internal/stack/runtime_test.go · proves kotlin/dart/svelte/typescript declare seedable test+build runtime and sql declares none"
+    }
+  }
+}

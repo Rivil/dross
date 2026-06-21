@@ -2,42 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.2",
   "current_phase": "08-language-profiles",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-21T09:42:19.567884Z",
-  "last_action": "resumed — ready to execute t-1 (extLang map: .dart/.svelte/.sql)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-21T09:58:45.920828Z",
+  "last_action": "phase 08-language-profiles executed (6/6 done)",
   "history": [
-    {
-      "at": "2026-06-20T15:49:08.723582Z",
-      "action": "plan locked: 06-dross-quality (9 tasks across 5 waves)"
-    },
-    {
-      "at": "2026-06-20T15:50:46.132111Z",
-      "action": "plan reviewed: 06-dross-quality (0 blocking, 3 flags)"
-    },
-    {
-      "at": "2026-06-20T15:55:05.752606Z",
-      "action": "executed t-1 (run-dir + run-id writer)"
-    },
-    {
-      "at": "2026-06-20T15:56:58.68559Z",
-      "action": "executed t-2 (dimension→analyzer catalog + detection)"
-    },
-    {
-      "at": "2026-06-20T15:58:32.805989Z",
-      "action": "executed t-3 (maintainability-risk findings ledger)"
-    },
-    {
-      "at": "2026-06-20T15:59:06.77072Z",
-      "action": "executed t-9 (gitignore quality run artifacts)"
-    },
-    {
-      "at": "2026-06-20T16:00:13.136183Z",
-      "action": "executed t-4 (tool-coverage manifest + language recon)"
-    },
-    {
-      "at": "2026-06-20T16:01:15.860003Z",
-      "action": "executed t-5 (risk-ordered remediation scaffold writer)"
-    },
     {
       "at": "2026-06-20T16:03:15.217068Z",
       "action": "executed t-6 (dross quality command + containment)"
@@ -205,6 +173,38 @@
     {
       "at": "2026-06-21T09:42:19.567884Z",
       "action": "resumed — ready to execute t-1 (extLang map: .dart/.svelte/.sql)"
+    },
+    {
+      "at": "2026-06-21T09:46:32.852529Z",
+      "action": "executed t-1 (Add .dart/.svelte/.sql to extLang)"
+    },
+    {
+      "at": "2026-06-21T09:53:02.560544Z",
+      "action": "executed t-2 (five embedded language profiles incl. typescript)"
+    },
+    {
+      "at": "2026-06-21T09:54:34.719279Z",
+      "action": "executed t-3 (detection resolves each profile id)"
+    },
+    {
+      "at": "2026-06-21T09:56:43.66003Z",
+      "action": "executed t-4 (AnalyzersFor surfaces each analyzer)"
+    },
+    {
+      "at": "2026-06-21T09:57:35.279875Z",
+      "action": "executed t-5 (ScannersFor stays agnostic-only)"
+    },
+    {
+      "at": "2026-06-21T09:58:37.150008Z",
+      "action": "executed t-6 (runtime seeded for 4, empty for sql)"
+    },
+    {
+      "at": "2026-06-21T09:58:45.913979Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-21T09:58:45.920828Z",
+      "action": "phase 08-language-profiles executed (6/6 done)"
     }
   ]
 }
