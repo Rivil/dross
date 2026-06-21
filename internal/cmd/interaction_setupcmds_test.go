@@ -129,3 +129,29 @@ func TestSetupNoArtifactDump(t *testing.T) {
 		}
 	}
 }
+
+// TestSetupAuditSectionsConform proves c-5: the audit doc records each of the
+// seven retrofitted setup/config commands as conforming. A section that still
+// carries a pending/partial/violates marker (⬜ 🟡 ❌) means the retrofit didn't
+// land or regressed — the audit must reflect the post-retrofit reality. Twin of
+// TestCoreLoopAuditSectionsConform; reuses coreLoopAuditSection (setup command
+// names are unique in the doc, so slicing by `### dross-<name>` is unambiguous).
+func TestSetupAuditSectionsConform(t *testing.T) {
+	root := repoRootFromTest(t)
+	b, err := os.ReadFile(filepath.Join(root, "docs", "interaction-audit.md"))
+	if err != nil {
+		t.Fatalf("read interaction-audit.md: %v", err)
+	}
+	doc := string(b)
+	for _, name := range setupPrompts {
+		section := coreLoopAuditSection(t, doc, name)
+		if !strings.Contains(section, "✅") {
+			t.Errorf("audit section dross-%s must be marked conforming (✅) post-retrofit (c-5)", name)
+		}
+		for _, marker := range []string{"⬜", "🟡", "❌"} {
+			if strings.Contains(section, marker) {
+				t.Errorf("audit section dross-%s still carries a non-conforming marker %q — retrofit incomplete (c-5)", name, marker)
+			}
+		}
+	}
+}
