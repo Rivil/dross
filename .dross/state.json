@@ -1,89 +1,9 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.2",
-  "last_activity": "2026-06-20T19:22:31.162181Z",
-  "last_action": "milestone v0.2 scoped (Multi-language stack profiles): phases 08-language-profiles, 09-marker-file-detection; v0.1 complete; version 0.1.0.13 → 0.2.0.0",
+  "last_activity": "2026-06-21T10:14:16.123353Z",
+  "last_action": "completed 08-language-profiles",
   "history": [
-    {
-      "at": "2026-06-20T13:12:42.121735Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-20T13:12:42.129611Z",
-      "action": "re-verified 05-dross-secure: pass (6/6 covered; phase-diff mutation clean after amend; rollup 0.81 package-scoped — not a phase signal)"
-    },
-    {
-      "at": "2026-06-20T13:31:18.310941Z",
-      "action": "completed 05-dross-secure"
-    },
-    {
-      "at": "2026-06-20T13:36:58.005881Z",
-      "action": "bump internal 0.1.0.12 → 0.1.0.13"
-    },
-    {
-      "at": "2026-06-20T13:36:58.014301Z",
-      "action": "quick: flag-aware Next: convention (re-recorded after phase-05 merge)"
-    },
-    {
-      "at": "2026-06-20T14:06:54.598781Z",
-      "action": "created 06-dross-quality"
-    },
-    {
-      "at": "2026-06-20T15:32:49.417954Z",
-      "action": "set current_phase=06-dross-quality"
-    },
-    {
-      "at": "2026-06-20T15:32:49.426641Z",
-      "action": "spec locked: 06-dross-quality"
-    },
-    {
-      "at": "2026-06-20T15:49:08.716127Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-20T15:49:08.723582Z",
-      "action": "plan locked: 06-dross-quality (9 tasks across 5 waves)"
-    },
-    {
-      "at": "2026-06-20T15:50:46.132111Z",
-      "action": "plan reviewed: 06-dross-quality (0 blocking, 3 flags)"
-    },
-    {
-      "at": "2026-06-20T15:55:05.752606Z",
-      "action": "executed t-1 (run-dir + run-id writer)"
-    },
-    {
-      "at": "2026-06-20T15:56:58.68559Z",
-      "action": "executed t-2 (dimension→analyzer catalog + detection)"
-    },
-    {
-      "at": "2026-06-20T15:58:32.805989Z",
-      "action": "executed t-3 (maintainability-risk findings ledger)"
-    },
-    {
-      "at": "2026-06-20T15:59:06.77072Z",
-      "action": "executed t-9 (gitignore quality run artifacts)"
-    },
-    {
-      "at": "2026-06-20T16:00:13.136183Z",
-      "action": "executed t-4 (tool-coverage manifest + language recon)"
-    },
-    {
-      "at": "2026-06-20T16:01:15.860003Z",
-      "action": "executed t-5 (risk-ordered remediation scaffold writer)"
-    },
-    {
-      "at": "2026-06-20T16:03:15.217068Z",
-      "action": "executed t-6 (dross quality command + containment)"
-    },
-    {
-      "at": "2026-06-20T16:04:56.898973Z",
-      "action": "executed t-7 (quality orchestration prompt content)"
-    },
-    {
-      "at": "2026-06-20T16:06:38.759896Z",
-      "action": "executed t-8 (prompt-content assertions + parity)"
-    },
     {
       "at": "2026-06-20T16:07:04.461111Z",
       "action": "set current_phase_status=complete"
@@ -203,6 +123,86 @@
     {
       "at": "2026-06-20T19:22:31.162181Z",
       "action": "milestone v0.2 scoped (Multi-language stack profiles): phases 08-language-profiles, 09-marker-file-detection; v0.1 complete; version 0.1.0.13 → 0.2.0.0"
+    },
+    {
+      "at": "2026-06-20T19:34:19.606825Z",
+      "action": "created 08-language-profiles"
+    },
+    {
+      "at": "2026-06-20T19:44:12.872928Z",
+      "action": "set current_phase=08-language-profiles"
+    },
+    {
+      "at": "2026-06-20T19:44:12.880139Z",
+      "action": "spec locked: 08-language-profiles"
+    },
+    {
+      "at": "2026-06-20T19:52:04.568307Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-20T19:52:04.5748Z",
+      "action": "plan locked: 08-language-profiles (6 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-06-20T19:54:11.736276Z",
+      "action": "plan reviewed: 08-language-profiles (0 blocking, 1 flag)"
+    },
+    {
+      "at": "2026-06-20T19:54:58.153613Z",
+      "action": "plan amended: 08-language-profiles (t-3 adds CLI list/show assertion for c-2)"
+    },
+    {
+      "at": "2026-06-20T19:56:33.783895Z",
+      "action": "paused — spec+plan locked for 08-language-profiles, ready to execute t-1"
+    },
+    {
+      "at": "2026-06-21T09:42:19.567884Z",
+      "action": "resumed — ready to execute t-1 (extLang map: .dart/.svelte/.sql)"
+    },
+    {
+      "at": "2026-06-21T09:46:32.852529Z",
+      "action": "executed t-1 (Add .dart/.svelte/.sql to extLang)"
+    },
+    {
+      "at": "2026-06-21T09:53:02.560544Z",
+      "action": "executed t-2 (five embedded language profiles incl. typescript)"
+    },
+    {
+      "at": "2026-06-21T09:54:34.719279Z",
+      "action": "executed t-3 (detection resolves each profile id)"
+    },
+    {
+      "at": "2026-06-21T09:56:43.66003Z",
+      "action": "executed t-4 (AnalyzersFor surfaces each analyzer)"
+    },
+    {
+      "at": "2026-06-21T09:57:35.279875Z",
+      "action": "executed t-5 (ScannersFor stays agnostic-only)"
+    },
+    {
+      "at": "2026-06-21T09:58:37.150008Z",
+      "action": "executed t-6 (runtime seeded for 4, empty for sql)"
+    },
+    {
+      "at": "2026-06-21T09:58:45.913979Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-21T09:58:45.920828Z",
+      "action": "phase 08-language-profiles executed (6/6 done)"
+    },
+    {
+      "at": "2026-06-21T10:03:39.170619Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-21T10:03:39.177503Z",
+      "action": "verified 08-language-profiles: pass (5/5 covered, mutation 0.97)"
+    },
+    {
+      "at": "2026-06-21T10:14:16.123353Z",
+      "action": "completed 08-language-profiles"
     }
   ]
 }

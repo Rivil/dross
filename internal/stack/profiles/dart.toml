@@ -1,0 +1,46 @@
+# Dart stack profile. Drop a sibling <id>.toml into ~/.claude/dross/profiles/
+# to add or override a stack — no recompile, zero code change. See README.md.
+
+id    = "dart"
+title = "Dart"
+
+[signals]
+  files    = ["pubspec.yaml"]
+  exts     = [".dart"]
+  priority = 5
+
+[[package_managers]]
+  name     = "pub"
+  bin      = "dart"
+  lockfile = "pubspec.lock"
+
+# Runtime command set seeded into project.toml [runtime] at init/onboard.
+[runtime.test]
+  run = "dart test"
+[runtime.typecheck]
+  run = "dart analyze"
+[runtime.format]
+  run = "dart format --output=none --set-exit-if-changed ."
+[runtime.build]
+  run = "dart compile exe bin/main.dart"
+
+# Dedicated quality analyzer. Agnostic tools (gitleaks, semgrep, trivy, scc,
+# jscpd) apply to every stack and are intentionally NOT listed here.
+[[tools]]
+  name      = "dcm"
+  kind      = "analyzer"
+  dimension = "complexity"
+  core      = true
+  install   = "see dcm.dev  (dart pub global activate dart_code_metrics for the OSS edition)"
+
+[loadout]
+  mcp_tools = [
+    "context7 (resolve-library-id + query-docs) — verify Dart / Flutter / package API signatures before calling them",
+  ]
+  guardrails = [
+    "Honour null-safety; prefer final and const; avoid dynamic unless unavoidable.",
+    "Run `dart analyze` and `dart test` before claiming a change works.",
+  ]
+  conventions = [
+    "Effective Dart style; async/await over raw Futures; lints via analysis_options.yaml.",
+  ]

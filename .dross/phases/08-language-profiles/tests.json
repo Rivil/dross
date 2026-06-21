@@ -1,0 +1,68 @@
+{
+  "phase": "08-language-profiles",
+  "generated_at": "2026-06-21T10:00:58.5511Z",
+  "languages": [
+    {
+      "name": "go",
+      "tool": "gremlins",
+      "files": [
+        "internal/quality/catalog_test.go",
+        "internal/security/catalog_test.go",
+        "internal/stack/detect.go",
+        "internal/stack/detect_test.go",
+        "internal/stack/runtime_test.go"
+      ],
+      "mutation": {
+        "Tool": "gremlins",
+        "Killed": 94,
+        "Survived": 3,
+        "Timeout": 0,
+        "Errors": 0,
+        "Score": 0.9690721649484536,
+        "Surviving": [
+          {
+            "File": "catalog.go",
+            "Line": 84,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "catalog.go",
+            "Line": 40,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "detect.go",
+            "Line": 181,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          }
+        ],
+        "NotCovered": 3
+      }
+    }
+  ],
+  "skipped": [
+    {
+      "file": "internal/stack/profiles/dart.toml",
+      "reason": "no mutation adapter for .toml"
+    },
+    {
+      "file": "internal/stack/profiles/kotlin.toml",
+      "reason": "no mutation adapter for .toml"
+    },
+    {
+      "file": "internal/stack/profiles/sql.toml",
+      "reason": "no mutation adapter for .toml"
+    },
+    {
+      "file": "internal/stack/profiles/svelte.toml",
+      "reason": "no mutation adapter for .toml"
+    },
+    {
+      "file": "internal/stack/profiles/typescript.toml",
+      "reason": "no mutation adapter for .toml"
+    }
+  ]
+}

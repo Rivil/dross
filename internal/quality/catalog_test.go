@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -88,6 +89,68 @@ func TestDetectMissingHasHint(t *testing.T) {
 		if st.Install == "" {
 			t.Errorf("missing analyzer %q has no install instruction", st.Name)
 		}
+	}
+}
+
+// findAnalyzer returns a pointer to the analyzer named name in list, or nil.
+func findAnalyzer(list []Analyzer, name string) *Analyzer {
+	for i := range list {
+		if list[i].Name == name {
+			return &list[i]
+		}
+	}
+	return nil
+}
+
+// TestAnalyzersForLanguageProfiles proves each v0.2 profile surfaces its dedicated
+// analyzer on top of the agnostic set (scc, jscpd), with a substantive dimension.
+// The list is profile-derived, so dropping (e.g.) dcm from dart.toml fails the
+// dart row — demonstrating the c-5 keystone on the quality side.
+func TestAnalyzersForLanguageProfiles(t *testing.T) {
+	cases := []struct {
+		id       string
+		analyzer string
+	}{
+		{"kotlin", "detekt"},
+		{"dart", "dcm"},
+		{"svelte", "eslint"},
+		{"sql", "sqlfluff"},
+		{"typescript", "eslint"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.id, func(t *testing.T) {
+			got := AnalyzersFor(tc.id)
+			names := map[string]bool{}
+			for _, a := range got {
+				names[a.Name] = true
+			}
+			for _, want := range []string{tc.analyzer, "scc", "jscpd"} {
+				if !names[want] {
+					t.Errorf("AnalyzersFor(%q) missing %q", tc.id, want)
+				}
+			}
+			dedicated := findAnalyzer(got, tc.analyzer)
+			if dedicated == nil || dedicated.Agnostic() {
+				t.Fatalf("AnalyzersFor(%q): want a dedicated (non-agnostic) analyzer %q", tc.id, tc.analyzer)
+			}
+			if !IsSubstantive(dedicated.Dimension) {
+				t.Errorf("%s analyzer %q has non-substantive dimension %q", tc.id, dedicated.Name, dedicated.Dimension)
+			}
+		})
+	}
+}
+
+// TestSvelteAndTypescriptEslintInstall pins the install hints apart: both profiles
+// name their analyzer "eslint", but svelte must pull in eslint-plugin-svelte and
+// typescript must pull in typescript-eslint.
+func TestSvelteAndTypescriptEslintInstall(t *testing.T) {
+	sv := findAnalyzer(AnalyzersFor("svelte"), "eslint")
+	if sv == nil || !strings.Contains(sv.Install, "eslint-plugin-svelte") {
+		t.Errorf("svelte eslint Install should name eslint-plugin-svelte, got %+v", sv)
+	}
+	ts := findAnalyzer(AnalyzersFor("typescript"), "eslint")
+	if ts == nil || !strings.Contains(ts.Install, "typescript-eslint") {
+		t.Errorf("typescript eslint Install should name typescript-eslint, got %+v", ts)
 	}
 }
 

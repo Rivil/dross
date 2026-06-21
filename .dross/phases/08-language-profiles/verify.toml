@@ -1,0 +1,99 @@
+[verify]
+  phase = "08-language-profiles"
+  generated_at = 2026-06-21T10:00:58.5511Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9690721649484536
+  mutants_killed = 94
+  mutants_survived = 3
+  mutants_not_covered = 3
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/stack/detect_test.go:TestDetectResolvesEmbeddedProfiles",
+    "internal/stack/detect_test.go:TestDetectLanguagesNewExts",
+    "internal/stack/detect_test.go:TestDetectLanguagesKotlinRegression",
+    "internal/stack/detect_test.go:TestDetectUnsupportedFixture",
+    "internal/stack/detect_test.go:TestDetectPolyglotSQLDoesNotHijackGo",
+  ]
+  notes = "extLang gains .dart/.svelte/.sql; each stack fixture resolves to its id, unsupported repo returns Unsupported, and go.mod beats a stray .sql (polyglot guard)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/stack/detect_test.go:TestStackCLISurfaceListsAndLoadsProfiles",
+    "internal/stack/detect_test.go:TestDetectResolvesEmbeddedProfiles",
+  ]
+  notes = "LoadAll() (the `dross stack list` path) contains all five ids and ByID resolves each (the `dross stack show <id>` path); Embedded() loads them all."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/quality/catalog_test.go:TestAnalyzersForLanguageProfiles",
+    "internal/quality/catalog_test.go:TestSvelteAndTypescriptEslintInstall",
+    "internal/security/catalog_test.go:TestScannersForLanguageProfilesAgnosticOnly",
+  ]
+  notes = "AnalyzersFor surfaces each dedicated analyzer (detekt/dcm/eslint/sqlfluff/eslint) with a substantive dimension; ScannersFor equals the agnostic set exactly for all five."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/stack/runtime_test.go:TestRuntimeSeededForLanguageProfiles",
+    "internal/stack/runtime_test.go:TestSQLProfileHasNoRuntime",
+  ]
+  notes = "kotlin/dart/svelte/typescript yield non-empty Test+Build via ResolveRuntime; sql yields empty (a sneaked-in [runtime] block fails it)."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [
+    "internal/stack/detect_test.go:TestDetectResolvesEmbeddedProfiles",
+    "internal/quality/catalog_test.go:TestAnalyzersForLanguageProfiles",
+  ]
+  notes = "Each profile is proven by detection resolving its id AND AnalyzersFor surfacing its dedicated analyzer; the only mechanism-code edit was the extLang map (t-1) — the keystone holds."
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (not-covered): catalog.go:84 (CONDITIONALS_NEGATION) — Analyzer.AppliesTo, not on the AnalyzersFor/c-3 path; pre-existing, outside phase scope."
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (not-covered): catalog.go:40 (CONDITIONALS_NEGATION) — Scanner.AppliesTo, not on the ScannersFor/c-3 path; pre-existing, outside phase scope."
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (not-covered): detect.go:181 (ARITHMETIC_BASE) — the no-leading-dot fallback in normalizeExt; profile exts all carry a dot so the branch never runs. Pre-existing, outside phase scope."
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 3 surviving mutants are NOT-COVERED (tests never execute the line); efficacy on covered code is 1.00. They sit in pre-existing helper code (AppliesTo, normalizeExt fallback) that no acceptance criterion depends on, so none downgrades a criterion. The phase only permitted touching detect.go's extLang map."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profiles/dart.toml: no mutation adapter for .toml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profiles/kotlin.toml: no mutation adapter for .toml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profiles/sql.toml: no mutation adapter for .toml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profiles/svelte.toml: no mutation adapter for .toml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profiles/typescript.toml: no mutation adapter for .toml"

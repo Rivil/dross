@@ -1,0 +1,32 @@
+# SQL stack profile. Drop a sibling <id>.toml into ~/.claude/dross/profiles/
+# to add or override a stack — no recompile, zero code change. See README.md.
+#
+# SQL declares NO [runtime] block: there is no meaningful test/typecheck/build
+# runtime to seed into project.toml (the seed_runtime decision).
+
+id    = "sql"
+title = "SQL"
+
+[signals]
+  exts     = [".sql"]
+  priority = 1
+
+# Dedicated quality analyzer. sqlfluff lints unused CTEs/columns/aliases, mapped
+# to the existing dead-code dimension (sqlfluff_dimension decision) rather than a
+# new dimension, to preserve the zero-mechanism-change keystone. Agnostic tools
+# (gitleaks, semgrep, trivy, scc, jscpd) apply to every stack and are NOT listed.
+[[tools]]
+  name      = "sqlfluff"
+  kind      = "analyzer"
+  dimension = "dead-code"
+  core      = true
+  install   = "pipx install sqlfluff  (or pip install sqlfluff)"
+
+[loadout]
+  guardrails = [
+    "Parameterise queries; never build SQL by string concatenation of untrusted input.",
+    "Run sqlfluff lint before claiming a change works.",
+  ]
+  conventions = [
+    "Lowercase keywords or follow the repo's .sqlfluff dialect/style config; explicit column lists over SELECT *.",
+  ]

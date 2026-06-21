@@ -1,0 +1,58 @@
+# Svelte stack profile. Drop a sibling <id>.toml into ~/.claude/dross/profiles/
+# to add or override a stack — no recompile, zero code change. See README.md.
+
+id    = "svelte"
+title = "Svelte"
+
+# .ts/.tsx are listed alongside .svelte because Svelte work is TypeScript-
+# intertwined; svelte.config.js (a file signal) keeps a Svelte repo winning over
+# the typescript profile on a polyglot tree.
+[signals]
+  files    = ["svelte.config.js", "svelte.config.ts"]
+  exts     = [".svelte", ".ts", ".tsx"]
+  priority = 6
+
+[[package_managers]]
+  name     = "pnpm"
+  bin      = "pnpm"
+  lockfile = "pnpm-lock.yaml"
+[[package_managers]]
+  name     = "npm"
+  bin      = "npm"
+  lockfile = "package-lock.json"
+[[package_managers]]
+  name     = "yarn"
+  bin      = "yarn"
+  lockfile = "yarn.lock"
+
+# Runtime command set seeded into project.toml [runtime] at init/onboard.
+[runtime.test]
+  run = "vitest run"
+[runtime.typecheck]
+  run = "svelte-check"
+[runtime.format]
+  run = "prettier --check ."
+[runtime.build]
+  run = "vite build"
+
+# Dedicated quality analyzer. Agnostic tools (gitleaks, semgrep, trivy, scc,
+# jscpd) apply to every stack and are intentionally NOT listed here.
+[[tools]]
+  name      = "eslint"
+  kind      = "analyzer"
+  dimension = "complexity"
+  core      = true
+  install   = "npm i -D eslint eslint-plugin-svelte"
+
+[loadout]
+  mcp_tools = [
+    "svelte (get-documentation + svelte-autofixer) — verify Svelte 5 runes/snippets/event syntax and autofix Svelte 4->5 drift before writing components",
+    "context7 (resolve-library-id + query-docs) — verify SvelteKit / library API signatures before calling them",
+  ]
+  guardrails = [
+    "Svelte 5 runes ($state/$derived/$effect), onclick (not on:click), snippets (not slots) — don't reach for Svelte 4 syntax.",
+    "Run svelte-check and the vitest suite before claiming a change works.",
+  ]
+  conventions = [
+    "Components in PascalCase .svelte files; load logic in +page/+layout.ts; prefer runes over stores for local state.",
+  ]
