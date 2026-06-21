@@ -1,7 +1,7 @@
 [verify]
   phase = "10-interaction-contract"
-  generated_at = 2026-06-21T15:26:56.435213Z
-  verdict = "partial"
+  generated_at = 2026-06-21T16:02:35.031839Z
+  verdict = "pass"
 
 [summary]
   mutation_status = "measured"
@@ -10,8 +10,8 @@
   mutants_survived = 0
   mutants_not_covered = 151
   criteria_total = 4
-  criteria_covered = 3
-  criteria_uncovered = 1
+  criteria_covered = 4
+  criteria_uncovered = 0
 
 [[criterion]]
   id = "c-1"
@@ -20,8 +20,9 @@
     "internal/rules/rules_test.go:TestRenderEmitsInteractionContractBuiltin",
     "internal/rules/rules_test.go:TestInteractionRuleNamesSnippet",
     "internal/rules/rules_test.go:TestInteractionRuleStaysTerse",
+    "internal/rules/rules_test.go:TestInteractionRuleUsesEmitter",
   ]
-  notes = "Rule renders into dross rule show at hard severity with the canonical phrases and names the snippet; gremlins killed every covered mutant in rules.go's render path."
+  notes = "The dross-interaction-contract builtin renders into `dross rule show` at hard severity with the canonical do/don't phrases; the new TestInteractionRuleUsesEmitter guards that the rule points at `dross interaction show` and no longer mentions the dead @-include. Render-path mutants in rules.go all killed."
 
 [[criterion]]
   id = "c-2"
@@ -33,15 +34,19 @@
     "internal/cmd/install_symlink_test.go:TestMakeDoctorCountsInteractionSnippet",
     "internal/rules/rules_test.go:TestInteractionContractNoDrift",
   ]
-  notes = "Snippet content (four playbook markers + accept/reword/drop example), make-install symlink resolution, and rule/snippet drift are all asserted."
+  notes = "Snippet content (four playbook markers + accept/reword/drop example), make-install symlink resolution, doctor count, and rule/snippet drift are all asserted."
 
 [[criterion]]
   id = "c-3"
-  status = "weak"
+  status = "covered"
   tests = [
-    "internal/cmd/interaction_pilot_test.go:TestSpecPilotIncludesSnippet",
+    "internal/cmd/interaction_test.go:TestInteractionShowEmitsPlaybook",
+    "internal/cmd/interaction_test.go:TestInteractionCommandRegistered",
+    "internal/cmd/interaction_test.go:TestInteractionPlaybookSingleSource",
+    "internal/cmd/interaction_pilot_test.go:TestSpecPilotUsesEmitter",
+    "internal/cmd/interaction_pilot_test.go:TestPilotResultRecorded",
   ]
-  notes = "Mechanical half proven: spec.md carries the literal @-include line and it resolves against the installed symlink. The criterion's core claim — the snippet text actually REACHES the model through the two-level nested include — is the irreducibly manual pilot, still PENDING (t-6 in_progress). Recorded in docs/interaction-audit.md with the sentinel to check and the CLI-emitter fallback. Weak, not covered, until the manual check passes."
+  notes = "Was weak under the @-include approach (the 'text reaches the model' claim was irreducibly manual). Now mechanically delivered: `dross interaction show` prints the embedded playbook verbatim (markers + accept/reword/drop sentinel asserted), is registered in cmd/dross/main.go, embeds the same on-disk snippet (single-source), spec.md's pre-flight invokes it with the dead @-include removed, and the audit doc records the pilot resolved-via-emitter. Also observed end-to-end this session: `make install` then `dross interaction show` printed the sentinel — the contract text reaches the model deterministically, no nested-expansion dependency."
 
 [[criterion]]
   id = "c-4"
@@ -52,12 +57,12 @@
   notes = "Every interactive command (grep -l AskUserQuestion assets/commands/) has a per-decision-point section with a conformance column; a new interactive command without a section fails the enumeration."
 
 [[finding]]
-  severity = "FLAG"
-  text = "c-3 is weak: the @-include pilot is proven mechanically but the end-to-end 'text reaches the model' check is a pending manual step (t-6 in_progress). Run /dross-spec in a fresh session and confirm the sentinel in docs/interaction-audit.md, then mark t-6 done and re-verify for pass."
+  severity = "NOTE"
+  text = "Mutation ran module-wide via gremlins: killed=638, rollup score=0.81. The 151 'survived' are all NOT-COVERED mutants (Survived==NotCovered==151, Lived==0) — zero true survivors; efficacy on covered mutants = 1.00. Per-package confirms: internal/rules killed=15/Lived=0, internal/cmd killed=623/Lived=0. The not-covered mutants sit in pre-existing untested cmd paths (ship.go, issue.go, stats.go, verify.go, doctor.go, etc.), none in this phase's criterion-covering tests, so no criterion is downgraded. The 0.81 score is depressed by module-wide not-covered code, not weak phase tests. (Known gremlins not-covered conflation — see dross_gremlins_adapter.)"
 
 [[finding]]
   severity = "NOTE"
-  text = "Mutation ran module-wide via gremlins: killed=638, score=0.81. The 151 'survived' the skeleton seeded are all NOT-COVERED mutants (Survived==NotCovered==151) — zero true survivors; efficacy on covered mutants = 1.00. They sit in pre-existing untested paths across the cmd package (ship.go, issue.go, stats.go, etc.), none in this phase's criterion-covering tests, so no criterion is downgraded. The 0.81 score is depressed by module-wide not-covered code, not by weak phase tests. (Per the known gremlins not-covered conflation — see dross_gremlins_adapter note.)"
+  text = "The one survivor in a phase-touched file, internal/rules/rules.go:104 (CONDITIONALS_NEGATION/BOUNDARY), is the Merge() scope-sort comparator — a pre-existing not-covered branch, not a c-1 covering surface (c-1 asserts rendered rule output, all killed). No downgrade."
 
 [[finding]]
   severity = "NOTE"
