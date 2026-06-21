@@ -1,21 +1,11 @@
 {
   "version": "0.2.0.0",
   "current_milestone": "v0.3",
-  "last_activity": "2026-06-21T18:34:42.739854Z",
-  "last_action": "completed 11-retrofit-core-loop",
+  "current_phase": "12-retrofit-setup-commands",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-21T18:44:45.884089Z",
+  "last_action": "spec locked: 12-retrofit-setup-commands",
   "history": [
-    {
-      "at": "2026-06-21T15:09:18.35654Z",
-      "action": "plan reviewed: 10-interaction-contract (0 blocking, 3 flags)"
-    },
-    {
-      "at": "2026-06-21T15:12:18.233264Z",
-      "action": "executed t-1 (Add interaction-contract builtin rule)"
-    },
-    {
-      "at": "2026-06-21T15:15:11.330323Z",
-      "action": "executed t-2 (Author reusable interaction snippet)"
-    },
     {
       "at": "2026-06-21T15:17:07.863613Z",
       "action": "executed t-4 (Seed interaction-audit checklist)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-21T18:34:42.739854Z",
       "action": "completed 11-retrofit-core-loop"
+    },
+    {
+      "at": "2026-06-21T18:38:05.190986Z",
+      "action": "created 12-retrofit-setup-commands"
+    },
+    {
+      "at": "2026-06-21T18:44:45.877645Z",
+      "action": "set current_phase=12-retrofit-setup-commands"
+    },
+    {
+      "at": "2026-06-21T18:44:45.884089Z",
+      "action": "spec locked: 12-retrofit-setup-commands"
     }
   ]
 }
