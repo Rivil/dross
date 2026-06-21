@@ -100,6 +100,35 @@ func TestStackLoadoutCommandRenders(t *testing.T) {
 	}
 }
 
+func TestStackListIncludesDocker(t *testing.T) {
+	var err error
+	out := captureStdout(t, func() {
+		err = runCmd(t, Stack(), "list")
+	})
+	if err != nil {
+		t.Fatalf("stack list: %v", err)
+	}
+	if !strings.Contains(out, "docker") {
+		t.Errorf("`stack list` must surface the docker profile; got:\n%s", out)
+	}
+}
+
+func TestStackShowDocker(t *testing.T) {
+	var err error
+	out := captureStdout(t, func() {
+		err = runCmd(t, Stack(), "show", "docker")
+	})
+	if err != nil {
+		t.Fatalf("`stack show docker` must succeed once docker.toml embeds, got: %v", err)
+	}
+	// The encoded profile must carry its marker patterns and the hadolint tool.
+	for _, want := range []string{"file_patterns", "hadolint"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("`stack show docker` output missing %q; got:\n%s", want, out)
+		}
+	}
+}
+
 func TestStackApplyResyncsRuntime(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/x\n"), 0o644); err != nil {
