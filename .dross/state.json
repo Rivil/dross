@@ -3,13 +3,9 @@
   "current_milestone": "v0.2",
   "current_phase": "08-language-profiles",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-20T19:56:33.783895Z",
-  "last_action": "paused — spec+plan locked for 08-language-profiles, ready to execute t-1",
+  "last_activity": "2026-06-21T09:42:19.567884Z",
+  "last_action": "resumed — ready to execute t-1 (extLang map: .dart/.svelte/.sql)",
   "history": [
-    {
-      "at": "2026-06-20T15:49:08.716127Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-20T15:49:08.723582Z",
       "action": "plan locked: 06-dross-quality (9 tasks across 5 waves)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-20T19:56:33.783895Z",
       "action": "paused — spec+plan locked for 08-language-profiles, ready to execute t-1"
+    },
+    {
+      "at": "2026-06-21T09:42:19.567884Z",
+      "action": "resumed — ready to execute t-1 (extLang map: .dart/.svelte/.sql)"
     }
   ]
 }
