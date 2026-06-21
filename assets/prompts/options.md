@@ -15,9 +15,17 @@ Full editor for every dross-managed setting. Designed to be run rarely (after mi
    - `dross env list` — settings.json env keys (values masked)
 4. Track `changed: []` and `skipped: []` lists in your head; use them in the wrap-up.
 
+## Section pick
+
+Open with a single **section-pick gate** before touching any setting: one `AskUserQuestion` (multiSelect) listing the sections below, so the user picks which to review this run and a one-setting change never forces all eleven. Lead with the sections most likely stale (e.g. after a milestone change: stack, runtime, repo). Walk only the chosen sections; skip the rest without asking.
+
+Sections: project identity · stack · runtime · repo conventions · remote · paths · env files · global defaults · rules · profile · settings env vars.
+
+This gate is **its own turn**, distinct from the per-setting Keep · Change · Skip turn in "How each section works" below — never collapse the two into one mega-form over every setting.
+
 ## How each section works
 
-For each field below: state the current value, ask `AskUserQuestion` with options **Keep · Change · Skip section**. On Change, gather the new value and immediately run the listed `dross X set ...` command. On any error from `dross X set`, surface it and offer Retry / Skip. On Skip section, move to the next section.
+For each field in a chosen section: state the current value, ask `AskUserQuestion` with options **Keep · Change · Skip section**. On Change, gather the new value and immediately run the listed `dross X set ...` command. On any error from `dross X set`, surface it and offer Retry / Skip. On Skip section, move to the next section.
 
 For booleans: Yes / No. For CSVs: ask for comma-separated input. For secrets: see §12 — never ask the user to paste tokens in chat.
 
@@ -101,7 +109,7 @@ If the user asks to add an entirely new env var dross doesn't currently know abo
 
 1. `dross validate` — surface any schema problems and offer to fix interactively.
 2. `dross doctor` — surface any drift between `[remote]` and reality.
-3. Print compact summary:
+3. Print a compact one-line-per-category summary — never paste the full `project.toml` back:
    ```
    Reviewed 12 sections.
    Changed: project.description, runtime.test_command, remote.auth_env (3)
