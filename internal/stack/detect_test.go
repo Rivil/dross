@@ -72,6 +72,51 @@ func TestDetect_SecondProfileSelected(t *testing.T) {
 	}
 }
 
+// containsLang reports whether want is in the DetectLanguages result.
+func containsLang(langs []string, want string) bool {
+	for _, l := range langs {
+		if l == want {
+			return true
+		}
+	}
+	return false
+}
+
+// TestDetectLanguagesNewExts proves the extLang additions for the four v0.2
+// stacks resolve. Each language is asserted independently, so deleting any one
+// extLang line drops that language and fails its check.
+func TestDetectLanguagesNewExts(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "main.dart", "void main() {}\n")
+	writeFile(t, dir, "App.svelte", "<script></script>\n")
+	writeFile(t, dir, "schema.sql", "select 1;\n")
+
+	langs, err := DetectLanguages(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"dart", "svelte", "sql"} {
+		if !containsLang(langs, want) {
+			t.Errorf("DetectLanguages = %v, want it to include %q", langs, want)
+		}
+	}
+}
+
+// TestDetectLanguagesKotlinRegression guards the pre-existing .kt->kotlin
+// mapping against a careless rewrite of the extLang map.
+func TestDetectLanguagesKotlinRegression(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "Main.kt", "fun main() {}\n")
+
+	langs, err := DetectLanguages(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsLang(langs, "kotlin") {
+		t.Errorf("DetectLanguages = %v, want it to include %q", langs, "kotlin")
+	}
+}
+
 // repoRoot walks up from the test working directory to the nearest go.mod.
 func repoRoot(t *testing.T) string {
 	t.Helper()
