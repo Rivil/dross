@@ -57,11 +57,11 @@
   id = "t-7"
   wave = 3
   title = "Add `dross interaction show` emitter"
-  files = ["assets/embed.go", "internal/cmd/interaction.go", "internal/cmd/root.go", "internal/cmd/interaction_test.go"]
-  description = "Embed the canonical assets/prompts/_interaction.md into the binary (new assets\npackage, go:embed) and add `dross interaction show` that prints it verbatim,\nmirroring `dross rule show`. Register the command on root. Single source: the\nemitted bytes are the same file make install links.\n"
+  files = ["assets/embed.go", "internal/cmd/interaction.go", "cmd/dross/main.go", "internal/cmd/interaction_test.go"]
+  description = "Embed the canonical assets/prompts/_interaction.md into the binary (new assets\npackage, go:embed) and add `dross interaction show` that prints it verbatim,\nmirroring `dross rule show`. Register cmd.Interaction() in cmd/dross/main.go's\nroot.AddCommand list. Single source: the emitted bytes are the same file make\ninstall links.\n"
   covers = ["c-3"]
   depends_on = ["t-2"]
-  test_contract = ["if `dross interaction show` is unregistered or prints empty, a cmd test capturing its output and asserting the four playbook markers plus the accept/reword/drop sentinel fails", "if the embedded bytes diverge from assets/prompts/_interaction.md on disk, the single-source assertion comparing emitter output to the file fails"]
+  test_contract = ["if `dross interaction show` is unregistered (absent from root.AddCommand in cmd/dross/main.go) or prints empty, a cmd test capturing its output and asserting the four playbook markers plus the accept/reword/drop sentinel fails", "if the embedded bytes diverge from assets/prompts/_interaction.md on disk, the single-source assertion comparing emitter output to the file fails"]
   status = "pending"
 
 [[task]]
@@ -73,4 +73,15 @@
   covers = ["c-3"]
   depends_on = ["t-7"]
   test_contract = ["if spec.md's pre-flight stops invoking `dross interaction show`, or still carries the dead @~/.claude/dross/prompts/_interaction.md line, the inverted pilot test fails", "if docs/interaction-audit.md does not record the pilot as resolved-via-emitter (nested @-include FAILED) with a date, the audit-result assertion fails"]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  title = "Purge stale @-include from shipped rule + snippet"
+  files = ["internal/rules/rules.go", "internal/rules/rules_test.go", "assets/prompts/_interaction.md"]
+  description = "The locked snippet_delivery decision replaced @-include with the emitter, but the\nshipped dross-interaction-contract rule text and the _interaction.md header still\nsay interactive prompts @-include the snippet. Repoint both at `dross interaction\nshow` while keeping the rule naming _interaction.md and terse.\n"
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = ["if the rendered dross-interaction-contract rule text still contains \"@-include\" (or stops pointing at the `dross interaction show` delivery mechanism), a rules_test assertion fails", "if the rule text stops naming \"_interaction.md\" or breaches the terse length cap, the existing pointer/length assertions fail", "if assets/prompts/_interaction.md's header comment still instructs prompts to @-include it, the snippet-content check fails"]
   status = "pending"

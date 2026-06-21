@@ -1,81 +1,59 @@
 # Plan Review — 10-interaction-contract
 
 Reviewed: 2026-06-21
-Plan: 6 tasks across 3 waves
+Plan: 8 tasks across 4 waves (t-1..t-5 done; t-6 reworked, t-7 + t-8 new, all pending)
 
 ## BLOCKING
 (none)
 
 ## FLAG
-- [granularity] t-5 ("Wire snippet into install; verify symlink") may be a near no-op
-  disguised as work. `make install` links the whole prompts directory with a single
-  `ln -sfn $(CURDIR)/assets/prompts $(PROMPTS_DIR)` (Makefile line 44) — it does not
-  enumerate individual files. A newly-created `assets/prompts/_interaction.md` is
-  therefore already resolvable through the existing dir symlink with zero Makefile
-  change. `make doctor` likewise loops `assets/prompts/*.md` (lines 123-134), so it
-  already counts the new file automatically. The task's description ("Ensure make
-  install links the new snippet... alongside the other prompts") implies a Makefile
-  edit that is almost certainly unnecessary.
-  Suggestion: keep the verification test (valuable regression guard) but expect t-5 to
-  touch the Makefile only if doctor needs a new explicit assertion; otherwise it's a
-  test-only task and should say so. Confirm before allocating a Makefile edit.
-
-- [wave-order] t-5 depends only on t-2 and is in wave 2, but t-2 is in wave 1 and t-5
-  touches only the Makefile / install path — it shares no files with t-3 (the other
-  wave-2 task) and doesn't consume t-3's output. Per the install mechanism above, t-5's
-  real dependency (a file existing under assets/prompts/) is satisfied the moment t-2
-  lands. It could run in wave 1 alongside t-2... except it must run *after* t-2, not
-  concurrently. So wave 2 is defensible, but t-5 and t-3 are independent of each other —
-  worth confirming the wave split is for ordering vs. t-2, not an implied t-3 coupling.
-  Suggestion: leave as-is; just note t-5 ⊥ t-3 so they can run in parallel within wave 2.
-
-- [granularity] t-6 spans 3 concerns in one task: (a) mechanical — add the @-include
-  line to spec.md; (b) empirical — manually load /dross-spec and observe whether
-  two-level @-expansion delivers the text; (c) contingent — apply the CLI-emitter
-  fallback if it doesn't. (b) is a human-in-the-loop observation that cannot be
-  unit-tested, and (c) is an entire alternate implementation path gated on (b)'s outcome.
-  This is the riskiest task in the phase (it's the c-3 de-risking pilot) yet it's sized
-  like the others.
-  Suggestion: don't split mechanically, but flag t-6 as the task most likely to expand —
-  if nested @-expansion fails, the fallback is real net-new work (a CLI emitter wired
-  into the prompt's pre-flight) that arguably deserves its own task. Be ready to spawn it.
+- [test-contract] t-6's second contract still reads "... record the pilot as
+  resolved-via-emitter (nested @-include FAILED) **with a date** ...". The date
+  clause remains effectively unfalsifiable — any string (or a wrong/placeholder
+  date) passes a grep for "a date". The prior review flagged this and the
+  amendment did not change the wording.
+  Suggestion: drop the date from the machine assertion (assert the two phrases
+  only), or pin a format the test actually validates (e.g. a YYYY-MM-DD regex).
 
 ## NOTE
-- [coverage] All four criteria are covered: c-1 → t-1, t-3; c-2 → t-2, t-3, t-5;
-  c-3 → t-6; c-4 → t-4. No gaps.
-
-- [locked-decisions] No conflicts found. The plan faithfully honors all four locked
-  decisions: builtin rule in rules.go not .dross/rules.toml (rule_tier → t-1); @-include
-  delivery with CLI fallback and explicit nested-expansion pilot (snippet_delivery → t-6);
-  rule-terse / snippet-heavy split enforced by t-3's ~600-char length-bound assertion
-  (rule_snippet_split); checklist at docs/interaction-audit.md (checklist_home → t-4).
-
-- [forbidden-actions] No rule violations. Project rule r-01 (prompt/Go edits aren't live
-  until `make install`) is actively respected — t-5 and t-6 both run against the installed
-  symlink, and t-6's pilot explicitly loads /dross-spec "for real". No global rules file
-  exists at ~/.claude/dross/rules.toml.
-
-- [test-contract] Test contracts are a genuine strength — they are specific and
-  failure-named, not vague. Examples: t-1 names the exact rendered token
-  `[builtin/hard/dross-interaction-contract]` plus required phrases; t-3 names
-  `TestInteractionRuleNamesSnippet` and a concrete ~600-char length bound; t-5 names a
-  temp-PROMPTS_DIR readlink check. None use "tests pass" or "covered by integration".
-  This is well above the usual LLM-plan baseline.
-
-- [realism] t-3's premise is grounded: spec.md genuinely carries a hand-rolled
-  interaction paragraph today (lines 5, 143, 172-173 — "one point per turn", "no walls
-  of text", "Don't paste the TOML back"). The dedup-into-snippet work is real, and the
-  drift/duplicate-grep assertion has a true target. The two-level @-expansion uncertainty
-  t-6 pilots is also real: command wrappers already `@`-include their prompt (verified
-  across all 20 wrappers), so the snippet would be a second nesting level.
-
-- [granularity] t-6 also writes to docs/interaction-audit.md (recording the pilot
-  result), which is created by t-4 (wave 1). The dependency is satisfied by wave order
-  but is not declared in t-6's depends_on (only t-3, t-5 are). Harmless given t-4 is
-  wave 1 and t-6 is wave 3, but the implicit edge is worth noting.
+- [prior-finding-1/registration] RESOLVED. t-7 now lists `cmd/dross/main.go` in
+  files (line 60), its description says "Register cmd.Interaction() in
+  cmd/dross/main.go's root.AddCommand list", and its first test_contract asserts
+  the command is "absent from root.AddCommand in cmd/dross/main.go". Grounded:
+  cmd/dross/main.go lines 23–48 are the real registration site (root.AddCommand);
+  internal/cmd/root.go has no AddCommand. The wrong path is gone.
+- [prior-finding-2/stale-@-include] RESOLVED. New t-8 (covers c-1, wave 3)
+  targets the two stale spots confirmed in source: rules.go:139 still says
+  "snippet that interactive prompts @-include", and _interaction.md:6 still says
+  "Interactive prompts @-include it". t-8's test_contract asserts the rendered
+  rule no longer contains "@-include" and points at `dross interaction show`, and
+  that the snippet header no longer instructs @-include — directly falsifiable
+  against both stale strings.
+- [wave-order] t-7 and t-8 both sit in wave 3 and run in parallel; files are
+  disjoint (t-7: assets/embed.go, internal/cmd/interaction.go, cmd/dross/main.go,
+  interaction_test.go; t-8: rules.go, rules_test.go, _interaction.md), so no
+  write collision. t-6 (wave 4) correctly depends on t-7. Both wave-3 tasks
+  depend only on done tasks (t-1, t-2). Order is sound. (As the prior review
+  noted, the wave numbers overstate the remaining 2-step tail now that t-1..t-5
+  are done — cosmetic only.)
+- [coverage] All four criteria still covered after the amendment: c-1 (t-1, t-3,
+  t-8), c-2 (t-2, t-3, t-5), c-3 (t-7, t-6), c-4 (t-4). No orphan criteria or
+  tasks. t-8 correctly adds a second c-1 owner rather than overloading t-6.
+- [test-contract/specificity] t-6's pilot test targets the `@`-prefixed include
+  line (spec.md line 7), not the legitimate prose mention of `_interaction.md` on
+  spec.md line 5. The contract wording ("the dead
+  @~/.claude/dross/prompts/_interaction.md line") is specific enough not to catch
+  the prose pointer, which must survive. The distinction is load-bearing for
+  execution — do not over-strip line 5.
+- [locked-decision] t-6/t-7/t-8 all align with the locked snippet_delivery
+  decision (emitter via `dross interaction show`, @-expansion disproven). No
+  conflict; t-8 in particular closes the last contradiction with that decision.
+- [granularity/strength] t-8 is a tight single-concern, three-file unit that does
+  exactly one thing (repoint two stale strings) with falsifiable assertions on
+  each. t-7's single-source byte-compare contract (emitter output vs
+  _interaction.md on disk) remains the strongest in the plan.
 
 ## Summary
-A genuinely strong plan — coverage complete, locked decisions honored, and test
-contracts unusually specific; the only real soft spot is that t-5 likely overstates its
-install work (the prompts dir is symlinked wholesale) and t-6 carries hidden
-fallback-path risk worth watching.
+Both prior findings are genuinely resolved and grounded in source, and the
+amendment introduces no new issues; the one residual flag (t-6's unfalsifiable
+"with a date" clause) is a carry-over the rework left untouched and is non-blocking.
