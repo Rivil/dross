@@ -1,81 +1,44 @@
 [phase]
-id = "13-audit-and-readme"
+  id = "13-audit-and-readme"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Wire emitter + contract phrase into 5 prompts"
-files         = [
-  "assets/prompts/architecture.md",
-  "assets/prompts/secure.md",
-  "assets/prompts/quality.md",
-  "assets/prompts/pause.md",
-  "assets/prompts/resume.md",
-]
-description   = """
-Add `dross interaction show` to each prompt's pre-flight and a prose reference to
-the "interaction playbook". Per the scan_command_emitter and handoff_emitter_exception
-decisions — all five earn ✅. No behaviour change beyond delivering the playbook.
-"""
-covers        = ["c-2"]
-test_contract = [
-  "if any of the 5 prompts drops `dross interaction show` from its pre-flight, the emitter guard test fails for that command",
-  "if any of the 5 prompts loses the \"interaction playbook\" reference phrase, the contract-reference test fails",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Wire emitter + contract phrase into 5 prompts"
+  files = ["assets/prompts/architecture.md", "assets/prompts/secure.md", "assets/prompts/quality.md", "assets/prompts/pause.md", "assets/prompts/resume.md"]
+  description = "Add `dross interaction show` to each prompt's pre-flight and a prose reference to\nthe \"interaction playbook\". Per the scan_command_emitter and handoff_emitter_exception\ndecisions — all five earn ✅. No behaviour change beyond delivering the playbook.\n"
+  covers = ["c-2"]
+  test_contract = ["if any of the 5 prompts drops `dross interaction show` from its pre-flight, the emitter guard test fails for that command", "if any of the 5 prompts loses the \"interaction playbook\" reference phrase, the contract-reference test fails"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "Add README ## Interaction section"
-files         = ["README.md"]
-description   = """
-New top-level "## Interaction" section placed right after "## Concept": a paragraph
-stating the contract (propose-and-react, one decision per turn, confirm-don't-broadcast),
-a compact worked one-turn example, and a pointer to the rule + _interaction.md.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "if README.md lacks a top-level \"## Interaction\" heading, the README guard test fails",
-  "if that section drops the propose-and-react / one-decision-per-turn phrasing, the README guard test fails",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Add README ## Interaction section"
+  files = ["README.md"]
+  description = "New top-level \"## Interaction\" section placed right after \"## Concept\": a paragraph\nstating the contract (propose-and-react, one decision per turn, confirm-don't-broadcast),\na compact worked one-turn example, and a pointer to the rule + _interaction.md.\n"
+  covers = ["c-3"]
+  test_contract = ["if README.md lacks a top-level \"## Interaction\" heading, the README guard test fails", "if that section drops the propose-and-react / one-decision-per-turn phrasing, the README guard test fails"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Fill the 5 audit-doc rows to conforming"
-files         = ["docs/interaction-audit.md"]
-description   = """
-Replace each ⬜ in the "Other interactive commands" section with the real current
-pattern and a ✅ verdict for all five. pause's inline handoff-draft preview noted as a
-documented exception; resume noted as walking items one at a time. No ⬜ left.
-"""
-covers        = ["c-1"]
-test_contract = [
-  "if any of the 5 audit sections still contains ⬜/🟡/❌, the audit-conformance test fails",
-  "if any of the 5 audit sections lacks a ✅ verdict, the audit-conformance test fails",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Fill the 5 audit-doc rows to conforming"
+  files = ["docs/interaction-audit.md"]
+  description = "Replace each ⬜ in the \"Other interactive commands\" section with the real current\npattern and a ✅ verdict for all five. pause's inline handoff-draft preview noted as a\ndocumented exception; resume noted as walking items one at a time. No ⬜ left.\n"
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = ["if any of the 5 audit sections still contains ⬜/🟡/❌, the audit-conformance test fails", "if any of the 5 audit sections lacks a ✅ verdict, the audit-conformance test fails"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 3
-depends_on    = ["t-1", "t-2", "t-3"]
-title         = "Add guard tests; make install; observe green"
-files         = ["internal/cmd/interaction_othercmds_test.go"]
-description   = """
-Twin tests for the 5 "other" commands (architecture/secure/quality/pause/resume):
-emitter wired, contract phrase present, audit section ✅ with no ⬜/🟡/❌. Plus a
-README-section grep test for the "## Interaction" heading + key phrasing. Run
-make install, run the full suite, observe green.
-"""
-covers        = ["c-1", "c-2", "c-3"]
-test_contract = [
-  "if an \"other\" command loses the emitter or contract phrase, the new emitter/contract test fails",
-  "if an \"other\" audit section regresses to a non-conforming marker, the new audit-conformance test fails",
-  "if the README \"## Interaction\" section or its key phrasing is removed, the new README test fails",
-  "if the README \"## Interaction\" heading is moved out of its locked placement (its index must fall between \"## Concept\" and the next top-level \"## \" heading), the README placement test fails",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 3
+  title = "Add guard tests; make install; observe green"
+  files = ["internal/cmd/interaction_othercmds_test.go"]
+  description = "Twin tests for the 5 \"other\" commands (architecture/secure/quality/pause/resume):\nemitter wired, contract phrase present, audit section ✅ with no ⬜/🟡/❌. Plus a\nREADME-section grep test for the \"## Interaction\" heading + key phrasing. Run\nmake install, run the full suite, observe green.\n"
+  covers = ["c-1", "c-2", "c-3"]
+  depends_on = ["t-1", "t-2", "t-3"]
+  test_contract = ["if an \"other\" command loses the emitter or contract phrase, the new emitter/contract test fails", "if an \"other\" audit section regresses to a non-conforming marker, the new audit-conformance test fails", "if the README \"## Interaction\" section or its key phrasing is removed, the new README test fails", "if the README \"## Interaction\" heading is moved out of its locked placement (its index must fall between \"## Concept\" and the next top-level \"## \" heading), the README placement test fails"]
+  status = "done"

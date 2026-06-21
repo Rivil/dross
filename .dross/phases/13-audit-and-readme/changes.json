@@ -1,0 +1,41 @@
+{
+  "phase": "13-audit-and-readme",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "assets/prompts/architecture.md",
+        "assets/prompts/secure.md",
+        "assets/prompts/quality.md",
+        "assets/prompts/pause.md",
+        "assets/prompts/resume.md"
+      ],
+      "commit": "3c1a2ed",
+      "completed_at": "2026-06-21T19:51:50.510902Z",
+      "notes": "feature: interaction contract coverage · pre-flight @ assets/prompts/{architecture,secure,quality,pause,resume}.md · wires dross interaction show emitter + playbook reference into the last 5 interactive prompts"
+    },
+    "t-2": {
+      "files": [
+        "README.md"
+      ],
+      "commit": "2fb8f58",
+      "completed_at": "2026-06-21T19:52:35.52007Z",
+      "notes": "feature: interaction contract coverage · ## Interaction @ README.md · documents propose-and-react / one-decision-per-turn as a first-class dross-loop behaviour with a worked spec example"
+    },
+    "t-3": {
+      "files": [
+        "docs/interaction-audit.md"
+      ],
+      "commit": "41de79f",
+      "completed_at": "2026-06-21T19:54:09.149647Z",
+      "notes": "feature: interaction contract coverage · Other interactive commands @ docs/interaction-audit.md · fills architecture/secure/quality/pause/resume audit rows to ✅ with real decision points and exception notes"
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/interaction_othercmds_test.go"
+      ],
+      "commit": "e26131b",
+      "completed_at": "2026-06-21T19:55:31.676533Z",
+      "notes": "feature: interaction contract coverage · TestOtherCmds*/TestReadmeInteraction* @ internal/cmd/interaction_othercmds_test.go · guards emitter+contract phrase for the 5 prompts, audit ✅, and README section+placement"
+    }
+  }
+}
