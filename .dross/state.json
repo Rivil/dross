@@ -2,22 +2,10 @@
   "version": "0.2.0.0",
   "current_milestone": "v0.2",
   "current_phase": "09-marker-file-detection",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-21T10:51:08.486028Z",
-  "last_action": "spec locked: 09-marker-file-detection",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-21T11:16:26.866919Z",
+  "last_action": "plan reviewed: 09-marker-file-detection (1 blocking found+resolved [hadolint analyzer dimension], 1 flag remaining)",
   "history": [
-    {
-      "at": "2026-06-20T16:48:41.11225Z",
-      "action": "verified 06-dross-quality: pass (5/5 covered; phase-diff mutation 100% on internal/quality, 0 survivors in changed code; rollup 0.81 package-scoped — not a phase signal)"
-    },
-    {
-      "at": "2026-06-20T16:50:38.121585Z",
-      "action": "completed 06-dross-quality"
-    },
-    {
-      "at": "2026-06-20T16:54:00.71112Z",
-      "action": "created 07-stack-profiles"
-    },
     {
       "at": "2026-06-20T17:33:37.280013Z",
       "action": "set current_phase=07-stack-profiles"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-21T10:51:08.486028Z",
       "action": "spec locked: 09-marker-file-detection"
+    },
+    {
+      "at": "2026-06-21T11:06:02.586547Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-21T11:06:02.593378Z",
+      "action": "plan locked: 09-marker-file-detection (7 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-21T11:16:26.866919Z",
+      "action": "plan reviewed: 09-marker-file-detection (1 blocking found+resolved [hadolint analyzer dimension], 1 flag remaining)"
     }
   ]
 }
