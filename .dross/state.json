@@ -1,13 +1,9 @@
 {
-  "version": "0.2.0.0",
+  "version": "0.3.4.0",
   "current_milestone": "v0.3",
-  "last_activity": "2026-06-21T20:02:21.729748Z",
-  "last_action": "completed 13-audit-and-readme",
+  "last_activity": "2026-06-22T06:48:52.556138Z",
+  "last_action": "set version=0.3.4.0",
   "history": [
-    {
-      "at": "2026-06-21T17:16:23.750299Z",
-      "action": "phase 11-retrofit-core-loop executed (7/7 done)"
-    },
     {
       "at": "2026-06-21T17:39:23.134296Z",
       "action": "set current_phase_status=verified"
@@ -203,6 +199,10 @@
     {
       "at": "2026-06-21T20:02:21.729748Z",
       "action": "completed 13-audit-and-readme"
+    },
+    {
+      "at": "2026-06-22T06:48:52.556138Z",
+      "action": "set version=0.3.4.0"
     }
   ]
 }
