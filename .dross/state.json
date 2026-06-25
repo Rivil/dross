@@ -1,21 +1,11 @@
 {
   "version": "0.4.0.0",
   "current_milestone": "v0.4",
-  "last_activity": "2026-06-25T17:11:04.190328Z",
-  "last_action": "scoped milestone v0.4: 4 criteria, 2 phases; version → 0.4.0.0",
+  "current_phase": "14-stable-slug-phase-ids",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-25T17:23:37.338126Z",
+  "last_action": "spec locked: 14-stable-slug-phase-ids",
   "history": [
-    {
-      "at": "2026-06-21T18:21:55.347512Z",
-      "action": "plan amended: 11-retrofit-core-loop (+t-8 prompt-sentinel tests for c-3/c-4; 8 tasks, 4 waves)"
-    },
-    {
-      "at": "2026-06-21T18:23:51.49683Z",
-      "action": "plan reviewed: 11-retrofit-core-loop t-8 (0 blocking, 2 flags)"
-    },
-    {
-      "at": "2026-06-21T18:24:24.648863Z",
-      "action": "plan amended: t-8 contract hardened per review (anchored sentinels for c-3/c-4)"
-    },
     {
       "at": "2026-06-21T18:27:35.255689Z",
       "action": "executed t-8 (Add prompt-sentinel tests for c-3/c-4)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-25T17:11:04.190328Z",
       "action": "scoped milestone v0.4: 4 criteria, 2 phases; version → 0.4.0.0"
+    },
+    {
+      "at": "2026-06-25T17:11:35.749453Z",
+      "action": "created 14-stable-slug-phase-ids"
+    },
+    {
+      "at": "2026-06-25T17:23:37.329902Z",
+      "action": "set current_phase=14-stable-slug-phase-ids"
+    },
+    {
+      "at": "2026-06-25T17:23:37.338126Z",
+      "action": "spec locked: 14-stable-slug-phase-ids"
     }
   ]
 }

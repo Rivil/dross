@@ -1,0 +1,66 @@
+[phase]
+id        = "14-stable-slug-phase-ids"
+title     = "Stable slug phase IDs"
+milestone = "v0.4"
+
+[[criteria]]
+id   = "pc-1"
+text = "Phase order is resolved from the milestone's phases array — `dross phase list` and all ordering logic read the array, never directory-name sorting. Reordering the array reorders the listing."
+
+[[criteria]]
+id   = "pc-2"
+text = "A newly created phase is a bare <slug>/ directory with [phase] id = \"<slug>\" and branch phase/<slug> — no numeric prefix anywhere in its identity — and it is appended to the current milestone's phases array."
+
+[[criteria]]
+id   = "pc-3"
+text = "Human-facing phase numbers come from a single displayNumber helper returning the 1-based position within the current milestone; status output and the version patch digit use it, and it stays correct after the array is reordered."
+
+[[criteria]]
+id   = "pc-4"
+text = "All existing phases are migrated to slug identity — directories renamed, id fields, milestone phases arrays, and state.json updated; git branches left as historical — and `dross validate` passes afterward."
+
+[[criteria]]
+id   = "pc-5"
+text = "A legacy NN-slug phase argument still resolves to its phase (the shim strips the numeric prefix), so old references, scripts, and muscle memory keep working after migration."
+
+[[decisions]]
+key    = "identity_model"
+choice = "Phase identity is its slug (no ordinal prefix); phase order is read solely from the milestone phases array — a single source of truth."
+why    = "Eliminates the duplicated-order defect (order stored both in the dir prefix and the array) that forces renumbering and strands artifacts on insertion."
+locked = true
+
+[[decisions]]
+key    = "slug_collisions"
+choice = "On slug collision in the flat .dross/phases/ namespace, auto-suffix -2/-3; never block creation."
+why    = "Collisions are rare in a single-author repo; a hard stop mid-create is more disruptive than a slightly-suffixed slug."
+locked = true
+
+[[decisions]]
+key    = "migration_command"
+choice = "Ship a reusable, idempotent `dross phase migrate` command (not a one-off script); re-running is a no-op."
+why    = "dross runs on other repos that also have NN-slug phases; a real command is reusable across adopters and unit-testable, which strengthens verify."
+locked = true
+
+[[decisions]]
+key    = "legacy_shim"
+choice = "NN-slug → slug resolution is permanent (strip the numeric prefix when resolving a phase id)."
+why    = "A few lines with zero maintenance cost; never breaks an old reference, and deprecation warnings would be noise in a solo tool."
+locked = true
+
+[[decisions]]
+key    = "display_scope"
+choice = "The computed displayNumber is the 1-based position within the current milestone (restarts per milestone)."
+why    = "Matches the version patch-digit rule exactly, giving one consistent definition of ordinal-within-milestone; 'phase 2 of v0.4' reads better than a global counter."
+locked = true
+
+[[deferred]]
+text = "dross phase insert --after/--before <slug> — single-command insertion between existing phases."
+why  = "Phase 15 — the lifecycle verbs build on the slug model this phase establishes."
+
+[[deferred]]
+text = "dross phase move (reorder within a milestone) and dross phase rename (change a slug)."
+why  = "Phase 15."
+
+[[deferred]]
+text = "Cross-milestone phase moves (moving a phase from one milestone's array to another)."
+why  = "Milestone v0.4 non-goal; deferred beyond this milestone."
