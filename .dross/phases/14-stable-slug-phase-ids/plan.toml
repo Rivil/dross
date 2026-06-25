@@ -1,0 +1,130 @@
+[phase]
+id = "14-stable-slug-phase-ids"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Add phase identity helpers"
+files         = ["internal/phase/phase.go", "internal/phase/phase_test.go"]
+description   = """
+Add the pure helpers the command layer wires in later waves, and make the existing
+phase.Dir resolve legacy ids so every caller gets back-compat for free:
+StripLegacyPrefix (strip a leading NN- only); phase.Dir gains a stat-based fallback
+— return phases/<id> if it exists, else phases/<stripped-slug> if that exists, else
+the literal path unchanged (string signature preserved, so phaseShow/verify/ship/
+task/issue all resolve legacy ids without edits); Ordered (order phase slugs by a
+milestone's phases array; array entry without a dir = stale problem, dir without an
+array entry = tolerated orphan appended last); DisplayNumber (1-based index of a
+slug within a milestone array, 0 if absent); UniqueSlug (slugify a title,
+auto-suffix -2/-3 against existing phases/ dirs).
+"""
+covers        = ["pc-1", "pc-2", "pc-3", "pc-5"]
+test_contract = [
+  "StripLegacyPrefix(\"03-fix-foo\")==\"fix-foo\" and StripLegacyPrefix(\"fix-foo\")==\"fix-foo\" (no over-strip of a non-numeric leading segment)",
+  "with only phases/foo on disk, phase.Dir(root,\"03-foo\") and phase.Dir(root,\"foo\") both return phases/foo; with phases/03-foo on disk phase.Dir(root,\"03-foo\") returns phases/03-foo; a non-existent id returns the literal phases/<id> unchanged (no silent wrong hit)",
+  "an existing caller that routes through phase.Dir (e.g. `dross phase show 12-onboarding` against a migrated phases/onboarding) finds the phase — reverting Dir to the bare join fails this legacy-id resolution",
+  "Ordered([\"gamma\",\"alpha\"], {alpha,gamma,orphan}) returns [\"gamma\",\"alpha\",\"orphan\"] — reverting to sort.Strings fails the gamma-before-alpha case; orphan is appended, never dropped",
+  "DisplayNumber([\"alpha\",\"beta\",\"gamma\"],\"beta\")==2 and DisplayNumber([\"gamma\",\"beta\",\"alpha\"],\"alpha\")==3 (recomputed from index); DisplayNumber(arr,\"missing\")==0 sentinel, not a panic",
+  "with phases/foo and phases/foo-2 on disk, UniqueSlug(\"foo\")==\"foo-3\"; with none present UniqueSlug(\"foo\")==\"foo\" — a loop stopping at the first probe fails the foo-3 case",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 2
+title         = "Order dross phase list by milestone array"
+files         = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+description   = """
+Replace phase.List's ReadDir+sort.Strings ordering in the list command with
+Ordered against the current milestone's phases array.
+"""
+covers        = ["pc-1"]
+test_contract = [
+  "with milestone v0.4 phases=[\"gamma\",\"alpha\"], `dross phase list` stdout == \"gamma\\nalpha\\n\"; reordering to [\"alpha\",\"gamma\"] flips the output",
+  "reverting the command to ReadDir+sort.Strings prints alphabetical regardless of the array and fails the test",
+]
+depends_on    = ["t-1"]
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 2
+title         = "Rewrite dross phase create to slug identity"
+files         = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+description   = """
+Create makes a bare <slug>/ dir (via UniqueSlug), writes [phase] id=<slug>, checks
+out branch phase/<slug>, and appends the slug to the current milestone's phases
+array. Delete nextPhaseNumber and the %02d-%s formatting.
+"""
+covers        = ["pc-2"]
+test_contract = [
+  "create \"My Feature\" under milestone v0.4 makes phases/my-feature/ (regexp ^\\d\\d- matches nothing under phases/), writes [phase] id=\"my-feature\", checks out branch phase/my-feature, and appends \"my-feature\" as the last element of v0.4's phases array",
+  "a second create \"My Feature\" yields phases/my-feature-2 with no clobber of the first",
+  "dropping the milestone-array append fails the array-tail assertion",
+]
+depends_on    = ["t-1"]
+status        = "pending"
+
+[[task]]
+id            = "t-4"
+wave          = 2
+title         = "Add phase number, wire status + execute.md pointer"
+files         = ["internal/cmd/phase.go", "internal/cmd/status.go", "internal/cmd/phase_test.go", "assets/prompts/execute.md"]
+description   = """
+Add `dross phase number <id>` printing DisplayNumber within the current milestone.
+Wire status' phase render to show the display number. Add a one-line step to
+execute.md at phase start: set the version patch digit from `dross phase number`
+(no edit to the global CLAUDE.md rule).
+"""
+covers        = ["pc-3"]
+test_contract = [
+  "`dross phase number beta` prints \"2\" for milestone [alpha,beta,gamma], and prints its new index after the array is reordered — counting directories instead of array position fails the post-reorder value",
+  "status renderPhase for current_phase=beta emits a line containing \"2 of 3\"; dropping the DisplayNumber call removes the number",
+  "execute.md contains the literal `dross phase number` in its patch-digit step (grep-gated); note r-01 — the prompt edit is not live until make install",
+]
+depends_on    = ["t-1"]
+status        = "pending"
+
+[[task]]
+id            = "t-5"
+wave          = 2
+title         = "Add idempotent dross phase migrate command"
+files         = ["internal/cmd/phase.go", "internal/cmd/migrate.go", "internal/cmd/phase_migrate_test.go"]
+description   = """
+New `dross phase migrate`: rename each NN-slug phase dir to a bare slug, rewrite its
+spec.toml and plan.toml [phase].id, strip the NN- prefix from every milestone phases
+array entry, and update state.current_phase. NEVER touches the in-flight phase
+(state.current_phase) — its dir, id, and array entry are left as-is so its
+phase/<id> branch keeps resolving for ship. Idempotent; refuses a collision rather
+than overwriting; never touches git branches. Register in Phase().
+"""
+covers        = ["pc-4"]
+test_contract = [
+  "fixture phases/01-foo, phases/02-bar, milestone [01-foo,02-bar], state.current_phase=02-bar: after one run phases/foo exists (01-foo gone) with spec.toml AND plan.toml [phase].id==\"foo\", but phases/02-bar is untouched (still 02-bar, id unchanged) because it is the in-flight phase; milestone array==[\"foo\",\"02-bar\"], state.current_phase==\"02-bar\", and `dross validate` exits 0 — skipping the plan.toml id rewrite makes validate report the dir/plan.id mismatch and fails",
+  "a second run leaves the dir listing and every file's bytes identical (no foo-2 spawned, exit 0) — proves idempotency",
+  "a fixture with 01-foo and 03-foo (neither current) maps them to foo and foo-2, remapping the two milestone entries distinctly; if a target slug dir already exists at rename time migrate refuses with a clear error rather than overwriting; git branches are never referenced",
+]
+depends_on    = ["t-1"]
+status        = "pending"
+
+[[task]]
+id            = "t-6"
+wave          = 3
+title         = "Migrate this repo's phases to slug identity"
+files         = [".dross/phases/", ".dross/milestones/v0.1.toml", ".dross/milestones/v0.2.toml", ".dross/milestones/v0.3.toml", ".dross/milestones/v0.4.toml", ".dross/state.json"]
+description   = """
+Run `make install` first (r-01: builds the migrate subcommand into the installed
+binary), then `dross phase migrate` on this repo. Migrates phases 01-13 to bare
+slugs; leaves 14-stable-slug-phase-ids untouched because it is the in-flight phase
+(it migrates on a later run after it ships — that residual is pc-4's intended
+exception, not a gap). Rewrites every milestone array and state.json; leaves git
+branches historical.
+"""
+covers        = ["pc-4"]
+test_contract = [
+  "after `make install` + `dross phase migrate` on this repo, `ls .dross/phases` has bare-slug dirs for every phase except 14-stable-slug-phase-ids (the in-flight phase, untouched), and `dross validate` exits 0",
+  "every migrated phase's milestone array entry is a bare slug while v0.4's array still lists 14-stable-slug-phase-ids; `git branch --list 'phase/*'` still lists the old NN- branch names (touching branches fails the branch-name assertion)",
+  "phases 01/02 (orphans, in no array) are renamed to bare slugs and validate stays green on them",
+]
+depends_on    = ["t-5"]
+status        = "pending"

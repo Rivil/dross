@@ -2,22 +2,10 @@
   "version": "0.4.0.0",
   "current_milestone": "v0.4",
   "current_phase": "14-stable-slug-phase-ids",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-25T17:23:37.338126Z",
-  "last_action": "spec locked: 14-stable-slug-phase-ids",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-25T18:27:49.100535Z",
+  "last_action": "plan reviewed: 14-stable-slug-phase-ids (0 blocking, 2 flags; pc-5 wiring folded into phase.Dir)",
   "history": [
-    {
-      "at": "2026-06-21T18:27:35.255689Z",
-      "action": "executed t-8 (Add prompt-sentinel tests for c-3/c-4)"
-    },
-    {
-      "at": "2026-06-21T18:27:41.773015Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-21T18:27:41.779378Z",
-      "action": "phase 11-retrofit-core-loop executed (8/8 done; t-8 hardened c-3/c-4 to direct coverage)"
-    },
     {
       "at": "2026-06-21T18:32:28.605587Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-25T17:23:37.338126Z",
       "action": "spec locked: 14-stable-slug-phase-ids"
+    },
+    {
+      "at": "2026-06-25T18:05:11.210843Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-25T18:05:11.218676Z",
+      "action": "plan locked: 14-stable-slug-phase-ids (7 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-25T18:27:49.100535Z",
+      "action": "plan reviewed: 14-stable-slug-phase-ids (0 blocking, 2 flags; pc-5 wiring folded into phase.Dir)"
     }
   ]
 }
