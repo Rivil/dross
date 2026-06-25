@@ -128,6 +128,7 @@ func renderMilestone(root, version string) {
 
 // renderPhase prints the phase line plus task progress if a plan exists.
 func renderPhase(root string, st *state.State) {
+	pos := phasePosition(root, st)
 	planPath := filepath.Join(phase.Dir(root, st.CurrentPhase), "plan.toml")
 	plan, err := phase.LoadPlan(planPath)
 	if err != nil {
@@ -136,7 +137,7 @@ func renderPhase(root string, st *state.State) {
 		if statusStr == "" {
 			statusStr = "spec / planning"
 		}
-		Printf("phase:     %s (%s)\n", st.CurrentPhase, statusStr)
+		Printf("phase:     %s (%s)%s\n", st.CurrentPhase, statusStr, pos)
 		return
 	}
 	pending, inProgress, done, failed := plan.Summary()
@@ -146,7 +147,7 @@ func renderPhase(root string, st *state.State) {
 		statusStr = "in plan"
 	}
 	bar := progressBar(done, total, 20)
-	Printf("phase:     %s (%s)\n", st.CurrentPhase, statusStr)
+	Printf("phase:     %s (%s)%s\n", st.CurrentPhase, statusStr, pos)
 	Printf("           %s %d/%d done", bar, done, total)
 	if inProgress > 0 {
 		Printf(", %d in progress", inProgress)
@@ -161,6 +162,26 @@ func renderPhase(root string, st *state.State) {
 	if next := plan.NextRunnable(); next != nil {
 		Printf("           next runnable: %s — %s\n", next.ID, next.Title)
 	}
+}
+
+// phasePosition returns a " · N of M" suffix locating the current phase within
+// its milestone's ordered phases array (N from phase.DisplayNumber, M the array
+// length). Empty when there's no current milestone, no scoped array, or the
+// phase isn't in it — the number is derived from array position, so it stays
+// correct after a reorder.
+func phasePosition(root string, st *state.State) string {
+	if st.CurrentMilestone == "" {
+		return ""
+	}
+	m, err := milestone.Load(milestone.FilePath(root, st.CurrentMilestone))
+	if err != nil || len(m.Phases) == 0 {
+		return ""
+	}
+	n := phase.DisplayNumber(m.Phases, st.CurrentPhase)
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" · %d of %d", n, len(m.Phases))
 }
 
 // suggestNext returns a one-line hint for "what to do now" based on state.

@@ -20,8 +20,40 @@ func Phase() *cobra.Command {
 		Use:   "phase",
 		Short: "Manage phase directories under .dross/phases/",
 	}
-	c.AddCommand(phaseList(), phaseCreate(), phaseShow(), phaseComplete())
+	c.AddCommand(phaseList(), phaseCreate(), phaseShow(), phaseComplete(), phaseNumber())
 	return c
+}
+
+// phaseNumber prints the 1-based position of a phase within the current
+// milestone's phases array — the single source of truth for phase ordinals.
+// This is the ordinal slash-command prompts use for the version patch digit,
+// so it's derived from array position (and recomputes after a reorder) rather
+// than counted from directory names. Prints 0 when there's no current
+// milestone or the phase isn't in its array.
+func phaseNumber() *cobra.Command {
+	return &cobra.Command{
+		Use:   "number <phase-id>",
+		Short: "Print a phase's 1-based ordinal within its milestone",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			s, err := state.Load(filepath.Join(root, state.File))
+			if err != nil {
+				return err
+			}
+			n := 0
+			if s.CurrentMilestone != "" {
+				if m, err := milestone.Load(milestone.FilePath(root, s.CurrentMilestone)); err == nil {
+					n = phase.DisplayNumber(m.Phases, args[0])
+				}
+			}
+			Printf("%d\n", n)
+			return nil
+		},
+	}
 }
 
 func phaseList() *cobra.Command {

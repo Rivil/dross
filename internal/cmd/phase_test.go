@@ -230,6 +230,75 @@ func TestPhaseListOrdersByMilestoneArray(t *testing.T) {
 	}
 }
 
+// TestPhaseNumber proves `dross phase number` reports a phase's 1-based ordinal
+// from the current milestone's array, recomputing after a reorder.
+func TestPhaseNumber(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	writeMs := func(phases string) {
+		mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+			"phases = ["+phases+"]\n\n[milestone]\nversion = \"v0.4\"\n")
+	}
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.4"); err != nil {
+		t.Fatal(err)
+	}
+	num := func(id string) string {
+		return strings.TrimSpace(captureStdout(t, func() {
+			if err := runCmd(t, Phase(), "number", id); err != nil {
+				t.Fatalf("number %s: %v", id, err)
+			}
+		}))
+	}
+
+	writeMs(`"alpha", "beta", "gamma"`)
+	if got := num("beta"); got != "2" {
+		t.Errorf("number beta: got %q want 2", got)
+	}
+	if got := num("alpha"); got != "1" {
+		t.Errorf("number alpha: got %q want 1", got)
+	}
+	// Reordering the array moves alpha to position 3 — a directory count would
+	// not change; array position does.
+	writeMs(`"gamma", "beta", "alpha"`)
+	if got := num("alpha"); got != "3" {
+		t.Errorf("number alpha after reorder: got %q want 3", got)
+	}
+	if got := num("missing"); got != "0" {
+		t.Errorf("number of phase not in array: got %q want 0", got)
+	}
+}
+
+// TestStatusPhasePosition proves `dross status` locates the current phase within
+// its milestone as "N of M" via the shared DisplayNumber helper.
+func TestStatusPhasePosition(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+		"phases = [\"alpha\", \"beta\", \"gamma\"]\n\n[milestone]\nversion = \"v0.4\"\n")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.4"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "set", "current_phase", "beta"); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Status()); err != nil {
+			t.Fatalf("status: %v", err)
+		}
+	})
+	if !strings.Contains(out, "2 of 3") {
+		t.Errorf("status should locate the phase as `2 of 3`; got:\n%s", out)
+	}
+}
+
 // completeFixture sets up the post-squash-merge state for `dross phase
 // complete`: local has been on phase/<id> with one work commit; origin
 // has the squash already on main. Returns repo dir + the phase id.
