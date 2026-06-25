@@ -131,6 +131,45 @@ func TestPhaseCreateRollsBackDirOnBranchFailure(t *testing.T) {
 	}
 }
 
+// TestPhaseListOrdersByMilestoneArray proves `dross phase list` orders by the
+// milestone's phases array, not by directory-name sort: reordering the array
+// flips the listing.
+func TestPhaseListOrdersByMilestoneArray(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	root := filepath.Join(dir, ".dross")
+	for _, name := range []string{"alpha", "gamma"} {
+		if err := os.MkdirAll(filepath.Join(root, "phases", name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeMilestone := func(phases string) {
+		mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+			"phases = ["+phases+"]\n\n[milestone]\nversion = \"v0.4\"\n")
+	}
+	list := func() string {
+		return captureStdout(t, func() {
+			if err := runCmd(t, Phase(), "list"); err != nil {
+				t.Fatalf("list: %v", err)
+			}
+		})
+	}
+
+	writeMilestone(`"gamma", "alpha"`)
+	if got := list(); got != "gamma\nalpha\n" {
+		t.Errorf("array order [gamma,alpha]: got %q want \"gamma\\nalpha\\n\"", got)
+	}
+	// Reverting to ReadDir+sort.Strings would print alphabetical here; the
+	// array order must win.
+	writeMilestone(`"alpha", "gamma"`)
+	if got := list(); got != "alpha\ngamma\n" {
+		t.Errorf("array order [alpha,gamma]: got %q want \"alpha\\ngamma\\n\"", got)
+	}
+}
+
 // completeFixture sets up the post-squash-merge state for `dross phase
 // complete`: local has been on phase/<id> with one work commit; origin
 // has the squash already on main. Returns repo dir + the phase id.

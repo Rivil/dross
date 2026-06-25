@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -42,12 +43,33 @@ func phaseList() *cobra.Command {
 				Print("(no phases)")
 				return nil
 			}
-			for _, id := range ids {
+			for _, id := range phase.Ordered(milestonePhaseOrder(root), ids) {
 				Print(id)
 			}
 			return nil
 		},
 	}
+}
+
+// milestonePhaseOrder concatenates every milestone's phases array in
+// version order, producing the canonical phase sequence the milestones
+// define. phase.Ordered uses it to order the listing; phases in no array
+// (orphans) sort after it. A milestone that fails to load is skipped — a
+// best-effort ordering hint, never a hard dependency for `phase list`.
+func milestonePhaseOrder(root string) []string {
+	versions, err := milestone.List(root)
+	if err != nil {
+		return nil
+	}
+	var order []string
+	for _, v := range versions {
+		m, err := milestone.Load(milestone.FilePath(root, v))
+		if err != nil {
+			continue
+		}
+		order = append(order, m.Phases...)
+	}
+	return order
 }
 
 // phaseCreate makes the directory NN-slug and (when the repo has git
