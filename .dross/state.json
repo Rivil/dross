@@ -1,15 +1,9 @@
 {
   "version": "0.4.0.0",
   "current_milestone": "v0.4",
-  "current_phase": "14-stable-slug-phase-ids",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-25T19:20:05.108632Z",
-  "last_action": "verified 14-stable-slug-phase-ids: pass (5/5 covered, mutation 0.82 measured, efficacy 1.00 ex-not-covered)",
+  "last_activity": "2026-06-25T19:53:53.76733Z",
+  "last_action": "completed 14-stable-slug-phase-ids",
   "history": [
-    {
-      "at": "2026-06-21T19:02:42.89635Z",
-      "action": "executed t-2 (Add grep guards for emitter + contract)"
-    },
     {
       "at": "2026-06-21T19:04:45.499597Z",
       "action": "executed t-3 (Rewrite init + onboard identity walks)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-25T19:20:05.108632Z",
       "action": "verified 14-stable-slug-phase-ids: pass (5/5 covered, mutation 0.82 measured, efficacy 1.00 ex-not-covered)"
+    },
+    {
+      "at": "2026-06-25T19:53:53.76733Z",
+      "action": "completed 14-stable-slug-phase-ids"
     }
   ]
 }
