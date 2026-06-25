@@ -2,22 +2,10 @@
   "version": "0.4.0.0",
   "current_milestone": "v0.4",
   "current_phase": "14-stable-slug-phase-ids",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-25T19:11:02.259842Z",
-  "last_action": "executed t-5 (Add idempotent dross phase migrate command)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-25T19:13:44.906027Z",
+  "last_action": "phase 14-stable-slug-phase-ids executed (6/6 done)",
   "history": [
-    {
-      "at": "2026-06-21T18:44:45.884089Z",
-      "action": "spec locked: 12-retrofit-setup-commands"
-    },
-    {
-      "at": "2026-06-21T18:54:19.138777Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-21T18:54:19.146452Z",
-      "action": "plan locked: 12-retrofit-setup-commands (10 tasks across 3 waves)"
-    },
     {
       "at": "2026-06-21T18:56:42.863398Z",
       "action": "plan reviewed: 12-retrofit-setup-commands (0 blocking, 4 flags); t-1/t-9 patched"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-25T19:11:02.259842Z",
       "action": "executed t-5 (Add idempotent dross phase migrate command)"
+    },
+    {
+      "at": "2026-06-25T19:13:19.970061Z",
+      "action": "executed t-6 (Migrate this repo's phases to slug identity)"
+    },
+    {
+      "at": "2026-06-25T19:13:44.899168Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-25T19:13:44.906027Z",
+      "action": "phase 14-stable-slug-phase-ids executed (6/6 done)"
     }
   ]
 }

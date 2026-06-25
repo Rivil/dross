@@ -52,6 +52,18 @@
       "commit": "06e7524",
       "completed_at": "2026-06-25T19:11:02.246503Z",
       "notes": "feature: phase lifecycle · phaseMigrate @ internal/cmd/migrate.go · idempotent NN-slug→slug migration, skips in-flight phase, disambiguates/refuses collisions"
+    },
+    "t-6": {
+      "files": [
+        ".dross/milestones/v0.1.toml",
+        ".dross/milestones/v0.2.toml",
+        ".dross/milestones/v0.3.toml",
+        ".dross/milestones/v0.4.toml",
+        ".dross/phases"
+      ],
+      "commit": "ebc2ac1",
+      "completed_at": "2026-06-25T19:13:19.957625Z",
+      "notes": "feature: phase lifecycle · dross phase migrate (applied) · this repo's 13 settled phases renamed to bare slugs; milestone arrays stripped; phase 14 deferred as in-flight"
     }
   }
 }

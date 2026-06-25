@@ -64,4 +64,4 @@
   covers = ["pc-4"]
   depends_on = ["t-5"]
   test_contract = ["after `make install` + `dross phase migrate` on this repo, `ls .dross/phases` has bare-slug dirs for every phase except 14-stable-slug-phase-ids (the in-flight phase, untouched), and `dross validate` exits 0", "every migrated phase's milestone array entry is a bare slug while v0.4's array still lists 14-stable-slug-phase-ids; `git branch --list 'phase/*'` still lists the old NN- branch names (touching branches fails the branch-name assertion)", "phases 01/02 (orphans, in no array) are renamed to bare slugs and validate stays green on them"]
-  status = "in_progress"
+  status = "done"
