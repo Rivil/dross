@@ -20,7 +20,7 @@ func Phase() *cobra.Command {
 		Use:   "phase",
 		Short: "Manage phase directories under .dross/phases/",
 	}
-	c.AddCommand(phaseList(), phaseCreate(), phaseShow(), phaseComplete(), phaseNumber())
+	c.AddCommand(phaseList(), phaseCreate(), phaseShow(), phaseComplete(), phaseNumber(), phaseMigrate())
 	return c
 }
 
