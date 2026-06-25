@@ -1,0 +1,57 @@
+{
+  "phase": "14-stable-slug-phase-ids",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/phase_test.go"
+      ],
+      "commit": "4d35f81",
+      "completed_at": "2026-06-25T18:31:19.052196Z",
+      "notes": "feature: phase identity · phase.Dir @ internal/phase/phase.go · resolves legacy NN-slug ids; adds slug ordering/display-number/unique-slug helpers"
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "a695353",
+      "completed_at": "2026-06-25T18:34:04.621639Z",
+      "notes": "feature: phase lifecycle · milestonePhaseOrder @ internal/cmd/phase.go · phase list orders by milestone array via phase.Ordered"
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go",
+        "internal/cmd/cmd_test.go",
+        "internal/cmd/integration_test.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "4fb8b80",
+      "completed_at": "2026-06-25T19:02:43.085616Z",
+      "notes": "feature: phase lifecycle · phaseCreate @ internal/cmd/phase.go · create makes bare-slug dirs, appends to milestone array, drops ordinal numbering"
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/status.go",
+        "internal/cmd/phase_test.go",
+        "internal/cmd/execute_prompt_test.go",
+        "assets/prompts/execute.md"
+      ],
+      "commit": "f45b6e4",
+      "completed_at": "2026-06-25T19:06:21.73951Z",
+      "notes": "feature: phase lifecycle · phaseNumber @ internal/cmd/phase.go · dross phase number + status N-of-M + execute.md patch-digit wiring, all via DisplayNumber"
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/migrate.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_migrate_test.go"
+      ],
+      "commit": "06e7524",
+      "completed_at": "2026-06-25T19:11:02.246503Z",
+      "notes": "feature: phase lifecycle · phaseMigrate @ internal/cmd/migrate.go · idempotent NN-slug→slug migration, skips in-flight phase, disambiguates/refuses collisions"
+    }
+  }
+}

@@ -3,29 +3,9 @@
   "current_milestone": "v0.4",
   "current_phase": "14-stable-slug-phase-ids",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-25T18:27:49.100535Z",
-  "last_action": "plan reviewed: 14-stable-slug-phase-ids (0 blocking, 2 flags; pc-5 wiring folded into phase.Dir)",
+  "last_activity": "2026-06-25T19:11:02.259842Z",
+  "last_action": "executed t-5 (Add idempotent dross phase migrate command)",
   "history": [
-    {
-      "at": "2026-06-21T18:32:28.605587Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-21T18:32:28.612628Z",
-      "action": "verified 11-retrofit-core-loop: pass (5/5 covered; c-3/c-4 graduated weak→covered via t-8; mutation skipped — no production Go in diff)"
-    },
-    {
-      "at": "2026-06-21T18:34:42.739854Z",
-      "action": "completed 11-retrofit-core-loop"
-    },
-    {
-      "at": "2026-06-21T18:38:05.190986Z",
-      "action": "created 12-retrofit-setup-commands"
-    },
-    {
-      "at": "2026-06-21T18:44:45.877645Z",
-      "action": "set current_phase=12-retrofit-setup-commands"
-    },
     {
       "at": "2026-06-21T18:44:45.884089Z",
       "action": "spec locked: 12-retrofit-setup-commands"
@@ -205,6 +185,26 @@
     {
       "at": "2026-06-25T18:27:49.100535Z",
       "action": "plan reviewed: 14-stable-slug-phase-ids (0 blocking, 2 flags; pc-5 wiring folded into phase.Dir)"
+    },
+    {
+      "at": "2026-06-25T18:31:19.071617Z",
+      "action": "executed t-1 (Add phase identity helpers)"
+    },
+    {
+      "at": "2026-06-25T18:34:04.635889Z",
+      "action": "executed t-2 (Order dross phase list by milestone array)"
+    },
+    {
+      "at": "2026-06-25T19:02:43.10164Z",
+      "action": "executed t-3 (Rewrite dross phase create to slug identity)"
+    },
+    {
+      "at": "2026-06-25T19:06:21.751928Z",
+      "action": "executed t-4 (Add phase number, wire status + execute.md pointer)"
+    },
+    {
+      "at": "2026-06-25T19:11:02.259842Z",
+      "action": "executed t-5 (Add idempotent dross phase migrate command)"
     }
   ]
 }
