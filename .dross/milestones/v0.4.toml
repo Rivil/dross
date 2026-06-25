@@ -1,4 +1,4 @@
-phases = ["14-stable-slug-phase-ids", "15-phase-lifecycle-commands"]
+phases = ["14-stable-slug-phase-ids", "phase-lifecycle-commands"]
 
 [milestone]
   version = "v0.4"

@@ -1,0 +1,80 @@
+[phase]
+  id = "dross-secure"
+  title = "dross-secure"
+  milestone = "v0.1"
+
+[[criteria]]
+  id = "c-1"
+  text = "Running /dross-secure produces a severity-ranked report at .dross/security/<run>/report.md (run-id = <timestamp>-<short-sha>); each finding carries its contextual severity and refutation evidence."
+
+[[criteria]]
+  id = "c-2"
+  text = "No LLM-guessed findings reach the report: every candidate passes an adversarial refute-panel and any that fail majority vote are dropped."
+
+[[criteria]]
+  id = "c-3"
+  text = "The audit is context-free — it reads no .dross/ planning artifacts (goals/non-goals/rules/spec); attack surface is derived only from code, dependency manifests, and entry points (language/framework detection excepted)."
+
+[[criteria]]
+  id = "c-4"
+  text = "A pre-sweep triage detects the codebase's languages, maps them to recommended scanners, reports installed-vs-missing with install instructions, and gates (continue / install) before running; the sweep then runs available scanners and records a tool-coverage manifest in the report."
+
+[[criteria]]
+  id = "c-5"
+  text = "On completion /dross-secure scaffolds a remediation phase: a pre-filled spec.toml where each surviving finding is one severity-ordered acceptance criterion backed by a findings.toml ledger entry, with severity driving wave order; it proposes-then-asks before locking."
+
+[[criteria]]
+  id = "c-6"
+  text = "Read-only: no --fix; the audit never edits or commits application code, only the (gitignored) run artifacts and the gated phase scaffold."
+
+[[decisions]]
+  key = "testable_surface"
+  choice = "Thin `dross security` Go CLI owns the deterministic parts (run-dir/run-id creation, scanner availability detection, findings→spec.toml scaffold writer); the prompt (assets/prompts/secure.md + assets/commands/dross-secure.md) orchestrates recon, fan-out audit, and the refute-panel."
+  why = "Gives real unit tests (c-1/c-4/c-5 verify as code; c-2/c-3/c-6 as prompt assertions) and matches dross's CLI-provides-state / prompt-orchestrates split. Pure-prompt would leave verify with only weak content assertions."
+  locked = true
+
+[[decisions]]
+  key = "report_artifact"
+  choice = "Run artifacts live under .dross/security/<run>/ (gitignored by default); run-id = <timestamp>-<short-sha>; each run dir holds report.md (human, severity-ranked) and findings.toml (machine-readable ledger consumed by the scaffold writer)."
+  why = "The dross repo is public — committing raw findings would pre-disclose unfixed vulnerabilities. The committed public-facing artifact is the remediation phase's spec.toml, which carries testable criteria without raw exploit detail."
+  locked = true
+
+[[decisions]]
+  key = "scanner_contract"
+  choice = "Detect → plan → gate → sweep: recon detects the codebase's languages, maps each to its recommended scanner set (+ language-agnostic tools), checks which are installed, surfaces the missing ones with install instructions, and gates (continue with partial coverage / install first) before running. The sweep runs whatever is available and records a tool-coverage manifest. No hard refusal, no silent skip."
+  why = "An informed pre-sweep gate avoids both a brittle hard-fail and a false 'all clear' from a thin toolbelt. Surfacing install steps up front lets the user choose coverage knowingly."
+  locked = true
+
+[[decisions]]
+  key = "catalog_scope"
+  choice = "The language→scanner catalog is data-driven and multi-language by construction, but ships Go-complete plus the language-agnostic tools (gitleaks, semgrep, trivy). Other languages are detected and receive whatever agnostic tools apply; their dedicated catalogs are stubs marked for later extension."
+  why = "Honors the milestone's Go-first non-goal (no broad multi-language library in v0.1) while keeping the mechanism extensible so adding a language later is a data change, not a rewrite."
+  locked = true
+
+[[decisions]]
+  key = "severity_model"
+  choice = "Severity is contextual / exploitability-adjusted — assigned by the refute/verify panel weighing real preconditions (reachability, required prior access), not the nominal scariness of the attack category. The report and scaffold lead with severity (criticals → low) for human visibility, and severity drives wave order."
+  why = "Nominal category severity over- or under-states real risk: a command injection only reachable post-root-access is effectively low, since at that point there are bigger problems. Judged severity keeps prioritization honest."
+  locked = true
+
+[[decisions]]
+  key = "criterion_unit"
+  choice = "Each surviving finding becomes its own acceptance criterion in the scaffolded remediation phase, listed criticals-first; the findings.toml ledger tracks every finding by id and verify requires a killing test for each. Severity drives wave order (criticals → wave 1)."
+  why = "Per-finding criteria ensure every hole — no matter how small — is a first-class, individually-testable line item that can't slip green. Coarse severity-tier criteria would pass once a single finding in the tier had a test, hiding the rest."
+  locked = true
+
+[[deferred]]
+  text = "Dedicated scanner catalogs for non-Go languages (JS/Python/etc.)"
+  why = "Mechanism is multi-language now; populating dedicated per-language catalogs is later work (Go-first non-goal)."
+
+[[deferred]]
+  text = "CodeQL integration"
+  why = "Heavy to wire; roadmap marks it optional."
+
+[[deferred]]
+  text = "Full `dross security` findings-tracking / state CLI"
+  why = "This phase ships only the thin slice (run-dir, scanner detection, scaffold writer); richer findings-state tracking is a later phase."
+
+[[deferred]]
+  text = "Committed / public in-git audit trail"
+  why = "Chose gitignored to avoid pre-disclosure on a public repo; durable in-git reporting (possibly redacted) is a later call."

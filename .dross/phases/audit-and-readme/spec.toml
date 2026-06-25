@@ -1,0 +1,42 @@
+[phase]
+  id = "audit-and-readme"
+  title = "audit-and-readme"
+  milestone = "v0.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "The 5 remaining interactive commands (architecture, secure, quality, pause, resume) are audited: every row in docs/interaction-audit.md's 'Other interactive commands' section is filled with its real current pattern and a conformance verdict — no ⬜ pending rows left."
+
+[[criteria]]
+  id = "c-2"
+  text = "Any of those 5 commands that violate the contract are retrofitted to conform; the final audit reads ✅ or 🟡 (🟡 only with a stated reason) — no ❌ left unaddressed."
+
+[[criteria]]
+  id = "c-3"
+  text = "The README documents the interaction model (propose-and-react, one decision per turn) as a first-class behaviour of the dross loop in its own dedicated, grep-verifiable section — not buried in a command's docs."
+
+[[decisions]]
+  key = "readme_section"
+  choice = "New top-level '## Interaction' section placed right after '## Concept', one short paragraph stating the contract (propose-and-react, one decision per turn, confirm-don't-broadcast) plus a compact worked one-turn example, written user-facing, with a pointer to the rule and _interaction.md for the mechanism."
+  why = "The loop's interaction behaviour belongs adjacent to where the loop is explained; a worked example makes propose-and-react concrete for a reader rather than abstract."
+  locked = true
+
+[[decisions]]
+  key = "scan_command_emitter"
+  choice = "Wire 'dross interaction show' into the pre-flight of secure, quality, and architecture so all three earn ✅ (they already gate their single scaffold/write decision via AskUserQuestion)."
+  why = "Milestone SC1 requires every interactive command to reference the playbook grep-verifiably; one pre-flight line each keeps the verdict uniform and avoids an SC1 carve-out."
+  locked = true
+
+[[decisions]]
+  key = "handoff_emitter_exception"
+  choice = "Wire the emitter into pause and resume pre-flights → ✅; pause's inline handoff-draft preview is recorded as a documented exception (the user confirms their own working memory, like ship's PR-body preview), and no per-field-walk rewrite is done — resume already walks items one at a time."
+  why = "Consistency with the scan-command decision and SC1; pause is a single confirm-amend, not multi-field composition, so a walk rewrite would be over-engineering."
+  locked = true
+
+[[deferred]]
+  text = "Runtime / Go-level contract linter that blocks a command for violating the interaction contract."
+  why = "Explicit milestone non-goal — the contract is verified by audit/review, not a code-level check."
+
+[[deferred]]
+  text = "Rewrite pause's single confirm+amend into a per-field propose-and-react walk."
+  why = "pause isn't multi-field composition; a walk rewrite would be over-engineering."

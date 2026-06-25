@@ -1,4 +1,4 @@
-phases = ["10-interaction-contract", "11-retrofit-core-loop", "12-retrofit-setup-commands", "13-audit-and-readme"]
+phases = ["interaction-contract", "retrofit-core-loop", "retrofit-setup-commands", "audit-and-readme"]
 
 [milestone]
   version = "v0.3"

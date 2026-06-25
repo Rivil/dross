@@ -1,0 +1,110 @@
+[phase]
+  id = "retrofit-setup-commands"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Wire emitter + contract phrase into 7 prompts"
+  files = ["assets/prompts/init.md", "assets/prompts/onboard.md", "assets/prompts/options.md", "assets/prompts/rule.md", "assets/prompts/inbox.md", "assets/prompts/quick.md", "assets/prompts/milestone.md"]
+  description = "Add `dross interaction show` beside `dross rule show` in each prompt's pre-flight,\nand an intro line carrying the literal phrase \"interaction playbook\". Most prompts\nalready have a pre-flight; rule.md has none yet — add the emitter under a new\npre-flight step there, NOT as a dead @-include. inbox.md already has `## 0.\nPre-flight` — add the emitter to the existing step, don't duplicate it.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["if any prompt drops the `dross interaction show` call, t-2 TestSetupPromptsWireEmitter fails for that prompt", "if the dead nested @-include line reappears in a prompt, TestSetupPromptsWireEmitter fails", "if a prompt is missing the phrase \"interaction playbook\", TestSetupPromptsReferenceContract fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Add grep guards for emitter + contract"
+  files = ["internal/cmd/interaction_setupcmds_test.go"]
+  description = "New test file, package cmd. Declare setupPrompts = {init,onboard,options,rule,\ninbox,quick,milestone}. TestSetupPromptsWireEmitter (per-prompt: contains\n\"dross interaction show\" AND NOT deadIncludeLine) + TestSetupPromptsReferenceContract\n(per-prompt: interactionRefPhrase). Direct twins of the coreLoop tests; reads\nsource so it is independent of t-1's content.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["if setupPrompts omits a command, that command's emitter/contract is unguarded — the loop must cover all 7", "TestSetupPromptsWireEmitter asserts \"dross interaction show\" present and deadIncludeLine absent per prompt", "TestSetupPromptsReferenceContract asserts interactionRefPhrase (\"interaction playbook\") present per prompt"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Rewrite init + onboard identity walks"
+  files = ["assets/prompts/init.md", "assets/prompts/onboard.md"]
+  description = "init §1 vision and onboard §1 identity become per-field AskUserQuestion turns\n(name → description → core value → audience → non-goals), not one bundled block;\nstack/runtime/remote each stay one decision per turn; project.toml is confirmed\nby a one-line summary, never pasted back.\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if init/onboard recombine identity fields into one bundled AskUserQuestion turn, t-8 init/onboard anchor fails", "if either prompt adds a 'paste project.toml back' directive, t-8 TestSetupNoArtifactDump arm fails"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Rewrite options section-pick gate + walk"
+  files = ["assets/prompts/options.md"]
+  description = "Implement locked options_walk: a FIRST AskUserQuestion gate picks section(s)\n(project / defaults / rules / profile / env), THEN a Keep/Change/Skip turn runs\none setting at a time within each chosen section. The wrap step prints a\nchanged/skipped summary, never the full project.toml.\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if options collapses into a single mega-form over all settings, t-8 options anchor (gate turn distinct from per-setting turn) fails", "if options pastes the composed project.toml back, t-8 TestSetupNoArtifactDump arm fails for options"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Rewrite milestone scoping walk"
+  files = ["assets/prompts/milestone.md"]
+  description = "Implement locked milestone_walk: success criteria one per turn (accept/reword/\ndrop), non-goals its own segment, phase order its own confirm/revise turn. The\nfinal step confirms via a count line, never a toml dump.\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if milestone reverts criteria to one accept-the-set turn, t-8 milestone anchor (per-criterion walk) fails", "if milestone pastes milestone.toml back instead of a count-line summary, t-8 TestSetupNoArtifactDump arm fails"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Mirror execute gates into quick; walk inbox"
+  files = ["assets/prompts/quick.md", "assets/prompts/inbox.md"]
+  description = "Per locked quick_inbox_mirror: quick's approval + red-path gates reuse execute.md's\nverbatim propose-and-react shape (proceed/steer/show/abort; fix/abort). inbox\ntriage stays one AskUserQuestion per issue — never bundling multiple issues into\none turn.\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if quick's gate diverges from execute's tokens (proceed/steer/abort, no merged gate), t-8 quick anchor fails", "if inbox batches multiple issues into one triage turn, t-8 inbox per-issue anchor fails"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 2
+  title = "Rewrite rule.md interactive turns"
+  files = ["assets/prompts/rule.md"]
+  description = "rule's action-select (add/list/remove/promote) is one turn; rule text + severity\nare separate proposal turns, not one bundled form; a written rule is confirmed by\na one-line summary, never a pasted rules block.\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if rule.md bundles action-select with text/severity into one turn, t-8 generic TestSetupNoBundledTurns flags rule.md", "if rule.md pastes the rules block back, t-8 TestSetupNoArtifactDump arm fails for rule"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  title = "Add anchor tests + generic no-bundle net"
+  files = ["internal/cmd/interaction_setupcmds_test.go"]
+  description = "Extend the t-2 file (reuse promptSection). Per-prompt anchors, each keyed on a\nSTABLE string and counting AskUserQuestion WITHIN a promptSection slice (never\nwhole-file): options gate distinct from per-setting turn; milestone per-criterion;\ninit/onboard fields separate; quick tokens == execute's. PLUS the generic\nTestSetupNoBundledTurns (each flagged decision section holds exactly one\nAskUserQuestion) and TestSetupNoArtifactDump (no 'paste <artifact> back' directive).\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-3", "t-4", "t-5", "t-6", "t-7"]
+  test_contract = ["each per-prompt anchor names prompt+section so a regression points at one owner; a bundled turn fails that prompt's subtest", "TestSetupNoBundledTurns fails if any flagged decision section holds more than one AskUserQuestion (catches rule/inbox + future)", "TestSetupNoArtifactDump fails if any setup prompt instructs pasting a composed config artifact back"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 3
+  title = "Flip 7 audit rows to conforming"
+  files = ["docs/interaction-audit.md"]
+  description = "Under \"## Setup & config (phase 12 — retrofit-setup-commands)\", every 🟡/⬜ marker\nacross the 7 commands' rows becomes ✅, and each row's decision-point list is\nreconciled to the rewritten prompt (milestone gains the per-criterion row; options\nshows the section-pick gate row). Flip to ✅ only after the rewrites land.\n"
+  covers = ["c-5"]
+  depends_on = ["t-3", "t-4", "t-5", "t-6", "t-7"]
+  test_contract = ["if any of the 7 setup rows keeps a ⬜/🟡/❌ marker, t-10 TestSetupAuditSectionsConform fails for that command"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 3
+  title = "Add audit guard; make install; observe green"
+  files = ["internal/cmd/interaction_setupcmds_test.go"]
+  description = "Add TestSetupAuditSectionsConform mirroring TestCoreLoopAuditSectionsConform\n(coreLoopAuditSection slicing) over setupPrompts: each `### dross-<name>` under the\nphase-12 heading contains ✅ and none of ⬜/🟡/❌. Then per RULE r-01 run\n`make install` followed by `go test -count=1 ./...` and OBSERVE it green before\nmarking done — the edits are inert against the live command until re-linked.\n"
+  covers = ["c-5"]
+  depends_on = ["t-9"]
+  test_contract = ["if any setup audit section still carries a non-conforming marker, TestSetupAuditSectionsConform fails that command's subtest", "if make install is skipped, the live retrofitted commands are unverified against the binary (r-01 gate) — suite must be observed green after re-link"]
+  status = "done"

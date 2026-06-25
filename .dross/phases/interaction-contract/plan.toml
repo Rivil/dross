@@ -1,0 +1,87 @@
+[phase]
+  id = "interaction-contract"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add interaction-contract builtin rule"
+  files = ["internal/rules/rules.go", "internal/rules/rules_test.go"]
+  description = "Add a hard builtin rule (id dross-interaction-contract) to the Builtins slice\nencoding the terse propose-and-react invariant. Rule text names _interaction.md\nas the detailed playbook.\n"
+  covers = ["c-1"]
+  test_contract = ["if the rule is dropped from Builtins, renamed, or demoted from hard, a rules_test assertion that Render(nil) contains \"[builtin/hard/dross-interaction-contract]\" plus the phrases \"one decision per turn\", \"propose\" and \"never paste the build artifact back\" fails", "if the rule stops rendering before user rules, the builtins-ordering test fails", "if the rule text stops naming \"_interaction.md\", the pointer assertion fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Author reusable interaction snippet"
+  files = ["assets/prompts/_interaction.md"]
+  description = "Write the full propose-and-react playbook: one decision per turn, propose a\ndefault and react, no walls of text, never paste the build artifact back, with a\nworked AskUserQuestion accept/reword/drop example.\n"
+  covers = ["c-2"]
+  test_contract = ["if the file is missing or any of the four playbook markers (propose-and-react, one decision per turn, no-walls, never-paste-artifact-back) is absent, a Go test that reads assets/prompts/_interaction.md fails", "if the AskUserQuestion accept/reword/drop example is removed, the content assertion fails"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Seed interaction-audit checklist"
+  files = ["docs/interaction-audit.md"]
+  description = "Create the audit checklist enumerating every interactive command (those whose\nassets/commands wrapper lists AskUserQuestion) with per-decision-point rows and a\nconformance column, for phases 11-13 to tick off.\n"
+  covers = ["c-4"]
+  test_contract = ["if an interactive command (grep -l AskUserQuestion assets/commands/) has no section in docs/interaction-audit.md, the enumeration check fails", "if the table lacks a per-decision-point row structure or the conformance/status column, the format check fails"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Reconcile rule/snippet/spec.md; cross-reference"
+  files = ["internal/rules/rules.go", "internal/rules/rules_test.go", "assets/prompts/_interaction.md", "assets/prompts/spec.md"]
+  description = "Pin the rule->snippet link and prevent drift: rule names the snippet, rule text\nstays terse, canonical phrases live in both rule and snippet, and spec.md drops\nits own embedded interaction paragraph in favour of pointing at the snippet.\n"
+  covers = ["c-1", "c-2"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if the rendered rule text stops containing \"_interaction.md\", TestInteractionRuleNamesSnippet fails", "if the rule text grows past the terse cap (~600 chars), the length-bound assertion fails so the heavy playbook can't leak into the every-command rule block", "if the canonical phrases \"one decision per turn\" / \"never paste the build artifact back\" diverge between the rule and the snippet, the drift assertion fails", "if spec.md still carries its own hand-rolled interaction paragraph (the phrase appears outside _interaction.md), the spec.md-duplicate grep fails"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Wire snippet into install; verify symlink"
+  files = ["Makefile"]
+  description = "Ensure make install links the new snippet into the prompts dir alongside the\nother prompts, and add a test/doctor check that the installed _interaction.md\nresolves to readable content matching source.\n"
+  covers = ["c-2"]
+  depends_on = ["t-2"]
+  test_contract = ["if make install stops linking the prompts dir or excludes the new file, a test running make install against an overridable temp PROMPTS_DIR then readlink-ing $PROMPTS_DIR/_interaction.md to matching source content fails", "if make doctor's prompt count stops including _interaction.md, the doctor-count assertion fails"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Add `dross interaction show` emitter"
+  files = ["assets/embed.go", "internal/cmd/interaction.go", "cmd/dross/main.go", "internal/cmd/interaction_test.go"]
+  description = "Embed the canonical assets/prompts/_interaction.md into the binary (new assets\npackage, go:embed) and add `dross interaction show` that prints it verbatim,\nmirroring `dross rule show`. Register cmd.Interaction() in cmd/dross/main.go's\nroot.AddCommand list. Single source: the emitted bytes are the same file make\ninstall links.\n"
+  covers = ["c-3"]
+  depends_on = ["t-2"]
+  test_contract = ["if `dross interaction show` is unregistered (absent from root.AddCommand in cmd/dross/main.go) or prints empty, a cmd test capturing its output and asserting the four playbook markers plus the accept/reword/drop sentinel fails", "if the embedded bytes diverge from assets/prompts/_interaction.md on disk, the single-source assertion comparing emitter output to the file fails"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 4
+  title = "Wire emitter into spec.md pre-flight; pilot"
+  files = ["assets/prompts/spec.md", "docs/interaction-audit.md", "internal/cmd/interaction_pilot_test.go"]
+  description = "Replace spec.md's dead @-include with a pre-flight `dross interaction show` step\n(mirroring `dross rule show`). Record the pilot result in the audit doc: @-include\nnesting FAILED, emitter adopted, with date. Invert the mechanical pilot test.\n"
+  covers = ["c-3"]
+  depends_on = ["t-7"]
+  test_contract = ["if spec.md's pre-flight stops invoking `dross interaction show`, or still carries the dead @~/.claude/dross/prompts/_interaction.md line, the inverted pilot test fails", "if docs/interaction-audit.md does not record the pilot as resolved-via-emitter (nested @-include FAILED) with a date, the audit-result assertion fails"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  title = "Purge stale @-include from shipped rule + snippet"
+  files = ["internal/rules/rules.go", "internal/rules/rules_test.go", "assets/prompts/_interaction.md"]
+  description = "The locked snippet_delivery decision replaced @-include with the emitter, but the\nshipped dross-interaction-contract rule text and the _interaction.md header still\nsay interactive prompts @-include the snippet. Repoint both at `dross interaction\nshow` while keeping the rule naming _interaction.md and terse.\n"
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = ["if the rendered dross-interaction-contract rule text still contains \"@-include\" (or stops pointing at the `dross interaction show` delivery mechanism), a rules_test assertion fails", "if the rule text stops naming \"_interaction.md\" or breaches the terse length cap, the existing pointer/length assertions fail", "if assets/prompts/_interaction.md's header comment still instructs prompts to @-include it, the snippet-content check fails"]
+  status = "done"

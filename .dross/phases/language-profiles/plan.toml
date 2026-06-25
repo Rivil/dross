@@ -1,0 +1,66 @@
+[phase]
+  id = "language-profiles"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add .dart/.svelte/.sql to extLang"
+  files = ["internal/stack/detect.go", "internal/stack/detect_test.go"]
+  description = "Add \".dart\"->\"dart\", \".svelte\"->\"svelte\", \".sql\"->\"sql\" to the extLang map\n(.kt->kotlin already present, left untouched). This is the ONLY mechanism-code\nedit the phase permits — the c-5 extensibility keystone.\n"
+  covers = ["c-1", "c-5"]
+  test_contract = ["DetectLanguages on a temp tree containing one .dart, one .svelte, and one .sql file includes \"dart\", \"svelte\", \"sql\"; deleting any one extLang line drops that language and the test fails", "the pre-existing .kt->kotlin mapping still resolves (regression guard against a careless rewrite of the map)"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Add five embedded language profiles"
+  files = ["internal/stack/profiles/kotlin.toml", "internal/stack/profiles/dart.toml", "internal/stack/profiles/svelte.toml", "internal/stack/profiles/sql.toml", "internal/stack/profiles/typescript.toml"]
+  description = "Five go:embed profile TOMLs, mirroring go.toml's shape. Each: id == its extLang\ntoken; one dedicated analyzer (kind=analyzer, core=true), no kind=scanner tool.\nkotlin=detekt/complexity (exts .kt/.kts, gradle runtime); dart=dcm/complexity\n(pubspec.yaml + .dart, dart runtime); svelte=eslint/complexity (svelte.config.js\n+ .svelte/.ts/.tsx, Install names eslint-plugin-svelte, vitest/svelte-check/prettier/vite\nruntime); sql=sqlfluff/dead-code (.sql, NO [runtime] block); typescript=eslint/complexity\n(tsconfig.json + .ts/.tsx, Install names typescript-eslint, vitest/tsc/prettier/build\nruntime) — the fifth profile so .ts files get a dedicated analyzer via recon (typescript_profile decision).\n"
+  covers = ["c-2", "c-3", "c-4"]
+  test_contract = ["each TOML is valid and loads via stack.Embedded(); a malformed profile would surface as a load error when t-3 calls Embedded()", "if a profile id != its extLang token (e.g. id=\"kt\" not \"kotlin\"), AnalyzersFor(token) omits the dedicated analyzer and t-4 fails", "if sql.toml declares a [runtime.test], t-6's sql empty-runtime assertion fails; if it uses a fresh non-substantive dimension, t-4's cosmetic-exclusion check fails"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Test detection resolves each profile id"
+  files = ["internal/stack/detect_test.go"]
+  description = "Table test over the shipped profiles via stack.Embedded(): a fixture for each of\nkotlin/dart/svelte/sql/typescript resolves to its id through Detect(). Plus two control\nguards (unsupported repo, polyglot repo) and a CLI-surface assertion that the\nfive ids list and load through LoadAll/ByID (the path `dross stack list`/`show`\ndelegate to).\n"
+  covers = ["c-1", "c-2", "c-5"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["Detect(fixture, Embedded()) returns \"kotlin\"/\"dart\"/\"svelte\"/\"sql\"/\"typescript\" for a fixture of each stack; deleting kotlin.toml fails the kotlin row", "an unsupported fixture (only foo.rb / README.txt) returns stack.Unsupported, not one of the five (false-match guard)", "a .sql file beside a go.mod still detects \"go\" — a file signal outweighs an extension, so SQL can't hijack a Go repo (polyglot guard)", "LoadAll() (what `dross stack list` enumerates) contains all five ids and ByID(LoadAll(), <id>) resolves each non-nil (what `dross stack show <id>` loads); removing svelte.toml drops it from the list and fails the svelte row"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Test AnalyzersFor surfaces each analyzer"
+  files = ["internal/quality/catalog_test.go"]
+  description = "Table test: AnalyzersFor(<id>) includes the dedicated analyzer on top of the\nagnostic set (scc, jscpd), and each dedicated analyzer's dimension is substantive.\n"
+  covers = ["c-3", "c-5"]
+  depends_on = ["t-2"]
+  test_contract = ["AnalyzersFor(\"kotlin\") includes detekt, (\"dart\") includes dcm, (\"svelte\") includes eslint, (\"sql\") includes sqlfluff, (\"typescript\") includes eslint — each alongside scc and jscpd; dropping dcm from dart.toml fails the dart row", "the svelte eslint analyzer's Install string contains \"eslint-plugin-svelte\" and the typescript eslint analyzer's Install string contains \"typescript-eslint\"", "every dedicated analyzer's Dimension passes the existing substantive-dimension check (a cosmetic dimension on any of the five trips TestCatalogExcludesCosmetic)"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Test ScannersFor stays agnostic-only"
+  files = ["internal/security/catalog_test.go"]
+  description = "Enforces the locked security_agnostic_only decision: none of the five profiles\ncontributes a dedicated scanner.\n"
+  covers = ["c-3"]
+  depends_on = ["t-2"]
+  test_contract = ["for each of kotlin/dart/svelte/sql/typescript, the ScannersFor(id) name-set EQUALS {gitleaks, semgrep, trivy} exactly — equality, not membership, so an accidentally-added kind=scanner tool fails the test"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Test runtime seeded for 3, empty for sql"
+  files = ["internal/stack/runtime_test.go"]
+  description = "Proves init/onboard/apply seed runtime for kotlin/dart/svelte/typescript and seed\nnothing for sql, via ResolveRuntime over the embedded profiles.\n"
+  covers = ["c-4"]
+  depends_on = ["t-2"]
+  test_contract = ["ResolveRuntime(ByID(Embedded(),\"kotlin\"), goos, lookPath).Test and .Build are non-empty (same for dart, svelte, typescript)", "ResolveRuntime for \"sql\" returns empty .Test and .Build; a sneaked-in [runtime] block in sql.toml fails this assertion"]
+  status = "done"
