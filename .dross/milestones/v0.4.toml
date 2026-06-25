@@ -1,0 +1,11 @@
+phases = ["14-stable-slug-phase-ids", "15-phase-lifecycle-commands"]
+
+[milestone]
+  version = "v0.4"
+  title = "Phase identity & lifecycle"
+  status = "active"
+  started = "2026-06-25"
+
+[scope]
+  success_criteria = ["A phase's identity is its slug with no ordinal prefix, and phase order is read solely from the milestone's phases array — verifiable by listing phases and confirming order matches the array, not directory names.", "Inserting a phase between two existing phases is a single command (e.g. dross phase insert --after <slug>) that leaves every existing phase's directory, id, branch, and artifacts byte-for-byte untouched.", "Human-facing phase numbers (status output, PR titles, the version patch digit) are computed from array position, so they stay correct after any insert, move, or reorder — no stale ordinals.", "All existing phases are migrated to slug identity in one pass with dross validate staying green, and old NN-slug references still resolve (back-compat shim) so nothing in flight breaks."]
+  non_goals = ["No history rewriting — existing git branches, merged-PR titles, and past commit messages keep their NN- prefixes; migration only touches live .dross/ artifacts.", "No cross-milestone phase moves — insert/move/reorder operate within a single milestone's phases array; moving a phase between milestones is deferred.", "No semantic changes — the spec→plan→execute→verify→ship semantics and .dross/ state schemas are unchanged except for the identity/ordering fields this milestone touches."]

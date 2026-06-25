@@ -1,21 +1,9 @@
 {
-  "version": "0.3.4.0",
-  "current_milestone": "v0.3",
-  "last_activity": "2026-06-22T06:48:52.556138Z",
-  "last_action": "set version=0.3.4.0",
+  "version": "0.4.0.0",
+  "current_milestone": "v0.4",
+  "last_activity": "2026-06-25T17:11:04.190328Z",
+  "last_action": "scoped milestone v0.4: 4 criteria, 2 phases; version → 0.4.0.0",
   "history": [
-    {
-      "at": "2026-06-21T17:39:23.134296Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-21T17:39:23.139998Z",
-      "action": "verified 11-retrofit-core-loop: partial (3/5 covered, c-3/c-4 weak — audit-proxy only; mutation Lived=0/0.81 package-scoped not a phase signal)"
-    },
-    {
-      "at": "2026-06-21T18:21:55.341475Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-21T18:21:55.347512Z",
       "action": "plan amended: 11-retrofit-core-loop (+t-8 prompt-sentinel tests for c-3/c-4; 8 tasks, 4 waves)"
@@ -203,6 +191,18 @@
     {
       "at": "2026-06-22T06:48:52.556138Z",
       "action": "set version=0.3.4.0"
+    },
+    {
+      "at": "2026-06-25T17:11:04.176917Z",
+      "action": "set current_milestone=v0.4"
+    },
+    {
+      "at": "2026-06-25T17:11:04.183911Z",
+      "action": "set version=0.4.0.0"
+    },
+    {
+      "at": "2026-06-25T17:11:04.190328Z",
+      "action": "scoped milestone v0.4: 4 criteria, 2 phases; version → 0.4.0.0"
     }
   ]
 }
