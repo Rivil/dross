@@ -73,7 +73,7 @@ func TestFullLifecycle(t *testing.T) {
 	if err := runCmd(t, Phase(), "create", "auth middleware"); err != nil {
 		t.Fatalf("phase create: %v", err)
 	}
-	phaseID := "01-auth-middleware"
+	phaseID := "auth-middleware"
 	phaseDir := filepath.Join(dir, ".dross/phases", phaseID)
 	if !pathExists(phaseDir) {
 		t.Fatalf("phase dir %s not created", phaseDir)
@@ -226,7 +226,7 @@ status = "pending"
 	}
 	verifyBody := mustRead(t, filepath.Join(phaseDir, "verify.toml"))
 	for _, want := range []string{
-		`phase = "01-auth-middleware"`,
+		`phase = "auth-middleware"`,
 		`verdict = "pending"`, // LLM step would update this
 		`criteria_total = 2`,
 		`id = "c-1"`,
@@ -264,15 +264,15 @@ func TestLifecycleResumeAfterInterruption(t *testing.T) {
 	if err := runCmd(t, Phase(), "create", "x"); err != nil {
 		t.Fatal(err)
 	}
-	mustWrite(t, ".dross/phases/01-x/spec.toml", `[phase]
-id = "01-x"
+	mustWrite(t, ".dross/phases/x/spec.toml", `[phase]
+id = "x"
 title = "x"
 [[criteria]]
 id = "c-1"
 text = "x"
 `)
-	mustWrite(t, ".dross/phases/01-x/plan.toml", `[phase]
-id = "01-x"
+	mustWrite(t, ".dross/phases/x/plan.toml", `[phase]
+id = "x"
 [[task]]
 id = "t-1"
 wave = 1
@@ -301,18 +301,18 @@ covers = ["c-1"]
 	// NextRunnable returns nothing — execute prompt would prompt user
 	// to resume t-2 rather than auto-pick.
 	out := captureStdout(t, func() {
-		runCmd(t, Task(), "next", "01-x")
+		runCmd(t, Task(), "next", "x")
 	})
 	if strings.TrimSpace(out) != "" {
 		t.Errorf("with in_progress task and downstream blocked, next should be empty (resume manually); got %q", out)
 	}
 
 	// Resume by completing t-2
-	if err := runCmd(t, Task(), "status", "01-x", "t-2", "done"); err != nil {
+	if err := runCmd(t, Task(), "status", "x", "t-2", "done"); err != nil {
 		t.Fatal(err)
 	}
 	out = captureStdout(t, func() {
-		runCmd(t, Task(), "next", "01-x")
+		runCmd(t, Task(), "next", "x")
 	})
 	if strings.TrimSpace(out) != "t-3" {
 		t.Errorf("after resuming t-2, next should be t-3; got %q", out)

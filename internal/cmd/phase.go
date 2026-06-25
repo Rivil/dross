@@ -6,8 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -93,11 +91,7 @@ func phaseCreate() *cobra.Command {
 			}
 			repoDir := filepath.Dir(root)
 
-			n, err := nextPhaseNumber(root)
-			if err != nil {
-				return err
-			}
-			id := fmt.Sprintf("%02d-%s", n, phase.Slugify(title))
+			id := phase.UniqueSlug(root, title)
 			branchName := "phase/" + id
 
 			// Pre-flight git checks before any side effects. We only do
@@ -148,8 +142,25 @@ func phaseCreate() *cobra.Command {
 				return fmt.Errorf("save state: %w", err)
 			}
 
+			// Register the phase in the current milestone's ordered phases
+			// array — that array is the single source of phase order, so a new
+			// phase joins it at the tail. appendUnique keeps this idempotent
+			// when /dross-spec --new scaffolds a phase the milestone already
+			// listed as intent.
+			ordinal := 0
+			if s.CurrentMilestone != "" {
+				mPath := milestone.FilePath(root, s.CurrentMilestone)
+				if m, err := milestone.Load(mPath); err == nil {
+					m.Phases = appendUnique(m.Phases, id)
+					if err := m.Save(mPath); err != nil {
+						return fmt.Errorf("register phase in milestone %s: %w", s.CurrentMilestone, err)
+					}
+					ordinal = phase.DisplayNumber(m.Phases, id)
+				}
+			}
+
 			Print("Next: /dross-spec to write spec.toml, then /dross-plan")
-			RecordOutcomeEvent("phase_create", map[string]int{"ordinal": n}, nil, nil)
+			RecordOutcomeEvent("phase_create", map[string]int{"ordinal": ordinal}, nil, nil)
 			return nil
 		},
 	}
@@ -398,30 +409,4 @@ func phaseShow() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-func nextPhaseNumber(root string) (int, error) {
-	entries, err := os.ReadDir(filepath.Join(root, "phases"))
-	if err != nil && !os.IsNotExist(err) {
-		return 0, err
-	}
-	max := 0
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		parts := strings.SplitN(e.Name(), "-", 2)
-		if len(parts) < 1 {
-			continue
-		}
-		n, err := strconv.Atoi(parts[0])
-		if err != nil {
-			continue
-		}
-		if n > max {
-			max = n
-		}
-	}
-	sort.Ints([]int{max})
-	return max + 1, nil
 }

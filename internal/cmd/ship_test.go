@@ -44,16 +44,16 @@ func shipFixture(t *testing.T, originURL string) string {
 	gitCommit(t, dir, "initial baseline")
 
 	// Create the phase via the real CLI — this also checks us out onto
-	// phase/01-x, matching the post-create state ship expects.
+	// phase/x, matching the post-create state ship expects.
 	if err := runCmd(t, Phase(), "create", "x"); err != nil {
 		t.Fatalf("phase create: %v", err)
 	}
 
 	// Drop verify.toml at pass and write phase code on the phase branch.
 	root := filepath.Join(dir, ".dross")
-	phaseDir := filepath.Join(root, "phases", "01-x")
+	phaseDir := filepath.Join(root, "phases", "x")
 	mustWrite(t, filepath.Join(phaseDir, "verify.toml"), `[verify]
-phase = "01-x"
+phase = "x"
 generated_at = 2026-05-02T10:00:00Z
 verdict = "pass"
 
@@ -75,7 +75,7 @@ tests = ["tag.test.ts:42"]
 	// working tree is clean when ship runs.
 	mustWrite(t, filepath.Join(dir, "src/tag.ts"), "export const tag = 1\n")
 	mustWrite(t, filepath.Join(phaseDir, "spec.toml"), `[phase]
-id = "01-x"
+id = "x"
 title = "Tagging"
 
 [[criteria]]
@@ -85,7 +85,7 @@ text = "Tags can be added"
 	gitCommit(t, dir, "feat(tag): add tagging")
 	commitSHA := gitOutT(t, dir, "rev-parse", "HEAD")
 	mustWrite(t, filepath.Join(phaseDir, "changes.json"), `{
-  "phase": "01-x",
+  "phase": "x",
   "tasks": {
     "t1": {"files": ["src/tag.ts"], "commit": "`+commitSHA+`", "completed_at": "2026-05-02T10:00:00Z"}
   }
@@ -114,15 +114,15 @@ func TestShipNoPushSkipsPushAndPR(t *testing.T) {
 	// No state.json shipped action recorded — --no-push is a dry run.
 	st, _ := state.Load(filepath.Join(dir, ".dross", "state.json"))
 	for _, a := range st.History {
-		if strings.HasPrefix(a.Action, "shipped 01-x") {
+		if strings.HasPrefix(a.Action, "shipped x") {
 			t.Error("should not record shipped action under --no-push")
 		}
 	}
 
 	// We should still be on the phase branch (ship doesn't switch).
 	cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD")
-	if cur != "phase/01-x" {
-		t.Errorf("expected to stay on phase/01-x, got %q", cur)
+	if cur != "phase/x" {
+		t.Errorf("expected to stay on phase/x, got %q", cur)
 	}
 }
 
@@ -130,7 +130,7 @@ func TestShipRefusesUnverified(t *testing.T) {
 	dir := shipFixture(t, "https://forge.example/me/p.git")
 
 	// Override verify verdict to "fail".
-	verifyPath := filepath.Join(dir, ".dross", "phases", "01-x", "verify.toml")
+	verifyPath := filepath.Join(dir, ".dross", "phases", "x", "verify.toml")
 	body, _ := os.ReadFile(verifyPath)
 	body = []byte(strings.Replace(string(body), `verdict = "pass"`, `verdict = "fail"`, 1))
 	if err := os.WriteFile(verifyPath, body, 0o644); err != nil {
@@ -148,7 +148,7 @@ func TestShipRefusesUnverified(t *testing.T) {
 
 func TestShipForceUnverifiedSkipsGate(t *testing.T) {
 	dir := shipFixture(t, "https://forge.example/me/p.git")
-	verifyPath := filepath.Join(dir, ".dross", "phases", "01-x", "verify.toml")
+	verifyPath := filepath.Join(dir, ".dross", "phases", "x", "verify.toml")
 	body, _ := os.ReadFile(verifyPath)
 	body = []byte(strings.Replace(string(body), `verdict = "pass"`, `verdict = "fail"`, 1))
 	if err := os.WriteFile(verifyPath, body, 0o644); err != nil {
@@ -191,7 +191,7 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	// Point project.toml at the mock server. project set runs from main
-	// (we're on phase/01-x and it writes to .dross/project.toml), so
+	// (we're on phase/x and it writes to .dross/project.toml), so
 	// commit on the phase branch before shipping (clean tree required).
 	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
 		t.Fatal(err)
@@ -202,12 +202,12 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 		t.Fatalf("ship: %v", err)
 	}
 
-	if !strings.Contains(openedTitle, "phase 01-x") {
+	if !strings.Contains(openedTitle, "phase x") {
 		t.Errorf("PR title should reference phase id, got: %q", openedTitle)
 	}
 
 	// Ship folds the completion record into the branch: state.json now
-	// clears current_phase and records `completed 01-x`, written and
+	// clears current_phase and records `completed x`, written and
 	// committed BEFORE the push so the provider's squash-merge carries it
 	// to main (c-4). The PR URL is printed, not persisted.
 	st, _ := state.Load(filepath.Join(dir, ".dross", "state.json"))
@@ -216,19 +216,19 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	}
 	foundCompleted := false
 	for _, a := range st.History {
-		if strings.Contains(a.Action, "completed 01-x") {
+		if strings.Contains(a.Action, "completed x") {
 			foundCompleted = true
 		}
 	}
 	if !foundCompleted {
-		t.Errorf("state history should record `completed 01-x`; history: %+v", st.History)
+		t.Errorf("state history should record `completed x`; history: %+v", st.History)
 	}
 
-	// Remote should have received phase/01-x directly (no synthetic
+	// Remote should have received phase/x directly (no synthetic
 	// pr/<id> branch any more).
 	remoteRefs := mustGit(t, remoteDir, "for-each-ref", "--format=%(refname:short)", "refs/heads")
-	if !strings.Contains(remoteRefs, "phase/01-x") {
-		t.Errorf("expected phase/01-x on remote, got: %q", remoteRefs)
+	if !strings.Contains(remoteRefs, "phase/x") {
+		t.Errorf("expected phase/x on remote, got: %q", remoteRefs)
 	}
 
 	// The completion record must live in the PUSHED ref, not a local-only
@@ -236,7 +236,7 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	// remote and assert current_phase is cleared there. If the commit landed
 	// after the push (the old behaviour), the pushed tree still carries
 	// current_phase and this fails.
-	pushedState := mustGit(t, remoteDir, "show", "phase/01-x:.dross/state.json")
+	pushedState := mustGit(t, remoteDir, "show", "phase/x:.dross/state.json")
 	var pushed state.State
 	if err := json.Unmarshal([]byte(pushedState), &pushed); err != nil {
 		t.Fatalf("parse pushed state.json: %v", err)
@@ -253,7 +253,7 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	}
 	// That write lands as a `chore(dross): ship <id>` commit at HEAD. If
 	// state isn't committed, HEAD is still the api_base test commit.
-	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); msg != "chore(dross): ship 01-x" {
+	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); msg != "chore(dross): ship x" {
 		t.Errorf("HEAD should be the ship state commit, got: %q", msg)
 	}
 }
@@ -300,7 +300,7 @@ func TestShipReshipIsIdempotent(t *testing.T) {
 
 	// Second ship — current_phase is now cleared, so name the phase. It must
 	// succeed and leave a clean tree (re-writes the same completed state).
-	if err := runCmd(t, Ship(), "01-x"); err != nil {
+	if err := runCmd(t, Ship(), "x"); err != nil {
 		t.Fatalf("re-ship should be idempotent, got: %v", err)
 	}
 	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
