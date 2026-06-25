@@ -124,6 +124,94 @@ func TestDir(t *testing.T) {
 	}
 }
 
+func TestStripLegacyPrefix(t *testing.T) {
+	cases := map[string]string{
+		"03-fix-foo":    "fix-foo",
+		"fix-foo":       "fix-foo",
+		"12-onboarding": "onboarding",
+		"onboarding":    "onboarding",
+		"123":           "123",          // no dash, untouched
+		"-foo":          "-foo",         // leading dash, no ordinal
+		"v1-bootstrap":  "v1-bootstrap", // non-numeric leading segment
+	}
+	for in, want := range cases {
+		if got := StripLegacyPrefix(in); got != want {
+			t.Errorf("StripLegacyPrefix(%q): got %q want %q", in, got, want)
+		}
+	}
+}
+
+func TestDirResolvesLegacy(t *testing.T) {
+	// Only the bare-slug dir exists: a legacy id resolves to it, the bare id
+	// resolves to it, and a non-existent id returns the literal unchanged.
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "phases", "foo"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wantFoo := filepath.Join(root, "phases", "foo")
+	if got := Dir(root, "03-foo"); got != wantFoo {
+		t.Errorf("Dir legacy→slug: got %q want %q", got, wantFoo)
+	}
+	if got := Dir(root, "foo"); got != wantFoo {
+		t.Errorf("Dir slug: got %q want %q", got, wantFoo)
+	}
+	if got, want := Dir(root, "nope"), filepath.Join(root, "phases", "nope"); got != want {
+		t.Errorf("Dir non-existent should be literal: got %q want %q", got, want)
+	}
+
+	// When the legacy dir itself still exists (un-migrated), Dir returns it
+	// verbatim rather than stripping the prefix.
+	root2 := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root2, "phases", "03-foo"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := Dir(root2, "03-foo"), filepath.Join(root2, "phases", "03-foo"); got != want {
+		t.Errorf("Dir literal-exists: got %q want %q", got, want)
+	}
+}
+
+func TestOrdered(t *testing.T) {
+	got := Ordered([]string{"gamma", "alpha"}, []string{"alpha", "gamma", "orphan"})
+	want := []string{"gamma", "alpha", "orphan"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Ordered: got %v want %v", got, want)
+	}
+	// A stale array entry (no dir on disk) is skipped, not emitted.
+	got = Ordered([]string{"missing", "alpha"}, []string{"alpha"})
+	if !reflect.DeepEqual(got, []string{"alpha"}) {
+		t.Errorf("Ordered stale: got %v want [alpha]", got)
+	}
+}
+
+func TestDisplayNumber(t *testing.T) {
+	order := []string{"alpha", "beta", "gamma"}
+	if got := DisplayNumber(order, "beta"); got != 2 {
+		t.Errorf("DisplayNumber beta: got %d want 2", got)
+	}
+	// Reordering changes the number.
+	if got := DisplayNumber([]string{"gamma", "beta", "alpha"}, "alpha"); got != 3 {
+		t.Errorf("DisplayNumber after reorder: got %d want 3", got)
+	}
+	if got := DisplayNumber(order, "missing"); got != 0 {
+		t.Errorf("DisplayNumber missing: got %d want 0", got)
+	}
+}
+
+func TestUniqueSlug(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"foo", "foo-2"} {
+		if err := os.MkdirAll(filepath.Join(root, "phases", name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := UniqueSlug(root, "Foo"); got != "foo-3" {
+		t.Errorf("UniqueSlug with foo,foo-2 present: got %q want foo-3", got)
+	}
+	if got := UniqueSlug(t.TempDir(), "Foo"); got != "foo" {
+		t.Errorf("UniqueSlug with none present: got %q want foo", got)
+	}
+}
+
 func TestNextRunnableEmptyPlan(t *testing.T) {
 	p := &Plan{}
 	if p.NextRunnable() != nil {

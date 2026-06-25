@@ -23,9 +23,103 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Dir is the conventional path for a phase: phases/NN-slug
+// Dir resolves a phase id to its on-disk directory under phases/.
+//
+// Identity is the bare slug (e.g. phases/auth). For back-compat, a legacy
+// NN-slug id (e.g. "01-auth") still resolves: if the literal directory is
+// absent, Dir falls back to the prefix-stripped slug when that directory
+// exists. When neither exists it returns the literal phases/<id> unchanged,
+// so callers that build a path for a not-yet-created phase are unaffected.
 func Dir(root, id string) string {
-	return filepath.Join(root, "phases", id)
+	literal := filepath.Join(root, "phases", id)
+	if _, err := os.Stat(literal); err == nil {
+		return literal
+	}
+	if stripped := StripLegacyPrefix(id); stripped != id {
+		if alt := filepath.Join(root, "phases", stripped); statDir(alt) {
+			return alt
+		}
+	}
+	return literal
+}
+
+func statDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// StripLegacyPrefix removes a leading ordinal prefix ("NN-") from a phase id,
+// leaving the slug. A non-numeric leading segment is left untouched, so it is
+// a no-op on ids that are already bare slugs.
+//
+//	StripLegacyPrefix("03-fix-foo") == "fix-foo"
+//	StripLegacyPrefix("fix-foo")    == "fix-foo"
+func StripLegacyPrefix(id string) string {
+	i := strings.IndexByte(id, '-')
+	if i <= 0 {
+		return id
+	}
+	for _, r := range id[:i] {
+		if r < '0' || r > '9' {
+			return id
+		}
+	}
+	return id[i+1:]
+}
+
+// Ordered returns the phase dirs ordered by their position in a milestone's
+// phases array. Entries present in order and on disk come first, in array
+// order; orphan dirs (on disk but in no array) are appended, sorted, never
+// dropped. A stale array entry (in the array but with no dir) is skipped —
+// there is nothing on disk to list for it.
+func Ordered(order, dirs []string) []string {
+	onDisk := make(map[string]bool, len(dirs))
+	for _, d := range dirs {
+		onDisk[d] = true
+	}
+	out := make([]string, 0, len(dirs))
+	placed := make(map[string]bool, len(dirs))
+	for _, o := range order {
+		if onDisk[o] {
+			out = append(out, o)
+			placed[o] = true
+		}
+	}
+	var orphans []string
+	for _, d := range dirs {
+		if !placed[d] {
+			orphans = append(orphans, d)
+		}
+	}
+	sort.Strings(orphans)
+	return append(out, orphans...)
+}
+
+// DisplayNumber is the 1-based position of slug within a milestone's phases
+// array, or 0 if it is not in the array. The number is derived from array
+// position, so reordering the array changes it.
+func DisplayNumber(order []string, slug string) int {
+	for i, o := range order {
+		if o == slug {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+// UniqueSlug slugifies title and, if a phase directory by that slug already
+// exists under root, appends "-2", "-3", … until it finds a free name.
+func UniqueSlug(root, title string) string {
+	base := Slugify(title)
+	if !statDir(filepath.Join(root, "phases", base)) {
+		return base
+	}
+	for i := 2; ; i++ {
+		cand := fmt.Sprintf("%s-%d", base, i)
+		if !statDir(filepath.Join(root, "phases", cand)) {
+			return cand
+		}
+	}
 }
 
 // Slugify converts a free-form title into a directory-safe slug.
