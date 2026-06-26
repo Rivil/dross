@@ -335,6 +335,38 @@ text = "someday idea"
 	}
 }
 
+// TestValidateRejectsDanglingTarget proves validate flags a [[deferred]] target
+// that names neither an existing phase dir nor any milestone.phases entry — the
+// silent re-surface failure the guard exists to catch.
+func TestValidateRejectsDanglingTarget(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	mustRunSet(t, "project.name", "test-app")
+	mustRunSet(t, "runtime.mode", "native")
+
+	spec := `[phase]
+id = "host-phase"
+title = "Host"
+
+[[criteria]]
+id = "c-1"
+text = "does a thing"
+
+[[deferred]]
+text = "routed to nowhere"
+target = "ghost-slug"
+`
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "host-phase", "spec.toml"), spec)
+
+	if err := runCmd(t, Validate()); err == nil {
+		t.Fatal("validate should reject a deferred target naming no phase dir or milestone.phases entry")
+	}
+}
+
 func TestRuleAddListRemove(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)

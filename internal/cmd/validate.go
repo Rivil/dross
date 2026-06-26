@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/rules"
@@ -65,6 +66,24 @@ func Validate() *cobra.Command {
 			if err != nil {
 				problems = append(problems, fmt.Sprintf("phases: %v", err))
 			}
+
+			// Valid deferred-target slugs: any existing phase dir, or any slug
+			// parked in a milestone's phases array. A target outside this set is
+			// dangling — it would silently break the 1:1 re-surface it routes to.
+			validTargets := map[string]bool{}
+			for _, id := range phaseIDs {
+				validTargets[id] = true
+			}
+			if versions, err := milestone.List(root); err == nil {
+				for _, v := range versions {
+					if m, err := milestone.Load(milestone.FilePath(root, v)); err == nil {
+						for _, ph := range m.Phases {
+							validTargets[ph] = true
+						}
+					}
+				}
+			}
+
 			for _, id := range phaseIDs {
 				dir := phase.Dir(root, id)
 				specPath := filepath.Join(dir, "spec.toml")
@@ -90,6 +109,13 @@ func Validate() *cobra.Command {
 							if !ids[cov] {
 								problems = append(problems, fmt.Sprintf("%s task %s covers unknown criterion %s", planPath, t.ID, cov))
 							}
+						}
+					}
+				}
+				if spec != nil {
+					for _, d := range spec.Deferred {
+						if d.Target != "" && !validTargets[d.Target] {
+							problems = append(problems, fmt.Sprintf("%s: deferred target %q names no phase dir or milestone.phases entry", specPath, d.Target))
 						}
 					}
 				}
