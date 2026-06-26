@@ -1,15 +1,9 @@
 {
   "version": "0.4.2.0",
   "current_milestone": "v0.4",
-  "current_phase": "phase-lifecycle-commands",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-26T15:10:08.624569Z",
-  "last_action": "verified phase-lifecycle-commands: pass (4/4 covered, mutation 0.83 module-wide / efficacy 1.00; resolveAnchor survivors are gremlins not-covered artifact, go-cover confirms 74-89%)",
+  "last_activity": "2026-06-26T15:11:41.831349Z",
+  "last_action": "completed phase-lifecycle-commands",
   "history": [
-    {
-      "at": "2026-06-26T08:56:03.545708Z",
-      "action": "set current_phase=deferred-item-routing"
-    },
     {
       "at": "2026-06-26T08:56:03.552826Z",
       "action": "spec locked: deferred-item-routing"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-26T15:10:08.624569Z",
       "action": "verified phase-lifecycle-commands: pass (4/4 covered, mutation 0.83 module-wide / efficacy 1.00; resolveAnchor survivors are gremlins not-covered artifact, go-cover confirms 74-89%)"
+    },
+    {
+      "at": "2026-06-26T15:11:41.831349Z",
+      "action": "completed phase-lifecycle-commands"
     }
   ]
 }
