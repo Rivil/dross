@@ -251,3 +251,65 @@ func TestRefuseIfShipped(t *testing.T) {
 		t.Errorf("refuseIfShipped should allow a phase with no origin branch: %v", err)
 	}
 }
+
+func TestPhaseInsert(t *testing.T) {
+	dir := setupLifecycleFixture(t)
+	root := filepath.Join(dir, ".dross")
+	before := snapshotPhases(t, root)
+
+	if err := runCmd(t, Phase(), "insert", "New Phase", "--after", "p1"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if got, want := milestonePhases(t, root, "v1"), []string{"p1", "new-phase", "p2", "p3"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("after insert: array = %v, want %v", got, want)
+	}
+	if !isDir(filepath.Join(root, "phases", "new-phase")) {
+		t.Error("insert did not create phases/new-phase")
+	}
+	// Siblings byte-for-byte untouched (only the new phase is excepted).
+	assertUntouched(t, before, snapshotPhases(t, root), "new-phase")
+
+	var num string
+	if err := runCmdCapturing(t, &num, Phase(), "number", "p2"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(num) != "3" {
+		t.Errorf("phase number p2 after insert = %q, want 3 (shifted +1)", num)
+	}
+	if err := runCmd(t, Validate()); err != nil {
+		t.Errorf("validate after insert: %v", err)
+	}
+}
+
+func TestPhaseInsertCollisionRefused(t *testing.T) {
+	dir := setupLifecycleFixture(t)
+	root := filepath.Join(dir, ".dross")
+	before := snapshotPhases(t, root)
+
+	// "p2" slugs to an existing phase — must refuse (no auto-suffix) and leave
+	// no stray state.
+	if err := runCmd(t, Phase(), "insert", "p2", "--after", "p1"); err == nil {
+		t.Fatal("inserting a colliding slug should error (no auto-suffix)")
+	}
+	if isDir(filepath.Join(root, "phases", "p2-2")) {
+		t.Error("collision left a stray suffixed directory")
+	}
+	if got, want := milestonePhases(t, root, "v1"), []string{"p1", "p2", "p3"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("collision mutated the array: %v", got)
+	}
+	assertUntouched(t, before, snapshotPhases(t, root))
+}
+
+func TestPhaseInsertErrors(t *testing.T) {
+	setupLifecycleFixture(t)
+
+	if err := runCmd(t, Phase(), "insert", "X", "--after", "p1", "--before", "p2"); err == nil {
+		t.Error("both --after and --before should error")
+	}
+	if err := runCmd(t, Phase(), "insert", "X"); err == nil {
+		t.Error("neither anchor flag should error")
+	}
+	if err := runCmd(t, Phase(), "insert", "X", "--after", "nonexistent"); err == nil {
+		t.Error("an anchor not in the milestone should error")
+	}
+}

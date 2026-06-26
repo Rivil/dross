@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -125,5 +126,104 @@ func phaseMove() *cobra.Command {
 	}
 	c.Flags().StringVar(&after, "after", "", "place <slug> immediately after this phase slug")
 	c.Flags().StringVar(&before, "before", "", "place <slug> immediately before this phase slug")
+	return c
+}
+
+// phaseInsert scaffolds a new phase (directory + phase/<slug> branch + active
+// state) and splices it into the current milestone's array at the anchor.
+// Unlike phase create it uses a STRICT slug (phase.Slugify, no UniqueSlug
+// auto-suffix — the locked input_validation decision) and refuses a collision,
+// and it splices at the anchor instead of appending at the tail.
+func phaseInsert() *cobra.Command {
+	var after, before string
+	c := &cobra.Command{
+		Use:   "insert <title>",
+		Short: "Scaffold a phase and place it at a position in the milestone array",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			title := strings.Join(args, " ")
+			anchor, isBefore, err := resolveAnchor(after, before)
+			if err != nil {
+				return err
+			}
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			repoDir := filepath.Dir(root)
+
+			version, m, mPath, err := loadCurrentMilestone(root)
+			if err != nil {
+				return err
+			}
+
+			id := phase.Slugify(title)
+			if id == "" {
+				return fmt.Errorf("title %q produces an empty slug", title)
+			}
+			// Strict collision refusal (no auto-suffix), checked BEFORE any
+			// scaffolding so a refusal leaves no stray directory.
+			if isDir(phase.Dir(root, id)) {
+				return fmt.Errorf("phase %q already exists (phases/%s) — choose another title or rename it first", id, id)
+			}
+			if slices.Contains(m.Phases, id) {
+				return fmt.Errorf("phase %q is already in milestone %s", id, version)
+			}
+			if !slices.Contains(m.Phases, anchor) {
+				return fmt.Errorf("anchor %q is not in milestone %s", anchor, version)
+			}
+
+			// Scaffold: reuse phase create's preflight + mkdir + checkout-b steps
+			// (NOT its tail-append). Side effects only after every check passes.
+			branchName := "phase/" + id
+			hasGit := isDir(filepath.Join(repoDir, ".git"))
+			if hasGit {
+				if err := preflightPhaseBranch(repoDir, branchName); err != nil {
+					return err
+				}
+			}
+			dir := phase.Dir(root, id)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return err
+			}
+			if hasGit {
+				if out, err := gitCombined(repoDir, "checkout", "-b", branchName); err != nil {
+					_ = os.Remove(dir)
+					return fmt.Errorf("git checkout -b %s: %w\n%s", branchName, err, out)
+				}
+			}
+
+			// Splice into the array at the anchor (existence already checked).
+			next, err := phase.InsertRelative(m.Phases, id, anchor, isBefore)
+			if err != nil {
+				return err
+			}
+			m.Phases = next
+			if err := m.Save(mPath); err != nil {
+				return err
+			}
+
+			sPath := filepath.Join(root, state.File)
+			s, err := state.Load(sPath)
+			if err != nil {
+				return err
+			}
+			s.CurrentPhase = id
+			s.CurrentPhaseStatus = "created"
+			s.Touch(fmt.Sprintf("inserted %s", id))
+			if err := s.Save(sPath); err != nil {
+				return err
+			}
+
+			Printf("inserted %s at position %d in %s\n", id, phase.DisplayNumber(m.Phases, id), version)
+			if hasGit {
+				Printf("checked out %s\n", branchName)
+			}
+			Print("Next: /dross-spec to write spec.toml, then /dross-plan")
+			return nil
+		},
+	}
+	c.Flags().StringVar(&after, "after", "", "place the new phase immediately after this phase slug")
+	c.Flags().StringVar(&before, "before", "", "place the new phase immediately before this phase slug")
 	return c
 }
