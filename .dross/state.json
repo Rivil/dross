@@ -3,13 +3,9 @@
   "current_milestone": "v0.4",
   "current_phase": "phase-lifecycle-commands",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-26T14:44:07.690602Z",
-  "last_action": "plan locked: phase-lifecycle-commands (5 tasks across 3 waves, --panel)",
+  "last_activity": "2026-06-26T14:47:55.853776Z",
+  "last_action": "plan reviewed: phase-lifecycle-commands (0 blocking, 3 flags; #1 UniqueSlug trap fixed in t-4, #3 serialized t-5 after t-4, #2 kept folded per D3)",
   "history": [
-    {
-      "at": "2026-06-25T19:11:02.259842Z",
-      "action": "executed t-5 (Add idempotent dross phase migrate command)"
-    },
     {
       "at": "2026-06-25T19:13:19.970061Z",
       "action": "executed t-6 (Migrate this repo's phases to slug identity)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-26T14:44:07.690602Z",
       "action": "plan locked: phase-lifecycle-commands (5 tasks across 3 waves, --panel)"
+    },
+    {
+      "at": "2026-06-26T14:47:55.853776Z",
+      "action": "plan reviewed: phase-lifecycle-commands (0 blocking, 3 flags; #1 UniqueSlug trap fixed in t-4, #3 serialized t-5 after t-4, #2 kept folded per D3)"
     }
   ]
 }

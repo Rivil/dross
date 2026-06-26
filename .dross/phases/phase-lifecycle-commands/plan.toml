@@ -56,7 +56,7 @@
   wave = 3
   title = "dross phase insert"
   files = ["internal/cmd/phase.go", "internal/cmd/phase_lifecycle.go", "internal/cmd/phase_lifecycle_test.go"]
-  description = "insert scaffolds the phase (dir + phase/<slug> branch, reusing phaseCreate's\nmachinery) then splices at the anchor via t-1 InsertRelative, reusing t-3's\nshared anchor validation. Strict on slug collision (no auto-suffix).\n"
+  description = "insert scaffolds the phase (dir + phase/<slug> branch + state) reusing ONLY\nthe preflight/mkdir/checkout-b/state steps — NOT phaseCreate's UniqueSlug, which\nauto-suffixes (forbidden by the locked input_validation decision). Uses\nphase.Slugify + a strict collision check, then splices at the anchor via t-1\nInsertRelative, reusing t-3's shared anchor validation.\n"
   covers = ["c-1", "c-4"]
   depends_on = ["t-1", "t-2", "t-3"]
   test_contract = [
@@ -75,7 +75,7 @@
   files = ["internal/cmd/phase.go", "internal/cmd/phase_lifecycle.go", "internal/cmd/deferred.go", "internal/cmd/phase_lifecycle_test.go"]
   description = "rename moves phases/old→phases/new, rewrites spec.phase.id (reusing migrate.go's\nid-rewrite path), swaps the array entry via t-1 RenameInArray, re-points other\nspecs' [[deferred]] Target==old→new via collectDeferred, renames local\nphase/old→phase/new branch, updates current_phase. target-exists check runs\nBEFORE the dir move; refuseIfShipped blocks a live-PR phase.\n"
   covers = ["c-3", "c-4"]
-  depends_on = ["t-1", "t-2", "t-3"]
+  depends_on = ["t-1", "t-2", "t-3", "t-4"]
   test_contract = [
     "if dir/id/array don't all move, after `rename old new` phases/new is absent OR spec.phase.id != new OR the array entry wasn't swapped in place — the rename round-trip test fails",
     "if the deferred re-point is missing, another spec's [[deferred]] Target==old is not repointed to new (TestRenameRepointsDeferred fails)",
