@@ -3,17 +3,9 @@
   "current_milestone": "v0.5",
   "current_phase": "deferred-item-routing",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-26T09:58:35.23751Z",
-  "last_action": "plan locked: deferred-item-routing (5 tasks across 3 waves)",
+  "last_activity": "2026-06-26T10:05:00.158345Z",
+  "last_action": "plan amended: deferred-item-routing (t-3 +list→route index handle per review flag #1)",
   "history": [
-    {
-      "at": "2026-06-21T19:14:38.10669Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-21T19:14:38.112973Z",
-      "action": "phase 12-retrofit-setup-commands executed (10/10 done)"
-    },
     {
       "at": "2026-06-21T19:20:23.694996Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-26T09:58:35.23751Z",
       "action": "plan locked: deferred-item-routing (5 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-26T10:01:58.920627Z",
+      "action": "plan reviewed: deferred-item-routing (0 blocking, 4 flags)"
+    },
+    {
+      "at": "2026-06-26T10:05:00.158345Z",
+      "action": "plan amended: deferred-item-routing (t-3 +list→route index handle per review flag #1)"
     }
   ]
 }

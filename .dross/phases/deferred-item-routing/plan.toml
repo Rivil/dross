@@ -45,8 +45,9 @@ files         = ["internal/cmd/deferred.go", "internal/cmd/deferred_test.go", "c
 description   = """
 New `dross deferred` command scanning all .dross/phases/*/spec.toml
 [[deferred]] entries. `list` with --target/--someday/--milestone/--routed/--json
-+ source column; `route <phase> <idx> --target <slug>` stamps target on disk.
-Register cmd.Deferred() in main.go's root.AddCommand.
++ source column; each --json entry also exposes its per-phase index, the
+addressing handle `route <phase> <idx> --target <slug>` consumes to stamp
+target on disk. Register cmd.Deferred() in main.go's root.AddCommand.
 """
 covers        = ["c-3", "c-4", "c-5", "c-6"]
 test_contract = [
@@ -55,6 +56,7 @@ test_contract = [
   "if the source field is dropped, `deferred list --target <slug> --json` returns entries without the originating-phase source and the JSON-shape assertion fails",
   "if --milestone scoping breaks, `deferred list --milestone <v>` returns an entry from a phase outside that milestone's phases array and the assertion fails",
   "if route persistence breaks, `deferred route <phase> <idx> --target <slug>` then reload does not yield Target==<slug> and the route round-trip assertion fails",
+  "if `list --json` omits the per-phase index handle that `route` consumes, the list→route handoff is unverifiable: a deferred_test.go assertion takes the idx returned by `list --json` for an entry, passes it to `deferred route <phase> <idx> --target <slug>`, reloads, and asserts that exact entry now has Target==<slug> — drop the index from the JSON or accept a different addressing and it fails",
 ]
 status        = "pending"
 
