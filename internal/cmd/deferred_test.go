@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/Rivil/dross/internal/phase"
@@ -190,6 +191,74 @@ func TestDeferredListRouteHandoff(t *testing.T) {
 	}
 	if spec.Deferred[pick.Index].Target != "alpha" {
 		t.Errorf("list→route handoff broken: entry %s[%d] target=%q want alpha", pick.Source, pick.Index, spec.Deferred[pick.Index].Target)
+	}
+}
+
+// TestDeferredDismissRoundTrip: dismissing a someday item persists Dismissed on
+// disk; reload reflects it.
+func TestDeferredDismissRoundTrip(t *testing.T) {
+	dir := setupDeferredFixture(t)
+
+	if err := runCmd(t, Deferred(), "dismiss", "gamma", "0"); err != nil {
+		t.Fatalf("dismiss: %v", err)
+	}
+	spec, err := phase.LoadSpec(filepath.Join(dir, ".dross", "phases", "gamma", "spec.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !spec.Deferred[0].Dismissed {
+		t.Errorf("dismiss did not persist: gamma[0] Dismissed=%v want true", spec.Deferred[0].Dismissed)
+	}
+}
+
+// TestDeferredDismissUndo: --undo clears the dismissed state back to someday.
+func TestDeferredDismissUndo(t *testing.T) {
+	dir := setupDeferredFixture(t)
+
+	if err := runCmd(t, Deferred(), "dismiss", "gamma", "0"); err != nil {
+		t.Fatalf("dismiss: %v", err)
+	}
+	if err := runCmd(t, Deferred(), "dismiss", "--undo", "gamma", "0"); err != nil {
+		t.Fatalf("dismiss --undo: %v", err)
+	}
+	spec, err := phase.LoadSpec(filepath.Join(dir, ".dross", "phases", "gamma", "spec.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Deferred[0].Dismissed {
+		t.Errorf("--undo did not clear dismissed: gamma[0] Dismissed=%v want false", spec.Deferred[0].Dismissed)
+	}
+}
+
+// TestDeferredDismissOutOfRange: an out-of-range idx errors rather than silently
+// succeeding.
+func TestDeferredDismissOutOfRange(t *testing.T) {
+	setupDeferredFixture(t)
+
+	if err := runCmd(t, Deferred(), "dismiss", "gamma", "5"); err == nil {
+		t.Error("dismiss with out-of-range idx should error, got nil")
+	}
+}
+
+// TestDeferredDismissRoutedGuard: dismiss is someday-only — a routed item errors
+// and is left untouched.
+func TestDeferredDismissRoutedGuard(t *testing.T) {
+	dir := setupDeferredFixture(t)
+
+	// alpha[0] is routed to beta.
+	err := runCmd(t, Deferred(), "dismiss", "alpha", "0")
+	if err == nil {
+		t.Fatal("dismiss on a routed item should error, got nil")
+	}
+	if !strings.Contains(err.Error(), "un-route") {
+		t.Errorf("routed-guard error should mention un-routing, got %q", err)
+	}
+	spec, lerr := phase.LoadSpec(filepath.Join(dir, ".dross", "phases", "alpha", "spec.toml"))
+	if lerr != nil {
+		t.Fatal(lerr)
+	}
+	if spec.Deferred[0].Dismissed {
+		t.Error("routed item must not be dismissed after a rejected dismiss")
 	}
 }
 

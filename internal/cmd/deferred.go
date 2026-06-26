@@ -31,7 +31,7 @@ func Deferred() *cobra.Command {
 		Use:   "deferred",
 		Short: "Inspect and route deferred items across phase specs",
 	}
-	c.AddCommand(deferredList(), deferredRoute())
+	c.AddCommand(deferredList(), deferredRoute(), deferredDismiss())
 	return c
 }
 
@@ -175,6 +175,56 @@ func deferredRoute() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&target, "target", "", "destination phase slug to stamp (required)")
+	return c
+}
+
+func deferredDismiss() *cobra.Command {
+	var undo bool
+	c := &cobra.Command{
+		Use:   "dismiss <phase> <idx>",
+		Short: "Retire a phase's Nth deferred item to a dismissed state (someday-only; --undo to reverse)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			phaseID := args[0]
+			idx, err := strconv.Atoi(args[1])
+			if err != nil {
+				return fmt.Errorf("idx must be an integer: %w", err)
+			}
+			specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
+			spec, err := phase.LoadSpec(specPath)
+			if err != nil {
+				return err
+			}
+			if idx < 0 || idx >= len(spec.Deferred) {
+				return fmt.Errorf("deferred index %d out of range (phase %s has %d deferred item(s))", idx, phaseID, len(spec.Deferred))
+			}
+			d := &spec.Deferred[idx]
+			if undo {
+				d.Dismissed = false
+				if err := spec.Save(specPath); err != nil {
+					return err
+				}
+				Printf("undismissed %s deferred[%d] → someday\n", phaseID, idx)
+				return nil
+			}
+			// Someday-only: dismiss and route are distinct intents, so a routed
+			// item must be un-routed before it can be dismissed.
+			if d.Target != "" {
+				return fmt.Errorf("deferred %s[%d] is routed to %q; un-route before dismissing", phaseID, idx, d.Target)
+			}
+			d.Dismissed = true
+			if err := spec.Save(specPath); err != nil {
+				return err
+			}
+			Printf("dismissed %s deferred[%d]\n", phaseID, idx)
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&undo, "undo", false, "clear the dismissed state (back to someday)")
 	return c
 }
 
