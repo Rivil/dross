@@ -1,0 +1,90 @@
+[phase]
+  id = "phase-lifecycle-commands"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Pure array-order helpers"
+  files = ["internal/phase/phase.go", "internal/phase/phase_test.go"]
+  description = "Add pure slice helpers beside Ordered/DisplayNumber: InsertRelative,\nMoveRelative, RenameInArray over a phases []string, with an\nErrAnchorNotFound sentinel. No git/fs — array logic only.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = [
+    "if InsertRelative places wrong, InsertRelative([a,b,c],\"x\",anchor=\"b\",before=false) != [a,b,x,c] (or before=true != [a,x,b,c]) and the table test fails",
+    "if a missing anchor silently appends, InsertRelative/MoveRelative with an absent anchor returns ErrAnchorNotFound rather than an end-of-array append — the anchor-not-found test fails on an append",
+    "if MoveRelative loses order, moving a slug does not preserve every non-moved element's relative order and the order-preservation assertion fails",
+    "if RenameInArray appends instead of replacing in place, the length-unchanged + old-index-preserved assertion fails",
+    "if the no-op path is wrong, MoveRelative of a slug to its own current position does not return the slice unchanged",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Byte-for-byte snapshot test harness"
+  files = ["internal/cmd/phase_lifecycle_test.go"]
+  description = "snapshotPhases(t,root) → slug→sha256 over (relpath,bytes) of every file\nunder phases/<slug>/ plus the phase's milestone array entry and\nspec.phase.id; assertUntouched(before,after,except...) fails on any\nnon-excepted diff. Includes a self-test.\n"
+  covers = ["c-1", "c-2", "c-3"]
+  test_contract = [
+    "if snapshotPhases misses a file, the self-test that mutates one byte of a bystander spec.toml does not flip that slug's hash and fails",
+    "if assertUntouched is vacuous, the self-test asserting it REPORTS the bystander diff (and that excepting the slug suppresses it) fails — proves the guarantee is enforced, not vacuous",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "dross phase move + shared lifecycle plumbing"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_lifecycle.go", "internal/cmd/phase_lifecycle_test.go"]
+  description = "New phase_lifecycle.go houses the move verb plus helpers move/insert/rename\nshare: anchor-flag validation, loadCurrentMilestone, refuseIfShipped (live\norigin phase branch ⇒ open-PR window), and the no-op check ordered BEFORE\ntarget-exists. move reorders the milestone array via t-1 and writes nothing else.\n"
+  covers = ["c-2", "c-4"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = [
+    "if move writes anything besides the array, after `move c --after a` assertUntouched(except=nothing) fails (a phase dir changed)",
+    "if the splice is wrong, `move c --after a` does not yield array [a,c,b] and the move test fails",
+    "if anchor-flag validation is missing, `move` with BOTH --after and --before, and `move` with NEITHER, do not each error — the two separate assertions fail",
+    "if the anchor guard is missing, `move x --after <nonexistent>` exits 0 instead of erroring",
+    "if the no-op path is wrong, a self-move does not print 'already there' / mutates the milestone .toml bytes",
+    "if refuseIfShipped is missing on move, moving a phase with a live origin branch succeeds instead of being refused",
+    "if numbering regresses, `phase number b` does not reflect b's new slot after the move",
+    "if a mutator stores an ordinal, the assertion that state.json + every spec.toml hold NO numeric ordinal field fails",
+    "if validate breaks, `dross validate` exits non-zero after a move",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 3
+  title = "dross phase insert"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_lifecycle.go", "internal/cmd/phase_lifecycle_test.go"]
+  description = "insert scaffolds the phase (dir + phase/<slug> branch, reusing phaseCreate's\nmachinery) then splices at the anchor via t-1 InsertRelative, reusing t-3's\nshared anchor validation. Strict on slug collision (no auto-suffix).\n"
+  covers = ["c-1", "c-4"]
+  depends_on = ["t-1", "t-2", "t-3"]
+  test_contract = [
+    "if insert places wrong, `insert \"P\" --after a` does not yield [a,<P>,b,c] — the index-of-new-slug assertion fails on a tail fallthrough",
+    "if insert touches siblings, assertUntouched(except=<P>) fails (a/b/c dir, spec.id, branch ref, or array entry changed)",
+    "if collision is not refused, a title slugging to an existing phase succeeds (auto-suffix) and/or leaves a stray directory — both the refusal and stray-dir checks fail",
+    "if shared anchor validation is not reused, `insert` with both/neither --after/--before does not error here",
+    "if numbering regresses, `phase number b` does not show b shifted +1, or `dross validate` exits non-zero",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 3
+  title = "dross phase rename"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_lifecycle.go", "internal/cmd/deferred.go", "internal/cmd/phase_lifecycle_test.go"]
+  description = "rename moves phases/old→phases/new, rewrites spec.phase.id (reusing migrate.go's\nid-rewrite path), swaps the array entry via t-1 RenameInArray, re-points other\nspecs' [[deferred]] Target==old→new via collectDeferred, renames local\nphase/old→phase/new branch, updates current_phase. target-exists check runs\nBEFORE the dir move; refuseIfShipped blocks a live-PR phase.\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-1", "t-2", "t-3"]
+  test_contract = [
+    "if dir/id/array don't all move, after `rename old new` phases/new is absent OR spec.phase.id != new OR the array entry wasn't swapped in place — the rename round-trip test fails",
+    "if the deferred re-point is missing, another spec's [[deferred]] Target==old is not repointed to new (TestRenameRepointsDeferred fails)",
+    "if the re-point is over-broad, a [[deferred]] targeting a DIFFERENT slug is rewritten (TestRenameLeavesOtherDeferredTargets fails)",
+    "if the branch isn't renamed, `git branch -m phase/old phase/new` does not run when the local ref exists",
+    "if current_phase isn't updated, renaming the current phase leaves state.current_phase==old",
+    "if the target-exists check runs AFTER the dir move, a collision leaves phases/old already gone — TestRenameNoPartialMoveOnCollision catches the partial state",
+    "if refuseIfShipped is missing, renaming a phase with a live origin branch succeeds instead of refusing (branch + phases/old must be left unchanged)",
+    "if the no-op path is wrong, a self-rename (new==old) does not print 'already there' before the target-exists check / writes something",
+    "if siblings are touched, assertUntouched(except=old,new) fails; `dross validate` exits non-zero on a dangling deferred target",
+  ]
+  status = "pending"

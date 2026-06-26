@@ -2,18 +2,10 @@
   "version": "0.5.2.0",
   "current_milestone": "v0.4",
   "current_phase": "phase-lifecycle-commands",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-26T14:32:25.256471Z",
-  "last_action": "spec locked: phase-lifecycle-commands",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-26T14:44:07.690602Z",
+  "last_action": "plan locked: phase-lifecycle-commands (5 tasks across 3 waves, --panel)",
   "history": [
-    {
-      "at": "2026-06-25T19:02:43.10164Z",
-      "action": "executed t-3 (Rewrite dross phase create to slug identity)"
-    },
-    {
-      "at": "2026-06-25T19:06:21.751928Z",
-      "action": "executed t-4 (Add phase number, wire status + execute.md pointer)"
-    },
     {
       "at": "2026-06-25T19:11:02.259842Z",
       "action": "executed t-5 (Add idempotent dross phase migrate command)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-26T14:32:25.256471Z",
       "action": "spec locked: phase-lifecycle-commands"
+    },
+    {
+      "at": "2026-06-26T14:44:07.683396Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-26T14:44:07.690602Z",
+      "action": "plan locked: phase-lifecycle-commands (5 tasks across 3 waves, --panel)"
     }
   ]
 }
