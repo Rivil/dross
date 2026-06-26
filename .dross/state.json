@@ -2,18 +2,10 @@
   "version": "0.5.0.0",
   "current_milestone": "v0.5",
   "current_phase": "deferred-item-routing",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-26T08:56:03.552826Z",
-  "last_action": "spec locked: deferred-item-routing",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-26T09:58:35.23751Z",
+  "last_action": "plan locked: deferred-item-routing (5 tasks across 3 waves)",
   "history": [
-    {
-      "at": "2026-06-21T19:13:26.486189Z",
-      "action": "executed t-9 (Flip 7 audit rows to conforming)"
-    },
-    {
-      "at": "2026-06-21T19:14:27.494458Z",
-      "action": "executed t-10 (Add audit guard; make install; observe green)"
-    },
     {
       "at": "2026-06-21T19:14:38.10669Z",
       "action": "set current_phase_status=complete"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-26T08:56:03.552826Z",
       "action": "spec locked: deferred-item-routing"
+    },
+    {
+      "at": "2026-06-26T09:58:35.230424Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-26T09:58:35.23751Z",
+      "action": "plan locked: deferred-item-routing (5 tasks across 3 waves)"
     }
   ]
 }
