@@ -1,21 +1,11 @@
 {
   "version": "0.4.2.1",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-26T15:46:00.153496Z",
-  "last_action": "scoped milestone v0.6: 4 criteria, 9 phases",
+  "current_phase": "multilang-stack-profiles",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-26T16:25:48.118636Z",
+  "last_action": "spec locked: multilang-stack-profiles",
   "history": [
-    {
-      "at": "2026-06-26T10:05:00.158345Z",
-      "action": "plan amended: deferred-item-routing (t-3 +list→route index handle per review flag #1)"
-    },
-    {
-      "at": "2026-06-26T10:05:59.811837Z",
-      "action": "set version=0.5.1.0"
-    },
-    {
-      "at": "2026-06-26T10:09:25.099215Z",
-      "action": "executed t-1 (Add optional target to Deferred schema)"
-    },
     {
       "at": "2026-06-26T10:11:05.929265Z",
       "action": "executed t-2 (Validate guards a dangling target)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-26T15:46:00.153496Z",
       "action": "scoped milestone v0.6: 4 criteria, 9 phases"
+    },
+    {
+      "at": "2026-06-26T15:48:15.412136Z",
+      "action": "created multilang-stack-profiles"
+    },
+    {
+      "at": "2026-06-26T16:25:48.112278Z",
+      "action": "set current_phase=multilang-stack-profiles"
+    },
+    {
+      "at": "2026-06-26T16:25:48.118636Z",
+      "action": "spec locked: multilang-stack-profiles"
     }
   ]
 }

@@ -1,0 +1,45 @@
+[phase]
+  id = "multilang-stack-profiles"
+  title = "Multi-language stack profiles"
+  milestone = "v0.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "At least one new non-Go stack profile (e.g. Python) ships as a drop-in toml: Detect resolves it on a matching tree, and its dedicated quality analyzer appears in a dross-quality run for that stack."
+
+[[criteria]]
+  id = "c-2"
+  text = "ext→language is single-sourced from profiles' [signals].exts — adding a profile automatically extends DetectLanguages, with no edit to a separate hardcoded map. No language detected today stops being detected (no DetectLanguages regression)."
+
+[[criteria]]
+  id = "c-3"
+  text = "Adding or extending a profile requires zero changes to Go detection/recon logic — purely the drop-in toml + single-sourced exts. A test proves a brand-new profile toml becomes detectable and recon-visible without recompiling logic."
+
+[[decisions]]
+  key = "residual_coverage"
+  choice = "Delete the hardcoded extLang map; every language it covered gets at least a detection-only stub profile; ext→lang is derived wholly from loaded profiles."
+  why = "c-2 demands a single source with no detection regression; stubs preserve coverage without a parallel map."
+  locked = true
+
+[[decisions]]
+  key = "full_profile_set"
+  choice = "Author full profiles (analyzer + runtime + loadout) for python, javascript/node, and csharp; ship detection-only stubs for ruby, rust, java, c, cpp, php, swift; leave existing go/typescript/svelte/kotlin/dart/sql profiles untouched."
+  why = "One+ full profile satisfies c-1; the milestone non-goal caps exhaustive coverage, so the remaining residual languages are stubs."
+  locked = true
+
+[[decisions]]
+  key = "stub_profile_shape"
+  choice = "Minimum valid profile = id + title + [signals].exts (or file_patterns); [[package_managers]], [runtime.*], [[tools]], and [loadout] are all optional."
+  why = "A detection-only stub must load, detect, and be recon-visible without an analyzer or loadout block."
+  locked = true
+
+[[decisions]]
+  key = "ext_clash_resolution"
+  choice = "ext→lang key = profile id; on a shared ext, higher Signals.priority wins, ties break lexicographically by id. Shipped profiles kept disjoint by convention."
+  why = "Reuses Detect's existing priority tie-break; never crashes on a drop-in overlap, matching detect.go's never-crash ethos."
+  locked = true
+
+[[deferred]]
+  text = "Upgrade the 7 detection-only stubs (ruby, rust, java, c, cpp, php, swift) to full profiles with analyzers, runtime commands, and loadout guidance."
+  why = "Per-language analyzer work belongs to the next phase (multilang-analyzer-catalogs); this phase ships detection coverage only."
+  target = "multilang-analyzer-catalogs"
