@@ -194,6 +194,11 @@ type Deferred struct {
 	// Target routes the deferred item to a destination: a phase slug it should
 	// re-surface in. Empty means "someday" — unrouted, awaiting triage.
 	Target string `toml:"target,omitempty"`
+	// Dismissed retires the item to a "dismissed" state — triaged as
+	// wontfix/done without a target. It is a third state distinct from
+	// "someday" (no target, not dismissed) and "routed" (target set); dismiss
+	// is someday-only, so a dismissed entry never carries a target.
+	Dismissed bool `toml:"dismissed,omitempty"`
 }
 
 // Plan is the task graph for a phase.

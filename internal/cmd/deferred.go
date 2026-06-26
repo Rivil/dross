@@ -19,9 +19,10 @@ import (
 type deferredEntry struct {
 	Source string `json:"source"`
 	Index  int    `json:"index"`
-	Text   string `json:"text"`
-	Why    string `json:"why,omitempty"`
-	Target string `json:"target,omitempty"`
+	Text      string `json:"text"`
+	Why       string `json:"why,omitempty"`
+	Target    string `json:"target,omitempty"`
+	Dismissed bool   `json:"dismissed,omitempty"`
 }
 
 // Deferred inspects and routes deferred items captured across phase specs.
@@ -53,11 +54,12 @@ func collectDeferred(root string) ([]deferredEntry, error) {
 		}
 		for i, d := range spec.Deferred {
 			entries = append(entries, deferredEntry{
-				Source: id,
-				Index:  i,
-				Text:   d.Text,
-				Why:    d.Why,
-				Target: d.Target,
+				Source:    id,
+				Index:     i,
+				Text:      d.Text,
+				Why:       d.Why,
+				Target:    d.Target,
+				Dismissed: d.Dismissed,
 			})
 		}
 	}
