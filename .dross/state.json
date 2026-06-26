@@ -1,15 +1,9 @@
 {
   "version": "0.5.2.0",
   "current_milestone": "v0.5",
-  "current_phase": "deferred-triage-gaps",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-26T13:41:58.487341Z",
-  "last_action": "verified deferred-triage-gaps: pass (4/4 covered, mutation 0.82 module-wide / efficacy 1.00 ex-not-covered)",
+  "last_activity": "2026-06-26T13:44:29.754502Z",
+  "last_action": "completed deferred-triage-gaps",
   "history": [
-    {
-      "at": "2026-06-25T18:05:11.210843Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-25T18:05:11.218676Z",
       "action": "plan locked: 14-stable-slug-phase-ids (7 tasks across 3 waves)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-26T13:41:58.487341Z",
       "action": "verified deferred-triage-gaps: pass (4/4 covered, mutation 0.82 module-wide / efficacy 1.00 ex-not-covered)"
+    },
+    {
+      "at": "2026-06-26T13:44:29.754502Z",
+      "action": "completed deferred-triage-gaps"
     }
   ]
 }
