@@ -6,12 +6,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -21,8 +20,40 @@ func Phase() *cobra.Command {
 		Use:   "phase",
 		Short: "Manage phase directories under .dross/phases/",
 	}
-	c.AddCommand(phaseList(), phaseCreate(), phaseShow(), phaseComplete())
+	c.AddCommand(phaseList(), phaseCreate(), phaseShow(), phaseComplete(), phaseNumber(), phaseMigrate())
 	return c
+}
+
+// phaseNumber prints the 1-based position of a phase within the current
+// milestone's phases array — the single source of truth for phase ordinals.
+// This is the ordinal slash-command prompts use for the version patch digit,
+// so it's derived from array position (and recomputes after a reorder) rather
+// than counted from directory names. Prints 0 when there's no current
+// milestone or the phase isn't in its array.
+func phaseNumber() *cobra.Command {
+	return &cobra.Command{
+		Use:   "number <phase-id>",
+		Short: "Print a phase's 1-based ordinal within its milestone",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			s, err := state.Load(filepath.Join(root, state.File))
+			if err != nil {
+				return err
+			}
+			n := 0
+			if s.CurrentMilestone != "" {
+				if m, err := milestone.Load(milestone.FilePath(root, s.CurrentMilestone)); err == nil {
+					n = phase.DisplayNumber(m.Phases, args[0])
+				}
+			}
+			Printf("%d\n", n)
+			return nil
+		},
+	}
 }
 
 func phaseList() *cobra.Command {
@@ -42,12 +73,33 @@ func phaseList() *cobra.Command {
 				Print("(no phases)")
 				return nil
 			}
-			for _, id := range ids {
+			for _, id := range phase.Ordered(milestonePhaseOrder(root), ids) {
 				Print(id)
 			}
 			return nil
 		},
 	}
+}
+
+// milestonePhaseOrder concatenates every milestone's phases array in
+// version order, producing the canonical phase sequence the milestones
+// define. phase.Ordered uses it to order the listing; phases in no array
+// (orphans) sort after it. A milestone that fails to load is skipped — a
+// best-effort ordering hint, never a hard dependency for `phase list`.
+func milestonePhaseOrder(root string) []string {
+	versions, err := milestone.List(root)
+	if err != nil {
+		return nil
+	}
+	var order []string
+	for _, v := range versions {
+		m, err := milestone.Load(milestone.FilePath(root, v))
+		if err != nil {
+			continue
+		}
+		order = append(order, m.Phases...)
+	}
+	return order
 }
 
 // phaseCreate makes the directory NN-slug and (when the repo has git
@@ -71,11 +123,7 @@ func phaseCreate() *cobra.Command {
 			}
 			repoDir := filepath.Dir(root)
 
-			n, err := nextPhaseNumber(root)
-			if err != nil {
-				return err
-			}
-			id := fmt.Sprintf("%02d-%s", n, phase.Slugify(title))
+			id := phase.UniqueSlug(root, title)
 			branchName := "phase/" + id
 
 			// Pre-flight git checks before any side effects. We only do
@@ -126,8 +174,25 @@ func phaseCreate() *cobra.Command {
 				return fmt.Errorf("save state: %w", err)
 			}
 
+			// Register the phase in the current milestone's ordered phases
+			// array — that array is the single source of phase order, so a new
+			// phase joins it at the tail. appendUnique keeps this idempotent
+			// when /dross-spec --new scaffolds a phase the milestone already
+			// listed as intent.
+			ordinal := 0
+			if s.CurrentMilestone != "" {
+				mPath := milestone.FilePath(root, s.CurrentMilestone)
+				if m, err := milestone.Load(mPath); err == nil {
+					m.Phases = appendUnique(m.Phases, id)
+					if err := m.Save(mPath); err != nil {
+						return fmt.Errorf("register phase in milestone %s: %w", s.CurrentMilestone, err)
+					}
+					ordinal = phase.DisplayNumber(m.Phases, id)
+				}
+			}
+
 			Print("Next: /dross-spec to write spec.toml, then /dross-plan")
-			RecordOutcomeEvent("phase_create", map[string]int{"ordinal": n}, nil, nil)
+			RecordOutcomeEvent("phase_create", map[string]int{"ordinal": ordinal}, nil, nil)
 			return nil
 		},
 	}
@@ -376,30 +441,4 @@ func phaseShow() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-func nextPhaseNumber(root string) (int, error) {
-	entries, err := os.ReadDir(filepath.Join(root, "phases"))
-	if err != nil && !os.IsNotExist(err) {
-		return 0, err
-	}
-	max := 0
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		parts := strings.SplitN(e.Name(), "-", 2)
-		if len(parts) < 1 {
-			continue
-		}
-		n, err := strconv.Atoi(parts[0])
-		if err != nil {
-			continue
-		}
-		if n > max {
-			max = n
-		}
-	}
-	sort.Ints([]int{max})
-	return max + 1, nil
 }

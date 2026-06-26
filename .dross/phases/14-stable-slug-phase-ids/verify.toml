@@ -1,0 +1,64 @@
+[verify]
+  phase = "14-stable-slug-phase-ids"
+  generated_at = 2026-06-25T19:14:25.788724Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8166666666666667
+  mutants_killed = 686
+  mutants_survived = 154
+  mutants_not_covered = 154
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "pc-1"
+  status = "covered"
+  tests = ["internal/phase/phase_test.go:TestOrdered", "internal/cmd/phase_test.go:TestPhaseListOrdersByMilestoneArray"]
+  notes = "Ordered orders by milestone array with orphans appended; `dross phase list` reflects the array and a reorder flips the output (reverting to sort.Strings fails it)."
+
+[[criterion]]
+  id = "pc-2"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestPhaseCreateSlugIdentity", "internal/cmd/cmd_test.go:TestPhaseCreateBareSlugs", "internal/phase/phase_test.go:TestUniqueSlug"]
+  notes = "create makes a bare <slug>/ dir (regexp ^\\d\\d- matches nothing), checks out phase/<slug>, appends the slug to the milestone array, and auto-suffixes on collision (foo-2)."
+
+[[criterion]]
+  id = "pc-3"
+  status = "covered"
+  tests = ["internal/phase/phase_test.go:TestDisplayNumber", "internal/cmd/phase_test.go:TestPhaseNumber", "internal/cmd/phase_test.go:TestStatusPhasePosition", "internal/cmd/execute_prompt_test.go:TestExecutePromptWiresPhaseNumber"]
+  notes = "DisplayNumber is the 1-based array position and recomputes after a reorder; status shows 'N of M'; execute.md derives the patch digit from `dross phase number`."
+
+[[criterion]]
+  id = "pc-4"
+  status = "covered"
+  tests = ["internal/cmd/phase_migrate_test.go:TestPhaseMigrate", "internal/cmd/phase_migrate_test.go:TestPhaseMigrateIdempotent", "internal/cmd/phase_migrate_test.go:TestPhaseMigrateDisambiguatesCollidingSlugs", "internal/cmd/phase_migrate_test.go:TestPhaseMigrateRefusesPreexistingCollision"]
+  notes = "migrate renames NN-slug dirs to slugs, rewrites spec/plan ids and milestone arrays, skips the in-flight phase, is idempotent, disambiguates/refuses collisions; `dross validate` exits 0 after the test fixture migration and after the real-repo migration (t-6)."
+
+[[criterion]]
+  id = "pc-5"
+  status = "covered"
+  tests = ["internal/phase/phase_test.go:TestStripLegacyPrefix", "internal/phase/phase_test.go:TestDirResolvesLegacy"]
+  notes = "phase.Dir resolves a legacy NN-slug id to the migrated bare-slug dir; a non-existent id returns the literal path (no silent wrong hit). Every command routes through phase.Dir, so the shim is repo-wide."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran whole-package (gremlins, 11 files, 840 mutants): killed=686, not_covered=154. Test efficacy excluding not-covered mutants = 1.00 — every mutant a test executed was killed. Score 0.82 counts not-covered as survived."
+
+[[finding]]
+  severity = "NOTE"
+  text = "~141 of the 154 surviving (not-covered) mutants are in files this phase did NOT touch (issue.go, ship.go, stats.go, rule.go, codex.go, env.go, verify.go, doctor.go, onboard.go, milestone.go, project.go, root.go, validate.go, subcommand_guard.go, telemetry.go, profile.go). These are pre-existing package-wide coverage gaps, not regressions introduced by this phase. Raw per-mutant list available by re-running `dross verify`."
+
+[[finding]]
+  severity = "FLAG"
+  text = "Survivors in this phase's touched files: internal/cmd/phase.go (133/249/251 = pre-existing phaseCreate/phaseComplete branches; 428/435 = error-propagation negations in phaseNumber, killable only by faking FindRoot/state.Load failure) and internal/cmd/status.go (349/351 tool render, 363 progressBar — pre-existing). Cross-checked against the criterion map: none lie in this phase's new criterion logic (StripLegacyPrefix/Ordered/DisplayNumber/UniqueSlug/Dir/migrate core), which gremlins killed — so no criterion is downgraded to weak."
+
+[[finding]]
+  severity = "NOTE"
+  text = "migrate.go produced zero surviving mutants; the internal/phase helpers (Dir resolution, Ordered, DisplayNumber, UniqueSlug, StripLegacyPrefix) were all killed — the new criterion-bearing code is mutation-tight."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .dross/milestones/v0.1.toml, v0.2.toml, v0.3.toml, v0.4.toml, .dross/phases, assets/prompts/execute.md: no mutation adapter for .toml/.md/dir (expected — execute.md's wiring is asserted by TestExecutePromptWiresPhaseNumber instead)."

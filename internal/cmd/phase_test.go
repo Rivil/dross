@@ -6,9 +6,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -39,8 +41,8 @@ func TestPhaseCreateChecksOutPhaseBranch(t *testing.T) {
 	}
 
 	cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD")
-	if cur != "phase/01-meal-tagging" {
-		t.Errorf("expected HEAD on phase/01-meal-tagging, got %q", cur)
+	if cur != "phase/meal-tagging" {
+		t.Errorf("expected HEAD on phase/meal-tagging, got %q", cur)
 	}
 }
 
@@ -79,7 +81,7 @@ func TestPhaseCreateRefusesExistingBranch(t *testing.T) {
 	dir := initWithGit(t)
 
 	// Pre-create the branch the next phase would want.
-	mustGit(t, dir, "branch", "phase/01-auth")
+	mustGit(t, dir, "branch", "phase/auth")
 
 	err := runCmd(t, Phase(), "create", "auth")
 	if err == nil {
@@ -119,15 +121,181 @@ func TestPhaseCreateRollsBackDirOnBranchFailure(t *testing.T) {
 	// git failure (e.g., dirty tree appearing mid-flight, signing
 	// configured but no key). Asserting "preflight prevents dir
 	// creation" is the practical guarantee we care about.
-	mustGit(t, dir, "branch", "phase/01-auth")
+	mustGit(t, dir, "branch", "phase/auth")
 
 	if err := runCmd(t, Phase(), "create", "auth"); err == nil {
 		t.Fatal("expected error from existing branch")
 	}
 
 	// Phase dir must NOT have been created — preflight runs first.
-	if _, err := os.Stat(filepath.Join(dir, ".dross", "phases", "01-auth")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, ".dross", "phases", "auth")); err == nil {
 		t.Error("phase dir should not exist when preflight fails")
+	}
+}
+
+// TestPhaseCreateSlugIdentity proves create makes a bare <slug>/ dir (no NN-
+// prefix), checks out phase/<slug>, sets state, appends the slug to the current
+// milestone's phases array, and auto-suffixes on collision.
+func TestPhaseCreateSlugIdentity(t *testing.T) {
+	dir := initWithGit(t)
+	root := filepath.Join(dir, ".dross")
+	mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+		"phases = []\n\n[milestone]\nversion = \"v0.4\"\n")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.4"); err != nil {
+		t.Fatalf("set milestone: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: milestone")
+
+	if err := runCmd(t, Phase(), "create", "My Feature"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Bare slug dir, and no NN- prefixed dir anywhere under phases/.
+	if !isDir(filepath.Join(root, "phases", "my-feature")) {
+		t.Error("expected phases/my-feature dir")
+	}
+	ents, _ := os.ReadDir(filepath.Join(root, "phases"))
+	nnRe := regexp.MustCompile(`^\d\d-`)
+	for _, e := range ents {
+		if nnRe.MatchString(e.Name()) {
+			t.Errorf("no NN- prefixed dir expected, got %q", e.Name())
+		}
+	}
+	// Branch + state both carry the slug identity.
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "phase/my-feature" {
+		t.Errorf("branch: got %q want phase/my-feature", cur)
+	}
+	s, _ := state.Load(filepath.Join(root, "state.json"))
+	if s.CurrentPhase != "my-feature" {
+		t.Errorf("current_phase: got %q want my-feature", s.CurrentPhase)
+	}
+	// Appended to the milestone array tail — dropping the append leaves it empty.
+	m, _ := milestone.Load(milestone.FilePath(root, "v0.4"))
+	if len(m.Phases) == 0 || m.Phases[len(m.Phases)-1] != "my-feature" {
+		t.Errorf("milestone array tail: got %v want last=my-feature", m.Phases)
+	}
+
+	// A second create of the same title collides → my-feature-2, first intact.
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: phase 1 bookkeeping")
+	mustGit(t, dir, "checkout", "-q", "main")
+	if err := runCmd(t, Phase(), "create", "My Feature"); err != nil {
+		t.Fatalf("second create: %v", err)
+	}
+	if !isDir(filepath.Join(root, "phases", "my-feature-2")) {
+		t.Error("expected phases/my-feature-2 on collision")
+	}
+	if !isDir(filepath.Join(root, "phases", "my-feature")) {
+		t.Error("first phase dir should be untouched by the collision")
+	}
+}
+
+// TestPhaseListOrdersByMilestoneArray proves `dross phase list` orders by the
+// milestone's phases array, not by directory-name sort: reordering the array
+// flips the listing.
+func TestPhaseListOrdersByMilestoneArray(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	root := filepath.Join(dir, ".dross")
+	for _, name := range []string{"alpha", "gamma"} {
+		if err := os.MkdirAll(filepath.Join(root, "phases", name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeMilestone := func(phases string) {
+		mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+			"phases = ["+phases+"]\n\n[milestone]\nversion = \"v0.4\"\n")
+	}
+	list := func() string {
+		return captureStdout(t, func() {
+			if err := runCmd(t, Phase(), "list"); err != nil {
+				t.Fatalf("list: %v", err)
+			}
+		})
+	}
+
+	writeMilestone(`"gamma", "alpha"`)
+	if got := list(); got != "gamma\nalpha\n" {
+		t.Errorf("array order [gamma,alpha]: got %q want \"gamma\\nalpha\\n\"", got)
+	}
+	// Reverting to ReadDir+sort.Strings would print alphabetical here; the
+	// array order must win.
+	writeMilestone(`"alpha", "gamma"`)
+	if got := list(); got != "alpha\ngamma\n" {
+		t.Errorf("array order [alpha,gamma]: got %q want \"alpha\\ngamma\\n\"", got)
+	}
+}
+
+// TestPhaseNumber proves `dross phase number` reports a phase's 1-based ordinal
+// from the current milestone's array, recomputing after a reorder.
+func TestPhaseNumber(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	writeMs := func(phases string) {
+		mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+			"phases = ["+phases+"]\n\n[milestone]\nversion = \"v0.4\"\n")
+	}
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.4"); err != nil {
+		t.Fatal(err)
+	}
+	num := func(id string) string {
+		return strings.TrimSpace(captureStdout(t, func() {
+			if err := runCmd(t, Phase(), "number", id); err != nil {
+				t.Fatalf("number %s: %v", id, err)
+			}
+		}))
+	}
+
+	writeMs(`"alpha", "beta", "gamma"`)
+	if got := num("beta"); got != "2" {
+		t.Errorf("number beta: got %q want 2", got)
+	}
+	if got := num("alpha"); got != "1" {
+		t.Errorf("number alpha: got %q want 1", got)
+	}
+	// Reordering the array moves alpha to position 3 — a directory count would
+	// not change; array position does.
+	writeMs(`"gamma", "beta", "alpha"`)
+	if got := num("alpha"); got != "3" {
+		t.Errorf("number alpha after reorder: got %q want 3", got)
+	}
+	if got := num("missing"); got != "0" {
+		t.Errorf("number of phase not in array: got %q want 0", got)
+	}
+}
+
+// TestStatusPhasePosition proves `dross status` locates the current phase within
+// its milestone as "N of M" via the shared DisplayNumber helper.
+func TestStatusPhasePosition(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+		"phases = [\"alpha\", \"beta\", \"gamma\"]\n\n[milestone]\nversion = \"v0.4\"\n")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.4"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "set", "current_phase", "beta"); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Status()); err != nil {
+			t.Fatalf("status: %v", err)
+		}
+	})
+	if !strings.Contains(out, "2 of 3") {
+		t.Errorf("status should locate the phase as `2 of 3`; got:\n%s", out)
 	}
 }
 
@@ -153,7 +321,7 @@ func completeFixture(t *testing.T) (string, string) {
 	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
 		t.Fatalf("phase create: %v", err)
 	}
-	// Make a phase commit so HEAD on phase/01-auth is real.
+	// Make a phase commit so HEAD on phase/auth is real.
 	mustWrite(t, filepath.Join(dir, "src/auth.ts"), "x\n")
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
@@ -161,10 +329,10 @@ func completeFixture(t *testing.T) (string, string) {
 	// Simulate the upstream squash-merge: build a synthetic squash on
 	// top of origin/main and push it. The squash must carry the completion
 	// record `dross ship` folds in (current_phase cleared + `completed
-	// 01-auth` history) — phase complete reads that off origin/main as its
+	// auth` history) — phase complete reads that off origin/main as its
 	// merge guard, so without it complete would refuse.
 	mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
-	mustGit(t, dir, "checkout", "phase/01-auth", "--", "src/")
+	mustGit(t, dir, "checkout", "phase/auth", "--", "src/")
 	mustGit(t, dir, "add", "src/")
 	stPath := filepath.Join(dir, ".dross", "state.json")
 	sqState, err := state.Load(stPath)
@@ -173,18 +341,18 @@ func completeFixture(t *testing.T) (string, string) {
 	}
 	sqState.CurrentPhase = ""
 	sqState.CurrentPhaseStatus = ""
-	sqState.Touch("completed 01-auth")
+	sqState.Touch("completed auth")
 	if err := sqState.Save(stPath); err != nil {
 		t.Fatalf("save squash state: %v", err)
 	}
 	mustGit(t, dir, "add", filepath.Join(".dross", "state.json"))
 	mustGit(t, dir, "commit", "-q", "-m", "feat(squash): auth")
 	mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
-	mustGit(t, dir, "checkout", "-q", "phase/01-auth")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
 	mustGit(t, dir, "branch", "-D", "squash-sim")
 	mustGit(t, dir, "fetch", "-q", "origin")
 
-	return dir, "01-auth"
+	return dir, "auth"
 }
 
 func TestPhaseCompleteHappyPath(t *testing.T) {
@@ -211,7 +379,7 @@ func TestPhaseCompleteHappyPath(t *testing.T) {
 	}
 	found := false
 	for _, a := range s.History {
-		if strings.Contains(a.Action, "completed 01-auth") {
+		if strings.Contains(a.Action, "completed auth") {
 			found = true
 		}
 	}
@@ -275,9 +443,9 @@ func TestPhaseCompleteRefusesUnmergedUpstream(t *testing.T) {
 	}
 
 	// Phase branch must still exist — we didn't lose the work.
-	branches := mustGit(t, dir, "branch", "--list", "phase/01-auth")
-	if !strings.Contains(branches, "phase/01-auth") {
-		t.Errorf("phase/01-auth should still exist after refused complete, got: %q", branches)
+	branches := mustGit(t, dir, "branch", "--list", "phase/auth")
+	if !strings.Contains(branches, "phase/auth") {
+		t.Errorf("phase/auth should still exist after refused complete, got: %q", branches)
 	}
 }
 
@@ -309,14 +477,14 @@ func TestPhaseCompleteRefusesUnmergedNoLocalBranch(t *testing.T) {
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
 	// Drop the local phase branch (switch to main first) — origin never got
-	// a squash, so there's no `completed 01-auth` record anywhere.
+	// a squash, so there's no `completed auth` record anywhere.
 	mustGit(t, dir, "checkout", "-q", "main")
-	mustGit(t, dir, "branch", "-D", "phase/01-auth")
+	mustGit(t, dir, "branch", "-D", "phase/auth")
 	originMain := mustGit(t, dir, "rev-parse", "main")
 
 	// Name the phase explicitly: neither current_phase nor a phase branch
 	// can supply it now.
-	err := runCmd(t, Phase(), "complete", "01-auth")
+	err := runCmd(t, Phase(), "complete", "auth")
 	if err == nil {
 		t.Fatal("expected refusal when local branch is gone AND origin lacks the completion record")
 	}
@@ -341,9 +509,9 @@ func TestPhaseCompleteDeletesRemoteBranch(t *testing.T) {
 
 	// Publish the phase branch to origin (provider --delete-branch aborted
 	// or never ran).
-	mustGit(t, dir, "push", "-q", "origin", "phase/01-auth")
-	if out := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/01-auth"); out == "" {
-		t.Fatal("precondition: origin should have phase/01-auth after push")
+	mustGit(t, dir, "push", "-q", "origin", "phase/auth")
+	if out := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/auth"); out == "" {
+		t.Fatal("precondition: origin should have phase/auth after push")
 	}
 
 	if err := runCmd(t, Phase(), "complete"); err != nil {
@@ -351,8 +519,8 @@ func TestPhaseCompleteDeletesRemoteBranch(t *testing.T) {
 	}
 
 	// If the remote-delete step is missing, the ref is still on origin here.
-	if out := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/01-auth"); out != "" {
-		t.Errorf("origin should no longer have phase/01-auth after complete, got: %q", out)
+	if out := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/auth"); out != "" {
+		t.Errorf("origin should no longer have phase/auth after complete, got: %q", out)
 	}
 }
 
@@ -362,7 +530,7 @@ func TestPhaseCompleteDeletesRemoteBranch(t *testing.T) {
 func TestPhaseCompleteRemoteDeleteIdempotent(t *testing.T) {
 	dir, _ := completeFixture(t)
 
-	if out := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/01-auth"); out != "" {
+	if out := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/auth"); out != "" {
 		t.Fatalf("precondition: origin should have no phase branch, got: %q", out)
 	}
 
@@ -386,7 +554,7 @@ func TestShipToCompleteLeavesZeroManualGit(t *testing.T) {
 		{"provider already deleted branch", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// shipFixture (ship_test.go) lands us on phase/01-x with verify
+			// shipFixture (ship_test.go) lands us on phase/x with verify
 			// pass and [remote] pointed at a forgejo provider.
 			dir := shipFixture(t, "https://forge.example/me/p.git")
 
@@ -416,30 +584,30 @@ func TestShipToCompleteLeavesZeroManualGit(t *testing.T) {
 			}
 			gitCommit(t, dir, "test: point api_base at mock")
 
-			// 1) Ship — pushes phase/01-x to origin, opens the PR, and (the
+			// 1) Ship — pushes phase/x to origin, opens the PR, and (the
 			//    t-1 fix) commits its state write so the tree is clean.
 			if err := runCmd(t, Ship()); err != nil {
 				t.Fatalf("ship: %v", err)
 			}
 
 			// 2) Simulate the upstream squash-merge onto origin/main. The
-			//    squash carries phase/01-x's src/ AND its .dross/state.json —
+			//    squash carries phase/x's src/ AND its .dross/state.json —
 			//    ship (t-1) folded the cleared current_phase + `completed
-			//    01-x` record into that state.json, and complete reads it off
+			//    x` record into that state.json, and complete reads it off
 			//    origin/main as its merge guard.
 			mustGit(t, dir, "fetch", "-q", "origin")
 			mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
-			mustGit(t, dir, "checkout", "phase/01-x", "--", "src/", ".dross/state.json")
+			mustGit(t, dir, "checkout", "phase/x", "--", "src/", ".dross/state.json")
 			mustGit(t, dir, "add", "src/", ".dross/state.json")
 			mustGit(t, dir, "commit", "-q", "-m", "feat(squash): tagging")
 			mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
-			mustGit(t, dir, "checkout", "-q", "phase/01-x")
+			mustGit(t, dir, "checkout", "-q", "phase/x")
 			mustGit(t, dir, "branch", "-D", "squash-sim")
 			mustGit(t, dir, "fetch", "-q", "origin")
 
 			// Optionally simulate the provider's --delete-branch having run.
 			if tc.providerDeleted {
-				mustGit(t, dir, "push", "-q", "origin", "--delete", "phase/01-x")
+				mustGit(t, dir, "push", "-q", "origin", "--delete", "phase/x")
 			}
 
 			// 3) Complete — must finish the job with no manual git either way.
@@ -456,8 +624,8 @@ func TestShipToCompleteLeavesZeroManualGit(t *testing.T) {
 			if b := mustGit(t, dir, "branch", "--list", "phase/*"); b != "" {
 				t.Errorf("no local phase branch should remain, got: %q", b)
 			}
-			if r := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/01-x"); r != "" {
-				t.Errorf("origin should have no phase/01-x ref, got: %q", r)
+			if r := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/x"); r != "" {
+				t.Errorf("origin should have no phase/x ref, got: %q", r)
 			}
 		})
 	}
@@ -533,8 +701,8 @@ func TestConsecutivePhasesNoDivergence(t *testing.T) {
 		}
 	}
 
-	// Phase 1 — already set up by shipFixture (on phase/01-x).
-	cycle("01-x", "phase/01-x")
+	// Phase 1 — already set up by shipFixture (on phase/x).
+	cycle("x", "phase/x")
 
 	// Phase 2 — fork a fresh phase off the now-clean main and run it through
 	// the same loop. If phase 1's completion had re-seeded divergence, this
@@ -583,7 +751,7 @@ tests = ["y.test.ts:1"]
 	s, _ := state.Load(filepath.Join(dir, ".dross", "state.json"))
 	var has1, has2 bool
 	for _, a := range s.History {
-		if strings.Contains(a.Action, "completed 01-x") {
+		if strings.Contains(a.Action, "completed x") {
 			has1 = true
 		}
 		if strings.Contains(a.Action, "completed "+id2) {
@@ -591,7 +759,7 @@ tests = ["y.test.ts:1"]
 		}
 	}
 	if !has1 || !has2 {
-		t.Errorf("main should carry both completion records; has 01-x=%v %s=%v; history=%+v",
+		t.Errorf("main should carry both completion records; has x=%v %s=%v; history=%+v",
 			has1, id2, has2, s.History)
 	}
 }

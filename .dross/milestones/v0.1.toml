@@ -1,4 +1,4 @@
-phases = ["03-fix-completion-chore-divergence", "04-status-action-surfaces", "05-dross-secure", "06-dross-quality", "07-stack-profiles"]
+phases = ["fix-completion-chore-divergence", "status-action-surfaces", "dross-secure", "dross-quality", "stack-profiles"]
 
 [milestone]
   version = "v0.1"

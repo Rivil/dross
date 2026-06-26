@@ -143,13 +143,16 @@ _introduced c8b346e · extended 01c10f0_
 
 ### Phase lifecycle
 
-Create, list, and complete phases on dedicated phase/<id> git branches; complete is fast-forward + branch-delete only (no commit to main), guarded by origin's `completed <id>` record so it refuses an unmerged phase and mutates nothing, then deletes both the local and the remote phase branch idempotently.
+Create, list, number, migrate, and complete phases on dedicated phase/<id> git branches. Phase identity is the bare slug and order lives solely in the milestone `phases` array (phase.Ordered), so create makes bare-slug dirs and appends to the array, while `phase number` / status / the version patch digit all read the 1-based array position (DisplayNumber) and `phase migrate` converts a legacy NN-slug repo idempotently — skipping the in-flight phase and disambiguating colliding slugs — with phase.Dir resolving old NN-slug ids for permanent back-compat. complete is fast-forward + branch-delete only (no commit to main), guarded by origin's `completed <id>` record so it refuses an unmerged phase and mutates nothing, then deletes both the local and the remote phase branch idempotently.
 
-- `Phase` (CLI) — `internal/cmd/phase.go:19`
-- `phaseCreate` — `internal/cmd/phase.go:60`
-- `phaseComplete` — `internal/cmd/phase.go:144`
+- `Phase` (CLI) — `internal/cmd/phase.go:18`
+- `phaseCreate` — `internal/cmd/phase.go:112`
+- `phaseNumber` — `internal/cmd/phase.go:33`
+- `phaseMigrate` — `internal/cmd/migrate.go:31`
+- `phaseComplete` — `internal/cmd/phase.go:209`
+- slug identity helpers (`Dir`, `Ordered`, `DisplayNumber`, `UniqueSlug`) — `internal/phase/phase.go:33`
 
-_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · 1b883bf_
+_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · ebc2ac1_
 
 ### Repo onboarding
 

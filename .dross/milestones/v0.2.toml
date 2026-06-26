@@ -1,4 +1,4 @@
-phases = ["08-language-profiles", "09-marker-file-detection"]
+phases = ["language-profiles", "marker-file-detection"]
 
 [milestone]
   version = "v0.2"

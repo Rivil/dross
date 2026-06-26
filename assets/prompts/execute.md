@@ -30,6 +30,19 @@ Mode: <pair | solo>
 Test command: <runtime.test_command or "(none — verify will catch this later)">
 ```
 
+Set the version patch digit to this phase's ordinal within its milestone (the
+global versioning rule: patch = phase ordinal, internal resets to 0). Derive the
+ordinal from `dross phase number` — the single source for phase order — rather
+than counting by hand:
+```
+PATCH=$(dross phase number <id>)
+# major.minor from the current milestone; internal resets to 0
+dross state set version <major>.<minor>.$PATCH.0
+```
+Skip this when the phase has no milestone (`PATCH` is `0` — there's no ordinal to
+assign). `dross phase number` recomputes from the milestone's `phases` array, so
+it stays correct even after a phase is inserted or reordered.
+
 Mark the board issue in-progress (no-op unless `[remote].board_sync` is on — safe to always run):
 ```
 dross issue phase-sync <id> --status in-progress

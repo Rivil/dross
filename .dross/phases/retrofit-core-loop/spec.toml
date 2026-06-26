@@ -1,0 +1,60 @@
+[phase]
+  id = "retrofit-core-loop"
+  title = "retrofit-core-loop"
+  milestone = "v0.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "Each of plan/execute/verify/ship/review invokes `dross interaction show` in pre-flight and treats the playbook as MUST-FOLLOW; grep-verifiable that the invocation appears in all five prompts."
+
+[[criteria]]
+  id = "c-2"
+  text = "Each of the five prompts references the propose-and-react interaction contract in its intro/conventions, so a reader sees the interaction style is binding (grep-verifiable phrase per prompt)."
+
+[[criteria]]
+  id = "c-3"
+  text = "No interactive turn in the five prompts bundles multiple unrelated decisions into one AskUserQuestion — e.g. ship's body-override and reviewers are separate turns."
+
+[[criteria]]
+  id = "c-4"
+  text = "No command pastes a composed internal build-artifact (plan.toml, verify.toml) back wholesale for review — confirmation is a one-line summary, with fields/report surfaced on request. Outward-facing publish content (PR body) is exempt; see decision ship_body_preview."
+
+[[criteria]]
+  id = "c-5"
+  text = "The phase-10 interaction-audit checklist gains a mapped entry for each of the five commands, listing its decision points and confirming the propose-and-react pattern holds."
+
+[[decisions]]
+  key = "ship_body_preview"
+  choice = "ship shows the generated PR body in full before the post is authorized; outward-facing publish artifacts are an explicit exception to c-4 (internal .dross artifacts stay summary-only)."
+  why = "The user is approving an external publish and must see exactly what will post."
+  locked = true
+
+[[decisions]]
+  key = "verify_surface"
+  choice = "verify surfaces the pass/partial/fail verdict plus a compact criterion→test/status mapping; the raw verify.toml is not pasted back."
+  why = "The criterion mapping is the judgment the user must trust to accept the verdict; the .toml file itself is the artifact."
+  locked = true
+
+[[decisions]]
+  key = "retrofit_depth"
+  choice = "Uniform restructure — every interactive turn across all five prompts is rewritten into a consistent propose-and-react shape, not only the turns that violate c-3/c-4."
+  why = "A consistent feel across the loop matters more than the churn risk of touching already-conforming flows."
+  locked = true
+
+[[decisions]]
+  key = "panel_disagreement_walk"
+  choice = "plan --panel walks one propose-and-react turn per disagreement (leading with the judge's pick); synthesis.md remains the source list."
+  why = "Consistent with retrofit_depth and avoids the wall-of-text the contract forbids."
+  locked = true
+
+[[deferred]]
+  text = "Retrofit of setup/config commands (init, onboard, options, rule, inbox, quick, milestone)."
+  why = "Belongs to 12-retrofit-setup-commands."
+
+[[deferred]]
+  text = "Documenting the interaction model in the README."
+  why = "Milestone criterion 4 — 13-audit-and-readme's job."
+
+[[deferred]]
+  text = "Full audit-checklist sweep across all interactive commands."
+  why = "Phase 13; here only the five core-loop commands get checklist entries."

@@ -321,21 +321,23 @@ func TestRuleAddListRemove(t *testing.T) {
 	}
 }
 
-func TestPhaseCreateAutoNumbers(t *testing.T) {
+// TestPhaseCreateBareSlugs proves create names phase dirs by bare slug with no
+// ordinal prefix — identity is the slug, order lives in the milestone array.
+func TestPhaseCreateBareSlugs(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := runCmd(t, Phase(), "create", "auth middleware"); err != nil {
+	if err := runCmd(t, Phase(), "create", "--no-branch", "auth middleware"); err != nil {
 		t.Fatalf("create 1: %v", err)
 	}
-	if err := runCmd(t, Phase(), "create", "billing"); err != nil {
+	if err := runCmd(t, Phase(), "create", "--no-branch", "billing"); err != nil {
 		t.Fatalf("create 2: %v", err)
 	}
 
-	for _, want := range []string{"01-auth-middleware", "02-billing"} {
+	for _, want := range []string{"auth-middleware", "billing"} {
 		path := filepath.Join(dir, ".dross", "phases", want)
 		if _, err := os.Stat(path); err != nil {
 			t.Errorf("phase dir %s missing: %v", want, err)
