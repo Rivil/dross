@@ -2,22 +2,10 @@
   "version": "0.4.2.1",
   "current_milestone": "v0.6",
   "current_phase": "multilang-stack-profiles",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-26T16:25:48.118636Z",
-  "last_action": "spec locked: multilang-stack-profiles",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-26T17:05:28.487219Z",
+  "last_action": "plan reviewed: multilang-stack-profiles (0 blocking, 3 flags)",
   "history": [
-    {
-      "at": "2026-06-26T10:11:05.929265Z",
-      "action": "executed t-2 (Validate guards a dangling target)"
-    },
-    {
-      "at": "2026-06-26T10:14:28.901553Z",
-      "action": "executed t-3 (Add dross deferred list + route command)"
-    },
-    {
-      "at": "2026-06-26T10:17:48.785381Z",
-      "action": "executed t-4 (spec.md §4 routing + re-surface seed)"
-    },
     {
       "at": "2026-06-26T10:20:33.895171Z",
       "action": "executed t-5 (inbox.md adds deferred someday triage source)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-26T16:25:48.118636Z",
       "action": "spec locked: multilang-stack-profiles"
+    },
+    {
+      "at": "2026-06-26T17:01:09.373864Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-26T17:01:09.38224Z",
+      "action": "plan locked: multilang-stack-profiles (4 tasks across 3 waves, --panel)"
+    },
+    {
+      "at": "2026-06-26T17:05:28.487219Z",
+      "action": "plan reviewed: multilang-stack-profiles (0 blocking, 3 flags)"
     }
   ]
 }

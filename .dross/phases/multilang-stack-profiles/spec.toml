@@ -35,8 +35,8 @@
 
 [[decisions]]
   key = "ext_clash_resolution"
-  choice = "ext→lang key = profile id; on a shared ext, higher Signals.priority wins, ties break lexicographically by id. Shipped profiles kept disjoint by convention."
-  why = "Reuses Detect's existing priority tie-break; never crashes on a drop-in overlap, matching detect.go's never-crash ethos."
+  choice = "Detect (single best profile) keeps priority-wins, ties lexicographic by id. DetectLanguages unions every profile claiming an ext to its profile-id language, so a shared ext (e.g. .ts in both svelte@6 and typescript@4) yields BOTH languages — no existing language is ever dropped."
+  why = "Shipped profiles are NOT disjoint (svelte and typescript both claim .ts/.tsx); priority-wins on DetectLanguages would drop typescript and regress c-2. DetectLanguages is already a set-union over the tree, so union is its natural semantics; Detect stays winner-take-all. (Amended at plan time after the panel surfaced the real-repo clash.)"
   locked = true
 
 [[deferred]]
