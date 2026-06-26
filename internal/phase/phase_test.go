@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -79,6 +80,47 @@ func TestSpecRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(original, loaded) {
 		t.Errorf("spec round-trip drift:\norig: %+v\nload: %+v", original, loaded)
+	}
+}
+
+// TestDeferredTargetRoundTrip pins the optional Target field: a routed entry
+// reads its slug back, and a target-less ("someday") entry must NOT emit a
+// `target =` key — dropping omitempty would rewrite every legacy spec.
+func TestDeferredTargetRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "spec.toml")
+
+	original := &Spec{
+		Phase:    SpecPhase{ID: "host-phase", Title: "Host"},
+		Criteria: []Criterion{{ID: "c-1", Text: "does a thing"}},
+		Deferred: []Deferred{
+			{Text: "routed idea", Target: "target-phase"},
+			{Text: "someday idea"},
+		},
+	}
+	if err := original.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Exactly one `target =` line — the routed entry only; the someday entry
+	// must omit it (omitempty back-compat).
+	if got := strings.Count(string(raw), "target ="); got != 1 {
+		t.Errorf("expected exactly 1 `target =` line (routed entry only), got %d:\n%s", got, raw)
+	}
+
+	loaded, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Deferred[0].Target != "target-phase" {
+		t.Errorf("routed target not read back: %+v", loaded.Deferred[0])
+	}
+	if loaded.Deferred[1].Target != "" {
+		t.Errorf("someday entry should have empty target, got %q", loaded.Deferred[1].Target)
 	}
 }
 
