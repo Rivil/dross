@@ -46,3 +46,39 @@ func TestInboxPromptDeferredFunnelCoverage(t *testing.T) {
 		t.Error("inbox.md deferred triage must stamp routing via `dross deferred route`")
 	}
 }
+
+// TestInboxPromptBoardOffFallback proves c-3: when board_sync is off, §0
+// announces the board source is skipped and continues to the deferred source
+// instead of hard-stopping.
+func TestInboxPromptBoardOffFallback(t *testing.T) {
+	content := inboxPromptContent(t)
+	if !strings.Contains(content, "skipping board issues") {
+		t.Error("inbox.md §0 must announce skipping the board source when board_sync is off")
+	}
+	if !strings.Contains(content, "triaging local deferred items") {
+		t.Error("inbox.md §0 board-off path must continue to the local deferred source, not stop")
+	}
+}
+
+// TestInboxPromptBoardOffFullFunnel proves c-3's funnel half: with the board
+// skipped, deferred items still route through all four triage destinations.
+func TestInboxPromptBoardOffFullFunnel(t *testing.T) {
+	content := inboxPromptContent(t)
+	if !strings.Contains(content, "skipping board issues") {
+		t.Fatal("inbox.md must provide a board-off path before the funnel can be the only source")
+	}
+	for _, dest := range []string{"new phase", "milestone backlog", "quick", "dismiss"} {
+		if !strings.Contains(content, dest) {
+			t.Errorf("inbox.md deferred funnel missing destination %q — board-off triage loses a route", dest)
+		}
+	}
+}
+
+// TestInboxPromptDismissInvokesCLI proves c-4: the deferred dismiss funnel
+// invokes the command instead of leaving the item or hand-editing the spec.
+func TestInboxPromptDismissInvokesCLI(t *testing.T) {
+	content := inboxPromptContent(t)
+	if !strings.Contains(content, "dross deferred dismiss") {
+		t.Error("inbox.md dismiss funnel must invoke `dross deferred dismiss <source> <index>` so the choice persists")
+	}
+}

@@ -1,0 +1,64 @@
+[verify]
+  phase = "deferred-triage-gaps"
+  generated_at = 2026-06-26T13:35:47.06072Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8232611174458381
+  mutants_killed = 722
+  mutants_survived = 155
+  mutants_not_covered = 155
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/cmd/deferred_test.go:TestDeferredDismissRoundTrip",
+    "internal/cmd/deferred_test.go:TestDeferredDismissUndo",
+    "internal/cmd/deferred_test.go:TestDeferredDismissOutOfRange",
+    "internal/cmd/deferred_test.go:TestDeferredDismissRoutedGuard",
+  ]
+  notes = "dismiss persistence, --undo clear, out-of-range error, and someday-only routed guard each have a killing test; no mutant survived in the new dismiss logic (deferred.go:215-232)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/cmd/deferred_test.go:TestDeferredListDismissedHidden",
+    "internal/cmd/deferred_test.go:TestDeferredListDismissedMarker",
+    "internal/phase/phase_test.go:TestDeferredDismissedRoundTrip",
+  ]
+  notes = "--someday/default exclusion (deferred.go:115-117) and the (dismissed) marker (deferred.go:136) have killing tests — both mutants died. The lone adjacent survivor at deferred.go:138 is the PRE-EXISTING (someday) rendering branch, outside c-2's dismissed surface — see NOTE."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/cmd/inbox_prompt_test.go:TestInboxPromptBoardOffFallback",
+    "internal/cmd/inbox_prompt_test.go:TestInboxPromptBoardOffFullFunnel",
+  ]
+  notes = "Guard tests assert the board-off path announces the skip, continues to the deferred source, and retains all four funnel destinations. inbox.md is .md — no mutation adapter (see NOTE)."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/cmd/inbox_prompt_test.go:TestInboxPromptDismissInvokesCLI",
+  ]
+  notes = "Guard test asserts the dismiss funnel invokes `dross deferred dismiss <source> <index>`."
+
+[[finding]]
+  severity = "NOTE"
+  text = "deferred.go:138 survived (CONDITIONALS_NEGATION): the pre-existing `case tgt == \"\"` -> (someday) table-rendering branch has no asserting test (existing + new list tests assert via --json or the dismissed marker, never the someday table cell). Outside c-2's dismissed surface and pre-dates this phase; a future tightening could assert a someday/routed row renders its expected TARGET cell."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran module-wide (gremlins rollup over internal/cmd + internal/phase). All 155 survivors are 'not covered' legacy mutants in files this phase never touched (ship.go, stats.go, issue.go, rule.go, verify.go, env.go, codex.go, doctor.go, etc.); efficacy on this phase's touched code (deferred.go, phase.go) = 1.00 (35 killed / 0 lived). Not phase signals — the per-survivor FLAGs the skeleton seeded were collapsed into this note."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/inbox.md: no mutation adapter for .md — c-3/c-4 verified via prompt-guard tests instead."

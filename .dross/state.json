@@ -1,73 +1,9 @@
 {
-  "version": "0.5.1.0",
+  "version": "0.5.2.0",
   "current_milestone": "v0.5",
-  "last_activity": "2026-06-26T10:56:44.647801Z",
-  "last_action": "completed deferred-item-routing",
+  "last_activity": "2026-06-26T13:44:29.754502Z",
+  "last_action": "completed deferred-triage-gaps",
   "history": [
-    {
-      "at": "2026-06-21T19:52:35.533582Z",
-      "action": "executed t-2 (Add README ## Interaction section)"
-    },
-    {
-      "at": "2026-06-21T19:54:09.164218Z",
-      "action": "executed t-3 (Fill the 5 audit-doc rows to conforming)"
-    },
-    {
-      "at": "2026-06-21T19:55:31.694627Z",
-      "action": "executed t-4 (Add guard tests; make install; observe green)"
-    },
-    {
-      "at": "2026-06-21T19:55:38.665037Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-21T19:55:38.671783Z",
-      "action": "phase 13-audit-and-readme executed (4/4 done)"
-    },
-    {
-      "at": "2026-06-21T20:00:03.649343Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-21T20:00:03.655956Z",
-      "action": "verified 13-audit-and-readme: pass (3/3 covered; mutation 0.81 package-scoped, Lived=0/efficacy 1.00 — not a phase signal; no production Go in diff)"
-    },
-    {
-      "at": "2026-06-21T20:02:21.729748Z",
-      "action": "completed 13-audit-and-readme"
-    },
-    {
-      "at": "2026-06-22T06:48:52.556138Z",
-      "action": "set version=0.3.4.0"
-    },
-    {
-      "at": "2026-06-25T17:11:04.176917Z",
-      "action": "set current_milestone=v0.4"
-    },
-    {
-      "at": "2026-06-25T17:11:04.183911Z",
-      "action": "set version=0.4.0.0"
-    },
-    {
-      "at": "2026-06-25T17:11:04.190328Z",
-      "action": "scoped milestone v0.4: 4 criteria, 2 phases; version → 0.4.0.0"
-    },
-    {
-      "at": "2026-06-25T17:11:35.749453Z",
-      "action": "created 14-stable-slug-phase-ids"
-    },
-    {
-      "at": "2026-06-25T17:23:37.329902Z",
-      "action": "set current_phase=14-stable-slug-phase-ids"
-    },
-    {
-      "at": "2026-06-25T17:23:37.338126Z",
-      "action": "spec locked: 14-stable-slug-phase-ids"
-    },
-    {
-      "at": "2026-06-25T18:05:11.210843Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-25T18:05:11.218676Z",
       "action": "plan locked: 14-stable-slug-phase-ids (7 tasks across 3 waves)"
@@ -203,6 +139,70 @@
     {
       "at": "2026-06-26T10:56:44.647801Z",
       "action": "completed deferred-item-routing"
+    },
+    {
+      "at": "2026-06-26T13:06:07.441609Z",
+      "action": "created deferred-triage-gaps"
+    },
+    {
+      "at": "2026-06-26T13:15:39.669411Z",
+      "action": "set current_phase=deferred-triage-gaps"
+    },
+    {
+      "at": "2026-06-26T13:15:39.678069Z",
+      "action": "spec locked: deferred-triage-gaps"
+    },
+    {
+      "at": "2026-06-26T13:18:25.383284Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-26T13:18:25.389005Z",
+      "action": "plan locked: deferred-triage-gaps (4 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-26T13:23:51.039796Z",
+      "action": "plan reviewed: deferred-triage-gaps (0 blocking, 3 flags; #1 serialized t-3→wave3, #3 added c-3 funnel clause, #2 kept)"
+    },
+    {
+      "at": "2026-06-26T13:28:11.009365Z",
+      "action": "set version=0.5.2.0"
+    },
+    {
+      "at": "2026-06-26T13:29:44.110108Z",
+      "action": "executed t-1 (Add dismissed state to deferred schema)"
+    },
+    {
+      "at": "2026-06-26T13:31:20.087323Z",
+      "action": "executed t-2 (Add dross deferred dismiss command)"
+    },
+    {
+      "at": "2026-06-26T13:33:27.668284Z",
+      "action": "executed t-3 (Filter dismissed in deferred list)"
+    },
+    {
+      "at": "2026-06-26T13:35:25.225444Z",
+      "action": "executed t-4 (Wire inbox §0 relax + dismiss command)"
+    },
+    {
+      "at": "2026-06-26T13:35:31.466218Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-26T13:35:31.473462Z",
+      "action": "phase deferred-triage-gaps executed (4/4 done)"
+    },
+    {
+      "at": "2026-06-26T13:41:58.481968Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-26T13:41:58.487341Z",
+      "action": "verified deferred-triage-gaps: pass (4/4 covered, mutation 0.82 module-wide / efficacy 1.00 ex-not-covered)"
+    },
+    {
+      "at": "2026-06-26T13:44:29.754502Z",
+      "action": "completed deferred-triage-gaps"
     }
   ]
 }

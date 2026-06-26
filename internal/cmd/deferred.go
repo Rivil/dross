@@ -19,9 +19,10 @@ import (
 type deferredEntry struct {
 	Source string `json:"source"`
 	Index  int    `json:"index"`
-	Text   string `json:"text"`
-	Why    string `json:"why,omitempty"`
-	Target string `json:"target,omitempty"`
+	Text      string `json:"text"`
+	Why       string `json:"why,omitempty"`
+	Target    string `json:"target,omitempty"`
+	Dismissed bool   `json:"dismissed,omitempty"`
 }
 
 // Deferred inspects and routes deferred items captured across phase specs.
@@ -30,7 +31,7 @@ func Deferred() *cobra.Command {
 		Use:   "deferred",
 		Short: "Inspect and route deferred items across phase specs",
 	}
-	c.AddCommand(deferredList(), deferredRoute())
+	c.AddCommand(deferredList(), deferredRoute(), deferredDismiss())
 	return c
 }
 
@@ -53,11 +54,12 @@ func collectDeferred(root string) ([]deferredEntry, error) {
 		}
 		for i, d := range spec.Deferred {
 			entries = append(entries, deferredEntry{
-				Source: id,
-				Index:  i,
-				Text:   d.Text,
-				Why:    d.Why,
-				Target: d.Target,
+				Source:    id,
+				Index:     i,
+				Text:      d.Text,
+				Why:       d.Why,
+				Target:    d.Target,
+				Dismissed: d.Dismissed,
 			})
 		}
 	}
@@ -69,6 +71,7 @@ func deferredList() *cobra.Command {
 		target    string
 		someday   bool
 		routed    bool
+		dismissed bool
 		milestVer string
 		asJSON    bool
 	)
@@ -105,6 +108,14 @@ func deferredList() *cobra.Command {
 			if target != "" {
 				entries = filterDeferred(entries, func(e deferredEntry) bool { return e.Target == target })
 			}
+			// Dismissed items are hidden from every view unless --dismissed is
+			// set; this also keeps --someday (no target) and the default unrouted
+			// listing from surfacing a dismissed item.
+			if dismissed {
+				entries = filterDeferred(entries, func(e deferredEntry) bool { return e.Dismissed })
+			} else {
+				entries = filterDeferred(entries, func(e deferredEntry) bool { return !e.Dismissed })
+			}
 
 			if asJSON {
 				out, err := json.Marshal(entries)
@@ -121,7 +132,10 @@ func deferredList() *cobra.Command {
 			Printf("%-24s %4s %-20s %s\n", "SOURCE", "IDX", "TARGET", "TEXT")
 			for _, e := range entries {
 				tgt := e.Target
-				if tgt == "" {
+				switch {
+				case e.Dismissed:
+					tgt = "(dismissed)"
+				case tgt == "":
 					tgt = "(someday)"
 				}
 				Printf("%-24s %4d %-20s %s\n", e.Source, e.Index, tgt, e.Text)
@@ -130,8 +144,9 @@ func deferredList() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&target, "target", "", "only items routed to this phase slug")
-	c.Flags().BoolVar(&someday, "someday", false, "only unrouted (no target) items")
+	c.Flags().BoolVar(&someday, "someday", false, "only unrouted (no target, not dismissed) items")
 	c.Flags().BoolVar(&routed, "routed", false, "only routed (target set) items")
+	c.Flags().BoolVar(&dismissed, "dismissed", false, "only dismissed items (hidden from every other view)")
 	c.Flags().StringVar(&milestVer, "milestone", "", "only items from phases in this milestone's phases array")
 	c.Flags().BoolVar(&asJSON, "json", false, "emit a JSON array (for prompt consumption)")
 	return c
@@ -173,6 +188,56 @@ func deferredRoute() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&target, "target", "", "destination phase slug to stamp (required)")
+	return c
+}
+
+func deferredDismiss() *cobra.Command {
+	var undo bool
+	c := &cobra.Command{
+		Use:   "dismiss <phase> <idx>",
+		Short: "Retire a phase's Nth deferred item to a dismissed state (someday-only; --undo to reverse)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			phaseID := args[0]
+			idx, err := strconv.Atoi(args[1])
+			if err != nil {
+				return fmt.Errorf("idx must be an integer: %w", err)
+			}
+			specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
+			spec, err := phase.LoadSpec(specPath)
+			if err != nil {
+				return err
+			}
+			if idx < 0 || idx >= len(spec.Deferred) {
+				return fmt.Errorf("deferred index %d out of range (phase %s has %d deferred item(s))", idx, phaseID, len(spec.Deferred))
+			}
+			d := &spec.Deferred[idx]
+			if undo {
+				d.Dismissed = false
+				if err := spec.Save(specPath); err != nil {
+					return err
+				}
+				Printf("undismissed %s deferred[%d] → someday\n", phaseID, idx)
+				return nil
+			}
+			// Someday-only: dismiss and route are distinct intents, so a routed
+			// item must be un-routed before it can be dismissed.
+			if d.Target != "" {
+				return fmt.Errorf("deferred %s[%d] is routed to %q; un-route before dismissing", phaseID, idx, d.Target)
+			}
+			d.Dismissed = true
+			if err := spec.Save(specPath); err != nil {
+				return err
+			}
+			Printf("dismissed %s deferred[%d]\n", phaseID, idx)
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&undo, "undo", false, "clear the dismissed state (back to someday)")
 	return c
 }
 

@@ -124,6 +124,47 @@ func TestDeferredTargetRoundTrip(t *testing.T) {
 	}
 }
 
+// TestDeferredDismissedRoundTrip pins the optional Dismissed field: a dismissed
+// entry reads true back, and an active entry must NOT emit a `dismissed =` key —
+// dropping omitempty would rewrite every legacy spec with `dismissed = false`.
+func TestDeferredDismissedRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "spec.toml")
+
+	original := &Spec{
+		Phase:    SpecPhase{ID: "host-phase", Title: "Host"},
+		Criteria: []Criterion{{ID: "c-1", Text: "does a thing"}},
+		Deferred: []Deferred{
+			{Text: "dismissed idea", Dismissed: true},
+			{Text: "active idea"},
+		},
+	}
+	if err := original.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Exactly one `dismissed =` line — the dismissed entry only; the active
+	// entry must omit it (omitempty back-compat).
+	if got := strings.Count(string(raw), "dismissed ="); got != 1 {
+		t.Errorf("expected exactly 1 `dismissed =` line (dismissed entry only), got %d:\n%s", got, raw)
+	}
+
+	loaded, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.Deferred[0].Dismissed {
+		t.Errorf("dismissed state not read back: %+v", loaded.Deferred[0])
+	}
+	if loaded.Deferred[1].Dismissed {
+		t.Errorf("active entry should not be dismissed: %+v", loaded.Deferred[1])
+	}
+}
+
 func TestPlanRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "plan.toml")
