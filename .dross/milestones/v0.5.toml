@@ -3,7 +3,7 @@ phases = ["deferred-item-routing", "deferred-triage-gaps"]
 [milestone]
   version = "v0.5"
   title = "Spec & backlog flow"
-  status = "active"
+  status = "complete"
   started = "2026-06-26"
 
 [scope]

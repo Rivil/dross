@@ -3,7 +3,7 @@ phases = ["interaction-contract", "retrofit-core-loop", "retrofit-setup-commands
 [milestone]
   version = "v0.3"
   title = "Conversational command UX across the dross loop"
-  status = "active"
+  status = "complete"
   started = "2026-06-21"
 
 [scope]

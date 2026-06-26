@@ -1,4 +1,4 @@
-phases = ["phase-lifecycle-commands"]
+phases = []
 
 [milestone]
   version = "v0.6"

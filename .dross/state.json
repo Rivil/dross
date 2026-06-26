@@ -1,13 +1,9 @@
 {
   "version": "0.5.2.0",
-  "current_milestone": "v0.5",
-  "last_activity": "2026-06-26T13:44:29.754502Z",
-  "last_action": "completed deferred-triage-gaps",
+  "current_milestone": "v0.4",
+  "last_activity": "2026-06-26T14:14:19.110232Z",
+  "last_action": "set current_milestone=v0.4",
   "history": [
-    {
-      "at": "2026-06-25T18:05:11.218676Z",
-      "action": "plan locked: 14-stable-slug-phase-ids (7 tasks across 3 waves)"
-    },
     {
       "at": "2026-06-25T18:27:49.100535Z",
       "action": "plan reviewed: 14-stable-slug-phase-ids (0 blocking, 2 flags; pc-5 wiring folded into phase.Dir)"
@@ -203,6 +199,10 @@
     {
       "at": "2026-06-26T13:44:29.754502Z",
       "action": "completed deferred-triage-gaps"
+    },
+    {
+      "at": "2026-06-26T14:14:19.110232Z",
+      "action": "set current_milestone=v0.4"
     }
   ]
 }
