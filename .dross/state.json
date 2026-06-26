@@ -1,17 +1,9 @@
 {
-  "version": "0.4.2.0",
+  "version": "0.4.2.1",
   "current_milestone": "v0.4",
-  "last_activity": "2026-06-26T15:11:41.831349Z",
-  "last_action": "completed phase-lifecycle-commands",
+  "last_activity": "2026-06-26T15:17:13.096681Z",
+  "last_action": "quick: count deferred someday ideas in /dross-status inbox nudge",
   "history": [
-    {
-      "at": "2026-06-26T08:56:03.552826Z",
-      "action": "spec locked: deferred-item-routing"
-    },
-    {
-      "at": "2026-06-26T09:58:35.230424Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-26T09:58:35.23751Z",
       "action": "plan locked: deferred-item-routing (5 tasks across 3 waves)"
@@ -203,6 +195,14 @@
     {
       "at": "2026-06-26T15:11:41.831349Z",
       "action": "completed phase-lifecycle-commands"
+    },
+    {
+      "at": "2026-06-26T15:17:13.078265Z",
+      "action": "bump internal 0.4.2.0 → 0.4.2.1"
+    },
+    {
+      "at": "2026-06-26T15:17:13.096681Z",
+      "action": "quick: count deferred someday ideas in /dross-status inbox nudge"
     }
   ]
 }
