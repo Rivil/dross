@@ -71,6 +71,7 @@ func deferredList() *cobra.Command {
 		target    string
 		someday   bool
 		routed    bool
+		dismissed bool
 		milestVer string
 		asJSON    bool
 	)
@@ -107,6 +108,14 @@ func deferredList() *cobra.Command {
 			if target != "" {
 				entries = filterDeferred(entries, func(e deferredEntry) bool { return e.Target == target })
 			}
+			// Dismissed items are hidden from every view unless --dismissed is
+			// set; this also keeps --someday (no target) and the default unrouted
+			// listing from surfacing a dismissed item.
+			if dismissed {
+				entries = filterDeferred(entries, func(e deferredEntry) bool { return e.Dismissed })
+			} else {
+				entries = filterDeferred(entries, func(e deferredEntry) bool { return !e.Dismissed })
+			}
 
 			if asJSON {
 				out, err := json.Marshal(entries)
@@ -123,7 +132,10 @@ func deferredList() *cobra.Command {
 			Printf("%-24s %4s %-20s %s\n", "SOURCE", "IDX", "TARGET", "TEXT")
 			for _, e := range entries {
 				tgt := e.Target
-				if tgt == "" {
+				switch {
+				case e.Dismissed:
+					tgt = "(dismissed)"
+				case tgt == "":
 					tgt = "(someday)"
 				}
 				Printf("%-24s %4d %-20s %s\n", e.Source, e.Index, tgt, e.Text)
@@ -132,8 +144,9 @@ func deferredList() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&target, "target", "", "only items routed to this phase slug")
-	c.Flags().BoolVar(&someday, "someday", false, "only unrouted (no target) items")
+	c.Flags().BoolVar(&someday, "someday", false, "only unrouted (no target, not dismissed) items")
 	c.Flags().BoolVar(&routed, "routed", false, "only routed (target set) items")
+	c.Flags().BoolVar(&dismissed, "dismissed", false, "only dismissed items (hidden from every other view)")
 	c.Flags().StringVar(&milestVer, "milestone", "", "only items from phases in this milestone's phases array")
 	c.Flags().BoolVar(&asJSON, "json", false, "emit a JSON array (for prompt consumption)")
 	return c

@@ -262,6 +262,58 @@ func TestDeferredDismissRoutedGuard(t *testing.T) {
 	}
 }
 
+// TestDeferredListDismissedHidden: a dismissed item drops out of --someday and
+// the default listing, and is reachable only via --dismissed (with the field
+// carried in JSON).
+func TestDeferredListDismissedHidden(t *testing.T) {
+	setupDeferredFixture(t)
+
+	// gamma[0] starts as someday; dismiss it.
+	if err := runCmd(t, Deferred(), "dismiss", "gamma", "0"); err != nil {
+		t.Fatalf("dismiss: %v", err)
+	}
+
+	for _, e := range listJSON(t, "--someday", "--json") {
+		if e.Source == "gamma" {
+			t.Errorf("--someday surfaced a dismissed item: %+v", e)
+		}
+	}
+	for _, e := range listJSON(t, "--json") {
+		if e.Source == "gamma" {
+			t.Errorf("default listing surfaced a dismissed item: %+v", e)
+		}
+	}
+
+	dismissed := listJSON(t, "--dismissed", "--json")
+	if len(dismissed) != 1 {
+		t.Fatalf("--dismissed should return exactly the 1 dismissed entry, got %d: %+v", len(dismissed), dismissed)
+	}
+	if dismissed[0].Source != "gamma" || !dismissed[0].Dismissed {
+		t.Errorf("--dismissed entry wrong: %+v (want gamma, Dismissed=true)", dismissed[0])
+	}
+}
+
+// TestDeferredListDismissedMarker: the table renders (dismissed) in the TARGET
+// column for a dismissed item, not (someday).
+func TestDeferredListDismissedMarker(t *testing.T) {
+	setupDeferredFixture(t)
+
+	if err := runCmd(t, Deferred(), "dismiss", "gamma", "0"); err != nil {
+		t.Fatalf("dismiss: %v", err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Deferred(), "list", "--dismissed"); err != nil {
+		t.Fatalf("list --dismissed: %v", err)
+	}
+	if !strings.Contains(out, "(dismissed)") {
+		t.Errorf("dismissed item should render (dismissed) in TARGET column, got:\n%s", out)
+	}
+	if strings.Contains(out, "(someday)") {
+		t.Errorf("dismissed item must not render as (someday), got:\n%s", out)
+	}
+}
+
 func intToStr(i int) string {
 	return strconv.Itoa(i)
 }
