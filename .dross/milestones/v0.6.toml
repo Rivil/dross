@@ -1,0 +1,9 @@
+phases = ["phase-lifecycle-commands"]
+
+[milestone]
+  version = "v0.6"
+  title = "Phase lifecycle commands"
+  status = "planning"
+  started = "2026-06-26"
+
+[scope]
