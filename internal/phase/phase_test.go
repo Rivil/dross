@@ -4,9 +4,95 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
+
+func TestInsertRelative(t *testing.T) {
+	base := []string{"a", "b", "c"}
+	cases := []struct {
+		name   string
+		anchor string
+		before bool
+		want   []string
+	}{
+		{"after b", "b", false, []string{"a", "b", "x", "c"}},
+		{"before b", "b", true, []string{"a", "x", "b", "c"}},
+		{"after first", "a", false, []string{"a", "x", "b", "c"}},
+		{"before first", "a", true, []string{"x", "a", "b", "c"}},
+		{"after last", "c", false, []string{"a", "b", "c", "x"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := InsertRelative(base, "x", tc.anchor, tc.before)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("InsertRelative x anchor=%s before=%v = %v, want %v", tc.anchor, tc.before, got, tc.want)
+			}
+		})
+	}
+	if !reflect.DeepEqual(base, []string{"a", "b", "c"}) {
+		t.Errorf("InsertRelative mutated its input: %v", base)
+	}
+	// Absent anchor must error, NOT append at the tail.
+	if _, err := InsertRelative(base, "x", "zzz", false); err != ErrAnchorNotFound {
+		t.Errorf("absent anchor: got %v, want ErrAnchorNotFound (no tail append)", err)
+	}
+}
+
+func TestMoveRelative(t *testing.T) {
+	base := []string{"a", "b", "c", "d"}
+
+	got, err := MoveRelative(base, "c", "a", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a", "c", "b", "d"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("move c after a = %v, want %v", got, want)
+	}
+	// Non-moved elements keep their relative order (b still before d).
+	if slices.Index(got, "b") > slices.Index(got, "d") {
+		t.Errorf("move did not preserve b-before-d order: %v", got)
+	}
+
+	// No-op: moving b to where it already is returns the input unchanged.
+	noop, err := MoveRelative(base, "b", "a", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(noop, base) {
+		t.Errorf("no-op move b after a = %v, want unchanged %v", noop, base)
+	}
+
+	if _, err := MoveRelative(base, "b", "zzz", false); err != ErrAnchorNotFound {
+		t.Errorf("absent anchor: got %v, want ErrAnchorNotFound", err)
+	}
+	if _, err := MoveRelative(base, "zzz", "a", false); err == nil {
+		t.Error("absent slug should error")
+	}
+}
+
+func TestRenameInArray(t *testing.T) {
+	base := []string{"a", "b", "c"}
+	got := RenameInArray(base, "b", "beta")
+
+	if want := []string{"a", "beta", "c"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("rename b→beta = %v, want %v", got, want)
+	}
+	// Replaced in place: length unchanged and index preserved.
+	if len(got) != len(base) {
+		t.Errorf("rename changed length: %d → %d", len(base), len(got))
+	}
+	if slices.Index(got, "beta") != slices.Index(base, "b") {
+		t.Errorf("rename did not preserve index: beta at %d, b was at %d", slices.Index(got, "beta"), slices.Index(base, "b"))
+	}
+	if !reflect.DeepEqual(base, []string{"a", "b", "c"}) {
+		t.Errorf("rename mutated its input: %v", base)
+	}
+}
 
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{

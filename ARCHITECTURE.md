@@ -159,16 +159,18 @@ _introduced c8b346e · extended 01c10f0_
 
 ### Phase lifecycle
 
-Create, list, number, migrate, and complete phases on dedicated phase/<id> git branches. Phase identity is the bare slug and order lives solely in the milestone `phases` array (phase.Ordered), so create makes bare-slug dirs and appends to the array, while `phase number` / status / the version patch digit all read the 1-based array position (DisplayNumber) and `phase migrate` converts a legacy NN-slug repo idempotently — skipping the in-flight phase and disambiguating colliding slugs — with phase.Dir resolving old NN-slug ids for permanent back-compat. complete is fast-forward + branch-delete only (no commit to main), guarded by origin's `completed <id>` record so it refuses an unmerged phase and mutates nothing, then deletes both the local and the remote phase branch idempotently.
+Create, list, number, migrate, complete, and reorder/insert/rename phases on dedicated phase/<id> git branches. Phase identity is the bare slug and order lives solely in the milestone `phases` array (phase.Ordered), so create makes bare-slug dirs and appends to the array, while `phase number` / status / the version patch digit all read the 1-based array position (DisplayNumber) and `phase migrate` converts a legacy NN-slug repo idempotently — skipping the in-flight phase and disambiguating colliding slugs — with phase.Dir resolving old NN-slug ids for permanent back-compat. complete is fast-forward + branch-delete only (no commit to main), guarded by origin's `completed <id>` record so it refuses an unmerged phase and mutates nothing, then deletes both the local and the remote phase branch idempotently. The lifecycle verbs `insert` / `move` / `rename` edit a phase's array slot and identity through pure splice helpers (InsertRelative / MoveRelative / RenameInArray) and shared plumbing (exactly-one-anchor validation, no-op-before-collision, ship-guard via the origin branch); insert scaffolds with a strict slug (no auto-suffix) and rename moves dir + spec id + array entry + deferred targets + local branch atomically — all leaving every other phase byte-for-byte untouched.
 
 - `Phase` (CLI) — `internal/cmd/phase.go:18`
 - `phaseCreate` — `internal/cmd/phase.go:112`
 - `phaseNumber` — `internal/cmd/phase.go:33`
 - `phaseMigrate` — `internal/cmd/migrate.go:31`
 - `phaseComplete` — `internal/cmd/phase.go:209`
+- `phaseMove` / `phaseInsert` / `phaseRename` — `internal/cmd/phase_lifecycle.go`
+- array-order splice helpers (`InsertRelative`, `MoveRelative`, `RenameInArray`) — `internal/phase/phase.go`
 - slug identity helpers (`Dir`, `Ordered`, `DisplayNumber`, `UniqueSlug`) — `internal/phase/phase.go:33`
 
-_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · ebc2ac1_
+_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · ea4db6b_
 
 ### Repo onboarding
 
