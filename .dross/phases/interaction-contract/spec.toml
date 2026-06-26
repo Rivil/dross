@@ -46,7 +46,9 @@
 [[deferred]]
   text = "The actual per-command retrofit of the interactive commands to the propose-and-react pattern."
   why = "That is phases 11 (core loop) and 12 (setup commands); phase 10 only ships the rule, snippet, one pilot, and the seeded checklist."
+  dismissed = true
 
 [[deferred]]
   text = "Documenting the interaction model in the README as a first-class behaviour of the loop."
   why = "That is phase 13 (audit-and-readme), after the retrofits land."
+  dismissed = true

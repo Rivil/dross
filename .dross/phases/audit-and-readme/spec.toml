@@ -36,7 +36,9 @@
 [[deferred]]
   text = "Runtime / Go-level contract linter that blocks a command for violating the interaction contract."
   why = "Explicit milestone non-goal — the contract is verified by audit/review, not a code-level check."
+  dismissed = true
 
 [[deferred]]
   text = "Rewrite pause's single confirm+amend into a per-field propose-and-react walk."
   why = "pause isn't multi-field composition; a walk rewrite would be over-engineering."
+  dismissed = true

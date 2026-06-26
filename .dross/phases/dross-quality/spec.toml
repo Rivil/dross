@@ -80,3 +80,4 @@
 [[deferred]]
   text = "Auto-remediation (applying fixes directly)"
   why = "Hard milestone non-goal — dross-quality stays a read-only audit that emits a remediation phase; recorded as a boundary marker so no planner adds it."
+  dismissed = true

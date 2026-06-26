@@ -72,6 +72,7 @@
 [[deferred]]
   text = "Generating standalone Claude Code agent .md definition files from a profile"
   why = "Rejected c-4 shape; the loadout ships as a 'dross stack loadout' text block instead of a maintained agent-file artifact."
+  dismissed = true
 
 [[deferred]]
   text = "Broad multi-language profile library shipped in v0.1"

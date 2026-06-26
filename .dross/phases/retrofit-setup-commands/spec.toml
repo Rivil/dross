@@ -54,7 +54,9 @@
 [[deferred]]
   text = "Documenting the interaction model in the README as a first-class loop behaviour."
   why = "Milestone criterion 4 — 13-audit-and-readme's job."
+  dismissed = true
 
 [[deferred]]
   text = "Full audit-checklist sweep across all interactive commands."
   why = "Phase 13; here only the 7 setup/config commands get checklist entries."
+  dismissed = true

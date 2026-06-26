@@ -50,11 +50,14 @@
 [[deferred]]
   text = "Retrofit of setup/config commands (init, onboard, options, rule, inbox, quick, milestone)."
   why = "Belongs to 12-retrofit-setup-commands."
+  dismissed = true
 
 [[deferred]]
   text = "Documenting the interaction model in the README."
   why = "Milestone criterion 4 — 13-audit-and-readme's job."
+  dismissed = true
 
 [[deferred]]
   text = "Full audit-checklist sweep across all interactive commands."
   why = "Phase 13; here only the five core-loop commands get checklist entries."
+  dismissed = true
