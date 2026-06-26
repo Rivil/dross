@@ -1,0 +1,52 @@
+{
+  "phase": "deferred-item-routing",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/phase_test.go",
+        "internal/cmd/cmd_test.go"
+      ],
+      "commit": "4468884",
+      "completed_at": "2026-06-26T10:09:25.083662Z",
+      "notes": "feature: deferred-item routing · Deferred.Target @ internal/phase/phase.go · optional target field routes a deferred item to a phase slug; empty = someday"
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/validate.go",
+        "internal/cmd/cmd_test.go"
+      ],
+      "commit": "a8005a5",
+      "completed_at": "2026-06-26T10:11:05.915767Z",
+      "notes": "feature: deferred-item routing · Validate deferred-target guard @ internal/cmd/validate.go · validate flags a deferred target that names no phase dir or milestone.phases entry"
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/deferred.go",
+        "internal/cmd/deferred_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "6509930",
+      "completed_at": "2026-06-26T10:14:28.890053Z",
+      "notes": "feature: deferred-item routing · Deferred (dross deferred list/route) @ internal/cmd/deferred.go · lists/filters deferred items across specs (--target/--someday/--routed/--milestone/--json + source+index) and stamps a route target on disk"
+    },
+    "t-4": {
+      "files": [
+        "assets/prompts/spec.md",
+        "internal/cmd/spec_prompt_test.go"
+      ],
+      "commit": "5ad537c",
+      "completed_at": "2026-06-26T10:17:48.774187Z",
+      "notes": "feature: deferred-item routing · spec.md §4 routing @ assets/prompts/spec.md · spec routes every deferred idea to a destination and re-surfaces parked ideas as candidate criteria"
+    },
+    "t-5": {
+      "files": [
+        "assets/prompts/inbox.md",
+        "internal/cmd/inbox_prompt_test.go"
+      ],
+      "commit": "85bf8f7",
+      "completed_at": "2026-06-26T10:20:33.880292Z",
+      "notes": "feature: deferred-item routing · inbox.md someday triage @ assets/prompts/inbox.md · inbox pulls someday deferred items as a second source and routes them through the shared new-phase/backlog/quick/dismiss funnel"
+    }
+  }
+}

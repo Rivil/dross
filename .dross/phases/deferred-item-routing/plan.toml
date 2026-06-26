@@ -1,101 +1,56 @@
 [phase]
-id = "deferred-item-routing"
+  id = "deferred-item-routing"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Add optional target to Deferred schema"
-files         = ["internal/phase/phase.go", "internal/phase/phase_test.go", "internal/cmd/cmd_test.go"]
-description   = """
-Add `Target string `toml:"target,omitempty"`` to the Deferred struct.
-target-less entries must round-trip without emitting a `target =` key.
-"""
-covers        = ["c-1"]
-test_contract = [
-  "if the omitempty tag is dropped, a target-less [[deferred]] entry loaded then saved emits a spurious `target = \"\"` line and the phase_test.go round-trip assertion fails",
-  "if the field/tag is wrong, an entry stamped target=\"foo-slug\" no longer reads the slug back via LoadSpec and the round-trip test fails",
-  "if the schema rejects the new key, the cmd_test.go validate case feeding one spec with target=<slug> and a sibling without fails to exit 0 for both",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Add optional target to Deferred schema"
+  files = ["internal/phase/phase.go", "internal/phase/phase_test.go", "internal/cmd/cmd_test.go"]
+  description = "Add `Target string `toml:\"target,omitempty\"`` to the Deferred struct.\ntarget-less entries must round-trip without emitting a `target =` key.\n"
+  covers = ["c-1"]
+  test_contract = ["if the omitempty tag is dropped, a target-less [[deferred]] entry loaded then saved emits a spurious `target = \"\"` line and the phase_test.go round-trip assertion fails", "if the field/tag is wrong, an entry stamped target=\"foo-slug\" no longer reads the slug back via LoadSpec and the round-trip test fails", "if the schema rejects the new key, the cmd_test.go validate case feeding one spec with target=<slug> and a sibling without fails to exit 0 for both"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Validate guards a dangling target"
-files         = ["internal/cmd/validate.go", "internal/cmd/cmd_test.go"]
-description   = """
-Extend dross validate: a [[deferred]] target must name an existing
-phases/<slug> dir or a milestone.phases entry. Fits validate.go's
-existing problems accumulation.
-"""
-covers        = ["c-1"]
-test_contract = [
-  "if the dangling-target check is missing, validate exits 0 for a spec whose deferred target names a slug that is neither a phases/<slug> dir nor any milestone.phases entry, and the validate-deferred cmd_test.go case fails",
-  "if the check is too strict, validate reports a problem for a target-less entry or for a target naming a real slug, and the same case fails",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 2
+  title = "Validate guards a dangling target"
+  files = ["internal/cmd/validate.go", "internal/cmd/cmd_test.go"]
+  description = "Extend dross validate: a [[deferred]] target must name an existing\nphases/<slug> dir or a milestone.phases entry. Fits validate.go's\nexisting problems accumulation.\n"
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = ["if the dangling-target check is missing, validate exits 0 for a spec whose deferred target names a slug that is neither a phases/<slug> dir nor any milestone.phases entry, and the validate-deferred cmd_test.go case fails", "if the check is too strict, validate reports a problem for a target-less entry or for a target naming a real slug, and the same case fails"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Add dross deferred list + route command"
-files         = ["internal/cmd/deferred.go", "internal/cmd/deferred_test.go", "cmd/dross/main.go"]
-description   = """
-New `dross deferred` command scanning all .dross/phases/*/spec.toml
-[[deferred]] entries. `list` with --target/--someday/--milestone/--routed/--json
-+ source column; each --json entry also exposes its per-phase index, the
-addressing handle `route <phase> <idx> --target <slug>` consumes to stamp
-target on disk. Register cmd.Deferred() in main.go's root.AddCommand.
-"""
-covers        = ["c-3", "c-4", "c-5", "c-6"]
-test_contract = [
-  "if the --someday filter breaks, `deferred list --someday` prints a routed (target-set) row and the deferred_test.go filter assertion fails",
-  "if --routed is not the exact complement of --someday, the complementarity assertion fails",
-  "if the source field is dropped, `deferred list --target <slug> --json` returns entries without the originating-phase source and the JSON-shape assertion fails",
-  "if --milestone scoping breaks, `deferred list --milestone <v>` returns an entry from a phase outside that milestone's phases array and the assertion fails",
-  "if route persistence breaks, `deferred route <phase> <idx> --target <slug>` then reload does not yield Target==<slug> and the route round-trip assertion fails",
-  "if `list --json` omits the per-phase index handle that `route` consumes, the list→route handoff is unverifiable: a deferred_test.go assertion takes the idx returned by `list --json` for an entry, passes it to `deferred route <phase> <idx> --target <slug>`, reloads, and asserts that exact entry now has Target==<slug> — drop the index from the JSON or accept a different addressing and it fails",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Add dross deferred list + route command"
+  files = ["internal/cmd/deferred.go", "internal/cmd/deferred_test.go", "cmd/dross/main.go"]
+  description = "New `dross deferred` command scanning all .dross/phases/*/spec.toml\n[[deferred]] entries. `list` with --target/--someday/--milestone/--routed/--json\n+ source column; each --json entry also exposes its per-phase index, the\naddressing handle `route <phase> <idx> --target <slug>` consumes to stamp\ntarget on disk. Register cmd.Deferred() in main.go's root.AddCommand.\n"
+  covers = ["c-3", "c-4", "c-5", "c-6"]
+  depends_on = ["t-1"]
+  test_contract = ["if the --someday filter breaks, `deferred list --someday` prints a routed (target-set) row and the deferred_test.go filter assertion fails", "if --routed is not the exact complement of --someday, the complementarity assertion fails", "if the source field is dropped, `deferred list --target <slug> --json` returns entries without the originating-phase source and the JSON-shape assertion fails", "if --milestone scoping breaks, `deferred list --milestone <v>` returns an entry from a phase outside that milestone's phases array and the assertion fails", "if route persistence breaks, `deferred route <phase> <idx> --target <slug>` then reload does not yield Target==<slug> and the route round-trip assertion fails", "if `list --json` omits the per-phase index handle that `route` consumes, the list→route handoff is unverifiable: a deferred_test.go assertion takes the idx returned by `list --json` for an entry, passes it to `deferred route <phase> <idx> --target <slug>`, reloads, and asserts that exact entry now has Target==<slug> — drop the index from the JSON or accept a different addressing and it fails"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 3
-depends_on    = ["t-3"]
-title         = "spec.md §4 routing + re-surface seed"
-files         = ["assets/prompts/spec.md", "internal/cmd/spec_prompt_test.go"]
-description   = """
-§4 routes every deferred item to one of four destinations; park branch
-chains `dross milestone add <v> phases <slug>` then `dross deferred route
-… --target <slug>`. Create-flow seeds candidate criteria via
-`dross deferred list --target <new-slug> --json` and skips already-targeted items.
-"""
-covers        = ["c-2", "c-3", "c-4", "c-5"]
-test_contract = [
-  "if any of the four destination phrases (pull-into-phase, milestone-backlog, named-future-phase, someday) is missing from §4, the destinations sub-assertion in spec_prompt_test.go fails",
-  "if the park branch loses the `milestone add … phases` + `deferred route … --target` sequence, the park-sequence assertion fails",
-  "if the 'leave unrouted only on explicit someday' phrasing is removed, that sub-assertion fails",
-  "if the create-flow seed no longer references `dross deferred list --target … --json` (CLI, not a grep), the re-surface-seed assertion fails",
-  "if the skip-already-routed (target set) instruction is removed, the dedup sub-assertion fails",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 3
+  title = "spec.md §4 routing + re-surface seed"
+  files = ["assets/prompts/spec.md", "internal/cmd/spec_prompt_test.go"]
+  description = "§4 routes every deferred item to one of four destinations; park branch\nchains `dross milestone add <v> phases <slug>` then `dross deferred route\n… --target <slug>`. Create-flow seeds candidate criteria via\n`dross deferred list --target <new-slug> --json` and skips already-targeted items.\n"
+  covers = ["c-2", "c-3", "c-4", "c-5"]
+  depends_on = ["t-3"]
+  test_contract = ["if any of the four destination phrases (pull-into-phase, milestone-backlog, named-future-phase, someday) is missing from §4, the destinations sub-assertion in spec_prompt_test.go fails", "if the park branch loses the `milestone add … phases` + `deferred route … --target` sequence, the park-sequence assertion fails", "if the 'leave unrouted only on explicit someday' phrasing is removed, that sub-assertion fails", "if the create-flow seed no longer references `dross deferred list --target … --json` (CLI, not a grep), the re-surface-seed assertion fails", "if the skip-already-routed (target set) instruction is removed, the dedup sub-assertion fails"]
+  status = "done"
 
 [[task]]
-id            = "t-5"
-wave          = 3
-depends_on    = ["t-3"]
-title         = "inbox.md adds deferred someday triage source"
-files         = ["assets/prompts/inbox.md", "internal/cmd/inbox_prompt_test.go"]
-description   = """
-inbox.md reads someday/unrouted items via `dross deferred list --someday
---json` as a second triage source alongside `dross issue pull`, routing
-each through the same new-phase / milestone-backlog / quick / dismiss funnel.
-"""
-covers        = ["c-6"]
-test_contract = [
-  "if the `dross deferred list --someday --json` source line is removed from inbox.md, the second-source assertion in inbox_prompt_test.go fails",
-  "if any funnel destination (new-phase / milestone-backlog / quick / dismiss) is dropped for deferred items, the funnel-coverage assertion fails",
-]
-status        = "pending"
+  id = "t-5"
+  wave = 3
+  title = "inbox.md adds deferred someday triage source"
+  files = ["assets/prompts/inbox.md", "internal/cmd/inbox_prompt_test.go"]
+  description = "inbox.md reads someday/unrouted items via `dross deferred list --someday\n--json` as a second triage source alongside `dross issue pull`, routing\neach through the same new-phase / milestone-backlog / quick / dismiss funnel.\n"
+  covers = ["c-6"]
+  depends_on = ["t-3"]
+  test_contract = ["if the `dross deferred list --someday --json` source line is removed from inbox.md, the second-source assertion in inbox_prompt_test.go fails", "if any funnel destination (new-phase / milestone-backlog / quick / dismiss) is dropped for deferred items, the funnel-coverage assertion fails"]
+  status = "done"
