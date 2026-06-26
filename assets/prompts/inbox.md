@@ -9,13 +9,15 @@ This is the inbound half of board sync. The outbound half (planning artefacts �
 ## 0. Pre-flight
 
 1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
-2. Confirm board sync is on: `dross project get remote.board_sync`. If `false`, tell the user to run `dross issue enable` (and set `[remote].provider`, `api_base`, `auth_env` if unset) and stop — there's no board to read otherwise.
+2. Check board sync: `dross project get remote.board_sync`. If `false`, there's no board to read — print one line (`board_sync off — skipping board issues, triaging local deferred items only`) and **skip the board-issue source** (§1's `dross issue pull`), proceeding straight to the deferred `someday` source below. Don't stop: the local deferred backlog is still triageable on a board-less repo. (To wire a board up later, the user runs `dross issue enable` and sets `[remote].provider`, `api_base`, `auth_env`.)
 
 ## 1. Pull the inbox
 
 ```
 dross issue pull --mark --json
 ```
+
+(Skip this pull entirely when `board_sync` is off — §0 already routed you past the board source straight to the deferred ideas below.)
 
 `--mark` records the pull time. The result is a JSON array of open board issues **not** already linked to a dross phase/quick and **not** previously dismissed. Default filter is none; pass `$ARGUMENTS` through, e.g. `dross issue pull --mark --labels bug,enhancement --json`, when the user wants to scope by label.
 
@@ -47,7 +49,7 @@ Show the user a compact list first (number, title, labels). Then walk them **one
 - **New phase** — route to `/dross-spec --new "<text>"`; once the phase id exists, mark the idea routed: `dross deferred route <source> <index> --target "<new-slug>"`.
 - **Milestone backlog** — coin a slug, then `dross milestone add <version> phases "<slug>"` and `dross deferred route <source> <index> --target "<slug>"` so it re-surfaces 1:1 when that phase is specced.
 - **Quick task** — route to `/dross-quick "<text>"` for a one-shot; the idea is handled outside the phase flow.
-- **Dismiss** — not worth doing. Leave it `someday` (it won't re-surface as a phase) or delete the `[[deferred]]` entry from its source spec by hand.
+- **Dismiss** — not worth doing. Retire it with `dross deferred dismiss <source> <index>` (reversible via `--undo`): the item moves to a dismissed state and stops appearing in `dross deferred list --someday`, with no hand-editing of specs.
 
 `<source>` and `<index>` come straight from the `dross deferred list --someday --json` entry.
 
