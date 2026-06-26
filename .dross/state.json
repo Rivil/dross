@@ -1,43 +1,11 @@
 {
-  "version": "0.5.2.0",
+  "version": "0.4.2.0",
   "current_milestone": "v0.4",
   "current_phase": "phase-lifecycle-commands",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-26T14:47:55.853776Z",
-  "last_action": "plan reviewed: phase-lifecycle-commands (0 blocking, 3 flags; #1 UniqueSlug trap fixed in t-4, #3 serialized t-5 after t-4, #2 kept folded per D3)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-26T15:03:56.073234Z",
+  "last_action": "phase phase-lifecycle-commands executed (5/5 done)",
   "history": [
-    {
-      "at": "2026-06-25T19:13:19.970061Z",
-      "action": "executed t-6 (Migrate this repo's phases to slug identity)"
-    },
-    {
-      "at": "2026-06-25T19:13:44.899168Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-25T19:13:44.906027Z",
-      "action": "phase 14-stable-slug-phase-ids executed (6/6 done)"
-    },
-    {
-      "at": "2026-06-25T19:20:05.10125Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-25T19:20:05.108632Z",
-      "action": "verified 14-stable-slug-phase-ids: pass (5/5 covered, mutation 0.82 measured, efficacy 1.00 ex-not-covered)"
-    },
-    {
-      "at": "2026-06-25T19:53:53.76733Z",
-      "action": "completed 14-stable-slug-phase-ids"
-    },
-    {
-      "at": "2026-06-26T08:41:05.73136Z",
-      "action": "set current_milestone=v0.5"
-    },
-    {
-      "at": "2026-06-26T08:41:05.740304Z",
-      "action": "set version=0.5.0.0"
-    },
     {
       "at": "2026-06-26T08:41:05.747685Z",
       "action": "scoped milestone v0.5: 4 criteria, 2 phases; version → 0.5.0.0"
@@ -205,6 +173,38 @@
     {
       "at": "2026-06-26T14:47:55.853776Z",
       "action": "plan reviewed: phase-lifecycle-commands (0 blocking, 3 flags; #1 UniqueSlug trap fixed in t-4, #3 serialized t-5 after t-4, #2 kept folded per D3)"
+    },
+    {
+      "at": "2026-06-26T14:48:46.538094Z",
+      "action": "set version=0.4.2.0"
+    },
+    {
+      "at": "2026-06-26T14:51:41.15896Z",
+      "action": "executed t-1 (Pure array-order helpers)"
+    },
+    {
+      "at": "2026-06-26T14:53:34.676295Z",
+      "action": "executed t-2 (Byte-for-byte snapshot test harness)"
+    },
+    {
+      "at": "2026-06-26T14:58:33.742906Z",
+      "action": "executed t-3 (dross phase move + shared lifecycle plumbing)"
+    },
+    {
+      "at": "2026-06-26T15:00:38.126405Z",
+      "action": "executed t-4 (dross phase insert)"
+    },
+    {
+      "at": "2026-06-26T15:03:37.005838Z",
+      "action": "executed t-5 (dross phase rename)"
+    },
+    {
+      "at": "2026-06-26T15:03:56.065689Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-26T15:03:56.073234Z",
+      "action": "phase phase-lifecycle-commands executed (5/5 done)"
     }
   ]
 }

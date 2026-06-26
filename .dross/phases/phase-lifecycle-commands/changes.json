@@ -1,0 +1,53 @@
+{
+  "phase": "phase-lifecycle-commands",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/phase_test.go"
+      ],
+      "commit": "e9bd41e",
+      "completed_at": "2026-06-26T14:51:41.144835Z",
+      "notes": "feature: phase lifecycle · InsertRelative/MoveRelative/RenameInArray @ internal/phase/phase.go · pure slice helpers (anchor-relative insert/move, in-place rename, ErrAnchorNotFound, no-op detection) underpinning insert/move/rename"
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/phase_lifecycle_test.go"
+      ],
+      "commit": "bfd2c45",
+      "completed_at": "2026-06-26T14:53:34.663231Z",
+      "notes": "feature: phase lifecycle · snapshotPhases/assertUntouched @ internal/cmd/phase_lifecycle_test.go · self-tested byte-for-byte fingerprint harness (dir files + milestone array slot) proving lifecycle ops leave siblings untouched"
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_lifecycle.go",
+        "internal/cmd/phase_lifecycle_test.go"
+      ],
+      "commit": "98a198a",
+      "completed_at": "2026-06-26T14:58:33.73099Z",
+      "notes": "feature: phase lifecycle · phaseMove + resolveAnchor/loadCurrentMilestone/refuseIfShipped @ internal/cmd/phase_lifecycle.go · dross phase move reorders the milestone array (anchor-validated, ship-guarded, no-op aware), touching no phase dir"
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_lifecycle.go",
+        "internal/cmd/phase_lifecycle_test.go"
+      ],
+      "commit": "860784d",
+      "completed_at": "2026-06-26T15:00:38.114223Z",
+      "notes": "feature: phase lifecycle · phaseInsert @ internal/cmd/phase_lifecycle.go · dross phase insert scaffolds a phase (strict Slugify, no auto-suffix) and splices it at --after/--before, siblings untouched"
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_lifecycle.go",
+        "internal/cmd/deferred.go",
+        "internal/cmd/phase_lifecycle_test.go"
+      ],
+      "commit": "ea4db6b",
+      "completed_at": "2026-06-26T15:03:36.991896Z",
+      "notes": "feature: phase lifecycle · phaseRename + repointDeferredTarget @ internal/cmd/phase_lifecycle.go · dross phase rename moves dir/id/array/deferred-targets/branch atomically, siblings untouched, collision-safe"
+    }
+  }
+}
