@@ -50,6 +50,7 @@
 [[deferred]]
   text = "Retrofit of read-mostly commands (pause, resume, status)."
   why = "Out of the agreed 7-command setup/config set; revisit only if they grow interactive decision points."
+  target = "retrofit-readmostly-commands"
 
 [[deferred]]
   text = "Documenting the interaction model in the README as a first-class loop behaviour."

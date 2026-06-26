@@ -1,4 +1,4 @@
-phases = []
+phases = ["architecture-doc-enhancements", "deferred-unroute-command", "multilang-analyzer-catalogs", "multilang-stack-profiles", "container-iac-scanning", "secure-quality-findings-lifecycle", "ship-complete-recovery-hardening", "status-action-surfaces-v2", "retrofit-readmostly-commands"]
 
 [milestone]
   version = "v0.6"
