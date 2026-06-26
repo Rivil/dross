@@ -313,3 +313,124 @@ func TestPhaseInsertErrors(t *testing.T) {
 		t.Error("an anchor not in the milestone should error")
 	}
 }
+
+func TestPhaseRename(t *testing.T) {
+	dir := setupLifecycleFixture(t)
+	root := filepath.Join(dir, ".dross")
+	before := snapshotPhases(t, root)
+
+	if err := runCmd(t, Phase(), "rename", "p2", "beta"); err != nil {
+		t.Fatalf("rename p2 beta: %v", err)
+	}
+	// dir + array + spec.id all move.
+	if isDir(filepath.Join(root, "phases", "p2")) {
+		t.Error("phases/p2 still exists after rename")
+	}
+	if !isDir(filepath.Join(root, "phases", "beta")) {
+		t.Error("phases/beta was not created")
+	}
+	if got, want := milestonePhases(t, root, "v1"), []string{"p1", "beta", "p3"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("array after rename = %v, want %v (entry swapped in place)", got, want)
+	}
+	spec, err := phase.LoadSpec(filepath.Join(root, "phases", "beta", "spec.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Phase.ID != "beta" {
+		t.Errorf("spec.phase.id = %q, want beta", spec.Phase.ID)
+	}
+	// Siblings byte-for-byte untouched (only old/new excepted).
+	assertUntouched(t, before, snapshotPhases(t, root), "p2", "beta")
+	if err := runCmd(t, Validate()); err != nil {
+		t.Errorf("validate after rename: %v", err)
+	}
+}
+
+func TestPhaseRenameRepointsDeferred(t *testing.T) {
+	dir := setupLifecycleFixture(t)
+	root := filepath.Join(dir, ".dross")
+	// p1 defers two ideas: one routed to p2 (renamed), one to p3 (must stay).
+	mustWrite(t, filepath.Join(root, "phases", "p1", "spec.toml"),
+		"[phase]\n  id = \"p1\"\n  title = \"p1\"\n\n[[criteria]]\n  id = \"c-1\"\n  text = \"x\"\n\n[[deferred]]\n  text = \"to p2\"\n  target = \"p2\"\n\n[[deferred]]\n  text = \"to p3\"\n  target = \"p3\"\n")
+
+	if err := runCmd(t, Phase(), "rename", "p2", "beta"); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	spec, err := phase.LoadSpec(filepath.Join(root, "phases", "p1", "spec.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Deferred[0].Target != "beta" {
+		t.Errorf("deferred target p2 not re-pointed: got %q, want beta", spec.Deferred[0].Target)
+	}
+	if spec.Deferred[1].Target != "p3" {
+		t.Errorf("deferred target p3 wrongly rewritten: got %q, want p3 (other targets must stay)", spec.Deferred[1].Target)
+	}
+}
+
+func TestPhaseRenameNoPartialMoveOnCollision(t *testing.T) {
+	dir := setupLifecycleFixture(t)
+	root := filepath.Join(dir, ".dross")
+
+	// p3 already exists — the target-exists check must fire BEFORE the dir move.
+	if err := runCmd(t, Phase(), "rename", "p2", "p3"); err == nil {
+		t.Fatal("renaming onto an existing slug should error")
+	}
+	if !isDir(filepath.Join(root, "phases", "p2")) {
+		t.Error("collision left phases/p2 already moved — partial rename")
+	}
+	if !isDir(filepath.Join(root, "phases", "p3")) {
+		t.Error("collision clobbered phases/p3")
+	}
+}
+
+func TestPhaseRenameNoOpAndCurrentPhase(t *testing.T) {
+	dir := setupLifecycleFixture(t)
+	root := filepath.Join(dir, ".dross")
+	sPath := filepath.Join(root, state.File)
+
+	// No-op: rename to the same slug succeeds quietly and writes nothing.
+	var out string
+	if err := runCmdCapturing(t, &out, Phase(), "rename", "p2", "p2"); err != nil {
+		t.Fatalf("self-rename: %v", err)
+	}
+	if !strings.Contains(out, "nothing to do") {
+		t.Errorf("self-rename should be a quiet no-op, got %q", out)
+	}
+
+	// current_phase follows a real rename.
+	s, _ := state.Load(sPath)
+	s.CurrentPhase = "p2"
+	if err := s.Save(sPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Phase(), "rename", "p2", "beta"); err != nil {
+		t.Fatal(err)
+	}
+	s2, _ := state.Load(sPath)
+	if s2.CurrentPhase != "beta" {
+		t.Errorf("current_phase after rename = %q, want beta", s2.CurrentPhase)
+	}
+}
+
+func TestPhaseRenameRenamesLocalBranch(t *testing.T) {
+	dir := setupLifecycleFixture(t)
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remote)
+	mustGit(t, dir, "add", "-A")
+	mustGit(t, dir, "commit", "-q", "-m", "init")
+	mustGit(t, dir, "checkout", "-q", "-b", "phase/p2")
+	mustGit(t, dir, "checkout", "-q", "main")
+
+	if err := runCmd(t, Phase(), "rename", "p2", "beta"); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	branches := mustGit(t, dir, "branch", "--format=%(refname:short)")
+	if strings.Contains(branches, "phase/p2") {
+		t.Errorf("old branch phase/p2 still present: %q", branches)
+	}
+	if !strings.Contains(branches, "phase/beta") {
+		t.Errorf("new branch phase/beta missing: %q", branches)
+	}
+}

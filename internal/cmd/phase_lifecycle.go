@@ -227,3 +227,87 @@ func phaseInsert() *cobra.Command {
 	c.Flags().StringVar(&before, "before", "", "place the new phase immediately before this phase slug")
 	return c
 }
+
+// phaseRename renames a phase end to end: its directory, spec/plan id, milestone
+// array entry, any deferred targets pointing at it, and the local git branch.
+// Other phases are left byte-for-byte untouched.
+func phaseRename() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "rename <old-slug> <new-slug>",
+		Short: "Rename a phase: directory, spec id, milestone entry, deferred targets, branch",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			oldSlug, newSlug := args[0], args[1]
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			repoDir := filepath.Dir(root)
+
+			version, m, mPath, err := loadCurrentMilestone(root)
+			if err != nil {
+				return err
+			}
+			if !slices.Contains(m.Phases, oldSlug) {
+				return fmt.Errorf("phase %q is not in milestone %s", oldSlug, version)
+			}
+			// No-op, special-cased BEFORE the target-exists check so renaming a
+			// phase to its own name succeeds quietly and writes nothing.
+			if newSlug == oldSlug {
+				Printf("%s already named that — nothing to do\n", oldSlug)
+				return nil
+			}
+			if newSlug == "" || phase.Slugify(newSlug) != newSlug {
+				return fmt.Errorf("new slug %q is not a valid slug", newSlug)
+			}
+			if err := refuseIfShipped(repoDir, oldSlug); err != nil {
+				return err
+			}
+			// Target-exists check BEFORE the directory move: if it ran after, a
+			// collision would leave phases/<old> already gone (a partial rename).
+			if isDir(phase.Dir(root, newSlug)) || slices.Contains(m.Phases, newSlug) {
+				return fmt.Errorf("phase %q already exists — choose another name", newSlug)
+			}
+
+			oldDir := phase.Dir(root, oldSlug)
+			newDir := filepath.Join(root, "phases", newSlug)
+			if err := os.Rename(oldDir, newDir); err != nil {
+				return fmt.Errorf("rename %s → %s: %w", oldDir, newDir, err)
+			}
+			if err := rewritePhaseID(newDir, newSlug); err != nil {
+				return err
+			}
+			m.Phases = phase.RenameInArray(m.Phases, oldSlug, newSlug)
+			if err := m.Save(mPath); err != nil {
+				return err
+			}
+			if err := repointDeferredTarget(root, oldSlug, newSlug); err != nil {
+				return err
+			}
+
+			// Rename the local branch when it exists; never touch remotes.
+			branchOld, branchNew := "phase/"+oldSlug, "phase/"+newSlug
+			if isDir(filepath.Join(repoDir, ".git")) {
+				if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branchOld); err == nil {
+					if out, err := gitCombined(repoDir, "branch", "-m", branchOld, branchNew); err != nil {
+						return fmt.Errorf("git branch -m %s %s: %w\n%s", branchOld, branchNew, err, out)
+					}
+				}
+			}
+
+			// Follow the rename in state when the renamed phase was current.
+			sPath := filepath.Join(root, state.File)
+			if s, err := state.Load(sPath); err == nil && s.CurrentPhase == oldSlug {
+				s.CurrentPhase = newSlug
+				s.Touch(fmt.Sprintf("renamed %s → %s", oldSlug, newSlug))
+				if err := s.Save(sPath); err != nil {
+					return err
+				}
+			}
+
+			Printf("renamed %s → %s in %s\n", oldSlug, newSlug, version)
+			return nil
+		},
+	}
+	return c
+}
