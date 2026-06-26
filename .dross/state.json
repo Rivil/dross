@@ -1,21 +1,11 @@
 {
   "version": "0.5.0.0",
   "current_milestone": "v0.5",
-  "last_activity": "2026-06-26T08:41:05.747685Z",
-  "last_action": "scoped milestone v0.5: 4 criteria, 2 phases; version → 0.5.0.0",
+  "current_phase": "deferred-item-routing",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-26T08:56:03.552826Z",
+  "last_action": "spec locked: deferred-item-routing",
   "history": [
-    {
-      "at": "2026-06-21T19:08:38.519106Z",
-      "action": "executed t-6 (Mirror execute gates into quick; walk inbox)"
-    },
-    {
-      "at": "2026-06-21T19:10:16.036832Z",
-      "action": "executed t-7 (Rewrite rule.md interactive turns)"
-    },
-    {
-      "at": "2026-06-21T19:11:57.138849Z",
-      "action": "executed t-8 (Add anchor tests + generic no-bundle net)"
-    },
     {
       "at": "2026-06-21T19:13:26.486189Z",
       "action": "executed t-9 (Flip 7 audit rows to conforming)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-26T08:41:05.747685Z",
       "action": "scoped milestone v0.5: 4 criteria, 2 phases; version → 0.5.0.0"
+    },
+    {
+      "at": "2026-06-26T08:42:05.451821Z",
+      "action": "created deferred-item-routing"
+    },
+    {
+      "at": "2026-06-26T08:56:03.545708Z",
+      "action": "set current_phase=deferred-item-routing"
+    },
+    {
+      "at": "2026-06-26T08:56:03.552826Z",
+      "action": "spec locked: deferred-item-routing"
     }
   ]
 }
