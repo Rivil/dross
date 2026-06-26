@@ -3,13 +3,9 @@
   "current_milestone": "v0.5",
   "current_phase": "deferred-triage-gaps",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-26T13:18:25.389005Z",
-  "last_action": "plan locked: deferred-triage-gaps (4 tasks across 3 waves)",
+  "last_activity": "2026-06-26T13:23:51.039796Z",
+  "last_action": "plan reviewed: deferred-triage-gaps (0 blocking, 3 flags; #1 serialized t-3→wave3, #3 added c-3 funnel clause, #2 kept)",
   "history": [
-    {
-      "at": "2026-06-21T20:00:03.649343Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-06-21T20:00:03.655956Z",
       "action": "verified 13-audit-and-readme: pass (3/3 covered; mutation 0.81 package-scoped, Lived=0/efficacy 1.00 — not a phase signal; no production Go in diff)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-26T13:18:25.389005Z",
       "action": "plan locked: deferred-triage-gaps (4 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-26T13:23:51.039796Z",
+      "action": "plan reviewed: deferred-triage-gaps (0 blocking, 3 flags; #1 serialized t-3→wave3, #3 added c-3 funnel clause, #2 kept)"
     }
   ]
 }

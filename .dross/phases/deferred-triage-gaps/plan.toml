@@ -24,12 +24,12 @@
 
 [[task]]
   id = "t-3"
-  wave = 2
+  wave = 3
   title = "Filter dismissed in deferred list"
   files = ["internal/cmd/deferred.go", "internal/cmd/deferred_test.go"]
   description = "Add a --dismissed flag; exclude dismissed items from --someday and the\ndefault unrouted view; render `(dismissed)` in the TARGET column when a\ndismissed item is shown; --json carries the dismissed field.\n"
   covers = ["c-2"]
-  depends_on = ["t-1"]
+  depends_on = ["t-1", "t-2"]
   test_contract = ["if --someday stops excluding dismissed, `deferred list --someday` prints a dismissed row and the filter assertion in deferred_test.go fails", "if --dismissed is missing or wrong, `deferred list --dismissed` does not return exactly the dismissed entries and the filter assertion fails", "if the marker is dropped, the default table for a dismissed item shows `(someday)` instead of `(dismissed)` in TARGET and the render assertion fails", "if --json omits the field, `deferred list --dismissed --json` returns entries without dismissed=true and the JSON-shape assertion fails"]
   status = "pending"
 
@@ -41,5 +41,5 @@
   description = "§0: when board_sync is off, announce the board source is skipped and\nproceed to the deferred someday source instead of stopping. Dismiss\nfunnel invokes `dross deferred dismiss <source> <index>` so the choice\npersists. Add guard tests. (r-01: make install after.)\n"
   covers = ["c-3", "c-4"]
   depends_on = ["t-2"]
-  test_contract = ["if the board-off branch still hard-stops, the inbox_prompt_test.go assertion that a board_sync=off path announces skipping the board and continues to the deferred source fails", "if the dismiss funnel no longer invokes the CLI, the assertion that the deferred dismiss destination references `dross deferred dismiss` fails"]
+  test_contract = ["if the board-off branch still hard-stops, the inbox_prompt_test.go assertion that a board_sync=off path announces skipping the board and continues to the deferred source fails", "if the dismiss funnel no longer invokes the CLI, the assertion that the deferred dismiss destination references `dross deferred dismiss` fails", "if the board-off path does not still route deferred items through all four destinations, the inbox_prompt_test.go assertion that the deferred funnel reaches phase / milestone-backlog / quick / dismiss when board_sync is off fails"]
   status = "pending"
