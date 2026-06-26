@@ -1,9 +1,11 @@
-phases = ["architecture-doc-enhancements", "deferred-unroute-command", "multilang-analyzer-catalogs", "multilang-stack-profiles", "container-iac-scanning", "secure-quality-findings-lifecycle", "ship-complete-recovery-hardening", "status-action-surfaces-v2", "retrofit-readmostly-commands"]
+phases = ["multilang-stack-profiles", "multilang-analyzer-catalogs", "container-iac-scanning", "secure-quality-findings-lifecycle", "status-action-surfaces-v2", "ship-complete-recovery-hardening", "architecture-doc-enhancements", "deferred-unroute-command", "retrofit-readmostly-commands"]
 
 [milestone]
   version = "v0.6"
-  title = "Phase lifecycle commands"
-  status = "planning"
+  title = "Surface depth & loop hardening"
+  status = "active"
   started = "2026-06-26"
 
 [scope]
+  success_criteria = ["dross-secure and dross-quality run real per-language analyzers on at least one non-Go stack (e.g. JS or Python), surfacing findings the agnostic fallback misses", "Secure and quality findings carry durable cross-run state (track/resolve/dismiss) through a CLI — a report is no longer a one-shot artifact", "A diverged-main or mid-merge ship failure is recoverable via a documented dross command/recipe — no manual .dross/ surgery", "dross status ranks its action areas by real signal (staleness/never-run) and the tech-debt area is backed by an actual scan, not a placeholder"]
+  non_goals = ["Exhaustive per-language tool coverage — one non-Go stack proves the mechanism; not every ecosystem gets a full loadout in v0.6", "Auto-remediation — secure & quality stay read-only audits that emit a remediation phase; v0.6 deepens reporting/lifecycle, never applies fixes"]

@@ -1,17 +1,9 @@
 {
   "version": "0.4.2.1",
-  "current_milestone": "v0.4",
-  "last_activity": "2026-06-26T15:17:13.096681Z",
-  "last_action": "quick: count deferred someday ideas in /dross-status inbox nudge",
+  "current_milestone": "v0.6",
+  "last_activity": "2026-06-26T15:46:00.153496Z",
+  "last_action": "scoped milestone v0.6: 4 criteria, 9 phases",
   "history": [
-    {
-      "at": "2026-06-26T09:58:35.23751Z",
-      "action": "plan locked: deferred-item-routing (5 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-06-26T10:01:58.920627Z",
-      "action": "plan reviewed: deferred-item-routing (0 blocking, 4 flags)"
-    },
     {
       "at": "2026-06-26T10:05:00.158345Z",
       "action": "plan amended: deferred-item-routing (t-3 +list→route index handle per review flag #1)"
@@ -203,6 +195,14 @@
     {
       "at": "2026-06-26T15:17:13.096681Z",
       "action": "quick: count deferred someday ideas in /dross-status inbox nudge"
+    },
+    {
+      "at": "2026-06-26T15:46:00.147703Z",
+      "action": "set current_milestone=v0.6"
+    },
+    {
+      "at": "2026-06-26T15:46:00.153496Z",
+      "action": "scoped milestone v0.6: 4 criteria, 9 phases"
     }
   ]
 }
