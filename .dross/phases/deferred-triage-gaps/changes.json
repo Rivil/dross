@@ -1,0 +1,42 @@
+{
+  "phase": "deferred-triage-gaps",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/cmd/deferred.go",
+        "internal/phase/phase_test.go"
+      ],
+      "commit": "12de28e",
+      "completed_at": "2026-06-26T13:29:44.096662Z",
+      "notes": "feature: deferred triage · Deferred.Dismissed @ internal/phase/phase.go · third 'dismissed' state (bool) on deferred items, distinct from someday/routed"
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/deferred.go",
+        "internal/cmd/deferred_test.go"
+      ],
+      "commit": "06bba80",
+      "completed_at": "2026-06-26T13:31:20.073573Z",
+      "notes": "feature: deferred triage · deferredDismiss @ internal/cmd/deferred.go · dross deferred dismiss \u003csrc\u003e \u003cidx\u003e retires a someday item (--undo reverses); errors on routed items"
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/deferred.go",
+        "internal/cmd/deferred_test.go"
+      ],
+      "commit": "36c5293",
+      "completed_at": "2026-06-26T13:33:27.654127Z",
+      "notes": "feature: deferred triage · deferredList --dismissed @ internal/cmd/deferred.go · hides dismissed items from someday/default, surfaces via --dismissed, renders (dismissed) in TARGET"
+    },
+    "t-4": {
+      "files": [
+        "assets/prompts/inbox.md",
+        "internal/cmd/inbox_prompt_test.go"
+      ],
+      "commit": "c2e1263",
+      "completed_at": "2026-06-26T13:35:25.207177Z",
+      "notes": "feature: inbox triage · inbox.md §0 + dismiss funnel @ assets/prompts/inbox.md · board-off repos skip the board source and still triage deferred items; dismiss funnel invokes dross deferred dismiss"
+    }
+  }
+}
