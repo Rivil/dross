@@ -17,6 +17,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -105,6 +106,62 @@ func DisplayNumber(order []string, slug string) int {
 		}
 	}
 	return 0
+}
+
+// ErrAnchorNotFound is returned by the relative array-order helpers when the
+// anchor slug they were asked to position against is absent from the array.
+var ErrAnchorNotFound = errors.New("anchor slug not found in milestone phases array")
+
+// InsertRelative returns a copy of arr with slug placed immediately before or
+// after anchor (before=true → before it). When anchor is absent it returns
+// ErrAnchorNotFound rather than appending at the tail; arr is never mutated.
+func InsertRelative(arr []string, slug, anchor string, before bool) ([]string, error) {
+	i := slices.Index(arr, anchor)
+	if i < 0 {
+		return nil, ErrAnchorNotFound
+	}
+	pos := i + 1
+	if before {
+		pos = i
+	}
+	return slices.Insert(slices.Clone(arr), pos, slug), nil
+}
+
+// MoveRelative returns a copy of arr with slug repositioned immediately before
+// or after anchor, preserving the relative order of every other element. Moving
+// slug to the position it already holds returns arr unchanged — the no-op the
+// caller reports as "already there". Returns ErrAnchorNotFound if anchor is
+// absent, or an error if slug itself is not in arr.
+func MoveRelative(arr []string, slug, anchor string, before bool) ([]string, error) {
+	from := slices.Index(arr, slug)
+	if from < 0 {
+		return nil, fmt.Errorf("phase %q is not in the milestone phases array", slug)
+	}
+	if !slices.Contains(arr, anchor) {
+		return nil, ErrAnchorNotFound
+	}
+	reduced := slices.Delete(slices.Clone(arr), from, from+1)
+	out, err := InsertRelative(reduced, slug, anchor, before)
+	if err != nil {
+		return nil, err
+	}
+	if slices.Equal(out, arr) {
+		return arr, nil // already in place
+	}
+	return out, nil
+}
+
+// RenameInArray returns a copy of arr with oldSlug replaced by newSlug in place,
+// preserving its index and the slice length. When oldSlug is absent the copy is
+// returned unchanged (callers validate existence separately).
+func RenameInArray(arr []string, oldSlug, newSlug string) []string {
+	out := slices.Clone(arr)
+	for i, s := range out {
+		if s == oldSlug {
+			out[i] = newSlug
+		}
+	}
+	return out
 }
 
 // UniqueSlug slugifies title and, if a phase directory by that slug already
