@@ -1,21 +1,9 @@
 {
-  "version": "0.4.0.0",
-  "current_milestone": "v0.4",
-  "last_activity": "2026-06-25T19:53:53.76733Z",
-  "last_action": "completed 14-stable-slug-phase-ids",
+  "version": "0.5.0.0",
+  "current_milestone": "v0.5",
+  "last_activity": "2026-06-26T08:41:05.747685Z",
+  "last_action": "scoped milestone v0.5: 4 criteria, 2 phases; version → 0.5.0.0",
   "history": [
-    {
-      "at": "2026-06-21T19:04:45.499597Z",
-      "action": "executed t-3 (Rewrite init + onboard identity walks)"
-    },
-    {
-      "at": "2026-06-21T19:05:59.596671Z",
-      "action": "executed t-4 (Rewrite options section-pick gate + walk)"
-    },
-    {
-      "at": "2026-06-21T19:07:09.789515Z",
-      "action": "executed t-5 (Rewrite milestone scoping walk)"
-    },
     {
       "at": "2026-06-21T19:08:38.519106Z",
       "action": "executed t-6 (Mirror execute gates into quick; walk inbox)"
@@ -203,6 +191,18 @@
     {
       "at": "2026-06-25T19:53:53.76733Z",
       "action": "completed 14-stable-slug-phase-ids"
+    },
+    {
+      "at": "2026-06-26T08:41:05.73136Z",
+      "action": "set current_milestone=v0.5"
+    },
+    {
+      "at": "2026-06-26T08:41:05.740304Z",
+      "action": "set version=0.5.0.0"
+    },
+    {
+      "at": "2026-06-26T08:41:05.747685Z",
+      "action": "scoped milestone v0.5: 4 criteria, 2 phases; version → 0.5.0.0"
     }
   ]
 }

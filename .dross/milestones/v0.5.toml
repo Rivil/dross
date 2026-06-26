@@ -1,0 +1,11 @@
+phases = ["deferred-item-routing", "backlog-inbox-triage"]
+
+[milestone]
+  version = "v0.5"
+  title = "Spec & backlog flow"
+  status = "active"
+  started = "2026-06-26"
+
+[scope]
+  success_criteria = ["Every deferred idea captured during /dross-spec is given a destination — pulled into the current phase as a criterion, parked in a milestone's backlog (phases array), or attached to a named future phase — rather than only recorded in spec.toml. Verifiable by deferring an item and confirming it lands in the chosen target.", "When a phase is scaffolded whose slug is the target of a parked deferred item, /dross-spec surfaces that item's text as a candidate acceptance criterion — so the punted idea reaches the planner instead of dying as a bare roadmap slug.", "A routed deferred item is marked in its spec.toml (e.g. a target field) so it is never re-routed or re-surfaced twice; the only unrouted state is an explicit \"someday\" with no milestone, which dross validate accepts and which can be listed on demand.", "Unrouted or \"someday\" deferred items are triageable through the same funnel as inbound board issues — /dross-inbox (or an equivalent backlog-triage surface) lists them alongside board issues and routes each to phase / milestone-backlog / quick / dismiss."]
+  non_goals = ["No retroactive sweep of already-shipped phases' spec.toml deferred items — only items deferred from this point forward (and live, unshipped milestones) get routed; historical frozen specs stay as-is.", "No automatic promotion — routing a deferred item is always user-confirmed (one decision per turn); dross never silently moves a deferred idea into a phase or backlog on its own."]
