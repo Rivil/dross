@@ -2,18 +2,10 @@
   "version": "0.5.1.0",
   "current_milestone": "v0.5",
   "current_phase": "deferred-triage-gaps",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-26T13:15:39.678069Z",
-  "last_action": "spec locked: deferred-triage-gaps",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-26T13:18:25.389005Z",
+  "last_action": "plan locked: deferred-triage-gaps (4 tasks across 3 waves)",
   "history": [
-    {
-      "at": "2026-06-21T19:55:38.665037Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-21T19:55:38.671783Z",
-      "action": "phase 13-audit-and-readme executed (4/4 done)"
-    },
     {
       "at": "2026-06-21T20:00:03.649343Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-26T13:15:39.678069Z",
       "action": "spec locked: deferred-triage-gaps"
+    },
+    {
+      "at": "2026-06-26T13:18:25.383284Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-26T13:18:25.389005Z",
+      "action": "plan locked: deferred-triage-gaps (4 tasks across 3 waves)"
     }
   ]
 }

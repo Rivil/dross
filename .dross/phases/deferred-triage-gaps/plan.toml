@@ -1,0 +1,45 @@
+[phase]
+  id = "deferred-triage-gaps"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add dismissed state to deferred schema"
+  files = ["internal/phase/phase.go", "internal/cmd/deferred.go", "internal/phase/phase_test.go"]
+  description = "Add `Dismissed bool `toml:\"dismissed,omitempty\"`` to the phase.Deferred\nstruct; add a Dismissed field to deferredEntry and propagate it in\ncollectDeferred. Active items must round-trip without emitting a\n`dismissed =` key.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["if the field/tag is wrong, a [[deferred]] entry with dismissed=true loaded via LoadSpec then Saved no longer reads dismissed back and the phase_test.go round-trip assertion fails", "if the omitempty tag is dropped, an active (dismissed=false) entry round-trips with a spurious `dismissed = false` line and the round-trip test fails", "if collectDeferred drops the field, the deferredEntry for a dismissed item carries Dismissed=false and the collect assertion in deferred_test.go fails"]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Add dross deferred dismiss command"
+  files = ["internal/cmd/deferred.go", "internal/cmd/deferred_test.go"]
+  description = "New `dross deferred dismiss <source> <idx>` subcommand registered in\nDeferred(); sets Dismissed=true, or clears it with --undo. Errors on an\nout-of-range idx and on an item whose target is set (someday-only;\nun-route first). Persists via spec.Save.\n"
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = ["if dismiss does not persist, `deferred dismiss <src> <idx>` then reload does not yield Dismissed==true and the deferred_test.go dismiss round-trip assertion fails", "if --undo does not clear state, `deferred dismiss --undo <src> <idx>` on a dismissed item leaves Dismissed==true and the undo assertion fails", "if the range guard is missing, `deferred dismiss <src> <out-of-range>` exits 0 instead of erroring and the bounds assertion fails", "if the someday-only guard is missing, `deferred dismiss <src> <idx>` on a target-set entry succeeds instead of erroring with un-route guidance and the routed-guard assertion fails"]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Filter dismissed in deferred list"
+  files = ["internal/cmd/deferred.go", "internal/cmd/deferred_test.go"]
+  description = "Add a --dismissed flag; exclude dismissed items from --someday and the\ndefault unrouted view; render `(dismissed)` in the TARGET column when a\ndismissed item is shown; --json carries the dismissed field.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["if --someday stops excluding dismissed, `deferred list --someday` prints a dismissed row and the filter assertion in deferred_test.go fails", "if --dismissed is missing or wrong, `deferred list --dismissed` does not return exactly the dismissed entries and the filter assertion fails", "if the marker is dropped, the default table for a dismissed item shows `(someday)` instead of `(dismissed)` in TARGET and the render assertion fails", "if --json omits the field, `deferred list --dismissed --json` returns entries without dismissed=true and the JSON-shape assertion fails"]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 3
+  title = "Wire inbox §0 relax + dismiss command"
+  files = ["assets/prompts/inbox.md", "internal/cmd/inbox_prompt_test.go"]
+  description = "§0: when board_sync is off, announce the board source is skipped and\nproceed to the deferred someday source instead of stopping. Dismiss\nfunnel invokes `dross deferred dismiss <source> <index>` so the choice\npersists. Add guard tests. (r-01: make install after.)\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-2"]
+  test_contract = ["if the board-off branch still hard-stops, the inbox_prompt_test.go assertion that a board_sync=off path announces skipping the board and continues to the deferred source fails", "if the dismiss funnel no longer invokes the CLI, the assertion that the deferred dismiss destination references `dross deferred dismiss` fails"]
+  status = "pending"
