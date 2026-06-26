@@ -1,21 +1,11 @@
 {
   "version": "0.5.2.0",
   "current_milestone": "v0.4",
-  "last_activity": "2026-06-26T14:14:19.110232Z",
-  "last_action": "set current_milestone=v0.4",
+  "current_phase": "phase-lifecycle-commands",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-26T14:32:25.256471Z",
+  "last_action": "spec locked: phase-lifecycle-commands",
   "history": [
-    {
-      "at": "2026-06-25T18:27:49.100535Z",
-      "action": "plan reviewed: 14-stable-slug-phase-ids (0 blocking, 2 flags; pc-5 wiring folded into phase.Dir)"
-    },
-    {
-      "at": "2026-06-25T18:31:19.071617Z",
-      "action": "executed t-1 (Add phase identity helpers)"
-    },
-    {
-      "at": "2026-06-25T18:34:04.635889Z",
-      "action": "executed t-2 (Order dross phase list by milestone array)"
-    },
     {
       "at": "2026-06-25T19:02:43.10164Z",
       "action": "executed t-3 (Rewrite dross phase create to slug identity)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-26T14:14:19.110232Z",
       "action": "set current_milestone=v0.4"
+    },
+    {
+      "at": "2026-06-26T14:15:50.166197Z",
+      "action": "created phase-lifecycle-commands"
+    },
+    {
+      "at": "2026-06-26T14:32:25.248647Z",
+      "action": "set current_phase=phase-lifecycle-commands"
+    },
+    {
+      "at": "2026-06-26T14:32:25.256471Z",
+      "action": "spec locked: phase-lifecycle-commands"
     }
   ]
 }

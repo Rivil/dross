@@ -1,0 +1,44 @@
+[phase]
+  id = "phase-lifecycle-commands"
+  title = "Phase lifecycle commands"
+  milestone = "v0.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross phase insert <title> --after <slug>` (or `--before <slug>`) scaffolds a new phase and places it at that position in the current milestone's phases array; every existing phase's directory, id, branch, and artifacts are byte-for-byte unchanged, and `dross validate` stays green."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross phase move <slug> --after <slug>` (or `--before <slug>`) reorders an existing phase within the current milestone's phases array; only the array order changes — no phase directory, id, branch, or artifact is touched — and `dross validate` stays green."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross phase rename <old-slug> <new-slug>` moves the phase's directory (phases/<old> → phases/<new>), its milestone array entry, and spec.toml's phase.id to the new slug, re-points any deferred items whose target was <old-slug>, and renames the local phase/<old> branch to phase/<new> when it exists; other phases are untouched and `dross validate` stays green."
+
+[[criteria]]
+  id = "c-4"
+  text = "After an insert or move, `dross phase number <slug>` and other human-facing numbering (status output, PR title, version patch) reflect the phase's new array position — ordinals are recomputed from array position, never stored, so none go stale."
+
+[[decisions]]
+  key = "input_validation"
+  choice = "insert/move require exactly one of --after/--before (error on both or neither) and error if the anchor slug is not in the current milestone's phases array; insert/rename refuse a target slug that already exists (directory or array entry) rather than auto-suffixing."
+  why = "Lifecycle ops are explicit edits to phase order/identity; teachable errors beat silent suffixing or end-of-array guesses."
+  locked = true
+
+[[decisions]]
+  key = "idempotency"
+  choice = "A genuine no-op — moving a phase to the position it already holds, or renaming to its own current slug — succeeds quietly (\"already there, nothing to do\") and is special-cased BEFORE the target-exists check; a collision with a different existing slug still errors."
+  why = "Re-running a lifecycle command must be safe; only real conflicts are errors."
+  locked = true
+
+[[decisions]]
+  key = "branch_on_rename"
+  choice = "rename updates the local git branch phase/<old> → phase/<new> when it exists (git branch -m); it does not touch any remote branch."
+  why = "Keeps ship/complete working against the renamed phase without remote-branch surgery, which is out of scope (unstarted/planning phases have no remote branch)."
+  locked = true
+
+[[decisions]]
+  key = "inflight_guard"
+  choice = "move/rename may operate on the current in-flight phase — updating state.current_phase and renaming the checked-out branch — EXCEPT when the phase is shipped/awaiting-merge (open PR), where they refuse with guidance to merge first."
+  why = "Renaming a shipped phase's branch would orphan its open PR; planning/executing phases are safe to mutate."
+  locked = true
