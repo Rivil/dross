@@ -7,39 +7,28 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/state"
 )
 
-// snapshotPhases fingerprints every phase under a .dross root: for each slug it
-// hashes the sorted (relpath, length, bytes) of every file in phases/<slug>/
-// PLUS the slug's milestone-array slot (which milestone file lists it and at
-// what index). The array slot is included so the byte-for-byte guarantee also
-// catches a sibling's order changing in a milestone .toml — a change that lives
-// outside the phase directory. Returns slug → hex sha256.
+// snapshotPhases fingerprints every phase DIRECTORY under a .dross root: for
+// each slug it hashes the sorted (relpath, length, bytes) of every file in
+// phases/<slug>/. It deliberately does NOT fold in the milestone array slot —
+// move/insert legitimately reorder the array, so array order is asserted
+// explicitly per verb (via milestone.Load), while this proves the on-disk phase
+// content is byte-for-byte untouched. Returns slug → hex sha256.
 func snapshotPhases(t *testing.T, drossRoot string) map[string]string {
 	t.Helper()
 	slugs, err := phase.List(drossRoot)
 	if err != nil {
 		t.Fatalf("snapshotPhases: list phases: %v", err)
-	}
-
-	// slug → "<milestone-file>#<index>" for every slug named in any milestone array.
-	arraySlot := map[string]string{}
-	metas, _ := filepath.Glob(filepath.Join(drossRoot, "milestones", "*.toml"))
-	sort.Strings(metas)
-	for _, mp := range metas {
-		m, err := milestone.Load(mp)
-		if err != nil {
-			continue
-		}
-		for i, s := range m.Phases {
-			arraySlot[s] = fmt.Sprintf("%s#%d", filepath.Base(mp), i)
-		}
 	}
 
 	out := make(map[string]string, len(slugs))
@@ -63,7 +52,6 @@ func snapshotPhases(t *testing.T, drossRoot string) map[string]string {
 			fmt.Fprintf(h, "%s\x00%d\x00", rel, len(b))
 			h.Write(b)
 		}
-		fmt.Fprintf(h, "array\x00%s", arraySlot[slug])
 		out[slug] = hex.EncodeToString(h.Sum(nil))
 	}
 	return out
@@ -136,5 +124,130 @@ func TestSnapshotHarnessSelfCheck(t *testing.T) {
 	}
 	if rest := diffSnapshots(before, after, "beta"); len(rest) != 0 {
 		t.Errorf("only beta changed, but excepting beta still reports: %v", rest)
+	}
+}
+
+// setupLifecycleFixture builds a project whose current milestone v1 holds three
+// phases [p1,p2,p3], each with a spec.toml. No git — so refuseIfShipped is a
+// no-op and lifecycle verbs run on the array alone.
+func setupLifecycleFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	mustRunSet(t, "project.name", "test-app")
+	mustRunSet(t, "runtime.mode", "native")
+	root := filepath.Join(dir, ".dross")
+	mustWrite(t, filepath.Join(root, "milestones", "v1.toml"),
+		"phases = [\"p1\", \"p2\", \"p3\"]\n\n[milestone]\n  version = \"v1\"\n  title = \"M\"\n")
+	for _, slug := range []string{"p1", "p2", "p3"} {
+		mustWrite(t, filepath.Join(root, "phases", slug, "spec.toml"),
+			"[phase]\n  id = \""+slug+"\"\n  title = \""+slug+"\"\n\n[[criteria]]\n  id = \"c-1\"\n  text = \"x\"\n")
+	}
+	sPath := filepath.Join(root, state.File)
+	s, err := state.Load(sPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.CurrentMilestone = "v1"
+	if err := s.Save(sPath); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func milestonePhases(t *testing.T, root, version string) []string {
+	t.Helper()
+	m, err := milestone.Load(filepath.Join(root, "milestones", version+".toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m.Phases
+}
+
+func TestPhaseMove(t *testing.T) {
+	dir := setupLifecycleFixture(t)
+	root := filepath.Join(dir, ".dross")
+	before := snapshotPhases(t, root)
+
+	if err := runCmd(t, Phase(), "move", "p3", "--after", "p1"); err != nil {
+		t.Fatalf("move p3 --after p1: %v", err)
+	}
+	if got, want := milestonePhases(t, root, "v1"), []string{"p1", "p3", "p2"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("after move: array = %v, want %v", got, want)
+	}
+	// Only the array changed — every phase directory is byte-for-byte untouched.
+	assertUntouched(t, before, snapshotPhases(t, root))
+
+	var num string
+	if err := runCmdCapturing(t, &num, Phase(), "number", "p3"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(num) != "2" {
+		t.Errorf("phase number p3 after move = %q, want 2", num)
+	}
+	if err := runCmd(t, Validate()); err != nil {
+		t.Errorf("validate after move: %v", err)
+	}
+}
+
+func TestPhaseMoveErrors(t *testing.T) {
+	setupLifecycleFixture(t)
+
+	if err := runCmd(t, Phase(), "move", "p2", "--after", "p1", "--before", "p3"); err == nil {
+		t.Error("both --after and --before should error")
+	}
+	if err := runCmd(t, Phase(), "move", "p2"); err == nil {
+		t.Error("neither --after nor --before should error")
+	}
+	if err := runCmd(t, Phase(), "move", "p2", "--after", "nonexistent"); err == nil {
+		t.Error("an anchor not in the milestone should error")
+	}
+	if err := runCmd(t, Phase(), "move", "ghost", "--after", "p1"); err == nil {
+		t.Error("moving a phase not in the milestone should error")
+	}
+}
+
+func TestPhaseMoveNoOp(t *testing.T) {
+	dir := setupLifecycleFixture(t)
+	root := filepath.Join(dir, ".dross")
+	mPath := filepath.Join(root, "milestones", "v1.toml")
+	beforeBytes := mustRead(t, mPath)
+
+	// p2 already sits immediately after p1 — a genuine no-op.
+	var out string
+	if err := runCmdCapturing(t, &out, Phase(), "move", "p2", "--after", "p1"); err != nil {
+		t.Fatalf("no-op move: %v", err)
+	}
+	if !strings.Contains(out, "already in place") {
+		t.Errorf("no-op move should report 'already in place', got %q", out)
+	}
+	if after := mustRead(t, mPath); after != beforeBytes {
+		t.Errorf("no-op move rewrote the milestone .toml")
+	}
+}
+
+func TestRefuseIfShipped(t *testing.T) {
+	repo := t.TempDir()
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, repo, remote)
+	mustWrite(t, filepath.Join(repo, "README.md"), "x\n")
+	mustGit(t, repo, "add", "README.md")
+	mustGit(t, repo, "commit", "-q", "-m", "init")
+	mustGit(t, repo, "push", "-q", "-u", "origin", "main")
+
+	// Ship a phase: push its branch to origin (the open-PR window).
+	mustGit(t, repo, "checkout", "-q", "-b", "phase/shipped")
+	mustGit(t, repo, "push", "-q", "-u", "origin", "phase/shipped")
+	mustGit(t, repo, "checkout", "-q", "main")
+
+	if err := refuseIfShipped(repo, "shipped"); err == nil {
+		t.Error("refuseIfShipped should block a phase with a live origin branch")
+	}
+	if err := refuseIfShipped(repo, "planning"); err != nil {
+		t.Errorf("refuseIfShipped should allow a phase with no origin branch: %v", err)
 	}
 }
