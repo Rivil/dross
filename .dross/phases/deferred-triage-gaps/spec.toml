@@ -1,0 +1,48 @@
+[phase]
+  id = "deferred-triage-gaps"
+  title = "Deferred triage gaps"
+  milestone = "v0.5"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross deferred dismiss <source> <idx>` marks that phase's Nth deferred item as dismissed (a persisted state in its spec.toml), so it no longer appears as an unrouted \"someday\" item; an out-of-range or already-routed index errors clearly."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross deferred list` excludes dismissed items from --someday and from the default unrouted view, surfaces them only under a new --dismissed filter, and marks them as (dismissed) in the TARGET column when shown; --json carries the dismissed state."
+
+[[criteria]]
+  id = "c-3"
+  text = "/dross-inbox no longer hard-stops at §0 when board_sync is off: with no board configured it skips the board-issue source but still lists and triages local someday/unrouted deferred items through the same funnel (phase / milestone-backlog / quick / dismiss)."
+
+[[criteria]]
+  id = "c-4"
+  text = "When a someday item is triaged to \"dismiss\" in /dross-inbox, the prompt invokes `dross deferred dismiss <source> <idx>` so the choice persists — dismiss is no longer a silent no-op."
+
+[[decisions]]
+  key = "dismissed_state"
+  choice = "A dismissed item is marked by a boolean `dismissed = true` on its [[deferred]] entry, independent of `target`; absent/false means active. someday = no target and not dismissed; routed = target set; dismissed = dismissed true."
+  why = "`target` is documented as a phase slug, so overloading it with a sentinel would break that contract. The three states (someday / routed / dismissed) must be distinct and independently queryable."
+  locked = true
+
+[[decisions]]
+  key = "dismiss_reversibility"
+  choice = "`dross deferred dismiss --undo <source> <idx>` clears the dismissed state back to someday; no separate restore verb."
+  why = "Reversible without a third subcommand or hand-editing — the same gap (no hand-editing) that motivates dismiss argues for a built-in undo."
+  locked = true
+
+[[decisions]]
+  key = "dismiss_scope"
+  choice = "dismiss is someday-only: it errors if the item already has a target (\"item is routed to <slug>; un-route before dismissing\"). It does not clear a target."
+  why = "Keeps route and dismiss single-purpose; the error teaches the correct sequence rather than silently blurring two intents."
+  locked = true
+
+[[decisions]]
+  key = "board_skip_signal"
+  choice = "When board_sync is off, /dross-inbox §0 prints one line (board source skipped, triaging local deferred items only) and proceeds to the deferred source instead of hard-stopping."
+  why = "Transparent — a board-less user sees that board issues were a source and isn't surprised that only deferred items appear; no dead-end."
+  locked = true
+
+[[deferred]]
+  text = "An un-route command (clear a deferred item's `target` back to someday). `dross deferred route --target \"\"` currently errors, so dropping an already-routed item still needs hand-editing — the remaining hand-edit case once dismiss is someday-only."
+  why = "Minor ergonomic gap surfaced while locking dismiss_scope; not needed to close v0.5 criterion #4."

@@ -1,21 +1,11 @@
 {
   "version": "0.5.1.0",
   "current_milestone": "v0.5",
-  "last_activity": "2026-06-26T10:56:44.647801Z",
-  "last_action": "completed deferred-item-routing",
+  "current_phase": "deferred-triage-gaps",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-26T13:15:39.678069Z",
+  "last_action": "spec locked: deferred-triage-gaps",
   "history": [
-    {
-      "at": "2026-06-21T19:52:35.533582Z",
-      "action": "executed t-2 (Add README ## Interaction section)"
-    },
-    {
-      "at": "2026-06-21T19:54:09.164218Z",
-      "action": "executed t-3 (Fill the 5 audit-doc rows to conforming)"
-    },
-    {
-      "at": "2026-06-21T19:55:31.694627Z",
-      "action": "executed t-4 (Add guard tests; make install; observe green)"
-    },
     {
       "at": "2026-06-21T19:55:38.665037Z",
       "action": "set current_phase_status=complete"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-26T10:56:44.647801Z",
       "action": "completed deferred-item-routing"
+    },
+    {
+      "at": "2026-06-26T13:06:07.441609Z",
+      "action": "created deferred-triage-gaps"
+    },
+    {
+      "at": "2026-06-26T13:15:39.669411Z",
+      "action": "set current_phase=deferred-triage-gaps"
+    },
+    {
+      "at": "2026-06-26T13:15:39.678069Z",
+      "action": "spec locked: deferred-triage-gaps"
     }
   ]
 }
