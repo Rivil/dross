@@ -191,6 +191,9 @@ type Decision struct {
 type Deferred struct {
 	Text string `toml:"text"`
 	Why  string `toml:"why,omitempty"`
+	// Target routes the deferred item to a destination: a phase slug it should
+	// re-surface in. Empty means "someday" — unrouted, awaiting triage.
+	Target string `toml:"target,omitempty"`
 }
 
 // Plan is the task graph for a phase.

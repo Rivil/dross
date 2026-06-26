@@ -1,0 +1,52 @@
+[phase]
+id        = "deferred-item-routing"
+title     = "Deferred item routing"
+milestone = "v0.5"
+
+[[criteria]]
+id   = "c-1"
+text = "spec.toml's [[deferred]] entries accept an optional `target` field; dross validate passes whether target is present or absent."
+
+[[criteria]]
+id   = "c-2"
+text = "/dross-spec §4 gives every deferred item a destination — pull-into-current-phase (becomes a criterion), park-in-milestone-backlog, or attach-to-a-named-future-phase — leaving it unrouted only when the user explicitly picks \"someday\"."
+
+[[criteria]]
+id   = "c-3"
+text = "Park-in-milestone-backlog coins a slug, appends it to the milestone's phases array (dross milestone add), and stamps target=<slug> on the deferred entry; attach-to-named-phase stamps target=<existing-slug>. Afterward both the milestone file and the [[deferred]] entry reflect the destination."
+
+[[criteria]]
+id   = "c-4"
+text = "When /dross-spec scaffolds a phase, deferred items from sibling specs whose target matches the new phase are proposed as candidate acceptance criteria (accept/reword/drop), backed by `dross deferred list` (flags --target, --someday, --milestone, --routed, --json, and a source column) — not a prompt-side grep."
+
+[[criteria]]
+id   = "c-5"
+text = "A deferred item with target already set is not offered for routing again and not re-surfaced twice; re-running /dross-spec or re-scaffolding produces no duplicate routing or duplicate candidate criteria."
+
+[[criteria]]
+id   = "c-6"
+text = "/dross-inbox lists someday/unrouted deferred items (those with no target) alongside inbound board issues and routes each through the same funnel — new phase / milestone-backlog / quick task / dismiss."
+
+[[decisions]]
+key    = "target_shape"
+choice = "A routed [[deferred]] entry carries a single string `target` holding a phase slug; absence of target means \"someday\" (unrouted)."
+why    = "Minimal, hand-editable TOML. Per the re-surface model, every routed target resolves to a phase slug, so no milestone-vs-phase disambiguation is needed."
+locked = true
+
+[[decisions]]
+key    = "pull_into_phase_mechanics"
+choice = "Pulling a deferred item into the current phase moves it out of [[deferred]] entirely and adds it as a new [[criteria]] entry; no deferred trace remains."
+why    = "It is now real scope, so review.md's 'accidentally implemented?' check stays correct without special-casing."
+locked = true
+
+[[decisions]]
+key    = "resurface_model"
+choice = "Park-in-backlog coins a slug, appends it to milestone.phases, and sets target=<slug>; the item re-surfaces 1:1 as a candidate criterion only when that exact phase is later scaffolded. Re-surfaced items are proposed (accept/reword/drop), never auto-added."
+why    = "1:1 slug matching keeps re-surface unambiguous and consistent with /dross-inbox's existing 'milestone backlog' behavior; proposing (not auto-adding) honors the user-confirmed-routing non-goal."
+locked = true
+
+[[decisions]]
+key    = "deferred_list_contract"
+choice = "`dross deferred list` scans all .dross/phases/*/spec.toml [[deferred]] entries; flags --target <slug>, --someday, --milestone <v>, --routed, --json, with a source column naming the originating phase. Default output is a human table; --json feeds prompt consumption."
+why    = "pc-4 requires a reliable CLI lookup rather than a prompt grep; the richer flag set was pulled into this phase to also serve the /dross-inbox triage (c-6)."
+locked = true

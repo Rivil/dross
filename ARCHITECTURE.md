@@ -85,6 +85,18 @@ Read/write project settings, global defaults, environment variables, and the GSD
 
 _c8b346e_
 
+### Deferred-item routing
+
+Give every deferred idea a destination instead of leaving it write-only: `/dross-spec` routes each (pull-into-phase / milestone-backlog / named-phase / someday), parked ideas re-surface as candidate criteria when their target phase is scaffolded, and someday items get triaged through `/dross-inbox`.
+
+- `Deferred.Target` (schema) — `internal/phase/phase.go:196`
+- `Deferred` (dross deferred list/route) — `internal/cmd/deferred.go:28`
+- `collectDeferred` (scan + filter) — `internal/cmd/deferred.go:39`
+- `deferredRoute` (stamp target on disk) — `internal/cmd/deferred.go:140`
+- dangling-target guard in `Validate` — `internal/cmd/validate.go:117`
+
+_introduced deferred-item-routing · 6509930_
+
 ### Greenfield bootstrap
 
 Seed the .dross/ scaffold and an ARCHITECTURE.md skeleton in a new repo, and seed `[runtime]` + `[stack].profile` from the detected stack profile (unsupported stacks are left unseeded, never fabricated).

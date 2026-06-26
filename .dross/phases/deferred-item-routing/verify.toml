@@ -1,0 +1,70 @@
+[verify]
+  phase = "deferred-item-routing"
+  generated_at = 2026-06-26T10:31:49.082566Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8200692041522492
+  mutants_killed = 711
+  mutants_survived = 156
+  mutants_not_covered = 156
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/phase/phase_test.go:TestDeferredTargetRoundTrip", "internal/cmd/cmd_test.go:TestValidateAcceptsDeferredTarget"]
+  notes = "Round-trip pins omitempty (no spurious target= on someday entries) + read-back; validate passes with target present and a target-less sibling. Schema-decode mutants killed."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/spec_prompt_test.go:TestSpecPromptRoutesFourDestinations", "internal/cmd/spec_prompt_test.go:TestSpecPromptSomedayOnlyExplicit"]
+  notes = "Prompt-text assertions: §4 names all four destinations and requires an explicit someday pick to leave an item unrouted."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/deferred_test.go:TestDeferredRouteRoundTrip", "internal/cmd/spec_prompt_test.go:TestSpecPromptParkSequence"]
+  notes = "route stamps target on disk (reload asserts Target); spec.md park branch chains `dross milestone add … phases` + `dross deferred route … --target`."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/deferred_test.go:TestDeferredListJSONSourceIndex", "internal/cmd/spec_prompt_test.go:TestSpecPromptResurfaceSeed"]
+  notes = "list --target --json returns matching entries with source+index; §1 seeds candidate criteria via the CLI lookup, not a grep."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/deferred_test.go:TestDeferredListSomedayRoutedComplement", "internal/cmd/deferred_test.go:TestDeferredListRouteHandoff", "internal/cmd/spec_prompt_test.go:TestSpecPromptSkipAlreadyRouted"]
+  notes = "Routed items never appear in --someday (exact complement), so they aren't re-triaged; prompt skips items that already carry a target."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/inbox_prompt_test.go:TestInboxPromptDeferredSecondSource", "internal/cmd/inbox_prompt_test.go:TestInboxPromptDeferredFunnelCoverage"]
+  notes = "inbox.md reads someday items via `dross deferred list --someday --json` as a second source and routes them through the new-phase/backlog/quick/dismiss funnel."
+
+[[finding]]
+  severity = "FLAG"
+  text = "deferred.go human-table output path (non --json: lines 117 len==0 message, 124 (someday) label) has no test — all deferred_test.go cases use --json (what the prompts consume). Incidental display gap, not a criterion surface."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation is module-wide: gremlins runs the whole Go module, so mutation_score 0.82 spans untouched commands. All 156 survivors are NOT-COVERED mutants (tests never ran them); efficacy on covered mutants = 1.00. The phase's own changed logic (Deferred.Target round-trip, validate dangling-target guard, deferred list/route filters) was killed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Survivors inside changed files are incidental: validate.go:92,96 are pre-existing spec/plan load-error branches (not the new deferred check); phase.go survivors (133/249/251/428/435) are pre-existing identity helpers untouched by the Target field add."
+
+[[finding]]
+  severity = "NOTE"
+  text = "~150 per-mutant survivor findings the skeleton seeded from module-wide gremlins (untouched commands: issue.go, stats.go, ship.go, verify.go, rule.go, env.go, doctor.go, profile.go, codex.go, telemetry.go, status.go) curated out for signal — full survivor list preserved in tests.json. These are pre-existing module coverage gaps, not phase regressions."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/inbox.md + spec.md: no mutation adapter for .md. Prompt behaviour is instead guarded by spec_prompt_test.go / inbox_prompt_test.go text assertions."

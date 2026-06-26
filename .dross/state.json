@@ -1,81 +1,9 @@
 {
-  "version": "0.5.0.0",
+  "version": "0.5.1.0",
   "current_milestone": "v0.5",
-  "last_activity": "2026-06-26T08:41:05.747685Z",
-  "last_action": "scoped milestone v0.5: 4 criteria, 2 phases; version → 0.5.0.0",
+  "last_activity": "2026-06-26T10:56:44.647801Z",
+  "last_action": "completed deferred-item-routing",
   "history": [
-    {
-      "at": "2026-06-21T19:08:38.519106Z",
-      "action": "executed t-6 (Mirror execute gates into quick; walk inbox)"
-    },
-    {
-      "at": "2026-06-21T19:10:16.036832Z",
-      "action": "executed t-7 (Rewrite rule.md interactive turns)"
-    },
-    {
-      "at": "2026-06-21T19:11:57.138849Z",
-      "action": "executed t-8 (Add anchor tests + generic no-bundle net)"
-    },
-    {
-      "at": "2026-06-21T19:13:26.486189Z",
-      "action": "executed t-9 (Flip 7 audit rows to conforming)"
-    },
-    {
-      "at": "2026-06-21T19:14:27.494458Z",
-      "action": "executed t-10 (Add audit guard; make install; observe green)"
-    },
-    {
-      "at": "2026-06-21T19:14:38.10669Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-21T19:14:38.112973Z",
-      "action": "phase 12-retrofit-setup-commands executed (10/10 done)"
-    },
-    {
-      "at": "2026-06-21T19:20:23.694996Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-21T19:20:23.701995Z",
-      "action": "verified 12-retrofit-setup-commands: pass (5/5 covered; mutation 0.81 package-scoped, not a phase signal — Lived=0)"
-    },
-    {
-      "at": "2026-06-21T19:26:01.077319Z",
-      "action": "completed 12-retrofit-setup-commands"
-    },
-    {
-      "at": "2026-06-21T19:30:08.506505Z",
-      "action": "created 13-audit-and-readme"
-    },
-    {
-      "at": "2026-06-21T19:43:14.960544Z",
-      "action": "set current_phase=13-audit-and-readme"
-    },
-    {
-      "at": "2026-06-21T19:43:14.966974Z",
-      "action": "spec locked: 13-audit-and-readme"
-    },
-    {
-      "at": "2026-06-21T19:46:43.719121Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-21T19:46:43.727048Z",
-      "action": "plan locked: 13-audit-and-readme (4 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-06-21T19:48:45.846935Z",
-      "action": "plan reviewed: 13-audit-and-readme (0 blocking, 2 flags)"
-    },
-    {
-      "at": "2026-06-21T19:49:17.439071Z",
-      "action": "plan amended: 13-audit-and-readme (t-4 +README placement guard per review flag)"
-    },
-    {
-      "at": "2026-06-21T19:51:50.52322Z",
-      "action": "executed t-1 (Wire emitter + contract phrase into 5 prompts)"
-    },
     {
       "at": "2026-06-21T19:52:35.533582Z",
       "action": "executed t-2 (Add README ## Interaction section)"
@@ -203,6 +131,78 @@
     {
       "at": "2026-06-26T08:41:05.747685Z",
       "action": "scoped milestone v0.5: 4 criteria, 2 phases; version → 0.5.0.0"
+    },
+    {
+      "at": "2026-06-26T08:42:05.451821Z",
+      "action": "created deferred-item-routing"
+    },
+    {
+      "at": "2026-06-26T08:56:03.545708Z",
+      "action": "set current_phase=deferred-item-routing"
+    },
+    {
+      "at": "2026-06-26T08:56:03.552826Z",
+      "action": "spec locked: deferred-item-routing"
+    },
+    {
+      "at": "2026-06-26T09:58:35.230424Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-26T09:58:35.23751Z",
+      "action": "plan locked: deferred-item-routing (5 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-26T10:01:58.920627Z",
+      "action": "plan reviewed: deferred-item-routing (0 blocking, 4 flags)"
+    },
+    {
+      "at": "2026-06-26T10:05:00.158345Z",
+      "action": "plan amended: deferred-item-routing (t-3 +list→route index handle per review flag #1)"
+    },
+    {
+      "at": "2026-06-26T10:05:59.811837Z",
+      "action": "set version=0.5.1.0"
+    },
+    {
+      "at": "2026-06-26T10:09:25.099215Z",
+      "action": "executed t-1 (Add optional target to Deferred schema)"
+    },
+    {
+      "at": "2026-06-26T10:11:05.929265Z",
+      "action": "executed t-2 (Validate guards a dangling target)"
+    },
+    {
+      "at": "2026-06-26T10:14:28.901553Z",
+      "action": "executed t-3 (Add dross deferred list + route command)"
+    },
+    {
+      "at": "2026-06-26T10:17:48.785381Z",
+      "action": "executed t-4 (spec.md §4 routing + re-surface seed)"
+    },
+    {
+      "at": "2026-06-26T10:20:33.895171Z",
+      "action": "executed t-5 (inbox.md adds deferred someday triage source)"
+    },
+    {
+      "at": "2026-06-26T10:20:56.189961Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-26T10:20:56.197852Z",
+      "action": "phase deferred-item-routing executed (5/5 done)"
+    },
+    {
+      "at": "2026-06-26T10:38:08.413699Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-26T10:38:08.419409Z",
+      "action": "verified deferred-item-routing: pass (6/6 covered, mutation 0.82 module-wide / efficacy 1.00 ex-not-covered)"
+    },
+    {
+      "at": "2026-06-26T10:56:44.647801Z",
+      "action": "completed deferred-item-routing"
     }
   ]
 }

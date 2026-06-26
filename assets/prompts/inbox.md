@@ -19,7 +19,13 @@ dross issue pull --mark --json
 
 `--mark` records the pull time. The result is a JSON array of open board issues **not** already linked to a dross phase/quick and **not** previously dismissed. Default filter is none; pass `$ARGUMENTS` through, e.g. `dross issue pull --mark --labels bug,enhancement --json`, when the user wants to scope by label.
 
-If the array is empty: print `Inbox clear — no new board issues.` and stop.
+**Second source — `someday` deferred ideas.** The board isn't the only intake: ideas punted during `/dross-spec` and never routed anywhere ("someday") are the local half of the backlog. Pull them too:
+```
+dross deferred list --someday --json
+```
+Each entry carries its originating `source` phase and `index` — the handle you'll pass to `dross deferred route` when triaging it. Treat them as a second batch of inbound items alongside the board issues.
+
+If **both** sources are empty: print `Inbox clear — no new board issues or deferred ideas.` and stop.
 
 ## 2. Triage each issue
 
@@ -36,6 +42,14 @@ Show the user a compact list first (number, title, labels). Then walk them **one
 - **Quick task** — small one-shot. Route to `/dross-quick "<title>"`. The quick flow opens its own board issue; dismiss the original so it doesn't double up: `dross issue dismiss <n>`.
 - **Dismiss** — not actionable / wontfix / duplicate. `dross issue dismiss <n>` so it never resurfaces here. (This does **not** close the issue on the board — the human who filed it still owns it; dismiss only removes it from dross triage.)
 - **Skip** — leave it for next time (no state change).
+
+**Deferred `someday` ideas route through the same funnel** — one item per turn, same triage gate, same four destinations:
+- **New phase** — route to `/dross-spec --new "<text>"`; once the phase id exists, mark the idea routed: `dross deferred route <source> <index> --target "<new-slug>"`.
+- **Milestone backlog** — coin a slug, then `dross milestone add <version> phases "<slug>"` and `dross deferred route <source> <index> --target "<slug>"` so it re-surfaces 1:1 when that phase is specced.
+- **Quick task** — route to `/dross-quick "<text>"` for a one-shot; the idea is handled outside the phase flow.
+- **Dismiss** — not worth doing. Leave it `someday` (it won't re-surface as a phase) or delete the `[[deferred]]` entry from its source spec by hand.
+
+`<source>` and `<index>` come straight from the `dross deferred list --someday --json` entry.
 
 Honor the user's call exactly — don't auto-decide. If they want to batch ("dismiss all the stale ones"), confirm the set before acting.
 

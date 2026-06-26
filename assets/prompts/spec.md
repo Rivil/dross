@@ -34,6 +34,12 @@ Read these and surface their relevant bits to the user before asking questions:
 - `.dross/milestones/<milestone>.toml` if `state.current_milestone` is set — milestone success criteria + non-goals constrain what this phase should accept
 - Any spec.toml in the phase dir already
 
+**Re-surface parked ideas.** A prior phase may have *deferred* an idea and routed it to **this** phase. Pull those candidates in via the CLI (don't grep specs by hand):
+```
+dross deferred list --target <id> --json
+```
+Each returned item is a candidate acceptance criterion for §2 — surface them ("phase `<source>` parked this for you: …") and let the user accept / reword / drop, same as any other criterion. This is the loop-closer: a punted idea reaches the planner instead of dying as a bare roadmap slug.
+
 Print a short orientation block: "Working on phase X. Project core value: Y. Milestone success criteria: Z. Locked decisions you can't relitigate: ..."
 
 ## 2. Acceptance criteria
@@ -105,11 +111,32 @@ The §3 discussion may already have surfaced deferred ideas (scope-creep redirec
 
 **"Anything someone might assume is in scope that you're explicitly punting? Stuff to defer to a later phase?"**
 
-For each:
+For each deferred idea capture:
 - `text` (the deferred thing)
 - `why` (optional — usually "premature without X" or "v1.1 not v1.0")
 
-This is gold for the planner: it stops them adding tasks for things you don't want yet.
+When resuming/extending an existing spec, **skip any deferred item that already has a target** — it's already routed; don't re-offer it (idempotent, no duplicate routing).
+
+### 4a. Route every deferred idea — don't just record it
+
+A bare deferred item is write-only: it dies in this spec and never comes back. So give **every** new deferred idea a destination via `AskUserQuestion` (one item per turn, lead with the most likely):
+
+- **Pull into the current phase** — it's actually in scope. Move it *out* of deferred and add it as a new `[[criteria]]` entry (back to §2). It is no longer deferred.
+- **Park in the milestone backlog** — relevant, but not this phase. Coin a short slug from the idea; after the spec is written (§5) run:
+  ```
+  dross milestone add <version> phases "<slug>"
+  dross deferred route <phase-id> <idx> --target "<slug>"
+  ```
+  It now re-surfaces 1:1 when `<slug>` is later scaffolded (§1's seed).
+- **Attach to a named future phase** — it belongs to a phase already on the roadmap. Stamp that existing slug (after §5):
+  ```
+  dross deferred route <phase-id> <idx> --target "<existing-slug>"
+  ```
+- **Someday** — genuinely no home yet. Leave it unrouted (no `target`); it gets triaged later via `/dross-inbox`. **Leave an item unrouted only on an explicit someday pick** — never as the silent default.
+
+`<idx>` is the item's 0-based position in this spec's `[[deferred]]` array. The `dross deferred route` / `dross milestone add` commands mutate on-disk artefacts, so **run them after §5 has written `spec.toml`** (a one-line confirm per item is enough — don't echo the array back). Re-run `dross validate` once after routing.
+
+This routing is gold for the planner and the backlog: parked ideas reach a real phase instead of evaporating.
 
 ## 5. Write spec.toml
 
