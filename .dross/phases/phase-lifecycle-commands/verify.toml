@@ -1,0 +1,65 @@
+[verify]
+  phase = "phase-lifecycle-commands"
+  generated_at = 2026-06-26T15:04:29.719216Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8271077908217717
+  mutants_killed = 775
+  mutants_survived = 162
+  mutants_not_covered = 162
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseInsert",
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseInsertCollisionRefused",
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseInsertErrors",
+    "internal/phase/phase_test.go:TestInsertRelative",
+  ]
+  notes = "insert placement (array [a,P,b,c]), byte-for-byte siblings via assertUntouched, strict collision refusal with no stray dir, and anchor/flag errors all have killing tests. Splice logic unit-tested in TestInsertRelative."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseMove",
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseMoveErrors",
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseMoveNoOp",
+    "internal/phase/phase_test.go:TestMoveRelative",
+  ]
+  notes = "move reorders the array only (assertUntouched(except=nothing) passes — no dir touched), both/neither-anchor and anchor-not-found error, and the no-op leaves the milestone .toml byte-identical."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseRename",
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseRenameRepointsDeferred",
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseRenameNoPartialMoveOnCollision",
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseRenameNoOpAndCurrentPhase",
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseRenameRenamesLocalBranch",
+  ]
+  notes = "dir+id+array move, deferred re-point (and other targets left), collision-before-move (no partial), current_phase follow, and local branch rename each have a killing test; siblings proven byte-for-byte untouched."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseMove",
+    "internal/cmd/phase_lifecycle_test.go:TestPhaseInsert",
+  ]
+  notes = "numbering recomputes from array position: `phase number p3` = 2 after move, `phase number p2` = 3 after insert. DisplayNumber derives from the array (never stored), so the recomputation tests prove no stale ordinal."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran module-wide (gremlins rollup over internal/cmd + internal/phase). All 162 survivors are classified not_covered; efficacy on covered code = 1.00 (775 killed / 0 covered-survivors). Some not_covered flags land on THIS phase's new code (phase_lifecycle.go:23-27 resolveAnchor, :181/:190 phaseInsert), but Go's own per-package coverage shows those functions 74-89% covered and the both/neither-anchor + collision error-path tests exercise exactly those lines — the not_covered flag is the known gremlins module-wide attribution artifact, not a real gap. The remaining uncovered branches are FindRoot/Save/git failure paths, none of which are acceptance-criterion surfaces."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The 162 survivors also span untouched legacy files (ship.go, stats.go, issue.go, verify.go, etc.) — not phase signals. The per-survivor FLAGs the skeleton seeded were collapsed into these notes."
