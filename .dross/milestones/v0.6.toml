@@ -1,4 +1,4 @@
-phases = ["phase-lifecycle-commands", "deferred-triage-gaps"]
+phases = ["phase-lifecycle-commands"]
 
 [milestone]
   version = "v0.6"
