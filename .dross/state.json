@@ -2,22 +2,10 @@
   "version": "0.6.5.0",
   "current_milestone": "v0.6",
   "current_phase": "ship-complete-recovery-hardening",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-27T18:23:03.051104Z",
-  "last_action": "spec locked: ship-complete-recovery-hardening",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-27T18:52:08.29522Z",
+  "last_action": "plan reviewed: ship-complete-recovery-hardening (0 blocking, 1 flag)",
   "history": [
-    {
-      "at": "2026-06-27T11:31:02.399793Z",
-      "action": "executed t-2 (Pin terraform patterns + embedded loadout)"
-    },
-    {
-      "at": "2026-06-27T11:32:09.140334Z",
-      "action": "executed t-3 (Assert terraform scanner surfaces \u0026 skips (security))"
-    },
-    {
-      "at": "2026-06-27T11:33:18.010267Z",
-      "action": "executed t-4 (Assert tflint analyzer surfaces \u0026 skips (quality))"
-    },
     {
       "at": "2026-06-27T11:34:28.992102Z",
       "action": "executed t-5 (Document terraform profile + doc-presence guard)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-27T18:23:03.051104Z",
       "action": "spec locked: ship-complete-recovery-hardening"
+    },
+    {
+      "at": "2026-06-27T18:45:07.192789Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-27T18:45:07.200507Z",
+      "action": "plan locked: ship-complete-recovery-hardening (5 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-06-27T18:52:08.29522Z",
+      "action": "plan reviewed: ship-complete-recovery-hardening (0 blocking, 1 flag)"
     }
   ]
 }

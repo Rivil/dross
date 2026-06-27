@@ -1,0 +1,94 @@
+[phase]
+id = "ship-complete-recovery-hardening"
+
+[[task]]
+id          = "t-1"
+wave        = 1
+title       = "Extract delta-gated shared recovery routine"
+files       = ["internal/cmd/ship_recover.go", "internal/cmd/ship_recover_test.go"]
+description = """
+Lift shipRecover's RunE body (fetch -> reset --hard origin/main -> restore .dross/
+-> commit) into an internal runDrossRecovery(repoDir, root, p, s, phaseID, preMergeSHA);
+ship recover now delegates to it. Gate the commit on a real staged .dross/ delta vs
+origin (check git status --porcelain after git add, before state.Touch), reusing the
+locked message `chore(dross): restore .dross/ after squash-merge for <id> + merge`.
+"""
+covers        = ["c-6", "c-2", "c-3"]
+test_contract = [
+  "TestShipRecoverIdempotentNoOp (c-6): in-sync fixture (local main == origin/main, .dross/ intact) -> exit 0, 'already in sync' message, git rev-list --count origin/main..HEAD == 0. Drop the delta gate -> phantom empty commit, count becomes 1 -> fails.",
+  "TestRecoverRestoresAllPhases (c-2): pre-merge HEAD holds .dross/phases/01-x/spec.toml AND 02-y/spec.toml, origin/main has neither; after recovery git ls-tree -r --name-only HEAD contains BOTH. A current-phase-only restore drops 02-y -> fails (partial-restore regression guard).",
+  "Existing TestShipRecoverHappyPath still commits exactly 1 on a real delta; TestShipRecoverRefusesDirtyTree / RefusesWrongBranch stay green through the extraction (c-3 ship-path guards survive).",
+]
+status = "pending"
+
+[[task]]
+id          = "t-2"
+wave        = 1
+title       = "Detect stale completed-state in dross status"
+files       = ["internal/cmd/status.go", "internal/cmd/status_test.go"]
+description = """
+Add staleCompletedState(root, repoDir) -> (phaseID, bool): true when HEAD is phase/<id>
+AND branch-local state records `completed <id>` AND origin/main carries no `completed <id>`.
+Status prints a warn-only `stale: on phase/<id> but state reads completed — reconcile: …`
+line and does not render the phase as done. Read-only — no state write in the path.
+"""
+covers        = ["c-4"]
+test_contract = [
+  "TestStatusSurfacesStaleCompletedState: HEAD on phase/x, history has `completed x`, origin/main lacks it -> output contains the `stale:` line + reconcile pointer and does not present the phase as finished.",
+  "TestStatusNoStaleOnMain (false-positive control): on main, OR origin/main already carries `completed x` -> the warning is absent. A detector keying only off local state without checking origin would warn here -> fails.",
+]
+status = "pending"
+
+[[task]]
+id          = "t-3"
+wave        = 1
+title       = "Document stale-state reconcile in resume.md"
+files       = ["assets/prompts/resume.md", "internal/cmd/resume_prompt_test.go"]
+description = """
+Add a resume.md drift case: 'on phase/<id> but state reads completed -> stale, not done'
+with its reconcile command and a never-auto-mutate caveat; dross resume surfaces it via the
+dross status call it already makes (no second Go detection path — resume is a prompt).
+"""
+covers        = ["c-4"]
+test_contract = [
+  "TestResumePromptStaleStateSection (mirrors secure_prompt_test.go's repoRootFromTest + normalise + needle pattern): asserts resume.md contains the stale-completed phrase, the reconcile pointer, and 'never auto-mutate'; removing the section fails exactly those needles.",
+]
+status = "pending"
+
+[[task]]
+id          = "t-4"
+wave        = 1
+title       = "Add recovery cookbook to ship.md"
+files       = ["assets/prompts/ship.md", "internal/cmd/ship_prompt_test.go"]
+description = """
+Add a ## Recovery section to ship.md covering all three mid-merge failure states
+(ff-abort / diverged main / dirty post-push tree), each naming the exact dross command
+(`dross phase complete --recover` and/or `dross ship recover`), with zero manual .dross/
+surgery in the instructions.
+"""
+covers        = ["c-5"]
+test_contract = [
+  "TestShipPromptRecoverySection: asserts all three failure-state phrases + both commands are present, AND asserts the absence of manual-surgery steps (no `checkout … -- .dross/`, no `git add .dross/` as a user step). Dropping a state's recipe or reintroducing manual .dross/ surgery fails the matching assertion.",
+]
+status = "pending"
+
+[[task]]
+id          = "t-5"
+wave        = 2
+depends_on  = ["t-1"]
+title       = "Wire --recover into phase complete"
+files       = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+description = """
+Add a --recover bool to phaseComplete. At the merge --ff-only origin/<main> hook
+(phase.go:314) the ff abort is the divergence signal: with --recover, delegate to t-1's
+runDrossRecovery (reset-to-origin + restore .dross/ in one shot); without it, return a
+one-line pointer error naming --recover / dross ship recover and change nothing. The
+pre-existing clean-tree check (phase.go:278) stays ahead of any reset.
+"""
+covers        = ["c-1", "c-3"]
+test_contract = [
+  "TestPhaseCompleteDivergedNoFlagStops (c-1): diverged-main fixture, no flag -> error mentions --recover, and git rev-parse main is byte-for-byte unchanged (a refusal that errors after a partial reset would pass a weaker contract while corrupting main).",
+  "TestPhaseCompleteRecoverHeals (c-1): same fixture, --recover -> exit 0, full cumulative .dross/ tree on HEAD, local phase/<id> deleted, tree clean, zero manual git.",
+  "TestPhaseCompleteRecoverRefusesDirty (c-3): diverged + dirty -> aborts with the file named, git rev-parse main byte-identical; drop complete's pre-recovery dirty guard and reset --hard destroys the uncommitted file -> fails.",
+]
+status = "pending"
