@@ -163,18 +163,56 @@ func TestDetectResolvesEmbeddedProfiles(t *testing.T) {
 }
 
 // TestDetectUnsupportedFixture guards against a profile false-matching a repo it
-// has no signal for: a Ruby/text fixture matches none of the shipped profiles.
+// has no signal for: a fixture of genuinely-unmapped extensions matches none of the
+// shipped profiles. (Originally a .rb fixture — but shipping ruby.toml makes .rb
+// legitimately detect "ruby", so the fixture was swapped to .xyz/.txt, which no
+// profile claims, to keep the never-false-match guard meaningful.)
 func TestDetectUnsupportedFixture(t *testing.T) {
 	profiles, err := Embedded()
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	writeFile(t, dir, "foo.rb", "puts 1\n")
+	writeFile(t, dir, "data.xyz", "blob\n")
 	writeFile(t, dir, "README.txt", "hi\n")
 
 	if got := Detect(dir, profiles); got != Unsupported {
 		t.Fatalf("unsupported fixture detected as %q, want %q", got, Unsupported)
+	}
+}
+
+// TestStubExtAliasesDetect proves the multi-extension aliases the old extLang map
+// carried survive as stub-profile signals: c.toml claims both .c and .h, cpp.toml
+// both .cc and .cpp. Each is asserted independently through the real embedded set,
+// so dropping .h from c.toml (or .cc from cpp.toml) makes that extension's tree
+// fall through to Unsupported and fails its row.
+func TestStubExtAliasesDetect(t *testing.T) {
+	profiles, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		file string
+		want string
+	}{
+		{"main.c", "c"},
+		{"header.h", "c"},
+		{"app.cc", "cpp"},
+		{"app.cpp", "cpp"},
+		{"lib.rb", "ruby"},
+		{"main.rs", "rust"},
+		{"App.java", "java"},
+		{"index.php", "php"},
+		{"main.swift", "swift"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.file, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, dir, tc.file, "x\n")
+			if got := Detect(dir, profiles); got != tc.want {
+				t.Fatalf("Detect on %s = %q, want %q (stub ext alias lost)", tc.file, got, tc.want)
+			}
+		})
 	}
 }
 
