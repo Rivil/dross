@@ -2,22 +2,10 @@
   "version": "0.6.3.0",
   "current_milestone": "v0.6",
   "current_phase": "secure-quality-findings-lifecycle",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-27T13:03:24.1293Z",
-  "last_action": "spec locked: secure-quality-findings-lifecycle",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-27T13:34:40.62924Z",
+  "last_action": "plan reviewed: secure-quality-findings-lifecycle (0 blocking, 2 flags applied: F1 t-7 prompt-reconcile, F2 c-3→t-6)",
   "history": [
-    {
-      "at": "2026-06-27T06:49:14.03887Z",
-      "action": "executed t-1 (author full profiles: python, javascript, csharp)"
-    },
-    {
-      "at": "2026-06-27T06:52:03.084347Z",
-      "action": "executed t-2 (author 7 detection-only stub profiles)"
-    },
-    {
-      "at": "2026-06-27T07:34:15.62485Z",
-      "action": "executed t-3 (single-source DetectLanguages; delete extLang)"
-    },
     {
       "at": "2026-06-27T07:40:40.00804Z",
       "action": "executed t-4 (drop-in keystone: zero-recompile profile add)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-27T13:03:24.1293Z",
       "action": "spec locked: secure-quality-findings-lifecycle"
+    },
+    {
+      "at": "2026-06-27T13:20:57.04763Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-27T13:20:57.055556Z",
+      "action": "plan locked: secure-quality-findings-lifecycle (6 tasks across 4 waves, --panel)"
+    },
+    {
+      "at": "2026-06-27T13:34:40.62924Z",
+      "action": "plan reviewed: secure-quality-findings-lifecycle (0 blocking, 2 flags applied: F1 t-7 prompt-reconcile, F2 c-3→t-6)"
     }
   ]
 }

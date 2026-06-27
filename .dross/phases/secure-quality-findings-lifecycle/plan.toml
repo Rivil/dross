@@ -1,0 +1,146 @@
+[phase]
+id = "secure-quality-findings-lifecycle"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Add shared fingerprint function"
+files         = ["internal/findings/fingerprint.go", "internal/findings/fingerprint_test.go"]
+description   = """
+New shared internal/findings package. Fingerprint(class, file, title) hashes
+class/dimension + normalized file path + title (no line number) into a stable
+cross-run key. Path normalization collapses ./ , // , and trailing-slash forms.
+"""
+covers        = ["c-1"]
+test_contract = [
+  "if a line number enters the hash, or './internal/x.go' / 'internal/x.go' / 'internal//x.go' / trailing-slash forms produce different keys, TestFingerprintStableAcrossLineAndPathDrift fails",
+  "if two inputs differing only in title collide to one fingerprint, TestFingerprintDistinctTitles fails",
+  "if an empty file or empty title panics or yields a non-deterministic key, the empty-input test fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 1
+title         = "Add fingerprint-keyed state store"
+files         = ["internal/findings/state.go", "internal/findings/state_test.go"]
+description   = """
+TOML ledger keyed by fingerprint with fields {state, regressed, title, file,
+class, last_run} — display fields denormalized so `findings list` renders after
+run-dir pruning. State enum tracked/resolved/dismissed with Valid(). Save is
+atomic (temp-file + rename).
+"""
+covers        = ["c-2"]
+test_contract = [
+  "if Save/Load drops the regressed or state field, TestStoreRoundTrip fails",
+  "if Get(fp) returns the wrong entry after reload, or Valid() accepts '' / 'bogus', TestStoreKeyedLookupAndStateValidation fails",
+  "if Load of a missing state.toml errors instead of returning an empty store, the first-run test fails",
+  "if Load of garbled TOML panics instead of erroring, the corrupt-state test fails",
+  "if a failed encode mid-save truncates or clobbers the prior state.toml, the interrupted-write (atomic temp+rename) test fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 2
+depends_on    = ["t-1", "t-2"]
+title         = "Implement post-scan reconcile engine"
+files         = ["internal/findings/reconcile.go", "internal/findings/reconcile_test.go"]
+description   = """
+Reconcile(store, []Item, runID) updates the store and returns a Result
+partitioning new / folded / regressed. Strictly post-scan: must not mutate the
+input scan ledger (prior state never leaks back into the scan).
+"""
+covers        = ["c-1", "c-3", "c-4"]
+test_contract = [
+  "if a fresh Item matching a state=dismissed entry is emitted as 'new' instead of folded, TestReconcileFoldsDismissed fails",
+  "if a fresh Item matching a state=resolved entry is emitted as 'new' instead of folded, TestReconcileFoldsResolved fails",
+  "if a resolved entry that reappears is not left state=resolved AND regressed=true, TestReconcileResolvedReappearsStaysResolvedRegressed fails",
+  "if a never-seen fingerprint is not inserted as state=tracked, TestReconcileNewIsTracked fails",
+  "if Reconcile mutates the input []Item, TestReconcileDoesNotMutateScan fails",
+  "if two fresh Items that fingerprint identically reconcile to two records instead of one, the identical-fingerprint dedup test fails",
+  "if a prior tracked record whose file is absent this run is dropped or marked regressed, the deleted-file-retention test fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-4"
+wave          = 3
+depends_on    = ["t-3"]
+title         = "Build shared findings cobra group"
+files         = ["internal/cmd/findings.go", "internal/cmd/findings_test.go"]
+description   = """
+newFindingsCmd(toolDescriptor) builds `findings {list, reconcile, <id>}`. The
+descriptor supplies the state-dir path and a run-dir-ledger → []Item loader, so
+both tools share one tested command surface. `reconcile <run-dir>` is the
+explicit post-scan trigger (consistent with the locked cli_shape, which
+constrains state-setting, not the reconcile trigger).
+"""
+covers        = ["c-2", "c-5"]
+test_contract = [
+  "if `findings <id> --state bogus` is accepted instead of erroring, TestFindingsStateFlagRejectsUnknown fails",
+  "if `findings <id> --state resolved` does not persist under that id's fingerprint, TestFindingsSetStatePersistsByFingerprint fails",
+  "if `findings list` omits a dismissed entry's state or the regressed marker, TestFindingsListRendersStateAndRegressed fails",
+  "if `findings reconcile <run-dir>` does not fold a prior dismissed finding end-to-end through the descriptor, TestFindingsReconcileSubcommand fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-5"
+wave          = 4
+depends_on    = ["t-4"]
+title         = "Wire security findings group + adapter"
+files         = ["internal/cmd/security.go", "internal/security/lifecycle.go", "internal/cmd/security_findings_test.go"]
+description   = """
+Register `dross security findings` on the tree via a descriptor mapping the
+fingerprint source to Class and the state-dir to .dross/security/state.toml.
+New internal/security/lifecycle.go adds Ledger.Items() adapting []Finding →
+[]findings.Item (lifecycle.go, not the existing findings.go).
+"""
+covers        = ["c-1", "c-2", "c-5"]
+test_contract = [
+  "if `dross security findings` is not registered on the command tree, TestSecurityFindingsRegistered fails",
+  "if the adapter feeds Severity where Class belongs (two findings of different class but same file+title collide), TestSecurityItemUsesClass fails",
+  "if .dross/security/state.toml is not gitignored (git check-ignore), TestSecurityStateGitignored fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-6"
+wave          = 4
+depends_on    = ["t-4"]
+title         = "Wire quality findings group + adapter"
+files         = ["internal/cmd/quality.go", "internal/quality/lifecycle.go", "internal/cmd/quality_findings_test.go"]
+description   = """
+Register `dross quality findings` via a descriptor mapping the fingerprint
+source to Dimension and the state-dir to .dross/quality/state.toml. New
+internal/quality/lifecycle.go adds Ledger.Items() adapting []Finding →
+[]findings.Item. Includes the end-to-end fold-survives-rerun path for c-3.
+"""
+covers        = ["c-1", "c-2", "c-3", "c-5"]
+test_contract = [
+  "if `dross quality findings` is not registered on the command tree, TestQualityFindingsRegistered fails",
+  "if the adapter feeds Risk where Dimension belongs, TestQualityItemUsesDimension fails",
+  "if .dross/quality/state.toml is not gitignored, TestQualityStateGitignored fails",
+  "if dismissing via `findings <id> --state dismissed` then re-running `findings reconcile` relists the item as new instead of folding it, the fold-survives-rerun test fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-7"
+wave          = 5
+depends_on    = ["t-5", "t-6"]
+title         = "Wire reconcile into secure/quality prompts"
+files         = ["assets/prompts/secure.md", "assets/prompts/quality.md"]
+description   = """
+Add a post-scan step to both audit prompts invoking
+`dross <tool> findings reconcile <run-dir>` after findings.toml is written, so
+c-1/c-3 reconciliation happens as part of the audit flow rather than only on a
+manually typed verb. assets/ edit — not live until `make install` (rule r-01).
+"""
+covers        = ["c-1", "c-3"]
+test_contract = [
+  "if secure.md omits the `dross security findings reconcile <run-dir>` post-scan step, the secure prompt-presence guard (internal/cmd/secure_prompt_test.go) fails",
+  "if quality.md omits the `dross quality findings reconcile <run-dir>` post-scan step, the quality prompt-presence guard (internal/cmd/quality_prompt_test.go) fails",
+]
+status        = "pending"
