@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 )
 
 // TestStoreRoundTrip fails if Save/Load drops the state or regressed field —
@@ -128,6 +129,120 @@ func TestSaveStoreAtomicLeavesPriorIntact(t *testing.T) {
 	}
 	if got, ok := out.Get("keep"); !ok || got.Title != "must survive" {
 		t.Fatalf("failed save corrupted the prior state: got %+v ok=%v", got, ok)
+	}
+}
+
+// TestStoreRoundTripLastRun fails if Save/Load drops the new store-level last_run
+// or disturbs the finding records alongside it.
+func TestStoreRoundTripLastRun(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.toml")
+	now := time.Date(2026, 6, 27, 10, 0, 0, 0, time.UTC)
+	in := &Store{LastRun: now, Records: []Record{
+		{Fingerprint: "abc", State: StateTracked, Title: "keep"},
+	}}
+	if err := SaveStore(path, in); err != nil {
+		t.Fatal(err)
+	}
+	out, err := LoadStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.LastRun.Equal(now) {
+		t.Fatalf("round-trip dropped last_run: got %v want %v", out.LastRun, now)
+	}
+	if out.NeverRun() {
+		t.Fatal("NeverRun() true after a stamped round-trip")
+	}
+	if len(out.Records) != 1 || out.Records[0].Fingerprint != "abc" {
+		t.Fatalf("round-trip disturbed records: %+v", out.Records)
+	}
+}
+
+// TestLoadStoreLegacyWithoutLastRun pins backward compatibility: a pre-existing
+// state.toml from before last_run existed loads with records intact and reads as
+// never-run.
+func TestLoadStoreLegacyWithoutLastRun(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.toml")
+	legacy := "[[finding]]\nfingerprint = \"abc\"\nstate = \"tracked\"\ntitle = \"old\"\n"
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := LoadStore(path)
+	if err != nil {
+		t.Fatalf("legacy load errored: %v", err)
+	}
+	if !out.NeverRun() {
+		t.Fatalf("legacy store without last_run should read NeverRun, got %v", out.LastRun)
+	}
+	if len(out.Records) != 1 || out.Records[0].Title != "old" {
+		t.Fatalf("legacy load disturbed records: %+v", out.Records)
+	}
+}
+
+// TestLoadStoreMissingNeverRun pins the never-run contract for a missing file:
+// LoadStore yields a store whose LastRun.IsZero() (NeverRun) is true.
+func TestLoadStoreMissingNeverRun(t *testing.T) {
+	s, err := LoadStore(filepath.Join(t.TempDir(), "absent.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.NeverRun() {
+		t.Fatal("missing state.toml should read NeverRun (IsZero), but didn't")
+	}
+}
+
+// TestStampLastRunPersists fails if StampLastRun doesn't durably record the run:
+// after stamping an empty store, the reloaded last_run is non-zero.
+func TestStampLastRunPersists(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.toml")
+	now := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
+	if err := StampLastRun(path, now); err != nil {
+		t.Fatal(err)
+	}
+	out, err := LoadStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.NeverRun() {
+		t.Fatal("StampLastRun on an empty store left it NeverRun")
+	}
+	if !out.LastRun.Equal(now) {
+		t.Fatalf("StampLastRun persisted %v, want %v", out.LastRun, now)
+	}
+}
+
+// TestStampLastRunPreservesRecords fails if stamping clobbers existing findings —
+// it must merge the timestamp into the existing ledger, not overwrite it.
+func TestStampLastRunPreservesRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.toml")
+	in := &Store{Records: []Record{{Fingerprint: "keep", State: StateResolved, Title: "survive"}}}
+	if err := SaveStore(path, in); err != nil {
+		t.Fatal(err)
+	}
+	if err := StampLastRun(path, time.Date(2026, 6, 27, 9, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	out, err := LoadStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := out.Get("keep"); !ok || got.Title != "survive" {
+		t.Fatalf("StampLastRun disturbed records: %+v ok=%v", got, ok)
+	}
+	if out.NeverRun() {
+		t.Fatal("StampLastRun didn't set last_run")
+	}
+}
+
+// TestLoadStoreGarbledLastRunErrors pins the corrupt-signal contract: a malformed
+// last_run datetime returns an error rather than a panic or a silent zero.
+func TestLoadStoreGarbledLastRunErrors(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.toml")
+	if err := os.WriteFile(path, []byte("last_run = \"not-a-timestamp\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadStore(path); err == nil {
+		t.Fatal("LoadStore accepted a garbled last_run; want an error, not a silent zero")
 	}
 }
 
