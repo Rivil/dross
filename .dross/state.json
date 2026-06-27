@@ -2,22 +2,10 @@
   "version": "0.6.2.0",
   "current_milestone": "v0.6",
   "current_phase": "container-iac-scanning",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-27T10:50:14.066007Z",
-  "last_action": "spec locked: container-iac-scanning",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-27T11:27:33.528458Z",
+  "last_action": "plan reviewed: container-iac-scanning (0 blocking, 2 flags applied)",
   "history": [
-    {
-      "at": "2026-06-26T15:03:56.065689Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-26T15:03:56.073234Z",
-      "action": "phase phase-lifecycle-commands executed (5/5 done)"
-    },
-    {
-      "at": "2026-06-26T15:10:08.619025Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-06-26T15:10:08.624569Z",
       "action": "verified phase-lifecycle-commands: pass (4/4 covered, mutation 0.83 module-wide / efficacy 1.00; resolveAnchor survivors are gremlins not-covered artifact, go-cover confirms 74-89%)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-27T10:50:14.066007Z",
       "action": "spec locked: container-iac-scanning"
+    },
+    {
+      "at": "2026-06-27T11:11:57.42369Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-27T11:11:57.429549Z",
+      "action": "plan locked: container-iac-scanning (6 tasks across 2 waves, --panel)"
+    },
+    {
+      "at": "2026-06-27T11:27:33.528458Z",
+      "action": "plan reviewed: container-iac-scanning (0 blocking, 2 flags applied)"
     }
   ]
 }
