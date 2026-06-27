@@ -3,6 +3,7 @@ package stack
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -73,6 +74,65 @@ func TestEmbeddedDocker(t *testing.T) {
 	// existing quality TestCatalogExcludesCosmetic guard goes red once docker embeds.
 	if got := analyzers["hadolint"].Dimension; got != "error-handling" {
 		t.Errorf("hadolint analyzer dimension = %q, want a substantive dimension (error-handling)", got)
+	}
+}
+
+// TestEmbeddedTerraform proves the terraform marker profile ships with exactly the
+// locked loadout: the exact 5-glob marker set pinned against the shipped TOML, a
+// distinctly-named trivy config scanner, and a tflint analyzer under error-handling —
+// and nothing from outside that set (no checkov/dockle).
+func TestEmbeddedTerraform(t *testing.T) {
+	emb, err := Embedded()
+	if err != nil {
+		t.Fatalf("Embedded: %v", err)
+	}
+	tf := ByID(emb, "terraform")
+	if tf == nil {
+		t.Fatal("embedded profiles must include the terraform profile")
+	}
+	// It is a marker stack: pattern signals, no source extensions.
+	if len(tf.Signals.Exts) != 0 {
+		t.Errorf("terraform profile must declare no exts (marker stack), got %v", tf.Signals.Exts)
+	}
+	// The exact locked marker set, pinned against the shipped terraform.toml — a
+	// dropped/renamed/reordered pattern fails this assertion (flag-1 enforcement).
+	wantPatterns := []string{"*.tf", "*.tf.json", "*.tfvars", "*.tfvars.json", "*.hcl"}
+	if !reflect.DeepEqual(tf.Signals.FilePatterns, wantPatterns) {
+		t.Errorf("terraform file_patterns = %v, want the locked set %v", tf.Signals.FilePatterns, wantPatterns)
+	}
+
+	// Group tools by kind and assert the exact loadout.
+	scanners, analyzers := map[string]Tool{}, map[string]Tool{}
+	for _, tool := range tf.Tools {
+		switch tool.Kind {
+		case "scanner":
+			scanners[tool.Name] = tool
+		case "analyzer":
+			analyzers[tool.Name] = tool
+		default:
+			t.Errorf("tool %q has unexpected kind %q", tool.Name, tool.Kind)
+		}
+		if tool.Name == "checkov" || tool.Name == "dockle" {
+			t.Errorf("terraform loadout must not ship %q (out of scope)", tool.Name)
+		}
+	}
+
+	// The IaC-misconfig scanner must be named distinctly from the agnostic "trivy"
+	// scanner, or the manifest dedup would collapse it away.
+	tc, ok := scanners["trivy config"]
+	if !ok {
+		t.Error(`terraform loadout missing the "trivy config" scanner (distinct from agnostic "trivy")`)
+	} else if tc.EffectiveBin("") != "trivy" {
+		t.Errorf(`"trivy config" must resolve to the trivy binary, got %q`, tc.EffectiveBin(""))
+	}
+
+	// tflint is the quality analyzer; its dimension must be error-handling (matching
+	// the locked decision and the substantive-dimension allowlist).
+	tfl, ok := analyzers["tflint"]
+	if !ok {
+		t.Error("terraform loadout missing the tflint analyzer")
+	} else if tfl.Dimension != "error-handling" {
+		t.Errorf("tflint analyzer dimension = %q, want error-handling", tfl.Dimension)
 	}
 }
 

@@ -167,6 +167,84 @@ func TestBuildManifestMarkerDedup(t *testing.T) {
 	}
 }
 
+// TestBuildManifestMarkerTerraform proves a repo whose only IaC signal is a *.tf
+// marker file surfaces the terraform scanner (trivy config) — the manifest blind
+// spot closed for Terraform/IaC (c-1).
+func TestBuildManifestMarkerTerraform(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "main.tf"), "resource \"null_resource\" \"x\" {}\n")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := toolNames(m)
+	if names["trivy config"] == 0 {
+		t.Errorf("*.tf-only repo: manifest missing %q — terraform marker scanner must surface (c-1); tools=%v", "trivy config", names)
+	}
+}
+
+// TestBuildManifestTerraformDedup proves the terraform "trivy config" scanner survives
+// distinctly alongside the agnostic "trivy" each exactly once, and the Go core scanners
+// remain (c-1).
+func TestBuildManifestTerraformDedup(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go.mod"), "module x\n")
+	writeFile(t, filepath.Join(root, "main.go"), "package main")
+	writeFile(t, filepath.Join(root, "main.tf"), "resource \"null_resource\" \"x\" {}\n")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := toolNames(m)
+	for name, n := range names {
+		if n != 1 {
+			t.Errorf("scanner %q appears %d times — the seen dedup failed on the terraform marker union", name, n)
+		}
+	}
+	if names["trivy"] == 0 {
+		t.Error("agnostic trivy scanner missing")
+	}
+	if names["trivy config"] == 0 {
+		t.Error(`"trivy config" was deduped away — it must surface distinctly from the agnostic "trivy" (c-1)`)
+	}
+	for _, want := range []string{"govulncheck", "gitleaks"} {
+		if names[want] == 0 {
+			t.Errorf("Go+TF repo missing %q — the Go core + agnostic scanners must remain alongside the marker tools", want)
+		}
+	}
+}
+
+// TestBuildManifestTerraformMissingScannerSkipped proves c-3's go-testable half: under
+// an all-missing lookup, "trivy config" is recorded skipped (keeping its install hint)
+// and BuildManifest still returns nil — a missing trivy reads as "skipped, install X".
+func TestBuildManifestTerraformMissingScannerSkipped(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "main.tf"), "resource \"null_resource\" \"x\" {}\n")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatalf("BuildManifest aborted on a missing tool: %v", err)
+	}
+	var tc *ToolStatus
+	for i := range m.Skipped() {
+		if m.Skipped()[i].Name == "trivy config" {
+			s := m.Skipped()[i]
+			tc = &s
+		}
+	}
+	if tc == nil {
+		t.Fatalf(`"trivy config" not in Skipped() under all-missing lookup; skipped=%v`, m.Skipped())
+	}
+	if tc.Install == "" {
+		t.Error(`skipped "trivy config" has no install hint`)
+	}
+}
+
 func contains(ss []string, want string) bool {
 	for _, s := range ss {
 		if s == want {

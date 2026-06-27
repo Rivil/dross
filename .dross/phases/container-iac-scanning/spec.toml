@@ -1,0 +1,43 @@
+[phase]
+  id = "container-iac-scanning"
+  title = "Container & IaC scanning"
+  milestone = "v0.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "On a repo containing Terraform files, dross security and dross quality recon detect a dedicated `terraform` marker-file profile and surface its `trivy config` scanner into the manifest — verifiable the same way the docker marker tests assert it."
+
+[[criteria]]
+  id = "c-2"
+  text = "The `terraform` profile also contributes `tflint` as a dedicated quality analyzer under the `error-handling` dimension, so `dross quality` recon on a `*.tf` repo surfaces an IaC-specific analyzer, not just the agnostic scc/jscpd fallback."
+
+[[criteria]]
+  id = "c-3"
+  text = "On a committed IaC fixture, `dross security detect` / `dross quality detect` lists the IaC tools with installed-vs-missing status and an install hint — a missing trivy/tflint reads as 'skipped, install X', never a silent all-clear; recorded as a documented manual-run record (mirroring the prior phase's c-3 proof)."
+
+[[criteria]]
+  id = "c-4"
+  text = "The `terraform` profile is documented like docker.toml: a header comment explaining it is a marker-file stack (and why dockle/checkov are out of scope), plus an entry in internal/stack/profiles/README.md so the drop-in profile is discoverable."
+
+[[decisions]]
+  key = "profile_identity"
+  choice = "A dedicated `terraform` profile (id = \"terraform\"), one profile per IaC family — not a generic `iac` profile."
+  why = "Mirrors how docker is its own profile; future Kubernetes/CloudFormation families become their own drop-in .toml, and detect output names the real tech."
+  locked = true
+
+[[decisions]]
+  key = "marker_patterns"
+  choice = "file_patterns = *.tf, *.tf.json, *.tfvars, *.tfvars.json, *.hcl."
+  why = "Covers Terraform HCL + JSON + var files and OpenTofu (which reuses .tf); *.hcl is included to catch HCL-syntax configs, accepting some false-positive risk on non-Terraform HCL (Packer/Nomad/Consul)."
+  locked = true
+
+[[decisions]]
+  key = "tflint_dimension"
+  choice = "tflint maps to the `error-handling` quality dimension."
+  why = "Matches hadolint so the two marker-file IaC analyzers group under one dimension; tflint's core job is catching apply-time errors/misconfig and deprecated syntax."
+  locked = true
+
+[[deferred]]
+  text = "Other IaC families: Kubernetes-manifest and CloudFormation marker profiles (each its own drop-in .toml)."
+  why = "v0.6 non-goal — not exhaustive IaC coverage; the first-cut loadout is Terraform only."
+  target = "deepen-container-iac-scanning"

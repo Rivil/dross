@@ -1,0 +1,48 @@
+# Terraform stack profile — a MARKER-FILE stack: it is detected from Infrastructure
+# as Code files (*.tf / *.tfvars / *.hcl), not a source extension. It declares only
+# [signals].file_patterns (no exts), so it is surfaced additively by MarkerProfiles
+# into the security/quality manifests — never as a primary stack via Detect.
+# To add or override a stack, drop a sibling <id>.toml into
+# ~/.claude/dross/profiles/ — no recompile, zero code change. See README.md.
+
+id    = "terraform"
+title = "Terraform"
+
+[signals]
+  # Case-insensitive globs matched against any filename in the tree (no brace
+  # expansion — .tf and .tf.json are listed separately). Covers Terraform HCL,
+  # the JSON config variant, var files, and bare .hcl. OpenTofu reuses .tf, so no
+  # extra pattern is needed. *.hcl is included to catch HCL-syntax configs, which
+  # accepts a known false-positive risk on non-Terraform HCL (Packer / Nomad /
+  # Consul) — a deliberate trade for broader IaC recognition.
+  file_patterns = [
+    "*.tf",
+    "*.tf.json",
+    "*.tfvars",
+    "*.tfvars.json",
+    "*.hcl",
+  ]
+
+# Tool loadout. trivy in `config` mode scans Terraform/IaC for misconfigurations
+# (open security groups, unencrypted storage, public buckets) — its Name is
+# distinct from the agnostic "trivy" scanner so the manifest dedup keeps both.
+# tflint lints Terraform for apply-time errors, deprecated syntax, and unused
+# declarations, so it is the quality analyzer under the error-handling dimension
+# (matching how docker's hadolint maps). checkov (exhaustive IaC misconfiguration,
+# heavier Python toolchain) and dockle (container image-layer CIS, needs a built
+# image) are intentionally out of scope. Agnostic tools (gitleaks, semgrep, trivy,
+# scc, jscpd) apply to every stack and stay in the catalogs — not listed here.
+
+[[tools]]
+  name    = "trivy config"
+  bin     = "trivy"
+  kind    = "scanner"
+  core    = true
+  install = "brew install trivy  (or see github.com/aquasecurity/trivy)"
+
+[[tools]]
+  name      = "tflint"
+  kind      = "analyzer"
+  dimension = "error-handling"
+  core      = true
+  install   = "brew install tflint  (or see github.com/terraform-linters/tflint)"

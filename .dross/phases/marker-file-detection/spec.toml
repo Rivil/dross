@@ -52,9 +52,9 @@
 [[deferred]]
   text = "dockle / container image-layer scanning (CIS benchmark on a built image)."
   why = "Needs a built image (docker build) in the scan path — beyond the static source loadout; revisit if image-level scanning is wanted."
-  target = "container-iac-scanning"
+  target = "deepen-container-iac-scanning"
 
 [[deferred]]
   text = "checkov / exhaustive IaC misconfiguration coverage."
   why = "Python dependency and broader than the first-cut loadout (hadolint + trivy config); not needed to close the marker-detection gap."
-  target = "container-iac-scanning"
+  target = "deepen-container-iac-scanning"

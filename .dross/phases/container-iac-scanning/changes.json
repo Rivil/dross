@@ -1,0 +1,57 @@
+{
+  "phase": "container-iac-scanning",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/stack/profiles/terraform.toml"
+      ],
+      "commit": "ab85c9a",
+      "completed_at": "2026-06-27T11:29:22.480646Z",
+      "notes": "feature: IaC scanning · terraform.toml @ internal/stack/profiles/terraform.toml · marker-file profile surfacing trivy config + tflint for Terraform/IaC"
+    },
+    "t-2": {
+      "files": [
+        "internal/stack/profile_test.go",
+        "internal/stack/embed_test.go"
+      ],
+      "commit": "dfa8bf1",
+      "completed_at": "2026-06-27T11:31:02.387778Z",
+      "notes": "feature: IaC scanning · TestEmbeddedTerraform @ internal/stack/embed_test.go · pins terraform marker patterns + loadout against the shipped profile"
+    },
+    "t-3": {
+      "files": [
+        "internal/security/recon_test.go"
+      ],
+      "commit": "49cf2dc",
+      "completed_at": "2026-06-27T11:32:09.127298Z",
+      "notes": "feature: IaC scanning · TestBuildManifestMarkerTerraform @ internal/security/recon_test.go · asserts trivy config surfaces, dedups vs agnostic trivy, and skips-with-hint when missing"
+    },
+    "t-4": {
+      "files": [
+        "internal/quality/recon_test.go"
+      ],
+      "commit": "41248da",
+      "completed_at": "2026-06-27T11:33:17.999043Z",
+      "notes": "feature: IaC scanning · TestQualityManifestMarkerTerraform @ internal/quality/recon_test.go · asserts tflint surfaces at error-handling, skips-with-hint, and does not leak into non-IaC repos"
+    },
+    "t-5": {
+      "files": [
+        "internal/stack/profiles/README.md",
+        "internal/stack/profiles_doc_test.go"
+      ],
+      "commit": "abec7c7",
+      "completed_at": "2026-06-27T11:34:28.979608Z",
+      "notes": "feature: IaC scanning · TestTerraformProfileDocumented @ internal/stack/profiles_doc_test.go · README marker-file-stacks section + guard that terraform profile stays documented"
+    },
+    "t-6": {
+      "files": [
+        "fixtures/terraform-c3/main.tf",
+        "fixtures/terraform-c3/RUN.md",
+        "fixtures/terraform-c3/expected-finding.txt"
+      ],
+      "commit": "2f89f55",
+      "completed_at": "2026-06-27T11:37:23.97388Z",
+      "notes": "feature: IaC scanning · fixtures/terraform-c3 @ fixtures/terraform-c3/RUN.md · c-3 proof: trivy config (observed AWS-0107) + tflint (expected) surface what scc/jscpd/gitleaks miss"
+    }
+  }
+}

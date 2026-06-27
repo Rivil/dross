@@ -1,0 +1,68 @@
+{
+  "phase": "container-iac-scanning",
+  "generated_at": "2026-06-27T11:47:16.226156Z",
+  "languages": [
+    {
+      "name": "go",
+      "tool": "gremlins",
+      "files": [
+        "internal/quality/recon_test.go",
+        "internal/security/recon_test.go",
+        "internal/stack/embed_test.go",
+        "internal/stack/profile_test.go",
+        "internal/stack/profiles_doc_test.go"
+      ],
+      "mutation": {
+        "Tool": "gremlins",
+        "Killed": 100,
+        "Survived": 3,
+        "Timeout": 0,
+        "Errors": 0,
+        "Score": 0.970873786407767,
+        "Surviving": [
+          {
+            "File": "catalog.go",
+            "Line": 84,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "catalog.go",
+            "Line": 40,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "detect.go",
+            "Line": 250,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          }
+        ],
+        "NotCovered": 3
+      }
+    }
+  ],
+  "skipped": [
+    {
+      "file": "fixtures/terraform-c3/RUN.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "fixtures/terraform-c3/expected-finding.txt",
+      "reason": "no mutation adapter for .txt"
+    },
+    {
+      "file": "fixtures/terraform-c3/main.tf",
+      "reason": "no mutation adapter for .tf"
+    },
+    {
+      "file": "internal/stack/profiles/README.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "internal/stack/profiles/terraform.toml",
+      "reason": "no mutation adapter for .toml"
+    }
+  ]
+}
