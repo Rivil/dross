@@ -1,15 +1,9 @@
 {
   "version": "0.6.1.0",
   "current_milestone": "v0.6",
-  "current_phase": "multilang-stack-profiles",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-27T07:51:20.308112Z",
-  "last_action": "verified multilang-stack-profiles: pass (3/3 covered, mutation 0.84 module / 1.00 in-scope)",
+  "last_activity": "2026-06-27T07:55:25.669676Z",
+  "last_action": "completed multilang-stack-profiles",
   "history": [
-    {
-      "at": "2026-06-26T13:23:51.039796Z",
-      "action": "plan reviewed: deferred-triage-gaps (0 blocking, 3 flags; #1 serialized t-3→wave3, #3 added c-3 funnel clause, #2 kept)"
-    },
     {
       "at": "2026-06-26T13:28:11.009365Z",
       "action": "set version=0.5.2.0"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-27T07:51:20.308112Z",
       "action": "verified multilang-stack-profiles: pass (3/3 covered, mutation 0.84 module / 1.00 in-scope)"
+    },
+    {
+      "at": "2026-06-27T07:55:25.669676Z",
+      "action": "completed multilang-stack-profiles"
     }
   ]
 }
