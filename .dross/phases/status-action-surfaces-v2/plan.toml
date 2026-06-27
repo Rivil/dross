@@ -1,0 +1,123 @@
+[phase]
+id = "status-action-surfaces-v2"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Add store-level last_run + stamp helper"
+files         = ["internal/findings/state.go", "internal/findings/state_test.go"]
+description   = """
+Add a store-level last_run timestamp (time.Time) to findings.Store, distinct from
+the existing per-Record LastRun run-id. Declare the new scalar field before the
+existing Records slice so the TOML encoder emits it before the [[finding]] tables.
+Add a StampLastRun helper and an IsZero never-run predicate; LoadStore returns an
+error on a garbled value.
+"""
+covers        = ["c-1", "c-2"]
+test_contract = [
+  "if Save/LoadStore drops the new field, the round-trip test fails: a store with last_run set reloads with it intact and existing finding Records untouched",
+  "if a pre-existing state.toml without last_run no longer loads cleanly, the test fails: records load intact and last_run IsZero (never-run)",
+  "if a missing state.toml stops reading as never-run, the test fails: LoadStore on an absent path yields IsZero()==true",
+  "if StampLastRun doesn't persist, the test fails: after StampLastRun on an empty store, reloaded last_run is non-zero",
+  "if a garbled last_run value panics or silently zeroes, the test fails: LoadStore returns an error instead",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 1
+title         = "Add tech-debt marker + size scan engine"
+files         = ["internal/techdebt/scan.go", "internal/techdebt/scan_test.go"]
+description   = """
+Pure scan: detect TODO/FIXME/HACK/XXX markers (word-boundary, not substring) and
+language-agnostic size heuristics (oversized files by line count, over-long lines).
+No external tools, no I/O beyond reading the supplied file set.
+"""
+covers        = ["c-4"]
+test_contract = [
+  "if the marker regex misses mid-line markers, the test fails: `x := 1 // FIXME later` yields a FIXME finding (and same for TODO/HACK/XXX)",
+  "if word-boundary matching breaks, the test fails: identifier `TODOList` yields no marker finding",
+  "if size thresholds break, the test fails: a file over the line-count threshold yields exactly one oversized-file finding, and a single over-length line yields one over-long-line finding",
+  "if binary/empty handling breaks, the test fails: a NUL-containing file and a zero-byte file each yield zero findings without error",
+  "if last-line counting breaks, the test fails: a file with no trailing newline still has its final line counted",
+  "if the scanner emits false positives, the test fails: a clean marker-free small tree yields zero findings",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 2
+title         = "Add tech-debt run dir, StatePath, report writer"
+files         = ["internal/techdebt/state.go", "internal/techdebt/run.go", "internal/techdebt/state_test.go", "internal/techdebt/run_test.go"]
+description   = """
+Tech-debt run scaffolding mirroring security's run helpers: StatePath at
+.dross/techdebt/state.toml (sibling of run dirs, prune-proof), a NewRun that never
+clobbers, and a report writer rendering a finding set into the run dir.
+"""
+covers        = ["c-4"]
+test_contract = [
+  "if StatePath drifts, the test fails: it resolves to .dross/techdebt/state.toml (sibling of, not inside, the run dirs)",
+  "if NewRun clobbers, the test fails: a second run in the same second on the same sha gets a -N suffix instead of overwriting",
+  "if WriteReport drops findings, the test fails: a scanned finding set renders into the run dir's report file",
+]
+depends_on    = ["t-2"]
+status        = "pending"
+
+[[task]]
+id            = "t-4"
+wave          = 3
+title         = "Add dross techdebt command + register + gitignore"
+files         = ["internal/cmd/techdebt.go", "internal/cmd/techdebt_test.go", "internal/techdebt/gitignore_test.go", ".gitignore", "cmd/dross/main.go"]
+description   = """
+Wire the `dross techdebt` cobra command: enumerate tracked files via git ls-files
+(tree-walk fallback outside a repo), run the scan, write a run + report, and stamp
+last_run. Register on root and add .dross/techdebt/ to .gitignore.
+"""
+covers        = ["c-4"]
+test_contract = [
+  "if enumeration ignores the tracked-files rule, the test fails: the command runs git ls-files, and outside a git repo falls back to a tree walk completing with a nogit run id and no hard error",
+  "if the run doesn't stamp the signal, the test fails: after `dross techdebt`, findings.LoadStore(techdebt.StatePath).last_run is non-zero (area would otherwise read never-run right after a run)",
+  "if the gitignore entry is missing, the test fails: git check-ignore confirms .dross/techdebt/<id>/report is ignored",
+  "if the command isn't registered, the test fails: the commands-parity test sees techdebt on the root command",
+]
+depends_on    = ["t-1", "t-2", "t-3"]
+status        = "pending"
+
+[[task]]
+id            = "t-5"
+wave          = 2
+title         = "Stamp last_run on security & quality runs"
+files         = ["internal/cmd/security.go", "internal/cmd/quality.go", "internal/cmd/security_test.go", "internal/cmd/quality_test.go"]
+description   = """
+Stamp the store-level last_run on each security and quality run so both areas rank
+as "ran". Merge into existing state.toml without disturbing finding records.
+"""
+covers        = ["c-1", "c-2"]
+test_contract = [
+  "if the security run stops stamping, the test fails: after `dross security run`, .dross/security/state.toml last_run is non-zero ~ now",
+  "if the quality run stops stamping, the test fails: after `dross quality run`, .dross/quality/state.toml last_run is non-zero ~ now",
+  "if stamping overwrites state, the test fails: stamping into a state.toml that already holds finding records leaves those records untouched",
+]
+depends_on    = ["t-1"]
+status        = "pending"
+
+[[task]]
+id            = "t-6"
+wave          = 4
+title         = "Rank, render, flip status action block"
+files         = ["internal/cmd/status.go", "internal/cmd/status_test.go"]
+description   = """
+In the spine-idle actions block: read each area's last_run signal, rank (never-run
+first in catalog order, then oldest-ran first), render run-signal text, flip
+security/quality/tech-debt to runnable, and guard against dead commands.
+"""
+covers        = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "if formatRunSignal breaks, the test fails: zero-time renders 'never run', now-3d contains '3d ago', and a future last_run renders no negative/absurd age",
+  "if ranking breaks, the test fails: rankAreas returns never-run areas first in stable catalog order, then ran areas oldest-last_run first, with identical last_run keeping catalog order",
+  "if wiring breaks, the integration test fails: with security=5d, quality=never, tech-debt=1d, the idle actions block lists quality, then security, then tech-debt, each line showing its run-signal text",
+  "if c-3 regresses, the guard test fails: every available area resolves to a real surface (/dross-secure, /dross-quality, registered dross techdebt) and no line shows '(planned)'",
+  "if the signal isn't prune-proof, the test fails: with all .dross/techdebt run dirs deleted but state.toml retaining last_run, the area still renders 'last run …', never 'never run'",
+]
+depends_on    = ["t-1", "t-3", "t-4"]
+status        = "pending"

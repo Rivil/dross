@@ -2,22 +2,10 @@
   "version": "0.6.4.0",
   "current_milestone": "v0.6",
   "current_phase": "status-action-surfaces-v2",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-27T14:50:47.841439Z",
-  "last_action": "spec locked: status-action-surfaces-v2",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-27T15:43:25.99045Z",
+  "last_action": "plan reviewed: status-action-surfaces-v2 (0 blocking, 1 flag)",
   "history": [
-    {
-      "at": "2026-06-27T09:33:01.115828Z",
-      "action": "executed t-3 (Rewrite security catalog test)"
-    },
-    {
-      "at": "2026-06-27T09:34:00.272732Z",
-      "action": "executed t-4 (Gate \u003e=3 analyzer dimensions in quality test)"
-    },
-    {
-      "at": "2026-06-27T09:35:01.423694Z",
-      "action": "executed t-5 (Security recon: surface + skip per repo)"
-    },
     {
       "at": "2026-06-27T09:35:47.001383Z",
       "action": "executed t-6 (Quality recon: 3 dims reach a run + skip)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-27T14:50:47.841439Z",
       "action": "spec locked: status-action-surfaces-v2"
+    },
+    {
+      "at": "2026-06-27T15:35:25.437228Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-27T15:35:25.444517Z",
+      "action": "plan locked: status-action-surfaces-v2 (6 tasks across 3 waves, --panel)"
+    },
+    {
+      "at": "2026-06-27T15:43:25.99045Z",
+      "action": "plan reviewed: status-action-surfaces-v2 (0 blocking, 1 flag)"
     }
   ]
 }
