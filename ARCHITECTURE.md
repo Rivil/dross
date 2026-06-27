@@ -223,11 +223,13 @@ _introduced 05-dross-secure · extended 07-stack-profiles · extended 09-marker-
 
 ### Ship recovery
 
-Heal origin/main vs local main divergence after a squash-merge.
+Heal origin/main vs local main divergence after a squash-merge — a shared, delta-gated routine reused by two entry points and documented as a three-state cookbook. `dross ship recover` is the standalone legacy-repo healer; `dross phase complete --recover` heals a diverged main in-loop (the ff-only abort is the divergence signal) and refuses with a pointer when the flag is absent. The shared `runDrossRecovery` resets main to origin, restores the full cumulative `.dross/` tree (every phase's artefacts, not just the current one), and commits only on a real delta — so an in-sync repo is a clean no-op with no phantom commit. The `ship.md` `## Recovery` section maps the three mid-merge failure states (ff-abort / diverged main / dirty post-push tree) each to a one-command fix, with no manual `.dross/` surgery (guarded by a prompt-presence test).
 
-- `shipRecover` — `internal/cmd/ship_recover.go:30`
+- `runDrossRecovery` (shared delta-gated reset+restore+commit) — `internal/cmd/ship_recover.go:132`
+- `shipRecover` (standalone CLI entry, delegates to the shared routine) — `internal/cmd/ship_recover.go:31`
+- `phaseComplete` `--recover` (in-loop heal) — `internal/cmd/phase.go:209`
 
-_52f6c75_
+_52f6c75 · extended ship-complete-recovery-hardening · 3a1fd7d_
 
 ### Shipping / pull requests
 
@@ -257,17 +259,18 @@ _introduced 07-stack-profiles · extended 08-language-profiles · extended 09-ma
 
 ### State & status
 
-Track current milestone/phase/version + activity in state.json; summarise "where am I" — including milestone phase-progress (N/M phases verified) and an idle-gated non-spine action surface (security/quality/tech-debt) that ranks areas by run signal (never-run first, then most-stale) and shows each area's last-run state, surfaced only when the spec→ship spine has nothing runnable left.
+Track current milestone/phase/version + activity in state.json; summarise "where am I" — including milestone phase-progress (N/M phases verified) and an idle-gated non-spine action surface (security/quality/tech-debt) that ranks areas by run signal (never-run first, then most-stale) and shows each area's last-run state, surfaced only when the spec→ship spine has nothing runnable left. Status also warns (read-only, never mutating) when sitting on a shipped-but-unmerged `phase/<id>` branch whose branch-local state reads `completed` while origin/main carries no such record — the stale-completion drift the user must reconcile rather than trust; the same drift-case is documented as a reconcile step in `resume.md`.
 
 - `state.State` — `internal/state/state.go:17`
 - `State` (CLI) — `internal/cmd/state.go:16`
 - `Status` — `internal/cmd/status.go:22`
+- `staleCompletedState` (shipped-but-unmerged-branch warning) — `internal/cmd/status.go:462`
 - `spineIdle` — `internal/cmd/status.go:247`
 - `rankAreas` — `internal/cmd/status.go:363`
 - `formatRunSignal` — `internal/cmd/status.go:382`
 - `renderActionAreas` — `internal/cmd/status.go:410`
 
-_c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · d2be565_
+_c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · 2b6d344_
 
 ### Tech-debt scan (dross techdebt)
 
