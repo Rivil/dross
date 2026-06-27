@@ -154,6 +154,51 @@ func TestSvelteAndTypescriptEslintInstall(t *testing.T) {
 	}
 }
 
+// TestAnalyzersFor_threeDimensions gates c-2: svelte/typescript/dart each surface
+// dedicated (non-agnostic) analyzers spanning at least three DISTINCT substantive
+// dimensions. Counting distinct dimensions (not tool count) means two analyzers
+// collapsing onto one dimension trips it even at three tools — and dropping
+// dart-analyze drops dart to two. Re-asserts the substantive-only guard per language.
+func TestAnalyzersFor_threeDimensions(t *testing.T) {
+	for _, id := range []string{"svelte", "typescript", "dart"} {
+		t.Run(id, func(t *testing.T) {
+			dims := map[Dimension]bool{}
+			for _, a := range AnalyzersFor(id) {
+				if a.Agnostic() {
+					continue
+				}
+				if !IsSubstantive(a.Dimension) {
+					t.Errorf("%s analyzer %q has non-substantive dimension %q", id, a.Name, a.Dimension)
+					continue
+				}
+				dims[a.Dimension] = true
+			}
+			if len(dims) < 3 {
+				t.Errorf("AnalyzersFor(%q): want >=3 distinct substantive dedicated dimensions, got %d (%v)", id, len(dims), dims)
+			}
+		})
+	}
+}
+
+// TestC3DedicatedDistinctFromAgnostic is the c-3 plumbing half (folded from the
+// former t-8): the demonstrator tool knip is wired into the typescript catalog as
+// a dedicated (non-agnostic) analyzer and is NOT one of the agnostic fallback bins
+// {scc, jscpd}. Renaming/removing knip fails it.
+func TestC3DedicatedDistinctFromAgnostic(t *testing.T) {
+	knip := findAnalyzer(AnalyzersFor("typescript"), "knip")
+	if knip == nil {
+		t.Fatal("AnalyzersFor(\"typescript\") missing the c-3 demonstrator analyzer knip")
+	}
+	if knip.Agnostic() {
+		t.Error("knip reported agnostic; the c-3 proof needs a language-dedicated analyzer")
+	}
+	for _, agnosticBin := range []string{"scc", "jscpd"} {
+		if knip.Name == agnosticBin || knip.Bin == agnosticBin {
+			t.Errorf("knip collides with agnostic fallback bin %q", agnosticBin)
+		}
+	}
+}
+
 // overrideGoProfile points the user profile dir at a temp HOME holding a go.toml
 // that replaces the embedded Go profile, so a test can prove the catalog tracks
 // the profile rather than an inline table.
