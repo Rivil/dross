@@ -507,6 +507,80 @@ func TestNoDockerHardcode(t *testing.T) {
 	}
 }
 
+// zzzDropInProfile is a brand-new profile id no embedded TOML ships: a unique .zzz
+// extension plus one dedicated analyzer. Dropping it under the user overlay must make
+// "zzz" both detectable and recon-visible with zero Go change — the c-3 keystone.
+const zzzDropInProfile = `id = "zzz"
+title = "Zzz"
+[signals]
+  exts = [".zzz"]
+[[tools]]
+  name = "zzzlint"
+  kind = "analyzer"
+  dimension = "complexity"
+  core = true
+  install = "echo install zzzlint"
+`
+
+// dropInOverlay points HOME at a fresh temp dir, writes profile TOMLs into the user
+// overlay (~/.claude/dross/profiles), and returns the overlay dir. This is the real
+// drop-in path a user takes — no embedded change, no recompile.
+func dropInOverlay(t *testing.T, files map[string]string) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profDir := filepath.Join(home, ".claude", "dross", "profiles")
+	if err := os.MkdirAll(profDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range files {
+		writeFile(t, profDir, name, content)
+	}
+	return profDir
+}
+
+// TestDropInProfileDetectable is the c-3 keystone (detection half): a brand-new
+// profile dropped under ~/.claude/dross/profiles makes its language detectable with
+// zero edit to detect.go — DetectLanguages derives the new .zzz->zzz mapping purely
+// from the loaded profile set. Reverting t-3's profile-derived DetectLanguages (back
+// to a hardcoded map) breaks this, since .zzz was never in any map literal.
+func TestDropInProfileDetectable(t *testing.T) {
+	dropInOverlay(t, map[string]string{"zzz.toml": zzzDropInProfile})
+
+	code := t.TempDir()
+	writeFile(t, code, "widget.zzz", "blob\n")
+
+	langs, err := DetectLanguages(code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsLang(langs, "zzz") {
+		t.Fatalf("DetectLanguages = %v, want it to include %q — a drop-in profile must be detectable with no code change", langs, "zzz")
+	}
+}
+
+// TestDropInMalformedDoesNotCrash is the never-crash drop-in seam: a malformed TOML
+// dropped beside valid profiles must not crash detection — LoadAll still returns the
+// merged embedded set, so DetectLanguages yields the embedded languages rather than
+// erroring out on a bad user file.
+func TestDropInMalformedDoesNotCrash(t *testing.T) {
+	dropInOverlay(t, map[string]string{
+		"zzz.toml":    zzzDropInProfile,
+		"broken.toml": "id = \nthis is not valid toml [[[\n",
+	})
+
+	code := t.TempDir()
+	writeFile(t, code, "main.go", "package main\n")
+
+	langs, err := DetectLanguages(code)
+	if err != nil {
+		t.Fatalf("a malformed drop-in must not crash detection, got: %v", err)
+	}
+	if !containsLang(langs, "go") {
+		t.Fatalf("DetectLanguages = %v, want the embedded set to survive a malformed overlay (include %q)", langs, "go")
+	}
+}
+
 // repoRoot walks up from the test working directory to the nearest go.mod.
 func repoRoot(t *testing.T) string {
 	t.Helper()

@@ -94,6 +94,50 @@ func TestPythonAnalyzerInManifest(t *testing.T) {
 	}
 }
 
+// TestDropInAnalyzerVisible is the c-3 keystone (recon half): a brand-new profile
+// dropped under ~/.claude/dross/profiles makes its dedicated analyzer recon-visible
+// with zero edit to catalog.go/recon.go — AnalyzersFor and BuildManifest both surface
+// it purely because the profile loaded. zzz is an id no embedded TOML ships, so this
+// can only pass via the live user-overlay path.
+func TestDropInAnalyzerVisible(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profDir := filepath.Join(home, ".claude", "dross", "profiles")
+	writeFile(t, filepath.Join(profDir, "zzz.toml"), `id = "zzz"
+title = "Zzz"
+[signals]
+  exts = [".zzz"]
+[[tools]]
+  name = "zzzlint"
+  kind = "analyzer"
+  dimension = "complexity"
+  core = true
+  install = "echo install zzzlint"
+`)
+
+	// AnalyzersFor the dropped-in language must surface its dedicated analyzer.
+	got := map[string]bool{}
+	for _, a := range AnalyzersFor("zzz") {
+		got[a.Name] = true
+	}
+	if !got["zzzlint"] {
+		t.Errorf("AnalyzersFor(\"zzz\") missing drop-in analyzer zzzlint; got %v", got)
+	}
+
+	// End-to-end: BuildManifest on a .zzz tree detects "zzz" then surfaces zzzlint —
+	// proving detection and analyzer resolution both flow from the dropped-in profile.
+	code := t.TempDir()
+	writeFile(t, filepath.Join(code, "widget.zzz"), "blob")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+	m, err := BuildManifest(code, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !manifestNames(m)["zzzlint"] {
+		t.Errorf("BuildManifest on a .zzz tree missing zzzlint — a drop-in analyzer must be recon-visible with zero catalog/recon edit; names=%v", manifestNames(m))
+	}
+}
+
 func TestDetectLanguages(t *testing.T) {
 	// HOME-isolate: DetectLanguages derives ext->lang from LoadAll(), which reads
 	// ~/.claude/dross/profiles — a real user overlay could add a language and flip
