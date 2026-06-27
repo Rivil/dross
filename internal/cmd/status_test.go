@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/state"
 )
 
 // status output evolves through phases of project lifecycle. Each test
@@ -656,4 +657,89 @@ func scaffoldPhaseWithSpecAndPlan(t *testing.T, phaseID, planTOML string) {
 	t.Helper()
 	scaffoldPhaseWithSpecOnly(t, phaseID)
 	mustWrite(t, ".dross/phases/"+phaseID+"/plan.toml", planTOML)
+}
+
+// staleBranchFixture builds a shipped-but-unmerged phase branch: origin/main
+// is a baseline with no completion record, while local HEAD sits on phase/x
+// whose branch-local state already carries `completed x` (the record `dross
+// ship` folds in pre-merge). Leaves the working copy on phase/x.
+func staleBranchFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remoteDir)
+	chdir(t, dir)
+
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := runCmd(t, Project(), "set", "repo.git_main_branch", "main"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Baseline on main with no completion record, pushed to origin.
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+
+	// Onto the phase branch; fold a `completed x` record into branch-local
+	// state and clear current_phase, mirroring what `dross ship` writes.
+	mustGit(t, dir, "checkout", "-q", "-b", "phase/x")
+	root := filepath.Join(dir, ".dross")
+	st, _ := state.Load(filepath.Join(root, state.File))
+	st.CurrentPhase = ""
+	st.Touch("completed x")
+	if err := st.Save(filepath.Join(root, state.File)); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// TestStatusSurfacesStaleCompletedState: on phase/x with `completed x` in
+// branch-local state but origin/main lacking it, status must warn (and not
+// present the phase as done).
+func TestStatusSurfacesStaleCompletedState(t *testing.T) {
+	staleBranchFixture(t)
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+
+	if !strings.Contains(out, "stale:") {
+		t.Errorf("expected stale warning on shipped-but-unmerged phase branch:\n%s", out)
+	}
+	if !strings.Contains(out, "phase/x") {
+		t.Errorf("stale warning should name the branch:\n%s", out)
+	}
+	if !strings.Contains(out, "reconcile") {
+		t.Errorf("stale warning should carry a reconcile pointer:\n%s", out)
+	}
+}
+
+// TestStatusNoStaleOnMain (false-positive control): the warning is absent both
+// on main (not a phase branch) and when origin/main genuinely carries the
+// completion. A detector keying only off local state without checking origin
+// would warn in the second case.
+func TestStatusNoStaleOnMain(t *testing.T) {
+	dir := staleBranchFixture(t)
+
+	// Case 1: on main — not a phase branch.
+	mustGit(t, dir, "checkout", "-q", "main")
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if strings.Contains(out, "stale:") {
+		t.Errorf("no stale warning expected on main:\n%s", out)
+	}
+
+	// Case 2: back on phase/x, but origin/main now carries `completed x`
+	// (genuinely merged). The origin check must suppress the warning.
+	mustGit(t, dir, "checkout", "-q", "phase/x")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: completed x")
+	mustGit(t, dir, "push", "-q", "origin", "phase/x:main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	out = captureStdout(t, func() { runCmd(t, Status()) })
+	if strings.Contains(out, "stale:") {
+		t.Errorf("no stale warning when origin/main carries the completion:\n%s", out)
+	}
 }
