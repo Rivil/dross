@@ -1,21 +1,11 @@
 {
   "version": "0.6.3.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-27T11:59:57.620253Z",
-  "last_action": "completed container-iac-scanning",
+  "current_phase": "secure-quality-findings-lifecycle",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-27T13:03:24.1293Z",
+  "last_action": "spec locked: secure-quality-findings-lifecycle",
   "history": [
-    {
-      "at": "2026-06-26T19:08:47.593692Z",
-      "action": "paused — multilang-stack-profiles planned+reviewed, ready to execute t-1"
-    },
-    {
-      "at": "2026-06-27T06:37:04.940371Z",
-      "action": "resumed — next: /dross-execute t-1 (author python/javascript/csharp profiles)"
-    },
-    {
-      "at": "2026-06-27T06:38:05.800849Z",
-      "action": "set version=0.6.1.0"
-    },
     {
       "at": "2026-06-27T06:49:14.03887Z",
       "action": "executed t-1 (author full profiles: python, javascript, csharp)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-27T11:59:57.620253Z",
       "action": "completed container-iac-scanning"
+    },
+    {
+      "at": "2026-06-27T12:03:18.953037Z",
+      "action": "created secure-quality-findings-lifecycle"
+    },
+    {
+      "at": "2026-06-27T13:03:24.12206Z",
+      "action": "set current_phase=secure-quality-findings-lifecycle"
+    },
+    {
+      "at": "2026-06-27T13:03:24.1293Z",
+      "action": "spec locked: secure-quality-findings-lifecycle"
     }
   ]
 }
