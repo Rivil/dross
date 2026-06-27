@@ -1,0 +1,23 @@
+# c-5 fixture — a CloudFormation template with planted misconfigurations the
+# agnostic fallback is blind to. The AWSTemplateFormatVersion / Resources tokens are
+# the content-sniff fingerprint that makes the `cloudformation` marker profile surface
+# this file (remove both and it stops matching). See RUN.md for the c-5 manual run.
+AWSTemplateFormatVersion: '2010-09-09'
+Description: c-5 fixture with planted misconfigurations
+Resources:
+  # Planted defect 1 (trivy config / checkov): a public-read S3 bucket.
+  PublicBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: PublicRead
+  # Planted defect 2 (trivy config / checkov): a security group open to the world
+  # on SSH (0.0.0.0/0 ingress).
+  OpenSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: open ssh
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0

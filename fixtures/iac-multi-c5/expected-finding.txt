@@ -1,0 +1,53 @@
+# c-5 expected findings — the deepened container/IaC loadout surfaces what the
+# language-agnostic fallback (gitleaks / semgrep / scc / jscpd) is structurally blind
+# to, across THREE marker families (kubernetes / cloudformation / docker).
+#
+# Each planted defect is pinned below. If a planted defect is removed or renamed, the
+# matching finding no longer reproduces and RUN.md goes stale. If a content token
+# (apiVersion+kind / AWSTemplateFormatVersion / Resources) is stripped from a fixture,
+# that profile stops surfacing and its tools drop from the manifest.
+#
+# OBSERVED = reproduced in the recording session (trivy 0.70.0, hadolint 2.14.0).
+# EXPECTED = the tool was [missing] in the recording session; finding derived from the
+#            tool's documented rules, not observed. Re-run to convert to OBSERVED.
+
+# --- trivy config (security) — OBSERVED 2026-06-27, trivy 0.70.0 -----------------
+
+# 1. kubernetes (deployment.yaml) — privileged container:
+KSV-0017 (HIGH): Container 'web' of Deployment 'web' should set 'securityContext.privileged' to false
+  deployment.yaml  (securityContext.privileged: true)
+
+# 2. cloudformation (template.yaml) — public S3 bucket:
+AWS-0086 (HIGH): No public access block so not blocking public acls
+  template.yaml:9-12  (AWS::S3::Bucket AccessControl: PublicRead)
+
+# 3. docker (Dockerfile) — image runs as root:
+DS-0002 (HIGH): Specify at least 1 USER command in Dockerfile with non-root user as argument
+  Dockerfile:11  (FROM ubuntu:latest, no USER)
+
+# --- hadolint (docker, quality+security) — OBSERVED 2026-06-27, hadolint 2.14.0 --
+
+DL3007 (warning): Using latest is prone to errors — pin the version explicitly
+  Dockerfile:11  (FROM ubuntu:latest)
+
+# --- checkov (cross-family IaC security) — EXPECTED (not installed in session) ---
+# checkov scans all three families; e.g. against template.yaml it flags the public
+# bucket, and against deployment.yaml the privileged container:
+CKV_AWS_53/54/55/56 (S3 public access block) — template.yaml PublicBucket
+CKV_K8S_16 (Container should not be privileged) — deployment.yaml web
+
+# --- dockle (container image-layer CIS) — EXPECTED, skip-with-reason on source -----
+# dockle needs a BUILT image, which dross never builds, so on this source-only fixture
+# it is SKIPPED-with-reason (never a silent all-clear). Against a built image of this
+# Dockerfile it would flag the missing non-root user:
+CIS-DI-0001 (Create a user for the container) — image runs as root (no USER)
+
+# --- kube-linter (kubernetes quality) — EXPECTED (not installed in session) -------
+privileged-container / no-read-only-root-fs — deployment.yaml web
+
+# --- cfn-lint (cloudformation quality) — EXPECTED (not installed in session) ------
+# cfn-lint validates template structure / resource properties on template.yaml.
+
+# --- agnostic fallback — BLIND to all of the above (OBSERVED) ----------------------
+# scc: line counts / complexity only (no misconfiguration concept).
+# gitleaks: "no leaks found" (secrets only).
