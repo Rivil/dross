@@ -2,26 +2,10 @@
   "version": "0.6.1.0",
   "current_milestone": "v0.6",
   "current_phase": "multilang-analyzer-catalogs",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-27T09:03:58.126712Z",
-  "last_action": "spec locked: multilang-analyzer-catalogs",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-27T09:26:51.446311Z",
+  "last_action": "plan flags applied: multilang-analyzer-catalogs (F1 t-7 dross-run, F2 t-2 contract, F3 t-8→t-4; 7 tasks)",
   "history": [
-    {
-      "at": "2026-06-26T13:33:27.668284Z",
-      "action": "executed t-3 (Filter dismissed in deferred list)"
-    },
-    {
-      "at": "2026-06-26T13:35:25.225444Z",
-      "action": "executed t-4 (Wire inbox §0 relax + dismiss command)"
-    },
-    {
-      "at": "2026-06-26T13:35:31.466218Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-26T13:35:31.473462Z",
-      "action": "phase deferred-triage-gaps executed (4/4 done)"
-    },
     {
       "at": "2026-06-26T13:41:58.481968Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +189,22 @@
     {
       "at": "2026-06-27T09:03:58.126712Z",
       "action": "spec locked: multilang-analyzer-catalogs"
+    },
+    {
+      "at": "2026-06-27T09:19:29.426863Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-27T09:19:29.433204Z",
+      "action": "plan locked: multilang-analyzer-catalogs (8 tasks across 2 waves, --panel)"
+    },
+    {
+      "at": "2026-06-27T09:24:26.56368Z",
+      "action": "plan reviewed: multilang-analyzer-catalogs (0 blocking, 4 flags)"
+    },
+    {
+      "at": "2026-06-27T09:26:51.446311Z",
+      "action": "plan flags applied: multilang-analyzer-catalogs (F1 t-7 dross-run, F2 t-2 contract, F3 t-8→t-4; 7 tasks)"
     }
   ]
 }

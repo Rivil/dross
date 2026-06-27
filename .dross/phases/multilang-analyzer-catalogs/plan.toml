@@ -1,0 +1,141 @@
+[phase]
+id = "multilang-analyzer-catalogs"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Add svelte+typescript tool loadout"
+files         = ["internal/stack/profiles/svelte.toml", "internal/stack/profiles/typescript.toml"]
+description   = """
+Add the js_ts_loadout to BOTH profiles, duplicated verbatim (jsts_tool_sharing:
+no inherit). Scanners: osv-scanner (core), eslint-plugin-security, retire.js
+(optional). Analyzers on top of existing eslint(complexity): knip(dead-code),
+dependency-cruiser(coupling), typescript-eslint(error-handling). Each analyzer
+keeps a distinct Name and every new tool a non-empty install hint.
+"""
+covers        = ["c-1", "c-2", "c-4"]
+test_contract = [
+  "if osv-scanner is dropped from svelte.toml or typescript.toml, t-3's TestScannersFor_dedicatedScanner subtest for that language fails",
+  "if the second eslint analyzer reuses Name \"eslint\" instead of \"typescript-eslint\", manifest dedup-by-Name collapses error-handling and t-6's three-dimension assertion fails",
+  "if any new tool ships without an install hint, the pre-existing security.TestAvailabilityMissingHasHint / quality.TestDetectMissingHasHint over Catalog() go red",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 1
+title         = "Add dart tool loadout"
+files         = ["internal/stack/profiles/dart.toml"]
+description   = """
+Per dart_loadout: scanner osv-scanner (optional, pubspec.lock); analyzers
+dcm-unused-code(dead-code) + dart-analyze(error-handling) on top of existing
+dcm(complexity). The two dcm entries MUST carry distinct Names or BuildManifest's
+dedup-by-Name silently drops the dead-code dimension. Each new tool has an install hint.
+"""
+covers        = ["c-1", "c-2", "c-4"]
+test_contract = [
+  "if the dcm unused-code analyzer shares Name with the dcm complexity analyzer, BuildManifest dedup drops dead-code and t-6's dart three-dimension assertion fails",
+  "if dart analyze is dropped, dart falls to 2 dedicated dimensions and t-4's len>=3 assertion fails for dart",
+  "if osv-scanner is mis-declared in dart.toml (kind != scanner, or absent), t-3's dart scanner subtest and t-5's foo.dart manifest test no longer find osv-scanner",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 2
+depends_on    = ["t-1", "t-2"]
+title         = "Rewrite security catalog test"
+files         = ["internal/security/catalog_test.go"]
+description   = """
+Hard green-blocker: TestScannersForLanguageProfilesAgnosticOnly currently asserts
+svelte/dart/typescript carry ONLY the agnostic scanner set, which the new loadouts
+violate. Narrow its strict-equality loop to {kotlin, sql} and add a
+TestScannersFor_dedicatedScanner with svelte/typescript/dart subtests.
+"""
+covers        = ["c-1"]
+test_contract = [
+  "if a dedicated scanner is smuggled into kotlin or sql, the narrowed strict-equality guard reddens",
+  "if ScannersFor(svelte|typescript|dart) loses osv-scanner (or its Languages tag), the corresponding TestScannersFor_dedicatedScanner subtest fails",
+  "each dedicated subtest also asserts the agnostic gitleaks/semgrep/trivy remain present, so dropping the merge of agnostic+dedicated fails it",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-4"
+wave          = 2
+depends_on    = ["t-1", "t-2"]
+title         = "Gate >=3 analyzer dimensions in quality test"
+files         = ["internal/quality/catalog_test.go"]
+description   = """
+Extend TestAnalyzersForLanguageProfiles (not a green-blocker — it under-asserts
+c-2). For svelte/typescript/dart, collect the distinct IsSubstantive dimensions
+across the dedicated (non-agnostic) analyzers in AnalyzersFor(lang) and assert
+len>=3; also assert no analyzer carries a non-substantive dimension. Folds in the
+former t-8 c-3 plumbing check: knip is present in AnalyzersFor("typescript") and
+distinct from the agnostic fallback bins.
+"""
+covers        = ["c-2", "c-3"]
+test_contract = [
+  "if any of svelte/typescript/dart drops below 3 distinct substantive dedicated dimensions, the len>=3 assertion fails for that language",
+  "if two analyzers collapse onto the same dimension (e.g. tool-count 3 but only 2 dimensions), the distinct-dimension count trips it",
+  "if a cosmetic/non-substantive dimension is added to a profile analyzer, the substantive-only guard fails",
+  "folded c-3 plumbing: if knip is absent from AnalyzersFor(\"typescript\") or matches an agnostic fallback bin {scc, jscpd}, the dedicated-distinct-from-agnostic assertion fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-5"
+wave          = 2
+depends_on    = ["t-1", "t-2"]
+title         = "Security recon: surface + skip per repo"
+files         = ["internal/security/recon_test.go"]
+description   = """
+Prove the c-1 'dross security detect lists it for a repo of that language' clause
+and the c-4 graceful-skip path through BuildManifest. Use unambiguous .svelte/.dart
+fixture trees (avoid bare .ts which maps to both svelte and typescript).
+"""
+covers        = ["c-1", "c-4"]
+test_contract = [
+  "TestBuildManifest_svelteRepo_listsOsvScanner fails if osv-scanner is absent from m.Tools for a tree containing one widget.svelte file",
+  "the dart equivalent fails if osv-scanner is absent for a foo.dart tree",
+  "TestBuildManifest_missingDedicatedScannerSkipped fails unless, under an all-missing lookPath, svelte's osv-scanner appears in m.Skipped() with a non-empty install hint AND BuildManifest returns a nil error (no abort)",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-6"
+wave          = 2
+depends_on    = ["t-1", "t-2"]
+title         = "Quality recon: 3 dims reach a run + skip"
+files         = ["internal/quality/recon_test.go"]
+description   = """
+Prove the dedicated analyzers actually surface through the quality manifest (c-2)
+and skip gracefully when missing (c-4). Mirror t-5 on the quality side.
+"""
+covers        = ["c-2", "c-4"]
+test_contract = [
+  "TestBuildManifest_svelteRepo_surfacesThreeDimensions fails unless knip, dependency-cruiser, and typescript-eslint all appear in m.Tools alongside scc/jscpd for a widget.svelte tree",
+  "TestBuildManifest_missingDedicatedAnalyzerSkipped fails unless dart's dcm-unused-code appears in m.Skipped() with a non-empty install hint and BuildManifest returns nil for a foo.dart tree",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-7"
+wave          = 2
+depends_on    = ["t-1"]
+title         = "Commit c-3 fixture + manual-run record"
+files         = ["fixtures/multilang-c3/ts-deadcode/package.json", "fixtures/multilang-c3/ts-deadcode/tsconfig.json", "fixtures/multilang-c3/ts-deadcode/src/index.ts", "fixtures/multilang-c3/expected-finding.txt", "fixtures/multilang-c3/RUN.md"]
+description   = """
+findings_proof artifact half (committed fixture + documented manual run, NOT a go
+test gate). A small TypeScript project with ONE planted unused export. RUN.md
+records an actual `dross quality` run on the fixture (knip's dead-code finding
+present) versus an agnostic-only run (finding absent) — run after `make install`
+per r-01 so the wired profile (t-1) is live in the binary. expected-finding.txt
+pins the exact symbol.
+"""
+covers        = ["c-3"]
+test_contract = [
+  "if the planted unused export in src/index.ts is removed, the symbol named in expected-finding.txt no longer matches the recorded `dross quality` run output and the RUN.md run is no longer reproducible",
+  "RUN.md must show a `dross quality` run surfacing knip's dead-code finding AND an agnostic-only run NOT surfacing it, or the proof does not demonstrate 'a dross run surfaces what the fallback misses'",
+]
+status        = "pending"
