@@ -1,0 +1,57 @@
+# Kubernetes stack profile — a MARKER-FILE stack with a CONTENT gate. Kubernetes
+# manifests live in plain *.yaml / *.yml / *.json, which an extension glob alone
+# cannot distinguish from any other YAML/JSON in the tree. So this profile pairs its
+# file_patterns with [signals.content]: a candidate is only surfaced when its body
+# carries BOTH `apiVersion` and `kind` (case-sensitive) — the two fields every real
+# manifest declares — turning a would-be every-YAML-repo false positive into a
+# near-exact match. It declares no exts, so it is surfaced additively by
+# MarkerProfiles into the security/quality manifests — never as a primary stack via
+# Detect. To add or override a stack, drop a sibling <id>.toml into
+# ~/.claude/dross/profiles/ — no recompile, zero code change. See README.md.
+
+id    = "kubernetes"
+title = "Kubernetes"
+
+[signals]
+  # Glob candidates by extension, then confirm by content below. .yml and .yaml are
+  # listed separately (no brace expansion); .json covers manifests authored as JSON.
+  file_patterns = [
+    "*.yaml",
+    "*.yml",
+    "*.json",
+  ]
+
+  # Content gate: a candidate must carry BOTH tokens (AND). apiVersion+kind together
+  # are the manifest fingerprint; requiring both keeps ordinary config YAML out.
+  [signals.content]
+    all = ["apiVersion", "kind"]
+
+# Tool loadout. trivy in `config` mode scans Kubernetes manifests for
+# misconfigurations (privileged containers, host mounts, missing resource limits) —
+# its Name is distinct from the agnostic "trivy" scanner so the manifest dedup keeps
+# both. checkov adds cross-family IaC misconfiguration coverage (a heavier Python
+# toolchain), kept distinct from trivy config so both signals surface. kube-linter
+# lints manifests for production-readiness and best-practice errors, so it is the
+# quality analyzer under the error-handling dimension (matching tflint/hadolint).
+# Agnostic tools (gitleaks, semgrep, trivy, scc, jscpd) apply to every stack and stay
+# in the catalogs — not listed here.
+
+[[tools]]
+  name    = "trivy config"
+  bin     = "trivy"
+  kind    = "scanner"
+  core    = true
+  install = "brew install trivy  (or see github.com/aquasecurity/trivy)"
+
+[[tools]]
+  name    = "checkov"
+  kind    = "scanner"
+  core    = true
+  install = "pipx install checkov  (or pip install checkov)"
+
+[[tools]]
+  name      = "kube-linter"
+  kind      = "analyzer"
+  dimension = "error-handling"
+  core      = true
+  install   = "brew install kube-linter  (or see github.com/stackrox/kube-linter)"
