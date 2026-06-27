@@ -227,11 +227,11 @@ _introduced d392501 · extended 01-architecture-comprehension-layer · extended 
 
 ### Stack profiles
 
-Declarative per-stack profiles — embedded built-ins plus `~/.claude/dross/profiles/` drop-ins (user wins on id) — that tune dross to a detected stack: runtime commands, the security/quality tool loadout, and the agent loadout. `dross stack detect/show/list/apply/loadout`; primary detection is signal-scored (exact marker files + source extensions), returning a matched profile id or an `unsupported` sentinel rather than a guess. `apply` re-syncs `[runtime]`; `loadout` emits a markdown block the execute prompt injects inline. Adding a stack is a single TOML drop-in — zero code change. Built-ins ship for Go plus Kotlin/Dart/Svelte/SQL/TypeScript, each with one dedicated quality analyzer (detekt/dcm/eslint/sqlfluff) and agnostic-only security; the v0.2 set landed as pure data behind one `extLang` edit, proving the zero-mechanism-change keystone. Marker-file stacks (e.g. Docker, detected from `Dockerfile`/compose files via case-insensitive `[signals].file_patterns` globs, no source extension) are surfaced *additively* by `MarkerProfiles` on top of the source languages in the secure/quality manifests — leaving primary `Detect` winner-take-all unchanged — so their tools (the docker profile ships hadolint as scanner+analyzer + trivy config) run on repos that have no matching source extension.
+Declarative per-stack profiles — embedded built-ins plus `~/.claude/dross/profiles/` drop-ins (user wins on id) — that tune dross to a detected stack: runtime commands, the security/quality tool loadout, and the agent loadout. `dross stack detect/show/list/apply/loadout`; primary detection is signal-scored (exact marker files + source extensions), returning a matched profile id or an `unsupported` sentinel rather than a guess. `apply` re-syncs `[runtime]`; `loadout` emits a markdown block the execute prompt injects inline. Adding a stack is a single TOML drop-in — zero code change. Built-ins ship full profiles (dedicated quality analyzer + runtime + loadout) for Go, Kotlin, Dart, Svelte, SQL, TypeScript, Python, JavaScript, and C#, plus detection-only stubs (id + title + `[signals].exts` only) for Ruby/Rust/Java/C/C++/PHP/Swift. ext→language is single-sourced from the loaded profiles: `DetectLanguages` derives it by **union** over every profile's `[signals].exts` — a shared extension (e.g. `.ts` in both svelte@6 and typescript@4) yields *both* languages, and the old hardcoded `extLang` map is deleted — so adding a profile extends language detection with no code change. The drop-in keystone is proven end-to-end: a brand-new `.zzz` profile dropped under `~/.claude/dross/profiles/` becomes both detectable and recon-visible with zero Go edit, and a malformed drop-in never crashes detection. Marker-file stacks (e.g. Docker, detected from `Dockerfile`/compose files via case-insensitive `[signals].file_patterns` globs, no source extension) are surfaced *additively* by `MarkerProfiles` on top of the source languages in the secure/quality manifests — leaving primary `Detect` winner-take-all unchanged — so their tools (the docker profile ships hadolint as scanner+analyzer + trivy config) run on repos that have no matching source extension.
 
 - `stack.Profile` / `stack.Load` — `internal/stack/profile.go:26`
 - `stack.Signals.MatchesFile` (case-insensitive glob matcher) — `internal/stack/profile.go:57`
-- `stack.Detect` / `stack.DetectLanguages` (`extLang` map) — `internal/stack/detect.go`
+- `stack.Detect` (signal-scored, winner-take-all) / `stack.DetectLanguages` → `extLangFor` + `detectLanguagesFrom` (profile-derived union, no hardcoded map) — `internal/stack/detect.go`
 - `stack.MarkerProfiles` (additive pattern-based seam) — `internal/stack/detect.go:186`
 - `stack.Embedded` / `stack.LoadAll` / `stack.Merge` — `internal/stack/embed.go`
 - embedded profile TOMLs (`go:embed profiles/*.toml`, incl. `docker.toml`) — `internal/stack/profiles/`
@@ -239,7 +239,7 @@ Declarative per-stack profiles — embedded built-ins plus `~/.claude/dross/prof
 - `stack.RenderLoadout` — `internal/stack/loadout.go`
 - `Stack` (CLI) — `internal/cmd/stack.go`
 
-_introduced 07-stack-profiles · extended 08-language-profiles · extended 09-marker-file-detection · e2cc0d1_
+_introduced 07-stack-profiles · extended 08-language-profiles · extended 09-marker-file-detection · extended multilang-stack-profiles · 976f180_
 
 ### State & status
 
