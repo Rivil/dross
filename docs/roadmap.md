@@ -299,6 +299,26 @@ workstreams don't track. Each becomes a phase (or `dross-quick`).
 
 ---
 
+## Next milestone — v0.7 (planning): branch topology & non-interactive ship
+
+Scoped as a draft milestone (`.dross/milestones/v0.7.toml`, `status = "planning"`).
+Two phases:
+
+- ⬜ **`ship-auto-noninteractive`** — `dross ship --auto`: use the generated PR
+  body, request no reviewers, and skip the body-override and reviewer prompts so
+  ship runs unattended (scripts / `/loop`). CI and merge gates unchanged.
+- ⬜ **`milestone-branch-model`** — layered branches for a staging↔production
+  split. `dross milestone` scoping creates a `milestone/<version>` integration
+  branch; `dross phase create` / `dross quick` branch off *that* (not main) and
+  their merges land on the milestone branch; `dross milestone` completion opens
+  **one PR of the whole milestone branch → main**, so main advances only at
+  milestone boundaries. **Supersedes** the v0.6 `phase/<id>`-off-main model —
+  re-scopes `phase create`, `ship`, `phase complete`, and `ship recover` around a
+  milestone base, plus the `.dross/` divergence/recovery machinery shipped in
+  `ship-complete-recovery-hardening`.
+
+---
+
 ## Recommended sequence
 
 1. ~~**Onboard dross**~~ ✅ — `.dross/` scaffolded, runtime + rules captured.

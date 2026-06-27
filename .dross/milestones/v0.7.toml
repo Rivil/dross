@@ -1,0 +1,11 @@
+phases = ["ship-auto-noninteractive", "milestone-branch-model"]
+
+[milestone]
+  version = "v0.7"
+  title = "Branch topology & non-interactive ship"
+  status = "planning"
+  started = "2026-06-27"
+
+[scope]
+  success_criteria = ["dross ship --auto runs unattended: it uses the generated PR body, requests no reviewers, and skips the body-override and reviewer prompts — usable in scripts and loops (CI and merge gates unchanged).", "dross milestone scoping creates a dedicated milestone/<version> integration branch; dross phase create and dross quick branch off that milestone branch (not main), and their per-phase/quick merges land on the milestone branch — superseding the v0.6 phase/<id>-off-main model.", "Completing a milestone opens a single PR of the milestone branch into main, so main advances only at milestone boundaries — giving a staging (milestone branch) vs production (main) separation."]
+  non_goals = ["Not changing the per-task atomic-commit or verify-gate model — only where phase/quick branches root and where their merges land.", "Not building deploy/CD automation — v0.7 delivers the branch topology that enables a staging->production split, not the pipeline itself."]
