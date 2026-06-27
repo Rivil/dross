@@ -1,0 +1,44 @@
+[phase]
+id        = "multilang-analyzer-catalogs"
+title     = "Multi-language analyzer & scanner catalogs"
+milestone = "v0.6"
+
+[[criteria]]
+id   = "c-1"
+text = "Each of svelte, typescript, and dart declares at least one dedicated security scanner (kind = \"scanner\") in its profile, and `dross security detect` lists that scanner for a repo of that language."
+
+[[criteria]]
+id   = "c-2"
+text = "Each of svelte, typescript, and dart declares dedicated quality analyzers covering at least three substantive dimensions (beyond today's single complexity tool), drawn from dead-code, coupling, duplication, error-handling, and test-gap."
+
+[[criteria]]
+id   = "c-3"
+text = "On at least one of the three stacks, a dross-quality or dross-secure run with the dedicated tools installed surfaces a real finding that the agnostic fallback (scc/jscpd/gitleaks/semgrep/trivy) alone does not — demonstrated on a committed fixture and recorded in verify."
+
+[[criteria]]
+id   = "c-4"
+text = "When a declared dedicated tool is not installed, dross-secure/dross-quality recon reports it as unavailable (with its install hint) and continues the run — no error, no abort."
+
+[[decisions]]
+key    = "js_ts_loadout"
+choice = "svelte + typescript share one loadout. Analyzers: eslint (complexity), knip (dead-code), dependency-cruiser (coupling), typescript-eslint typed rules (error-handling). Scanners: osv-scanner (core), eslint-plugin-security, retire.js (optional)."
+why    = "Covers the dimensions the agnostic scc/jscpd/semgrep set misses; modern, non-archived tools (knip over the archived ts-prune)."
+locked = true
+
+[[decisions]]
+key    = "jsts_tool_sharing"
+choice = "Duplicate the [[tools]] entries across svelte.toml and typescript.toml; no profile inherit/include mechanism."
+why    = "Keeps profiles flat, standalone, and drop-in; ~7 repeated lines is cheaper than new schema plus merge complexity."
+locked = true
+
+[[decisions]]
+key    = "findings_proof"
+choice = "Commit a small fixture with deliberate issues; record the c-3 proof as a documented manual run in verify, not a `go test` gate."
+why    = "Wiring JS/dart toolchains into `go test` fights the single-static-binary ethos; a committed fixture keeps the proof reproducible by hand."
+locked = true
+
+[[decisions]]
+key    = "dart_loadout"
+choice = "Scanner: osv-scanner on pubspec.lock, marked optional. Analyzers: dcm (complexity), dcm unused-code (dead-code), dart analyze (error-handling) to reach three dimensions."
+why    = "Dart has no strong dedicated SAST and dcm's OSS status is murky; an honest optional scanner plus dcm/dart-analyze hits c-2 without overclaiming depth."
+locked = true

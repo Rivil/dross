@@ -1,21 +1,11 @@
 {
   "version": "0.6.1.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-27T07:55:25.669676Z",
-  "last_action": "completed multilang-stack-profiles",
+  "current_phase": "multilang-analyzer-catalogs",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-27T09:03:58.126712Z",
+  "last_action": "spec locked: multilang-analyzer-catalogs",
   "history": [
-    {
-      "at": "2026-06-26T13:28:11.009365Z",
-      "action": "set version=0.5.2.0"
-    },
-    {
-      "at": "2026-06-26T13:29:44.110108Z",
-      "action": "executed t-1 (Add dismissed state to deferred schema)"
-    },
-    {
-      "at": "2026-06-26T13:31:20.087323Z",
-      "action": "executed t-2 (Add dross deferred dismiss command)"
-    },
     {
       "at": "2026-06-26T13:33:27.668284Z",
       "action": "executed t-3 (Filter dismissed in deferred list)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-27T07:55:25.669676Z",
       "action": "completed multilang-stack-profiles"
+    },
+    {
+      "at": "2026-06-27T08:47:30.369565Z",
+      "action": "created multilang-analyzer-catalogs"
+    },
+    {
+      "at": "2026-06-27T09:03:58.120556Z",
+      "action": "set current_phase=multilang-analyzer-catalogs"
+    },
+    {
+      "at": "2026-06-27T09:03:58.126712Z",
+      "action": "spec locked: multilang-analyzer-catalogs"
     }
   ]
 }
