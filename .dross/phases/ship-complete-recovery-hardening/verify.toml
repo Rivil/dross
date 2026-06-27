@@ -1,0 +1,88 @@
+[verify]
+  phase = "ship-complete-recovery-hardening"
+  generated_at = 2026-06-27T19:21:30.062676Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8289054197662061
+  mutants_killed = 780
+  mutants_survived = 0
+  mutants_not_covered = 161
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/cmd/phase_test.go:TestPhaseCompleteRecoverHeals",
+    "internal/cmd/phase_test.go:TestPhaseCompleteDivergedNoFlagStops",
+  ]
+  notes = "complete --recover heals a diverged main (reset to origin + restore .dross/, branch torn down, clean tree); without the flag it refuses with a --recover pointer and leaves main byte-for-byte unchanged."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/cmd/ship_recover_test.go:TestRecoverRestoresAllPhases",
+    "internal/cmd/phase_test.go:TestPhaseCompleteRecoverHeals",
+  ]
+  notes = "full-tree restore brings back every phase's .dross/ artefacts (01-x AND 02-y, not just current_phase); the heal test also asserts the squash-dropped artefact returns to HEAD."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/cmd/phase_test.go:TestPhaseCompleteRecoverRefusesDirty",
+    "internal/cmd/ship_recover_test.go:TestShipRecoverRefusesDirtyTree",
+    "internal/cmd/ship_recover_test.go:TestShipRecoverRefusesWrongBranch",
+  ]
+  notes = "dirty tree / wrong branch abort non-destructively; main SHA is byte-identical after a refused recover (the clean-tree guard fires before any reset)."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/cmd/status_test.go:TestStatusSurfacesStaleCompletedState",
+    "internal/cmd/status_test.go:TestStatusNoStaleOnMain",
+    "internal/cmd/resume_prompt_test.go:TestResumePromptStaleStateSection",
+  ]
+  notes = "status warns on a shipped-but-unmerged phase branch and stays silent on main / when origin already carries the completion; resume.md documents the reconcile with a never-auto-mutate caveat."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/ship_prompt_test.go:TestShipPromptRecoverySection"]
+  notes = "ship.md cookbook asserts all three failure states + both recovery commands are present AND that no manual .dross/ surgery is instructed."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/ship_recover_test.go:TestShipRecoverIdempotentNoOp"]
+  notes = "an in-sync repo makes recovery a no-op (rev-list origin/main..HEAD == 0); the delta gate prevents a phantom commit."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation measured (gremlins): killed=780, truly-survived=0 → test efficacy 1.00 on covered mutants. The overall 0.83 score reflects 161 NOT-COVERED mutants (lines no test exercises), not weak assertions. The run reported Lived: 0; the skeleton's per-mutant 'survived' findings were the adapter conflating not_covered with survived."
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 161 not-covered mutants sit in pre-existing, unchanged cmd code — unrelated commands (issue.go, rule.go, stats.go, doctor.go, verify.go, env.go, milestone.go, codex.go, profile.go, ship.go, …) plus pre-existing helpers in the touched files (status.go humanizeAge/renderActionAreas/progressBar; phase.go phaseID switch and helper error checks). gremlins mutates the whole changed package, so package-wide coverage gaps surface here; none were introduced by this phase. Raw per-mutant detail in tests.json."
+
+[[finding]]
+  severity = "NOTE"
+  text = "This phase's NEW code has zero not-covered and zero survived mutants: ship_recover.go runDrossRecovery (no findings at all), status.go staleCompletedState/stateRecordsCompleted, phase.go --recover branch. The cited status.go/phase.go mutant lines are all pre-existing functions, not the added recovery logic."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Cross-check complete: no not-covered mutant lands on a line participating in any criterion's covering test, so no criterion is downgraded from covered to weak."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/resume.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/ship.md: no mutation adapter for .md"

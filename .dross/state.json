@@ -2,18 +2,10 @@
   "version": "0.6.6.0",
   "current_milestone": "v0.6",
   "current_phase": "ship-complete-recovery-hardening",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-27T19:11:11.066671Z",
-  "last_action": "phase ship-complete-recovery-hardening executed (5/5 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-27T19:27:09.443954Z",
+  "last_action": "verified ship-complete-recovery-hardening: pass (6/6 covered, mutation 0.83 measured / 1.00 on-covered, 0 survived)",
   "history": [
-    {
-      "at": "2026-06-27T13:03:24.12206Z",
-      "action": "set current_phase=secure-quality-findings-lifecycle"
-    },
-    {
-      "at": "2026-06-27T13:03:24.1293Z",
-      "action": "spec locked: secure-quality-findings-lifecycle"
-    },
     {
       "at": "2026-06-27T13:20:57.04763Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-27T19:11:11.066671Z",
       "action": "phase ship-complete-recovery-hardening executed (5/5 done)"
+    },
+    {
+      "at": "2026-06-27T19:27:09.437604Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-27T19:27:09.443954Z",
+      "action": "verified ship-complete-recovery-hardening: pass (6/6 covered, mutation 0.83 measured / 1.00 on-covered, 0 survived)"
     }
   ]
 }
