@@ -1,0 +1,52 @@
+# C# stack profile. Drop a sibling <id>.toml into ~/.claude/dross/profiles/
+# to add or override a stack — no recompile, zero code change. See README.md.
+#
+# .csproj/.sln are project markers, not source extensions — they are listed as
+# file_patterns (the additive marker seam, MatchesFile/MarkerProfiles), while .cs
+# is the source extension Detect scores on. So a bare .cs tree resolves "csharp"
+# and a .csproj surfaces it as a marker stack on top.
+
+id    = "csharp"
+title = "C#"
+
+[signals]
+  files         = ["global.json"]
+  file_patterns = ["*.csproj", "*.sln"]
+  exts          = [".cs"]
+  priority      = 5
+
+[[package_managers]]
+  name     = "dotnet"
+  bin      = "dotnet"
+  lockfile = "packages.lock.json"
+
+# Runtime command set seeded into project.toml [runtime] at init/onboard.
+[runtime.test]
+  run = "dotnet test"
+[runtime.typecheck]
+  run = "dotnet build"
+[runtime.format]
+  run = "dotnet format --verify-no-changes"
+[runtime.build]
+  run = "dotnet build -c Release"
+
+# Dedicated quality analyzer. Agnostic tools (gitleaks, semgrep, trivy, scc,
+# jscpd) apply to every stack and are intentionally NOT listed here.
+[[tools]]
+  name      = "roslynator"
+  kind      = "analyzer"
+  dimension = "complexity"
+  core      = true
+  install   = "dotnet tool install -g roslynator.dotnet.cli"
+
+[loadout]
+  mcp_tools = [
+    "context7 (resolve-library-id + query-docs) — verify .NET / NuGet package API signatures before calling them",
+  ]
+  guardrails = [
+    "Enable nullable reference types; prefer async/await with CancellationToken; dispose IDisposable via using.",
+    "Run dotnet build and the dotnet test suite before claiming a change works.",
+  ]
+  conventions = [
+    "PascalCase for types/methods, camelCase for locals; file-scoped namespaces; records for immutable data; LINQ over manual loops where it reads cleanly.",
+  ]

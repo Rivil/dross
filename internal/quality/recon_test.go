@@ -68,6 +68,32 @@ func TestQualityNoMarkerRegression(t *testing.T) {
 	}
 }
 
+// TestPythonAnalyzerInManifest is the c-1 analyzer-in-run row: a .py tree must
+// surface python's dedicated analyzer (ruff) in the quality manifest, ON TOP of
+// the agnostic set — proving a full stack profile's analyzer reaches a real run via
+// profile id == language. Dropping ruff from python.toml (or renaming the profile
+// id away from "python") loses the ruff row.
+func TestPythonAnalyzerInManifest(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "app.py"), "print(1)\n")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := manifestNames(m)
+	if !names["ruff"] {
+		t.Errorf(".py repo: quality manifest missing python's ruff analyzer (c-1); names=%v", names)
+	}
+	// The agnostic set must remain — a python repo never loses scc/jscpd.
+	for _, want := range []string{"scc", "jscpd"} {
+		if !names[want] {
+			t.Errorf("python repo lost the agnostic analyzer %q; names=%v", want, names)
+		}
+	}
+}
+
 func TestDetectLanguages(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "main.go"), "package main")

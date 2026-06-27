@@ -1,0 +1,59 @@
+# JavaScript stack profile. Drop a sibling <id>.toml into ~/.claude/dross/
+# profiles/ to add or override a stack — no recompile, zero code change.
+#
+# id is "javascript" (the language token), NOT "node" — quality.AnalyzersFor and
+# DetectLanguages both key on profile id == language. priority is 3, BELOW the
+# typescript profile (4): on a tree carrying both package.json and tsconfig.json,
+# typescript must win, so a TS project is never mislabelled plain JavaScript.
+
+id    = "javascript"
+title = "JavaScript"
+
+[signals]
+  files    = ["package.json"]
+  exts     = [".js", ".jsx"]
+  priority = 3
+
+[[package_managers]]
+  name     = "pnpm"
+  bin      = "pnpm"
+  lockfile = "pnpm-lock.yaml"
+[[package_managers]]
+  name     = "npm"
+  bin      = "npm"
+  lockfile = "package-lock.json"
+[[package_managers]]
+  name     = "yarn"
+  bin      = "yarn"
+  lockfile = "yarn.lock"
+
+# Runtime command set seeded into project.toml [runtime] at init/onboard.
+[runtime.test]
+  run = "vitest run"
+[runtime.typecheck]
+  run = "eslint ."
+[runtime.format]
+  run = "prettier --check ."
+[runtime.build]
+  run = "npm run build"
+
+# Dedicated quality analyzer. Agnostic tools (gitleaks, semgrep, trivy, scc,
+# jscpd) apply to every stack and are intentionally NOT listed here.
+[[tools]]
+  name      = "eslint"
+  kind      = "analyzer"
+  dimension = "complexity"
+  core      = true
+  install   = "npm i -D eslint"
+
+[loadout]
+  mcp_tools = [
+    "context7 (resolve-library-id + query-docs) — verify JavaScript / library API signatures before calling them",
+  ]
+  guardrails = [
+    "Prefer const over let; use === over ==; await over raw promise chains; don't swallow rejected promises.",
+    "Run eslint and the vitest suite before claiming a change works.",
+  ]
+  conventions = [
+    "ESM modules (import/export); async/await; optional chaining and nullish coalescing over manual guards.",
+  ]

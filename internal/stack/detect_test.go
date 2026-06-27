@@ -195,6 +195,74 @@ func TestDetectPolyglotSQLDoesNotHijackGo(t *testing.T) {
 	}
 }
 
+// TestDetectFullProfilesResolve proves each of the three full non-Go profiles
+// shipped this phase (python, javascript, csharp) is selectable by its declared
+// signals through the real embedded set — Detect needs only the TOML, no detect.go
+// change (c-1). Deleting any <id>.toml, or renaming javascript's id to "node",
+// drops its row.
+func TestDetectFullProfilesResolve(t *testing.T) {
+	profiles, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		id    string
+		setup func(dir string)
+	}{
+		{"python", func(d string) {
+			writeFile(t, d, "pyproject.toml", "[project]\nname = \"x\"\n")
+			writeFile(t, d, "app.py", "print(1)\n")
+		}},
+		{"javascript", func(d string) {
+			writeFile(t, d, "package.json", `{"name":"x"}`)
+			writeFile(t, d, "index.js", "export default 1\n")
+		}},
+		{"csharp", func(d string) {
+			writeFile(t, d, "Program.cs", "class P {}\n")
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.id, func(t *testing.T) {
+			dir := t.TempDir()
+			tc.setup(dir)
+			if got := Detect(dir, profiles); got != tc.id {
+				t.Fatalf("Detect = %q, want %q (profile must resolve by data alone)", got, tc.id)
+			}
+		})
+	}
+}
+
+// TestJsNotHijackedByTs is the TS-hijack guard (t-1 contract #3): on a TypeScript
+// project tree the typescript profile must win over javascript. The realistic case
+// (package.json + tsconfig.json + index.ts) wins on score (tsconfig+ .ts = 101 >
+// package.json = 100); the source-less scaffold case (package.json + tsconfig.json,
+// a 100-100 tie) wins only because javascript's priority (3) sits below
+// typescript's (4). Raising javascript's priority to >= 4, or letting it claim
+// tsconfig.json, fails the tie case.
+func TestJsNotHijackedByTs(t *testing.T) {
+	profiles, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run("ts project with sources", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, dir, "package.json", `{"name":"x"}`)
+		writeFile(t, dir, "tsconfig.json", "{}\n")
+		writeFile(t, dir, "index.ts", "export {}\n")
+		if got := Detect(dir, profiles); got != "typescript" {
+			t.Fatalf("Detect = %q, want \"typescript\" — a TS project must not be mislabelled javascript", got)
+		}
+	})
+	t.Run("source-less scaffold (priority tie-break)", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, dir, "package.json", `{"name":"x"}`)
+		writeFile(t, dir, "tsconfig.json", "{}\n")
+		if got := Detect(dir, profiles); got != "typescript" {
+			t.Fatalf("Detect = %q, want \"typescript\" — package.json/tsconfig.json tie must break to typescript (javascript priority must stay < typescript)", got)
+		}
+	})
+}
+
 // TestStackCLISurfaceListsAndLoadsProfiles exercises the path `dross stack list`
 // and `dross stack show <id>` delegate to: LoadAll() enumerates the profiles and
 // ByID resolves a single one. Removing an <id>.toml drops it from the list and

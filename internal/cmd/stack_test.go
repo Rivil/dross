@@ -11,7 +11,11 @@ import (
 
 func TestStackDetectNonGoExitsZeroUnsupported(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"x"}`), 0o644); err != nil {
+	// A genuinely-unmapped extension: no shipped profile claims .xyz, so detection
+	// must fall through to the explicit "unsupported" sentinel. (package.json now
+	// legitimately resolves to the javascript profile, so it can't stand in for an
+	// unmatched tree any more.)
+	if err := os.WriteFile(filepath.Join(dir, "data.xyz"), []byte("blob"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
