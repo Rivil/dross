@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -104,68 +105,112 @@ longer holds the pre-merge .dross/ tree:
 				return errors.New("working tree is dirty; commit or stash before recovering")
 			}
 
-			// Capture the SHA holding the pre-merge .dross/ tree *before*
-			// we mutate anything. Default: current HEAD (which still has
-			// the phase commits, as the divergent steady state requires).
-			// Override: --pre-merge-sha for the case where the user has
-			// already manually reset main and lost current HEAD.
-			sha := preMergeSHA
-			if sha == "" {
-				sha, err = gitTrim(repoDir, "rev-parse", "HEAD")
-				if err != nil {
-					return fmt.Errorf("rev-parse HEAD: %w", err)
-				}
-			}
-
-			// Pre-check: SHA must actually contain a .dross/ tree, or the
-			// checkout step would fail with an unhelpful pathspec error.
-			if err := exec.Command("git", "-C", repoDir, "rev-parse", "--verify",
-				sha+":.dross").Run(); err != nil {
-				return fmt.Errorf("commit %s has no .dross/ tree — nothing to restore. "+
-					"If you've already reset main, pass "+
-					"--pre-merge-sha=$(git rev-parse HEAD@{1})", short(sha))
-			}
-
-			if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
-				return fmt.Errorf("git fetch: %w\n%s", err, out)
-			}
-			if out, err := gitCombined(repoDir, "reset", "--hard", "origin/"+mainBranch); err != nil {
-				return fmt.Errorf("git reset --hard origin/%s: %w\n%s", mainBranch, err, out)
-			}
-			if out, err := gitCombined(repoDir, "checkout", sha, "--", ".dross/"); err != nil {
-				return fmt.Errorf("git checkout %s -- .dross/: %w\n%s", short(sha), err, out)
-			}
-
-			// Touch state.json so the recovery commit captures the merge
-			// in the history log. The earlier ship-time `Touch("shipped …")`
-			// is preserved because the reset to origin/main doesn't touch
-			// state.json (it's on local main pre-reset, but state.json is
-			// inside .dross/ which we just restored from the pre-reset SHA).
-			s.Touch(fmt.Sprintf("merged %s", phaseID))
-			if err := s.Save(filepath.Join(root, state.File)); err != nil {
-				return fmt.Errorf("save state: %w", err)
-			}
-
-			if out, err := gitCombined(repoDir, "add", ".dross/"); err != nil {
-				return fmt.Errorf("git add: %w\n%s", err, out)
-			}
-			msg := fmt.Sprintf("chore(dross): restore .dross/ after squash-merge for %s + merge", phaseID)
-			if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
-				return fmt.Errorf("git commit: %w\n%s", err, out)
-			}
-
-			RecordOutcomeEvent("ship_recover",
-				map[string]int{},
-				nil,
-				map[string]string{"result": "recovered"},
-			)
-			Printf("Restored .dross/ from %s and recorded merge for %s\n", short(sha), phaseID)
-			return nil
+			// Guards passed (correct branch, clean tree). Hand off to the
+			// shared recovery routine — the same one `dross phase complete
+			// --recover` delegates to, so the heal procedure can't drift
+			// between the two entry points.
+			return runDrossRecovery(repoDir, root, p, s, phaseID, preMergeSHA)
 		},
 	}
 	c.Flags().StringVar(&preMergeSHA, "pre-merge-sha", "",
 		"commit holding the pre-merge .dross/ tree (default: current HEAD)")
 	return c
+}
+
+// runDrossRecovery performs the core post-squash-merge recovery shared by
+// `dross ship recover` and `dross phase complete --recover`: reset main to
+// origin, restore the cumulative .dross/ tree from the pre-merge SHA, and —
+// only when that produces a real delta vs origin — commit it. Callers own
+// their own pre-conditions (clean tree, correct branch); this routine assumes
+// them.
+//
+// The delta gate is what makes recovery idempotent (c-6): when origin/main
+// already carries the full .dross/ tree (the healed, linguist-generated era),
+// the restore stages nothing and the routine is a clean no-op — no phantom
+// commit. The full-tree `checkout <sha> -- .dross/` is what makes it restore
+// every phase's artefacts at once (c-2), not just the current phase's.
+func runDrossRecovery(repoDir, root string, p *project.Project, s *state.State, phaseID, preMergeSHA string) error {
+	mainBranch := p.Repo.GitMainBranch
+	if mainBranch == "" {
+		mainBranch = "main"
+	}
+
+	// Capture the SHA holding the pre-merge .dross/ tree *before* we mutate
+	// anything. Default: current HEAD (which still has the phase commits, as
+	// the divergent steady state requires). Override: --pre-merge-sha when the
+	// caller has already reset main and lost current HEAD.
+	sha := preMergeSHA
+	if sha == "" {
+		var err error
+		sha, err = gitTrim(repoDir, "rev-parse", "HEAD")
+		if err != nil {
+			return fmt.Errorf("rev-parse HEAD: %w", err)
+		}
+	}
+
+	// Pre-check: SHA must actually contain a .dross/ tree, or the checkout
+	// step would fail with an unhelpful pathspec error.
+	if err := exec.Command("git", "-C", repoDir, "rev-parse", "--verify",
+		sha+":.dross").Run(); err != nil {
+		return fmt.Errorf("commit %s has no .dross/ tree — nothing to restore. "+
+			"If you've already reset main, pass "+
+			"--pre-merge-sha=$(git rev-parse HEAD@{1})", short(sha))
+	}
+
+	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
+		return fmt.Errorf("git fetch: %w\n%s", err, out)
+	}
+	if out, err := gitCombined(repoDir, "reset", "--hard", "origin/"+mainBranch); err != nil {
+		return fmt.Errorf("git reset --hard origin/%s: %w\n%s", mainBranch, err, out)
+	}
+	if out, err := gitCombined(repoDir, "checkout", sha, "--", ".dross/"); err != nil {
+		return fmt.Errorf("git checkout %s -- .dross/: %w\n%s", short(sha), err, out)
+	}
+
+	// Delta gate. Stage the restored .dross/ and check whether it actually
+	// differs from origin/main (which we just reset to). If nothing staged,
+	// main already carries the full tree — a clean no-op, no commit. Checked
+	// *before* state.Touch, because touching state.json would always
+	// manufacture a delta and make this no-op unreachable.
+	if out, err := gitCombined(repoDir, "add", ".dross/"); err != nil {
+		return fmt.Errorf("git add: %w\n%s", err, out)
+	}
+	staged, err := gitTrim(repoDir, "status", "--porcelain")
+	if err != nil {
+		return fmt.Errorf("git status: %w", err)
+	}
+	if staged == "" {
+		RecordOutcomeEvent("ship_recover",
+			map[string]int{},
+			nil,
+			map[string]string{"result": "in_sync"},
+		)
+		Printf("main already in sync with origin/%s — nothing to restore for %s\n", mainBranch, phaseID)
+		return nil
+	}
+
+	// Real delta: record the merge in state history and commit the restored
+	// tree in one atomic commit. state.json is inside .dross/, so the same
+	// `git add .dross/` stages the touch.
+	s.Touch(fmt.Sprintf("merged %s", phaseID))
+	if err := s.Save(filepath.Join(root, state.File)); err != nil {
+		return fmt.Errorf("save state: %w", err)
+	}
+	if out, err := gitCombined(repoDir, "add", ".dross/"); err != nil {
+		return fmt.Errorf("git add: %w\n%s", err, out)
+	}
+	msg := fmt.Sprintf("chore(dross): restore .dross/ after squash-merge for %s + merge", phaseID)
+	if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
+		return fmt.Errorf("git commit: %w\n%s", err, out)
+	}
+
+	RecordOutcomeEvent("ship_recover",
+		map[string]int{},
+		nil,
+		map[string]string{"result": "recovered"},
+	)
+	Printf("Restored .dross/ from %s and recorded merge for %s\n", short(sha), phaseID)
+	return nil
 }
 
 func gitTrim(repoDir string, args ...string) (string, error) {
