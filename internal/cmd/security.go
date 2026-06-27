@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/findings"
 	"github.com/Rivil/dross/internal/security"
 )
 
@@ -22,8 +23,31 @@ func Security() *cobra.Command {
 		Use:   "security",
 		Short: "Deterministic surface of the dross-secure audit (run dirs, scanner detection, scaffold)",
 	}
-	c.AddCommand(securityDetect(), securityRun(), securityScaffold())
+	c.AddCommand(securityDetect(), securityRun(), securityScaffold(), securityFindings())
 	return c
+}
+
+// securityFindings builds the `dross security findings` group, supplying the
+// security-specific descriptor: state.toml under .dross/security, the run-dir
+// ledger → reconcile-items adapter (keyed on Class), and the latest-run id
+// resolver.
+func securityFindings() *cobra.Command {
+	return newFindingsCmd(FindingsTool{
+		Name:      "security",
+		StatePath: security.StatePath,
+		ItemsForRun: func(runDir string) ([]findings.Item, string, error) {
+			ledgerPath, err := containedPath(runDir, "findings.toml")
+			if err != nil {
+				return nil, "", err
+			}
+			ledger, err := security.Load(ledgerPath)
+			if err != nil {
+				return nil, "", err
+			}
+			return ledger.Items(), filepath.Base(runDir), nil
+		},
+		ResolveID: security.ResolveItem,
+	})
 }
 
 func securityDetect() *cobra.Command {
