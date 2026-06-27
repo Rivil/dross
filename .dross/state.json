@@ -1,47 +1,11 @@
 {
-  "version": "0.6.4.0",
+  "version": "0.6.5.0",
   "current_milestone": "v0.6",
   "current_phase": "status-action-surfaces-v2",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-27T15:43:25.99045Z",
-  "last_action": "plan reviewed: status-action-surfaces-v2 (0 blocking, 1 flag)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-27T16:06:59.99802Z",
+  "last_action": "phase status-action-surfaces-v2 executed (6/6 done)",
   "history": [
-    {
-      "at": "2026-06-27T09:35:47.001383Z",
-      "action": "executed t-6 (Quality recon: 3 dims reach a run + skip)"
-    },
-    {
-      "at": "2026-06-27T09:39:15.401677Z",
-      "action": "executed t-7 (Commit c-3 fixture + manual-run record)"
-    },
-    {
-      "at": "2026-06-27T09:39:45.071832Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-27T09:39:45.078673Z",
-      "action": "phase multilang-analyzer-catalogs executed (7/7 done)"
-    },
-    {
-      "at": "2026-06-27T09:43:20.987263Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-27T09:43:20.994273Z",
-      "action": "verified multilang-analyzer-catalogs: pass (4/4 covered, mutation skipped — no production TS; gremlins 100% on touched Go pre-abort)"
-    },
-    {
-      "at": "2026-06-27T09:52:36.173425Z",
-      "action": "completed multilang-analyzer-catalogs"
-    },
-    {
-      "at": "2026-06-27T10:27:00.600536Z",
-      "action": "created container-iac-scanning"
-    },
-    {
-      "at": "2026-06-27T10:50:14.057982Z",
-      "action": "set current_phase=container-iac-scanning"
-    },
     {
       "at": "2026-06-27T10:50:14.066007Z",
       "action": "spec locked: container-iac-scanning"
@@ -205,6 +169,42 @@
     {
       "at": "2026-06-27T15:43:25.99045Z",
       "action": "plan reviewed: status-action-surfaces-v2 (0 blocking, 1 flag)"
+    },
+    {
+      "at": "2026-06-27T15:49:08.801465Z",
+      "action": "set version=0.6.5.0"
+    },
+    {
+      "at": "2026-06-27T15:51:57.043921Z",
+      "action": "executed t-1 (Add store-level last_run + stamp helper)"
+    },
+    {
+      "at": "2026-06-27T15:53:59.571769Z",
+      "action": "executed t-2 (Add tech-debt marker + size scan engine)"
+    },
+    {
+      "at": "2026-06-27T15:55:45.890001Z",
+      "action": "executed t-3 (Add tech-debt run dir, StatePath, report writer)"
+    },
+    {
+      "at": "2026-06-27T15:59:12.418807Z",
+      "action": "executed t-5 (Stamp last_run on security \u0026 quality runs)"
+    },
+    {
+      "at": "2026-06-27T16:02:22.65021Z",
+      "action": "executed t-4 (Add dross techdebt command + register + gitignore)"
+    },
+    {
+      "at": "2026-06-27T16:06:52.578752Z",
+      "action": "executed t-6 (Rank, render, flip status action block)"
+    },
+    {
+      "at": "2026-06-27T16:06:59.989967Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-27T16:06:59.99802Z",
+      "action": "phase status-action-surfaces-v2 executed (6/6 done)"
     }
   ]
 }
