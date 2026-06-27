@@ -1,0 +1,67 @@
+{
+  "phase": "multilang-analyzer-catalogs",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/stack/profiles/svelte.toml",
+        "internal/stack/profiles/typescript.toml"
+      ],
+      "commit": "9e7049e",
+      "completed_at": "2026-06-27T09:30:37.551604Z",
+      "notes": "feature: language analyzer/scanner catalogs · svelte.toml+typescript.toml · dedicated osv-scanner/eslint-plugin-security/retire.js scanners + knip/dependency-cruiser/typescript-eslint analyzers (4 dimensions)"
+    },
+    "t-2": {
+      "files": [
+        "internal/stack/profiles/dart.toml"
+      ],
+      "commit": "9ea5626",
+      "completed_at": "2026-06-27T09:31:19.94647Z",
+      "notes": "feature: language analyzer/scanner catalogs · dart.toml · osv-scanner (optional) scanner + dcm-unused-code(dead-code) + dart-analyze(error-handling) → 3 dimensions"
+    },
+    "t-3": {
+      "files": [
+        "internal/security/catalog_test.go"
+      ],
+      "commit": "ec4ac7b",
+      "completed_at": "2026-06-27T09:33:01.104455Z",
+      "notes": "feature: language analyzer/scanner catalogs · TestScannersFor_dedicatedScanner @ internal/security/catalog_test.go · gates per-language osv-scanner on top of the agnostic set"
+    },
+    "t-4": {
+      "files": [
+        "internal/quality/catalog_test.go"
+      ],
+      "commit": "9c8ec16",
+      "completed_at": "2026-06-27T09:34:00.260159Z",
+      "notes": "feature: language analyzer/scanner catalogs · TestAnalyzersFor_threeDimensions @ internal/quality/catalog_test.go · gates \u003e=3 distinct substantive dimensions per stack + c-3 knip-distinct-from-agnostic"
+    },
+    "t-5": {
+      "files": [
+        "internal/security/recon_test.go"
+      ],
+      "commit": "8f0f56c",
+      "completed_at": "2026-06-27T09:35:01.413256Z",
+      "notes": "feature: language analyzer/scanner catalogs · TestBuildManifest_svelteRepo_listsOsvScanner @ internal/security/recon_test.go · per-repo scanner surfacing + graceful missing-tool skip (no abort)"
+    },
+    "t-6": {
+      "files": [
+        "internal/quality/recon_test.go"
+      ],
+      "commit": "47ddd20",
+      "completed_at": "2026-06-27T09:35:46.99026Z",
+      "notes": "feature: language analyzer/scanner catalogs · TestBuildManifest_svelteRepo_surfacesThreeDimensions @ internal/quality/recon_test.go · 3 dedicated dimensions reach a run + graceful analyzer skip"
+    },
+    "t-7": {
+      "files": [
+        "fixtures/multilang-c3/ts-deadcode/package.json",
+        "fixtures/multilang-c3/ts-deadcode/tsconfig.json",
+        "fixtures/multilang-c3/ts-deadcode/src/index.ts",
+        "fixtures/multilang-c3/ts-deadcode/src/lib.ts",
+        "fixtures/multilang-c3/expected-finding.txt",
+        "fixtures/multilang-c3/RUN.md"
+      ],
+      "commit": "47b86c3",
+      "completed_at": "2026-06-27T09:39:15.389284Z",
+      "notes": "feature: language analyzer/scanner catalogs · fixtures/multilang-c3/RUN.md · committed c-3 proof: knip surfaces dead-code (orphanedWidget) the agnostic scc/jscpd fallback misses"
+    }
+  }
+}
