@@ -1,0 +1,9 @@
+# c-3 expected finding — the dedicated-only dead-code result.
+#
+# knip (the typescript profile's dead-code analyzer) reports exactly one unused
+# export in ts-deadcode/. The agnostic fallback (scc, jscpd) reports nothing of
+# the sort. If the planted export is removed or renamed, this no longer matches
+# and RUN.md is no longer reproducible.
+
+Unused exports (1)
+orphanedWidget  function  src/lib.ts:9:17
