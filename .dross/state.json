@@ -1,97 +1,9 @@
 {
-  "version": "0.4.2.0",
-  "current_milestone": "v0.4",
-  "last_activity": "2026-06-26T15:11:41.831349Z",
-  "last_action": "completed phase-lifecycle-commands",
+  "version": "0.6.1.0",
+  "current_milestone": "v0.6",
+  "last_activity": "2026-06-27T07:55:25.669676Z",
+  "last_action": "completed multilang-stack-profiles",
   "history": [
-    {
-      "at": "2026-06-26T08:56:03.552826Z",
-      "action": "spec locked: deferred-item-routing"
-    },
-    {
-      "at": "2026-06-26T09:58:35.230424Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-26T09:58:35.23751Z",
-      "action": "plan locked: deferred-item-routing (5 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-06-26T10:01:58.920627Z",
-      "action": "plan reviewed: deferred-item-routing (0 blocking, 4 flags)"
-    },
-    {
-      "at": "2026-06-26T10:05:00.158345Z",
-      "action": "plan amended: deferred-item-routing (t-3 +list→route index handle per review flag #1)"
-    },
-    {
-      "at": "2026-06-26T10:05:59.811837Z",
-      "action": "set version=0.5.1.0"
-    },
-    {
-      "at": "2026-06-26T10:09:25.099215Z",
-      "action": "executed t-1 (Add optional target to Deferred schema)"
-    },
-    {
-      "at": "2026-06-26T10:11:05.929265Z",
-      "action": "executed t-2 (Validate guards a dangling target)"
-    },
-    {
-      "at": "2026-06-26T10:14:28.901553Z",
-      "action": "executed t-3 (Add dross deferred list + route command)"
-    },
-    {
-      "at": "2026-06-26T10:17:48.785381Z",
-      "action": "executed t-4 (spec.md §4 routing + re-surface seed)"
-    },
-    {
-      "at": "2026-06-26T10:20:33.895171Z",
-      "action": "executed t-5 (inbox.md adds deferred someday triage source)"
-    },
-    {
-      "at": "2026-06-26T10:20:56.189961Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-26T10:20:56.197852Z",
-      "action": "phase deferred-item-routing executed (5/5 done)"
-    },
-    {
-      "at": "2026-06-26T10:38:08.413699Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-26T10:38:08.419409Z",
-      "action": "verified deferred-item-routing: pass (6/6 covered, mutation 0.82 module-wide / efficacy 1.00 ex-not-covered)"
-    },
-    {
-      "at": "2026-06-26T10:56:44.647801Z",
-      "action": "completed deferred-item-routing"
-    },
-    {
-      "at": "2026-06-26T13:06:07.441609Z",
-      "action": "created deferred-triage-gaps"
-    },
-    {
-      "at": "2026-06-26T13:15:39.669411Z",
-      "action": "set current_phase=deferred-triage-gaps"
-    },
-    {
-      "at": "2026-06-26T13:15:39.678069Z",
-      "action": "spec locked: deferred-triage-gaps"
-    },
-    {
-      "at": "2026-06-26T13:18:25.383284Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-26T13:18:25.389005Z",
-      "action": "plan locked: deferred-triage-gaps (4 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-06-26T13:23:51.039796Z",
-      "action": "plan reviewed: deferred-triage-gaps (0 blocking, 3 flags; #1 serialized t-3→wave3, #3 added c-3 funnel clause, #2 kept)"
-    },
     {
       "at": "2026-06-26T13:28:11.009365Z",
       "action": "set version=0.5.2.0"
@@ -203,6 +115,94 @@
     {
       "at": "2026-06-26T15:11:41.831349Z",
       "action": "completed phase-lifecycle-commands"
+    },
+    {
+      "at": "2026-06-26T15:17:13.078265Z",
+      "action": "bump internal 0.4.2.0 → 0.4.2.1"
+    },
+    {
+      "at": "2026-06-26T15:17:13.096681Z",
+      "action": "quick: count deferred someday ideas in /dross-status inbox nudge"
+    },
+    {
+      "at": "2026-06-26T15:46:00.147703Z",
+      "action": "set current_milestone=v0.6"
+    },
+    {
+      "at": "2026-06-26T15:46:00.153496Z",
+      "action": "scoped milestone v0.6: 4 criteria, 9 phases"
+    },
+    {
+      "at": "2026-06-26T15:48:15.412136Z",
+      "action": "created multilang-stack-profiles"
+    },
+    {
+      "at": "2026-06-26T16:25:48.112278Z",
+      "action": "set current_phase=multilang-stack-profiles"
+    },
+    {
+      "at": "2026-06-26T16:25:48.118636Z",
+      "action": "spec locked: multilang-stack-profiles"
+    },
+    {
+      "at": "2026-06-26T17:01:09.373864Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-26T17:01:09.38224Z",
+      "action": "plan locked: multilang-stack-profiles (4 tasks across 3 waves, --panel)"
+    },
+    {
+      "at": "2026-06-26T17:05:28.487219Z",
+      "action": "plan reviewed: multilang-stack-profiles (0 blocking, 3 flags)"
+    },
+    {
+      "at": "2026-06-26T19:08:47.593692Z",
+      "action": "paused — multilang-stack-profiles planned+reviewed, ready to execute t-1"
+    },
+    {
+      "at": "2026-06-27T06:37:04.940371Z",
+      "action": "resumed — next: /dross-execute t-1 (author python/javascript/csharp profiles)"
+    },
+    {
+      "at": "2026-06-27T06:38:05.800849Z",
+      "action": "set version=0.6.1.0"
+    },
+    {
+      "at": "2026-06-27T06:49:14.03887Z",
+      "action": "executed t-1 (author full profiles: python, javascript, csharp)"
+    },
+    {
+      "at": "2026-06-27T06:52:03.084347Z",
+      "action": "executed t-2 (author 7 detection-only stub profiles)"
+    },
+    {
+      "at": "2026-06-27T07:34:15.62485Z",
+      "action": "executed t-3 (single-source DetectLanguages; delete extLang)"
+    },
+    {
+      "at": "2026-06-27T07:40:40.00804Z",
+      "action": "executed t-4 (drop-in keystone: zero-recompile profile add)"
+    },
+    {
+      "at": "2026-06-27T07:40:49.378123Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-27T07:40:49.384407Z",
+      "action": "phase multilang-stack-profiles executed (4/4 done)"
+    },
+    {
+      "at": "2026-06-27T07:51:20.301178Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-27T07:51:20.308112Z",
+      "action": "verified multilang-stack-profiles: pass (3/3 covered, mutation 0.84 module / 1.00 in-scope)"
+    },
+    {
+      "at": "2026-06-27T07:55:25.669676Z",
+      "action": "completed multilang-stack-profiles"
     }
   ]
 }

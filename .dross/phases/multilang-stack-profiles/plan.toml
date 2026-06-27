@@ -1,0 +1,44 @@
+[phase]
+  id = "multilang-stack-profiles"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Author full profiles: python, javascript, csharp"
+  files = ["internal/stack/profiles/python.toml", "internal/stack/profiles/javascript.toml", "internal/stack/profiles/csharp.toml", "internal/stack/detect_test.go", "internal/quality/recon_test.go"]
+  description = "Three full drop-in profiles (signals + runtime + analyzer + loadout), mirroring go.toml/typescript.toml shape.\njavascript id MUST be \"javascript\" (exts .js/.jsx), not \"node\". javascript's package.json signal must stay lower\npriority than typescript so a tsconfig+.ts tree still resolves to typescript.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["If python.toml drops .py or its analyzer, Detect on a .py-only tree no longer returns \"python\" AND quality.BuildManifest omits the python analyzer (the c-1 analyzer-in-run row).", "If javascript.toml id is \"node\" instead of \"javascript\", the t-3 no-regression golden's .js row fails (language silently renamed).", "If javascript claims package.json at >= typescript's priority, Detect on a tsconfig.json + .ts tree returns \"javascript\" not \"typescript\" (TS-hijack guard)."]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Author 7 detection-only stub profiles"
+  files = ["internal/stack/profiles/ruby.toml", "internal/stack/profiles/rust.toml", "internal/stack/profiles/java.toml", "internal/stack/profiles/c.toml", "internal/stack/profiles/cpp.toml", "internal/stack/profiles/php.toml", "internal/stack/profiles/swift.toml", "internal/stack/profile_test.go", "internal/stack/detect_test.go"]
+  description = "Seven detection-only stubs carrying only id + title + [signals].exts (per stub_profile_shape). c.toml keeps .c/.h,\ncpp.toml keeps .cc/.cpp. Repair TestDetectUnsupportedFixture: shipping ruby.toml makes its foo.rb fixture legitimately\nDetect \"ruby\" — swap that fixture to a genuinely-unmapped ext so the never-false-match guard stays meaningful.\n"
+  covers = ["c-2"]
+  test_contract = ["A stub with only id+title+[signals].exts (no [runtime]/[[tools]]/[loadout]) Decodes and Validates clean — a Validate regression rejecting a bare stub fails TestStubMinimalShapeLoads.", "If any one stub is malformed (missing id, or a tools entry with no bin), Embedded() errors and the whole shipped set fails — TestEmbeddedProfilesAllLoad catches the blast radius.", "If c.toml drops .h or cpp.toml drops .cc, that ext's detect row loses \"c\"/\"cpp\" (multi-ext aliases the old map carried).", "After shipping ruby.toml, TestDetectUnsupportedFixture still asserts a never-matched stack on a genuinely-unmapped ext (fixture repaired in the same commit)."]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Single-source DetectLanguages; delete extLang"
+  files = ["internal/stack/detect.go", "internal/stack/detect_test.go"]
+  description = "Delete the hardcoded extLang map. Add an unexported parameterized core (detectLanguagesFrom(root, profiles) /\nextLangFor(profiles)) that DetectLanguages(root) wraps via LoadAll() — public signature unchanged, so recon callers\nstay untouched. Derive ext->lang by UNION over every loaded profile's [signals].exts (per the amended\next_clash_resolution): a shared ext yields every claiming profile's language. Detect stays winner-take-all.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["A temp tree with one file per legacy ext (.go .py .js .jsx .ts .tsx .rb .rs .java .kt .dart .svelte .sql .c .h .cc .cpp .cs .php .swift) yields all legacy language ids — TestDetectLanguagesNoRegression loses the exact language whose derivation broke.", "A pure-.ts repo's DetectLanguages still includes \"typescript\" — a winner-take-all derivation returns only \"svelte\" (pri 6 > 4) and fails TestTsNotHijackedBySvelte.", "The ext->lang core is unit-tested as a pure function over a profile slice (no filesystem); a tie-break/clash regression fails that unit without a temp dir.", "No extLang map literal survives in detect.go — TestNoDuplicateExtLangMap fails if one is reintroduced."]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 3
+  title = "Drop-in keystone: zero-recompile profile add"
+  files = ["internal/stack/detect_test.go", "internal/quality/recon_test.go"]
+  description = "End-to-end keystone proving c-3 via the real user-overlay path. With t.Setenv(\"HOME\", tmp) and a brand-new <id>.toml\n(exts=[\".zzz\"], one analyzer) under ~/.claude/dross/profiles/, assert detectable + recon-visible with zero edits to\ndetect.go/recon.go/catalog.go.\n"
+  covers = ["c-3"]
+  depends_on = ["t-3"]
+  test_contract = ["With HOME set to a temp dir and a new .zzz profile dropped under the user overlay, stack.DetectLanguages on a .zzz tree includes that id AND quality.AnalyzersFor(id)/BuildManifest surfaces its analyzer — proving zero-Go-edit extensibility; reverting t-3's derivation breaks the DetectLanguages half.", "A malformed toml dropped beside the valid one does not crash: DetectLanguages still returns the embedded language set (never-crash drop-in seam)."]
+  status = "done"

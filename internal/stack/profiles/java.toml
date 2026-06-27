@@ -1,0 +1,10 @@
+# Java stack profile (detection-only stub). Drop a sibling <id>.toml into
+# ~/.claude/dross/profiles/ to add or override a stack. This stub carries only
+# detection signals; its analyzer/runtime loadout is deferred to
+# multilang-analyzer-catalogs. See README.md.
+
+id    = "java"
+title = "Java"
+
+[signals]
+  exts = [".java"]

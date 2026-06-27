@@ -62,19 +62,24 @@
 [[deferred]]
   text = "Language-dedicated security scanners per stack (e.g. eslint-plugin-security for Svelte)."
   why = "Agnostic semgrep/gitleaks/trivy cover these ecosystems for now; revisit only if a gap shows."
+  target = "multilang-analyzer-catalogs"
 
 [[deferred]]
   text = "A new quality dimension for SQL/correctness linting."
   why = "Rejected to preserve the zero-mechanism-change keystone; sqlfluff maps to dead-code instead."
+  dismissed = true
 
 [[deferred]]
   text = "Broader per-ecosystem tool coverage (ktlint as a style analyzer, dart analyze as a separate analyzer, svelte-check as a quality tool, full Flutter build variants)."
   why = "First-cut loadout per stack only (milestone non-goal: not exhaustive per-language coverage)."
+  target = "multilang-analyzer-catalogs"
 
 [[deferred]]
   text = "Marker-file stack detection (Dockerfile / compose) and a Docker profile."
   why = "Separate phase 09-marker-file-detection in this milestone."
+  dismissed = true
 
 [[deferred]]
   text = "Unifying the extLang map with each profile's [signals].exts so extension->language is single-sourced."
   why = "Not required to ship these profiles; the milestone explicitly scopes 'extLang additions' as the recognition path."
+  target = "multilang-stack-profiles"

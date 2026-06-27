@@ -7,7 +7,10 @@ One-line answer to "where am I?". Uses `dross status` for the mechanical read, s
 1. Run `dross rule show` and treat output as MUST-FOLLOW (the user might have rules that override the default suggestion in step 3).
 2. Run `dross status` and capture stdout.
 3. Print the captured output verbatim — it's already formatted. Don't paraphrase.
-4. Run `dross issue pull --labels bug,enhancement --json` (read-only; emits `[]` when board sync is off or there's nothing new). If it returns a non-empty array, add a one-line passive nudge under the status block: `inbox: N new board issue(s) — /dross-inbox to triage`. Never block on this; a board/network error here is non-fatal — skip the nudge silently.
+4. Count what `/dross-inbox` would surface — it triages **two** intake sources, so count both. Each is read-only and non-fatal: on any error, skip that source's contribution silently (never block).
+   - **Board issues:** `dross issue pull --labels bug,enhancement --json` (emits `[]` when board sync is off or there's nothing new).
+   - **Deferred `someday` ideas:** `dross deferred list --someday --json` (the local backlog half — ideas punted in `/dross-spec` and never routed; emits `[]` when none are pending).
+   If the combined count is non-zero, add a one-line passive nudge under the status block: `inbox: N item(s) to triage (B board, D deferred) — /dross-inbox`. Drop the `(…)` breakdown when only one source contributes (e.g. `inbox: 3 board issue(s) to triage — /dross-inbox`).
 5. After the status block, add one short paragraph (2-3 sentences max) that:
    - Names the most likely next action and why
    - Flags anything off (e.g. uncommitted git changes, failed tasks) the user should know about

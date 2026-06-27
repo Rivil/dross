@@ -22,6 +22,9 @@ func writeFile(t *testing.T, path, content string) {
 }
 
 func TestDetectLanguagesContextFree(t *testing.T) {
+	// HOME-isolate so DetectLanguages (now profile-derived via LoadAll, reading
+	// ~/.claude/dross/profiles) is independent of any real user overlay (flag #3).
+	t.Setenv("HOME", t.TempDir())
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "main.go"), "package main")
 	// A planted .dross/ holding a python file + planning artifacts. Detection must
@@ -45,6 +48,7 @@ func TestDetectLanguagesContextFree(t *testing.T) {
 }
 
 func TestDetectLanguagesUnknownExt(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // overlay-independent: see TestDetectLanguagesContextFree (flag #3)
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "data.xyz"), "blob")
 	writeFile(t, filepath.Join(root, "notes.unknownext"), "blob")

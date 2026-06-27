@@ -1,0 +1,54 @@
+{
+  "phase": "multilang-stack-profiles",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/stack/profiles/python.toml",
+        "internal/stack/profiles/javascript.toml",
+        "internal/stack/profiles/csharp.toml",
+        "internal/stack/detect_test.go",
+        "internal/quality/recon_test.go",
+        "internal/cmd/stack_test.go"
+      ],
+      "commit": "ff5a5f3",
+      "completed_at": "2026-06-27T06:49:14.022623Z",
+      "notes": "feature: multi-language stack detection · python/javascript/csharp profiles @ internal/stack/profiles/ · full drop-in profiles (signals+runtime+analyzer+loadout) detectable with zero detect.go change"
+    },
+    "t-2": {
+      "files": [
+        "internal/stack/profiles/ruby.toml",
+        "internal/stack/profiles/rust.toml",
+        "internal/stack/profiles/java.toml",
+        "internal/stack/profiles/c.toml",
+        "internal/stack/profiles/cpp.toml",
+        "internal/stack/profiles/php.toml",
+        "internal/stack/profiles/swift.toml",
+        "internal/stack/profile_test.go",
+        "internal/stack/detect_test.go"
+      ],
+      "commit": "db97611",
+      "completed_at": "2026-06-27T06:52:03.069865Z",
+      "notes": "feature: multi-language stack detection · ruby/rust/java/c/cpp/php/swift stub profiles @ internal/stack/profiles/ · detection-only stubs (id+title+exts) preserving residual ext coverage with zero code change"
+    },
+    "t-3": {
+      "files": [
+        "internal/stack/detect.go",
+        "internal/stack/detect_test.go",
+        "internal/quality/recon_test.go",
+        "internal/security/recon_test.go"
+      ],
+      "commit": "976f180",
+      "completed_at": "2026-06-27T07:34:15.610479Z",
+      "notes": "feature: multi-language stack detection · extLangFor/detectLanguagesFrom @ internal/stack/detect.go · DetectLanguages single-sources ext-\u003elang by union over loaded profiles, deleting the hardcoded map (zero-recompile language adds)"
+    },
+    "t-4": {
+      "files": [
+        "internal/stack/detect_test.go",
+        "internal/quality/recon_test.go"
+      ],
+      "commit": "886f237",
+      "completed_at": "2026-06-27T07:40:39.991986Z",
+      "notes": "feature: multi-language stack detection · TestDropInProfileDetectable/TestDropInAnalyzerVisible @ internal/stack/detect_test.go · end-to-end keystone proving a drop-in profile is detectable + recon-visible with zero Go change (c-3)"
+    }
+  }
+}

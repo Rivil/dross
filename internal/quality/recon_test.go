@@ -68,7 +68,81 @@ func TestQualityNoMarkerRegression(t *testing.T) {
 	}
 }
 
+// TestPythonAnalyzerInManifest is the c-1 analyzer-in-run row: a .py tree must
+// surface python's dedicated analyzer (ruff) in the quality manifest, ON TOP of
+// the agnostic set — proving a full stack profile's analyzer reaches a real run via
+// profile id == language. Dropping ruff from python.toml (or renaming the profile
+// id away from "python") loses the ruff row.
+func TestPythonAnalyzerInManifest(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "app.py"), "print(1)\n")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := manifestNames(m)
+	if !names["ruff"] {
+		t.Errorf(".py repo: quality manifest missing python's ruff analyzer (c-1); names=%v", names)
+	}
+	// The agnostic set must remain — a python repo never loses scc/jscpd.
+	for _, want := range []string{"scc", "jscpd"} {
+		if !names[want] {
+			t.Errorf("python repo lost the agnostic analyzer %q; names=%v", want, names)
+		}
+	}
+}
+
+// TestDropInAnalyzerVisible is the c-3 keystone (recon half): a brand-new profile
+// dropped under ~/.claude/dross/profiles makes its dedicated analyzer recon-visible
+// with zero edit to catalog.go/recon.go — AnalyzersFor and BuildManifest both surface
+// it purely because the profile loaded. zzz is an id no embedded TOML ships, so this
+// can only pass via the live user-overlay path.
+func TestDropInAnalyzerVisible(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profDir := filepath.Join(home, ".claude", "dross", "profiles")
+	writeFile(t, filepath.Join(profDir, "zzz.toml"), `id = "zzz"
+title = "Zzz"
+[signals]
+  exts = [".zzz"]
+[[tools]]
+  name = "zzzlint"
+  kind = "analyzer"
+  dimension = "complexity"
+  core = true
+  install = "echo install zzzlint"
+`)
+
+	// AnalyzersFor the dropped-in language must surface its dedicated analyzer.
+	got := map[string]bool{}
+	for _, a := range AnalyzersFor("zzz") {
+		got[a.Name] = true
+	}
+	if !got["zzzlint"] {
+		t.Errorf("AnalyzersFor(\"zzz\") missing drop-in analyzer zzzlint; got %v", got)
+	}
+
+	// End-to-end: BuildManifest on a .zzz tree detects "zzz" then surfaces zzzlint —
+	// proving detection and analyzer resolution both flow from the dropped-in profile.
+	code := t.TempDir()
+	writeFile(t, filepath.Join(code, "widget.zzz"), "blob")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+	m, err := BuildManifest(code, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !manifestNames(m)["zzzlint"] {
+		t.Errorf("BuildManifest on a .zzz tree missing zzzlint — a drop-in analyzer must be recon-visible with zero catalog/recon edit; names=%v", manifestNames(m))
+	}
+}
+
 func TestDetectLanguages(t *testing.T) {
+	// HOME-isolate: DetectLanguages derives ext->lang from LoadAll(), which reads
+	// ~/.claude/dross/profiles — a real user overlay could add a language and flip
+	// this exact-match assertion (review flag #3).
+	t.Setenv("HOME", t.TempDir())
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "main.go"), "package main")
 	// A planted .dross/ holding a python file. Detection must NOT descend into
@@ -86,6 +160,7 @@ func TestDetectLanguages(t *testing.T) {
 }
 
 func TestDetectLanguagesUnknownExt(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // overlay-independent: see TestDetectLanguages (flag #3)
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "data.xyz"), "blob")
 	writeFile(t, filepath.Join(root, "notes.unknownext"), "blob")

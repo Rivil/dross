@@ -23,3 +23,4 @@
 [[deferred]]
   text = "A full ship/merge recovery recipe in ship.md §6.2 covering arbitrary mid-merge failure states (beyond these three specific fixes)."
   why = "These fixes make the happy path clean; a general recovery cookbook (the dross_ship_squash_recovery memory item) is a larger doc effort for later."
+  target = "ship-complete-recovery-hardening"

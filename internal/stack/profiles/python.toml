@@ -1,0 +1,61 @@
+# Python stack profile. Drop a sibling <id>.toml into ~/.claude/dross/profiles/
+# to add or override a stack — no recompile, zero code change. See README.md.
+
+id    = "python"
+title = "Python"
+
+[signals]
+  files    = ["pyproject.toml", "setup.py", "requirements.txt", "Pipfile"]
+  exts     = [".py"]
+  priority = 5
+
+[[package_managers]]
+  name     = "uv"
+  bin      = "uv"
+  lockfile = "uv.lock"
+[[package_managers]]
+  name     = "poetry"
+  bin      = "poetry"
+  lockfile = "poetry.lock"
+[[package_managers]]
+  name     = "pip"
+  bin      = "pip"
+  lockfile = "requirements.txt"
+
+# Runtime command set seeded into project.toml [runtime] at init/onboard.
+[runtime.test]
+  run = "pytest"
+[runtime.typecheck]
+  run = "mypy ."
+[runtime.format]
+  run = "ruff format --check ."
+[runtime.build]
+  run = "python -m build"
+
+# Dedicated quality analyzers. Agnostic tools (gitleaks, semgrep, trivy, scc,
+# jscpd) apply to every stack and are intentionally NOT listed here.
+[[tools]]
+  name      = "ruff"
+  kind      = "analyzer"
+  dimension = "complexity"
+  core      = true
+  install   = "pipx install ruff"
+[[tools]]
+  name      = "vulture"
+  kind      = "analyzer"
+  dimension = "dead-code"
+  core      = true
+  install   = "pipx install vulture"
+
+[loadout]
+  mcp_tools = [
+    "context7 (resolve-library-id + query-docs) — verify Python stdlib / library API signatures before calling them",
+  ]
+  guardrails = [
+    "Type-annotate public functions; prefer pathlib over os.path; let exceptions propagate rather than swallowing them.",
+    "Run mypy and the pytest suite before claiming a change works.",
+    "Pin and isolate dependencies (venv / uv); don't assume a global interpreter.",
+  ]
+  conventions = [
+    "PEP 8 via ruff; f-strings over .format/%; dataclasses for plain records; explicit __all__ on package modules.",
+  ]

@@ -84,6 +84,56 @@ func TestProfileSchemaShapes(t *testing.T) {
 	assertShapes(t, rt)
 }
 
+// TestStubMinimalShapeLoads pins the stub_profile_shape decision: a detection-only
+// stub carrying only id + title + [signals].exts (no [runtime], [[tools]] or
+// [loadout]) must Decode and Validate clean. A Validate regression that began
+// demanding a runtime block or an analyzer would reject a bare stub and fail here.
+func TestStubMinimalShapeLoads(t *testing.T) {
+	const stub = `id = "ruby"
+title = "Ruby"
+[signals]
+  exts = [".rb"]
+`
+	p, err := Decode([]byte(stub))
+	if err != nil {
+		t.Fatalf("bare stub must Decode+Validate clean, got: %v", err)
+	}
+	if p.ID != "ruby" || len(p.Signals.Exts) != 1 || p.Signals.Exts[0] != ".rb" {
+		t.Fatalf("stub fields lost: %+v", p)
+	}
+	// The optional blocks must genuinely be absent — a stub is not silently filled in.
+	if len(p.Tools) != 0 || len(p.Packages) != 0 {
+		t.Errorf("bare stub gained tools/packages it never declared: tools=%v packages=%v", p.Tools, p.Packages)
+	}
+}
+
+// TestEmbeddedProfilesAllLoad is the blast-radius guard: Embedded() decodes AND
+// validates every shipped <id>.toml, so a single malformed profile (missing id, a
+// tools entry with no bin, broken TOML) errors the whole set rather than being
+// silently skipped. Shipping a bad stub fails the entire suite here.
+func TestEmbeddedProfilesAllLoad(t *testing.T) {
+	profiles, err := Embedded()
+	if err != nil {
+		t.Fatalf("a malformed shipped profile breaks the whole embedded set: %v", err)
+	}
+	// Every loaded profile must satisfy the same invariants Decode enforces.
+	for _, p := range profiles {
+		if err := p.Validate(); err != nil {
+			t.Errorf("embedded profile %q fails Validate: %v", p.ID, err)
+		}
+	}
+	// The 7 detection-only stubs shipped this phase must all be present.
+	ids := map[string]bool{}
+	for _, p := range profiles {
+		ids[p.ID] = true
+	}
+	for _, want := range []string{"ruby", "rust", "java", "c", "cpp", "php", "swift"} {
+		if !ids[want] {
+			t.Errorf("embedded set missing stub profile %q", want)
+		}
+	}
+}
+
 func TestProfileRejectsEmptyID(t *testing.T) {
 	_, err := Decode([]byte(`id = ""` + "\n[runtime.test]\n  run = \"go test ./...\"\n"))
 	if err == nil {

@@ -66,15 +66,19 @@
 [[deferred]]
   text = "Dedicated scanner catalogs for non-Go languages (JS/Python/etc.)"
   why = "Mechanism is multi-language now; populating dedicated per-language catalogs is later work (Go-first non-goal)."
+  target = "multilang-analyzer-catalogs"
 
 [[deferred]]
   text = "CodeQL integration"
   why = "Heavy to wire; roadmap marks it optional."
+  target = "secure-quality-findings-lifecycle"
 
 [[deferred]]
   text = "Full `dross security` findings-tracking / state CLI"
   why = "This phase ships only the thin slice (run-dir, scanner detection, scaffold writer); richer findings-state tracking is a later phase."
+  target = "secure-quality-findings-lifecycle"
 
 [[deferred]]
   text = "Committed / public in-git audit trail"
   why = "Chose gitignored to avoid pre-disclosure on a public repo; durable in-git reporting (possibly redacted) is a later call."
+  target = "secure-quality-findings-lifecycle"

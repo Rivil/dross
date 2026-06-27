@@ -113,39 +113,50 @@ func extsInTree(root string) map[string]bool {
 	return out
 }
 
-// extLang maps source-file extensions to languages. Unknown extensions are
-// ignored — detection never crashes on an extension it doesn't recognise. This is
-// the single canonical map: security and quality recon both delegate to
-// DetectLanguages so the ext->lang mapping can never drift across copies.
-var extLang = map[string]string{
-	".go":     "go",
-	".py":     "python",
-	".js":     "javascript",
-	".jsx":    "javascript",
-	".ts":     "typescript",
-	".tsx":    "typescript",
-	".rb":     "ruby",
-	".rs":     "rust",
-	".java":   "java",
-	".kt":     "kotlin",
-	".dart":   "dart",
-	".svelte": "svelte",
-	".sql":    "sql",
-	".c":      "c",
-	".h":      "c",
-	".cc":     "cpp",
-	".cpp":    "cpp",
-	".cs":     "csharp",
-	".php":    "php",
-	".swift":  "swift",
+// extLangFor derives the ext->languages map by UNION over every profile's declared
+// Signals.Exts: each extension maps to the id of every profile that claims it, so a
+// shared extension (e.g. .ts in both svelte@6 and typescript@4) yields BOTH
+// languages — no profile's language is ever dropped (the amended ext_clash_resolution
+// decision). This is a pure function of the profile slice — no filesystem — so the
+// derivation is unit-testable in isolation. There is no hardcoded ext->lang map: the
+// mapping is single-sourced from the loaded profiles, so adding a profile extends
+// language detection with zero code change here.
+func extLangFor(profiles []*Profile) map[string][]string {
+	m := map[string][]string{}
+	for _, p := range profiles {
+		for _, e := range p.Signals.Exts {
+			ext := normalizeExt(e)
+			if !langListHas(m[ext], p.ID) {
+				m[ext] = append(m[ext], p.ID)
+			}
+		}
+	}
+	for ext := range m {
+		sort.Strings(m[ext])
+	}
+	return m
 }
 
-// DetectLanguages walks the tree at root and returns the sorted, de-duplicated set
-// of languages found, mapped from file extensions. It skips VCS/vendor/build noise
+// langListHas reports whether langs already contains id (keeps extLangFor's per-ext
+// language list de-duplicated even if two profiles share an id).
+func langListHas(langs []string, id string) bool {
+	for _, l := range langs {
+		if l == id {
+			return true
+		}
+	}
+	return false
+}
+
+// detectLanguagesFrom walks the tree at root and returns the sorted, de-duplicated
+// set of languages found, deriving ext->lang from the supplied profiles (via
+// extLangFor) rather than a hardcoded map. It skips VCS/vendor/build noise
 // (including .dross, keeping audit sweeps context-free) and silently ignores files
-// with unknown extensions. Unlike Detect (which resolves a single best profile),
-// this returns every language present — what the security/quality tool sweeps need.
-func DetectLanguages(root string) ([]string, error) {
+// with extensions no profile claims. Parameterizing the profile slice keeps the
+// core filesystem-walk testable without a real user overlay; DetectLanguages is the
+// production wrapper that supplies the loaded set.
+func detectLanguagesFrom(root string, profiles []*Profile) ([]string, error) {
+	extToLangs := extLangFor(profiles)
 	set := map[string]bool{}
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -157,7 +168,7 @@ func DetectLanguages(root string) ([]string, error) {
 			}
 			return nil
 		}
-		if lang, ok := extLang[filepath.Ext(d.Name())]; ok {
+		for _, lang := range extToLangs[filepath.Ext(d.Name())] {
 			set[lang] = true
 		}
 		return nil
@@ -171,6 +182,26 @@ func DetectLanguages(root string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// DetectLanguages walks the tree at root and returns the sorted, de-duplicated set
+// of languages found, mapped from file extensions. It skips VCS/vendor/build noise
+// (including .dross, keeping audit sweeps context-free) and silently ignores files
+// with extensions no profile claims. Unlike Detect (which resolves a single best
+// profile), this returns every language present — what the security/quality tool
+// sweeps need.
+//
+// The ext->lang mapping is derived from the loaded profile set (embedded built-ins
+// overlaid by ~/.claude/dross/profiles), so dropping in a profile extends language
+// detection with no code change (c-2/c-3). A malformed user profile is tolerated:
+// LoadAll still returns the merged embedded set, so detection never crashes on a bad
+// drop-in — only a total failure to load any profile surfaces as an error.
+func DetectLanguages(root string) ([]string, error) {
+	profiles, err := LoadAll()
+	if len(profiles) == 0 && err != nil {
+		return nil, err
+	}
+	return detectLanguagesFrom(root, profiles)
 }
 
 // MarkerProfiles returns the sorted ids of every profile whose Signals.FilePatterns

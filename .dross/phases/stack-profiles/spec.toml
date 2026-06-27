@@ -68,11 +68,14 @@
 [[deferred]]
   text = "Other-language stack profiles (Node, Python, etc.)"
   why = "This phase delivers the mechanism + Go; populating further frameworks is the next-phase drop-in work the extensibility keystone enables."
+  target = "multilang-stack-profiles"
 
 [[deferred]]
   text = "Generating standalone Claude Code agent .md definition files from a profile"
   why = "Rejected c-4 shape; the loadout ships as a 'dross stack loadout' text block instead of a maintained agent-file artifact."
+  dismissed = true
 
 [[deferred]]
   text = "Broad multi-language profile library shipped in v0.1"
   why = "Milestone non-goal; the mechanism is built to accept many stacks, but only Go ships now."
+  target = "multilang-stack-profiles"
