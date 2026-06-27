@@ -207,7 +207,8 @@ func phaseCreate() *cobra.Command {
 // entry. This is the post-merge counterpart to `dross phase create` —
 // together they keep phase work fully off main.
 func phaseComplete() *cobra.Command {
-	return &cobra.Command{
+	var recoverFlag bool
+	c := &cobra.Command{
 		Use:   "complete [phase-id]",
 		Short: "Finalize a phase after squash-merge: ff main, delete phase/<id>",
 		Long: `Run after the PR for this phase has been squash-merged upstream.
@@ -223,7 +224,12 @@ completion onto main — complete writes no commit of its own. This is
 what eliminates the completion-chore divergence.
 
 Refuses on a dirty tree, or when origin/<main> carries no "completed
-<id>" record (the upstream merge hasn't actually happened yet).`,
+<id>" record (the upstream merge hasn't actually happened yet).
+
+On an already-diverged main the fast-forward aborts. Re-run with
+--recover to reset main to origin and restore the cumulative .dross/
+tree in one shot (the same heal as 'dross ship recover'), then finish
+the completion. --recover performs a destructive reset of local main.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			root, err := FindRoot()
@@ -312,8 +318,31 @@ Refuses on a dirty tree, or when origin/<main> carries no "completed
 			}
 
 			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+mainBranch); err != nil {
-				return fmt.Errorf("fast-forward of %s from origin failed: %w\n%s",
-					mainBranch, err, out)
+				// The ff abort IS the divergence signal: local main holds
+				// commits origin/<main> doesn't. Without --recover, refuse and
+				// point at the fix, changing nothing destructive. The clean-tree
+				// guard above already ran, so no uncommitted work is at risk.
+				if !recoverFlag {
+					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged.\n%s\n"+
+						"Re-run `dross phase complete --recover` to reset %s to origin and restore .dross/ "+
+						"(or use `dross ship recover`). Recovery is a destructive reset of local %s — read the abort first.",
+						mainBranch, mainBranch, out, mainBranch, mainBranch)
+				}
+				// --recover: reload state from the (now checked-out) main
+				// working tree so the recovery commit carries main's .dross/
+				// state, not the phase branch's stale copy loaded at the top of
+				// this RunE. Then delegate to the shared routine — the same heal
+				// `dross ship recover` runs — which resets to origin and restores
+				// the cumulative .dross/ tree in one shot.
+				rs, lerr := state.Load(filepath.Join(root, state.File))
+				if lerr != nil {
+					return fmt.Errorf("reload state for recovery: %w", lerr)
+				}
+				if rerr := runDrossRecovery(repoDir, root, p, rs, phaseID, ""); rerr != nil {
+					return fmt.Errorf("recover diverged %s during complete: %w", mainBranch, rerr)
+				}
+				// Healed: main reset to origin with .dross/ restored. Fall
+				// through to the branch teardown below.
 			}
 
 			// Delete the local phase branch (best-effort: only if it exists).
@@ -354,6 +383,9 @@ Refuses on a dirty tree, or when origin/<main> carries no "completed
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&recoverFlag, "recover", false,
+		"on a diverged main, reset to origin and restore .dross/ in one shot instead of aborting")
+	return c
 }
 
 // preflightPhaseBranch enforces the invariants required for a clean
