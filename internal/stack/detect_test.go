@@ -581,6 +581,122 @@ func TestDropInMalformedDoesNotCrash(t *testing.T) {
 	}
 }
 
+// TestContentMatchReadCap proves the content gate only inspects the first
+// contentSniffCap bytes: a marker planted just past the cap must NOT match, while the
+// same marker within the cap must. Removing the cap (reading the whole file) fails
+// the first assertion.
+func TestContentMatchReadCap(t *testing.T) {
+	prof := &Profile{ID: "capped", Signals: Signals{
+		FilePatterns: []string{"*.yaml"},
+		Content:      ContentMatch{All: []string{"MARKER"}},
+	}}
+	pad := strings.Repeat("x", contentSniffCap+10)
+
+	far := t.TempDir()
+	writeFile(t, far, "far.yaml", pad+"\nMARKER\n")
+	if got := MarkerProfiles(far, []*Profile{prof}); containsLang(got, "capped") {
+		t.Fatalf("MarkerProfiles = %v, want it to NOT include %q — a marker beyond the read cap must not match", got, "capped")
+	}
+
+	near := t.TempDir()
+	writeFile(t, near, "near.yaml", "MARKER\n"+pad)
+	if got := MarkerProfiles(near, []*Profile{prof}); !containsLang(got, "capped") {
+		t.Fatalf("MarkerProfiles = %v, want it to include %q — a marker within the cap must match", got, "capped")
+	}
+}
+
+// TestContentMatchUnreadableSkipped proves a content-gated candidate that cannot be
+// read (missing file) or carries binary garbage is skipped gracefully — readCapped
+// reports ok=false and MarkerProfiles never panics or false-matches.
+func TestContentMatchUnreadableSkipped(t *testing.T) {
+	if _, ok := readCapped(filepath.Join(t.TempDir(), "does-not-exist.yaml"), contentSniffCap); ok {
+		t.Error("readCapped must report ok=false for a missing file")
+	}
+
+	prof := &Profile{ID: "bin", Signals: Signals{
+		FilePatterns: []string{"*.yaml"},
+		Content:      ContentMatch{All: []string{"apiVersion"}},
+	}}
+	dir := t.TempDir()
+	writeFile(t, dir, "blob.yaml", string([]byte{0x00, 0xff, 0xfe, 0x01, 0x02}))
+	if got := MarkerProfiles(dir, []*Profile{prof}); containsLang(got, "bin") {
+		t.Fatalf("MarkerProfiles = %v, want it to NOT include %q — binary content lacking the token must not match", got, "bin")
+	}
+}
+
+// TestMarkerGlobOnlyFastPath proves a glob-only profile (no content gate) matches on
+// filename alone WITHOUT reading the candidate body: an unreadable candidate still
+// surfaces the profile. If the engine began reading bodies for glob-only profiles,
+// the failed read would drop the match. Skipped where the unreadable-file
+// discriminator is unavailable (e.g. running as root).
+func TestMarkerGlobOnlyFastPath(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "x.marker")
+	writeFile(t, dir, "x.marker", "irrelevant\n")
+	if err := os.Chmod(p, 0o000); err != nil {
+		t.Skipf("cannot chmod candidate unreadable: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+	if _, err := os.ReadFile(p); err == nil {
+		t.Skip("file still readable after chmod (running as root?) — discriminator unavailable")
+	}
+
+	globOnly := &Profile{ID: "marker", Signals: Signals{FilePatterns: []string{"*.marker"}}}
+	if got := MarkerProfiles(dir, []*Profile{globOnly}); !containsLang(got, "marker") {
+		t.Fatalf("MarkerProfiles = %v, want %q — a glob-only profile must match on filename without reading the body", got, "marker")
+	}
+}
+
+// TestMarkerProfilesContentSniffEndToEnd resolves content-sniff end-to-end through
+// MarkerProfiles with synthetic profiles carrying the same content semantics the
+// embedded kubernetes (AND apiVersion+kind) and cloudformation (ANY
+// AWSTemplateFormatVersion/Resources) profiles will use. Those embedded profiles land
+// in t-3/t-4; their Embedded()-backed assertions live in t-7/t-8. A plain YAML file
+// must surface neither — the false-positive guard the content gate exists for.
+func TestMarkerProfilesContentSniffEndToEnd(t *testing.T) {
+	k8s := &Profile{ID: "kubernetes", Signals: Signals{
+		FilePatterns: []string{"*.yaml", "*.yml", "*.json"},
+		Content:      ContentMatch{All: []string{"apiVersion", "kind"}},
+	}}
+	cfn := &Profile{ID: "cloudformation", Signals: Signals{
+		FilePatterns: []string{"*.yaml", "*.yml", "*.json"},
+		Content:      ContentMatch{Any: []string{"AWSTemplateFormatVersion", "Resources"}},
+	}}
+	profiles := []*Profile{k8s, cfn}
+
+	t.Run("k8s manifest surfaces only kubernetes", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, dir, "deployment.yaml", "apiVersion: apps/v1\nkind: Deployment\n")
+		got := MarkerProfiles(dir, profiles)
+		if !containsLang(got, "kubernetes") {
+			t.Errorf("MarkerProfiles = %v, want it to include kubernetes", got)
+		}
+		if containsLang(got, "cloudformation") {
+			t.Errorf("MarkerProfiles = %v, a pure k8s manifest must not surface cloudformation", got)
+		}
+	})
+
+	t.Run("cfn template surfaces only cloudformation", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, dir, "template.yaml", "AWSTemplateFormatVersion: '2010-09-09'\n")
+		got := MarkerProfiles(dir, profiles)
+		if !containsLang(got, "cloudformation") {
+			t.Errorf("MarkerProfiles = %v, want it to include cloudformation", got)
+		}
+		if containsLang(got, "kubernetes") {
+			t.Errorf("MarkerProfiles = %v, a CFN-only template must not surface kubernetes", got)
+		}
+	})
+
+	t.Run("plain yaml surfaces neither", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFile(t, dir, "config.yaml", "name: my-app\nport: 8080\n")
+		if got := MarkerProfiles(dir, profiles); len(got) != 0 {
+			t.Errorf("MarkerProfiles = %v, want empty — a plain YAML file must surface no IaC profile", got)
+		}
+	})
+}
+
 // repoRoot walks up from the test working directory to the nearest go.mod.
 func repoRoot(t *testing.T) string {
 	t.Helper()

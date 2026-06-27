@@ -287,3 +287,67 @@ func findTool(p *Profile, name string) *Tool {
 	}
 	return nil
 }
+
+// TestContentMatchAllSemantics pins All=AND / Any=OR. If All were treated as OR, a
+// candidate carrying only one of two required tokens would wrongly match.
+func TestContentMatchAllSemantics(t *testing.T) {
+	all := ContentMatch{All: []string{"apiVersion", "kind"}}
+	if !all.Matches([]byte("apiVersion: apps/v1\nkind: Deployment\n")) {
+		t.Error("All match: both tokens present must match")
+	}
+	if all.Matches([]byte("apiVersion: apps/v1\n")) {
+		t.Error("All is AND, not OR — only one of two required tokens must NOT match")
+	}
+
+	any := ContentMatch{Any: []string{"AWSTemplateFormatVersion", "Resources"}}
+	if !any.Matches([]byte("Resources:\n  Bucket:\n")) {
+		t.Error("Any match: one token present must match (OR)")
+	}
+	if any.Matches([]byte("nothing relevant here\n")) {
+		t.Error("Any match: no token present must NOT match")
+	}
+}
+
+// TestContentMatchCaseSensitive pins case-sensitive matching: a lowercase
+// `resources:` (common in unrelated YAML) must not satisfy a CloudFormation
+// `Resources` token, or every YAML repo would false-positive.
+func TestContentMatchCaseSensitive(t *testing.T) {
+	c := ContentMatch{Any: []string{"Resources"}}
+	if c.Matches([]byte("resources:\n  - x\n")) {
+		t.Error("content match must be case-sensitive — lowercase `resources:` must not satisfy `Resources`")
+	}
+	if !c.Matches([]byte("Resources:\n")) {
+		t.Error("exact-case `Resources` must match")
+	}
+}
+
+// TestContentMatchDecodeRoundTrip pins the [signals.content] toml tag: a profile's
+// content gate must survive decode and an encode/decode round-trip (a dropped tag
+// would silently disable content confirmation).
+func TestContentMatchDecodeRoundTrip(t *testing.T) {
+	const src = `id = "k8s-like"
+[signals]
+  file_patterns = ["*.yaml", "*.json"]
+  [signals.content]
+    all = ["apiVersion", "kind"]
+`
+	p, err := Decode([]byte(src))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	want := []string{"apiVersion", "kind"}
+	if got := p.Signals.Content.All; !equalStrs(got, want) {
+		t.Fatalf("content.all decode: got %v, want %v (wrong toml tag?)", got, want)
+	}
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(p); err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	rt, err := Decode(buf.Bytes())
+	if err != nil {
+		t.Fatalf("decode round-trip: %v", err)
+	}
+	if got := rt.Signals.Content.All; !equalStrs(got, want) {
+		t.Fatalf("content.all lost on round-trip: got %v, want %v", got, want)
+	}
+}
