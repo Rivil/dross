@@ -224,3 +224,53 @@ func TestQualityReconDelegatesToStack(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildManifest_svelteRepo_surfacesThreeDimensions proves c-2 end-to-end: a
+// .svelte tree surfaces all three added dedicated analyzers (knip/dead-code,
+// dependency-cruiser/coupling, typescript-eslint/error-handling) in the manifest
+// alongside the agnostic scc/jscpd — so every dimension reaches a real run.
+func TestBuildManifest_svelteRepo_surfacesThreeDimensions(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // embedded profiles only, no user overlay
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "widget.svelte"), "<script>let x = 1</script>")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := manifestNames(m)
+	for _, want := range []string{"knip", "dependency-cruiser", "typescript-eslint", "scc", "jscpd"} {
+		if !names[want] {
+			t.Errorf("svelte repo: manifest missing %q (all three dedicated dimensions must reach a run); tools=%v", want, names)
+		}
+	}
+}
+
+// TestBuildManifest_missingDedicatedAnalyzerSkipped proves c-4 on the quality side:
+// under an all-missing lookup, dart's dcm-unused-code is recorded as skipped (with
+// its install hint) and BuildManifest still returns nil — no abort.
+func TestBuildManifest_missingDedicatedAnalyzerSkipped(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "foo.dart"), "void main() {}")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatalf("BuildManifest aborted on a missing tool: %v", err)
+	}
+	var unused *ToolStatus
+	for i := range m.Skipped() {
+		if m.Skipped()[i].Name == "dcm-unused-code" {
+			s := m.Skipped()[i]
+			unused = &s
+		}
+	}
+	if unused == nil {
+		t.Fatalf("dart dcm-unused-code not in Skipped() under all-missing lookup; skipped=%v", m.Skipped())
+	}
+	if unused.Install == "" {
+		t.Error("skipped dcm-unused-code has no install hint")
+	}
+}
