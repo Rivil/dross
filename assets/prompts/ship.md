@@ -135,6 +135,18 @@ Next: /dross-status — see where things stand.
 
 If the PR opened but reviewer-request failed, surface that — it's non-fatal but the user should know.
 
+## Recovery
+
+Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-forwards local main from origin and tears down the branch. When the merge step goes sideways, recover with a dross command — **never hand-edit `.dross/` or re-commit it by hand.** That manual surgery is exactly what drifted in the past; a dross command owns the restore and the commit. The three mid-merge failure states and their one-command fixes:
+
+1. **Fast-forward abort.** `dross phase complete` stops with a "fast-forward … failed" error — local main has diverged from origin/main (a stray commit on main, or a legacy completion chore). Fix: **`dross phase complete --recover`** — it resets main to origin and restores the cumulative `.dross/` tree in one shot, then finishes the completion. Pass `--recover` only after reading the abort: it is a destructive reset of local main.
+
+2. **Diverged main (legacy / strip-filter era).** Local main carries phase commits that origin/main lost to an old `.dross/`-stripping squash, so main holds a parallel history. Fix: **`dross ship recover`** — the standalone healer. Same reset-and-restore as `--recover`, usable outside the merge loop.
+
+3. **Dirty tree after push.** `dross ship` returned but `git status` is not clean — an older ship left its post-push state write uncommitted, which then blocks the provider's `--delete-branch` and `dross phase complete`. Fix: re-run **`dross ship`** — it is idempotent and commits its own post-push `.dross/` state, leaving a clean tree. You stage nothing yourself.
+
+If you find yourself reaching for git plumbing against `.dross/`, stop — one of the three commands above already covers it.
+
 ## Subagent review panel — DEFERRED
 
 The original design called for a 4-lens subagent review panel (security, code quality, test efficacy, spec fidelity) posting findings as PR comments. v1 ships without this; track it as a separate task once `/dross-ship` has been validated against real Forgejo + GitHub PRs.
