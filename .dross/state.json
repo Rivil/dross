@@ -1,15 +1,9 @@
 {
   "version": "0.6.5.0",
   "current_milestone": "v0.6",
-  "current_phase": "status-action-surfaces-v2",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-27T16:26:15.317861Z",
-  "last_action": "verified status-action-surfaces-v2: pass (4/4 covered, mutation 0.83 module / high in-scope; 3 minor in-scope FLAGs, 155/164 survivors out-of-scope)",
+  "last_activity": "2026-06-27T17:35:52.765848Z",
+  "last_action": "completed status-action-surfaces-v2",
   "history": [
-    {
-      "at": "2026-06-27T11:11:57.429549Z",
-      "action": "plan locked: container-iac-scanning (6 tasks across 2 waves, --panel)"
-    },
     {
       "at": "2026-06-27T11:27:33.528458Z",
       "action": "plan reviewed: container-iac-scanning (0 blocking, 2 flags applied)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-27T16:26:15.317861Z",
       "action": "verified status-action-surfaces-v2: pass (4/4 covered, mutation 0.83 module / high in-scope; 3 minor in-scope FLAGs, 155/164 survivors out-of-scope)"
+    },
+    {
+      "at": "2026-06-27T17:35:52.765848Z",
+      "action": "completed status-action-surfaces-v2"
     }
   ]
 }
