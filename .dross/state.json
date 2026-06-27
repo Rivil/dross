@@ -1,51 +1,11 @@
 {
-  "version": "0.6.3.0",
+  "version": "0.6.4.0",
   "current_milestone": "v0.6",
   "current_phase": "secure-quality-findings-lifecycle",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-27T13:34:40.62924Z",
-  "last_action": "plan reviewed: secure-quality-findings-lifecycle (0 blocking, 2 flags applied: F1 t-7 prompt-reconcile, F2 c-3→t-6)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-27T13:52:16.785347Z",
+  "last_action": "phase secure-quality-findings-lifecycle executed (7/7 done)",
   "history": [
-    {
-      "at": "2026-06-27T07:40:40.00804Z",
-      "action": "executed t-4 (drop-in keystone: zero-recompile profile add)"
-    },
-    {
-      "at": "2026-06-27T07:40:49.378123Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-27T07:40:49.384407Z",
-      "action": "phase multilang-stack-profiles executed (4/4 done)"
-    },
-    {
-      "at": "2026-06-27T07:51:20.301178Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-27T07:51:20.308112Z",
-      "action": "verified multilang-stack-profiles: pass (3/3 covered, mutation 0.84 module / 1.00 in-scope)"
-    },
-    {
-      "at": "2026-06-27T07:55:25.669676Z",
-      "action": "completed multilang-stack-profiles"
-    },
-    {
-      "at": "2026-06-27T08:47:30.369565Z",
-      "action": "created multilang-analyzer-catalogs"
-    },
-    {
-      "at": "2026-06-27T09:03:58.120556Z",
-      "action": "set current_phase=multilang-analyzer-catalogs"
-    },
-    {
-      "at": "2026-06-27T09:03:58.126712Z",
-      "action": "spec locked: multilang-analyzer-catalogs"
-    },
-    {
-      "at": "2026-06-27T09:19:29.426863Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-27T09:19:29.433204Z",
       "action": "plan locked: multilang-analyzer-catalogs (8 tasks across 2 waves, --panel)"
@@ -205,6 +165,46 @@
     {
       "at": "2026-06-27T13:34:40.62924Z",
       "action": "plan reviewed: secure-quality-findings-lifecycle (0 blocking, 2 flags applied: F1 t-7 prompt-reconcile, F2 c-3→t-6)"
+    },
+    {
+      "at": "2026-06-27T13:36:15.470369Z",
+      "action": "set version=0.6.4.0"
+    },
+    {
+      "at": "2026-06-27T13:38:05.604439Z",
+      "action": "executed t-1 (Add shared fingerprint function)"
+    },
+    {
+      "at": "2026-06-27T13:40:22.959358Z",
+      "action": "executed t-2 (Add fingerprint-keyed state store)"
+    },
+    {
+      "at": "2026-06-27T13:42:12.113302Z",
+      "action": "executed t-3 (Implement post-scan reconcile engine)"
+    },
+    {
+      "at": "2026-06-27T13:45:45.457886Z",
+      "action": "executed t-4 (Build shared findings cobra group)"
+    },
+    {
+      "at": "2026-06-27T13:47:59.966442Z",
+      "action": "executed t-5 (Wire security findings group + adapter)"
+    },
+    {
+      "at": "2026-06-27T13:49:47.344248Z",
+      "action": "executed t-6 (Wire quality findings group + adapter)"
+    },
+    {
+      "at": "2026-06-27T13:52:01.280688Z",
+      "action": "executed t-7 (Wire reconcile into secure/quality prompts)"
+    },
+    {
+      "at": "2026-06-27T13:52:16.777205Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-27T13:52:16.785347Z",
+      "action": "phase secure-quality-findings-lifecycle executed (7/7 done)"
     }
   ]
 }

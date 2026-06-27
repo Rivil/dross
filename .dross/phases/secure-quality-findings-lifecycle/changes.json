@@ -1,0 +1,72 @@
+{
+  "phase": "secure-quality-findings-lifecycle",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/findings/fingerprint.go",
+        "internal/findings/fingerprint_test.go"
+      ],
+      "commit": "5d2146d",
+      "completed_at": "2026-06-27T13:38:05.591498Z",
+      "notes": "feature: findings lifecycle · Fingerprint @ internal/findings/fingerprint.go · stable cross-run identity from class+normalized-file+title, no line number"
+    },
+    "t-2": {
+      "files": [
+        "internal/findings/state.go",
+        "internal/findings/state_test.go"
+      ],
+      "commit": "a82b970",
+      "completed_at": "2026-06-27T13:40:22.944179Z",
+      "notes": "feature: findings lifecycle · Store @ internal/findings/state.go · durable gitignored fingerprint-keyed state ledger (tracked/resolved/dismissed) with atomic temp+rename save"
+    },
+    "t-3": {
+      "files": [
+        "internal/findings/reconcile.go",
+        "internal/findings/reconcile_test.go"
+      ],
+      "commit": "fa06830",
+      "completed_at": "2026-06-27T13:42:12.100499Z",
+      "notes": "feature: findings lifecycle · Reconcile @ internal/findings/reconcile.go · post-scan fold of fresh items vs prior state (new/folded/regressed), no scan mutation, dedup + deleted-file retention"
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/findings.go",
+        "internal/cmd/findings_test.go"
+      ],
+      "commit": "17b4668",
+      "completed_at": "2026-06-27T13:45:45.443425Z",
+      "notes": "feature: findings lifecycle · newFindingsCmd @ internal/cmd/findings.go · shared descriptor-driven 'findings {list,reconcile,\u003cid\u003e --state}' group reused by both audits"
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/security.go",
+        "internal/security/lifecycle.go",
+        "internal/cmd/security_findings_test.go"
+      ],
+      "commit": "e61e787",
+      "completed_at": "2026-06-27T13:47:59.951727Z",
+      "notes": "feature: findings lifecycle · security.Ledger.Items + securityFindings @ internal/security/lifecycle.go · registers 'dross security findings', adapter keys fingerprint on Class"
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/quality.go",
+        "internal/quality/lifecycle.go",
+        "internal/cmd/quality_findings_test.go"
+      ],
+      "commit": "056cd6b",
+      "completed_at": "2026-06-27T13:49:47.333219Z",
+      "notes": "feature: findings lifecycle · quality.Ledger.Items + qualityFindings @ internal/quality/lifecycle.go · registers 'dross quality findings', adapter keys fingerprint on Dimension; c-3 fold-survives-rerun e2e"
+    },
+    "t-7": {
+      "files": [
+        "assets/prompts/secure.md",
+        "assets/prompts/quality.md",
+        "internal/cmd/secure_prompt_test.go",
+        "internal/cmd/quality_prompt_test.go"
+      ],
+      "commit": "5744525",
+      "completed_at": "2026-06-27T13:52:01.268899Z",
+      "notes": "feature: findings lifecycle · secure.md/quality.md §6a · post-scan 'findings reconcile \u003crun-dir\u003e' step wires cross-run reconciliation into the audit flow"
+    }
+  }
+}
