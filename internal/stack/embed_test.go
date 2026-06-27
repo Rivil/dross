@@ -19,8 +19,9 @@ func TestEmbeddedIncludesGo(t *testing.T) {
 }
 
 // TestEmbeddedDocker proves the docker marker profile ships with exactly the locked
-// loadout: hadolint as both a scanner and an analyzer, plus a distinctly-named trivy
-// config scanner — and nothing from outside that set (no dockle/checkov).
+// loadout: hadolint as both a scanner and an analyzer, a distinctly-named trivy config
+// scanner, and the dockle image-layer scanner — and no checkov (an IaC-family scanner,
+// not a container-image one).
 func TestEmbeddedDocker(t *testing.T) {
 	emb, err := Embedded()
 	if err != nil {
@@ -49,9 +50,17 @@ func TestEmbeddedDocker(t *testing.T) {
 		default:
 			t.Errorf("tool %q has unexpected kind %q", tool.Name, tool.Kind)
 		}
-		if tool.Name == "dockle" || tool.Name == "checkov" {
-			t.Errorf("docker loadout must not ship %q (out of scope)", tool.Name)
+		if tool.Name == "checkov" {
+			t.Errorf("docker loadout must not ship %q (checkov is an IaC-family scanner, not a container-image one)", tool.Name)
 		}
+	}
+
+	// dockle (container image-layer CIS) now ships in the docker loadout — surfaced in
+	// detect; its no-image skip-with-reason is enforced on the run path (DecideDockle).
+	if dk, ok := scanners["dockle"]; !ok {
+		t.Error("docker loadout must ship the dockle scanner")
+	} else if dk.EffectiveBin("") != "dockle" {
+		t.Errorf("dockle must resolve to the dockle binary, got %q", dk.EffectiveBin(""))
 	}
 
 	// hadolint must appear as BOTH a scanner and an analyzer.
@@ -79,8 +88,9 @@ func TestEmbeddedDocker(t *testing.T) {
 
 // TestEmbeddedTerraform proves the terraform marker profile ships with exactly the
 // locked loadout: the exact 5-glob marker set pinned against the shipped TOML, a
-// distinctly-named trivy config scanner, and a tflint analyzer under error-handling —
-// and nothing from outside that set (no checkov/dockle).
+// distinctly-named trivy config scanner, the cross-family checkov scanner, and a
+// tflint analyzer under error-handling — and no dockle (which scans container images,
+// not IaC source).
 func TestEmbeddedTerraform(t *testing.T) {
 	emb, err := Embedded()
 	if err != nil {
@@ -112,8 +122,8 @@ func TestEmbeddedTerraform(t *testing.T) {
 		default:
 			t.Errorf("tool %q has unexpected kind %q", tool.Name, tool.Kind)
 		}
-		if tool.Name == "checkov" || tool.Name == "dockle" {
-			t.Errorf("terraform loadout must not ship %q (out of scope)", tool.Name)
+		if tool.Name == "dockle" {
+			t.Errorf("terraform loadout must not ship %q (dockle scans container images, not IaC source)", tool.Name)
 		}
 	}
 
@@ -124,6 +134,15 @@ func TestEmbeddedTerraform(t *testing.T) {
 		t.Error(`terraform loadout missing the "trivy config" scanner (distinct from agnostic "trivy")`)
 	} else if tc.EffectiveBin("") != "trivy" {
 		t.Errorf(`"trivy config" must resolve to the trivy binary, got %q`, tc.EffectiveBin(""))
+	}
+
+	// checkov (cross-family IaC misconfiguration) now ships alongside trivy config,
+	// kept distinct so the manifest dedup surfaces both. Its install hint must name the
+	// Python toolchain.
+	if ck, ok := scanners["checkov"]; !ok {
+		t.Error("terraform loadout must ship the checkov scanner")
+	} else if !strings.Contains(strings.ToLower(ck.Install), "pip") {
+		t.Errorf("checkov install hint must name the Python toolchain (pip/pipx), got %q", ck.Install)
 	}
 
 	// tflint is the quality analyzer; its dimension must be error-handling (matching
