@@ -1,0 +1,15 @@
+# c-3 expected findings — the dedicated IaC tools surface what the agnostic
+# fallback (gitleaks / semgrep / scc / jscpd) is structurally blind to.
+#
+# Two planted defects in main.tf, each pinned below. If a planted defect is removed
+# or renamed, the matching finding no longer reproduces and RUN.md goes stale.
+
+# 1. trivy config (security) — OBSERVED 2026-06-27, trivy 0.70.0:
+AWS-0107 (HIGH): Security group rule allows unrestricted ingress from any IP address.
+  main.tf:22  (aws_security_group.open — ingress cidr_blocks ["0.0.0.0/0"])
+
+# 2. tflint (quality / error-handling) — EXPECTED, not observed in the recording
+#    session (tflint not installed). Per tflint's default terraform_unused_declarations
+#    rule, the declared-but-unused variable must flag:
+terraform_unused_declarations: variable "unused" is declared but not used
+  main.tf:7  (variable "unused")
