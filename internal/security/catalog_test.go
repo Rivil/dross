@@ -73,14 +73,15 @@ func TestScannersForGoIsComplete(t *testing.T) {
 	}
 }
 
-// TestScannersForLanguageProfilesAgnosticOnly enforces the locked
-// security_agnostic_only decision: none of the v0.2 profiles contributes a
-// dedicated scanner, so each profile's scanner set EQUALS the agnostic set
-// exactly. Equality (not membership) means an accidentally-added kind="scanner"
-// tool in any of the five profiles fails this test.
+// TestScannersForLanguageProfilesAgnosticOnly enforces, for the profiles that
+// still ship NO dedicated scanner, that their scanner set EQUALS the agnostic
+// set exactly. Equality (not membership) means an accidentally-added
+// kind="scanner" tool in kotlin or sql fails this test. svelte/typescript/dart
+// now carry dedicated scanners (multilang-analyzer-catalogs) and are covered by
+// TestScannersFor_dedicatedScanner instead.
 func TestScannersForLanguageProfilesAgnosticOnly(t *testing.T) {
 	agnostic := map[string]bool{"gitleaks": true, "semgrep": true, "trivy": true}
-	for _, id := range []string{"kotlin", "dart", "svelte", "sql", "typescript"} {
+	for _, id := range []string{"kotlin", "sql"} {
 		t.Run(id, func(t *testing.T) {
 			names := map[string]bool{}
 			for _, s := range ScannersFor(id) {
@@ -94,6 +95,47 @@ func TestScannersForLanguageProfilesAgnosticOnly(t *testing.T) {
 			for name := range names {
 				if !agnostic[name] {
 					t.Errorf("ScannersFor(%q) has unexpected dedicated scanner %q (security_agnostic_only)", id, name)
+				}
+			}
+		})
+	}
+}
+
+// TestScannersFor_dedicatedScanner pins the multilang-analyzer-catalogs loadout:
+// svelte/typescript/dart each contribute the dedicated osv-scanner (non-agnostic,
+// tagged for that language) ON TOP OF the agnostic gitleaks/semgrep/trivy.
+// Dropping osv-scanner from a profile — or its Languages tag (Agnostic() flips on
+// an empty tag) — fails that language's subtest.
+func TestScannersFor_dedicatedScanner(t *testing.T) {
+	for _, id := range []string{"svelte", "typescript", "dart"} {
+		t.Run(id, func(t *testing.T) {
+			scanners := ScannersFor(id)
+			names := map[string]bool{}
+			var osv *Scanner
+			for i := range scanners {
+				names[scanners[i].Name] = true
+				if scanners[i].Name == "osv-scanner" {
+					osv = &scanners[i]
+				}
+			}
+			if osv == nil {
+				t.Fatalf("ScannersFor(%q) missing dedicated osv-scanner", id)
+			}
+			if osv.Agnostic() {
+				t.Errorf("osv-scanner for %q reported agnostic; expected a language-dedicated scanner", id)
+			}
+			taggedFor := false
+			for _, l := range osv.Languages {
+				if l == id {
+					taggedFor = true
+				}
+			}
+			if !taggedFor {
+				t.Errorf("osv-scanner for %q missing Languages tag %q (got %v)", id, id, osv.Languages)
+			}
+			for _, want := range []string{"gitleaks", "semgrep", "trivy"} {
+				if !names[want] {
+					t.Errorf("ScannersFor(%q) lost agnostic scanner %q (dedicated must add, not replace)", id, want)
 				}
 			}
 		})
