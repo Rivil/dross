@@ -68,6 +68,89 @@ func TestQualityNoMarkerRegression(t *testing.T) {
 	}
 }
 
+// TestQualityManifestMarkerTerraform proves a *.tf-only repo surfaces the terraform
+// analyzer (tflint) under the error-handling dimension, ON TOP of the agnostic set —
+// a .tf repo gets an IaC-specific analyzer, not only the agnostic fallback (c-2).
+func TestQualityManifestMarkerTerraform(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // embedded profiles only, no user overlay
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "main.tf"), "resource \"null_resource\" \"x\" {}\n")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := manifestNames(m)
+	if !names["tflint"] {
+		t.Errorf("*.tf-only repo: quality manifest missing tflint analyzer (c-2); names=%v", names)
+	}
+	// The agnostic set must remain — a marker-only repo never loses scc/jscpd.
+	for _, want := range []string{"scc", "jscpd"} {
+		if !names[want] {
+			t.Errorf("marker-only repo lost the agnostic analyzer %q; names=%v", want, names)
+		}
+	}
+	// tflint must carry the locked error-handling dimension.
+	found := false
+	for _, tool := range m.Tools {
+		if tool.Name == "tflint" {
+			found = true
+			if tool.Dimension != "error-handling" {
+				t.Errorf("tflint dimension = %q, want error-handling", tool.Dimension)
+			}
+		}
+	}
+	if !found {
+		t.Error("tflint absent from manifest tools — cannot assert its dimension")
+	}
+}
+
+// TestBuildManifest_terraformMissingAnalyzerSkipped proves c-3's go-testable half on
+// the quality side: under an all-missing lookup, tflint is recorded skipped (with its
+// install hint) and BuildManifest still returns nil — degrades, never aborts.
+func TestBuildManifest_terraformMissingAnalyzerSkipped(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "main.tf"), "resource \"null_resource\" \"x\" {}\n")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatalf("BuildManifest aborted on a missing tool: %v", err)
+	}
+	var tfl *ToolStatus
+	for i := range m.Skipped() {
+		if m.Skipped()[i].Name == "tflint" {
+			s := m.Skipped()[i]
+			tfl = &s
+		}
+	}
+	if tfl == nil {
+		t.Fatalf("tflint not in Skipped() under all-missing lookup; skipped=%v", m.Skipped())
+	}
+	if tfl.Install == "" {
+		t.Error("skipped tflint has no install hint")
+	}
+}
+
+// TestQualityTerraformNoLeak guards against a signals misconfig: a marker-less Go-only
+// repo's quality manifest must NOT surface tflint.
+func TestQualityTerraformNoLeak(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "main.go"), "package main")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifestNames(m)["tflint"] {
+		t.Error("marker-less Go repo surfaced the tflint analyzer — no terraform tools must leak in")
+	}
+}
+
 // TestPythonAnalyzerInManifest is the c-1 analyzer-in-run row: a .py tree must
 // surface python's dedicated analyzer (ruff) in the quality manifest, ON TOP of
 // the agnostic set — proving a full stack profile's analyzer reaches a real run via
