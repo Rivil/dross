@@ -32,11 +32,27 @@ extensions: a profile declares `[signals].file_patterns` (and no `exts`), so it 
 surfaced *additively* into the `dross-secure` / `dross-quality` manifests by
 `MarkerProfiles` — never selected as a primary stack by `dross stack detect`.
 
-- **`docker`** — Dockerfiles and compose files (`hadolint`, `trivy config`).
+Some marker stacks (Kubernetes, CloudFormation) live in plain `*.yaml` / `*.json`
+that an extension glob alone can't distinguish from any other YAML/JSON. Those add a
+`[signals.content]` gate: after a glob selects a candidate, its body is read (capped,
+case-sensitive) and the profile is surfaced only when the declared tokens match —
+`all` = every token (AND), `any` = at least one (OR). A profile with no content gate
+keeps the pure-glob fast path (its candidates' bodies are never read).
+
+- **`docker`** — Dockerfiles and compose files: `hadolint` (lint), `trivy config`
+  (compose misconfig), and `dockle` (container image-layer CIS). dockle is surfaced
+  in detect, but it needs a *built* image — which dross never builds — so its
+  no-image case is skipped-with-reason on the run path (supply `--image` /
+  `$DROSS_IMAGE` to scan a prebuilt image).
 - **`terraform`** — Terraform / IaC files (`*.tf`, `*.tf.json`, `*.tfvars`,
-  `*.tfvars.json`, `*.hcl`): `trivy config` for misconfigurations and `tflint` for
-  lint / error-handling. `checkov` (exhaustive IaC) and `dockle` (container image
-  layers) are intentionally out of scope.
+  `*.tfvars.json`, `*.hcl`): `trivy config` and `checkov` for misconfigurations,
+  `tflint` for lint / error-handling.
+- **`kubernetes`** — Kubernetes manifests (`*.yaml` / `*.yml` / `*.json`,
+  content-confirmed by `apiVersion` + `kind`): `trivy config` and `checkov`
+  scanners, `kube-linter` analyzer (error-handling).
+- **`cloudformation`** — CloudFormation templates (`*.yaml` / `*.yml` / `*.json`,
+  content-confirmed by `AWSTemplateFormatVersion` or `Resources`): `trivy config`
+  and `checkov` scanners, `cfn-lint` analyzer (error-handling).
 
 ## Schema (see `internal/stack/profile.go` for the authoritative struct)
 
@@ -48,6 +64,9 @@ title = "Go"
   files    = ["go.mod"]   # root marker files (strong signal)
   exts     = [".go"]      # source extensions (weak signal)
   priority = 10           # tiebreaker on a polyglot tree
+  # file_patterns = ["*.yaml"]      # marker stacks: glob instead of exts
+  # [signals.content]               # marker stacks in ambiguous YAML/JSON: confirm
+  #   all = ["apiVersion", "kind"]  #   a glob candidate's body (all=AND, any=OR)
 
 [[package_managers]]   # one entry per variant (npm/pnpm/yarn, pip/poetry/uv, …)
   name = "go"
