@@ -1,67 +1,11 @@
 {
-  "version": "0.6.6.0",
+  "version": "0.6.10.0",
   "current_milestone": "v0.6",
   "current_phase": "deepen-container-iac-scanning",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-27T21:10:13.301693Z",
-  "last_action": "plan reviewed: deepen-container-iac-scanning (0 blocking, 0 flags, c-3 flag closed)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-27T21:40:06.805954Z",
+  "last_action": "phase deepen-container-iac-scanning executed (11/11 done)",
   "history": [
-    {
-      "at": "2026-06-27T13:45:45.457886Z",
-      "action": "executed t-4 (Build shared findings cobra group)"
-    },
-    {
-      "at": "2026-06-27T13:47:59.966442Z",
-      "action": "executed t-5 (Wire security findings group + adapter)"
-    },
-    {
-      "at": "2026-06-27T13:49:47.344248Z",
-      "action": "executed t-6 (Wire quality findings group + adapter)"
-    },
-    {
-      "at": "2026-06-27T13:52:01.280688Z",
-      "action": "executed t-7 (Wire reconcile into secure/quality prompts)"
-    },
-    {
-      "at": "2026-06-27T13:52:16.777205Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-27T13:52:16.785347Z",
-      "action": "phase secure-quality-findings-lifecycle executed (7/7 done)"
-    },
-    {
-      "at": "2026-06-27T14:02:15.362451Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-27T14:02:15.369819Z",
-      "action": "verified secure-quality-findings-lifecycle: pass (5/5 covered, mutation 0.82 module / 1.00 in-scope engine; lifecycle.go resolver gap flagged)"
-    },
-    {
-      "at": "2026-06-27T14:05:42.924684Z",
-      "action": "completed secure-quality-findings-lifecycle"
-    },
-    {
-      "at": "2026-06-27T14:17:41.36431Z",
-      "action": "created status-action-surfaces-v2"
-    },
-    {
-      "at": "2026-06-27T14:50:47.834326Z",
-      "action": "set current_phase=status-action-surfaces-v2"
-    },
-    {
-      "at": "2026-06-27T14:50:47.841439Z",
-      "action": "spec locked: status-action-surfaces-v2"
-    },
-    {
-      "at": "2026-06-27T15:35:25.437228Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-27T15:35:25.444517Z",
-      "action": "plan locked: status-action-surfaces-v2 (6 tasks across 3 waves, --panel)"
-    },
     {
       "at": "2026-06-27T15:43:25.99045Z",
       "action": "plan reviewed: status-action-surfaces-v2 (0 blocking, 1 flag)"
@@ -205,6 +149,62 @@
     {
       "at": "2026-06-27T21:10:13.301693Z",
       "action": "plan reviewed: deepen-container-iac-scanning (0 blocking, 0 flags, c-3 flag closed)"
+    },
+    {
+      "at": "2026-06-27T21:11:23.498041Z",
+      "action": "set version=0.6.10.0"
+    },
+    {
+      "at": "2026-06-27T21:17:00.80697Z",
+      "action": "executed t-1 (Add content-matcher to marker engine)"
+    },
+    {
+      "at": "2026-06-27T21:18:44.036041Z",
+      "action": "executed t-2 (Add dockle scan-path decision fn)"
+    },
+    {
+      "at": "2026-06-27T21:20:57.437942Z",
+      "action": "executed t-5 (Add checkov/dockle loadouts, flip guards)"
+    },
+    {
+      "at": "2026-06-27T21:22:10.810087Z",
+      "action": "executed t-3 (Add kubernetes marker profile)"
+    },
+    {
+      "at": "2026-06-27T21:25:50.517272Z",
+      "action": "executed t-4 (Add cloudformation marker profile)"
+    },
+    {
+      "at": "2026-06-27T21:29:03.385024Z",
+      "action": "executed t-6 (Wire --image flag into security run)"
+    },
+    {
+      "at": "2026-06-27T21:31:29.828239Z",
+      "action": "executed t-10 (Document new profiles + doc guard)"
+    },
+    {
+      "at": "2026-06-27T21:35:32.704135Z",
+      "action": "executed t-11 (Commit multi-IaC fixture + run record)"
+    },
+    {
+      "at": "2026-06-27T21:36:39.240606Z",
+      "action": "executed t-7 (Pin embedded loadouts for new profiles)"
+    },
+    {
+      "at": "2026-06-27T21:38:09.889525Z",
+      "action": "executed t-8 (Assert security recon IaC scanners)"
+    },
+    {
+      "at": "2026-06-27T21:39:56.85754Z",
+      "action": "executed t-9 (Assert quality recon IaC analyzers)"
+    },
+    {
+      "at": "2026-06-27T21:40:06.799592Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-27T21:40:06.805954Z",
+      "action": "phase deepen-container-iac-scanning executed (11/11 done)"
     }
   ]
 }
