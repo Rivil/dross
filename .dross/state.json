@@ -2,18 +2,10 @@
   "version": "0.6.5.0",
   "current_milestone": "v0.6",
   "current_phase": "status-action-surfaces-v2",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-27T16:06:59.99802Z",
-  "last_action": "phase status-action-surfaces-v2 executed (6/6 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-27T16:26:15.317861Z",
+  "last_action": "verified status-action-surfaces-v2: pass (4/4 covered, mutation 0.83 module / high in-scope; 3 minor in-scope FLAGs, 155/164 survivors out-of-scope)",
   "history": [
-    {
-      "at": "2026-06-27T10:50:14.066007Z",
-      "action": "spec locked: container-iac-scanning"
-    },
-    {
-      "at": "2026-06-27T11:11:57.42369Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-27T11:11:57.429549Z",
       "action": "plan locked: container-iac-scanning (6 tasks across 2 waves, --panel)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-27T16:06:59.99802Z",
       "action": "phase status-action-surfaces-v2 executed (6/6 done)"
+    },
+    {
+      "at": "2026-06-27T16:26:15.30966Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-27T16:26:15.317861Z",
+      "action": "verified status-action-surfaces-v2: pass (4/4 covered, mutation 0.83 module / high in-scope; 3 minor in-scope FLAGs, 155/164 survivors out-of-scope)"
     }
   ]
 }
