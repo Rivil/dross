@@ -155,6 +155,106 @@ func TestEmbeddedTerraform(t *testing.T) {
 	}
 }
 
+// TestEmbeddedKubernetes proves the kubernetes marker profile ships with the locked
+// content-sniff loadout: no exts, the exact glob set, an AND content gate of
+// apiVersion+kind (pinned with reflect.DeepEqual), trivy config + checkov scanners,
+// and a kube-linter analyzer under error-handling.
+func TestEmbeddedKubernetes(t *testing.T) {
+	emb, err := Embedded()
+	if err != nil {
+		t.Fatalf("Embedded: %v", err)
+	}
+	k := ByID(emb, "kubernetes")
+	if k == nil {
+		t.Fatal("embedded profiles must include the kubernetes profile")
+	}
+	if len(k.Signals.Exts) != 0 {
+		t.Errorf("kubernetes profile must declare no exts (marker stack), got %v", k.Signals.Exts)
+	}
+	if want := []string{"*.yaml", "*.yml", "*.json"}; !reflect.DeepEqual(k.Signals.FilePatterns, want) {
+		t.Errorf("kubernetes file_patterns = %v, want %v", k.Signals.FilePatterns, want)
+	}
+	// The content gate must decode non-empty and match the locked AND tokens — a
+	// renamed [signals.content] schema would leave this empty and fail here.
+	if want := []string{"apiVersion", "kind"}; !reflect.DeepEqual(k.Signals.Content.All, want) {
+		t.Errorf("kubernetes content.all = %v, want %v (AND fingerprint)", k.Signals.Content.All, want)
+	}
+
+	scanners, analyzers := map[string]Tool{}, map[string]Tool{}
+	for _, tool := range k.Tools {
+		switch tool.Kind {
+		case "scanner":
+			scanners[tool.Name] = tool
+		case "analyzer":
+			analyzers[tool.Name] = tool
+		default:
+			t.Errorf("tool %q has unexpected kind %q", tool.Name, tool.Kind)
+		}
+	}
+	if tc, ok := scanners["trivy config"]; !ok {
+		t.Error(`kubernetes loadout missing the "trivy config" scanner`)
+	} else if tc.EffectiveBin("") != "trivy" {
+		t.Errorf(`"trivy config" must resolve to the trivy binary, got %q`, tc.EffectiveBin(""))
+	}
+	if _, ok := scanners["checkov"]; !ok {
+		t.Error("kubernetes loadout missing the checkov scanner")
+	}
+	if kl, ok := analyzers["kube-linter"]; !ok {
+		t.Error("kubernetes loadout missing the kube-linter analyzer")
+	} else if kl.Dimension != "error-handling" {
+		t.Errorf("kube-linter analyzer dimension = %q, want error-handling", kl.Dimension)
+	}
+}
+
+// TestEmbeddedCloudFormation proves the cloudformation marker profile ships with the
+// locked content-sniff loadout: no exts, the exact glob set, an OR content gate of
+// AWSTemplateFormatVersion/Resources (pinned with reflect.DeepEqual), trivy config +
+// checkov scanners, and a cfn-lint analyzer under error-handling.
+func TestEmbeddedCloudFormation(t *testing.T) {
+	emb, err := Embedded()
+	if err != nil {
+		t.Fatalf("Embedded: %v", err)
+	}
+	c := ByID(emb, "cloudformation")
+	if c == nil {
+		t.Fatal("embedded profiles must include the cloudformation profile")
+	}
+	if len(c.Signals.Exts) != 0 {
+		t.Errorf("cloudformation profile must declare no exts (marker stack), got %v", c.Signals.Exts)
+	}
+	if want := []string{"*.yaml", "*.yml", "*.json"}; !reflect.DeepEqual(c.Signals.FilePatterns, want) {
+		t.Errorf("cloudformation file_patterns = %v, want %v", c.Signals.FilePatterns, want)
+	}
+	if want := []string{"AWSTemplateFormatVersion", "Resources"}; !reflect.DeepEqual(c.Signals.Content.Any, want) {
+		t.Errorf("cloudformation content.any = %v, want %v (OR fingerprint)", c.Signals.Content.Any, want)
+	}
+
+	scanners, analyzers := map[string]Tool{}, map[string]Tool{}
+	for _, tool := range c.Tools {
+		switch tool.Kind {
+		case "scanner":
+			scanners[tool.Name] = tool
+		case "analyzer":
+			analyzers[tool.Name] = tool
+		default:
+			t.Errorf("tool %q has unexpected kind %q", tool.Name, tool.Kind)
+		}
+	}
+	if tc, ok := scanners["trivy config"]; !ok {
+		t.Error(`cloudformation loadout missing the "trivy config" scanner`)
+	} else if tc.EffectiveBin("") != "trivy" {
+		t.Errorf(`"trivy config" must resolve to the trivy binary, got %q`, tc.EffectiveBin(""))
+	}
+	if _, ok := scanners["checkov"]; !ok {
+		t.Error("cloudformation loadout missing the checkov scanner")
+	}
+	if cl, ok := analyzers["cfn-lint"]; !ok {
+		t.Error("cloudformation loadout missing the cfn-lint analyzer")
+	} else if cl.Dimension != "error-handling" {
+		t.Errorf("cfn-lint analyzer dimension = %q, want error-handling", cl.Dimension)
+	}
+}
+
 // TestMalformedDockerLikeProfileErrors proves the load path surfaces a malformed
 // profile as an error rather than silently shipping a broken loadout — the guarantee
 // that protects the embedded docker.toml.
