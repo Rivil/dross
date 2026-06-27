@@ -2,22 +2,10 @@
   "version": "0.6.6.0",
   "current_milestone": "v0.6",
   "current_phase": "deepen-container-iac-scanning",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-27T20:30:45.305134Z",
-  "last_action": "spec locked: deepen-container-iac-scanning",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-27T21:10:13.301693Z",
+  "last_action": "plan reviewed: deepen-container-iac-scanning (0 blocking, 0 flags, c-3 flag closed)",
   "history": [
-    {
-      "at": "2026-06-27T13:38:05.604439Z",
-      "action": "executed t-1 (Add shared fingerprint function)"
-    },
-    {
-      "at": "2026-06-27T13:40:22.959358Z",
-      "action": "executed t-2 (Add fingerprint-keyed state store)"
-    },
-    {
-      "at": "2026-06-27T13:42:12.113302Z",
-      "action": "executed t-3 (Implement post-scan reconcile engine)"
-    },
     {
       "at": "2026-06-27T13:45:45.457886Z",
       "action": "executed t-4 (Build shared findings cobra group)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-27T20:30:45.305134Z",
       "action": "spec locked: deepen-container-iac-scanning"
+    },
+    {
+      "at": "2026-06-27T21:00:23.91549Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-27T21:00:23.920747Z",
+      "action": "plan locked: deepen-container-iac-scanning (11 tasks across 3 waves, --panel)"
+    },
+    {
+      "at": "2026-06-27T21:10:13.301693Z",
+      "action": "plan reviewed: deepen-container-iac-scanning (0 blocking, 0 flags, c-3 flag closed)"
     }
   ]
 }
