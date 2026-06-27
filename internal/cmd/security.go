@@ -13,6 +13,12 @@ import (
 	"github.com/Rivil/dross/internal/security"
 )
 
+// securityLookPath is the PATH lookup the security command uses to detect tool
+// availability (scanner manifest + the dockle image decision). It is a package var
+// so tests can inject a fake — dockle is rarely installed in CI, and the image-scan
+// decision must be exercisable regardless.
+var securityLookPath = security.LookPath
+
 // Security registers `dross security {detect,run,scaffold}` — the deterministic
 // surface of the dross-secure audit. The audit orchestration itself (recon,
 // scanners, fan-out, refute-panel) lives in the secure.md prompt; these
@@ -75,7 +81,8 @@ func securityDetect() *cobra.Command {
 }
 
 func securityRun() *cobra.Command {
-	return &cobra.Command{
+	var image string
+	c := &cobra.Command{
 		Use:   "run [path]",
 		Short: "Create a security run dir (.dross/security/<id>) and write the tool-coverage manifest",
 		Args:  cobra.MaximumNArgs(1),
@@ -91,11 +98,17 @@ func securityRun() *cobra.Command {
 			}
 			// A missing scanner never hard-errors: the run proceeds with partial
 			// coverage and records what was skipped in the manifest.
-			m, err := security.BuildManifest(pathArg(args), security.LookPath)
+			m, err := security.BuildManifest(pathArg(args), securityLookPath)
 			if err != nil {
 				return err
 			}
-			if err := writeRunReport(runDir, m); err != nil {
+			// dockle scans a BUILT image, which dross never builds. The image ref
+			// comes from --image, falling back to $DROSS_IMAGE (the config channel);
+			// an empty/whitespace value is treated as no image → skipped-with-reason.
+			img := resolveImage(image)
+			_, dockleErr := securityLookPath(security.DockleBin)
+			dec := security.DecideDockle(img, dockleErr == nil)
+			if err := writeRunReport(runDir, m, dec); err != nil {
 				return err
 			}
 			// Stamp the store-level last_run so `dross status` can rank the
@@ -106,9 +119,26 @@ func securityRun() *cobra.Command {
 			}
 			Printf("security run: %s\n", runDir)
 			Printf("  scanners: %d ran, %d skipped\n", len(m.Ran()), len(m.Skipped()))
+			if dec.Run {
+				Printf("  dockle: scanning image %s\n", img)
+			} else {
+				Printf("  dockle: skipped — %s\n", dec.Reason)
+			}
 			return nil
 		},
 	}
+	c.Flags().StringVar(&image, "image", "", "container image ref for dockle (dross never builds; empty → skipped-with-reason). Falls back to $DROSS_IMAGE.")
+	return c
+}
+
+// resolveImage returns the image ref the dockle decision should use: the --image
+// flag when set, otherwise the $DROSS_IMAGE env fallback (the c-8 config channel).
+// Surrounding whitespace is trimmed so a blank value reads as "no image".
+func resolveImage(flag string) string {
+	if strings.TrimSpace(flag) != "" {
+		return flag
+	}
+	return os.Getenv("DROSS_IMAGE")
 }
 
 func securityScaffold() *cobra.Command {
@@ -167,9 +197,10 @@ func containedPath(runDir, name string) (string, error) {
 	return p, nil
 }
 
-// writeRunReport writes the human report.md (with the tool-coverage manifest) into
-// the run dir, through containedPath so it can never escape the sandbox.
-func writeRunReport(runDir string, m security.Manifest) error {
+// writeRunReport writes the human report.md (with the tool-coverage manifest and the
+// dockle image-scan decision) into the run dir, through containedPath so it can never
+// escape the sandbox.
+func writeRunReport(runDir string, m security.Manifest, dec security.DockleDecision) error {
 	reportPath, err := containedPath(runDir, "report.md")
 	if err != nil {
 		return err
@@ -184,6 +215,15 @@ func writeRunReport(runDir string, m security.Manifest) error {
 			status = "ran"
 		}
 		fmt.Fprintf(&b, "- %s — %s\n", t.Name, status)
+	}
+	b.WriteString("\n## Container image scan (dockle)\n\n")
+	if dec.Run {
+		fmt.Fprintf(&b, "- dockle — scanning supplied image (args: %s)\n", strings.Join(dec.Args, " "))
+	} else {
+		fmt.Fprintf(&b, "- dockle — skipped: %s\n", dec.Reason)
+		if dec.Install != "" {
+			fmt.Fprintf(&b, "  install: %s\n", dec.Install)
+		}
 	}
 	b.WriteString("\n## Findings\n\n_(populated by the dross-secure audit)_\n")
 	return os.WriteFile(reportPath, []byte(b.String()), 0o644)

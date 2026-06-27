@@ -168,6 +168,112 @@ func TestSecurityScaffoldEmptyLedgerErrors(t *testing.T) {
 	}
 }
 
+// withDockleInstalled overrides the security command's PATH lookup so dockle reads as
+// installed, letting the image-scan decision be exercised without dockle on the box.
+func withDockleInstalled(t *testing.T) {
+	t.Helper()
+	prev := securityLookPath
+	securityLookPath = func(bin string) (string, error) {
+		if bin == security.DockleBin {
+			return "/fake/dockle", nil
+		}
+		return prev(bin)
+	}
+	t.Cleanup(func() { securityLookPath = prev })
+}
+
+// TestSecurityRunImageFlagRunsDockle proves a supplied --image makes the run scan
+// that exact ref with dockle. If the flag is ignored, no "scanning image" line is
+// emitted and this fails.
+func TestSecurityRunImageFlagRunsDockle(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	withDockleInstalled(t)
+	t.Setenv("DROSS_IMAGE", "")
+
+	const ref = "registry.example.com/app:1.2.3"
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Security(), "run", "--image", ref, "."); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+	if !strings.Contains(out, "dockle: scanning image "+ref) {
+		t.Fatalf("a supplied --image must run dockle against that ref:\n%s", out)
+	}
+}
+
+// TestSecurityRunNoImageSkipsDockle proves that with dockle installed but no image
+// supplied, the run skips dockle WITH the no-image reason — never a silent ran/all-clear.
+func TestSecurityRunNoImageSkipsDockle(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	withDockleInstalled(t)
+	t.Setenv("DROSS_IMAGE", "")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Security(), "run", "."); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+	if strings.Contains(out, "scanning image") {
+		t.Fatalf("no image supplied must not run dockle:\n%s", out)
+	}
+	if !strings.Contains(out, "dockle: skipped") || !strings.Contains(out, "needs a built image") {
+		t.Fatalf("no image must skip dockle with the no-image reason, not read as all-clear:\n%s", out)
+	}
+}
+
+// TestSecurityRunEmptyImageFlagSkips pins the empty-flag guard: a whitespace --image
+// is treated as no image (skipped), never as a real ref.
+func TestSecurityRunEmptyImageFlagSkips(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	withDockleInstalled(t)
+	t.Setenv("DROSS_IMAGE", "")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Security(), "run", "--image", "   ", "."); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+	if strings.Contains(out, "scanning image") {
+		t.Fatalf("a whitespace --image must be treated as no image (skipped):\n%s", out)
+	}
+	if !strings.Contains(out, "dockle: skipped") {
+		t.Fatalf("empty --image must skip dockle:\n%s", out)
+	}
+}
+
+// TestSecurityRunImageEnvFallback proves the c-8 config channel: $DROSS_IMAGE feeds
+// dockle when --image is unset.
+func TestSecurityRunImageEnvFallback(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	withDockleInstalled(t)
+	t.Setenv("DROSS_IMAGE", "env.example.com/img:9")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Security(), "run", "."); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+	if !strings.Contains(out, "dockle: scanning image env.example.com/img:9") {
+		t.Fatalf("$DROSS_IMAGE must feed dockle when --image is unset:\n%s", out)
+	}
+}
+
 func TestSecurityRunReadOnly(t *testing.T) {
 	runDir := t.TempDir()
 
