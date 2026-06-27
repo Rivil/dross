@@ -1,21 +1,11 @@
 {
   "version": "0.6.4.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-27T14:05:42.924684Z",
-  "last_action": "completed secure-quality-findings-lifecycle",
+  "current_phase": "status-action-surfaces-v2",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-27T14:50:47.841439Z",
+  "last_action": "spec locked: status-action-surfaces-v2",
   "history": [
-    {
-      "at": "2026-06-27T09:27:34.993286Z",
-      "action": "set version=0.6.2.0"
-    },
-    {
-      "at": "2026-06-27T09:30:37.5684Z",
-      "action": "executed t-1 (Add svelte+typescript tool loadout)"
-    },
-    {
-      "at": "2026-06-27T09:31:19.958991Z",
-      "action": "executed t-2 (Add dart tool loadout)"
-    },
     {
       "at": "2026-06-27T09:33:01.115828Z",
       "action": "executed t-3 (Rewrite security catalog test)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-27T14:05:42.924684Z",
       "action": "completed secure-quality-findings-lifecycle"
+    },
+    {
+      "at": "2026-06-27T14:17:41.36431Z",
+      "action": "created status-action-surfaces-v2"
+    },
+    {
+      "at": "2026-06-27T14:50:47.834326Z",
+      "action": "set current_phase=status-action-surfaces-v2"
+    },
+    {
+      "at": "2026-06-27T14:50:47.841439Z",
+      "action": "spec locked: status-action-surfaces-v2"
     }
   ]
 }

@@ -1,0 +1,50 @@
+[phase]
+  id = "status-action-surfaces-v2"
+  title = "status-action-surfaces-v2"
+  milestone = "v0.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "When `dross status` shows the `actions:` block, areas are ordered by run signal — never-run areas first, then ran areas most-stale (longest since last run) before recently-run — so the most-neglected area sits at the top."
+
+[[criteria]]
+  id = "c-2"
+  text = "Each area in the `actions:` block shows its run-signal state — `never run` when there is no recorded run, or a relative `last run <when>` (e.g. \"3d ago\") when it has run — so the c-1 ordering is legible."
+
+[[criteria]]
+  id = "c-3"
+  text = "The security and quality areas render as runnable (`/dross-secure`, `/dross-quality`) instead of `(planned)`, reflecting that those commands now ship — no surfaced area points at a command that does not exist."
+
+[[criteria]]
+  id = "c-4"
+  text = "The tech-debt area is backed by a real scan — TODO/FIXME/HACK/XXX markers plus language-agnostic size heuristics (oversized files, over-long lines) — that produces concrete findings, not a `(planned)` placeholder."
+
+[[decisions]]
+  key = "area_catalog"
+  choice = "Keep the fixed in-code catalog (security, quality, tech-debt); config-driven `[[action_areas]]` in project.toml is dropped, not deferred."
+  why = "Reaffirms v1's YAGNI call for a solo single-binary tool with no second consumer; carrying a config schema indefinitely is dead weight."
+  locked = true
+
+[[decisions]]
+  key = "techdebt_scan"
+  choice = "tech-debt is a marker scan (TODO/FIXME/HACK/XXX across tracked files) plus language-agnostic size heuristics (oversized files by line count, over-long lines), computed by dross itself with no external tools."
+  why = "Dependency-free and language-agnostic per the locked single-binary ethos; distinct from /dross-quality's deep analyzer audit, so the two areas measure different things rather than overlapping."
+  locked = true
+
+[[decisions]]
+  key = "techdebt_invocation"
+  choice = "A `dross techdebt` CLI subcommand runs the scan and writes a durable run record under `.dross/techdebt`; status renders the area runnable. No agent/skill prompt."
+  why = "A recorded run makes tech-debt symmetric with secure/quality so it participates in the c-1/c-2 ranking; the scan is deterministic so it needs no orchestration prompt."
+  locked = true
+
+[[decisions]]
+  key = "staleness_signal"
+  choice = "Each area's run signal is a store-level `last_run` timestamp persisted in its durable `.dross/<area>/state.toml`, written on every run and read by status; never-run = no state / empty timestamp."
+  why = "Prune-proof (the findings store is designed to survive run-dir pruning) and uniform across secure/quality/tech-debt, unlike run-dir mtimes or the per-finding LastRun run-id."
+  locked = true
+
+[[decisions]]
+  key = "ranking_order"
+  choice = "Pure relative ordering: never-run areas first in stable catalog order (security, quality, tech-debt), then ran areas oldest-last-run first. No staleness threshold / 'stale' flag and no new config."
+  why = "The milestone criterion asks for ranking by signal, not a tuned alarm; a threshold needs an arbitrary N and config to tune it — against the solo-tool grain."
+  locked = true
