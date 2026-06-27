@@ -1,21 +1,11 @@
 {
   "version": "0.6.6.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-27T19:35:16.574721Z",
-  "last_action": "completed ship-complete-recovery-hardening",
+  "current_phase": "deepen-container-iac-scanning",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-27T20:30:45.305134Z",
+  "last_action": "spec locked: deepen-container-iac-scanning",
   "history": [
-    {
-      "at": "2026-06-27T13:20:57.055556Z",
-      "action": "plan locked: secure-quality-findings-lifecycle (6 tasks across 4 waves, --panel)"
-    },
-    {
-      "at": "2026-06-27T13:34:40.62924Z",
-      "action": "plan reviewed: secure-quality-findings-lifecycle (0 blocking, 2 flags applied: F1 t-7 prompt-reconcile, F2 c-3→t-6)"
-    },
-    {
-      "at": "2026-06-27T13:36:15.470369Z",
-      "action": "set version=0.6.4.0"
-    },
     {
       "at": "2026-06-27T13:38:05.604439Z",
       "action": "executed t-1 (Add shared fingerprint function)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-27T19:35:16.574721Z",
       "action": "completed ship-complete-recovery-hardening"
+    },
+    {
+      "at": "2026-06-27T19:59:32.200147Z",
+      "action": "created deepen-container-iac-scanning"
+    },
+    {
+      "at": "2026-06-27T20:30:45.299093Z",
+      "action": "set current_phase=deepen-container-iac-scanning"
+    },
+    {
+      "at": "2026-06-27T20:30:45.305134Z",
+      "action": "spec locked: deepen-container-iac-scanning"
     }
   ]
 }

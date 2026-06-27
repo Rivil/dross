@@ -1,0 +1,60 @@
+[phase]
+  id = "deepen-container-iac-scanning"
+  title = "Deepen container & IaC scanning"
+  milestone = "v0.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "On a repo containing Kubernetes manifests, dross security and dross quality recon detect a dedicated `kubernetes` marker profile and surface its scanner into the manifest — verifiable the same way the existing terraform/docker marker tests assert it."
+
+[[criteria]]
+  id = "c-2"
+  text = "On a repo containing CloudFormation templates, dross security and dross quality recon detect a dedicated `cloudformation` marker profile and surface its scanner into the manifest — asserted like the other marker profiles."
+
+[[criteria]]
+  id = "c-3"
+  text = "On a repo with a Dockerfile, dross security recon surfaces `dockle` as a container image-layer scanner. Because dockle needs a built image, the scan path handles the no-image case gracefully — it reports skipped-with-reason, never a silent all-clear — asserted in tests."
+
+[[criteria]]
+  id = "c-4"
+  text = "On an IaC repo (Terraform / Kubernetes / CloudFormation), dross security recon surfaces `checkov` as a cross-family IaC misconfiguration scanner with installed-vs-missing status — asserted in tests; its Python dependency is reflected in the install hint."
+
+[[criteria]]
+  id = "c-5"
+  text = "On a committed multi-IaC fixture, dross security detect / dross quality detect lists every new tool (k8s + CFN scanners, dockle, checkov, kube-linter, cfn-lint) with installed-vs-missing status and an install hint — a missing tool reads as 'skipped, install X', never a silent all-clear; recorded as a documented manual-run record (mirroring the prior phases' c-3 proof)."
+
+[[criteria]]
+  id = "c-6"
+  text = "Each new profile (`kubernetes`, `cloudformation`) is documented like terraform.toml/docker.toml — a header comment explaining the marker stack and tool choices — plus entries in internal/stack/profiles/README.md, so the drop-in profiles are discoverable."
+
+[[criteria]]
+  id = "c-7"
+  text = "On a Kubernetes/CloudFormation repo, dross quality recon surfaces a dedicated IaC quality analyzer per family — `kube-linter` (k8s) and `cfn-lint` (cfn) — mapped to the `error-handling` dimension (matching tflint/hadolint), not just the agnostic scc/jscpd fallback."
+
+[[criteria]]
+  id = "c-8"
+  text = "When a user supplies an image ref (flag/config), dross security runs `dockle` against it; with no image supplied it still skips-with-hint (c-3). dross never builds the image itself."
+
+[[decisions]]
+  key = "manifest_detection"
+  choice = "K8s/CFN profiles use content-sniff hybrid detection: glob candidate *.yaml/*.yml/*.json files, then confirm by content — kubernetes = file has apiVersion + kind; cloudformation = file has AWSTemplateFormatVersion or a Resources block. Requires adding a content-matcher capability to the profile/marker engine."
+  why = "Plain YAML/JSON can't be detected by extension alone (terraform's *.tf trick) — a bare *.yaml glob fires on every YAML repo and collides with the docker-compose/svelte profiles. Content confirmation gives near-zero false positives."
+  locked = true
+
+[[decisions]]
+  key = "scanner_selection"
+  choice = "Reuse `trivy config` as the per-family security scanner for both kubernetes and cloudformation (distinct Name per profile so manifest dedup keeps both, like terraform). Add dedicated quality analyzers per family — kube-linter (k8s) and cfn-lint (cfn) — under the error-handling dimension."
+  why = "trivy config already scans k8s and CloudFormation, so no new security dependency and the mechanism stays consistent with terraform. Dedicated quality linters give an IaC-specific quality signal per family (c-7), matching the terraform trivy+tflint split."
+  locked = true
+
+[[decisions]]
+  key = "dockle_image_source"
+  choice = "dross never runs `docker build`. dockle is surfaced and shown in detect; with no image the scan path skips-with-hint ('dockle needs a built image, run docker build / supply one'). When the user supplies an image ref (flag/config), dross runs dockle against that supplied image."
+  why = "Building images in the scan path needs a docker daemon and has side effects — it breaks the static-source model. Skip-with-hint preserves that model; a supplied-image input lets users opt into a real scan without dross owning the build."
+  locked = true
+
+[[decisions]]
+  key = "checkov_role"
+  choice = "checkov is a cross-family IaC security scanner (terraform/k8s/cloudformation) that runs alongside trivy config — distinct Name, both kept by manifest dedup. A missing checkov skips with an install hint; it is never deduped away in favour of trivy config."
+  why = "dross's pattern is to keep overlapping scanners side-by-side (agnostic trivy vs trivy config), letting the user see both signals. checkov adds policy depth trivy config can miss; treating it as quality doesn't fit a misconfig/security tool."
+  locked = true
