@@ -257,16 +257,29 @@ _introduced 07-stack-profiles · extended 08-language-profiles · extended 09-ma
 
 ### State & status
 
-Track current milestone/phase/version + activity in state.json; summarise "where am I" — including milestone phase-progress (N/M phases verified) and an idle-gated non-spine action surface (security/quality/tech-debt) shown only when the spec→ship spine has nothing runnable left.
+Track current milestone/phase/version + activity in state.json; summarise "where am I" — including milestone phase-progress (N/M phases verified) and an idle-gated non-spine action surface (security/quality/tech-debt) that ranks areas by run signal (never-run first, then most-stale) and shows each area's last-run state, surfaced only when the spec→ship spine has nothing runnable left.
 
 - `state.State` — `internal/state/state.go:17`
 - `State` (CLI) — `internal/cmd/state.go:16`
-- `Status` — `internal/cmd/status.go:18`
-- `renderMilestone` — `internal/cmd/status.go:108`
-- `spineIdle` — `internal/cmd/status.go:222`
-- `renderActionAreas` — `internal/cmd/status.go:312`
+- `Status` — `internal/cmd/status.go:22`
+- `spineIdle` — `internal/cmd/status.go:247`
+- `rankAreas` — `internal/cmd/status.go:363`
+- `formatRunSignal` — `internal/cmd/status.go:382`
+- `renderActionAreas` — `internal/cmd/status.go:410`
 
-_c8b346e · extended 04-status-action-surfaces · 2ee9736_
+_c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · d2be565_
+
+### Tech-debt scan (dross techdebt)
+
+Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (word-boundary) plus size heuristics (oversized files, over-long lines) over git-tracked files, written to a prune-proof run dir with a store-level `last_run` that feeds the status action surface. Distinct from the dross-quality analyzer audit — markers are self-flagged debt, not analyzer findings.
+
+- `Scan` — `internal/techdebt/scan.go:53`
+- `NewRun` — `internal/techdebt/run.go:54`
+- `StatePath` — `internal/techdebt/state.go:16`
+- `Techdebt` (CLI) — `internal/cmd/techdebt.go:22`
+- `findings.StampLastRun` — `internal/findings/state.go:121`
+
+_introduced status-action-surfaces-v2 · 510e772_
 
 ### Telemetry & stats
 
