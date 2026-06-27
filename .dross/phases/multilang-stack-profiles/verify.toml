@@ -1,0 +1,63 @@
+[verify]
+  phase = "multilang-stack-profiles"
+  generated_at = 2026-06-27T07:45:06.320029Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8412537917087968
+  mutants_killed = 832
+  mutants_survived = 157
+  mutants_not_covered = 157
+  criteria_total = 3
+  criteria_covered = 3
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/stack/detect_test.go:TestDetectFullProfilesResolve",
+    "internal/quality/recon_test.go:TestPythonAnalyzerInManifest",
+  ]
+  notes = "Detect resolves python/javascript/csharp on matching trees; BuildManifest on a .py tree surfaces the ruff analyzer. Breaks if a profile drops its ext or analyzer."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/stack/detect_test.go:TestDetectLanguagesNoRegression",
+    "internal/stack/detect_test.go:TestTsNotHijackedBySvelte",
+    "internal/stack/detect_test.go:TestExtLangForUnit",
+    "internal/stack/detect_test.go:TestNoExtLangMapInDetect",
+    "internal/stack/detect_test.go:TestStubExtAliasesDetect",
+    "internal/security/recon_test.go:TestNoDuplicateExtLangMap",
+  ]
+  notes = "ext->lang single-sourced by union over loaded profiles. NoRegression pins all 16 legacy languages; TsNotHijackedBySvelte pins the union (no drop); ExtLangForUnit is the pure-function derivation; NoExtLangMapInDetect + NoDuplicateExtLangMap forbid a reintroduced hardcoded map."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/stack/detect_test.go:TestDropInProfileDetectable",
+    "internal/quality/recon_test.go:TestDropInAnalyzerVisible",
+    "internal/stack/detect_test.go:TestDropInMalformedDoesNotCrash",
+  ]
+  notes = "A brand-new .zzz profile dropped under ~/.claude/dross/profiles is detectable (DetectLanguages) and recon-visible (AnalyzersFor/BuildManifest) with zero Go change; a malformed sibling toml never crashes detection. Reverting t-3's derivation breaks DropInProfileDetectable."
+
+# --- Mutation cross-check ---------------------------------------------------
+# In-scope package internal/stack (the only package with changed production
+# code, detect.go) scored 52/52 mutants killed — 100% efficacy, ZERO
+# covered-but-survived mutants. So no criterion is downgraded to weak.
+
+[[finding]]
+  severity = "FLAG"
+  text = "Only in-scope surviving mutant: detect.go:250 (ARITHMETIC_BASE) in normalizeExt's `return \".\" + e` branch. NOT-COVERED, not a regression — every profile ext arrives already dot-prefixed, so the no-dot defensive branch is never exercised by any criterion test. Pre-existing helper; benign."
+
+[[finding]]
+  severity = "NOTE"
+  text = "156 of the 157 survivors are NOT-COVERED mutants in pre-existing, untouched files (internal/cmd CLI commands: issue.go/ship.go/stats.go/rule.go/verify.go/doctor.go/etc., plus quality/catalog.go). gremlins mutates every production file in a package when ANY test file in it changes (this phase touched stack_test.go and recon_test.go in those packages), so they surfaced despite no code change here. They are pre-existing CLI test-coverage debt, not this phase's. Module-wide score 0.84 is diluted by them; in-scope internal/stack efficacy is 100%. Full per-mutant list preserved in tests.json."
+
+[[finding]]
+  severity = "NOTE"
+  text = "10 profile .toml files (python/javascript/csharp + 7 stubs) were skipped by mutation — no mutation adapter for TOML data files. Their behaviour is exercised through the Go detection/recon tests above (Detect/DetectLanguages/BuildManifest over the embedded set), not mutated directly."
