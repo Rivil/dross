@@ -33,6 +33,30 @@ title = "Dart"
   core      = true
   install   = "see dcm.dev  (dart pub global activate dart_code_metrics for the OSS edition)"
 
+# Dedicated security scanner. Dart has no strong dedicated SAST; osv-scanner
+# scans pubspec.lock for known-vuln packages — optional, not core. Agnostic
+# gitleaks/semgrep/trivy stay in the security catalog.
+[[tools]]
+  name     = "osv-scanner"
+  kind     = "scanner"
+  optional = true
+  install  = "go install github.com/google/osv-scanner/cmd/osv-scanner@latest"
+
+# Two more analyzer dimensions on top of dcm(complexity). Distinct Names so the
+# manifest dedup (by Name) keeps both — same dcm binary, different invocation.
+[[tools]]
+  name      = "dcm-unused-code"
+  bin       = "dcm"
+  kind      = "analyzer"
+  dimension = "dead-code"
+  install   = "see dcm.dev  (dart pub global activate dart_code_metrics for the OSS edition)"
+[[tools]]
+  name      = "dart-analyze"
+  bin       = "dart"
+  kind      = "analyzer"
+  dimension = "error-handling"
+  install   = "bundled with the Dart SDK (dart.dev/get-dart)"
+
 [loadout]
   mcp_tools = [
     "context7 (resolve-library-id + query-docs) — verify Dart / Flutter / package API signatures before calling them",

@@ -45,6 +45,46 @@ title = "TypeScript"
   core      = true
   install   = "npm i -D eslint typescript-eslint"
 
+# Dedicated security scanners. Agnostic gitleaks/semgrep/trivy stay in the
+# security catalog and are intentionally NOT listed here.
+[[tools]]
+  name    = "osv-scanner"
+  kind    = "scanner"
+  core    = true
+  install = "go install github.com/google/osv-scanner/cmd/osv-scanner@latest"
+[[tools]]
+  name    = "eslint-plugin-security"
+  bin     = "eslint"
+  kind    = "scanner"
+  install = "npm i -D eslint eslint-plugin-security"
+[[tools]]
+  name     = "retire.js"
+  bin      = "retire"
+  kind     = "scanner"
+  optional = true
+  install  = "npm i -g retire"
+
+# Dedicated quality analyzers across the substantive dimensions the agnostic
+# scc/jscpd set does not cover (eslint complexity stays above).
+[[tools]]
+  name      = "knip"
+  kind      = "analyzer"
+  dimension = "dead-code"
+  core      = true
+  install   = "npm i -D knip"
+[[tools]]
+  name      = "dependency-cruiser"
+  bin       = "depcruise"
+  kind      = "analyzer"
+  dimension = "coupling"
+  install   = "npm i -D dependency-cruiser"
+[[tools]]
+  name      = "typescript-eslint"
+  bin       = "eslint"
+  kind      = "analyzer"
+  dimension = "error-handling"
+  install   = "npm i -D eslint typescript-eslint"
+
 [loadout]
   mcp_tools = [
     "context7 (resolve-library-id + query-docs) — verify TypeScript / library API signatures before calling them",

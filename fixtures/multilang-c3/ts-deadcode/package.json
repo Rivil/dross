@@ -1,0 +1,11 @@
+{
+  "name": "multilang-c3-ts-deadcode",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "c-3 fixture: one unused export that knip(dead-code) flags but the agnostic fallback (scc/jscpd) misses.",
+  "knip": {
+    "entry": ["src/index.ts"],
+    "project": ["src/**/*.ts"]
+  }
+}

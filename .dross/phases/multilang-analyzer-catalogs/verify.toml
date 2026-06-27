@@ -1,0 +1,64 @@
+[verify]
+  phase = "multilang-analyzer-catalogs"
+  generated_at = 2026-06-27T09:41:47.721388Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "skipped"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/security/catalog_test.go:TestScannersFor_dedicatedScanner (svelte/typescript/dart: osv-scanner present, non-agnostic, Languages-tagged, agnostic set retained)",
+    "internal/security/recon_test.go:TestBuildManifest_svelteRepo_listsOsvScanner",
+    "internal/security/recon_test.go:TestBuildManifest_dartRepo_listsOsvScanner",
+  ]
+  notes = "Catalog test covers all three stacks; recon proves the per-repo 'dross security detect lists it' clause for svelte and dart (unambiguous extensions). typescript's per-repo path is covered transitively (a .ts tree resolves to svelte+typescript) and directly at the catalog layer."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/quality/catalog_test.go:TestAnalyzersFor_threeDimensions (svelte/typescript=4, dart=3 distinct substantive dedicated dimensions; collapse or drop trips it)",
+    "internal/quality/recon_test.go:TestBuildManifest_svelteRepo_surfacesThreeDimensions (knip/dependency-cruiser/typescript-eslint reach a real run)",
+  ]
+  notes = "Counts DISTINCT substantive dimensions, not tool count, so two analyzers sharing a dimension fails even at three tools. dart sits at exactly 3 per the locked >=3-total reading."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/quality/catalog_test.go:TestC3DedicatedDistinctFromAgnostic (knip wired into typescript catalog, distinct from agnostic scc/jscpd)",
+    "fixtures/multilang-c3/RUN.md + expected-finding.txt (recorded real run: npx knip surfaces orphanedWidget @ src/lib.ts:9; scc/jscpd report nothing)",
+  ]
+  notes = "Per the locked findings_proof decision the 'surfaces a finding the fallback misses' half is a committed fixture + documented manual run (kept out of `go test` to avoid pulling the JS toolchain into CI). The go-test guards the wiring; RUN.md is the demonstrated proof, reproducible against expected-finding.txt."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/security/recon_test.go:TestBuildManifest_missingDedicatedScannerSkipped (osv-scanner in Skipped() with install hint, BuildManifest returns nil)",
+    "internal/quality/recon_test.go:TestBuildManifest_missingDedicatedAnalyzerSkipped (dcm-unused-code in Skipped() with hint, nil error)",
+    "internal/security/catalog_test.go:TestAvailabilityMissingHasHint + internal/quality/catalog_test.go:TestDetectMissingHasHint (every catalog tool carries an install hint)",
+  ]
+  notes = "Graceful skip proven on both security and quality recon: a missing tool is recorded as unavailable with its hint and the run continues without error."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation skipped (--skip-mutation): no adapter ran. This phase's production change is embedded TOML profiles (not mutatable) plus Go test files; the verdict rests on criterion coverage — all 4 covered."
+
+[[finding]]
+  severity = "NOTE"
+  text = "A default `dross verify` run aborted because the c-3 TypeScript fixture made the repo trip the Stryker (JS) adapter, which is broken in this environment (npx stryker is an ancient version missing module 'rx'). The Go gremlins pass that ran before the abort reported 24 killed / 0 lived / 100% test efficacy on the touched quality package — a positive signal, though formally unrecorded here."
+
+[[finding]]
+  severity = "FLAG"
+  text = "The bare TS c-3 fixture under fixtures/ causes mutation-on `dross verify` to invoke the JS adapter on test data. Consider excluding fixtures/ from the mutation file set, or scoping the adapter to production paths, so a future verify on this repo doesn't false-trigger Stryker."

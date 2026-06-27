@@ -1,89 +1,9 @@
 {
-  "version": "0.6.1.0",
+  "version": "0.6.2.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-27T07:55:25.669676Z",
-  "last_action": "completed multilang-stack-profiles",
+  "last_activity": "2026-06-27T09:52:36.173425Z",
+  "last_action": "completed multilang-analyzer-catalogs",
   "history": [
-    {
-      "at": "2026-06-26T13:28:11.009365Z",
-      "action": "set version=0.5.2.0"
-    },
-    {
-      "at": "2026-06-26T13:29:44.110108Z",
-      "action": "executed t-1 (Add dismissed state to deferred schema)"
-    },
-    {
-      "at": "2026-06-26T13:31:20.087323Z",
-      "action": "executed t-2 (Add dross deferred dismiss command)"
-    },
-    {
-      "at": "2026-06-26T13:33:27.668284Z",
-      "action": "executed t-3 (Filter dismissed in deferred list)"
-    },
-    {
-      "at": "2026-06-26T13:35:25.225444Z",
-      "action": "executed t-4 (Wire inbox §0 relax + dismiss command)"
-    },
-    {
-      "at": "2026-06-26T13:35:31.466218Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-26T13:35:31.473462Z",
-      "action": "phase deferred-triage-gaps executed (4/4 done)"
-    },
-    {
-      "at": "2026-06-26T13:41:58.481968Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-26T13:41:58.487341Z",
-      "action": "verified deferred-triage-gaps: pass (4/4 covered, mutation 0.82 module-wide / efficacy 1.00 ex-not-covered)"
-    },
-    {
-      "at": "2026-06-26T13:44:29.754502Z",
-      "action": "completed deferred-triage-gaps"
-    },
-    {
-      "at": "2026-06-26T14:14:19.110232Z",
-      "action": "set current_milestone=v0.4"
-    },
-    {
-      "at": "2026-06-26T14:15:50.166197Z",
-      "action": "created phase-lifecycle-commands"
-    },
-    {
-      "at": "2026-06-26T14:32:25.248647Z",
-      "action": "set current_phase=phase-lifecycle-commands"
-    },
-    {
-      "at": "2026-06-26T14:32:25.256471Z",
-      "action": "spec locked: phase-lifecycle-commands"
-    },
-    {
-      "at": "2026-06-26T14:44:07.683396Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-26T14:44:07.690602Z",
-      "action": "plan locked: phase-lifecycle-commands (5 tasks across 3 waves, --panel)"
-    },
-    {
-      "at": "2026-06-26T14:47:55.853776Z",
-      "action": "plan reviewed: phase-lifecycle-commands (0 blocking, 3 flags; #1 UniqueSlug trap fixed in t-4, #3 serialized t-5 after t-4, #2 kept folded per D3)"
-    },
-    {
-      "at": "2026-06-26T14:48:46.538094Z",
-      "action": "set version=0.4.2.0"
-    },
-    {
-      "at": "2026-06-26T14:51:41.15896Z",
-      "action": "executed t-1 (Pure array-order helpers)"
-    },
-    {
-      "at": "2026-06-26T14:53:34.676295Z",
-      "action": "executed t-2 (Byte-for-byte snapshot test harness)"
-    },
     {
       "at": "2026-06-26T14:58:33.742906Z",
       "action": "executed t-3 (dross phase move + shared lifecycle plumbing)"
@@ -203,6 +123,86 @@
     {
       "at": "2026-06-27T07:55:25.669676Z",
       "action": "completed multilang-stack-profiles"
+    },
+    {
+      "at": "2026-06-27T08:47:30.369565Z",
+      "action": "created multilang-analyzer-catalogs"
+    },
+    {
+      "at": "2026-06-27T09:03:58.120556Z",
+      "action": "set current_phase=multilang-analyzer-catalogs"
+    },
+    {
+      "at": "2026-06-27T09:03:58.126712Z",
+      "action": "spec locked: multilang-analyzer-catalogs"
+    },
+    {
+      "at": "2026-06-27T09:19:29.426863Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-27T09:19:29.433204Z",
+      "action": "plan locked: multilang-analyzer-catalogs (8 tasks across 2 waves, --panel)"
+    },
+    {
+      "at": "2026-06-27T09:24:26.56368Z",
+      "action": "plan reviewed: multilang-analyzer-catalogs (0 blocking, 4 flags)"
+    },
+    {
+      "at": "2026-06-27T09:26:51.446311Z",
+      "action": "plan flags applied: multilang-analyzer-catalogs (F1 t-7 dross-run, F2 t-2 contract, F3 t-8→t-4; 7 tasks)"
+    },
+    {
+      "at": "2026-06-27T09:27:34.993286Z",
+      "action": "set version=0.6.2.0"
+    },
+    {
+      "at": "2026-06-27T09:30:37.5684Z",
+      "action": "executed t-1 (Add svelte+typescript tool loadout)"
+    },
+    {
+      "at": "2026-06-27T09:31:19.958991Z",
+      "action": "executed t-2 (Add dart tool loadout)"
+    },
+    {
+      "at": "2026-06-27T09:33:01.115828Z",
+      "action": "executed t-3 (Rewrite security catalog test)"
+    },
+    {
+      "at": "2026-06-27T09:34:00.272732Z",
+      "action": "executed t-4 (Gate \u003e=3 analyzer dimensions in quality test)"
+    },
+    {
+      "at": "2026-06-27T09:35:01.423694Z",
+      "action": "executed t-5 (Security recon: surface + skip per repo)"
+    },
+    {
+      "at": "2026-06-27T09:35:47.001383Z",
+      "action": "executed t-6 (Quality recon: 3 dims reach a run + skip)"
+    },
+    {
+      "at": "2026-06-27T09:39:15.401677Z",
+      "action": "executed t-7 (Commit c-3 fixture + manual-run record)"
+    },
+    {
+      "at": "2026-06-27T09:39:45.071832Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-27T09:39:45.078673Z",
+      "action": "phase multilang-analyzer-catalogs executed (7/7 done)"
+    },
+    {
+      "at": "2026-06-27T09:43:20.987263Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-27T09:43:20.994273Z",
+      "action": "verified multilang-analyzer-catalogs: pass (4/4 covered, mutation skipped — no production TS; gremlins 100% on touched Go pre-abort)"
+    },
+    {
+      "at": "2026-06-27T09:52:36.173425Z",
+      "action": "completed multilang-analyzer-catalogs"
     }
   ]
 }

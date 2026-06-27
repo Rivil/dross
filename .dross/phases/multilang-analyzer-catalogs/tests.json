@@ -1,0 +1,59 @@
+{
+  "phase": "multilang-analyzer-catalogs",
+  "generated_at": "2026-06-27T09:41:47.721388Z",
+  "languages": null,
+  "skipped": [
+    {
+      "file": "fixtures/multilang-c3/RUN.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "fixtures/multilang-c3/expected-finding.txt",
+      "reason": "no mutation adapter for .txt"
+    },
+    {
+      "file": "fixtures/multilang-c3/ts-deadcode/package.json",
+      "reason": "no mutation adapter for .json"
+    },
+    {
+      "file": "fixtures/multilang-c3/ts-deadcode/src/index.ts",
+      "reason": "no mutation adapter for .ts"
+    },
+    {
+      "file": "fixtures/multilang-c3/ts-deadcode/src/lib.ts",
+      "reason": "no mutation adapter for .ts"
+    },
+    {
+      "file": "fixtures/multilang-c3/ts-deadcode/tsconfig.json",
+      "reason": "no mutation adapter for .json"
+    },
+    {
+      "file": "internal/quality/catalog_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/quality/recon_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/security/catalog_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/security/recon_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/stack/profiles/dart.toml",
+      "reason": "no mutation adapter for .toml"
+    },
+    {
+      "file": "internal/stack/profiles/svelte.toml",
+      "reason": "no mutation adapter for .toml"
+    },
+    {
+      "file": "internal/stack/profiles/typescript.toml",
+      "reason": "no mutation adapter for .toml"
+    }
+  ]
+}
