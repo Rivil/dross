@@ -1,47 +1,11 @@
 {
-  "version": "0.6.2.0",
+  "version": "0.6.3.0",
   "current_milestone": "v0.6",
   "current_phase": "container-iac-scanning",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-27T11:27:33.528458Z",
-  "last_action": "plan reviewed: container-iac-scanning (0 blocking, 2 flags applied)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-27T11:37:29.849602Z",
+  "last_action": "phase container-iac-scanning executed (6/6 done)",
   "history": [
-    {
-      "at": "2026-06-26T15:10:08.624569Z",
-      "action": "verified phase-lifecycle-commands: pass (4/4 covered, mutation 0.83 module-wide / efficacy 1.00; resolveAnchor survivors are gremlins not-covered artifact, go-cover confirms 74-89%)"
-    },
-    {
-      "at": "2026-06-26T15:11:41.831349Z",
-      "action": "completed phase-lifecycle-commands"
-    },
-    {
-      "at": "2026-06-26T15:17:13.078265Z",
-      "action": "bump internal 0.4.2.0 → 0.4.2.1"
-    },
-    {
-      "at": "2026-06-26T15:17:13.096681Z",
-      "action": "quick: count deferred someday ideas in /dross-status inbox nudge"
-    },
-    {
-      "at": "2026-06-26T15:46:00.147703Z",
-      "action": "set current_milestone=v0.6"
-    },
-    {
-      "at": "2026-06-26T15:46:00.153496Z",
-      "action": "scoped milestone v0.6: 4 criteria, 9 phases"
-    },
-    {
-      "at": "2026-06-26T15:48:15.412136Z",
-      "action": "created multilang-stack-profiles"
-    },
-    {
-      "at": "2026-06-26T16:25:48.112278Z",
-      "action": "set current_phase=multilang-stack-profiles"
-    },
-    {
-      "at": "2026-06-26T16:25:48.118636Z",
-      "action": "spec locked: multilang-stack-profiles"
-    },
     {
       "at": "2026-06-26T17:01:09.373864Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +169,42 @@
     {
       "at": "2026-06-27T11:27:33.528458Z",
       "action": "plan reviewed: container-iac-scanning (0 blocking, 2 flags applied)"
+    },
+    {
+      "at": "2026-06-27T11:28:12.933991Z",
+      "action": "set version=0.6.3.0"
+    },
+    {
+      "at": "2026-06-27T11:29:22.493453Z",
+      "action": "executed t-1 (Add terraform.toml marker profile)"
+    },
+    {
+      "at": "2026-06-27T11:31:02.399793Z",
+      "action": "executed t-2 (Pin terraform patterns + embedded loadout)"
+    },
+    {
+      "at": "2026-06-27T11:32:09.140334Z",
+      "action": "executed t-3 (Assert terraform scanner surfaces \u0026 skips (security))"
+    },
+    {
+      "at": "2026-06-27T11:33:18.010267Z",
+      "action": "executed t-4 (Assert tflint analyzer surfaces \u0026 skips (quality))"
+    },
+    {
+      "at": "2026-06-27T11:34:28.992102Z",
+      "action": "executed t-5 (Document terraform profile + doc-presence guard)"
+    },
+    {
+      "at": "2026-06-27T11:37:23.986149Z",
+      "action": "executed t-6 (Commit IaC fixture + manual-run record)"
+    },
+    {
+      "at": "2026-06-27T11:37:29.843587Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-27T11:37:29.849602Z",
+      "action": "phase container-iac-scanning executed (6/6 done)"
     }
   ]
 }

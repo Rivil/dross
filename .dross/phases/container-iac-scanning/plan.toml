@@ -1,141 +1,67 @@
 [phase]
-id = "container-iac-scanning"
+  id = "container-iac-scanning"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Add terraform.toml marker profile"
-files         = ["internal/stack/profiles/terraform.toml"]
-description   = """
-New drop-in marker-file profile mirroring docker.toml. id="terraform",
-title="Terraform"; [signals].file_patterns = the locked set (*.tf, *.tf.json,
-*.tfvars, *.tfvars.json, *.hcl) and NO exts. Loadout: scanner "trivy config"
-(bin="trivy", core) distinct from agnostic "trivy"; analyzer "tflint"
-(dimension="error-handling", core). Header comment marks it a marker-file stack,
-notes the accepted *.hcl false-positive risk (Packer/Nomad/Consul), and states
-checkov/dockle are out of scope. Pure data, no Go logic.
-"""
-covers        = ["c-1", "c-2", "c-4"]
-test_contract = [
-  "if the file_patterns set drops *.tf.json or *.hcl, t-2's per-pattern match rows fail",
-  "if \"trivy config\" is renamed to bare \"trivy\", t-3's dedup count fails",
-  "if tflint's dimension is not error-handling, t-2/t-4 dimension rows fail",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Add terraform.toml marker profile"
+  files = ["internal/stack/profiles/terraform.toml"]
+  description = "New drop-in marker-file profile mirroring docker.toml. id=\"terraform\",\ntitle=\"Terraform\"; [signals].file_patterns = the locked set (*.tf, *.tf.json,\n*.tfvars, *.tfvars.json, *.hcl) and NO exts. Loadout: scanner \"trivy config\"\n(bin=\"trivy\", core) distinct from agnostic \"trivy\"; analyzer \"tflint\"\n(dimension=\"error-handling\", core). Header comment marks it a marker-file stack,\nnotes the accepted *.hcl false-positive risk (Packer/Nomad/Consul), and states\ncheckov/dockle are out of scope. Pure data, no Go logic.\n"
+  covers = ["c-1", "c-2", "c-4"]
+  test_contract = ["if the file_patterns set drops *.tf.json or *.hcl, t-2's per-pattern match rows fail", "if \"trivy config\" is renamed to bare \"trivy\", t-3's dedup count fails", "if tflint's dimension is not error-handling, t-2/t-4 dimension rows fail"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Pin terraform patterns + embedded loadout"
-files         = ["internal/stack/profile_test.go", "internal/stack/embed_test.go"]
-description   = """
-(a) TestTerraformFilePatternMatch (mirror TestFilePatternMatch): one row per
-locked pattern must match (main.tf, vars.tf.json, prod.tfvars, x.tfvars.json,
-packer.hcl); must NOT match main.tfstate, module.tf.bak, notfile.tfx, main.go;
-a directory named stuff.tf surfaces nothing; Main.TF still matches (case-insensitive).
-(b) TestEmbeddedTerraform (mirror TestEmbeddedDocker): ByID(Embedded(),"terraform")
-non-nil, Exts empty, scanner "trivy config" bin=="trivy", analyzer "tflint"
-dimension=="error-handling", and FilePatterns EQUALS the exact locked set
-(*.tf, *.tf.json, *.tfvars, *.tfvars.json, *.hcl) — pinned against the shipped
-terraform.toml, not a hardcoded list, so dropping/renaming a pattern in the file
-fails this assertion.
-"""
-covers        = ["c-1", "c-2"]
-test_contract = [
-  "if *.tf is treated as covering *.tf.json, the vars.tf.json match row fails",
-  "if the .tfstate/.tf.bak guard regresses, those non-match rows fail",
-  "if case-insensitive matching breaks, the Main.TF row fails",
-  "if any locked file_pattern is dropped/renamed in terraform.toml, the FilePatterns-equals-locked-set assertion fails",
-  "if the embedded profile loses Exts-empty or renames the id, TestEmbeddedTerraform fails",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 2
+  title = "Pin terraform patterns + embedded loadout"
+  files = ["internal/stack/profile_test.go", "internal/stack/embed_test.go"]
+  description = "(a) TestTerraformFilePatternMatch (mirror TestFilePatternMatch): one row per\nlocked pattern must match (main.tf, vars.tf.json, prod.tfvars, x.tfvars.json,\npacker.hcl); must NOT match main.tfstate, module.tf.bak, notfile.tfx, main.go;\na directory named stuff.tf surfaces nothing; Main.TF still matches (case-insensitive).\n(b) TestEmbeddedTerraform (mirror TestEmbeddedDocker): ByID(Embedded(),\"terraform\")\nnon-nil, Exts empty, scanner \"trivy config\" bin==\"trivy\", analyzer \"tflint\"\ndimension==\"error-handling\", and FilePatterns EQUALS the exact locked set\n(*.tf, *.tf.json, *.tfvars, *.tfvars.json, *.hcl) — pinned against the shipped\nterraform.toml, not a hardcoded list, so dropping/renaming a pattern in the file\nfails this assertion.\n"
+  covers = ["c-1", "c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["if *.tf is treated as covering *.tf.json, the vars.tf.json match row fails", "if the .tfstate/.tf.bak guard regresses, those non-match rows fail", "if case-insensitive matching breaks, the Main.TF row fails", "if any locked file_pattern is dropped/renamed in terraform.toml, the FilePatterns-equals-locked-set assertion fails", "if the embedded profile loses Exts-empty or renames the id, TestEmbeddedTerraform fails"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Assert terraform scanner surfaces & skips (security)"
-files         = ["internal/security/recon_test.go"]
-description   = """
-(a) TestBuildManifestMarkerTerraform (mirror MarkerDocker): a *.tf-only repo
-yields a manifest containing "trivy config".
-(b) TestBuildManifestTerraformDedup (mirror MarkerDedup): a go.mod + main.go +
-main.tf repo keeps BOTH agnostic "trivy" and "trivy config" each exactly once,
-and still keeps govulncheck + gitleaks.
-(c) missing-tool skip: under an all-missing lookPath, "trivy config" is in
-m.Skipped() with a non-empty Install hint and BuildManifest returns no error.
-"""
-covers        = ["c-1", "c-3"]
-test_contract = [
-  "if the terraform marker scanner is dropped, TestBuildManifestMarkerTerraform's trivy-config row empties",
-  "if \"trivy config\" collapses into agnostic \"trivy\", the dedup count fails",
-  "if a missing trivy is silently omitted instead of Skipped-with-hint, the skip assertion fails",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Assert terraform scanner surfaces & skips (security)"
+  files = ["internal/security/recon_test.go"]
+  description = "(a) TestBuildManifestMarkerTerraform (mirror MarkerDocker): a *.tf-only repo\nyields a manifest containing \"trivy config\".\n(b) TestBuildManifestTerraformDedup (mirror MarkerDedup): a go.mod + main.go +\nmain.tf repo keeps BOTH agnostic \"trivy\" and \"trivy config\" each exactly once,\nand still keeps govulncheck + gitleaks.\n(c) missing-tool skip: under an all-missing lookPath, \"trivy config\" is in\nm.Skipped() with a non-empty Install hint and BuildManifest returns no error.\n"
+  covers = ["c-1", "c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["if the terraform marker scanner is dropped, TestBuildManifestMarkerTerraform's trivy-config row empties", "if \"trivy config\" collapses into agnostic \"trivy\", the dedup count fails", "if a missing trivy is silently omitted instead of Skipped-with-hint, the skip assertion fails"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Assert tflint analyzer surfaces & skips (quality)"
-files         = ["internal/quality/recon_test.go"]
-description   = """
-(a) TestQualityManifestMarkerTerraform (mirror MarkerDocker): a *.tf-only repo
-surfaces "tflint" with dimension error-handling AND still carries agnostic
-"scc"/"jscpd" (union, not replace).
-(b) missing-tool skip: under an all-missing lookup, "tflint" is in m.Skipped()
-with a non-empty Install hint and BuildManifest returns no error.
-(c) no-leak guard (mirror TestQualityNoMarkerRegression): a marker-less Go-only
-repo's quality manifest does NOT contain "tflint".
-"""
-covers        = ["c-2", "c-3"]
-test_contract = [
-  "if tflint is dropped, the tflint manifest row fails",
-  "if marker analyzers replace rather than union the agnostic set, the scc/jscpd rows fail",
-  "if a missing tflint is silently omitted instead of Skipped-with-hint, the skip assertion fails",
-  "if tflint leaks into a marker-less Go repo, the no-leak assertion fails",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 2
+  title = "Assert tflint analyzer surfaces & skips (quality)"
+  files = ["internal/quality/recon_test.go"]
+  description = "(a) TestQualityManifestMarkerTerraform (mirror MarkerDocker): a *.tf-only repo\nsurfaces \"tflint\" with dimension error-handling AND still carries agnostic\n\"scc\"/\"jscpd\" (union, not replace).\n(b) missing-tool skip: under an all-missing lookup, \"tflint\" is in m.Skipped()\nwith a non-empty Install hint and BuildManifest returns no error.\n(c) no-leak guard (mirror TestQualityNoMarkerRegression): a marker-less Go-only\nrepo's quality manifest does NOT contain \"tflint\".\n"
+  covers = ["c-2", "c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["if tflint is dropped, the tflint manifest row fails", "if marker analyzers replace rather than union the agnostic set, the scc/jscpd rows fail", "if a missing tflint is silently omitted instead of Skipped-with-hint, the skip assertion fails", "if tflint leaks into a marker-less Go repo, the no-leak assertion fails"]
+  status = "done"
 
 [[task]]
-id            = "t-5"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Document terraform profile + doc-presence guard"
-files         = ["internal/stack/profiles/README.md", "internal/stack/profiles_doc_test.go"]
-description   = """
-Add a terraform row to profiles/README.md, then TestTerraformProfileDocumented
-(os.ReadFile): README.md mentions "terraform"; terraform.toml's leading comment
-block contains "marker" and names the out-of-scope tools (checkov/dockle).
-"""
-covers        = ["c-4"]
-test_contract = [
-  "if the README terraform row is deleted, TestTerraformProfileDocumented fails",
-  "if the terraform.toml header comment is stripped or omits the out-of-scope note, the comment assertion fails",
-]
-status        = "pending"
+  id = "t-5"
+  wave = 2
+  title = "Document terraform profile + doc-presence guard"
+  files = ["internal/stack/profiles/README.md", "internal/stack/profiles_doc_test.go"]
+  description = "Add a terraform row to profiles/README.md, then TestTerraformProfileDocumented\n(os.ReadFile): README.md mentions \"terraform\"; terraform.toml's leading comment\nblock contains \"marker\" and names the out-of-scope tools (checkov/dockle).\n"
+  covers = ["c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if the README terraform row is deleted, TestTerraformProfileDocumented fails", "if the terraform.toml header comment is stripped or omits the out-of-scope note, the comment assertion fails"]
+  status = "done"
 
 [[task]]
-id            = "t-6"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Commit IaC fixture + manual-run record"
-files         = ["fixtures/terraform-c3/main.tf", "fixtures/terraform-c3/RUN.md", "fixtures/terraform-c3/expected-finding.txt"]
-description   = """
-Mirror fixtures/multilang-c3. main.tf plants TWO deterministic defects the
-agnostic fallback is blind to: (1) a declared-but-unused variable that tflint
-flags as terraform_unused_declarations (plugin-free, default ruleset), and (2) a
-trivy-config misconfig (e.g. unencrypted S3 / open security group) pinned to its
-AVD rule id. expected-finding.txt pins BOTH (rule id @ main.tf:line). RUN.md
-records the manual run after `make install`: detect lists trivy-config + tflint
-installed-vs-missing-with-hint, then both tools surface their finding while the
-agnostic fallback (trivy fs / gitleaks / scc / jscpd) is blind. Locked manual-run
-record, NOT a go-test shelling out to the tools.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "if the unused variable is removed/renamed, RUN.md stops reproducing and expected-finding.txt no longer matches the tflint finding",
-  "if the trivy-config misconfig is fixed, the trivy-config finding in expected-finding.txt no longer matches",
-]
-status        = "pending"
+  id = "t-6"
+  wave = 2
+  title = "Commit IaC fixture + manual-run record"
+  files = ["fixtures/terraform-c3/main.tf", "fixtures/terraform-c3/RUN.md", "fixtures/terraform-c3/expected-finding.txt"]
+  description = "Mirror fixtures/multilang-c3. main.tf plants TWO deterministic defects the\nagnostic fallback is blind to: (1) a declared-but-unused variable that tflint\nflags as terraform_unused_declarations (plugin-free, default ruleset), and (2) a\ntrivy-config misconfig (e.g. unencrypted S3 / open security group) pinned to its\nAVD rule id. expected-finding.txt pins BOTH (rule id @ main.tf:line). RUN.md\nrecords the manual run after `make install`: detect lists trivy-config + tflint\ninstalled-vs-missing-with-hint, then both tools surface their finding while the\nagnostic fallback (trivy fs / gitleaks / scc / jscpd) is blind. Locked manual-run\nrecord, NOT a go-test shelling out to the tools.\n"
+  covers = ["c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["if the unused variable is removed/renamed, RUN.md stops reproducing and expected-finding.txt no longer matches the tflint finding", "if the trivy-config misconfig is fixed, the trivy-config finding in expected-finding.txt no longer matches"]
+  status = "done"
