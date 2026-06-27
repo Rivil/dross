@@ -217,3 +217,62 @@ func TestNoDuplicateExtLangMap(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildManifest_svelteRepo_listsOsvScanner proves c-1's "dross security detect
+// lists it for a repo of that language": a tree whose only source is one .svelte
+// file surfaces the dedicated osv-scanner in the manifest. A .svelte file maps
+// unambiguously to svelte (a bare .ts would resolve to svelte AND typescript).
+func TestBuildManifest_svelteRepo_listsOsvScanner(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // embedded profiles only, no user overlay
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "widget.svelte"), "<script>let x = 1</script>")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if toolNames(m)["osv-scanner"] == 0 {
+		t.Errorf("svelte repo: manifest missing dedicated osv-scanner; tools=%v", toolNames(m))
+	}
+}
+
+func TestBuildManifest_dartRepo_listsOsvScanner(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "foo.dart"), "void main() {}")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if toolNames(m)["osv-scanner"] == 0 {
+		t.Errorf("dart repo: manifest missing dedicated osv-scanner; tools=%v", toolNames(m))
+	}
+}
+
+// TestBuildManifest_missingDedicatedScannerSkipped proves c-4: under an all-missing
+// lookup, svelte's osv-scanner is recorded as skipped (keeping its install hint) and
+// BuildManifest still returns nil — a missing tool degrades, never aborts the run.
+func TestBuildManifest_missingDedicatedScannerSkipped(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "widget.svelte"), "<script>let x = 1</script>")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatalf("BuildManifest aborted on a missing tool: %v", err)
+	}
+	var osv *ToolStatus
+	for i := range m.Skipped() {
+		if m.Skipped()[i].Name == "osv-scanner" {
+			s := m.Skipped()[i]
+			osv = &s
+		}
+	}
+	if osv == nil {
+		t.Fatalf("svelte osv-scanner not in Skipped() under all-missing lookup; skipped=%v", m.Skipped())
+	}
+	if osv.Install == "" {
+		t.Error("skipped osv-scanner has no install hint")
+	}
+}
