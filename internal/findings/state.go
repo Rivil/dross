@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -48,9 +49,22 @@ type Record struct {
 // Store is the durable, gitignored state ledger (state.toml) keyed by
 // fingerprint. It persists across runs separately from the timestamped per-run
 // dirs, so state survives run-dir pruning.
+//
+// LastRun is the store-level timestamp of the area's most recent run — distinct
+// from a Record's run-id LastRun. It is declared before Records so the TOML
+// encoder emits the scalar before the [[finding]] array tables (a scalar after
+// an array-of-tables header would be mis-attributed to the last table). A zero
+// LastRun means the area has never run, the signal status uses to rank areas by
+// staleness.
 type Store struct {
-	Records []Record `toml:"finding"`
+	LastRun time.Time `toml:"last_run"`
+	Records []Record  `toml:"finding"`
 }
+
+// NeverRun reports whether this area has no recorded run — its store-level
+// LastRun is the zero time, which is the case for both a missing state.toml and
+// a store that exists but was never stamped.
+func (s *Store) NeverRun() bool { return s.LastRun.IsZero() }
 
 // Get returns the record for a fingerprint and whether it was present.
 func (s *Store) Get(fp string) (Record, bool) {
@@ -98,6 +112,19 @@ func SaveStore(path string, s *Store) error {
 		return fmt.Errorf("encode state store: %w", err)
 	}
 	return saveAtomic(path, buf.Bytes())
+}
+
+// StampLastRun records that this area ran at now: it loads the store at path,
+// sets the store-level LastRun, and saves it back — preserving every finding
+// Record (a merge, not an overwrite). The first stamp on a missing state.toml
+// creates it. This is the signal status reads to render "last run <when>".
+func StampLastRun(path string, now time.Time) error {
+	s, err := LoadStore(path)
+	if err != nil {
+		return err
+	}
+	s.LastRun = now
+	return SaveStore(path, s)
 }
 
 // saveAtomic writes data to path via a same-directory temp file + rename, so a

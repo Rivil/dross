@@ -1,0 +1,66 @@
+{
+  "phase": "status-action-surfaces-v2",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/findings/state.go",
+        "internal/findings/state_test.go"
+      ],
+      "commit": "4e57d26",
+      "completed_at": "2026-06-27T15:51:57.029581Z",
+      "notes": "feature: status action signal · StampLastRun @ internal/findings/state.go · persists a store-level last_run timestamp per scan area so status can rank areas by staleness"
+    },
+    "t-2": {
+      "files": [
+        "internal/techdebt/scan.go",
+        "internal/techdebt/scan_test.go"
+      ],
+      "commit": "32db2f8",
+      "completed_at": "2026-06-27T15:53:59.559596Z",
+      "notes": "feature: tech-debt scan · Scan @ internal/techdebt/scan.go · dependency-free, language-agnostic scanner for TODO/FIXME/HACK/XXX markers + oversized-file/long-line size heuristics"
+    },
+    "t-3": {
+      "files": [
+        "internal/techdebt/state.go",
+        "internal/techdebt/run.go",
+        "internal/techdebt/state_test.go",
+        "internal/techdebt/run_test.go"
+      ],
+      "commit": "40409e3",
+      "completed_at": "2026-06-27T15:55:45.874176Z",
+      "notes": "feature: tech-debt scan · NewRun @ internal/techdebt/run.go · prune-proof run dir + StatePath (.dross/techdebt/state.toml) + report writer, mirroring security's run helpers"
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/techdebt.go",
+        "internal/cmd/techdebt_test.go",
+        "internal/techdebt/gitignore_test.go",
+        ".gitignore",
+        "cmd/dross/main.go"
+      ],
+      "commit": "510e772",
+      "completed_at": "2026-06-27T16:02:22.638279Z",
+      "notes": "feature: tech-debt scan · Techdebt @ internal/cmd/techdebt.go · dross techdebt enumerates tracked files (git ls-files + tree-walk fallback), scans, writes prune-proof run/report, stamps last_run; artifacts gitignored"
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/security.go",
+        "internal/cmd/quality.go",
+        "internal/cmd/security_test.go",
+        "internal/cmd/quality_test.go"
+      ],
+      "commit": "f57375d",
+      "completed_at": "2026-06-27T15:59:12.406375Z",
+      "notes": "feature: status action signal · securityRun/qualityRun @ internal/cmd/security.go · stamp store-level last_run on each security/quality run so status ranks them as ran"
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go"
+      ],
+      "commit": "d2be565",
+      "completed_at": "2026-06-27T16:06:52.568465Z",
+      "notes": "feature: status action signal · rankAreas/renderActionAreas @ internal/cmd/status.go · ranks idle action areas by staleness (never-run first), renders run-signal text, flips security/quality/tech-debt to runnable with a dead-command guard"
+    }
+  }
+}

@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/findings"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
@@ -83,7 +86,8 @@ func Status() *cobra.Command {
 			// (between phases, or the current phase is done with nothing left
 			// to do), so live work isn't cluttered (c-1, c-3).
 			if spineIdle(root, proj, st) {
-				if lines := renderActionAreas(actionCatalog); len(lines) > 0 {
+				ranked := rankAreas(loadAreaSignals(root, actionCatalog))
+				if lines := renderActionAreas(ranked, time.Now().UTC()); len(lines) > 0 {
 					Printf("actions:   %s\n", lines[0])
 					for _, l := range lines[1:] {
 						Printf("           %s\n", l)
@@ -309,47 +313,120 @@ func openHandoff(root string) string {
 }
 
 // actionArea is one non-spine area of work surfaced when the spine is idle
-// (security, quality, tech-debt). The catalog is fixed in code — no config —
-// and each later phase flips its area `available` once the backing command
-// ships.
+// (security, quality, tech-debt). The catalog is fixed in code — no config.
+// stateDir names the area's subdir under .dross holding its state.toml, the
+// source of the store-level last_run signal status ranks by.
 type actionArea struct {
 	label     string
-	command   string // slash command or short hint; "" when none exists yet
+	command   string // slash command or CLI hint; "" when none exists yet
+	stateDir  string // subdir under .dross with this area's state.toml; "" = no signal
 	available bool
 }
 
-// actionCatalog is the fixed set of non-spine areas. All are not-yet-available
-// in this phase: security/quality land their commands in later phases and the
-// tech-debt scanner is deferred, so each renders with a "(planned)" marker.
+// actionCatalog is the fixed set of non-spine areas. All three are now runnable:
+// /dross-secure and /dross-quality are slash commands, `dross techdebt` is a CLI
+// command. Each carries a state.toml under .dross/<stateDir>/ that records its
+// last run, so status can rank them by staleness.
 var actionCatalog = []actionArea{
-	{label: "security", command: "/dross-secure", available: false},
-	{label: "quality", command: "/dross-quality", available: false},
-	{label: "tech-debt", command: "", available: false},
+	{label: "security", command: "/dross-secure", stateDir: "security", available: true},
+	{label: "quality", command: "/dross-quality", stateDir: "quality", available: true},
+	{label: "tech-debt", command: "dross techdebt", stateDir: "techdebt", available: true},
 }
 
-// renderActionAreas formats the `actions:` block body for the given areas.
-// An available area emits its runnable command; an unavailable one is marked
-// "(planned)" and is never presented as runnable. Returns nil for no areas.
-func renderActionAreas(areas []actionArea) []string {
-	if len(areas) == 0 {
+// areaSignal pairs an action area with its store-level last_run. A zero lastRun
+// means the area has never run.
+type areaSignal struct {
+	area    actionArea
+	lastRun time.Time
+}
+
+// loadAreaSignals reads each area's store-level last_run from
+// .dross/<stateDir>/state.toml. A missing or garbled ledger degrades to a zero
+// time (never-run) so status always renders — it never fails on a corrupt store.
+func loadAreaSignals(root string, areas []actionArea) []areaSignal {
+	out := make([]areaSignal, 0, len(areas))
+	for _, a := range areas {
+		var lr time.Time
+		if a.stateDir != "" {
+			if s, err := findings.LoadStore(filepath.Join(root, a.stateDir, "state.toml")); err == nil {
+				lr = s.LastRun
+			}
+		}
+		out = append(out, areaSignal{area: a, lastRun: lr})
+	}
+	return out
+}
+
+// rankAreas orders areas by run signal: never-run areas first (kept in stable
+// catalog order), then ran areas oldest-last-run first — so the most-neglected
+// area sits at the top. Identical timestamps keep catalog order (stable sort).
+func rankAreas(sigs []areaSignal) []areaSignal {
+	out := make([]areaSignal, len(sigs))
+	copy(out, sigs)
+	sort.SliceStable(out, func(i, j int) bool {
+		zi, zj := out[i].lastRun.IsZero(), out[j].lastRun.IsZero()
+		if zi != zj {
+			return zi // never-run sorts before any ran area
+		}
+		if zi {
+			return false // both never-run: preserve catalog order
+		}
+		return out[i].lastRun.Before(out[j].lastRun) // both ran: oldest first
+	})
+	return out
+}
+
+// formatRunSignal renders an area's run signal relative to now: "never run" for a
+// zero time, otherwise "last run <age>". A future timestamp (clock skew) clamps
+// to "just now" rather than rendering a negative age.
+func formatRunSignal(now, lastRun time.Time) string {
+	if lastRun.IsZero() {
+		return "never run"
+	}
+	d := now.Sub(lastRun)
+	if d < time.Minute {
+		return "last run just now"
+	}
+	return "last run " + humanizeAge(d)
+}
+
+// humanizeAge renders a positive duration (>= 1 minute) as a coarse "<n>m/h/d ago".
+func humanizeAge(d time.Duration) string {
+	switch {
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours())/24)
+	}
+}
+
+// renderActionAreas formats the `actions:` block body for the ranked areas. An
+// available area emits its runnable command plus its run-signal text; an
+// unavailable one is marked "(planned)" and never presented as runnable (kept
+// for forward-compat with areas whose command hasn't shipped). Returns nil for
+// no areas.
+func renderActionAreas(sigs []areaSignal, now time.Time) []string {
+	if len(sigs) == 0 {
 		return nil
 	}
 	// Align labels into a column so the block scans like the other status rows.
 	width := 0
-	for _, a := range areas {
-		if len(a.label) > width {
-			width = len(a.label)
+	for _, s := range sigs {
+		if len(s.area.label) > width {
+			width = len(s.area.label)
 		}
 	}
 	var lines []string
-	for _, a := range areas {
-		label := fmt.Sprintf("%-*s", width, a.label)
+	for _, s := range sigs {
+		label := fmt.Sprintf("%-*s", width, s.area.label)
 		var detail string
 		switch {
-		case a.available && a.command != "":
-			detail = a.command
-		case a.command != "":
-			detail = a.command + " (planned)"
+		case s.area.available && s.area.command != "":
+			detail = fmt.Sprintf("%s · %s", s.area.command, formatRunSignal(now, s.lastRun))
+		case s.area.command != "":
+			detail = s.area.command + " (planned)"
 		default:
 			detail = "(planned)"
 		}

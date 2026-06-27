@@ -1,0 +1,88 @@
+[verify]
+  phase = "status-action-surfaces-v2"
+  generated_at = 2026-06-27T16:18:32.395326Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8295218295218295
+  mutants_killed = 798
+  mutants_survived = 164
+  mutants_not_covered = 164
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/cmd/status_test.go:TestRankAreas",
+    "internal/cmd/status_test.go:TestStatusActionsRankedAndSignalled",
+  ]
+  notes = "TestRankAreas pins never-run-first, oldest-last-run-next, and stable catalog tie-break; the integration test pins the wired order quality<security<tech-debt. No surviving mutant in rankAreas."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/cmd/status_test.go:TestFormatRunSignal",
+    "internal/cmd/status_test.go:TestStatusActionsRankedAndSignalled",
+    "internal/findings/state_test.go:TestStampLastRunPersists",
+    "internal/findings/state_test.go:TestLoadStoreMissingNeverRun",
+  ]
+  notes = "never-run and day-granularity 'last run Nd ago' are pinned by name; the surviving humanizeAge boundary mutants (status.go:396/398) are sub-day (m/h) granularity not exercised by the test inputs — flagged, not criterion-breaking."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/cmd/status_test.go:TestActionAreaCommandsResolve",
+    "internal/cmd/status_test.go:TestStatusShowsActionsBetweenPhases",
+    "internal/cmd/status_test.go:TestRenderActionAreasAvailableEmitsCommand",
+  ]
+  notes = "TestActionAreaCommandsResolve directly pins the no-dead-command guard (every available area resolves to an assets command or a registered CLI command); integration asserts no '(planned)' once commands ship."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/techdebt/scan_test.go:TestScanMarkersMidLineAllKinds",
+    "internal/techdebt/scan_test.go:TestScanMarkerWordBoundary",
+    "internal/techdebt/scan_test.go:TestScanSizeThresholds",
+    "internal/techdebt/scan_test.go:TestScanBinaryAndEmpty",
+    "internal/techdebt/run_test.go:TestNewRunNeverClobbers",
+    "internal/techdebt/run_test.go:TestWriteReportRendersFindings",
+    "internal/techdebt/state_test.go:TestStatePathIsSiblingOfRunDirs",
+    "internal/cmd/techdebt_test.go:TestTechdebtRunNoGitFallback",
+    "internal/cmd/techdebt_test.go:TestTechdebtEnumeratesTrackedFiles",
+  ]
+  notes = "scan engine (markers/size/binary/no-newline), run-dir collision suffix, prune-proof StatePath, report rendering, nogit fallback, and tracked-files enumeration are all pinned by name."
+
+# --- In-scope surviving mutants (this phase's changed code) ---
+
+[[finding]]
+  severity = "FLAG"
+  text = "in-scope: humanizeAge boundary mutants survive (status.go:396 d<time.Hour, status.go:398 d<24h). Sub-day 'Nm ago'/'Nh ago' formatting is never asserted; only the day path is pinned. Tighten TestFormatRunSignal with a minutes and an hours case to kill them."
+
+[[finding]]
+  severity = "FLAG"
+  text = "in-scope: renderActionAreas branch-condition negations survive (status.go:426 available&&command, status.go:428 command non-empty). The available/planned branch structure is under-pinned; a direct unit assertion on a mixed available/unavailable slice would catch it."
+
+[[finding]]
+  severity = "FLAG"
+  text = "in-scope: techdebt report count-summary increment survives (run.go:97). TestWriteReportRendersFindings asserts the finding lines but not the 'N markers, M oversized, K long lines' totals — assert the counts to kill it."
+
+[[finding]]
+  severity = "NOTE"
+  text = "in-scope: run.go:34 (ShortSHA err) and run.go:43 (normalizeSHA empty) read NOT COVERED in the per-package techdebt run, but the nogit path IS exercised cross-package by internal/cmd TestTechdebtRunNoGitFallback. Per-package gremlins coverage blind spot, not a real gap."
+
+# --- Out-of-scope (package-rollup) survivors ---
+
+[[finding]]
+  severity = "NOTE"
+  text = "155 of 164 surviving mutants are in internal/cmd files this phase never touched (rule.go, ship.go, stats.go, issue.go, doctor.go, env.go, codex.go, milestone.go, verify.go, profile.go, project.go, telemetry.go, validate.go, root.go, subcommand_guard.go). They are a gremlins package-rollup artifact — the whole internal/cmd package is mutated even though this phase changed only status/security/quality/techdebt. Module score 0.83; in-scope efficacy on the changed techdebt package is 25 killed / 3 not-covered, 100% on covered mutants."
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation skipped .gitignore: no mutation adapter for non-Go files."

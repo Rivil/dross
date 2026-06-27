@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Rivil/dross/internal/findings"
 	"github.com/Rivil/dross/internal/quality"
 )
 
@@ -61,12 +63,29 @@ func TestQualityRunCreatesDir(t *testing.T) {
 		t.Fatalf("run hard-errored (should proceed with partial coverage): %v", err)
 	}
 	qDir := filepath.Join(dir, ".dross", "quality")
-	entries, err := os.ReadDir(qDir)
-	if err != nil {
-		t.Fatalf("no .dross/quality dir created: %v", err)
+	soleRunDir(t, qDir)
+}
+
+// TestQualityRunStampsLastRun fails if a run doesn't record the store-level
+// last_run signal — the area would then read "never run" right after a run.
+func TestQualityRunStampsLastRun(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
 	}
-	if len(entries) != 1 || !entries[0].IsDir() {
-		t.Fatalf(".dross/quality should hold exactly one run dir, got %v", entries)
+	if err := runCmd(t, Quality(), "run", "."); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	store, err := findings.LoadStore(quality.StatePath(filepath.Join(dir, ".dross")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.NeverRun() {
+		t.Fatal("quality run did not stamp last_run")
+	}
+	if time.Since(store.LastRun) > time.Minute {
+		t.Fatalf("stamped last_run is not ~now: %v", store.LastRun)
 	}
 }
 
@@ -81,11 +100,8 @@ func TestQualityRunWritesManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	qDir := filepath.Join(dir, ".dross", "quality")
-	entries, err := os.ReadDir(qDir)
-	if err != nil || len(entries) != 1 {
-		t.Fatalf("expected one run dir under .dross/quality, got %v (err=%v)", entries, err)
-	}
-	report, err := os.ReadFile(filepath.Join(qDir, entries[0].Name(), "report.md"))
+	runDir := soleRunDir(t, qDir)
+	report, err := os.ReadFile(filepath.Join(qDir, runDir, "report.md"))
 	if err != nil {
 		t.Fatalf("run did not write report.md: %v", err)
 	}

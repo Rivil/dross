@@ -45,6 +45,7 @@ func main() {
 		cmd.Issue(),
 		cmd.Security(),
 		cmd.Quality(),
+		cmd.Techdebt(),
 		cmd.Stack(),
 		cmd.Deferred(),
 	)

@@ -98,6 +98,12 @@ func qualityRun() *cobra.Command {
 			if err := writeQualityRunReport(runDir, m); err != nil {
 				return err
 			}
+			// Stamp the store-level last_run so `dross status` can rank the
+			// quality area by staleness; merges into state.toml without
+			// disturbing the findings ledger.
+			if err := findings.StampLastRun(quality.StatePath(root), time.Now().UTC()); err != nil {
+				return err
+			}
 			Printf("quality run: %s\n", runDir)
 			Printf("  analyzers: %d ran, %d skipped\n", len(m.Ran()), len(m.Skipped()))
 			return nil

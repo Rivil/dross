@@ -1,81 +1,9 @@
 {
-  "version": "0.6.4.0",
+  "version": "0.6.5.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-27T14:05:42.924684Z",
-  "last_action": "completed secure-quality-findings-lifecycle",
+  "last_activity": "2026-06-27T17:35:52.765848Z",
+  "last_action": "completed status-action-surfaces-v2",
   "history": [
-    {
-      "at": "2026-06-27T09:27:34.993286Z",
-      "action": "set version=0.6.2.0"
-    },
-    {
-      "at": "2026-06-27T09:30:37.5684Z",
-      "action": "executed t-1 (Add svelte+typescript tool loadout)"
-    },
-    {
-      "at": "2026-06-27T09:31:19.958991Z",
-      "action": "executed t-2 (Add dart tool loadout)"
-    },
-    {
-      "at": "2026-06-27T09:33:01.115828Z",
-      "action": "executed t-3 (Rewrite security catalog test)"
-    },
-    {
-      "at": "2026-06-27T09:34:00.272732Z",
-      "action": "executed t-4 (Gate \u003e=3 analyzer dimensions in quality test)"
-    },
-    {
-      "at": "2026-06-27T09:35:01.423694Z",
-      "action": "executed t-5 (Security recon: surface + skip per repo)"
-    },
-    {
-      "at": "2026-06-27T09:35:47.001383Z",
-      "action": "executed t-6 (Quality recon: 3 dims reach a run + skip)"
-    },
-    {
-      "at": "2026-06-27T09:39:15.401677Z",
-      "action": "executed t-7 (Commit c-3 fixture + manual-run record)"
-    },
-    {
-      "at": "2026-06-27T09:39:45.071832Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-27T09:39:45.078673Z",
-      "action": "phase multilang-analyzer-catalogs executed (7/7 done)"
-    },
-    {
-      "at": "2026-06-27T09:43:20.987263Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-27T09:43:20.994273Z",
-      "action": "verified multilang-analyzer-catalogs: pass (4/4 covered, mutation skipped — no production TS; gremlins 100% on touched Go pre-abort)"
-    },
-    {
-      "at": "2026-06-27T09:52:36.173425Z",
-      "action": "completed multilang-analyzer-catalogs"
-    },
-    {
-      "at": "2026-06-27T10:27:00.600536Z",
-      "action": "created container-iac-scanning"
-    },
-    {
-      "at": "2026-06-27T10:50:14.057982Z",
-      "action": "set current_phase=container-iac-scanning"
-    },
-    {
-      "at": "2026-06-27T10:50:14.066007Z",
-      "action": "spec locked: container-iac-scanning"
-    },
-    {
-      "at": "2026-06-27T11:11:57.42369Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-27T11:11:57.429549Z",
-      "action": "plan locked: container-iac-scanning (6 tasks across 2 waves, --panel)"
-    },
     {
       "at": "2026-06-27T11:27:33.528458Z",
       "action": "plan reviewed: container-iac-scanning (0 blocking, 2 flags applied)"
@@ -203,6 +131,78 @@
     {
       "at": "2026-06-27T14:05:42.924684Z",
       "action": "completed secure-quality-findings-lifecycle"
+    },
+    {
+      "at": "2026-06-27T14:17:41.36431Z",
+      "action": "created status-action-surfaces-v2"
+    },
+    {
+      "at": "2026-06-27T14:50:47.834326Z",
+      "action": "set current_phase=status-action-surfaces-v2"
+    },
+    {
+      "at": "2026-06-27T14:50:47.841439Z",
+      "action": "spec locked: status-action-surfaces-v2"
+    },
+    {
+      "at": "2026-06-27T15:35:25.437228Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-27T15:35:25.444517Z",
+      "action": "plan locked: status-action-surfaces-v2 (6 tasks across 3 waves, --panel)"
+    },
+    {
+      "at": "2026-06-27T15:43:25.99045Z",
+      "action": "plan reviewed: status-action-surfaces-v2 (0 blocking, 1 flag)"
+    },
+    {
+      "at": "2026-06-27T15:49:08.801465Z",
+      "action": "set version=0.6.5.0"
+    },
+    {
+      "at": "2026-06-27T15:51:57.043921Z",
+      "action": "executed t-1 (Add store-level last_run + stamp helper)"
+    },
+    {
+      "at": "2026-06-27T15:53:59.571769Z",
+      "action": "executed t-2 (Add tech-debt marker + size scan engine)"
+    },
+    {
+      "at": "2026-06-27T15:55:45.890001Z",
+      "action": "executed t-3 (Add tech-debt run dir, StatePath, report writer)"
+    },
+    {
+      "at": "2026-06-27T15:59:12.418807Z",
+      "action": "executed t-5 (Stamp last_run on security \u0026 quality runs)"
+    },
+    {
+      "at": "2026-06-27T16:02:22.65021Z",
+      "action": "executed t-4 (Add dross techdebt command + register + gitignore)"
+    },
+    {
+      "at": "2026-06-27T16:06:52.578752Z",
+      "action": "executed t-6 (Rank, render, flip status action block)"
+    },
+    {
+      "at": "2026-06-27T16:06:59.989967Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-27T16:06:59.99802Z",
+      "action": "phase status-action-surfaces-v2 executed (6/6 done)"
+    },
+    {
+      "at": "2026-06-27T16:26:15.30966Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-27T16:26:15.317861Z",
+      "action": "verified status-action-surfaces-v2: pass (4/4 covered, mutation 0.83 module / high in-scope; 3 minor in-scope FLAGs, 155/164 survivors out-of-scope)"
+    },
+    {
+      "at": "2026-06-27T17:35:52.765848Z",
+      "action": "completed status-action-surfaces-v2"
     }
   ]
 }

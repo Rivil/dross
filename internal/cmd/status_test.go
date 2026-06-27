@@ -1,8 +1,13 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Rivil/dross/internal/findings"
 )
 
 // status output evolves through phases of project lifecycle. Each test
@@ -322,8 +327,13 @@ func TestStatusShowsActionsBetweenPhases(t *testing.T) {
 	if !strings.Contains(out, "actions:") {
 		t.Errorf("expected actions block between phases:\n%s", out)
 	}
-	if !strings.Contains(out, "security") || !strings.Contains(out, "(planned)") {
-		t.Errorf("expected non-spine areas with planned marker:\n%s", out)
+	// Fresh repo: no area has run, so each shows "never run" — and now that the
+	// commands ship, nothing is "(planned)".
+	if !strings.Contains(out, "security") || !strings.Contains(out, "never run") {
+		t.Errorf("expected non-spine areas with run-signal text:\n%s", out)
+	}
+	if strings.Contains(out, "(planned)") {
+		t.Errorf("areas whose commands ship must not show (planned):\n%s", out)
 	}
 }
 
@@ -420,9 +430,9 @@ status = "done"
 // runnable, available areas emit their command.
 
 func TestRenderActionAreasUnavailableShowsPlannedNotRunnable(t *testing.T) {
-	lines := renderActionAreas([]actionArea{
-		{label: "security", command: "/dross-secure", available: false},
-	})
+	lines := renderActionAreas([]areaSignal{
+		{area: actionArea{label: "future", command: "/dross-future", available: false}},
+	}, time.Now())
 	if len(lines) != 1 {
 		t.Fatalf("expected 1 line, got %d: %v", len(lines), lines)
 	}
@@ -432,9 +442,9 @@ func TestRenderActionAreasUnavailableShowsPlannedNotRunnable(t *testing.T) {
 }
 
 func TestRenderActionAreasAvailableEmitsCommand(t *testing.T) {
-	lines := renderActionAreas([]actionArea{
-		{label: "security", command: "/dross-secure", available: true},
-	})
+	lines := renderActionAreas([]areaSignal{
+		{area: actionArea{label: "security", command: "/dross-secure", available: true}},
+	}, time.Now())
 	if len(lines) != 1 {
 		t.Fatalf("expected 1 line, got %d: %v", len(lines), lines)
 	}
@@ -444,6 +454,177 @@ func TestRenderActionAreasAvailableEmitsCommand(t *testing.T) {
 	if strings.Contains(lines[0], "(planned)") {
 		t.Errorf("available area must NOT be marked planned:\n%s", lines[0])
 	}
+}
+
+// TestFormatRunSignal pins c-2's rendering: never-run, a relative "<n>d ago" for
+// a past run, and a clamp (no negative/absurd age) for a future timestamp.
+func TestFormatRunSignal(t *testing.T) {
+	now := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
+	if got := formatRunSignal(now, time.Time{}); got != "never run" {
+		t.Errorf("zero time = %q, want \"never run\"", got)
+	}
+	if got := formatRunSignal(now, now.Add(-72*time.Hour)); !strings.Contains(got, "3d ago") {
+		t.Errorf("3-days-ago = %q, want it to contain \"3d ago\"", got)
+	}
+	future := formatRunSignal(now, now.Add(48*time.Hour))
+	if strings.Contains(future, "-") || strings.Contains(future, "ago") && strings.Contains(future, "-") {
+		t.Errorf("future last_run rendered a negative age: %q", future)
+	}
+	if future != "last run just now" {
+		t.Errorf("future last_run = %q, want the clamped \"last run just now\"", future)
+	}
+}
+
+// TestRankAreas pins c-1's ordering: never-run first (stable catalog order),
+// then ran areas oldest-last-run first, with ties keeping catalog order.
+func TestRankAreas(t *testing.T) {
+	now := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
+	in := []areaSignal{
+		{area: actionArea{label: "security"}, lastRun: now.Add(-5 * 24 * time.Hour)},
+		{area: actionArea{label: "quality"}},                                  // never run
+		{area: actionArea{label: "tech-debt"}, lastRun: now.Add(-1 * 24 * time.Hour)},
+	}
+	got := rankAreas(in)
+	order := []string{got[0].area.label, got[1].area.label, got[2].area.label}
+	want := []string{"quality", "security", "tech-debt"} // never-run, then 5d, then 1d
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("rank order = %v, want %v", order, want)
+		}
+	}
+
+	// Tie-break: two never-run areas keep catalog order; identical timestamps too.
+	tie := []areaSignal{
+		{area: actionArea{label: "a"}},
+		{area: actionArea{label: "b"}},
+	}
+	if r := rankAreas(tie); r[0].area.label != "a" || r[1].area.label != "b" {
+		t.Errorf("never-run tie did not preserve catalog order: %v", []string{r[0].area.label, r[1].area.label})
+	}
+}
+
+// TestStatusActionsRankedAndSignalled pins c-1+c-2 end to end: with security=5d,
+// quality=never, tech-debt=1d, the idle actions block lists quality, then
+// security, then tech-debt, each line carrying its run-signal text.
+func TestStatusActionsRankedAndSignalled(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	scaffoldPhaseWithSpecAndPlan(t, "01-done", `[phase]
+id = "01-done"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+	mustWrite(t, ".dross/phases/01-done/verify.toml", "verdict = \"pass\"\n")
+
+	root := filepath.Join(dir, ".dross")
+	now := time.Now().UTC()
+	stampArea(t, root, "security", now.Add(-5*24*time.Hour))
+	stampArea(t, root, "techdebt", now.Add(-1*24*time.Hour))
+	// quality: leave unstamped → never run.
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+
+	qi, si, ti := strings.Index(out, "quality"), strings.Index(out, "security"), strings.Index(out, "tech-debt")
+	if qi < 0 || si < 0 || ti < 0 {
+		t.Fatalf("an area is missing from the actions block:\n%s", out)
+	}
+	if !(qi < si && si < ti) {
+		t.Fatalf("ranking order wrong (want quality < security < tech-debt):\n%s", out)
+	}
+	if !strings.Contains(out, "never run") || !strings.Contains(out, "5d ago") || !strings.Contains(out, "1d ago") {
+		t.Fatalf("actions block missing run-signal text:\n%s", out)
+	}
+}
+
+// TestStatusSignalPruneProof pins the prune-proof contract: with no run dirs left
+// but state.toml retaining last_run, the area still renders "last run …", never
+// "never run".
+func TestStatusSignalPruneProof(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	scaffoldPhaseWithSpecAndPlan(t, "01-done", `[phase]
+id = "01-done"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+	mustWrite(t, ".dross/phases/01-done/verify.toml", "verdict = \"pass\"\n")
+
+	root := filepath.Join(dir, ".dross")
+	// Stamp tech-debt but create NO run dirs under .dross/techdebt — simulating
+	// pruned run dirs with the durable state.toml still present.
+	stampArea(t, root, "techdebt", time.Now().UTC().Add(-2*24*time.Hour))
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	line := actionLine(t, out, "tech-debt")
+	if !strings.Contains(line, "last run") || strings.Contains(line, "never run") {
+		t.Fatalf("pruned-run-dir tech-debt line should read 'last run', got %q", line)
+	}
+}
+
+// TestActionAreaCommandsResolve pins c-3's no-dead-command guard: every available
+// area's command resolves to a real surface — a slash command's assets file, or a
+// CLI command registered on the root in main.go.
+func TestActionAreaCommandsResolve(t *testing.T) {
+	repo := repoRootFromTest(t)
+	mainGo, err := os.ReadFile(filepath.Join(repo, "cmd", "dross", "main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range actionCatalog {
+		if !a.available {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(a.command, "/"):
+			name := strings.TrimPrefix(a.command, "/")
+			p := filepath.Join(repo, "assets", "commands", name+".md")
+			if _, err := os.Stat(p); err != nil {
+				t.Errorf("area %q points at %q but %s is missing", a.label, a.command, p)
+			}
+		case strings.HasPrefix(a.command, "dross "):
+			sub := strings.TrimPrefix(a.command, "dross ")
+			fn := "cmd." + strings.ToUpper(sub[:1]) + sub[1:] + "()"
+			if !strings.Contains(string(mainGo), fn) {
+				t.Errorf("area %q points at %q but %s is not registered in main.go", a.label, a.command, fn)
+			}
+		default:
+			t.Errorf("area %q has unrecognized command form %q", a.label, a.command)
+		}
+	}
+}
+
+// stampArea writes a state.toml under .dross/<area>/ with the given last_run.
+func stampArea(t *testing.T, root, area string, lr time.Time) {
+	t.Helper()
+	dir := filepath.Join(root, area)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := findings.SaveStore(filepath.Join(dir, "state.toml"), &findings.Store{LastRun: lr}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// actionLine returns the first output line containing label, failing if none.
+func actionLine(t *testing.T, out, label string) string {
+	t.Helper()
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(l, label) {
+			return l
+		}
+	}
+	t.Fatalf("no %q line in:\n%s", label, out)
+	return ""
 }
 
 // ---- helpers ----

@@ -16,3 +16,6 @@ docs/dross.pdf
 
 # dross quality run artifacts — local audit output; the committed record is the remediation spec
 .dross/quality/
+
+# dross tech-debt run artifacts — local scan output; state.toml is the durable signal, run dirs are prunable
+.dross/techdebt/
