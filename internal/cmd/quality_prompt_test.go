@@ -42,6 +42,7 @@ func TestQualityPromptMandatedSections(t *testing.T) {
 			[]string{"tool-coverage manifest", "proceed with partial coverage", "install the missing tools first"}},
 		{"c-4 propose-then-ask before locking the scaffold", []string{"propose-then-ask before locking"}},
 		{"c-5 read-only, no --fix, never edits app code", []string{"read-only", "no --fix", "never edit"}},
+		{"c-1/c-3 post-scan reconcile against prior state", []string{"dross quality findings reconcile"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
