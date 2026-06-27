@@ -1,77 +1,9 @@
 {
-  "version": "0.6.5.0",
+  "version": "0.6.6.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-27T17:35:52.765848Z",
-  "last_action": "completed status-action-surfaces-v2",
+  "last_activity": "2026-06-27T19:35:16.574721Z",
+  "last_action": "completed ship-complete-recovery-hardening",
   "history": [
-    {
-      "at": "2026-06-27T11:27:33.528458Z",
-      "action": "plan reviewed: container-iac-scanning (0 blocking, 2 flags applied)"
-    },
-    {
-      "at": "2026-06-27T11:28:12.933991Z",
-      "action": "set version=0.6.3.0"
-    },
-    {
-      "at": "2026-06-27T11:29:22.493453Z",
-      "action": "executed t-1 (Add terraform.toml marker profile)"
-    },
-    {
-      "at": "2026-06-27T11:31:02.399793Z",
-      "action": "executed t-2 (Pin terraform patterns + embedded loadout)"
-    },
-    {
-      "at": "2026-06-27T11:32:09.140334Z",
-      "action": "executed t-3 (Assert terraform scanner surfaces \u0026 skips (security))"
-    },
-    {
-      "at": "2026-06-27T11:33:18.010267Z",
-      "action": "executed t-4 (Assert tflint analyzer surfaces \u0026 skips (quality))"
-    },
-    {
-      "at": "2026-06-27T11:34:28.992102Z",
-      "action": "executed t-5 (Document terraform profile + doc-presence guard)"
-    },
-    {
-      "at": "2026-06-27T11:37:23.986149Z",
-      "action": "executed t-6 (Commit IaC fixture + manual-run record)"
-    },
-    {
-      "at": "2026-06-27T11:37:29.843587Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-27T11:37:29.849602Z",
-      "action": "phase container-iac-scanning executed (6/6 done)"
-    },
-    {
-      "at": "2026-06-27T11:50:24.709962Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-27T11:50:24.715979Z",
-      "action": "verified container-iac-scanning: pass (4/4 covered, mutation 0.97 measured / 1.00 in-scope; 3 not-covered survivors adjacent to marker path)"
-    },
-    {
-      "at": "2026-06-27T11:59:57.620253Z",
-      "action": "completed container-iac-scanning"
-    },
-    {
-      "at": "2026-06-27T12:03:18.953037Z",
-      "action": "created secure-quality-findings-lifecycle"
-    },
-    {
-      "at": "2026-06-27T13:03:24.12206Z",
-      "action": "set current_phase=secure-quality-findings-lifecycle"
-    },
-    {
-      "at": "2026-06-27T13:03:24.1293Z",
-      "action": "spec locked: secure-quality-findings-lifecycle"
-    },
-    {
-      "at": "2026-06-27T13:20:57.04763Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-06-27T13:20:57.055556Z",
       "action": "plan locked: secure-quality-findings-lifecycle (6 tasks across 4 waves, --panel)"
@@ -203,6 +135,74 @@
     {
       "at": "2026-06-27T17:35:52.765848Z",
       "action": "completed status-action-surfaces-v2"
+    },
+    {
+      "at": "2026-06-27T18:05:27.343452Z",
+      "action": "created ship-complete-recovery-hardening"
+    },
+    {
+      "at": "2026-06-27T18:23:03.043076Z",
+      "action": "set current_phase=ship-complete-recovery-hardening"
+    },
+    {
+      "at": "2026-06-27T18:23:03.051104Z",
+      "action": "spec locked: ship-complete-recovery-hardening"
+    },
+    {
+      "at": "2026-06-27T18:45:07.192789Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-27T18:45:07.200507Z",
+      "action": "plan locked: ship-complete-recovery-hardening (5 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-06-27T18:52:08.29522Z",
+      "action": "plan reviewed: ship-complete-recovery-hardening (0 blocking, 1 flag)"
+    },
+    {
+      "at": "2026-06-27T18:53:49.078792Z",
+      "action": "set version=0.6.6.0"
+    },
+    {
+      "at": "2026-06-27T18:58:33.396911Z",
+      "action": "executed t-1 (Extract delta-gated shared recovery routine)"
+    },
+    {
+      "at": "2026-06-27T19:01:51.122826Z",
+      "action": "executed t-2 (Detect stale completed-state in dross status)"
+    },
+    {
+      "at": "2026-06-27T19:03:18.103674Z",
+      "action": "executed t-3 (Document stale-state reconcile in resume.md)"
+    },
+    {
+      "at": "2026-06-27T19:05:18.980887Z",
+      "action": "executed t-4 (Add recovery cookbook to ship.md)"
+    },
+    {
+      "at": "2026-06-27T19:10:56.712645Z",
+      "action": "executed t-5 (Wire --recover into phase complete)"
+    },
+    {
+      "at": "2026-06-27T19:11:11.05996Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-27T19:11:11.066671Z",
+      "action": "phase ship-complete-recovery-hardening executed (5/5 done)"
+    },
+    {
+      "at": "2026-06-27T19:27:09.437604Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-27T19:27:09.443954Z",
+      "action": "verified ship-complete-recovery-hardening: pass (6/6 covered, mutation 0.83 measured / 1.00 on-covered, 0 survived)"
+    },
+    {
+      "at": "2026-06-27T19:35:16.574721Z",
+      "action": "completed ship-complete-recovery-hardening"
     }
   ]
 }

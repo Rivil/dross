@@ -763,3 +763,153 @@ tests = ["y.test.ts:1"]
 			has1, id2, has2, s.History)
 	}
 }
+
+// divergedCompleteFixture builds a TRUE divergence for `dross phase complete`:
+// origin/main carries the PR squash (with the `completed auth` record but not
+// every .dross/ artefact), while local main carries the SAME completion record
+// plus an extra `.dross/phases/auth/spec.toml` the squash lost. Local main and
+// origin/main share only the baseline ancestor, so the ff-only aborts. Returns
+// repo dir, phase id, and the pre-recovery local main SHA (for byte-for-byte
+// no-op assertions). Leaves the working copy on phase/auth.
+func divergedCompleteFixture(t *testing.T) (string, string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remoteDir)
+	chdir(t, dir)
+
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("phase create: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "src/auth.ts"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
+
+	stPath := filepath.Join(dir, ".dross", "state.json")
+
+	// Origin squash: src/ + completion record, but no phase .dross/ artefacts.
+	mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
+	mustGit(t, dir, "checkout", "phase/auth", "--", "src/")
+	mustGit(t, dir, "add", "src/")
+	sq, err := state.Load(stPath)
+	if err != nil {
+		t.Fatalf("load squash state: %v", err)
+	}
+	sq.CurrentPhase = ""
+	sq.CurrentPhaseStatus = ""
+	sq.Touch("completed auth")
+	if err := sq.Save(stPath); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, dir, "add", filepath.Join(".dross", "state.json"))
+	mustGit(t, dir, "commit", "-q", "-m", "feat(squash): auth")
+	mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
+	mustGit(t, dir, "checkout", "-q", "main")
+	mustGit(t, dir, "branch", "-D", "squash-sim")
+
+	// Local main diverges: same completion record + a phase artefact origin
+	// lost. Built on local main (baseline), so it shares only baseline with
+	// origin/main -> ff-only aborts.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/spec.toml"), `id = "auth"`)
+	lm, err := state.Load(stPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lm.CurrentPhase = ""
+	lm.CurrentPhaseStatus = ""
+	lm.Touch("completed auth")
+	if err := lm.Save(stPath); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, dir, "add", ".dross/")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): complete auth")
+	mainSHA := mustGit(t, dir, "rev-parse", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	return dir, "auth", mainSHA
+}
+
+// TestPhaseCompleteDivergedNoFlagStops (c-1): without --recover, a diverged
+// main makes complete refuse with a pointer to --recover, and local main is
+// byte-for-byte unchanged — no partial reset.
+func TestPhaseCompleteDivergedNoFlagStops(t *testing.T) {
+	dir, _, mainSHA := divergedCompleteFixture(t)
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected complete to refuse on a diverged main without --recover")
+	}
+	if !strings.Contains(err.Error(), "--recover") {
+		t.Errorf("error should point at --recover: %v", err)
+	}
+	if got := mustGit(t, dir, "rev-parse", "main"); got != mainSHA {
+		t.Errorf("local main must be unchanged after a refused complete: was %s, now %s", mainSHA, got)
+	}
+}
+
+// TestPhaseCompleteRecoverHeals (c-1): with --recover, complete resets main to
+// origin, restores the .dross/ artefact the squash lost, deletes the phase
+// branch, and finishes on a clean tree — zero manual git.
+func TestPhaseCompleteRecoverHeals(t *testing.T) {
+	dir, _, _ := divergedCompleteFixture(t)
+
+	if err := runCmd(t, Phase(), "complete", "--recover"); err != nil {
+		t.Fatalf("complete --recover should heal a diverged main: %v", err)
+	}
+
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "main" {
+		t.Errorf("expected HEAD on main after recovery, got %q", cur)
+	}
+	if branches := mustGit(t, dir, "branch", "--list", "phase/*"); branches != "" {
+		t.Errorf("phase/* should be deleted after recovery, got: %q", branches)
+	}
+	// The cumulative .dross/ tree is restored — including the artefact the
+	// origin squash dropped.
+	headTree := mustGit(t, dir, "ls-tree", "-r", "--name-only", "HEAD")
+	if !strings.Contains(headTree, ".dross/phases/auth/spec.toml") {
+		t.Errorf("recovery should restore the dropped .dross/ artefact:\n%s", headTree)
+	}
+	// Completion record survives on HEAD.
+	s, _ := state.Load(filepath.Join(dir, ".dross", "state.json"))
+	found := false
+	for _, a := range s.History {
+		if strings.Contains(a.Action, "completed auth") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("completion record should survive recovery: %+v", s.History)
+	}
+	if status := mustGit(t, dir, "status", "--porcelain"); status != "" {
+		t.Errorf("working tree should be clean after recovery, got: %q", status)
+	}
+}
+
+// TestPhaseCompleteRecoverRefusesDirty (c-3): --recover on a diverged AND dirty
+// tree aborts with the offending file named, leaving local main byte-for-byte
+// unchanged — the pre-recovery clean-tree guard fires before any reset.
+func TestPhaseCompleteRecoverRefusesDirty(t *testing.T) {
+	dir, _, mainSHA := divergedCompleteFixture(t)
+	mustWrite(t, filepath.Join(dir, "src/dirty.ts"), "x\n")
+
+	err := runCmd(t, Phase(), "complete", "--recover")
+	if err == nil {
+		t.Fatal("expected complete --recover to refuse on a dirty tree")
+	}
+	if !strings.Contains(err.Error(), "dirty.ts") {
+		t.Errorf("dirty-tree error should name the offending file: %v", err)
+	}
+	if got := mustGit(t, dir, "rev-parse", "main"); got != mainSHA {
+		t.Errorf("local main must be unchanged when recovery aborts on a dirty tree: was %s, now %s", mainSHA, got)
+	}
+}

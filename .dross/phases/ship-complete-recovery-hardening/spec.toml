@@ -1,0 +1,58 @@
+[phase]
+  id        = "ship-complete-recovery-hardening"
+  title     = "Ship/complete recovery hardening"
+  milestone = "v0.6"
+
+[[criteria]]
+  id   = "c-1"
+  text = "On an already-diverged main, `dross phase complete --recover` finishes with zero manual git — it resets to origin/main and restores `.dross/` in one shot, instead of requiring a manual `git reset` + re-commit. Without `--recover`, complete stops with a clear pointer rather than acting destructively."
+
+[[criteria]]
+  id   = "c-2"
+  text = "Auto-recovery loses no planning artefacts: the full cumulative `.dross/` tree survives on main — every prior phase's files, not just the current phase's (guards the partial-restore regression)."
+
+[[criteria]]
+  id   = "c-3"
+  text = "Recovery is non-destructive: on a dirty working tree or the wrong branch it aborts cleanly with a clear message and changes nothing — it never resets over uncommitted work."
+
+[[criteria]]
+  id   = "c-4"
+  text = "Re-opening work on a shipped-but-unmerged phase branch whose branch-local state.json reads `completed` is detected: `dross status` and `dross resume` surface the stale state with a reconcile pointer and do not treat the phase as done — but never auto-mutate."
+
+[[criteria]]
+  id   = "c-5"
+  text = "`ship.md` documents a recovery recipe covering the mid-merge failure states (ff-abort / diverged main / dirty post-push tree), each naming the exact dross command to run — with no manual `.dross/` surgery in the instructions (enforced by a doc-presence guard test)."
+
+[[criteria]]
+  id   = "c-6"
+  text = "Recovery is idempotent: running it when main is already clean / not diverged is a safe no-op with a clear message — no empty commit, no error."
+
+[[decisions]]
+  key    = "recover_gate"
+  choice = "`dross phase complete` gates auto-recovery behind an opt-in `--recover` flag. On a diverged main without the flag it stops with a clear one-line pointer; `--recover` performs reset-to-origin + restore `.dross/` in one shot."
+  why    = "A destructive `reset --hard` in a pair-mode tool needs a human gate, but a single flag is not manual git surgery — so c-1 (zero manual git) holds while the user still authorizes the reset. complete is non-interactive, so a flag fits better than a stdin prompt."
+  locked = true
+
+[[decisions]]
+  key    = "stale_state_surface"
+  choice = "The stale `completed`-on-unmerged-branch state (c-4) is detected in `dross status` and `dross resume`, which warn with a reconcile pointer and never auto-mutate."
+  why    = "status and resume are read-mostly orientation commands run on re-entry — the natural place to catch it — and keeping them read-only leaves the reconcile-vs-abandon choice with the user."
+  locked = true
+
+[[decisions]]
+  key    = "recover_command_fate"
+  choice = "Keep `dross ship recover` as the public recovery command; `complete --recover` delegates to the same shared internal recovery routine. No duplication, nothing deprecated."
+  why    = "One implementation, two entry points — `ship recover` stays as the standalone legacy-repo healer, `complete --recover` is the in-loop fast path; sharing the routine avoids drift between them."
+  locked = true
+
+[[decisions]]
+  key    = "recovery_commit"
+  choice = "Recovery re-commits the restored `.dross/` on main only when there is a real delta vs origin (otherwise it is the c-6 no-op — no empty commit), reusing `ship recover`'s `chore(dross): restore .dross/ after squash-merge for <id> + merge` message. This is the one sanctioned exception to complete's no-commit-to-main rule."
+  why    = "Divergence-recovery inherently must re-attach the cumulative `.dross/` tree, which requires a commit; restricting it to a real delta keeps the clean no-op and avoids audit noise."
+  locked = true
+
+[[decisions]]
+  key    = "supersedes_prevent_only"
+  choice = "This phase supersedes fix-completion-chore-divergence's `diverged_recovery_scope` (prevent-only) decision: `complete` now offers in-loop auto-heal via `--recover` instead of only hard-failing with a pointer."
+  why    = "The prevent-only decision explicitly deferred auto-heal and routed it here; ship-time prevention still holds, and recovery is now first-class in the loop rather than a manual side-trip."
+  locked = true

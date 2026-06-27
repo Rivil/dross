@@ -31,6 +31,7 @@ Then reconcile handoff against reality and flag drift:
 - **Branch mismatch** — handoff says `phase/<id>` but you're on a different branch. Offer to `git checkout phase/<id>` (only if it exists locally; otherwise surface it, don't guess).
 - **Dirty drift** — `## Dirty` lists files but the tree is clean now (committed since?), or new dirty files appeared. Note it.
 - **Stale next** — the `## Next` action looks already-done given the diff. Call it out rather than re-doing it.
+- **Stale completion** — `dross status` shows a `stale:` line: you're on `phase/<id>` but branch-local state reads `completed` while origin/`<main>` hasn't merged the PR yet. The phase is **not** actually done — don't treat it as finished or start a new phase on top of it. Reconcile by re-syncing from origin (`git reset --hard origin/<main>`, then `dross phase complete --recover` if main has diverged) or by abandoning the branch. Resume **never auto-mutates** state to resolve this — surface it and let the user choose.
 
 If the handoff is older than a few days, say so — memory may have moved on.
 

@@ -1,0 +1,50 @@
+{
+  "phase": "ship-complete-recovery-hardening",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/ship_recover_test.go"
+      ],
+      "commit": "73040e4",
+      "completed_at": "2026-06-27T18:58:33.378346Z",
+      "notes": "feature: ship recovery · runDrossRecovery @ internal/cmd/ship_recover.go · delta-gated reset+restore+commit shared by ship recover and complete --recover; no-op when in sync"
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go"
+      ],
+      "commit": "2b6d344",
+      "completed_at": "2026-06-27T19:01:51.107972Z",
+      "notes": "feature: stale-state detection · staleCompletedState @ internal/cmd/status.go · warns on shipped-but-unmerged phase branch where local state reads completed but origin/main lacks it"
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/resume.md",
+        "internal/cmd/resume_prompt_test.go"
+      ],
+      "commit": "1ffea24",
+      "completed_at": "2026-06-27T19:03:18.089774Z",
+      "notes": "feature: stale-state detection · resume.md stale-completion drift case · teaches resume to reconcile a shipped-but-unmerged phase branch, never auto-mutate"
+    },
+    "t-4": {
+      "files": [
+        "assets/prompts/ship.md",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "d7c6e0d",
+      "completed_at": "2026-06-27T19:05:18.96591Z",
+      "notes": "feature: ship recovery · ship.md ## Recovery cookbook · three mid-merge failure states each mapped to a one-command dross fix, no manual .dross/ surgery"
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "3a1fd7d",
+      "completed_at": "2026-06-27T19:10:56.697364Z",
+      "notes": "feature: ship recovery · phase complete --recover @ internal/cmd/phase.go · heals a diverged main in-loop via shared runDrossRecovery; refuses with a pointer when the flag is absent"
+    }
+  }
+}

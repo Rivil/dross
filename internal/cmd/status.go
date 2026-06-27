@@ -56,6 +56,21 @@ func Status() *cobra.Command {
 				Print("phase:     (none — try `/dross-spec --new \"<title>\"`)")
 			}
 
+			// Stale-completion guard. On a shipped-but-unmerged phase branch,
+			// `dross ship` has already folded the `completed <id>` record into
+			// branch-local state, but origin/<main> hasn't received the squash
+			// yet — so the phase reads "done" while its PR is still open. Warn
+			// only; never mutate (the user reconciles from origin or abandons
+			// the branch).
+			mainBranch := proj.Repo.GitMainBranch
+			if mainBranch == "" {
+				mainBranch = "main"
+			}
+			if pid, ok := staleCompletedState(filepath.Dir(root), st, mainBranch); ok {
+				Printf("stale:     on phase/%s but state reads completed — PR not merged on origin/%s\n", pid, mainBranch)
+				Printf("           reconcile: re-sync from origin/%s or abandon the branch (status never auto-mutates)\n", mainBranch)
+			}
+
 			// Last activity
 			if !st.LastActivity.IsZero() {
 				when := st.LastActivity.Format("2006-01-02 15:04 UTC")
@@ -433,6 +448,50 @@ func renderActionAreas(sigs []areaSignal, now time.Time) []string {
 		lines = append(lines, fmt.Sprintf("%s — %s", label, detail))
 	}
 	return lines
+}
+
+// staleCompletedState reports whether the working copy is sitting on a
+// shipped-but-unmerged phase branch: HEAD is phase/<id>, branch-local state
+// already records `completed <id>` (folded in by `dross ship` pre-merge), yet
+// origin/<main> carries no such record (the PR hasn't merged). In that window
+// the phase reads "done" locally while it isn't actually merged — status warns
+// so the stale state isn't silently trusted. Read-only: it shells out to git
+// but never mutates. Returns ("", false) on any uncertainty (not a phase
+// branch, no completion record, unreadable origin, or genuinely merged) so a
+// repo without a remote never produces a false warning.
+func staleCompletedState(repoDir string, st *state.State, mainBranch string) (string, bool) {
+	cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+	if err != nil {
+		return "", false
+	}
+	phaseID, ok := strings.CutPrefix(cur, "phase/")
+	if !ok || phaseID == "" {
+		return "", false
+	}
+	if !stateRecordsCompleted(st, phaseID) {
+		return "", false
+	}
+	// origin/<main> must lack the completion. If reading it fails we can't
+	// confirm the divergence, so stay silent rather than warn on a guess.
+	originState, err := gitTrim(repoDir, "show", "origin/"+mainBranch+":.dross/"+state.File)
+	if err != nil {
+		return "", false
+	}
+	if strings.Contains(originState, "completed "+phaseID) {
+		return "", false // genuinely merged — not stale
+	}
+	return phaseID, true
+}
+
+// stateRecordsCompleted reports whether state history carries a `completed
+// <id>` action — the record `dross ship` folds in when finalizing a phase.
+func stateRecordsCompleted(st *state.State, phaseID string) bool {
+	for _, a := range st.History {
+		if strings.Contains(a.Action, "completed "+phaseID) {
+			return true
+		}
+	}
+	return false
 }
 
 func progressBar(done, total, width int) string {
