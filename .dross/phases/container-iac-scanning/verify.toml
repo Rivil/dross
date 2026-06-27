@@ -1,0 +1,89 @@
+[verify]
+  phase = "container-iac-scanning"
+  generated_at = 2026-06-27T11:47:16.226156Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.970873786407767
+  mutants_killed = 100
+  mutants_survived = 3
+  mutants_not_covered = 3
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/security/recon_test.go:TestBuildManifestMarkerTerraform",
+    "internal/security/recon_test.go:TestBuildManifestTerraformDedup",
+    "internal/stack/embed_test.go:TestEmbeddedTerraform",
+    "internal/stack/profile_test.go:TestTerraformFilePatternMatch",
+  ]
+  notes = "A *.tf repo surfaces 'trivy config' into the security manifest, distinct from agnostic trivy (dedup pinned). Embedded loadout + exact marker patterns pinned against the shipped terraform.toml."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/quality/recon_test.go:TestQualityManifestMarkerTerraform",
+    "internal/quality/recon_test.go:TestQualityTerraformNoLeak",
+    "internal/stack/embed_test.go:TestEmbeddedTerraform",
+  ]
+  notes = "tflint surfaces under the error-handling dimension on a *.tf repo, on top of agnostic scc/jscpd; no-leak guard proves it stays out of marker-less repos; embedded test pins the dimension."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/security/recon_test.go:TestBuildManifestTerraformMissingScannerSkipped",
+    "internal/quality/recon_test.go:TestBuildManifest_terraformMissingAnalyzerSkipped",
+    "fixtures/terraform-c3/RUN.md (documented manual-run record)",
+  ]
+  notes = "Go tests pin that a missing trivy config / tflint lands in Skipped() with a non-empty install hint (never a silent all-clear). RUN.md records the observed live run: 'dross security detect' lists trivy config [installed], 'dross quality detect' lists tflint [missing] with hint, and 'trivy config' surfaces AVD-AWS-0107 (HIGH) while scc/gitleaks are blind. The tflint terraform_unused_declarations finding is recorded as EXPECTED, not observed (tflint not installed in the session) — honestly labeled in RUN.md/expected-finding.txt; does not affect the c-3 surface, which is the detect listing + manual record."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/stack/profiles_doc_test.go:TestTerraformProfileDocumented",
+  ]
+  notes = "Asserts profiles/README.md names the terraform profile and terraform.toml's comments mark it a marker stack + name the out-of-scope tools (checkov/dockle)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins not-covered mutant: catalog.go:40 (CONDITIONALS_NEGATION) — language-filter 'if l == lang'. A terraform marker tool has no Languages, so this line is structurally unreachable by the terraform path; not introduced by this phase (no production Go shipped). In-scope efficacy = 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins not-covered mutant: catalog.go:84 (CONDITIONALS_NEGATION) — analyzer language-filter, same rationale as catalog.go:40."
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins not-covered mutant: detect.go:250 (ARITHMETIC_BASE) — ext-normalization ('.' + e). Terraform is a marker stack with no exts, so this path is not exercised by the terraform tests; pre-existing adjacent code."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-3 tflint finding is EXPECTED, not observed: tflint is not installed in the recording session. Install tflint and re-run the RUN.md section 2b to convert it from expected to observed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped fixtures/terraform-c3/RUN.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped fixtures/terraform-c3/expected-finding.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped fixtures/terraform-c3/main.tf: no mutation adapter for .tf"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profiles/README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profiles/terraform.toml: no mutation adapter for .toml"

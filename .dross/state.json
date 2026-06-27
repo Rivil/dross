@@ -2,18 +2,10 @@
   "version": "0.6.3.0",
   "current_milestone": "v0.6",
   "current_phase": "container-iac-scanning",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-27T11:37:29.849602Z",
-  "last_action": "phase container-iac-scanning executed (6/6 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-27T11:50:24.715979Z",
+  "last_action": "verified container-iac-scanning: pass (4/4 covered, mutation 0.97 measured / 1.00 in-scope; 3 not-covered survivors adjacent to marker path)",
   "history": [
-    {
-      "at": "2026-06-26T17:01:09.373864Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-26T17:01:09.38224Z",
-      "action": "plan locked: multilang-stack-profiles (4 tasks across 3 waves, --panel)"
-    },
     {
       "at": "2026-06-26T17:05:28.487219Z",
       "action": "plan reviewed: multilang-stack-profiles (0 blocking, 3 flags)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-27T11:37:29.849602Z",
       "action": "phase container-iac-scanning executed (6/6 done)"
+    },
+    {
+      "at": "2026-06-27T11:50:24.709962Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-27T11:50:24.715979Z",
+      "action": "verified container-iac-scanning: pass (4/4 covered, mutation 0.97 measured / 1.00 in-scope; 3 not-covered survivors adjacent to marker path)"
     }
   ]
 }
