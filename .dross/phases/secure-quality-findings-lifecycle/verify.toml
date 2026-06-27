@@ -1,0 +1,78 @@
+[verify]
+  phase = "secure-quality-findings-lifecycle"
+  generated_at = 2026-06-27T13:55:23.185617Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8235897435897436
+  mutants_killed = 803
+  mutants_survived = 172
+  mutants_not_covered = 172
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/findings/reconcile_test.go:TestReconcileNewIsTracked",
+    "internal/findings/reconcile_test.go:TestReconcileIdenticalFingerprintDedup",
+    "internal/findings/fingerprint_test.go:TestFingerprintStableAcrossLineAndPathDrift",
+  ]
+  notes = "Post-scan identity match proven by reconcile + fingerprint suites; all mutants in fingerprint.go/reconcile.go killed."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/findings/state_test.go:TestStoreRoundTrip",
+    "internal/findings/state_test.go:TestStoreKeyedLookupAndStateValidation",
+    "internal/cmd/findings_test.go:TestFindingsSetStatePersistsByFingerprint",
+    "internal/cmd/quality_findings_test.go:TestQualityFoldSurvivesRerun",
+  ]
+  notes = "State store + set-state mechanism fully covered (store mutants all killed). Quality's id->fingerprint resolver is exercised end-to-end; security's mirror resolver (lifecycle.go LatestRun/ResolveItem) is not — see FLAG."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/findings/reconcile_test.go:TestReconcileFoldsDismissed",
+    "internal/findings/reconcile_test.go:TestReconcileFoldsResolved",
+    "internal/cmd/quality_findings_test.go:TestQualityFoldSurvivesRerun",
+    "internal/cmd/secure_prompt_test.go:TestSecurePromptMandatedSections",
+  ]
+  notes = "Fold-not-new proven in the engine and end-to-end through the quality descriptor; prompt-wiring guards assert the post-scan step exists."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/findings/reconcile_test.go:TestReconcileResolvedReappearsStaysResolvedRegressed",
+  ]
+  notes = "Reappeared-resolved stays resolved + regressed=true; mutant on the resolved branch killed."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [
+    "internal/cmd/findings_test.go:TestFindingsListRendersStateAndRegressed",
+  ]
+  notes = "list renders state and the regressed marker; store denormalized fields make it render after run-dir pruning (TestStoreRoundTrip)."
+
+[[finding]]
+  severity = "FLAG"
+  text = "In-scope test gap: internal/security/lifecycle.go LatestRun/ResolveItem (lines 37-65) and internal/quality/lifecycle.go (same) are not covered by in-package tests. Quality's path is exercised end-to-end by cmd TestQualityFoldSurvivesRerun; security's resolver has no equivalent e2e. Mirror that test for `dross security findings <id> --state` to close the 6 not-covered mutants per file."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Module-wide gremlins score 0.82 (efficacy 1.00 excluding never-run mutants) is dominated by pre-existing not-covered files OUTSIDE this phase's diff (ship.go, issue.go, rule.go, stats.go, verify.go, codex.go, env.go, doctor.go, phase*.go, profile.go, milestone.go, status.go, telemetry.go, validate.go, deferred.go, onboard.go, project.go, catalog.go). The phase's touched core — fingerprint.go, state.go, reconcile.go, cmd/findings.go — had ZERO survivors: in-scope efficacy is 1.00 on the engine, with the only in-scope survivors confined to lifecycle.go (the FLAG above)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/quality.md: no mutation adapter for .md — c-1/c-3 prompt wiring covered by TestQualityPromptMandatedSections instead."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/secure.md: no mutation adapter for .md — c-1/c-3 prompt wiring covered by TestSecurePromptMandatedSections instead."

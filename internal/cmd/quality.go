@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/findings"
 	"github.com/Rivil/dross/internal/quality"
 )
 
@@ -22,8 +23,31 @@ func Quality() *cobra.Command {
 		Use:   "quality",
 		Short: "Deterministic surface of the dross-quality audit (run dirs, analyzer detection, scaffold)",
 	}
-	c.AddCommand(qualityDetect(), qualityRun(), qualityScaffold())
+	c.AddCommand(qualityDetect(), qualityRun(), qualityScaffold(), qualityFindings())
 	return c
+}
+
+// qualityFindings builds the `dross quality findings` group, supplying the
+// quality-specific descriptor: state.toml under .dross/quality, the run-dir
+// ledger → reconcile-items adapter (keyed on Dimension), and the latest-run id
+// resolver.
+func qualityFindings() *cobra.Command {
+	return newFindingsCmd(FindingsTool{
+		Name:      "quality",
+		StatePath: quality.StatePath,
+		ItemsForRun: func(runDir string) ([]findings.Item, string, error) {
+			ledgerPath, err := containedPath(runDir, "findings.toml")
+			if err != nil {
+				return nil, "", err
+			}
+			ledger, err := quality.Load(ledgerPath)
+			if err != nil {
+				return nil, "", err
+			}
+			return ledger.Items(), filepath.Base(runDir), nil
+		},
+		ResolveID: quality.ResolveItem,
+	})
 }
 
 func qualityDetect() *cobra.Command {

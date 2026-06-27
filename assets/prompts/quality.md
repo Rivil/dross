@@ -111,6 +111,21 @@ Dedupe and rank the survivors by maintainability-risk (highest first). Write:
 - `findings.toml` — the machine ledger (`dross quality` writes it): every surviving
   finding by id, with contextual risk, dimension, and refutation.
 
+### 6a. Reconcile against prior state (post-scan)
+
+The scan above ran **unprejudiced** — it never saw prior state. Now that
+`findings.toml` exists, fold this run against the durable cross-run ledger so
+dismissed/resolved findings don't re-surface as new and a resolved finding that
+reappeared is flagged regressed:
+```
+dross quality findings reconcile <run-dir>
+```
+This updates `.dross/quality/state.toml` (gitignored) and prints `N new, M
+folded, K regressed`. Run it **after** `findings.toml` is written — never
+before, so prior state can never bias the scan. To carry a finding across runs:
+`dross quality findings list`, and `dross quality findings <id> --state
+resolved|dismissed|tracked` to triage one.
+
 ## 7. Scaffold the remediation phase — propose, then ask
 
 Turn the verified ledger into a remediation phase:

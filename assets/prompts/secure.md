@@ -107,6 +107,21 @@ Dedupe and severity-rank the survivors (criticals first). Write:
 - `findings.toml` — the machine ledger (`dross security` writes it): every
   surviving finding by id, with contextual severity and refutation.
 
+### 6a. Reconcile against prior state (post-scan)
+
+The scan above ran **unprejudiced** — it never saw prior state. Now that
+`findings.toml` exists, fold this run against the durable cross-run ledger so
+dismissed/resolved findings don't re-surface as new and a resolved finding that
+reappeared is flagged regressed:
+```
+dross security findings reconcile <run-dir>
+```
+This updates `.dross/security/state.toml` (gitignored) and prints `N new, M
+folded, K regressed`. Run it **after** `findings.toml` is written — never
+before, so prior state can never bias the scan. To carry a finding across runs:
+`dross security findings list`, and `dross security findings <id> --state
+resolved|dismissed|tracked` to triage one.
+
 ## 7. Scaffold the remediation phase — propose, then ask
 
 Turn the verified ledger into a remediation phase:
