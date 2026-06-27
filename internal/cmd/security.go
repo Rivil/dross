@@ -98,6 +98,12 @@ func securityRun() *cobra.Command {
 			if err := writeRunReport(runDir, m); err != nil {
 				return err
 			}
+			// Stamp the store-level last_run so `dross status` can rank the
+			// security area by staleness; merges into state.toml without
+			// disturbing the findings ledger.
+			if err := findings.StampLastRun(security.StatePath(root), time.Now().UTC()); err != nil {
+				return err
+			}
 			Printf("security run: %s\n", runDir)
 			Printf("  scanners: %d ran, %d skipped\n", len(m.Ran()), len(m.Skipped()))
 			return nil

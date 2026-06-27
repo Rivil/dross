@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Rivil/dross/internal/findings"
 	"github.com/Rivil/dross/internal/security"
 )
 
@@ -61,15 +63,71 @@ func TestSecurityRunCreatesDir(t *testing.T) {
 		t.Fatalf("run hard-errored (should proceed with partial coverage): %v", err)
 	}
 	secDir := filepath.Join(dir, ".dross", "security")
-	entries, err := os.ReadDir(secDir)
-	if err != nil {
-		t.Fatalf("no .dross/security dir created: %v", err)
-	}
-	if len(entries) != 1 || !entries[0].IsDir() {
-		t.Fatalf(".dross/security should hold exactly one run dir, got %v", entries)
-	}
-	if _, err := os.Stat(filepath.Join(secDir, entries[0].Name(), "report.md")); err != nil {
+	runDir := soleRunDir(t, secDir)
+	if _, err := os.Stat(filepath.Join(secDir, runDir, "report.md")); err != nil {
 		t.Errorf("run did not write report.md in the run dir: %v", err)
+	}
+}
+
+// soleRunDir returns the name of the single run directory under dir, ignoring the
+// sibling state.toml signal ledger (which now lives beside the run dirs). It
+// fails unless exactly one run directory is present.
+func soleRunDir(t *testing.T, dir string) string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	var runs []string
+	for _, e := range entries {
+		if e.IsDir() {
+			runs = append(runs, e.Name())
+		}
+	}
+	if len(runs) != 1 {
+		t.Fatalf("%s should hold exactly one run dir, got dirs %v (all entries %v)", dir, runs, entries)
+	}
+	return runs[0]
+}
+
+// TestSecurityRunStampsLastRun fails if a run doesn't record the store-level
+// last_run signal (status would then read "never run" right after a run), and if
+// stamping clobbers a pre-existing findings ledger instead of merging.
+func TestSecurityRunStampsLastRun(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(security.SecurityDir(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	statePath := security.StatePath(root)
+	// Seed an existing ledger record so we can prove the stamp merges, not overwrites.
+	seed := &findings.Store{Records: []findings.Record{
+		{Fingerprint: "keep", State: findings.StateTracked, Title: "survive"},
+	}}
+	if err := findings.SaveStore(statePath, seed); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runCmd(t, Security(), "run", "."); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	store, err := findings.LoadStore(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.NeverRun() {
+		t.Fatal("security run did not stamp last_run; the area would read 'never run' right after a run")
+	}
+	if time.Since(store.LastRun) > time.Minute {
+		t.Fatalf("stamped last_run is not ~now: %v", store.LastRun)
+	}
+	if got, ok := store.Get("keep"); !ok || got.Title != "survive" {
+		t.Fatalf("stamp clobbered the existing ledger record: %+v ok=%v", got, ok)
 	}
 }
 
