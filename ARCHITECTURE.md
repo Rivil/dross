@@ -101,6 +101,20 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 
 _introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps · 539d475_
 
+### Findings lifecycle
+
+Durable cross-run state for security & quality findings, shared by both audits through one `internal/findings` engine: a stable fingerprint (class/dimension + normalized file path + title, deliberately no line number, so identity survives line drift), a gitignored top-level fingerprint-keyed `state.toml` ledger per tool (tracked/resolved/dismissed + a regressed flag, denormalized display fields so `list` renders after run-dir pruning, atomic temp+rename save), and a strictly post-scan `Reconcile` that folds a fresh run against prior state — a fresh finding matching a dismissed/resolved prior item is folded (not relisted as new), a resolved finding that reappears stays resolved + `regressed=true`, identical fingerprints dedup to one record, and a finding whose file vanished is retained — without ever mutating the scan input, so prior state can't prejudice the runner. Surfaced via a descriptor-driven `dross <tool> findings {list, reconcile <run-dir>, <id> --state tracked|resolved|dismissed}` group wired into both `dross security` and `dross quality` through thin per-tool adapters (security keys the fingerprint on Class, quality on Dimension; each resolves a per-run finding id off its latest run dir). The `secure.md` / `quality.md` §6a step invokes `findings reconcile` after `findings.toml` is written, making cross-run reconciliation part of the audit flow rather than a manual verb.
+
+- `findings.Fingerprint` — `internal/findings/fingerprint.go`
+- `findings.Store` / `findings.Record` — `internal/findings/state.go`
+- `findings.Reconcile` / `findings.Item` — `internal/findings/reconcile.go`
+- `newFindingsCmd` (shared cobra group) — `internal/cmd/findings.go`
+- `security.Ledger.Items` / `security.ResolveItem` — `internal/security/lifecycle.go`
+- `quality.Ledger.Items` / `quality.ResolveItem` — `internal/quality/lifecycle.go`
+- post-scan reconcile step — `assets/prompts/secure.md` / `assets/prompts/quality.md` §6a
+
+_introduced secure-quality-findings-lifecycle · fa06830_
+
 ### Greenfield bootstrap
 
 Seed the .dross/ scaffold and an ARCHITECTURE.md skeleton in a new repo, and seed `[runtime]` + `[stack].profile` from the detected stack profile (unsupported stacks are left unseeded, never fabricated).
