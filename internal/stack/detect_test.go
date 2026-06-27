@@ -87,6 +87,7 @@ func containsLang(langs []string, want string) bool {
 // stacks resolve. Each language is asserted independently, so deleting any one
 // extLang line drops that language and fails its check.
 func TestDetectLanguagesNewExts(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	writeFile(t, dir, "main.dart", "void main() {}\n")
 	writeFile(t, dir, "App.svelte", "<script></script>\n")
@@ -106,6 +107,7 @@ func TestDetectLanguagesNewExts(t *testing.T) {
 // TestDetectLanguagesKotlinRegression guards the pre-existing .kt->kotlin
 // mapping against a careless rewrite of the extLang map.
 func TestDetectLanguagesKotlinRegression(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	writeFile(t, dir, "Main.kt", "fun main() {}\n")
 
@@ -115,6 +117,121 @@ func TestDetectLanguagesKotlinRegression(t *testing.T) {
 	}
 	if !containsLang(langs, "kotlin") {
 		t.Errorf("DetectLanguages = %v, want it to include %q", langs, "kotlin")
+	}
+}
+
+// isolateHome points HOME at an empty temp dir so DetectLanguages — which now
+// derives ext->lang from LoadAll() (embedded built-ins overlaid by
+// ~/.claude/dross/profiles) — sees no user overlay and resolves to the embedded set
+// alone. Without this, a contributor who happens to have a profile dropped under
+// their real ~/.claude/dross/profiles could flip an exact-match assertion (review
+// flag #3). Tests asserting only "includes X" don't need it; exact-set tests do.
+func isolateHome(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+}
+
+// TestDetectLanguagesNoRegression is the c-2 no-regression keystone: every language
+// the deleted extLang map used to carry must still be derivable from the profile
+// set. A tree with one file per legacy extension must yield all 16 legacy language
+// ids; breaking any single profile's exts (or its derivation) drops exactly that
+// language and fails its row. It runs against detectLanguagesFrom over Embedded() —
+// no filesystem overlay, no HOME dependence — so the assertion is deterministic.
+func TestDetectLanguagesNoRegression(t *testing.T) {
+	profiles, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	legacyExts := []string{
+		".go", ".py", ".js", ".jsx", ".ts", ".tsx", ".rb", ".rs", ".java",
+		".kt", ".dart", ".svelte", ".sql", ".c", ".h", ".cc", ".cpp", ".cs",
+		".php", ".swift",
+	}
+	for i, ext := range legacyExts {
+		writeFile(t, dir, "f"+string(rune('a'+i))+ext, "x\n")
+	}
+
+	langs, err := detectLanguagesFrom(dir, profiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The 16 distinct languages the old hardcoded extLang map resolved.
+	for _, want := range []string{
+		"go", "python", "javascript", "typescript", "ruby", "rust", "java",
+		"kotlin", "dart", "svelte", "sql", "c", "cpp", "csharp", "php", "swift",
+	} {
+		if !containsLang(langs, want) {
+			t.Errorf("DetectLanguages = %v, want it to include %q — a legacy language stopped resolving", langs, want)
+		}
+	}
+}
+
+// TestTsNotHijackedBySvelte pins the amended ext_clash_resolution: .ts is claimed by
+// BOTH typescript@4 and svelte@6, and DetectLanguages unions them — so a tree with a
+// .ts file yields BOTH languages. A winner-take-all derivation would keep only svelte
+// (priority 6 > 4) and silently drop typescript, regressing c-2.
+func TestTsNotHijackedBySvelte(t *testing.T) {
+	profiles, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	writeFile(t, dir, "index.ts", "export {}\n")
+
+	langs, err := detectLanguagesFrom(dir, profiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"typescript", "svelte"} {
+		if !containsLang(langs, want) {
+			t.Errorf("DetectLanguages on a .ts tree = %v, want it to include %q — a shared ext must union, not winner-take-all", langs, want)
+		}
+	}
+}
+
+// TestExtLangForUnit exercises the ext->lang derivation as a pure function over a
+// profile slice — no filesystem. It proves a shared extension unions to every
+// claiming profile's id (sorted, de-duplicated) and a sole-claim extension maps to
+// exactly one. A tie-break/clash regression in extLangFor fails here without a temp
+// dir.
+func TestExtLangForUnit(t *testing.T) {
+	profiles := []*Profile{
+		{ID: "typescript", Signals: Signals{Exts: []string{".ts", ".tsx"}}},
+		{ID: "svelte", Signals: Signals{Exts: []string{".svelte", ".ts", ".tsx"}}},
+		{ID: "go", Signals: Signals{Exts: []string{".go"}}},
+	}
+	m := extLangFor(profiles)
+
+	if got, want := m[".ts"], []string{"svelte", "typescript"}; !equalStrs(got, want) {
+		t.Errorf("extLangFor[.ts] = %v, want %v (shared ext must union, sorted)", got, want)
+	}
+	if got, want := m[".svelte"], []string{"svelte"}; !equalStrs(got, want) {
+		t.Errorf("extLangFor[.svelte] = %v, want %v (sole claim)", got, want)
+	}
+	if got, want := m[".go"], []string{"go"}; !equalStrs(got, want) {
+		t.Errorf("extLangFor[.go] = %v, want %v", got, want)
+	}
+	if _, ok := m[".unknown"]; ok {
+		t.Error("extLangFor invented a mapping for an unclaimed extension")
+	}
+}
+
+// TestNoExtLangMapInDetect is the t-3 contract #4 guard: the hardcoded ext->lang map
+// literal must not survive (or be reintroduced) in detect.go — the mapping is
+// single-sourced from the loaded profiles via extLangFor. Mirrors the
+// TestNoDuplicateExtLangMap idiom in the recon packages (reading source via
+// os.ReadFile).
+func TestNoExtLangMapInDetect(t *testing.T) {
+	data, err := os.ReadFile("detect.go")
+	if err != nil {
+		t.Fatalf("read detect.go: %v", err)
+	}
+	src := string(data)
+	for _, marker := range []string{"extLang = map[string]string", `".swift": "swift"`} {
+		if strings.Contains(src, marker) {
+			t.Errorf("detect.go still carries a standalone ext->lang map (found %q) — derive it from profiles via extLangFor instead", marker)
+		}
 	}
 }
 

@@ -95,6 +95,10 @@ func TestPythonAnalyzerInManifest(t *testing.T) {
 }
 
 func TestDetectLanguages(t *testing.T) {
+	// HOME-isolate: DetectLanguages derives ext->lang from LoadAll(), which reads
+	// ~/.claude/dross/profiles — a real user overlay could add a language and flip
+	// this exact-match assertion (review flag #3).
+	t.Setenv("HOME", t.TempDir())
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "main.go"), "package main")
 	// A planted .dross/ holding a python file. Detection must NOT descend into
@@ -112,6 +116,7 @@ func TestDetectLanguages(t *testing.T) {
 }
 
 func TestDetectLanguagesUnknownExt(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // overlay-independent: see TestDetectLanguages (flag #3)
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "data.xyz"), "blob")
 	writeFile(t, filepath.Join(root, "notes.unknownext"), "blob")
