@@ -24,6 +24,20 @@ next framework is a new file, not a new build.
   (the user dir wins on collision).
 - A profile with a **new `id`** adds a brand-new stack.
 
+## Marker-file stacks
+
+Some stacks have no source language of their own but ship build / config artifacts
+worth scanning. They are detected by **file patterns** rather than source
+extensions: a profile declares `[signals].file_patterns` (and no `exts`), so it is
+surfaced *additively* into the `dross-secure` / `dross-quality` manifests by
+`MarkerProfiles` — never selected as a primary stack by `dross stack detect`.
+
+- **`docker`** — Dockerfiles and compose files (`hadolint`, `trivy config`).
+- **`terraform`** — Terraform / IaC files (`*.tf`, `*.tf.json`, `*.tfvars`,
+  `*.tfvars.json`, `*.hcl`): `trivy config` for misconfigurations and `tflint` for
+  lint / error-handling. `checkov` (exhaustive IaC) and `dockle` (container image
+  layers) are intentionally out of scope.
+
 ## Schema (see `internal/stack/profile.go` for the authoritative struct)
 
 ```toml
