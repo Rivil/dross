@@ -2,34 +2,10 @@
   "version": "0.6.1.0",
   "current_milestone": "v0.6",
   "current_phase": "multilang-stack-profiles",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-27T06:38:05.800849Z",
-  "last_action": "set version=0.6.1.0",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-27T07:40:49.384407Z",
+  "last_action": "phase multilang-stack-profiles executed (4/4 done)",
   "history": [
-    {
-      "at": "2026-06-26T10:38:08.413699Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-26T10:38:08.419409Z",
-      "action": "verified deferred-item-routing: pass (6/6 covered, mutation 0.82 module-wide / efficacy 1.00 ex-not-covered)"
-    },
-    {
-      "at": "2026-06-26T10:56:44.647801Z",
-      "action": "completed deferred-item-routing"
-    },
-    {
-      "at": "2026-06-26T13:06:07.441609Z",
-      "action": "created deferred-triage-gaps"
-    },
-    {
-      "at": "2026-06-26T13:15:39.669411Z",
-      "action": "set current_phase=deferred-triage-gaps"
-    },
-    {
-      "at": "2026-06-26T13:15:39.678069Z",
-      "action": "spec locked: deferred-triage-gaps"
-    },
     {
       "at": "2026-06-26T13:18:25.383284Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +181,30 @@
     {
       "at": "2026-06-27T06:38:05.800849Z",
       "action": "set version=0.6.1.0"
+    },
+    {
+      "at": "2026-06-27T06:49:14.03887Z",
+      "action": "executed t-1 (author full profiles: python, javascript, csharp)"
+    },
+    {
+      "at": "2026-06-27T06:52:03.084347Z",
+      "action": "executed t-2 (author 7 detection-only stub profiles)"
+    },
+    {
+      "at": "2026-06-27T07:34:15.62485Z",
+      "action": "executed t-3 (single-source DetectLanguages; delete extLang)"
+    },
+    {
+      "at": "2026-06-27T07:40:40.00804Z",
+      "action": "executed t-4 (drop-in keystone: zero-recompile profile add)"
+    },
+    {
+      "at": "2026-06-27T07:40:49.378123Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-27T07:40:49.384407Z",
+      "action": "phase multilang-stack-profiles executed (4/4 done)"
     }
   ]
 }
