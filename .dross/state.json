@@ -1,21 +1,11 @@
 {
   "version": "0.6.2.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-27T09:52:36.173425Z",
-  "last_action": "completed multilang-analyzer-catalogs",
+  "current_phase": "container-iac-scanning",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-27T10:50:14.066007Z",
+  "last_action": "spec locked: container-iac-scanning",
   "history": [
-    {
-      "at": "2026-06-26T14:58:33.742906Z",
-      "action": "executed t-3 (dross phase move + shared lifecycle plumbing)"
-    },
-    {
-      "at": "2026-06-26T15:00:38.126405Z",
-      "action": "executed t-4 (dross phase insert)"
-    },
-    {
-      "at": "2026-06-26T15:03:37.005838Z",
-      "action": "executed t-5 (dross phase rename)"
-    },
     {
       "at": "2026-06-26T15:03:56.065689Z",
       "action": "set current_phase_status=complete"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-27T09:52:36.173425Z",
       "action": "completed multilang-analyzer-catalogs"
+    },
+    {
+      "at": "2026-06-27T10:27:00.600536Z",
+      "action": "created container-iac-scanning"
+    },
+    {
+      "at": "2026-06-27T10:50:14.057982Z",
+      "action": "set current_phase=container-iac-scanning"
+    },
+    {
+      "at": "2026-06-27T10:50:14.066007Z",
+      "action": "spec locked: container-iac-scanning"
     }
   ]
 }
