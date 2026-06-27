@@ -190,6 +190,44 @@ func TestFilePatternMatch(t *testing.T) {
 	}
 }
 
+// TestTerraformFilePatternMatch drives the match cases off the SHIPPED terraform
+// profile's Signals (not a hardcoded list), so a dropped/renamed pattern in
+// terraform.toml changes what matches here. One row per locked pattern.
+func TestTerraformFilePatternMatch(t *testing.T) {
+	emb, err := Embedded()
+	if err != nil {
+		t.Fatalf("Embedded: %v", err)
+	}
+	tf := ByID(emb, "terraform")
+	if tf == nil {
+		t.Fatal("embedded profiles must include the terraform profile")
+	}
+	s := tf.Signals
+	cases := []struct {
+		name string
+		want bool
+	}{
+		// MUST match — one row per locked pattern, plus a case-insensitive guard.
+		{"main.tf", true},             // *.tf
+		{"vars.tf.json", true},        // *.tf.json
+		{"prod.tfvars", true},         // *.tfvars
+		{"secrets.tfvars.json", true}, // *.tfvars.json
+		{"packer.hcl", true},          // *.hcl
+		{"Main.TF", true},             // case-insensitive
+		// MUST NOT match — false-positive guards.
+		{"main.go", false},
+		{"README.md", false},
+		{"notfile.tfx", false},   // *.tf must not match a longer ext
+		{"main.tfstate", false},  // *.tf must not match *.tfstate
+		{"module.tf.bak", false}, // a backup file is not a TF source
+	}
+	for _, c := range cases {
+		if got := s.MatchesFile(c.name); got != c.want {
+			t.Errorf("MatchesFile(%q) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func TestFilePatternNoBraceExpansion(t *testing.T) {
 	// .yml and .yaml are distinct patterns — there is no brace expansion. A
 	// *.yml-only pattern must NOT match a .yaml file; collapsing them breaks this.
