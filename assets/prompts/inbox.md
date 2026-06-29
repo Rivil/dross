@@ -9,7 +9,7 @@ This is the inbound half of board sync. The outbound half (planning artefacts �
 ## 0. Pre-flight
 
 1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
-2. Check board sync: `dross project get remote.board_sync`. If `false`, there's no board to read — print one line (`board_sync off — skipping board issues, triaging local deferred items only`) and **skip the board-issue source** (§1's `dross issue pull`), proceeding straight to the deferred `someday` source below. Don't stop: the local deferred backlog is still triageable on a board-less repo. (To wire a board up later, the user runs `dross issue enable` and sets `[remote].provider`, `api_base`, `auth_env`.)
+2. Check board sync: `dross project get board.enabled`. If `false`, there's no board to read — print one line (`board sync off — skipping board issues, triaging local deferred items only`) and **skip the board-issue source** (§1's `dross issue pull`), proceeding straight to the deferred `someday` source below. Don't stop: the local deferred backlog is still triageable on a board-less repo. (To wire a board up later, the user runs `dross issue enable` and sets `[board].provider`, `base_url`, `auth_env`.)
 
 ## 1. Pull the inbox
 
@@ -17,7 +17,7 @@ This is the inbound half of board sync. The outbound half (planning artefacts �
 dross issue pull --mark --json
 ```
 
-(Skip this pull entirely when `board_sync` is off — §0 already routed you past the board source straight to the deferred ideas below.)
+(Skip this pull entirely when `board.enabled` is off — §0 already routed you past the board source straight to the deferred ideas below.)
 
 `--mark` records the pull time. The result is a JSON array of open board issues **not** already linked to a dross phase/quick and **not** previously dismissed. Default filter is none; pass `$ARGUMENTS` through, e.g. `dross issue pull --mark --labels bug,enhancement --json`, when the user wants to scope by label.
 
