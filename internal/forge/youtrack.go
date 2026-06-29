@@ -255,6 +255,49 @@ func (c *YouTrackClient) ensureEpic(name, description string) (string, error) {
 	return created.IDReadable, nil
 }
 
+// defaultYouTrackStateMap maps dross lifecycle states to YouTrack State values.
+// YouTrack state names are instance-specific, so this is a sensible default
+// overridden per project via [board].state_map.
+var defaultYouTrackStateMap = map[string]string{
+	"planned":     "Open",
+	"in-progress": "In Progress",
+	"verifying":   "In Progress",
+	"shipped":     "Fixed",
+	"complete":    "Verified",
+}
+
+// resolveYouTrackState maps a dross lifecycle status to a YouTrack State value:
+// the per-project override wins, falling back to the built-in default. ok is
+// false when neither maps it (or the override blanks it).
+func resolveYouTrackState(status string, override map[string]string) (string, bool) {
+	if v, ok := override[status]; ok {
+		return v, v != ""
+	}
+	v, ok := defaultYouTrackStateMap[status]
+	return v, ok
+}
+
+// SetState updates an issue's State custom field from a dross lifecycle status,
+// mapped via the default map overridden by `override`. A status that maps to
+// nothing warns and skips the State write, returning nil so the rest of the
+// issue sync still succeeds.
+func (c *YouTrackClient) SetState(key, status string, override map[string]string) error {
+	value, ok := resolveYouTrackState(status, override)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "warning: dross state %q has no YouTrack State mapping — skipping State update on %s\n", status, key)
+		return nil
+	}
+	body := map[string]any{
+		"customFields": []map[string]any{
+			{"name": "State", "$type": "StateIssueCustomField", "value": map[string]any{"name": value}},
+		},
+	}
+	if err := c.do("POST", c.endpoint("/issues/"+key)+"?fields="+url.QueryEscape("idReadable"), body, nil); err != nil {
+		return fmt.Errorf("set state %q on %s: %w", value, key, err)
+	}
+	return nil
+}
+
 // ListIssues returns issues in the configured project matching the filter.
 // State maps to YouTrack's resolved/unresolved query clauses and each label
 // becomes a `tag:` clause.

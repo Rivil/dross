@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -299,6 +300,80 @@ func TestYouTrackMilestoneEpicMode(t *testing.T) {
 			t.Errorf("id = %q, want PROJ-50", id)
 		}
 	})
+}
+
+func TestYouTrackSetStateMapsAndUpdates(t *testing.T) {
+	post := func(t *testing.T, status string, override map[string]string) map[string]any {
+		t.Helper()
+		var gotPath, gotMethod string
+		var body map[string]any
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotMethod, gotPath = r.Method, r.URL.Path
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &body)
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7"}`)
+		})
+		if err := c.SetState("PROJ-7", status, override); err != nil {
+			t.Fatalf("SetState: %v", err)
+		}
+		if gotMethod != "POST" || gotPath != "/api/issues/PROJ-7" {
+			t.Fatalf("SetState hit %s %s, want POST /api/issues/PROJ-7", gotMethod, gotPath)
+		}
+		return body
+	}
+
+	stateValue := func(body map[string]any) string {
+		cfs, _ := body["customFields"].([]any)
+		for _, cf := range cfs {
+			m, _ := cf.(map[string]any)
+			if m["name"] == "State" {
+				v, _ := m["value"].(map[string]any)
+				s, _ := v["name"].(string)
+				return s
+			}
+		}
+		return ""
+	}
+
+	t.Run("override wins", func(t *testing.T) {
+		if got := stateValue(post(t, "shipped", map[string]string{"shipped": "Fixed"})); got != "Fixed" {
+			t.Errorf("State value = %q, want Fixed", got)
+		}
+	})
+	t.Run("default map when override empty", func(t *testing.T) {
+		if got := stateValue(post(t, "shipped", nil)); got != "Fixed" {
+			t.Errorf("State value = %q, want Fixed (default map)", got)
+		}
+	})
+}
+
+func TestYouTrackSetStateUnmappedWarnsSkips(t *testing.T) {
+	posted := false
+	c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			posted = true
+		}
+		_, _ = io.WriteString(w, `{}`)
+	})
+
+	// Capture stderr to confirm the warning.
+	oldStderr := os.Stderr
+	rd, wr, _ := os.Pipe()
+	os.Stderr = wr
+	err := c.SetState("PROJ-7", "no-such-state", nil)
+	_ = wr.Close()
+	os.Stderr = oldStderr
+	warn, _ := io.ReadAll(rd)
+
+	if err != nil {
+		t.Fatalf("unmapped state must not fail the sync, got %v", err)
+	}
+	if posted {
+		t.Error("unmapped state must not write the State field")
+	}
+	if !strings.Contains(string(warn), "no YouTrack State mapping") {
+		t.Errorf("expected a skip warning, got %q", string(warn))
+	}
 }
 
 func TestYouTrackBearerAuth(t *testing.T) {

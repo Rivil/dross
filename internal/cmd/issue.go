@@ -323,6 +323,14 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 			return wrapBoard(err)
 		}
 	}
+	// YouTrack tracks lifecycle on the State custom field (not a status label),
+	// mapped via the default map overridden by [board].state_map. An unmapped
+	// state warns and skips inside SetState without failing the sync.
+	if yt, ok := ctx.client.(*forge.YouTrackClient); ok && status != "" {
+		if err := yt.SetState(key, status, ctx.proj.Board.StateMap); err != nil {
+			return wrapBoard(err)
+		}
+	}
 	// Close-on-create edge: created above then asked to close.
 	if doClose && !linked {
 		if err := ctx.client.CloseIssue(key); err != nil {
