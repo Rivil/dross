@@ -2,18 +2,10 @@
   "version": "0.6.10.0",
   "current_milestone": "v0.6",
   "current_phase": "deepen-container-iac-scanning",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-29T06:15:43.96917Z",
-  "last_action": "resumed — handoff cleared (stale multilang-stack-profiles, shipped #20); next is /dross-verify deepen-container-iac-scanning",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-29T06:26:39.086447Z",
+  "last_action": "verified deepen-container-iac-scanning: pass (8/8 covered, mutation 0.83)",
   "history": [
-    {
-      "at": "2026-06-27T15:49:08.801465Z",
-      "action": "set version=0.6.5.0"
-    },
-    {
-      "at": "2026-06-27T15:51:57.043921Z",
-      "action": "executed t-1 (Add store-level last_run + stamp helper)"
-    },
     {
       "at": "2026-06-27T15:53:59.571769Z",
       "action": "executed t-2 (Add tech-debt marker + size scan engine)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-29T06:15:43.96917Z",
       "action": "resumed — handoff cleared (stale multilang-stack-profiles, shipped #20); next is /dross-verify deepen-container-iac-scanning"
+    },
+    {
+      "at": "2026-06-29T06:26:39.079135Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-29T06:26:39.086447Z",
+      "action": "verified deepen-container-iac-scanning: pass (8/8 covered, mutation 0.83)"
     }
   ]
 }

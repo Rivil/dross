@@ -1,0 +1,122 @@
+[verify]
+  phase = "deepen-container-iac-scanning"
+  generated_at = 2026-06-29T06:17:44.012922Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8328664799253035
+  mutants_killed = 892
+  mutants_survived = 179
+  mutants_not_covered = 179
+  criteria_total = 8
+  criteria_covered = 8
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/stack/embed_test.go:TestEmbeddedKubernetes",
+    "internal/security/recon_test.go:TestBuildManifestMarkerKubernetes",
+    "internal/quality/recon_test.go:TestQualityManifestMarkerKubernetes",
+    "internal/security/recon_test.go:TestBuildManifestMarkerKubernetesPlainYAMLIgnored",
+    "internal/stack/detect_test.go:TestMarkerProfilesContentSniffEndToEnd",
+  ]
+  notes = "k8s marker profile surfaces into both the security and quality manifests; the PlainYAMLIgnored test pins the content-sniff false-positive guard (apiVersion+kind required, not any *.yaml)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/stack/embed_test.go:TestEmbeddedCloudFormation",
+    "internal/security/recon_test.go:TestBuildManifestMarkerCloudformation",
+    "internal/quality/recon_test.go:TestQualityManifestMarkerCloudformation",
+  ]
+  notes = "cfn marker profile surfaces into both manifests; embed test pins the any-match content gate (AWSTemplateFormatVersion|Resources) via reflect.DeepEqual."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/security/dockle_test.go:TestDockleNoImageSkipsWithReason",
+    "internal/security/dockle_test.go:TestDockleMissingBinHint",
+    "internal/security/recon_test.go:TestBuildManifestMarkerDockerDockle",
+    "internal/cmd/security_test.go:TestSecurityRunNoImageSkipsDockle",
+  ]
+  notes = "no-image path skips-with-reason (distinct from the missing-binary hint), never a silent all-clear; dockle surfaces in the docker security manifest installed-vs-missing."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/security/recon_test.go:TestBuildManifestCheckovKeptBesideTrivyConfig",
+    "internal/security/recon_test.go:TestBuildManifestCheckovSkipHint",
+    "internal/stack/embed_test.go:TestEmbeddedTerraform",
+    "internal/stack/embed_test.go:TestEmbeddedKubernetes",
+    "internal/stack/embed_test.go:TestEmbeddedCloudFormation",
+  ]
+  notes = "checkov kept as a distinct Name beside trivy config (dedup does not collapse it); missing-checkov skip carries the Python (pip/pipx) install hint; present across all three IaC profiles."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [
+    "fixtures/iac-multi-c5/RUN.md (committed manual-run record)",
+    "fixtures/iac-multi-c5/expected-finding.txt",
+  ]
+  notes = "Proof is a committed multi-family fixture + reproducible manual-run record, by spec design (mirrors the terraform-c3 / multilang-c3 precedents) — shelling trivy/checkov/dockle out of go test fights the single-static-binary ethos. Not an automated gate; see the c-5 NOTE finding."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = [
+    "internal/stack/profiles_doc_test.go:TestNewIaCProfilesDocumented",
+  ]
+  notes = "Guard asserts README documents both new profiles and that the kubernetes/cloudformation headers contain 'marker' + explain content-sniff."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = [
+    "internal/quality/recon_test.go:TestQualityManifestMarkerKubernetes",
+    "internal/quality/recon_test.go:TestQualityManifestMarkerCloudformation",
+    "internal/quality/recon_test.go:TestQualityIaCNoLeak",
+  ]
+  notes = "kube-linter (k8s) and cfn-lint (cfn) surface under the error-handling dimension; NoLeak pins union-not-replace (scc/jscpd retained) and that IaC analyzers never leak into a marker-less Go repo."
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = [
+    "internal/cmd/security_test.go:TestSecurityRunImageFlagRunsDockle",
+    "internal/cmd/security_test.go:TestSecurityRunImageEnvFallback",
+    "internal/cmd/security_test.go:TestSecurityRunEmptyImageFlagSkips",
+    "internal/security/dockle_test.go:TestDockleNeverBuilds",
+  ]
+  notes = "--image / $DROSS_IMAGE supplies the ref dockle scans; empty flag falls back to skip-with-reason; DockleNeverBuilds asserts the run plan references the image and never contains 'build'."
+
+# --- Findings -----------------------------------------------------------------
+# Raw per-mutant survivor detail is preserved in tests.json. The skeleton seeded
+# one FLAG per survivor across the WHOLE internal/ tree (gremlins is not diff-scoped);
+# the judgment below consolidates them by phase relevance.
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation dilution: gremlins scanned the whole internal/ tree, not the phase diff. 177 of 179 surviving mutants are in pre-existing files this phase never touched (internal/cmd command layer — issue.go/ship.go/stats.go/rule.go/verify.go/status.go/etc., plus the internal/cmd/profile.go namesake at lines 30/34/62/66/79/85, NOT internal/stack/profile.go). Out of phase scope; standing tech debt, not new test gaps."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Phase new behavioral code is fully mutation-covered: ContentMatch.Matches/IsZero (internal/stack/profile.go), DecideDockle (internal/security/dockle.go), and the marker-profile recon paths show zero surviving mutants — every injected fault was killed by t-1/t-2/t-7/t-8/t-9 tests."
+
+[[finding]]
+  severity = "NOTE"
+  text = "One in-scope survivor: detect.go:260 `const contentSniffCap = 64 * 1024` (ARITHMETIC_BASE). The safety property (a marker planted past the cap is NOT matched) is pinned by TestContentMatchReadCap; only the exact 64KiB magnitude is free, and no criterion depends on it. Optional polish: a paired sub-cap-matches / past-cap-skips boundary test would pin the value."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-5 proof modality: fixtures/iac-multi-c5/RUN.md is a committed manual-run record by spec design (the locked precedent from terraform-c3 / multilang-c3), not a go test gate. expected-finding.txt + the planted defects make it reproducible; a regression is caught by re-running the record, not by CI."
+
+[[finding]]
+  severity = "NOTE"
+  text = "10 declarative data files (the new/edited *.toml profiles, README.md, and the iac-multi-c5 *.yaml/Dockerfile/*.txt fixtures) have no mutation adapter and were skipped — expected. They are asserted instead via decode/embed tests (TestEmbeddedKubernetes/CloudFormation, profiles_doc_test) and the c-5 record."
