@@ -2,22 +2,10 @@
   "version": "0.6.10.0",
   "current_milestone": "v0.6",
   "current_phase": "gitlab-ship-provider",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-29T08:00:07.352234Z",
-  "last_action": "spec locked: gitlab-ship-provider",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-29T08:36:40.414887Z",
+  "last_action": "plan reviewed: gitlab-ship-provider (0 blocking, 1 flag resolved)",
   "history": [
-    {
-      "at": "2026-06-27T16:06:52.578752Z",
-      "action": "executed t-6 (Rank, render, flip status action block)"
-    },
-    {
-      "at": "2026-06-27T16:06:59.989967Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-27T16:06:59.99802Z",
-      "action": "phase status-action-surfaces-v2 executed (6/6 done)"
-    },
     {
       "at": "2026-06-27T16:26:15.30966Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-29T08:00:07.352234Z",
       "action": "spec locked: gitlab-ship-provider"
+    },
+    {
+      "at": "2026-06-29T08:31:06.870828Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-29T08:31:06.878341Z",
+      "action": "plan locked: gitlab-ship-provider (7 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-29T08:36:40.414887Z",
+      "action": "plan reviewed: gitlab-ship-provider (0 blocking, 1 flag resolved)"
     }
   ]
 }
