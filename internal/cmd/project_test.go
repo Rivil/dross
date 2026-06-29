@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -226,6 +227,46 @@ func TestExpandedDottedPathsRoundTrip(t *testing.T) {
 		}
 		if got != value {
 			t.Errorf("round-trip %q: got %q want %q", path, got, value)
+		}
+	}
+}
+
+// TestBoardDottedArmsRoundTrip drives every board.* scalar through the full
+// CLI path the slash commands use: writeDotted → Save → Load → readDotted. A
+// missing read or write arm breaks the round-trip on that field.
+func TestBoardDottedArmsRoundTrip(t *testing.T) {
+	p := &project.Project{}
+	cases := map[string]string{
+		"board.provider":       "youtrack",
+		"board.base_url":       "https://yt.example.com",
+		"board.auth_env":       "YOUTRACK_TOKEN",
+		"board.project":        "PROJ",
+		"board.enabled":        "true",
+		"board.milestone_mode": "version",
+	}
+	for path, value := range cases {
+		if err := writeDotted(p, path, value); err != nil {
+			t.Errorf("writeDotted(%q, %q): %v", path, value, err)
+		}
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	if err := p.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err := project.Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	for dotted, want := range cases {
+		got, ok := readDotted(loaded, dotted)
+		if !ok {
+			t.Errorf("readDotted(%q): missing after Save→Load", dotted)
+			continue
+		}
+		if got != want {
+			t.Errorf("round-trip %q: got %q want %q", dotted, got, want)
 		}
 	}
 }

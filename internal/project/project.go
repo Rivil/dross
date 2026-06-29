@@ -19,6 +19,7 @@ type Project struct {
 	Runtime     Runtime           `toml:"runtime"`
 	Repo        Repo              `toml:"repo"`
 	Remote      Remote            `toml:"remote,omitempty"`
+	Board       Board             `toml:"board,omitempty"`
 	Paths       Paths             `toml:"paths"`
 	Env         Env               `toml:"env"`
 	Goals       Goals             `toml:"goals"`
@@ -103,6 +104,21 @@ type Remote struct {
 	ProjectID  string   `toml:"project_id,omitempty"`  // gitlab: numeric project-id override (else derived from URL)
 	Reviewers  []string `toml:"reviewers,omitempty"`   // default human reviewers for /dross-ship
 	BoardSync  bool     `toml:"board_sync,omitempty"`  // mirror planning artefacts onto the issue board
+}
+
+// Board describes the issue-tracker destination for board sync, kept separate
+// from Remote so a repo can ship code to one host ([remote]) while tracking
+// issues on another ([board]) — e.g. ship to GitLab, track in YouTrack. It is
+// the single source for `dross issue` board operations; there is no [remote]
+// fallback.
+type Board struct {
+	Provider      string            `toml:"provider,omitempty"`       // forgejo | gitea | gitlab | youtrack
+	BaseURL       string            `toml:"base_url,omitempty"`       // instance base URL of the tracker
+	AuthEnv       string            `toml:"auth_env,omitempty"`       // env var name holding the token (NEVER the value)
+	Project       string            `toml:"project,omitempty"`        // project short-name / key on the tracker
+	Enabled       bool              `toml:"enabled,omitempty"`        // board sync is on
+	MilestoneMode string            `toml:"milestone_mode,omitempty"` // version (default) | agile | epic
+	StateMap      map[string]string `toml:"state_map,omitempty"`      // dross lifecycle state → tracker State value override
 }
 
 type Paths struct {
