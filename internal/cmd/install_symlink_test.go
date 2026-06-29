@@ -21,11 +21,33 @@ func makeInstallToTemp(t *testing.T) (root, home string) {
 	home = t.TempDir()
 	cmd := exec.Command("make", "install")
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "HOME="+home)
+	cmd.Env = installTestEnv(t, home)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("make install failed: %v\n%s", err, out)
 	}
 	return root, home
+}
+
+// installTestEnv returns the subprocess environment for a make-install/doctor run
+// isolated to a temp HOME, with Go's caches pinned to the host location. Without
+// pinning, `make install`'s `go build` derives GOPATH/GOCACHE from HOME and writes
+// a read-only module cache UNDER the temp HOME; t.TempDir cleanup then fails to
+// unlink those read-only files (reproduces only where GOPATH isn't preset, e.g. CI).
+func installTestEnv(t *testing.T, home string) []string {
+	t.Helper()
+	goEnv := func(k string) string {
+		out, err := exec.Command("go", "env", k).Output()
+		if err != nil {
+			t.Fatalf("go env %s: %v", k, err)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	return append(os.Environ(),
+		"HOME="+home,
+		"GOPATH="+goEnv("GOPATH"),
+		"GOMODCACHE="+goEnv("GOMODCACHE"),
+		"GOCACHE="+goEnv("GOCACHE"),
+	)
 }
 
 // TestMakeInstallDelegates proves the install_unification decision: `make install`
@@ -97,7 +119,7 @@ func TestMakeDoctorCountsInteractionSnippet(t *testing.T) {
 
 	cmd := exec.Command("make", "doctor")
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "HOME="+home)
+	cmd.Env = installTestEnv(t, home)
 	out, _ := cmd.CombinedOutput() // non-zero exit expected (PATH/binary checks)
 	doc := string(out)
 
