@@ -1,15 +1,9 @@
 {
   "version": "0.6.13.0",
   "current_milestone": "v0.6",
-  "current_phase": "self-update-and-distribution",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-29T17:09:24.465408Z",
-  "last_action": "verified self-update-and-distribution: pass (5/5 covered, mutation 0.84 measured)",
+  "last_activity": "2026-06-29T18:18:08.155334Z",
+  "last_action": "completed self-update-and-distribution",
   "history": [
-    {
-      "at": "2026-06-29T08:59:31.86378Z",
-      "action": "phase gitlab-ship-provider executed (7/7 done)"
-    },
     {
       "at": "2026-06-29T09:16:35.482229Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-29T17:09:24.465408Z",
       "action": "verified self-update-and-distribution: pass (5/5 covered, mutation 0.84 measured)"
+    },
+    {
+      "at": "2026-06-29T18:18:08.155334Z",
+      "action": "completed self-update-and-distribution"
     }
   ]
 }
