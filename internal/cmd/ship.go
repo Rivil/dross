@@ -10,10 +10,40 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/verify"
 )
+
+// buildOpenOpts maps a project's [remote] config onto ship.OpenOpts. Extracted
+// from the inline ship literal so the provider / auth_scheme / project_id wiring
+// is unit-testable — a dropped field (e.g. GitLab silently using default auth or
+// a derived project id even when the user overrode them) is caught by ship_test.go.
+func buildOpenOpts(p *project.Project) ship.OpenOpts {
+	return ship.OpenOpts{
+		Provider:   p.Remote.Provider,
+		URL:        p.Remote.URL,
+		APIBase:    p.Remote.APIBase,
+		AuthEnv:    p.Remote.AuthEnv,
+		AuthScheme: p.Remote.AuthScheme,
+		ProjectID:  p.Remote.ProjectID,
+		Reviewers:  p.Remote.Reviewers,
+	}
+}
+
+// buildCommentOpts maps a project's [remote] config onto ship.CommentOpts,
+// carrying the same provider / auth / project fields as buildOpenOpts.
+func buildCommentOpts(p *project.Project) ship.CommentOpts {
+	return ship.CommentOpts{
+		Provider:   p.Remote.Provider,
+		URL:        p.Remote.URL,
+		APIBase:    p.Remote.APIBase,
+		AuthEnv:    p.Remote.AuthEnv,
+		AuthScheme: p.Remote.AuthScheme,
+		ProjectID:  p.Remote.ProjectID,
+	}
+}
 
 // Ship orchestrates /dross-ship: pushes the current phase/<id> branch
 // and opens a provider-aware PR with auto-assigned human reviewers.
@@ -181,18 +211,13 @@ func Ship() *cobra.Command {
 			if baseBranch == "" {
 				baseBranch = "main"
 			}
-			res, err := ship.OpenPR(ship.OpenOpts{
-				Provider:   p.Remote.Provider,
-				URL:        p.Remote.URL,
-				APIBase:    p.Remote.APIBase,
-				AuthEnv:    p.Remote.AuthEnv,
-				HeadBranch: phaseBranch,
-				BaseBranch: baseBranch,
-				Title:      title,
-				Body:       body,
-				Reviewers:  p.Remote.Reviewers,
-				Draft:      draft,
-			})
+			opts := buildOpenOpts(p)
+			opts.HeadBranch = phaseBranch
+			opts.BaseBranch = baseBranch
+			opts.Title = title
+			opts.Body = body
+			opts.Draft = draft
+			res, err := ship.OpenPR(opts)
 			if err != nil && res == nil {
 				return fmt.Errorf("open PR: %w", err)
 			}
@@ -276,14 +301,10 @@ func shipComment() *cobra.Command {
 			if p.Remote.URL == "" || p.Remote.Provider == "" {
 				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
 			}
-			if err := ship.PostComment(ship.CommentOpts{
-				Provider: p.Remote.Provider,
-				URL:      p.Remote.URL,
-				APIBase:  p.Remote.APIBase,
-				AuthEnv:  p.Remote.AuthEnv,
-				PRNumber: prNumber,
-				Body:     body,
-			}); err != nil {
+			co := buildCommentOpts(p)
+			co.PRNumber = prNumber
+			co.Body = body
+			if err := ship.PostComment(co); err != nil {
 				return fmt.Errorf("post comment: %w", err)
 			}
 			Printf("Posted comment to PR #%d\n", prNumber)

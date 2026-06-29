@@ -10,8 +10,56 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
+
+// TestBuildOpenOptsMapsGitLabFields pins c-2's wiring: the ship command must
+// copy remote.auth_scheme and remote.project_id (plus the base remote fields)
+// onto ship.OpenOpts. The inline struct literal this replaced was untestable, so
+// a regression where GitLab silently used default auth / a derived id even when
+// the user overrode them would have gone unnoticed.
+func TestBuildOpenOptsMapsGitLabFields(t *testing.T) {
+	p := &project.Project{Remote: project.Remote{
+		Provider:   "gitlab",
+		URL:        "https://gitlab.example/me/proj",
+		APIBase:    "https://gitlab.example/api/v4",
+		AuthEnv:    "GL_TOKEN",
+		AuthScheme: "bearer",
+		ProjectID:  "42",
+		Reviewers:  []string{"alice"},
+	}}
+	got := buildOpenOpts(p)
+	if got.Provider != "gitlab" || got.URL != p.Remote.URL || got.APIBase != p.Remote.APIBase || got.AuthEnv != "GL_TOKEN" {
+		t.Errorf("base remote fields not copied: %+v", got)
+	}
+	if got.AuthScheme != "bearer" {
+		t.Errorf("auth_scheme not copied onto OpenOpts: %q", got.AuthScheme)
+	}
+	if got.ProjectID != "42" {
+		t.Errorf("project_id not copied onto OpenOpts: %q", got.ProjectID)
+	}
+	if len(got.Reviewers) != 1 || got.Reviewers[0] != "alice" {
+		t.Errorf("reviewers not copied: %v", got.Reviewers)
+	}
+}
+
+// TestBuildCommentOptsMapsGitLabFields pins c-3's wiring: the same provider /
+// auth_scheme / project_id fields must reach ship.CommentOpts.
+func TestBuildCommentOptsMapsGitLabFields(t *testing.T) {
+	p := &project.Project{Remote: project.Remote{
+		Provider:   "gitlab",
+		URL:        "https://gitlab.example/me/proj",
+		APIBase:    "https://gitlab.example/api/v4",
+		AuthEnv:    "GL_TOKEN",
+		AuthScheme: "bearer",
+		ProjectID:  "42",
+	}}
+	got := buildCommentOpts(p)
+	if got.Provider != "gitlab" || got.AuthEnv != "GL_TOKEN" || got.AuthScheme != "bearer" || got.ProjectID != "42" {
+		t.Errorf("comment opts dropped a field: %+v", got)
+	}
+}
 
 // shipFixture builds a fully-initialised dross repo with a phase that
 // has spec, verify (pass), and changes recorded — ready to ship.
