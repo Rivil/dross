@@ -2,18 +2,10 @@
   "version": "0.6.12.0",
   "current_milestone": "v0.6",
   "current_phase": "youtrack-board-integration",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-29T12:20:07.887331Z",
-  "last_action": "phase youtrack-board-integration re-executed (c-6 amendment, 10/10 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-29T12:29:04.415216Z",
+  "last_action": "verified youtrack-board-integration: pass (6/6 covered, c-6 lifted to covered; mutation 0.86 measured, efficacy 1.00 on covered)",
   "history": [
-    {
-      "at": "2026-06-27T21:40:06.799592Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-27T21:40:06.805954Z",
-      "action": "phase deepen-container-iac-scanning executed (11/11 done)"
-    },
     {
       "at": "2026-06-29T06:15:43.96917Z",
       "action": "resumed — handoff cleared (stale multilang-stack-profiles, shipped #20); next is /dross-verify deepen-container-iac-scanning"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-29T12:20:07.887331Z",
       "action": "phase youtrack-board-integration re-executed (c-6 amendment, 10/10 done)"
+    },
+    {
+      "at": "2026-06-29T12:29:04.407787Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-29T12:29:04.415216Z",
+      "action": "verified youtrack-board-integration: pass (6/6 covered, c-6 lifted to covered; mutation 0.86 measured, efficacy 1.00 on covered)"
     }
   ]
 }
