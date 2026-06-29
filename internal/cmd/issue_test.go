@@ -283,6 +283,62 @@ func TestIssuePullFiltersLinkedAndDismissed(t *testing.T) {
 	}
 }
 
+// youtrackBoardRepo scaffolds a .dross repo whose [board] points at a YouTrack
+// instance at apiBase, board sync enabled. Token env is set; does the chdir.
+func youtrackBoardRepo(t *testing.T, apiBase string) string {
+	t.Helper()
+	dir := t.TempDir()
+	chdir(t, dir)
+	t.Setenv("MOCK_TOKEN", "secret")
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustRunSet(t, "board.provider", "youtrack")
+	mustRunSet(t, "board.base_url", apiBase)
+	mustRunSet(t, "board.auth_env", "MOCK_TOKEN")
+	mustRunSet(t, "board.project", "PROJ")
+	mustRunSet(t, "board.enabled", "true")
+	return dir
+}
+
+// TestIssuePullYouTrackFiltersLinkedAndDismissed proves c-3 for YouTrack: pull
+// emits only open issues not linked and not dismissed (by readable id), with the
+// label filter passed through to the upstream query as a tag clause.
+func TestIssuePullYouTrackFiltersLinkedAndDismissed(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query().Get("query")
+		// PROJ-12 is linked (a phase), PROJ-20 dismissed, PROJ-21 is new.
+		_, _ = io.WriteString(w, `[
+			{"idReadable":"PROJ-12","summary":"phase issue"},
+			{"idReadable":"PROJ-20","summary":"dismissed one"},
+			{"idReadable":"PROJ-21","summary":"a real bug","tags":[{"name":"bug"}]}
+		]`)
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	writeSpec(t, dir, "01-x", "[phase]\nid=\"01-x\"\ntitle=\"X\"\n")
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"phases":{"01-x":"PROJ-12"},"quicks":{},"milestones":{},"dismissed":["PROJ-20"]}`)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "pull", "--labels", "bug", "--json"); err != nil {
+			t.Fatalf("pull: %v", err)
+		}
+	})
+	var got []map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
+		t.Fatalf("pull --json not valid JSON: %v\n%s", err, out)
+	}
+	if len(got) != 1 || got[0]["Key"].(string) != "PROJ-21" {
+		t.Errorf("expected only PROJ-21 inbound, got %v", got)
+	}
+	if !strings.Contains(gotQuery, "bug") {
+		t.Errorf("upstream YouTrack query %q must carry the bug tag filter", gotQuery)
+	}
+}
+
 func TestIssueDismissPersists(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
