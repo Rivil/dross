@@ -3,13 +3,9 @@
   "current_milestone": "v0.6",
   "current_phase": "deepen-container-iac-scanning",
   "current_phase_status": "complete",
-  "last_activity": "2026-06-27T21:40:06.805954Z",
-  "last_action": "phase deepen-container-iac-scanning executed (11/11 done)",
+  "last_activity": "2026-06-29T06:15:43.96917Z",
+  "last_action": "resumed — handoff cleared (stale multilang-stack-profiles, shipped #20); next is /dross-verify deepen-container-iac-scanning",
   "history": [
-    {
-      "at": "2026-06-27T15:43:25.99045Z",
-      "action": "plan reviewed: status-action-surfaces-v2 (0 blocking, 1 flag)"
-    },
     {
       "at": "2026-06-27T15:49:08.801465Z",
       "action": "set version=0.6.5.0"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-27T21:40:06.805954Z",
       "action": "phase deepen-container-iac-scanning executed (11/11 done)"
+    },
+    {
+      "at": "2026-06-29T06:15:43.96917Z",
+      "action": "resumed — handoff cleared (stale multilang-stack-profiles, shipped #20); next is /dross-verify deepen-container-iac-scanning"
     }
   ]
 }
