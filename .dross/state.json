@@ -1,15 +1,9 @@
 {
   "version": "0.6.10.0",
   "current_milestone": "v0.6",
-  "current_phase": "deepen-container-iac-scanning",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-29T06:26:39.086447Z",
-  "last_action": "verified deepen-container-iac-scanning: pass (8/8 covered, mutation 0.83)",
+  "last_activity": "2026-06-29T06:35:03.761647Z",
+  "last_action": "completed deepen-container-iac-scanning",
   "history": [
-    {
-      "at": "2026-06-27T15:53:59.571769Z",
-      "action": "executed t-2 (Add tech-debt marker + size scan engine)"
-    },
     {
       "at": "2026-06-27T15:55:45.890001Z",
       "action": "executed t-3 (Add tech-debt run dir, StatePath, report writer)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-29T06:26:39.086447Z",
       "action": "verified deepen-container-iac-scanning: pass (8/8 covered, mutation 0.83)"
+    },
+    {
+      "at": "2026-06-29T06:35:03.761647Z",
+      "action": "completed deepen-container-iac-scanning"
     }
   ]
 }
