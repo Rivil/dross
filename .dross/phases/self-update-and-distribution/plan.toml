@@ -1,138 +1,77 @@
 [phase]
-id = "self-update-and-distribution"
+  id = "self-update-and-distribution"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Embed all commands+prompts; drift guard"
-files         = ["assets/embed.go", "assets/embed_test.go"]
-description   = """
-Replace the single //go:embed prompts/_interaction.md with an embed.FS over
-commands/dross-*.md + prompts/*.md. InteractionPlaybook re-derives from the FS.
-"""
-covers        = ["c-1"]
-test_contract = [
-  "TestEmbedDrift walks os.ReadDir(assets/commands)+os.ReadDir(assets/prompts) and asserts embedded bytes == on-disk bytes per *.md AND embedded file-set == on-disk file-set",
-  "add/rename a dross-foo.md on disk but not in the glob -> set-equality fails naming the drifted path",
-  "edit a byte without re-embedding -> content-equality fails; delete prompts/_interaction.md from disk but not the FS -> also fails",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Embed all commands+prompts; drift guard"
+  files = ["assets/embed.go", "assets/embed_test.go"]
+  description = "Replace the single //go:embed prompts/_interaction.md with an embed.FS over\ncommands/dross-*.md + prompts/*.md. InteractionPlaybook re-derives from the FS.\n"
+  covers = ["c-1"]
+  test_contract = ["TestEmbedDrift walks os.ReadDir(assets/commands)+os.ReadDir(assets/prompts) and asserts embedded bytes == on-disk bytes per *.md AND embedded file-set == on-disk file-set", "add/rename a dross-foo.md on disk but not in the glob -> set-equality fails naming the drifted path", "edit a byte without re-embedding -> content-equality fails; delete prompts/_interaction.md from disk but not the FS -> also fails"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "internal/update: release client + verify"
-files         = ["internal/update/update.go", "internal/update/update_test.go"]
-description   = """
-Pure package, no cobra: asset-name resolution, checksum verification,
-newer-only semver comparison, atomic binary replace. Tested against an
-httptest.Server standing in for api.github.com + the asset host.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "TestAssetName: runtime GOOS/GOARCH (darwin/linux x arm64/amd64) -> dross_{Version}_{Os}_{Arch}.tar.gz exactly matching the .goreleaser name_template; unsupported pair (e.g. windows) -> unsupported-platform error",
-  "TestVerifyChecksum: parse checksums.txt, select our platform row, sha256 the bytes -> nil on match; flip one byte -> ErrChecksumMismatch (never nil); checksums.txt omitting our filename -> error, not silent pass",
-  "TestNewerOnly: latest strictly-newer -> update available; equal/older -> up-to-date/refuse-downgrade; dev/unknown running version (0.1.0.0 / Commit==unknown) -> needs-confirm",
-  "TestAtomicReplace: write temp file in target dir, chmod 0o755, rename over; inject failure between temp-write and rename -> target still holds original bytes, partial temp discarded, result executable",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "internal/update: release client + verify"
+  files = ["internal/update/update.go", "internal/update/update_test.go"]
+  description = "Pure package, no cobra: asset-name resolution, checksum verification,\nnewer-only semver comparison, atomic binary replace. Tested against an\nhttptest.Server standing in for api.github.com + the asset host.\n"
+  covers = ["c-3"]
+  test_contract = ["TestAssetName: runtime GOOS/GOARCH (darwin/linux x arm64/amd64) -> dross_{Version}_{Os}_{Arch}.tar.gz exactly matching the .goreleaser name_template; unsupported pair (e.g. windows) -> unsupported-platform error", "TestVerifyChecksum: parse checksums.txt, select our platform row, sha256 the bytes -> nil on match; flip one byte -> ErrChecksumMismatch (never nil); checksums.txt omitting our filename -> error, not silent pass", "TestNewerOnly: latest strictly-newer -> update available; equal/older -> up-to-date/refuse-downgrade; dev/unknown running version (0.1.0.0 / Commit==unknown) -> needs-confirm", "TestAtomicReplace: write temp file in target dir, chmod 0o755, rename over; inject failure between temp-write and rename -> target still holds original bytes, partial temp discarded, result executable"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-title         = "Add `dross install` command"
-files         = ["internal/cmd/install.go", "internal/cmd/install_test.go", "cmd/dross/main.go"]
-description   = """
-Registered in main.go. Auto-detect source checkout (assets/ present) ->
-symlink commands/prompts; else write real-file copies from t-1's embedded FS.
---copy / --link override detection. Clean-sync the dross-* namespace.
-"""
-covers        = ["c-2"]
-depends_on    = ["t-1"]
-test_contract = [
-  "TestInstallCopyMode (force copy, HOME=t.TempDir): SKILL.md is a REAL file (Lstat mode&Symlink==0), bytes == embed.FS bytes; prompts likewise",
-  "TestInstallSymlinkMode (checkout): SKILL.md is a symlink whose readlink target is the absolute assets/commands/dross-<name>.md",
-  "TestInstallPrunesStaleDross: pre-seed dross-obsolete/ -> gone after install",
-  "TestInstallPrunesStalePrompt: pre-seed a stale dross prompt file in ~/.claude/dross/prompts/ -> removed after a copy-mode install (asset_sync_policy prunes dropped prompts, not just skills)",
-  "TestInstallSparesNonDross: pre-seed a NON-dross skill foo/ containing a real user file -> foo/ AND its inner file untouched; a prune globbing beyond dross-* deletes foo and fails",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Add `dross install` command"
+  files = ["internal/cmd/install.go", "internal/cmd/install_test.go", "cmd/dross/main.go"]
+  description = "Registered in main.go. Auto-detect source checkout (assets/ present) ->\nsymlink commands/prompts; else write real-file copies from t-1's embedded FS.\n--copy / --link override detection. Clean-sync the dross-* namespace.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["TestInstallCopyMode (force copy, HOME=t.TempDir): SKILL.md is a REAL file (Lstat mode&Symlink==0), bytes == embed.FS bytes; prompts likewise", "TestInstallSymlinkMode (checkout): SKILL.md is a symlink whose readlink target is the absolute assets/commands/dross-<name>.md", "TestInstallPrunesStaleDross: pre-seed dross-obsolete/ -> gone after install", "TestInstallPrunesStalePrompt: pre-seed a stale dross prompt file in ~/.claude/dross/prompts/ -> removed after a copy-mode install (asset_sync_policy prunes dropped prompts, not just skills)", "TestInstallSparesNonDross: pre-seed a NON-dross skill foo/ containing a real user file -> foo/ AND its inner file untouched; a prune globbing beyond dross-* deletes foo and fails"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 3
-title         = "make install delegates to `dross install`"
-files         = ["Makefile", "internal/cmd/install_symlink_test.go"]
-description   = """
-Rewrite the install: target to `build` + `./dross install --link`, dropping
-the inline ln/loop.
-"""
-covers        = ["c-2"]
-depends_on    = ["t-3"]
-test_contract = [
-  "TestMakeInstallDelegates runs `make install` against a temp HOME and asserts EVERY assets/commands/dross-*.md has a skills/dross-<name>/SKILL.md symlink resolving to its source file (not just _interaction.md) -- proving the recipe shells out rather than running its own cp/ln loop",
-  "existing TestMakeInstallLinksInteractionSnippet must still pass",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 3
+  title = "make install delegates to `dross install`"
+  files = ["Makefile", "internal/cmd/install_symlink_test.go"]
+  description = "Rewrite the install: target to `build` + `./dross install --link`, dropping\nthe inline ln/loop.\n"
+  covers = ["c-2"]
+  depends_on = ["t-3"]
+  test_contract = ["TestMakeInstallDelegates runs `make install` against a temp HOME and asserts EVERY assets/commands/dross-*.md has a skills/dross-<name>/SKILL.md symlink resolving to its source file (not just _interaction.md) -- proving the recipe shells out rather than running its own cp/ln loop", "existing TestMakeInstallLinksInteractionSnippet must still pass"]
+  status = "done"
 
 [[task]]
-id            = "t-5"
-wave          = 3
-title         = "Add `dross update` command (--check/--force)"
-files         = ["internal/cmd/update.go", "internal/cmd/update_test.go", "cmd/dross/main.go"]
-description   = """
-Thin cobra wrapper over t-2's internal/update, API base URL injectable for
-tests. After swapping in the new binary, re-syncs assets by exec'ing the
-freshly-swapped binary (`<newbin> install`) -- NOT t-3's engine in-process,
-which would re-install the old binary's embedded assets. Tested against an
-httptest mock of /releases/latest + tarball + checksums.txt.
-"""
-covers        = ["c-3"]
-depends_on    = ["t-2", "t-3"]
-test_contract = [
-  "TestUpdateCheckNoApply: --check on a newer release prints the version and leaves the target binary byte-identical AND assets untouched (no swap)",
-  "TestUpdateAppliesAndResyncs: newer + valid checksum -> binary bytes replaced AND re-synced asset bytes match the NEW binary's embed (not the old in-process embed); proven by exec'ing the swapped binary's `install`",
-  "TestUpdateForce: --force on equal/older still applies",
-  "TestUpdateRefusesOnBadChecksum: checksums.txt not matching the served tarball -> non-zero, target binary unchanged, no swap reached end-to-end",
-]
-status        = "pending"
+  id = "t-5"
+  wave = 3
+  title = "Add `dross update` command (--check/--force)"
+  files = ["internal/cmd/update.go", "internal/cmd/update_test.go", "cmd/dross/main.go"]
+  description = "Thin cobra wrapper over t-2's internal/update, API base URL injectable for\ntests. After swapping in the new binary, re-syncs assets by exec'ing the\nfreshly-swapped binary (`<newbin> install`) -- NOT t-3's engine in-process,\nwhich would re-install the old binary's embedded assets. Tested against an\nhttptest mock of /releases/latest + tarball + checksums.txt.\n"
+  covers = ["c-3"]
+  depends_on = ["t-2", "t-3"]
+  test_contract = ["TestUpdateCheckNoApply: --check on a newer release prints the version and leaves the target binary byte-identical AND assets untouched (no swap)", "TestUpdateAppliesAndResyncs: newer + valid checksum -> binary bytes replaced AND re-synced asset bytes match the NEW binary's embed (not the old in-process embed); proven by exec'ing the swapped binary's `install`", "TestUpdateForce: --force on equal/older still applies", "TestUpdateRefusesOnBadChecksum: checksums.txt not matching the served tarball -> non-zero, target binary unchanged, no swap reached end-to-end"]
+  status = "done"
 
 [[task]]
-id            = "t-6"
-wave          = 3
-title         = "install.sh bootstrap + shellcheck gate"
-files         = ["install.sh", ".github/workflows/ci.yml"]
-description   = """
-POSIX `set -euo pipefail` script: uname-detect os/arch -> the
-dross_{Version}_{Os}_{Arch}.tar.gz asset, download latest binary + checksums
-to a TEMP dir, verify, mv onto ~/.local/bin only after checksum, then exec
-`dross install`. Add a shellcheck job to ci.yml.
-NOTE: editing ci.yml triggers the CI supply-chain hardening checklist (pin
-action SHAs, minimal permissions:) -- audit the new job, do not just append it.
-"""
-covers        = ["c-4"]
-depends_on    = ["t-3"]
-test_contract = [
-  "shellcheck install.sh in a ci.yml job fails on any SC finding (quoted vars, no SC2086)",
-  "asset name in the script matches the .goreleaser name_template dross_{Version}_{Os}_{Arch}.tar.gz, with the uname->goreleaser os/arch mapping pinned per platform (uname -s/-m Darwin+arm64 -> darwin_arm64, Linux+x86_64 -> linux_amd64) and asserted for at least darwin/arm64 and linux/amd64",
-  "running with an unreachable/404 download URL exits non-zero and leaves NO partial/zero-byte dross on the bin path (staging-in-temp proves it); a script curling straight onto the bin path would leave a stub and fail",
-  "documented smoke run uses an env-overridable base URL against a local fixture and ends in a working `dross install`",
-]
-status        = "pending"
+  id = "t-6"
+  wave = 3
+  title = "install.sh bootstrap + shellcheck gate"
+  files = ["install.sh", ".github/workflows/ci.yml"]
+  description = "POSIX `set -euo pipefail` script: uname-detect os/arch -> the\ndross_{Version}_{Os}_{Arch}.tar.gz asset, download latest binary + checksums\nto a TEMP dir, verify, mv onto ~/.local/bin only after checksum, then exec\n`dross install`. Add a shellcheck job to ci.yml.\nNOTE: editing ci.yml triggers the CI supply-chain hardening checklist (pin\naction SHAs, minimal permissions:) -- audit the new job, do not just append it.\n"
+  covers = ["c-4"]
+  depends_on = ["t-3"]
+  test_contract = ["shellcheck install.sh in a ci.yml job fails on any SC finding (quoted vars, no SC2086)", "asset name in the script matches the .goreleaser name_template dross_{Version}_{Os}_{Arch}.tar.gz, with the uname->goreleaser os/arch mapping pinned per platform (uname -s/-m Darwin+arm64 -> darwin_arm64, Linux+x86_64 -> linux_amd64) and asserted for at least darwin/arm64 and linux/amd64", "running with an unreachable/404 download URL exits non-zero and leaves NO partial/zero-byte dross on the bin path (staging-in-temp proves it); a script curling straight onto the bin path would leave a stub and fail", "documented smoke run uses an env-overridable base URL against a local fixture and ends in a working `dross install`"]
+  status = "done"
 
 [[task]]
-id            = "t-7"
-wave          = 4
-title         = "Document curl|sh + `dross update` in README"
-files         = ["README.md", "internal/cmd/readme_doc_test.go"]
-description   = """
-Replace the "binary only / needs a checkout" caveat with the supported flow:
-the curl|sh one-liner and a `dross update` section incl. --check.
-"""
-covers        = ["c-5"]
-depends_on    = ["t-5", "t-6"]
-test_contract = [
-  "TestReadmeDocumentsInstallAndUpdate greps README.md and asserts both the `curl -fsSL .../install.sh | sh` one-liner (raw githubusercontent URL matching Rivil/dross) and a `dross update` invocation are present",
-  "rename the entrypoint without updating docs -> the grep fails",
-]
-status        = "pending"
+  id = "t-7"
+  wave = 4
+  title = "Document curl|sh + `dross update` in README"
+  files = ["README.md", "internal/cmd/readme_doc_test.go"]
+  description = "Replace the \"binary only / needs a checkout\" caveat with the supported flow:\nthe curl|sh one-liner and a `dross update` section incl. --check.\n"
+  covers = ["c-5"]
+  depends_on = ["t-5", "t-6"]
+  test_contract = ["TestReadmeDocumentsInstallAndUpdate greps README.md and asserts both the `curl -fsSL .../install.sh | sh` one-liner (raw githubusercontent URL matching Rivil/dross) and a `dross update` invocation are present", "rename the entrypoint without updating docs -> the grep fails"]
+  status = "done"

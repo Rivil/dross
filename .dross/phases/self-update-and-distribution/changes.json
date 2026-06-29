@@ -1,0 +1,72 @@
+{
+  "phase": "self-update-and-distribution",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "assets/embed.go",
+        "assets/embed_test.go"
+      ],
+      "commit": "dd41692",
+      "completed_at": "2026-06-29T13:33:39.274607Z",
+      "notes": "feature: self-contained asset distribution · assets.FS @ assets/embed.go · embeds all command skills+prompts (all: prefix keeps _interaction.md); TestEmbedDrift guards embed vs on-disk drift"
+    },
+    "t-2": {
+      "files": [
+        "internal/update/update.go",
+        "internal/update/update_test.go",
+        "go.mod",
+        "go.sum"
+      ],
+      "commit": "8ee5912",
+      "completed_at": "2026-06-29T13:36:35.114607Z",
+      "notes": "feature: self-update core · update.Client @ internal/update/update.go · platform asset-name, SHA-256 verify, strictly-newer semver, atomic swap; httptest-backed"
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/install.go",
+        "internal/cmd/install_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "2e4c432",
+      "completed_at": "2026-06-29T13:39:40.714936Z",
+      "notes": "feature: unified install · cmd.Install @ internal/cmd/install.go · materializes embedded skills+prompts (symlink off checkout, copy otherwise), prunes dross-* namespace, spares non-dross"
+    },
+    "t-4": {
+      "files": [
+        "Makefile",
+        "internal/cmd/install_symlink_test.go"
+      ],
+      "commit": "fea615b",
+      "completed_at": "2026-06-29T13:42:56.071668Z",
+      "notes": "feature: unified install · Makefile install target · delegates skills/prompts sync to dross install --link, dropping the inline ln/loop"
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/update.go",
+        "internal/cmd/update_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "bb12c07",
+      "completed_at": "2026-06-29T13:45:58.574475Z",
+      "notes": "feature: self-update · cmd.Update @ internal/cmd/update.go · fetch+verify+atomic-swap latest release, --check/--force, re-syncs assets by exec'ing the new binary"
+    },
+    "t-6": {
+      "files": [
+        "install.sh",
+        ".github/workflows/ci.yml"
+      ],
+      "commit": "b4f42ac",
+      "completed_at": "2026-06-29T13:49:46.831996Z",
+      "notes": "feature: curl|sh bootstrap · install.sh · uname-detect+download+verify+stage-then-mv installer, runs dross install; shellcheck CI gate + hardened ci.yml"
+    },
+    "t-7": {
+      "files": [
+        "README.md",
+        "internal/cmd/readme_doc_test.go"
+      ],
+      "commit": "0ccce6a",
+      "completed_at": "2026-06-29T13:51:29.40668Z",
+      "notes": "feature: install/update docs · README Install section · curl|sh one-liner + dross update flow, doc-guard test"
+    }
+  }
+}
