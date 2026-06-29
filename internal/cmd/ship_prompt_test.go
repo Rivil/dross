@@ -53,3 +53,54 @@ func TestShipPromptRecoverySection(t *testing.T) {
 		}
 	}
 }
+
+// TestShipPromptGitLabSections proves c-4: ship.md's §5 (CI gate) and §6 (merge
+// gate) carry the GitLab pipeline-watch and squash-merge steps, and §5 pins the
+// ENTIRE locked pipeline_status_mapping — terminal, keep-polling, AND ambiguous
+// states — not just the terminal ones. Dropping any branch of the mapping or
+// either ship step removes its token and fails this. Tokens are matched against
+// shipPromptContent, which lowercases and strips underscores (so merge_requests
+// -> mergerequests, should_remove_source_branch -> shouldremovesourcebranch).
+// (r-01: the prompt edit is only live for the running binary after `make install`;
+// this reads the source file, gating the committed prompt directly.)
+func TestShipPromptGitLabSections(t *testing.T) {
+	content := shipPromptContent(t)
+
+	// §5 GitLab CI-watch endpoint + both auth schemes.
+	for _, needle := range []string{
+		"projects/<id>/pipelines",
+		"pipelines?sha",
+		"private-token",
+		"bearer",
+	} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("ship.md §5 missing GitLab CI-watch token %q", needle)
+		}
+	}
+
+	// Locked pipeline_status_mapping — every branch must be documented.
+	for _, state := range []string{
+		"success", "failed", "canceled", // terminal
+		"running", "pending", "created", "preparing", // keep-polling
+		"manual", "skipped", // surface-and-ask
+	} {
+		if !strings.Contains(content, state) {
+			t.Errorf("ship.md §5 dropped pipeline status %q from the locked mapping", state)
+		}
+	}
+
+	// No-pipeline-for-the-SHA ask path.
+	if !strings.Contains(content, "empty pipelines array") {
+		t.Error("ship.md §5 missing the no-pipeline (empty pipelines array) surface-and-ask path")
+	}
+
+	// §6 GitLab squash-merge + remote-branch removal (underscore-stripped forms).
+	for _, needle := range []string{
+		"mergerequests",            // merge_requests
+		"shouldremovesourcebranch", // should_remove_source_branch
+	} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("ship.md §6 missing GitLab squash-merge token %q", needle)
+		}
+	}
+}

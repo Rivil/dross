@@ -1,0 +1,74 @@
+{
+  "phase": "gitlab-ship-provider",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/project/project.go",
+        "internal/project/remote.go",
+        "internal/cmd/project.go",
+        "internal/project/remote_test.go",
+        "internal/cmd/project_test.go"
+      ],
+      "commit": "0f209c9",
+      "completed_at": "2026-06-29T08:40:35.70769Z",
+      "notes": "feature: Configuration · Remote.AuthScheme/ProjectID + KnownHostProviders gitlab @ internal/project/remote.go · gitlab.com→gitlab autodetect, /api/v4 derivation, auth_scheme/project_id config fields"
+    },
+    "t-2": {
+      "files": [
+        "internal/ship/open.go",
+        "internal/ship/open_test.go"
+      ],
+      "commit": "9a30ca5",
+      "completed_at": "2026-06-29T08:43:46.521109Z",
+      "notes": "feature: Shipping / pull requests · openGitLabPR @ internal/ship/open.go · GitLab MR via REST (source/target_branch, Draft: prefix, web_url→URL/iid→Number), gitlabProjectRef (%2F or numeric id) + gitlabAuthHeader (PRIVATE-TOKEN|Bearer) helpers, username→id reviewer resolution non-fatal"
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/ship.md",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "002ec80",
+      "completed_at": "2026-06-29T08:46:39.234692Z",
+      "notes": "feature: Shipping / pull requests · ship.md §5/§6 GitLab @ assets/prompts/ship.md · pipeline-status-mapping CI watch (success/failed/canceled, keep-polling, manual/skipped ask, empty-pipelines) + squash-merge with should_remove_source_branch, guarded by TestShipPromptGitLabSections"
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go",
+        "internal/telemetry/telemetry.go",
+        "internal/telemetry/telemetry_test.go"
+      ],
+      "commit": "2797a84",
+      "completed_at": "2026-06-29T08:48:43.136475Z",
+      "notes": "feature: Configuration · doctor remote checks @ internal/cmd/doctor.go · doctor accepts a gitlab remote (origin/auth_env validated, not rejected) + flags an invalid auth_scheme; telemetry classifies 'gitlab backend' as provider not other"
+    },
+    "t-5": {
+      "files": [
+        "internal/forge/forge.go",
+        "internal/forge/forge_test.go",
+        "internal/cmd/issue.go"
+      ],
+      "commit": "27e1a4f",
+      "completed_at": "2026-06-29T08:54:02.776527Z",
+      "notes": "feature: Issue board sync · provider-aware forge.Client @ internal/forge/forge.go · New() returns a gitlab backend (not ErrNotImplemented); /projects/\u003cref\u003e paths, PRIVATE-TOKEN/Bearer auth, iid/description/state_event/comma-label shapes, opened→open; issue enable + openBoard accept gitlab"
+    },
+    "t-6": {
+      "files": [
+        "internal/ship/comment.go",
+        "internal/ship/comment_test.go"
+      ],
+      "commit": "8f66dcd",
+      "completed_at": "2026-06-29T08:55:14.835329Z",
+      "notes": "feature: Shipping / pull requests · postGitLabComment @ internal/ship/comment.go · posts an MR note via /projects/\u003cref\u003e/merge_requests/\u003ciid\u003e/notes reusing gitlabProjectRef/gitlabAuthHeader (PRIVATE-TOKEN|Bearer); PRNumber=MR iid"
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "8270436",
+      "completed_at": "2026-06-29T08:58:43.899248Z",
+      "notes": "feature: Shipping / pull requests · buildOpenOpts/buildCommentOpts @ internal/cmd/ship.go · extract testable opts builders threading remote.auth_scheme/project_id onto OpenOpts/CommentOpts so the gitlab ship+comment path carries the user's overrides"
+    }
+  }
+}

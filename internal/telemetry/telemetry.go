@@ -268,6 +268,7 @@ func ClassifyError(err error) string {
 	// Provider / remote.
 	case strings.Contains(msg, "github backend"),
 		strings.Contains(msg, "forgejo backend"),
+		strings.Contains(msg, "gitlab backend"),
 		strings.Contains(msg, "unsupported provider"),
 		strings.Contains(msg, "no [remote]"),
 		strings.Contains(msg, "[remote].url"):

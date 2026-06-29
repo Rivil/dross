@@ -86,6 +86,14 @@ func Doctor() *cobra.Command {
 				}
 			}
 
+			// auth_scheme is the GitLab credential selector: empty defaults to
+			// private-token in code, so only a non-empty, non-recognised value
+			// is a misconfiguration worth flagging.
+			if scheme := strings.ToLower(p.Remote.AuthScheme); scheme != "" && scheme != "private-token" && scheme != "bearer" {
+				Printf("  ✗ [remote].auth_scheme = %q is invalid (expected private-token | bearer)\n", p.Remote.AuthScheme)
+				issues++
+			}
+
 			Print("")
 
 			// --- .gitattributes ---

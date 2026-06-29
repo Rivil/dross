@@ -1,0 +1,76 @@
+[phase]
+  id = "gitlab-ship-provider"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add GitLab config surface + detection"
+  files = ["internal/project/project.go", "internal/project/remote.go", "internal/cmd/project.go", "internal/project/remote_test.go", "internal/cmd/project_test.go"]
+  description = "Remote struct gains AuthScheme + ProjectID toml fields. KnownHostProviders maps\ngitlab.com -> gitlab; DetectRemote's APIBase switch derives https://<host>/api/v4\nfor gitlab. readDotted/writeDotted gain remote.auth_scheme + remote.project_id arms.\nSelf-hosted (arbitrary host) is left for manual config (Provider stays \"\").\n"
+  covers = ["c-1"]
+  test_contract = ["if the KnownHostProviders/APIBase wiring is wrong, DetectRemote(\"https://gitlab.com/o/r\") no longer asserts provider==\"gitlab\" && api_base==\"https://gitlab.com/api/v4\"", "if an arbitrary self-hosted host stops falling through to manual config, the test asserting DetectRemote leaves Provider==\"\" for an unknown host fails", "if the Remote struct lacks AuthScheme/ProjectID tags or the readDotted/writeDotted remote.* arms are missing, a project set-then-get round-trip on remote.auth_scheme=\"bearer\" and remote.project_id=\"42\" fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Open GitLab MR via REST + reviewers"
+  files = ["internal/ship/open.go", "internal/ship/open_test.go"]
+  description = "OpenOpts gains AuthScheme + ProjectID. OpenPR adds a \"gitlab\" case -> openGitLabPR,\nwith gitlabProjectRef (%2F-encode owner/repo, numeric project_id wins) and\ngitlabAuthHeader (PRIVATE-TOKEN default, Authorization: Bearer when scheme=bearer)\nhelpers. Reviewers resolve usernames->ids and set reviewer_ids, non-fatal on failure.\n"
+  covers = ["c-2", "c-5"]
+  test_contract = ["if project-ref encoding breaks, TestGitLabProjectRef fails: (\"me\",\"p\",0)->\"me%2Fp\" and (\"me\",\"p\",123)->\"123\" (numeric project_id wins)", "if the auth-scheme switch breaks, TestGitLabAuthHeader fails: \"\"/\"private-token\" sets PRIVATE-TOKEN with NO Authorization; \"bearer\" sets Authorization: Bearer with NO PRIVATE-TOKEN", "if the MR create payload is wrong, the httptest asserting POST /api/v4/projects/me%2Fp/merge_requests with source_branch/target_branch (not head/base) + title/description, Draft=true -> \"Draft: \" title prefix, and web_url->URL / iid->Number fails", "if reviewer failure becomes fatal, the test mirroring TestOpenForgejoPRReviewerFailureNonFatal (404/empty/500 on GET /api/v4/users?username= or on assignment WARNS and still returns the opened MR) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Add GitLab CI + merge steps to ship.md"
+  files = ["assets/prompts/ship.md", "internal/cmd/ship_prompt_test.go"]
+  description = "ship.md §5 gains GitLab pipeline polling (GET /api/v4/projects/<id>/pipelines?sha=)\nwith the locked status mapping; §6 gains the GitLab squash-merge (PUT\n.../merge_requests/<iid>/merge, squash=true + should_remove_source_branch=true).\nPrompt-only change (rule r-01) verified by a prompt-presence grep test, not a Go unit.\n"
+  covers = ["c-4"]
+  test_contract = ["if any GitLab ship step is missing from the prompt, TestShipPromptGitLabSections fails — it asserts the embedded ship.md contains the exact tokens: api/v4/projects, pipelines?sha, success, failed, canceled, manual, skipped, squash=true, should_remove_source_branch", "if the keep-polling or no-pipeline branches of the locked status mapping are dropped, the test fails — it also asserts the tokens running, pending, created, preparing AND a no-pipeline-for-the-SHA ask path (surface-and-ask, mirroring §5's 'no checks registered' handling), so the full locked pipeline_status_mapping is guarded, not just the terminal states"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Diagnose GitLab remotes (doctor + telemetry)"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_test.go", "internal/telemetry/telemetry.go", "internal/telemetry/telemetry_test.go"]
+  description = "doctor accepts a GitLab remote (origin==remote.url, auth_env set) without rejecting\nit, and flags an invalid remote.auth_scheme (anything but private-token|bearer).\ntelemetry classification gains a \"gitlab backend\" substring so the provider error\nbucket catches it instead of \"other\".\n"
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = ["if doctor rejects or mis-validates a GitLab remote, TestDoctorAcceptsGitLabRemote fails: provider=gitlab + origin==remote.url + auth_env set -> 0 remote issues", "if the auth_scheme guard is missing, the doctor test asserting an invalid remote.auth_scheme (e.g. \"token\") is flagged fails", "if the telemetry arm is missing, the test asserting classify(\"gitlab backend needs APIBase\")==\"provider\" (not \"other\") fails"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Implement GitLab forge backend + enable"
+  files = ["internal/forge/forge.go", "internal/forge/forge_test.go", "internal/cmd/issue.go"]
+  description = "forge.Config gains AuthScheme + ProjectID. New() returns a GitLab client for\nprovider=gitlab instead of ErrNotImplemented (client impl + dispatch land together).\nMilestones via /api/v4/projects/<ref>/milestones; issues keyed on project-relative\niid (create/update/label/close/get/list). issue enable accepts gitlab; openBoard\nthreads Remote.AuthScheme/ProjectID into forge.Config.\n"
+  covers = ["c-6"]
+  depends_on = ["t-1"]
+  test_contract = ["if New() still returns ErrNotImplemented for gitlab, TestNewValidation's gitlab row (expects a constructed backend) fails", "if issue endpoints are wrong, the httptest asserting GetIssue/CloseIssue hit /api/v4/projects/<ref>/issues/<iid>, CloseIssue body carries state_event=\"close\", CreateIssue sends labels as a comma-joined string, response iid->Issue.Number, and ListIssues GET .../issues?state=open fails", "if the auth header or project-ref is wrong on the forge path, the request assertion (PRIVATE-TOKEN/Bearer + /api/v4/projects/<enc-or-id>) fails", "if issue enable still rejects gitlab, the test asserting enable accepts gitlab (replacing the no-board-backend default arm) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Post GitLab MR note"
+  files = ["internal/ship/comment.go", "internal/ship/comment_test.go"]
+  description = "CommentOpts gains AuthScheme + ProjectID. PostComment adds a \"gitlab\" case reusing\ngitlabAuthHeader/gitlabProjectRef; PRNumber is the MR iid.\n"
+  covers = ["c-3"]
+  depends_on = ["t-2"]
+  test_contract = ["if the GitLab comment endpoint/payload is wrong, the httptest for PRNumber=7 asserting POST /api/v4/projects/<ref>/merge_requests/7/notes with body {\"body\":...} and the PRIVATE-TOKEN header (Authorization: Bearer when scheme=bearer) fails", "if the dispatch regresses, TestPostCommentRejectsUnknownProvider (unknown provider still errors) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Wire GitLab config through ship cmd"
+  files = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
+  description = "Extract testable buildOpenOpts(p)/buildCommentOpts(p) that copy remote.auth_scheme\n-> AuthScheme and remote.project_id -> ProjectID (alongside url/api_base/auth_env/\nreviewers) onto the opts, and record the returned MR web_url in state on the gitlab\npath. Replaces the inline-built opts at cmd/ship.go (not unit-testable as-is).\n"
+  covers = ["c-2", "c-3"]
+  depends_on = ["t-2", "t-6"]
+  test_contract = ["if buildOpenOpts/buildCommentOpts drop the new fields, ship_test.go assertions that auth_scheme->AuthScheme and project_id->ProjectID are copied fail — catching the silent 'GitLab uses default auth / derived id even when the user overrode them' drift", "if the gitlab ship path stops recording the MR url, the test asserting the returned web_url lands in state fails"]
+  status = "done"

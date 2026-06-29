@@ -314,3 +314,201 @@ func TestSplitOwnerRepo(t *testing.T) {
 		}
 	}
 }
+
+// --- GitLab backend ---
+
+const gitlabTokenEnv = "MOCK_GITLAB_TOKEN"
+
+// newGitLabTestClient points a gitlab Client at an httptest server.
+func newGitLabTestClient(t *testing.T, h http.HandlerFunc) *Client {
+	t.Helper()
+	t.Setenv(gitlabTokenEnv, "glsecret")
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	c, err := New(Config{
+		Provider: "gitlab",
+		URL:      "https://gitlab.example/me/proj",
+		APIBase:  srv.URL,
+		AuthEnv:  gitlabTokenEnv,
+	})
+	if err != nil {
+		t.Fatalf("New gitlab: %v", err)
+	}
+	return c
+}
+
+// TestNewAcceptsGitLab proves New returns a constructed backend for gitlab
+// instead of the ErrNotImplemented sentinel (the github path still returns it).
+func TestNewAcceptsGitLab(t *testing.T) {
+	t.Setenv(gitlabTokenEnv, "x")
+	c, err := New(Config{
+		Provider: "gitlab",
+		URL:      "https://gitlab.example/me/proj",
+		APIBase:  "https://gitlab.example/api/v4",
+		AuthEnv:  gitlabTokenEnv,
+	})
+	if err != nil {
+		t.Fatalf("gitlab should construct a backend, got %v", err)
+	}
+	if c == nil || !c.isGitLab() {
+		t.Fatalf("expected a gitlab client, got %+v", c)
+	}
+}
+
+func TestGitLabCreateIssue(t *testing.T) {
+	var (
+		gotPath, gotPrivTok string
+		gotBody             map[string]any
+	)
+	c := newGitLabTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPrivTok = r.Header.Get("PRIVATE-TOKEN")
+		if r.Method == "POST" && strings.HasSuffix(r.URL.EscapedPath(), "/issues") {
+			gotPath = r.URL.EscapedPath()
+			b, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(b, &gotBody)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"iid":12,"web_url":"https://gitlab.example/me/proj/-/issues/12","state":"opened"}`))
+			return
+		}
+		t.Errorf("unexpected %s %s", r.Method, r.URL.EscapedPath())
+	})
+
+	iss, err := c.CreateIssue(IssueInput{Title: "t", Body: "desc", Labels: []string{"dross", "phase"}, Milestone: 7})
+	if err != nil {
+		t.Fatalf("CreateIssue: %v", err)
+	}
+	if iss.Number != 12 || iss.URL == "" {
+		t.Errorf("iid->Number / web_url->URL mapping wrong: %+v", iss)
+	}
+	if !strings.Contains(gotPath, "/projects/me%2Fproj/issues") {
+		t.Errorf("path not URL-encoded owner/repo: %q", gotPath)
+	}
+	if gotBody["description"] != "desc" {
+		t.Errorf("body must use description, got %v", gotBody)
+	}
+	if gotBody["labels"] != "dross,phase" {
+		t.Errorf("labels must be a comma-joined string, got %v", gotBody["labels"])
+	}
+	if gotBody["milestone_id"] != float64(7) {
+		t.Errorf("milestone_id = %v", gotBody["milestone_id"])
+	}
+	if gotPrivTok != "glsecret" {
+		t.Errorf("PRIVATE-TOKEN header = %q", gotPrivTok)
+	}
+}
+
+func TestGitLabCloseIssue(t *testing.T) {
+	var (
+		gotPath string
+		gotBody map[string]any
+	)
+	c := newGitLabTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PUT" {
+			t.Errorf("want PUT, got %s %s", r.Method, r.URL.EscapedPath())
+			return
+		}
+		gotPath = r.URL.EscapedPath()
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		_, _ = w.Write([]byte(`{"iid":12,"state":"closed"}`))
+	})
+	if err := c.CloseIssue(12); err != nil {
+		t.Fatalf("CloseIssue: %v", err)
+	}
+	if !strings.Contains(gotPath, "/projects/me%2Fproj/issues/12") {
+		t.Errorf("close path = %q", gotPath)
+	}
+	if gotBody["state_event"] != "close" {
+		t.Errorf("close must send state_event=close, got %v", gotBody["state_event"])
+	}
+}
+
+func TestGitLabGetIssue(t *testing.T) {
+	c := newGitLabTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || !strings.Contains(r.URL.EscapedPath(), "/projects/me%2Fproj/issues/5") {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.EscapedPath())
+		}
+		_, _ = w.Write([]byte(`{"iid":5,"title":"t","description":"d","state":"opened","web_url":"u","milestone":{"title":"v0.2"}}`))
+	})
+	iss, err := c.GetIssue(5)
+	if err != nil {
+		t.Fatalf("GetIssue: %v", err)
+	}
+	if iss.Number != 5 || iss.Body != "d" || iss.State != "open" || iss.Milestone != "v0.2" {
+		t.Errorf("iid/description/state(opened->open)/milestone mapping wrong: %+v", iss)
+	}
+}
+
+func TestGitLabListIssuesMapsOpenedState(t *testing.T) {
+	var gotQuery string
+	c := newGitLabTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		_, _ = w.Write([]byte(`[{"iid":1,"title":"a","state":"opened","labels":["bug"]}]`))
+	})
+	got, err := c.ListIssues(IssueFilter{State: "open", Labels: []string{"bug"}})
+	if err != nil {
+		t.Fatalf("ListIssues: %v", err)
+	}
+	if len(got) != 1 || got[0].Number != 1 || got[0].State != "open" || got[0].Labels[0] != "bug" {
+		t.Fatalf("list mapping wrong: %+v", got)
+	}
+	if !strings.Contains(gotQuery, "state=opened") {
+		t.Errorf("gitlab must map open->opened in the query, got %q", gotQuery)
+	}
+}
+
+func TestGitLabEnsureMilestoneOmitsStateAll(t *testing.T) {
+	var listQuery, gotPath string
+	c := newGitLabTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Errorf("milestone already exists — unexpected %s", r.Method)
+			return
+		}
+		listQuery = r.URL.RawQuery
+		gotPath = r.URL.EscapedPath()
+		_, _ = w.Write([]byte(`[{"id":7,"title":"v0.6"}]`))
+	})
+	id, err := c.EnsureMilestone("v0.6", "d")
+	if err != nil {
+		t.Fatalf("EnsureMilestone: %v", err)
+	}
+	if id != 7 {
+		t.Errorf("id = %d, want 7", id)
+	}
+	if strings.Contains(listQuery, "state=all") {
+		t.Errorf("gitlab must not send state=all (rejected by GitLab), got %q", listQuery)
+	}
+	if !strings.Contains(gotPath, "/projects/me%2Fproj/milestones") {
+		t.Errorf("milestone path = %q", gotPath)
+	}
+}
+
+func TestGitLabBearerAuthHeader(t *testing.T) {
+	t.Setenv(gitlabTokenEnv, "tok")
+	var gotAuth, gotPriv string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotPriv = r.Header.Get("PRIVATE-TOKEN")
+		_, _ = w.Write([]byte(`{"iid":1}`))
+	}))
+	t.Cleanup(srv.Close)
+	c, err := New(Config{
+		Provider:   "gitlab",
+		URL:        "https://gitlab.example/me/proj",
+		APIBase:    srv.URL,
+		AuthEnv:    gitlabTokenEnv,
+		AuthScheme: "bearer",
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := c.GetIssue(1); err != nil {
+		t.Fatalf("GetIssue: %v", err)
+	}
+	if gotAuth != "Bearer tok" {
+		t.Errorf("bearer scheme: Authorization = %q", gotAuth)
+	}
+	if gotPriv != "" {
+		t.Errorf("bearer scheme: PRIVATE-TOKEN should be empty, got %q", gotPriv)
+	}
+}

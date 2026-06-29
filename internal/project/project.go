@@ -93,14 +93,16 @@ type Repo struct {
 // Separated from Repo (which holds branch/layout policy) because hosting
 // + auth + reviewer config travels with the code, not the local checkout.
 type Remote struct {
-	URL       string   `toml:"url,omitempty"`        // canonical https URL of the repo
-	Provider  string   `toml:"provider,omitempty"`   // forgejo | github | gitea | bitbucket | none
-	Public    bool     `toml:"public,omitempty"`     // true if cloud agents can clone
-	APIBase   string   `toml:"api_base,omitempty"`   // override; default derived from provider+URL
-	LogAPI    bool     `toml:"log_api,omitempty"`    // instance exposes CI logs via API
-	AuthEnv   string   `toml:"auth_env,omitempty"`   // env var name (NEVER the value)
-	Reviewers []string `toml:"reviewers,omitempty"`  // default human reviewers for /dross-ship
-	BoardSync bool     `toml:"board_sync,omitempty"` // mirror planning artefacts onto the issue board
+	URL        string   `toml:"url,omitempty"`         // canonical https URL of the repo
+	Provider   string   `toml:"provider,omitempty"`    // forgejo | github | gitea | gitlab | bitbucket | none
+	Public     bool     `toml:"public,omitempty"`      // true if cloud agents can clone
+	APIBase    string   `toml:"api_base,omitempty"`    // override; default derived from provider+URL
+	LogAPI     bool     `toml:"log_api,omitempty"`     // instance exposes CI logs via API
+	AuthEnv    string   `toml:"auth_env,omitempty"`    // env var name (NEVER the value)
+	AuthScheme string   `toml:"auth_scheme,omitempty"` // gitlab: private-token (default) | bearer
+	ProjectID  string   `toml:"project_id,omitempty"`  // gitlab: numeric project-id override (else derived from URL)
+	Reviewers  []string `toml:"reviewers,omitempty"`   // default human reviewers for /dross-ship
+	BoardSync  bool     `toml:"board_sync,omitempty"`  // mirror planning artefacts onto the issue board
 }
 
 type Paths struct {

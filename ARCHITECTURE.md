@@ -76,14 +76,16 @@ _introduced 06-dross-quality · extended 07-stack-profiles · extended 09-marker
 
 ### Configuration
 
-Read/write project settings, global defaults, environment variables, and the GSD-seeded profile.
+Read/write project settings, global defaults, environment variables, and the GSD-seeded profile. Provider recognition lives here: `gitlab.com` autodetects to the `gitlab` provider (deriving `api_base = …/api/v4`), self-hosted hosts stay manual (Provider left empty to prompt), and the GitLab `remote.auth_scheme` (private-token|bearer) + `remote.project_id` override are dotted-config fields. `dross doctor` validates a configured remote — origin/url match, `auth_env` set, and a valid `auth_scheme` — rather than rejecting unknown providers.
 
 - `Project` — `internal/cmd/project.go:15`
 - `Defaults` — `internal/cmd/defaults.go:14`
 - `Env` — `internal/cmd/env.go:24`
 - `Profile` — `internal/cmd/profile.go:14`
+- `project.DetectRemote` / `KnownHostProviders` (host→provider autodetect + api_base) — `internal/project/remote.go:23`
+- `Doctor` (remote + auth_scheme validation) — `internal/cmd/doctor.go:22`
 
-_c8b346e_
+_c8b346e · extended gitlab-ship-provider · 0f209c9_
 
 ### Deferred-item routing
 
@@ -143,13 +145,14 @@ _introduced 10-interaction-contract · extended 11-retrofit-core-loop · extende
 
 ### Issue board sync
 
-Mirror milestones, phases, and quick tasks onto a Forgejo/GitHub issue board (opt-in).
+Mirror milestones, phases, and quick tasks onto a Forgejo/Gitea or GitLab issue board (opt-in; GitHub still returns ErrNotImplemented). The forge client is a single provider-aware concrete type: `forge.New()` returns a GitLab backend (not ErrNotImplemented) that branches per method on the GitLab wire shapes — `/projects/<ref>` paths (URL-encoded owner/repo or numeric `project_id`), PRIVATE-TOKEN/Bearer auth, issues keyed on the project-relative `iid`, `state_event` close/reopen, comma-joined labels, and `opened`→`open` normalisation.
 
 - `Issue` — `internal/cmd/issue.go:35`
 - `board.Load` — `internal/board/board.go:53`
 - `board.SetPhase` — `internal/board/board.go:109`
+- `forge.New` (provider-aware factory: forgejo/gitea/gitlab) — `internal/forge/forge.go:56`
 
-_a073ab7_
+_a073ab7 · extended gitlab-ship-provider · 27e1a4f_
 
 ### Milestone scoping
 
@@ -235,13 +238,15 @@ _52f6c75 · extended ship-complete-recovery-hardening · 3a1fd7d_
 
 ### Shipping / pull requests
 
-Push the phase branch and open a provider-aware PR (GitHub/Forgejo) with reviewers, merging the phase's landmarks into ARCHITECTURE.md first; folds the completed-state transition (cleared current_phase + `completed <id>` history) into the phase branch and commits it BEFORE the push, so the squash-merge carries the completion record to main and ship returns on a clean tree; squash-merge collapses per-task commits.
+Push the phase branch and open a provider-aware PR/MR (GitHub/Forgejo/GitLab) with reviewers, merging the phase's landmarks into ARCHITECTURE.md first; folds the completed-state transition (cleared current_phase + `completed <id>` history) into the phase branch and commits it BEFORE the push, so the squash-merge carries the completion record to main and ship returns on a clean tree; squash-merge collapses per-task commits. The GitLab path is raw REST (no `gh`/`glab` CLI): `openGitLabPR` opens a Merge Request (source/target branch, `Draft:` prefix, `web_url`→URL, `iid`→Number) and resolves reviewer usernames→ids non-fatally; `postGitLabComment` posts an MR note. The post-push PR/MR URL is intentionally printed, not persisted to state.json (avoids the completion-chore divergence). The CI-watch + squash-merge steps are prompt-driven (ship.md §5/§6) with the locked GitLab pipeline-status mapping.
 
 - `Ship` (CLI) — `internal/cmd/ship.go:22`
-- `ship.OpenPR` — `internal/ship/open.go:38`
+- `ship.OpenPR` (provider switch → github/forgejo/`openGitLabPR`) — `internal/ship/open.go:38`
+- `ship.PostComment` / `postGitLabComment` — `internal/ship/comment.go`
+- `buildOpenOpts` / `buildCommentOpts` (thread remote auth_scheme/project_id) — `internal/cmd/ship.go`
 - `ship.BuildPRBody` — `internal/ship/body.go:20`
 
-_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · 77220f5_
+_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended gitlab-ship-provider · 9a30ca5_
 
 ### Stack profiles
 

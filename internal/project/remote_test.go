@@ -82,6 +82,14 @@ func TestDetectRemote(t *testing.T) {
 			wantAPIBase:  "https://codeberg.org/api/v1",
 		},
 		{
+			name:         "gitlab.com → gitlab, derives /api/v4",
+			input:        "https://gitlab.com/o/r",
+			wantURL:      "https://gitlab.com/o/r",
+			wantProvider: "gitlab",
+			wantPublic:   true,
+			wantAPIBase:  "https://gitlab.com/api/v4",
+		},
+		{
 			name:         "bitbucket",
 			input:        "git@bitbucket.org:me/proj.git",
 			wantURL:      "https://bitbucket.org/me/proj",

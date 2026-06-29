@@ -193,8 +193,10 @@ func TestExpandedDottedPathsRoundTrip(t *testing.T) {
 		"repo.commit_convention": "conventional",
 		"repo.squash_merge":      "true",
 		// remote (re-covered to ensure bool path stays consistent)
-		"remote.public":  "true",
-		"remote.log_api": "false",
+		"remote.public":      "true",
+		"remote.log_api":     "false",
+		"remote.auth_scheme": "bearer",
+		"remote.project_id":  "42",
 		// paths
 		"paths.source":     "src",
 		"paths.tests":      "src",

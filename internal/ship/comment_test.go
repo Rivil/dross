@@ -121,3 +121,80 @@ func TestPostGitHubCommentInvokesGh(t *testing.T) {
 		}
 	}
 }
+
+func TestPostGitLabCommentHappyPath(t *testing.T) {
+	var got struct {
+		Method  string
+		Path    string
+		Body    string
+		PrivTok string
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got.Method = r.Method
+		got.Path = r.URL.EscapedPath()
+		got.PrivTok = r.Header.Get("PRIVATE-TOKEN")
+		b, _ := io.ReadAll(r.Body)
+		var parsed map[string]any
+		_ = json.Unmarshal(b, &parsed)
+		got.Body, _ = parsed["body"].(string)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id": 99}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("FAKE_GL_TOKEN", "gltok")
+	err := PostComment(CommentOpts{
+		Provider: "gitlab",
+		URL:      "https://gitlab.example/me/proj",
+		APIBase:  srv.URL,
+		AuthEnv:  "FAKE_GL_TOKEN",
+		PRNumber: 7,
+		Body:     "panel findings",
+	})
+	if err != nil {
+		t.Fatalf("PostComment gitlab: %v", err)
+	}
+	if got.Method != "POST" {
+		t.Errorf("method: %q", got.Method)
+	}
+	if got.Path != "/projects/me%2Fproj/merge_requests/7/notes" {
+		t.Errorf("path: %q (want the MR notes endpoint with %%2F-encoded project)", got.Path)
+	}
+	if got.PrivTok != "gltok" {
+		t.Errorf("PRIVATE-TOKEN header: %q", got.PrivTok)
+	}
+	if got.Body != "panel findings" {
+		t.Errorf("body: %q", got.Body)
+	}
+}
+
+func TestPostGitLabCommentBearerScheme(t *testing.T) {
+	var gotAuth, gotPriv string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotPriv = r.Header.Get("PRIVATE-TOKEN")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":1}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("FAKE_GL_TOKEN", "gltok")
+	err := PostComment(CommentOpts{
+		Provider:   "gitlab",
+		URL:        "https://gitlab.example/me/proj",
+		APIBase:    srv.URL,
+		AuthEnv:    "FAKE_GL_TOKEN",
+		AuthScheme: "bearer",
+		PRNumber:   7,
+		Body:       "x",
+	})
+	if err != nil {
+		t.Fatalf("PostComment gitlab bearer: %v", err)
+	}
+	if gotAuth != "Bearer gltok" {
+		t.Errorf("Authorization: %q", gotAuth)
+	}
+	if gotPriv != "" {
+		t.Errorf("PRIVATE-TOKEN should be empty under bearer, got %q", gotPriv)
+	}
+}

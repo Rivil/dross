@@ -1,89 +1,9 @@
 {
-  "version": "0.6.10.0",
+  "version": "0.6.11.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-29T06:35:03.761647Z",
-  "last_action": "completed deepen-container-iac-scanning",
+  "last_activity": "2026-06-29T09:36:38.969018Z",
+  "last_action": "completed gitlab-ship-provider",
   "history": [
-    {
-      "at": "2026-06-27T15:55:45.890001Z",
-      "action": "executed t-3 (Add tech-debt run dir, StatePath, report writer)"
-    },
-    {
-      "at": "2026-06-27T15:59:12.418807Z",
-      "action": "executed t-5 (Stamp last_run on security \u0026 quality runs)"
-    },
-    {
-      "at": "2026-06-27T16:02:22.65021Z",
-      "action": "executed t-4 (Add dross techdebt command + register + gitignore)"
-    },
-    {
-      "at": "2026-06-27T16:06:52.578752Z",
-      "action": "executed t-6 (Rank, render, flip status action block)"
-    },
-    {
-      "at": "2026-06-27T16:06:59.989967Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-27T16:06:59.99802Z",
-      "action": "phase status-action-surfaces-v2 executed (6/6 done)"
-    },
-    {
-      "at": "2026-06-27T16:26:15.30966Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-27T16:26:15.317861Z",
-      "action": "verified status-action-surfaces-v2: pass (4/4 covered, mutation 0.83 module / high in-scope; 3 minor in-scope FLAGs, 155/164 survivors out-of-scope)"
-    },
-    {
-      "at": "2026-06-27T17:35:52.765848Z",
-      "action": "completed status-action-surfaces-v2"
-    },
-    {
-      "at": "2026-06-27T18:05:27.343452Z",
-      "action": "created ship-complete-recovery-hardening"
-    },
-    {
-      "at": "2026-06-27T18:23:03.043076Z",
-      "action": "set current_phase=ship-complete-recovery-hardening"
-    },
-    {
-      "at": "2026-06-27T18:23:03.051104Z",
-      "action": "spec locked: ship-complete-recovery-hardening"
-    },
-    {
-      "at": "2026-06-27T18:45:07.192789Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-27T18:45:07.200507Z",
-      "action": "plan locked: ship-complete-recovery-hardening (5 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-06-27T18:52:08.29522Z",
-      "action": "plan reviewed: ship-complete-recovery-hardening (0 blocking, 1 flag)"
-    },
-    {
-      "at": "2026-06-27T18:53:49.078792Z",
-      "action": "set version=0.6.6.0"
-    },
-    {
-      "at": "2026-06-27T18:58:33.396911Z",
-      "action": "executed t-1 (Extract delta-gated shared recovery routine)"
-    },
-    {
-      "at": "2026-06-27T19:01:51.122826Z",
-      "action": "executed t-2 (Detect stale completed-state in dross status)"
-    },
-    {
-      "at": "2026-06-27T19:03:18.103674Z",
-      "action": "executed t-3 (Document stale-state reconcile in resume.md)"
-    },
-    {
-      "at": "2026-06-27T19:05:18.980887Z",
-      "action": "executed t-4 (Add recovery cookbook to ship.md)"
-    },
     {
       "at": "2026-06-27T19:10:56.712645Z",
       "action": "executed t-5 (Wire --recover into phase complete)"
@@ -203,6 +123,86 @@
     {
       "at": "2026-06-29T06:35:03.761647Z",
       "action": "completed deepen-container-iac-scanning"
+    },
+    {
+      "at": "2026-06-29T07:13:57.522685Z",
+      "action": "created gitlab-ship-provider"
+    },
+    {
+      "at": "2026-06-29T08:00:07.344373Z",
+      "action": "set current_phase=gitlab-ship-provider"
+    },
+    {
+      "at": "2026-06-29T08:00:07.352234Z",
+      "action": "spec locked: gitlab-ship-provider"
+    },
+    {
+      "at": "2026-06-29T08:31:06.870828Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-29T08:31:06.878341Z",
+      "action": "plan locked: gitlab-ship-provider (7 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-06-29T08:36:40.414887Z",
+      "action": "plan reviewed: gitlab-ship-provider (0 blocking, 1 flag resolved)"
+    },
+    {
+      "at": "2026-06-29T08:38:12.065187Z",
+      "action": "set version=0.6.11.0"
+    },
+    {
+      "at": "2026-06-29T08:40:35.725919Z",
+      "action": "executed t-1 (Add GitLab config surface + detection)"
+    },
+    {
+      "at": "2026-06-29T08:43:46.534783Z",
+      "action": "executed t-2 (Open GitLab MR via REST + reviewers)"
+    },
+    {
+      "at": "2026-06-29T08:46:39.248834Z",
+      "action": "executed t-3 (Add GitLab CI + merge steps to ship.md)"
+    },
+    {
+      "at": "2026-06-29T08:48:43.151869Z",
+      "action": "executed t-4 (Diagnose GitLab remotes)"
+    },
+    {
+      "at": "2026-06-29T08:54:02.789198Z",
+      "action": "executed t-5 (Implement GitLab forge backend + enable)"
+    },
+    {
+      "at": "2026-06-29T08:55:14.848665Z",
+      "action": "executed t-6 (Post GitLab MR note)"
+    },
+    {
+      "at": "2026-06-29T08:58:43.915717Z",
+      "action": "executed t-7 (Wire GitLab config through ship cmd)"
+    },
+    {
+      "at": "2026-06-29T08:59:31.856164Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-29T08:59:31.86378Z",
+      "action": "phase gitlab-ship-provider executed (7/7 done)"
+    },
+    {
+      "at": "2026-06-29T09:16:35.482229Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-29T09:16:35.488955Z",
+      "action": "verified gitlab-ship-provider: partial (5/6 covered, c-2 weak, mutation 0.86)"
+    },
+    {
+      "at": "2026-06-29T09:32:29.991968Z",
+      "action": "re-verified gitlab-ship-provider: pass (6/6 covered after c-2 reword, mutation 0.86)"
+    },
+    {
+      "at": "2026-06-29T09:36:38.969018Z",
+      "action": "completed gitlab-ship-provider"
     }
   ]
 }
