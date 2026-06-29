@@ -3,13 +3,9 @@
   "current_milestone": "v0.6",
   "current_phase": "gitlab-ship-provider",
   "current_phase_status": "verified",
-  "last_activity": "2026-06-29T09:16:35.488955Z",
-  "last_action": "verified gitlab-ship-provider: partial (5/6 covered, c-2 weak, mutation 0.86)",
+  "last_activity": "2026-06-29T09:32:29.991968Z",
+  "last_action": "re-verified gitlab-ship-provider: pass (6/6 covered after c-2 reword, mutation 0.86)",
   "history": [
-    {
-      "at": "2026-06-27T19:03:18.103674Z",
-      "action": "executed t-3 (Document stale-state reconcile in resume.md)"
-    },
     {
       "at": "2026-06-27T19:05:18.980887Z",
       "action": "executed t-4 (Add recovery cookbook to ship.md)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-29T09:16:35.488955Z",
       "action": "verified gitlab-ship-provider: partial (5/6 covered, c-2 weak, mutation 0.86)"
+    },
+    {
+      "at": "2026-06-29T09:32:29.991968Z",
+      "action": "re-verified gitlab-ship-provider: pass (6/6 covered after c-2 reword, mutation 0.86)"
     }
   ]
 }

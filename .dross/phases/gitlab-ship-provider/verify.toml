@@ -1,7 +1,7 @@
 [verify]
   phase = "gitlab-ship-provider"
   generated_at = 2026-06-29T09:09:36.08078Z
-  verdict = "partial"
+  verdict = "pass"
 
 [summary]
   mutation_status = "measured"
@@ -10,8 +10,8 @@
   mutants_survived = 170
   mutants_not_covered = 170
   criteria_total = 6
-  criteria_covered = 5
-  criteria_uncovered = 1
+  criteria_covered = 6
+  criteria_uncovered = 0
 
 [[criterion]]
   id = "c-1"
@@ -26,13 +26,13 @@
 
 [[criterion]]
   id = "c-2"
-  status = "weak"
+  status = "covered"
   tests = [
     "internal/ship/open_test.go:TestOpenGitLabPRHappyPath (POST merge_requests, source/target, draft, web_url→URL, iid→Number)",
     "internal/ship/open_test.go:TestGitLabProjectRef / TestGitLabAuthHeader",
     "internal/cmd/ship_test.go:TestBuildOpenOptsMapsGitLabFields",
   ]
-  notes = "The open-MR-via-REST and return-URL behavior is fully covered. BUT the criterion's 'recorded into state' sub-clause is NOT implemented or tested: the ship flow deliberately keeps the post-push PR/MR URL out of state.json (it commits the completion record BEFORE the push; persisting the URL after would dirty the tree and reintroduce the completion-chore divergence — see ship.go step-5 comment + the 'Shipping / pull requests' ARCHITECTURE entry). Honest classification: weak — open/return is robust, the state-persistence clause has no covering test by design. See the c-2 FLAG."
+  notes = "Open-MR-via-REST, return+surface the URL, draft prefix, project-ref encoding, and auth scheme are all covered; buildOpenOpts threads the config. c-2 was reworded (with user approval) to drop the 'recorded into state' clause, which conflicted with the locked completion-chore-divergence design — the post-push URL is intentionally printed, not persisted. No remaining gap."
 
 [[criterion]]
   id = "c-3"
@@ -80,8 +80,8 @@
 # across the WHOLE module (gremlins is not diff-scoped); consolidated by relevance.
 
 [[finding]]
-  severity = "FLAG"
-  text = "c-2 'recorded into state' is unimplemented by design: the ship flow prints the post-push PR/MR URL rather than persisting it to state.json, because the completion record is committed BEFORE the push and a post-push state write would dirty the tree and reintroduce the completion-chore divergence (ship.go step-5 comment). RECOMMENDATION: reword c-2 to 'returned and surfaced (printed)' to match the locked ship architecture, OR open a separate phase if durable PR-URL-in-state is genuinely wanted (would need a post-push commit+push, a real design change). This is the surface the user flagged at execute time."
+  severity = "NOTE"
+  text = "c-2 was reworded during verify (with user approval) from 'returned and recorded in state' to 'returned and surfaced (printed)'. The original clause conflicted with the locked completion-chore-divergence design (the post-push PR/MR URL is intentionally printed, not persisted to state.json). The reword resolved the only weak criterion; verdict moved partial → pass. No code changed, so the measured mutation result (0.861) was not re-run."
 
 [[finding]]
   severity = "NOTE"

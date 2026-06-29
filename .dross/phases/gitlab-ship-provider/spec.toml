@@ -9,7 +9,7 @@
 
 [[criteria]]
   id = "c-2"
-  text = "On a GitLab remote, `dross ship` opens a Merge Request via the GitLab REST API (`POST /api/v4/projects/<id>/merge_requests`) sending source/target branch, title, and body; draft is supported (via a `Draft:` title prefix); the MR URL is returned and recorded in state. The path uses raw REST (no dependency on the `gh`/`glab` CLI), mirroring the Forgejo path."
+  text = "On a GitLab remote, `dross ship` opens a Merge Request via the GitLab REST API (`POST /api/v4/projects/<id>/merge_requests`) sending source/target branch, title, and body; draft is supported (via a `Draft:` title prefix); the MR URL is returned and surfaced (printed) to the user. The path uses raw REST (no dependency on the `gh`/`glab` CLI), mirroring the Forgejo path. (The post-push URL is intentionally not persisted to state.json — the completion record is committed before the push, and a post-push state write would dirty the tree and reintroduce the completion-chore divergence; see the 'Shipping / pull requests' design.)"
 
 [[criteria]]
   id = "c-3"
