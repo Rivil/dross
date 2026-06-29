@@ -35,6 +35,10 @@ type Board struct {
 	// Quicks maps a quick-task ref (e.g. the bumped version "0.2.3.5") to its
 	// readable issue id.
 	Quicks map[string]string `json:"quicks"`
+	// Backlog maps a milestone-backlog item key (e.g. "slug:future-x" or
+	// "someday:02-auth#1") to its readable issue id, so backlog sync reconciles
+	// the same items instead of duplicating them.
+	Backlog map[string]string `json:"backlog,omitempty"`
 	// Dismissed holds inbound issue ids the user triaged away; they won't
 	// resurface in /dross-inbox.
 	Dismissed []string `json:"dismissed,omitempty"`
@@ -92,6 +96,9 @@ func (b *Board) ensureMaps() {
 	if b.Quicks == nil {
 		b.Quicks = map[string]string{}
 	}
+	if b.Backlog == nil {
+		b.Backlog = map[string]string{}
+	}
 }
 
 // --- links ---
@@ -130,6 +137,19 @@ func (b *Board) SetQuick(ref, issue string) {
 func (b *Board) QuickIssue(ref string) (string, bool) {
 	n, ok := b.Quicks[ref]
 	return n, ok
+}
+
+// SetBacklog records the readable issue id for a milestone-backlog item key.
+func (b *Board) SetBacklog(key, issue string) {
+	b.ensureMaps()
+	b.Backlog[key] = issue
+}
+
+// BacklogID returns the stored issue id for a backlog item key and whether it's
+// linked.
+func (b *Board) BacklogID(key string) (string, bool) {
+	id, ok := b.Backlog[key]
+	return id, ok
 }
 
 // --- inbound triage ---

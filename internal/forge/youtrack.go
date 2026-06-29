@@ -90,6 +90,27 @@ func (c *YouTrackClient) CreateIssue(in IssueInput) (*Issue, error) {
 	return raw.toIssue(), nil
 }
 
+// CreateBacklogItem creates an Open backlog issue and, when fixVersion is set,
+// attaches it to the milestone's Version bundle value (version mode) via the
+// Fix versions field. New YouTrack issues are Open by default.
+func (c *YouTrackClient) CreateBacklogItem(summary, description, fixVersion string) (*Issue, error) {
+	body := map[string]any{
+		"project":     map[string]any{"shortName": c.project},
+		"summary":     summary,
+		"description": description,
+	}
+	if fixVersion != "" {
+		body["customFields"] = []map[string]any{
+			{"name": "Fix versions", "$type": "MultiVersionIssueCustomField", "value": []map[string]any{{"name": fixVersion}}},
+		}
+	}
+	var raw youtrackIssue
+	if err := c.do("POST", c.endpoint("/issues")+"?fields="+url.QueryEscape(ytIssueFields), body, &raw); err != nil {
+		return nil, fmt.Errorf("create backlog item: %w", err)
+	}
+	return raw.toIssue(), nil
+}
+
 // GetIssue fetches a single issue by its readable id (e.g. "PROJ-7").
 func (c *YouTrackClient) GetIssue(key string) (*Issue, error) {
 	var raw youtrackIssue

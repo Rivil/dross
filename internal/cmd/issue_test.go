@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -519,11 +520,114 @@ func TestIssueDismissAcceptsReadableID(t *testing.T) {
 	}
 }
 
+// TestIssueBacklogSyncYouTrackIdempotent proves c-6: backlog-sync mirrors the
+// milestone's unscaffolded slugs + unrouted someday ideas as backlog items
+// attached to the milestone entity (Fix versions), idempotently.
+func TestIssueBacklogSyncYouTrackIdempotent(t *testing.T) {
+	var creates, updates int
+	var createBodies []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/customFields") && r.Method == "GET":
+			_, _ = io.WriteString(w, `[{"field":{"name":"Fix versions"},"bundle":{"id":"B1","$type":"VersionBundle","values":[]}}]`)
+		case strings.Contains(r.URL.Path, "/bundles/version/B1/values") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"name":"v0.1"}`)
+		case r.URL.Path == "/api/issues" && r.Method == "POST":
+			creates++
+			raw, _ := io.ReadAll(r.Body)
+			var b map[string]any
+			_ = json.Unmarshal(raw, &b)
+			createBodies = append(createBodies, b)
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 200+creates))
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "POST":
+			updates++
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-upd"}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v0.1.toml"), `
+phases = ["01-done", "future-x"]
+
+[milestone]
+version = "v0.1"
+title = "First cut"
+
+[scope]
+success_criteria = ["ships"]
+`)
+	// 01-done is scaffolded (has a phase dir) and carries a someday deferred idea.
+	writeSpec(t, dir, "01-done", `
+[phase]
+id = "01-done"
+title = "Done phase"
+
+[[criteria]]
+id = "c1"
+text = "works"
+
+[[deferred]]
+text = "a future idea"
+why = "later"
+`)
+
+	// First run: future-x (unscaffolded slug) + the someday idea → 2 creates.
+	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+		t.Fatalf("backlog-sync: %v", err)
+	}
+	if creates != 2 {
+		t.Fatalf("expected exactly 2 backlog item creates, got %d", creates)
+	}
+	for i, b := range createBodies {
+		if !hasFixVersion(b, "v0.1") {
+			t.Errorf("backlog item %d not attached to milestone entity (Fix versions v0.1): %v", i, b)
+		}
+	}
+	bj, err := readBoardJSON(dir)
+	if err != nil || len(bj.Backlog) != 2 {
+		t.Fatalf("backlog map should have 2 links: %+v err=%v", bj, err)
+	}
+
+	// Second run: same items → 0 new creates, updated by readable-id link.
+	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+		t.Fatalf("backlog-sync rerun: %v", err)
+	}
+	if creates != 2 {
+		t.Errorf("rerun must not create new items, total creates=%d", creates)
+	}
+	if updates != 2 {
+		t.Errorf("rerun should update the 2 linked items, updates=%d", updates)
+	}
+}
+
+// hasFixVersion reports whether a create body sets the Fix versions field to v.
+func hasFixVersion(b map[string]any, v string) bool {
+	cfs, _ := b["customFields"].([]any)
+	for _, cf := range cfs {
+		m, _ := cf.(map[string]any)
+		if m["name"] != "Fix versions" {
+			continue
+		}
+		vals, _ := m["value"].([]any)
+		for _, val := range vals {
+			vm, _ := val.(map[string]any)
+			if vm["name"] == v {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // readBoardJSON decodes .dross/board.json for assertions.
 func readBoardJSON(dir string) (*struct {
 	Milestones map[string]string `json:"milestones"`
 	Phases     map[string]string `json:"phases"`
 	Quicks     map[string]string `json:"quicks"`
+	Backlog    map[string]string `json:"backlog"`
 	Dismissed  []string          `json:"dismissed"`
 }, error) {
 	b, err := os.ReadFile(filepath.Join(dir, ".dross", "board.json"))
@@ -534,6 +638,7 @@ func readBoardJSON(dir string) (*struct {
 		Milestones map[string]string `json:"milestones"`
 		Phases     map[string]string `json:"phases"`
 		Quicks     map[string]string `json:"quicks"`
+		Backlog    map[string]string `json:"backlog"`
 		Dismissed  []string          `json:"dismissed"`
 	}
 	if err := json.Unmarshal(b, &out); err != nil {

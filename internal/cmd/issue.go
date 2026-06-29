@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -41,6 +42,7 @@ func Issue() *cobra.Command {
 		issueEnable(),
 		issueDisable(),
 		issueMilestoneSync(),
+		issueBacklogSync(),
 		issuePhaseSync(),
 		issueQuick(),
 		issuePull(),
@@ -249,6 +251,114 @@ func milestoneBody(title, criteria string) string {
 		return title
 	}
 	return title + "\n\nSuccess criteria:\n" + criteria
+}
+
+// --- backlog sync ---
+
+func issueBacklogSync() *cobra.Command {
+	return &cobra.Command{
+		Use:   "backlog-sync <version>",
+		Short: "Sync the milestone backlog (unscaffolded slugs + someday ideas) to the board",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			ctx, enabled, err := openBoard()
+			if err != nil {
+				return err
+			}
+			if !enabled {
+				return nil
+			}
+			return syncBacklog(ctx, args[0])
+		},
+	}
+}
+
+// backlogItem is one milestone-backlog entry to mirror onto the board.
+type backlogItem struct{ key, title, body string }
+
+// syncBacklog mirrors a milestone's backlog — its unscaffolded roadmap phase
+// slugs and unrouted `someday` deferred ideas — onto the board as Open issues
+// attached to the milestone entity, recorded in board.json's backlog map.
+// Idempotent: re-running updates the same items by their readable-id link.
+func syncBacklog(ctx *boardCtx, version string) error {
+	m, err := milestone.Load(milestone.FilePath(ctx.root, version))
+	if err != nil {
+		return fmt.Errorf("load milestone %q: %w", version, err)
+	}
+
+	// Ensure the milestone entity the backlog attaches to (version value / epic
+	// / agile board). Version mode tags each item's Fix versions with it.
+	entityID, err := ensureMilestoneLink(ctx, version)
+	if err != nil {
+		return err
+	}
+	fixVersion := ""
+	switch strings.ToLower(ctx.proj.Board.MilestoneMode) {
+	case "", "version":
+		fixVersion = entityID
+	}
+
+	var items []backlogItem
+	// Unscaffolded roadmap slugs: in milestone.phases with no phase directory.
+	for _, slug := range m.Phases {
+		if _, err := os.Stat(phase.Dir(ctx.root, slug)); err == nil {
+			continue // scaffolded — tracked by its own phase issue
+		}
+		items = append(items, backlogItem{
+			key:   "slug:" + slug,
+			title: "[backlog] " + slug,
+			body:  fmt.Sprintf("Roadmap phase `%s` in milestone %s — not yet scaffolded.\n\n_Tracked by dross._", slug, version),
+		})
+	}
+	// Unrouted `someday` deferred ideas (no target, not dismissed).
+	deferredItems, err := collectDeferred(ctx.root)
+	if err != nil {
+		return err
+	}
+	for _, d := range deferredItems {
+		if d.Target != "" || d.Dismissed {
+			continue
+		}
+		items = append(items, backlogItem{
+			key:   fmt.Sprintf("someday:%s#%d", d.Source, d.Index),
+			title: "[someday] " + d.Text,
+			body:  fmt.Sprintf("Someday idea (from phase `%s`): %s\n\n_Tracked by dross._", d.Source, d.Text),
+		})
+	}
+
+	created, updated := 0, 0
+	for _, it := range items {
+		if key, ok := ctx.board.BacklogID(it.key); ok {
+			title, body := it.title, it.body
+			if _, err := ctx.client.UpdateIssue(key, forge.IssuePatch{Title: &title, Body: &body}); err != nil {
+				return wrapBoard(err)
+			}
+			updated++
+			continue
+		}
+		var iss *forge.Issue
+		if yt, ok := ctx.client.(*forge.YouTrackClient); ok {
+			iss, err = yt.CreateBacklogItem(it.title, it.body, fixVersion)
+		} else {
+			ms, _ := strconv.Atoi(entityID)
+			iss, err = ctx.client.CreateIssue(forge.IssueInput{
+				Title:     it.title,
+				Body:      it.body,
+				Labels:    []string{labelMarker},
+				Milestone: ms,
+			})
+		}
+		if err != nil {
+			return wrapBoard(err)
+		}
+		ctx.board.SetBacklog(it.key, iss.Key)
+		created++
+	}
+	if err := ctx.board.Save(ctx.boardPath); err != nil {
+		return err
+	}
+	Printf("backlog %s -> %d created, %d updated\n", version, created, updated)
+	return nil
 }
 
 // --- phase sync ---
