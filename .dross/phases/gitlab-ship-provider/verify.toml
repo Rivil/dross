@@ -1,0 +1,96 @@
+[verify]
+  phase = "gitlab-ship-provider"
+  generated_at = 2026-06-29T09:09:36.08078Z
+  verdict = "partial"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8614506927465363
+  mutants_killed = 1057
+  mutants_survived = 170
+  mutants_not_covered = 170
+  criteria_total = 6
+  criteria_covered = 5
+  criteria_uncovered = 1
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/project/remote_test.go:TestDetectRemote (gitlab.com → gitlab, derives /api/v4)",
+    "internal/cmd/project_test.go:TestExpandedDottedPathsRoundTrip (remote.auth_scheme/project_id round-trip)",
+    "internal/cmd/doctor_test.go:TestDoctorAcceptsGitLabRemote",
+    "internal/cmd/doctor_test.go:TestDoctorFlagsInvalidAuthScheme",
+  ]
+  notes = "Autodetect + api_base derivation, the new config fields, and doctor's accept-not-reject (plus invalid auth_scheme guard) all have failing-on-break tests."
+
+[[criterion]]
+  id = "c-2"
+  status = "weak"
+  tests = [
+    "internal/ship/open_test.go:TestOpenGitLabPRHappyPath (POST merge_requests, source/target, draft, web_url→URL, iid→Number)",
+    "internal/ship/open_test.go:TestGitLabProjectRef / TestGitLabAuthHeader",
+    "internal/cmd/ship_test.go:TestBuildOpenOptsMapsGitLabFields",
+  ]
+  notes = "The open-MR-via-REST and return-URL behavior is fully covered. BUT the criterion's 'recorded into state' sub-clause is NOT implemented or tested: the ship flow deliberately keeps the post-push PR/MR URL out of state.json (it commits the completion record BEFORE the push; persisting the URL after would dirty the tree and reintroduce the completion-chore divergence — see ship.go step-5 comment + the 'Shipping / pull requests' ARCHITECTURE entry). Honest classification: weak — open/return is robust, the state-persistence clause has no covering test by design. See the c-2 FLAG."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/ship/comment_test.go:TestPostGitLabCommentHappyPath (POST /projects/<ref>/merge_requests/<iid>/notes, PRIVATE-TOKEN)",
+    "internal/ship/comment_test.go:TestPostGitLabCommentBearerScheme",
+    "internal/cmd/ship_test.go:TestBuildCommentOptsMapsGitLabFields",
+  ]
+  notes = "MR-note endpoint, body, and both auth schemes are asserted; the cmd wiring threads auth_scheme/project_id."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/cmd/ship_prompt_test.go:TestShipPromptGitLabSections",
+  ]
+  notes = "Prompt-presence guard (rule r-01) pins the GitLab CI-watch endpoint, the FULL locked pipeline_status_mapping (success/failed/canceled, running/pending/created/preparing, manual/skipped, empty-pipelines ask) and the squash-merge + should_remove_source_branch tokens. Dropping any branch removes a token and fails."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [
+    "internal/ship/open_test.go:TestOpenGitLabPRHappyPath (GET /users?username= → reviewer_ids set)",
+    "internal/ship/open_test.go:TestOpenGitLabPRReviewerFailureNonFatal (500 on lookup → MR returned + warn, not fatal)",
+  ]
+  notes = "username→id resolution sets reviewer_ids; a lookup/assignment failure is non-fatal and still returns the opened MR."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = [
+    "internal/forge/forge_test.go:TestNewAcceptsGitLab (constructs a backend, not ErrNotImplemented)",
+    "internal/forge/forge_test.go:TestGitLabCreateIssue (description + comma labels + milestone_id, iid→Number, %2F path)",
+    "internal/forge/forge_test.go:TestGitLabCloseIssue (state_event=close)",
+    "internal/forge/forge_test.go:TestGitLabGetIssue (iid/description/opened→open/milestone)",
+    "internal/forge/forge_test.go:TestGitLabListIssuesMapsOpenedState",
+    "internal/forge/forge_test.go:TestGitLabEnsureMilestoneOmitsStateAll",
+    "internal/forge/forge_test.go:TestGitLabBearerAuthHeader",
+  ]
+  notes = "Full board-sync parity: milestones + issues (create/update/close/get/list) on /projects/<ref>, GitLab wire shapes, both auth schemes. forge.go has zero surviving mutants."
+
+# --- Findings -----------------------------------------------------------------
+# Raw per-mutant detail is in tests.json. The skeleton seeded one FLAG per survivor
+# across the WHOLE module (gremlins is not diff-scoped); consolidated by relevance.
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-2 'recorded into state' is unimplemented by design: the ship flow prints the post-push PR/MR URL rather than persisting it to state.json, because the completion record is committed BEFORE the push and a post-push state write would dirty the tree and reintroduce the completion-chore divergence (ship.go step-5 comment). RECOMMENDATION: reword c-2 to 'returned and surfaced (printed)' to match the locked ship architecture, OR open a separate phase if durable PR-URL-in-state is genuinely wanted (would need a post-push commit+push, a real design change). This is the surface the user flagged at execute time."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation dilution: gremlins scanned the whole module, not the phase diff. The 170 survivors are overwhelmingly in pre-existing code — the internal/cmd command layer (issue.go/ship.go/doctor.go error-handling `if err != nil` branches, the project.go/profile.go namesakes), telemetry.go's pre-existing Append/record arms, and the GitHub/Forgejo regions of open.go (lines <84) and comment.go (line 55). None are in this phase's new GitLab logic."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Phase new GitLab code is fully mutation-covered: internal/forge/forge.go shows ZERO surviving mutants (every gitlab branch killed), and openGitLabPR / postGitLabComment / gitlabReq / gitlabReviewerIDs / gitlabProjectRef / gitlabAuthHeader (open.go ≥160, comment.go gitlab fn) surface no survivors. buildOpenOpts/buildCommentOpts are pure field-copies (no mutable conditionals) asserted directly by unit tests."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Live-integration caveat: all GitLab behavior is verified against httptest mocks. The first real MR open / pipeline watch / squash-merge / board sync against the self-hosted GitLab instance is the true integration test (auth scope, nested-subgroup project paths, pipeline timing)."

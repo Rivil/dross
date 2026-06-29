@@ -2,18 +2,10 @@
   "version": "0.6.11.0",
   "current_milestone": "v0.6",
   "current_phase": "gitlab-ship-provider",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-29T08:59:31.86378Z",
-  "last_action": "phase gitlab-ship-provider executed (7/7 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-29T09:16:35.488955Z",
+  "last_action": "verified gitlab-ship-provider: partial (5/6 covered, c-2 weak, mutation 0.86)",
   "history": [
-    {
-      "at": "2026-06-27T18:58:33.396911Z",
-      "action": "executed t-1 (Extract delta-gated shared recovery routine)"
-    },
-    {
-      "at": "2026-06-27T19:01:51.122826Z",
-      "action": "executed t-2 (Detect stale completed-state in dross status)"
-    },
     {
       "at": "2026-06-27T19:03:18.103674Z",
       "action": "executed t-3 (Document stale-state reconcile in resume.md)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-29T08:59:31.86378Z",
       "action": "phase gitlab-ship-provider executed (7/7 done)"
+    },
+    {
+      "at": "2026-06-29T09:16:35.482229Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-29T09:16:35.488955Z",
+      "action": "verified gitlab-ship-provider: partial (5/6 covered, c-2 weak, mutation 0.86)"
     }
   ]
 }
