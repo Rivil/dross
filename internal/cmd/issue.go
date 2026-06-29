@@ -77,10 +77,12 @@ func openBoard() (ctx *boardCtx, enabled bool, err error) {
 		return nil, false, err
 	}
 	client, err := forge.New(forge.Config{
-		Provider: proj.Remote.Provider,
-		URL:      proj.Remote.URL,
-		APIBase:  proj.Remote.APIBase,
-		AuthEnv:  proj.Remote.AuthEnv,
+		Provider:   proj.Remote.Provider,
+		URL:        proj.Remote.URL,
+		APIBase:    proj.Remote.APIBase,
+		AuthEnv:    proj.Remote.AuthEnv,
+		AuthScheme: proj.Remote.AuthScheme,
+		ProjectID:  proj.Remote.ProjectID,
 	})
 	if err != nil {
 		return nil, false, err
@@ -124,11 +126,11 @@ func issueEnable() *cobra.Command {
 			}
 			Print("board sync enabled")
 			switch strings.ToLower(p.Remote.Provider) {
-			case "forgejo", "gitea":
+			case "forgejo", "gitea", "gitlab":
 			case "":
-				Print("note: [remote].provider is unset — set it to forgejo/gitea")
+				Print("note: [remote].provider is unset — set it to forgejo/gitea/gitlab")
 			default:
-				Printf("note: provider %q has no board backend yet (forgejo/gitea only)\n", p.Remote.Provider)
+				Printf("note: provider %q has no board backend yet (forgejo/gitea/gitlab only)\n", p.Remote.Provider)
 			}
 			if p.Remote.APIBase == "" {
 				Print("note: [remote].api_base is unset — needed for the board API")

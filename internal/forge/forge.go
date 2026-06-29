@@ -29,13 +29,20 @@ var ErrNotImplemented = errors.New("issue-board sync is not implemented for this
 // them in the board UI; the value only matters at creation time.
 const defaultLabelColor = "#7057ff"
 
-// Client talks to one repo's issue tracker. Construct with New.
+// Client talks to one repo's issue tracker. Construct with New. A single
+// concrete type serves every REST backend; provider-specific wire differences
+// (GitLab's /projects path, PRIVATE-TOKEN auth, iid/description/state_event
+// shapes) are branched per method off the `provider` field rather than behind
+// an interface — matching internal/ship's concrete shape.
 type Client struct {
-	owner   string
-	repo    string
-	apiBase string
-	token   string
-	authEnv string // env var name (kept for diagnostic error messages)
+	provider   string // "forgejo" | "gitea" | "gitlab"
+	owner      string
+	repo       string
+	apiBase    string
+	token      string
+	authEnv    string // env var name (kept for diagnostic error messages)
+	authScheme string // gitlab: "private-token" (default) | "bearer"
+	projectID  string // gitlab: numeric project-id override (else derived from owner/repo)
 
 	http     *http.Client
 	labelIDs map[string]int // name -> id cache, lazily populated
@@ -44,29 +51,38 @@ type Client struct {
 // Config is the subset of [remote] settings the forge client needs. It maps
 // 1:1 onto project.toml's Remote so callers can pass them straight through.
 type Config struct {
-	Provider string // forgejo | gitea | github
-	URL      string // canonical https URL of the repo
-	APIBase  string // forgejo/gitea REST base (e.g. https://forge/api/v1)
-	AuthEnv  string // env var name holding the token (never the value)
+	Provider   string // forgejo | gitea | gitlab | github
+	URL        string // canonical https URL of the repo
+	APIBase    string // REST base (forgejo/gitea: .../api/v1; gitlab: .../api/v4)
+	AuthEnv    string // env var name holding the token (never the value)
+	AuthScheme string // gitlab: "private-token" (default) | "bearer"
+	ProjectID  string // gitlab: numeric project-id override; empty = derive from URL
 }
 
 // New validates config, resolves the token from the environment, and returns
 // a ready Client. It errors early on the same conditions the ship backend
 // checks: missing APIBase/AuthEnv, unset token, unparseable repo URL.
 func New(cfg Config) (*Client, error) {
-	switch strings.ToLower(cfg.Provider) {
-	case "forgejo", "gitea":
+	provider := strings.ToLower(cfg.Provider)
+	switch provider {
+	case "forgejo", "gitea", "gitlab":
 		// supported below
 	case "github":
 		return nil, ErrNotImplemented
 	default:
-		return nil, fmt.Errorf("unsupported provider %q (expected forgejo | gitea)", cfg.Provider)
+		return nil, fmt.Errorf("unsupported provider %q (expected forgejo | gitea | gitlab)", cfg.Provider)
+	}
+	// backendName makes config errors carry the active provider so telemetry
+	// classifies them under "provider" (see telemetry.ClassifyError).
+	backendName := "forgejo"
+	if provider == "gitlab" {
+		backendName = "gitlab"
 	}
 	if cfg.APIBase == "" {
-		return nil, errors.New("forgejo backend needs APIBase (set [remote].api_base)")
+		return nil, fmt.Errorf("%s backend needs APIBase (set [remote].api_base)", backendName)
 	}
 	if cfg.AuthEnv == "" {
-		return nil, errors.New("forgejo backend needs AuthEnv (set [remote].auth_env)")
+		return nil, fmt.Errorf("%s backend needs AuthEnv (set [remote].auth_env)", backendName)
 	}
 	token := os.Getenv(cfg.AuthEnv)
 	if token == "" {
@@ -77,15 +93,21 @@ func New(cfg Config) (*Client, error) {
 		return nil, err
 	}
 	return &Client{
-		owner:    owner,
-		repo:     repo,
-		apiBase:  strings.TrimRight(cfg.APIBase, "/"),
-		token:    token,
-		authEnv:  cfg.AuthEnv,
-		http:     &http.Client{Timeout: 30 * time.Second},
-		labelIDs: map[string]int{},
+		provider:   provider,
+		owner:      owner,
+		repo:       repo,
+		apiBase:    strings.TrimRight(cfg.APIBase, "/"),
+		token:      token,
+		authEnv:    cfg.AuthEnv,
+		authScheme: cfg.AuthScheme,
+		projectID:  strings.TrimSpace(cfg.ProjectID),
+		http:       &http.Client{Timeout: 30 * time.Second},
+		labelIDs:   map[string]int{},
 	}, nil
 }
+
+// isGitLab reports whether this client targets a GitLab instance.
+func (c *Client) isGitLab() bool { return c.provider == "gitlab" }
 
 // --- public types ---
 
@@ -142,7 +164,13 @@ func (c *Client) EnsureMilestone(title, description string) (int, error) {
 		ID    int    `json:"id"`
 		Title string `json:"title"`
 	}
-	if err := c.do("GET", c.path("/milestones")+"?state=all", nil, &existing); err != nil {
+	// Forgejo/Gitea need ?state=all to include closed milestones; GitLab returns
+	// every state by default and rejects state=all, so omit the filter there.
+	listQuery := "?state=all"
+	if c.isGitLab() {
+		listQuery = ""
+	}
+	if err := c.do("GET", c.path("/milestones")+listQuery, nil, &existing); err != nil {
 		return 0, fmt.Errorf("list milestones: %w", err)
 	}
 	for _, m := range existing {
@@ -236,6 +264,22 @@ func (c *Client) resolveLabelIDs(names []string) ([]int, error) {
 
 // CreateIssue opens a new issue and returns it.
 func (c *Client) CreateIssue(in IssueInput) (*Issue, error) {
+	if c.isGitLab() {
+		body := map[string]any{"title": in.Title, "description": in.Body}
+		if in.Milestone > 0 {
+			body["milestone_id"] = in.Milestone
+		}
+		if len(in.Labels) > 0 {
+			// GitLab takes labels as a comma-joined string and auto-creates
+			// any that don't exist — no id resolution needed.
+			body["labels"] = strings.Join(in.Labels, ",")
+		}
+		var raw gitlabIssueResponse
+		if err := c.do("POST", c.path("/issues"), body, &raw); err != nil {
+			return nil, fmt.Errorf("create issue: %w", err)
+		}
+		return raw.toIssue(), nil
+	}
 	body := map[string]any{"title": in.Title, "body": in.Body}
 	if in.Milestone > 0 {
 		body["milestone"] = in.Milestone
@@ -257,6 +301,37 @@ func (c *Client) CreateIssue(in IssueInput) (*Issue, error) {
 // UpdateIssue applies a partial patch. Label changes go through the dedicated
 // labels endpoint (a full replace); everything else rides the issue PATCH.
 func (c *Client) UpdateIssue(number int, patch IssuePatch) (*Issue, error) {
+	if c.isGitLab() {
+		// GitLab updates the whole issue in one PUT: state via state_event,
+		// labels as a comma-joined string (full replace), no separate endpoint.
+		body := map[string]any{}
+		if patch.Title != nil {
+			body["title"] = *patch.Title
+		}
+		if patch.Body != nil {
+			body["description"] = *patch.Body
+		}
+		if patch.State != nil {
+			if *patch.State == "closed" {
+				body["state_event"] = "close"
+			} else {
+				body["state_event"] = "reopen"
+			}
+		}
+		if patch.Milestone != nil {
+			body["milestone_id"] = *patch.Milestone
+		}
+		if patch.Labels != nil {
+			body["labels"] = strings.Join(*patch.Labels, ",")
+		}
+		var raw gitlabIssueResponse
+		if len(body) > 0 {
+			if err := c.do("PUT", c.path(fmt.Sprintf("/issues/%d", number)), body, &raw); err != nil {
+				return nil, fmt.Errorf("update issue !%d: %w", number, err)
+			}
+		}
+		return raw.toIssue(), nil
+	}
 	body := map[string]any{}
 	if patch.Title != nil {
 		body["title"] = *patch.Title
@@ -303,8 +378,15 @@ func (c *Client) CloseIssue(number int) error {
 	return err
 }
 
-// GetIssue fetches a single issue by number.
+// GetIssue fetches a single issue by number (GitLab: project-relative iid).
 func (c *Client) GetIssue(number int) (*Issue, error) {
+	if c.isGitLab() {
+		var raw gitlabIssueResponse
+		if err := c.do("GET", c.path(fmt.Sprintf("/issues/%d", number)), nil, &raw); err != nil {
+			return nil, fmt.Errorf("get issue !%d: %w", number, err)
+		}
+		return raw.toIssue(), nil
+	}
 	var raw issueResponse
 	if err := c.do("GET", c.path(fmt.Sprintf("/issues/%d", number)), nil, &raw); err != nil {
 		return nil, fmt.Errorf("get issue #%d: %w", number, err)
@@ -316,6 +398,30 @@ func (c *Client) GetIssue(number int) (*Issue, error) {
 // Forgejo/Gitea issues endpoint otherwise returns both) so inbound triage
 // never surfaces pull requests as "new work".
 func (c *Client) ListIssues(f IssueFilter) ([]Issue, error) {
+	if c.isGitLab() {
+		// GitLab spells the open state "opened" and serves issues on a
+		// dedicated endpoint (no PRs mixed in, so no type filter needed).
+		state := f.State
+		switch state {
+		case "", "open":
+			state = "opened"
+		}
+		q := url.Values{}
+		q.Set("state", state)
+		q.Set("per_page", "50")
+		if len(f.Labels) > 0 {
+			q.Set("labels", strings.Join(f.Labels, ","))
+		}
+		var raw []gitlabIssueResponse
+		if err := c.do("GET", c.path("/issues")+"?"+q.Encode(), nil, &raw); err != nil {
+			return nil, fmt.Errorf("list issues: %w", err)
+		}
+		out := make([]Issue, 0, len(raw))
+		for i := range raw {
+			out = append(out, *raw[i].toIssue())
+		}
+		return out, nil
+	}
 	state := f.State
 	if state == "" {
 		state = "open"
@@ -378,11 +484,59 @@ func (r *issueResponse) toIssue() *Issue {
 	return iss
 }
 
+// gitlabIssueResponse is GitLab's issue shape: the project-relative `iid` is the
+// user-facing number, `description` is the body, `web_url` the browser link,
+// labels are plain strings, and the open state is spelled "opened".
+type gitlabIssueResponse struct {
+	IID         int      `json:"iid"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	State       string   `json:"state"`
+	WebURL      string   `json:"web_url"`
+	Labels      []string `json:"labels"`
+	Milestone   *struct {
+		Title string `json:"title"`
+	} `json:"milestone"`
+}
+
+func (r *gitlabIssueResponse) toIssue() *Issue {
+	state := r.State
+	if state == "opened" {
+		state = "open" // normalise to dross's open/closed vocabulary
+	}
+	iss := &Issue{
+		Number: r.IID,
+		Title:  r.Title,
+		Body:   r.Description,
+		State:  state,
+		Labels: r.Labels,
+		URL:    r.WebURL,
+	}
+	if r.Milestone != nil {
+		iss.Milestone = r.Milestone.Title
+	}
+	return iss
+}
+
 // --- low-level REST ---
 
-// path builds a /repos/{owner}/{repo}{suffix} API path.
+// path builds the project-scoped API path for a suffix. GitLab uses
+// /projects/{ref} (ref = URL-encoded owner/repo, or a numeric project-id
+// override); Forgejo/Gitea use /repos/{owner}/{repo}.
 func (c *Client) path(suffix string) string {
+	if c.isGitLab() {
+		return c.apiBase + "/projects/" + c.projectRef() + suffix
+	}
 	return c.apiBase + fmt.Sprintf("/repos/%s/%s", c.owner, c.repo) + suffix
+}
+
+// projectRef is the GitLab project identifier: a numeric project-id override
+// when set, otherwise the URL-encoded "owner/repo" path (owner%2Frepo).
+func (c *Client) projectRef() string {
+	if c.projectID != "" {
+		return c.projectID
+	}
+	return url.PathEscape(c.owner + "/" + c.repo)
 }
 
 // do performs a token-authenticated JSON request. If out is non-nil and the
@@ -405,7 +559,15 @@ func (c *Client) do(method, endpoint string, body any, out any) error {
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("Authorization", "token "+c.token)
+	if c.isGitLab() {
+		if strings.ToLower(c.authScheme) == "bearer" {
+			req.Header.Set("Authorization", "Bearer "+c.token)
+		} else {
+			req.Header.Set("PRIVATE-TOKEN", c.token)
+		}
+	} else {
+		req.Header.Set("Authorization", "token "+c.token)
+	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
