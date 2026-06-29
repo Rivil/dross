@@ -189,6 +189,7 @@ func TestClassifyError(t *testing.T) {
 
 		// provider
 		{errors.New("forgejo backend needs APIBase (set [remote].api_base)"), "provider"},
+		{errors.New("gitlab backend needs APIBase (set [remote].api_base)"), "provider"},
 		{errors.New("unsupported provider \"bitbucket\""), "provider"},
 
 		// issue-board sync — operational failures wrapped "board:", and the

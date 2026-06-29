@@ -83,6 +83,52 @@ func TestDoctorFlagsMissingAuthEnv(t *testing.T) {
 	}
 }
 
+func TestDoctorAcceptsGitLabRemote(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://gitlab.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	// c-1: a GitLab remote with auth_env set is validated, not rejected.
+	if err := runCmd(t, Project(), "set", "remote.auth_env", "DROSS_TEST_GITLAB_TOKEN"); err != nil {
+		t.Fatalf("project set: %v", err)
+	}
+	t.Setenv("DROSS_TEST_GITLAB_TOKEN", "secret")
+
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err != nil {
+		t.Fatalf("doctor should accept a well-formed GitLab remote, got error; out:\n%s", out)
+	}
+	if !strings.Contains(out, "git origin matches [remote].url") {
+		t.Errorf("expected origin-match line for the gitlab remote:\n%s", out)
+	}
+	if !strings.Contains(out, "$DROSS_TEST_GITLAB_TOKEN is set") {
+		t.Errorf("expected auth_env-set line for the gitlab remote:\n%s", out)
+	}
+}
+
+func TestDoctorFlagsInvalidAuthScheme(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://gitlab.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := runCmd(t, Project(), "set", "remote.auth_scheme", "token"); err != nil {
+		t.Fatalf("project set: %v", err)
+	}
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err == nil {
+		t.Error("expected non-nil error for an invalid remote.auth_scheme")
+	}
+	if !strings.Contains(out, "auth_scheme") || !strings.Contains(out, "invalid") {
+		t.Errorf("expected invalid auth_scheme warning, got:\n%s", out)
+	}
+}
+
 func TestDoctorReturnsErrorOnIssues(t *testing.T) {
 	dir := t.TempDir()
 	gitInit(t, dir, "https://github.com/Rivil/dross.git")
