@@ -1,21 +1,11 @@
 {
   "version": "0.6.11.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-29T09:36:38.969018Z",
-  "last_action": "completed gitlab-ship-provider",
+  "current_phase": "youtrack-board-integration",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-29T10:41:50.693597Z",
+  "last_action": "spec locked: youtrack-board-integration",
   "history": [
-    {
-      "at": "2026-06-27T19:10:56.712645Z",
-      "action": "executed t-5 (Wire --recover into phase complete)"
-    },
-    {
-      "at": "2026-06-27T19:11:11.05996Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-27T19:11:11.066671Z",
-      "action": "phase ship-complete-recovery-hardening executed (5/5 done)"
-    },
     {
       "at": "2026-06-27T19:27:09.437604Z",
       "action": "set current_phase_status=verified"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-29T09:36:38.969018Z",
       "action": "completed gitlab-ship-provider"
+    },
+    {
+      "at": "2026-06-29T09:40:00.794474Z",
+      "action": "created youtrack-board-integration"
+    },
+    {
+      "at": "2026-06-29T10:41:50.68766Z",
+      "action": "set current_phase=youtrack-board-integration"
+    },
+    {
+      "at": "2026-06-29T10:41:50.693597Z",
+      "action": "spec locked: youtrack-board-integration"
     }
   ]
 }

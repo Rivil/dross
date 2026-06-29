@@ -1,0 +1,66 @@
+[phase]
+  id = "youtrack-board-integration"
+  title = "YouTrack board integration"
+  milestone = "v0.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "dross reads a dedicated `[board]` config block (`provider`, `base_url`, `auth_env`, `project`, `enabled`, plus `milestone_mode` and `state_map`) that is the single source for issue-board sync, independent of `[remote]`. The board operations (`dross issue pull`, `phase-sync`, `milestone-sync`) resolve their client from `[board]` — so a repo ships code to one host (`[remote]`) and tracks issues on another (`[board]`). `dross doctor` validates a configured `[board]` (base_url reachable-shaped, auth_env set, provider recognised)."
+
+[[criteria]]
+  id = "c-2"
+  text = "A YouTrack backend implements the board issue operations against the YouTrack REST API (`/api/issues`, `/api/admin/projects/<project>`): create / update / get / list issues scoped to the configured project, authenticated with a bearer permanent-token from `board.auth_env`. The board-client factory returns a working YouTrack client for `provider = youtrack` instead of erroring — asserted against an httptest mock like the forge backends."
+
+[[criteria]]
+  id = "c-3"
+  text = "With a YouTrack `[board]` enabled, `dross issue pull --json` returns open YouTrack issues that are not yet linked to a dross phase/quick and not dismissed (tag/label filter passed through), so `/dross-inbox` triages them exactly like forge board issues — asserted in tests."
+
+[[criteria]]
+  id = "c-4"
+  text = "`dross issue phase-sync` creates or updates a YouTrack issue per phase (title, acceptance criteria, task checklist rendered from plan.toml) and links it back in board.json by the readable issue id; `dross issue milestone-sync` ensures the YouTrack milestone entity (per `milestone_mode`) that phase issues attach to. The spec→plan→execute→verify→ship spine keeps the phase trackable on the board — asserted in tests."
+
+[[criteria]]
+  id = "c-5"
+  text = "As a phase moves through its lifecycle, `dross issue phase-sync --status <state>` updates the YouTrack issue's State custom field via the configured state map, so the board column reflects where each phase is. An unmapped or non-existent target state warns and skips the state update without failing the issue sync — asserted in tests."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross issue` syncs the milestone *backlog* to YouTrack — the active milestone's unscaffolded phase slugs (roadmap entries in `milestone.phases` with no phase directory) and unrouted `someday` deferred ideas — as backlog items created in the backlog/Open state and attached to the milestone entity per `milestone_mode`, so the full roadmap is visible on the board alongside the active phase issues. Idempotent (re-running updates, never duplicates) and asserted in tests."
+
+[[decisions]]
+  key = "board_config_source"
+  choice = "Issue-board sync is driven solely by a new `[board]` config block; `[remote]` no longer drives board sync (no fallback). Existing Forgejo/Gitea/GitLab board users migrate their provider/base_url/auth_env into `[board]`; `dross issue enable` and `dross doctor` guide the migration. `[board].provider` accepts forgejo | gitea | gitlab | youtrack."
+  why = "A single source decouples the code host (PR/MR destination) from the issue tracker, which is the whole point — ship to GitLab, track in YouTrack. A clean break is acceptable: board sync is opt-in, dross's own board sync is off, and the author is the only user."
+  locked = true
+
+[[decisions]]
+  key = "milestone_mode"
+  choice = "A dross milestone maps into YouTrack per a per-project `[board].milestone_mode` field — `version` (a values bundle phases are tagged with; default), `agile` (a sprint/column on an existing Agile board, phases as cards), or `epic` (an Epic issue phases link to as subtasks). All three modes are implemented in this phase."
+  why = "The best mapping varies by project and the user can't commit upfront, so it must be configurable rather than a single locked shape. Building all three lets each project pick its fit; version is the safe default (least API surface, mirrors forge-milestone semantics)."
+  locked = true
+
+[[decisions]]
+  key = "phase_state_mapping"
+  choice = "Phase lifecycle → YouTrack State uses a built-in default map (planned→Open, in-progress→In Progress, verifying→In Progress, shipped→Fixed, complete→Verified), overridable per project via `[board].state_map`. When a mapped target state does not exist in the project's workflow, the sync warns and skips the state update — it never fails the whole issue sync."
+  why = "YouTrack state names are instance-specific, so a fixed map would break on most instances; defaults give zero-config value and the override + graceful-skip make it robust against any workflow."
+  locked = true
+
+[[decisions]]
+  key = "board_auth"
+  choice = "YouTrack authenticates with `Authorization: Bearer <token>` using a permanent token read from `board.auth_env` (never the value in config)."
+  why = "Permanent tokens are YouTrack's standard automation credential and bearer is its idiomatic header; reusing the auth_env indirection keeps secrets out of project.toml as elsewhere."
+  locked = true
+
+[[decisions]]
+  key = "issue_identity"
+  choice = "board.json links a phase/quick to its YouTrack issue by the human-readable issue id (e.g. `PROJ-123`), not the internal database id."
+  why = "The readable id is stable, user-recognisable, and what appears in the YouTrack UI/URLs, so the link is debuggable and matches what the user sees."
+  locked = true
+
+[[deferred]]
+  text = "GitHub board backend: implement a `github` [board].provider carrying BOTH issue sync (c-2..c-5 equivalent) and backlog sync (c-6 equivalent), so the full tracking + backlog loop works on GitHub (today the forge factory returns ErrNotImplemented for github). The [board] decoupling makes it tractable."
+  why = "Out of scope for the YouTrack phase; someday — resurfaces via /dross-inbox."
+
+[[deferred]]
+  text = "Jira board backend: implement a `jira` [board].provider (Jira REST: issues/projects/versions, custom-field state) carrying both issue sync and backlog sync, mirroring the GitHub backend plan — a second future provider so dross can track on Jira."
+  why = "Out of scope for the YouTrack phase; someday — resurfaces via /dross-inbox. Planned similarly to the GitHub backend."
