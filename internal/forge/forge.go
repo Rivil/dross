@@ -57,6 +57,7 @@ type Config struct {
 	AuthEnv    string // env var name holding the token (never the value)
 	AuthScheme string // gitlab: "private-token" (default) | "bearer"
 	ProjectID  string // gitlab: numeric project-id override; empty = derive from URL
+	Project    string // youtrack: project short-name (e.g. "PROJ"); ignored by forge backends
 }
 
 // New validates config, resolves the token from the environment, and returns
@@ -111,9 +112,23 @@ func (c *Client) isGitLab() bool { return c.provider == "gitlab" }
 
 // --- public types ---
 
+// BoardClient is the minimal issue-board surface shared by every backend: the
+// forge REST Client (forgejo/gitea/gitlab) and the YouTrackClient. It is
+// deliberately small for now — create + list, the operations whose signatures
+// already match across backends. The id-taking operations (get/update/close)
+// join it during the string-id migration (plan t-5), once the forge path also
+// keys issues by readable string id like YouTrack does.
+type BoardClient interface {
+	CreateIssue(in IssueInput) (*Issue, error)
+	ListIssues(f IssueFilter) ([]Issue, error)
+}
+
+var _ BoardClient = (*Client)(nil)
+
 // Issue is the minimal shape dross cares about across operations.
 type Issue struct {
 	Number    int
+	Key       string // tracker-native readable id (YouTrack idReadable, e.g. "PROJ-7"); forge backends leave this empty until the string-id migration
 	Title     string
 	Body      string
 	State     string // "open" | "closed"
