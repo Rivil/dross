@@ -1,15 +1,9 @@
 {
   "version": "0.6.12.0",
   "current_milestone": "v0.6",
-  "current_phase": "youtrack-board-integration",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-29T12:29:04.415216Z",
-  "last_action": "verified youtrack-board-integration: pass (6/6 covered, c-6 lifted to covered; mutation 0.86 measured, efficacy 1.00 on covered)",
+  "last_activity": "2026-06-29T12:34:09.566539Z",
+  "last_action": "completed youtrack-board-integration",
   "history": [
-    {
-      "at": "2026-06-29T06:15:43.96917Z",
-      "action": "resumed — handoff cleared (stale multilang-stack-profiles, shipped #20); next is /dross-verify deepen-container-iac-scanning"
-    },
     {
       "at": "2026-06-29T06:26:39.079135Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-29T12:29:04.415216Z",
       "action": "verified youtrack-board-integration: pass (6/6 covered, c-6 lifted to covered; mutation 0.86 measured, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-06-29T12:34:09.566539Z",
+      "action": "completed youtrack-board-integration"
     }
   ]
 }
