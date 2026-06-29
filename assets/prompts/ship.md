@@ -86,18 +86,20 @@ The CLI:
 
 ## 5. CI gate
 
-After the PR opens, watch CI to completion. Skip this section ONLY if the repo has no `.github/workflows/`, `.forgejo/workflows/`, `.gitea/workflows/`, AND the provider reports no checks for the head SHA.
+After the PR opens, watch CI to completion. Skip this section ONLY if the repo has no `.github/workflows/`, `.forgejo/workflows/`, `.gitea/workflows/`, `.gitlab-ci.yml`, AND the provider reports no checks for the head SHA.
 
 **Watch checks:**
 - GitHub: `gh pr checks <pr-url> --watch --fail-fast` — blocks until all checks finish; non-zero exit on failure.
 - Forgejo / Gitea: poll every ~30s — `GET <api_base>/repos/<owner>/<repo>/commits/<sha>/status` (auth header `token $<auth_env>`). Stop when `state` ∈ `success | failure | error`. SHA = head of `phase/<id>`.
+- GitLab: poll every ~30s — `GET <api_base>/projects/<id>/pipelines?sha=<sha>` (auth header `PRIVATE-TOKEN: $<auth_env>`, or `Authorization: Bearer` when `remote.auth_scheme = bearer`); `<id>` is the URL-encoded `owner/repo` (or numeric `remote.project_id`). Read the latest pipeline's `status` and apply the locked mapping: `success` → pass (go to §6); `failed` or `canceled` → fail (drop to **On failure**); `running` / `pending` / `created` / `preparing` → keep polling; `manual` / `skipped` → **do not guess** — surface to the user and ask whether to proceed without a green pipeline. SHA = head of `phase/<id>`.
 
-If the provider reports no checks were registered (CI workflow missing or not triggered), surface that to the user and ask whether to proceed without CI or stop.
+If the provider reports no checks were registered — GitHub/Forgejo report none, **or** GitLab returns an empty pipelines array (no pipeline for the SHA) — surface that to the user and ask whether to proceed without CI or stop.
 
 **On failure:**
 1. Pull failing logs:
    - GitHub: `gh run view --log-failed` for the run linked from the PR.
    - Forgejo: log URL is in the commit status payload (`target_url`); `WebFetch` it.
+   - GitLab: the failed job's `web_url` is in the pipeline's jobs (`GET <api_base>/projects/<id>/pipelines/<pipeline-id>/jobs`); `WebFetch` the trace or surface the job URL.
 2. Diagnose. Edit + commit the fix on `phase/<id>`, one commit per logical fix following `repo.commit_convention`.
 3. `git push origin phase/<id>` — appends to the open PR. Do NOT re-run `dross ship` (would open a second PR). If you rebase or amend, use `git push --force-with-lease` (or `dross ship --force`).
 4. Loop back to "Watch checks". Cap at 3 fix iterations — if checks still fail after 3 cycles, stop and hand back to the user.
@@ -115,6 +117,7 @@ If `merge`:
 1. **Squash-merge via provider:**
    - GitHub: `gh pr merge <pr-url> --squash --delete-branch` — also deletes the remote `phase/<id>` branch.
    - Forgejo / Gitea: `POST <api_base>/repos/<owner>/<repo>/pulls/<n>/merge` body `{"Do":"squash"}`, then `DELETE <api_base>/repos/<owner>/<repo>/branches/phase%2F<id>` to remove the remote branch.
+   - GitLab: `PUT <api_base>/projects/<id>/merge_requests/<iid>/merge` body `{"squash":true,"should_remove_source_branch":true}` (auth header as in §5) — the squash collapses per-task commits and `should_remove_source_branch` deletes the remote `phase/<id>` branch in one call.
 2. **Finalize locally**: `dross phase complete <phase-id>` — switches to main, fast-forwards from origin (succeeds cleanly because phase work never touched main), deletes local `phase/<id>`, records the merge in state.json with a chore commit.
 3. **Close the board issue** (no-op unless `[remote].board_sync` is on — safe to always run): `dross issue phase-sync <phase-id> --close`.
 
