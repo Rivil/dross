@@ -145,14 +145,15 @@ _introduced 10-interaction-contract · extended 11-retrofit-core-loop · extende
 
 ### Issue board sync
 
-Mirror milestones, phases, and quick tasks onto a Forgejo/Gitea or GitLab issue board (opt-in; GitHub still returns ErrNotImplemented). The forge client is a single provider-aware concrete type: `forge.New()` returns a GitLab backend (not ErrNotImplemented) that branches per method on the GitLab wire shapes — `/projects/<ref>` paths (URL-encoded owner/repo or numeric `project_id`), PRIVATE-TOKEN/Bearer auth, issues keyed on the project-relative `iid`, `state_event` close/reopen, comma-joined labels, and `opened`→`open` normalisation.
+Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue board — driven solely by a dedicated `[board]` config block, independent of `[remote]`, so a repo ships code to one host and tracks issues on another. Backends sit behind a `BoardClient` interface that `forge.NewBoard` dispatches by provider: the provider-aware forge `*Client` (forgejo/gitea/gitlab) or a sibling `YouTrackClient` (REST CRUD, bearer permanent-token, readable-id `PROJ-7` addressing, `?fields` projection). board.json links every artefact by the tracker's readable **string** id. YouTrack adds milestone entities per `[board].milestone_mode` (version bundle / agile board / epic), lifecycle→State mapping via the default map + `[board].state_map` (unmapped warns and skips), and backlog sync of unscaffolded slugs + someday ideas attached per mode (Fix versions / Epic subtask / project-based board). `dross doctor` validates a configured `[board]`; the inbox board source is gated on `[board].enabled`.
 
-- `Issue` — `internal/cmd/issue.go:35`
-- `board.Load` — `internal/board/board.go:53`
-- `board.SetPhase` — `internal/board/board.go:109`
-- `forge.New` (provider-aware factory: forgejo/gitea/gitlab) — `internal/forge/forge.go:56`
+- `forge.BoardClient` (interface) + `forge.NewBoard` (provider dispatch) — `internal/forge/forge.go:121`
+- `forge.YouTrackClient` + `NewYouTrack` — `internal/forge/youtrack.go:25`
+- `YouTrackClient.EnsureMilestoneEntity` / `SetState` — `internal/forge/youtrack.go:184`
+- `board.Board` (string readable-id link registry) — `internal/board/board.go:29`
+- `openBoard` (resolves client solely from `[board]`) / `syncBacklog` — `internal/cmd/issue.go:70`
 
-_a073ab7 · extended gitlab-ship-provider · 27e1a4f_
+_a073ab7 · extended gitlab-ship-provider · 27e1a4f · extended youtrack-board-integration · 4bdea81_
 
 ### Milestone scoping
 
