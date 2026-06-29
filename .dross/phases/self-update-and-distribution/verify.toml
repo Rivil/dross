@@ -1,0 +1,60 @@
+[verify]
+  phase = "self-update-and-distribution"
+  generated_at = 2026-06-29T17:02:09.788464Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.839851024208566
+  mutants_killed = 902
+  mutants_survived = 172
+  mutants_not_covered = 172
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["assets/embed_test.go:TestEmbedDrift", "assets/embed_test.go:TestInteractionPlaybookFromFS"]
+  notes = "Drift guard asserts embedded bytes == on-disk bytes AND embedded file-set == on-disk set, both directions; the `all:` prefix keeps the underscore-prefixed _interaction.md embedded. embed.go:34 survivor is the unreachable mustReadString panic guard, not the drift surface."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/install_test.go:TestInstallCopyMode", "internal/cmd/install_test.go:TestInstallSymlinkMode", "internal/cmd/install_test.go:TestInstallPrunesStaleDross", "internal/cmd/install_test.go:TestInstallPrunesStalePrompt", "internal/cmd/install_test.go:TestInstallSparesNonDross", "internal/cmd/install_symlink_test.go:TestMakeInstallDelegates"]
+  notes = "Symlink-vs-copy, dross-* prune (skills + prompts), non-dross sparing, and make-install delegation are covered and killed. Survived mutants in install.go are in cobra RunE flag-wiring and rare fallback branches (detectSourceDir, copy-mode symlink-drop, clearPath symlink arm) the struct-driven tests bypass — see FLAG, not the asserted surfaces."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/update/update_test.go:TestAssetName", "internal/update/update_test.go:TestVerifyChecksum", "internal/update/update_test.go:TestNewerOnly", "internal/update/update_test.go:TestAtomicReplace", "internal/update/update_test.go:TestClientFetchAndVerify", "internal/cmd/update_test.go:TestUpdateAppliesAndResyncs", "internal/cmd/update_test.go:TestUpdateCheckNoApply", "internal/cmd/update_test.go:TestUpdateForce", "internal/cmd/update_test.go:TestUpdateRefusesOnBadChecksum"]
+  notes = "internal/update core at 100% mutation efficacy (asset-name, checksum verify/refuse, newer-only semver, atomic replace). update.go:145,148 survivors are the os.Executable() production fallback the tests bypass via injected targetPath — see FLAG. MITM/bad-checksum refusal asserted end-to-end."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [".github/workflows/ci.yml:shellcheck install.sh", "documented smoke run in install.sh (happy-path + 404 + checksum-mismatch), verified 2026-06-29 via file:// fixture + koalaman/shellcheck:stable"]
+  notes = "Acceptance bar is shellcheck-clean + a documented smoke run; both met and observed this session. No mutation adapter for .sh and no Go-level functional test — install.sh logic has lint + manual-smoke coverage only. See FLAG."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/readme_doc_test.go:TestReadmeDocumentsInstallAndUpdate"]
+  notes = "Greps README for the raw.githubusercontent install.sh|sh one-liner (Rivil/dross) and a `dross update` invocation; fails if either entrypoint is renamed without a doc update."
+
+[[finding]]
+  severity = "FLAG"
+  text = "Phase-touched cobra-wiring/fallback branches are mutation-uncovered: install.go RunE flag mutual-exclusion + detectSourceDir (36,67,71), copy-mode symlink-drop (207), clearPath symlink arm (267); update.go os.Executable() fallback (145,148); embed.go mustReadString panic guard (34). The unit tests drive the core via injected seams, so the thin CLI wiring for `dross install`/`dross update` has no end-to-end flag-parsing test. All load-bearing logic is covered+killed."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-4: install.sh has no automated functional test — coverage is the CI shellcheck lint gate plus a manual documented smoke run. A logic regression (e.g. a broken checksum comparison) would still pass shellcheck. Consider a scripted smoke test in CI against a local fixture."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran as a whole-repo rollup (11 files): 172/1074 mutants not covered, all in CLI command files; ~164 are in pre-existing untested glue (issue.go, rule.go, ship.go, stats.go, doctor.go, verify.go, codex.go, status.go, phase*.go, env.go, profile.go, etc.) predating this phase. Efficacy on covered mutants = 1.00; the 0.84 score reflects long-standing repo CLI-glue gaps, not this phase's code."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Non-Go phase artifacts have no mutation adapter (skipped): .github/workflows/ci.yml, Makefile, README.md, install.sh, go.mod, go.sum. Each is gated elsewhere (shellcheck job, TestReadmeDocumentsInstallAndUpdate, TestMakeInstallDelegates)."

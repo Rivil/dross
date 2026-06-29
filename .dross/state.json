@@ -2,18 +2,10 @@
   "version": "0.6.13.0",
   "current_milestone": "v0.6",
   "current_phase": "self-update-and-distribution",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-29T13:52:08.292254Z",
-  "last_action": "phase self-update-and-distribution executed (7/7 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-29T17:09:24.465408Z",
+  "last_action": "verified self-update-and-distribution: pass (5/5 covered, mutation 0.84 measured)",
   "history": [
-    {
-      "at": "2026-06-29T08:58:43.915717Z",
-      "action": "executed t-7 (Wire GitLab config through ship cmd)"
-    },
-    {
-      "at": "2026-06-29T08:59:31.856164Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-06-29T08:59:31.86378Z",
       "action": "phase gitlab-ship-provider executed (7/7 done)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-29T13:52:08.292254Z",
       "action": "phase self-update-and-distribution executed (7/7 done)"
+    },
+    {
+      "at": "2026-06-29T17:09:24.458881Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-29T17:09:24.465408Z",
+      "action": "verified self-update-and-distribution: pass (5/5 covered, mutation 0.84 measured)"
     }
   ]
 }
