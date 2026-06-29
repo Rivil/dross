@@ -167,18 +167,42 @@ Symlinks mean edits to `assets/` in the dross repo apply immediately — no re-i
 
 ## Install
 
-### Prebuilt binary (recommended)
+### Quick install (recommended)
 
-GoReleaser publishes archives for `darwin/arm64` (primary), `darwin/amd64`, `linux/arm64`, and `linux/amd64` on every `v*` tag. Grab the matching `.tar.gz` from [releases](https://github.com/Rivil/dross/releases), extract, drop the `dross` binary on your PATH, and run `dross --help`.
+```sh
+curl -fsSL https://raw.githubusercontent.com/Rivil/dross/main/install.sh | sh
+```
 
-This installs the binary only — slash commands and prompts still need a checkout (`make install`) until those ship as a separate package.
+This downloads the latest release binary for your platform (`darwin`/`linux` × `arm64`/`amd64`), verifies its SHA-256 against the release `checksums.txt`, drops `dross` on your PATH (`~/.local/bin`), and runs `dross install` to materialize the slash commands and prompts into `~/.claude`. No Go toolchain or git checkout required.
+
+If `~/.local/bin` isn't on your PATH, add it:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` (existing repo).
+
+### Updating
+
+```sh
+dross update          # update to the latest release, if it is newer
+dross update --check  # report the available version without applying
+dross update --force  # reinstall the latest regardless of version
+```
+
+`dross update` fetches the latest GitHub release, verifies the tarball's SHA-256 against `checksums.txt` (refusing on mismatch), atomically replaces the running binary, then re-syncs the embedded slash commands + prompts.
+
+### Manual binary download
+
+GoReleaser publishes archives for `darwin/arm64` (primary), `darwin/amd64`, `linux/arm64`, and `linux/amd64` on every `v*` tag. Grab the matching `.tar.gz` from [releases](https://github.com/Rivil/dross/releases), extract, drop the `dross` binary on your PATH, then run `dross install` to set up the slash commands and prompts.
 
 ### From source
 
 ```sh
 make build       # builds ./dross for current arch (with commit + build date in `dross version`)
 make test        # go test -count=1 ./...
-make install     # builds + installs binary + symlinks all slash commands & prompts
+make install     # builds + installs binary, then `dross install --link` (symlinks slash commands & prompts)
 make doctor      # verifies install: PATH, binary freshness, symlink targets — exits non-zero on any issue
 make uninstall   # removes binary, all dross-* skills, and the prompts symlink
 make release-snapshot  # local goreleaser dry-run — produces dist/, never tags or pushes
@@ -189,8 +213,6 @@ After `make install`, ensure `~/.local/bin` is on your PATH:
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
-
-Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` (existing repo).
 
 ## Available commands
 
