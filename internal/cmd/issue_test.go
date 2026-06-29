@@ -603,6 +603,121 @@ why = "later"
 	}
 }
 
+// TestIssueBacklogSyncYouTrackEpicMode proves c-6 for epic mode: backlog items
+// are linked as subtasks of the Epic entity via the commands API.
+func TestIssueBacklogSyncYouTrackEpicMode(t *testing.T) {
+	var itemCreates, links int
+	var linkQueries []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/issues" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`) // no existing Epic → one gets created
+		case r.URL.Path == "/api/issues" && r.Method == "POST":
+			raw, _ := io.ReadAll(r.Body)
+			var b map[string]any
+			_ = json.Unmarshal(raw, &b)
+			if _, ok := b["customFields"]; ok {
+				_, _ = io.WriteString(w, `{"idReadable":"PROJ-50"}`) // the Epic
+			} else {
+				itemCreates++
+				_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 200+itemCreates))
+			}
+		case r.URL.Path == "/api/commands" && r.Method == "POST":
+			links++
+			raw, _ := io.ReadAll(r.Body)
+			var b map[string]any
+			_ = json.Unmarshal(raw, &b)
+			linkQueries = append(linkQueries, fmt.Sprint(b["query"]))
+			_, _ = io.WriteString(w, `{}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustRunSet(t, "board.milestone_mode", "epic")
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v0.1.toml"), `
+phases = ["01-done", "future-x"]
+
+[milestone]
+version = "v0.1"
+title = "First cut"
+
+[scope]
+success_criteria = ["ships"]
+`)
+	writeSpec(t, dir, "01-done", `
+[phase]
+id = "01-done"
+title = "Done phase"
+
+[[criteria]]
+id = "c1"
+text = "works"
+
+[[deferred]]
+text = "a future idea"
+why = "later"
+`)
+
+	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+		t.Fatalf("backlog-sync: %v", err)
+	}
+	if itemCreates != 2 {
+		t.Fatalf("expected 2 backlog item creates, got %d", itemCreates)
+	}
+	if links != 2 {
+		t.Errorf("expected each backlog item linked as a subtask (2 commands), got %d", links)
+	}
+	for _, q := range linkQueries {
+		if !strings.Contains(q, "subtask of PROJ-50") {
+			t.Errorf("link command %q must attach the item under the Epic PROJ-50", q)
+		}
+	}
+}
+
+// TestIssueBacklogSyncYouTrackAgileMode proves c-6 for agile mode: items are
+// created in the project (which a query/project-based board auto-includes), with
+// no per-item attach command and no error.
+func TestIssueBacklogSyncYouTrackAgileMode(t *testing.T) {
+	var itemCreates int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/agiles" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[{"id":"108-23","name":"v0.1"}]`) // board present
+		case r.URL.Path == "/api/issues" && r.Method == "POST":
+			itemCreates++
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 300+itemCreates))
+		case r.URL.Path == "/api/commands":
+			t.Error("agile mode must not link subtasks — boards are query/project-based")
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustRunSet(t, "board.milestone_mode", "agile")
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v0.1.toml"), `
+phases = ["future-x"]
+
+[milestone]
+version = "v0.1"
+title = "First cut"
+
+[scope]
+success_criteria = ["ships"]
+`)
+
+	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+		t.Fatalf("backlog-sync: %v", err)
+	}
+	if itemCreates != 1 {
+		t.Errorf("expected 1 backlog item create (future-x slug), got %d", itemCreates)
+	}
+}
+
 // hasFixVersion reports whether a create body sets the Fix versions field to v.
 func hasFixVersion(b map[string]any, v string) bool {
 	cfs, _ := b["customFields"].([]any)

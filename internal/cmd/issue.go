@@ -292,9 +292,13 @@ func syncBacklog(ctx *boardCtx, version string) error {
 	if err != nil {
 		return err
 	}
+	// Per milestone_mode, attach each backlog item to the entity: version mode
+	// sets the item's Fix versions to the bundle value; epic mode links it as a
+	// subtask of the Epic; agile boards are query/project-based, so an item
+	// created in the project already appears on the board (no per-item call).
+	mode := strings.ToLower(ctx.proj.Board.MilestoneMode)
 	fixVersion := ""
-	switch strings.ToLower(ctx.proj.Board.MilestoneMode) {
-	case "", "version":
+	if mode == "" || mode == "version" {
 		fixVersion = entityID
 	}
 
@@ -339,6 +343,10 @@ func syncBacklog(ctx *boardCtx, version string) error {
 		var iss *forge.Issue
 		if yt, ok := ctx.client.(*forge.YouTrackClient); ok {
 			iss, err = yt.CreateBacklogItem(it.title, it.body, fixVersion)
+			if err == nil && mode == "epic" && entityID != "" {
+				// Attach to the Epic entity as a subtask.
+				err = yt.LinkSubtask(entityID, iss.Key)
+			}
 		} else {
 			ms, _ := strconv.Atoi(entityID)
 			iss, err = ctx.client.CreateIssue(forge.IssueInput{

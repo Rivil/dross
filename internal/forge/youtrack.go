@@ -111,6 +111,20 @@ func (c *YouTrackClient) CreateBacklogItem(summary, description, fixVersion stri
 	return raw.toIssue(), nil
 }
 
+// LinkSubtask makes childKey a subtask of parentKey via the commands API
+// (applying "subtask of <parent>" to the child). YouTrack treats links as a
+// set, so re-applying an existing link is a no-op — safe to call on re-sync.
+func (c *YouTrackClient) LinkSubtask(parentKey, childKey string) error {
+	body := map[string]any{
+		"query":  "subtask of " + parentKey,
+		"issues": []map[string]any{{"idReadable": childKey}},
+	}
+	if err := c.do("POST", c.endpoint("/commands"), body, nil); err != nil {
+		return fmt.Errorf("link %s as subtask of %s: %w", childKey, parentKey, err)
+	}
+	return nil
+}
+
 // GetIssue fetches a single issue by its readable id (e.g. "PROJ-7").
 func (c *YouTrackClient) GetIssue(key string) (*Issue, error) {
 	var raw youtrackIssue
