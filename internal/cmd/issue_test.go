@@ -301,6 +301,121 @@ func youtrackBoardRepo(t *testing.T, apiBase string) string {
 	return dir
 }
 
+// TestIssuePhaseSyncYouTrackCreatesThenUpdates proves c-4 for YouTrack:
+// phase-sync creates a YouTrack issue (criteria + task checklist) and links it
+// by readable id; a second sync updates that issue, never creating a duplicate.
+func TestIssuePhaseSyncYouTrackCreatesThenUpdates(t *testing.T) {
+	var creates, updates int
+	var createdBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/issues" && r.Method == "POST":
+			creates++
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &createdBody)
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7"}`)
+		case r.URL.Path == "/api/issues/PROJ-7" && r.Method == "POST":
+			updates++
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7"}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	writeSpec(t, dir, "01-auth", `
+[phase]
+id = "01-auth"
+title = "Auth middleware"
+
+[[criteria]]
+id = "c1"
+text = "login works"
+`)
+	writePlan(t, dir, "01-auth", `
+[phase]
+id = "01-auth"
+
+[[task]]
+id = "t1"
+title = "schema"
+wave = 1
+status = "done"
+
+[[task]]
+id = "t2"
+title = "handler"
+wave = 1
+`)
+
+	// First sync — creates the issue.
+	if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+		t.Fatalf("phase-sync create: %v", err)
+	}
+	if creates != 1 {
+		t.Errorf("expected 1 create POST to /api/issues, got %d", creates)
+	}
+	body, _ := createdBody["description"].(string)
+	if !strings.Contains(body, "login works") || !strings.Contains(body, "- [x] t1 — schema") || !strings.Contains(body, "- [ ] t2 — handler") {
+		t.Errorf("issue description missing criteria/checklist:\n%s", body)
+	}
+	bj, _ := readBoardJSON(dir)
+	if bj.Phases["01-auth"] != "PROJ-7" {
+		t.Errorf("phase link = %q, want PROJ-7", bj.Phases["01-auth"])
+	}
+
+	// Second sync — link exists, so it updates /api/issues/PROJ-7, no new create.
+	if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", "in-progress"); err != nil {
+		t.Fatalf("phase-sync update: %v", err)
+	}
+	if creates != 1 {
+		t.Errorf("second sync must not create a new issue, creates=%d", creates)
+	}
+	if updates < 1 {
+		t.Errorf("second sync should POST an update to /api/issues/PROJ-7, got %d", updates)
+	}
+}
+
+// TestIssueMilestoneSyncYouTrack proves c-4: milestone-sync ensures the YouTrack
+// milestone entity per milestone_mode (version bundle by default) and links it
+// in board.json.
+func TestIssueMilestoneSyncYouTrack(t *testing.T) {
+	posted := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/customFields") && r.Method == "GET":
+			_, _ = io.WriteString(w, `[{"field":{"name":"Fix versions"},"bundle":{"id":"B1","$type":"VersionBundle","values":[]}}]`)
+		case strings.Contains(r.URL.Path, "/bundles/version/B1/values") && r.Method == "POST":
+			posted = true
+			_, _ = io.WriteString(w, `{"name":"v0.1"}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v0.1.toml"), `
+[milestone]
+version = "v0.1"
+title = "First cut"
+
+[scope]
+success_criteria = ["ships"]
+`)
+	if err := runCmd(t, Issue(), "milestone-sync", "v0.1"); err != nil {
+		t.Fatalf("milestone-sync: %v", err)
+	}
+	if !posted {
+		t.Error("milestone entity not ensured (no version-bundle POST)")
+	}
+	bj, err := readBoardJSON(dir)
+	if err != nil || bj.Milestones["v0.1"] != "v0.1" {
+		t.Errorf("milestone entity not linked in board.json: %+v err=%v", bj, err)
+	}
+}
+
 // TestIssuePullYouTrackFiltersLinkedAndDismissed proves c-3 for YouTrack: pull
 // emits only open issues not linked and not dismissed (by readable id), with the
 // label filter passed through to the upstream query as a tag clause.

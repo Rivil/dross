@@ -226,7 +226,14 @@ func ensureMilestoneLink(ctx *boardCtx, version string) (string, error) {
 		title = version
 	}
 	desc := strings.Join(m.Scope.SuccessCriteria, "\n")
-	id, err := ctx.client.EnsureMilestone(version, milestoneBody(title, desc))
+	var id string
+	if yt, ok := ctx.client.(*forge.YouTrackClient); ok {
+		// YouTrack maps a milestone to an entity per [board].milestone_mode
+		// (version bundle / agile board / epic), not a forge-style milestone.
+		id, err = yt.EnsureMilestoneEntity(ctx.proj.Board.MilestoneMode, version, desc)
+	} else {
+		id, err = ctx.client.EnsureMilestone(version, milestoneBody(title, desc))
+	}
 	if err != nil {
 		return "", wrapBoard(err)
 	}
