@@ -1,15 +1,9 @@
 {
   "version": "0.6.11.0",
   "current_milestone": "v0.6",
-  "current_phase": "gitlab-ship-provider",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-29T09:32:29.991968Z",
-  "last_action": "re-verified gitlab-ship-provider: pass (6/6 covered after c-2 reword, mutation 0.86)",
+  "last_activity": "2026-06-29T09:36:38.969018Z",
+  "last_action": "completed gitlab-ship-provider",
   "history": [
-    {
-      "at": "2026-06-27T19:05:18.980887Z",
-      "action": "executed t-4 (Add recovery cookbook to ship.md)"
-    },
     {
       "at": "2026-06-27T19:10:56.712645Z",
       "action": "executed t-5 (Wire --recover into phase complete)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-29T09:32:29.991968Z",
       "action": "re-verified gitlab-ship-provider: pass (6/6 covered after c-2 reword, mutation 0.86)"
+    },
+    {
+      "at": "2026-06-29T09:36:38.969018Z",
+      "action": "completed gitlab-ship-provider"
     }
   ]
 }
