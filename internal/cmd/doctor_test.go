@@ -109,6 +109,87 @@ func TestDoctorAcceptsGitLabRemote(t *testing.T) {
 	}
 }
 
+// TestDoctorValidatesBoardBlock proves c-1: doctor validates a configured
+// [board] independently of [remote] — flagging an unset $auth_env, an
+// unrecognised provider, a malformed base_url, and an invalid milestone_mode,
+// while passing a well-formed youtrack board with a ✓ line.
+func TestDoctorValidatesBoardBlock(t *testing.T) {
+	const tokenEnv = "DROSS_TEST_BOARD_TOKEN"
+
+	// runWithBoard inits a repo with a well-formed youtrack [board] as the
+	// baseline, applies the caller's overrides, optionally exports the token,
+	// then runs doctor and returns its captured output + error.
+	runWithBoard := func(t *testing.T, overrides map[string]string, exportToken bool) (string, error) {
+		t.Helper()
+		dir := t.TempDir()
+		gitInit(t, dir, "https://gitlab.com/Rivil/dross.git")
+		chdir(t, dir)
+		if err := runCmd(t, Init()); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		fields := map[string]string{
+			// Point [remote].auth_env at the same token so the [remote] block
+			// stays clean and only the [board] block decides the verdict.
+			"remote.auth_env":      tokenEnv,
+			"board.provider":       "youtrack",
+			"board.base_url":       "https://yt.example.com",
+			"board.auth_env":       tokenEnv,
+			"board.project":        "PROJ",
+			"board.enabled":        "true",
+			"board.milestone_mode": "version",
+		}
+		for k, v := range overrides {
+			fields[k] = v
+		}
+		for k, v := range fields {
+			if err := runCmd(t, Project(), "set", k, v); err != nil {
+				t.Fatalf("project set %s: %v", k, err)
+			}
+		}
+		if exportToken {
+			t.Setenv(tokenEnv, "secret")
+		} else {
+			t.Setenv(tokenEnv, "") // explicit absence
+		}
+		var out string
+		err := runCmdCapturing(t, &out, Doctor())
+		return out, err
+	}
+
+	t.Run("well-formed youtrack board", func(t *testing.T) {
+		out, err := runWithBoard(t, nil, true)
+		if err != nil {
+			t.Fatalf("doctor should accept a well-formed board, got error; out:\n%s", out)
+		}
+		if !strings.Contains(out, "[board] is well-formed") {
+			t.Errorf("expected ✓ board line:\n%s", out)
+		}
+	})
+
+	bad := []struct {
+		name      string
+		overrides map[string]string
+		export    bool
+		want      string
+	}{
+		{"unset auth_env", nil, false, "auth_env"},
+		{"bogus provider", map[string]string{"board.provider": "bogus"}, true, "provider"},
+		{"bad base_url", map[string]string{"board.base_url": "not a url"}, true, "base_url"},
+		{"invalid milestone_mode", map[string]string{"board.milestone_mode": "bogus"}, true, "milestone_mode"},
+	}
+	for _, tc := range bad {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := runWithBoard(t, tc.overrides, tc.export)
+			if err == nil {
+				t.Errorf("expected non-nil error for %s; out:\n%s", tc.name, out)
+			}
+			if !strings.Contains(out, "✗") || !strings.Contains(out, tc.want) {
+				t.Errorf("expected ✗ %s line, got:\n%s", tc.want, out)
+			}
+		})
+	}
+}
+
 func TestDoctorFlagsInvalidAuthScheme(t *testing.T) {
 	dir := t.TempDir()
 	gitInit(t, dir, "https://gitlab.com/Rivil/dross.git")
