@@ -1,0 +1,120 @@
+[phase]
+  id = "deepen-container-iac-scanning"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add content-matcher to marker engine"
+  files = ["internal/stack/profile.go", "internal/stack/detect.go", "internal/stack/profile_test.go", "internal/stack/detect_test.go"]
+  description = "Add `Signals.Content{All,Any []string}`. After a glob candidate matches, read the\nfile at a capped size (~64 KiB) and confirm case-sensitively — All=AND, Any=OR. A\nprofile with no [signals.content] keeps the pure-glob fast path (docker/terraform\nunchanged). Engine carries no profile-id literal (TestNoDockerHardcode stays green).\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["if OR semantics are used where AND is required, TestContentMatchAllSemantics fails", "if matching becomes case-insensitive (lowercase `resources:` matches cfn `Resources`), TestContentMatchCaseSensitive fails", "if a glob-only profile starts reading file bodies, the pure-glob fast-path regression test fails", "if the read cap is removed, TestContentMatchReadCap (marker planted past the cap must NOT match) fails", "if a binary/unreadable candidate panics instead of being skipped, TestContentMatchUnreadableSkipped fails", "if content-sniff doesn't resolve end-to-end, TestMarkerContentSniffEmbedded (apiVersion+kind -> kubernetes; AWSTemplateFormatVersion -> cloudformation via Embedded()) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Add dockle scan-path decision fn"
+  files = ["internal/security/dockle.go", "internal/security/dockle_test.go"]
+  description = "Pure decision function. image==\"\" -> Skipped with a non-empty Reason\n(\"dockle needs a built image; run docker build or supply --image\"), never all-clear.\ndockle missing -> Skipped with the install hint (distinct from the no-image reason).\nimage set -> a run plan targeting the supplied ref; never emits `docker build`.\n"
+  covers = ["c-3", "c-8"]
+  test_contract = ["if the no-image case is not skipped-with-reason, TestDockleNoImageSkipsWithReason fails", "if a supplied-image plan shells out to build, TestDockleNeverBuilds (must reference the image, never contain \"build\") fails", "if a missing dockle binary is reported as a no-image skip instead of an install hint, TestDockleMissingBinHint fails"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Add checkov/dockle loadouts, flip guards"
+  files = ["internal/stack/profiles/terraform.toml", "internal/stack/profiles/docker.toml", "internal/stack/embed_test.go"]
+  description = "terraform.toml gains a \"checkov\" scanner (install hint names the Python toolchain,\ne.g. \"pipx install checkov\"); docker.toml gains a \"dockle\" scanner. Both header\ncomments updated — checkov/dockle are no longer \"out of scope\". In the SAME commit,\nflip the existing forbidding assertions in TestEmbeddedTerraform (embed_test.go:115-117)\nand TestEmbeddedDocker (embed_test.go:52-54) to require the new tools — so t-5's own\ncommit passes go test (no deferred red-commit window).\n"
+  covers = ["c-3", "c-4"]
+  test_contract = ["if checkov is absent from terraform.toml, the flipped TestEmbeddedTerraform present-assertion fails", "if dockle is absent from docker.toml, the flipped TestEmbeddedDocker present-assertion fails", "if the assertions are added (checkov/dockle present) without the .toml change in the same commit, go test fails inside this task's own commit", "if the checkov install hint omits the Python toolchain, t-8's c-4 python-hint row fails"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Add kubernetes marker profile"
+  files = ["internal/stack/profiles/kubernetes.toml"]
+  description = "No exts; file_patterns *.yaml/*.yml/*.json; [signals.content].all = [\"apiVersion\",\"kind\"].\nScanners \"trivy config\" (bin trivy) + \"checkov\" (Python hint). Analyzer \"kube-linter\"\n(dimension error-handling). Header comment explains the marker + content-sniff stack.\n"
+  covers = ["c-1", "c-4", "c-7"]
+  depends_on = ["t-1"]
+  test_contract = ["if apiVersion/kind is dropped from the content matcher, t-8's TestBuildManifestMarkerKubernetes fixture stops surfacing the profile", "if kube-linter's dimension is not error-handling, t-9's quality dimension row fails", "if checkov is dropped from the profile, t-8's checkov-present row for k8s empties"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Add cloudformation marker profile"
+  files = ["internal/stack/profiles/cloudformation.toml"]
+  description = "No exts; file_patterns *.yaml/*.yml/*.json; [signals.content].any =\n[\"AWSTemplateFormatVersion\",\"Resources\"]. Scanners \"trivy config\" + \"checkov\".\nAnalyzer \"cfn-lint\" (dimension error-handling, Python hint). Header notes the\ncase-sensitive any-match that guards the `Resources` false-positive.\n"
+  covers = ["c-2", "c-4", "c-7"]
+  depends_on = ["t-1"]
+  test_contract = ["if AWSTemplateFormatVersion is dropped from the content matcher, t-8's TestBuildManifestMarkerCloudformation fixture stops surfacing the profile", "if cfn-lint's dimension is wrong, t-9's quality dimension row fails", "if the any-match collapses to require both tokens, a template carrying only AWSTemplateFormatVersion stops matching"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Wire --image flag into security run"
+  files = ["internal/cmd/security.go", "internal/cmd/security_test.go"]
+  description = "Add an --image flag feeding t-2's decision; report shows dockle running against the\nref when supplied, skipped-with-reason when not; empty flag treated as no-image. The\n\"config\" channel for c-8 is a DROSS_IMAGE env-var fallback to the flag (no new\nproject.toml field).\n"
+  covers = ["c-3", "c-8"]
+  depends_on = ["t-2"]
+  test_contract = ["if --image is ignored, TestSecurityRunImageFlagRunsDockle fails", "if no --image still reports dockle ran/all-clear, TestSecurityRunNoImageSkipsDockle fails", "if an empty --image is treated as a real ref, the empty-flag guard test fails"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Pin embedded loadouts for new profiles"
+  files = ["internal/stack/embed_test.go"]
+  description = "Add TestEmbeddedKubernetes/TestEmbeddedCloudFormation: content markers decode\nnon-empty (pin the matcher with reflect.DeepEqual), trivy config bin==trivy, checkov\npresent, analyzer dimension error-handling, no exts. (The terraform/docker assertion\nflip lives in t-5, committed atomically with the .toml change.)\n"
+  covers = ["c-1", "c-2", "c-4"]
+  depends_on = ["t-3", "t-4", "t-5"]
+  test_contract = ["if the content schema is renamed so kubernetes.toml stops decoding, TestEmbeddedKubernetes empty-markers assertion fails", "if cloudformation.toml's loadout regresses, TestEmbeddedCloudFormation present-assertions (trivy config, checkov, cfn-lint) fail"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  title = "Assert security recon IaC scanners"
+  files = ["internal/security/recon_test.go"]
+  description = "k8s/cfn content fixtures surface \"trivy config\" + \"checkov\"; a multi-IaC repo keeps\n\"trivy\", \"trivy config\", \"checkov\" each exactly once AND still keeps\ngovulncheck/gitleaks; a missing checkov is in Skipped() with a non-empty Python\ninstall hint. Also assert dockle surfaces in the assembled docker security manifest\n(installed-vs-missing), mirroring TestBuildManifestMarkerDocker for trivy config.\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  depends_on = ["t-3", "t-4", "t-5"]
+  test_contract = ["if dedup collapses checkov into trivy config, TestBuildManifestCheckovKeptBesideTrivyConfig (two distinct Names) fails", "if a missing checkov is silently omitted, TestBuildManifestCheckovSkipHint (hint contains pip/pipx, no error) fails", "if unioning IaC markers drops agnostic tools, the agnostic-still-present row fails", "if dockle stops appearing in the docker security manifest, TestBuildManifestMarkerDockerDockle (installed-vs-missing) fails"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 3
+  title = "Assert quality recon IaC analyzers"
+  files = ["internal/quality/recon_test.go"]
+  description = "k8s fixture surfaces \"kube-linter\" (error-handling) and still carries scc/jscpd\n(union, not replace); cfn fixture surfaces \"cfn-lint\" (error-handling); missing\nanalyzers Skipped-with-hint; a marker-less Go repo surfaces neither.\n"
+  covers = ["c-7"]
+  depends_on = ["t-3", "t-4"]
+  test_contract = ["if kube-linter is dropped, its surface row in the k8s fixture empties", "if marker analyzers replace rather than union, TestQualityIaCNoLeak (scc/jscpd still present) fails", "if cfn-lint leaks into a Go-only repo, TestQualityIaCNoLeak's no-leak row fails", "if a missing analyzer is silently omitted, TestQualityIaCMissingAnalyzerSkipped fails"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 3
+  title = "Document new profiles + doc guard"
+  files = ["internal/stack/profiles/README.md", "internal/stack/profiles_doc_test.go"]
+  description = "Add README rows for kubernetes/cloudformation; update terraform/docker header notes\n(checkov/dockle now in scope). New guard: kubernetes.toml/cloudformation.toml headers\ncontain \"marker\" and explain content-sniff. Note: TestTerraformProfileDocumented only\nchecks the strings are present, so it keeps passing — no terraform/docker doc-guard\nactually breaks; update the comment prose for accuracy.\n"
+  covers = ["c-6"]
+  depends_on = ["t-3", "t-4", "t-5"]
+  test_contract = ["if README loses the new rows, TestNewIaCProfilesDocumented fails", "if the new profile headers omit \"marker\"/content-sniff, the header-content assertion fails"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 3
+  title = "Commit multi-IaC fixture + run record"
+  files = ["fixtures/iac-multi-c5/deployment.yaml", "fixtures/iac-multi-c5/template.yaml", "fixtures/iac-multi-c5/Dockerfile", "fixtures/iac-multi-c5/RUN.md", "fixtures/iac-multi-c5/expected-finding.txt"]
+  description = "Mirror fixtures/terraform-c3. A k8s manifest, a CFN template, and a Dockerfile each\nplant a deterministic misconfig the agnostic fallback is blind to. RUN.md is a locked\nMANUAL-run record: after `make install`, `dross security detect` + `dross quality\ndetect` list every new tool (k8s+cfn trivy config, checkov, dockle, kube-linter,\ncfn-lint) as installed-vs-missing-with-hint, then each surfaces its finding while\ntrivy fs/gitleaks/scc/jscpd stay blind. Fixtures carry the exact content tokens\nt-1/t-3/t-4 sniff.\n"
+  covers = ["c-5"]
+  depends_on = ["t-3", "t-4", "t-5"]
+  test_contract = ["if a planted misconfig is fixed, expected-finding.txt no longer matches the corresponding tool's finding in RUN.md", "if a k8s/cfn content token is removed from the fixture, the fixture stops surfacing its profile and RUN.md stops reproducing"]
+  status = "done"

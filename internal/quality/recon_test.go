@@ -134,6 +134,120 @@ func TestBuildManifest_terraformMissingAnalyzerSkipped(t *testing.T) {
 	}
 }
 
+// analyzerDimension returns the dimension recorded for the named analyzer in the
+// manifest, or "" if absent.
+func analyzerDimension(m Manifest, name string) (Dimension, bool) {
+	for _, tool := range m.Tools {
+		if tool.Name == name {
+			return tool.Dimension, true
+		}
+	}
+	return "", false
+}
+
+// TestQualityManifestMarkerKubernetes proves a content-confirmed k8s manifest surfaces
+// the kube-linter analyzer under error-handling, ON TOP of the agnostic set — a k8s
+// repo gets an IaC-specific analyzer, not only the agnostic fallback (c-7).
+func TestQualityManifestMarkerKubernetes(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "deployment.yaml"), "apiVersion: apps/v1\nkind: Deployment\n")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dim, ok := analyzerDimension(m, "kube-linter")
+	if !ok {
+		t.Fatalf("k8s repo: quality manifest missing kube-linter analyzer (c-7); names=%v", manifestNames(m))
+	}
+	if dim != "error-handling" {
+		t.Errorf("kube-linter dimension = %q, want error-handling", dim)
+	}
+	for _, want := range []string{"scc", "jscpd"} {
+		if !manifestNames(m)[want] {
+			t.Errorf("marker repo lost the agnostic analyzer %q (union, not replace); names=%v", want, manifestNames(m))
+		}
+	}
+}
+
+// TestQualityManifestMarkerCloudformation proves a content-confirmed CFN template
+// surfaces the cfn-lint analyzer under error-handling, alongside the agnostic set.
+func TestQualityManifestMarkerCloudformation(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "template.yaml"), "AWSTemplateFormatVersion: '2010-09-09'\nResources: {}\n")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dim, ok := analyzerDimension(m, "cfn-lint")
+	if !ok {
+		t.Fatalf("CFN repo: quality manifest missing cfn-lint analyzer (c-7); names=%v", manifestNames(m))
+	}
+	if dim != "error-handling" {
+		t.Errorf("cfn-lint dimension = %q, want error-handling", dim)
+	}
+	for _, want := range []string{"scc", "jscpd"} {
+		if !manifestNames(m)[want] {
+			t.Errorf("marker repo lost the agnostic analyzer %q (union, not replace); names=%v", want, manifestNames(m))
+		}
+	}
+}
+
+// TestQualityIaCNoLeak guards against a signals misconfig: a marker-less Go-only repo's
+// quality manifest must surface neither kube-linter nor cfn-lint.
+func TestQualityIaCNoLeak(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "main.go"), "package main")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leak := range []string{"kube-linter", "cfn-lint"} {
+		if manifestNames(m)[leak] {
+			t.Errorf("marker-less Go repo surfaced %q — no IaC analyzer must leak in; names=%v", leak, manifestNames(m))
+		}
+	}
+}
+
+// TestQualityIaCMissingAnalyzerSkipped proves a missing kube-linter / cfn-lint is
+// recorded skipped with an install hint (never silently omitted) and BuildManifest
+// still returns nil — degrades, never aborts.
+func TestQualityIaCMissingAnalyzerSkipped(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "deployment.yaml"), "apiVersion: apps/v1\nkind: Deployment\n")
+	writeFile(t, filepath.Join(root, "template.yaml"), "AWSTemplateFormatVersion: '2010-09-09'\nResources: {}\n")
+	allMissing := func(string) (string, error) { return "", errors.New("not found") }
+
+	m, err := BuildManifest(root, allMissing)
+	if err != nil {
+		t.Fatalf("BuildManifest aborted on a missing tool: %v", err)
+	}
+	for _, want := range []string{"kube-linter", "cfn-lint"} {
+		var st *ToolStatus
+		for i := range m.Skipped() {
+			if m.Skipped()[i].Name == want {
+				s := m.Skipped()[i]
+				st = &s
+			}
+		}
+		if st == nil {
+			t.Fatalf("%q not in Skipped() under all-missing lookup — never silently omit it; skipped=%v", want, m.Skipped())
+		}
+		if st.Install == "" {
+			t.Errorf("skipped %q has no install hint", want)
+		}
+	}
+}
+
 // TestQualityTerraformNoLeak guards against a signals misconfig: a marker-less Go-only
 // repo's quality manifest must NOT surface tflint.
 func TestQualityTerraformNoLeak(t *testing.T) {

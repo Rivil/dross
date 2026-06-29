@@ -14,6 +14,7 @@
 package stack
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -38,10 +39,55 @@ type Profile struct {
 // detect.go) keys off these declared signals rather than a hardcoded language
 // switch, so a new profile is selectable by data alone.
 type Signals struct {
-	Files        []string `toml:"files,omitempty"`         // exact root filenames, e.g. "go.mod"
-	FilePatterns []string `toml:"file_patterns,omitempty"` // glob patterns matched case-insensitively against any filename (marker stacks like Docker)
-	Exts         []string `toml:"exts,omitempty"`          // file extensions, e.g. ".go"
-	Priority     int      `toml:"priority,omitempty"`
+	Files        []string     `toml:"files,omitempty"`         // exact root filenames, e.g. "go.mod"
+	FilePatterns []string     `toml:"file_patterns,omitempty"` // glob patterns matched case-insensitively against any filename (marker stacks like Docker)
+	Exts         []string     `toml:"exts,omitempty"`          // file extensions, e.g. ".go"
+	Content      ContentMatch `toml:"content,omitempty"`       // optional content confirmation for a glob candidate (marker stacks living in ambiguous *.yaml/*.json)
+	Priority     int          `toml:"priority,omitempty"`
+}
+
+// ContentMatch is an optional second gate for a marker stack whose files share an
+// extension with unrelated content (Kubernetes manifests and CloudFormation
+// templates both live in plain *.yaml/*.json). After a FilePatterns glob selects a
+// candidate, MarkerProfiles confirms the candidate's contents against these tokens
+// before surfacing the profile — turning a would-be every-YAML-repo false positive
+// into a near-exact match. Matching is CASE-SENSITIVE: lowercase `resources:` must
+// not satisfy a CloudFormation `Resources` token. A profile that declares no content
+// keeps the pure-glob fast path (MarkerProfiles never reads its candidates' bodies).
+type ContentMatch struct {
+	All []string `toml:"all,omitempty"` // every token must be present (AND)
+	Any []string `toml:"any,omitempty"` // at least one token must be present (OR)
+}
+
+// IsZero reports whether no content requirements are declared, so callers can keep
+// the pure-glob fast path and avoid reading candidate file bodies entirely.
+func (c ContentMatch) IsZero() bool {
+	return len(c.All) == 0 && len(c.Any) == 0
+}
+
+// Matches reports whether body satisfies the content requirements: every All token
+// must be present (AND) and, when Any is non-empty, at least one Any token must be
+// present (OR). An empty clause is trivially satisfied. Matching is case-sensitive
+// (bytes.Contains, no normalization), so a token's exact casing is required.
+func (c ContentMatch) Matches(body []byte) bool {
+	for _, tok := range c.All {
+		if !bytes.Contains(body, []byte(tok)) {
+			return false
+		}
+	}
+	if len(c.Any) > 0 {
+		found := false
+		for _, tok := range c.Any {
+			if bytes.Contains(body, []byte(tok)) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // MatchesFile reports whether the base filename name matches any of this profile's

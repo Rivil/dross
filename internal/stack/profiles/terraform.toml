@@ -26,12 +26,15 @@ title = "Terraform"
 # Tool loadout. trivy in `config` mode scans Terraform/IaC for misconfigurations
 # (open security groups, unencrypted storage, public buckets) — its Name is
 # distinct from the agnostic "trivy" scanner so the manifest dedup keeps both.
-# tflint lints Terraform for apply-time errors, deprecated syntax, and unused
-# declarations, so it is the quality analyzer under the error-handling dimension
-# (matching how docker's hadolint maps). checkov (exhaustive IaC misconfiguration,
-# heavier Python toolchain) and dockle (container image-layer CIS, needs a built
-# image) are intentionally out of scope. Agnostic tools (gitleaks, semgrep, trivy,
-# scc, jscpd) apply to every stack and stay in the catalogs — not listed here.
+# checkov adds exhaustive cross-family IaC misconfiguration coverage (a heavier
+# Python toolchain); it ships here too, kept distinct from trivy config so the
+# manifest dedup surfaces both signals rather than collapsing them. tflint lints
+# Terraform for apply-time errors, deprecated syntax, and unused declarations, so it
+# is the quality analyzer under the error-handling dimension (matching how docker's
+# hadolint maps). dockle (container image-layer CIS) stays out — it scans a built
+# image, which belongs to the docker profile, not Terraform source. Agnostic tools
+# (gitleaks, semgrep, trivy, scc, jscpd) apply to every stack and stay in the
+# catalogs — not listed here.
 
 [[tools]]
   name    = "trivy config"
@@ -39,6 +42,12 @@ title = "Terraform"
   kind    = "scanner"
   core    = true
   install = "brew install trivy  (or see github.com/aquasecurity/trivy)"
+
+[[tools]]
+  name    = "checkov"
+  kind    = "scanner"
+  core    = true
+  install = "pipx install checkov  (or pip install checkov)"
 
 [[tools]]
   name      = "tflint"

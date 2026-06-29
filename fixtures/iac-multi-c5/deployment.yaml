@@ -1,0 +1,28 @@
+# c-5 fixture — a Kubernetes manifest with a planted misconfiguration the
+# language-agnostic fallback (scc / jscpd / gitleaks) is structurally blind to.
+# The apiVersion + kind tokens are the content-sniff fingerprint that makes the
+# `kubernetes` marker profile surface this file (remove either and it stops matching).
+# See RUN.md for the documented manual run backing acceptance criterion c-5.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          # Planted defects: a privileged container (trivy KSV017 / kube-linter
+          # privileged-container) running an unpinned :latest image, with no
+          # resource limits and no runAsNonRoot. A secrets/complexity/LOC tool
+          # cannot see any of these.
+          image: nginx:latest
+          securityContext:
+            privileged: true

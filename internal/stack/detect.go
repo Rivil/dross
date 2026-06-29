@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -228,7 +229,18 @@ func MarkerProfiles(root string, profiles []*Profile) []string {
 		}
 		name := d.Name()
 		for _, p := range profiles {
-			if !matched[p.ID] && p.Signals.MatchesFile(name) {
+			if matched[p.ID] || !p.Signals.MatchesFile(name) {
+				continue
+			}
+			// Pure-glob fast path: a profile with no content requirements matches on
+			// filename alone and its candidate body is never read.
+			if p.Signals.Content.IsZero() {
+				matched[p.ID] = true
+				continue
+			}
+			// Content-gated: confirm the glob candidate's body against the profile's
+			// tokens. An unreadable candidate is skipped (ok=false), never fatal.
+			if body, ok := readCapped(path, contentSniffCap); ok && p.Signals.Content.Matches(body) {
 				matched[p.ID] = true
 			}
 		}
@@ -240,6 +252,29 @@ func MarkerProfiles(root string, profiles []*Profile) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// contentSniffCap bounds how many bytes a content gate reads from a candidate, so a
+// huge file can't blow up memory and a marker planted past the cap is treated as
+// absent. 64 KiB comfortably covers a real manifest/template header.
+const contentSniffCap = 64 * 1024
+
+// readCapped returns up to limit bytes from the file at path. It returns ok=false
+// when the file cannot be opened or read, so a content-gated profile is simply
+// skipped on an unreadable or vanished candidate rather than panicking. A short read
+// (file smaller than limit) is normal and returned as-is.
+func readCapped(path string, limit int) ([]byte, bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, false
+	}
+	defer f.Close()
+	buf := make([]byte, limit)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return nil, false
+	}
+	return buf[:n], true
 }
 
 func normalizeExt(e string) string {

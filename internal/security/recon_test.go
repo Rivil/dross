@@ -328,6 +328,139 @@ func TestBuildManifest_dartRepo_listsOsvScanner(t *testing.T) {
 	}
 }
 
+// TestBuildManifestMarkerKubernetes proves a repo whose only signal is a content-
+// confirmed Kubernetes manifest surfaces the k8s scanners (trivy config + checkov).
+// The apiVersion+kind tokens are the content gate; without them the profile would not
+// surface (a plain YAML must not match).
+func TestBuildManifestMarkerKubernetes(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "deployment.yaml"), "apiVersion: apps/v1\nkind: Deployment\n")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := toolNames(m)
+	for _, want := range []string{"trivy config", "checkov"} {
+		if names[want] == 0 {
+			t.Errorf("k8s manifest repo: manifest missing %q — content-sniff k8s scanners must surface (c-1); tools=%v", want, names)
+		}
+	}
+}
+
+// TestBuildManifestMarkerKubernetesPlainYAMLIgnored guards the content gate: a plain
+// YAML file (no apiVersion+kind) must NOT surface the kubernetes scanners.
+func TestBuildManifestMarkerKubernetesPlainYAMLIgnored(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "config.yaml"), "name: my-app\nport: 8080\n")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// checkov is unique to the IaC marker profiles; a plain YAML must not pull it in.
+	if toolNames(m)["checkov"] != 0 {
+		t.Errorf("plain YAML surfaced checkov — content gate failed to keep non-manifest YAML out; tools=%v", toolNames(m))
+	}
+}
+
+// TestBuildManifestMarkerCloudformation proves a repo whose only signal is a content-
+// confirmed CloudFormation template surfaces the cfn scanners (trivy config + checkov).
+func TestBuildManifestMarkerCloudformation(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "template.yaml"), "AWSTemplateFormatVersion: '2010-09-09'\nResources: {}\n")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := toolNames(m)
+	for _, want := range []string{"trivy config", "checkov"} {
+		if names[want] == 0 {
+			t.Errorf("CFN template repo: manifest missing %q — content-sniff cfn scanners must surface (c-2); tools=%v", want, names)
+		}
+	}
+}
+
+// TestBuildManifestCheckovKeptBesideTrivyConfig proves the dedup keeps checkov as a
+// distinct scanner alongside trivy config across a multi-IaC repo (terraform + k8s +
+// cfn + docker, plus Go): trivy / trivy config / checkov each appear exactly once, and
+// the Go core + agnostic scanners remain.
+func TestBuildManifestCheckovKeptBesideTrivyConfig(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go.mod"), "module x\n")
+	writeFile(t, filepath.Join(root, "main.go"), "package main")
+	writeFile(t, filepath.Join(root, "main.tf"), "resource \"null_resource\" \"x\" {}\n")
+	writeFile(t, filepath.Join(root, "deployment.yaml"), "apiVersion: apps/v1\nkind: Deployment\n")
+	writeFile(t, filepath.Join(root, "template.yaml"), "AWSTemplateFormatVersion: '2010-09-09'\nResources: {}\n")
+	writeFile(t, filepath.Join(root, "Dockerfile"), "FROM scratch\n")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := toolNames(m)
+	for _, name := range []string{"trivy", "trivy config", "checkov"} {
+		if names[name] != 1 {
+			t.Errorf("scanner %q appears %d times across the multi-IaC repo, want exactly 1 (dedup must keep it distinct, not collapse or duplicate); tools=%v", name, names[name], names)
+		}
+	}
+	for _, want := range []string{"govulncheck", "gitleaks"} {
+		if names[want] == 0 {
+			t.Errorf("multi-IaC repo dropped %q — the Go core + agnostic scanners must remain beside the marker tools; tools=%v", want, names)
+		}
+	}
+}
+
+// TestBuildManifestCheckovSkipHint proves a missing checkov is recorded skipped with a
+// Python install hint, and BuildManifest still returns nil (a missing tool degrades,
+// never aborts) — checkov is never silently omitted.
+func TestBuildManifestCheckovSkipHint(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "deployment.yaml"), "apiVersion: apps/v1\nkind: Deployment\n")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatalf("BuildManifest aborted on a missing tool: %v", err)
+	}
+	var ck *ToolStatus
+	for i := range m.Skipped() {
+		if m.Skipped()[i].Name == "checkov" {
+			s := m.Skipped()[i]
+			ck = &s
+		}
+	}
+	if ck == nil {
+		t.Fatalf("checkov not in Skipped() under all-missing lookup — it must never be silently omitted; skipped=%v", m.Skipped())
+	}
+	if !strings.Contains(strings.ToLower(ck.Install), "pip") {
+		t.Errorf("skipped checkov install hint must name the Python toolchain (pip/pipx), got %q", ck.Install)
+	}
+}
+
+// TestBuildManifestMarkerDockerDockle proves dockle surfaces in the assembled docker
+// security manifest (installed-vs-missing), mirroring how TestBuildManifestMarkerDocker
+// asserts trivy config. The image-specific run/skip decision lives on the run path
+// (DecideDockle); here we only assert dockle is part of the detect-time loadout.
+func TestBuildManifestMarkerDockerDockle(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "Dockerfile"), "FROM scratch\n")
+
+	m, err := BuildManifest(root, allMissingLookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if toolNames(m)["dockle"] == 0 {
+		t.Errorf("Dockerfile repo: manifest missing %q — dockle must surface in the docker loadout (c-3); tools=%v", "dockle", toolNames(m))
+	}
+}
+
 // TestBuildManifest_missingDedicatedScannerSkipped proves c-4: under an all-missing
 // lookup, svelte's osv-scanner is recorded as skipped (keeping its install hint) and
 // BuildManifest still returns nil — a missing tool degrades, never aborts the run.

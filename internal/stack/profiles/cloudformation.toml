@@ -1,0 +1,59 @@
+# CloudFormation stack profile — a MARKER-FILE stack with a CONTENT gate.
+# CloudFormation templates live in plain *.yaml / *.yml / *.json, indistinguishable
+# by extension from any other YAML/JSON. So this profile pairs its file_patterns with
+# [signals.content]: a candidate is surfaced when its body carries EITHER
+# `AWSTemplateFormatVersion` OR `Resources` (case-sensitive, ANY/OR). The match is
+# deliberately case-sensitive — a lowercase `resources:` (common in unrelated YAML)
+# must NOT match, or every Compose/Helm file would false-positive. `Resources` is the
+# looser of the two signals (a template may omit AWSTemplateFormatVersion), an
+# accepted trade for catching version-less templates. It declares no exts, so it is
+# surfaced additively by MarkerProfiles into the security/quality manifests — never as
+# a primary stack via Detect. To add or override a stack, drop a sibling <id>.toml
+# into ~/.claude/dross/profiles/ — no recompile, zero code change. See README.md.
+
+id    = "cloudformation"
+title = "CloudFormation"
+
+[signals]
+  # Glob candidates by extension, then confirm by content below. .yml and .yaml are
+  # listed separately (no brace expansion); .json covers JSON-authored templates.
+  file_patterns = [
+    "*.yaml",
+    "*.yml",
+    "*.json",
+  ]
+
+  # Content gate: ANY token confirms (OR). AWSTemplateFormatVersion is the strong
+  # signal; Resources catches version-less templates. Case-sensitive on purpose.
+  [signals.content]
+    any = ["AWSTemplateFormatVersion", "Resources"]
+
+# Tool loadout. trivy in `config` mode scans CloudFormation templates for
+# misconfigurations (public buckets, open security groups, unencrypted resources) —
+# its Name is distinct from the agnostic "trivy" scanner so the manifest dedup keeps
+# both. checkov adds cross-family IaC misconfiguration coverage (a heavier Python
+# toolchain), kept distinct from trivy config so both signals surface. cfn-lint
+# validates template structure and catches resource-property errors, so it is the
+# quality analyzer under the error-handling dimension (matching tflint/hadolint).
+# Agnostic tools (gitleaks, semgrep, trivy, scc, jscpd) apply to every stack and stay
+# in the catalogs — not listed here.
+
+[[tools]]
+  name    = "trivy config"
+  bin     = "trivy"
+  kind    = "scanner"
+  core    = true
+  install = "brew install trivy  (or see github.com/aquasecurity/trivy)"
+
+[[tools]]
+  name    = "checkov"
+  kind    = "scanner"
+  core    = true
+  install = "pipx install checkov  (or pip install checkov)"
+
+[[tools]]
+  name      = "cfn-lint"
+  kind      = "analyzer"
+  dimension = "error-handling"
+  core      = true
+  install   = "pipx install cfn-lint  (or pip install cfn-lint)"

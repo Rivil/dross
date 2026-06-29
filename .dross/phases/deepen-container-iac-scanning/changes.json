@@ -1,0 +1,105 @@
+{
+  "phase": "deepen-container-iac-scanning",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/stack/profile.go",
+        "internal/stack/detect.go",
+        "internal/stack/profile_test.go",
+        "internal/stack/detect_test.go"
+      ],
+      "commit": "208fec7",
+      "completed_at": "2026-06-27T21:17:00.788512Z",
+      "notes": "feature: stack marker detection · ContentMatch @ internal/stack/profile.go · content-sniff confirms glob marker candidates by capped case-sensitive token match (All=AND, Any=OR)"
+    },
+    "t-10": {
+      "files": [
+        "internal/stack/profiles/README.md",
+        "internal/stack/profiles_doc_test.go"
+      ],
+      "commit": "0b56a0c",
+      "completed_at": "2026-06-27T21:31:29.815617Z",
+      "notes": "feature: stack profile docs · profiles/README.md · documents kubernetes/cloudformation marker profiles + content-sniff gate; doc guard for discoverability"
+    },
+    "t-11": {
+      "files": [
+        "fixtures/iac-multi-c5/deployment.yaml",
+        "fixtures/iac-multi-c5/template.yaml",
+        "fixtures/iac-multi-c5/Dockerfile",
+        "fixtures/iac-multi-c5/RUN.md",
+        "fixtures/iac-multi-c5/expected-finding.txt"
+      ],
+      "commit": "13f806e",
+      "completed_at": "2026-06-27T21:35:32.690303Z",
+      "notes": "feature: IaC findings proof · fixtures/iac-multi-c5 · multi-family (k8s/cfn/docker) fixture + c-5 manual-run record proving detect lists all deepened tools, trivy config surfaces all 3 families"
+    },
+    "t-2": {
+      "files": [
+        "internal/security/dockle.go",
+        "internal/security/dockle_test.go"
+      ],
+      "commit": "f07fc15",
+      "completed_at": "2026-06-27T21:18:44.022169Z",
+      "notes": "feature: container image scanning · DecideDockle @ internal/security/dockle.go · three-state dockle decision (run supplied-image / skip-no-image / skip-missing-bin), never builds"
+    },
+    "t-3": {
+      "files": [
+        "internal/stack/profiles/kubernetes.toml"
+      ],
+      "commit": "ee7d299",
+      "completed_at": "2026-06-27T21:22:10.795308Z",
+      "notes": "feature: IaC marker profiles · kubernetes.toml · content-sniff (apiVersion+kind) k8s profile; trivy config + checkov scanners, kube-linter analyzer"
+    },
+    "t-4": {
+      "files": [
+        "internal/stack/profiles/cloudformation.toml"
+      ],
+      "commit": "16d3b72",
+      "completed_at": "2026-06-27T21:25:50.504762Z",
+      "notes": "feature: IaC marker profiles · cloudformation.toml · content-sniff (AWSTemplateFormatVersion|Resources, ANY) CFN profile; trivy config + checkov scanners, cfn-lint analyzer"
+    },
+    "t-5": {
+      "files": [
+        "internal/stack/profiles/terraform.toml",
+        "internal/stack/profiles/docker.toml",
+        "internal/stack/embed_test.go"
+      ],
+      "commit": "5178a32",
+      "completed_at": "2026-06-27T21:20:57.424962Z",
+      "notes": "feature: IaC/container tool loadouts · terraform.toml/docker.toml · checkov added to terraform (cross-family), dockle added to docker; embed guards flipped atomically"
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/security.go",
+        "internal/cmd/security_test.go"
+      ],
+      "commit": "dbe4852",
+      "completed_at": "2026-06-27T21:29:03.370545Z",
+      "notes": "feature: container image scanning · securityRun --image @ internal/cmd/security.go · --image/$DROSS_IMAGE feeds dockle decision; supplied-image scans, empty skips-with-reason, never builds"
+    },
+    "t-7": {
+      "files": [
+        "internal/stack/embed_test.go"
+      ],
+      "commit": "af299d2",
+      "completed_at": "2026-06-27T21:36:39.227778Z",
+      "notes": "feature: IaC marker profiles · TestEmbeddedKubernetes/CloudFormation @ internal/stack/embed_test.go · pins new profiles' content-sniff gate + scanner/analyzer loadout via Embedded()"
+    },
+    "t-8": {
+      "files": [
+        "internal/security/recon_test.go"
+      ],
+      "commit": "272f2f4",
+      "completed_at": "2026-06-27T21:38:09.876276Z",
+      "notes": "feature: IaC security recon · recon_test.go · asserts k8s/cfn content-sniff surfacing, checkov dedup beside trivy config + Python skip-hint, dockle in docker manifest"
+    },
+    "t-9": {
+      "files": [
+        "internal/quality/recon_test.go"
+      ],
+      "commit": "cea9254",
+      "completed_at": "2026-06-27T21:39:56.844961Z",
+      "notes": "feature: IaC quality recon · recon_test.go · asserts kube-linter/cfn-lint surface under error-handling (union not replace), no-leak on Go repo, missing-skip with hint"
+    }
+  }
+}
