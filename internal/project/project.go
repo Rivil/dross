@@ -103,7 +103,6 @@ type Remote struct {
 	AuthScheme string   `toml:"auth_scheme,omitempty"` // gitlab: private-token (default) | bearer
 	ProjectID  string   `toml:"project_id,omitempty"`  // gitlab: numeric project-id override (else derived from URL)
 	Reviewers  []string `toml:"reviewers,omitempty"`   // default human reviewers for /dross-ship
-	BoardSync  bool     `toml:"board_sync,omitempty"`  // mirror planning artefacts onto the issue board
 }
 
 // Board describes the issue-tracker destination for board sync, kept separate

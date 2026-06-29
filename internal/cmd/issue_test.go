@@ -11,9 +11,9 @@ import (
 	"testing"
 )
 
-// boardRepo scaffolds a .dross repo wired to a forge at apiBase, with board
-// sync toggled per `enabled`. Token env is set. Caller has already chdir'd
-// nowhere — boardRepo does the chdir.
+// boardRepo scaffolds a .dross repo whose [board] points at a forgejo tracker
+// at apiBase, with board sync toggled per `enabled`. Token env is set; boardRepo
+// does the chdir. Board sync is resolved SOLELY from [board].
 func boardRepo(t *testing.T, apiBase string, enabled bool) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -22,12 +22,12 @@ func boardRepo(t *testing.T, apiBase string, enabled bool) string {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	mustRunSet(t, "remote.provider", "forgejo")
-	mustRunSet(t, "remote.url", "https://forge.example/me/proj")
-	mustRunSet(t, "remote.api_base", apiBase)
-	mustRunSet(t, "remote.auth_env", "MOCK_TOKEN")
+	mustRunSet(t, "board.provider", "forgejo")
+	mustRunSet(t, "board.base_url", apiBase)
+	mustRunSet(t, "board.auth_env", "MOCK_TOKEN")
+	mustRunSet(t, "board.project", "me/proj")
 	if enabled {
-		mustRunSet(t, "remote.board_sync", "true")
+		mustRunSet(t, "board.enabled", "true")
 	}
 	return dir
 }
@@ -51,15 +51,62 @@ func TestIssueEnableDisableTogglesConfig(t *testing.T) {
 	if err := runCmd(t, Issue(), "enable"); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
-	if !strings.Contains(mustRead(t, filepath.Join(dir, ".dross", "project.toml")), "board_sync = true") {
-		t.Error("board_sync not set true after enable")
+	if !strings.Contains(mustRead(t, filepath.Join(dir, ".dross", "project.toml")), "enabled = true") {
+		t.Error("[board].enabled not set true after enable")
 	}
 	if err := runCmd(t, Issue(), "disable"); err != nil {
 		t.Fatalf("disable: %v", err)
 	}
 	body := mustRead(t, filepath.Join(dir, ".dross", "project.toml"))
-	if strings.Contains(body, "board_sync = true") {
-		t.Error("board_sync still true after disable")
+	if strings.Contains(body, "enabled = true") {
+		t.Error("[board].enabled still true after disable")
+	}
+}
+
+// TestOpenBoardResolvesFromBoardBlock proves c-1: board ops resolve their
+// client solely from [board], independent of [remote]. A repo with
+// [remote].provider=github (no board backend) but an enabled forgejo [board]
+// must hit the BOARD server; a disabled [board] is a silent no-op.
+func TestOpenBoardResolvesFromBoardBlock(t *testing.T) {
+	hit := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := t.TempDir()
+	chdir(t, dir)
+	t.Setenv("MOCK_TOKEN", "secret")
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	// [remote] is a code host with no board backend — must NOT drive board ops.
+	mustRunSet(t, "remote.provider", "github")
+	mustRunSet(t, "remote.url", "https://github.com/me/proj")
+	// [board] is the single board source.
+	mustRunSet(t, "board.provider", "forgejo")
+	mustRunSet(t, "board.base_url", srv.URL)
+	mustRunSet(t, "board.auth_env", "MOCK_TOKEN")
+	mustRunSet(t, "board.project", "me/proj")
+	mustRunSet(t, "board.enabled", "true")
+
+	if err := runCmd(t, Issue(), "pull", "--json"); err != nil {
+		t.Fatalf("pull (board enabled): %v", err)
+	}
+	if !hit {
+		t.Error("board op did not hit the [board] server — openBoard must resolve from [board], not [remote]")
+	}
+	_ = dir
+
+	// Disabled [board] + populated [remote] → silent no-op (no server hit).
+	hit = false
+	mustRunSet(t, "board.enabled", "false")
+	if err := runCmd(t, Issue(), "pull", "--json"); err != nil {
+		t.Fatalf("pull (board disabled): %v", err)
+	}
+	if hit {
+		t.Error("disabled [board] must be a no-op, but the board server was hit")
 	}
 }
 
@@ -149,15 +196,15 @@ wave = 1
 	if issuePosts != 1 {
 		t.Errorf("expected 1 issue POST, got %d", issuePosts)
 	}
-	if !strings.Contains(out, "#12") || !strings.Contains(out, "in-progress") {
-		t.Errorf("output = %q (want #12 + in-progress, one task is done)", out)
+	if !strings.Contains(out, "board 12") || !strings.Contains(out, "in-progress") {
+		t.Errorf("output = %q (want board 12 + in-progress, one task is done)", out)
 	}
 	body, _ := createdBody["body"].(string)
 	if !strings.Contains(body, "- [x] t1 — schema") || !strings.Contains(body, "- [ ] t2 — handler") {
 		t.Errorf("issue body checklist wrong:\n%s", body)
 	}
 	bj, err := readBoardJSON(dir)
-	if err != nil || bj.Phases["01-auth"] != 12 {
+	if err != nil || bj.Phases["01-auth"] != "12" {
 		t.Errorf("board link not stored: %+v err=%v", bj, err)
 	}
 
@@ -200,7 +247,7 @@ success_criteria = ["ships"]
 		t.Fatalf("milestone-sync: %v", err)
 	}
 	bj, err := readBoardJSON(dir)
-	if err != nil || bj.Milestones["v0.1"] != 5 {
+	if err != nil || bj.Milestones["v0.1"] != "5" {
 		t.Errorf("milestone link not stored: %+v err=%v", bj, err)
 	}
 }
@@ -217,10 +264,10 @@ func TestIssuePullFiltersLinkedAndDismissed(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	dir := boardRepo(t, srv.URL, true)
-	// Seed board.json with a phase link (#12) and a dismissal (#20).
+	// Seed board.json with a phase link (#12) and a dismissal (#20), string-keyed.
 	writeSpec(t, dir, "01-x", "[phase]\nid=\"01-x\"\ntitle=\"X\"\n")
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
-		`{"phases":{"01-x":12},"quicks":{},"milestones":{},"dismissed":[20]}`)
+		`{"phases":{"01-x":"12"},"quicks":{},"milestones":{},"dismissed":["20"]}`)
 
 	out := captureStdout(t, func() {
 		if err := runCmd(t, Issue(), "pull", "--json"); err != nil {
@@ -231,7 +278,7 @@ func TestIssuePullFiltersLinkedAndDismissed(t *testing.T) {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
 		t.Fatalf("pull --json not valid JSON: %v\n%s", err, out)
 	}
-	if len(got) != 1 || got[0]["Number"].(float64) != 21 {
+	if len(got) != 1 || got[0]["Key"].(string) != "21" {
 		t.Errorf("expected only #21 inbound, got %v", got)
 	}
 }
@@ -251,7 +298,7 @@ func TestIssueDismissPersists(t *testing.T) {
 	}
 	found := false
 	for _, n := range bj.Dismissed {
-		if n == 42 {
+		if n == "42" {
 			found = true
 		}
 	}
@@ -270,38 +317,53 @@ func TestIssueLinkAdoptsExistingIssue(t *testing.T) {
 		t.Fatalf("link: %v", err)
 	}
 	bj, err := readBoardJSON(dir)
-	if err != nil || bj.Phases["04-rate-limit"] != 37 {
+	if err != nil || bj.Phases["04-rate-limit"] != "37" {
 		t.Errorf("link not stored: %+v err=%v", bj, err)
 	}
 }
 
-func TestIssueDismissRejectsNonInteger(t *testing.T) {
+// TestIssueDismissAcceptsReadableID proves the dismiss CLI takes a readable
+// string issue id (e.g. a YouTrack "PROJ-300"), not just an integer.
+func TestIssueDismissAcceptsReadableID(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
-	if err := runCmd(t, Issue(), "dismiss", "abc"); err == nil {
-		t.Fatal("expected error for non-integer issue number")
+	if err := runCmd(t, Issue(), "dismiss", "PROJ-300"); err != nil {
+		t.Fatalf("dismiss readable id: %v", err)
+	}
+	bj, err := readBoardJSON(dir)
+	if err != nil {
+		t.Fatalf("board.json: %v", err)
+	}
+	found := false
+	for _, n := range bj.Dismissed {
+		if n == "PROJ-300" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("PROJ-300 not dismissed: %+v", bj.Dismissed)
 	}
 }
 
 // readBoardJSON decodes .dross/board.json for assertions.
 func readBoardJSON(dir string) (*struct {
-	Milestones map[string]int `json:"milestones"`
-	Phases     map[string]int `json:"phases"`
-	Quicks     map[string]int `json:"quicks"`
-	Dismissed  []int          `json:"dismissed"`
+	Milestones map[string]string `json:"milestones"`
+	Phases     map[string]string `json:"phases"`
+	Quicks     map[string]string `json:"quicks"`
+	Dismissed  []string          `json:"dismissed"`
 }, error) {
 	b, err := os.ReadFile(filepath.Join(dir, ".dross", "board.json"))
 	if err != nil {
 		return nil, err
 	}
 	var out struct {
-		Milestones map[string]int `json:"milestones"`
-		Phases     map[string]int `json:"phases"`
-		Quicks     map[string]int `json:"quicks"`
-		Dismissed  []int          `json:"dismissed"`
+		Milestones map[string]string `json:"milestones"`
+		Phases     map[string]string `json:"phases"`
+		Quicks     map[string]string `json:"quicks"`
+		Dismissed  []string          `json:"dismissed"`
 	}
 	if err := json.Unmarshal(b, &out); err != nil {
 		return nil, err

@@ -183,8 +183,6 @@ func readDotted(p *project.Project, path string) (string, bool) {
 		return p.Remote.ProjectID, true
 	case "remote.reviewers":
 		return strings.Join(p.Remote.Reviewers, ","), true
-	case "remote.board_sync":
-		return fmt.Sprintf("%t", p.Remote.BoardSync), true
 	// board
 	case "board.provider":
 		return p.Board.Provider, true
@@ -340,8 +338,6 @@ func writeDotted(p *project.Project, path, value string) error {
 		p.Remote.ProjectID = value
 	case "remote.reviewers":
 		p.Remote.Reviewers = splitCSV(value)
-	case "remote.board_sync":
-		return setBool(&p.Remote.BoardSync)
 	// board
 	case "board.provider":
 		p.Board.Provider = value

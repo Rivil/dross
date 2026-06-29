@@ -119,6 +119,23 @@ func (c *YouTrackClient) UpdateIssue(key string, patch IssuePatch) (*Issue, erro
 	return raw.toIssue(), nil
 }
 
+// CloseIssue resolves an issue. YouTrack has no separate "close" — an issue is
+// closed by moving its State to a resolved value, which the lifecycle-driven
+// state sync handles (plan t-7). Standalone close is a no-op here so the
+// BoardClient contract is satisfied without guessing at a resolved State name.
+func (c *YouTrackClient) CloseIssue(key string) error {
+	return nil
+}
+
+// EnsureMilestone is the forge-shaped milestone hook. YouTrack milestones are
+// entity-mode specific (version bundle / agile board / epic), wired in plan
+// t-6 (entity dispatch) and t-9 (milestone-sync). This placeholder satisfies
+// the BoardClient contract; it returns no link so milestone-sync treats the
+// entity as not-yet-ensured until the mode dispatch lands.
+func (c *YouTrackClient) EnsureMilestone(title, description string) (string, error) {
+	return "", nil
+}
+
 // ListIssues returns issues in the configured project matching the filter.
 // State maps to YouTrack's resolved/unresolved query clauses and each label
 // becomes a `tag:` clause.

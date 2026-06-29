@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -112,18 +113,32 @@ func (c *Client) isGitLab() bool { return c.provider == "gitlab" }
 
 // --- public types ---
 
-// BoardClient is the minimal issue-board surface shared by every backend: the
-// forge REST Client (forgejo/gitea/gitlab) and the YouTrackClient. It is
-// deliberately small for now — create + list, the operations whose signatures
-// already match across backends. The id-taking operations (get/update/close)
-// join it during the string-id migration (plan t-5), once the forge path also
-// keys issues by readable string id like YouTrack does.
+// BoardClient is the issue-board surface shared by every backend: the forge
+// REST Client (forgejo/gitea/gitlab) and the YouTrackClient. Issues are
+// addressed by their readable string id (a forge issue number "42" or a
+// YouTrack idReadable "PROJ-7"), so board.json and every call site speak one
+// id type regardless of backend.
 type BoardClient interface {
+	EnsureMilestone(title, description string) (string, error)
 	CreateIssue(in IssueInput) (*Issue, error)
+	GetIssue(key string) (*Issue, error)
+	UpdateIssue(key string, patch IssuePatch) (*Issue, error)
+	CloseIssue(key string) error
 	ListIssues(f IssueFilter) ([]Issue, error)
 }
 
 var _ BoardClient = (*Client)(nil)
+
+// NewBoard returns the board client for the configured provider: the YouTrack
+// backend for provider=youtrack, otherwise the forge REST Client
+// (forgejo/gitea/gitlab). It is the single entry point board operations use to
+// resolve a client from the [board] config.
+func NewBoard(cfg Config) (BoardClient, error) {
+	if strings.ToLower(cfg.Provider) == "youtrack" {
+		return NewYouTrack(cfg)
+	}
+	return New(cfg)
+}
 
 // Issue is the minimal shape dross cares about across operations.
 type Issue struct {
@@ -174,7 +189,7 @@ type LabelSpec struct {
 
 // EnsureMilestone returns the id of the milestone titled `title`, creating it
 // if absent. Idempotent: safe to call on every milestone-sync.
-func (c *Client) EnsureMilestone(title, description string) (int, error) {
+func (c *Client) EnsureMilestone(title, description string) (string, error) {
 	var existing []struct {
 		ID    int    `json:"id"`
 		Title string `json:"title"`
@@ -186,11 +201,11 @@ func (c *Client) EnsureMilestone(title, description string) (int, error) {
 		listQuery = ""
 	}
 	if err := c.do("GET", c.path("/milestones")+listQuery, nil, &existing); err != nil {
-		return 0, fmt.Errorf("list milestones: %w", err)
+		return "", fmt.Errorf("list milestones: %w", err)
 	}
 	for _, m := range existing {
 		if m.Title == title {
-			return m.ID, nil
+			return strconv.Itoa(m.ID), nil
 		}
 	}
 	var created struct {
@@ -200,9 +215,9 @@ func (c *Client) EnsureMilestone(title, description string) (int, error) {
 		"title":       title,
 		"description": description,
 	}, &created); err != nil {
-		return 0, fmt.Errorf("create milestone %q: %w", title, err)
+		return "", fmt.Errorf("create milestone %q: %w", title, err)
 	}
-	return created.ID, nil
+	return strconv.Itoa(created.ID), nil
 }
 
 // --- labels ---
@@ -315,7 +330,11 @@ func (c *Client) CreateIssue(in IssueInput) (*Issue, error) {
 
 // UpdateIssue applies a partial patch. Label changes go through the dedicated
 // labels endpoint (a full replace); everything else rides the issue PATCH.
-func (c *Client) UpdateIssue(number int, patch IssuePatch) (*Issue, error) {
+func (c *Client) UpdateIssue(key string, patch IssuePatch) (*Issue, error) {
+	number, err := strconv.Atoi(key)
+	if err != nil {
+		return nil, fmt.Errorf("invalid forge issue id %q (expected a number): %w", key, err)
+	}
 	if c.isGitLab() {
 		// GitLab updates the whole issue in one PUT: state via state_event,
 		// labels as a comma-joined string (full replace), no separate endpoint.
@@ -387,14 +406,19 @@ func (c *Client) UpdateIssue(number int, patch IssuePatch) (*Issue, error) {
 }
 
 // CloseIssue is a convenience for the ship step.
-func (c *Client) CloseIssue(number int) error {
+func (c *Client) CloseIssue(key string) error {
 	closed := "closed"
-	_, err := c.UpdateIssue(number, IssuePatch{State: &closed})
+	_, err := c.UpdateIssue(key, IssuePatch{State: &closed})
 	return err
 }
 
-// GetIssue fetches a single issue by number (GitLab: project-relative iid).
-func (c *Client) GetIssue(number int) (*Issue, error) {
+// GetIssue fetches a single issue by its readable id (GitLab: project-relative
+// iid). The forge readable id is the issue number as a string.
+func (c *Client) GetIssue(key string) (*Issue, error) {
+	number, err := strconv.Atoi(key)
+	if err != nil {
+		return nil, fmt.Errorf("invalid forge issue id %q (expected a number): %w", key, err)
+	}
 	if c.isGitLab() {
 		var raw gitlabIssueResponse
 		if err := c.do("GET", c.path(fmt.Sprintf("/issues/%d", number)), nil, &raw); err != nil {
@@ -485,6 +509,7 @@ type issueResponse struct {
 func (r *issueResponse) toIssue() *Issue {
 	iss := &Issue{
 		Number: r.Number,
+		Key:    strconv.Itoa(r.Number),
 		Title:  r.Title,
 		Body:   r.Body,
 		State:  r.State,
@@ -521,6 +546,7 @@ func (r *gitlabIssueResponse) toIssue() *Issue {
 	}
 	iss := &Issue{
 		Number: r.IID,
+		Key:    strconv.Itoa(r.IID),
 		Title:  r.Title,
 		Body:   r.Description,
 		State:  state,
