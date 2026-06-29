@@ -5,13 +5,23 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege: this workflow only reads the repo. No job pushes anywhere.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # Supply-chain hardening: pin the module proxy + checksum DB and refuse any
+      # mid-CI mutation of go.mod/go.sum.
+      GOFLAGS: -mod=readonly
+      GOPROXY: https://proxy.golang.org,direct
+      GOSUMDB: sum.golang.org
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
         with:
           go-version: '1.23'
           cache: true
@@ -24,3 +34,12 @@ jobs:
 
       - name: go build
         run: go build ./cmd/dross
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      # shellcheck is preinstalled on ubuntu-latest runners — no third-party action.
+      - name: shellcheck install.sh
+        run: shellcheck install.sh
