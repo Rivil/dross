@@ -2,22 +2,10 @@
   "version": "0.6.11.0",
   "current_milestone": "v0.6",
   "current_phase": "youtrack-board-integration",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-29T10:41:50.693597Z",
-  "last_action": "spec locked: youtrack-board-integration",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-29T11:07:16.878301Z",
+  "last_action": "plan reviewed: youtrack-board-integration (0 blocking, 2 flags resolved)",
   "history": [
-    {
-      "at": "2026-06-27T19:27:09.437604Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-27T19:27:09.443954Z",
-      "action": "verified ship-complete-recovery-hardening: pass (6/6 covered, mutation 0.83 measured / 1.00 on-covered, 0 survived)"
-    },
-    {
-      "at": "2026-06-27T19:35:16.574721Z",
-      "action": "completed ship-complete-recovery-hardening"
-    },
     {
       "at": "2026-06-27T19:59:32.200147Z",
       "action": "created deepen-container-iac-scanning"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-29T10:41:50.693597Z",
       "action": "spec locked: youtrack-board-integration"
+    },
+    {
+      "at": "2026-06-29T11:02:18.907538Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-29T11:02:18.914579Z",
+      "action": "plan locked: youtrack-board-integration (10 tasks across 4 waves)"
+    },
+    {
+      "at": "2026-06-29T11:07:16.878301Z",
+      "action": "plan reviewed: youtrack-board-integration (0 blocking, 2 flags resolved)"
     }
   ]
 }

@@ -1,0 +1,222 @@
+[phase]
+  id = "youtrack-board-integration"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add [board] config struct + dotted arms"
+  files = [
+    "internal/project/project.go",
+    "internal/project/board_test.go",
+    "internal/cmd/project.go",
+    "internal/cmd/project_test.go",
+  ]
+  description = """
+Add a Board struct to project.toml (provider, base_url, auth_env, project,
+enabled, milestone_mode, state_map) modelled on Remote, and the board.* dotted
+read/write arms so `dross project set/get board.<field>` round-trips.
+"""
+  covers = ["c-1"]
+  test_contract = [
+    "if a Board field or toml tag is wrong/dropped, TestProjectBoardRoundTrip fails: Board{provider=youtrack, base_url, auth_env, project, enabled, milestone_mode=version, state_map={shipped:Fixed}} Save→Load preserves every field incl. the state_map map",
+    "if a board.* dotted arm is missing, the extended round-trip (project set/get board.provider|base_url|auth_env|project|enabled|milestone_mode through writeDotted→Save→Load) fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "YouTrack REST client + BoardClient interface + factory"
+  files = [
+    "internal/forge/youtrack.go",
+    "internal/forge/youtrack_test.go",
+    "internal/forge/forge.go",
+  ]
+  description = """
+Add a sibling YouTrackClient (CRUD over the YouTrack REST API) behind a minimal
+BoardClient interface that the existing *forge.Client also satisfies; the
+forge.New factory returns the YouTrack client for provider=youtrack. Client +
+factory land together (compile/test integrity).
+"""
+  covers = ["c-2"]
+  test_contract = [
+    "if New() doesn't construct a youtrack backend, TestNewAcceptsYouTrack fails (returns a client, not ErrNotImplemented); compile-time var _ BoardClient = (*Client)(nil) and var _ BoardClient = (*YouTrackClient)(nil) break if the interface isn't satisfied",
+    "if the create shape is wrong, TestYouTrackCreateIssue fails: POST /api/issues body {project:{...},summary,description}, response idReadable PROJ-7 → Issue.Key==\"PROJ-7\"",
+    "if list scoping/get/update paths are wrong, TestYouTrackListIssues (GET /api/issues?query=project:<short>&fields=) / TestYouTrackGetIssue / TestYouTrackUpdateIssue (/api/issues/PROJ-7) fail",
+    "if auth is wrong, TestYouTrackBearerAuth fails (Authorization: Bearer <token-from-auth_env>, never an int-id path)",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Move inbox board gate to [board].enabled"
+  files = [
+    "assets/prompts/inbox.md",
+    "internal/cmd/inbox_prompt_test.go",
+  ]
+  description = """
+inbox.md's board-source gate reads `dross project get board.enabled` (and points
+migration at `[board]`/`dross issue enable`) instead of `remote.board_sync`.
+Prompt-only (rule r-01); verified by a prompt-presence grep test.
+"""
+  covers = ["c-3"]
+  test_contract = [
+    "if the gate isn't moved, TestInboxPromptReadsBoardEnabled fails — normalised inbox.md must contain `board.enabled` and no longer `remote.board_sync` (currently the live gate)",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Validate [board] in dross doctor"
+  files = [
+    "internal/cmd/doctor.go",
+    "internal/cmd/doctor_test.go",
+  ]
+  description = """
+doctor validates a configured [board]: auth_env set, provider in
+forgejo|gitea|gitlab|youtrack, base_url shaped, milestone_mode in
+version|agile|epic — surfacing ✗ per problem and ✓ on a well-formed board.
+"""
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = [
+    "if doctor ignores [board] or rejects youtrack, TestDoctorValidatesBoardBlock fails: board.enabled=true with unset $auth_env → ✗ auth_env; provider=bogus → ✗ provider; bad base_url / invalid milestone_mode → ✗; a well-formed youtrack board → ✓ board line",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "String issue id in board.json + re-route ops to [board]"
+  files = [
+    "internal/board/board.go",
+    "internal/board/board_test.go",
+    "internal/cmd/issue.go",
+  ]
+  description = """
+board.json links by readable string issue id across ALL maps — Phases, Quicks,
+AND Milestones become map[string]string, Dismissed becomes []string — and every
+issue.go call site flips from the forge int Issue.Number to the string Issue.Key.
+openBoard resolves its client SOLELY from [board] (no [remote] fallback),
+re-routing the forge path (forgejo|gitea|gitlab) through [board].provider too.
+The full board.go signature change + every issue.go call site land in ONE atomic
+task so the build never goes red.
+"""
+  covers = ["c-1", "c-4"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = [
+    "if any link map isn't string-keyed, TestBoardReadableIDRoundTrip fails: SetPhase/SetQuick/SetMilestone(\"...\",\"PROJ-123\") → the getters return \"PROJ-123\", and IsLinked(\"PROJ-123\")/IsDismissed round-trip a string id across Phases, Quicks AND Milestones + Dismissed",
+    "if a call site still passes an int (partial migration), the package fails to compile — a guard test references SetPhase/SetQuick/SetMilestone with string args and the dismiss CLI path with a readable id",
+    "if openBoard still reads proj.Remote or falls back to [remote], TestOpenBoardResolvesFromBoardBlock fails: [remote].provider=github + enabled [board] pointing at an httptest server → board ops hit the BOARD server; a disabled [board] + populated [remote] is a no-op",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Ensure milestone entity per milestone_mode"
+  files = [
+    "internal/forge/youtrack.go",
+    "internal/forge/youtrack_test.go",
+  ]
+  description = """
+One ensure-entity dispatch covering all three locked modes: version (project
+Version bundle, default), agile (look up a pre-existing Agile board), epic
+(create-or-reuse an Epic issue). Re-running reuses, never duplicates.
+"""
+  covers = ["c-4"]
+  depends_on = ["t-2"]
+  test_contract = [
+    "if version mode is wrong, TestYouTrackMilestoneVersionMode fails (GET then POST the Version bundle under /api/admin/projects/<id>)",
+    "if a missing agile board aborts instead of degrading, TestYouTrackMilestoneAgileMode fails: GET /api/agiles, named board absent → WARN-and-skip the attach, no error",
+    "if epic mode is wrong or duplicates, TestYouTrackMilestoneEpicMode fails (creates-or-reuses an Epic, returns its idReadable)",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Set YouTrack State via state_map, warn-skip"
+  files = [
+    "internal/forge/youtrack.go",
+    "internal/cmd/issue.go",
+    "internal/forge/youtrack_test.go",
+  ]
+  description = """
+phase-sync --status maps a dross lifecycle state to a YouTrack State custom-field
+value via the default map (planned→Open…complete→Verified) overridden by
+[board].state_map; a state the workflow lacks warns and skips the State write
+without failing the rest of the issue patch.
+"""
+  covers = ["c-5"]
+  depends_on = ["t-2", "t-5"]
+  test_contract = [
+    "if the state mapping/update is wrong, TestYouTrackSetStateMapsAndUpdates fails: --status shipped with state_map shipped→Fixed sends POST /api/issues/PROJ-7 with State value \"Fixed\" (default map when state_map empty)",
+    "if an unmapped/absent state aborts or silently no-ops, TestYouTrackSetStateUnmappedWarnsSkips fails: no State write sent, the rest of the patch succeeds (err==nil), a warning is printed",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  title = "Surface YouTrack issues in issue pull"
+  files = [
+    "internal/cmd/issue.go",
+    "internal/cmd/issue_test.go",
+  ]
+  description = """
+`dross issue pull --json` returns open YouTrack issues not linked to a dross
+phase/quick and not dismissed, with the label filter passed through as a YouTrack
+query clause — feeding /dross-inbox.
+"""
+  covers = ["c-3"]
+  depends_on = ["t-2", "t-5"]
+  test_contract = [
+    "if a linked/dismissed string-id issue leaks or the label filter is dropped, TestIssuePullYouTrackFiltersLinkedAndDismissed fails: 3 open issues (PROJ-12 linked, PROJ-20 dismissed, PROJ-21 new), board.json seeded → pull --labels bug emits only PROJ-21 and the upstream query carries the bug tag",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-9"
+  wave = 4
+  title = "Wire phase-sync + milestone-sync to YouTrack"
+  files = [
+    "internal/cmd/issue.go",
+    "internal/cmd/issue_test.go",
+  ]
+  description = """
+phase-sync creates-or-updates a YouTrack issue per phase (acceptance criteria +
+task checklist via renderPhaseBody, linked in board.json by readable id);
+milestone-sync ensures the milestone entity (calls t-6) and links it.
+"""
+  covers = ["c-4"]
+  depends_on = ["t-5", "t-6", "t-7"]
+  test_contract = [
+    "if a second sync duplicates the issue, TestIssuePhaseSyncYouTrackCreatesThenUpdates fails: first sync POSTs /api/issues with criteria + a - [ ]/- [x] checklist and stores phases[<phase>]==PROJ-7; second sync POSTs /api/issues/PROJ-7 (update, no new create)",
+    "if milestone-sync skips the entity/link, TestIssueMilestoneSyncYouTrack fails: the milestone entity is ensured per milestone_mode and linked in board.json",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-10"
+  wave = 4
+  title = "Sync milestone backlog (slugs + someday), idempotent"
+  files = [
+    "internal/cmd/issue.go",
+    "internal/board/board.go",
+    "internal/cmd/issue_test.go",
+  ]
+  description = """
+Sync the milestone backlog to YouTrack: unscaffolded phase slugs (in
+milestone.phases with no phase dir) + unrouted `someday` deferred ideas become
+backlog items in Open state attached to the milestone entity, recorded in a
+board.json backlog map; re-running updates the same items, never duplicates.
+"""
+  covers = ["c-6"]
+  depends_on = ["t-5", "t-6"]
+  test_contract = [
+    "if a scaffolded slug leaks, a someday item is missed, or re-running duplicates, TestIssueBacklogSyncYouTrackIdempotent fails: milestone.phases=[01-done(scaffolded), future-x] + one unrouted someday deferred → first run POSTs exactly 2 backlog items attached to the milestone entity; second run POSTs 0 new, updating the same items by readable-id link",
+  ]
+  status = "pending"
