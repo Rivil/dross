@@ -2,22 +2,10 @@
   "version": "0.6.12.0",
   "current_milestone": "v0.6",
   "current_phase": "youtrack-board-integration",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-29T12:14:50.684251Z",
-  "last_action": "verified youtrack-board-integration: partial (5/6 covered, c-6 weak; mutation 0.86 measured, efficacy 1.00 on covered)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-29T12:20:07.887331Z",
+  "last_action": "phase youtrack-board-integration re-executed (c-6 amendment, 10/10 done)",
   "history": [
-    {
-      "at": "2026-06-27T21:36:39.240606Z",
-      "action": "executed t-7 (Pin embedded loadouts for new profiles)"
-    },
-    {
-      "at": "2026-06-27T21:38:09.889525Z",
-      "action": "executed t-8 (Assert security recon IaC scanners)"
-    },
-    {
-      "at": "2026-06-27T21:39:56.85754Z",
-      "action": "executed t-9 (Assert quality recon IaC analyzers)"
-    },
     {
       "at": "2026-06-27T21:40:06.799592Z",
       "action": "set current_phase_status=complete"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-29T12:14:50.684251Z",
       "action": "verified youtrack-board-integration: partial (5/6 covered, c-6 weak; mutation 0.86 measured, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-06-29T12:20:00.180085Z",
+      "action": "amended t-10 (backlog attach per milestone_mode: epic/agile)"
+    },
+    {
+      "at": "2026-06-29T12:20:07.88051Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-29T12:20:07.887331Z",
+      "action": "phase youtrack-board-integration re-executed (c-6 amendment, 10/10 done)"
     }
   ]
 }

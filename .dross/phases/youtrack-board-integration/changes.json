@@ -14,14 +14,13 @@
     },
     "t-10": {
       "files": [
-        "internal/board/board.go",
         "internal/forge/youtrack.go",
         "internal/cmd/issue.go",
         "internal/cmd/issue_test.go"
       ],
-      "commit": "c857901",
-      "completed_at": "2026-06-29T12:06:14.317804Z",
-      "notes": "feature: milestone backlog sync · syncBacklog + YouTrackClient.CreateBacklogItem @ internal/cmd/issue.go,internal/forge/youtrack.go · mirrors unscaffolded slugs + someday ideas as Open issues attached to the milestone entity (Fix versions), idempotent via board.json backlog map"
+      "commit": "7cc07b1",
+      "completed_at": "2026-06-29T12:20:00.164432Z",
+      "notes": "feature: milestone backlog sync · LinkSubtask + per-mode attach @ internal/forge/youtrack.go,internal/cmd/issue.go · backlog items attach to the entity per milestone_mode — epic via subtask command, agile via project-based board, version via Fix versions"
     },
     "t-2": {
       "files": [
