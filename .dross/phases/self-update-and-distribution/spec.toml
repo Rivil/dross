@@ -1,0 +1,66 @@
+[phase]
+  id = "self-update-and-distribution"
+  title = "self-update and distribution"
+  milestone = "v0.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "The dross binary embeds all slash-command skills (assets/commands/*) and prompts (assets/prompts/*), not just _interaction.md; a guard test fails if the embedded content drifts from the on-disk assets/ files."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross install` materializes the skills (~/.claude/skills/dross-*/SKILL.md) and prompts (~/.claude/dross/prompts/) into the user's home: when run from a source checkout it symlinks assets/ (live edits preserved), otherwise it writes real-file copies from the embedded FS; it prunes stale dross-* skills/prompts this version dropped and never touches non-dross entries. `make install` produces the same dev (symlink) result by delegating to it — asserted in tests against a temp HOME."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross update` detects the host platform (darwin/linux × arm64/amd64), fetches the latest GitHub release, downloads the matching tarball, verifies its SHA-256 against the release checksums.txt over HTTPS and refuses on mismatch, atomically replaces the running binary, then re-syncs the embedded assets. It updates only when the release is strictly newer (semver); `--check` reports the available version without applying and `--force` reinstalls regardless. Version comparison + checksum verification asserted against an httptest mock of the GitHub API + release asset."
+
+[[criteria]]
+  id = "c-4"
+  text = "A `curl | sh` install.sh bootstraps a fresh machine — downloads the latest release binary for the platform and runs `dross install` — leaving working dross slash commands with no Go toolchain or git checkout required. The script passes shellcheck and a documented smoke run."
+
+[[criteria]]
+  id = "c-5"
+  text = "The README documents the install (curl|sh) and `dross update` flow as the supported way to install and update dross on any machine."
+
+[[decisions]]
+  key = "distribution_model"
+  choice = "Embed all command skills + prompts into the binary (extending the existing assets go:embed); `dross update` self-updates by downloading the latest GitHub release; the binary is the single distribution unit carrying its own assets."
+  why = "Matches the locked single-static-binary / no-runtime-deps stack decision; gives painless updates on machines with no Go toolchain and no git checkout."
+  locked = true
+
+[[decisions]]
+  key = "install_unification"
+  choice = "One `dross install` is the installer everywhere: it auto-detects a source checkout (symlink assets/ for live dev edits) versus not (write embedded real-file copies), with an explicit override flag; `make install` becomes a thin wrapper over `dross install`."
+  why = "Single entry point; preserves the r-01 live-edit dev loop on the author's box while giving end-users copy-based installs from the embedded FS."
+  locked = true
+
+[[decisions]]
+  key = "update_trust"
+  choice = "`dross update` verifies the downloaded tarball's SHA-256 against the release checksums.txt fetched over HTTPS and refuses on mismatch. No signing yet, but the download/verify path is structured so signed-checksums (embedded public key + ed25519 verify + a goreleaser `signs` block) can be added later as a small additive change."
+  why = "Checksum-over-HTTPS gives corruption/MITM protection now with zero key management; signature verification (account-compromise resistance) is deferred but designed-for."
+  locked = true
+
+[[decisions]]
+  key = "update_version_semantics"
+  choice = "`dross update` semver-compares the latest GitHub release tag against the running binary's release version (set via ldflags) and updates only when strictly newer; `--check` reports without applying, `--force` reinstalls regardless, and a dev/unknown-version build warns and offers anyway. The 4-part `.dross` state/project version is project-internal and not used by the updater."
+  why = "Released binaries already carry their tag via ldflags; semver-newer-only avoids accidental downgrades and keeps the binary's release version distinct from the project-state version scheme."
+  locked = true
+
+[[decisions]]
+  key = "asset_sync_policy"
+  choice = "install/update performs a clean sync of the dross-* namespace: write all current skills/prompts, prune dross-* skills/prompts this version dropped, and never touch non-dross skills in ~/.claude."
+  why = "Renamed or removed commands shouldn't linger as stale skills; scoping the prune to dross-* avoids clobbering the user's other Claude Code skills."
+  locked = true
+
+[[deferred]]
+  text = "Release signing (minisign or cosign) in CI plus signature verification in `dross update` — embed a public key, sign checksums.txt in goreleaser, ed25519-verify before swap. The update_trust path is built to accept this additively."
+  why = "Checksum-over-HTTPS is enough for now (solo project, GitHub is the trust root); signing adds account-compromise resistance later. Someday."
+
+[[deferred]]
+  text = "Windows support — a windows/amd64 (and arm64) goreleaser build plus the different install path (no ~/.claude symlink semantics, %USERPROFILE% layout)."
+  why = "Author is on darwin/linux; cross-platform Windows install is out of scope for the first cut. Someday."
+
+[[deferred]]
+  text = "Package-manager distribution channels — a Homebrew tap (and possibly others) as an alternative install/update route alongside curl|sh + `dross update`."
+  why = "curl|sh + self-update covers the author's machines; package-manager channels are a marketing/convenience concern, premature while unmarketed. Someday."

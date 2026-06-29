@@ -1,21 +1,11 @@
 {
   "version": "0.6.12.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-29T12:34:09.566539Z",
-  "last_action": "completed youtrack-board-integration",
+  "current_phase": "self-update-and-distribution",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-29T12:55:28.621527Z",
+  "last_action": "spec locked: self-update-and-distribution",
   "history": [
-    {
-      "at": "2026-06-29T06:26:39.079135Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-29T06:26:39.086447Z",
-      "action": "verified deepen-container-iac-scanning: pass (8/8 covered, mutation 0.83)"
-    },
-    {
-      "at": "2026-06-29T06:35:03.761647Z",
-      "action": "completed deepen-container-iac-scanning"
-    },
     {
       "at": "2026-06-29T07:13:57.522685Z",
       "action": "created gitlab-ship-provider"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-29T12:34:09.566539Z",
       "action": "completed youtrack-board-integration"
+    },
+    {
+      "at": "2026-06-29T12:51:15.872844Z",
+      "action": "created self-update-and-distribution"
+    },
+    {
+      "at": "2026-06-29T12:55:28.614163Z",
+      "action": "set current_phase=self-update-and-distribution"
+    },
+    {
+      "at": "2026-06-29T12:55:28.621527Z",
+      "action": "spec locked: self-update-and-distribution"
     }
   ]
 }
