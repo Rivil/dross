@@ -136,6 +136,125 @@ func (c *YouTrackClient) EnsureMilestone(title, description string) (string, err
 	return "", nil
 }
 
+// EnsureMilestoneEntity ensures the YouTrack entity a dross milestone maps to,
+// per the configured milestone_mode, and returns its readable id (or "" when
+// the mode degrades to a skip). Idempotent — re-running reuses, never
+// duplicates.
+//
+//   - version (default): a value in the project's Version bundle. Returns the
+//     version name (the identifier issues are tagged with).
+//   - agile: a pre-existing Agile board, looked up by name. A missing board
+//     warns and skips (no error, "" id) rather than failing the sync.
+//   - epic: a create-or-reuse Epic issue. Returns its idReadable.
+func (c *YouTrackClient) EnsureMilestoneEntity(mode, name, description string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "version":
+		return c.ensureVersion(name)
+	case "agile":
+		return c.ensureAgile(name)
+	case "epic":
+		return c.ensureEpic(name, description)
+	default:
+		return "", fmt.Errorf("unknown milestone_mode %q (expected version | agile | epic)", mode)
+	}
+}
+
+// ensureVersion ensures a value exists in the project's Version bundle. It
+// discovers the bundle (and its current values) through the project's custom
+// fields, then adds the value via the version-bundle endpoint if absent.
+func (c *YouTrackClient) ensureVersion(name string) (string, error) {
+	var fields []struct {
+		Field struct {
+			Name string `json:"name"`
+		} `json:"field"`
+		Bundle *struct {
+			ID     string `json:"id"`
+			Type   string `json:"$type"`
+			Values []struct {
+				Name string `json:"name"`
+			} `json:"values"`
+		} `json:"bundle"`
+	}
+	q := "?fields=" + url.QueryEscape("field(name),bundle(id,$type,values(name))")
+	if err := c.do("GET", c.endpoint("/admin/projects/"+c.project+"/customFields")+q, nil, &fields); err != nil {
+		return "", fmt.Errorf("list project custom fields: %w", err)
+	}
+	bundleID := ""
+	for _, f := range fields {
+		if f.Bundle == nil || f.Bundle.Type != "VersionBundle" {
+			continue
+		}
+		bundleID = f.Bundle.ID
+		for _, v := range f.Bundle.Values {
+			if v.Name == name {
+				return name, nil // already present — idempotent reuse
+			}
+		}
+		break
+	}
+	if bundleID == "" {
+		return "", fmt.Errorf("project %s has no version bundle (no version-typed field?)", c.project)
+	}
+	// The version-bundle values endpoint lives under customFieldSettings, not
+	// the project — the project custom-field GET above is how we resolve which
+	// bundle to write to.
+	if err := c.do("POST", c.endpoint("/admin/customFieldSettings/bundles/version/"+bundleID+"/values")+"?fields="+url.QueryEscape("name"),
+		map[string]any{"name": name}, nil); err != nil {
+		return "", fmt.Errorf("add version %q: %w", name, err)
+	}
+	return name, nil
+}
+
+// ensureAgile returns the id of a pre-existing Agile board matching name. A
+// missing board warns and skips (no error) so milestone sync degrades rather
+// than failing on a project without the expected board.
+func (c *YouTrackClient) ensureAgile(name string) (string, error) {
+	var boards []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := c.do("GET", c.endpoint("/agiles")+"?fields="+url.QueryEscape("id,name"), nil, &boards); err != nil {
+		return "", fmt.Errorf("list agile boards: %w", err)
+	}
+	for _, b := range boards {
+		if b.Name == name {
+			return b.ID, nil
+		}
+	}
+	fmt.Fprintf(os.Stderr, "warning: no Agile board named %q on this YouTrack — skipping milestone attach\n", name)
+	return "", nil
+}
+
+// ensureEpic creates-or-reuses an Epic issue named `name` and returns its
+// readable id. Reuse matches an existing Epic by summary.
+func (c *YouTrackClient) ensureEpic(name, description string) (string, error) {
+	q := url.Values{}
+	q.Set("query", "project: "+c.project+" Type: Epic")
+	q.Set("fields", "idReadable,summary")
+	var existing []youtrackIssue
+	if err := c.do("GET", c.endpoint("/issues")+"?"+q.Encode(), nil, &existing); err != nil {
+		return "", fmt.Errorf("list epics: %w", err)
+	}
+	for _, e := range existing {
+		if e.Summary == name {
+			return e.IDReadable, nil // reuse
+		}
+	}
+	body := map[string]any{
+		"project":     map[string]any{"shortName": c.project},
+		"summary":     name,
+		"description": description,
+		"customFields": []map[string]any{
+			{"name": "Type", "$type": "SingleEnumIssueCustomField", "value": map[string]any{"name": "Epic"}},
+		},
+	}
+	var created youtrackIssue
+	if err := c.do("POST", c.endpoint("/issues")+"?fields="+url.QueryEscape("idReadable,summary"), body, &created); err != nil {
+		return "", fmt.Errorf("create epic %q: %w", name, err)
+	}
+	return created.IDReadable, nil
+}
+
 // ListIssues returns issues in the configured project matching the filter.
 // State maps to YouTrack's resolved/unresolved query clauses and each label
 // becomes a `tag:` clause.

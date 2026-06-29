@@ -159,6 +159,148 @@ func TestYouTrackUpdateIssue(t *testing.T) {
 	}
 }
 
+func TestYouTrackMilestoneVersionMode(t *testing.T) {
+	// Create path: bundle exists with other values, target absent → POST it.
+	t.Run("creates when absent", func(t *testing.T) {
+		var gotFieldsGet, gotValuePost string
+		var postBody map[string]any
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/customFields") && r.Method == "GET":
+				gotFieldsGet = r.URL.Path
+				_, _ = io.WriteString(w, `[{"field":{"name":"Fix versions"},"bundle":{"id":"B1","$type":"VersionBundle","values":[{"name":"v0.5"}]}}]`)
+			case strings.Contains(r.URL.Path, "/bundles/version/B1/values") && r.Method == "POST":
+				gotValuePost = r.URL.Path
+				raw, _ := io.ReadAll(r.Body)
+				_ = json.Unmarshal(raw, &postBody)
+				_, _ = io.WriteString(w, `{"name":"v0.6"}`)
+			default:
+				t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			}
+		})
+
+		id, err := c.EnsureMilestoneEntity("version", "v0.6", "")
+		if err != nil {
+			t.Fatalf("EnsureMilestoneEntity: %v", err)
+		}
+		if gotFieldsGet != "/api/admin/projects/PROJ/customFields" {
+			t.Errorf("bundle discovery GET = %q", gotFieldsGet)
+		}
+		if gotValuePost == "" || postBody["name"] != "v0.6" {
+			t.Errorf("version value not POSTed: path=%q body=%v", gotValuePost, postBody)
+		}
+		if id != "v0.6" {
+			t.Errorf("id = %q, want v0.6", id)
+		}
+	})
+
+	// Idempotent: target already in the bundle → no POST.
+	t.Run("reuses when present", func(t *testing.T) {
+		posted := false
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "POST" {
+				posted = true
+			}
+			_, _ = io.WriteString(w, `[{"field":{"name":"Fix versions"},"bundle":{"id":"B1","$type":"VersionBundle","values":[{"name":"v0.6"}]}}]`)
+		})
+		id, err := c.EnsureMilestoneEntity("version", "v0.6", "")
+		if err != nil {
+			t.Fatalf("EnsureMilestoneEntity: %v", err)
+		}
+		if posted {
+			t.Error("should not POST a version that already exists")
+		}
+		if id != "v0.6" {
+			t.Errorf("id = %q, want v0.6", id)
+		}
+	})
+}
+
+func TestYouTrackMilestoneAgileMode(t *testing.T) {
+	t.Run("missing board warns and skips", func(t *testing.T) {
+		var gotPath string
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			_, _ = io.WriteString(w, `[{"id":"108-1","name":"Other board"}]`)
+		})
+		id, err := c.EnsureMilestoneEntity("agile", "v0.6 board", "")
+		if err != nil {
+			t.Fatalf("agile mode must not fail on a missing board: %v", err)
+		}
+		if gotPath != "/api/agiles" {
+			t.Errorf("agile lookup hit %q, want /api/agiles", gotPath)
+		}
+		if id != "" {
+			t.Errorf("missing board should skip (empty id), got %q", id)
+		}
+	})
+
+	t.Run("present board returns its id", func(t *testing.T) {
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			_, _ = io.WriteString(w, `[{"id":"108-23","name":"v0.6 board"}]`)
+		})
+		id, err := c.EnsureMilestoneEntity("agile", "v0.6 board", "")
+		if err != nil {
+			t.Fatalf("EnsureMilestoneEntity: %v", err)
+		}
+		if id != "108-23" {
+			t.Errorf("id = %q, want 108-23", id)
+		}
+	})
+}
+
+func TestYouTrackMilestoneEpicMode(t *testing.T) {
+	t.Run("creates when absent", func(t *testing.T) {
+		var postBody map[string]any
+		created := false
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case "GET":
+				_, _ = io.WriteString(w, `[]`)
+			case "POST":
+				created = true
+				raw, _ := io.ReadAll(r.Body)
+				_ = json.Unmarshal(raw, &postBody)
+				_, _ = io.WriteString(w, `{"idReadable":"PROJ-50","summary":"v0.6"}`)
+			}
+		})
+		id, err := c.EnsureMilestoneEntity("epic", "v0.6", "the milestone")
+		if err != nil {
+			t.Fatalf("EnsureMilestoneEntity: %v", err)
+		}
+		if !created {
+			t.Error("epic should be created when absent")
+		}
+		cfs, _ := postBody["customFields"].([]any)
+		if len(cfs) == 0 {
+			t.Errorf("create epic body missing Type custom field: %v", postBody)
+		}
+		if id != "PROJ-50" {
+			t.Errorf("id = %q, want PROJ-50", id)
+		}
+	})
+
+	t.Run("reuses when present", func(t *testing.T) {
+		posted := false
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "POST" {
+				posted = true
+			}
+			_, _ = io.WriteString(w, `[{"idReadable":"PROJ-50","summary":"v0.6"}]`)
+		})
+		id, err := c.EnsureMilestoneEntity("epic", "v0.6", "the milestone")
+		if err != nil {
+			t.Fatalf("EnsureMilestoneEntity: %v", err)
+		}
+		if posted {
+			t.Error("should not create a duplicate epic")
+		}
+		if id != "PROJ-50" {
+			t.Errorf("id = %q, want PROJ-50", id)
+		}
+	})
+}
+
 func TestYouTrackBearerAuth(t *testing.T) {
 	var gotAuth, gotPath string
 	c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
