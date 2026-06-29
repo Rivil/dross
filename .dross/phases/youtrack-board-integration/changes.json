@@ -1,0 +1,106 @@
+{
+  "phase": "youtrack-board-integration",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/project/project.go",
+        "internal/project/board_test.go",
+        "internal/cmd/project.go",
+        "internal/cmd/project_test.go"
+      ],
+      "commit": "7061481",
+      "completed_at": "2026-06-29T11:14:35.750061Z",
+      "notes": "feature: board config block · Board @ internal/project/project.go · dedicated [board] struct (provider/base_url/auth_env/project/enabled/milestone_mode/state_map) + board.* dotted get/set arms, decoupled from [remote]"
+    },
+    "t-10": {
+      "files": [
+        "internal/forge/youtrack.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "7cc07b1",
+      "completed_at": "2026-06-29T12:20:00.164432Z",
+      "notes": "feature: milestone backlog sync · LinkSubtask + per-mode attach @ internal/forge/youtrack.go,internal/cmd/issue.go · backlog items attach to the entity per milestone_mode — epic via subtask command, agile via project-based board, version via Fix versions"
+    },
+    "t-2": {
+      "files": [
+        "internal/forge/youtrack.go",
+        "internal/forge/youtrack_test.go",
+        "internal/forge/forge.go"
+      ],
+      "commit": "7f90f7d",
+      "completed_at": "2026-06-29T11:25:52.461687Z",
+      "notes": "feature: youtrack board backend · YouTrackClient @ internal/forge/youtrack.go · YouTrack REST CRUD (bearer perm-token, readable-id PROJ-7 addressing, ?fields projection) behind BoardClient interface + NewYouTrack factory"
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/inbox.md",
+        "internal/cmd/inbox_prompt_test.go"
+      ],
+      "commit": "42422e0",
+      "completed_at": "2026-06-29T11:27:42.179208Z",
+      "notes": "feature: inbox board triage · inbox.md §0 gate · inbound board source gated on [board].enabled instead of remote.board_sync, decoupling triage from the code host"
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "277628a",
+      "completed_at": "2026-06-29T11:31:46.250372Z",
+      "notes": "feature: board config block · doctor Board section @ internal/cmd/doctor.go · validates a configured [board] (provider/auth_env/base_url/milestone_mode) independently of [remote], ✗ per problem + ✓ when well-formed"
+    },
+    "t-5": {
+      "files": [
+        "internal/board/board.go",
+        "internal/board/board_test.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_test.go",
+        "internal/cmd/project.go",
+        "internal/forge/forge.go",
+        "internal/forge/forge_test.go",
+        "internal/forge/youtrack.go",
+        "internal/project/project.go"
+      ],
+      "commit": "4bdea81",
+      "completed_at": "2026-06-29T11:46:43.463834Z",
+      "notes": "feature: board link registry · board.Board + openBoard @ internal/board/board.go,internal/cmd/issue.go · string readable-id keys across phases/quicks/milestones/dismissed; board ops resolve solely from [board] via forge.NewBoard, BoardClient unifies forge+youtrack"
+    },
+    "t-6": {
+      "files": [
+        "internal/forge/youtrack.go",
+        "internal/forge/youtrack_test.go"
+      ],
+      "commit": "2f73687",
+      "completed_at": "2026-06-29T11:50:20.672982Z",
+      "notes": "feature: youtrack milestone entity · EnsureMilestoneEntity @ internal/forge/youtrack.go · one dispatch over version (Version bundle value) / agile (existing board, warn-skip) / epic (create-or-reuse Epic issue), idempotent"
+    },
+    "t-7": {
+      "files": [
+        "internal/forge/youtrack.go",
+        "internal/forge/youtrack_test.go",
+        "internal/cmd/issue.go"
+      ],
+      "commit": "4d4f086",
+      "completed_at": "2026-06-29T11:53:02.789439Z",
+      "notes": "feature: youtrack state sync · YouTrackClient.SetState @ internal/forge/youtrack.go · maps dross lifecycle→State custom field (default map + [board].state_map override), unmapped state warns+skips without failing the sync"
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "89be851",
+      "completed_at": "2026-06-29T11:54:51.189683Z",
+      "notes": "feature: inbox board triage · TestIssuePullYouTrackFiltersLinkedAndDismissed @ internal/cmd/issue_test.go · pins that issue pull surfaces open unlinked/undismissed YouTrack issues with label→tag query passthrough (generic path from t-2/t-5)"
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "cde3f23",
+      "completed_at": "2026-06-29T11:58:30.0938Z",
+      "notes": "feature: youtrack phase tracking · ensureMilestoneLink dispatch @ internal/cmd/issue.go · milestone-sync ensures the entity per milestone_mode and links it; phase-sync creates/updates the YouTrack issue (criteria+checklist, State) by readable id, idempotent"
+    }
+  }
+}

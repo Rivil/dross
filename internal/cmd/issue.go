@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -41,6 +42,7 @@ func Issue() *cobra.Command {
 		issueEnable(),
 		issueDisable(),
 		issueMilestoneSync(),
+		issueBacklogSync(),
 		issuePhaseSync(),
 		issueQuick(),
 		issuePull(),
@@ -53,37 +55,31 @@ func Issue() *cobra.Command {
 
 // boardCtx bundles everything a board operation needs.
 type boardCtx struct {
-	client    *forge.Client
+	client    forge.BoardClient
 	board     *board.Board
 	proj      *project.Project
 	root      string
 	boardPath string
 }
 
-// openBoard loads project + board.json + a forge client. When board sync is
-// disabled in project.toml it returns enabled=false and no error, so the
-// workflow prompts can call `dross issue …` unconditionally and have it be a
-// silent no-op for anyone who hasn't opted in.
+// openBoard loads project + board.json + a board client, resolved SOLELY from
+// the [board] config block (never [remote] — a repo can ship code to one host
+// and track issues on another). When board sync is disabled it returns
+// enabled=false and no error, so the workflow prompts can call `dross issue …`
+// unconditionally and have it be a silent no-op for anyone who hasn't opted in.
 func openBoard() (ctx *boardCtx, enabled bool, err error) {
 	proj, _, err := loadProject()
 	if err != nil {
 		return nil, false, err
 	}
-	if !proj.Remote.BoardSync {
+	if !proj.Board.Enabled {
 		return nil, false, nil
 	}
 	root, err := FindRoot()
 	if err != nil {
 		return nil, false, err
 	}
-	client, err := forge.New(forge.Config{
-		Provider:   proj.Remote.Provider,
-		URL:        proj.Remote.URL,
-		APIBase:    proj.Remote.APIBase,
-		AuthEnv:    proj.Remote.AuthEnv,
-		AuthScheme: proj.Remote.AuthScheme,
-		ProjectID:  proj.Remote.ProjectID,
-	})
+	client, err := forge.NewBoard(boardConfig(proj.Board))
 	if err != nil {
 		return nil, false, err
 	}
@@ -98,6 +94,25 @@ func openBoard() (ctx *boardCtx, enabled bool, err error) {
 		root:      root,
 		boardPath: filepath.Join(root, board.File),
 	}, true, nil
+}
+
+// boardConfig maps a [board] block onto a forge.Config. base_url is the API
+// base; project is the tracker-native identifier — a "owner/repo" path for
+// forge backends, the numeric/path project ref for GitLab, the short-name for
+// YouTrack. For the forge backends a synthetic URL carries owner/repo to the
+// client (the real host is irrelevant — every call targets base_url).
+func boardConfig(b project.Board) forge.Config {
+	cfg := forge.Config{
+		Provider: b.Provider,
+		APIBase:  b.BaseURL,
+		AuthEnv:  b.AuthEnv,
+		Project:  b.Project,
+		URL:      "https://board.local/" + b.Project,
+	}
+	if strings.ToLower(b.Provider) == "gitlab" {
+		cfg.ProjectID = b.Project
+	}
+	return cfg
 }
 
 // wrapBoard tags operational forge errors so telemetry buckets them as
@@ -120,23 +135,26 @@ func issueEnable() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			p.Remote.BoardSync = true
+			p.Board.Enabled = true
 			if err := p.Save(path); err != nil {
 				return err
 			}
 			Print("board sync enabled")
-			switch strings.ToLower(p.Remote.Provider) {
-			case "forgejo", "gitea", "gitlab":
+			switch strings.ToLower(p.Board.Provider) {
+			case "forgejo", "gitea", "gitlab", "youtrack":
 			case "":
-				Print("note: [remote].provider is unset — set it to forgejo/gitea/gitlab")
+				Print("note: [board].provider is unset — set it to forgejo/gitea/gitlab/youtrack")
 			default:
-				Printf("note: provider %q has no board backend yet (forgejo/gitea/gitlab only)\n", p.Remote.Provider)
+				Printf("note: provider %q has no board backend (forgejo/gitea/gitlab/youtrack)\n", p.Board.Provider)
 			}
-			if p.Remote.APIBase == "" {
-				Print("note: [remote].api_base is unset — needed for the board API")
+			if p.Board.BaseURL == "" {
+				Print("note: [board].base_url is unset — needed for the board API")
 			}
-			if p.Remote.AuthEnv == "" {
-				Print("note: [remote].auth_env is unset — needed for the board token")
+			if p.Board.AuthEnv == "" {
+				Print("note: [board].auth_env is unset — needed for the board token")
+			}
+			if p.Board.Project == "" {
+				Print("note: [board].project is unset — needed to scope board issues")
 			}
 			return nil
 		},
@@ -152,7 +170,7 @@ func issueDisable() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			p.Remote.BoardSync = false
+			p.Board.Enabled = false
 			if err := p.Save(path); err != nil {
 				return err
 			}
@@ -181,13 +199,13 @@ func issueMilestoneSync() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if id == 0 {
+			if id == "" {
 				return fmt.Errorf("milestone %q not found under .dross/milestones/", args[0])
 			}
 			if err := ctx.board.Save(ctx.boardPath); err != nil {
 				return err
 			}
-			Printf("milestone %s -> board #%d\n", args[0], id)
+			Printf("milestone %s -> board %s\n", args[0], id)
 			return nil
 		},
 	}
@@ -197,22 +215,32 @@ func issueMilestoneSync() *cobra.Command {
 // version, creating the board milestone (and storing the link) if needed.
 // Returns 0 (no error) when the milestone toml doesn't exist locally, so
 // callers can treat "no milestone" as "skip assignment".
-func ensureMilestoneLink(ctx *boardCtx, version string) (int, error) {
+func ensureMilestoneLink(ctx *boardCtx, version string) (string, error) {
 	if id, ok := ctx.board.MilestoneID(version); ok {
 		return id, nil
 	}
 	m, err := milestone.Load(milestone.FilePath(ctx.root, version))
 	if err != nil {
-		return 0, nil // not found locally — nothing to link
+		return "", nil // not found locally — nothing to link
 	}
 	title := m.Milestone.Title
 	if title == "" {
 		title = version
 	}
 	desc := strings.Join(m.Scope.SuccessCriteria, "\n")
-	id, err := ctx.client.EnsureMilestone(version, milestoneBody(title, desc))
+	var id string
+	if yt, ok := ctx.client.(*forge.YouTrackClient); ok {
+		// YouTrack maps a milestone to an entity per [board].milestone_mode
+		// (version bundle / agile board / epic), not a forge-style milestone.
+		id, err = yt.EnsureMilestoneEntity(ctx.proj.Board.MilestoneMode, version, desc)
+	} else {
+		id, err = ctx.client.EnsureMilestone(version, milestoneBody(title, desc))
+	}
 	if err != nil {
-		return 0, wrapBoard(err)
+		return "", wrapBoard(err)
+	}
+	if id == "" {
+		return "", nil // backend ensured no entity (e.g. youtrack mode dispatch lands later)
 	}
 	ctx.board.SetMilestone(version, id)
 	return id, nil
@@ -223,6 +251,122 @@ func milestoneBody(title, criteria string) string {
 		return title
 	}
 	return title + "\n\nSuccess criteria:\n" + criteria
+}
+
+// --- backlog sync ---
+
+func issueBacklogSync() *cobra.Command {
+	return &cobra.Command{
+		Use:   "backlog-sync <version>",
+		Short: "Sync the milestone backlog (unscaffolded slugs + someday ideas) to the board",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			ctx, enabled, err := openBoard()
+			if err != nil {
+				return err
+			}
+			if !enabled {
+				return nil
+			}
+			return syncBacklog(ctx, args[0])
+		},
+	}
+}
+
+// backlogItem is one milestone-backlog entry to mirror onto the board.
+type backlogItem struct{ key, title, body string }
+
+// syncBacklog mirrors a milestone's backlog — its unscaffolded roadmap phase
+// slugs and unrouted `someday` deferred ideas — onto the board as Open issues
+// attached to the milestone entity, recorded in board.json's backlog map.
+// Idempotent: re-running updates the same items by their readable-id link.
+func syncBacklog(ctx *boardCtx, version string) error {
+	m, err := milestone.Load(milestone.FilePath(ctx.root, version))
+	if err != nil {
+		return fmt.Errorf("load milestone %q: %w", version, err)
+	}
+
+	// Ensure the milestone entity the backlog attaches to (version value / epic
+	// / agile board). Version mode tags each item's Fix versions with it.
+	entityID, err := ensureMilestoneLink(ctx, version)
+	if err != nil {
+		return err
+	}
+	// Per milestone_mode, attach each backlog item to the entity: version mode
+	// sets the item's Fix versions to the bundle value; epic mode links it as a
+	// subtask of the Epic; agile boards are query/project-based, so an item
+	// created in the project already appears on the board (no per-item call).
+	mode := strings.ToLower(ctx.proj.Board.MilestoneMode)
+	fixVersion := ""
+	if mode == "" || mode == "version" {
+		fixVersion = entityID
+	}
+
+	var items []backlogItem
+	// Unscaffolded roadmap slugs: in milestone.phases with no phase directory.
+	for _, slug := range m.Phases {
+		if _, err := os.Stat(phase.Dir(ctx.root, slug)); err == nil {
+			continue // scaffolded — tracked by its own phase issue
+		}
+		items = append(items, backlogItem{
+			key:   "slug:" + slug,
+			title: "[backlog] " + slug,
+			body:  fmt.Sprintf("Roadmap phase `%s` in milestone %s — not yet scaffolded.\n\n_Tracked by dross._", slug, version),
+		})
+	}
+	// Unrouted `someday` deferred ideas (no target, not dismissed).
+	deferredItems, err := collectDeferred(ctx.root)
+	if err != nil {
+		return err
+	}
+	for _, d := range deferredItems {
+		if d.Target != "" || d.Dismissed {
+			continue
+		}
+		items = append(items, backlogItem{
+			key:   fmt.Sprintf("someday:%s#%d", d.Source, d.Index),
+			title: "[someday] " + d.Text,
+			body:  fmt.Sprintf("Someday idea (from phase `%s`): %s\n\n_Tracked by dross._", d.Source, d.Text),
+		})
+	}
+
+	created, updated := 0, 0
+	for _, it := range items {
+		if key, ok := ctx.board.BacklogID(it.key); ok {
+			title, body := it.title, it.body
+			if _, err := ctx.client.UpdateIssue(key, forge.IssuePatch{Title: &title, Body: &body}); err != nil {
+				return wrapBoard(err)
+			}
+			updated++
+			continue
+		}
+		var iss *forge.Issue
+		if yt, ok := ctx.client.(*forge.YouTrackClient); ok {
+			iss, err = yt.CreateBacklogItem(it.title, it.body, fixVersion)
+			if err == nil && mode == "epic" && entityID != "" {
+				// Attach to the Epic entity as a subtask.
+				err = yt.LinkSubtask(entityID, iss.Key)
+			}
+		} else {
+			ms, _ := strconv.Atoi(entityID)
+			iss, err = ctx.client.CreateIssue(forge.IssueInput{
+				Title:     it.title,
+				Body:      it.body,
+				Labels:    []string{labelMarker},
+				Milestone: ms,
+			})
+		}
+		if err != nil {
+			return wrapBoard(err)
+		}
+		ctx.board.SetBacklog(it.key, iss.Key)
+		created++
+	}
+	if err := ctx.board.Save(ctx.boardPath); err != nil {
+		return err
+	}
+	Printf("backlog %s -> %d created, %d updated\n", version, created, updated)
+	return nil
 }
 
 // --- phase sync ---
@@ -268,16 +412,17 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 	labels := []string{labelMarker, statusLabel(status)}
 
 	// Assign to the milestone if the phase declares one and it's syncable.
+	// IssueInput.Milestone is the forge int id; the board stores it as a string.
 	milestoneID := 0
 	if spec.Phase.Milestone != "" {
-		if id, err := ensureMilestoneLink(ctx, spec.Phase.Milestone); err != nil {
+		id, err := ensureMilestoneLink(ctx, spec.Phase.Milestone)
+		if err != nil {
 			return err
-		} else {
-			milestoneID = id
 		}
+		milestoneID, _ = strconv.Atoi(id) // "" / non-numeric (youtrack entity) → 0, unassigned
 	}
 
-	num, linked := ctx.board.PhaseIssue(phaseID)
+	key, linked := ctx.board.PhaseIssue(phaseID)
 	if !linked {
 		iss, err := ctx.client.CreateIssue(forge.IssueInput{
 			Title:     title,
@@ -288,8 +433,8 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 		if err != nil {
 			return wrapBoard(err)
 		}
-		ctx.board.SetPhase(phaseID, iss.Number)
-		num = iss.Number
+		ctx.board.SetPhase(phaseID, iss.Key)
+		key = iss.Key
 	} else {
 		patch := forge.IssuePatch{Title: &title, Body: &body, Labels: &labels}
 		if milestoneID > 0 {
@@ -299,13 +444,21 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 			closed := "closed"
 			patch.State = &closed
 		}
-		if _, err := ctx.client.UpdateIssue(num, patch); err != nil {
+		if _, err := ctx.client.UpdateIssue(key, patch); err != nil {
+			return wrapBoard(err)
+		}
+	}
+	// YouTrack tracks lifecycle on the State custom field (not a status label),
+	// mapped via the default map overridden by [board].state_map. An unmapped
+	// state warns and skips inside SetState without failing the sync.
+	if yt, ok := ctx.client.(*forge.YouTrackClient); ok && status != "" {
+		if err := yt.SetState(key, status, ctx.proj.Board.StateMap); err != nil {
 			return wrapBoard(err)
 		}
 	}
 	// Close-on-create edge: created above then asked to close.
 	if doClose && !linked {
-		if err := ctx.client.CloseIssue(num); err != nil {
+		if err := ctx.client.CloseIssue(key); err != nil {
 			return wrapBoard(err)
 		}
 	}
@@ -317,7 +470,7 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 	if doClose {
 		state = "closed"
 	}
-	Printf("phase %s -> board #%d (%s)\n", phaseID, num, state)
+	Printf("phase %s -> board %s (%s)\n", phaseID, key, state)
 	return nil
 }
 
@@ -385,14 +538,14 @@ func issueQuick() *cobra.Command {
 			ref := args[0]
 
 			if doClose {
-				num, ok := ctx.board.QuickIssue(ref)
+				key, ok := ctx.board.QuickIssue(ref)
 				if !ok {
 					return fmt.Errorf("no board issue linked to quick ref %q", ref)
 				}
-				if err := ctx.client.CloseIssue(num); err != nil {
+				if err := ctx.client.CloseIssue(key); err != nil {
 					return wrapBoard(err)
 				}
-				Printf("quick %s -> board #%d (closed)\n", ref, num)
+				Printf("quick %s -> board %s (closed)\n", ref, key)
 				return nil
 			}
 
@@ -407,11 +560,11 @@ func issueQuick() *cobra.Command {
 			if err != nil {
 				return wrapBoard(err)
 			}
-			ctx.board.SetQuick(ref, iss.Number)
+			ctx.board.SetQuick(ref, iss.Key)
 			if err := ctx.board.Save(ctx.boardPath); err != nil {
 				return err
 			}
-			Printf("quick %s -> board #%d\n", ref, iss.Number)
+			Printf("quick %s -> board %s\n", ref, iss.Key)
 			return nil
 		},
 	}
@@ -448,7 +601,7 @@ func issuePull() *cobra.Command {
 			}
 			var inbound []forge.Issue
 			for _, iss := range issues {
-				if ctx.board.IsLinked(iss.Number) || ctx.board.IsDismissed(iss.Number) {
+				if ctx.board.IsLinked(iss.Key) || ctx.board.IsDismissed(iss.Key) {
 					continue
 				}
 				inbound = append(inbound, iss)
@@ -481,7 +634,7 @@ func issuePull() *cobra.Command {
 				if len(iss.Labels) > 0 {
 					labelStr = "  [" + strings.Join(iss.Labels, ", ") + "]"
 				}
-				Printf("  #%d %s%s\n", iss.Number, iss.Title, labelStr)
+				Printf("  %s %s%s\n", iss.Key, iss.Title, labelStr)
 			}
 			return nil
 		},
@@ -497,14 +650,11 @@ func issuePull() *cobra.Command {
 
 func issueDismiss() *cobra.Command {
 	return &cobra.Command{
-		Use:   "dismiss <issue-number>",
+		Use:   "dismiss <issue-id>",
 		Short: "Stop an inbound issue from resurfacing in triage",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			n, err := strconv.Atoi(args[0])
-			if err != nil {
-				return fmt.Errorf("issue number must be an integer: %q", args[0])
-			}
+			id := args[0]
 			root, err := FindRoot()
 			if err != nil {
 				return err
@@ -514,11 +664,11 @@ func issueDismiss() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			bd.Dismiss(n)
+			bd.Dismiss(id)
 			if err := bd.Save(path); err != nil {
 				return err
 			}
-			Printf("dismissed #%d\n", n)
+			Printf("dismissed %s\n", id)
 			return nil
 		},
 	}
@@ -528,17 +678,14 @@ func issueDismiss() *cobra.Command {
 
 func issueLink() *cobra.Command {
 	return &cobra.Command{
-		Use:   "link <phase-id> <issue-number>",
+		Use:   "link <phase-id> <issue-id>",
 		Short: "Adopt an existing board issue as a phase's tracking issue",
 		Long: "Used by /dross-inbox triage: when an inbound bug/feature issue " +
 			"becomes a dross phase, link it so the next `phase-sync` updates that " +
 			"issue in place instead of opening a duplicate.",
 		Args: cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
-			n, err := strconv.Atoi(args[1])
-			if err != nil {
-				return fmt.Errorf("issue number must be an integer: %q", args[1])
-			}
+			id := args[1]
 			root, err := FindRoot()
 			if err != nil {
 				return err
@@ -548,11 +695,11 @@ func issueLink() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			bd.SetPhase(args[0], n)
+			bd.SetPhase(args[0], id)
 			if err := bd.Save(path); err != nil {
 				return err
 			}
-			Printf("linked phase %s -> issue #%d\n", args[0], n)
+			Printf("linked phase %s -> issue %s\n", args[0], id)
 			return nil
 		},
 	}
@@ -578,13 +725,13 @@ func issueList() *cobra.Command {
 				return nil
 			}
 			for v, id := range bd.Milestones {
-				Printf("milestone %s -> board #%d\n", v, id)
+				Printf("milestone %s -> board %s\n", v, id)
 			}
 			for p, n := range bd.Phases {
-				Printf("phase %s -> issue #%d\n", p, n)
+				Printf("phase %s -> issue %s\n", p, n)
 			}
 			for ref, n := range bd.Quicks {
-				Printf("quick %s -> issue #%d\n", ref, n)
+				Printf("quick %s -> issue %s\n", ref, n)
 			}
 			if len(bd.Dismissed) > 0 {
 				Printf("dismissed: %v\n", bd.Dismissed)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -96,6 +97,55 @@ func Doctor() *cobra.Command {
 
 			Print("")
 
+			// --- [board] checks ---
+			//
+			// [board] is the single source for issue-board sync, independent
+			// of [remote] (a repo can ship to one host and track issues on
+			// another). Validate it only when something is configured — board
+			// sync is opt-in, so an empty block is fine and stays silent.
+			b := p.Board
+			if b.Provider != "" || b.BaseURL != "" || b.AuthEnv != "" || b.Project != "" || b.Enabled || b.MilestoneMode != "" || len(b.StateMap) > 0 {
+				Print("Board:")
+				boardIssues := 0
+
+				switch strings.ToLower(b.Provider) {
+				case "forgejo", "gitea", "gitlab", "youtrack":
+					// recognised
+				default:
+					Printf("  ✗ [board].provider = %q is invalid (expected forgejo | gitea | gitlab | youtrack)\n", b.Provider)
+					boardIssues++
+				}
+
+				if b.AuthEnv == "" {
+					Print("  ✗ [board].auth_env is not set (board ops read the token from this env var)")
+					boardIssues++
+				} else if v := os.Getenv(b.AuthEnv); v == "" {
+					Printf("  ✗ [board].auth_env = %s but $%s is not set in this shell\n", b.AuthEnv, b.AuthEnv)
+					boardIssues++
+				}
+
+				if !looksLikeBoardURL(b.BaseURL) {
+					Printf("  ✗ [board].base_url = %q is not a valid URL (expected http(s)://host)\n", b.BaseURL)
+					boardIssues++
+				}
+
+				// Empty milestone_mode defaults to "version" in code, so only a
+				// non-empty, unrecognised value is a misconfiguration.
+				switch b.MilestoneMode {
+				case "", "version", "agile", "epic":
+					// recognised (empty = version default)
+				default:
+					Printf("  ✗ [board].milestone_mode = %q is invalid (expected version | agile | epic)\n", b.MilestoneMode)
+					boardIssues++
+				}
+
+				if boardIssues == 0 {
+					Printf("  ✓ [board] is well-formed (%s @ %s)\n", b.Provider, b.BaseURL)
+				}
+				issues += boardIssues
+				Print("")
+			}
+
 			// --- .gitattributes ---
 			//
 			// Without `.dross/** linguist-generated=true`, planning artefacts
@@ -149,6 +199,13 @@ func Doctor() *cobra.Command {
 			return finalizeDoctor(issues)
 		},
 	}
+}
+
+// looksLikeBoardURL reports whether s is a plausible instance base URL: an
+// absolute http(s) URL with a host. Shape-only — it doesn't dial the host.
+func looksLikeBoardURL(s string) bool {
+	u, err := url.Parse(strings.TrimSpace(s))
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 // finalizeDoctor records the doctor outcome event and returns the

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,9 +12,9 @@ import (
 	"testing"
 )
 
-// boardRepo scaffolds a .dross repo wired to a forge at apiBase, with board
-// sync toggled per `enabled`. Token env is set. Caller has already chdir'd
-// nowhere — boardRepo does the chdir.
+// boardRepo scaffolds a .dross repo whose [board] points at a forgejo tracker
+// at apiBase, with board sync toggled per `enabled`. Token env is set; boardRepo
+// does the chdir. Board sync is resolved SOLELY from [board].
 func boardRepo(t *testing.T, apiBase string, enabled bool) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -22,12 +23,12 @@ func boardRepo(t *testing.T, apiBase string, enabled bool) string {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	mustRunSet(t, "remote.provider", "forgejo")
-	mustRunSet(t, "remote.url", "https://forge.example/me/proj")
-	mustRunSet(t, "remote.api_base", apiBase)
-	mustRunSet(t, "remote.auth_env", "MOCK_TOKEN")
+	mustRunSet(t, "board.provider", "forgejo")
+	mustRunSet(t, "board.base_url", apiBase)
+	mustRunSet(t, "board.auth_env", "MOCK_TOKEN")
+	mustRunSet(t, "board.project", "me/proj")
 	if enabled {
-		mustRunSet(t, "remote.board_sync", "true")
+		mustRunSet(t, "board.enabled", "true")
 	}
 	return dir
 }
@@ -51,15 +52,62 @@ func TestIssueEnableDisableTogglesConfig(t *testing.T) {
 	if err := runCmd(t, Issue(), "enable"); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
-	if !strings.Contains(mustRead(t, filepath.Join(dir, ".dross", "project.toml")), "board_sync = true") {
-		t.Error("board_sync not set true after enable")
+	if !strings.Contains(mustRead(t, filepath.Join(dir, ".dross", "project.toml")), "enabled = true") {
+		t.Error("[board].enabled not set true after enable")
 	}
 	if err := runCmd(t, Issue(), "disable"); err != nil {
 		t.Fatalf("disable: %v", err)
 	}
 	body := mustRead(t, filepath.Join(dir, ".dross", "project.toml"))
-	if strings.Contains(body, "board_sync = true") {
-		t.Error("board_sync still true after disable")
+	if strings.Contains(body, "enabled = true") {
+		t.Error("[board].enabled still true after disable")
+	}
+}
+
+// TestOpenBoardResolvesFromBoardBlock proves c-1: board ops resolve their
+// client solely from [board], independent of [remote]. A repo with
+// [remote].provider=github (no board backend) but an enabled forgejo [board]
+// must hit the BOARD server; a disabled [board] is a silent no-op.
+func TestOpenBoardResolvesFromBoardBlock(t *testing.T) {
+	hit := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := t.TempDir()
+	chdir(t, dir)
+	t.Setenv("MOCK_TOKEN", "secret")
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	// [remote] is a code host with no board backend — must NOT drive board ops.
+	mustRunSet(t, "remote.provider", "github")
+	mustRunSet(t, "remote.url", "https://github.com/me/proj")
+	// [board] is the single board source.
+	mustRunSet(t, "board.provider", "forgejo")
+	mustRunSet(t, "board.base_url", srv.URL)
+	mustRunSet(t, "board.auth_env", "MOCK_TOKEN")
+	mustRunSet(t, "board.project", "me/proj")
+	mustRunSet(t, "board.enabled", "true")
+
+	if err := runCmd(t, Issue(), "pull", "--json"); err != nil {
+		t.Fatalf("pull (board enabled): %v", err)
+	}
+	if !hit {
+		t.Error("board op did not hit the [board] server — openBoard must resolve from [board], not [remote]")
+	}
+	_ = dir
+
+	// Disabled [board] + populated [remote] → silent no-op (no server hit).
+	hit = false
+	mustRunSet(t, "board.enabled", "false")
+	if err := runCmd(t, Issue(), "pull", "--json"); err != nil {
+		t.Fatalf("pull (board disabled): %v", err)
+	}
+	if hit {
+		t.Error("disabled [board] must be a no-op, but the board server was hit")
 	}
 }
 
@@ -149,15 +197,15 @@ wave = 1
 	if issuePosts != 1 {
 		t.Errorf("expected 1 issue POST, got %d", issuePosts)
 	}
-	if !strings.Contains(out, "#12") || !strings.Contains(out, "in-progress") {
-		t.Errorf("output = %q (want #12 + in-progress, one task is done)", out)
+	if !strings.Contains(out, "board 12") || !strings.Contains(out, "in-progress") {
+		t.Errorf("output = %q (want board 12 + in-progress, one task is done)", out)
 	}
 	body, _ := createdBody["body"].(string)
 	if !strings.Contains(body, "- [x] t1 — schema") || !strings.Contains(body, "- [ ] t2 — handler") {
 		t.Errorf("issue body checklist wrong:\n%s", body)
 	}
 	bj, err := readBoardJSON(dir)
-	if err != nil || bj.Phases["01-auth"] != 12 {
+	if err != nil || bj.Phases["01-auth"] != "12" {
 		t.Errorf("board link not stored: %+v err=%v", bj, err)
 	}
 
@@ -200,7 +248,7 @@ success_criteria = ["ships"]
 		t.Fatalf("milestone-sync: %v", err)
 	}
 	bj, err := readBoardJSON(dir)
-	if err != nil || bj.Milestones["v0.1"] != 5 {
+	if err != nil || bj.Milestones["v0.1"] != "5" {
 		t.Errorf("milestone link not stored: %+v err=%v", bj, err)
 	}
 }
@@ -217,10 +265,10 @@ func TestIssuePullFiltersLinkedAndDismissed(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	dir := boardRepo(t, srv.URL, true)
-	// Seed board.json with a phase link (#12) and a dismissal (#20).
+	// Seed board.json with a phase link (#12) and a dismissal (#20), string-keyed.
 	writeSpec(t, dir, "01-x", "[phase]\nid=\"01-x\"\ntitle=\"X\"\n")
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
-		`{"phases":{"01-x":12},"quicks":{},"milestones":{},"dismissed":[20]}`)
+		`{"phases":{"01-x":"12"},"quicks":{},"milestones":{},"dismissed":["20"]}`)
 
 	out := captureStdout(t, func() {
 		if err := runCmd(t, Issue(), "pull", "--json"); err != nil {
@@ -231,8 +279,179 @@ func TestIssuePullFiltersLinkedAndDismissed(t *testing.T) {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
 		t.Fatalf("pull --json not valid JSON: %v\n%s", err, out)
 	}
-	if len(got) != 1 || got[0]["Number"].(float64) != 21 {
+	if len(got) != 1 || got[0]["Key"].(string) != "21" {
 		t.Errorf("expected only #21 inbound, got %v", got)
+	}
+}
+
+// youtrackBoardRepo scaffolds a .dross repo whose [board] points at a YouTrack
+// instance at apiBase, board sync enabled. Token env is set; does the chdir.
+func youtrackBoardRepo(t *testing.T, apiBase string) string {
+	t.Helper()
+	dir := t.TempDir()
+	chdir(t, dir)
+	t.Setenv("MOCK_TOKEN", "secret")
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustRunSet(t, "board.provider", "youtrack")
+	mustRunSet(t, "board.base_url", apiBase)
+	mustRunSet(t, "board.auth_env", "MOCK_TOKEN")
+	mustRunSet(t, "board.project", "PROJ")
+	mustRunSet(t, "board.enabled", "true")
+	return dir
+}
+
+// TestIssuePhaseSyncYouTrackCreatesThenUpdates proves c-4 for YouTrack:
+// phase-sync creates a YouTrack issue (criteria + task checklist) and links it
+// by readable id; a second sync updates that issue, never creating a duplicate.
+func TestIssuePhaseSyncYouTrackCreatesThenUpdates(t *testing.T) {
+	var creates, updates int
+	var createdBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/issues" && r.Method == "POST":
+			creates++
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &createdBody)
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7"}`)
+		case r.URL.Path == "/api/issues/PROJ-7" && r.Method == "POST":
+			updates++
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7"}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	writeSpec(t, dir, "01-auth", `
+[phase]
+id = "01-auth"
+title = "Auth middleware"
+
+[[criteria]]
+id = "c1"
+text = "login works"
+`)
+	writePlan(t, dir, "01-auth", `
+[phase]
+id = "01-auth"
+
+[[task]]
+id = "t1"
+title = "schema"
+wave = 1
+status = "done"
+
+[[task]]
+id = "t2"
+title = "handler"
+wave = 1
+`)
+
+	// First sync — creates the issue.
+	if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+		t.Fatalf("phase-sync create: %v", err)
+	}
+	if creates != 1 {
+		t.Errorf("expected 1 create POST to /api/issues, got %d", creates)
+	}
+	body, _ := createdBody["description"].(string)
+	if !strings.Contains(body, "login works") || !strings.Contains(body, "- [x] t1 — schema") || !strings.Contains(body, "- [ ] t2 — handler") {
+		t.Errorf("issue description missing criteria/checklist:\n%s", body)
+	}
+	bj, _ := readBoardJSON(dir)
+	if bj.Phases["01-auth"] != "PROJ-7" {
+		t.Errorf("phase link = %q, want PROJ-7", bj.Phases["01-auth"])
+	}
+
+	// Second sync — link exists, so it updates /api/issues/PROJ-7, no new create.
+	if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", "in-progress"); err != nil {
+		t.Fatalf("phase-sync update: %v", err)
+	}
+	if creates != 1 {
+		t.Errorf("second sync must not create a new issue, creates=%d", creates)
+	}
+	if updates < 1 {
+		t.Errorf("second sync should POST an update to /api/issues/PROJ-7, got %d", updates)
+	}
+}
+
+// TestIssueMilestoneSyncYouTrack proves c-4: milestone-sync ensures the YouTrack
+// milestone entity per milestone_mode (version bundle by default) and links it
+// in board.json.
+func TestIssueMilestoneSyncYouTrack(t *testing.T) {
+	posted := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/customFields") && r.Method == "GET":
+			_, _ = io.WriteString(w, `[{"field":{"name":"Fix versions"},"bundle":{"id":"B1","$type":"VersionBundle","values":[]}}]`)
+		case strings.Contains(r.URL.Path, "/bundles/version/B1/values") && r.Method == "POST":
+			posted = true
+			_, _ = io.WriteString(w, `{"name":"v0.1"}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v0.1.toml"), `
+[milestone]
+version = "v0.1"
+title = "First cut"
+
+[scope]
+success_criteria = ["ships"]
+`)
+	if err := runCmd(t, Issue(), "milestone-sync", "v0.1"); err != nil {
+		t.Fatalf("milestone-sync: %v", err)
+	}
+	if !posted {
+		t.Error("milestone entity not ensured (no version-bundle POST)")
+	}
+	bj, err := readBoardJSON(dir)
+	if err != nil || bj.Milestones["v0.1"] != "v0.1" {
+		t.Errorf("milestone entity not linked in board.json: %+v err=%v", bj, err)
+	}
+}
+
+// TestIssuePullYouTrackFiltersLinkedAndDismissed proves c-3 for YouTrack: pull
+// emits only open issues not linked and not dismissed (by readable id), with the
+// label filter passed through to the upstream query as a tag clause.
+func TestIssuePullYouTrackFiltersLinkedAndDismissed(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query().Get("query")
+		// PROJ-12 is linked (a phase), PROJ-20 dismissed, PROJ-21 is new.
+		_, _ = io.WriteString(w, `[
+			{"idReadable":"PROJ-12","summary":"phase issue"},
+			{"idReadable":"PROJ-20","summary":"dismissed one"},
+			{"idReadable":"PROJ-21","summary":"a real bug","tags":[{"name":"bug"}]}
+		]`)
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	writeSpec(t, dir, "01-x", "[phase]\nid=\"01-x\"\ntitle=\"X\"\n")
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"phases":{"01-x":"PROJ-12"},"quicks":{},"milestones":{},"dismissed":["PROJ-20"]}`)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "pull", "--labels", "bug", "--json"); err != nil {
+			t.Fatalf("pull: %v", err)
+		}
+	})
+	var got []map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
+		t.Fatalf("pull --json not valid JSON: %v\n%s", err, out)
+	}
+	if len(got) != 1 || got[0]["Key"].(string) != "PROJ-21" {
+		t.Errorf("expected only PROJ-21 inbound, got %v", got)
+	}
+	if !strings.Contains(gotQuery, "bug") {
+		t.Errorf("upstream YouTrack query %q must carry the bug tag filter", gotQuery)
 	}
 }
 
@@ -251,7 +470,7 @@ func TestIssueDismissPersists(t *testing.T) {
 	}
 	found := false
 	for _, n := range bj.Dismissed {
-		if n == 42 {
+		if n == "42" {
 			found = true
 		}
 	}
@@ -270,38 +489,272 @@ func TestIssueLinkAdoptsExistingIssue(t *testing.T) {
 		t.Fatalf("link: %v", err)
 	}
 	bj, err := readBoardJSON(dir)
-	if err != nil || bj.Phases["04-rate-limit"] != 37 {
+	if err != nil || bj.Phases["04-rate-limit"] != "37" {
 		t.Errorf("link not stored: %+v err=%v", bj, err)
 	}
 }
 
-func TestIssueDismissRejectsNonInteger(t *testing.T) {
+// TestIssueDismissAcceptsReadableID proves the dismiss CLI takes a readable
+// string issue id (e.g. a YouTrack "PROJ-300"), not just an integer.
+func TestIssueDismissAcceptsReadableID(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
-	if err := runCmd(t, Issue(), "dismiss", "abc"); err == nil {
-		t.Fatal("expected error for non-integer issue number")
+	if err := runCmd(t, Issue(), "dismiss", "PROJ-300"); err != nil {
+		t.Fatalf("dismiss readable id: %v", err)
 	}
+	bj, err := readBoardJSON(dir)
+	if err != nil {
+		t.Fatalf("board.json: %v", err)
+	}
+	found := false
+	for _, n := range bj.Dismissed {
+		if n == "PROJ-300" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("PROJ-300 not dismissed: %+v", bj.Dismissed)
+	}
+}
+
+// TestIssueBacklogSyncYouTrackIdempotent proves c-6: backlog-sync mirrors the
+// milestone's unscaffolded slugs + unrouted someday ideas as backlog items
+// attached to the milestone entity (Fix versions), idempotently.
+func TestIssueBacklogSyncYouTrackIdempotent(t *testing.T) {
+	var creates, updates int
+	var createBodies []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/customFields") && r.Method == "GET":
+			_, _ = io.WriteString(w, `[{"field":{"name":"Fix versions"},"bundle":{"id":"B1","$type":"VersionBundle","values":[]}}]`)
+		case strings.Contains(r.URL.Path, "/bundles/version/B1/values") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"name":"v0.1"}`)
+		case r.URL.Path == "/api/issues" && r.Method == "POST":
+			creates++
+			raw, _ := io.ReadAll(r.Body)
+			var b map[string]any
+			_ = json.Unmarshal(raw, &b)
+			createBodies = append(createBodies, b)
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 200+creates))
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "POST":
+			updates++
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-upd"}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v0.1.toml"), `
+phases = ["01-done", "future-x"]
+
+[milestone]
+version = "v0.1"
+title = "First cut"
+
+[scope]
+success_criteria = ["ships"]
+`)
+	// 01-done is scaffolded (has a phase dir) and carries a someday deferred idea.
+	writeSpec(t, dir, "01-done", `
+[phase]
+id = "01-done"
+title = "Done phase"
+
+[[criteria]]
+id = "c1"
+text = "works"
+
+[[deferred]]
+text = "a future idea"
+why = "later"
+`)
+
+	// First run: future-x (unscaffolded slug) + the someday idea → 2 creates.
+	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+		t.Fatalf("backlog-sync: %v", err)
+	}
+	if creates != 2 {
+		t.Fatalf("expected exactly 2 backlog item creates, got %d", creates)
+	}
+	for i, b := range createBodies {
+		if !hasFixVersion(b, "v0.1") {
+			t.Errorf("backlog item %d not attached to milestone entity (Fix versions v0.1): %v", i, b)
+		}
+	}
+	bj, err := readBoardJSON(dir)
+	if err != nil || len(bj.Backlog) != 2 {
+		t.Fatalf("backlog map should have 2 links: %+v err=%v", bj, err)
+	}
+
+	// Second run: same items → 0 new creates, updated by readable-id link.
+	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+		t.Fatalf("backlog-sync rerun: %v", err)
+	}
+	if creates != 2 {
+		t.Errorf("rerun must not create new items, total creates=%d", creates)
+	}
+	if updates != 2 {
+		t.Errorf("rerun should update the 2 linked items, updates=%d", updates)
+	}
+}
+
+// TestIssueBacklogSyncYouTrackEpicMode proves c-6 for epic mode: backlog items
+// are linked as subtasks of the Epic entity via the commands API.
+func TestIssueBacklogSyncYouTrackEpicMode(t *testing.T) {
+	var itemCreates, links int
+	var linkQueries []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/issues" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`) // no existing Epic → one gets created
+		case r.URL.Path == "/api/issues" && r.Method == "POST":
+			raw, _ := io.ReadAll(r.Body)
+			var b map[string]any
+			_ = json.Unmarshal(raw, &b)
+			if _, ok := b["customFields"]; ok {
+				_, _ = io.WriteString(w, `{"idReadable":"PROJ-50"}`) // the Epic
+			} else {
+				itemCreates++
+				_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 200+itemCreates))
+			}
+		case r.URL.Path == "/api/commands" && r.Method == "POST":
+			links++
+			raw, _ := io.ReadAll(r.Body)
+			var b map[string]any
+			_ = json.Unmarshal(raw, &b)
+			linkQueries = append(linkQueries, fmt.Sprint(b["query"]))
+			_, _ = io.WriteString(w, `{}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustRunSet(t, "board.milestone_mode", "epic")
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v0.1.toml"), `
+phases = ["01-done", "future-x"]
+
+[milestone]
+version = "v0.1"
+title = "First cut"
+
+[scope]
+success_criteria = ["ships"]
+`)
+	writeSpec(t, dir, "01-done", `
+[phase]
+id = "01-done"
+title = "Done phase"
+
+[[criteria]]
+id = "c1"
+text = "works"
+
+[[deferred]]
+text = "a future idea"
+why = "later"
+`)
+
+	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+		t.Fatalf("backlog-sync: %v", err)
+	}
+	if itemCreates != 2 {
+		t.Fatalf("expected 2 backlog item creates, got %d", itemCreates)
+	}
+	if links != 2 {
+		t.Errorf("expected each backlog item linked as a subtask (2 commands), got %d", links)
+	}
+	for _, q := range linkQueries {
+		if !strings.Contains(q, "subtask of PROJ-50") {
+			t.Errorf("link command %q must attach the item under the Epic PROJ-50", q)
+		}
+	}
+}
+
+// TestIssueBacklogSyncYouTrackAgileMode proves c-6 for agile mode: items are
+// created in the project (which a query/project-based board auto-includes), with
+// no per-item attach command and no error.
+func TestIssueBacklogSyncYouTrackAgileMode(t *testing.T) {
+	var itemCreates int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/agiles" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[{"id":"108-23","name":"v0.1"}]`) // board present
+		case r.URL.Path == "/api/issues" && r.Method == "POST":
+			itemCreates++
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 300+itemCreates))
+		case r.URL.Path == "/api/commands":
+			t.Error("agile mode must not link subtasks — boards are query/project-based")
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustRunSet(t, "board.milestone_mode", "agile")
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v0.1.toml"), `
+phases = ["future-x"]
+
+[milestone]
+version = "v0.1"
+title = "First cut"
+
+[scope]
+success_criteria = ["ships"]
+`)
+
+	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+		t.Fatalf("backlog-sync: %v", err)
+	}
+	if itemCreates != 1 {
+		t.Errorf("expected 1 backlog item create (future-x slug), got %d", itemCreates)
+	}
+}
+
+// hasFixVersion reports whether a create body sets the Fix versions field to v.
+func hasFixVersion(b map[string]any, v string) bool {
+	cfs, _ := b["customFields"].([]any)
+	for _, cf := range cfs {
+		m, _ := cf.(map[string]any)
+		if m["name"] != "Fix versions" {
+			continue
+		}
+		vals, _ := m["value"].([]any)
+		for _, val := range vals {
+			vm, _ := val.(map[string]any)
+			if vm["name"] == v {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // readBoardJSON decodes .dross/board.json for assertions.
 func readBoardJSON(dir string) (*struct {
-	Milestones map[string]int `json:"milestones"`
-	Phases     map[string]int `json:"phases"`
-	Quicks     map[string]int `json:"quicks"`
-	Dismissed  []int          `json:"dismissed"`
+	Milestones map[string]string `json:"milestones"`
+	Phases     map[string]string `json:"phases"`
+	Quicks     map[string]string `json:"quicks"`
+	Backlog    map[string]string `json:"backlog"`
+	Dismissed  []string          `json:"dismissed"`
 }, error) {
 	b, err := os.ReadFile(filepath.Join(dir, ".dross", "board.json"))
 	if err != nil {
 		return nil, err
 	}
 	var out struct {
-		Milestones map[string]int `json:"milestones"`
-		Phases     map[string]int `json:"phases"`
-		Quicks     map[string]int `json:"quicks"`
-		Dismissed  []int          `json:"dismissed"`
+		Milestones map[string]string `json:"milestones"`
+		Phases     map[string]string `json:"phases"`
+		Quicks     map[string]string `json:"quicks"`
+		Backlog    map[string]string `json:"backlog"`
+		Dismissed  []string          `json:"dismissed"`
 	}
 	if err := json.Unmarshal(b, &out); err != nil {
 		return nil, err

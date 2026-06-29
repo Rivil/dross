@@ -183,8 +183,19 @@ func readDotted(p *project.Project, path string) (string, bool) {
 		return p.Remote.ProjectID, true
 	case "remote.reviewers":
 		return strings.Join(p.Remote.Reviewers, ","), true
-	case "remote.board_sync":
-		return fmt.Sprintf("%t", p.Remote.BoardSync), true
+	// board
+	case "board.provider":
+		return p.Board.Provider, true
+	case "board.base_url":
+		return p.Board.BaseURL, true
+	case "board.auth_env":
+		return p.Board.AuthEnv, true
+	case "board.project":
+		return p.Board.Project, true
+	case "board.enabled":
+		return fmt.Sprintf("%t", p.Board.Enabled), true
+	case "board.milestone_mode":
+		return p.Board.MilestoneMode, true
 	// paths
 	case "paths.source":
 		return p.Paths.Source, true
@@ -327,8 +338,19 @@ func writeDotted(p *project.Project, path, value string) error {
 		p.Remote.ProjectID = value
 	case "remote.reviewers":
 		p.Remote.Reviewers = splitCSV(value)
-	case "remote.board_sync":
-		return setBool(&p.Remote.BoardSync)
+	// board
+	case "board.provider":
+		p.Board.Provider = value
+	case "board.base_url":
+		p.Board.BaseURL = value
+	case "board.auth_env":
+		p.Board.AuthEnv = value
+	case "board.project":
+		p.Board.Project = value
+	case "board.enabled":
+		return setBool(&p.Board.Enabled)
+	case "board.milestone_mode":
+		p.Board.MilestoneMode = value
 	// paths
 	case "paths.source":
 		p.Paths.Source = value

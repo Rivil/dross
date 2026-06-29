@@ -47,6 +47,19 @@ func TestInboxPromptDeferredFunnelCoverage(t *testing.T) {
 	}
 }
 
+// TestInboxPromptReadsBoardEnabled proves c-3's gate move: the inbox board
+// source is driven by [board].enabled, decoupled from [remote]. The old
+// remote.board_sync gate must be gone so the two configs can't drift.
+func TestInboxPromptReadsBoardEnabled(t *testing.T) {
+	content := inboxPromptContent(t)
+	if !strings.Contains(content, "board.enabled") {
+		t.Error("inbox.md board gate must read `board.enabled` ([board] is the single board source)")
+	}
+	if strings.Contains(content, "remote.board_sync") {
+		t.Error("inbox.md must no longer gate on `remote.board_sync` — board sync is driven solely by [board]")
+	}
+}
+
 // TestInboxPromptBoardOffFallback proves c-3: when board_sync is off, §0
 // announces the board source is skipped and continues to the deferred source
 // instead of hard-stopping.

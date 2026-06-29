@@ -1,4 +1,4 @@
-phases = ["multilang-stack-profiles", "multilang-analyzer-catalogs", "container-iac-scanning", "secure-quality-findings-lifecycle", "status-action-surfaces-v2", "ship-complete-recovery-hardening", "architecture-doc-enhancements", "deferred-unroute-command", "retrofit-readmostly-commands", "deepen-container-iac-scanning", "gitlab-ship-provider"]
+phases = ["multilang-stack-profiles", "multilang-analyzer-catalogs", "container-iac-scanning", "secure-quality-findings-lifecycle", "status-action-surfaces-v2", "ship-complete-recovery-hardening", "architecture-doc-enhancements", "deferred-unroute-command", "retrofit-readmostly-commands", "deepen-container-iac-scanning", "gitlab-ship-provider", "youtrack-board-integration"]
 
 [milestone]
   version = "v0.6"

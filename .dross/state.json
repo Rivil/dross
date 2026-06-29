@@ -1,117 +1,9 @@
 {
-  "version": "0.6.11.0",
+  "version": "0.6.12.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-29T09:36:38.969018Z",
-  "last_action": "completed gitlab-ship-provider",
+  "last_activity": "2026-06-29T12:34:09.566539Z",
+  "last_action": "completed youtrack-board-integration",
   "history": [
-    {
-      "at": "2026-06-27T19:10:56.712645Z",
-      "action": "executed t-5 (Wire --recover into phase complete)"
-    },
-    {
-      "at": "2026-06-27T19:11:11.05996Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-27T19:11:11.066671Z",
-      "action": "phase ship-complete-recovery-hardening executed (5/5 done)"
-    },
-    {
-      "at": "2026-06-27T19:27:09.437604Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-27T19:27:09.443954Z",
-      "action": "verified ship-complete-recovery-hardening: pass (6/6 covered, mutation 0.83 measured / 1.00 on-covered, 0 survived)"
-    },
-    {
-      "at": "2026-06-27T19:35:16.574721Z",
-      "action": "completed ship-complete-recovery-hardening"
-    },
-    {
-      "at": "2026-06-27T19:59:32.200147Z",
-      "action": "created deepen-container-iac-scanning"
-    },
-    {
-      "at": "2026-06-27T20:30:45.299093Z",
-      "action": "set current_phase=deepen-container-iac-scanning"
-    },
-    {
-      "at": "2026-06-27T20:30:45.305134Z",
-      "action": "spec locked: deepen-container-iac-scanning"
-    },
-    {
-      "at": "2026-06-27T21:00:23.91549Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-27T21:00:23.920747Z",
-      "action": "plan locked: deepen-container-iac-scanning (11 tasks across 3 waves, --panel)"
-    },
-    {
-      "at": "2026-06-27T21:10:13.301693Z",
-      "action": "plan reviewed: deepen-container-iac-scanning (0 blocking, 0 flags, c-3 flag closed)"
-    },
-    {
-      "at": "2026-06-27T21:11:23.498041Z",
-      "action": "set version=0.6.10.0"
-    },
-    {
-      "at": "2026-06-27T21:17:00.80697Z",
-      "action": "executed t-1 (Add content-matcher to marker engine)"
-    },
-    {
-      "at": "2026-06-27T21:18:44.036041Z",
-      "action": "executed t-2 (Add dockle scan-path decision fn)"
-    },
-    {
-      "at": "2026-06-27T21:20:57.437942Z",
-      "action": "executed t-5 (Add checkov/dockle loadouts, flip guards)"
-    },
-    {
-      "at": "2026-06-27T21:22:10.810087Z",
-      "action": "executed t-3 (Add kubernetes marker profile)"
-    },
-    {
-      "at": "2026-06-27T21:25:50.517272Z",
-      "action": "executed t-4 (Add cloudformation marker profile)"
-    },
-    {
-      "at": "2026-06-27T21:29:03.385024Z",
-      "action": "executed t-6 (Wire --image flag into security run)"
-    },
-    {
-      "at": "2026-06-27T21:31:29.828239Z",
-      "action": "executed t-10 (Document new profiles + doc guard)"
-    },
-    {
-      "at": "2026-06-27T21:35:32.704135Z",
-      "action": "executed t-11 (Commit multi-IaC fixture + run record)"
-    },
-    {
-      "at": "2026-06-27T21:36:39.240606Z",
-      "action": "executed t-7 (Pin embedded loadouts for new profiles)"
-    },
-    {
-      "at": "2026-06-27T21:38:09.889525Z",
-      "action": "executed t-8 (Assert security recon IaC scanners)"
-    },
-    {
-      "at": "2026-06-27T21:39:56.85754Z",
-      "action": "executed t-9 (Assert quality recon IaC analyzers)"
-    },
-    {
-      "at": "2026-06-27T21:40:06.799592Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-27T21:40:06.805954Z",
-      "action": "phase deepen-container-iac-scanning executed (11/11 done)"
-    },
-    {
-      "at": "2026-06-29T06:15:43.96917Z",
-      "action": "resumed — handoff cleared (stale multilang-stack-profiles, shipped #20); next is /dross-verify deepen-container-iac-scanning"
-    },
     {
       "at": "2026-06-29T06:26:39.079135Z",
       "action": "set current_phase_status=verified"
@@ -203,6 +95,114 @@
     {
       "at": "2026-06-29T09:36:38.969018Z",
       "action": "completed gitlab-ship-provider"
+    },
+    {
+      "at": "2026-06-29T09:40:00.794474Z",
+      "action": "created youtrack-board-integration"
+    },
+    {
+      "at": "2026-06-29T10:41:50.68766Z",
+      "action": "set current_phase=youtrack-board-integration"
+    },
+    {
+      "at": "2026-06-29T10:41:50.693597Z",
+      "action": "spec locked: youtrack-board-integration"
+    },
+    {
+      "at": "2026-06-29T11:02:18.907538Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-29T11:02:18.914579Z",
+      "action": "plan locked: youtrack-board-integration (10 tasks across 4 waves)"
+    },
+    {
+      "at": "2026-06-29T11:07:16.878301Z",
+      "action": "plan reviewed: youtrack-board-integration (0 blocking, 2 flags resolved)"
+    },
+    {
+      "at": "2026-06-29T11:10:38.427446Z",
+      "action": "set version=0.6.12.0"
+    },
+    {
+      "at": "2026-06-29T11:14:35.768164Z",
+      "action": "executed t-1 (Add [board] config struct + dotted arms)"
+    },
+    {
+      "at": "2026-06-29T11:25:52.47715Z",
+      "action": "executed t-2 (YouTrack REST client + BoardClient interface + factory)"
+    },
+    {
+      "at": "2026-06-29T11:27:42.19312Z",
+      "action": "executed t-3 (Move inbox board gate to [board].enabled)"
+    },
+    {
+      "at": "2026-06-29T11:31:46.264099Z",
+      "action": "executed t-4 (Validate [board] in dross doctor)"
+    },
+    {
+      "at": "2026-06-29T11:46:43.476972Z",
+      "action": "executed t-5 (String issue id in board.json + re-route ops to [board])"
+    },
+    {
+      "at": "2026-06-29T11:50:20.689322Z",
+      "action": "executed t-6 (Ensure milestone entity per milestone_mode)"
+    },
+    {
+      "at": "2026-06-29T11:53:02.804791Z",
+      "action": "executed t-7 (Set YouTrack State via state_map, warn-skip)"
+    },
+    {
+      "at": "2026-06-29T11:54:51.203981Z",
+      "action": "executed t-8 (Surface YouTrack issues in issue pull)"
+    },
+    {
+      "at": "2026-06-29T11:58:30.107013Z",
+      "action": "executed t-9 (Wire phase-sync + milestone-sync to YouTrack)"
+    },
+    {
+      "at": "2026-06-29T12:06:14.331956Z",
+      "action": "executed t-10 (Sync milestone backlog slugs + someday, idempotent)"
+    },
+    {
+      "at": "2026-06-29T12:06:27.535277Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-29T12:06:27.541752Z",
+      "action": "phase youtrack-board-integration executed (10/10 done)"
+    },
+    {
+      "at": "2026-06-29T12:14:50.677192Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-29T12:14:50.684251Z",
+      "action": "verified youtrack-board-integration: partial (5/6 covered, c-6 weak; mutation 0.86 measured, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-06-29T12:20:00.180085Z",
+      "action": "amended t-10 (backlog attach per milestone_mode: epic/agile)"
+    },
+    {
+      "at": "2026-06-29T12:20:07.88051Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-29T12:20:07.887331Z",
+      "action": "phase youtrack-board-integration re-executed (c-6 amendment, 10/10 done)"
+    },
+    {
+      "at": "2026-06-29T12:29:04.407787Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-29T12:29:04.415216Z",
+      "action": "verified youtrack-board-integration: pass (6/6 covered, c-6 lifted to covered; mutation 0.86 measured, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-06-29T12:34:09.566539Z",
+      "action": "completed youtrack-board-integration"
     }
   ]
 }

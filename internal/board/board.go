@@ -2,11 +2,15 @@
 // dross planning artefacts to their issue-tracker counterparts.
 //
 // It deliberately holds nothing but the cross-references (version ->
-// milestone id, phase id -> issue number, quick ref -> issue number) plus a
+// milestone id, phase id -> issue id, quick ref -> issue id) plus a
 // dismissed set and a last-pull marker. Keeping the links in one file means
 // the existing milestone/phase TOML schemas stay untouched, and inbound
 // triage has a single place to ask "is this issue already linked to dross
 // work?".
+//
+// Links are keyed by the tracker's readable issue id (a string — e.g. a
+// forge issue number "42" or a YouTrack idReadable "PROJ-7"), so the same
+// registry serves every backend.
 package board
 
 import (
@@ -23,18 +27,21 @@ const File = "board.json"
 
 // Board is the on-disk link registry.
 type Board struct {
-	// Milestones maps a dross milestone version (e.g. "v0.2") to the forge
-	// milestone id. Note: milestone ids live in a different number space
-	// from issue numbers, so they never collide with Phases/Quicks values.
-	Milestones map[string]int `json:"milestones"`
-	// Phases maps a phase id (e.g. "02-auth") to its issue number.
-	Phases map[string]int `json:"phases"`
+	// Milestones maps a dross milestone version (e.g. "v0.2") to the tracker
+	// milestone entity id (a forge milestone id, or a YouTrack version/epic id).
+	Milestones map[string]string `json:"milestones"`
+	// Phases maps a phase id (e.g. "02-auth") to its readable issue id.
+	Phases map[string]string `json:"phases"`
 	// Quicks maps a quick-task ref (e.g. the bumped version "0.2.3.5") to its
-	// issue number.
-	Quicks map[string]int `json:"quicks"`
-	// Dismissed holds inbound issue numbers the user triaged away; they won't
+	// readable issue id.
+	Quicks map[string]string `json:"quicks"`
+	// Backlog maps a milestone-backlog item key (e.g. "slug:future-x" or
+	// "someday:02-auth#1") to its readable issue id, so backlog sync reconciles
+	// the same items instead of duplicating them.
+	Backlog map[string]string `json:"backlog,omitempty"`
+	// Dismissed holds inbound issue ids the user triaged away; they won't
 	// resurface in /dross-inbox.
-	Dismissed []int `json:"dismissed,omitempty"`
+	Dismissed []string `json:"dismissed,omitempty"`
 	// LastPull records when inbound issues were last fetched.
 	LastPull time.Time `json:"last_pull,omitempty"`
 }
@@ -42,9 +49,9 @@ type Board struct {
 // New returns an empty board with initialised maps.
 func New() *Board {
 	return &Board{
-		Milestones: map[string]int{},
-		Phases:     map[string]int{},
-		Quicks:     map[string]int{},
+		Milestones: map[string]string{},
+		Phases:     map[string]string{},
+		Quicks:     map[string]string{},
 	}
 }
 
@@ -81,66 +88,82 @@ func (b *Board) Save(path string) error {
 
 func (b *Board) ensureMaps() {
 	if b.Milestones == nil {
-		b.Milestones = map[string]int{}
+		b.Milestones = map[string]string{}
 	}
 	if b.Phases == nil {
-		b.Phases = map[string]int{}
+		b.Phases = map[string]string{}
 	}
 	if b.Quicks == nil {
-		b.Quicks = map[string]int{}
+		b.Quicks = map[string]string{}
+	}
+	if b.Backlog == nil {
+		b.Backlog = map[string]string{}
 	}
 }
 
 // --- links ---
 
-// SetMilestone records the forge milestone id for a dross milestone version.
-func (b *Board) SetMilestone(version string, id int) {
+// SetMilestone records the tracker milestone entity id for a dross version.
+func (b *Board) SetMilestone(version, id string) {
 	b.ensureMaps()
 	b.Milestones[version] = id
 }
 
 // MilestoneID returns the stored milestone id and whether it's linked.
-func (b *Board) MilestoneID(version string) (int, bool) {
+func (b *Board) MilestoneID(version string) (string, bool) {
 	id, ok := b.Milestones[version]
 	return id, ok
 }
 
-// SetPhase records the issue number for a phase id.
-func (b *Board) SetPhase(phaseID string, issue int) {
+// SetPhase records the readable issue id for a phase id.
+func (b *Board) SetPhase(phaseID, issue string) {
 	b.ensureMaps()
 	b.Phases[phaseID] = issue
 }
 
-// PhaseIssue returns the stored issue number for a phase and whether it's linked.
-func (b *Board) PhaseIssue(phaseID string) (int, bool) {
+// PhaseIssue returns the stored issue id for a phase and whether it's linked.
+func (b *Board) PhaseIssue(phaseID string) (string, bool) {
 	n, ok := b.Phases[phaseID]
 	return n, ok
 }
 
-// SetQuick records the issue number for a quick-task ref.
-func (b *Board) SetQuick(ref string, issue int) {
+// SetQuick records the readable issue id for a quick-task ref.
+func (b *Board) SetQuick(ref, issue string) {
 	b.ensureMaps()
 	b.Quicks[ref] = issue
 }
 
-// QuickIssue returns the stored issue number for a quick ref and whether it's linked.
-func (b *Board) QuickIssue(ref string) (int, bool) {
+// QuickIssue returns the stored issue id for a quick ref and whether it's linked.
+func (b *Board) QuickIssue(ref string) (string, bool) {
 	n, ok := b.Quicks[ref]
 	return n, ok
 }
 
+// SetBacklog records the readable issue id for a milestone-backlog item key.
+func (b *Board) SetBacklog(key, issue string) {
+	b.ensureMaps()
+	b.Backlog[key] = issue
+}
+
+// BacklogID returns the stored issue id for a backlog item key and whether it's
+// linked.
+func (b *Board) BacklogID(key string) (string, bool) {
+	id, ok := b.Backlog[key]
+	return id, ok
+}
+
 // --- inbound triage ---
 
-// Dismiss marks an inbound issue number as triaged-away (idempotent).
-func (b *Board) Dismiss(issue int) {
+// Dismiss marks an inbound issue id as triaged-away (idempotent).
+func (b *Board) Dismiss(issue string) {
 	if b.IsDismissed(issue) {
 		return
 	}
 	b.Dismissed = append(b.Dismissed, issue)
 }
 
-// IsDismissed reports whether an issue number was dismissed.
-func (b *Board) IsDismissed(issue int) bool {
+// IsDismissed reports whether an issue id was dismissed.
+func (b *Board) IsDismissed(issue string) bool {
 	for _, n := range b.Dismissed {
 		if n == issue {
 			return true
@@ -149,10 +172,10 @@ func (b *Board) IsDismissed(issue int) bool {
 	return false
 }
 
-// IsLinked reports whether an issue number is already tied to a phase or quick
-// task. Milestone ids are excluded on purpose — they're not issue numbers.
-// Used by inbound triage to skip issues dross already owns.
-func (b *Board) IsLinked(issue int) bool {
+// IsLinked reports whether an issue id is already tied to a phase or quick
+// task. Milestone ids are excluded on purpose — they live in a different id
+// space. Used by inbound triage to skip issues dross already owns.
+func (b *Board) IsLinked(issue string) bool {
 	for _, n := range b.Phases {
 		if n == issue {
 			return true

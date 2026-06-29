@@ -81,8 +81,8 @@ func TestEnsureMilestoneExisting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureMilestone: %v", err)
 	}
-	if id != 7 {
-		t.Errorf("id = %d, want 7", id)
+	if id != "7" {
+		t.Errorf("id = %q, want 7", id)
 	}
 	if posted {
 		t.Error("should not POST when milestone already exists")
@@ -106,8 +106,8 @@ func TestEnsureMilestoneCreates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureMilestone: %v", err)
 	}
-	if id != 42 {
-		t.Errorf("id = %d, want 42", id)
+	if id != "42" {
+		t.Errorf("id = %q, want 42", id)
 	}
 	if gotBody["title"] != "v1.0" || gotBody["description"] != "the desc" {
 		t.Errorf("create body = %v", gotBody)
@@ -197,7 +197,7 @@ func TestUpdateIssueBodyAndLabels(t *testing.T) {
 
 	newBody := "updated body"
 	labels := []string{"dross", "dross/status:in-progress"}
-	if _, err := c.UpdateIssue(12, IssuePatch{Body: &newBody, Labels: &labels}); err != nil {
+	if _, err := c.UpdateIssue("12", IssuePatch{Body: &newBody, Labels: &labels}); err != nil {
 		t.Fatalf("UpdateIssue: %v", err)
 	}
 	if patchBody["body"] != "updated body" {
@@ -219,7 +219,7 @@ func TestCloseIssue(t *testing.T) {
 		_ = json.Unmarshal(b, &patchBody)
 		_, _ = w.Write([]byte(`{"number":12,"state":"closed"}`))
 	})
-	if err := c.CloseIssue(12); err != nil {
+	if err := c.CloseIssue("12"); err != nil {
 		t.Fatalf("CloseIssue: %v", err)
 	}
 	if patchBody["state"] != "closed" {
@@ -260,7 +260,7 @@ func TestGetIssue(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"number":5,"title":"t","state":"closed","milestone":{"title":"v0.2"}}`))
 	})
-	iss, err := c.GetIssue(5)
+	iss, err := c.GetIssue("5")
 	if err != nil {
 		t.Fatalf("GetIssue: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestDoSurfacesHTTPError(t *testing.T) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"message":"token required"}`))
 	})
-	_, err := c.GetIssue(1)
+	_, err := c.GetIssue("1")
 	if err == nil || !strings.Contains(err.Error(), "HTTP 401") {
 		t.Errorf("expected HTTP 401 error, got %v", err)
 	}
@@ -287,7 +287,7 @@ func TestSendsTokenHeader(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"number":1}`))
 	})
-	if _, err := c.GetIssue(1); err != nil {
+	if _, err := c.GetIssue("1"); err != nil {
 		t.Fatalf("GetIssue: %v", err)
 	}
 }
@@ -412,7 +412,7 @@ func TestGitLabCloseIssue(t *testing.T) {
 		_ = json.Unmarshal(b, &gotBody)
 		_, _ = w.Write([]byte(`{"iid":12,"state":"closed"}`))
 	})
-	if err := c.CloseIssue(12); err != nil {
+	if err := c.CloseIssue("12"); err != nil {
 		t.Fatalf("CloseIssue: %v", err)
 	}
 	if !strings.Contains(gotPath, "/projects/me%2Fproj/issues/12") {
@@ -430,7 +430,7 @@ func TestGitLabGetIssue(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"iid":5,"title":"t","description":"d","state":"opened","web_url":"u","milestone":{"title":"v0.2"}}`))
 	})
-	iss, err := c.GetIssue(5)
+	iss, err := c.GetIssue("5")
 	if err != nil {
 		t.Fatalf("GetIssue: %v", err)
 	}
@@ -472,8 +472,8 @@ func TestGitLabEnsureMilestoneOmitsStateAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureMilestone: %v", err)
 	}
-	if id != 7 {
-		t.Errorf("id = %d, want 7", id)
+	if id != "7" {
+		t.Errorf("id = %q, want 7", id)
 	}
 	if strings.Contains(listQuery, "state=all") {
 		t.Errorf("gitlab must not send state=all (rejected by GitLab), got %q", listQuery)
@@ -502,7 +502,7 @@ func TestGitLabBearerAuthHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if _, err := c.GetIssue(1); err != nil {
+	if _, err := c.GetIssue("1"); err != nil {
 		t.Fatalf("GetIssue: %v", err)
 	}
 	if gotAuth != "Bearer tok" {
