@@ -1,21 +1,11 @@
 {
   "version": "0.6.10.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-29T06:35:03.761647Z",
-  "last_action": "completed deepen-container-iac-scanning",
+  "current_phase": "gitlab-ship-provider",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-29T08:00:07.352234Z",
+  "last_action": "spec locked: gitlab-ship-provider",
   "history": [
-    {
-      "at": "2026-06-27T15:55:45.890001Z",
-      "action": "executed t-3 (Add tech-debt run dir, StatePath, report writer)"
-    },
-    {
-      "at": "2026-06-27T15:59:12.418807Z",
-      "action": "executed t-5 (Stamp last_run on security \u0026 quality runs)"
-    },
-    {
-      "at": "2026-06-27T16:02:22.65021Z",
-      "action": "executed t-4 (Add dross techdebt command + register + gitignore)"
-    },
     {
       "at": "2026-06-27T16:06:52.578752Z",
       "action": "executed t-6 (Rank, render, flip status action block)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-29T06:35:03.761647Z",
       "action": "completed deepen-container-iac-scanning"
+    },
+    {
+      "at": "2026-06-29T07:13:57.522685Z",
+      "action": "created gitlab-ship-provider"
+    },
+    {
+      "at": "2026-06-29T08:00:07.344373Z",
+      "action": "set current_phase=gitlab-ship-provider"
+    },
+    {
+      "at": "2026-06-29T08:00:07.352234Z",
+      "action": "spec locked: gitlab-ship-provider"
     }
   ]
 }

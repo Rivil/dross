@@ -1,0 +1,46 @@
+[phase]
+  id = "gitlab-ship-provider"
+  title = "GitLab self-hosted provider"
+  milestone = "v0.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "dross recognizes `remote.provider = gitlab`: autodetect maps host `gitlab.com` to provider `gitlab` and derives `api_base = https://<host>/api/v4`; a self-hosted instance (arbitrary host) is fully configurable via manual `provider`/`url`/`api_base`/`auth_env`; and `dross doctor` validates a GitLab remote (origin matches `remote.url`, `auth_env` set) instead of rejecting it as an unsupported provider."
+
+[[criteria]]
+  id = "c-2"
+  text = "On a GitLab remote, `dross ship` opens a Merge Request via the GitLab REST API (`POST /api/v4/projects/<id>/merge_requests`) sending source/target branch, title, and body; draft is supported (via a `Draft:` title prefix); the MR URL is returned and recorded in state. The path uses raw REST (no dependency on the `gh`/`glab` CLI), mirroring the Forgejo path."
+
+[[criteria]]
+  id = "c-3"
+  text = "On a GitLab remote, `dross ship comment` posts a note to a Merge Request via the GitLab notes endpoint (`POST /api/v4/projects/<id>/merge_requests/<iid>/notes`), so manual and (deferred) review-panel comments work on GitLab the same way they do on Forgejo/GitHub."
+
+[[criteria]]
+  id = "c-4"
+  text = "`assets/prompts/ship.md` gains GitLab steps so the ship loop is complete end-to-end: §5 polls GitLab pipeline status for the head SHA (`GET /api/v4/projects/<id>/pipelines?sha=`) instead of `gh pr checks`, and §6 squash-merges (`PUT /api/v4/projects/<id>/merge_requests/<iid>/merge` with `squash=true` + `should_remove_source_branch=true`). Being prompt-driven (like the Forgejo path), it is guarded by a prompt-presence test asserting the GitLab CI-watch and merge sections exist."
+
+[[criteria]]
+  id = "c-5"
+  text = "When reviewers are configured, the GitLab path resolves usernames to numeric user IDs (`GET /api/v4/users?username=`) and sets `reviewer_ids` on the MR; a lookup or assignment failure is non-fatal and warns rather than aborting the ship (mirroring the Forgejo reviewer-failure behavior)."
+
+[[criteria]]
+  id = "c-6"
+  text = "On a GitLab remote with `board_sync` enabled, `dross issue` operations (milestone-sync, phase-sync, quick, pull, close) work against the GitLab REST API: `forge.New()` returns a GitLab client (instead of `ErrNotImplemented`) implementing project milestones (`/api/v4/projects/<id>/milestones`) and issues (`/projects/<id>/issues` — create/update/label/close/get/list, keyed on the project-relative `iid`), and `dross issue enable` accepts `gitlab` as a supported board backend."
+
+[[decisions]]
+  key = "pipeline_status_mapping"
+  choice = "Ship CI gate maps GitLab pipeline status for the head SHA: `success` = pass (proceed to merge gate); `failed` and `canceled` = fail (pull job logs, enter fix loop); `running`/`pending`/`created`/`preparing` = keep polling; `manual`, `skipped`, and no-pipeline-for-the-SHA = do not guess — surface to the user and ask whether to proceed without a green CI."
+  why = "GitLab has more terminal/blocking states than GitHub checks. canceled is genuinely not-passing. manual/skipped/absent are ambiguous (the pipeline didn't conclusively pass or fail), so reusing ship.md's existing 'no checks registered → ask' handling avoids both a false-green merge and a false-red block."
+  locked = true
+
+[[decisions]]
+  key = "auth_scheme"
+  choice = "GitLab requests authenticate with the `PRIVATE-TOKEN: <token>` header by default (token read from `remote.auth_env`), supporting personal/project/group access tokens. A new `remote.auth_scheme` config field (`private-token` | `bearer`, default `private-token`) opts into `Authorization: Bearer <token>` for OAuth tokens."
+  why = "PRIVATE-TOKEN with an access token is the idiomatic self-hosted GitLab credential and the common case; defaulting to it keeps config minimal. Supporting Bearer behind an explicit config field covers OAuth setups without forcing token-sniffing or changing the default."
+  locked = true
+
+[[decisions]]
+  key = "project_identifier"
+  choice = "The GitLab project is identified by the URL-encoded `owner/repo` path derived from `remote.url` (same owner/repo split the Forgejo path uses, then percent-encoded), with an optional numeric `project-id` override in project.toml for cases where the derived path doesn't resolve (deeply nested subgroups, renamed paths)."
+  why = "Deriving from remote.url means zero extra config for the common case. GitLab's API accepts either the encoded path or a numeric id, so an optional override handles subgroup/rename edge cases without making every user configure an id."
+  locked = true
