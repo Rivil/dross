@@ -11,6 +11,7 @@ import (
 var KnownHostProviders = map[string]string{
 	"github.com":    "github",
 	"codeberg.org":  "forgejo",
+	"gitlab.com":    "gitlab",
 	"bitbucket.org": "bitbucket",
 }
 
@@ -18,8 +19,8 @@ var KnownHostProviders = map[string]string{
 // best-effort Remote with URL, Provider, APIBase pre-filled.
 //
 // Recognised provider hosts get Public=true; unknown hosts (likely
-// self-hosted Forgejo / Gitea) leave Provider="" and Public=false so the
-// caller knows to prompt.
+// self-hosted Forgejo / Gitea / GitLab) leave Provider="" and Public=false so
+// the caller knows to prompt.
 func DetectRemote(remoteURL string) Remote {
 	r := Remote{}
 	host, path := parseGitRemote(remoteURL)
@@ -37,6 +38,8 @@ func DetectRemote(remoteURL string) Remote {
 			r.APIBase = "https://api.github.com"
 		case "forgejo", "gitea":
 			r.APIBase = "https://" + host + "/api/v1"
+		case "gitlab":
+			r.APIBase = "https://" + host + "/api/v4"
 		case "bitbucket":
 			r.APIBase = "https://api.bitbucket.org/2.0"
 		}
