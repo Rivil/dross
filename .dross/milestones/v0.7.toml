@@ -1,4 +1,4 @@
-phases = ["ship-auto-noninteractive", "milestone-branch-model"]
+phases = ["ship-auto-noninteractive", "milestone-branch-model", "interaction-defer-or-add-framing"]
 
 [milestone]
   version = "v0.7"
