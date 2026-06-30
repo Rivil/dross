@@ -3,13 +3,9 @@
   "current_milestone": "v0.6",
   "current_phase": "deferred-unroute-command",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-30T09:50:27.494489Z",
-  "last_action": "plan locked: deferred-unroute-command (1 task across 1 wave)",
+  "last_activity": "2026-06-30T09:53:53.978951Z",
+  "last_action": "plan reviewed: deferred-unroute-command (0 blocking, 1 flag)",
   "history": [
-    {
-      "at": "2026-06-29T11:14:35.768164Z",
-      "action": "executed t-1 (Add [board] config struct + dotted arms)"
-    },
     {
       "at": "2026-06-29T11:25:52.47715Z",
       "action": "executed t-2 (YouTrack REST client + BoardClient interface + factory)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-30T09:50:27.494489Z",
       "action": "plan locked: deferred-unroute-command (1 task across 1 wave)"
+    },
+    {
+      "at": "2026-06-30T09:53:53.978951Z",
+      "action": "plan reviewed: deferred-unroute-command (0 blocking, 1 flag)"
     }
   ]
 }
