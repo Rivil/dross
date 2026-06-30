@@ -1,15 +1,9 @@
 {
   "version": "0.8.1.0",
   "current_milestone": "v0.8",
-  "current_phase": "native-statusline",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-30T09:08:56.143628Z",
-  "last_action": "verified native-statusline: pass (7/7 covered, mutation 0.84 measured, efficacy 100%)",
+  "last_activity": "2026-06-30T09:26:02.265112Z",
+  "last_action": "completed native-statusline",
   "history": [
-    {
-      "at": "2026-06-29T12:06:27.535277Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-06-29T12:06:27.541752Z",
       "action": "phase youtrack-board-integration executed (10/10 done)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-30T09:08:56.143628Z",
       "action": "verified native-statusline: pass (7/7 covered, mutation 0.84 measured, efficacy 100%)"
+    },
+    {
+      "at": "2026-06-30T09:26:02.265112Z",
+      "action": "completed native-statusline"
     }
   ]
 }
