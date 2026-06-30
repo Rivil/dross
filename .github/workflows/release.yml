@@ -1,11 +1,11 @@
 name: release
 
-# Automatic releasing: every merge to main computes the next semver tag from the
-# conventional commits since the last tag (feat → minor, BREAKING → major, else
-# patch — always at least a patch, so every merge cuts a release), tags it, and
-# goreleaser publishes the per-platform archives + checksums.txt that install.sh
-# and `dross update` consume. workflow_dispatch with an explicit `version` is the
-# manual escape hatch.
+# Automatic releasing: every merge to main bumps the patch of the last tag, tags
+# it, and goreleaser publishes the per-platform archives + checksums.txt that
+# install.sh and `dross update` consume. The bump is deterministic (always patch)
+# — squash-merge hides the per-task conventional prefixes behind a `phase <slug>:`
+# subject, so parsing them is unreliable. For a minor/major (or to reset the
+# baseline), run this workflow manually with an explicit `version`.
 on:
   push:
     branches: [main]
@@ -50,24 +50,12 @@ jobs:
             exit 0
           fi
           last="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
-          if git rev-parse "$last" >/dev/null 2>&1; then
-            range="$last..HEAD"
-          else
-            range="HEAD"
-          fi
-          log="$(git log "$range" --format='%B')"
           ver="${last#v}"
           major="${ver%%.*}"; rest="${ver#*.}"; minor="${rest%%.*}"; patch="${rest##*.}"
           major="${major:-0}"; minor="${minor:-0}"; patch="${patch:-0}"
-          if printf '%s' "$log" | grep -qE 'BREAKING CHANGE|^[[:space:]*]*[a-z]+(\([^)]*\))?!:'; then
-            major=$((major+1)); minor=0; patch=0
-          elif printf '%s' "$log" | grep -qE '^[[:space:]*]*feat(\([^)]*\))?:'; then
-            minor=$((minor+1)); patch=0
-          else
-            patch=$((patch+1))
-          fi
+          patch=$((patch+1))
           new="v${major}.${minor}.${patch}"
-          echo "Computed next tag: $new (from $last)"
+          echo "Computed next tag: $new (patch bump from $last)"
           echo "new_tag=$new" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
