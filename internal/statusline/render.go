@@ -11,7 +11,10 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
+	"unicode"
 )
 
 // Inputs is the fully-resolved data the renderer needs. The gather layer (t-4)
@@ -45,6 +48,18 @@ type Inputs struct {
 	// >0 derives the auto-compact buffer as a fraction of TotalTokens, otherwise the
 	// renderer uses the ~16.5% default buffer.
 	AutoCompactWindow int
+
+	// Peers are sibling background jobs shown on line 3. The gather layer resolves
+	// them (skip-own-job + 6h staleness filtering); the renderer only sorts by
+	// attention priority and formats. Empty => no line 3.
+	Peers []Peer
+}
+
+// Peer is one sibling background job rendered on line 3.
+type Peer struct {
+	Name   string
+	State  string
+	Detail string
 }
 
 // defaultAutoCompactBufferPct is the assumed auto-compact reserve when
@@ -91,7 +106,84 @@ func Render(in Inputs) []byte {
 	if line2 != "" {
 		lines = append(lines, line2)
 	}
+	if peerLine := formatPeers(in.Peers); peerLine != "" {
+		lines = append(lines, peerLine)
+	}
 	return []byte(strings.Join(lines, "\n"))
+}
+
+// peerStyle maps a peer state to its nerd-font MDI icon and ANSI color, matching
+// the reference STYLE table; an unknown state falls back to "•" dim.
+type peerStyle struct{ icon, color string }
+
+var peerStyles = map[string]peerStyle{
+	"review":  {"\U000F0170", "38;5;208"}, // orange — ready for review
+	"blocked": {"\U000F0817", "33"},       // yellow — needs input
+	"working": {"\U000F0FD7", "34"},       // blue — working
+	"done":    {"\U000F05E0", "32"},       // green — completed (MDI check-circle)
+}
+
+// peerPrio orders attention-needers first: review→blocked→working→done; an unknown
+// state sorts last (3), matching the reference's `PRIO[state] ?? 3`.
+func peerPrio(state string) int {
+	switch state {
+	case "review":
+		return 0
+	case "blocked":
+		return 1
+	case "working":
+		return 2
+	default:
+		return 3
+	}
+}
+
+// formatPeers renders line 3: one "<icon> <name> · <detail>" per peer, sorted by
+// attention priority (stable, preserving input order within a priority), joined by
+// three spaces. Returns "" when there are no peers.
+func formatPeers(peers []Peer) string {
+	if len(peers) == 0 {
+		return ""
+	}
+	sorted := make([]Peer, len(peers))
+	copy(sorted, peers)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return peerPrio(sorted[i].State) < peerPrio(sorted[j].State)
+	})
+
+	parts := make([]string, 0, len(sorted))
+	for _, p := range sorted {
+		st, ok := peerStyles[p.State]
+		if !ok {
+			st = peerStyle{icon: "•", color: "2"}
+		}
+		head := fmt.Sprintf("\x1b[%sm%s %s\x1b[0m", st.color, st.icon, p.Name)
+		if d := truncDetail(p.Detail, 40); d != "" {
+			parts = append(parts, fmt.Sprintf("%s \x1b[2m· %s\x1b[0m", head, d))
+		} else {
+			parts = append(parts, head)
+		}
+	}
+	return strings.Join(parts, "   ")
+}
+
+var whitespaceRun = regexp.MustCompile(`\s+`)
+
+// truncDetail returns the first line of s, whitespace-collapsed and trimmed, then
+// ellipsized to n characters (slice to n-1 runes, trim trailing whitespace, append
+// "…") when longer — matching the reference truncDetail. Length is counted in runes
+// (equivalent to the JS UTF-16 length for the BMP detail strings jobs carry).
+func truncDetail(s string, n int) string {
+	if s == "" {
+		return ""
+	}
+	t := strings.SplitN(s, "\n", 2)[0]
+	t = whitespaceRun.ReplaceAllString(t, " ")
+	t = strings.TrimSpace(t)
+	if runes := []rune(t); len(runes) > n {
+		t = strings.TrimRightFunc(string(runes[:n-1]), unicode.IsSpace) + "…"
+	}
+	return t
 }
 
 // contextMeter renders the 10-cell USED% meter, normalized for Claude Code's

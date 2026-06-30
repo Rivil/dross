@@ -84,4 +84,27 @@ mint state_missing_field "$CFG" "" "{$M,$PROJPJSON,\"session_id\":\"\"}"
 # todo AND dross state present => todo wins:
 mint todo_wins "$CFGT" "" "{$M,$PROJJSON,\"session_id\":\"sess123\"}"
 
+# --- t-3: peer jobs (line 3). updatedAt omitted so the 6h filter is clock-free and
+#     the capture is reproducible; CLAUDE_JOB_DIR unset so no peer is skipped. ---
+CFGJ="$SBX/cfgj"; mkdir -p "$CFGJ/jobs"
+mk_job() { d="$CFGJ/jobs/$1"; mkdir -p "$d"; printf '%s' "$2" > "$d/state.json"; }
+# Dir names are read alphabetically (done,working,blocked,review) — the OPPOSITE of
+# the rendered order, so the priority sort (review→blocked→working→done) is exercised.
+mk_job a-done    '{"name":"docs","state":"done","detail":"completed"}'
+mk_job b-working '{"name":"api","state":"working","detail":"running tests"}'
+mk_job c-blocked '{"name":"web","state":"blocked","detail":"needs input on schema"}'
+mk_job d-review  '{"name":"feastahead","state":"review","detail":"awaiting next phase decision"}'
+mint peers_sorted "$CFGJ" "" "{$M,$NOPROJ,\"session_id\":\"\"}"
+
+# Detail with collapsible runs of spaces, longer than 40 chars => truncDetail.
+CFGJT="$SBX/cfgjt"; mkdir -p "$CFGJT/jobs/x"
+printf '%s' '{"name":"api","state":"working","detail":"this  is   a    very     long detail that exceeds forty characters easily"}' \
+	> "$CFGJT/jobs/x/state.json"
+mint peers_truncate "$CFGJT" "" "{$M,$NOPROJ,\"session_id\":\"\"}"
+
+# Unknown state => "•" dim fallback icon, no detail.
+CFGJU="$SBX/cfgju"; mkdir -p "$CFGJU/jobs/y"
+printf '%s' '{"name":"ghost","state":"zombie","detail":""}' > "$CFGJU/jobs/y/state.json"
+mint peers_unknown "$CFGJU" "" "{$M,$NOPROJ,\"session_id\":\"\"}"
+
 echo "minted into $DIR"

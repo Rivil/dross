@@ -63,6 +63,21 @@ var renderCases = []struct {
 	{"state_with_meter", Inputs{Model: "Claude", Dir: "/x/proj", DrossState: "v0.8 · native-statusline · planned", RemainingPercent: fptr(60.0), TotalTokens: 1_000_000, AutoCompactWindow: 200000}},
 	{"state_missing_field", Inputs{Model: "Claude", Dir: "/x/projpartial", DrossState: "v0.8 · native-statusline"}},
 	{"todo_wins", Inputs{Model: "Claude", Dir: "/x/proj", TodoActiveForm: "Doing the thing", DrossState: "v0.8 · native-statusline · planned"}},
+
+	// Line 3 peers. Fed in the OPPOSITE of render order (done,working,blocked,review)
+	// so the priority sort must reorder them to match the golden.
+	{"peers_sorted", Inputs{Model: "Claude", Dir: "/work/myproject", Peers: []Peer{
+		{Name: "docs", State: "done", Detail: "completed"},
+		{Name: "api", State: "working", Detail: "running tests"},
+		{Name: "web", State: "blocked", Detail: "needs input on schema"},
+		{Name: "feastahead", State: "review", Detail: "awaiting next phase decision"},
+	}}},
+	{"peers_truncate", Inputs{Model: "Claude", Dir: "/work/myproject", Peers: []Peer{
+		{Name: "api", State: "working", Detail: "this  is   a    very     long detail that exceeds forty characters easily"},
+	}}},
+	{"peers_unknown", Inputs{Model: "Claude", Dir: "/work/myproject", Peers: []Peer{
+		{Name: "ghost", State: "zombie", Detail: ""},
+	}}},
 }
 
 // TestRender pins the full render output byte-for-byte against the node-minted
@@ -146,6 +161,46 @@ func TestRenderLine2(t *testing.T) {
 	}
 	if !strings.HasPrefix(mline, "\x1b[") {
 		t.Errorf("no-body+meter: line 2 should start with the meter SGR, got %q", mline)
+	}
+}
+
+// TestTruncDetail pins the JS truncDetail shape: first line only, whitespace
+// collapsed, trimmed, then slice(0,n-1)+"…" (trailing whitespace trimmed) when long.
+func TestTruncDetail(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"", ""},
+		{"plain detail", "plain detail"},
+		{"first line\nsecond line", "first line"}, // first line only
+		{"a  b\tc", "a b c"},                      // collapse runs of whitespace (incl tab)
+		{"  trim me  ", "trim me"},                // trim
+	}
+	for _, c := range cases {
+		if got := truncDetail(c.in, 40); got != c.want {
+			t.Errorf("truncDetail(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	// >40 chars: ellipsized, never longer than 40 runes, prefix preserved.
+	long := "this  is   a    very     long detail that exceeds forty characters easily"
+	got := truncDetail(long, 40)
+	if !strings.HasSuffix(got, "…") {
+		t.Errorf("long detail not ellipsized: %q", got)
+	}
+	if n := len([]rune(got)); n > 40 {
+		t.Errorf("truncated detail is %d runes, want <=40: %q", n, got)
+	}
+	if !strings.HasPrefix(got, "this is a very long") {
+		t.Errorf("truncated detail lost its prefix: %q", got)
+	}
+}
+
+// TestPeersAbsent: no peers => no line 3 (the reference omits an empty peer line).
+func TestPeersAbsent(t *testing.T) {
+	if got := formatPeers(nil); got != "" {
+		t.Errorf("formatPeers(nil) = %q, want empty", got)
+	}
+	out := string(Render(Inputs{Model: "Claude", Dir: "/x/proj", DrossState: "v0.8 · p · s"}))
+	if n := strings.Count(out, "\n"); n != 1 {
+		t.Errorf("with state and no peers, want exactly 2 lines, got %d newlines: %q", n, out)
 	}
 }
 
