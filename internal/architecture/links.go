@@ -1,6 +1,7 @@
 package architecture
 
 import (
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -210,8 +211,19 @@ func resolveAgainst(link SymbolLink, syms []codex.Symbol) Resolution {
 }
 
 // ResolveAll parses content and resolves every link in every entry, indexing
-// each referenced file at most once.
+// each referenced file at most once. Paths are resolved against the process
+// working directory — use ResolveAllIn to pin them to a repo root instead.
 func ResolveAll(content string) []Resolution {
+	return ResolveAllIn(content, "")
+}
+
+// ResolveAllIn is ResolveAll with each link's File resolved relative to baseDir
+// (the repo root) rather than the process working directory. A consumer that
+// knows the repo root but may run from a subdirectory passes it here so the
+// doc's repo-relative links resolve correctly. baseDir "" leaves paths as-is.
+// Each referenced file is indexed at most once. The returned Resolution keeps
+// the original (repo-relative) link for display.
+func ResolveAllIn(content, baseDir string) []Resolution {
 	cache := map[string][]codex.Symbol{}
 	var out []Resolution
 	for _, e := range ParseDoc(content) {
@@ -220,10 +232,14 @@ func ResolveAll(content string) []Resolution {
 				out = append(out, Resolution{Link: link, Status: StatusSkipped})
 				continue
 			}
-			syms, ok := cache[link.File]
+			resolved := link.File
+			if baseDir != "" && !filepath.IsAbs(resolved) {
+				resolved = filepath.Join(baseDir, resolved)
+			}
+			syms, ok := cache[resolved]
 			if !ok {
-				syms = fileSymbols(link.File)
-				cache[link.File] = syms
+				syms = fileSymbols(resolved)
+				cache[resolved] = syms
 			}
 			out = append(out, resolveAgainst(link, syms))
 		}

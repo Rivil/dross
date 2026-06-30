@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/architecture"
 )
 
 // Doctor checks project-level health for the current dross repo.
@@ -196,9 +198,50 @@ func Doctor() *cobra.Command {
 			}
 			Print("")
 
+			// --- Architecture links ---
+			//
+			// ARCHITECTURE.md's `Symbol — file:line` bullets go stale as code
+			// moves. Surface stale links ADVISORILY: this never touches `issues`
+			// and never blocks the loop (the doc is best-effort; `dross
+			// architecture check --fix` repairs it). A repo with no
+			// ARCHITECTURE.md gets no section at all.
+			if warnings, present := architectureLinkWarnings(repoDir); present {
+				Print("Architecture links:")
+				if len(warnings) == 0 {
+					Print("  ✓ all ARCHITECTURE.md symbol links resolve")
+				} else {
+					for _, w := range warnings {
+						Printf("  ⚠ %s\n", w)
+					}
+					Print("    Advisory only. Fix: `dross architecture check --fix` (or /dross-architecture to refresh).")
+				}
+				Print("")
+			}
+
 			return finalizeDoctor(issues)
 		},
 	}
+}
+
+// architectureLinkWarnings resolves every symbol link in ARCHITECTURE.md against
+// the live code (paths pinned to repoDir) and returns one advisory warning per
+// Moved/Unresolved bullet. present=false means there is no ARCHITECTURE.md — the
+// caller emits no section and no error. Ambiguous and Skipped links never warn:
+// a duplicate name or a language codex can't index is not "stale".
+func architectureLinkWarnings(repoDir string) (warnings []string, present bool) {
+	body, err := os.ReadFile(filepath.Join(repoDir, architecture.File))
+	if err != nil {
+		return nil, false // absent (or unreadable) → no section
+	}
+	for _, r := range architecture.ResolveAllIn(string(body), repoDir) {
+		switch r.Status {
+		case architecture.StatusMoved:
+			warnings = append(warnings, fmt.Sprintf("%s — %s:%d moved to line %d", r.Link.Symbol, r.Link.File, r.Link.Line, r.NewLine))
+		case architecture.StatusUnresolved:
+			warnings = append(warnings, fmt.Sprintf("%s — %s:%d no longer resolves", r.Link.Symbol, r.Link.File, r.Link.Line))
+		}
+	}
+	return warnings, true
 }
 
 // looksLikeBoardURL reports whether s is a plausible instance base URL: an

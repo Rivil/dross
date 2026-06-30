@@ -124,6 +124,28 @@ func TestResolveSkipped(t *testing.T) {
 	}
 }
 
+func TestResolveAllIn(t *testing.T) {
+	dir := t.TempDir()
+	writeGo(t, dir, "a.go", "package fix\n\nfunc Alpha() {}\n") // Alpha at line 3
+	doc := "### Feature\n\nline.\n\n- `Alpha` — `a.go:99`\n\n_x_\n"
+
+	// Resolved against the repo root, the dir-relative file is found → Moved.
+	in := ResolveAllIn(doc, dir)
+	if len(in) != 1 || in[0].Status != StatusMoved || in[0].NewLine != 3 {
+		t.Fatalf("ResolveAllIn should resolve relative to baseDir: %+v", in)
+	}
+	// The resolution keeps the original repo-relative path for display.
+	if in[0].Link.File != "a.go" {
+		t.Errorf("resolution should keep the repo-relative path, got %q", in[0].Link.File)
+	}
+	// Without the base dir, the dir-relative path can't be found from the test
+	// cwd → Unresolved (proves the baseDir join is doing real work).
+	out := ResolveAll(doc)
+	if len(out) != 1 || out[0].Status != StatusUnresolved {
+		t.Errorf("ResolveAll (cwd-relative) should not find a dir-relative file: %+v", out)
+	}
+}
+
 func TestResolveAll(t *testing.T) {
 	dir := t.TempDir()
 	f := writeGo(t, dir, "a.go", "package fix\n\nfunc Alpha() {}\n\nfunc Beta() {}\n")
