@@ -3,13 +3,9 @@
   "current_milestone": "v0.6",
   "current_phase": "retrofit-readmostly-commands",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-30T15:09:16.418502Z",
-  "last_action": "plan locked: retrofit-readmostly-commands (4 tasks across 2 waves)",
+  "last_activity": "2026-06-30T15:12:42.128283Z",
+  "last_action": "plan reviewed: retrofit-readmostly-commands (0 blocking, 3 flags)",
   "history": [
-    {
-      "at": "2026-06-29T11:27:42.19312Z",
-      "action": "executed t-3 (Move inbox board gate to [board].enabled)"
-    },
     {
       "at": "2026-06-29T11:31:46.264099Z",
       "action": "executed t-4 (Validate [board] in dross doctor)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-30T15:09:16.418502Z",
       "action": "plan locked: retrofit-readmostly-commands (4 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-06-30T15:12:42.128283Z",
+      "action": "plan reviewed: retrofit-readmostly-commands (0 blocking, 3 flags)"
     }
   ]
 }
