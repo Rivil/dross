@@ -1,15 +1,9 @@
 {
   "version": "0.6.16.0",
   "current_milestone": "v0.6",
-  "current_phase": "gray-area-walkthrough",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-30T18:56:46.47269Z",
-  "last_action": "verified gray-area-walkthrough: pass (3/3 covered, mutation not a signal — prompt-only change)",
+  "last_activity": "2026-06-30T19:05:15.072446Z",
+  "last_action": "completed gray-area-walkthrough",
   "history": [
-    {
-      "at": "2026-06-29T13:30:25.086394Z",
-      "action": "plan reviewed: self-update-and-distribution (0 blocking, 3 flags folded in)"
-    },
     {
       "at": "2026-06-29T13:31:40.040167Z",
       "action": "set version=0.6.13.0"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-30T18:56:46.47269Z",
       "action": "verified gray-area-walkthrough: pass (3/3 covered, mutation not a signal — prompt-only change)"
+    },
+    {
+      "at": "2026-06-30T19:05:15.072446Z",
+      "action": "completed gray-area-walkthrough"
     }
   ]
 }
