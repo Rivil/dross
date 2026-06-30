@@ -23,31 +23,36 @@ regenerate the whole document from a scan of the code and git history.
 
 ### Architecture comprehension
 
-The single feature-organized ARCHITECTURE.md — its fixed entry template and greenfield skeleton seeding; backfill and landmark-merge live in the dross prompts.
+The single feature-organized ARCHITECTURE.md — fixed entry template + greenfield skeleton seeding, with backfill, landmark-merge and refresh-merge driven by the dross prompts. Symbol links are kept honest by a codex-backed resolver: `dross doctor` flags stale links advisorily and `dross architecture check --fix` repoints moved ones in place.
 
 - `architecture.EntryTemplate` — `internal/architecture/architecture.go:27`
 - `architecture.Skeleton` — `internal/architecture/architecture.go:41`
-- `Init` (seeds skeleton) — `internal/cmd/init.go:28`
+- `architecture.ParseDoc` / `Resolve` (codex-backed link resolver) — `internal/architecture/links.go:91`
+- `codex.SupportsFile` (language-dispatch gate) — `internal/codex/codex.go:106`
+- `architectureLinkWarnings` (doctor advisory section) — `internal/cmd/doctor.go:231`
+- `Architecture` (`dross architecture check [--fix]`) — `internal/cmd/architecture.go:16`
+- `Init` (seeds skeleton) — `internal/cmd/init.go:30`
 
-_introduced 01-architecture-comprehension-layer · 3fdba37_
+_introduced 01-architecture-comprehension-layer · extended architecture-doc-enhancements · 89813a3_
 
 ### Artefact validation
 
 Schema-check every .dross/ TOML/JSON artefact, including that plan `covers` reference real spec criteria.
 
-- `Validate` — `internal/cmd/validate.go:26`
-- `loadIfExists` — `internal/cmd/validate.go:111`
+- `Validate` — `internal/cmd/validate.go:27`
+- `loadIfExists` — `internal/cmd/validate.go:137`
 
 _c8b346e_
 
 ### Change tracking & landmarks
 
-Append-only per-task record of files touched, plus a feature·symbol·what landmark carried in `--notes`.
+Append-only per-task record of files touched, plus a typed `--landmark` record (feature/symbol/loc/what) parsed into a structured `Landmarks` array — replacing the old landmark-carried-in-`--notes` convention.
 
-- `Changes.Record` — `internal/changes/changes.go:78`
-- `Changes` (CLI) — `internal/cmd/changes.go:15`
+- `Changes.Record` — `internal/changes/changes.go:133`
+- `changes.ParseLandmark` / `Landmark` — `internal/changes/changes.go:62`
+- `Changes` (CLI, repeatable `--landmark`) — `internal/cmd/changes.go:15`
 
-_introduced 1d1f85a · extended 01-architecture-comprehension-layer · 4f31f70_
+_introduced 1d1f85a · extended 01-architecture-comprehension-layer · extended architecture-doc-enhancements · 12513fc_
 
 ### Code insight (codex)
 
@@ -64,11 +69,11 @@ _4b6e027_
 Calibrate-only, read-only multi-pass code-quality audit: real analyzers plus an adversarial refute-panel over cold subagents, emitting a verified maintainability-risk ledger and scaffolding a remediation phase. The `dross quality` CLI is the deterministic surface (run dirs, analyzer detection, findings→spec scaffold); `quality.md` orchestrates the audit. Sibling of the security audit, diverging on the locked context model (downrank-only, never suppress) and ranking (blast-radius-weighted maintainability-risk).
 
 - `quality.NewRun` — `internal/quality/run.go:65`
-- `quality.Catalog` / `quality.Detect` — `internal/quality/catalog.go:107`
+- `quality.Catalog` / `quality.Detect` — `internal/quality/catalog.go:140`
 - `quality.Ledger` — `internal/quality/findings.go:69`
-- `quality.BuildManifest` — `internal/quality/recon.go:112`
+- `quality.BuildManifest` — `internal/quality/recon.go:47`
 - `quality.ScaffoldSpec` — `internal/quality/scaffold.go:15`
-- `Quality` (CLI) — `internal/cmd/quality.go:20`
+- `Quality` (CLI) — `internal/cmd/quality.go:21`
 
 The analyzer catalog now sources language-dedicated tools from the active stack profile (agnostic tools stay inline); `recon.DetectLanguages` delegates to the single `stack.DetectLanguages`. `BuildManifest` also unions any marker-file stack's analyzers (via `stack.MarkerProfiles`) additively on top of the detected languages, so a marker-only repo (e.g. a Dockerfile) still gets its analyzers (hadolint) atop the agnostic set. The IaC marker profiles add dedicated quality analyzers — `kube-linter` (kubernetes) and `cfn-lint` (cloudformation) — surfaced at the error-handling dimension on top of (never replacing) the agnostic scc/jscpd, and absent from a marker-less Go repo.
 
@@ -82,8 +87,8 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `Defaults` — `internal/cmd/defaults.go:14`
 - `Env` — `internal/cmd/env.go:24`
 - `Profile` — `internal/cmd/profile.go:14`
-- `project.DetectRemote` / `KnownHostProviders` (host→provider autodetect + api_base) — `internal/project/remote.go:23`
-- `Doctor` (remote + auth_scheme validation) — `internal/cmd/doctor.go:22`
+- `project.DetectRemote` / `KnownHostProviders` (host→provider autodetect + api_base) — `internal/project/remote.go:24`
+- `Doctor` (remote + auth_scheme validation) — `internal/cmd/doctor.go:25`
 
 _c8b346e · extended gitlab-ship-provider · 0f209c9_
 
@@ -93,7 +98,7 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 
 - `Deferred.Target` (schema) — `internal/phase/phase.go:196`
 - `Deferred.Dismissed` (dismissed-state flag) — `internal/phase/phase.go:201`
-- `Deferred` (dross deferred list/route/unroute/dismiss) — `internal/cmd/deferred.go:28`
+- `Deferred` (dross deferred list/route/unroute/dismiss) — `internal/cmd/deferred.go:29`
 - `collectDeferred` (scan + filter) — `internal/cmd/deferred.go:40`
 - `deferredRoute` (stamp target on disk) — `internal/cmd/deferred.go:155`
 - `deferredDismiss` (retire to dismissed, someday-only) — `internal/cmd/deferred.go:194`
@@ -122,7 +127,7 @@ _introduced secure-quality-findings-lifecycle · fa06830_
 
 Seed the .dross/ scaffold and an ARCHITECTURE.md skeleton in a new repo, and seed `[runtime]` + `[stack].profile` from the detected stack profile (unsupported stacks are left unseeded, never fabricated).
 
-- `Init` — `internal/cmd/init.go:28`
+- `Init` — `internal/cmd/init.go:30`
 - `seedRuntimeFromProfile` — `internal/cmd/init.go`
 - `project.Project` — `internal/project/project.go:16`
 
@@ -171,7 +176,7 @@ Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Sve
 
 - `Adapter` — `internal/mutation/adapter.go:46`
 - `Report` — `internal/mutation/adapter.go:18`
-- `Gremlins.Run` — `internal/mutation/gremlins.go:57`
+- `Gremlins.Run` — `internal/mutation/gremlins.go:82`
 - `Stryker.Run` — `internal/mutation/stryker.go:40`
 
 _introduced c8b346e · extended 01c10f0_
@@ -196,8 +201,8 @@ _c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-compl
 Scan an existing repo's signal files (Dockerfile, package.json, go.mod, …) into a draft project.toml, seeding `[runtime]` + `[stack].profile` from the matched stack profile.
 
 - `Onboard` — `internal/cmd/onboard.go:26`
-- `scanRepo` — `internal/cmd/onboard.go:109`
-- `toProject` — `internal/cmd/onboard.go:140`
+- `scanRepo` — `internal/cmd/onboard.go:110`
+- `toProject` — `internal/cmd/onboard.go:141`
 
 _c8b346e · extended 07-stack-profiles · eb602f1_
 
@@ -222,7 +227,7 @@ Context-free, read-only multi-pass security audit: real scanners plus an adversa
 - `security.ScaffoldSpec` — `internal/security/scaffold.go`
 - `security.DecideDockle` (three-state image-scan decision: run-supplied / skip-no-image / skip-missing-bin, never builds) — `internal/security/dockle.go:43`
 - `securityRun --image` / `resolveImage` (`--image` flag, `$DROSS_IMAGE` fallback) — `internal/cmd/security.go:108`
-- `Security` (CLI) — `internal/cmd/security.go:18`
+- `Security` (CLI) — `internal/cmd/security.go:27`
 
 The scanner catalog now sources language-dedicated tools from the active stack profile (agnostic tools stay inline); `recon.DetectLanguages` delegates to the single `stack.DetectLanguages`. `BuildManifest` also unions any marker-file stack's scanners (via `stack.MarkerProfiles`) additively on top of the detected languages, so a marker-only repo (e.g. a Dockerfile with no source extension) still gets its scanners — including the deepened IaC/container loadout (`checkov` cross-family, `dockle` for docker), each surfaced installed-vs-missing. The security surface also covers **container image-layer scanning**: `DecideDockle` is a pure three-state decision that never runs `docker build`, and `dross security run --image <ref>` (or `$DROSS_IMAGE`) feeds it — with no image the run skips-with-reason rather than emitting a silent all-clear.
 
@@ -256,8 +261,8 @@ _52f6c75 · extended ship-complete-recovery-hardening · 3a1fd7d_
 
 Push the phase branch and open a provider-aware PR/MR (GitHub/Forgejo/GitLab) with reviewers, merging the phase's landmarks into ARCHITECTURE.md first; folds the completed-state transition (cleared current_phase + `completed <id>` history) into the phase branch and commits it BEFORE the push, so the squash-merge carries the completion record to main and ship returns on a clean tree; squash-merge collapses per-task commits. The GitLab path is raw REST (no `gh`/`glab` CLI): `openGitLabPR` opens a Merge Request (source/target branch, `Draft:` prefix, `web_url`→URL, `iid`→Number) and resolves reviewer usernames→ids non-fatally; `postGitLabComment` posts an MR note. The post-push PR/MR URL is intentionally printed, not persisted to state.json (avoids the completion-chore divergence). The CI-watch + squash-merge steps are prompt-driven (ship.md §5/§6) with the locked GitLab pipeline-status mapping.
 
-- `Ship` (CLI) — `internal/cmd/ship.go:22`
-- `ship.OpenPR` (provider switch → github/forgejo/`openGitLabPR`) — `internal/ship/open.go:38`
+- `Ship` (CLI) — `internal/cmd/ship.go:52`
+- `ship.OpenPR` (provider switch → github/forgejo/`openGitLabPR`) — `internal/ship/open.go:41`
 - `ship.PostComment` / `postGitLabComment` — `internal/ship/comment.go`
 - `buildOpenOpts` / `buildCommentOpts` (thread remote auth_scheme/project_id) — `internal/cmd/ship.go`
 - `ship.BuildPRBody` — `internal/ship/body.go:20`
@@ -268,7 +273,7 @@ _introduced d392501 · extended 01-architecture-comprehension-layer · extended 
 
 Declarative per-stack profiles — embedded built-ins plus `~/.claude/dross/profiles/` drop-ins (user wins on id) — that tune dross to a detected stack: runtime commands, the security/quality tool loadout, and the agent loadout. `dross stack detect/show/list/apply/loadout`; primary detection is signal-scored (exact marker files + source extensions), returning a matched profile id or an `unsupported` sentinel rather than a guess. `apply` re-syncs `[runtime]`; `loadout` emits a markdown block the execute prompt injects inline. Adding a stack is a single TOML drop-in — zero code change. Built-ins ship full profiles (dedicated quality analyzer + runtime + loadout) for Go, Kotlin, Dart, Svelte, SQL, TypeScript, Python, JavaScript, and C#, plus detection-only stubs (id + title + `[signals].exts` only) for Ruby/Rust/Java/C/C++/PHP/Swift. The Svelte, TypeScript, and Dart profiles carry a deepened loadout: dedicated **security scanners** (osv-scanner, plus eslint-plugin-security/retire.js on JS/TS) and **quality analyzers spanning ≥3 substantive dimensions** — dead-code (knip / `dcm unused-code`), coupling (dependency-cruiser), error-handling (typescript-eslint / `dart analyze`) — on top of the existing complexity analyzer, each tool distinctly named so the by-Name manifest dedup keeps every dimension. These surface findings the agnostic scc/jscpd/gitleaks/semgrep/trivy fallback misses (proven end-to-end by the committed `fixtures/multilang-c3` run: knip flags a dead export the fallback is blind to). ext→language is single-sourced from the loaded profiles: `DetectLanguages` derives it by **union** over every profile's `[signals].exts` — a shared extension (e.g. `.ts` in both svelte@6 and typescript@4) yields *both* languages, and the old hardcoded `extLang` map is deleted — so adding a profile extends language detection with no code change. The drop-in keystone is proven end-to-end: a brand-new `.zzz` profile dropped under `~/.claude/dross/profiles/` becomes both detectable and recon-visible with zero Go edit, and a malformed drop-in never crashes detection. Marker-file stacks (e.g. Docker, detected from `Dockerfile`/compose files via case-insensitive `[signals].file_patterns` globs, no source extension) are surfaced *additively* by `MarkerProfiles` on top of the source languages in the secure/quality manifests — leaving primary `Detect` winner-take-all unchanged — so their tools run on repos that have no matching source extension: the docker profile ships hadolint (scanner+analyzer) + trivy config, and the terraform profile ships trivy config (IaC-misconfiguration scanner, named distinctly from the agnostic trivy) + tflint (quality analyzer at the error-handling dimension), detected from `*.tf`/`*.tf.json`/`*.tfvars`/`*.tfvars.json`/`*.hcl` markers (`*.hcl` accepts a known false-positive risk on non-Terraform HCL). This is proven by the committed `fixtures/terraform-c3` run: `trivy config` flags an open-ingress misconfiguration (AVD-AWS-0107) the agnostic scc/jscpd/gitleaks fallback is structurally blind to. The container/IaC loadout is then *deepened* with **content-sniff marker detection**: `ContentMatch` adds an optional second gate so a profile globbing the ambiguous `*.yaml`/`*.yml`/`*.json` space confirms a candidate by case-sensitive token match (`All`=AND, `Any`=OR, body read capped at 64 KiB) before surfacing — turning a would-be every-YAML-repo false positive into a near-exact match, while a profile that declares no content keeps the pure-glob fast path. This enables two new marker profiles — `kubernetes` (content `apiVersion`+`kind`) and `cloudformation` (content `AWSTemplateFormatVersion`|`Resources`) — each shipping `trivy config` + `checkov` security scanners and a dedicated quality analyzer (`kube-linter` / `cfn-lint` at the error-handling dimension); `checkov` (cross-family IaC misconfiguration) is added to terraform/k8s/cfn and `dockle` (container image-layer) to docker, each kept distinctly named beside `trivy config` by the by-Name manifest dedup. Proven end-to-end by the committed `fixtures/iac-multi-c5` multi-family run record (a k8s manifest, a CFN template, and a Dockerfile each planting a defect the agnostic fallback misses).
 
-- `stack.Profile` / `stack.Load` — `internal/stack/profile.go:26`
+- `stack.Profile` / `stack.Load` — `internal/stack/profile.go:28`
 - `stack.ContentMatch` (content-sniff gate, `All`=AND / `Any`=OR, case-sensitive) — `internal/stack/profile.go:57`
 - `stack.Signals.MatchesFile` (case-insensitive glob matcher) — `internal/stack/profile.go:103`
 - `stack.Detect` (signal-scored, winner-take-all) / `stack.DetectLanguages` → `extLangFor` + `detectLanguagesFrom` (profile-derived union, no hardcoded map) — `internal/stack/detect.go`
@@ -289,10 +294,10 @@ Track current milestone/phase/version + activity in state.json; summarise "where
 - `State` (CLI) — `internal/cmd/state.go:16`
 - `Status` — `internal/cmd/status.go:22`
 - `staleCompletedState` (shipped-but-unmerged-branch warning) — `internal/cmd/status.go:462`
-- `spineIdle` — `internal/cmd/status.go:247`
-- `rankAreas` — `internal/cmd/status.go:363`
-- `formatRunSignal` — `internal/cmd/status.go:382`
-- `renderActionAreas` — `internal/cmd/status.go:410`
+- `spineIdle` — `internal/cmd/status.go:262`
+- `rankAreas` — `internal/cmd/status.go:378`
+- `formatRunSignal` — `internal/cmd/status.go:397`
+- `renderActionAreas` — `internal/cmd/status.go:425`
 
 _c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · 2b6d344_
 
