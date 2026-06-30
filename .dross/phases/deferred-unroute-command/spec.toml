@@ -1,0 +1,30 @@
+[phase]
+id        = "deferred-unroute-command"
+title     = "Deferred un-route command"
+milestone = "v0.6"
+
+[[criteria]]
+id   = "c-1"
+text = "`dross deferred unroute <phase> <idx>` clears a routed deferred item's target, returning it to someday (no target) — verifiable by routing an item, unrouting it, and seeing it reappear under `deferred list --someday`."
+
+[[criteria]]
+id   = "c-2"
+text = "`unroute` validates its arguments consistently with `route`/`dismiss` — an out-of-range index or a missing phase spec produces the same clear error, never a panic or a silent no-op."
+
+[[decisions]]
+key    = "command_shape"
+choice = "Add a dedicated `deferred unroute <phase> <idx>` subcommand; `route` keeps requiring a non-empty --target."
+why    = "Symmetric with dismiss/--undo, keeps route's 'target is required' invariant clean, and avoids an accidental un-route from a stray empty --target."
+locked = true
+
+[[decisions]]
+key    = "already_someday"
+choice = "Un-routing an item that already has no target is an idempotent success (\"already someday\" message, no state change)."
+why    = "Matches dismiss --undo's unconditional-clear precedent and is script-friendly — a make-it-so verb shouldn't fail when the end-state already holds."
+locked = true
+
+[[decisions]]
+key    = "dismissed_item"
+choice = "Un-routing a dismissed item is refused with a pointer to `dismiss --undo`."
+why    = "Routing and dismissal are distinct intents (deferred.go:227); an idempotent success would mislead by leaving the item dismissed/hidden."
+locked = true

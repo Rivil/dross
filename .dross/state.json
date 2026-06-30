@@ -1,21 +1,11 @@
 {
   "version": "0.8.0.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-30T09:41:06.212821Z",
-  "last_action": "set current_milestone=v0.6",
+  "current_phase": "deferred-unroute-command",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-30T09:47:51.564388Z",
+  "last_action": "spec locked: deferred-unroute-command",
   "history": [
-    {
-      "at": "2026-06-29T10:41:50.693597Z",
-      "action": "spec locked: youtrack-board-integration"
-    },
-    {
-      "at": "2026-06-29T11:02:18.907538Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-29T11:02:18.914579Z",
-      "action": "plan locked: youtrack-board-integration (10 tasks across 4 waves)"
-    },
     {
       "at": "2026-06-29T11:07:16.878301Z",
       "action": "plan reviewed: youtrack-board-integration (0 blocking, 2 flags resolved)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-30T09:41:06.212821Z",
       "action": "set current_milestone=v0.6"
+    },
+    {
+      "at": "2026-06-30T09:42:00.243952Z",
+      "action": "created deferred-unroute-command"
+    },
+    {
+      "at": "2026-06-30T09:47:51.559151Z",
+      "action": "set current_phase=deferred-unroute-command"
+    },
+    {
+      "at": "2026-06-30T09:47:51.564388Z",
+      "action": "spec locked: deferred-unroute-command"
     }
   ]
 }
