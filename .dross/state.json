@@ -1,17 +1,11 @@
 {
   "version": "0.8.0.0",
   "current_milestone": "v0.8",
-  "last_activity": "2026-06-30T07:17:27.603301Z",
-  "last_action": "set version=0.8.0.0",
+  "current_phase": "native-statusline",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-30T07:24:13.828925Z",
+  "last_action": "spec locked: native-statusline",
   "history": [
-    {
-      "at": "2026-06-29T09:40:00.794474Z",
-      "action": "created youtrack-board-integration"
-    },
-    {
-      "at": "2026-06-29T10:41:50.68766Z",
-      "action": "set current_phase=youtrack-board-integration"
-    },
     {
       "at": "2026-06-29T10:41:50.693597Z",
       "action": "spec locked: youtrack-board-integration"
@@ -203,6 +197,14 @@
     {
       "at": "2026-06-30T07:17:27.603301Z",
       "action": "set version=0.8.0.0"
+    },
+    {
+      "at": "2026-06-30T07:19:01.618662Z",
+      "action": "created native-statusline"
+    },
+    {
+      "at": "2026-06-30T07:24:13.828925Z",
+      "action": "spec locked: native-statusline"
     }
   ]
 }

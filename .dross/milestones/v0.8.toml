@@ -1,3 +1,5 @@
+phases = ["native-statusline"]
+
 [milestone]
   version = "v0.8"
   title = "Claude Code surface integration"

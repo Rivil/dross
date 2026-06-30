@@ -1,0 +1,56 @@
+[phase]
+  id = "native-statusline"
+  title = "native statusline"
+  milestone = "v0.8"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross statusline` reads Claude Code's status JSON from stdin and emits line 1 = \"model │ dirname ⎇ branch\": dim model display_name, dim basename of workspace current_dir, dim git branch (git symbolic-ref --short HEAD, falling back to rev-parse --short HEAD, empty outside a repo)."
+
+[[criteria]]
+  id = "c-2"
+  text = "Line 2 shows the active session's in-progress todo activeForm (bold) when present, else the dross project state from .dross/state.json rendered as \"milestone · phase · status\" (dim, graceful when fields absent); the todo wins when both exist. The in-progress todo is read from the newest-by-mtime ~/.claude/todos/<session_id>*-agent-*.json with status == in_progress."
+
+[[criteria]]
+  id = "c-3"
+  text = "Line 2 ends with a 10-cell context meter showing USED %, normalized for Claude Code's auto-compact buffer (CLAUDE_CODE_AUTO_COMPACT_WINDOW token count / total_tokens, else ~16.5% default): green <50, yellow <65, orange <80, blinking 💀 red ≥80. Absent when remaining_percentage is not provided."
+
+[[criteria]]
+  id = "c-4"
+  text = "Line 3 lists peer background jobs from ~/.claude/jobs/<id>/state.json — skipping the current CLAUDE_JOB_DIR and any dir not updated within 6h — each rendered \"<icon> <name> · <detail>\", sorted review→blocked→working→done with the nerd-font MDI icons and colors; absent when there are no peers."
+
+[[criteria]]
+  id = "c-5"
+  text = "Robustness: honors CLAUDE_CONFIG_DIR (overrides ~/.claude); never hangs (bounded stdin read) and never breaks the status line on JSON-parse or filesystem errors (silent fail / partial output). Output is byte-faithful to the existing statusline.js for representative stdin fixtures, asserted by a golden test."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross install --statusline` configures ~/.claude/settings.json so statusLine.command invokes the installed dross binary's `statusline` (absolute path): opt-in (only with the flag / interactive consent), idempotent, JSON-merge preserving every other settings.json key, and refusing to overwrite a different existing statusLine.command without explicit consent."
+
+[[criteria]]
+  id = "c-7"
+  text = "A revert path (`dross install --no-statusline` / `dross statusline disable`) un-wires dross's statusline from ~/.claude/settings.json: removes only the statusLine entry dross set, JSON-merge preserving all other keys, idempotent (no-op when dross didn't set it), and never removes a user's unrelated/different statusLine."
+
+[[decisions]]
+  key = "native_go"
+  choice = "Implement the status line as a native `dross statusline` Go subcommand reading the stdin status JSON; do not ship the existing node hooks/statusline.js. The bare `dross statusline` (no subcommand) is the render path; management verbs (enable/disable) and/or `dross install --statusline` wire it."
+  why = "Honors the locked single-static-binary / no-runtime-deps stack decision — the status line stops depending on Node. Accepts that dross's Go core now tracks Claude Code's internal todo/job/context-window file formats."
+  locked = true
+
+[[decisions]]
+  key = "install_optin"
+  choice = "Wiring the status line into ~/.claude/settings.json is opt-in (a --statusline flag, with an interactive prompt where install is interactive), JSON-merges to preserve every other settings.json key, is idempotent, and refuses to overwrite a different existing statusLine.command without explicit consent."
+  why = "Editing the user's Claude Code config is more invasive than writing dross-* skills; it must never be silent, automatic, or clobber an unrelated statusLine the user already configured."
+  locked = true
+
+[[decisions]]
+  key = "output_fidelity"
+  choice = "The native output must be byte-faithful to the current statusline.js — same line layout, ANSI color codes, nerd-font MDI icons, and context-meter math (including the auto-compact normalization) — verified by a golden test against representative stdin fixtures."
+  why = "It's a drop-in replacement; switching from the node script to the binary must be visually identical so the user notices no regression."
+  locked = true
+
+[[decisions]]
+  key = "command_form"
+  choice = "settings.json invokes the status line via the absolute installed-binary path (e.g. /Users/<user>/.local/bin/dross statusline), resolved at install time, not a bare `dross statusline` relying on PATH."
+  why = "Claude Code runs the statusLine command in a subprocess whose PATH may not include ~/.local/bin; an absolute path is robust regardless of the invoking shell's environment."
+  locked = true
