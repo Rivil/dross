@@ -1,27 +1,11 @@
 {
-  "version": "0.8.0.0",
+  "version": "0.6.8.0",
   "current_milestone": "v0.6",
   "current_phase": "deferred-unroute-command",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-30T09:53:53.978951Z",
-  "last_action": "plan reviewed: deferred-unroute-command (0 blocking, 1 flag)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-30T10:20:50.368536Z",
+  "last_action": "phase deferred-unroute-command executed (1/1 done)",
   "history": [
-    {
-      "at": "2026-06-29T11:25:52.47715Z",
-      "action": "executed t-2 (YouTrack REST client + BoardClient interface + factory)"
-    },
-    {
-      "at": "2026-06-29T11:27:42.19312Z",
-      "action": "executed t-3 (Move inbox board gate to [board].enabled)"
-    },
-    {
-      "at": "2026-06-29T11:31:46.264099Z",
-      "action": "executed t-4 (Validate [board] in dross doctor)"
-    },
-    {
-      "at": "2026-06-29T11:46:43.476972Z",
-      "action": "executed t-5 (String issue id in board.json + re-route ops to [board])"
-    },
     {
       "at": "2026-06-29T11:50:20.689322Z",
       "action": "executed t-6 (Ensure milestone entity per milestone_mode)"
@@ -205,6 +189,22 @@
     {
       "at": "2026-06-30T09:53:53.978951Z",
       "action": "plan reviewed: deferred-unroute-command (0 blocking, 1 flag)"
+    },
+    {
+      "at": "2026-06-30T10:18:26.146134Z",
+      "action": "set version=0.6.8.0"
+    },
+    {
+      "at": "2026-06-30T10:20:44.176747Z",
+      "action": "executed t-1 (Add deferred unroute subcommand)"
+    },
+    {
+      "at": "2026-06-30T10:20:50.363419Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-30T10:20:50.368536Z",
+      "action": "phase deferred-unroute-command executed (1/1 done)"
     }
   ]
 }
