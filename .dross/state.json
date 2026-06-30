@@ -2,18 +2,10 @@
   "version": "0.8.1.0",
   "current_milestone": "v0.8",
   "current_phase": "native-statusline",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-30T08:38:28.966037Z",
-  "last_action": "phase native-statusline executed (7/7 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-30T09:08:56.143628Z",
+  "last_action": "verified native-statusline: pass (7/7 covered, mutation 0.84 measured, efficacy 100%)",
   "history": [
-    {
-      "at": "2026-06-29T11:58:30.107013Z",
-      "action": "executed t-9 (Wire phase-sync + milestone-sync to YouTrack)"
-    },
-    {
-      "at": "2026-06-29T12:06:14.331956Z",
-      "action": "executed t-10 (Sync milestone backlog slugs + someday, idempotent)"
-    },
     {
       "at": "2026-06-29T12:06:27.535277Z",
       "action": "set current_phase_status=complete"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-30T08:38:28.966037Z",
       "action": "phase native-statusline executed (7/7 done)"
+    },
+    {
+      "at": "2026-06-30T09:08:56.139028Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-30T09:08:56.143628Z",
+      "action": "verified native-statusline: pass (7/7 covered, mutation 0.84 measured, efficacy 100%)"
     }
   ]
 }
