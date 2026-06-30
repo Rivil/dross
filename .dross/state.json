@@ -1,15 +1,9 @@
 {
   "version": "0.6.7.0",
   "current_milestone": "v0.6",
-  "current_phase": "architecture-doc-enhancements",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-30T13:42:49.464629Z",
-  "last_action": "verified architecture-doc-enhancements: pass (4/4 covered, mutation 0.84 measured, efficacy 1.00 on covered)",
+  "last_activity": "2026-06-30T13:59:40.312038Z",
+  "last_action": "completed architecture-doc-enhancements",
   "history": [
-    {
-      "at": "2026-06-29T12:14:50.684251Z",
-      "action": "verified youtrack-board-integration: partial (5/6 covered, c-6 weak; mutation 0.86 measured, efficacy 1.00 on covered)"
-    },
     {
       "at": "2026-06-29T12:20:00.180085Z",
       "action": "amended t-10 (backlog attach per milestone_mode: epic/agile)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-30T13:42:49.464629Z",
       "action": "verified architecture-doc-enhancements: pass (4/4 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-06-30T13:59:40.312038Z",
+      "action": "completed architecture-doc-enhancements"
     }
   ]
 }
