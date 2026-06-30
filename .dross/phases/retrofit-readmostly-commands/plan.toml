@@ -1,0 +1,44 @@
+[phase]
+  id = "retrofit-readmostly-commands"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Fail-closed interaction-coverage check"
+  files = ["docs/interaction-audit.md", "internal/cmd/interaction_coverage.go", "internal/cmd/interaction_coverage_test.go"]
+  description = "Replace interaction-audit.md's prose Scope exemption sentence with a structured\n`## Exempt` list (status → read-only, plan-review → subagent-only). Add a shared\nclassifier in production code (callable by doctor) that, for every command-backed\nprompt (matching shim, _-partials excluded), classifies it\ninteractive-with-audit-section vs exempt-listed. Add a fail-closed Go test over it.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["if a command-backed prompt is neither interactive-with-audit-section nor on the interaction-audit.md exempt list, TestInteractionCoverageFailClosed fails naming that prompt", "if the exempt entry for status or plan-review is removed from interaction-audit.md, the coverage test fails (neither has an AskUserQuestion shim or an audit section)"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Confirm + pin pre-existing coverage"
+  files = ["internal/cmd/interaction_othercmds_test.go", "internal/cmd/commands_parity_test.go"]
+  description = "Confirm pause/resume genuinely conform (emitter wired, contract referenced, audit\nsections accurate) via the existing TestOtherCmds* tests, and command↔prompt\nparity via TestCommandsPromptsParity; fix any deviation found in the prompts. Add\nguard comments pinning c-3 and c-6 to these tests so the criteria are traceable.\n"
+  covers = ["c-3", "c-6"]
+  test_contract = ["if pause.md or resume.md drops its `dross interaction show` pre-flight or contract reference, TestOtherCmdsWireEmitter / TestOtherCmdsReferenceContract fails", "if a command loses its matching prompt (or vice versa), TestCommandsPromptsParity fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "dross doctor coverage lint"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_test.go"]
+  description = "Add a doctor check that runs t-1's shared classifier and warns on any unclassified\ncommand-backed prompt, reusing the classifier rather than duplicating logic. The\nclassifier needs the exempt list from docs/interaction-audit.md, which is not\nembedded — so the lint runs only when doctor operates on the dross source tree\n(docs/interaction-audit.md + assets/prompts present) and skips silently in other\nonboarded projects.\n"
+  covers = ["c-5"]
+  depends_on = ["t-1"]
+  test_contract = ["with an unclassified command-backed prompt present, `dross doctor` (run in the dross repo) prints a ✗ line naming it (TestDoctorInteractionCoverage)", "when every prompt is classified, doctor prints the ✓ coverage line and increments no issue count", "when the dross source tree is absent (docs/interaction-audit.md missing), doctor emits no coverage section and no issue"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Document the coverage convention"
+  files = ["docs/interaction-audit.md", "assets/prompts/_interaction.md", "internal/cmd/interaction_coverage_test.go"]
+  description = "Document the machine-checked convention (interactive → audit-doc section;\nnon-interactive → exempt-list entry with a reason; enforced by the Go test,\nsurfaced by dross doctor) in the interaction-audit.md header, cross-referenced\nfrom _interaction.md. Add a doc grep test pinning the convention text.\n"
+  covers = ["c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if interaction-audit.md's header loses the interactive→section / exempt→list convention statement, TestAuditDocDocumentsConvention fails", "if _interaction.md drops the cross-reference to the coverage convention, the doc test fails"]
+  status = "done"

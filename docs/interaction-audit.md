@@ -5,10 +5,20 @@ one-decision-per-turn** contract (`dross-interaction-contract` builtin rule +
 `assets/prompts/_interaction.md` playbook).
 
 **Scope.** "Interactive" = any command whose `assets/commands/dross-<name>.md`
-wrapper lists `AskUserQuestion` in `allowed-tools`. Read-only commands (`status`)
-and subagent-only commands (`plan-review`) are out of scope and intentionally
-absent. The Go test in `internal/cmd/interaction_audit_test.go` fails if an
-interactive command has no section here.
+wrapper lists `AskUserQuestion` in `allowed-tools`. Non-interactive command-backed
+prompts are **out of scope** and must be enrolled explicitly in the [`## Exempt`](#exempt)
+list below — each with a reason — rather than silently omitted. The Go test in
+`internal/cmd/interaction_audit_test.go` fails if an interactive command has no
+section here, and `internal/cmd/interaction_coverage_test.go` fails (fail-closed)
+if any command-backed prompt is neither sectioned nor exempt.
+
+**Coverage convention.** Every command-backed prompt is classified exactly one of
+two ways: **interactive** → its shim lists `AskUserQuestion` and it has a
+`### dross-<name>` section here; or **non-interactive** → it is enrolled in
+[`## Exempt`](#exempt) with a reason. There is no third state — an unclassified
+prompt fails the build. Adding a command? Give it a section if it ever asks the
+user anything; otherwise add an Exempt entry. The Go test is the enforcing gate;
+`dross doctor` surfaces the same verdict on-demand inside the dross repo.
 
 **Conformance legend** (filled in by phases 11–13):
 
@@ -20,6 +30,19 @@ interactive command has no section here.
 Each command lists its **decision points** (the moments it asks the user to
 choose) one row each — not one row per command — so the retrofit can confirm the
 pattern point by point.
+
+## Exempt
+
+Command-backed prompts that are intentionally **non-interactive** — they carry no
+section above. This list is machine-read by `interaction_coverage_test.go` and the
+`dross doctor` coverage lint: a non-interactive command must appear here (with a
+reason) or the build fails. Removing an entry fails the build unless that command
+becomes interactive (gains an `AskUserQuestion` shim + a section above).
+
+| Command | Reason |
+|---|---|
+| status | read-only — prints `dross status` and stops; no decision points |
+| plan-review | subagent-only — spawns a cold reviewer and relays findings; no user turns |
 
 ---
 

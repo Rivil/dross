@@ -1,73 +1,9 @@
 {
-  "version": "0.8.0.0",
+  "version": "0.6.9.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-30T14:06:44.900387Z",
-  "last_action": "merged architecture-doc-enhancements",
+  "last_activity": "2026-06-30T18:04:39.382514Z",
+  "last_action": "completed retrofit-readmostly-commands",
   "history": [
-    {
-      "at": "2026-06-29T11:02:18.914579Z",
-      "action": "plan locked: youtrack-board-integration (10 tasks across 4 waves)"
-    },
-    {
-      "at": "2026-06-29T11:07:16.878301Z",
-      "action": "plan reviewed: youtrack-board-integration (0 blocking, 2 flags resolved)"
-    },
-    {
-      "at": "2026-06-29T11:10:38.427446Z",
-      "action": "set version=0.6.12.0"
-    },
-    {
-      "at": "2026-06-29T11:14:35.768164Z",
-      "action": "executed t-1 (Add [board] config struct + dotted arms)"
-    },
-    {
-      "at": "2026-06-29T11:25:52.47715Z",
-      "action": "executed t-2 (YouTrack REST client + BoardClient interface + factory)"
-    },
-    {
-      "at": "2026-06-29T11:27:42.19312Z",
-      "action": "executed t-3 (Move inbox board gate to [board].enabled)"
-    },
-    {
-      "at": "2026-06-29T11:31:46.264099Z",
-      "action": "executed t-4 (Validate [board] in dross doctor)"
-    },
-    {
-      "at": "2026-06-29T11:46:43.476972Z",
-      "action": "executed t-5 (String issue id in board.json + re-route ops to [board])"
-    },
-    {
-      "at": "2026-06-29T11:50:20.689322Z",
-      "action": "executed t-6 (Ensure milestone entity per milestone_mode)"
-    },
-    {
-      "at": "2026-06-29T11:53:02.804791Z",
-      "action": "executed t-7 (Set YouTrack State via state_map, warn-skip)"
-    },
-    {
-      "at": "2026-06-29T11:54:51.203981Z",
-      "action": "executed t-8 (Surface YouTrack issues in issue pull)"
-    },
-    {
-      "at": "2026-06-29T11:58:30.107013Z",
-      "action": "executed t-9 (Wire phase-sync + milestone-sync to YouTrack)"
-    },
-    {
-      "at": "2026-06-29T12:06:14.331956Z",
-      "action": "executed t-10 (Sync milestone backlog slugs + someday, idempotent)"
-    },
-    {
-      "at": "2026-06-29T12:06:27.535277Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-29T12:06:27.541752Z",
-      "action": "phase youtrack-board-integration executed (10/10 done)"
-    },
-    {
-      "at": "2026-06-29T12:14:50.677192Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-06-29T12:14:50.684251Z",
       "action": "verified youtrack-board-integration: partial (5/6 covered, c-6 weak; mutation 0.86 measured, efficacy 1.00 on covered)"
@@ -203,6 +139,70 @@
     {
       "at": "2026-06-30T14:06:44.900387Z",
       "action": "merged architecture-doc-enhancements"
+    },
+    {
+      "at": "2026-06-30T14:17:58.60491Z",
+      "action": "created retrofit-readmostly-commands"
+    },
+    {
+      "at": "2026-06-30T14:47:37.138013Z",
+      "action": "set current_phase=retrofit-readmostly-commands"
+    },
+    {
+      "at": "2026-06-30T14:47:37.14502Z",
+      "action": "spec locked: retrofit-readmostly-commands"
+    },
+    {
+      "at": "2026-06-30T15:09:16.41238Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-30T15:09:16.418502Z",
+      "action": "plan locked: retrofit-readmostly-commands (4 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-06-30T15:12:42.128283Z",
+      "action": "plan reviewed: retrofit-readmostly-commands (0 blocking, 3 flags)"
+    },
+    {
+      "at": "2026-06-30T15:22:50.287239Z",
+      "action": "set version=0.6.9.0"
+    },
+    {
+      "at": "2026-06-30T15:27:43.114732Z",
+      "action": "executed t-1 (Fail-closed interaction-coverage check)"
+    },
+    {
+      "at": "2026-06-30T15:29:03.17793Z",
+      "action": "executed t-3 (Confirm + pin pre-existing coverage)"
+    },
+    {
+      "at": "2026-06-30T15:34:13.931832Z",
+      "action": "executed t-2 (dross doctor coverage lint)"
+    },
+    {
+      "at": "2026-06-30T15:37:05.187563Z",
+      "action": "executed t-4 (Document the coverage convention)"
+    },
+    {
+      "at": "2026-06-30T15:37:23.479463Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-30T15:37:23.48546Z",
+      "action": "phase retrofit-readmostly-commands executed (4/4 done)"
+    },
+    {
+      "at": "2026-06-30T15:49:47.330649Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-30T15:49:47.335776Z",
+      "action": "verified retrofit-readmostly-commands: pass (6/6 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-06-30T18:04:39.382514Z",
+      "action": "completed retrofit-readmostly-commands"
     }
   ]
 }

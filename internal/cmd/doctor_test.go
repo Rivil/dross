@@ -391,6 +391,118 @@ func TestDoctorStaleLinksNeverBlock(t *testing.T) {
 	}
 }
 
+// plantInteractionFixture writes a minimal command/prompt/audit tree into dir so
+// doctor's interaction-coverage lint has a dross-source-tree to classify:
+//   - foo: interactive (AskUserQuestion shim) + audit section → covered
+//   - baz: non-interactive + Exempt entry → covered
+//   - bar (only if includeBar): non-interactive, NOT exempt → the unclassified probe
+func plantInteractionFixture(t *testing.T, dir string, includeBar bool) {
+	t.Helper()
+	mustWrite(t, filepath.Join(dir, "assets/commands/dross-foo.md"), "allowed-tools: AskUserQuestion\n")
+	mustWrite(t, filepath.Join(dir, "assets/prompts/foo.md"), "# foo\n")
+	mustWrite(t, filepath.Join(dir, "assets/commands/dross-baz.md"), "allowed-tools: Read\n")
+	mustWrite(t, filepath.Join(dir, "assets/prompts/baz.md"), "# baz\n")
+	if includeBar {
+		mustWrite(t, filepath.Join(dir, "assets/commands/dross-bar.md"), "allowed-tools: Read\n")
+		mustWrite(t, filepath.Join(dir, "assets/prompts/bar.md"), "# bar\n")
+	}
+	mustWrite(t, filepath.Join(dir, "docs/interaction-audit.md"),
+		"# Interaction audit\n\n### dross-foo\n\n| Decision point | Conforms |\n|---|---|\n| pick | yes |\n\n"+
+			"## Exempt\n\n| Command | Reason |\n|---|---|\n| baz | read-only fixture |\n")
+}
+
+// TestInteractionCoverageWarnings (c-5) proves the present-gating: a dir with no
+// docs/interaction-audit.md yields no section (present=false), while a planted
+// dross source tree returns present=true and one warning per unclassified prompt.
+func TestInteractionCoverageWarnings(t *testing.T) {
+	// Absent source tree → no section.
+	if _, present := interactionCoverageWarnings(t.TempDir()); present {
+		t.Error("expected present=false when docs/interaction-audit.md is absent")
+	}
+
+	// Planted tree with an unclassified prompt → present, warning names it.
+	dir := t.TempDir()
+	plantInteractionFixture(t, dir, true)
+	warnings, present := interactionCoverageWarnings(dir)
+	if !present {
+		t.Fatal("expected present=true for a dross source tree")
+	}
+	joined := strings.Join(warnings, "\n")
+	if !strings.Contains(joined, "bar") {
+		t.Errorf("expected a warning naming the unclassified 'bar'; got: %v", warnings)
+	}
+	if strings.Contains(joined, "foo ") || strings.Contains(joined, "baz ") {
+		t.Errorf("covered prompts foo/baz should not warn; got: %v", warnings)
+	}
+}
+
+// TestDoctorInteractionCoverage (c-5) proves the doctor lint end to end. The
+// assertions are differential (baseline vs. with-fixture, in one repo) so they
+// isolate the coverage check from unrelated baseline issues in the test shell
+// (e.g. an unset $auth_env): an unclassified prompt prints a ✗ line naming it and
+// *changes the verdict* (adds an issue); a fully classified tree prints the ✓ line
+// and leaves the verdict unchanged (adds no issue); and a repo with no dross
+// source tree emits no section at all.
+func TestDoctorInteractionCoverage(t *testing.T) {
+	newRepo := func(t *testing.T) string {
+		t.Helper()
+		dir := t.TempDir()
+		gitInit(t, dir, "https://github.com/Rivil/dross.git")
+		chdir(t, dir)
+		if err := runCmd(t, Init()); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		return dir
+	}
+	errString := func(e error) string {
+		if e == nil {
+			return ""
+		}
+		return e.Error()
+	}
+
+	t.Run("classified tree adds no issue and shows ✓", func(t *testing.T) {
+		dir := newRepo(t)
+		var baseOut, classOut string
+		baseErr := runCmdCapturing(t, &baseOut, Doctor()) // no source tree yet → no section
+		if strings.Contains(baseOut, "Interaction coverage:") {
+			t.Fatalf("baseline should have no coverage section:\n%s", baseOut)
+		}
+		plantInteractionFixture(t, dir, false) // only covered prompts
+		classErr := runCmdCapturing(t, &classOut, Doctor())
+		if errString(baseErr) != errString(classErr) {
+			t.Errorf("a fully-classified tree changed the doctor verdict (must add no issue):\n base=%q\n class=%q",
+				errString(baseErr), errString(classErr))
+		}
+		if !strings.Contains(classOut, "every command-backed prompt is sectioned or exempt") {
+			t.Errorf("expected the ✓ coverage line, got:\n%s", classOut)
+		}
+	})
+
+	t.Run("unclassified prompt adds an issue and a ✗ line", func(t *testing.T) {
+		dir := newRepo(t)
+		var baseOut, uncOut string
+		baseErr := runCmdCapturing(t, &baseOut, Doctor())
+		plantInteractionFixture(t, dir, true) // bar is unclassified
+		uncErr := runCmdCapturing(t, &uncOut, Doctor())
+		if errString(baseErr) == errString(uncErr) {
+			t.Errorf("an unclassified prompt must change the verdict (add an issue); both=%q", errString(uncErr))
+		}
+		if !strings.Contains(uncOut, "Interaction coverage:") || !strings.Contains(uncOut, "✗") || !strings.Contains(uncOut, "bar") {
+			t.Errorf("expected a ✗ coverage line naming 'bar', got:\n%s", uncOut)
+		}
+	})
+
+	t.Run("no source tree, no section", func(t *testing.T) {
+		newRepo(t) // plain repo: no docs/interaction-audit.md, no assets/
+		var out string
+		_ = runCmdCapturing(t, &out, Doctor())
+		if strings.Contains(out, "Interaction coverage:") {
+			t.Errorf("expected no coverage section outside the dross source tree, got:\n%s", out)
+		}
+	})
+}
+
 // runCmdCapturing runs cmd with args while capturing stdout into *out.
 // Use when both the error and the output text matter to the assertion.
 func runCmdCapturing(t *testing.T, out *string, cmd *cobra.Command, args ...string) error {
