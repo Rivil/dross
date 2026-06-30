@@ -3,13 +3,9 @@
   "current_milestone": "v0.6",
   "current_phase": "architecture-doc-enhancements",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-30T12:51:39.164969Z",
-  "last_action": "plan locked: architecture-doc-enhancements (6 tasks across 2 waves)",
+  "last_activity": "2026-06-30T12:55:45.96422Z",
+  "last_action": "plan reviewed: architecture-doc-enhancements (0 blocking, 1 flag folded in)",
   "history": [
-    {
-      "at": "2026-06-29T11:25:52.47715Z",
-      "action": "executed t-2 (YouTrack REST client + BoardClient interface + factory)"
-    },
     {
       "at": "2026-06-29T11:27:42.19312Z",
       "action": "executed t-3 (Move inbox board gate to [board].enabled)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-30T12:51:39.164969Z",
       "action": "plan locked: architecture-doc-enhancements (6 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-06-30T12:55:45.96422Z",
+      "action": "plan reviewed: architecture-doc-enhancements (0 blocking, 1 flag folded in)"
     }
   ]
 }

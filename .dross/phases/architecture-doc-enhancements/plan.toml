@@ -26,14 +26,17 @@ title         = "Architecture link parse + symbol resolver"
 files         = ["internal/architecture/links.go", "internal/architecture/links_test.go"]
 description   = """
 Single shared ParseDoc + codex-backed symbol resolver consumed by t-3 and t-4.
-Resolver uses internal/codex (Go-only; non-Go links classify Unresolved/Skipped —
-document the limitation here).
+Resolver routes through internal/codex's existing language dispatch (multi-language:
+Go stdlib indexer + ast-grep langs). A bullet in a language codex can't index
+classifies Skipped, not Unresolved — so a non-Go repo's healthy links aren't
+reported as stale.
 """
 covers        = ["c-3", "c-4"]
 test_contract = [
   "ParseDoc returns one Entry per ### heading with its one-line, []SymbolLink{Symbol,File,Line} bullets, and provenance",
   "a bullet whose symbol now sits at a new line classifies Moved{newline}; two same-name declarations in one file classify Ambiguous (never silent first-match)",
   "a deleted/renamed symbol is Unresolved; a bullet missing file:line is Skipped without aborting the rest; em-dash separator and a :line with trailing text both parse",
+  "a bullet pointing at a file whose language codex can't index classifies Skipped (not Unresolved), routed through codex's dispatch rather than a hard-coded Go path",
 ]
 status        = "pending"
 
@@ -87,6 +90,7 @@ covers        = ["c-3"]
 test_contract = [
   "the issues counter feeding finalizeDoctor is identical to the same repo without staleness — stale links never increment issues (assert finalizeDoctor's return/issue-count, not stdout)",
   "a repo with no ARCHITECTURE.md emits no link section and no error",
+  "doctor prints ⚠ only for Moved/Unresolved bullets; Skipped bullets (unindexable language or missing file:line) produce no warning, so healthy non-indexable links don't flood the section",
 ]
 status        = "pending"
 
