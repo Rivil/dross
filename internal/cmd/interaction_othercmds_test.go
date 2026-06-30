@@ -12,6 +12,12 @@ import (
 // single gated decision, retrofitted uniformly to invoke `dross interaction show`
 // in its pre-flight (the scan_command_emitter + handoff_emitter_exception
 // decisions). Twin of coreLoopPrompts / setupPrompts.
+//
+// Pin (retrofit-readmostly-commands c-3): pause + resume are the read-mostly
+// interactive pair. Their genuine propose-and-react conformance is c-3's test
+// contract, asserted by TestOtherCmdsWireEmitter / TestOtherCmdsReferenceContract /
+// TestOtherCmdsAuditSectionsConform below — a regression in either prompt (dropped
+// emitter, lost contract reference, downgraded audit marker) fails the build.
 var otherCmdPrompts = []string{"architecture", "secure", "quality", "pause", "resume"}
 
 // TestOtherCmdsWireEmitter proves c-2: each of the five remaining prompts invokes

@@ -16,6 +16,11 @@ import (
 // It directly guards the architecture backfill engine: if either
 // assets/commands/dross-architecture.md or assets/prompts/architecture.md is
 // missing, this test fails (t-3 / c-7 test_contract).
+//
+// Pin (retrofit-readmostly-commands c-6): this bidirectional check IS c-6 — every
+// command has a matching prompt and vice versa, a CI-failing gate. A command
+// shipped without a prompt (or an orphan prompt) fails here, so the criterion is
+// pre-satisfied and pinned against silent removal.
 func TestCommandsPromptsParity(t *testing.T) {
 	root := repoRootFromTest(t)
 	cmds := mdNamesIn(t, filepath.Join(root, "assets", "commands"), "dross-")
