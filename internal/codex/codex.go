@@ -94,6 +94,19 @@ func dispatch(indexers []Indexer, file string) Indexer {
 	return nil
 }
 
+// SupportsFile reports whether codex has an indexer for this file's language
+// (decided by extension). It routes through the same allIndexers() registry
+// that Index dispatches on, so a newly registered language is recognised here
+// with no change. Consumers use it to tell "a language codex can't index"
+// (skip) apart from "a symbol that's genuinely gone" (unresolved).
+//
+// Note: this reflects *language* coverage, not tool availability — for an
+// ast-grep-backed language it returns true even when the ast-grep binary is
+// absent (in which case Symbols() is empty). Go (stdlib parser) always works.
+func SupportsFile(file string) bool {
+	return dispatch(allIndexers(), file) != nil
+}
+
 // siblings returns the names of files in dir, excluding the target
 // file itself and any subdirectories. Used to surface "what else lives
 // here" context to the LLM.

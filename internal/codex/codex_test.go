@@ -255,3 +255,19 @@ func TestRecentLogSurfacesCommits(t *testing.T) {
 		t.Errorf("expected one log line with subject: %v", lines)
 	}
 }
+
+func TestSupportsFile(t *testing.T) {
+	// Languages codex has an indexer for (by extension) — true regardless of
+	// whether the ast-grep binary is installed.
+	for _, f := range []string{"a.go", "pkg/b.ts", "c.tsx", "d.svelte", "e.cs", "f.gd"} {
+		if !SupportsFile(f) {
+			t.Errorf("SupportsFile(%q) = false, want true", f)
+		}
+	}
+	// No indexer for these → consumers should Skip, not flag as unresolved.
+	for _, f := range []string{"README.md", "x.py", "y.txt", "noext", "z.json"} {
+		if SupportsFile(f) {
+			t.Errorf("SupportsFile(%q) = true, want false", f)
+		}
+	}
+}

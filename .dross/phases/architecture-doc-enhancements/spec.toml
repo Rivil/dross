@@ -1,0 +1,48 @@
+[phase]
+id        = "architecture-doc-enhancements"
+title     = "Architecture doc enhancements"
+milestone = "v0.6"
+
+[[criteria]]
+id   = "c-1"
+text = "dross changes record accepts a typed, repeatable --landmark flag (feature, symbol, loc file:line, what); dross-execute emits it instead of overloading --notes, and dross-ship reads the structured fields when merging into ARCHITECTURE.md."
+
+[[criteria]]
+id   = "c-2"
+text = "/dross-architecture can regenerate over an existing ARCHITECTURE.md (the first-creation-only guard is lifted), merging fresh scan results without clobbering hand-authored entries or edits."
+
+[[criteria]]
+id   = "c-3"
+text = "dross doctor reports stale symbol links in ARCHITECTURE.md (each Symbol — file:line bullet validated against the real code), advisorily and without ever blocking the loop."
+
+[[criteria]]
+id   = "c-4"
+text = "A dross architecture check --fix re-resolves moved symbols' line numbers in place in ARCHITECTURE.md (repairs links whose symbol still exists at a new line, skips renamed/deleted ones), so stale links are fixable without a full regenerate."
+
+[[decisions]]
+key    = "landmark_field_shape"
+choice = "Repeatable --landmark flag with key=value pairs (feature/symbol/loc/what), stored as a structured array in changes.json; ship reads the fields directly."
+why    = "Order-free and self-documenting; survives a delimiter character in the text where the old positional notes string would break."
+locked = true
+
+[[decisions]]
+key    = "refresh_merge_strategy"
+choice = "Per-entry merge keyed by feature heading: refresh symbol bullets + provenance in place, keep the existing one-line unless empty, add new capabilities, and never silently drop an entry the scan didn't rediscover (flag it). The existing propose→approve diff gate is the safety net."
+why    = "The rigid entry template leaves little hand-prose to protect; matching on heading lets a fresh scan update mechanically-derived fields without overwriting curation."
+locked = true
+
+[[decisions]]
+key    = "link_check"
+choice = "dross doctor warns advisorily on stale links and never blocks the loop; a separate opt-in `dross architecture check --fix` re-resolves moved symbols on demand."
+why    = "ARCHITECTURE.md is best-effort docs — a hard validate fail would block spec/plan/verify every time a symbol moves; advisory + opt-in fix keeps the loop unblocked."
+locked = true
+
+[[decisions]]
+key    = "legacy_notes"
+choice = "Clean break: ship merges only typed --landmark entries. --notes stays a valid free-form field but is no longer parsed as a landmark."
+why    = "Historical landmarks already live in the doc and ship only merges the current phase, so no fragile back-compat parser is needed; c-2 refresh re-derives from code if ever required."
+locked = true
+
+[[deferred]]
+text = "dross-ship auto-generates ARCHITECTURE.md (via the backfill engine) when it is absent, then merges landmarks — an older repo self-heals on its next ship."
+why  = "Out of scope for a focused phase; someday-triaged via /dross-inbox."

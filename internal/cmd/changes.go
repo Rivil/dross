@@ -23,14 +23,23 @@ func Changes() *cobra.Command {
 
 func changesRecord() *cobra.Command {
 	var filesCSV, commit, notes string
+	var landmarkFlags []string
 	c := &cobra.Command{
 		Use:   "record <phase-id> <task-id>",
-		Short: "Record files (and optionally commit + notes) for a task",
+		Short: "Record files (and optionally commit, notes, landmarks) for a task",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			files := splitCSV(filesCSV)
 			if len(files) == 0 {
 				return fmt.Errorf("at least one --files entry is required")
+			}
+			landmarks := make([]changes.Landmark, 0, len(landmarkFlags))
+			for _, raw := range landmarkFlags {
+				lm, err := changes.ParseLandmark(raw)
+				if err != nil {
+					return err
+				}
+				landmarks = append(landmarks, lm)
 			}
 			root, err := FindRoot()
 			if err != nil {
@@ -41,7 +50,7 @@ func changesRecord() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			c.Record(args[1], files, commit, notes)
+			c.Record(args[1], files, commit, notes, landmarks)
 			if err := c.Save(path); err != nil {
 				return err
 			}
@@ -58,6 +67,10 @@ func changesRecord() *cobra.Command {
 	c.Flags().StringVar(&filesCSV, "files", "", "comma-separated list of files touched")
 	c.Flags().StringVar(&commit, "commit", "", "commit SHA for this task")
 	c.Flags().StringVar(&notes, "notes", "", "free-form notes")
+	// StringArray (not StringSlice): each --landmark is one landmark whose value
+	// is comma-separated key=value pairs — cobra must NOT split it on commas.
+	c.Flags().StringArrayVar(&landmarkFlags, "landmark", nil,
+		`typed landmark "feature=…, symbol=…, loc=file:line, what=…" (repeatable)`)
 	_ = c.MarkFlagRequired("files")
 	return c
 }

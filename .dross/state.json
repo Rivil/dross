@@ -1,33 +1,9 @@
 {
-  "version": "0.6.8.0",
+  "version": "0.6.7.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-30T12:11:26.407253Z",
-  "last_action": "completed deferred-unroute-command",
+  "last_activity": "2026-06-30T13:59:40.312038Z",
+  "last_action": "completed architecture-doc-enhancements",
   "history": [
-    {
-      "at": "2026-06-29T11:58:30.107013Z",
-      "action": "executed t-9 (Wire phase-sync + milestone-sync to YouTrack)"
-    },
-    {
-      "at": "2026-06-29T12:06:14.331956Z",
-      "action": "executed t-10 (Sync milestone backlog slugs + someday, idempotent)"
-    },
-    {
-      "at": "2026-06-29T12:06:27.535277Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-29T12:06:27.541752Z",
-      "action": "phase youtrack-board-integration executed (10/10 done)"
-    },
-    {
-      "at": "2026-06-29T12:14:50.677192Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-29T12:14:50.684251Z",
-      "action": "verified youtrack-board-integration: partial (5/6 covered, c-6 weak; mutation 0.86 measured, efficacy 1.00 on covered)"
-    },
     {
       "at": "2026-06-29T12:20:00.180085Z",
       "action": "amended t-10 (backlog attach per milestone_mode: epic/agile)"
@@ -153,56 +129,80 @@
       "action": "set current_milestone=v0.6"
     },
     {
-      "at": "2026-06-30T09:42:00.243952Z",
-      "action": "created deferred-unroute-command"
+      "at": "2026-06-30T12:15:00.136848Z",
+      "action": "merged deferred-unroute-command"
     },
     {
-      "at": "2026-06-30T09:47:51.559151Z",
-      "action": "set current_phase=deferred-unroute-command"
+      "at": "2026-06-30T12:16:57.220385Z",
+      "action": "created architecture-doc-enhancements"
     },
     {
-      "at": "2026-06-30T09:47:51.564388Z",
-      "action": "spec locked: deferred-unroute-command"
+      "at": "2026-06-30T12:36:24.810132Z",
+      "action": "set current_phase=architecture-doc-enhancements"
     },
     {
-      "at": "2026-06-30T09:50:27.488312Z",
+      "at": "2026-06-30T12:36:24.8168Z",
+      "action": "spec locked: architecture-doc-enhancements"
+    },
+    {
+      "at": "2026-06-30T12:51:39.159782Z",
       "action": "set current_phase_status=planned"
     },
     {
-      "at": "2026-06-30T09:50:27.494489Z",
-      "action": "plan locked: deferred-unroute-command (1 task across 1 wave)"
+      "at": "2026-06-30T12:51:39.164969Z",
+      "action": "plan locked: architecture-doc-enhancements (6 tasks across 2 waves)"
     },
     {
-      "at": "2026-06-30T09:53:53.978951Z",
-      "action": "plan reviewed: deferred-unroute-command (0 blocking, 1 flag)"
+      "at": "2026-06-30T12:55:45.96422Z",
+      "action": "plan reviewed: architecture-doc-enhancements (0 blocking, 1 flag folded in)"
     },
     {
-      "at": "2026-06-30T10:18:26.146134Z",
-      "action": "set version=0.6.8.0"
+      "at": "2026-06-30T12:56:59.933443Z",
+      "action": "set version=0.6.7.0"
     },
     {
-      "at": "2026-06-30T10:20:44.176747Z",
-      "action": "executed t-1 (Add deferred unroute subcommand)"
+      "at": "2026-06-30T13:01:39.05133Z",
+      "action": "executed t-1 (Typed --landmark capture in changes)"
     },
     {
-      "at": "2026-06-30T10:20:50.363419Z",
+      "at": "2026-06-30T13:11:24.166969Z",
+      "action": "executed t-2 (Architecture link parse + symbol resolver)"
+    },
+    {
+      "at": "2026-06-30T13:14:20.441612Z",
+      "action": "executed t-5 (Prompts emit \u0026 read typed landmarks)"
+    },
+    {
+      "at": "2026-06-30T13:16:42.312651Z",
+      "action": "executed t-6 (Lift first-creation guard, safe refresh-merge)"
+    },
+    {
+      "at": "2026-06-30T13:26:22.316086Z",
+      "action": "executed t-3 (doctor advisory stale-link section)"
+    },
+    {
+      "at": "2026-06-30T13:29:44.03003Z",
+      "action": "executed t-4 (dross architecture check [--fix] subcommand)"
+    },
+    {
+      "at": "2026-06-30T13:29:54.483882Z",
       "action": "set current_phase_status=complete"
     },
     {
-      "at": "2026-06-30T10:20:50.368536Z",
-      "action": "phase deferred-unroute-command executed (1/1 done)"
+      "at": "2026-06-30T13:29:54.489216Z",
+      "action": "phase architecture-doc-enhancements executed (6/6 done)"
     },
     {
-      "at": "2026-06-30T10:27:16.070195Z",
+      "at": "2026-06-30T13:42:49.45859Z",
       "action": "set current_phase_status=verified"
     },
     {
-      "at": "2026-06-30T10:27:16.076726Z",
-      "action": "verified deferred-unroute-command: pass (2/2 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
+      "at": "2026-06-30T13:42:49.464629Z",
+      "action": "verified architecture-doc-enhancements: pass (4/4 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
     },
     {
-      "at": "2026-06-30T12:11:26.407253Z",
-      "action": "completed deferred-unroute-command"
+      "at": "2026-06-30T13:59:40.312038Z",
+      "action": "completed architecture-doc-enhancements"
     }
   ]
 }

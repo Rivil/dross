@@ -320,6 +320,77 @@ func TestDoctorFlagsMissingGitattributes(t *testing.T) {
 	}
 }
 
+// TestArchitectureLinkWarnings (c-3) proves the resolver-backed detection: only
+// Moved and Unresolved bullets warn — an OK link, a Skipped (unindexable) link,
+// and a no-line link stay silent — and a repo with no ARCHITECTURE.md yields no
+// section (present=false).
+func TestArchitectureLinkWarnings(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "foo.go"), "package foo\n\nfunc Bar() {}\n") // Bar at line 3
+	doc := "### Feature\n\none line.\n\n" +
+		"- `Bar` — `foo.go:99`\n" + // Moved (lives at 3) → warn
+		"- `Gone` — `foo.go:3`\n" + // Unresolved (no such symbol) → warn
+		"- `Bar` — `foo.go:3`\n" + // OK → silent
+		"- `Doc` — `notes.md:1`\n" + // Skipped (codex can't index .md) → silent
+		"\n_x_\n"
+	mustWrite(t, filepath.Join(dir, "ARCHITECTURE.md"), doc)
+
+	warnings, present := architectureLinkWarnings(dir)
+	if !present {
+		t.Fatal("expected present=true when ARCHITECTURE.md exists")
+	}
+	if len(warnings) != 2 {
+		t.Fatalf("expected exactly 2 warnings (Moved+Unresolved), got %d: %v", len(warnings), warnings)
+	}
+
+	// No ARCHITECTURE.md → no section at all.
+	if err := os.Remove(filepath.Join(dir, "ARCHITECTURE.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := architectureLinkWarnings(dir); present {
+		t.Error("expected present=false when ARCHITECTURE.md is absent")
+	}
+}
+
+// TestDoctorStaleLinksNeverBlock (c-3) proves the advisory-only contract by the
+// only falsifiable measure: stale ARCHITECTURE.md links must not change doctor's
+// issue verdict. Running doctor on the same repo with a clean vs a stale doc must
+// yield the identical return error (issue count unchanged) — while the ⚠ advisory
+// still appears in the output.
+func TestDoctorStaleLinksNeverBlock(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "foo.go"), "package foo\n\nfunc Bar() {}\n") // Bar at line 3
+
+	errString := func(e error) string {
+		if e == nil {
+			return ""
+		}
+		return e.Error()
+	}
+
+	// Baseline: the seeded skeleton (no real entries → no stale links).
+	var baseOut string
+	baseErr := runCmdCapturing(t, &baseOut, Doctor())
+
+	// Now plant stale links and re-run on the otherwise-identical repo.
+	stale := "### Feature\n\none line.\n\n- `Bar` — `foo.go:99`\n- `Gone` — `foo.go:3`\n\n_x_\n"
+	mustWrite(t, filepath.Join(dir, "ARCHITECTURE.md"), stale)
+	var staleOut string
+	staleErr := runCmdCapturing(t, &staleOut, Doctor())
+
+	if errString(baseErr) != errString(staleErr) {
+		t.Errorf("stale links changed the doctor verdict (must be advisory):\n base=%q\n stale=%q", errString(baseErr), errString(staleErr))
+	}
+	if !strings.Contains(staleOut, "Architecture links:") || !strings.Contains(staleOut, "⚠") {
+		t.Errorf("expected the advisory stale-link section with ⚠, got:\n%s", staleOut)
+	}
+}
+
 // runCmdCapturing runs cmd with args while capturing stdout into *out.
 // Use when both the error and the output text matter to the assertion.
 func runCmdCapturing(t *testing.T, out *string, cmd *cobra.Command, args ...string) error {
