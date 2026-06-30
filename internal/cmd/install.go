@@ -24,13 +24,16 @@ import (
 // scoped to the dross-* namespace: stale dross skills/prompts this version dropped are
 // pruned, and non-dross skills are never touched.
 func Install() *cobra.Command {
-	var copyMode, linkMode bool
+	var copyMode, linkMode, statuslineMode, noStatuslineMode bool
 	c := &cobra.Command{
 		Use:   "install",
 		Short: "Install dross slash commands + prompts into ~/.claude",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if copyMode && linkMode {
 				return errors.New("--copy and --link are mutually exclusive")
+			}
+			if statuslineMode && noStatuslineMode {
+				return errors.New("--statusline and --no-statusline are mutually exclusive")
 			}
 			home, err := os.UserHomeDir()
 			if err != nil {
@@ -51,11 +54,30 @@ func Install() *cobra.Command {
 					in.link, in.sourceDir = true, src
 				}
 			}
-			return in.run()
+			if err := in.run(); err != nil {
+				return err
+			}
+
+			// Opt-in status-line wiring: only when explicitly requested. Resolve the
+			// absolute installed-binary path (command_form) and edit settings.json.
+			if statuslineMode || noStatuslineMode {
+				bin, err := resolveStatuslineBinary()
+				if err != nil {
+					return err
+				}
+				path := statuslineSettingsPath(home, os.Getenv)
+				if statuslineMode {
+					return enableStatuslineIn(path, bin, interactiveConfirm(cmd), cmd.OutOrStdout())
+				}
+				return disableStatuslineIn(path, bin, cmd.OutOrStdout())
+			}
+			return nil
 		},
 	}
 	c.Flags().BoolVar(&copyMode, "copy", false, "write real-file copies from the embedded assets (end-user install)")
 	c.Flags().BoolVar(&linkMode, "link", false, "symlink the source assets/ for live dev edits (requires a source checkout)")
+	c.Flags().BoolVar(&statuslineMode, "statusline", false, "also wire the dross statusline into ~/.claude/settings.json")
+	c.Flags().BoolVar(&noStatuslineMode, "no-statusline", false, "un-wire the dross statusline from ~/.claude/settings.json")
 	return c
 }
 
@@ -83,8 +105,10 @@ type installer struct {
 	out       io.Writer // progress output (nil = discard)
 }
 
-func (in *installer) skillsDir() string  { return filepath.Join(in.home, ".claude", "skills") }
-func (in *installer) promptsDir() string { return filepath.Join(in.home, ".claude", "dross", "prompts") }
+func (in *installer) skillsDir() string { return filepath.Join(in.home, ".claude", "skills") }
+func (in *installer) promptsDir() string {
+	return filepath.Join(in.home, ".claude", "dross", "prompts")
+}
 
 func (in *installer) logf(format string, args ...any) {
 	if in.out != nil {

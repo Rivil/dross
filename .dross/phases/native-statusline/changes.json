@@ -1,0 +1,73 @@
+{
+  "phase": "native-statusline",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/statusline/render.go",
+        "internal/statusline/render_test.go",
+        "internal/statusline/testdata"
+      ],
+      "commit": "46e5025",
+      "completed_at": "2026-06-30T08:12:10.725502Z",
+      "notes": "feature: native status line · Render @ internal/statusline/render.go · pure core renders line 1 + auto-compact-normalized context meter, byte-faithful to the node reference via node-minted goldens"
+    },
+    "t-2": {
+      "files": [
+        "internal/statusline/render.go",
+        "internal/statusline/render_test.go",
+        "internal/statusline/testdata"
+      ],
+      "commit": "b3c8694",
+      "completed_at": "2026-06-30T08:21:07.983339Z",
+      "notes": "feature: native status line · Render @ internal/statusline/render.go · line 2 renders the bold in-progress todo (wins) or dim dross state plus the context meter, byte-faithful to the node reference"
+    },
+    "t-3": {
+      "files": [
+        "internal/statusline/render.go",
+        "internal/statusline/render_test.go",
+        "internal/statusline/testdata"
+      ],
+      "commit": "19c44ce",
+      "completed_at": "2026-06-30T08:25:31.278967Z",
+      "notes": "feature: native status line · formatPeers @ internal/statusline/render.go · line 3 renders peer background jobs sorted by attention priority with MDI icons, byte-faithful to the node reference"
+    },
+    "t-4": {
+      "files": [
+        "internal/statusline/gather.go",
+        "internal/statusline/gather_test.go"
+      ],
+      "commit": "ccdb99b",
+      "completed_at": "2026-06-30T08:29:09.80711Z",
+      "notes": "feature: native status line · Gather @ internal/statusline/gather.go · resolves render Inputs from stdin + todos/state/jobs/git behind injected env/clock/git seams (CLAUDE_CONFIG_DIR, newest-todo, walk-up, 6h staleness)"
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/statusline.go",
+        "internal/cmd/statusline_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "2f43e2e",
+      "completed_at": "2026-06-30T08:33:16.507308Z",
+      "notes": "feature: native status line · Statusline @ internal/cmd/statusline.go · the dross statusline command: bounded-stdin, silent-fail, real git runner, wired into main.go"
+    },
+    "t-6": {
+      "files": [
+        "internal/statusline/settings.go",
+        "internal/statusline/settings_test.go"
+      ],
+      "commit": "e45bebc",
+      "completed_at": "2026-06-30T08:17:18.408031Z",
+      "notes": "feature: statusline install wiring · MergeStatusline @ internal/statusline/settings.go · order-preserving settings.json merge/unmerge: opt-in wire, idempotent, refuse-clobber, surgical revert"
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/install.go",
+        "internal/cmd/statusline.go",
+        "internal/cmd/install_statusline_test.go"
+      ],
+      "commit": "71608f1",
+      "completed_at": "2026-06-30T08:38:16.8065Z",
+      "notes": "feature: statusline install wiring · enableStatuslineIn @ internal/cmd/statusline.go · install --statusline/--no-statusline + statusline enable|disable opt-in/revert over the settings.json merge core, absolute binary path, consent-gated"
+    }
+  }
+}

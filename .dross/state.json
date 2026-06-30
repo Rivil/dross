@@ -1,89 +1,9 @@
 {
-  "version": "0.6.13.1",
-  "current_milestone": "v0.6",
-  "last_activity": "2026-06-30T07:06:00.981531Z",
-  "last_action": "quick: add install.sh smoke test",
+  "version": "0.8.1.0",
+  "current_milestone": "v0.8",
+  "last_activity": "2026-06-30T09:26:02.265112Z",
+  "last_action": "completed native-statusline",
   "history": [
-    {
-      "at": "2026-06-29T09:32:29.991968Z",
-      "action": "re-verified gitlab-ship-provider: pass (6/6 covered after c-2 reword, mutation 0.86)"
-    },
-    {
-      "at": "2026-06-29T09:36:38.969018Z",
-      "action": "completed gitlab-ship-provider"
-    },
-    {
-      "at": "2026-06-29T09:40:00.794474Z",
-      "action": "created youtrack-board-integration"
-    },
-    {
-      "at": "2026-06-29T10:41:50.68766Z",
-      "action": "set current_phase=youtrack-board-integration"
-    },
-    {
-      "at": "2026-06-29T10:41:50.693597Z",
-      "action": "spec locked: youtrack-board-integration"
-    },
-    {
-      "at": "2026-06-29T11:02:18.907538Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-29T11:02:18.914579Z",
-      "action": "plan locked: youtrack-board-integration (10 tasks across 4 waves)"
-    },
-    {
-      "at": "2026-06-29T11:07:16.878301Z",
-      "action": "plan reviewed: youtrack-board-integration (0 blocking, 2 flags resolved)"
-    },
-    {
-      "at": "2026-06-29T11:10:38.427446Z",
-      "action": "set version=0.6.12.0"
-    },
-    {
-      "at": "2026-06-29T11:14:35.768164Z",
-      "action": "executed t-1 (Add [board] config struct + dotted arms)"
-    },
-    {
-      "at": "2026-06-29T11:25:52.47715Z",
-      "action": "executed t-2 (YouTrack REST client + BoardClient interface + factory)"
-    },
-    {
-      "at": "2026-06-29T11:27:42.19312Z",
-      "action": "executed t-3 (Move inbox board gate to [board].enabled)"
-    },
-    {
-      "at": "2026-06-29T11:31:46.264099Z",
-      "action": "executed t-4 (Validate [board] in dross doctor)"
-    },
-    {
-      "at": "2026-06-29T11:46:43.476972Z",
-      "action": "executed t-5 (String issue id in board.json + re-route ops to [board])"
-    },
-    {
-      "at": "2026-06-29T11:50:20.689322Z",
-      "action": "executed t-6 (Ensure milestone entity per milestone_mode)"
-    },
-    {
-      "at": "2026-06-29T11:53:02.804791Z",
-      "action": "executed t-7 (Set YouTrack State via state_map, warn-skip)"
-    },
-    {
-      "at": "2026-06-29T11:54:51.203981Z",
-      "action": "executed t-8 (Surface YouTrack issues in issue pull)"
-    },
-    {
-      "at": "2026-06-29T11:58:30.107013Z",
-      "action": "executed t-9 (Wire phase-sync + milestone-sync to YouTrack)"
-    },
-    {
-      "at": "2026-06-29T12:06:14.331956Z",
-      "action": "executed t-10 (Sync milestone backlog slugs + someday, idempotent)"
-    },
-    {
-      "at": "2026-06-29T12:06:27.535277Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-06-29T12:06:27.541752Z",
       "action": "phase youtrack-board-integration executed (10/10 done)"
@@ -203,6 +123,86 @@
     {
       "at": "2026-06-30T07:06:00.981531Z",
       "action": "quick: add install.sh smoke test"
+    },
+    {
+      "at": "2026-06-30T07:17:27.596743Z",
+      "action": "set current_milestone=v0.8"
+    },
+    {
+      "at": "2026-06-30T07:17:27.603301Z",
+      "action": "set version=0.8.0.0"
+    },
+    {
+      "at": "2026-06-30T07:19:01.618662Z",
+      "action": "created native-statusline"
+    },
+    {
+      "at": "2026-06-30T07:24:13.828925Z",
+      "action": "spec locked: native-statusline"
+    },
+    {
+      "at": "2026-06-30T07:34:33.052637Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-30T07:34:33.058157Z",
+      "action": "plan locked: native-statusline (7 tasks across 5 waves)"
+    },
+    {
+      "at": "2026-06-30T07:42:05.651951Z",
+      "action": "plan review clean: native-statusline (3 blocking fixes applied, 7 tasks/6 waves)"
+    },
+    {
+      "at": "2026-06-30T08:04:51.172902Z",
+      "action": "set version=0.8.1.0"
+    },
+    {
+      "at": "2026-06-30T08:12:10.740209Z",
+      "action": "executed t-1 (pure render core: line 1 + context meter + golden harness)"
+    },
+    {
+      "at": "2026-06-30T08:17:18.418833Z",
+      "action": "executed t-6 (pure settings.json merge/unmerge core)"
+    },
+    {
+      "at": "2026-06-30T08:21:07.99337Z",
+      "action": "executed t-2 (line 2 todo/state composition)"
+    },
+    {
+      "at": "2026-06-30T08:25:31.290478Z",
+      "action": "executed t-3 (peer-jobs render, line 3)"
+    },
+    {
+      "at": "2026-06-30T08:29:09.816734Z",
+      "action": "executed t-4 (gather layer)"
+    },
+    {
+      "at": "2026-06-30T08:33:16.518179Z",
+      "action": "executed t-5 (cobra dross statusline command)"
+    },
+    {
+      "at": "2026-06-30T08:38:16.819593Z",
+      "action": "executed t-7 (install --statusline wiring + enable/disable)"
+    },
+    {
+      "at": "2026-06-30T08:38:28.960187Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-30T08:38:28.966037Z",
+      "action": "phase native-statusline executed (7/7 done)"
+    },
+    {
+      "at": "2026-06-30T09:08:56.139028Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-30T09:08:56.143628Z",
+      "action": "verified native-statusline: pass (7/7 covered, mutation 0.84 measured, efficacy 100%)"
+    },
+    {
+      "at": "2026-06-30T09:26:02.265112Z",
+      "action": "completed native-statusline"
     }
   ]
 }

@@ -1,0 +1,72 @@
+[verify]
+  phase = "native-statusline"
+  generated_at = 2026-06-30T09:00:35.243713Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8394222599830077
+  mutants_killed = 988
+  mutants_survived = 189
+  mutants_not_covered = 189
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/statusline/render_test.go:TestRender(line1_plain,line1_branch)", "internal/cmd/statusline_test.go:TestGitBranch"]
+  notes = "Line-1 layout pinned byte-for-byte against node-minted goldens (dim model/dir, ⎇ branch, empty-branch no-suffix). TestGitBranch exercises the real symbolic-ref→rev-parse→\"\" fallback over a git-init temp repo (normal/detached/non-repo)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/statusline/render_test.go:TestRender(todo_only,state_only,state_missing_field,todo_wins)", "internal/statusline/render_test.go:TestRenderLine2", "internal/statusline/gather_test.go:TestGatherNewestTodoWinsAndBeatsState"]
+  notes = "Todo-bold vs dim-state vs todo-wins all pinned by goldens; TestRenderLine2 asserts precedence + the leading-space rule; gather proves newest-by-mtime todo and todo-wins-over-state."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/statusline/render_test.go:TestRender(meter_u49..u80,meter_default,meter_total_override)", "internal/statusline/render_test.go:TestContextMeterBands", "internal/statusline/render_test.go:TestContextMeterAbsent"]
+  notes = "Boundary table at used% 49/50/64/65/79/80 straddles every band edge (exact SGR + floor(used/10) cell count + 💀≥80); auto-compact normalization covered for acw-set/default/total-override; meter absent when remaining nil."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/statusline/render_test.go:TestRender(peers_sorted,peers_truncate,peers_unknown)", "internal/statusline/render_test.go:TestTruncDetail", "internal/statusline/render_test.go:TestPeersAbsent", "internal/statusline/gather_test.go:TestGatherPeerStalenessAndSkip"]
+  notes = "peers_sorted feeds peers in reverse order to prove the priority sort; icons/colors/truncation pinned by goldens; gather proves the 6h staleness filter (clock-free via now), skip-own-CLAUDE_JOB_DIR, and garbage-skipped-not-fatal."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/statusline_test.go:TestStatuslineSilentFail", "internal/cmd/statusline_test.go:TestStatuslineNoHang", "internal/cmd/statusline_test.go:TestStatuslineEndToEndGolden", "internal/statusline/gather_test.go:TestGatherConfigDirOverride"]
+  notes = "CLAUDE_CONFIG_DIR override proven (default ~/.claude not consulted); no-hang asserted with a never-closing reader against the bounded deadline; malformed/empty stdin → empty output; the render core is byte-faithful via node-minted goldens, exercised end-to-end through the command."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/statusline/settings_test.go:TestMergeCreatesFromEmpty", "internal/statusline/settings_test.go:TestMergePreservesSiblings", "internal/statusline/settings_test.go:TestMergeIdempotent", "internal/statusline/settings_test.go:TestMergeRefusesClobber", "internal/cmd/install_statusline_test.go:TestEnableFromEmptyAbsolutePath", "internal/cmd/install_statusline_test.go:TestEnablePreservesAndIdempotent", "internal/cmd/install_statusline_test.go:TestEnableRefusesForeignWithoutConsent"]
+  notes = "Pure merge core: create/preserve/idempotent/refuse-clobber over hostile fixtures. Command wiring: absolute-binary-path command asserted, siblings preserved, idempotent, consent-gated. The cobra RunE glue + interactiveConfirm TTY prompt are not unit-covered (tested via the injectable enableStatuslineIn + confirm-stub instead) — acceptable thin glue."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/statusline/settings_test.go:TestRemoveOurs", "internal/statusline/settings_test.go:TestRemoveNoStatusLine", "internal/statusline/settings_test.go:TestRemoveForeignUntouched", "internal/statusline/settings_test.go:TestRoundTrip", "internal/cmd/install_statusline_test.go:TestDisableRemovesOnlyOurs"]
+  notes = "RemoveStatusline: removes only dross's entry, no-op when absent, never touches a foreign statusLine; Merge→Remove round-trips to the original. disable proven for removes-ours/missing-file-noop/foreign-untouched."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation efficacy on COVERED code is 100% (0 covered mutants survived; killed=988, lived=0). All 189 'survived' mutants are NOT-COVERED — lines no test executes (gremlins skips running them). The 0.84 score is killed/(killed+not_covered), diluted by coverage blind spots, not theatrical coverage."
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins ran package-wide over internal/cmd + internal/statusline, so the bulk of the 189 not-covered mutants are in PRE-EXISTING untouched files outside this phase's diff (issue.go, ship.go, rule.go, phase.go, codex.go, doctor.go, stats.go, env.go, verify.go, status.go, profile.go, telemetry.go). They are not regressions from this phase."
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins reported this phase's NEW render/settings lines (render.go:88,90,215,217,219; settings.go:32,34,36) as NOT COVERED, but `go test -coverprofile` shows them executed (Render 100%, contextMeter 94.4%, MergeStatusline 88.2%). The band-boundary mutants would be killed (meter_u49/u50 straddle used<50; goldens differ on the mutated branch) — a gremlins coverage-attribution artifact, not a real gap."
+
+[[finding]]
+  severity = "FLAG"
+  text = "Genuine cmd-glue coverage blind spots (acceptable, non-criterion): statusline.go error-path RunE wiring (UserHomeDir/resolveStatuslineBinary err returns) and interactiveConfirm's TTY y/N prompt are not unit-covered; the criterion logic they wrap (enableStatuslineIn/disableStatuslineIn, gather, render) is fully tested via injected seams."

@@ -295,6 +295,20 @@ Track current milestone/phase/version + activity in state.json; summarise "where
 
 _c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · 2b6d344_
 
+### Status line (native)
+
+Render Claude Code's status line as a native `dross statusline` Go subcommand — a byte-faithful drop-in for the former Node `statusline.js`, with no runtime dependency. A pure `internal/statusline` core renders three lines from an explicit `Inputs`: line 1 `model │ dir ⎇ branch`; line 2 the bold in-progress todo (winning over the dim `.dross` project state) followed by a 10-cell context meter normalized for the auto-compact buffer (green/yellow/orange/blinking-💀 bands); line 3 peer background jobs sorted by attention priority with nerd-font MDI icons. Fidelity is pinned by goldens minted once from the reference node script (the tests never invoke node). A gather layer resolves those inputs from stdin + ~/.claude todos/jobs + a `.dross/state.json` walk-up + git, all behind injected env/clock/git seams so render and golden tests stay hermetic; the command reads stdin bounded (never hangs the prompt) and silent-fails on any parse/FS error. Opt-in wiring (`dross install --statusline` / `dross statusline enable`) JSON-merges ~/.claude/settings.json to invoke the absolute installed-binary path — order-preserving, idempotent, refusing to clobber a foreign statusLine without consent — with a symmetric revert (`--no-statusline` / `dross statusline disable`) that removes only dross's own entry.
+
+- `Render` (three-line pure render core) — `internal/statusline/render.go:75`
+- `contextMeter` (auto-compact-normalized 10-cell meter) — `internal/statusline/render.go:194`
+- `formatPeers` (priority-sorted peer jobs, MDI icons) — `internal/statusline/render.go:144`
+- `Gather` (stdin + todos/state/jobs/git behind injected seams) — `internal/statusline/gather.go:36`
+- `Statusline` (bounded-stdin, silent-fail command + enable/disable) — `internal/cmd/statusline.go:31`
+- `MergeStatusline` / `RemoveStatusline` (order-preserving settings.json wire/unwire) — `internal/statusline/settings.go:26`
+- `enableStatuslineIn` (install --statusline wiring, absolute path, consent-gated) — `internal/cmd/statusline.go:119`
+
+_introduced native-statusline · 46e5025_
+
 ### Tech-debt scan (dross techdebt)
 
 Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (word-boundary) plus size heuristics (oversized files, over-long lines) over git-tracked files, written to a prune-proof run dir with a store-level `last_run` that feeds the status action surface. Distinct from the dross-quality analyzer audit — markers are self-flagged debt, not analyzer findings.
