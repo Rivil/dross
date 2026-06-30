@@ -19,11 +19,12 @@ proposed default and let the user react — one decision, not a wall.
 1. Run `dross rule show` and `dross interaction show`; treat the rules as
    MUST-FOLLOW and follow the printed interaction playbook for the §3 approval gate.
 2. Find the repo root — the directory holding `.dross/`.
-3. **First-creation only.** If `ARCHITECTURE.md` already exists at repo root,
-   stop: this engine is scoped to generating the doc when it's absent. Merging
-   into an existing doc without clobbering hand edits is deferred — `/dross-ship`
-   already merges each phase's landmarks incrementally. Tell the user to edit by
-   hand, or proceed only if they explicitly ask to overwrite from scratch.
+3. **Create or refresh.** If `ARCHITECTURE.md` is absent, generate it fresh
+   (§1→§3). If it already exists, **refresh-merge** rather than clobber: parse the
+   existing doc, regenerate entries from the scan, and merge them by feature
+   heading using the §2.5 rules. The §3 propose→approve diff is the safety net —
+   the user sees every change before it lands, so hand edits are never silently
+   overwritten.
 
 ## 1. Map features (read-only fan-out OK)
 
@@ -69,10 +70,33 @@ Rules:
 - Open the file with the same header + organizing contract the seeded skeleton
   uses (organized by feature, one entry per capability, never per phase).
 
+## 2.5 Refresh-merge into an existing doc
+
+Only when `ARCHITECTURE.md` already exists (the §0.3 refresh path). Do **not**
+overwrite it from scratch. Match the freshly scanned entries against the existing
+ones **by feature heading** and merge each **in place**:
+
+- **Refresh** the symbol-link bullets and the provenance breadcrumb of a matched
+  entry from the scan — symbols move and commits accrue, so these are the parts
+  that go stale.
+- **Keep** the existing one-line description unless it is empty. A hand-tuned
+  one-liner is curation, not stale data — don't rewrite it.
+- **Add** a new entry for any capability the scan found that has no existing
+  heading.
+- **Never silently drop** an existing entry the scan didn't rediscover — a scan
+  gap is not a deletion signal. Leave it in place and **flag** it in the §3
+  proposal (e.g. "no scan hit for `<heading>` — keep / remove?") so the user
+  decides, never the merge.
+
+Keep entries alphabetical by feature, still obeying the one fixed template (§2) —
+a refresh must not introduce prose paragraphs.
+
 ## 3. Propose → approve → write (gated)
 
-Show the user the full drafted `ARCHITECTURE.md` — the feature list and every
-entry — in chat. Ask: **proceed / steer**. Only on explicit approval, write it to
+Show the user the drafted `ARCHITECTURE.md` in chat. For a first creation, show
+the full feature list and every entry; for a refresh (§2.5), show the `git diff`
+against the existing file plus any flagged unmatched entries — not a wall of
+unchanged text. Ask: **proceed / steer**. Only on explicit approval, write it to
 `ARCHITECTURE.md` at repo root.
 
 (When this engine runs embedded in an automated/`--solo` flow, write directly and
