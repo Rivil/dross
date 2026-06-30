@@ -3,13 +3,9 @@
   "current_milestone": "v0.6",
   "current_phase": "gray-area-walkthrough",
   "current_phase_status": "planned",
-  "last_activity": "2026-06-30T18:39:59.766562Z",
-  "last_action": "plan locked: gray-area-walkthrough (1 task across 1 wave)",
+  "last_activity": "2026-06-30T18:42:05.566633Z",
+  "last_action": "plan reviewed: gray-area-walkthrough (0 blocking, 2 flags)",
   "history": [
-    {
-      "at": "2026-06-29T12:29:04.415216Z",
-      "action": "verified youtrack-board-integration: pass (6/6 covered, c-6 lifted to covered; mutation 0.86 measured, efficacy 1.00 on covered)"
-    },
     {
       "at": "2026-06-29T12:34:09.566539Z",
       "action": "completed youtrack-board-integration"
@@ -205,6 +201,10 @@
     {
       "at": "2026-06-30T18:39:59.766562Z",
       "action": "plan locked: gray-area-walkthrough (1 task across 1 wave)"
+    },
+    {
+      "at": "2026-06-30T18:42:05.566633Z",
+      "action": "plan reviewed: gray-area-walkthrough (0 blocking, 2 flags)"
     }
   ]
 }
