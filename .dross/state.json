@@ -2,18 +2,10 @@
   "version": "0.8.0.0",
   "current_milestone": "v0.6",
   "current_phase": "architecture-doc-enhancements",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-30T12:36:24.8168Z",
-  "last_action": "spec locked: architecture-doc-enhancements",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-30T12:51:39.164969Z",
+  "last_action": "plan locked: architecture-doc-enhancements (6 tasks across 2 waves)",
   "history": [
-    {
-      "at": "2026-06-29T11:10:38.427446Z",
-      "action": "set version=0.6.12.0"
-    },
-    {
-      "at": "2026-06-29T11:14:35.768164Z",
-      "action": "executed t-1 (Add [board] config struct + dotted arms)"
-    },
     {
       "at": "2026-06-29T11:25:52.47715Z",
       "action": "executed t-2 (YouTrack REST client + BoardClient interface + factory)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-30T12:36:24.8168Z",
       "action": "spec locked: architecture-doc-enhancements"
+    },
+    {
+      "at": "2026-06-30T12:51:39.159782Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-30T12:51:39.164969Z",
+      "action": "plan locked: architecture-doc-enhancements (6 tasks across 2 waves)"
     }
   ]
 }

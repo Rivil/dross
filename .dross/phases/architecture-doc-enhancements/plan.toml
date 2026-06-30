@@ -1,0 +1,109 @@
+[phase]
+id = "architecture-doc-enhancements"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Typed --landmark capture in changes"
+files         = ["internal/changes/changes.go", "internal/changes/changes_test.go", "internal/cmd/changes.go"]
+description   = """
+Add Landmarks []Landmark{Feature,Symbol,Loc,What} to TaskRecord (Notes stays a
+valid free-form field, no longer the landmark carrier — legacy_notes decision).
+dross changes record gains a repeatable --landmark key=value flag.
+"""
+covers        = ["c-1"]
+test_contract = [
+  "--landmark \"what=a=b · c\" round-trips through changes.json with the value's = and · intact (SplitN on the first = only; array never re-flattened to a notes string)",
+  "two --landmark flags yield a 2-element Landmarks array",
+  "--landmark feature (no =) returns a parse error, never an empty-key entry",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 1
+title         = "Architecture link parse + symbol resolver"
+files         = ["internal/architecture/links.go", "internal/architecture/links_test.go"]
+description   = """
+Single shared ParseDoc + codex-backed symbol resolver consumed by t-3 and t-4.
+Resolver uses internal/codex (Go-only; non-Go links classify Unresolved/Skipped —
+document the limitation here).
+"""
+covers        = ["c-3", "c-4"]
+test_contract = [
+  "ParseDoc returns one Entry per ### heading with its one-line, []SymbolLink{Symbol,File,Line} bullets, and provenance",
+  "a bullet whose symbol now sits at a new line classifies Moved{newline}; two same-name declarations in one file classify Ambiguous (never silent first-match)",
+  "a deleted/renamed symbol is Unresolved; a bullet missing file:line is Skipped without aborting the rest; em-dash separator and a :line with trailing text both parse",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-5"
+wave          = 1
+title         = "Prompts emit & read typed landmarks"
+files         = ["assets/prompts/execute.md", "assets/prompts/ship.md", "internal/cmd/execute_prompt_test.go", "internal/cmd/ship_prompt_test.go"]
+description   = """
+execute.md emits dross changes record … --landmark feature=… --landmark symbol=…
+--landmark loc=… --landmark what=… instead of the --notes landmark form; ship.md
+§3.5 reads the structured fields from dross changes show JSON, not the notes string.
+Field names are pinned by landmark_field_shape so this doesn't gate on t-1's binary.
+"""
+covers        = ["c-1"]
+test_contract = [
+  "an execute.md grep test fails if any --notes \"feature: …\" landmark instruction survives",
+  "a ship.md grep test fails if §3.5 still parses the notes string rather than the structured landmark fields",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-6"
+wave          = 1
+title         = "Lift first-creation guard, safe refresh-merge"
+files         = ["assets/prompts/architecture.md", "internal/cmd/architecture_prompt_test.go"]
+description   = """
+§0.3 no longer stops when ARCHITECTURE.md exists; instead instructs the
+heading-keyed in-place refresh (refresh symbol bullets + provenance, keep existing
+one-line unless empty, add new capabilities, flag — never silently drop — entries
+the scan didn't rediscover), gated by the existing propose→approve diff.
+"""
+covers        = ["c-2"]
+test_contract = [
+  "a prompt-grep test fails if the 'First-creation only / stop' language remains in architecture.md §0.3",
+  "the test fails if the feature-keyed in-place merge step (with the flag-don't-drop instruction) is absent",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 2
+depends_on    = ["t-2"]
+title         = "doctor advisory stale-link section"
+files         = ["internal/cmd/doctor.go", "internal/cmd/doctor_test.go"]
+description   = """
+doctor gains an "Architecture links:" section that runs t-2's resolver and prints
+one ⚠ per Moved/Unresolved bullet — advisory only, never blocking.
+"""
+covers        = ["c-3"]
+test_contract = [
+  "the issues counter feeding finalizeDoctor is identical to the same repo without staleness — stale links never increment issues (assert finalizeDoctor's return/issue-count, not stdout)",
+  "a repo with no ARCHITECTURE.md emits no link section and no error",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-4"
+wave          = 2
+depends_on    = ["t-2"]
+title         = "dross architecture check [--fix] subcommand"
+files         = ["internal/cmd/architecture.go", "internal/cmd/architecture_test.go", "cmd/dross/main.go"]
+description   = """
+New dross architecture check subcommand over t-2's resolver; --fix rewrites moved
+links in place (rewriter inlined in the command, not split out).
+"""
+covers        = ["c-4"]
+test_contract = [
+  "architecture check --fix rewrites only the :line suffix of a Moved bullet and leaves every other byte (heading, one-line, provenance, healthy bullets) identical",
+  "an Ambiguous/Unresolved bullet is left verbatim — never repointed to a guessed line",
+  "architecture check without --fix writes nothing; dross architecture check -h resolves (survives EnforceSubcommandKnown)",
+]
+status        = "pending"
