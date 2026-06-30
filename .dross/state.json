@@ -2,18 +2,10 @@
   "version": "0.6.9.0",
   "current_milestone": "v0.6",
   "current_phase": "retrofit-readmostly-commands",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-30T15:37:23.48546Z",
-  "last_action": "phase retrofit-readmostly-commands executed (4/4 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-30T15:49:47.335776Z",
+  "last_action": "verified retrofit-readmostly-commands: pass (6/6 covered, mutation 0.84 measured, efficacy 1.00 on covered)",
   "history": [
-    {
-      "at": "2026-06-29T12:06:27.535277Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-29T12:06:27.541752Z",
-      "action": "phase youtrack-board-integration executed (10/10 done)"
-    },
     {
       "at": "2026-06-29T12:14:50.677192Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-30T15:37:23.48546Z",
       "action": "phase retrofit-readmostly-commands executed (4/4 done)"
+    },
+    {
+      "at": "2026-06-30T15:49:47.330649Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-30T15:49:47.335776Z",
+      "action": "verified retrofit-readmostly-commands: pass (6/6 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
     }
   ]
 }
