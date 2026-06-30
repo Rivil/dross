@@ -25,24 +25,15 @@ tidy:
 test:
 	go test -count=1 ./...
 
-# Symlink-based dev install: edits to assets/ apply immediately.
-# Slash commands become skills under $(SKILLS_DIR)/dross-<name>/SKILL.md.
-# Prompt files referenced by @-imports live at $(PROMPTS_DIR)/<name>.md.
+# Dev install: `dross install` is the single installer. make install builds,
+# drops the binary on PATH, then delegates the skills/prompts sync to the freshly
+# built binary in --link mode — symlinking assets/ so edits apply immediately.
+# The binary installs into $HOME/.claude (skills) and $HOME/.claude/dross/prompts.
 install: build
 	@mkdir -p $(BIN_DIR)
 	@cp dross $(BIN_DIR)/dross
 	@echo "binary  → $(BIN_DIR)/dross"
-	@mkdir -p $(SKILLS_DIR)
-	@for cmd in $(CURDIR)/assets/commands/dross-*.md; do \
-		name=$$(basename $$cmd .md); \
-		skill_dir=$(SKILLS_DIR)/$$name; \
-		mkdir -p $$skill_dir; \
-		ln -sfn $$cmd $$skill_dir/SKILL.md; \
-		echo "skill   → $$skill_dir/SKILL.md"; \
-	done
-	@mkdir -p $(dir $(PROMPTS_DIR))
-	@ln -sfn $(CURDIR)/assets/prompts $(PROMPTS_DIR)
-	@echo "prompts → $(PROMPTS_DIR) → $(CURDIR)/assets/prompts"
+	@./dross install --link
 	@echo ""
 	@echo "Done. If $(BIN_DIR) isn't in PATH, add to your shell rc:"
 	@echo "  export PATH=\"$(BIN_DIR):\$$PATH\""

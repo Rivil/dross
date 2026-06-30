@@ -132,7 +132,7 @@ _c8b346e · extended 07-stack-profiles · eb602f1_
 The propose-and-react contract for interactive commands — a terse builtin rule in every `dross rule show`, the full `_interaction.md` playbook, and a `dross interaction show` emitter that injects the playbook verbatim into interactive prompts (the c-3 pilot disproved nested @-include, so delivery is the CLI emitter), plus a per-decision-point audit checklist. **Every** interactive command is now wired and audited: the five core-loop prompts (plan/execute/verify/ship/review), the seven setup/config prompts (init/onboard/options/rule/inbox/quick/milestone), and the five remaining audit/handoff prompts (architecture/secure/quality/pause/resume) — each restructured to one-decision-per-turn (per-field identity walks, an options section-pick gate, per-criterion milestone scoping, single-gated-turn scaffolds, summary-confirm instead of artifact paste-back), guarded by grep + per-section prompt-sentinel tests. The model is documented as a first-class loop behaviour in the README's `## Interaction` section.
 
 - `Interaction` / `interactionShow` (CLI) — `internal/cmd/interaction.go:10`
-- `assets.InteractionPlaybook` (`go:embed _interaction.md`) — `assets/embed.go:17`
+- `assets.InteractionPlaybook` (re-derived from `assets.FS`) — `assets/embed.go:26`
 - `dross-interaction-contract` builtin — `internal/rules/rules.go:137`
 - `_interaction.md` playbook — `assets/prompts/_interaction.md`
 - per-decision-point checklist (all commands ✅) — `docs/interaction-audit.md`
@@ -226,6 +226,20 @@ Context-free, read-only multi-pass security audit: real scanners plus an adversa
 The scanner catalog now sources language-dedicated tools from the active stack profile (agnostic tools stay inline); `recon.DetectLanguages` delegates to the single `stack.DetectLanguages`. `BuildManifest` also unions any marker-file stack's scanners (via `stack.MarkerProfiles`) additively on top of the detected languages, so a marker-only repo (e.g. a Dockerfile with no source extension) still gets its scanners — including the deepened IaC/container loadout (`checkov` cross-family, `dockle` for docker), each surfaced installed-vs-missing. The security surface also covers **container image-layer scanning**: `DecideDockle` is a pure three-state decision that never runs `docker build`, and `dross security run --image <ref>` (or `$DROSS_IMAGE`) feeds it — with no image the run skips-with-reason rather than emitting a silent all-clear.
 
 _introduced 05-dross-secure · extended 07-stack-profiles · extended 09-marker-file-detection · extended deepen-container-iac-scanning · f07fc15_
+
+### Self-update & distribution
+
+Ship dross as a single self-contained binary that carries its own assets and updates itself. The binary embeds every command skill + prompt (`assets.FS`, with the `all:` prefix so the underscore-prefixed `_interaction.md` survives), guarded against drift from the on-disk assets/ tree. `dross install` materializes them into ~/.claude — symlinking assets/ off a source checkout, writing real-file copies from the embedded FS otherwise (`--copy`/`--link` override) — cleanly syncing the dross-* namespace (prune dropped skills *and* prompts, never touch non-dross), with `make install` delegating to it via `--link`. `dross update` fetches the latest GitHub release, verifies the platform tarball's SHA-256 against checksums.txt (refusing on mismatch), atomically swaps the running binary only when the release is strictly newer (or `--force`; `--check` reports without applying), then re-syncs assets by exec'ing the freshly-swapped binary (never the old in-process engine). `install.sh` is the `curl | sh` bootstrap — uname-detect platform, download+verify into a temp dir, mv onto PATH only after the checksum, then `dross install` — gated by a shellcheck CI job; the README documents the curl|sh + `dross update` flow.
+
+- `assets.FS` (`go:embed all:commands all:prompts`) — `assets/embed.go:20`
+- `update.AssetName` / `VerifyChecksum` / `Decide` / `AtomicReplace` — `internal/update/update.go`
+- `update.Client` (latest release + download) — `internal/update/update.go:214`
+- `Install` (symlink/copy materialize + dross-* prune) — `internal/cmd/install.go:26`
+- `Update` (`--check`/`--force`, re-sync via the new binary) — `internal/cmd/update.go:27`
+- `install.sh` (curl|sh bootstrap, stage-then-mv) — `install.sh`
+- `make install` delegation + shellcheck CI gate — `Makefile` / `.github/workflows/ci.yml`
+
+_introduced self-update-and-distribution · 0ccce6a_
 
 ### Ship recovery
 

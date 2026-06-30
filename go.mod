@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/BurntSushi/toml v1.4.0
 	github.com/spf13/cobra v1.8.1
+	golang.org/x/mod v0.37.0
 	golang.org/x/term v0.42.0
 )
 

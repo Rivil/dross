@@ -1,85 +1,9 @@
 {
-  "version": "0.6.12.0",
+  "version": "0.6.13.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-29T12:34:09.566539Z",
-  "last_action": "completed youtrack-board-integration",
+  "last_activity": "2026-06-29T18:18:08.155334Z",
+  "last_action": "completed self-update-and-distribution",
   "history": [
-    {
-      "at": "2026-06-29T06:26:39.079135Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-29T06:26:39.086447Z",
-      "action": "verified deepen-container-iac-scanning: pass (8/8 covered, mutation 0.83)"
-    },
-    {
-      "at": "2026-06-29T06:35:03.761647Z",
-      "action": "completed deepen-container-iac-scanning"
-    },
-    {
-      "at": "2026-06-29T07:13:57.522685Z",
-      "action": "created gitlab-ship-provider"
-    },
-    {
-      "at": "2026-06-29T08:00:07.344373Z",
-      "action": "set current_phase=gitlab-ship-provider"
-    },
-    {
-      "at": "2026-06-29T08:00:07.352234Z",
-      "action": "spec locked: gitlab-ship-provider"
-    },
-    {
-      "at": "2026-06-29T08:31:06.870828Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-29T08:31:06.878341Z",
-      "action": "plan locked: gitlab-ship-provider (7 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-06-29T08:36:40.414887Z",
-      "action": "plan reviewed: gitlab-ship-provider (0 blocking, 1 flag resolved)"
-    },
-    {
-      "at": "2026-06-29T08:38:12.065187Z",
-      "action": "set version=0.6.11.0"
-    },
-    {
-      "at": "2026-06-29T08:40:35.725919Z",
-      "action": "executed t-1 (Add GitLab config surface + detection)"
-    },
-    {
-      "at": "2026-06-29T08:43:46.534783Z",
-      "action": "executed t-2 (Open GitLab MR via REST + reviewers)"
-    },
-    {
-      "at": "2026-06-29T08:46:39.248834Z",
-      "action": "executed t-3 (Add GitLab CI + merge steps to ship.md)"
-    },
-    {
-      "at": "2026-06-29T08:48:43.151869Z",
-      "action": "executed t-4 (Diagnose GitLab remotes)"
-    },
-    {
-      "at": "2026-06-29T08:54:02.789198Z",
-      "action": "executed t-5 (Implement GitLab forge backend + enable)"
-    },
-    {
-      "at": "2026-06-29T08:55:14.848665Z",
-      "action": "executed t-6 (Post GitLab MR note)"
-    },
-    {
-      "at": "2026-06-29T08:58:43.915717Z",
-      "action": "executed t-7 (Wire GitLab config through ship cmd)"
-    },
-    {
-      "at": "2026-06-29T08:59:31.856164Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-29T08:59:31.86378Z",
-      "action": "phase gitlab-ship-provider executed (7/7 done)"
-    },
     {
       "at": "2026-06-29T09:16:35.482229Z",
       "action": "set current_phase_status=verified"
@@ -203,6 +127,82 @@
     {
       "at": "2026-06-29T12:34:09.566539Z",
       "action": "completed youtrack-board-integration"
+    },
+    {
+      "at": "2026-06-29T12:51:15.872844Z",
+      "action": "created self-update-and-distribution"
+    },
+    {
+      "at": "2026-06-29T12:55:28.614163Z",
+      "action": "set current_phase=self-update-and-distribution"
+    },
+    {
+      "at": "2026-06-29T12:55:28.621527Z",
+      "action": "spec locked: self-update-and-distribution"
+    },
+    {
+      "at": "2026-06-29T13:18:02.773783Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-29T13:18:02.781655Z",
+      "action": "plan locked: self-update-and-distribution (7 tasks across 4 waves)"
+    },
+    {
+      "at": "2026-06-29T13:30:25.086394Z",
+      "action": "plan reviewed: self-update-and-distribution (0 blocking, 3 flags folded in)"
+    },
+    {
+      "at": "2026-06-29T13:31:40.040167Z",
+      "action": "set version=0.6.13.0"
+    },
+    {
+      "at": "2026-06-29T13:33:39.290153Z",
+      "action": "executed t-1 (Embed all commands+prompts; drift guard)"
+    },
+    {
+      "at": "2026-06-29T13:36:35.128669Z",
+      "action": "executed t-2 (internal/update: release client + verify)"
+    },
+    {
+      "at": "2026-06-29T13:39:40.728943Z",
+      "action": "executed t-3 (Add dross install command)"
+    },
+    {
+      "at": "2026-06-29T13:42:56.085309Z",
+      "action": "executed t-4 (make install delegates to dross install)"
+    },
+    {
+      "at": "2026-06-29T13:45:58.587796Z",
+      "action": "executed t-5 (Add dross update command)"
+    },
+    {
+      "at": "2026-06-29T13:49:46.843379Z",
+      "action": "executed t-6 (install.sh bootstrap + shellcheck gate)"
+    },
+    {
+      "at": "2026-06-29T13:51:29.421094Z",
+      "action": "executed t-7 (Document curl|sh + dross update in README)"
+    },
+    {
+      "at": "2026-06-29T13:52:08.286287Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-29T13:52:08.292254Z",
+      "action": "phase self-update-and-distribution executed (7/7 done)"
+    },
+    {
+      "at": "2026-06-29T17:09:24.458881Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-29T17:09:24.465408Z",
+      "action": "verified self-update-and-distribution: pass (5/5 covered, mutation 0.84 measured)"
+    },
+    {
+      "at": "2026-06-29T18:18:08.155334Z",
+      "action": "completed self-update-and-distribution"
     }
   ]
 }
