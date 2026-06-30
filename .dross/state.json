@@ -2,18 +2,10 @@
   "version": "0.8.0.0",
   "current_milestone": "v0.6",
   "current_phase": "retrofit-readmostly-commands",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-30T14:47:37.14502Z",
-  "last_action": "spec locked: retrofit-readmostly-commands",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-30T15:09:16.418502Z",
+  "last_action": "plan locked: retrofit-readmostly-commands (4 tasks across 2 waves)",
   "history": [
-    {
-      "at": "2026-06-29T11:14:35.768164Z",
-      "action": "executed t-1 (Add [board] config struct + dotted arms)"
-    },
-    {
-      "at": "2026-06-29T11:25:52.47715Z",
-      "action": "executed t-2 (YouTrack REST client + BoardClient interface + factory)"
-    },
     {
       "at": "2026-06-29T11:27:42.19312Z",
       "action": "executed t-3 (Move inbox board gate to [board].enabled)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-30T14:47:37.14502Z",
       "action": "spec locked: retrofit-readmostly-commands"
+    },
+    {
+      "at": "2026-06-30T15:09:16.41238Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-30T15:09:16.418502Z",
+      "action": "plan locked: retrofit-readmostly-commands (4 tasks across 2 waves)"
     }
   ]
 }
