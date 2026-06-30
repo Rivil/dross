@@ -1,17 +1,9 @@
 {
-  "version": "0.6.13.1",
-  "current_milestone": "v0.6",
-  "last_activity": "2026-06-30T07:06:00.981531Z",
-  "last_action": "quick: add install.sh smoke test",
+  "version": "0.8.0.0",
+  "current_milestone": "v0.8",
+  "last_activity": "2026-06-30T07:17:27.603301Z",
+  "last_action": "set version=0.8.0.0",
   "history": [
-    {
-      "at": "2026-06-29T09:32:29.991968Z",
-      "action": "re-verified gitlab-ship-provider: pass (6/6 covered after c-2 reword, mutation 0.86)"
-    },
-    {
-      "at": "2026-06-29T09:36:38.969018Z",
-      "action": "completed gitlab-ship-provider"
-    },
     {
       "at": "2026-06-29T09:40:00.794474Z",
       "action": "created youtrack-board-integration"
@@ -203,6 +195,14 @@
     {
       "at": "2026-06-30T07:06:00.981531Z",
       "action": "quick: add install.sh smoke test"
+    },
+    {
+      "at": "2026-06-30T07:17:27.596743Z",
+      "action": "set current_milestone=v0.8"
+    },
+    {
+      "at": "2026-06-30T07:17:27.603301Z",
+      "action": "set version=0.8.0.0"
     }
   ]
 }

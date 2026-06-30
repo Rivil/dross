@@ -1,0 +1,9 @@
+[milestone]
+  version = "v0.8"
+  title = "Claude Code surface integration"
+  status = "planning"
+  started = "2026-06-30"
+
+[scope]
+  success_criteria = ["dross ships and installs a native Claude Code status line (dross statusline) that replaces the Node hook script with no runtime dependency, configured opt-in into ~/.claude/settings.json"]
+  non_goals = ["Not a general Claude Code hooks framework — only the status line for now"]
