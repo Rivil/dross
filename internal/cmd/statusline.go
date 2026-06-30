@@ -2,13 +2,18 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/Rivil/dross/internal/statusline"
 )
@@ -24,7 +29,7 @@ const stdinDeadline = 3 * time.Second
 // yields empty or partial output, mirroring the reference's silent-fail contract —
 // a broken status line must never break the prompt.
 func Statusline() *cobra.Command {
-	return &cobra.Command{
+	c := &cobra.Command{
 		Use:   "statusline",
 		Short: "Render the Claude Code status line (reads status JSON on stdin)",
 		Args:  cobra.NoArgs,
@@ -33,6 +38,183 @@ func Statusline() *cobra.Command {
 			return nil
 		},
 	}
+	c.AddCommand(statuslineEnable(), statuslineDisable())
+	return c
+}
+
+// statuslineEnable registers `dross statusline enable` — wire the status line into
+// ~/.claude/settings.json (the same wiring `dross install --statusline` performs).
+func statuslineEnable() *cobra.Command {
+	return &cobra.Command{
+		Use:   "enable",
+		Short: "Wire the dross statusline into ~/.claude/settings.json",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, _ []string) error {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("resolve home: %w", err)
+			}
+			bin, err := resolveStatuslineBinary()
+			if err != nil {
+				return err
+			}
+			return enableStatuslineIn(statuslineSettingsPath(home, os.Getenv), bin, interactiveConfirm(c), c.OutOrStdout())
+		},
+	}
+}
+
+// statuslineDisable registers `dross statusline disable` — un-wire dross's status
+// line, leaving any other settings.json keys and any foreign statusLine untouched.
+func statuslineDisable() *cobra.Command {
+	return &cobra.Command{
+		Use:   "disable",
+		Short: "Un-wire the dross statusline from ~/.claude/settings.json",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, _ []string) error {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("resolve home: %w", err)
+			}
+			bin, err := resolveStatuslineBinary()
+			if err != nil {
+				return err
+			}
+			return disableStatuslineIn(statuslineSettingsPath(home, os.Getenv), bin, c.OutOrStdout())
+		},
+	}
+}
+
+// statuslineCommand is the settings.json statusLine.command for the installed binary
+// at binPath: the ABSOLUTE path (quoted to tolerate spaces) plus the statusline verb,
+// per the command_form decision — never a bare `dross` relying on PATH.
+func statuslineCommand(binPath string) string {
+	return fmt.Sprintf("%q statusline", binPath)
+}
+
+// resolveStatuslineBinary returns the absolute path of the running dross binary,
+// resolving symlinks so settings.json points at the real installed file.
+func resolveStatuslineBinary() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("resolve binary path: %w", err)
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return exe, nil
+}
+
+// statuslineSettingsPath is ~/.claude/settings.json, honoring CLAUDE_CONFIG_DIR.
+func statuslineSettingsPath(home string, env func(string) string) string {
+	if cfg := env("CLAUDE_CONFIG_DIR"); cfg != "" {
+		return filepath.Join(cfg, "settings.json")
+	}
+	return filepath.Join(home, ".claude", "settings.json")
+}
+
+// enableStatuslineIn wires the settings.json at path to invoke binPath's statusline.
+// It JSON-merges (preserving every other key), is idempotent, and refuses to
+// overwrite a DIFFERENT existing statusLine.command unless confirm approves it. The
+// write is atomic (temp + rename) so a crash never leaves a half-written settings.json.
+func enableStatuslineIn(path, binPath string, confirm func(existing string) bool, out io.Writer) error {
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read settings.json: %w", err)
+	}
+	command := statuslineCommand(binPath)
+	merged, err := statusline.MergeStatusline(data, command, false)
+	if errors.Is(err, statusline.ErrStatusLineClobber) {
+		existing := existingStatusLineCommand(data)
+		if confirm == nil || !confirm(existing) {
+			return fmt.Errorf("settings.json already has a different statusLine.command (%s); not overwriting", existing)
+		}
+		merged, err = statusline.MergeStatusline(data, command, true)
+	}
+	if err != nil {
+		return err
+	}
+	if err := atomicWriteFile(path, merged); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "statusLine wired: %s\n", command)
+	return nil
+}
+
+// disableStatuslineIn removes dross's statusLine entry from the settings.json at
+// path, preserving all other keys. It is a no-op when the file is absent or its
+// statusLine is not dross's (never removes a foreign status line).
+func disableStatuslineIn(path, binPath string, out io.Writer) error {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		fmt.Fprintln(out, "statusLine not set by dross; nothing to disable")
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read settings.json: %w", err)
+	}
+	result, err := statusline.RemoveStatusline(data, statuslineCommand(binPath))
+	if err != nil {
+		return err
+	}
+	if err := atomicWriteFile(path, result); err != nil {
+		return err
+	}
+	fmt.Fprintln(out, "statusLine unwired")
+	return nil
+}
+
+// existingStatusLineCommand extracts statusLine.command from raw settings (or "").
+func existingStatusLineCommand(data []byte) string {
+	var v struct {
+		StatusLine struct {
+			Command string `json:"command"`
+		} `json:"statusLine"`
+	}
+	_ = json.Unmarshal(data, &v)
+	return v.StatusLine.Command
+}
+
+// interactiveConfirm returns a consent callback that prompts on a TTY and refuses
+// (returns false) when input is not interactive — so a non-interactive install never
+// silently clobbers a foreign statusLine.
+func interactiveConfirm(c *cobra.Command) func(string) bool {
+	return func(existing string) bool {
+		if !term.IsTerminal(int(os.Stdin.Fd())) {
+			return false
+		}
+		fmt.Fprintf(c.OutOrStdout(), "settings.json already has a statusLine.command:\n  %s\nOverwrite it with dross? [y/N] ", existing)
+		var resp string
+		_, _ = fmt.Fscanln(os.Stdin, &resp)
+		resp = strings.ToLower(strings.TrimSpace(resp))
+		return resp == "y" || resp == "yes"
+	}
+}
+
+// atomicWriteFile writes data to path via a temp file in the same directory then
+// renames over it, creating parent directories as needed.
+func atomicWriteFile(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", dir, err)
+	}
+	tmp, err := os.CreateTemp(dir, ".settings-*")
+	if err != nil {
+		return fmt.Errorf("stage settings.json: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		if _, statErr := os.Stat(tmpName); statErr == nil {
+			_ = os.Remove(tmpName)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write settings.json: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close settings.json: %w", err)
+	}
+	return os.Rename(tmpName, path)
 }
 
 // runStatusline is the testable core: read stdin (bounded by timeout), gather, render,
