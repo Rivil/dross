@@ -1,0 +1,34 @@
+[phase]
+id        = "gray-area-walkthrough"
+title     = "Gray-area walkthrough"
+milestone = "v0.6"
+
+[[criteria]]
+id   = "c-1"
+text = "spec.md §3 no longer contains the multiSelect 'which of these should we pin down?' pre-selection — the user is never asked to choose which gray areas to discuss."
+
+[[criteria]]
+id   = "c-2"
+text = "spec.md §3 instructs walking every surfaced gray area one at a time (one decision per turn) until each is resolved, replacing the removed pre-selection step."
+
+[[criteria]]
+id   = "c-3"
+text = "spec.md §3's discriminator for surfacing a gray area is Claude's genuine uncertainty (a choice it cannot confidently resolve alone), while preserving the existing boundary that internal architecture / code patterns / performance are Claude's to decide, not to ask about."
+
+[[decisions]]
+key    = "walk_termination"
+choice = "Walk-all by default: the prompt walks every surfaced gray area to resolution and Claude never self-truncates. An explicit user off-ramp ('you decide the rest' / 'that's enough') is honored at any point, per the playbook's when-the-contract-bends clause."
+why    = "Thorough by default, but the user stays in control — Claude doesn't silently skip areas (the old pre-selection failure mode), yet isn't forced to march through low-stakes ones once the user signals trust."
+locked = true
+
+[[decisions]]
+key    = "count_ordering"
+choice = "Surface the areas of genuine uncertainty as a soft ~3-4 guideline — don't pad to a number, don't truncate genuine ones — ordered most-impactful / most-uncertain first."
+why    = "The uncertainty discriminator keeps the list naturally short; impact-first ordering means an early user off-ramp leaves only low-stakes areas unwalked. A hard cap would silently drop real areas; no guidance leaves turn count unbounded."
+locked = true
+
+[[decisions]]
+key    = "uncertainty_threshold"
+choice = "Surface an area only at the intersection of two conditions: it is contract-shaping / user-observable AND Claude is genuinely uncertain how it should go. Contract-shaping but confident → Claude decides and notes it. Uncertain but pure-internal (architecture/patterns/perf) → Claude owns it, doesn't ask."
+why    = "Shifts the discriminator from the old 'the user might have an opinion' to 'contract-shaping and Claude can't confidently resolve it', operationalizing c-3's boundary so the walk never drags the user through choices Claude should own."
+locked = true

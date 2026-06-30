@@ -1,21 +1,11 @@
 {
   "version": "0.6.9.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-30T18:04:39.382514Z",
-  "last_action": "completed retrofit-readmostly-commands",
+  "current_phase": "gray-area-walkthrough",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-30T18:25:28.753287Z",
+  "last_action": "spec locked: gray-area-walkthrough",
   "history": [
-    {
-      "at": "2026-06-29T12:14:50.684251Z",
-      "action": "verified youtrack-board-integration: partial (5/6 covered, c-6 weak; mutation 0.86 measured, efficacy 1.00 on covered)"
-    },
-    {
-      "at": "2026-06-29T12:20:00.180085Z",
-      "action": "amended t-10 (backlog attach per milestone_mode: epic/agile)"
-    },
-    {
-      "at": "2026-06-29T12:20:07.88051Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-06-29T12:20:07.887331Z",
       "action": "phase youtrack-board-integration re-executed (c-6 amendment, 10/10 done)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-30T18:04:39.382514Z",
       "action": "completed retrofit-readmostly-commands"
+    },
+    {
+      "at": "2026-06-30T18:08:34.387644Z",
+      "action": "created gray-area-walkthrough"
+    },
+    {
+      "at": "2026-06-30T18:25:28.748157Z",
+      "action": "set current_phase=gray-area-walkthrough"
+    },
+    {
+      "at": "2026-06-30T18:25:28.753287Z",
+      "action": "spec locked: gray-area-walkthrough"
     }
   ]
 }
