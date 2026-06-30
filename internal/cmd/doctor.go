@@ -218,6 +218,30 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
+			// --- Interaction coverage ---
+			//
+			// Fail-closed classification of every command-backed prompt:
+			// interactive ones (AskUserQuestion shim) must have a `### dross-<name>`
+			// audit section; non-interactive ones must be enrolled in the doc's
+			// `## Exempt` list. Reuses the same classifier the Go-test gate
+			// (interaction_coverage_test.go) runs — that test is the enforcing
+			// gate; this surfaces the same verdict on demand. It fires only in the
+			// dross source tree (docs/interaction-audit.md is not embedded) and
+			// stays silent in other onboarded projects.
+			if warnings, present := interactionCoverageWarnings(repoDir); present {
+				Print("Interaction coverage:")
+				if len(warnings) == 0 {
+					Print("  ✓ every command-backed prompt is sectioned or exempt")
+				} else {
+					for _, w := range warnings {
+						Printf("  ✗ %s\n", w)
+						issues++
+					}
+					Print("    Fix: add a `### dross-<name>` audit section (interactive) or an `## Exempt` entry (non-interactive) in docs/interaction-audit.md.")
+				}
+				Print("")
+			}
+
 			return finalizeDoctor(issues)
 		},
 	}
@@ -240,6 +264,27 @@ func architectureLinkWarnings(repoDir string) (warnings []string, present bool) 
 		case architecture.StatusUnresolved:
 			warnings = append(warnings, fmt.Sprintf("%s — %s:%d no longer resolves", r.Link.Symbol, r.Link.File, r.Link.Line))
 		}
+	}
+	return warnings, true
+}
+
+// interactionCoverageWarnings runs the interaction-contract coverage classifier
+// — the same one the Go-test gate uses — against the dross source tree and
+// returns one warning per unclassified command-backed prompt. present=false means
+// repoDir is not the dross source tree: docs/interaction-audit.md is absent (it is
+// not embedded, so the classifier has nothing to read in other onboarded
+// projects), and the caller emits no section. The Go test is the enforcing gate;
+// this lint only surfaces the same classification on demand inside the dross repo.
+func interactionCoverageWarnings(repoDir string) (warnings []string, present bool) {
+	if _, err := os.Stat(filepath.Join(repoDir, "docs", "interaction-audit.md")); err != nil {
+		return nil, false // not the dross source tree → no section
+	}
+	res, err := interactionCoverage(repoDir)
+	if err != nil {
+		return nil, false // partial/malformed tree → skip silently
+	}
+	for _, gap := range res.Uncovered {
+		warnings = append(warnings, fmt.Sprintf("%s — %s", gap.Name, gap.Reason))
 	}
 	return warnings, true
 }
