@@ -5,27 +5,27 @@ milestone = "v0.6"
 
 [[criteria]]
 id   = "c-1"
-text = "A Go test reads assets/prompts/*.md (skipping _-prefixed partials) and fails if any command prompt is neither interaction-contract-bearing nor explicitly interaction-exempt."
+text = "A Go test makes interaction-contract coverage fail-closed: every command-backed prompt (assets/prompts/<name>.md with a matching shim, excluding _-partials) is either interactive — its shim lists AskUserQuestion and it has a section in docs/interaction-audit.md — or it appears on an explicit exempt list in that doc. An unclassified command-backed prompt fails. Extends interaction_audit_test.go; no new prompt-level marker."
 
 [[criteria]]
 id   = "c-2"
-text = "status and plan-review each carry an explicit, human-readable exemption note (the marker's reason string) stating why they are non-interactive — read-only / report-only, no decision points."
+text = "status and plan-review appear on the explicit exempt list in docs/interaction-audit.md, each with a short human-readable reason (status: read-only; plan-review: subagent-only), replacing the prose-only Scope sentence with a structured, test-read list."
 
 [[criteria]]
 id   = "c-3"
-text = "pause and resume are audited end-to-end against the interaction contract — each interactive turn is a single propose-and-react decision (no batched multi-decision turns, no artifact-dump) — and any real deviation found is fixed."
+text = "pause and resume are confirmed to genuinely conform to the contract — prompts wire `dross interaction show` and reference it in prose, their interaction-audit.md sections reflect reality, one decision per turn — any deviation fixed; covered by a per-group emitter/contract test if not already."
 
 [[criteria]]
 id   = "c-4"
-text = "The exemption convention (marker syntax + the two valid states: contract-bearing or exempt-with-reason) is documented where a command author will see it (e.g. _interaction.md), so satisfying the c-1 check is discoverable rather than folklore."
+text = "The machine-checked convention (interactive → audit-doc section; non-interactive → exempt-list entry with a reason; enforced by the Go test, surfaced by dross doctor) is documented where a command author will see it — the interaction-audit.md header, cross-referenced from _interaction.md."
 
 [[criteria]]
 id   = "c-5"
-text = "dross doctor surfaces the same interaction-coverage classification on-demand (a warning listing any unclassified prompt), in addition to the c-1 Go-test gate."
+text = "dross doctor surfaces the same fail-closed classification on-demand (a warning naming any unclassified command-backed prompt), reusing c-1's shared classifier rather than duplicating the logic."
 
 [[criteria]]
 id   = "c-6"
-text = "A check asserts every command has a matching prompt — a command shipped without a corresponding prompt fails (the reverse, command↔prompt, direction of coverage)."
+text = "Command↔prompt parity (every command has a matching prompt and vice versa, a CI-failing check) is confirmed covered by commands_parity_test.go and guarded against silent removal."
 
 [[decisions]]
 key    = "check_home"
@@ -34,13 +34,13 @@ why    = "A test blocks a merge that adds an unclassified prompt; doctor is read
 locked = true
 
 [[decisions]]
-key    = "marker_format"
-choice = "Exempt prompts declare a single HTML comment carrying the reason: <!-- interaction: exempt: <reason> -->. Contract-bearing prompts are detected via their existing `dross interaction show` / _interaction reference, so only exempt prompts gain a marker."
-why    = "One token serves both the c-1 check (greppable on `interaction: exempt`) and the c-2 human-readable note (reason inline); minimal churn — touches only status and plan-review."
+key    = "exempt_mechanism"
+choice = "A command prompt declares non-interactive exemption by appearing on an explicit exempt list in docs/interaction-audit.md (each entry carries a human-readable reason), read by the Go coverage test. No prompt-level <!-- interaction: exempt --> marker is introduced. Supersedes the original marker_format decision."
+why    = "The repo already keys interactivity off the shim's AskUserQuestion and records exemptions in interaction-audit.md; a prompt-level marker would stand up a redundant parallel classifier beside the one that already exists."
 locked = true
 
 [[decisions]]
 key    = "coverage_universe"
-choice = "The c-1 classification check globs assets/prompts/*.md, skips _-prefixed partials, and fail-closes: every remaining file must be classified, and a new unclassified prompt fails. The reverse command↔prompt direction is a separate check (c-6)."
-why    = "Adding a command adds a prompt file that the glob auto-includes, so future commands cannot silently slip the contract; no manifest to drift out of sync."
+choice = "The coverage check's universe is command-backed prompts: assets/prompts/<name>.md with a matching assets/commands/dross-<name>.md shim, excluding _-prefixed partials (per mdNamesIn). Each is classified interactive-with-audit-section vs exempt-listed, fail-closed; an unclassified one fails. The reverse command↔prompt direction is commands_parity_test.go (c-6)."
+why    = "Keying on command-backed prompts matches the existing interaction-audit + parity mechanism; adding a command adds a shim+prompt the check auto-includes, so future commands cannot silently skip classification. No manifest to drift."
 locked = true
