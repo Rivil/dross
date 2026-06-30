@@ -1,0 +1,71 @@
+{
+  "phase": "retrofit-readmostly-commands",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "docs/interaction-audit.md",
+        "internal/cmd/interaction_coverage.go",
+        "internal/cmd/interaction_coverage_test.go"
+      ],
+      "commit": "e1fcf14",
+      "completed_at": "2026-06-30T15:27:43.098727Z",
+      "landmarks": [
+        {
+          "feature": "interaction-contract coverage",
+          "symbol": "interactionCoverage",
+          "loc": "internal/cmd/interaction_coverage.go:36",
+          "what": "fail-closed classifier + Exempt list enforcing every command-backed prompt is sectioned or exempt"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "06a85dd",
+      "completed_at": "2026-06-30T15:34:24.619287Z",
+      "landmarks": [
+        {
+          "feature": "interaction-contract coverage",
+          "symbol": "interactionCoverageWarnings",
+          "loc": "internal/cmd/doctor.go:278",
+          "what": "dross doctor surfaces unclassified command-backed prompts on-demand (dross-source-tree only)"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/interaction_othercmds_test.go",
+        "internal/cmd/commands_parity_test.go"
+      ],
+      "commit": "a32dcdc",
+      "completed_at": "2026-06-30T15:29:03.166906Z",
+      "landmarks": [
+        {
+          "feature": "interaction-contract coverage",
+          "symbol": "TestCommandsPromptsParity",
+          "loc": "internal/cmd/commands_parity_test.go:23",
+          "what": "pin c-3 pause/resume conformance and c-6 command-prompt parity to their existing CI gates"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "docs/interaction-audit.md",
+        "assets/prompts/_interaction.md",
+        "internal/cmd/interaction_coverage_test.go"
+      ],
+      "commit": "bd6ddf9",
+      "completed_at": "2026-06-30T15:37:05.177434Z",
+      "landmarks": [
+        {
+          "feature": "interaction-contract coverage",
+          "symbol": "TestAuditDocDocumentsConvention",
+          "loc": "internal/cmd/interaction_coverage_test.go:120",
+          "what": "document the machine-checked coverage convention and cross-ref it from the playbook"
+        }
+      ]
+    }
+  }
+}

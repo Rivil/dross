@@ -1,39 +1,11 @@
 {
-  "version": "0.8.0.0",
+  "version": "0.6.9.0",
   "current_milestone": "v0.6",
   "current_phase": "retrofit-readmostly-commands",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-30T15:12:42.128283Z",
-  "last_action": "plan reviewed: retrofit-readmostly-commands (0 blocking, 3 flags)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-30T15:37:23.48546Z",
+  "last_action": "phase retrofit-readmostly-commands executed (4/4 done)",
   "history": [
-    {
-      "at": "2026-06-29T11:31:46.264099Z",
-      "action": "executed t-4 (Validate [board] in dross doctor)"
-    },
-    {
-      "at": "2026-06-29T11:46:43.476972Z",
-      "action": "executed t-5 (String issue id in board.json + re-route ops to [board])"
-    },
-    {
-      "at": "2026-06-29T11:50:20.689322Z",
-      "action": "executed t-6 (Ensure milestone entity per milestone_mode)"
-    },
-    {
-      "at": "2026-06-29T11:53:02.804791Z",
-      "action": "executed t-7 (Set YouTrack State via state_map, warn-skip)"
-    },
-    {
-      "at": "2026-06-29T11:54:51.203981Z",
-      "action": "executed t-8 (Surface YouTrack issues in issue pull)"
-    },
-    {
-      "at": "2026-06-29T11:58:30.107013Z",
-      "action": "executed t-9 (Wire phase-sync + milestone-sync to YouTrack)"
-    },
-    {
-      "at": "2026-06-29T12:06:14.331956Z",
-      "action": "executed t-10 (Sync milestone backlog slugs + someday, idempotent)"
-    },
     {
       "at": "2026-06-29T12:06:27.535277Z",
       "action": "set current_phase_status=complete"
@@ -205,6 +177,34 @@
     {
       "at": "2026-06-30T15:12:42.128283Z",
       "action": "plan reviewed: retrofit-readmostly-commands (0 blocking, 3 flags)"
+    },
+    {
+      "at": "2026-06-30T15:22:50.287239Z",
+      "action": "set version=0.6.9.0"
+    },
+    {
+      "at": "2026-06-30T15:27:43.114732Z",
+      "action": "executed t-1 (Fail-closed interaction-coverage check)"
+    },
+    {
+      "at": "2026-06-30T15:29:03.17793Z",
+      "action": "executed t-3 (Confirm + pin pre-existing coverage)"
+    },
+    {
+      "at": "2026-06-30T15:34:13.931832Z",
+      "action": "executed t-2 (dross doctor coverage lint)"
+    },
+    {
+      "at": "2026-06-30T15:37:05.187563Z",
+      "action": "executed t-4 (Document the coverage convention)"
+    },
+    {
+      "at": "2026-06-30T15:37:23.479463Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-30T15:37:23.48546Z",
+      "action": "phase retrofit-readmostly-commands executed (4/4 done)"
     }
   ]
 }
