@@ -43,3 +43,20 @@ func TestExecutePromptInvokesLoadout(t *testing.T) {
 		}
 	}
 }
+
+// TestExecutePromptEmitsTypedLandmark proves c-1's producer side: execute.md
+// records the landmark through the typed `--landmark feature=…, symbol=…, loc=…,
+// what=…` flag and no longer through the legacy `--notes "feature: …"` form. If
+// the prompt regresses to the notes-string landmark, the forbidden token returns
+// and this fails. (r-01: gates the source prompt directly, independent of install.)
+func TestExecutePromptEmitsTypedLandmark(t *testing.T) {
+	content := executePromptContent(t)
+	for _, needle := range []string{"--landmark", "feature=", "symbol=", "loc=", "what="} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("execute.md must emit the typed landmark: missing %q", needle)
+		}
+	}
+	if strings.Contains(content, `--notes "feature:`) {
+		t.Error("execute.md must not encode the landmark in --notes (legacy `--notes \"feature: …\"` form survived)")
+	}
+}

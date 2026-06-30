@@ -46,9 +46,11 @@ Read the configured list (`dross project get remote.reviewers`) and drive a sing
 Before pushing, fold this phase's landmarks into the architecture doc so the PR
 carries an up-to-date `ARCHITECTURE.md` (c-6).
 
-1. `dross changes show <phase-id>` — each task record's `notes` is a landmark in
-   the form `feature: <capability> · <Symbol> @ <file> · <what>` (written by
-   execute §1f).
+1. `dross changes show <phase-id>` prints JSON; each task record carries a typed
+   `landmarks` array of `{feature, symbol, loc, what}` objects (written by execute
+   §1f). Read those **structured fields** directly — do not parse a `notes` string
+   for the landmark (the free-form `notes` field is no longer the landmark
+   carrier).
 2. If `ARCHITECTURE.md` is absent at repo root, the repo predates the doc: run
    `/dross-architecture` to generate it first, or **skip this step with a note**
    — a missing doc must not block the ship. Then continue.

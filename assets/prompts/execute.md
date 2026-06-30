@@ -171,31 +171,29 @@ Covers: <criterion-ids>
 
 **Capture a landmark.** Before recording, write a one-line *landmark* for the
 task — the durable "what shipped here" that `/dross-ship` later merges into
-`ARCHITECTURE.md` by feature. It has three parts, aligned to that doc's entry
-template (`internal/architecture` `EntryTemplate`):
-
-```
-feature: <user-facing capability> · <Symbol> @ <file> · <one line: what it does>
-```
+`ARCHITECTURE.md` by feature. It is a typed record with four fields, aligned to
+that doc's entry template (`internal/architecture` `EntryTemplate`):
 
 - **feature** — the capability this task delivered, phrased as something the
   system *does* (e.g. `phase lifecycle`, `architecture doc format`), never a
   module name and never the phase id. Reuse an existing feature name if the task
   extended one, so ship updates that entry in place instead of forking a new one.
-- **symbol@file** — the primary symbol introduced/changed and its file (the
-  symbol-link target). One is enough; ship resolves precise `file:line` later.
+- **symbol** + **loc** — the primary symbol introduced/changed and its
+  `file:line` (the symbol-link target). One is enough.
 - **what** — a single dense clause. No prose paragraphs.
 
-Pass it through the existing free-form `--notes` (there is no typed `--landmark`
-field — that's deferred). If a task genuinely has no user-facing landmark (pure
-tooling/chore), still record it with a `feature: <area>` landmark so the trail
-stays complete.
+Pass it as a typed, structured `--landmark` flag: **one** flag whose value is the
+comma-separated `key=value` pairs (each pair splits on its first `=`, so a value
+may contain `=` or `·`). The landmark is structured data now — it is **not**
+encoded in `--notes` any more; `--notes` stays available for genuine free-form
+notes. If a task has no user-facing landmark (pure tooling/chore), still record
+one with a `feature=<area>` landmark so the trail stays complete.
 
 After commit:
 ```
 SHA=$(git rev-parse --short HEAD)
 dross changes record <phase> <task-id> --files <task.files (csv)> --commit $SHA \
-  --notes "feature: <capability> · <Symbol> @ <file> · <one line what>"
+  --landmark "feature=<capability>, symbol=<Symbol>, loc=<file:line>, what=<one line what>"
 dross task status <phase> <task-id> done
 dross state touch "executed <task-id> (<task.title>)"
 ```

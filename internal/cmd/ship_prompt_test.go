@@ -54,6 +54,23 @@ func TestShipPromptRecoverySection(t *testing.T) {
 	}
 }
 
+// TestShipPromptReadsTypedLandmarks proves c-1's consumer side: ship.md §3.5
+// reads the structured `landmarks` array of {feature, symbol, loc, what} objects
+// from `dross changes show`, and no longer parses a notes string for the
+// landmark. Regressing §3.5 to "notes is a landmark" reintroduces the forbidden
+// phrase and fails this.
+func TestShipPromptReadsTypedLandmarks(t *testing.T) {
+	content := shipPromptContent(t)
+	for _, needle := range []string{"landmarks", "feature", "symbol", "loc", "what"} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("ship.md §3.5 must read the typed landmark fields: missing %q", needle)
+		}
+	}
+	if strings.Contains(content, "notes is a landmark") {
+		t.Error("ship.md §3.5 must not parse the notes string for the landmark (legacy phrasing survived)")
+	}
+}
+
 // TestShipPromptGitLabSections proves c-4: ship.md's §5 (CI gate) and §6 (merge
 // gate) carry the GitLab pipeline-watch and squash-merge steps, and §5 pins the
 // ENTIRE locked pipeline_status_mapping — terminal, keep-polling, AND ambiguous
