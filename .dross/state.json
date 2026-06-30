@@ -1,21 +1,11 @@
 {
   "version": "0.6.16.0",
   "current_milestone": "v0.7",
-  "last_activity": "2026-06-30T19:14:03.438853Z",
-  "last_action": "scoped milestone v0.7: 3 criteria, 3 phases",
+  "current_phase": "ship-auto-noninteractive",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-30T20:18:21.823594Z",
+  "last_action": "spec locked: ship-auto-noninteractive",
   "history": [
-    {
-      "at": "2026-06-29T13:36:35.128669Z",
-      "action": "executed t-2 (internal/update: release client + verify)"
-    },
-    {
-      "at": "2026-06-29T13:39:40.728943Z",
-      "action": "executed t-3 (Add dross install command)"
-    },
-    {
-      "at": "2026-06-29T13:42:56.085309Z",
-      "action": "executed t-4 (make install delegates to dross install)"
-    },
     {
       "at": "2026-06-29T13:45:58.587796Z",
       "action": "executed t-5 (Add dross update command)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-30T19:14:03.438853Z",
       "action": "scoped milestone v0.7: 3 criteria, 3 phases"
+    },
+    {
+      "at": "2026-06-30T19:15:15.809519Z",
+      "action": "created ship-auto-noninteractive"
+    },
+    {
+      "at": "2026-06-30T20:18:21.818954Z",
+      "action": "set current_phase=ship-auto-noninteractive"
+    },
+    {
+      "at": "2026-06-30T20:18:21.823594Z",
+      "action": "spec locked: ship-auto-noninteractive"
     }
   ]
 }

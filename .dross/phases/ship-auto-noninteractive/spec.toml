@@ -1,0 +1,36 @@
+[phase]
+id        = "ship-auto-noninteractive"
+title     = "ship-auto-noninteractive"
+milestone = "v0.7"
+
+[[criteria]]
+id   = "c-1"
+text = "`dross ship --auto <id>` requests zero reviewers and uses the generated PR body (ignoring any configured remote.reviewers), running to completion non-interactively — suitable to call from a script or loop."
+
+[[criteria]]
+id   = "c-2"
+text = "When `/dross-ship` is invoked with `--auto` in its arguments, it skips the §2 body-override and §3 reviewer AskUserQuestion turns and the §1 body-preview dump, and shells out to `dross ship --auto`."
+
+[[criteria]]
+id   = "c-3"
+text = "`--auto` does not bypass the verify-pass gate — shipping an unverified phase still fails unless `--force-unverified` is also passed."
+
+[[criteria]]
+id   = "c-4"
+text = "`--auto` opens the PR and returns without merging; the merge step and CI are unchanged."
+
+[[criteria]]
+id   = "c-5"
+text = "`dross ship --json` emits a single machine-readable JSON object on stdout (PR url, number, result status) and suppresses the human narration lines; composable with `--auto` for clean capture in scripts/loops."
+
+[[decisions]]
+key    = "reviewers_under_auto"
+choice = "--auto requests zero reviewers for that run and does not mutate remote.reviewers config."
+why    = "Per-invocation and non-destructive; the criterion requires no reviewers without erasing the project default."
+locked = true
+
+[[decisions]]
+key    = "explicit_flags_win"
+choice = "--auto governs defaults/prompts only; explicit --body-file / --body / --draft still override it."
+why    = "Least-surprising CLI convention — --auto means 'no prompts', not 'ignore my flags'."
+locked = true
