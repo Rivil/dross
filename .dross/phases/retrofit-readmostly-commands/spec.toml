@@ -1,0 +1,46 @@
+[phase]
+id        = "retrofit-readmostly-commands"
+title     = "Retrofit read-mostly commands"
+milestone = "v0.6"
+
+[[criteria]]
+id   = "c-1"
+text = "A Go test reads assets/prompts/*.md (skipping _-prefixed partials) and fails if any command prompt is neither interaction-contract-bearing nor explicitly interaction-exempt."
+
+[[criteria]]
+id   = "c-2"
+text = "status and plan-review each carry an explicit, human-readable exemption note (the marker's reason string) stating why they are non-interactive — read-only / report-only, no decision points."
+
+[[criteria]]
+id   = "c-3"
+text = "pause and resume are audited end-to-end against the interaction contract — each interactive turn is a single propose-and-react decision (no batched multi-decision turns, no artifact-dump) — and any real deviation found is fixed."
+
+[[criteria]]
+id   = "c-4"
+text = "The exemption convention (marker syntax + the two valid states: contract-bearing or exempt-with-reason) is documented where a command author will see it (e.g. _interaction.md), so satisfying the c-1 check is discoverable rather than folklore."
+
+[[criteria]]
+id   = "c-5"
+text = "dross doctor surfaces the same interaction-coverage classification on-demand (a warning listing any unclassified prompt), in addition to the c-1 Go-test gate."
+
+[[criteria]]
+id   = "c-6"
+text = "A check asserts every command has a matching prompt — a command shipped without a corresponding prompt fails (the reverse, command↔prompt, direction of coverage)."
+
+[[decisions]]
+key    = "check_home"
+choice = "The c-1 coverage check is a Go test that acts as the enforcing hard gate (fails go test ./... / CI). A dross doctor lint additionally surfaces the same classification on-demand (c-5), but the test — not doctor — is the gate."
+why    = "A test blocks a merge that adds an unclassified prompt; doctor is read-and-warn, so it discovers drift but cannot enforce it."
+locked = true
+
+[[decisions]]
+key    = "marker_format"
+choice = "Exempt prompts declare a single HTML comment carrying the reason: <!-- interaction: exempt: <reason> -->. Contract-bearing prompts are detected via their existing `dross interaction show` / _interaction reference, so only exempt prompts gain a marker."
+why    = "One token serves both the c-1 check (greppable on `interaction: exempt`) and the c-2 human-readable note (reason inline); minimal churn — touches only status and plan-review."
+locked = true
+
+[[decisions]]
+key    = "coverage_universe"
+choice = "The c-1 classification check globs assets/prompts/*.md, skips _-prefixed partials, and fail-closes: every remaining file must be classified, and a new unclassified prompt fails. The reverse command↔prompt direction is a separate check (c-6)."
+why    = "Adding a command adds a prompt file that the glob auto-includes, so future commands cannot silently slip the contract; no manifest to drift out of sync."
+locked = true

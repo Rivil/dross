@@ -1,21 +1,11 @@
 {
   "version": "0.8.0.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-30T14:06:44.900387Z",
-  "last_action": "merged architecture-doc-enhancements",
+  "current_phase": "retrofit-readmostly-commands",
+  "current_phase_status": "created",
+  "last_activity": "2026-06-30T14:47:37.14502Z",
+  "last_action": "spec locked: retrofit-readmostly-commands",
   "history": [
-    {
-      "at": "2026-06-29T11:02:18.914579Z",
-      "action": "plan locked: youtrack-board-integration (10 tasks across 4 waves)"
-    },
-    {
-      "at": "2026-06-29T11:07:16.878301Z",
-      "action": "plan reviewed: youtrack-board-integration (0 blocking, 2 flags resolved)"
-    },
-    {
-      "at": "2026-06-29T11:10:38.427446Z",
-      "action": "set version=0.6.12.0"
-    },
     {
       "at": "2026-06-29T11:14:35.768164Z",
       "action": "executed t-1 (Add [board] config struct + dotted arms)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-06-30T14:06:44.900387Z",
       "action": "merged architecture-doc-enhancements"
+    },
+    {
+      "at": "2026-06-30T14:17:58.60491Z",
+      "action": "created retrofit-readmostly-commands"
+    },
+    {
+      "at": "2026-06-30T14:47:37.138013Z",
+      "action": "set current_phase=retrofit-readmostly-commands"
+    },
+    {
+      "at": "2026-06-30T14:47:37.14502Z",
+      "action": "spec locked: retrofit-readmostly-commands"
     }
   ]
 }
