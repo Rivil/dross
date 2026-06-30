@@ -49,6 +49,64 @@ func TestSpecPromptParkSequence(t *testing.T) {
 	}
 }
 
+// TestSpecPromptNoGrayAreaPreselection proves c-1: §3 no longer asks the user
+// which gray areas to discuss — the multiSelect pre-selection gate is gone.
+func TestSpecPromptNoGrayAreaPreselection(t *testing.T) {
+	content := specPromptContent(t)
+	for _, banned := range []string{
+		"which of these should we pin down",
+		"present for selection",
+	} {
+		if strings.Contains(content, banned) {
+			t.Errorf("spec.md §3 must not contain the pre-selection gate %q", banned)
+		}
+	}
+}
+
+// TestSpecPromptWalksEveryGrayArea proves c-2: §3 walks every gray area
+// one-by-one, one decision per turn, with an explicit user off-ramp.
+func TestSpecPromptWalksEveryGrayArea(t *testing.T) {
+	content := specPromptContent(t)
+	for _, needle := range []string{
+		"walk every",
+		"one at a time",
+		"off-ramp",
+	} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("spec.md §3 walk-all instruction missing %q", needle)
+		}
+	}
+}
+
+// TestSpecPromptUncertaintyDiscriminator proves c-3: the discriminator is
+// Claude's own uncertainty, and the "decide internals yourself" boundary is kept.
+func TestSpecPromptUncertaintyDiscriminator(t *testing.T) {
+	content := specPromptContent(t)
+	for _, needle := range []string{
+		"cannot confidently",    // uncertainty framing
+		"genuinely uncertain",   // uncertainty framing
+		"decide these yourself", // retained boundary
+	} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("spec.md §3 discriminator/boundary missing %q", needle)
+		}
+	}
+}
+
+// TestSpecPromptGrayAreaOrdering proves the count_ordering decision: a soft ~3–4
+// guideline, ordered most-impactful first.
+func TestSpecPromptGrayAreaOrdering(t *testing.T) {
+	content := specPromptContent(t)
+	for _, needle := range []string{
+		"most-impactful",
+		"3–4",
+	} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("spec.md §3 count/ordering guidance missing %q", needle)
+		}
+	}
+}
+
 // TestSpecPromptSomedayOnlyExplicit proves the someday half of c-2: an item is
 // left unrouted only on an explicit someday pick, never the silent default.
 func TestSpecPromptSomedayOnlyExplicit(t *testing.T) {

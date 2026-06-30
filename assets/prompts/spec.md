@@ -58,44 +58,40 @@ Then walk the answers **one at a time** — not as a wall:
 - Vague ("works well") instead of measurable ("loads in under 200ms on 4G")
 - Two outcomes squashed into one (split it)
 
-## 3. Locked decisions — gray-area discussion
+## 3. Locked decisions — gray-area walkthrough
 
-Don't just ask "any locked decisions?" and wait for the user to free-recall them. Surface this phase's **gray areas** and walk the user through the ones they care about. Each resolved area becomes a locked decision.
+Don't just ask "any locked decisions?" and wait for the user to free-recall them. Surface this phase's **gray areas** — the contract-shaping choices you're *genuinely unsure how to resolve* — and walk the user through **every** one, one at a time. Each resolved area becomes a locked decision.
 
-A gray area is an implementation decision the user has an opinion on — a choice that could go multiple ways and would change the result.
+A gray area is a contract-shaping choice you **cannot confidently resolve on your own**: it could go multiple ways, the outcome differs, and you don't have a clear best answer. The discriminator is *your* uncertainty — **not** merely that the user *might* have an opinion. If you're confident about the right call on a contract-shaping choice, make it and note it; don't ask.
 
 ### 3a. Identify gray areas
 
-Using the context from §1 (project goals, milestone constraints, locked stack) and the acceptance criteria from §2, generate **3–4 phase-specific gray areas**:
+Using the context from §1 (project goals, milestone constraints, locked stack) and the acceptance criteria from §2, list the areas where you are **genuinely uncertain** how to proceed:
 
 - Use **concrete labels tied to this phase's domain** — never generic category names like "UI" / "Behaviour" / "Architecture".
   - Phase "CLI for backups" → `Output format`, `Flag design`, `Progress reporting`, `Error recovery`
   - Phase "Meal tagging" → `Tag storage`, `Duplicate handling`, `Tag input UX`, `Max tags per item`
+- **Keep it to the genuine ones — a soft ~3–4.** Don't pad to hit a number, and don't truncate a real uncertainty to stay under one. Order them **most-impactful / most-uncertain first**, so if the user later hands you the rest (§3b off-ramp), the consequential ones are already settled.
 - **Skip what's already decided.** Don't re-ask anything settled by `stack.locked` in project.toml, a `[[decisions]]` carried in a prior phase's spec.toml, or a choice already implied by an acceptance criterion. If you skip an area for this reason, say so ("session handling is fixed by the locked auth library — not asking").
 - **Stay inside the phase boundary.** A gray area clarifies HOW to build what's already scoped — never WHETHER to add a new capability. If a candidate is really a new capability, it's a deferred idea (§4), not a gray area.
 
-**What is NOT a gray area — decide these yourself, don't ask:** internal architecture, code patterns, performance tuning, anything the planner or executor resolves. Ask only about user-facing and contract-shaping choices.
+**What is NOT a gray area — decide these yourself, don't ask:** internal architecture, code patterns, performance tuning, anything the planner or executor resolves — **even when you're unsure about them**. Uncertainty alone doesn't earn a question; the choice must *also* be contract-shaping / user-observable. Ask only about user-facing and contract-shaping choices you can't confidently settle.
 
-If no meaningful gray areas exist (pure infra, clear-cut implementation, all already decided), say so plainly and skip to §4. Don't manufacture choices to fill space.
+If no meaningful gray areas exist (pure infra, clear-cut implementation, all already decided, or you're confident on every call), say so plainly and skip to §4. Don't manufacture choices to fill space.
 
-### 3b. Present for selection
+### 3b. Walk every area, one at a time
 
-`AskUserQuestion` (multiSelect: true):
-- header: `Discuss`
-- question: **"Which of these should we pin down for `<phase>`?"**
-- one option per gray area: the concrete label, with 1–2 framing questions in the description, annotated with relevant context (e.g. "stack is locked to Postgres — this is about table shape, not the DB").
+There is **no selection step** — do not ask the user which areas to discuss, and do not pre-filter the list down for them. Walk **every** identified gray area yourself, **one at a time** — a single decision each turn, in the propose-and-react shape the `_interaction.md` playbook defines:
 
-**Do NOT include a "skip" / "you decide" option.** The user ran this command to clarify — give real choices.
-
-### 3c. Deep-dive each selected area
-
-For each area the user picked, one focused exchange at a time — **don't batch areas into a single turn**. Offer concrete options via `AskUserQuestion` where a small set of choices exists; go freeform where it's open-ended. Keep going on an area until the decision is crisp enough to write down, then move to the next.
+- For each area, offer concrete options via `AskUserQuestion` where a small set of choices exists; go freeform where it's open-ended. **Lead with the option you'd pick.** Keep going on an area until the decision is crisp enough to write down, then move to the next.
+- **Don't batch** areas into a single turn, and don't dump the whole list — surface one area, resolve it, advance. A short "decided: tag_storage" before the next is enough.
+- **User off-ramp.** If the user says "you decide the rest" / "that's enough" at any point, stop walking and settle the remaining areas yourself (recording them as decisions), per the playbook's *when-the-contract-bends* clause. **Never self-truncate without that signal** — walking all of them is the default.
 
 While discussing:
 - If the user references a doc/spec/file ("follow the schema in `X`"), read it and let it inform your follow-ups.
 - If the user raises something outside the phase boundary, capture it as a deferred idea and redirect: **"`<that>` is its own capability — noting it as deferred. For now let's stay on `<phase>`."**
 
-### 3d. Capture outcomes
+### 3c. Capture outcomes
 
 Each resolved gray area becomes a locked decision:
 - `key` (short identifier, e.g. `tag_storage`)
