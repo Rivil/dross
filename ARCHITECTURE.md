@@ -89,19 +89,20 @@ _c8b346e · extended gitlab-ship-provider · 0f209c9_
 
 ### Deferred-item routing
 
-Give every deferred idea a destination instead of leaving it write-only: `/dross-spec` routes each (pull-into-phase / milestone-backlog / named-phase / someday), parked ideas re-surface as candidate criteria when their target phase is scaffolded, and someday items get triaged through `/dross-inbox`. An item lives in one of three states — someday (no target), routed (target set), or dismissed (`dross deferred dismiss`, `--undo` to reverse); a board-less repo still triages its local deferred backlog because `/dross-inbox` §0 skips the board source rather than hard-stopping.
+Give every deferred idea a destination instead of leaving it write-only: `/dross-spec` routes each (pull-into-phase / milestone-backlog / named-phase / someday), parked ideas re-surface as candidate criteria when their target phase is scaffolded, and someday items get triaged through `/dross-inbox`. An item lives in one of three states — someday (no target), routed (target set, cleared back to someday with `dross deferred unroute`), or dismissed (`dross deferred dismiss`, `--undo` to reverse); a board-less repo still triages its local deferred backlog because `/dross-inbox` §0 skips the board source rather than hard-stopping.
 
 - `Deferred.Target` (schema) — `internal/phase/phase.go:196`
 - `Deferred.Dismissed` (dismissed-state flag) — `internal/phase/phase.go:201`
-- `Deferred` (dross deferred list/route/dismiss) — `internal/cmd/deferred.go:28`
+- `Deferred` (dross deferred list/route/unroute/dismiss) — `internal/cmd/deferred.go:28`
 - `collectDeferred` (scan + filter) — `internal/cmd/deferred.go:40`
 - `deferredRoute` (stamp target on disk) — `internal/cmd/deferred.go:155`
 - `deferredDismiss` (retire to dismissed, someday-only) — `internal/cmd/deferred.go:194`
+- `deferredUnroute` (clear target → someday; idempotent, refuses dismissed) — `internal/cmd/deferred.go:248`
 - `deferredList --dismissed` (hide/surface dismissed) — `internal/cmd/deferred.go:69`
 - dangling-target guard in `Validate` — `internal/cmd/validate.go:117`
 - `/dross-inbox` board-off fallback + dismiss funnel — `assets/prompts/inbox.md`
 
-_introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps · 539d475_
+_introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps · 539d475 · extended deferred-unroute-command · fb24bc2_
 
 ### Findings lifecycle
 
