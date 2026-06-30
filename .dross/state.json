@@ -1,61 +1,9 @@
 {
-  "version": "0.6.9.0",
+  "version": "0.6.16.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-30T18:04:39.382514Z",
-  "last_action": "completed retrofit-readmostly-commands",
+  "last_activity": "2026-06-30T19:05:15.072446Z",
+  "last_action": "completed gray-area-walkthrough",
   "history": [
-    {
-      "at": "2026-06-29T12:14:50.684251Z",
-      "action": "verified youtrack-board-integration: partial (5/6 covered, c-6 weak; mutation 0.86 measured, efficacy 1.00 on covered)"
-    },
-    {
-      "at": "2026-06-29T12:20:00.180085Z",
-      "action": "amended t-10 (backlog attach per milestone_mode: epic/agile)"
-    },
-    {
-      "at": "2026-06-29T12:20:07.88051Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-29T12:20:07.887331Z",
-      "action": "phase youtrack-board-integration re-executed (c-6 amendment, 10/10 done)"
-    },
-    {
-      "at": "2026-06-29T12:29:04.407787Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-29T12:29:04.415216Z",
-      "action": "verified youtrack-board-integration: pass (6/6 covered, c-6 lifted to covered; mutation 0.86 measured, efficacy 1.00 on covered)"
-    },
-    {
-      "at": "2026-06-29T12:34:09.566539Z",
-      "action": "completed youtrack-board-integration"
-    },
-    {
-      "at": "2026-06-29T12:51:15.872844Z",
-      "action": "created self-update-and-distribution"
-    },
-    {
-      "at": "2026-06-29T12:55:28.614163Z",
-      "action": "set current_phase=self-update-and-distribution"
-    },
-    {
-      "at": "2026-06-29T12:55:28.621527Z",
-      "action": "spec locked: self-update-and-distribution"
-    },
-    {
-      "at": "2026-06-29T13:18:02.773783Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-29T13:18:02.781655Z",
-      "action": "plan locked: self-update-and-distribution (7 tasks across 4 waves)"
-    },
-    {
-      "at": "2026-06-29T13:30:25.086394Z",
-      "action": "plan reviewed: self-update-and-distribution (0 blocking, 3 flags folded in)"
-    },
     {
       "at": "2026-06-29T13:31:40.040167Z",
       "action": "set version=0.6.13.0"
@@ -203,6 +151,58 @@
     {
       "at": "2026-06-30T18:04:39.382514Z",
       "action": "completed retrofit-readmostly-commands"
+    },
+    {
+      "at": "2026-06-30T18:08:34.387644Z",
+      "action": "created gray-area-walkthrough"
+    },
+    {
+      "at": "2026-06-30T18:25:28.748157Z",
+      "action": "set current_phase=gray-area-walkthrough"
+    },
+    {
+      "at": "2026-06-30T18:25:28.753287Z",
+      "action": "spec locked: gray-area-walkthrough"
+    },
+    {
+      "at": "2026-06-30T18:39:59.76146Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-30T18:39:59.766562Z",
+      "action": "plan locked: gray-area-walkthrough (1 task across 1 wave)"
+    },
+    {
+      "at": "2026-06-30T18:42:05.566633Z",
+      "action": "plan reviewed: gray-area-walkthrough (0 blocking, 2 flags)"
+    },
+    {
+      "at": "2026-06-30T18:44:36.399826Z",
+      "action": "set version=0.6.16.0"
+    },
+    {
+      "at": "2026-06-30T18:48:56.538887Z",
+      "action": "executed t-1 (Rewrite spec.md §3 to walk-all + uncertainty discriminator)"
+    },
+    {
+      "at": "2026-06-30T18:49:08.490833Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-30T18:49:08.498271Z",
+      "action": "phase gray-area-walkthrough executed (1/1 done)"
+    },
+    {
+      "at": "2026-06-30T18:56:46.465151Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-30T18:56:46.47269Z",
+      "action": "verified gray-area-walkthrough: pass (3/3 covered, mutation not a signal — prompt-only change)"
+    },
+    {
+      "at": "2026-06-30T19:05:15.072446Z",
+      "action": "completed gray-area-walkthrough"
     }
   ]
 }
