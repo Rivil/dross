@@ -54,6 +54,15 @@ var renderCases = []struct {
 	// Auto-compact normalization variants.
 	{"meter_default", Inputs{Model: "Claude", Dir: "/work/myproject", RemainingPercent: fptr(60.0), TotalTokens: 1_000_000, AutoCompactWindow: 0}},           // ~16.5% default buffer
 	{"meter_total_override", Inputs{Model: "Claude", Dir: "/work/myproject", RemainingPercent: fptr(60.0), TotalTokens: 500_000, AutoCompactWindow: 200000}}, // buffer 200000/500000 => 40%
+
+	// Line-2 body: todo (bold) wins over dross state (dim), each crossed with the
+	// meter present/absent. The gather layer pre-formats DrossState; render dims it.
+	{"todo_only", Inputs{Model: "Claude", Dir: "/work/myproject", TodoActiveForm: "Doing the thing"}},
+	{"todo_with_meter", Inputs{Model: "Claude", Dir: "/work/myproject", TodoActiveForm: "Doing the thing", RemainingPercent: fptr(60.0), TotalTokens: 1_000_000, AutoCompactWindow: 200000}},
+	{"state_only", Inputs{Model: "Claude", Dir: "/x/proj", DrossState: "v0.8 · native-statusline · planned"}},
+	{"state_with_meter", Inputs{Model: "Claude", Dir: "/x/proj", DrossState: "v0.8 · native-statusline · planned", RemainingPercent: fptr(60.0), TotalTokens: 1_000_000, AutoCompactWindow: 200000}},
+	{"state_missing_field", Inputs{Model: "Claude", Dir: "/x/projpartial", DrossState: "v0.8 · native-statusline"}},
+	{"todo_wins", Inputs{Model: "Claude", Dir: "/x/proj", TodoActiveForm: "Doing the thing", DrossState: "v0.8 · native-statusline · planned"}},
 }
 
 // TestRender pins the full render output byte-for-byte against the node-minted
@@ -104,6 +113,39 @@ func TestContextMeterBands(t *testing.T) {
 				t.Errorf("%s: filled cells = %d, want floor(%d/10) = %d", c.golden, gotFilled, c.used, c.used/10)
 			}
 		})
+	}
+}
+
+// TestRenderLine2 pins the byte-fragile line-2 assembly: todo precedence and the
+// context-meter leading-space rule (kept as a separator after a body, stripped when
+// the body is empty — the reference's ctxOnLine2 branch).
+func TestRenderLine2(t *testing.T) {
+	// Todo wins over state: bold todo present, the state string absent entirely.
+	out := string(Render(Inputs{Model: "Claude", Dir: "/x/proj", TodoActiveForm: "Doing the thing", DrossState: "v0.8 · native-statusline · planned"}))
+	if !strings.Contains(out, "\x1b[1mDoing the thing\x1b[0m") {
+		t.Errorf("todo-wins: missing bold todo in %q", out)
+	}
+	if strings.Contains(out, "native-statusline") {
+		t.Errorf("todo-wins: dross state leaked into output %q", out)
+	}
+
+	// Body present + meter: the meter keeps its leading space as a separator, so the
+	// reset of the body is followed by " " then the meter SGR.
+	body := string(Render(Inputs{Model: "Claude", Dir: "/x/proj", DrossState: "v0.8 · p · s", RemainingPercent: fptr(60.0), TotalTokens: 1_000_000, AutoCompactWindow: 200000}))
+	line2 := strings.Split(body, "\n")[1]
+	if !strings.HasPrefix(line2, "\x1b[2mv0.8 · p · s\x1b[0m \x1b[") {
+		t.Errorf("body+meter: want '<dim state><reset> <meter>', got %q", line2)
+	}
+
+	// No body + meter: the meter's leading space is stripped, so line 2 starts with
+	// the meter SGR directly (no stray leading space).
+	noBody := string(Render(Inputs{Model: "Claude", Dir: "/x/proj", RemainingPercent: fptr(60.0), TotalTokens: 1_000_000, AutoCompactWindow: 200000}))
+	mline := strings.Split(noBody, "\n")[1]
+	if strings.HasPrefix(mline, " ") {
+		t.Errorf("no-body+meter: stray leading space before meter: %q", mline)
+	}
+	if !strings.HasPrefix(mline, "\x1b[") {
+		t.Errorf("no-body+meter: line 2 should start with the meter SGR, got %q", mline)
 	}
 }
 

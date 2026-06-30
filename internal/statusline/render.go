@@ -27,6 +27,15 @@ type Inputs struct {
 	// Branch is the git branch (short SHA on detached HEAD, "" outside a repo).
 	Branch string
 
+	// TodoActiveForm is the active session's in-progress todo activeForm. When set
+	// it is line 2's body (bold) and wins over DrossState.
+	TodoActiveForm string
+	// DrossState is the pre-formatted ".dross" project state ("milestone · phase ·
+	// status") shown dim on line 2 when there is no in-progress todo. The gather
+	// layer formats it (degrading gracefully when fields are absent); the renderer
+	// only dims it.
+	DrossState string
+
 	// RemainingPercent is context_window.remaining_percentage. Nil => no meter.
 	RemainingPercent *float64
 	// TotalTokens is context_window.total_tokens; <=0 falls back to 1_000_000
@@ -42,11 +51,12 @@ type Inputs struct {
 // CLAUDE_CODE_AUTO_COMPACT_WINDOW is unset, matching the reference statusline.
 const defaultAutoCompactBufferPct = 16.5
 
-// Render returns the status line bytes for in. In this task it emits line 1
-// (dim model │ dim basename(dir) ⎇ dim branch) and, when a context meter is
-// present, the meter on line 2 with its leading space stripped (the reference's
-// `ctx.replace(/^ /, "")` path, taken because there is no line-2 body yet). Later
-// tasks fold the todo/state body and the peer-jobs line into this assembly.
+// Render returns the status line bytes for in. Line 1 is "dim model │ dim
+// basename(dir) ⎇ dim branch". Line 2 is the in-progress todo activeForm (bold,
+// winning over state) or the dross state (dim), followed by the context meter; the
+// meter's leading space is kept as a separator when there is a body and stripped
+// when there is not — the reference's `ctxOnLine2` rule. Lines that come out empty
+// are omitted. The peer-jobs line is folded in by a later task.
 func Render(in Inputs) []byte {
 	dirname := filepath.Base(in.Dir)
 	branchSuffix := ""
@@ -55,11 +65,31 @@ func Render(in Inputs) []byte {
 	}
 	line1 := fmt.Sprintf("\x1b[2m%s\x1b[0m │ \x1b[2m%s\x1b[0m%s", in.Model, dirname, branchSuffix)
 
+	// Line-2 body: bold todo (wins) else dim dross state, mirroring the reference's
+	// `middle` and its " │ "-append-then-strip (a no-op net of `middle`, replicated
+	// literally for fidelity).
+	middle := ""
+	switch {
+	case in.TodoActiveForm != "":
+		middle = fmt.Sprintf("\x1b[1m%s\x1b[0m", in.TodoActiveForm)
+	case in.DrossState != "":
+		middle = fmt.Sprintf("\x1b[2m%s\x1b[0m", in.DrossState)
+	}
+	line2Body := ""
+	if middle != "" {
+		line2Body = strings.TrimSuffix(middle+" │ ", " │ ")
+	}
+
+	ctx := contextMeter(in)
+	ctxOnLine2 := ctx
+	if line2Body == "" {
+		ctxOnLine2 = strings.TrimPrefix(ctx, " ")
+	}
+	line2 := line2Body + ctxOnLine2
+
 	lines := []string{line1}
-	if ctx := contextMeter(in); ctx != "" {
-		// No line-2 body in this task, so strip the meter's leading space exactly
-		// as the reference does when there is nothing in front of it.
-		lines = append(lines, strings.TrimPrefix(ctx, " "))
+	if line2 != "" {
+		lines = append(lines, line2)
 	}
 	return []byte(strings.Join(lines, "\n"))
 }
