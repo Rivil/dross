@@ -2,18 +2,10 @@
   "version": "0.6.8.0",
   "current_milestone": "v0.6",
   "current_phase": "deferred-unroute-command",
-  "current_phase_status": "complete",
-  "last_activity": "2026-06-30T10:20:50.368536Z",
-  "last_action": "phase deferred-unroute-command executed (1/1 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-06-30T10:27:16.076726Z",
+  "last_action": "verified deferred-unroute-command: pass (2/2 covered, mutation 0.84 measured, efficacy 1.00 on covered)",
   "history": [
-    {
-      "at": "2026-06-29T11:50:20.689322Z",
-      "action": "executed t-6 (Ensure milestone entity per milestone_mode)"
-    },
-    {
-      "at": "2026-06-29T11:53:02.804791Z",
-      "action": "executed t-7 (Set YouTrack State via state_map, warn-skip)"
-    },
     {
       "at": "2026-06-29T11:54:51.203981Z",
       "action": "executed t-8 (Surface YouTrack issues in issue pull)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-30T10:20:50.368536Z",
       "action": "phase deferred-unroute-command executed (1/1 done)"
+    },
+    {
+      "at": "2026-06-30T10:27:16.070195Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-30T10:27:16.076726Z",
+      "action": "verified deferred-unroute-command: pass (2/2 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
     }
   ]
 }
