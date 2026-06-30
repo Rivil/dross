@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -28,10 +29,64 @@ type Changes struct {
 }
 
 type TaskRecord struct {
-	Files       []string  `json:"files"`
-	Commit      string    `json:"commit,omitempty"`
-	CompletedAt time.Time `json:"completed_at"`
-	Notes       string    `json:"notes,omitempty"`
+	Files       []string   `json:"files"`
+	Commit      string     `json:"commit,omitempty"`
+	CompletedAt time.Time  `json:"completed_at"`
+	Notes       string     `json:"notes,omitempty"`
+	Landmarks   []Landmark `json:"landmarks,omitempty"`
+}
+
+// Landmark is the durable "what shipped here" for a task, aligned to the
+// ARCHITECTURE.md entry template (feature + symbol-link + one-line what).
+// /dross-ship merges these into the doc by feature. Replaces the old practice
+// of encoding the landmark inside the free-form Notes string.
+type Landmark struct {
+	Feature string `json:"feature,omitempty"`
+	Symbol  string `json:"symbol,omitempty"`
+	Loc     string `json:"loc,omitempty"`
+	What    string `json:"what,omitempty"`
+}
+
+// landmarkKeys is the closed set of recognised landmark fields.
+var landmarkKeys = map[string]func(*Landmark, string){
+	"feature": func(l *Landmark, v string) { l.Feature = v },
+	"symbol":  func(l *Landmark, v string) { l.Symbol = v },
+	"loc":     func(l *Landmark, v string) { l.Loc = v },
+	"what":    func(l *Landmark, v string) { l.What = v },
+}
+
+// ParseLandmark parses one --landmark value: comma-separated key=value pairs
+// (feature/symbol/loc/what). Each pair splits on its FIRST '=' only, so a value
+// may itself contain '=' or '·'. A pair with no '=' or an empty/unknown key is
+// an error — never a silent empty-key entry.
+func ParseLandmark(s string) (Landmark, error) {
+	var lm Landmark
+	seen := false
+	for _, pair := range strings.Split(s, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) != 2 {
+			return Landmark{}, fmt.Errorf("landmark pair %q has no '=' (want key=value)", pair)
+		}
+		key := strings.TrimSpace(kv[0])
+		val := strings.TrimSpace(kv[1])
+		if key == "" {
+			return Landmark{}, fmt.Errorf("landmark pair %q has an empty key", pair)
+		}
+		set, ok := landmarkKeys[key]
+		if !ok {
+			return Landmark{}, fmt.Errorf("unknown landmark key %q (want feature/symbol/loc/what)", key)
+		}
+		set(&lm, val)
+		seen = true
+	}
+	if !seen {
+		return Landmark{}, fmt.Errorf("empty landmark %q", s)
+	}
+	return lm, nil
 }
 
 func New(phaseID string) *Changes {
@@ -75,7 +130,7 @@ func (c *Changes) Save(path string) error {
 
 // Record sets the entry for a task. Overwrites on re-execution
 // (intentional — re-running a task replaces the prior record).
-func (c *Changes) Record(taskID string, files []string, commit, notes string) {
+func (c *Changes) Record(taskID string, files []string, commit, notes string, landmarks []Landmark) {
 	if c.Tasks == nil {
 		c.Tasks = map[string]TaskRecord{}
 	}
@@ -84,5 +139,6 @@ func (c *Changes) Record(taskID string, files []string, commit, notes string) {
 		Commit:      commit,
 		CompletedAt: time.Now().UTC(),
 		Notes:       notes,
+		Landmarks:   landmarks,
 	}
 }

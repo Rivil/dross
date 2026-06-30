@@ -26,8 +26,8 @@ func TestRecordAndRoundTrip(t *testing.T) {
 	path := filepath.Join(dir, "changes.json")
 
 	c := New("01-meal-tagging")
-	c.Record("t-1", []string{"db/schema.ts", "db/migrations/0042.sql"}, "abc1234", "")
-	c.Record("t-2", []string{"src/api/tags.ts"}, "def5678", "tagged with helper notes")
+	c.Record("t-1", []string{"db/schema.ts", "db/migrations/0042.sql"}, "abc1234", "", nil)
+	c.Record("t-2", []string{"src/api/tags.ts"}, "def5678", "tagged with helper notes", nil)
 
 	if err := c.Save(path); err != nil {
 		t.Fatalf("save: %v", err)
@@ -58,10 +58,10 @@ func TestRecordAndRoundTrip(t *testing.T) {
 
 func TestRecordOverwritesOnRerun(t *testing.T) {
 	c := New("p")
-	c.Record("t-1", []string{"a.ts"}, "old", "")
+	c.Record("t-1", []string{"a.ts"}, "old", "", nil)
 	first := c.Tasks["t-1"].CompletedAt
 	time.Sleep(2 * time.Millisecond)
-	c.Record("t-1", []string{"a.ts", "b.ts"}, "new", "")
+	c.Record("t-1", []string{"a.ts", "b.ts"}, "new", "", nil)
 	if c.Tasks["t-1"].Commit != "new" {
 		t.Errorf("expected overwrite, got commit %q", c.Tasks["t-1"].Commit)
 	}
@@ -74,7 +74,7 @@ func TestSaveCreatesParentDir(t *testing.T) {
 	dir := t.TempDir()
 	deep := filepath.Join(dir, "a", "b", "c", "changes.json")
 	c := New("p")
-	c.Record("t-1", []string{"x"}, "", "")
+	c.Record("t-1", []string{"x"}, "", "", nil)
 	if err := c.Save(deep); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -149,11 +149,77 @@ func TestSaveFailsWhenParentIsAFile(t *testing.T) {
 
 func TestRecordInitialisesNilTaskMap(t *testing.T) {
 	c := &Changes{Phase: "p"} // no New(), Tasks is nil
-	c.Record("t-1", []string{"a"}, "abc", "note")
+	c.Record("t-1", []string{"a"}, "abc", "note", nil)
 	if len(c.Tasks) != 1 {
 		t.Fatalf("expected 1 task, got %d", len(c.Tasks))
 	}
 	if c.Tasks["t-1"].Notes != "note" {
 		t.Errorf("notes round-trip: %q", c.Tasks["t-1"].Notes)
+	}
+}
+
+func TestParseLandmark(t *testing.T) {
+	// Contract: value splits on the FIRST '=' only, so '=' and '·' survive.
+	lm, err := ParseLandmark("what=a=b · c")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if lm.What != "a=b · c" {
+		t.Errorf("value lost its = or ·: got %q, want %q", lm.What, "a=b · c")
+	}
+	if lm.Feature != "" || lm.Symbol != "" || lm.Loc != "" {
+		t.Errorf("only What should be set, got %+v", lm)
+	}
+
+	// All four fields in one --landmark value, comma-separated.
+	full, err := ParseLandmark("feature=Phase lifecycle, symbol=Insert, loc=internal/cmd/insert.go:42, what=inserts a phase")
+	if err != nil {
+		t.Fatalf("parse full: %v", err)
+	}
+	if full.Feature != "Phase lifecycle" || full.Symbol != "Insert" ||
+		full.Loc != "internal/cmd/insert.go:42" || full.What != "inserts a phase" {
+		t.Errorf("full landmark fields wrong: %+v", full)
+	}
+
+	// A pair with no '=' is an error — never a silent empty-key entry.
+	if _, err := ParseLandmark("feature"); err == nil {
+		t.Error("expected error for a pair with no '=', got nil")
+	}
+	// Unknown key is rejected.
+	if _, err := ParseLandmark("color=blue"); err == nil {
+		t.Error("expected error for unknown landmark key, got nil")
+	}
+	// An empty value parses nothing → error.
+	if _, err := ParseLandmark("   "); err == nil {
+		t.Error("expected error for empty landmark, got nil")
+	}
+}
+
+func TestLandmarkRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "changes.json")
+
+	c := New("01-arch")
+	c.Record("t-1", []string{"a.go"}, "abc1234", "",
+		[]Landmark{
+			{Feature: "architecture doc", Symbol: "ParseDoc", Loc: "internal/architecture/links.go:10", What: "parses entries"},
+			{What: "a=b · c"},
+		})
+	if err := c.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got, err := Load(path, "01-arch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lms := got.Tasks["t-1"].Landmarks
+	if len(lms) != 2 {
+		t.Fatalf("expected 2 landmarks after round-trip, got %d", len(lms))
+	}
+	if lms[0].Symbol != "ParseDoc" || lms[0].Loc != "internal/architecture/links.go:10" {
+		t.Errorf("landmark[0] fields lost: %+v", lms[0])
+	}
+	if lms[1].What != "a=b · c" {
+		t.Errorf("landmark[1] value lost its = or · through JSON: %q", lms[1].What)
 	}
 }
