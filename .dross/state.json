@@ -1,15 +1,9 @@
 {
   "version": "0.6.8.0",
   "current_milestone": "v0.6",
-  "current_phase": "deferred-unroute-command",
-  "current_phase_status": "verified",
-  "last_activity": "2026-06-30T10:27:16.076726Z",
-  "last_action": "verified deferred-unroute-command: pass (2/2 covered, mutation 0.84 measured, efficacy 1.00 on covered)",
+  "last_activity": "2026-06-30T12:11:26.407253Z",
+  "last_action": "completed deferred-unroute-command",
   "history": [
-    {
-      "at": "2026-06-29T11:54:51.203981Z",
-      "action": "executed t-8 (Surface YouTrack issues in issue pull)"
-    },
     {
       "at": "2026-06-29T11:58:30.107013Z",
       "action": "executed t-9 (Wire phase-sync + milestone-sync to YouTrack)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-06-30T10:27:16.076726Z",
       "action": "verified deferred-unroute-command: pass (2/2 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-06-30T12:11:26.407253Z",
+      "action": "completed deferred-unroute-command"
     }
   ]
 }
