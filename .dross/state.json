@@ -2,22 +2,10 @@
   "version": "0.8.0.0",
   "current_milestone": "v0.8",
   "current_phase": "native-statusline",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-30T07:24:13.828925Z",
-  "last_action": "spec locked: native-statusline",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-30T07:42:05.651951Z",
+  "last_action": "plan review clean: native-statusline (3 blocking fixes applied, 7 tasks/6 waves)",
   "history": [
-    {
-      "at": "2026-06-29T10:41:50.693597Z",
-      "action": "spec locked: youtrack-board-integration"
-    },
-    {
-      "at": "2026-06-29T11:02:18.907538Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-29T11:02:18.914579Z",
-      "action": "plan locked: youtrack-board-integration (10 tasks across 4 waves)"
-    },
     {
       "at": "2026-06-29T11:07:16.878301Z",
       "action": "plan reviewed: youtrack-board-integration (0 blocking, 2 flags resolved)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-06-30T07:24:13.828925Z",
       "action": "spec locked: native-statusline"
+    },
+    {
+      "at": "2026-06-30T07:34:33.052637Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-30T07:34:33.058157Z",
+      "action": "plan locked: native-statusline (7 tasks across 5 waves)"
+    },
+    {
+      "at": "2026-06-30T07:42:05.651951Z",
+      "action": "plan review clean: native-statusline (3 blocking fixes applied, 7 tasks/6 waves)"
     }
   ]
 }
