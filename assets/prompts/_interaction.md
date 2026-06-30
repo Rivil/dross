@@ -7,6 +7,12 @@
   show` so the pattern lives in one place and every command behaves the same way.
 
   Underscore prefix keeps it sorting/reading as a partial, not a command prompt.
+
+  Coverage convention: every command-backed prompt must be classified — interactive
+  commands get a `### dross-<name>` section in docs/interaction-audit.md;
+  non-interactive ones are enrolled in that doc's `## Exempt` list with a reason.
+  interaction_coverage_test.go enforces this fail-closed; `dross doctor` surfaces
+  it. See docs/interaction-audit.md for the full convention.
 -->
 
 # Interaction playbook

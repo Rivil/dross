@@ -12,6 +12,14 @@ list below — each with a reason — rather than silently omitted. The Go test 
 section here, and `internal/cmd/interaction_coverage_test.go` fails (fail-closed)
 if any command-backed prompt is neither sectioned nor exempt.
 
+**Coverage convention.** Every command-backed prompt is classified exactly one of
+two ways: **interactive** → its shim lists `AskUserQuestion` and it has a
+`### dross-<name>` section here; or **non-interactive** → it is enrolled in
+[`## Exempt`](#exempt) with a reason. There is no third state — an unclassified
+prompt fails the build. Adding a command? Give it a section if it ever asks the
+user anything; otherwise add an Exempt entry. The Go test is the enforcing gate;
+`dross doctor` surfaces the same verdict on-demand inside the dross repo.
+
 **Conformance legend** (filled in by phases 11–13):
 
 - ✅ conforms — one decision per turn, proposes a default, references the playbook via `dross interaction show`

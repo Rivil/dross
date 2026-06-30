@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -108,6 +109,38 @@ func TestInteractionCoverageExemptRemovalFails(t *testing.T) {
 	}
 	if !uncoveredSet(res)["baz"] {
 		t.Error("'baz' should become unclassified once removed from the Exempt list")
+	}
+}
+
+// TestAuditDocDocumentsConvention pins the c-4 documentation: interaction-audit.md
+// states the machine-checked coverage convention (both classification states), and
+// _interaction.md — the playbook a command author reads — cross-references it. A
+// future edit that guts either statement fails here, so the convention can't
+// silently drift out of the docs.
+func TestAuditDocDocumentsConvention(t *testing.T) {
+	root := repoRootFromTest(t)
+
+	audit := mustRead(t, filepath.Join(root, "docs", "interaction-audit.md"))
+	for _, phrase := range []string{
+		"Coverage convention",
+		"### dross-<name>", // the interactive → section half
+		"## Exempt",        // the non-interactive → exempt half
+		"fail",             // fail-closed framing
+	} {
+		if !strings.Contains(audit, phrase) {
+			t.Errorf("interaction-audit.md must document the coverage convention (missing %q)", phrase)
+		}
+	}
+
+	playbook := mustRead(t, filepath.Join(root, "assets", "prompts", "_interaction.md"))
+	for _, phrase := range []string{
+		"Coverage convention",
+		"docs/interaction-audit.md", // cross-reference target
+		"Exempt",
+	} {
+		if !strings.Contains(playbook, phrase) {
+			t.Errorf("_interaction.md must cross-reference the coverage convention (missing %q)", phrase)
+		}
 	}
 }
 
