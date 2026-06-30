@@ -1,47 +1,11 @@
 {
-  "version": "0.8.0.0",
+  "version": "0.6.7.0",
   "current_milestone": "v0.6",
   "current_phase": "architecture-doc-enhancements",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-30T12:55:45.96422Z",
-  "last_action": "plan reviewed: architecture-doc-enhancements (0 blocking, 1 flag folded in)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-30T13:29:54.489216Z",
+  "last_action": "phase architecture-doc-enhancements executed (6/6 done)",
   "history": [
-    {
-      "at": "2026-06-29T11:27:42.19312Z",
-      "action": "executed t-3 (Move inbox board gate to [board].enabled)"
-    },
-    {
-      "at": "2026-06-29T11:31:46.264099Z",
-      "action": "executed t-4 (Validate [board] in dross doctor)"
-    },
-    {
-      "at": "2026-06-29T11:46:43.476972Z",
-      "action": "executed t-5 (String issue id in board.json + re-route ops to [board])"
-    },
-    {
-      "at": "2026-06-29T11:50:20.689322Z",
-      "action": "executed t-6 (Ensure milestone entity per milestone_mode)"
-    },
-    {
-      "at": "2026-06-29T11:53:02.804791Z",
-      "action": "executed t-7 (Set YouTrack State via state_map, warn-skip)"
-    },
-    {
-      "at": "2026-06-29T11:54:51.203981Z",
-      "action": "executed t-8 (Surface YouTrack issues in issue pull)"
-    },
-    {
-      "at": "2026-06-29T11:58:30.107013Z",
-      "action": "executed t-9 (Wire phase-sync + milestone-sync to YouTrack)"
-    },
-    {
-      "at": "2026-06-29T12:06:14.331956Z",
-      "action": "executed t-10 (Sync milestone backlog slugs + someday, idempotent)"
-    },
-    {
-      "at": "2026-06-29T12:06:27.535277Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-06-29T12:06:27.541752Z",
       "action": "phase youtrack-board-integration executed (10/10 done)"
@@ -205,6 +169,42 @@
     {
       "at": "2026-06-30T12:55:45.96422Z",
       "action": "plan reviewed: architecture-doc-enhancements (0 blocking, 1 flag folded in)"
+    },
+    {
+      "at": "2026-06-30T12:56:59.933443Z",
+      "action": "set version=0.6.7.0"
+    },
+    {
+      "at": "2026-06-30T13:01:39.05133Z",
+      "action": "executed t-1 (Typed --landmark capture in changes)"
+    },
+    {
+      "at": "2026-06-30T13:11:24.166969Z",
+      "action": "executed t-2 (Architecture link parse + symbol resolver)"
+    },
+    {
+      "at": "2026-06-30T13:14:20.441612Z",
+      "action": "executed t-5 (Prompts emit \u0026 read typed landmarks)"
+    },
+    {
+      "at": "2026-06-30T13:16:42.312651Z",
+      "action": "executed t-6 (Lift first-creation guard, safe refresh-merge)"
+    },
+    {
+      "at": "2026-06-30T13:26:22.316086Z",
+      "action": "executed t-3 (doctor advisory stale-link section)"
+    },
+    {
+      "at": "2026-06-30T13:29:44.03003Z",
+      "action": "executed t-4 (dross architecture check [--fix] subcommand)"
+    },
+    {
+      "at": "2026-06-30T13:29:54.483882Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-30T13:29:54.489216Z",
+      "action": "phase architecture-doc-enhancements executed (6/6 done)"
     }
   ]
 }

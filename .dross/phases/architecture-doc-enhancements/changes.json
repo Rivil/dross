@@ -1,0 +1,67 @@
+{
+  "phase": "architecture-doc-enhancements",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/changes/changes_test.go",
+        "internal/cmd/changes.go"
+      ],
+      "commit": "12513fc",
+      "completed_at": "2026-06-30T13:01:39.033759Z",
+      "notes": "feature: task changes record · ParseLandmark @ internal/changes/changes.go · typed repeatable --landmark (key=value pairs) captured as structured array, replacing notes-string landmarks"
+    },
+    "t-2": {
+      "files": [
+        "internal/architecture/links.go",
+        "internal/architecture/links_test.go",
+        "internal/codex/codex.go",
+        "internal/codex/codex_test.go"
+      ],
+      "commit": "9e8aa3e",
+      "completed_at": "2026-06-30T13:11:24.154185Z",
+      "notes": "feature: architecture doc link integrity · ParseDoc @ internal/architecture/links.go · shared parse + codex-backed symbol resolver (Moved/Unresolved/Ambiguous/Skipped) routed through codex.SupportsFile"
+    },
+    "t-3": {
+      "files": [
+        "internal/architecture/links.go",
+        "internal/architecture/links_test.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "9057547",
+      "completed_at": "2026-06-30T13:26:22.304092Z",
+      "notes": "feature: architecture comprehension · architectureLinkWarnings @ internal/cmd/doctor.go · advisory doctor stale-link section (ResolveAllIn, never increments issues)"
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/architecture.go",
+        "internal/cmd/architecture_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "89813a3",
+      "completed_at": "2026-06-30T13:29:44.01832Z",
+      "notes": "feature: architecture comprehension · Architecture @ internal/cmd/architecture.go · dross architecture check [--fix] repoints moved bullet :line byte-faithfully, leaves unresolved/ambiguous verbatim"
+    },
+    "t-5": {
+      "files": [
+        "assets/prompts/execute.md",
+        "assets/prompts/ship.md",
+        "internal/cmd/execute_prompt_test.go",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "0390e86",
+      "completed_at": "2026-06-30T13:14:20.429571Z",
+      "notes": "feature: change tracking \u0026 landmarks · execute.md/ship.md landmark wiring · execute emits typed --landmark flag, ship reads structured landmarks array instead of notes string"
+    },
+    "t-6": {
+      "files": [
+        "assets/prompts/architecture.md",
+        "internal/cmd/architecture_prompt_test.go"
+      ],
+      "commit": "8d70361",
+      "completed_at": "2026-06-30T13:16:42.300884Z",
+      "notes": "feature: architecture comprehension · architecture.md §0.3/§2.5 refresh-merge · lift first-creation guard; heading-keyed in-place merge that never silently drops unmatched entries"
+    }
+  }
+}
