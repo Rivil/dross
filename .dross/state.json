@@ -1,13 +1,9 @@
 {
   "version": "0.8.0.0",
-  "current_milestone": "v0.8",
-  "last_activity": "2026-06-30T09:29:38.235115Z",
-  "last_action": "merged native-statusline",
+  "current_milestone": "v0.6",
+  "last_activity": "2026-06-30T09:41:06.212821Z",
+  "last_action": "set current_milestone=v0.6",
   "history": [
-    {
-      "at": "2026-06-29T10:41:50.68766Z",
-      "action": "set current_phase=youtrack-board-integration"
-    },
     {
       "at": "2026-06-29T10:41:50.693597Z",
       "action": "spec locked: youtrack-board-integration"
@@ -203,6 +199,10 @@
     {
       "at": "2026-06-30T09:29:38.235115Z",
       "action": "merged native-statusline"
+    },
+    {
+      "at": "2026-06-30T09:41:06.212821Z",
+      "action": "set current_milestone=v0.6"
     }
   ]
 }
