@@ -1,0 +1,66 @@
+[verify]
+  phase = "architecture-doc-enhancements"
+  generated_at = 2026-06-30T13:34:38.25635Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8407590759075908
+  mutants_killed = 1019
+  mutants_survived = 193
+  mutants_not_covered = 193
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/changes/changes_test.go:TestParseLandmark",
+    "internal/changes/changes_test.go:TestLandmarkRoundTrip",
+    "internal/cmd/execute_prompt_test.go:TestExecutePromptEmitsTypedLandmark",
+    "internal/cmd/ship_prompt_test.go:TestShipPromptReadsTypedLandmarks",
+  ]
+  notes = "Typed --landmark key=value parsing (= and · survive the first-= split; errors on no-=/empty/unknown key) plus a 2-element Landmarks array surviving the changes.json round-trip; execute emits the typed flag and ship reads the structured array — grep tests fail if the legacy --notes landmark form returns."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/architecture_prompt_test.go:TestArchitecturePromptRefreshMerge"]
+  notes = "Prompt-contract criterion: the refresh-merge is LLM-executed (locked prompt-only decision), so the deterministic surface is the prompt instruction — TestArchitecturePromptRefreshMerge fails if the first-creation-only guard returns or the heading-keyed in-place merge (with the never-silently-drop/flag clause) goes missing. There is no Go merge function to mutation-test by design."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/architecture/links_test.go:TestResolveMovedAndOK",
+    "internal/architecture/links_test.go:TestResolveUnresolved",
+    "internal/architecture/links_test.go:TestResolveAmbiguous",
+    "internal/architecture/links_test.go:TestResolveSkipped",
+    "internal/cmd/doctor_test.go:TestArchitectureLinkWarnings",
+    "internal/cmd/doctor_test.go:TestDoctorStaleLinksNeverBlock",
+  ]
+  notes = "Resolver classifies Moved/Unresolved/Ambiguous/Skipped (Skipped for an unindexable language, via codex.SupportsFile); doctor warns only on Moved/Unresolved. TestDoctorStaleLinksNeverBlock asserts the issue verdict is byte-identical with vs without stale links — the only falsifiable form of 'advisory, never blocks'."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/cmd/architecture_test.go:TestArchitectureCheckFix",
+    "internal/cmd/architecture_test.go:TestArchitectureCheckNoFixWritesNothing",
+    "internal/cmd/architecture_test.go:TestArchitectureCheckRegistered",
+  ]
+  notes = "TestArchitectureCheckFix asserts whole-document equality except a single :99→:3 substitution (byte-faithful Moved repoint), with an Unresolved and an Ambiguous bullet left verbatim; report-only writes nothing; `architecture check -h` resolves under EnforceSubcommandKnown."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation efficacy on COVERED code = 1.00 — no covered mutant survived. The 193 survivors are all NOT-COVERED mutants from gremlins' package-wide blast, overwhelmingly in pre-existing code this phase never touched (issue.go, stats.go, rule.go, ship.go, status.go, phase*.go, env.go, codex.Index/dispatch, doctor RunE remote/board checks, …). Aggregate score 0.84 includes them as denominator."
+
+[[finding]]
+  severity = "FLAG"
+  text = "Only NEW-code not-covered mutants are links.go:121 and :129 — the `trimmed == \"\"` and one-line case clauses in ParseDoc. TestParseDoc exercises both (its fixture has blank lines and a one-line description); gremlins mis-attributes coverage on switch case-clauses (known adapter imprecision). Every other new symbol — ParseLandmark, codex.SupportsFile, the resolver, architectureLinkWarnings + the doctor section, and the whole architecture command — had its mutants killed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/{architecture,execute,ship}.md: no mutation adapter for .md. The c-1 (prompt emit/read) and c-2 (refresh-merge) prompt-contract clauses are gated by source-reading grep tests instead."
