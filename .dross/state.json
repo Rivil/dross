@@ -1,9 +1,77 @@
 {
-  "version": "0.6.7.0",
+  "version": "0.8.0.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-30T13:59:40.312038Z",
-  "last_action": "completed architecture-doc-enhancements",
+  "last_activity": "2026-06-30T14:06:44.900387Z",
+  "last_action": "merged architecture-doc-enhancements",
   "history": [
+    {
+      "at": "2026-06-29T11:02:18.914579Z",
+      "action": "plan locked: youtrack-board-integration (10 tasks across 4 waves)"
+    },
+    {
+      "at": "2026-06-29T11:07:16.878301Z",
+      "action": "plan reviewed: youtrack-board-integration (0 blocking, 2 flags resolved)"
+    },
+    {
+      "at": "2026-06-29T11:10:38.427446Z",
+      "action": "set version=0.6.12.0"
+    },
+    {
+      "at": "2026-06-29T11:14:35.768164Z",
+      "action": "executed t-1 (Add [board] config struct + dotted arms)"
+    },
+    {
+      "at": "2026-06-29T11:25:52.47715Z",
+      "action": "executed t-2 (YouTrack REST client + BoardClient interface + factory)"
+    },
+    {
+      "at": "2026-06-29T11:27:42.19312Z",
+      "action": "executed t-3 (Move inbox board gate to [board].enabled)"
+    },
+    {
+      "at": "2026-06-29T11:31:46.264099Z",
+      "action": "executed t-4 (Validate [board] in dross doctor)"
+    },
+    {
+      "at": "2026-06-29T11:46:43.476972Z",
+      "action": "executed t-5 (String issue id in board.json + re-route ops to [board])"
+    },
+    {
+      "at": "2026-06-29T11:50:20.689322Z",
+      "action": "executed t-6 (Ensure milestone entity per milestone_mode)"
+    },
+    {
+      "at": "2026-06-29T11:53:02.804791Z",
+      "action": "executed t-7 (Set YouTrack State via state_map, warn-skip)"
+    },
+    {
+      "at": "2026-06-29T11:54:51.203981Z",
+      "action": "executed t-8 (Surface YouTrack issues in issue pull)"
+    },
+    {
+      "at": "2026-06-29T11:58:30.107013Z",
+      "action": "executed t-9 (Wire phase-sync + milestone-sync to YouTrack)"
+    },
+    {
+      "at": "2026-06-29T12:06:14.331956Z",
+      "action": "executed t-10 (Sync milestone backlog slugs + someday, idempotent)"
+    },
+    {
+      "at": "2026-06-29T12:06:27.535277Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-29T12:06:27.541752Z",
+      "action": "phase youtrack-board-integration executed (10/10 done)"
+    },
+    {
+      "at": "2026-06-29T12:14:50.677192Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-06-29T12:14:50.684251Z",
+      "action": "verified youtrack-board-integration: partial (5/6 covered, c-6 weak; mutation 0.86 measured, efficacy 1.00 on covered)"
+    },
     {
       "at": "2026-06-29T12:20:00.180085Z",
       "action": "amended t-10 (backlog attach per milestone_mode: epic/agile)"
@@ -133,76 +201,8 @@
       "action": "merged deferred-unroute-command"
     },
     {
-      "at": "2026-06-30T12:16:57.220385Z",
-      "action": "created architecture-doc-enhancements"
-    },
-    {
-      "at": "2026-06-30T12:36:24.810132Z",
-      "action": "set current_phase=architecture-doc-enhancements"
-    },
-    {
-      "at": "2026-06-30T12:36:24.8168Z",
-      "action": "spec locked: architecture-doc-enhancements"
-    },
-    {
-      "at": "2026-06-30T12:51:39.159782Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-30T12:51:39.164969Z",
-      "action": "plan locked: architecture-doc-enhancements (6 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-06-30T12:55:45.96422Z",
-      "action": "plan reviewed: architecture-doc-enhancements (0 blocking, 1 flag folded in)"
-    },
-    {
-      "at": "2026-06-30T12:56:59.933443Z",
-      "action": "set version=0.6.7.0"
-    },
-    {
-      "at": "2026-06-30T13:01:39.05133Z",
-      "action": "executed t-1 (Typed --landmark capture in changes)"
-    },
-    {
-      "at": "2026-06-30T13:11:24.166969Z",
-      "action": "executed t-2 (Architecture link parse + symbol resolver)"
-    },
-    {
-      "at": "2026-06-30T13:14:20.441612Z",
-      "action": "executed t-5 (Prompts emit \u0026 read typed landmarks)"
-    },
-    {
-      "at": "2026-06-30T13:16:42.312651Z",
-      "action": "executed t-6 (Lift first-creation guard, safe refresh-merge)"
-    },
-    {
-      "at": "2026-06-30T13:26:22.316086Z",
-      "action": "executed t-3 (doctor advisory stale-link section)"
-    },
-    {
-      "at": "2026-06-30T13:29:44.03003Z",
-      "action": "executed t-4 (dross architecture check [--fix] subcommand)"
-    },
-    {
-      "at": "2026-06-30T13:29:54.483882Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-30T13:29:54.489216Z",
-      "action": "phase architecture-doc-enhancements executed (6/6 done)"
-    },
-    {
-      "at": "2026-06-30T13:42:49.45859Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-30T13:42:49.464629Z",
-      "action": "verified architecture-doc-enhancements: pass (4/4 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
-    },
-    {
-      "at": "2026-06-30T13:59:40.312038Z",
-      "action": "completed architecture-doc-enhancements"
+      "at": "2026-06-30T14:06:44.900387Z",
+      "action": "merged architecture-doc-enhancements"
     }
   ]
 }
