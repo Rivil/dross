@@ -1,11 +1,13 @@
 name: release
 
-# Automatic releasing: every merge to main computes the next semver tag from the
-# conventional commits since the last tag (feat → minor, BREAKING → major, else
-# patch — always at least a patch, so every merge cuts a release), tags it, and
-# goreleaser publishes the per-platform archives + checksums.txt that install.sh
-# and `dross update` consume. workflow_dispatch with an explicit `version` is the
-# manual escape hatch.
+# Automatic releasing: every merge to main reads the project version from
+# .dross/state.json and projects it to a 3-part semver tag (0.6.13.0 → v0.6.13 —
+# valid semver for `dross update`, dropping the dev-only .internal part). If that
+# tag does not already exist it tags the commit and goreleaser publishes the
+# per-platform archives + checksums.txt that install.sh and `dross update` consume.
+# A phase ship bumps the patch (phase ordinal) so it cuts a release; a quick task
+# only bumps .internal, leaving the 3-part tag unchanged, so it cuts none.
+# workflow_dispatch with an explicit `version` is the manual override.
 on:
   push:
     branches: [main]
@@ -44,30 +46,21 @@ jobs:
             echo "new_tag=$input" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if git describe --exact-match --tags HEAD >/dev/null 2>&1; then
-            echo "HEAD is already tagged ($(git describe --tags HEAD)); nothing to release."
+          proj="$(jq -r '.version // empty' .dross/state.json)"
+          if [ -z "$proj" ]; then
+            echo "No project version in .dross/state.json; nothing to release." >&2
+            exit 1
+          fi
+          # Project version is 4-part major.minor.patch.internal; release tags use
+          # the first 3 parts (valid semver, drops the dev-only .internal counter).
+          mmp="$(printf '%s' "$proj" | cut -d. -f1-3)"
+          new="v${mmp}"
+          if git rev-parse -q --verify "refs/tags/$new" >/dev/null; then
+            echo "Tag $new already exists (project version $proj unchanged on this merge); nothing to release."
             echo "new_tag=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          last="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
-          if git rev-parse "$last" >/dev/null 2>&1; then
-            range="$last..HEAD"
-          else
-            range="HEAD"
-          fi
-          log="$(git log "$range" --format='%B')"
-          ver="${last#v}"
-          major="${ver%%.*}"; rest="${ver#*.}"; minor="${rest%%.*}"; patch="${rest##*.}"
-          major="${major:-0}"; minor="${minor:-0}"; patch="${patch:-0}"
-          if printf '%s' "$log" | grep -qE 'BREAKING CHANGE|^[[:space:]*]*[a-z]+(\([^)]*\))?!:'; then
-            major=$((major+1)); minor=0; patch=0
-          elif printf '%s' "$log" | grep -qE '^[[:space:]*]*feat(\([^)]*\))?:'; then
-            minor=$((minor+1)); patch=0
-          else
-            patch=$((patch+1))
-          fi
-          new="v${major}.${minor}.${patch}"
-          echo "Computed next tag: $new (from $last)"
+          echo "Release tag from project version $proj → $new"
           echo "new_tag=$new" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
