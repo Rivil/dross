@@ -1,9 +1,57 @@
 {
-  "version": "0.6.8.0",
+  "version": "0.8.0.0",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-30T12:11:26.407253Z",
-  "last_action": "completed deferred-unroute-command",
+  "last_activity": "2026-06-30T12:15:00.136848Z",
+  "last_action": "merged deferred-unroute-command",
   "history": [
+    {
+      "at": "2026-06-29T11:02:18.907538Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-29T11:02:18.914579Z",
+      "action": "plan locked: youtrack-board-integration (10 tasks across 4 waves)"
+    },
+    {
+      "at": "2026-06-29T11:07:16.878301Z",
+      "action": "plan reviewed: youtrack-board-integration (0 blocking, 2 flags resolved)"
+    },
+    {
+      "at": "2026-06-29T11:10:38.427446Z",
+      "action": "set version=0.6.12.0"
+    },
+    {
+      "at": "2026-06-29T11:14:35.768164Z",
+      "action": "executed t-1 (Add [board] config struct + dotted arms)"
+    },
+    {
+      "at": "2026-06-29T11:25:52.47715Z",
+      "action": "executed t-2 (YouTrack REST client + BoardClient interface + factory)"
+    },
+    {
+      "at": "2026-06-29T11:27:42.19312Z",
+      "action": "executed t-3 (Move inbox board gate to [board].enabled)"
+    },
+    {
+      "at": "2026-06-29T11:31:46.264099Z",
+      "action": "executed t-4 (Validate [board] in dross doctor)"
+    },
+    {
+      "at": "2026-06-29T11:46:43.476972Z",
+      "action": "executed t-5 (String issue id in board.json + re-route ops to [board])"
+    },
+    {
+      "at": "2026-06-29T11:50:20.689322Z",
+      "action": "executed t-6 (Ensure milestone entity per milestone_mode)"
+    },
+    {
+      "at": "2026-06-29T11:53:02.804791Z",
+      "action": "executed t-7 (Set YouTrack State via state_map, warn-skip)"
+    },
+    {
+      "at": "2026-06-29T11:54:51.203981Z",
+      "action": "executed t-8 (Surface YouTrack issues in issue pull)"
+    },
     {
       "at": "2026-06-29T11:58:30.107013Z",
       "action": "executed t-9 (Wire phase-sync + milestone-sync to YouTrack)"
@@ -153,56 +201,8 @@
       "action": "set current_milestone=v0.6"
     },
     {
-      "at": "2026-06-30T09:42:00.243952Z",
-      "action": "created deferred-unroute-command"
-    },
-    {
-      "at": "2026-06-30T09:47:51.559151Z",
-      "action": "set current_phase=deferred-unroute-command"
-    },
-    {
-      "at": "2026-06-30T09:47:51.564388Z",
-      "action": "spec locked: deferred-unroute-command"
-    },
-    {
-      "at": "2026-06-30T09:50:27.488312Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-30T09:50:27.494489Z",
-      "action": "plan locked: deferred-unroute-command (1 task across 1 wave)"
-    },
-    {
-      "at": "2026-06-30T09:53:53.978951Z",
-      "action": "plan reviewed: deferred-unroute-command (0 blocking, 1 flag)"
-    },
-    {
-      "at": "2026-06-30T10:18:26.146134Z",
-      "action": "set version=0.6.8.0"
-    },
-    {
-      "at": "2026-06-30T10:20:44.176747Z",
-      "action": "executed t-1 (Add deferred unroute subcommand)"
-    },
-    {
-      "at": "2026-06-30T10:20:50.363419Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-30T10:20:50.368536Z",
-      "action": "phase deferred-unroute-command executed (1/1 done)"
-    },
-    {
-      "at": "2026-06-30T10:27:16.070195Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-30T10:27:16.076726Z",
-      "action": "verified deferred-unroute-command: pass (2/2 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
-    },
-    {
-      "at": "2026-06-30T12:11:26.407253Z",
-      "action": "completed deferred-unroute-command"
+      "at": "2026-06-30T12:15:00.136848Z",
+      "action": "merged deferred-unroute-command"
     }
   ]
 }
