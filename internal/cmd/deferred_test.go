@@ -314,6 +314,107 @@ func TestDeferredListDismissedMarker(t *testing.T) {
 	}
 }
 
+// TestDeferredUnrouteRoundTrip: route an item, then unroute it — the target is
+// cleared on disk and the entry reappears under --someday.
+func TestDeferredUnrouteRoundTrip(t *testing.T) {
+	dir := setupDeferredFixture(t)
+
+	if err := runCmd(t, Deferred(), "route", "gamma", "0", "--target", "alpha"); err != nil {
+		t.Fatalf("route: %v", err)
+	}
+	if err := runCmd(t, Deferred(), "unroute", "gamma", "0"); err != nil {
+		t.Fatalf("unroute: %v", err)
+	}
+	spec, err := phase.LoadSpec(filepath.Join(dir, ".dross", "phases", "gamma", "spec.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Deferred[0].Target != "" {
+		t.Errorf("unroute did not clear target: got %q want \"\"", spec.Deferred[0].Target)
+	}
+
+	found := false
+	for _, e := range listJSON(t, "--someday", "--json") {
+		if e.Source == "gamma" && e.Index == 0 {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("un-routed item should reappear under --someday")
+	}
+}
+
+// TestDeferredUnrouteOutOfRange: an out-of-range idx errors (naming the range)
+// rather than panicking, matching dismiss.
+func TestDeferredUnrouteOutOfRange(t *testing.T) {
+	setupDeferredFixture(t)
+
+	err := runCmd(t, Deferred(), "unroute", "gamma", "5")
+	if err == nil {
+		t.Fatal("unroute with out-of-range idx should error, got nil")
+	}
+	if !strings.Contains(err.Error(), "out of range") {
+		t.Errorf("out-of-range error should name the range, got %q", err)
+	}
+}
+
+// TestDeferredUnrouteMissingPhase: a missing phase spec surfaces LoadSpec's error
+// rather than panicking.
+func TestDeferredUnrouteMissingPhase(t *testing.T) {
+	setupDeferredFixture(t)
+
+	if err := runCmd(t, Deferred(), "unroute", "no-such-phase", "0"); err == nil {
+		t.Error("unroute on a missing phase should error, got nil")
+	}
+}
+
+// TestDeferredUnrouteIdempotentSomeday: un-routing an already-someday item is a
+// no-op success that prints the "already someday" message.
+func TestDeferredUnrouteIdempotentSomeday(t *testing.T) {
+	dir := setupDeferredFixture(t)
+
+	// gamma[0] starts as someday (no target).
+	var out string
+	if err := runCmdCapturing(t, &out, Deferred(), "unroute", "gamma", "0"); err != nil {
+		t.Fatalf("unroute on someday item should succeed, got %v", err)
+	}
+	if !strings.Contains(out, "already someday") {
+		t.Errorf("idempotent path should print the \"already someday\" message, got:\n%s", out)
+	}
+	spec, err := phase.LoadSpec(filepath.Join(dir, ".dross", "phases", "gamma", "spec.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Deferred[0].Target != "" {
+		t.Errorf("someday item must stay someday after unroute: got target %q", spec.Deferred[0].Target)
+	}
+}
+
+// TestDeferredUnrouteDismissedGuard: un-routing a dismissed item is refused with a
+// pointer to `dismiss --undo`, and leaves the item dismissed.
+func TestDeferredUnrouteDismissedGuard(t *testing.T) {
+	dir := setupDeferredFixture(t)
+
+	// gamma[0] is someday; dismiss it so it carries Dismissed (and empty Target).
+	if err := runCmd(t, Deferred(), "dismiss", "gamma", "0"); err != nil {
+		t.Fatalf("dismiss: %v", err)
+	}
+	err := runCmd(t, Deferred(), "unroute", "gamma", "0")
+	if err == nil {
+		t.Fatal("unroute on a dismissed item should error, got nil")
+	}
+	if !strings.Contains(err.Error(), "dismiss --undo") {
+		t.Errorf("dismissed-guard error should point to `dismiss --undo`, got %q", err)
+	}
+	spec, lerr := phase.LoadSpec(filepath.Join(dir, ".dross", "phases", "gamma", "spec.toml"))
+	if lerr != nil {
+		t.Fatal(lerr)
+	}
+	if !spec.Deferred[0].Dismissed {
+		t.Error("dismissed item must remain dismissed after a rejected unroute")
+	}
+}
+
 func intToStr(i int) string {
 	return strconv.Itoa(i)
 }
