@@ -2,18 +2,10 @@
   "version": "0.8.0.0",
   "current_milestone": "v0.6",
   "current_phase": "deferred-unroute-command",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-30T09:47:51.564388Z",
-  "last_action": "spec locked: deferred-unroute-command",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-30T09:50:27.494489Z",
+  "last_action": "plan locked: deferred-unroute-command (1 task across 1 wave)",
   "history": [
-    {
-      "at": "2026-06-29T11:07:16.878301Z",
-      "action": "plan reviewed: youtrack-board-integration (0 blocking, 2 flags resolved)"
-    },
-    {
-      "at": "2026-06-29T11:10:38.427446Z",
-      "action": "set version=0.6.12.0"
-    },
     {
       "at": "2026-06-29T11:14:35.768164Z",
       "action": "executed t-1 (Add [board] config struct + dotted arms)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-30T09:47:51.564388Z",
       "action": "spec locked: deferred-unroute-command"
+    },
+    {
+      "at": "2026-06-30T09:50:27.488312Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-30T09:50:27.494489Z",
+      "action": "plan locked: deferred-unroute-command (1 task across 1 wave)"
     }
   ]
 }
