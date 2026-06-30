@@ -50,6 +50,7 @@ func main() {
 		cmd.Deferred(),
 		cmd.Install(),
 		cmd.Update(),
+		cmd.Statusline(),
 	)
 
 	// Without this, `dross phase add` (or any unknown subcommand under a
