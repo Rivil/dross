@@ -1,17 +1,9 @@
 {
-  "version": "0.6.13.0",
+  "version": "0.6.13.1",
   "current_milestone": "v0.6",
-  "last_activity": "2026-06-29T18:18:08.155334Z",
-  "last_action": "completed self-update-and-distribution",
+  "last_activity": "2026-06-30T07:06:00.981531Z",
+  "last_action": "quick: add install.sh smoke test",
   "history": [
-    {
-      "at": "2026-06-29T09:16:35.482229Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-29T09:16:35.488955Z",
-      "action": "verified gitlab-ship-provider: partial (5/6 covered, c-2 weak, mutation 0.86)"
-    },
     {
       "at": "2026-06-29T09:32:29.991968Z",
       "action": "re-verified gitlab-ship-provider: pass (6/6 covered after c-2 reword, mutation 0.86)"
@@ -203,6 +195,14 @@
     {
       "at": "2026-06-29T18:18:08.155334Z",
       "action": "completed self-update-and-distribution"
+    },
+    {
+      "at": "2026-06-30T07:06:00.974275Z",
+      "action": "bump internal 0.6.13.0 → 0.6.13.1"
+    },
+    {
+      "at": "2026-06-30T07:06:00.981531Z",
+      "action": "quick: add install.sh smoke test"
     }
   ]
 }
