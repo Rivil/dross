@@ -3,7 +3,7 @@ phases = ["ship-auto-noninteractive", "milestone-branch-model", "interaction-def
 [milestone]
   version = "v0.7"
   title = "Branch topology & non-interactive ship"
-  status = "planning"
+  status = "active"
   started = "2026-06-27"
 
 [scope]
