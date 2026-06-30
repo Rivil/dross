@@ -1,27 +1,11 @@
 {
-  "version": "0.6.9.0",
+  "version": "0.6.16.0",
   "current_milestone": "v0.6",
   "current_phase": "gray-area-walkthrough",
-  "current_phase_status": "planned",
-  "last_activity": "2026-06-30T18:42:05.566633Z",
-  "last_action": "plan reviewed: gray-area-walkthrough (0 blocking, 2 flags)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-06-30T18:49:08.498271Z",
+  "last_action": "phase gray-area-walkthrough executed (1/1 done)",
   "history": [
-    {
-      "at": "2026-06-29T12:34:09.566539Z",
-      "action": "completed youtrack-board-integration"
-    },
-    {
-      "at": "2026-06-29T12:51:15.872844Z",
-      "action": "created self-update-and-distribution"
-    },
-    {
-      "at": "2026-06-29T12:55:28.614163Z",
-      "action": "set current_phase=self-update-and-distribution"
-    },
-    {
-      "at": "2026-06-29T12:55:28.621527Z",
-      "action": "spec locked: self-update-and-distribution"
-    },
     {
       "at": "2026-06-29T13:18:02.773783Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +189,22 @@
     {
       "at": "2026-06-30T18:42:05.566633Z",
       "action": "plan reviewed: gray-area-walkthrough (0 blocking, 2 flags)"
+    },
+    {
+      "at": "2026-06-30T18:44:36.399826Z",
+      "action": "set version=0.6.16.0"
+    },
+    {
+      "at": "2026-06-30T18:48:56.538887Z",
+      "action": "executed t-1 (Rewrite spec.md §3 to walk-all + uncertainty discriminator)"
+    },
+    {
+      "at": "2026-06-30T18:49:08.490833Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-06-30T18:49:08.498271Z",
+      "action": "phase gray-area-walkthrough executed (1/1 done)"
     }
   ]
 }

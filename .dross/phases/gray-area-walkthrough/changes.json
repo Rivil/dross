@@ -1,0 +1,21 @@
+{
+  "phase": "gray-area-walkthrough",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "assets/prompts/spec.md",
+        "internal/cmd/spec_prompt_test.go"
+      ],
+      "commit": "7672345",
+      "completed_at": "2026-06-30T18:48:56.520699Z",
+      "landmarks": [
+        {
+          "feature": "interaction contract",
+          "symbol": "TestSpecPromptWalksEveryGrayArea",
+          "loc": "internal/cmd/spec_prompt_test.go:68",
+          "what": "dross-spec walks every gray area Claude is genuinely unsure about one at a time (no user pre-selection) with an off-ramp"
+        }
+      ]
+    }
+  }
+}

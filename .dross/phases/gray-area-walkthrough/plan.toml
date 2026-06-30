@@ -1,28 +1,12 @@
 [phase]
-id = "gray-area-walkthrough"
+  id = "gray-area-walkthrough"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Rewrite spec.md §3 to walk-all + uncertainty discriminator"
-files         = [
-  "assets/prompts/spec.md",
-  "internal/cmd/spec_prompt_test.go",
-]
-description   = """
-Rewrite spec.md §3: remove the §3b multiSelect 'which gray areas should we pin
-down?' pre-selection; rework §3c to walk every surfaced gray area one-by-one to
-resolution with an explicit user off-ramp; reframe the §3-intro/§3a discriminator
-to 'contract-shaping AND Claude genuinely uncertain'; keep the 'decide internal
-architecture / patterns / perf yourself' boundary. Encode the locked decisions
-(walk-all + off-ramp, soft ~3-4 impact-ordered, intersection threshold). Add
-prompt-sentinel tests pinning all three criteria.
-"""
-covers        = ["c-1", "c-2", "c-3"]
-test_contract = [
-  "TestSpecPromptNoGrayAreaPreselection fails if spec.md still contains the pre-selection strings 'which of these should we pin down' or a 'Present for selection' multiSelect gray-area gate",
-  "TestSpecPromptWalksEveryGrayArea fails if §3 lacks the walk-all sentinels — 'walk every' gray area and 'one decision per turn' (or 'one at a time') — or the explicit user off-ramp clause",
-  "TestSpecPromptUncertaintyDiscriminator fails if §3 lacks the uncertainty-framing sentinel ('cannot confidently' / 'genuinely uncertain') or loses the retained boundary string 'decide these yourself'",
-  "TestSpecPromptGrayAreaOrdering fails if §3 lacks the count_ordering sentinels — an impact-ordering phrase ('most-impactful' / 'most-uncertain first') and the soft '3–4' guideline",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Rewrite spec.md §3 to walk-all + uncertainty discriminator"
+  files = ["assets/prompts/spec.md", "internal/cmd/spec_prompt_test.go"]
+  description = "Rewrite spec.md §3: remove the §3b multiSelect 'which gray areas should we pin\ndown?' pre-selection; rework §3c to walk every surfaced gray area one-by-one to\nresolution with an explicit user off-ramp; reframe the §3-intro/§3a discriminator\nto 'contract-shaping AND Claude genuinely uncertain'; keep the 'decide internal\narchitecture / patterns / perf yourself' boundary. Encode the locked decisions\n(walk-all + off-ramp, soft ~3-4 impact-ordered, intersection threshold). Add\nprompt-sentinel tests pinning all three criteria.\n"
+  covers = ["c-1", "c-2", "c-3"]
+  test_contract = ["TestSpecPromptNoGrayAreaPreselection fails if spec.md still contains the pre-selection strings 'which of these should we pin down' or a 'Present for selection' multiSelect gray-area gate", "TestSpecPromptWalksEveryGrayArea fails if §3 lacks the walk-all sentinels — 'walk every' gray area and 'one decision per turn' (or 'one at a time') — or the explicit user off-ramp clause", "TestSpecPromptUncertaintyDiscriminator fails if §3 lacks the uncertainty-framing sentinel ('cannot confidently' / 'genuinely uncertain') or loses the retained boundary string 'decide these yourself'", "TestSpecPromptGrayAreaOrdering fails if §3 lacks the count_ordering sentinels — an impact-ordering phrase ('most-impactful' / 'most-uncertain first') and the soft '3–4' guideline"]
+  status = "done"
