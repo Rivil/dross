@@ -3,7 +3,7 @@ phases = ["14-stable-slug-phase-ids", "phase-lifecycle-commands"]
 [milestone]
   version = "v0.4"
   title = "Phase identity & lifecycle"
-  status = "active"
+  status = "complete"
   started = "2026-06-25"
 
 [scope]

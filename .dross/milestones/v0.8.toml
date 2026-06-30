@@ -1,7 +1,9 @@
+phases = ["native-statusline"]
+
 [milestone]
   version = "v0.8"
   title = "Claude Code surface integration"
-  status = "planning"
+  status = "complete"
   started = "2026-06-30"
 
 [scope]
