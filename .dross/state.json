@@ -2,18 +2,10 @@
   "version": "0.6.9.0",
   "current_milestone": "v0.6",
   "current_phase": "gray-area-walkthrough",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-30T18:25:28.753287Z",
-  "last_action": "spec locked: gray-area-walkthrough",
+  "current_phase_status": "planned",
+  "last_activity": "2026-06-30T18:39:59.766562Z",
+  "last_action": "plan locked: gray-area-walkthrough (1 task across 1 wave)",
   "history": [
-    {
-      "at": "2026-06-29T12:20:07.887331Z",
-      "action": "phase youtrack-board-integration re-executed (c-6 amendment, 10/10 done)"
-    },
-    {
-      "at": "2026-06-29T12:29:04.407787Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-06-29T12:29:04.415216Z",
       "action": "verified youtrack-board-integration: pass (6/6 covered, c-6 lifted to covered; mutation 0.86 measured, efficacy 1.00 on covered)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-30T18:25:28.753287Z",
       "action": "spec locked: gray-area-walkthrough"
+    },
+    {
+      "at": "2026-06-30T18:39:59.76146Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-06-30T18:39:59.766562Z",
+      "action": "plan locked: gray-area-walkthrough (1 task across 1 wave)"
     }
   ]
 }

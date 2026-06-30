@@ -1,0 +1,27 @@
+[phase]
+id = "gray-area-walkthrough"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Rewrite spec.md §3 to walk-all + uncertainty discriminator"
+files         = [
+  "assets/prompts/spec.md",
+  "internal/cmd/spec_prompt_test.go",
+]
+description   = """
+Rewrite spec.md §3: remove the §3b multiSelect 'which gray areas should we pin
+down?' pre-selection; rework §3c to walk every surfaced gray area one-by-one to
+resolution with an explicit user off-ramp; reframe the §3-intro/§3a discriminator
+to 'contract-shaping AND Claude genuinely uncertain'; keep the 'decide internal
+architecture / patterns / perf yourself' boundary. Encode the locked decisions
+(walk-all + off-ramp, soft ~3-4 impact-ordered, intersection threshold). Add
+prompt-sentinel tests pinning all three criteria.
+"""
+covers        = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "if spec.md §3 still contains the multiSelect 'which of these should we pin down' pre-selection gate, TestSpecPromptNoGrayAreaPreselection fails",
+  "if spec.md §3 drops the one-by-one walk-all instruction (walk every uncertain area, one decision per turn), TestSpecPromptWalksEveryGrayArea fails",
+  "if spec.md §3 loses the uncertainty-discriminator framing or the 'decide internal architecture yourself' boundary, TestSpecPromptUncertaintyDiscriminator fails",
+]
+status        = "pending"
