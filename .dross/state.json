@@ -1,9 +1,21 @@
 {
-  "version": "0.8.1.0",
-  "current_milestone": "v0.8",
-  "last_activity": "2026-06-30T09:26:02.265112Z",
-  "last_action": "completed native-statusline",
+  "version": "0.6.8.0",
+  "current_milestone": "v0.6",
+  "last_activity": "2026-06-30T12:11:26.407253Z",
+  "last_action": "completed deferred-unroute-command",
   "history": [
+    {
+      "at": "2026-06-29T11:58:30.107013Z",
+      "action": "executed t-9 (Wire phase-sync + milestone-sync to YouTrack)"
+    },
+    {
+      "at": "2026-06-29T12:06:14.331956Z",
+      "action": "executed t-10 (Sync milestone backlog slugs + someday, idempotent)"
+    },
+    {
+      "at": "2026-06-29T12:06:27.535277Z",
+      "action": "set current_phase_status=complete"
+    },
     {
       "at": "2026-06-29T12:06:27.541752Z",
       "action": "phase youtrack-board-integration executed (10/10 done)"
@@ -133,76 +145,64 @@
       "action": "set version=0.8.0.0"
     },
     {
-      "at": "2026-06-30T07:19:01.618662Z",
-      "action": "created native-statusline"
+      "at": "2026-06-30T09:29:38.235115Z",
+      "action": "merged native-statusline"
     },
     {
-      "at": "2026-06-30T07:24:13.828925Z",
-      "action": "spec locked: native-statusline"
+      "at": "2026-06-30T09:41:06.212821Z",
+      "action": "set current_milestone=v0.6"
     },
     {
-      "at": "2026-06-30T07:34:33.052637Z",
+      "at": "2026-06-30T09:42:00.243952Z",
+      "action": "created deferred-unroute-command"
+    },
+    {
+      "at": "2026-06-30T09:47:51.559151Z",
+      "action": "set current_phase=deferred-unroute-command"
+    },
+    {
+      "at": "2026-06-30T09:47:51.564388Z",
+      "action": "spec locked: deferred-unroute-command"
+    },
+    {
+      "at": "2026-06-30T09:50:27.488312Z",
       "action": "set current_phase_status=planned"
     },
     {
-      "at": "2026-06-30T07:34:33.058157Z",
-      "action": "plan locked: native-statusline (7 tasks across 5 waves)"
+      "at": "2026-06-30T09:50:27.494489Z",
+      "action": "plan locked: deferred-unroute-command (1 task across 1 wave)"
     },
     {
-      "at": "2026-06-30T07:42:05.651951Z",
-      "action": "plan review clean: native-statusline (3 blocking fixes applied, 7 tasks/6 waves)"
+      "at": "2026-06-30T09:53:53.978951Z",
+      "action": "plan reviewed: deferred-unroute-command (0 blocking, 1 flag)"
     },
     {
-      "at": "2026-06-30T08:04:51.172902Z",
-      "action": "set version=0.8.1.0"
+      "at": "2026-06-30T10:18:26.146134Z",
+      "action": "set version=0.6.8.0"
     },
     {
-      "at": "2026-06-30T08:12:10.740209Z",
-      "action": "executed t-1 (pure render core: line 1 + context meter + golden harness)"
+      "at": "2026-06-30T10:20:44.176747Z",
+      "action": "executed t-1 (Add deferred unroute subcommand)"
     },
     {
-      "at": "2026-06-30T08:17:18.418833Z",
-      "action": "executed t-6 (pure settings.json merge/unmerge core)"
-    },
-    {
-      "at": "2026-06-30T08:21:07.99337Z",
-      "action": "executed t-2 (line 2 todo/state composition)"
-    },
-    {
-      "at": "2026-06-30T08:25:31.290478Z",
-      "action": "executed t-3 (peer-jobs render, line 3)"
-    },
-    {
-      "at": "2026-06-30T08:29:09.816734Z",
-      "action": "executed t-4 (gather layer)"
-    },
-    {
-      "at": "2026-06-30T08:33:16.518179Z",
-      "action": "executed t-5 (cobra dross statusline command)"
-    },
-    {
-      "at": "2026-06-30T08:38:16.819593Z",
-      "action": "executed t-7 (install --statusline wiring + enable/disable)"
-    },
-    {
-      "at": "2026-06-30T08:38:28.960187Z",
+      "at": "2026-06-30T10:20:50.363419Z",
       "action": "set current_phase_status=complete"
     },
     {
-      "at": "2026-06-30T08:38:28.966037Z",
-      "action": "phase native-statusline executed (7/7 done)"
+      "at": "2026-06-30T10:20:50.368536Z",
+      "action": "phase deferred-unroute-command executed (1/1 done)"
     },
     {
-      "at": "2026-06-30T09:08:56.139028Z",
+      "at": "2026-06-30T10:27:16.070195Z",
       "action": "set current_phase_status=verified"
     },
     {
-      "at": "2026-06-30T09:08:56.143628Z",
-      "action": "verified native-statusline: pass (7/7 covered, mutation 0.84 measured, efficacy 100%)"
+      "at": "2026-06-30T10:27:16.076726Z",
+      "action": "verified deferred-unroute-command: pass (2/2 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
     },
     {
-      "at": "2026-06-30T09:26:02.265112Z",
-      "action": "completed native-statusline"
+      "at": "2026-06-30T12:11:26.407253Z",
+      "action": "completed deferred-unroute-command"
     }
   ]
 }

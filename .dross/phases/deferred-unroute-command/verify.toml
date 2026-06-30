@@ -1,0 +1,41 @@
+[verify]
+  phase = "deferred-unroute-command"
+  generated_at = 2026-06-30T10:21:16.544629Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.8353265869365225
+  mutants_killed = 908
+  mutants_survived = 179
+  mutants_not_covered = 179
+  criteria_total = 2
+  criteria_covered = 2
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/cmd/deferred_test.go:TestDeferredUnrouteRoundTrip",
+    "internal/cmd/deferred_test.go:TestDeferredUnrouteIdempotentSomeday",
+    "internal/cmd/deferred_test.go:TestDeferredUnrouteDismissedGuard",
+  ]
+  notes = "Round-trip test clears Target and asserts the entry reappears under `list --someday`; idempotent + dismissed-guard tests cover the locked-decision edges. Every mutant inside deferredUnroute was killed (efficacy 1.00 on the new code)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/cmd/deferred_test.go:TestDeferredUnrouteOutOfRange",
+    "internal/cmd/deferred_test.go:TestDeferredUnrouteMissingPhase",
+  ]
+  notes = "Out-of-range idx returns an error naming the range; a missing phase spec surfaces LoadSpec's error rather than panicking — parity with route/dismiss."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran package-wide on internal/cmd (gremlins mutates the whole package). All 179 survivors are NOT-COVERED mutants in pre-existing, untested command code (ship.go, stats.go, status.go, install.go, doctor.go, rule.go, …) — none in the new deferredUnroute function. Efficacy on covered code = 1.00; measured score 0.84 ≥ 0.80. This is pre-existing package debt, not a gap introduced by this phase."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The lone touched-file survivor is deferred.go:138 (CONDITIONALS_NEGATION) — the `case tgt == \"\"` branch in deferredList's TABLE renderer that prints `(someday)`. This is pre-existing code (not deferredUnroute) and is only reached on the non-JSON list path; the unroute tests use --json. Outside this phase's scope; a future deferredList table-render test would kill it."

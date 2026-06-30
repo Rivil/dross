@@ -17,8 +17,8 @@ import (
 // originating phase (Source) and the position within that phase's [[deferred]]
 // array (Index) — the stable handle `dross deferred route` addresses it by.
 type deferredEntry struct {
-	Source string `json:"source"`
-	Index  int    `json:"index"`
+	Source    string `json:"source"`
+	Index     int    `json:"index"`
 	Text      string `json:"text"`
 	Why       string `json:"why,omitempty"`
 	Target    string `json:"target,omitempty"`
@@ -31,7 +31,7 @@ func Deferred() *cobra.Command {
 		Use:   "deferred",
 		Short: "Inspect and route deferred items across phase specs",
 	}
-	c.AddCommand(deferredList(), deferredRoute(), deferredDismiss())
+	c.AddCommand(deferredList(), deferredRoute(), deferredDismiss(), deferredUnroute())
 	return c
 }
 
@@ -238,6 +238,56 @@ func deferredDismiss() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&undo, "undo", false, "clear the dismissed state (back to someday)")
+	return c
+}
+
+// deferredUnroute is the inverse of route: it clears a routed item's Target back
+// to "" (someday). It is the missing complement that lets a routed item be
+// dropped without hand-editing the spec — `route --target ""` is rejected by
+// design, so un-routing gets its own verb.
+func deferredUnroute() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "unroute <phase> <idx>",
+		Short: "Clear a routed deferred item's target, returning it to someday",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			phaseID := args[0]
+			idx, err := strconv.Atoi(args[1])
+			if err != nil {
+				return fmt.Errorf("idx must be an integer: %w", err)
+			}
+			specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
+			spec, err := phase.LoadSpec(specPath)
+			if err != nil {
+				return err
+			}
+			if idx < 0 || idx >= len(spec.Deferred) {
+				return fmt.Errorf("deferred index %d out of range (phase %s has %d deferred item(s))", idx, phaseID, len(spec.Deferred))
+			}
+			d := &spec.Deferred[idx]
+			// Dismissed items already have an empty Target, so the someday check
+			// below would mis-report them as "already someday". Catch them first
+			// and point at the right verb — routing and dismissal are distinct
+			// intents (see deferredDismiss).
+			if d.Dismissed {
+				return fmt.Errorf("deferred %s[%d] is dismissed; use 'dismiss --undo' to revive it, not unroute", phaseID, idx)
+			}
+			if d.Target == "" {
+				Printf("%s deferred[%d] already someday — nothing to un-route\n", phaseID, idx)
+				return nil
+			}
+			d.Target = ""
+			if err := spec.Save(specPath); err != nil {
+				return err
+			}
+			Printf("unrouted %s deferred[%d] → someday\n", phaseID, idx)
+			return nil
+		},
+	}
 	return c
 }
 

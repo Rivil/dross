@@ -1,0 +1,12 @@
+[phase]
+  id = "deferred-unroute-command"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add `deferred unroute` subcommand"
+  files = ["internal/cmd/deferred.go", "internal/cmd/deferred_test.go"]
+  description = "Add a `deferred unroute <phase> <idx>` cobra command to Deferred() (register\nalongside route/dismiss). Range-check idx; refuse when the item is Dismissed\n(error pointing to `dismiss --undo`); otherwise clear Target to \"\" and Save —\nidempotent when already someday. Mirror the route/dismiss structure and tests.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["route→unroute round-trip: after routing an item, `unroute <phase> <idx>` clears its target and the item reappears under `deferred list --someday` (c-1)", "out-of-range idx errors like dismiss: `unroute <phase> 5` returns a non-nil error naming the valid range, never a panic (c-2)", "missing phase spec errors: `unroute no-such-phase 0` surfaces LoadSpec's error, not a panic (c-2)", "already-someday is idempotent success: `unroute` on an unrouted item returns nil, leaves Target empty, AND prints the \"already someday\" message — a regression to that wording fails the test (decision already_someday)", "dismissed item is refused: `unroute` on a dismissed item errors and the message points to `dismiss --undo` (decision dismissed_item)"]
+  status = "done"

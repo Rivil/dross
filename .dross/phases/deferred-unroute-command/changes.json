@@ -1,0 +1,14 @@
+{
+  "phase": "deferred-unroute-command",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/deferred.go",
+        "internal/cmd/deferred_test.go"
+      ],
+      "commit": "fb24bc2",
+      "completed_at": "2026-06-30T10:20:44.16592Z",
+      "notes": "feature: deferred routing · deferredUnroute @ internal/cmd/deferred.go · clears a routed deferred item's target back to someday (idempotent; refuses dismissed items)"
+    }
+  }
+}
