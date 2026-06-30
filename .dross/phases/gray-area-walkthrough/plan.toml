@@ -20,8 +20,9 @@ prompt-sentinel tests pinning all three criteria.
 """
 covers        = ["c-1", "c-2", "c-3"]
 test_contract = [
-  "if spec.md §3 still contains the multiSelect 'which of these should we pin down' pre-selection gate, TestSpecPromptNoGrayAreaPreselection fails",
-  "if spec.md §3 drops the one-by-one walk-all instruction (walk every uncertain area, one decision per turn), TestSpecPromptWalksEveryGrayArea fails",
-  "if spec.md §3 loses the uncertainty-discriminator framing or the 'decide internal architecture yourself' boundary, TestSpecPromptUncertaintyDiscriminator fails",
+  "TestSpecPromptNoGrayAreaPreselection fails if spec.md still contains the pre-selection strings 'which of these should we pin down' or a 'Present for selection' multiSelect gray-area gate",
+  "TestSpecPromptWalksEveryGrayArea fails if §3 lacks the walk-all sentinels — 'walk every' gray area and 'one decision per turn' (or 'one at a time') — or the explicit user off-ramp clause",
+  "TestSpecPromptUncertaintyDiscriminator fails if §3 lacks the uncertainty-framing sentinel ('cannot confidently' / 'genuinely uncertain') or loses the retained boundary string 'decide these yourself'",
+  "TestSpecPromptGrayAreaOrdering fails if §3 lacks the count_ordering sentinels — an impact-ordering phrase ('most-impactful' / 'most-uncertain first') and the soft '3–4' guideline",
 ]
 status        = "pending"
