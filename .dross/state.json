@@ -1,15 +1,9 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "current_phase": "verify-merge-before-completion",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-01T10:34:03.610902Z",
-  "last_action": "verified verify-merge-before-completion: pass (5/5 covered, mutation 0.96 measured, efficacy 1.00 on covered)",
+  "last_activity": "2026-07-01T10:36:12.283461Z",
+  "last_action": "completed verify-merge-before-completion",
   "history": [
-    {
-      "at": "2026-06-30T18:56:46.465151Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-06-30T18:56:46.47269Z",
       "action": "verified gray-area-walkthrough: pass (3/3 covered, mutation not a signal — prompt-only change)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-01T10:34:03.610902Z",
       "action": "verified verify-merge-before-completion: pass (5/5 covered, mutation 0.96 measured, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-07-01T10:36:12.283461Z",
+      "action": "completed verify-merge-before-completion"
     }
   ]
 }
