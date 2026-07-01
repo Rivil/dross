@@ -6,99 +6,27 @@
   wave = 1
   title = "Jira Cloud REST board backend (sibling BoardClient type)"
   files = ["internal/forge/jira.go", "internal/forge/jira_test.go"]
-  description = """
-New internal/forge/jira.go: a JiraClient struct + NewJira(cfg Config) constructor,
-implementing all 6 BoardClient methods (forge.go:121-128) against the Jira Cloud REST API v3.
-Model structure + the low-level `do` helper on youtrack.go (constructor ~46-67, do ~417-465).
-- Auth: HTTP Basic email:token — email from cfg (a new AuthUser field, see t-3), token from
-  os.Getenv(cfg.AuthEnv); error with a `dross env set` hint if unset (mirror youtrack.go:56-59).
-- Endpoints (base cfg.APIBase = https://<site>.atlassian.net): CreateIssue POST /rest/api/3/issue
-  (fields.project.key, summary, description, issuetype); GetIssue GET /rest/api/3/issue/{key};
-  UpdateIssue PUT /rest/api/3/issue/{key}; CloseIssue = POST /rest/api/3/issue/{key}/transitions
-  (transition to a Done status); ListIssues GET /rest/api/3/search?jql=... .
-  Issue.Key is the Jira key string (PROJ-123); Number can stay 0.
-- EnsureMilestone maps to a Jira project VERSION (POST /rest/api/3/version). Since ids are
-  strings, add a concrete EnsureMilestoneEntity-style method + a SetState (transition) method
-  like YouTrack, so the command layer's concrete-assertion path (t-3) can use it.
-- var _ BoardClient = (*JiraClient)(nil).
-Tests jira_test.go: copy newTestYTClient (youtrack_test.go:16-26) → newTestJiraClient (httptest
-server, base-URL override, t.Setenv token). A constructor accept/reject table like
-TestNewAcceptsYouTrack (:30). Per-method capture-and-assert tests (method/path/body → canned
-JSON → parsed Issue) like TestYouTrackCreateIssue (:62), covering create/get/update/close(transition)/
-list(JQL)/ensure-version. VERIFY the Jira REST v3 request/response shapes against the docs
-(WebFetch developer.atlassian.com Jira Cloud REST v3) before coding — do not guess field names.
-"""
+  description = "New internal/forge/jira.go: a JiraClient struct + NewJira(cfg Config) constructor,\nimplementing all 6 BoardClient methods (forge.go:121-128) against the Jira Cloud REST API v3.\nModel structure + the low-level `do` helper on youtrack.go (constructor ~46-67, do ~417-465).\n- Auth: HTTP Basic email:token — email from cfg (a new AuthUser field, see t-3), token from\n  os.Getenv(cfg.AuthEnv); error with a `dross env set` hint if unset (mirror youtrack.go:56-59).\n- Endpoints (base cfg.APIBase = https://<site>.atlassian.net): CreateIssue POST /rest/api/3/issue\n  (fields.project.key, summary, description, issuetype); GetIssue GET /rest/api/3/issue/{key};\n  UpdateIssue PUT /rest/api/3/issue/{key}; CloseIssue = POST /rest/api/3/issue/{key}/transitions\n  (transition to a Done status); ListIssues GET /rest/api/3/search?jql=... .\n  Issue.Key is the Jira key string (PROJ-123); Number can stay 0.\n- EnsureMilestone maps to a Jira project VERSION (POST /rest/api/3/version). Since ids are\n  strings, add a concrete EnsureMilestoneEntity-style method + a SetState (transition) method\n  like YouTrack, so the command layer's concrete-assertion path (t-3) can use it.\n- var _ BoardClient = (*JiraClient)(nil).\nTests jira_test.go: copy newTestYTClient (youtrack_test.go:16-26) → newTestJiraClient (httptest\nserver, base-URL override, t.Setenv token). A constructor accept/reject table like\nTestNewAcceptsYouTrack (:30). Per-method capture-and-assert tests (method/path/body → canned\nJSON → parsed Issue) like TestYouTrackCreateIssue (:62), covering create/get/update/close(transition)/\nlist(JQL)/ensure-version. VERIFY the Jira REST v3 request/response shapes against the docs\n(WebFetch developer.atlassian.com Jira Cloud REST v3) before coding — do not guess field names.\n"
   covers = ["c-2", "c-3"]
-  test_contract = [
-    "NewJira rejects missing apibase/authenv/unset-token and accepts a valid config (table test)",
-    "CreateIssue posts fields.project.key+summary+description and parses the returned key; CloseIssue POSTs a transition; ListIssues issues a JQL search — each asserted against a mock handler",
-    "EnsureMilestone(version) creates a Jira version and returns its string id via the concrete path",
-  ]
-  status = "todo"
+  test_contract = ["NewJira rejects missing apibase/authenv/unset-token and accepts a valid config (table test)", "CreateIssue posts fields.project.key+summary+description and parses the returned key; CloseIssue POSTs a transition; ListIssues issues a JQL search — each asserted against a mock handler", "EnsureMilestone(version) creates a Jira version and returns its string id via the concrete path"]
+  status = "done"
 
 [[task]]
   id = "t-2"
   wave = 1
   title = "GitHub board backend (repo issues + Projects v2 add-to-board)"
   files = ["internal/forge/github.go", "internal/forge/github_test.go"]
-  description = """
-New internal/forge/github.go: a GitHubClient struct + NewGitHubProjects(cfg Config) constructor
-implementing BoardClient against GitHub's REST issues API (shaped like the forge Client:
-issue-number string keys, integer repo milestones). Auth: token from os.Getenv(cfg.AuthEnv),
-`Authorization: Bearer <tok>`, Accept application/vnd.github+json, base cfg.APIBase
-(default https://api.github.com).
-- CreateIssue POST /repos/{owner}/{repo}/issues (title, body, milestone int, labels); GetIssue
-  GET .../issues/{number}; UpdateIssue PATCH; CloseIssue PATCH state=closed; ListIssues GET
-  .../issues?state=&labels=; EnsureMilestone POST/GET .../milestones (returns the integer
-  milestone number as a string id — fits the existing int-milestone path, unlike Jira).
-- owner/repo come from cfg.Project (\"owner/repo\") — parse it; error if malformed.
-- Projects v2 add-to-board: when a project board is configured (a new cfg field, see t-3, e.g.
-  ProjectID = the Projects v2 node id or number), after CreateIssue call the GraphQL endpoint
-  POST {APIBase}/graphql with mutation addProjectV2ItemById(projectId, contentId) — the issue's
-  node id is returned by the REST create (field node_id). Keep this best-effort/isolated so a
-  projectless config still syncs issues.
-- var _ BoardClient = (*GitHubClient)(nil).
-Tests github_test.go: newTestGitHubClient (httptest, base-URL override, token env). Constructor
-table. Per-method REST capture-and-assert tests. A test that with a configured project, CreateIssue
-ALSO fires the GraphQL addProjectV2ItemById mutation (mock the single /graphql POST, assert the
-mutation body carries the project + content ids); and that WITHOUT a project, no GraphQL call is
-made. VERIFY the GitHub REST issues + GraphQL Projects v2 addProjectV2ItemById shapes against the
-docs (WebFetch docs.github.com REST issues + GraphQL Projects v2) before coding.
-"""
+  description = "New internal/forge/github.go: a GitHubClient struct + NewGitHubProjects(cfg Config) constructor\nimplementing BoardClient against GitHub's REST issues API (shaped like the forge Client:\nissue-number string keys, integer repo milestones). Auth: token from os.Getenv(cfg.AuthEnv),\n`Authorization: Bearer <tok>`, Accept application/vnd.github+json, base cfg.APIBase\n(default https://api.github.com).\n- CreateIssue POST /repos/{owner}/{repo}/issues (title, body, milestone int, labels); GetIssue\n  GET .../issues/{number}; UpdateIssue PATCH; CloseIssue PATCH state=closed; ListIssues GET\n  .../issues?state=&labels=; EnsureMilestone POST/GET .../milestones (returns the integer\n  milestone number as a string id — fits the existing int-milestone path, unlike Jira).\n- owner/repo come from cfg.Project (\"owner/repo\") — parse it; error if malformed.\n- Projects v2 add-to-board: when a project board is configured (a new cfg field, see t-3, e.g.\n  ProjectID = the Projects v2 node id or number), after CreateIssue call the GraphQL endpoint\n  POST {APIBase}/graphql with mutation addProjectV2ItemById(projectId, contentId) — the issue's\n  node id is returned by the REST create (field node_id). Keep this best-effort/isolated so a\n  projectless config still syncs issues.\n- var _ BoardClient = (*GitHubClient)(nil).\nTests github_test.go: newTestGitHubClient (httptest, base-URL override, token env). Constructor\ntable. Per-method REST capture-and-assert tests. A test that with a configured project, CreateIssue\nALSO fires the GraphQL addProjectV2ItemById mutation (mock the single /graphql POST, assert the\nmutation body carries the project + content ids); and that WITHOUT a project, no GraphQL call is\nmade. VERIFY the GitHub REST issues + GraphQL Projects v2 addProjectV2ItemById shapes against the\ndocs (WebFetch docs.github.com REST issues + GraphQL Projects v2) before coding.\n"
   covers = ["c-1", "c-3"]
-  test_contract = [
-    "CreateIssue posts to /repos/{owner}/{repo}/issues and parses number+node_id; EnsureMilestone returns the integer milestone as a string id",
-    "with a project configured, CreateIssue also POSTs an addProjectV2ItemById GraphQL mutation carrying the project + issue node ids; without a project, no /graphql call fires",
-    "GetIssue/UpdateIssue/CloseIssue/ListIssues hit the right REST paths/verbs (mock-asserted)",
-  ]
-  status = "todo"
+  test_contract = ["CreateIssue posts to /repos/{owner}/{repo}/issues and parses number+node_id; EnsureMilestone returns the integer milestone as a string id", "with a project configured, CreateIssue also POSTs an addProjectV2ItemById GraphQL mutation carrying the project + issue node ids; without a project, no /graphql call fires", "GetIssue/UpdateIssue/CloseIssue/ListIssues hit the right REST paths/verbs (mock-asserted)"]
+  status = "done"
 
 [[task]]
   id = "t-3"
   wave = 2
   title = "Wire github/jira into dispatch, config, and the issue command layer"
   files = ["internal/forge/forge.go", "internal/project/project.go", "internal/project/board_test.go", "internal/cmd/issue.go"]
-  description = """
-Registration + config + command wiring, keeping existing backends green.
-- forge.NewBoard (forge.go:136-141): dispatch provider \"github\" → NewGitHubProjects, \"jira\" →
-  NewJira, before the forge New() fallthrough. Leave forge.New()'s github ErrNotImplemented as-is
-  (the forge REST path); github board sync routes through NewBoard to the new client. Add any new
-  fields to forge.Config (forge.go:54-62): AuthUser (jira email), and a project/board id for GH
-  Projects (reuse ProjectID or add a BoardID field) — whatever the t-1/t-2 clients consumed.
-- project.Board (project.go:113-121): add auth_user (jira email) and a github project/board number
-  field. Extend the board_test.go round-trip (project/board_test.go:16-22) to cover the new fields.
-- boardConfig (issue.go:104-116): map the new project.Board fields → forge.Config.
-- issueEnable validation hints (issue.go:143-158): include github and jira in the provider list.
-- Command-layer concrete assertions: alongside the existing `if yt, ok := ctx.client.(*forge.YouTrackClient)`
-  branches at issue.go:232 (milestone), 344-349 (backlog), 454-458 (phase state), add branches for
-  the Jira client (string-id entity/state path) — and GitHub if it needs any non-interface handling
-  (it should NOT for milestones, since it uses the int path).
-- Run the full suite: existing forge/youtrack/issue tests must stay green.
-"""
+  description = "Registration + config + command wiring, keeping existing backends green.\n- forge.NewBoard (forge.go:136-141): dispatch provider \"github\" → NewGitHubProjects, \"jira\" →\n  NewJira, before the forge New() fallthrough. Leave forge.New()'s github ErrNotImplemented as-is\n  (the forge REST path); github board sync routes through NewBoard to the new client. Add any new\n  fields to forge.Config (forge.go:54-62): AuthUser (jira email), and a project/board id for GH\n  Projects (reuse ProjectID or add a BoardID field) — whatever the t-1/t-2 clients consumed.\n- project.Board (project.go:113-121): add auth_user (jira email) and a github project/board number\n  field. Extend the board_test.go round-trip (project/board_test.go:16-22) to cover the new fields.\n- boardConfig (issue.go:104-116): map the new project.Board fields → forge.Config.\n- issueEnable validation hints (issue.go:143-158): include github and jira in the provider list.\n- Command-layer concrete assertions: alongside the existing `if yt, ok := ctx.client.(*forge.YouTrackClient)`\n  branches at issue.go:232 (milestone), 344-349 (backlog), 454-458 (phase state), add branches for\n  the Jira client (string-id entity/state path) — and GitHub if it needs any non-interface handling\n  (it should NOT for milestones, since it uses the int path).\n- Run the full suite: existing forge/youtrack/issue tests must stay green.\n"
   covers = ["c-3"]
-  test_contract = [
-    "forge.NewBoard returns the GitHub client for provider=github and the Jira client for provider=jira",
-    "a [board] block with the new fields (auth_user, github project) round-trips through Save→Load",
-    "existing forgejo/gitea/gitlab/youtrack board tests and the dross issue command tests stay green",
-  ]
-  status = "todo"
+  test_contract = ["forge.NewBoard returns the GitHub client for provider=github and the Jira client for provider=jira", "a [board] block with the new fields (auth_user, github project) round-trips through Save→Load", "existing forgejo/gitea/gitlab/youtrack board tests and the dross issue command tests stay green"]
+  status = "done"

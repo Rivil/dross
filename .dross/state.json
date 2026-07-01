@@ -1,13 +1,11 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "last_activity": "2026-07-01T14:02:48.193346Z",
-  "last_action": "completed homebrew-and-windows-distribution",
+  "current_phase": "additional-board-backends",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-01T14:05:17.567171Z",
+  "last_action": "created additional-board-backends",
   "history": [
-    {
-      "at": "2026-07-01T09:06:54.054466Z",
-      "action": "executed t-3 (Apply defer-first framing in plan.md)"
-    },
     {
       "at": "2026-07-01T09:07:01.429419Z",
       "action": "set current_phase_status=complete"
@@ -203,6 +201,10 @@
     {
       "at": "2026-07-01T14:02:48.193346Z",
       "action": "completed homebrew-and-windows-distribution"
+    },
+    {
+      "at": "2026-07-01T14:05:17.567171Z",
+      "action": "created additional-board-backends"
     }
   ]
 }

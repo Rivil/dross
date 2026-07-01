@@ -1,0 +1,55 @@
+{
+  "phase": "additional-board-backends",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/forge/jira.go",
+        "internal/forge/jira_test.go"
+      ],
+      "commit": "9d60ea2",
+      "completed_at": "2026-07-01T14:21:13.334834Z",
+      "landmarks": [
+        {
+          "feature": "Jira board backend",
+          "symbol": "JiraClient",
+          "loc": "internal/forge/jira.go:28",
+          "what": "Jira Cloud REST v3 BoardClient; Basic email:token auth; milestones as versions; transition-driven state"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/forge/github.go",
+        "internal/forge/github_test.go"
+      ],
+      "commit": "f24e17e",
+      "completed_at": "2026-07-01T14:21:13.343182Z",
+      "landmarks": [
+        {
+          "feature": "GitHub board backend",
+          "symbol": "GitHubClient",
+          "loc": "internal/forge/github.go:42",
+          "what": "GitHub repo issues (int milestones) plus an isolated Projects v2 addProjectV2ItemById on create"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/forge/forge.go",
+        "internal/project/project.go",
+        "internal/project/board_test.go",
+        "internal/cmd/issue.go"
+      ],
+      "commit": "ff6e805",
+      "completed_at": "2026-07-01T14:21:13.350804Z",
+      "landmarks": [
+        {
+          "feature": "Board provider dispatch",
+          "symbol": "NewBoard",
+          "loc": "internal/forge/forge.go:136",
+          "what": "NewBoard dispatches github/jira; project.Board gains auth_user + github_project"
+        }
+      ]
+    }
+  }
+}
