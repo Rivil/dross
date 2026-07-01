@@ -3,13 +3,9 @@
   "current_milestone": "v0.7",
   "current_phase": "interaction-defer-or-add-framing",
   "current_phase_status": "planned",
-  "last_activity": "2026-07-01T08:53:44.606395Z",
-  "last_action": "plan locked: interaction-defer-or-add-framing (3 tasks across 2 waves)",
+  "last_activity": "2026-07-01T08:56:16.803913Z",
+  "last_action": "plan reviewed: interaction-defer-or-add-framing (0 blocking, 3 flags)",
   "history": [
-    {
-      "at": "2026-06-30T14:47:37.138013Z",
-      "action": "set current_phase=retrofit-readmostly-commands"
-    },
     {
       "at": "2026-06-30T14:47:37.14502Z",
       "action": "spec locked: retrofit-readmostly-commands"
@@ -205,6 +201,10 @@
     {
       "at": "2026-07-01T08:53:44.606395Z",
       "action": "plan locked: interaction-defer-or-add-framing (3 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-01T08:56:16.803913Z",
+      "action": "plan reviewed: interaction-defer-or-add-framing (0 blocking, 3 flags)"
     }
   ]
 }

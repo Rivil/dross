@@ -28,8 +28,11 @@ description   = """
 In spec.md, borderline/optional candidates (§3 gray-area-adjacent proposals, §4
 deferred surfacing) get the defer-first either/or per the playbook: 'defer it'
 leads, 'add to current phase' is the alternative. On 'defer it', the existing §4a
-destination routing (park / attach / someday) runs as a two-step follow-up. Clearly
-in-scope criteria keep the plain accept/reword/drop gate (defer_trigger).
+destination routing (park / attach / someday) runs as a two-step follow-up. To
+avoid a double-offer, that §4a follow-up drops its existing 'Pull into the current
+phase' option (the entry gate already covered add-vs-defer) and offers only the
+destinations. Clearly in-scope criteria keep the plain accept/reword/drop gate
+(defer_trigger).
 """
 covers        = ["c-1"]
 test_contract = [
