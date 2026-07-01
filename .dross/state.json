@@ -3,13 +3,9 @@
   "current_milestone": "v0.7",
   "current_phase": "ship-auto-noninteractive",
   "current_phase_status": "planned",
-  "last_activity": "2026-07-01T05:37:16.185877Z",
-  "last_action": "plan locked: ship-auto-noninteractive (3 tasks across 2 waves)",
+  "last_activity": "2026-07-01T05:43:17.576196Z",
+  "last_action": "plan reviewed: ship-auto-noninteractive (0 blocking, 1 flag)",
   "history": [
-    {
-      "at": "2026-06-29T13:51:29.421094Z",
-      "action": "executed t-7 (Document curl|sh + dross update in README)"
-    },
     {
       "at": "2026-06-29T13:52:08.286287Z",
       "action": "set current_phase_status=complete"
@@ -205,6 +201,10 @@
     {
       "at": "2026-07-01T05:37:16.185877Z",
       "action": "plan locked: ship-auto-noninteractive (3 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-01T05:43:17.576196Z",
+      "action": "plan reviewed: ship-auto-noninteractive (0 blocking, 1 flag)"
     }
   ]
 }
