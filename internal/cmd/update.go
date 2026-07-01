@@ -130,6 +130,21 @@ func runUpdate(ctx context.Context, o updateOpts) error {
 	if err != nil {
 		return err
 	}
+	// Outer trust gate: verify the minisign signature over checksums.txt against the
+	// embedded public key BEFORE trusting any of its hashes and BEFORE touching any
+	// binary. A missing .minisig is fail-closed (every release from this version on is
+	// signed), so an absent signature is treated as tampering, not an unsigned release.
+	sigURL := rel.AssetURL("checksums.txt.minisig")
+	if sigURL == "" {
+		return fmt.Errorf("refusing update: %w", update.ErrNoSignature)
+	}
+	sig, err := client.Download(ctx, sigURL)
+	if err != nil {
+		return err
+	}
+	if err := update.VerifySignature(sums, sig, update.TrustedMinisignKey); err != nil {
+		return fmt.Errorf("refusing update: %w", err)
+	}
 	if err := update.VerifyChecksum(tarball, update.ParseChecksums(sums), assetName); err != nil {
 		return fmt.Errorf("refusing update: %w", err)
 	}
