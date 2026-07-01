@@ -1,13 +1,11 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "last_activity": "2026-07-01T11:05:19.789207Z",
-  "last_action": "completed pr-record-reaches-base",
+  "current_phase": "release-trust-and-distribution",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-01T12:24:58.452743Z",
+  "last_action": "created release-trust-and-distribution",
   "history": [
-    {
-      "at": "2026-07-01T08:53:44.598071Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-07-01T08:53:44.606395Z",
       "action": "plan locked: interaction-defer-or-add-framing (3 tasks across 2 waves)"
@@ -203,6 +201,10 @@
     {
       "at": "2026-07-01T11:05:19.789207Z",
       "action": "completed pr-record-reaches-base"
+    },
+    {
+      "at": "2026-07-01T12:24:58.452743Z",
+      "action": "created release-trust-and-distribution"
     }
   ]
 }
