@@ -2,18 +2,10 @@
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
   "current_phase": "pr-record-reaches-base",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-01T10:58:07.434837Z",
-  "last_action": "phase pr-record-reaches-base executed (1/1 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-01T11:04:29.152058Z",
+  "last_action": "verified pr-record-reaches-base: pass (3/3 covered, mutation 0.96, efficacy 1.00 on covered)",
   "history": [
-    {
-      "at": "2026-07-01T08:29:28.310622Z",
-      "action": "created interaction-defer-or-add-framing"
-    },
-    {
-      "at": "2026-07-01T08:44:42.643091Z",
-      "action": "set current_phase=interaction-defer-or-add-framing"
-    },
     {
       "at": "2026-07-01T08:44:42.650314Z",
       "action": "spec locked: interaction-defer-or-add-framing"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-01T10:58:07.434837Z",
       "action": "phase pr-record-reaches-base executed (1/1 done)"
+    },
+    {
+      "at": "2026-07-01T11:04:29.145076Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-01T11:04:29.152058Z",
+      "action": "verified pr-record-reaches-base: pass (3/3 covered, mutation 0.96, efficacy 1.00 on covered)"
     }
   ]
 }
