@@ -1,15 +1,9 @@
 {
   "version": "0.7.1.0",
   "current_milestone": "v0.7",
-  "current_phase": "ship-auto-noninteractive",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-01T06:48:52.793483Z",
-  "last_action": "verified ship-auto-noninteractive: pass (5/5 covered, mutation 0.96 after coverage fold-in)",
+  "last_activity": "2026-07-01T06:59:30.563231Z",
+  "last_action": "completed ship-auto-noninteractive",
   "history": [
-    {
-      "at": "2026-06-30T07:17:27.603301Z",
-      "action": "set version=0.8.0.0"
-    },
     {
       "at": "2026-06-30T09:29:38.235115Z",
       "action": "merged native-statusline"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-01T06:48:52.793483Z",
       "action": "verified ship-auto-noninteractive: pass (5/5 covered, mutation 0.96 after coverage fold-in)"
+    },
+    {
+      "at": "2026-07-01T06:59:30.563231Z",
+      "action": "completed ship-auto-noninteractive"
     }
   ]
 }
