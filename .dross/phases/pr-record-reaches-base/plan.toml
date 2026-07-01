@@ -1,0 +1,25 @@
+[phase]
+id = "pr-record-reaches-base"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Push the PR-record commit to the phase branch"
+files         = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
+description   = """
+In ship.go, after the PR number is persisted to changes.json and committed
+(the `chore(dross): record PR #N` commit around line 294-305), push the phase
+branch again (`git push origin phase/<id>`) so the record lands in the open PR
+and its squash-merge carries it onto the base branch's changes.json. Guard: only
+when a PR was actually opened (res != nil && res.Number > 0); the --no-push path
+returns earlier (line 171) so it is naturally skipped. Keep it idempotent (a
+re-ship with no new record change must not error). Extend ship_test to assert the
+record commit is pushed to the (fake) origin phase-branch ref, not left local-only.
+"""
+covers        = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "if ship records the PR into changes.json but does NOT push that commit, the ship_test asserting the pushed origin/phase ref contains the PR record fails",
+  "if the extra push runs under --no-push (no PR opened), the --no-push test fails",
+  "existing ship tests (open PR, --auto, --json) stay green — the added push composes with them",
+]
+status        = "pending"
