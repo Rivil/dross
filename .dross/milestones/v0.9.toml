@@ -1,4 +1,4 @@
-phases = ["ship-architecture-autogen", "secure-quality-findings-followups", "release-trust-and-distribution", "additional-board-backends", "verify-merge-before-completion"]
+phases = ["ship-architecture-autogen", "secure-quality-findings-followups", "release-trust-and-distribution", "additional-board-backends", "verify-merge-before-completion", "pr-record-reaches-base"]
 
 [milestone]
   version = "v0.9"
