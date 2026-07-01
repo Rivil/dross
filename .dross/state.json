@@ -1,15 +1,9 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "current_phase": "additional-board-backends",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-01T14:05:17.567171Z",
-  "last_action": "created additional-board-backends",
+  "last_activity": "2026-07-01T14:42:32.268867Z",
+  "last_action": "completed additional-board-backends",
   "history": [
-    {
-      "at": "2026-07-01T09:07:01.429419Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-07-01T09:07:01.435743Z",
       "action": "phase interaction-defer-or-add-framing executed (3/3 done)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-01T14:05:17.567171Z",
       "action": "created additional-board-backends"
+    },
+    {
+      "at": "2026-07-01T14:42:32.268867Z",
+      "action": "completed additional-board-backends"
     }
   ]
 }
