@@ -77,6 +77,17 @@ jobs:
           go-version: '1.25'
           cache: true
 
+      # goreleaser's `signs:` block shells out to the `minisign` CLI, which is not
+      # present on the runner by default. Install it from Ubuntu's signed apt repo
+      # (distro-signed, not a mutable registry @latest tag — within the CI hardening
+      # rules). Without this the signing step fails: "minisign: not found in $PATH".
+      - name: Install minisign
+        if: steps.tag.outputs.new_tag != ''
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y minisign
+
       - name: Write minisign secret key
         if: steps.tag.outputs.new_tag != ''
         env:
