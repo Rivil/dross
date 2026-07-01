@@ -1,0 +1,53 @@
+{
+  "phase": "interaction-defer-or-add-framing",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "assets/prompts/_interaction.md",
+        "internal/cmd/interaction_snippet_test.go"
+      ],
+      "commit": "d4d05f2",
+      "completed_at": "2026-07-01T09:00:59.005991Z",
+      "landmarks": [
+        {
+          "feature": "interaction playbook",
+          "symbol": "TestInteractionSnippetHasDeferOrAddPattern",
+          "loc": "internal/cmd/interaction_snippet_test.go",
+          "what": "defer-first either/or for borderline candidates · canonical in _interaction.md"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "assets/prompts/spec.md",
+        "internal/cmd/spec_prompt_test.go"
+      ],
+      "commit": "43c4e84",
+      "completed_at": "2026-07-01T09:04:56.486462Z",
+      "landmarks": [
+        {
+          "feature": "spec deferred routing",
+          "symbol": "TestSpecPromptTwoStepRouting",
+          "loc": "internal/cmd/spec_prompt_test.go",
+          "what": "two-step defer-first entry gate then destination · drops §4a double-offer"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/plan.md",
+        "internal/cmd/plan_prompt_test.go"
+      ],
+      "commit": "e9a5e49",
+      "completed_at": "2026-07-01T09:06:54.041813Z",
+      "landmarks": [
+        {
+          "feature": "plan decomposition steering",
+          "symbol": "TestPlanPromptBorderlineTaskDeferFirst",
+          "loc": "internal/cmd/plan_prompt_test.go",
+          "what": "§3 borderline-task defer-first + §4 coverage-gap explicit either/or"
+        }
+      ]
+    }
+  }
+}

@@ -54,3 +54,23 @@ func TestInteractionSnippetHasAcceptRewordDropExample(t *testing.T) {
 		}
 	}
 }
+
+// TestInteractionSnippetHasDeferOrAddPattern proves c-3: the shared playbook
+// carries the defer-or-add pattern for borderline candidates — a defer-first
+// either/or (lead with "defer it", offer "add to current phase"), scoped to
+// genuinely borderline items. If any half of the pattern is dropped from
+// _interaction.md, one of these needles disappears and this fails, so spec.md
+// and plan.md can safely defer to the playbook instead of restating it.
+func TestInteractionSnippetHasDeferOrAddPattern(t *testing.T) {
+	content := interactionSnippetContent(t)
+	for _, needle := range []string{
+		"defer it",             // the lead option
+		"add to current phase", // the alternative
+		"defer-first",          // defer leads
+		"borderline",           // the trigger — only for borderline candidates
+	} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("defer-or-add pattern incomplete: snippet missing %q", needle)
+		}
+	}
+}

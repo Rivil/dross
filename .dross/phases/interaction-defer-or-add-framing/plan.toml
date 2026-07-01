@@ -1,0 +1,34 @@
+[phase]
+  id = "interaction-defer-or-add-framing"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Document defer-or-add pattern in playbook"
+  files = ["assets/prompts/_interaction.md", "internal/cmd/interaction_snippet_test.go"]
+  description = "Add a defer-or-add section to the shared interaction playbook: when a command\nsurfaces a borderline/optional candidate, present it as a single either/or that\nLEADS with 'defer it' and offers 'add to current phase' — never open-ended, never\nsilently recorded. This is the one canonical statement spec.md and plan.md defer to.\n"
+  covers = ["c-3"]
+  test_contract = ["if the defer-first either/or pattern (defer-leads + add-to-current-phase) is dropped from _interaction.md, the new interaction_snippet_test assertion fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Apply defer-first either/or in spec.md"
+  files = ["assets/prompts/spec.md", "internal/cmd/spec_prompt_test.go"]
+  description = "In spec.md, borderline/optional candidates (§3 gray-area-adjacent proposals, §4\ndeferred surfacing) get the defer-first either/or per the playbook: 'defer it'\nleads, 'add to current phase' is the alternative. On 'defer it', the existing §4a\ndestination routing (park / attach / someday) runs as a two-step follow-up. To\navoid a double-offer, that §4a follow-up drops its existing 'Pull into the current\nphase' option (the entry gate already covered add-vs-defer) and offers only the\ndestinations. Clearly in-scope criteria keep the plain accept/reword/drop gate\n(defer_trigger).\n"
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = ["if spec.md's borderline-candidate defer-first either/or wording is removed, the spec_prompt_test defer-framing assertion fails", "if the two-step defer→§4a-routing instruction is removed, the spec_prompt_test routing-layering assertion fails"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Apply defer-first framing in plan.md"
+  files = ["assets/prompts/plan.md", "internal/cmd/plan_prompt_test.go"]
+  description = "Two plan.md edits: (1) §3 borderline/optional task proposals use the defer-first\neither/or per the playbook (plan_reach); (2) the §4 coverage-gap check is reframed\nas an explicit either/or (add a covering task vs defer the criterion) instead of\nthe current inline instruction. Add a new plan_prompt_test.go mirroring the\nspec_prompt_test harness.\n"
+  covers = ["c-2", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if plan.md's §3 borderline-task defer-first framing is removed, the plan_prompt_test task-proposal assertion fails", "if the coverage-gap either/or reframe is removed from plan.md, the plan_prompt_test coverage-gap assertion fails"]
+  status = "done"
