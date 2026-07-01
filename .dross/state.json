@@ -1,17 +1,9 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "last_activity": "2026-07-01T13:30:39.022123Z",
-  "last_action": "completed secure-quality-findings-followups",
+  "last_activity": "2026-07-01T14:02:48.193346Z",
+  "last_action": "completed homebrew-and-windows-distribution",
   "history": [
-    {
-      "at": "2026-07-01T09:00:49.572097Z",
-      "action": "executed t-1 (Document defer-or-add pattern in playbook)"
-    },
-    {
-      "at": "2026-07-01T09:04:56.500468Z",
-      "action": "executed t-2 (Apply defer-first either/or in spec.md)"
-    },
     {
       "at": "2026-07-01T09:06:54.054466Z",
       "action": "executed t-3 (Apply defer-first framing in plan.md)"
@@ -203,6 +195,14 @@
     {
       "at": "2026-07-01T13:30:39.022123Z",
       "action": "completed secure-quality-findings-followups"
+    },
+    {
+      "at": "2026-07-01T13:39:12.636685Z",
+      "action": "created homebrew-and-windows-distribution"
+    },
+    {
+      "at": "2026-07-01T14:02:48.193346Z",
+      "action": "completed homebrew-and-windows-distribution"
     }
   ]
 }

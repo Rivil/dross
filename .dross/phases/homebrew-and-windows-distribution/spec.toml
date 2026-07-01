@@ -1,0 +1,46 @@
+[phase]
+id        = "homebrew-and-windows-distribution"
+title     = "homebrew-and-windows-distribution"
+milestone = "v0.9"
+
+[[criteria]]
+id   = "c-1"
+text = "dross update self-updates on Windows. update.AssetName and the platform gate accept windows/amd64 and windows/arm64; the release asset is a .zip on windows (matching goreleaser) and .tar.gz elsewhere, and the binary inside is dross.exe on windows / dross otherwise. The archive extractor handles BOTH tar.gz and zip. The existing signature+checksum trust gate is unchanged and covers the windows zip. Proven by unit tests (AssetName windows→.zip; zip extraction) and the cmd httptest update flow serving a signed windows zip that applies."
+
+[[criteria]]
+id   = "c-2"
+text = "The release pipeline builds Windows and publishes a Homebrew tap. .goreleaser.yaml adds windows to the build matrix (amd64+arm64), a zip format override for windows, and a brews block that pushes a formula to the Rivil/homebrew-dross tap using HOMEBREW_TAP_GITHUB_TOKEN. checksums.txt (and its minisign signature) cover the windows zips. Pinned by a config-guard test, like the release-signing guard."
+
+[[criteria]]
+id   = "c-3"
+text = "Windows has a bootstrap install channel and the docs cover the new channels. install.ps1 is the PowerShell analog of install.sh (download the windows zip, verify SHA-256 against checksums.txt, extract dross.exe onto PATH, run dross install). README documents Windows install (install.ps1 / download + dross update) and the Homebrew tap (brew install rivil/dross/dross). The two steps that cannot be exercised unattended — running a real Windows binary and the live tap push (needs the tap repo + token) — are documented as such, never reported as verified."
+
+[[decisions]]
+key    = "windows_asset_format"
+choice = "Windows release archives are .zip and contain dross.exe; every other platform stays .tar.gz with dross. AssetName returns the exact goreleaser asset name per OS (…_windows_amd64.zip)."
+why    = "goreleaser emits .zip for windows via format_overrides and Go appends .exe to the windows binary; dross update must mirror the exact asset name and format goreleaser publishes or the download 404s. This is the same 'match goreleaser exactly' contract AssetName already documents for tar.gz."
+locked = true
+
+[[decisions]]
+key    = "extraction_dispatch"
+choice = "One update flow serves all platforms; the only OS-dependent bits are archive format (tar.gz vs zip, chosen by asset suffix) and inner binary name (dross vs dross.exe, chosen by GOOS). Add a zip extractor alongside the existing tar.gz one and dispatch on the asset extension."
+why    = "Keeps the download → verify-signature → verify-checksum → extract → atomic-swap pipeline single-path; archive format and binary name are the minimal windows deltas and both are unit-testable without a windows host."
+locked = true
+
+[[decisions]]
+key    = "homebrew_tap"
+choice = "goreleaser brews block pushes the formula to an EXTERNAL Rivil/homebrew-dross tap repo using a HOMEBREW_TAP_GITHUB_TOKEN secret (a PAT with contents:write on the tap). The config + a guard test are authored here; the live push is a documented flip-on step gated on the tap repo + token existing."
+why    = "Homebrew formulae live in a separate tap repo; goreleaser needs a token scoped to push there. The tap repo and token are the user's to provision, so this phase ships verifiable config + guard test and documents the one live step it can't run unattended — same posture as release signing (config static-checked, mechanics unit-tested)."
+locked = true
+
+[[decisions]]
+key    = "windows_install_channel"
+choice = "Ship install.ps1 (a self-contained PowerShell bootstrap mirroring install.sh) as the Windows install channel. Homebrew covers macOS/Linux only; Scoop/winget would need their own external buckets like the tap."
+why    = "A self-contained .ps1 is the lowest-dependency Windows bootstrap and needs no extra external repo. It is authored from the PowerShell/Windows docs and reviewed statically — PowerShell/Windows can't be exercised unattended here — while the load-bearing self-update logic it leans on (AssetName/extract/verify) is fully unit-tested."
+locked = true
+
+[[decisions]]
+key    = "verify_posture"
+choice = "Code and config are unit-tested and config-guard-tested in this phase. The two things that need a real Windows host or the live tap — executing a windows binary end-to-end and goreleaser's actual formula push — are documented as unverifiable-unattended and are NOT reported green."
+why    = "Honesty rule: never claim a result not observed. The signing phase set this precedent — statically verify what can't be run live, unit-test the mechanics, and say plainly which step needs the user's environment."
+locked = true
