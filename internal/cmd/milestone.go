@@ -80,9 +80,61 @@ func milestoneCreate() *cobra.Command {
 				return err
 			}
 			Printf("created %s\n", path)
+
+			// Cut + push the milestone integration branch as an
+			// unconditional side effect of scoping (the v0.7 branch
+			// topology). Skips silently in a non-git dir so `dross init`
+			// flows and non-git usage keep working.
+			mainBranch := "main"
+			if p, _, err := loadProject(); err == nil && p.Repo.GitMainBranch != "" {
+				mainBranch = p.Repo.GitMainBranch
+			}
+			branch, created, pushed, err := ensureMilestoneBranch(filepath.Dir(root), mainBranch, args[0])
+			if err != nil {
+				return err
+			}
+			if created {
+				Printf("cut %s from %s\n", branch, mainBranch)
+			}
+			if pushed {
+				Printf("pushed %s to origin\n", branch)
+			}
 			return nil
 		},
 	}
+}
+
+// ensureMilestoneBranch cuts milestone/<version> from the main branch (without
+// checking it out — HEAD stays put) and pushes it to origin, so the integration
+// branch exists as an unconditional side effect of scoping. Idempotent: an
+// existing local ref is left as-is (re-scope no-ops rather than erroring) and
+// the push is a no-op when origin already carries the ref at the same commit.
+// Skips silently when the repo has no git, no main ref to cut from yet, or no
+// origin remote — scoping must still succeed in those cases.
+func ensureMilestoneBranch(repoDir, mainBranch, version string) (branch string, created, pushed bool, err error) {
+	branch = "milestone/" + version
+	if !isDir(filepath.Join(repoDir, ".git")) {
+		return branch, false, false, nil
+	}
+	// Need a main ref to cut from; a repo with no commits has none.
+	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+mainBranch) != nil {
+		return branch, false, false, nil
+	}
+	// Idempotent create: only when the local ref is absent.
+	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch) != nil {
+		if out, e := gitCombined(repoDir, "branch", branch, mainBranch); e != nil {
+			return branch, false, false, fmt.Errorf("git branch %s %s: %w\n%s", branch, mainBranch, e, out)
+		}
+		created = true
+	}
+	// Push only when an origin remote exists.
+	if gitNoOut(repoDir, "remote", "get-url", "origin") == nil {
+		if out, e := gitCombined(repoDir, "push", "origin", branch); e != nil {
+			return branch, created, false, fmt.Errorf("git push origin %s: %w\n%s", branch, e, out)
+		}
+		pushed = true
+	}
+	return branch, created, pushed, nil
 }
 
 func milestoneShow() *cobra.Command {

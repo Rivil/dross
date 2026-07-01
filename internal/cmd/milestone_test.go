@@ -361,3 +361,83 @@ func TestMilestoneCover_ShowDefaultsToCurrent(t *testing.T) {
 		}
 	}
 }
+
+// setupMilestoneRepo builds a git repo with a bare origin and one commit on
+// main, chdir'd and dross-initialised — the fixture the branch-topology tests
+// share. Returns the working dir and the bare origin path.
+func setupMilestoneRepo(t *testing.T) (dir, origin string) {
+	t.Helper()
+	dir = t.TempDir()
+	origin = t.TempDir()
+	mustGit(t, origin, "init", "--bare", "-q", "-b", "main")
+	gitInit(t, dir, origin)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustGit(t, dir, "add", "-A")
+	mustGit(t, dir, "commit", "-q", "-m", "init")
+	return dir, origin
+}
+
+func TestMilestoneCreateCutsBranchFromMain(t *testing.T) {
+	dir, _ := setupMilestoneRepo(t)
+	if err := runCmd(t, Milestone(), "create", "v0.9"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	// Branch exists locally (mustGit fatals if the ref is missing).
+	mustGit(t, dir, "rev-parse", "--verify", "refs/heads/milestone/v0.9")
+	// HEAD stayed on main.
+	if head := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); head != "main" {
+		t.Errorf("HEAD moved off main to %q", head)
+	}
+	// Tip equals main's tip (cut from main, not some other commit).
+	mainTip := mustGit(t, dir, "rev-parse", "main")
+	msTip := mustGit(t, dir, "rev-parse", "milestone/v0.9")
+	if mainTip != msTip {
+		t.Errorf("milestone tip %s != main tip %s", msTip, mainTip)
+	}
+}
+
+func TestMilestoneCreatePushesEagerly(t *testing.T) {
+	dir, _ := setupMilestoneRepo(t)
+	if err := runCmd(t, Milestone(), "create", "v0.9"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if out := mustGit(t, dir, "ls-remote", "--heads", "origin", "milestone/v0.9"); !strings.Contains(out, "milestone/v0.9") {
+		t.Errorf("milestone/v0.9 not on origin; ls-remote:\n%s", out)
+	}
+}
+
+func TestMilestoneCreateRerunIdempotent(t *testing.T) {
+	dir, _ := setupMilestoneRepo(t)
+	if err := runCmd(t, Milestone(), "create", "v0.9"); err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+	// Simulate a re-scope: drop the toml so the command runs past its
+	// existence guard and re-enters the branch/push step with the ref
+	// already present locally and on origin.
+	if err := os.Remove(filepath.Join(dir, ".dross/milestones/v0.9.toml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "create", "v0.9"); err != nil {
+		t.Fatalf("re-scope should no-op the existing branch, got: %v", err)
+	}
+	// Ref survived the re-scope (mustGit fatals if it's gone).
+	mustGit(t, dir, "rev-parse", "--verify", "refs/heads/milestone/v0.9")
+}
+
+func TestMilestoneCreateNoGitSkips(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	// No git repo here — create must still write the toml and not error.
+	if err := runCmd(t, Milestone(), "create", "v0.9"); err != nil {
+		t.Fatalf("create in non-git dir should skip branch cleanly, got: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".dross/milestones/v0.9.toml")); err != nil {
+		t.Errorf("toml not written in non-git dir: %v", err)
+	}
+}
