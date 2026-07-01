@@ -25,6 +25,7 @@ func FilePath(root, phaseID string) string {
 
 type Changes struct {
 	Phase string                `json:"phase"`
+	PR    int                   `json:"pr,omitempty"`
 	Tasks map[string]TaskRecord `json:"tasks"`
 }
 
@@ -91,6 +92,22 @@ func ParseLandmark(s string) (Landmark, error) {
 
 func New(phaseID string) *Changes {
 	return &Changes{Phase: phaseID, Tasks: map[string]TaskRecord{}}
+}
+
+// SetPR records the opened PR number for a phase in its phase-scoped
+// changes.json, loading the existing file (or starting fresh), setting the
+// phase-level PR field, and saving. A phase-scoped record can't be dragged
+// forward in the cumulative state history the way the "completed <id>"
+// completion breadcrumb is, so `dross phase complete` can identify THIS
+// phase's PR and gate on its authoritative merge status.
+func SetPR(root, phaseID string, pr int) error {
+	path := FilePath(root, phaseID)
+	c, err := Load(path, phaseID)
+	if err != nil {
+		return err
+	}
+	c.PR = pr
+	return c.Save(path)
 }
 
 // Load reads the file. Missing file = empty Changes for the phase, no error.

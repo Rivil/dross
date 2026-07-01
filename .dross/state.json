@@ -1,65 +1,9 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "last_activity": "2026-07-01T09:38:33.258334Z",
-  "last_action": "scoped milestone v0.9: 5 criteria, 4 phases",
+  "last_activity": "2026-07-01T10:36:12.283461Z",
+  "last_action": "completed verify-merge-before-completion",
   "history": [
-    {
-      "at": "2026-06-30T15:49:47.330649Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-30T15:49:47.335776Z",
-      "action": "verified retrofit-readmostly-commands: pass (6/6 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
-    },
-    {
-      "at": "2026-06-30T18:04:39.382514Z",
-      "action": "completed retrofit-readmostly-commands"
-    },
-    {
-      "at": "2026-06-30T18:08:34.387644Z",
-      "action": "created gray-area-walkthrough"
-    },
-    {
-      "at": "2026-06-30T18:25:28.748157Z",
-      "action": "set current_phase=gray-area-walkthrough"
-    },
-    {
-      "at": "2026-06-30T18:25:28.753287Z",
-      "action": "spec locked: gray-area-walkthrough"
-    },
-    {
-      "at": "2026-06-30T18:39:59.76146Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-30T18:39:59.766562Z",
-      "action": "plan locked: gray-area-walkthrough (1 task across 1 wave)"
-    },
-    {
-      "at": "2026-06-30T18:42:05.566633Z",
-      "action": "plan reviewed: gray-area-walkthrough (0 blocking, 2 flags)"
-    },
-    {
-      "at": "2026-06-30T18:44:36.399826Z",
-      "action": "set version=0.6.16.0"
-    },
-    {
-      "at": "2026-06-30T18:48:56.538887Z",
-      "action": "executed t-1 (Rewrite spec.md §3 to walk-all + uncertainty discriminator)"
-    },
-    {
-      "at": "2026-06-30T18:49:08.490833Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-30T18:49:08.498271Z",
-      "action": "phase gray-area-walkthrough executed (1/1 done)"
-    },
-    {
-      "at": "2026-06-30T18:56:46.465151Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-06-30T18:56:46.47269Z",
       "action": "verified gray-area-walkthrough: pass (3/3 covered, mutation not a signal — prompt-only change)"
@@ -203,6 +147,62 @@
     {
       "at": "2026-07-01T09:38:33.258334Z",
       "action": "scoped milestone v0.9: 5 criteria, 4 phases"
+    },
+    {
+      "at": "2026-07-01T09:58:46.339574Z",
+      "action": "created verify-merge-before-completion"
+    },
+    {
+      "at": "2026-07-01T09:59:17.27806Z",
+      "action": "set current_phase=verify-merge-before-completion"
+    },
+    {
+      "at": "2026-07-01T09:59:17.28599Z",
+      "action": "spec locked: verify-merge-before-completion"
+    },
+    {
+      "at": "2026-07-01T10:00:26.086696Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-01T10:00:26.093503Z",
+      "action": "plan locked: verify-merge-before-completion (3 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-01T10:06:26.776721Z",
+      "action": "plan reviewed: verify-merge-before-completion (2 blocking resolved, 4 flags folded)"
+    },
+    {
+      "at": "2026-07-01T10:16:10.172106Z",
+      "action": "executed t-1 (Persist + commit PR number per-phase at ship)"
+    },
+    {
+      "at": "2026-07-01T10:17:28.390032Z",
+      "action": "executed t-2 (Provider PR-merged lookup + exported seam)"
+    },
+    {
+      "at": "2026-07-01T10:22:37.0253Z",
+      "action": "executed t-3 (Gate complete on merge + migrate fixtures)"
+    },
+    {
+      "at": "2026-07-01T10:25:50.459418Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-01T10:25:50.466801Z",
+      "action": "phase verify-merge-before-completion executed (3/3 done)"
+    },
+    {
+      "at": "2026-07-01T10:34:03.603741Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-01T10:34:03.610902Z",
+      "action": "verified verify-merge-before-completion: pass (5/5 covered, mutation 0.96 measured, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-07-01T10:36:12.283461Z",
+      "action": "completed verify-merge-before-completion"
     }
   ]
 }

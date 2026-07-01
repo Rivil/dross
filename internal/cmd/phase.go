@@ -10,8 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -228,8 +230,15 @@ into the PR squash, so the fast-forward above already brings the
 completion onto the reconcile branch — complete writes no commit of its
 own. This is what eliminates the completion-chore divergence.
 
-Refuses on a dirty tree, or when origin/<branch> carries no "completed
-<id>" record (the upstream merge hasn't actually happened yet).
+Refuses on a dirty tree, or unless the phase's merge is authoritatively
+confirmed. The gate is the provider's "is PR #N merged?" status, looked
+up via the PR number ship recorded in the phase's changes.json — the
+"completed <id>" history string is only a corroborating hint, never the
+gate, because it rides forward in cumulative history and a later merged
+phase can drag it onto the base. When no PR number is recorded or the
+provider can't answer, complete falls back to a git-ancestry check
+(merge-base --is-ancestor) and refuses-when-inconclusive rather than
+false-completing.
 
 On an already-diverged branch the fast-forward aborts. For main, re-run
 with --recover to reset it to origin and restore the cumulative .dross/
@@ -295,6 +304,18 @@ points at a manual reconcile.`,
 				return dirtyTreeError("completing", status)
 			}
 
+			// Read THIS phase's recorded PR number from its phase-scoped
+			// changes.json BEFORE switching branches — the reconcile branch
+			// may not carry the phase's changes.json, and the record is
+			// drag-proof (unlike the "completed <id>" breadcrumb in cumulative
+			// state history). ship writes and commits it onto phase/<id>
+			// post-push. A missing/empty file is fine (recordedPR stays 0 → the
+			// gate falls back to git ancestry).
+			recordedPR := 0
+			if ch, cerr := changes.Load(changes.FilePath(root, phaseID), phaseID); cerr == nil {
+				recordedPR = ch.PR
+			}
+
 			// Switch to the reconcile branch if we aren't already there.
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
@@ -310,22 +331,18 @@ points at a manual reconcile.`,
 				return fmt.Errorf("git fetch: %w\n%s", err, out)
 			}
 
-			// Branch-ref-independent merge guard. `dross ship` folds the
-			// `completed <id>` record into the squash, so a genuinely merged
-			// phase shows that record on origin/<main>. Verify it's there
-			// before touching anything destructive. The old guard nested
-			// this under "local phase branch ref exists", so an abandoned
-			// phase whose local branch was already deleted skipped the check
-			// and the ff-only silently no-op'd — letting complete "succeed"
-			// on an unmerged phase. Reading origin/<main> directly closes
-			// that gap regardless of whether any branch ref survives.
-			originState, err := gitTrim(repoDir, "show", "origin/"+reconcileBranch+":.dross/"+state.File)
-			if err != nil {
-				return fmt.Errorf("read origin/%s:.dross/%s: %w — has the PR merged upstream?", reconcileBranch, state.File, err)
-			}
-			if !strings.Contains(originState, "completed "+phaseID) {
-				return fmt.Errorf("origin/%s carries no `completed %s` record — has the PR merged upstream? Refusing so the phase branch isn't lost",
-					reconcileBranch, phaseID)
+			// Authoritative merge gate. Prefer the provider's "is PR #N
+			// merged?" status (via the recorded PR number): squash-merge
+			// rewrites SHAs so git ancestry can't confirm a squash-merged
+			// phase, and the "completed <id>" breadcrumb rides forward in
+			// cumulative history so a later merged phase can drag it onto the
+			// base — it can't be trusted as the gate. When we can't get an
+			// authoritative answer (no PR number, provider can't answer, or an
+			// error), fall back to a git-ancestry check and
+			// refuse-when-inconclusive rather than false-complete. Runs before
+			// anything destructive.
+			if err := mergeGate(repoDir, buildOpenOpts(p), phaseID, phaseBranch, reconcileBranch, recordedPR); err != nil {
+				return err
 			}
 
 			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+reconcileBranch); err != nil {
@@ -408,6 +425,45 @@ points at a manual reconcile.`,
 	c.Flags().BoolVar(&recoverFlag, "recover", false,
 		"on a diverged main, reset to origin and restore .dross/ in one shot instead of aborting")
 	return c
+}
+
+// mergeGate is the authoritative completion gate for `dross phase complete`.
+// Primary signal: the provider's "is PR #N merged?" status, looked up via the
+// phase-recorded PR number (opts carries the provider/url wiring). When a PR
+// number is recorded and the provider answers, that answer is decisive —
+// merged proceeds, unmerged refuses. When there is no recorded PR, or the
+// provider can't answer (ErrMergeStatusUnsupported) or errors, it falls back to
+// `git merge-base --is-ancestor origin/phase/<id> origin/<base>`: a git error
+// (ref missing — squash-deleted) AND a false ancestry result BOTH map to the
+// same guided refusal. It never trusts the "completed <id>" breadcrumb, never
+// false-completes, and never crashes offline.
+func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconcileBranch string, recordedPR int) error {
+	if recordedPR > 0 {
+		opts.PRNumber = recordedPR
+		merged, err := ship.PRMergedFunc(opts)
+		switch {
+		case err == nil && merged:
+			return nil // authoritatively merged — proceed
+		case err == nil && !merged:
+			return fmt.Errorf("PR #%d for %s is not merged upstream — refusing to complete so the phase branch isn't lost.\n"+
+				"Merge the PR first and re-run; or if it really merged, use `dross phase complete --recover` / verify the merge manually.",
+				recordedPR, phaseID)
+		case errors.Is(err, ship.ErrMergeStatusUnsupported):
+			// Provider can't answer yet — fall through to the ancestry fallback.
+		default:
+			// Network/API error — fall through rather than block on a transient failure.
+		}
+	}
+	// Fallback: git ancestry. A missing origin/phase/<id> ref (squash-deleted)
+	// OR a non-ancestor result both mean "can't confirm the merge" — refuse
+	// with guidance rather than trust the breadcrumb or false-complete.
+	if err := gitNoOut(repoDir, "merge-base", "--is-ancestor", "origin/"+phaseBranch, "origin/"+reconcileBranch); err != nil {
+		return fmt.Errorf("cannot confirm %s has merged into %s — no merged-PR status was available and origin/%s is not an ancestor of origin/%s "+
+			"(the phase branch may have been squash-deleted, or the PR isn't merged yet).\n"+
+			"Refusing so the phase branch isn't lost. If the PR really merged, use `dross phase complete --recover` or verify the merge manually.",
+			phaseID, reconcileBranch, phaseBranch, reconcileBranch)
+	}
+	return nil
 }
 
 // forkPhaseBranch creates and checks out branchName rooted on the base returned

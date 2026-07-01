@@ -11,8 +11,21 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
 )
+
+// stubPRMerged overrides the exported ship.PRMergedFunc seam so `dross phase
+// complete`'s merge gate gets a deterministic answer without a `gh` binary or
+// network, restoring the real func when the test ends. The happy-path fixtures
+// record a PR number, so with merged=true the gate takes the authoritative
+// path; merged=false simulates an unmerged PR.
+func stubPRMerged(t *testing.T, merged bool) {
+	t.Helper()
+	prev := ship.PRMergedFunc
+	ship.PRMergedFunc = func(ship.OpenOpts) (bool, error) { return merged, nil }
+	t.Cleanup(func() { ship.PRMergedFunc = prev })
+}
 
 // initWithGit sets up a dross-onboarded git repo at dir with a single
 // baseline commit on main, ready for `dross phase create` to fork
@@ -331,6 +344,14 @@ func completeFixture(t *testing.T) (string, string) {
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
+	// Record a PR number on phase/auth (as ship does post-push), so complete's
+	// merge gate has THIS phase's PR to look up. Committed on the phase branch
+	// only — it never reaches origin/main, matching production.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
+		`{"phase":"auth","pr":42,"tasks":{}}`)
+	mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record PR #42 for auth")
+
 	// Simulate the upstream squash-merge: build a synthetic squash on
 	// top of origin/main and push it. The squash must carry the completion
 	// record `dross ship` folds in (current_phase cleared + `completed
@@ -362,6 +383,7 @@ func completeFixture(t *testing.T) (string, string) {
 
 func TestPhaseCompleteHappyPath(t *testing.T) {
 	dir, _ := completeFixture(t)
+	stubPRMerged(t, true) // the recorded PR is authoritatively merged
 
 	if err := runCmd(t, Phase(), "complete"); err != nil {
 		t.Fatalf("complete: %v", err)
@@ -439,12 +461,16 @@ func TestPhaseCompleteRefusesUnmergedUpstream(t *testing.T) {
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
+	// No PR was recorded (never shipped) and phase/auth was never pushed, so
+	// the gate falls back to git ancestry and finds it inconclusive. Even a
+	// merged=false provider answer would refuse; assert the fallback refusal.
+	stubPRMerged(t, false)
 	err := runCmd(t, Phase(), "complete")
 	if err == nil {
 		t.Fatal("expected error when upstream merge hasn't actually happened")
 	}
-	if !strings.Contains(err.Error(), "has the PR merged") {
-		t.Errorf("error should question whether the PR merged upstream: %v", err)
+	if !strings.Contains(err.Error(), "cannot confirm") {
+		t.Errorf("error should say the merge can't be confirmed: %v", err)
 	}
 
 	// Phase branch must still exist — we didn't lose the work.
@@ -489,12 +515,13 @@ func TestPhaseCompleteRefusesUnmergedNoLocalBranch(t *testing.T) {
 
 	// Name the phase explicitly: neither current_phase nor a phase branch
 	// can supply it now.
+	stubPRMerged(t, false)
 	err := runCmd(t, Phase(), "complete", "auth")
 	if err == nil {
 		t.Fatal("expected refusal when local branch is gone AND origin lacks the completion record")
 	}
-	if !strings.Contains(err.Error(), "has the PR merged") {
-		t.Errorf("error should question whether the PR merged upstream: %v", err)
+	if !strings.Contains(err.Error(), "cannot confirm") {
+		t.Errorf("error should say the merge can't be confirmed: %v", err)
 	}
 
 	// Nothing destructive: main is unchanged and the tree is clean.
@@ -506,11 +533,77 @@ func TestPhaseCompleteRefusesUnmergedNoLocalBranch(t *testing.T) {
 	}
 }
 
+// TestPhaseCompleteRefusesDraggedBreadcrumb is the core regression (c-1): a
+// later merged phase drags a `completed auth` row onto origin/main, but auth's
+// own PR is still open. The old guard passed on the breadcrumb alone; the
+// authoritative gate (recorded PR + provider merged-status) must refuse — no
+// ff, no branch deletion — so the unmerged phase branch isn't lost.
+func TestPhaseCompleteRefusesDraggedBreadcrumb(t *testing.T) {
+	dir, _ := completeFixture(t) // origin/main carries `completed auth`; PR 42 recorded
+	stubPRMerged(t, false)       // …but PR #42 is NOT actually merged
+
+	// Precondition: the breadcrumb really is dragged onto the base.
+	originState := mustGit(t, dir, "show", "origin/main:.dross/state.json")
+	if !strings.Contains(originState, "completed auth") {
+		t.Fatalf("precondition: origin/main should carry the dragged `completed auth` breadcrumb, got:\n%s", originState)
+	}
+	originMain := mustGit(t, dir, "rev-parse", "origin/main")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("must refuse: the PR is unmerged even though a `completed auth` breadcrumb was dragged onto the base")
+	}
+	if !strings.Contains(err.Error(), "not merged") {
+		t.Errorf("error should say PR #42 is not merged: %v", err)
+	}
+	// Nothing destructive: the phase branch survives and main didn't ff.
+	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); !strings.Contains(b, "phase/auth") {
+		t.Errorf("phase/auth must survive a refused complete, got %q", b)
+	}
+	if now := mustGit(t, dir, "rev-parse", "main"); now == originMain {
+		t.Errorf("local main should not have fast-forwarded onto the dragged breadcrumb")
+	}
+}
+
+// TestPhaseCompleteRefusesWhenMergeInconclusive covers the offline/deleted-ref
+// fallback (c-5): origin/main carries a `completed auth` breadcrumb, but there
+// is NO recorded PR and origin/phase/auth is absent (squash-deleted / never
+// pushed). With no authoritative signal the gate falls back to git ancestry,
+// finds it inconclusive, and refuses with guidance — never trusting the
+// breadcrumb, never panicking, never false-completing.
+func TestPhaseCompleteRefusesWhenMergeInconclusive(t *testing.T) {
+	dir, _ := completeFixture(t)
+
+	// Strip the recorded PR so the gate has no authoritative signal; with no
+	// [remote] provider configured the real PRMergedFunc can't answer either,
+	// so the run reaches the ancestry fallback (no stub).
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
+		`{"phase":"auth","tasks":{}}`)
+	mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: drop PR record")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("must refuse when the merge can't be confirmed (no PR, ref absent)")
+	}
+	if !strings.Contains(err.Error(), "cannot confirm") {
+		t.Errorf("error should be the guided ancestry-fallback refusal: %v", err)
+	}
+	// Not destructive, no crash: phase/auth survives and the tree is clean.
+	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); !strings.Contains(b, "phase/auth") {
+		t.Errorf("phase/auth must survive, got %q", b)
+	}
+	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
+		t.Errorf("tree should be clean after the refusal, got %q", st)
+	}
+}
+
 // TestPhaseCompleteDeletesRemoteBranch covers the provider-did-NOT-delete
 // case: the phase branch is still live on origin when complete runs, and
 // complete must remove it so nothing is left behind.
 func TestPhaseCompleteDeletesRemoteBranch(t *testing.T) {
 	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
 
 	// Publish the phase branch to origin (provider --delete-branch aborted
 	// or never ran).
@@ -534,6 +627,7 @@ func TestPhaseCompleteDeletesRemoteBranch(t *testing.T) {
 // remote delete must be a no-op, not an error.
 func TestPhaseCompleteRemoteDeleteIdempotent(t *testing.T) {
 	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
 
 	if out := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/auth"); out != "" {
 		t.Fatalf("precondition: origin should have no phase branch, got: %q", out)
@@ -559,6 +653,9 @@ func TestShipToCompleteLeavesZeroManualGit(t *testing.T) {
 		{"provider already deleted branch", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// The forgejo provider can't answer merged-status, so stub the
+			// gate to the authoritative merged answer ship's PR record earns.
+			stubPRMerged(t, true)
 			// shipFixture (ship_test.go) lands us on phase/x with verify
 			// pass and [remote] pointed at a forgejo provider.
 			dir := shipFixture(t, "https://forge.example/me/p.git")
@@ -646,6 +743,7 @@ func TestShipToCompleteLeavesZeroManualGit(t *testing.T) {
 // branches. With ship folding the record into the squash and complete
 // writing no commit, both completions leave main exactly at origin.
 func TestConsecutivePhasesNoDivergence(t *testing.T) {
+	stubPRMerged(t, true) // forgejo can't answer merged-status; ship records the PR
 	dir := shipFixture(t, "https://forge.example/me/p.git")
 
 	remoteDir := t.TempDir()
@@ -799,6 +897,13 @@ func divergedCompleteFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
+	// Record a PR on phase/auth so the merge gate passes (tests stub
+	// PRMergedFunc=true) and the run reaches the ff-divergence logic under test.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
+		`{"phase":"auth","pr":77,"tasks":{}}`)
+	mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record PR #77 for auth")
+
 	stPath := filepath.Join(dir, ".dross", "state.json")
 
 	// Origin squash: src/ + completion record, but no phase .dross/ artefacts.
@@ -849,6 +954,7 @@ func divergedCompleteFixture(t *testing.T) (string, string, string) {
 // byte-for-byte unchanged — no partial reset.
 func TestPhaseCompleteDivergedNoFlagStops(t *testing.T) {
 	dir, _, mainSHA := divergedCompleteFixture(t)
+	stubPRMerged(t, true) // gate passes; the ff-divergence refusal is under test
 
 	err := runCmd(t, Phase(), "complete")
 	if err == nil {
@@ -867,6 +973,7 @@ func TestPhaseCompleteDivergedNoFlagStops(t *testing.T) {
 // branch, and finishes on a clean tree — zero manual git.
 func TestPhaseCompleteRecoverHeals(t *testing.T) {
 	dir, _, _ := divergedCompleteFixture(t)
+	stubPRMerged(t, true) // gate passes; the --recover heal path is under test
 
 	if err := runCmd(t, Phase(), "complete", "--recover"); err != nil {
 		t.Fatalf("complete --recover should heal a diverged main: %v", err)
@@ -1107,6 +1214,13 @@ func completeMilestoneFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
+	// Record a PR number on phase/auth so complete's merge gate has a PR to
+	// look up (tests stub PRMergedFunc for the answer).
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
+		`{"phase":"auth","pr":42,"tasks":{}}`)
+	mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record PR #42 for auth")
+
 	// Simulate the upstream squash-merge onto the MILESTONE branch: a synthetic
 	// squash on top of origin/milestone/<v> carrying the completion record that
 	// complete reads as its merge guard.
@@ -1135,6 +1249,7 @@ func completeMilestoneFixture(t *testing.T) (string, string, string) {
 
 func TestPhaseCompleteFastForwardsMilestone(t *testing.T) {
 	dir, _, version := completeMilestoneFixture(t)
+	stubPRMerged(t, true)
 	if err := runCmd(t, Phase(), "complete"); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
@@ -1154,6 +1269,7 @@ func TestPhaseCompleteFastForwardsMilestone(t *testing.T) {
 
 func TestPhaseCompleteNoMilestoneFfsMain(t *testing.T) {
 	dir, _ := completeFixture(t) // no milestone active → main reconcile preserved
+	stubPRMerged(t, true)
 	if err := runCmd(t, Phase(), "complete"); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
@@ -1167,6 +1283,7 @@ func TestPhaseCompleteNoMilestoneFfsMain(t *testing.T) {
 
 func TestPhaseCompleteMilestoneDivergedAborts(t *testing.T) {
 	dir, _, version := completeMilestoneFixture(t)
+	stubPRMerged(t, true) // gate passes; the ff-divergence is what's under test
 	// Introduce local divergence: a commit on local milestone/<v> that origin
 	// lacks (origin carries the squash the local branch doesn't) → ff aborts.
 	mustGit(t, dir, "checkout", "-q", "milestone/"+version)

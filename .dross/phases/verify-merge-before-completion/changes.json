@@ -1,0 +1,47 @@
+{
+  "phase": "verify-merge-before-completion",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/cmd/ship.go",
+        "internal/changes/changes_test.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "e3d57d9",
+      "completed_at": "2026-07-01T10:16:10.154793Z",
+      "landmarks": [
+        {
+          "feature": "PR persistence · symbol=SetPR · loc=internal/changes/changes.go:96 · what=ship records opened PR number into phase-scoped changes.json and commits it"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/ship/merged.go",
+        "internal/ship/merged_test.go",
+        "internal/ship/open.go"
+      ],
+      "commit": "7e0a425",
+      "completed_at": "2026-07-01T10:17:28.375685Z",
+      "landmarks": [
+        {
+          "feature": "merge authority · symbol=PRMergedFunc · loc=internal/ship/merged.go:38 · what=provider PR-merged lookup with GitHub via gh and unsupported-provider sentinel behind an exported overridable seam"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "6d99599",
+      "completed_at": "2026-07-01T10:22:37.011725Z",
+      "landmarks": [
+        {
+          "feature": "merge authority · symbol=mergeGate · loc=internal/cmd/phase.go:334 · what=phase complete gates on recorded-PR merge status with git-ancestry refuse-when-inconclusive fallback replacing the breadcrumb guard"
+        }
+      ]
+    }
+  }
+}
