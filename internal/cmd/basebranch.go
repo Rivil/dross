@@ -1,11 +1,48 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
+
+	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
+
+// BaseBranch prints the branch that new phase/quick work should fork off (and
+// that ship should target): the active milestone's integration branch when it
+// exists, else the configured main branch. stdout carries only the bare branch
+// name so callers can consume `$(dross base-branch)`; the scope-a-milestone
+// nudge (no active milestone) goes to stderr to keep stdout clean.
+func BaseBranch() *cobra.Command {
+	return &cobra.Command{
+		Use:   "base-branch",
+		Short: "Print the branch new phase/quick work should fork off",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			base, milestoneActive, err := resolveNewWorkBase(filepath.Dir(root), root)
+			if err != nil {
+				return err
+			}
+			Print(base)
+			// Nudge only when there's no active milestone at all — never in
+			// the cutover case (a milestone is set but predates the branch
+			// model), matching phase create's fallback nudge.
+			if !milestoneActive {
+				if s, err := state.Load(filepath.Join(root, state.File)); err == nil && s.CurrentMilestone == "" {
+					fmt.Fprintf(os.Stderr, "no milestone active — rooted on %s; scope one with `dross milestone <version>` for integration branching\n", base)
+				}
+			}
+			return nil
+		},
+	}
+}
 
 // resolveNewWorkBase decides the branch that new phase/quick work should fork
 // off (and that ship should target). It returns the active milestone's
