@@ -58,7 +58,9 @@ type Config struct {
 	AuthEnv    string // env var name holding the token (never the value)
 	AuthScheme string // gitlab: "private-token" (default) | "bearer"
 	ProjectID  string // gitlab: numeric project-id override; empty = derive from URL
-	Project    string // youtrack: project short-name (e.g. "PROJ"); ignored by forge backends
+	Project    string // youtrack: project short-name (e.g. "PROJ"); jira: project key; github: "owner/repo"; ignored by forge backends
+	AuthUser   string // jira: account email for HTTP Basic auth (email:token)
+	BoardID    string // github: Projects v2 board node id to add created issues to (empty = repo issues only)
 }
 
 // New validates config, resolves the token from the environment, and returns
@@ -130,12 +132,18 @@ type BoardClient interface {
 var _ BoardClient = (*Client)(nil)
 
 // NewBoard returns the board client for the configured provider: the YouTrack
-// backend for provider=youtrack, otherwise the forge REST Client
-// (forgejo/gitea/gitlab). It is the single entry point board operations use to
-// resolve a client from the [board] config.
+// backend for provider=youtrack, the Jira backend for provider=jira, the GitHub
+// (repo-issues + Projects v2) backend for provider=github, otherwise the forge
+// REST Client (forgejo/gitea/gitlab). It is the single entry point board
+// operations use to resolve a client from the [board] config.
 func NewBoard(cfg Config) (BoardClient, error) {
-	if strings.ToLower(cfg.Provider) == "youtrack" {
+	switch strings.ToLower(cfg.Provider) {
+	case "youtrack":
 		return NewYouTrack(cfg)
+	case "jira":
+		return NewJira(cfg)
+	case "github":
+		return NewGitHubProjects(cfg)
 	}
 	return New(cfg)
 }

@@ -158,15 +158,18 @@ _introduced 10-interaction-contract · extended 11-retrofit-core-loop · extende
 
 ### Issue board sync
 
-Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue board — driven solely by a dedicated `[board]` config block, independent of `[remote]`, so a repo ships code to one host and tracks issues on another. Backends sit behind a `BoardClient` interface that `forge.NewBoard` dispatches by provider: the provider-aware forge `*Client` (forgejo/gitea/gitlab) or a sibling `YouTrackClient` (REST CRUD, bearer permanent-token, readable-id `PROJ-7` addressing, `?fields` projection). board.json links every artefact by the tracker's readable **string** id. YouTrack adds milestone entities per `[board].milestone_mode` (version bundle / agile board / epic), lifecycle→State mapping via the default map + `[board].state_map` (unmapped warns and skips), and backlog sync of unscaffolded slugs + someday ideas attached per mode (Fix versions / Epic subtask / project-based board). `dross doctor` validates a configured `[board]`; the inbox board source is gated on `[board].enabled`.
+Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue board — driven solely by a dedicated `[board]` config block, independent of `[remote]`, so a repo ships code to one host and tracks issues on another. Backends sit behind a `BoardClient` interface that `forge.NewBoard` dispatches by provider: the provider-aware forge `*Client` (forgejo/gitea/gitlab), a sibling `YouTrackClient` (REST CRUD, bearer permanent-token, readable-id `PROJ-7` addressing, `?fields` projection), a `JiraClient` (Jira Cloud REST v3, HTTP Basic email:token, string `PROJ-123` keys, ADF bodies, transition-driven state, milestones as project versions), or a `GitHubClient` (repo issues with integer milestones — forge-shaped — plus an isolated Projects v2 `addProjectV2ItemById` add-to-board on create when a board is configured). board.json links every artefact by the tracker's readable **string** id. YouTrack adds milestone entities per `[board].milestone_mode` (version bundle / agile board / epic), lifecycle→State mapping via the default map + `[board].state_map` (unmapped warns and skips), and backlog sync of unscaffolded slugs + someday ideas attached per mode (Fix versions / Epic subtask / project-based board). `dross doctor` validates a configured `[board]`; the inbox board source is gated on `[board].enabled`.
 
 - `forge.BoardClient` (interface) + `forge.NewBoard` (provider dispatch) — `internal/forge/forge.go:121`
 - `forge.YouTrackClient` + `NewYouTrack` — `internal/forge/youtrack.go:25`
 - `YouTrackClient.EnsureMilestoneEntity` / `SetState` — `internal/forge/youtrack.go:184`
+- `forge.JiraClient` + `NewJira` (REST v3, versions, transitions) — `internal/forge/jira.go:25`
+- `forge.GitHubClient` + `NewGitHubProjects` (repo issues + Projects v2 attach) — `internal/forge/github.go:26`
 - `board.Board` (string readable-id link registry) — `internal/board/board.go:29`
 - `openBoard` (resolves client solely from `[board]`) / `syncBacklog` — `internal/cmd/issue.go:70`
 
 _a073ab7 · extended gitlab-ship-provider · 27e1a4f · extended youtrack-board-integration · 4bdea81_
+_extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2_
 
 ### Milestone scoping
 

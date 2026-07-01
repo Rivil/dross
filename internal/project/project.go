@@ -111,10 +111,12 @@ type Remote struct {
 // the single source for `dross issue` board operations; there is no [remote]
 // fallback.
 type Board struct {
-	Provider      string            `toml:"provider,omitempty"`       // forgejo | gitea | gitlab | youtrack
+	Provider      string            `toml:"provider,omitempty"`       // forgejo | gitea | gitlab | youtrack | jira | github
 	BaseURL       string            `toml:"base_url,omitempty"`       // instance base URL of the tracker
 	AuthEnv       string            `toml:"auth_env,omitempty"`       // env var name holding the token (NEVER the value)
-	Project       string            `toml:"project,omitempty"`        // project short-name / key on the tracker
+	AuthUser      string            `toml:"auth_user,omitempty"`      // jira: account email for HTTP Basic auth (email:token)
+	Project       string            `toml:"project,omitempty"`        // project short-name / key on the tracker; github: "owner/repo"
+	GitHubProject string            `toml:"github_project,omitempty"` // github: Projects v2 board node id to add created issues to
 	Enabled       bool              `toml:"enabled,omitempty"`        // board sync is on
 	MilestoneMode string            `toml:"milestone_mode,omitempty"` // version (default) | agile | epic
 	StateMap      map[string]string `toml:"state_map,omitempty"`      // dross lifecycle state → tracker State value override

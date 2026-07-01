@@ -1,0 +1,40 @@
+[phase]
+id        = "additional-board-backends"
+title     = "additional-board-backends"
+milestone = "v0.9"
+
+[[criteria]]
+id   = "c-1"
+text = "GitHub is a board backend. A GitHubClient (internal/forge/github.go) implements the BoardClient interface against GitHub's issues API — issue-number string keys and integer repo milestones, shaped like the existing forge Client — so [board] provider=\"github\" routes through forge.NewBoard. When a Projects v2 board is configured, a created issue is ALSO added to that project board via a GraphQL addProjectV2ItemById call (the 'project board' requirement). Auth is a PAT read from auth_env. Covered by httptest-mock tests (REST issue ops + the GraphQL project-attach) mirroring the forge/youtrack test pattern."
+
+[[criteria]]
+id   = "c-2"
+text = "Jira is a second board backend. A JiraClient (internal/forge/jira.go) implements BoardClient against the Jira Cloud REST API v3: create/get/update issues, close via a transition, list via JQL search, and EnsureMilestone mapped to a Jira version. Jira issue keys are strings (PROJ-123) and it follows the YouTrack concrete-path where the integer-milestone assumption doesn't fit. Auth is email + API token (HTTP Basic). Covered by httptest-mock tests mirroring the youtrack pattern."
+
+[[criteria]]
+id   = "c-3"
+text = "The backends are wired end-to-end. forge.NewBoard dispatches provider github/jira to the new clients; project.Board carries any new config it needs (a project/board number for GitHub Projects, an account email for Jira Basic auth) with a Save→Load round-trip test; boardConfig maps them; dross issue enable's validation hints list github and jira; command-layer concrete-assertion branches are added where a backend needs non-interface entity/state handling. Existing forgejo/gitea/gitlab/youtrack flows stay green."
+
+[[decisions]]
+key    = "github_model"
+choice = "GitHub board sync targets REPO ISSUES via GitHub's API (issue-number keys, integer repo milestones — the same shape as the forge Client), and additionally adds each created issue to a configured Projects v2 board via the GraphQL addProjectV2ItemById mutation. The Projects v2 GraphQL is scoped to that single add-to-board step."
+why    = "GitHub's issues + milestones API mirrors Gitea's, so the issue-centric BoardClient (with integer milestones) fits cleanly and needs no YouTrack-style concrete path for issues. Full Projects v2 modeling (custom fields, draft items, iterations) is out of scope and error-prone from docs alone; the one add-item mutation is what fulfills the 'project board' criterion verifiably with a mocked GraphQL response."
+locked = true
+
+[[decisions]]
+key    = "jira_model"
+choice = "Jira board sync uses the Jira Cloud REST API v3 with string issue keys, and maps dross milestones to Jira project VERSIONS. It follows the YouTrack concrete-path (string entity ids via an EnsureMilestoneEntity-style method + SetState transition), not the integer-milestone path."
+why    = "Jira ids are non-integer strings and its state model is transition-based, exactly the mismatch the YouTrack sibling type already solves; reusing that pattern keeps the command layer's int-milestone path untouched for the existing forges."
+locked = true
+
+[[decisions]]
+key    = "auth_and_secrets"
+choice = "GitHub: a PAT (project + repo scope) read from auth_env. Jira: HTTP Basic with an account email + API token — the email is a new project.Board field (auth_user), the token comes from auth_env. Tokens are NEVER stored in project.toml; only the env-var name is. Follows the existing os.Getenv(AuthEnv) + `dross env set` convention."
+why    = "Matches the established secret posture (env-name in config, value in ~/.claude via dross env). Jira Basic auth is email:token, so the non-secret email needs a home in [board] while the token stays an env reference."
+locked = true
+
+[[decisions]]
+key    = "verify_posture"
+choice = "Both backends are verified by httptest-mock tests — the established bar for every existing board/forge provider (forgejo/gitea/gitlab/youtrack are all mock-tested, none against a live instance). NO live GitHub Projects board or Jira Cloud instance is exercised in this phase; that needs the user's tokens/instances and is a documented flip-on step, never reported as verified."
+why    = "The provider test contract in this repo IS mocked-HTTP; a live smoke test requires credentials the user will supply later. Honesty rule: mock-verified is stated as mock-verified, and the live step is named, not faked."
+locked = true
