@@ -369,3 +369,45 @@ func TestJiraBasicAuth(t *testing.T) {
 		t.Errorf("Authorization = %q, want %q", gotAuth, want)
 	}
 }
+
+// TestJiraUpdateIssueStateTransitions covers UpdateIssue's State-patch branch:
+// State="closed" drives a done transition; any other State reopens via the
+// indeterminate transition. Without this, the close-vs-reopen branch is untested.
+func TestJiraUpdateIssueStateTransitions(t *testing.T) {
+	var postedID string
+	c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/transitions") {
+			t.Errorf("unexpected path %s", r.URL.Path)
+			return
+		}
+		switch r.Method {
+		case "GET":
+			_, _ = io.WriteString(w, `{"transitions":[{"id":"11","name":"Start","to":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}},{"id":"31","name":"Done","to":{"name":"Done","statusCategory":{"key":"done"}}}]}`)
+		case "POST":
+			var body map[string]any
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &body)
+			tr, _ := body["transition"].(map[string]any)
+			postedID, _ = tr["id"].(string)
+			w.WriteHeader(http.StatusNoContent)
+		}
+	})
+
+	closed := "closed"
+	postedID = ""
+	if _, err := c.UpdateIssue("PROJ-7", IssuePatch{State: &closed}); err != nil {
+		t.Fatalf("UpdateIssue(closed): %v", err)
+	}
+	if postedID != "31" {
+		t.Errorf("State=closed fired transition %q, want 31 (done)", postedID)
+	}
+
+	open := "open"
+	postedID = ""
+	if _, err := c.UpdateIssue("PROJ-7", IssuePatch{State: &open}); err != nil {
+		t.Fatalf("UpdateIssue(open): %v", err)
+	}
+	if postedID != "11" {
+		t.Errorf("State=open fired transition %q, want 11 (reopen/indeterminate)", postedID)
+	}
+}
