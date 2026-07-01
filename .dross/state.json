@@ -1,21 +1,11 @@
 {
   "version": "0.7.1.0",
   "current_milestone": "v0.7",
-  "last_activity": "2026-07-01T06:59:30.563231Z",
-  "last_action": "completed ship-auto-noninteractive",
+  "current_phase": "milestone-branch-model",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-01T07:17:16.402004Z",
+  "last_action": "spec locked: milestone-branch-model",
   "history": [
-    {
-      "at": "2026-06-30T09:29:38.235115Z",
-      "action": "merged native-statusline"
-    },
-    {
-      "at": "2026-06-30T09:41:06.212821Z",
-      "action": "set current_milestone=v0.6"
-    },
-    {
-      "at": "2026-06-30T12:15:00.136848Z",
-      "action": "merged deferred-unroute-command"
-    },
     {
       "at": "2026-06-30T14:06:44.900387Z",
       "action": "merged architecture-doc-enhancements"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-01T06:59:30.563231Z",
       "action": "completed ship-auto-noninteractive"
+    },
+    {
+      "at": "2026-07-01T07:07:15.535556Z",
+      "action": "created milestone-branch-model"
+    },
+    {
+      "at": "2026-07-01T07:17:16.395056Z",
+      "action": "set current_phase=milestone-branch-model"
+    },
+    {
+      "at": "2026-07-01T07:17:16.402004Z",
+      "action": "spec locked: milestone-branch-model"
     }
   ]
 }
