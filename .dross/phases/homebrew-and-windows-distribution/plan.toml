@@ -1,0 +1,95 @@
+[phase]
+  id = "homebrew-and-windows-distribution"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Windows-aware self-update core (zip + dross.exe) with a goos/goarch test seam"
+  files = ["internal/update/update.go", "internal/update/update_test.go", "internal/cmd/update.go", "internal/cmd/update_test.go"]
+  description = """
+Make dross update work on windows without needing a windows host to test it.
+internal/update/update.go:
+  - add \"windows\" to supportedOS.
+  - AssetName: return the goreleaser asset name per OS — \"…_windows_amd64.zip\" on windows
+    (.zip), \"…_tar.gz\" elsewhere. Keep matching goreleaser exactly (name_template +
+    format_overrides). Update the doc comment.
+  - add BinaryName(goos string) string → \"dross.exe\" on windows, \"dross\" otherwise.
+internal/cmd/update.go:
+  - add goos, goarch fields to updateOpts, DEFAULTING to runtime.GOOS/GOARCH when empty
+    (resolve them once near the top of runUpdate). Replace the direct runtime.GOOS/GOARCH
+    uses so tests can drive the windows path.
+  - extraction: keep extractBinary (tar.gz) and ADD extractBinaryZip(zip []byte, name string)
+    using archive/zip; dispatch on the asset suffix (.zip → zip, else tar.gz). Pass the
+    OS-correct binary name (update.BinaryName(goos)) instead of the literal \"dross\".
+  - the signature + checksum trust gate is UNCHANGED and must still run before extract/swap
+    for the zip path too.
+Tests:
+  - internal/update/update_test.go: AssetName windows/amd64 + windows/arm64 → the exact .zip
+    names; BinaryName windows→dross.exe; unsupported OS still errors.
+  - internal/cmd/update_test.go: extend releaseServer to optionally build a ZIP containing
+    dross.exe and name the asset …_windows_amd64.zip; add a test that runs runUpdate with
+    opts.goos=\"windows\", goarch=\"amd64\" against a validly-signed windows zip and asserts the
+    binary is extracted+swapped (reuse the signature override seam). Existing darwin/linux
+    tar.gz tests stay green.
+"""
+  covers = ["c-1"]
+  test_contract = [
+    "AssetName(v, \"windows\", \"amd64\") returns dross_<v>_windows_amd64.zip (and arm64), unit-asserted",
+    "runUpdate with goos=windows extracts dross.exe from a served .zip and swaps the binary; a tar.gz-era darwin run still works",
+    "signature/checksum refusal still fires before extract on the windows path (no bypass via zip)",
+  ]
+  status = "todo"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "goreleaser: windows builds + zip override + Homebrew tap; config-guard test"
+  files = [".goreleaser.yaml", "internal/cmd/release_signing_test.go"]
+  description = """
+.goreleaser.yaml:
+  - add windows to builds.goos (keep amd64 + arm64).
+  - add archives format_overrides: windows → zip (so windows archives are .zip, matching AssetName).
+  - add a brews block: tap repository owner Rivil / name homebrew-dross, formula name dross,
+    homepage/description, install `bin.install \"dross\"`, and the token from
+    {{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }} (goreleaser's brews.repository.token). Add a post-install
+    `dross install` caveat note is optional; do not overreach.
+  - checksums already cover all archives incl. the windows zips (no change needed) and the
+    minisign signs block already signs checksums.txt.
+Add config-guard assertions (extend internal/cmd/release_signing_test.go or a sibling test in
+package cmd, reusing readRepoFile/repoRootFromTest): assert .goreleaser.yaml contains `goos: windows`
+region (windows build), a zip format override for windows, and a brews block naming
+homebrew-dross + HOMEBREW_TAP_GITHUB_TOKEN. Keep the existing signing-guard assertions intact.
+"""
+  covers = ["c-2"]
+  test_contract = [
+    "config guard fails if the windows build target, the windows→zip override, or the homebrew-dross brews block is missing",
+    "the brews block references HOMEBREW_TAP_GITHUB_TOKEN (never a literal token) and the Rivil/homebrew-dross tap",
+    "existing release-signing guard assertions stay green",
+  ]
+  status = "todo"
+
+[[task]]
+  id = "t-3"
+  wave = 3
+  title = "Windows install.ps1 bootstrap + README docs for Windows & Homebrew"
+  files = ["install.ps1", "README.md"]
+  description = """
+install.ps1: a self-contained PowerShell bootstrap mirroring install.sh — detect arch
+(amd64/arm64), download the windows .zip from the latest release (allow a DROSS_INSTALL_BASE
+override like install.sh), verify its SHA-256 against checksums.txt (abort on mismatch, stage
+in a temp dir, move onto PATH only after verify), extract dross.exe, place it under a user bin
+dir on PATH, then run `dross install`. Authored from the PowerShell docs; it CANNOT be executed
+unattended here (no windows/pwsh), so keep it simple, well-commented, and mirror install.sh's
+verify-before-place safety. No CI linter exists for ps1 — note that in the phase verify.
+README.md: document (a) Homebrew install — `brew install rivil/dross/dross` via the tap — and
+(b) Windows install — the install.ps1 one-liner and `dross update` self-update — alongside the
+existing curl|sh + dross update instructions. Note the tap push and a live windows run are the
+maintainer/user steps that this phase does not exercise unattended.
+"""
+  covers = ["c-3"]
+  test_contract = [
+    "install.ps1 exists, verifies the checksum before placing the binary, and supports DROSS_INSTALL_BASE",
+    "README documents the Homebrew tap and Windows install/self-update channels",
+    "no green claim is made for a live windows run or the live tap push",
+  ]
+  status = "todo"
