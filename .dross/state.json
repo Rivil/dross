@@ -1,21 +1,11 @@
 {
   "version": "0.7.1.0",
   "current_milestone": "v0.7",
-  "last_activity": "2026-07-01T06:59:30.563231Z",
-  "last_action": "completed ship-auto-noninteractive",
+  "current_phase": "interaction-defer-or-add-framing",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-01T08:44:42.650314Z",
+  "last_action": "spec locked: interaction-defer-or-add-framing",
   "history": [
-    {
-      "at": "2026-06-30T09:29:38.235115Z",
-      "action": "merged native-statusline"
-    },
-    {
-      "at": "2026-06-30T09:41:06.212821Z",
-      "action": "set current_milestone=v0.6"
-    },
-    {
-      "at": "2026-06-30T12:15:00.136848Z",
-      "action": "merged deferred-unroute-command"
-    },
     {
       "at": "2026-06-30T14:06:44.900387Z",
       "action": "merged architecture-doc-enhancements"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-01T06:59:30.563231Z",
       "action": "completed ship-auto-noninteractive"
+    },
+    {
+      "at": "2026-07-01T08:29:28.310622Z",
+      "action": "created interaction-defer-or-add-framing"
+    },
+    {
+      "at": "2026-07-01T08:44:42.643091Z",
+      "action": "set current_phase=interaction-defer-or-add-framing"
+    },
+    {
+      "at": "2026-07-01T08:44:42.650314Z",
+      "action": "spec locked: interaction-defer-or-add-framing"
     }
   ]
 }
