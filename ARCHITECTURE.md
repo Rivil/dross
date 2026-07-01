@@ -244,17 +244,20 @@ _introduced 05-dross-secure · extended 07-stack-profiles · extended 09-marker-
 
 ### Self-update & distribution
 
-Ship dross as a single self-contained binary that carries its own assets and updates itself. The binary embeds every command skill + prompt (`assets.FS`, with the `all:` prefix so the underscore-prefixed `_interaction.md` survives), guarded against drift from the on-disk assets/ tree. `dross install` materializes them into ~/.claude — symlinking assets/ off a source checkout, writing real-file copies from the embedded FS otherwise (`--copy`/`--link` override) — cleanly syncing the dross-* namespace (prune dropped skills *and* prompts, never touch non-dross), with `make install` delegating to it via `--link`. `dross update` fetches the latest GitHub release, verifies the platform tarball's SHA-256 against checksums.txt (refusing on mismatch), atomically swaps the running binary only when the release is strictly newer (or `--force`; `--check` reports without applying), then re-syncs assets by exec'ing the freshly-swapped binary (never the old in-process engine). `install.sh` is the `curl | sh` bootstrap — uname-detect platform, download+verify into a temp dir, mv onto PATH only after the checksum, then `dross install` — gated by a shellcheck CI job; the README documents the curl|sh + `dross update` flow.
+Ship dross as a single self-contained binary that carries its own assets and updates itself. The binary embeds every command skill + prompt (`assets.FS`, with the `all:` prefix so the underscore-prefixed `_interaction.md` survives), guarded against drift from the on-disk assets/ tree. `dross install` materializes them into ~/.claude — symlinking assets/ off a source checkout, writing real-file copies from the embedded FS otherwise (`--copy`/`--link` override) — cleanly syncing the dross-* namespace (prune dropped skills *and* prompts, never touch non-dross), with `make install` delegating to it via `--link`. `dross update` fetches the latest GitHub release, then applies a two-stage trust gate before touching any binary: it verifies a **minisign signature** over checksums.txt against a public key embedded in the binary (fail-closed — a missing `checksums.txt.minisig` or a wrong-key/tampered signature refuses the update), and only the signature-verified checksums.txt is then used to verify the platform tarball's SHA-256 (still refusing on mismatch). It atomically swaps the running binary only when the release is strictly newer (or `--force`; `--check` reports without applying), then re-syncs assets by exec'ing the freshly-swapped binary (never the old in-process engine). The release pipeline signs checksums.txt with minisign in CI (goreleaser `signs` block; the private key is materialized to `$RUNNER_TEMP` from a GitHub secret and the password is piped via stdin), publishing `checksums.txt.minisig` as a release artifact. `install.sh` is the `curl | sh` bootstrap — uname-detect platform, download+verify into a temp dir, mv onto PATH only after the checksum, then `dross install` — gated by a shellcheck CI job; the README documents the curl|sh + `dross update` flow.
 
 - `assets.FS` (`go:embed all:commands all:prompts`) — `assets/embed.go:20`
 - `update.AssetName` / `VerifyChecksum` / `Decide` / `AtomicReplace` — `internal/update/update.go`
+- `update.VerifySignature` / `EmbeddedMinisignPublicKey` / `TrustedMinisignKey` (signature trust anchor + override seam) — `internal/update/signature.go:43`
 - `update.Client` (latest release + download) — `internal/update/update.go:214`
 - `Install` (symlink/copy materialize + dross-* prune) — `internal/cmd/install.go:26`
-- `Update` (`--check`/`--force`, re-sync via the new binary) — `internal/cmd/update.go:27`
+- `Update` signature gate (verify `checksums.txt.minisig` before checksum/extract/swap) — `internal/cmd/update.go:133`
+- release signing (`signs:` block, minisign over checksums) — `.goreleaser.yaml:39` / `.github/workflows/release.yml`
 - `install.sh` (curl|sh bootstrap, stage-then-mv) — `install.sh`
 - `make install` delegation + shellcheck CI gate — `Makefile` / `.github/workflows/ci.yml`
 
 _introduced self-update-and-distribution · 0ccce6a_
+_extended release-trust-and-distribution (minisign signing + verify-before-swap) · 46c091a_
 
 ### Ship recovery
 
