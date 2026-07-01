@@ -50,6 +50,23 @@ drop**:
 When the choice is open-ended (not a small fixed set), go freeform instead of
 manufacturing options — but still lead with your recommendation.
 
+## Surfacing a borderline candidate — defer or add
+
+When you surface a candidate that *might* belong to the current phase — a
+gray-area-adjacent proposal, a parked idea, an optional sub-feature — don't ask
+open-endedly and don't silently record it. Present it as a single either/or that
+**leads with "defer it"** and offers "add to current phase":
+
+- **defer it** (the lead) — it's not this phase; park it (routed to a destination,
+  or someday). Keeps the phase boundary tight by default.
+- **add to current phase** — it's actually in scope; pull it in as a criterion or
+  task.
+
+The defer-first lead keeps scope tight while making inclusion a one-click choice,
+and the either/or guarantees the candidate never evaporates — it is either pulled
+in or parked, never lost. Use this **only for genuinely borderline items**: a
+clearly in-scope proposal still uses the plain accept / reword / drop gate above.
+
 ## Anti-patterns
 
 - A single `AskUserQuestion` that bundles several unrelated decisions "to save

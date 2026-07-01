@@ -1,0 +1,45 @@
+[verify]
+  phase = "interaction-defer-or-add-framing"
+  generated_at = 2026-07-01T09:07:40.867352Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "skipped"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/cmd/spec_prompt_test.go:TestSpecPromptDeferFirstEitherOr",
+    "internal/cmd/spec_prompt_test.go:TestSpecPromptTwoStepRouting",
+  ]
+  notes = "spec.md §4a routes surfaced candidates through the defer-first either/or (defer-first/add-to-current-phase) then a two-step destination that drops the duplicate pull-in; both halves pinned by unique-phrase content assertions."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/plan_prompt_test.go:TestPlanPromptBorderlineTaskDeferFirst"]
+  notes = "plan.md §3 borderline/optional task proposals use the same defer-first either/or (borderline/defer-first/add-as-a-task); needles confined to the new §3 paragraph."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/interaction_snippet_test.go:TestInteractionSnippetHasDeferOrAddPattern"]
+  notes = "_interaction.md carries the canonical defer-or-add section (defer it/add to current phase/defer-first/borderline); phrases unique to the new section, so removal fails the test."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/plan_prompt_test.go:TestPlanPromptCoverageGapEitherOr"]
+  notes = "plan.md §4 coverage-gap check reframed as an explicit either/or (add a covering task / defer the criterion); both arms pinned."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation unmeasurable: phase changed only markdown prompts (.md) and Go test files (_test.go) — no production Go for a mutation adapter to touch. Verdict rests on criterion coverage, consistent with the prior prompt-only phase (gray-area-walkthrough). All four criteria are pinned by falsifiable content-assertion tests whose needles are unique to the added prompt text."

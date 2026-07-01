@@ -38,6 +38,40 @@ func TestSpecPromptRoutesFourDestinations(t *testing.T) {
 	}
 }
 
+// TestSpecPromptDeferFirstEitherOr proves c-1's framing half: a surfaced
+// borderline candidate is routed through the defer-first either/or from the
+// playbook — lead "defer it", offer "add to current phase". Drop the framing and
+// the needles disappear.
+func TestSpecPromptDeferFirstEitherOr(t *testing.T) {
+	content := specPromptContent(t)
+	for _, needle := range []string{
+		"defer-first",          // defer leads
+		"add to current phase", // the alternative
+		"defer it",             // the lead option, spelled out
+	} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("spec.md §4a missing defer-first framing %q", needle)
+		}
+	}
+}
+
+// TestSpecPromptTwoStepRouting proves c-1's routing-layering half: the entry gate
+// (defer vs add) precedes destination routing, and the post-defer step does NOT
+// re-offer the pull-in (the §4a double-offer reconciliation). Collapse the two
+// steps or restore the duplicate pull-in and this fails.
+func TestSpecPromptTwoStepRouting(t *testing.T) {
+	content := specPromptContent(t)
+	for _, needle := range []string{
+		"two-step",          // the layered structure
+		"entry gate",        // step 1
+		"does not re-offer", // step 2 drops the duplicate pull-in
+	} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("spec.md §4a two-step routing missing %q", needle)
+		}
+	}
+}
+
 // TestSpecPromptParkSequence proves c-3: the park branch chains `dross milestone
 // add … phases` with the `dross deferred route … --target` stamp.
 func TestSpecPromptParkSequence(t *testing.T) {

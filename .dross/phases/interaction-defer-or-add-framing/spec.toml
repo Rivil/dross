@@ -1,0 +1,38 @@
+[phase]
+id        = "interaction-defer-or-add-framing"
+title     = "interaction-defer-or-add-framing"
+milestone = "v0.7"
+
+[[criteria]]
+id   = "c-1"
+text = "When /dross-spec surfaces a borderline candidate (gray-area-adjacent proposal, parked idea, optional sub-feature), it is presented as a single AskUserQuestion that leads with 'defer it' and offers 'add to current phase' — an explicit either/or, never open-ended and never silently recorded."
+
+[[criteria]]
+id   = "c-2"
+text = "The same defer-first either/or framing is applied to borderline/optional tasks dross proposes during /dross-plan §3 steering, so the pattern is consistent across spec and plan — not spec-only."
+
+[[criteria]]
+id   = "c-3"
+text = "The defer-or-add pattern is documented once in the shared interaction playbook (_interaction.md) — defer leads, add-to-current-phase is the alternative — so future commands inherit the convention instead of re-specifying it per prompt."
+
+[[criteria]]
+id   = "c-4"
+text = "The /dross-plan coverage-gap check (a criterion with no covering task) is presented as an explicit either/or (add a covering task vs defer the criterion), consistent with the defer-or-add framing, rather than the current inline instruction."
+
+[[decisions]]
+key    = "defer_trigger"
+choice = "The defer-first either/or applies only to borderline/optional candidates dross is unsure belong; clearly-in-scope criteria keep the plain accept/reword/drop gate. The prompt defines the trigger."
+why    = "Leading with 'defer' for solid criteria would wrongly de-emphasize items the user clearly wants; the motivating scenario was specifically an optional candidate."
+locked = true
+
+[[decisions]]
+key    = "defer_routing_layering"
+choice = "Two-step: the surfacing turn is 'defer it / add to current phase'; if 'defer', the existing spec.md §4a destination routing (park / attach / someday) runs as a follow-up turn. §4a stays intact and gains a defer-first entry gate."
+why    = "Preserves §4a's valuable destination routing while adding the defer-first framing as the entry decision — no loss of the loop-closing routing."
+locked = true
+
+[[decisions]]
+key    = "plan_reach"
+choice = "In plan.md, the defer-first either/or applies to borderline/optional tasks proposed during §3 steering (the true parallel to spec's borderline criteria). The coverage-gap check is handled separately by c-4 as its own explicit either/or."
+why    = "Task-proposal surfacing is the direct parallel to spec; the coverage-gap 'move c-N to deferred' is a spec-integrity escape, so it gets its own reframing rather than being conflated with candidate surfacing."
+locked = true

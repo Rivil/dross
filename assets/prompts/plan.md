@@ -167,9 +167,11 @@ Then, as a single propose-and-react turn, ask via `AskUserQuestion`: **"Steer or
 
 Iterate until the user says proceed. Do not be sycophantic — if the user accepts a poor decomposition, flag the risk once before writing.
 
+**Borderline tasks — defer or add.** If the decomposition includes a task you're unsure belongs — an optional/nice-to-have, or one that could be its own phase — don't slip it in silently. Surface it on its own turn with the playbook's defer-or-add either/or: **lead with "defer it"** and offer **"add as a task"**. Defer-first keeps the task graph tight by default; if the user adds it, fold it into the plan as a regular task. (This is the plan-side mirror of spec's borderline-candidate framing; clearly in-scope tasks just ride along in the §3 proposal.)
+
 ## 4. Coverage check (before writing)
 
-Verify every criterion in `spec.toml` has at least one task with that id in `covers`. If a criterion has no covering task: stop, ask the user — "either add a task that covers `c-N`, or move `c-N` to deferred."
+Verify every criterion in `spec.toml` has at least one task with that id in `covers`. If a criterion has no covering task: stop and resolve it as an explicit either/or via `AskUserQuestion` — **add a covering task** for `c-N`, or **defer the criterion** (move `c-N` out of the spec to deferred). Don't write the plan with an uncovered criterion.
 
 ## 5. Write plan.toml
 

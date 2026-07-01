@@ -1,0 +1,31 @@
+{
+  "phase": "interaction-defer-or-add-framing",
+  "generated_at": "2026-07-01T09:07:40.867352Z",
+  "languages": null,
+  "skipped": [
+    {
+      "file": "assets/prompts/_interaction.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/plan.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/spec.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "internal/cmd/interaction_snippet_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/cmd/plan_prompt_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/cmd/spec_prompt_test.go",
+      "reason": "no mutation adapter for .go"
+    }
+  ]
+}
