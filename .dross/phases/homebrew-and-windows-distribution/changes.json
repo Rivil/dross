@@ -1,5 +1,6 @@
 {
   "phase": "homebrew-and-windows-distribution",
+  "pr": 46,
   "tasks": {
     "t-1": {
       "files": [
