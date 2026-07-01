@@ -2,18 +2,10 @@
   "version": "0.7.1.0",
   "current_milestone": "v0.7",
   "current_phase": "ship-auto-noninteractive",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-01T05:56:05.976109Z",
-  "last_action": "phase ship-auto-noninteractive executed (3/3 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-01T06:48:52.793483Z",
+  "last_action": "verified ship-auto-noninteractive: pass (5/5 covered, mutation 0.96 after coverage fold-in)",
   "history": [
-    {
-      "at": "2026-06-30T07:06:00.981531Z",
-      "action": "quick: add install.sh smoke test"
-    },
-    {
-      "at": "2026-06-30T07:17:27.596743Z",
-      "action": "set current_milestone=v0.8"
-    },
     {
       "at": "2026-06-30T07:17:27.603301Z",
       "action": "set version=0.8.0.0"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-01T05:56:05.976109Z",
       "action": "phase ship-auto-noninteractive executed (3/3 done)"
+    },
+    {
+      "at": "2026-07-01T06:48:52.785738Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-01T06:48:52.793483Z",
+      "action": "verified ship-auto-noninteractive: pass (5/5 covered, mutation 0.96 after coverage fold-in)"
     }
   ]
 }
