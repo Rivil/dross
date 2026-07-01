@@ -113,11 +113,15 @@ For each deferred idea capture:
 
 When resuming/extending an existing spec, **skip any deferred item that already has a target** — it's already routed; don't re-offer it (idempotent, no duplicate routing).
 
-### 4a. Route every deferred idea — don't just record it
+### 4a. Route every surfaced candidate — defer-first, then destination
 
-A bare deferred item is write-only: it dies in this spec and never comes back. So give **every** new deferred idea a destination via `AskUserQuestion` (one item per turn, lead with the most likely):
+A bare deferred item is write-only: it dies in this spec and never comes back. So every surfaced candidate — a §3 gray-area-adjacent proposal, an optional sub-feature, or an idea the user punted above — gets the **defer-or-add either/or** from the interaction playbook (not open recording, not silent parking). Drive it as a **two-step** `AskUserQuestion`, one item per turn:
 
-- **Pull into the current phase** — it's actually in scope. Move it *out* of deferred and add it as a new `[[criteria]]` entry (back to §2). It is no longer deferred.
+**Step 1 — the entry gate (defer-first).** Lead with **defer it** and offer **add to current phase**:
+- **add to current phase** — it's actually in scope. This is the **Pull into the current phase** branch: move it *out* of deferred and add it as a new `[[criteria]]` entry (back to §2). It is no longer deferred. This is the *only* place the pull-in is offered.
+- **defer it** (the lead) — it's not this phase. Keep it deferred and go to step 2 for a destination. Defer-first keeps the phase boundary tight by default while making inclusion a one-click choice.
+
+**Step 2 — the destination (only after "defer it").** Route the deferred item via `AskUserQuestion` (lead with the most likely). The entry gate already settled add-vs-defer, so this step **does not re-offer** the pull-in — only the parking destinations:
 - **Park in the milestone backlog** — relevant, but not this phase. Coin a short slug from the idea; after the spec is written (§5) run:
   ```
   dross milestone add <version> phases "<slug>"
