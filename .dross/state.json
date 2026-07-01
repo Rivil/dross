@@ -2,18 +2,10 @@
   "version": "0.6.16.0",
   "current_milestone": "v0.7",
   "current_phase": "ship-auto-noninteractive",
-  "current_phase_status": "created",
-  "last_activity": "2026-06-30T20:18:21.823594Z",
-  "last_action": "spec locked: ship-auto-noninteractive",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-01T05:37:16.185877Z",
+  "last_action": "plan locked: ship-auto-noninteractive (3 tasks across 2 waves)",
   "history": [
-    {
-      "at": "2026-06-29T13:45:58.587796Z",
-      "action": "executed t-5 (Add dross update command)"
-    },
-    {
-      "at": "2026-06-29T13:49:46.843379Z",
-      "action": "executed t-6 (install.sh bootstrap + shellcheck gate)"
-    },
     {
       "at": "2026-06-29T13:51:29.421094Z",
       "action": "executed t-7 (Document curl|sh + dross update in README)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-06-30T20:18:21.823594Z",
       "action": "spec locked: ship-auto-noninteractive"
+    },
+    {
+      "at": "2026-07-01T05:37:16.179536Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-01T05:37:16.185877Z",
+      "action": "plan locked: ship-auto-noninteractive (3 tasks across 2 waves)"
     }
   ]
 }
