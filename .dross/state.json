@@ -1,15 +1,9 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "current_phase": "pr-record-reaches-base",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-01T11:04:29.152058Z",
-  "last_action": "verified pr-record-reaches-base: pass (3/3 covered, mutation 0.96, efficacy 1.00 on covered)",
+  "last_activity": "2026-07-01T11:05:19.789207Z",
+  "last_action": "completed pr-record-reaches-base",
   "history": [
-    {
-      "at": "2026-07-01T08:44:42.650314Z",
-      "action": "spec locked: interaction-defer-or-add-framing"
-    },
     {
       "at": "2026-07-01T08:53:44.598071Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-01T11:04:29.152058Z",
       "action": "verified pr-record-reaches-base: pass (3/3 covered, mutation 0.96, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-07-01T11:05:19.789207Z",
+      "action": "completed pr-record-reaches-base"
     }
   ]
 }
