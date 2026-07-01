@@ -72,6 +72,12 @@ The contract is **informed, not silent, and not brittle**:
    staticcheck, osv-scanner; agnostic: gitleaks, semgrep, trivy). Record a
    **tool-coverage manifest** in `report.md` (ran vs skipped + why) so a thin
    toolbelt can never read as a clean "all clear".
+   - **Private / proprietary code — no egress.** On any repo the user does not own
+     or that is not public, run registry-backed scanners in a no-network-leak mode.
+     For **semgrep**, pass `--metrics=off` and prefer a pinned or local ruleset over
+     `--config auto` — the latter logs the project URL to semgrep.dev. Registry rules
+     are convenient but leak project metadata; default to no-leak unless the repo is
+     public.
 
 ## 3. Fan-out manual audit — cold, parallel subagents
 

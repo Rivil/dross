@@ -1,0 +1,22 @@
+{
+  "phase": "secure-quality-findings-followups",
+  "pr": 45,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "assets/prompts/secure.md",
+        "internal/cmd/secure_prompt_test.go",
+        ".dross/milestones/v0.9.toml"
+      ],
+      "commit": "1c9807a",
+      "completed_at": "2026-07-01T13:22:05.85317Z",
+      "landmarks": [
+        {
+          "feature": "Private-repo secure scanning",
+          "loc": "assets/prompts/secure.md:75",
+          "what": "secure.md sweep runs semgrep with --metrics=off and pinned rules (not --config auto) on private code to avoid project-URL egress"
+        }
+      ]
+    }
+  }
+}

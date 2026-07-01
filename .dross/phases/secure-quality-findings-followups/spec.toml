@@ -1,0 +1,26 @@
+[phase]
+id        = "secure-quality-findings-followups"
+title     = "secure-quality-findings-followups"
+milestone = "v0.9"
+
+[[criteria]]
+id   = "c-1"
+text = "The /dross-secure sweep runs registry-backed scanners in a private-repo-safe way. secure.md instructs that on private/proprietary code semgrep is invoked with --metrics=off and a pinned/local ruleset rather than `--config auto` (which logs the project URL to semgrep.dev), so scanning code the user does not own never leaks project metadata. The guidance is pinned by a case in TestSecurePromptMandatedSections."
+
+[[decisions]]
+key    = "scanner_choice"
+choice = "Semgrep is the SAST scanner for the secure audit; CodeQL is explicitly NOT added."
+why    = "CodeQL is free only on PUBLIC repos: private/proprietary code needs paid GitHub Code Security (~$30/active committer/mo), and the standalone CodeQL CLI's terms forbid analyzing closed source without a commercial license. Semgrep is free on private code with equivalent source→sink dataflow analysis, and is already in dross's agnostic scanner catalog. The user's target is private repos, so Semgrep is the correct fit."
+locked = true
+
+[[decisions]]
+key    = "already_delivered"
+choice = "This phase adds ONLY the private-repo semgrep hardening. The two other things once bundled under this slug are already shipped: (a) the findings lifecycle (milestone c-2 — new/recurring/resolved tracked across runs) by the prior secure-quality-findings-lifecycle phase, and (b) the Semgrep catalog entry (agnostic, Core) by the prior dross-secure phase."
+why    = "Verified this session — reconcile unit tests plus a live end-to-end CLI walkthrough (security + quality: new→folded→resolved→regressed) prove c-2; `dross security detect` + secure.md §2.3 + catalog_test prove Semgrep is wired. Re-building either would be redundant; honesty requires recording them as pre-satisfied rather than faking fresh work."
+locked = true
+
+[[decisions]]
+key    = "in_git_audit_trail_dropped"
+choice = "The in-git findings audit-trail idea once floated for this slug stays dropped (previously declined)."
+why    = "The durable state.toml ledger already carries per-finding state across runs; a parallel in-git audit trail was declined earlier as redundant churn."
+locked = true
