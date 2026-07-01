@@ -1,15 +1,9 @@
 {
   "version": "0.7.2.0",
   "current_milestone": "v0.7",
-  "current_phase": "milestone-branch-model",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-01T08:24:15.275348Z",
-  "last_action": "verified milestone-branch-model: pass (6/6 covered, mutation 0.96 measured, efficacy 1.00 on covered)",
+  "last_activity": "2026-07-01T08:25:49.6351Z",
+  "last_action": "completed milestone-branch-model",
   "history": [
-    {
-      "at": "2026-06-30T15:49:47.335776Z",
-      "action": "verified retrofit-readmostly-commands: pass (6/6 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
-    },
     {
       "at": "2026-06-30T18:04:39.382514Z",
       "action": "completed retrofit-readmostly-commands"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-01T08:24:15.275348Z",
       "action": "verified milestone-branch-model: pass (6/6 covered, mutation 0.96 measured, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-07-01T08:25:49.6351Z",
+      "action": "completed milestone-branch-model"
     }
   ]
 }
