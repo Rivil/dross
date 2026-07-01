@@ -3,13 +3,9 @@
   "current_milestone": "v0.9",
   "current_phase": "verify-merge-before-completion",
   "current_phase_status": "planned",
-  "last_activity": "2026-07-01T10:00:26.093503Z",
-  "last_action": "plan locked: verify-merge-before-completion (3 tasks across 2 waves)",
+  "last_activity": "2026-07-01T10:06:26.776721Z",
+  "last_action": "plan reviewed: verify-merge-before-completion (2 blocking resolved, 4 flags folded)",
   "history": [
-    {
-      "at": "2026-06-30T18:25:28.753287Z",
-      "action": "spec locked: gray-area-walkthrough"
-    },
     {
       "at": "2026-06-30T18:39:59.76146Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +201,10 @@
     {
       "at": "2026-07-01T10:00:26.093503Z",
       "action": "plan locked: verify-merge-before-completion (3 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-01T10:06:26.776721Z",
+      "action": "plan reviewed: verify-merge-before-completion (2 blocking resolved, 4 flags folded)"
     }
   ]
 }
