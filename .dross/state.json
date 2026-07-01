@@ -1,17 +1,9 @@
 {
   "version": "0.7.3.0",
-  "current_milestone": "v0.7",
-  "last_activity": "2026-07-01T09:12:30.680948Z",
-  "last_action": "completed interaction-defer-or-add-framing",
+  "current_milestone": "v0.9",
+  "last_activity": "2026-07-01T09:38:33.258334Z",
+  "last_action": "scoped milestone v0.9: 5 criteria, 4 phases",
   "history": [
-    {
-      "at": "2026-06-30T15:37:23.479463Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-30T15:37:23.48546Z",
-      "action": "phase retrofit-readmostly-commands executed (4/4 done)"
-    },
     {
       "at": "2026-06-30T15:49:47.330649Z",
       "action": "set current_phase_status=verified"
@@ -203,6 +195,14 @@
     {
       "at": "2026-07-01T09:12:30.680948Z",
       "action": "completed interaction-defer-or-add-framing"
+    },
+    {
+      "at": "2026-07-01T09:38:33.251085Z",
+      "action": "set current_milestone=v0.9"
+    },
+    {
+      "at": "2026-07-01T09:38:33.258334Z",
+      "action": "scoped milestone v0.9: 5 criteria, 4 phases"
     }
   ]
 }
