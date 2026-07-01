@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -26,8 +28,149 @@ func Milestone() *cobra.Command {
 		milestoneGet(),
 		milestoneSet(),
 		milestoneAdd(),
+		milestoneComplete(),
 	)
 	return c
+}
+
+// milestoneComplete closes out a milestone in two steps. Without --finalize it
+// opens the single milestone/<version> -> main PR (the staging->production
+// boundary): main advances only here, once per milestone. With --finalize —
+// run after that PR is merged — it fast-forwards local main from origin and
+// deletes milestone/<version> local+remote, mirroring `dross phase complete`.
+func milestoneComplete() *cobra.Command {
+	var finalize bool
+	c := &cobra.Command{
+		Use:   "complete [version]",
+		Short: "Open the milestone->main PR, or (--finalize) ff main and delete the milestone branch after merge",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			repoDir := filepath.Dir(root)
+			p, _, err := loadProject()
+			if err != nil {
+				return err
+			}
+			s, err := state.Load(filepath.Join(root, state.File))
+			if err != nil {
+				return err
+			}
+
+			version := ""
+			if len(args) == 1 {
+				version = args[0]
+			} else {
+				version = s.CurrentMilestone
+			}
+			if version == "" {
+				return errors.New("no milestone version given and state has no current_milestone")
+			}
+
+			mainBranch := p.Repo.GitMainBranch
+			if mainBranch == "" {
+				mainBranch = "main"
+			}
+			msBranch := "milestone/" + version
+
+			if finalize {
+				return milestoneFinalize(repoDir, mainBranch, msBranch, version)
+			}
+
+			// Open mode: one PR of the milestone branch into main.
+			if p.Remote.URL == "" || p.Remote.Provider == "" {
+				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
+			}
+			opts := buildOpenOpts(p)
+			opts.HeadBranch = msBranch
+			opts.BaseBranch = mainBranch
+			opts.Title = fmt.Sprintf("milestone %s", version)
+			opts.Body = fmt.Sprintf("Integration PR for milestone %s.\n\n"+
+				"Merge as a **merge commit** (not squash) to preserve per-phase history on %s.",
+				version, mainBranch)
+
+			res, err := ship.OpenPR(opts)
+			if err != nil {
+				// Idempotent: a duplicate PR (provider rejects a second open
+				// for the same head->base) is a no-op, not a failure.
+				if strings.Contains(strings.ToLower(err.Error()), "already exists") {
+					Printf("milestone %s PR already open (%s -> %s) — nothing to do\n", version, msBranch, mainBranch)
+					return nil
+				}
+				return fmt.Errorf("open milestone PR: %w", err)
+			}
+			Printf("PR opened: %s (#%d)\n", res.URL, res.Number)
+			// milestone_main_merge: the milestone PR must land as a merge commit,
+			// never a squash — and dross doesn't drive the merge, so surface the
+			// requirement regardless of repo.squash_merge.
+			Printf("Merge it as a MERGE COMMIT (not squash) to keep per-phase history on %s — do not squash even if repo.squash_merge is set.\n", mainBranch)
+			Printf("After it merges: `dross milestone complete %s --finalize`\n", version)
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&finalize, "finalize", false,
+		"after the milestone PR merges: ff main from origin and delete milestone/<version> local+remote")
+	return c
+}
+
+// milestoneFinalize is the post-merge counterpart to opening the milestone PR:
+// it fast-forwards local main from origin and deletes milestone/<version> local
+// + remote. It refuses unless origin/milestone/<version> is already an ancestor
+// of origin/<main> (i.e. the PR actually merged), so unmerged integration work
+// is never destroyed.
+func milestoneFinalize(repoDir, mainBranch, msBranch, version string) error {
+	status, err := gitTrim(repoDir, "status", "--porcelain")
+	if err != nil {
+		return fmt.Errorf("git status: %w", err)
+	}
+	if status != "" {
+		return dirtyTreeError("finalizing the milestone", status)
+	}
+
+	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
+		return fmt.Errorf("git fetch: %w\n%s", err, out)
+	}
+
+	// Merge guard: refuse until origin/<main> actually contains the milestone.
+	if err := gitNoOut(repoDir, "merge-base", "--is-ancestor", "origin/"+msBranch, "origin/"+mainBranch); err != nil {
+		return fmt.Errorf("origin/%s is not merged into origin/%s yet — has the milestone PR merged? Refusing so the milestone branch isn't lost",
+			msBranch, mainBranch)
+	}
+
+	cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+	if err != nil {
+		return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
+	}
+	if cur != mainBranch {
+		if out, err := gitCombined(repoDir, "checkout", mainBranch); err != nil {
+			return fmt.Errorf("git checkout %s: %w\n%s", mainBranch, err, out)
+		}
+	}
+	if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+mainBranch); err != nil {
+		return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged:\n%s", mainBranch, mainBranch, out)
+	}
+
+	// Delete the local milestone branch (only if it exists).
+	if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+msBranch); err == nil {
+		if out, err := gitCombined(repoDir, "branch", "-D", msBranch); err != nil {
+			return fmt.Errorf("git branch -D %s: %w\n%s", msBranch, err, out)
+		}
+	}
+	// Delete the remote milestone branch (idempotent — only if origin has it).
+	remoteRef, err := gitTrim(repoDir, "ls-remote", "--heads", "origin", msBranch)
+	if err != nil {
+		return fmt.Errorf("git ls-remote origin %s: %w", msBranch, err)
+	}
+	if remoteRef != "" {
+		if out, err := gitCombined(repoDir, "push", "origin", "--delete", msBranch); err != nil {
+			return fmt.Errorf("git push origin --delete %s: %w\n%s", msBranch, err, out)
+		}
+	}
+
+	Printf("milestone %s finalized — %s is at origin, %s deleted\n", version, mainBranch, msBranch)
+	return nil
 }
 
 func milestoneList() *cobra.Command {

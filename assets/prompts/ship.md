@@ -144,6 +144,15 @@ If `merge`:
 2. **Finalize locally**: `dross phase complete <phase-id>` — switches to main, fast-forwards from origin (succeeds cleanly because phase work never touched main), deletes local `phase/<id>`, records the merge in state.json with a chore commit.
 3. **Close the board issue** (no-op unless `[remote].board_sync` is on — safe to always run): `dross issue phase-sync <phase-id> --close`.
 
+> **Two merge levels (v0.7 branch topology).** Phase PRs **squash-merge** into
+> their base — `milestone/<version>` when a milestone is active, else `main` —
+> collapsing per-task commits into one per phase. The milestone itself lands in
+> `main` separately via `dross milestone complete` (opens one `milestone/<version>
+> → main` PR); that integration PR must be merged as a **merge commit, not a
+> squash**, so `main` keeps the per-phase history — do this even if
+> `repo.squash_merge` is set. After it merges, run `dross milestone complete
+> <version> --finalize` to fast-forward `main` and delete the milestone branch.
+
 ## 7. Wrap
 
 Print:
