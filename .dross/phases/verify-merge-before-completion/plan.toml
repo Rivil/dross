@@ -1,0 +1,61 @@
+[phase]
+id = "verify-merge-before-completion"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Persist PR number per-phase at ship"
+files         = ["internal/changes/changes.go", "internal/cmd/ship.go", "internal/changes/changes_test.go", "internal/cmd/ship_test.go"]
+description   = """
+Add a drag-proof, phase-scoped PR field to changes.json (a phase-level `PR int`
+on the Changes struct + a helper to set it). In ship.go, after OpenPR returns
+its *OpenResult, persist res.Number into the phase's changes.json (post-push,
+where the number is known). This is the identifier complete will use.
+"""
+covers        = ["c-4"]
+test_contract = [
+  "if ship stops writing the opened PR number into the phase's changes.json, the ship_test assertion reading changes.PR fails",
+  "if the changes schema drops/renames the PR field, the changes_test round-trip (marshal/unmarshal keeps PR) fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 1
+title         = "Add provider PR-merged lookup"
+files         = ["internal/ship/merged.go", "internal/ship/merged_test.go"]
+description   = """
+New ship.PRMerged(opts) (bool, error) mirroring OpenPR's provider dispatch.
+GitHub path via the overridable ghCommand: `gh pr view <n> --json state,mergedAt`,
+merged == state "MERGED". Providers not implemented (forgejo/gitea/gitlab for now)
+return a sentinel ErrMergeStatusUnsupported so callers fall back rather than block.
+"""
+covers        = ["c-3"]
+test_contract = [
+  "if the GitHub path reports merged for an open/unmerged PR (state != MERGED), the merged_test table case fails",
+  "if an unimplemented provider silently returns merged=true instead of ErrMergeStatusUnsupported, the unsupported-provider test fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 2
+depends_on    = ["t-1", "t-2"]
+title         = "Gate phase complete on authoritative merge"
+files         = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+description   = """
+Replace the strings.Contains(originState, "completed <id>") sole guard in
+phaseComplete with an authoritative gate: read the phase's recorded PR number
+from changes.json and require ship.PRMerged == true. When there is no PR number
+or the provider returns ErrMergeStatusUnsupported / a network error, fall back to
+git merge-base --is-ancestor origin/phase/<id> origin/<base>; if that is
+inconclusive, refuse with guidance (--recover / verify manually) rather than
+trusting the breadcrumb. The breadcrumb is demoted to at most a corroborating hint.
+"""
+covers        = ["c-1", "c-2", "c-3", "c-5"]
+test_contract = [
+  "TestPhaseCompleteRefusesDraggedBreadcrumb: a phase whose PR is unmerged but whose 'completed <id>' row reached the base via a later merged phase must be refused (no ff/delete) — fails if complete accepts it",
+  "happy path: a phase whose recorded PR reports merged completes (ff + branch cleanup) — the existing happy-path/ consecutive-phases tests stay green",
+  "offline/no-provider: with no PR number and no ancestry, complete refuses (or ancestry-passes for a merge-commit repo) rather than false-completing — fails if it false-completes",
+]
+status        = "pending"
