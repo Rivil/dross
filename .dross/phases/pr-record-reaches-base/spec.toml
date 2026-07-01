@@ -1,0 +1,34 @@
+[phase]
+id        = "pr-record-reaches-base"
+title     = "pr-record-reaches-base"
+milestone = "v0.9"
+
+[[criteria]]
+id   = "c-1"
+text = "When ship opens a PR and records the PR number into the phase's changes.json, it PUSHES that commit to the phase branch before returning — so the open PR (and its eventual squash-merge) carries the PR number onto the base branch's changes.json, where dross phase complete's mergeGate reads it in the normal gh-merge-then-complete flow."
+
+[[criteria]]
+id   = "c-2"
+text = "A ship_test proves the PR-record changes.json commit is actually PUSHED to origin's phase-branch ref (not left as a local-only commit), so a squash-merge carries it to base — the exact gap that made mergeGate fall back and refuse every squash-merged completion."
+
+[[criteria]]
+id   = "c-3"
+text = "The extra push is safe and scoped: it runs only when a PR was actually opened (interactive and --auto), is skipped under --no-push, and existing ship tests stay green (idempotent re-ship, no double PR)."
+
+[[decisions]]
+key    = "fix_mechanism"
+choice = "ship records the PR number into changes.json AND then pushes the phase branch again. The number is only known after the push+PR-open, so it cannot be part of the first push; a second push is the minimal way to get the record into the PR and thus the squash and the base."
+why    = "The shipped verify-merge-before-completion persisted the record as a post-push local-only commit that never reached the PR/base, so mergeGate's authoritative recorded-PR path was unreachable and every squash-merged completion fell back to the ancestry check and refused."
+locked = true
+
+[[decisions]]
+key    = "pr_open_scope"
+choice = "Persist+push the record whenever a PR is actually opened — both the interactive path and --auto — and skip entirely under --no-push (no PR, nothing to record)."
+why    = "A phase shipped via --auto is completed later too, so its PR record must reach the base the same way; --no-push opens no PR so there is nothing to persist."
+locked = true
+
+[[decisions]]
+key    = "gate_unchanged"
+choice = "Do not change mergeGate. This phase only makes its existing recorded-PR primary path reachable in the real flow by fixing where ship puts the record."
+why    = "mergeGate's logic (authoritative provider check + refuse-when-inconclusive fallback) is correct and tested; the defect is purely that the record never reached a readable location."
+locked = true

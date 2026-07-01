@@ -1,21 +1,11 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "last_activity": "2026-07-01T10:47:41.71719Z",
-  "last_action": "completed ship-architecture-autogen",
+  "current_phase": "pr-record-reaches-base",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-01T10:53:20.332689Z",
+  "last_action": "spec locked: pr-record-reaches-base",
   "history": [
-    {
-      "at": "2026-07-01T05:49:54.95017Z",
-      "action": "executed t-1 (Add --auto flag to dross ship)"
-    },
-    {
-      "at": "2026-07-01T05:52:51.159904Z",
-      "action": "executed t-2 (Add --json flag to dross ship)"
-    },
-    {
-      "at": "2026-07-01T05:55:54.68642Z",
-      "action": "executed t-3 (Document --auto fast-path in ship prompt)"
-    },
     {
       "at": "2026-07-01T05:56:05.969386Z",
       "action": "set current_phase_status=complete"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-01T10:47:41.71719Z",
       "action": "completed ship-architecture-autogen"
+    },
+    {
+      "at": "2026-07-01T10:52:05.609336Z",
+      "action": "created pr-record-reaches-base"
+    },
+    {
+      "at": "2026-07-01T10:53:20.3257Z",
+      "action": "set current_phase=pr-record-reaches-base"
+    },
+    {
+      "at": "2026-07-01T10:53:20.332689Z",
+      "action": "spec locked: pr-record-reaches-base"
     }
   ]
 }
