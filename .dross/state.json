@@ -1,21 +1,11 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "last_activity": "2026-07-01T09:38:33.258334Z",
-  "last_action": "scoped milestone v0.9: 5 criteria, 4 phases",
+  "current_phase": "verify-merge-before-completion",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-01T09:59:17.28599Z",
+  "last_action": "spec locked: verify-merge-before-completion",
   "history": [
-    {
-      "at": "2026-06-30T15:49:47.330649Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-30T15:49:47.335776Z",
-      "action": "verified retrofit-readmostly-commands: pass (6/6 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
-    },
-    {
-      "at": "2026-06-30T18:04:39.382514Z",
-      "action": "completed retrofit-readmostly-commands"
-    },
     {
       "at": "2026-06-30T18:08:34.387644Z",
       "action": "created gray-area-walkthrough"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-01T09:38:33.258334Z",
       "action": "scoped milestone v0.9: 5 criteria, 4 phases"
+    },
+    {
+      "at": "2026-07-01T09:58:46.339574Z",
+      "action": "created verify-merge-before-completion"
+    },
+    {
+      "at": "2026-07-01T09:59:17.27806Z",
+      "action": "set current_phase=verify-merge-before-completion"
+    },
+    {
+      "at": "2026-07-01T09:59:17.28599Z",
+      "action": "spec locked: verify-merge-before-completion"
     }
   ]
 }
