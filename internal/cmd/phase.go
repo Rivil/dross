@@ -126,32 +126,27 @@ func phaseCreate() *cobra.Command {
 			id := phase.UniqueSlug(root, title)
 			branchName := "phase/" + id
 
-			// Pre-flight git checks before any side effects. We only do
-			// these when the repo has git AND the user didn't opt out;
-			// `dross init` runs cleanly in non-git dirs and we keep that
-			// property here.
 			hasGit := isDir(filepath.Join(repoDir, ".git"))
-			if hasGit && !noBranch {
-				if err := preflightPhaseBranch(repoDir, branchName); err != nil {
-					return err
-				}
-			}
 
 			dir := phase.Dir(root, id)
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				return err
 			}
 
+			var branchBase string
+			var milestoneActive bool
 			if hasGit && !noBranch {
-				if out, err := gitCombined(repoDir, "checkout", "-b", branchName); err != nil {
-					// Roll back the directory we just made so a retry
-					// after fixing the git issue doesn't leak a phase
-					// number. dir is empty so plain Remove suffices.
+				// Fork phase/<id> off the resolved new-work base
+				// (milestone/<version> when active, else main). On any
+				// failure roll back the empty dir so a retry doesn't leak
+				// a phase number.
+				branchBase, milestoneActive, err = forkPhaseBranch(repoDir, root, branchName)
+				if err != nil {
 					_ = os.Remove(dir)
-					return fmt.Errorf("git checkout -b %s: %w\n%s", branchName, err, out)
+					return err
 				}
 				Printf("created %s\n", dir)
-				Printf("checked out %s\n", branchName)
+				Printf("checked out %s (rooted on %s)\n", branchName, branchBase)
 			} else {
 				Printf("created %s\n", dir)
 				if !hasGit {
@@ -191,6 +186,15 @@ func phaseCreate() *cobra.Command {
 				}
 			}
 
+			// Nudge (never require) the user to scope a milestone when there's
+			// none active and we fell back to main — the no_milestone_fallback
+			// locked decision. Silent in the cutover case (a milestone is set
+			// but predates the branch model), where milestoneActive is false
+			// yet CurrentMilestone is not empty.
+			if hasGit && !noBranch && !milestoneActive && s.CurrentMilestone == "" {
+				Printf("no milestone active — rooted on %s; scope one with `dross milestone <version>` for integration branching\n", branchBase)
+			}
+
 			Print("Next: /dross-spec to write spec.toml, then /dross-plan")
 			RecordOutcomeEvent("phase_create", map[string]int{"ordinal": ordinal}, nil, nil)
 			return nil
@@ -210,26 +214,29 @@ func phaseComplete() *cobra.Command {
 	var recoverFlag bool
 	c := &cobra.Command{
 		Use:   "complete [phase-id]",
-		Short: "Finalize a phase after squash-merge: ff main, delete phase/<id>",
+		Short: "Finalize a phase after squash-merge: ff the reconcile branch, delete phase/<id>",
 		Long: `Run after the PR for this phase has been squash-merged upstream.
 
-  1. switch to the configured main branch (if not already there)
+  1. switch to the reconcile branch — milestone/<version> when a milestone
+     is active, else the configured main branch
   2. fetch origin
-  3. fast-forward main from origin/<main>
+  3. fast-forward the reconcile branch from origin/<branch>
   4. delete the local phase/<id> branch (and the remote one)
 
 'dross ship' folds the cleared current_phase + "completed <id>" record
 into the PR squash, so the fast-forward above already brings the
-completion onto main — complete writes no commit of its own. This is
-what eliminates the completion-chore divergence.
+completion onto the reconcile branch — complete writes no commit of its
+own. This is what eliminates the completion-chore divergence.
 
-Refuses on a dirty tree, or when origin/<main> carries no "completed
+Refuses on a dirty tree, or when origin/<branch> carries no "completed
 <id>" record (the upstream merge hasn't actually happened yet).
 
-On an already-diverged main the fast-forward aborts. Re-run with
---recover to reset main to origin and restore the cumulative .dross/
-tree in one shot (the same heal as 'dross ship recover'), then finish
-the completion. --recover performs a destructive reset of local main.`,
+On an already-diverged branch the fast-forward aborts. For main, re-run
+with --recover to reset it to origin and restore the cumulative .dross/
+tree in one shot (the same heal as 'dross ship recover'); --recover is a
+destructive reset of local main. Under a milestone, --recover is not yet
+supported, so a diverged milestone branch aborts non-destructively and
+points at a manual reconcile.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			root, err := FindRoot()
@@ -267,9 +274,13 @@ the completion. --recover performs a destructive reset of local main.`,
 				return errors.New("no phase id given, state has no current_phase, and not on a phase/<id> branch")
 			}
 
-			mainBranch := p.Repo.GitMainBranch
-			if mainBranch == "" {
-				mainBranch = "main"
+			// Reconcile against the active milestone's integration branch
+			// (milestone/<version>) when one exists, else main — the same base
+			// resolver create/ship use. Under a milestone, complete ff's the
+			// milestone branch so main only advances at the milestone boundary.
+			reconcileBranch, milestoneActive, err := resolveNewWorkBase(repoDir, root)
+			if err != nil {
+				return err
 			}
 			phaseBranch := "phase/" + phaseID
 
@@ -284,14 +295,14 @@ the completion. --recover performs a destructive reset of local main.`,
 				return dirtyTreeError("completing", status)
 			}
 
-			// Switch to main if we aren't already there.
+			// Switch to the reconcile branch if we aren't already there.
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 			}
-			if cur != mainBranch {
-				if out, err := gitCombined(repoDir, "checkout", mainBranch); err != nil {
-					return fmt.Errorf("git checkout %s: %w\n%s", mainBranch, err, out)
+			if cur != reconcileBranch {
+				if out, err := gitCombined(repoDir, "checkout", reconcileBranch); err != nil {
+					return fmt.Errorf("git checkout %s: %w\n%s", reconcileBranch, err, out)
 				}
 			}
 
@@ -308,25 +319,36 @@ the completion. --recover performs a destructive reset of local main.`,
 			// and the ff-only silently no-op'd — letting complete "succeed"
 			// on an unmerged phase. Reading origin/<main> directly closes
 			// that gap regardless of whether any branch ref survives.
-			originState, err := gitTrim(repoDir, "show", "origin/"+mainBranch+":.dross/"+state.File)
+			originState, err := gitTrim(repoDir, "show", "origin/"+reconcileBranch+":.dross/"+state.File)
 			if err != nil {
-				return fmt.Errorf("read origin/%s:.dross/%s: %w — has the PR merged upstream?", mainBranch, state.File, err)
+				return fmt.Errorf("read origin/%s:.dross/%s: %w — has the PR merged upstream?", reconcileBranch, state.File, err)
 			}
 			if !strings.Contains(originState, "completed "+phaseID) {
 				return fmt.Errorf("origin/%s carries no `completed %s` record — has the PR merged upstream? Refusing so the phase branch isn't lost",
-					mainBranch, phaseID)
+					reconcileBranch, phaseID)
 			}
 
-			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+mainBranch); err != nil {
-				// The ff abort IS the divergence signal: local main holds
-				// commits origin/<main> doesn't. Without --recover, refuse and
-				// point at the fix, changing nothing destructive. The clean-tree
-				// guard above already ran, so no uncommitted work is at risk.
+			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+reconcileBranch); err != nil {
+				// The ff abort IS the divergence signal: local <branch> holds
+				// commits origin/<branch> doesn't. The clean-tree guard above
+				// already ran, so no uncommitted work is at risk.
+				if milestoneActive {
+					// --recover's reconcile branch is still hardcoded to main
+					// (deferred), so it must NOT be pointed at a milestone
+					// branch — that would reset the wrong branch. Abort
+					// non-destructively and steer to a manual reconcile.
+					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged.\n%s\n"+
+						"Reconcile it manually (save any local commits, then `git reset --hard origin/%s`). "+
+						"`--recover` does not yet support milestone branches, so nothing was reset.",
+						reconcileBranch, reconcileBranch, out, reconcileBranch)
+				}
+				// main path. Without --recover, refuse and point at the fix,
+				// changing nothing destructive.
 				if !recoverFlag {
 					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged.\n%s\n"+
 						"Re-run `dross phase complete --recover` to reset %s to origin and restore .dross/ "+
 						"(or use `dross ship recover`). Recovery is a destructive reset of local %s — read the abort first.",
-						mainBranch, mainBranch, out, mainBranch, mainBranch)
+						reconcileBranch, reconcileBranch, out, reconcileBranch, reconcileBranch)
 				}
 				// --recover: reload state from the (now checked-out) main
 				// working tree so the recovery commit carries main's .dross/
@@ -339,7 +361,7 @@ the completion. --recover performs a destructive reset of local main.`,
 					return fmt.Errorf("reload state for recovery: %w", lerr)
 				}
 				if rerr := runDrossRecovery(repoDir, root, p, rs, phaseID, ""); rerr != nil {
-					return fmt.Errorf("recover diverged %s during complete: %w", mainBranch, rerr)
+					return fmt.Errorf("recover diverged %s during complete: %w", reconcileBranch, rerr)
 				}
 				// Healed: main reset to origin with .dross/ restored. Fall
 				// through to the branch teardown below.
@@ -379,7 +401,7 @@ the completion. --recover performs a destructive reset of local main.`,
 				nil,
 				map[string]string{"result": "completed"},
 			)
-			Printf("completed %s — main is at origin, phase/%s deleted\n", phaseID, phaseID)
+			Printf("completed %s — %s is at origin, phase/%s deleted\n", phaseID, reconcileBranch, phaseID)
 			return nil
 		},
 	}
@@ -388,39 +410,33 @@ the completion. --recover performs a destructive reset of local main.`,
 	return c
 }
 
-// preflightPhaseBranch enforces the invariants required for a clean
-// phase start: on the configured main branch, clean working tree, and
-// no existing phase/<id> branch ref. Returns a user-facing error.
-func preflightPhaseBranch(repoDir, branchName string) error {
-	p, _, err := loadProject()
-	if err != nil {
-		return err
-	}
-	mainBranch := p.Repo.GitMainBranch
-	if mainBranch == "" {
-		mainBranch = "main"
-	}
-
-	cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
-	if err != nil {
-		return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
-	}
-	if cur != mainBranch {
-		return fmt.Errorf("must be on %s to start a phase (currently on %s); switch back or use --no-branch", mainBranch, cur)
-	}
-
+// forkPhaseBranch creates and checks out branchName rooted on the base returned
+// by resolveNewWorkBase (milestone/<version> when its ref exists, else main).
+// It keeps the clean-tree and no-existing-ref guards but — unlike the old
+// preflight — does NOT require being on main first, because under the v0.7
+// branch topology the base may be a milestone integration branch reached from
+// anywhere. The checkout is the only side effect; the caller owns directory
+// creation and rollback. Returns the resolved base and whether a milestone
+// branch was used (so create can tailor the no-milestone nudge).
+func forkPhaseBranch(repoDir, root, branchName string) (base string, milestoneActive bool, err error) {
 	status, err := gitTrim(repoDir, "status", "--porcelain")
 	if err != nil {
-		return fmt.Errorf("git status: %w", err)
+		return "", false, fmt.Errorf("git status: %w", err)
 	}
 	if status != "" {
-		return dirtyTreeError("starting a phase", status)
+		return "", false, dirtyTreeError("starting a phase", status)
 	}
-
 	if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branchName); err == nil {
-		return fmt.Errorf("branch %s already exists locally; delete it first or pass --no-branch", branchName)
+		return "", false, fmt.Errorf("branch %s already exists locally; delete it first or pass --no-branch", branchName)
 	}
-	return nil
+	base, milestoneActive, err = resolveNewWorkBase(repoDir, root)
+	if err != nil {
+		return "", false, err
+	}
+	if out, e := gitCombined(repoDir, "checkout", "-b", branchName, base); e != nil {
+		return "", false, fmt.Errorf("git checkout -b %s %s: %w\n%s", branchName, base, e, out)
+	}
+	return base, milestoneActive, nil
 }
 
 // dirtyTreeError builds an actionable dirty-tree error. It keeps the

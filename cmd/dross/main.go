@@ -52,6 +52,7 @@ func main() {
 		cmd.Update(),
 		cmd.Statusline(),
 		cmd.Architecture(),
+		cmd.BaseBranch(),
 	)
 
 	// Without this, `dross phase add` (or any unknown subcommand under a
