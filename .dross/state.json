@@ -1,21 +1,11 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "last_activity": "2026-07-01T10:36:12.283461Z",
-  "last_action": "completed verify-merge-before-completion",
+  "current_phase": "ship-architecture-autogen",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-01T10:42:48.113659Z",
+  "last_action": "spec locked: ship-architecture-autogen",
   "history": [
-    {
-      "at": "2026-06-30T18:56:46.47269Z",
-      "action": "verified gray-area-walkthrough: pass (3/3 covered, mutation not a signal — prompt-only change)"
-    },
-    {
-      "at": "2026-06-30T19:05:15.072446Z",
-      "action": "completed gray-area-walkthrough"
-    },
-    {
-      "at": "2026-06-30T19:14:03.43294Z",
-      "action": "set current_milestone=v0.7"
-    },
     {
       "at": "2026-06-30T19:14:03.438853Z",
       "action": "scoped milestone v0.7: 3 criteria, 3 phases"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-01T10:36:12.283461Z",
       "action": "completed verify-merge-before-completion"
+    },
+    {
+      "at": "2026-07-01T10:42:04.604424Z",
+      "action": "created ship-architecture-autogen"
+    },
+    {
+      "at": "2026-07-01T10:42:48.107525Z",
+      "action": "set current_phase=ship-architecture-autogen"
+    },
+    {
+      "at": "2026-07-01T10:42:48.113659Z",
+      "action": "spec locked: ship-architecture-autogen"
     }
   ]
 }
