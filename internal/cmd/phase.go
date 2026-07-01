@@ -214,26 +214,29 @@ func phaseComplete() *cobra.Command {
 	var recoverFlag bool
 	c := &cobra.Command{
 		Use:   "complete [phase-id]",
-		Short: "Finalize a phase after squash-merge: ff main, delete phase/<id>",
+		Short: "Finalize a phase after squash-merge: ff the reconcile branch, delete phase/<id>",
 		Long: `Run after the PR for this phase has been squash-merged upstream.
 
-  1. switch to the configured main branch (if not already there)
+  1. switch to the reconcile branch — milestone/<version> when a milestone
+     is active, else the configured main branch
   2. fetch origin
-  3. fast-forward main from origin/<main>
+  3. fast-forward the reconcile branch from origin/<branch>
   4. delete the local phase/<id> branch (and the remote one)
 
 'dross ship' folds the cleared current_phase + "completed <id>" record
 into the PR squash, so the fast-forward above already brings the
-completion onto main — complete writes no commit of its own. This is
-what eliminates the completion-chore divergence.
+completion onto the reconcile branch — complete writes no commit of its
+own. This is what eliminates the completion-chore divergence.
 
-Refuses on a dirty tree, or when origin/<main> carries no "completed
+Refuses on a dirty tree, or when origin/<branch> carries no "completed
 <id>" record (the upstream merge hasn't actually happened yet).
 
-On an already-diverged main the fast-forward aborts. Re-run with
---recover to reset main to origin and restore the cumulative .dross/
-tree in one shot (the same heal as 'dross ship recover'), then finish
-the completion. --recover performs a destructive reset of local main.`,
+On an already-diverged branch the fast-forward aborts. For main, re-run
+with --recover to reset it to origin and restore the cumulative .dross/
+tree in one shot (the same heal as 'dross ship recover'); --recover is a
+destructive reset of local main. Under a milestone, --recover is not yet
+supported, so a diverged milestone branch aborts non-destructively and
+points at a manual reconcile.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			root, err := FindRoot()
@@ -271,9 +274,13 @@ the completion. --recover performs a destructive reset of local main.`,
 				return errors.New("no phase id given, state has no current_phase, and not on a phase/<id> branch")
 			}
 
-			mainBranch := p.Repo.GitMainBranch
-			if mainBranch == "" {
-				mainBranch = "main"
+			// Reconcile against the active milestone's integration branch
+			// (milestone/<version>) when one exists, else main — the same base
+			// resolver create/ship use. Under a milestone, complete ff's the
+			// milestone branch so main only advances at the milestone boundary.
+			reconcileBranch, milestoneActive, err := resolveNewWorkBase(repoDir, root)
+			if err != nil {
+				return err
 			}
 			phaseBranch := "phase/" + phaseID
 
@@ -288,14 +295,14 @@ the completion. --recover performs a destructive reset of local main.`,
 				return dirtyTreeError("completing", status)
 			}
 
-			// Switch to main if we aren't already there.
+			// Switch to the reconcile branch if we aren't already there.
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 			}
-			if cur != mainBranch {
-				if out, err := gitCombined(repoDir, "checkout", mainBranch); err != nil {
-					return fmt.Errorf("git checkout %s: %w\n%s", mainBranch, err, out)
+			if cur != reconcileBranch {
+				if out, err := gitCombined(repoDir, "checkout", reconcileBranch); err != nil {
+					return fmt.Errorf("git checkout %s: %w\n%s", reconcileBranch, err, out)
 				}
 			}
 
@@ -312,25 +319,36 @@ the completion. --recover performs a destructive reset of local main.`,
 			// and the ff-only silently no-op'd — letting complete "succeed"
 			// on an unmerged phase. Reading origin/<main> directly closes
 			// that gap regardless of whether any branch ref survives.
-			originState, err := gitTrim(repoDir, "show", "origin/"+mainBranch+":.dross/"+state.File)
+			originState, err := gitTrim(repoDir, "show", "origin/"+reconcileBranch+":.dross/"+state.File)
 			if err != nil {
-				return fmt.Errorf("read origin/%s:.dross/%s: %w — has the PR merged upstream?", mainBranch, state.File, err)
+				return fmt.Errorf("read origin/%s:.dross/%s: %w — has the PR merged upstream?", reconcileBranch, state.File, err)
 			}
 			if !strings.Contains(originState, "completed "+phaseID) {
 				return fmt.Errorf("origin/%s carries no `completed %s` record — has the PR merged upstream? Refusing so the phase branch isn't lost",
-					mainBranch, phaseID)
+					reconcileBranch, phaseID)
 			}
 
-			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+mainBranch); err != nil {
-				// The ff abort IS the divergence signal: local main holds
-				// commits origin/<main> doesn't. Without --recover, refuse and
-				// point at the fix, changing nothing destructive. The clean-tree
-				// guard above already ran, so no uncommitted work is at risk.
+			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+reconcileBranch); err != nil {
+				// The ff abort IS the divergence signal: local <branch> holds
+				// commits origin/<branch> doesn't. The clean-tree guard above
+				// already ran, so no uncommitted work is at risk.
+				if milestoneActive {
+					// --recover's reconcile branch is still hardcoded to main
+					// (deferred), so it must NOT be pointed at a milestone
+					// branch — that would reset the wrong branch. Abort
+					// non-destructively and steer to a manual reconcile.
+					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged.\n%s\n"+
+						"Reconcile it manually (save any local commits, then `git reset --hard origin/%s`). "+
+						"`--recover` does not yet support milestone branches, so nothing was reset.",
+						reconcileBranch, reconcileBranch, out, reconcileBranch)
+				}
+				// main path. Without --recover, refuse and point at the fix,
+				// changing nothing destructive.
 				if !recoverFlag {
 					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged.\n%s\n"+
 						"Re-run `dross phase complete --recover` to reset %s to origin and restore .dross/ "+
 						"(or use `dross ship recover`). Recovery is a destructive reset of local %s — read the abort first.",
-						mainBranch, mainBranch, out, mainBranch, mainBranch)
+						reconcileBranch, reconcileBranch, out, reconcileBranch, reconcileBranch)
 				}
 				// --recover: reload state from the (now checked-out) main
 				// working tree so the recovery commit carries main's .dross/
@@ -343,7 +361,7 @@ the completion. --recover performs a destructive reset of local main.`,
 					return fmt.Errorf("reload state for recovery: %w", lerr)
 				}
 				if rerr := runDrossRecovery(repoDir, root, p, rs, phaseID, ""); rerr != nil {
-					return fmt.Errorf("recover diverged %s during complete: %w", mainBranch, rerr)
+					return fmt.Errorf("recover diverged %s during complete: %w", reconcileBranch, rerr)
 				}
 				// Healed: main reset to origin with .dross/ restored. Fall
 				// through to the branch teardown below.
@@ -383,7 +401,7 @@ the completion. --recover performs a destructive reset of local main.`,
 				nil,
 				map[string]string{"result": "completed"},
 			)
-			Printf("completed %s — main is at origin, phase/%s deleted\n", phaseID, phaseID)
+			Printf("completed %s — %s is at origin, phase/%s deleted\n", phaseID, reconcileBranch, phaseID)
 			return nil
 		},
 	}

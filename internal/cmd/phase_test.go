@@ -1069,3 +1069,125 @@ func TestPhaseCreateNudgesNoMilestone(t *testing.T) {
 		t.Errorf("no-milestone create should nudge naming `dross milestone`; got:\n%s", out)
 	}
 }
+
+// completeMilestoneFixture mirrors completeFixture but under an active milestone:
+// the phase forks off milestone/<version>, and the simulated squash-merge lands
+// on origin/milestone/<version> (not origin/main). Local milestone/<version> is
+// left behind origin so complete can fast-forward it. Returns dir, phase id, version.
+func completeMilestoneFixture(t *testing.T) (string, string, string) {
+	t.Helper()
+	version := "v0.9"
+	dir := t.TempDir()
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remoteDir)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	// Activate the milestone, then cut + push its integration branch.
+	if err := runCmd(t, State(), "set", "current_milestone", version); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: scope "+version)
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+	mustGit(t, dir, "branch", "milestone/"+version)
+	mustGit(t, dir, "push", "-q", "-u", "origin", "milestone/"+version)
+
+	// Phase forks off the milestone branch (t-3 behaviour).
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("phase create: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "src/auth.ts"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
+
+	// Simulate the upstream squash-merge onto the MILESTONE branch: a synthetic
+	// squash on top of origin/milestone/<v> carrying the completion record that
+	// complete reads as its merge guard.
+	mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/milestone/"+version)
+	mustGit(t, dir, "checkout", "phase/auth", "--", "src/")
+	mustGit(t, dir, "add", "src/")
+	stPath := filepath.Join(dir, ".dross", "state.json")
+	sq, err := state.Load(stPath)
+	if err != nil {
+		t.Fatalf("load squash state: %v", err)
+	}
+	sq.CurrentPhase = ""
+	sq.CurrentPhaseStatus = ""
+	sq.Touch("completed auth")
+	if err := sq.Save(stPath); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, dir, "add", filepath.Join(".dross", "state.json"))
+	mustGit(t, dir, "commit", "-q", "-m", "feat(squash): auth")
+	mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:milestone/"+version)
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	mustGit(t, dir, "branch", "-D", "squash-sim")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	return dir, "auth", version
+}
+
+func TestPhaseCompleteFastForwardsMilestone(t *testing.T) {
+	dir, _, version := completeMilestoneFixture(t)
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	// Local milestone branch fast-forwarded to origin (not main).
+	local := mustGit(t, dir, "rev-parse", "milestone/"+version)
+	origin := mustGit(t, dir, "rev-parse", "origin/milestone/"+version)
+	if local != origin {
+		t.Errorf("milestone/%s not ff'd to origin: local %s != origin %s", version, local, origin)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "milestone/"+version {
+		t.Errorf("HEAD = %q; want milestone/%s (reconcile branch, not main)", cur, version)
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/*"); b != "" {
+		t.Errorf("phase/* should be deleted, got %q", b)
+	}
+}
+
+func TestPhaseCompleteNoMilestoneFfsMain(t *testing.T) {
+	dir, _ := completeFixture(t) // no milestone active → main reconcile preserved
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "main" {
+		t.Errorf("no-milestone complete should ff main; HEAD = %q", cur)
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/*"); b != "" {
+		t.Errorf("phase/* should be deleted, got %q", b)
+	}
+}
+
+func TestPhaseCompleteMilestoneDivergedAborts(t *testing.T) {
+	dir, _, version := completeMilestoneFixture(t)
+	// Introduce local divergence: a commit on local milestone/<v> that origin
+	// lacks (origin carries the squash the local branch doesn't) → ff aborts.
+	mustGit(t, dir, "checkout", "-q", "milestone/"+version)
+	mustWrite(t, filepath.Join(dir, "local-only.txt"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "local divergence")
+	localBefore := mustGit(t, dir, "rev-parse", "milestone/"+version)
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected non-destructive abort on a diverged milestone branch")
+	}
+	if !strings.Contains(err.Error(), "diverged") {
+		t.Errorf("error should explain divergence: %v", err)
+	}
+	// Nothing reset: local milestone tip unchanged and phase branch still present.
+	if after := mustGit(t, dir, "rev-parse", "milestone/"+version); after != localBefore {
+		t.Errorf("milestone/%s tip changed (should be untouched): %s -> %s", version, localBefore, after)
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); b == "" {
+		t.Error("phase/auth should NOT be deleted on a non-destructive abort")
+	}
+}
