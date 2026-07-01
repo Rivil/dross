@@ -2,22 +2,10 @@
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
   "current_phase": "pr-record-reaches-base",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-01T10:53:43.592613Z",
-  "last_action": "plan locked: pr-record-reaches-base (1 task, no-review: focused single-file fix)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-01T10:58:07.434837Z",
+  "last_action": "phase pr-record-reaches-base executed (1/1 done)",
   "history": [
-    {
-      "at": "2026-07-01T06:48:52.785738Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-01T06:48:52.793483Z",
-      "action": "verified ship-auto-noninteractive: pass (5/5 covered, mutation 0.96 after coverage fold-in)"
-    },
-    {
-      "at": "2026-07-01T06:59:30.563231Z",
-      "action": "completed ship-auto-noninteractive"
-    },
     {
       "at": "2026-07-01T08:29:28.310622Z",
       "action": "created interaction-defer-or-add-framing"
@@ -205,6 +193,18 @@
     {
       "at": "2026-07-01T10:53:43.592613Z",
       "action": "plan locked: pr-record-reaches-base (1 task, no-review: focused single-file fix)"
+    },
+    {
+      "at": "2026-07-01T10:56:50.647786Z",
+      "action": "executed t-1 (Push the PR-record commit to the phase branch)"
+    },
+    {
+      "at": "2026-07-01T10:58:07.427214Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-01T10:58:07.434837Z",
+      "action": "phase pr-record-reaches-base executed (1/1 done)"
     }
   ]
 }
