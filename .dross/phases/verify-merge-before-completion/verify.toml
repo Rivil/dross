@@ -1,0 +1,58 @@
+[verify]
+  phase = "verify-merge-before-completion"
+  generated_at = 2026-07-01T10:27:09.914827Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9602698650674663
+  mutants_killed = 1281
+  mutants_survived = 53
+  mutants_not_covered = 53
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestPhaseCompleteRefusesDraggedBreadcrumb"]
+  notes = "Reproduces the exact bug: origin/main carries a dragged 'completed auth' breadcrumb AND PR #42 is unmerged (PRMergedFunc stubbed false) — asserts refusal, phase branch survives, main does not ff. The old strings.Contains guard would have false-completed this."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/cmd/phase_test.go:TestPhaseCompleteHappyPath",
+    "internal/cmd/phase_test.go:TestConsecutivePhasesNoDivergence",
+    "internal/cmd/phase_test.go:TestShipToCompleteLeavesZeroManualGit",
+  ]
+  notes = "Happy-path fixtures record a PR and stub PRMergedFunc=merged, so they exercise the PRIMARY authoritative gate (err==nil && merged -> proceed) and still complete with ff + branch cleanup."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/ship/merged_test.go:TestPRMerged (GitHub state parse + unsupported provider)",
+    "internal/cmd/phase_test.go:TestPhaseCompleteRefusesDraggedBreadcrumb",
+  ]
+  notes = "Authoritative signal = ship.PRMerged via the recorded PR number; GitHub path asserts merged only on state==MERGED, unsupported providers return ErrMergeStatusUnsupported. The completion gate consumes it via the exported PRMergedFunc seam — the strings.Contains breadcrumb is no longer the gate."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/changes/changes_test.go:TestChanges (PR field round-trip)",
+    "internal/cmd/ship_test.go (PR persisted + committed; not written when res nil / Number<=0)",
+  ]
+  notes = "PR stored on the phase-scoped changes.json (json:pr,omitempty) and committed onto the phase branch — drag-proof, unlike the cumulative History breadcrumb that caused the bug."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestPhaseCompleteRefusesWhenMergeInconclusive"]
+  notes = "No recorded PR + no provider answer -> git merge-base --is-ancestor fallback; a missing ref / non-ancestor both map to a guided 'cannot confirm' refusal with a clean error and no panic; tree stays clean, branch survives."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation measured via gremlins (per-package): score 0.96, efficacy 1.00 on covered mutants, 0 real survivors (all 53 survivors are NOT-COVERED). The only not-covered mutants in the new logic are phase.go:445/447 — the two switch-case conditions of mergeGate (err==nil&&merged / err==nil&&!merged). Both branches are provably exercised (happy-path tests hit the merged case; RefusesDraggedBreadcrumb hits the not-merged case); gremlins cannot credit switch-case condition mutants (known go-cover attribution ceiling), so this is not a real test gap."
