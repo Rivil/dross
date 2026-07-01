@@ -1,0 +1,46 @@
+[phase]
+id        = "release-trust-and-distribution"
+title     = "release-trust-and-distribution"
+milestone = "v0.9"
+
+[[criteria]]
+id   = "c-1"
+text = "The release pipeline signs checksums.txt. .goreleaser.yaml gains a signs block that runs minisign to sign checksums.txt using the MINISIGN_SECRET_KEY + MINISIGN_PASSWORD GitHub Actions secrets, emitting checksums.txt.minisig as a published release artifact alongside checksums.txt. The release workflow YAML is audited against the CI supply-chain hardening checklist in the same change."
+
+[[criteria]]
+id   = "c-2"
+text = "dross update refuses on a bad or missing signature. Before checksums.txt is trusted, dross update downloads checksums.txt.minisig and verifies it against a minisign public key EMBEDDED in the binary; a valid signature is required to proceed. On signature mismatch, wrong-key signature, or absent .minisig it returns a new sentinel and refuses the update BEFORE extracting or swapping any binary — mirroring the existing ErrChecksumMismatch refuse-path. Signature verification precedes the SHA-256 checksum check (an unsigned checksums.txt is not authoritative)."
+
+[[criteria]]
+id   = "c-3"
+text = "The verify path is proven by tests with a throwaway keypair (no production private key needed): a fixture checksums.txt signed by a test key verifies and the update proceeds to the checksum stage; a tampered checksums.txt, a signature made by a different key, and an absent .minisig each cause a refusal before any binary swap. The embedded production public key is minisign key 664311AB85365746 (RWRGVzaFqxFDZpeqfa4BbxCTnkoKCE2iyau5AB8C/aL+w10g41xlSbqi)."
+
+[[decisions]]
+key    = "signing_tool"
+choice = "minisign (ed25519). Sign checksums.txt in the release pipeline; embed the minisign PUBLIC key in the dross binary; verify the .minisig in dross update using a minisign-format verification library (not hand-rolled Ed25519 parsing) so the untrusted/trusted-comment + prehash framing is handled correctly."
+why    = "Matches the originating deferred design (embed a public key, ed25519-verify before swap); minisign has native goreleaser signing support and a single tiny public key that is trivial to embed; a maintained Go minisign library is more robust than parsing the signature format by hand."
+locked = true
+
+[[decisions]]
+key    = "trust_order"
+choice = "Verify the minisign signature over checksums.txt BEFORE any SHA-256 checksum comparison. If the signature does not verify against the embedded public key, refuse immediately; only a signature-verified checksums.txt is then used to check the tarball hash."
+why    = "checksums.txt is only authoritative once its signature is verified against the embedded key; checking a tarball hash against an unsigned or forged checksums.txt is meaningless. Signature is the outer trust gate, checksum the inner integrity check."
+locked = true
+
+[[decisions]]
+key    = "fail_closed"
+choice = "A missing or unverifiable checksums.txt.minisig REFUSES the update (new sentinel, e.g. ErrSignatureMismatch / ErrNoSignature) — never a silent downgrade to unsigned checksums. Every release from this version onward is signed, so an absent signature on the latest release is treated as tampering/misconfiguration, not a valid unsigned release."
+why    = "Matches the existing 'the update path MUST refuse on mismatch' contract and the no-silent-pass rule. Fail-closed is the whole point of signing: an attacker who can serve a forged checksums.txt must not be able to bypass verification by simply omitting the signature."
+locked = true
+
+[[decisions]]
+key    = "key_custody"
+choice = "The minisign PUBLIC key (664311AB85365746) is embedded in the binary and committed to the repo (safe to share). The PRIVATE key and its password live ONLY in the GitHub Actions secrets MINISIGN_SECRET_KEY and MINISIGN_PASSWORD; they are never committed, never written to disk in a committed file, and never pasted into any chat/transcript."
+why    = "Standard signing hygiene: the public half is the trust anchor and belongs in the binary; the private half is the sole secret and must stay in CI secret storage. Both secrets are already set on the repo (confirmed via gh secret list)."
+locked = true
+
+[[decisions]]
+key    = "scope"
+choice = "Signing only — milestone criterion c-3. Homebrew tap installation and Windows (amd64/arm64) install + self-update (milestone c-4) are deferred to the dedicated homebrew-and-windows-distribution phase and are explicitly out of scope here."
+why    = "Signing is fully build-and-verifiable in this session with a throwaway test key; the Homebrew tap needs a separate tap repo + token and Windows self-update cannot be proven unattended, so they are split off rather than shipped 'green' unverified."
+locked = true
