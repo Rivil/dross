@@ -1,0 +1,36 @@
+[verify]
+  phase = "ship-architecture-autogen"
+  generated_at = 2026-07-01T10:46:26.829147Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "skipped"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  criteria_total = 3
+  criteria_covered = 3
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/ship_prompt_test.go:TestShipPromptAutoBackfill"]
+  notes = "Asserts ship.md §3.5 self-heals an absent doc via an automatic backfill ('self-heal' + 'automatically backfill') and guards against regressing to the manual 'generate it first' punt; whitespace-collapsed so multi-word needles match across line wraps."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/ship_prompt_test.go:TestShipPromptAutoBackfill"]
+  notes = "Asserts the 'auto-backfill' token is documented (the §0.5 --auto note skips backfill non-interactively alongside the landmark merge)."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/ship_prompt_test.go:TestShipPromptAutoBackfill"]
+  notes = "Asserts the non-blocking rule ('non-blocking' + 'must never block the ship') so a missing/ungenerated doc never aborts a ship."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation not a signal: this phase changed only ship.md (.md) and a Go test file (ship_prompt_test.go) — no production Go for a mutation adapter to touch, consistent with the prior prompt+test-only phases. Verdict rests on criterion coverage; all three criteria are pinned by one falsifiable content-assertion test with a manual-run regression guard."

@@ -83,8 +83,8 @@ func TestShipPromptAutoFastPath(t *testing.T) {
 	// Tokens unique to the fast-path section — these carry the fail-on-removal
 	// guarantee (none appear elsewhere in ship.md).
 	for _, needle := range []string{
-		"dross ship --auto", // shells out to the non-interactive CLI path
-		"non-interactive",   // the section's defining property
+		"dross ship --auto",       // shells out to the non-interactive CLI path
+		"non-interactive",         // the section's defining property
 		"returns without merging", // c-4: --auto opens the PR and stops
 	} {
 		if !strings.Contains(content, needle) {
@@ -148,6 +148,35 @@ func TestShipPromptGitLabSections(t *testing.T) {
 	} {
 		if !strings.Contains(content, needle) {
 			t.Errorf("ship.md §6 missing GitLab squash-merge token %q", needle)
+		}
+	}
+}
+
+// TestShipPromptAutoBackfill proves ship-architecture-autogen: an absent
+// ARCHITECTURE.md self-heals automatically on the interactive ship path (c-1),
+// --auto documents skipping that backfill (c-2), and the backfill is non-blocking
+// (c-3). Regressing §3.5 back to a manual-run-or-skip drops these needles.
+func TestShipPromptAutoBackfill(t *testing.T) {
+	// Collapse whitespace so multi-word needles match across line wraps.
+	content := strings.Join(strings.Fields(shipPromptContent(t)), " ")
+	// c-1: absent doc self-heals via an automatic backfill.
+	for _, needle := range []string{"self-heal", "automatically backfill"} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("ship.md §3.5 must auto-backfill an absent ARCHITECTURE.md: missing %q", needle)
+		}
+	}
+	// c-1 regression guard: must not punt to a manual run.
+	if strings.Contains(content, "generate it first") {
+		t.Error("ship.md §3.5 regressed to a manual /dross-architecture run (should auto-backfill)")
+	}
+	// c-2: --auto documents skipping the auto-backfill.
+	if !strings.Contains(content, "auto-backfill") {
+		t.Error("ship.md must document the ARCHITECTURE.md auto-backfill (incl. the --auto skip)")
+	}
+	// c-3: the backfill is non-blocking.
+	for _, needle := range []string{"non-blocking", "must never block the ship"} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("ship.md backfill must be non-blocking: missing %q", needle)
 		}
 	}
 }
