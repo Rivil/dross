@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -53,9 +55,11 @@ type updateOpts struct {
 	force   bool
 
 	httpClient *http.Client
-	version    string                    // running version; defaults to cmd.Version
-	commit     string                    // running commit; defaults to cmd.Commit
-	targetPath string                    // binary to replace; defaults to os.Executable()
+	version    string                       // running version; defaults to cmd.Version
+	commit     string                       // running commit; defaults to cmd.Commit
+	goos       string                       // target OS; defaults to runtime.GOOS
+	goarch     string                       // target arch; defaults to runtime.GOARCH
+	targetPath string                       // binary to replace; defaults to os.Executable()
 	resync     func(newBinary string) error // asset re-sync; defaults to `<newBinary> install`
 }
 
@@ -70,6 +74,14 @@ func runUpdate(ctx context.Context, o updateOpts) error {
 	commit := o.commit
 	if commit == "" {
 		commit = Commit
+	}
+	goos := o.goos
+	if goos == "" {
+		goos = runtime.GOOS
+	}
+	goarch := o.goarch
+	if goarch == "" {
+		goarch = runtime.GOARCH
 	}
 
 	client := update.NewClient()
@@ -109,7 +121,7 @@ func runUpdate(ctx context.Context, o updateOpts) error {
 		return nil
 	}
 
-	assetName, err := update.AssetName(rel.TagName, runtime.GOOS, runtime.GOARCH)
+	assetName, err := update.AssetName(rel.TagName, goos, goarch)
 	if err != nil {
 		return err
 	}
@@ -149,7 +161,16 @@ func runUpdate(ctx context.Context, o updateOpts) error {
 		return fmt.Errorf("refusing update: %w", err)
 	}
 
-	binBytes, err := extractBinary(tarball, "dross")
+	// Dispatch on the archive format goreleaser published for this OS: windows
+	// ships a .zip containing dross.exe; every other platform a .tar.gz with dross.
+	// Extraction happens only AFTER the signature+checksum trust gate above.
+	binName := update.BinaryName(goos)
+	var binBytes []byte
+	if strings.HasSuffix(assetName, ".zip") {
+		binBytes, err = extractBinaryZip(tarball, binName)
+	} else {
+		binBytes, err = extractBinary(tarball, binName)
+	}
 	if err != nil {
 		return err
 	}
@@ -207,4 +228,25 @@ func extractBinary(targz []byte, name string) ([]byte, error) {
 		}
 	}
 	return nil, fmt.Errorf("binary %q not found in release archive", name)
+}
+
+// extractBinaryZip pulls the file whose base name is `name` out of a zip archive
+// (the windows release format). It mirrors extractBinary but for archive/zip.
+func extractBinaryZip(zipBytes []byte, name string) ([]byte, error) {
+	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		return nil, fmt.Errorf("open zip release archive: %w", err)
+	}
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() || filepath.Base(f.Name) != name {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, fmt.Errorf("open %q in zip release archive: %w", name, err)
+		}
+		defer rc.Close()
+		return io.ReadAll(rc)
+	}
+	return nil, fmt.Errorf("binary %q not found in zip release archive", name)
 }

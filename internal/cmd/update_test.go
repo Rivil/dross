@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -40,6 +41,25 @@ func makeTarGz(t *testing.T, name string, content []byte) []byte {
 		t.Fatal(err)
 	}
 	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// makeZip packs a single file `name` with the given bytes into a zip archive — the
+// windows release format goreleaser emits via format_overrides.
+func makeZip(t *testing.T, name string, content []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.Create(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
@@ -112,6 +132,45 @@ func releaseServer(t *testing.T, tag string, binary []byte, checksumsBody string
 	return srv, assetName, pub.String()
 }
 
+// windowsReleaseServer is the windows analog of releaseServer: it serves a signed
+// release whose asset is a .zip named dross_<v>_windows_amd64.zip containing
+// dross.exe. This exercises the zip extraction + windows binary-name path without a
+// windows host. checksumsBody empty -> a correct checksum for the served zip; when
+// non-empty it is served verbatim (still validly signed) so the checksum gate can be
+// exercised on the zip path. Returns the server, the asset name, and the signing
+// key's public-key line (feed to trustKey for a valid-signature run).
+func windowsReleaseServer(t *testing.T, tag string, binaryExe []byte, checksumsBody string) (*httptest.Server, string, string) {
+	t.Helper()
+	assetName, err := update.AssetName(tag, "windows", "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	zipBytes := makeZip(t, "dross.exe", binaryExe)
+	sums := checksumsBody
+	if sums == "" {
+		sums = fmt.Sprintf("%s  %s\n", sha256hex(zipBytes), assetName)
+	}
+
+	pub, priv := genTestKey(t)
+	sig := minisign.Sign(priv, []byte(sums))
+
+	mux := http.NewServeMux()
+	var base string
+	mux.HandleFunc("/repos/Rivil/dross/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(w, `{"tag_name":%q,"assets":[
+			{"name":%q,"browser_download_url":%q},
+			{"name":"checksums.txt","browser_download_url":%q},
+			{"name":"checksums.txt.minisig","browser_download_url":%q}
+		]}`, tag, assetName, base+"/dl/"+assetName, base+"/dl/checksums.txt", base+"/dl/checksums.txt.minisig")
+	})
+	mux.HandleFunc("/dl/"+assetName, func(w http.ResponseWriter, _ *http.Request) { w.Write(zipBytes) })
+	mux.HandleFunc("/dl/checksums.txt", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, sums) })
+	mux.HandleFunc("/dl/checksums.txt.minisig", func(w http.ResponseWriter, _ *http.Request) { w.Write(sig) })
+	srv := httptest.NewServer(mux)
+	base = srv.URL
+	return srv, assetName, pub.String()
+}
+
 // newBinaryScript returns a shell "binary" that, when run as `<self> install`, writes
 // a marker file — so a successful run proves the FRESHLY-SWAPPED binary executed the
 // asset re-sync, not the old in-process engine.
@@ -155,6 +214,85 @@ func TestUpdateAppliesAndResyncs(t *testing.T) {
 	}
 	if strings.TrimSpace(string(mb)) != "synced-by-new-binary" {
 		t.Errorf("marker content = %q", mb)
+	}
+}
+
+// TestUpdateAppliesWindowsZip drives the windows self-update path from a non-windows
+// host: runUpdate with goos=windows/amd64 downloads a validly-signed .zip, verifies
+// signature+checksum, extracts dross.exe, and atomically swaps the target. The resync
+// is stubbed (we cannot execute a windows binary here) so the assertion is purely that
+// the extracted-and-swapped bytes are the served dross.exe.
+func TestUpdateAppliesWindowsZip(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "dross.exe")
+	if err := os.WriteFile(target, []byte("OLD-WINDOWS-BINARY"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	newExe := []byte("MZ\x00\x00 fake-windows-pe dross.exe")
+
+	srv, assetName, pubKey := windowsReleaseServer(t, "v0.6.1", newExe, "")
+	defer srv.Close()
+	trustKey(t, pubKey)
+	if !strings.HasSuffix(assetName, ".zip") {
+		t.Fatalf("windows asset %q is not a .zip", assetName)
+	}
+
+	var out bytes.Buffer
+	resyncCalled := false
+	err := runUpdate(context.Background(), updateOpts{
+		out: &out, apiBase: srv.URL, httpClient: srv.Client(),
+		version: "0.6.0", commit: "abc1234", targetPath: target,
+		goos: "windows", goarch: "amd64",
+		resync: func(string) error { resyncCalled = true; return nil },
+	})
+	if err != nil {
+		t.Fatalf("runUpdate windows: %v\n%s", err, out.String())
+	}
+	got, _ := os.ReadFile(target)
+	if !bytes.Equal(got, newExe) {
+		t.Errorf("windows binary not replaced with the extracted dross.exe bytes")
+	}
+	if !resyncCalled {
+		t.Errorf("windows update did not reach the resync step")
+	}
+}
+
+// TestUpdateRefusesOnBadChecksumWindowsZip proves the checksum gate still fires on the
+// zip path: a validly-signed checksums.txt whose hash does NOT match the served zip is
+// refused at the checksum stage, before any extraction/swap — no zip bypass.
+func TestUpdateRefusesOnBadChecksumWindowsZip(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "dross.exe")
+	orig := []byte("ORIGINAL-WINDOWS-BINARY")
+	if err := os.WriteFile(target, orig, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	assetName, _ := update.AssetName("v0.6.1", "windows", "amd64")
+	badSums := fmt.Sprintf("%s  %s\n", strings.Repeat("0", 64), assetName)
+
+	srv, _, pubKey := windowsReleaseServer(t, "v0.6.1", []byte("MZ new-exe"), badSums)
+	defer srv.Close()
+	trustKey(t, pubKey)
+
+	var out bytes.Buffer
+	resyncCalled := false
+	err := runUpdate(context.Background(), updateOpts{
+		out: &out, apiBase: srv.URL, httpClient: srv.Client(),
+		version: "0.6.0", commit: "abc1234", targetPath: target,
+		goos: "windows", goarch: "amd64",
+		resync: func(string) error { resyncCalled = true; return nil },
+	})
+	if err == nil {
+		t.Fatal("windows bad checksum: want error, got nil")
+	}
+	if !errors.Is(err, update.ErrChecksumMismatch) {
+		t.Errorf("windows bad checksum: want ErrChecksumMismatch, got %v", err)
+	}
+	if got, _ := os.ReadFile(target); !bytes.Equal(got, orig) {
+		t.Errorf("windows bad checksum: binary was modified despite refusal")
+	}
+	if resyncCalled {
+		t.Errorf("windows bad checksum: re-sync ran despite refusal")
 	}
 }
 
