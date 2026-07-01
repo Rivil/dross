@@ -126,32 +126,27 @@ func phaseCreate() *cobra.Command {
 			id := phase.UniqueSlug(root, title)
 			branchName := "phase/" + id
 
-			// Pre-flight git checks before any side effects. We only do
-			// these when the repo has git AND the user didn't opt out;
-			// `dross init` runs cleanly in non-git dirs and we keep that
-			// property here.
 			hasGit := isDir(filepath.Join(repoDir, ".git"))
-			if hasGit && !noBranch {
-				if err := preflightPhaseBranch(repoDir, branchName); err != nil {
-					return err
-				}
-			}
 
 			dir := phase.Dir(root, id)
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				return err
 			}
 
+			var branchBase string
+			var milestoneActive bool
 			if hasGit && !noBranch {
-				if out, err := gitCombined(repoDir, "checkout", "-b", branchName); err != nil {
-					// Roll back the directory we just made so a retry
-					// after fixing the git issue doesn't leak a phase
-					// number. dir is empty so plain Remove suffices.
+				// Fork phase/<id> off the resolved new-work base
+				// (milestone/<version> when active, else main). On any
+				// failure roll back the empty dir so a retry doesn't leak
+				// a phase number.
+				branchBase, milestoneActive, err = forkPhaseBranch(repoDir, root, branchName)
+				if err != nil {
 					_ = os.Remove(dir)
-					return fmt.Errorf("git checkout -b %s: %w\n%s", branchName, err, out)
+					return err
 				}
 				Printf("created %s\n", dir)
-				Printf("checked out %s\n", branchName)
+				Printf("checked out %s (rooted on %s)\n", branchName, branchBase)
 			} else {
 				Printf("created %s\n", dir)
 				if !hasGit {
@@ -189,6 +184,15 @@ func phaseCreate() *cobra.Command {
 					}
 					ordinal = phase.DisplayNumber(m.Phases, id)
 				}
+			}
+
+			// Nudge (never require) the user to scope a milestone when there's
+			// none active and we fell back to main — the no_milestone_fallback
+			// locked decision. Silent in the cutover case (a milestone is set
+			// but predates the branch model), where milestoneActive is false
+			// yet CurrentMilestone is not empty.
+			if hasGit && !noBranch && !milestoneActive && s.CurrentMilestone == "" {
+				Printf("no milestone active — rooted on %s; scope one with `dross milestone <version>` for integration branching\n", branchBase)
 			}
 
 			Print("Next: /dross-spec to write spec.toml, then /dross-plan")
@@ -388,39 +392,33 @@ the completion. --recover performs a destructive reset of local main.`,
 	return c
 }
 
-// preflightPhaseBranch enforces the invariants required for a clean
-// phase start: on the configured main branch, clean working tree, and
-// no existing phase/<id> branch ref. Returns a user-facing error.
-func preflightPhaseBranch(repoDir, branchName string) error {
-	p, _, err := loadProject()
-	if err != nil {
-		return err
-	}
-	mainBranch := p.Repo.GitMainBranch
-	if mainBranch == "" {
-		mainBranch = "main"
-	}
-
-	cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
-	if err != nil {
-		return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
-	}
-	if cur != mainBranch {
-		return fmt.Errorf("must be on %s to start a phase (currently on %s); switch back or use --no-branch", mainBranch, cur)
-	}
-
+// forkPhaseBranch creates and checks out branchName rooted on the base returned
+// by resolveNewWorkBase (milestone/<version> when its ref exists, else main).
+// It keeps the clean-tree and no-existing-ref guards but — unlike the old
+// preflight — does NOT require being on main first, because under the v0.7
+// branch topology the base may be a milestone integration branch reached from
+// anywhere. The checkout is the only side effect; the caller owns directory
+// creation and rollback. Returns the resolved base and whether a milestone
+// branch was used (so create can tailor the no-milestone nudge).
+func forkPhaseBranch(repoDir, root, branchName string) (base string, milestoneActive bool, err error) {
 	status, err := gitTrim(repoDir, "status", "--porcelain")
 	if err != nil {
-		return fmt.Errorf("git status: %w", err)
+		return "", false, fmt.Errorf("git status: %w", err)
 	}
 	if status != "" {
-		return dirtyTreeError("starting a phase", status)
+		return "", false, dirtyTreeError("starting a phase", status)
 	}
-
 	if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branchName); err == nil {
-		return fmt.Errorf("branch %s already exists locally; delete it first or pass --no-branch", branchName)
+		return "", false, fmt.Errorf("branch %s already exists locally; delete it first or pass --no-branch", branchName)
 	}
-	return nil
+	base, milestoneActive, err = resolveNewWorkBase(repoDir, root)
+	if err != nil {
+		return "", false, err
+	}
+	if out, e := gitCombined(repoDir, "checkout", "-b", branchName, base); e != nil {
+		return "", false, fmt.Errorf("git checkout -b %s %s: %w\n%s", branchName, base, e, out)
+	}
+	return base, milestoneActive, nil
 }
 
 // dirtyTreeError builds an actionable dirty-tree error. It keeps the

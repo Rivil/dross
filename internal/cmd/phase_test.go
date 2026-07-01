@@ -64,16 +64,25 @@ func TestPhaseCreateRefusesDirtyTree(t *testing.T) {
 	}
 }
 
-func TestPhaseCreateRefusesWrongBranch(t *testing.T) {
+// Under the v0.7 branch model the must-be-on-main guard is gone: create forks
+// off the resolved base (main here, no milestone) regardless of the branch you
+// happen to be on, so commits from the current branch must NOT leak in.
+func TestPhaseCreateFromNonMainRootsOnBase(t *testing.T) {
 	dir := initWithGit(t)
 	mustGit(t, dir, "checkout", "-q", "-b", "feature")
+	mustWrite(t, filepath.Join(dir, "feature.txt"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feature only")
+	featureCommit := mustGit(t, dir, "rev-parse", "HEAD")
 
-	err := runCmd(t, Phase(), "create", "auth")
-	if err == nil {
-		t.Fatal("expected error when not on main")
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create from non-main should now succeed: %v", err)
 	}
-	if !strings.Contains(err.Error(), "must be on main") {
-		t.Errorf("error should mention main: %v", err)
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "phase/auth" {
+		t.Errorf("expected HEAD on phase/auth, got %q", cur)
+	}
+	if err := gitNoOut(dir, "merge-base", "--is-ancestor", featureCommit, "refs/heads/phase/auth"); err == nil {
+		t.Error("phase/auth must root on main, not the current feature branch (feature commit leaked in)")
 	}
 }
 
@@ -113,23 +122,19 @@ func TestPhaseCreateNoBranchSkipsGit(t *testing.T) {
 func TestPhaseCreateRollsBackDirOnBranchFailure(t *testing.T) {
 	dir := initWithGit(t)
 
-	// Pre-create the would-be branch to force the git checkout step to
-	// fail. Then verify the phase dir doesn't leak.
-	//
-	// Note: preflight catches the duplicate BEFORE the dir is created,
-	// so the dir-rollback path only triggers on a different class of
-	// git failure (e.g., dirty tree appearing mid-flight, signing
-	// configured but no key). Asserting "preflight prevents dir
-	// creation" is the practical guarantee we care about.
+	// Pre-create the would-be branch so forkPhaseBranch's no-existing-ref
+	// guard trips. The guard now runs after the phase dir is mkdir'd, so the
+	// guarantee under test is the rollback: an errored create leaves no
+	// stray phase dir behind (dir is os.Remove'd on any fork failure).
 	mustGit(t, dir, "branch", "phase/auth")
 
 	if err := runCmd(t, Phase(), "create", "auth"); err == nil {
 		t.Fatal("expected error from existing branch")
 	}
 
-	// Phase dir must NOT have been created — preflight runs first.
+	// Phase dir must NOT survive — the fork failure rolled it back.
 	if _, err := os.Stat(filepath.Join(dir, ".dross", "phases", "auth")); err == nil {
-		t.Error("phase dir should not exist when preflight fails")
+		t.Error("phase dir should not exist after a rolled-back create")
 	}
 }
 
@@ -1010,5 +1015,57 @@ func TestPhaseCover_ShowMissingVsPresent(t *testing.T) {
 	}
 	if !strings.Contains(out, "(missing)") {
 		t.Errorf("absent plan.toml should print the (missing) placeholder; got:\n%s", out)
+	}
+}
+
+func TestPhaseCreateRootsOnMilestoneBranch(t *testing.T) {
+	dir := initWithGit(t)
+	// Activate the milestone and commit it, so the tree is clean before create.
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.9"); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "scope v0.9")
+
+	// A milestone branch carrying a commit that is NOT on main.
+	mustGit(t, dir, "branch", "milestone/v0.9")
+	mustGit(t, dir, "checkout", "-q", "milestone/v0.9")
+	mustWrite(t, filepath.Join(dir, "ms.txt"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "milestone only")
+	msCommit := mustGit(t, dir, "rev-parse", "HEAD")
+	mustGit(t, dir, "checkout", "-q", "main")
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	// Ancestor probe, not tip equality: tips coincide when main==milestone, so
+	// only ancestry proves phase/auth forked off the milestone branch.
+	if err := gitNoOut(dir, "merge-base", "--is-ancestor", msCommit, "refs/heads/phase/auth"); err != nil {
+		t.Errorf("phase/auth not rooted on milestone/v0.9 (milestone commit not ancestor): %v", err)
+	}
+}
+
+func TestPhaseCreateRootsOnMainNoMilestone(t *testing.T) {
+	dir := initWithGit(t)
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	mainTip := mustGit(t, dir, "rev-parse", "main")
+	phaseTip := mustGit(t, dir, "rev-parse", "phase/auth")
+	if mainTip != phaseTip {
+		t.Errorf("phase/auth tip %s != main tip %s (should root on main with no milestone)", phaseTip, mainTip)
+	}
+}
+
+func TestPhaseCreateNudgesNoMilestone(t *testing.T) {
+	initWithGit(t)
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+	})
+	if !strings.Contains(out, "dross milestone") {
+		t.Errorf("no-milestone create should nudge naming `dross milestone`; got:\n%s", out)
 	}
 }
