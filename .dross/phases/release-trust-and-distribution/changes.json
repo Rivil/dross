@@ -1,5 +1,6 @@
 {
   "phase": "release-trust-and-distribution",
+  "pr": 44,
   "tasks": {
     "t-1": {
       "files": [
