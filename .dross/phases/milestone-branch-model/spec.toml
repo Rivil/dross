@@ -1,0 +1,58 @@
+[phase]
+id        = "milestone-branch-model"
+title     = "Milestone branch model"
+milestone = "v0.7"
+
+[[criteria]]
+id   = "c-1"
+text = "Scoping a milestone (`dross milestone`) creates a `milestone/<version>` integration branch cut from main."
+
+[[criteria]]
+id   = "c-2"
+text = "When a milestone is active, `dross phase create` roots `phase/<id>` on `milestone/<version>` rather than main."
+
+[[criteria]]
+id   = "c-3"
+text = "When a milestone is active, `dross quick` roots its branch on `milestone/<version>` rather than main."
+
+[[criteria]]
+id   = "c-4"
+text = "`dross ship` opens the phase PR with base = `milestone/<version>`, so the phase merge lands on the milestone branch, not main."
+
+[[criteria]]
+id   = "c-5"
+text = "Completing a milestone opens a single PR of `milestone/<version>` into main."
+
+[[criteria]]
+id   = "c-6"
+text = "After a phase merges, `dross phase complete` fast-forwards `milestone/<version>` from origin and deletes `phase/<id>` (previously fast-forwarded main)."
+
+[[decisions]]
+key    = "no_milestone_fallback"
+choice = "With no active milestone, phase create/quick branch off main and ship targets main (v0.6 behavior); the commands nudge the user to scope a milestone but do not require one."
+why    = "Keeps milestone-less repos frictionless while steering toward the branch model."
+locked = true
+
+[[decisions]]
+key    = "milestone_main_merge"
+choice = "The milestone/<version> -> main PR uses a regular merge-commit (non-squash), preserving the per-phase commits on main."
+why    = "Keeps per-phase history on main and lets local main fast-forward to origin cleanly, avoiding the squash-divergence that forced phase-off-main."
+locked = true
+
+[[decisions]]
+key    = "milestone_branch_push"
+choice = "milestone/<version> is pushed to origin eagerly at milestone scope time."
+why    = "The PR base always exists on the provider before any phase ships, so there are no ordering surprises."
+locked = true
+
+[[decisions]]
+key    = "milestone_branch_cleanup"
+choice = "After the milestone->main PR merges, ff main from origin and delete milestone/<version> both locally and on origin."
+why    = "Mirrors phase-complete cleanup so no stale integration branches accumulate."
+locked = true
+
+[[decisions]]
+key    = "rollout_cutover"
+choice = "The branch model applies only to milestones scoped after this ships; already-active milestones (v0.7) finish under the old phase-off-main model."
+why    = "Avoids a bootstrap paradox (this phase itself ships under v0.7) and keeps the cutover simple."
+locked = true

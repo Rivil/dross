@@ -17,7 +17,7 @@ Use when:
 3. Read `.dross/state.json`. Note `current_phase` (may be empty — that's fine, standalone mode).
 4. **Verify the current branch matches the mode** with `git symbolic-ref --short HEAD`:
    - **In-phase** (`current_phase` set): branch must be `phase/<current_phase>`. If not, switch to it (or stop if it doesn't exist locally). Quick changes inside a phase belong on the phase branch — they ship together with the phase.
-   - **Standalone** (no `current_phase`): branch must be the configured main branch (`repo.git_main_branch`). Standalone quick changes go to main directly via small commit.
+   - **Standalone** (no `current_phase`): run `dross base-branch` and branch must be **that** — the active milestone's integration branch (`milestone/<version>`) when one exists, else the configured main branch. Don't hardcode `repo.git_main_branch`; `dross base-branch` resolves the milestone-vs-main cutover for you (and nudges on stderr when no milestone is active). Standalone quick changes go to that base directly via a small commit.
 5. Check `git status --porcelain`. If working tree is dirty:
    - Surface the diff to the user.
    - Ask via `AskUserQuestion`: "commit existing work first / stash / abort". Atomic commit semantics require a clean baseline.

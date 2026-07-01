@@ -202,9 +202,34 @@ func Ship() *cobra.Command {
 				}
 			}
 
-			// 6) Push phase/<id> directly. The provider's squash-merge will
-			//    collapse the per-task commits into one on main; no client-side
-			//    synthetic branch needed.
+			// 6) Resolve the PR base: the active milestone's integration
+			//    branch when it exists, else main (rollout_cutover /
+			//    no_milestone_fallback via the shared resolver). Resolved
+			//    before the push so the remote-base guard can run first.
+			baseBranch, milestoneActive, err := resolveNewWorkBase(repoDir, root)
+			if err != nil {
+				return err
+			}
+			// Guard only the milestone case: milestone/<version> is pushed at
+			// scope time, so its absence on origin means scoping was
+			// incomplete — refuse rather than open a PR against a base the
+			// provider can't see. main is the always-present default.
+			if milestoneActive {
+				if err := gitNoOut(repoDir, "ls-remote", "--exit-code", "--heads", "origin", baseBranch); err != nil {
+					return fmt.Errorf("base branch %q is not on origin — it is pushed when the milestone is scoped; re-scope or push it before shipping", baseBranch)
+				}
+			}
+			// Nudge (never require) scoping a milestone when falling back to
+			// main with none active — mirrors phase create / base-branch.
+			// Silent in the cutover case (a milestone is set but predates the
+			// branch model).
+			if !milestoneActive && s.CurrentMilestone == "" {
+				narrate("no milestone active — PR targets %s; scope one with `dross milestone <version>` for a staging branch\n", baseBranch)
+			}
+
+			// 7) Push phase/<id> directly. The provider's squash-merge will
+			//    collapse the per-task commits into one on the base; no
+			//    client-side synthetic branch needed.
 			pushArgs := []string{"push", "-u", "origin", phaseBranch}
 			if forcePush {
 				// --force-with-lease guards against clobbering a concurrent
@@ -218,11 +243,7 @@ func Ship() *cobra.Command {
 			}
 			narrate("Pushed %s to origin\n", phaseBranch)
 
-			// 7) Open the PR via the provider.
-			baseBranch := p.Repo.GitMainBranch
-			if baseBranch == "" {
-				baseBranch = "main"
-			}
+			// 8) Open the PR via the provider (base resolved in step 6).
 			opts := buildOpenOpts(p)
 			opts.HeadBranch = phaseBranch
 			opts.BaseBranch = baseBranch

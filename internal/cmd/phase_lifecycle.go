@@ -173,23 +173,22 @@ func phaseInsert() *cobra.Command {
 				return fmt.Errorf("anchor %q is not in milestone %s", anchor, version)
 			}
 
-			// Scaffold: reuse phase create's preflight + mkdir + checkout-b steps
-			// (NOT its tail-append). Side effects only after every check passes.
+			// Scaffold: reuse phase create's fork-off-resolved-base + mkdir
+			// steps (NOT its tail-append). forkPhaseBranch roots phase/<id>
+			// on milestone/<version> when active, so an inserted phase joins
+			// the milestone integration line like a created one.
 			branchName := "phase/" + id
 			hasGit := isDir(filepath.Join(repoDir, ".git"))
-			if hasGit {
-				if err := preflightPhaseBranch(repoDir, branchName); err != nil {
-					return err
-				}
-			}
 			dir := phase.Dir(root, id)
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				return err
 			}
+			var branchBase string
 			if hasGit {
-				if out, err := gitCombined(repoDir, "checkout", "-b", branchName); err != nil {
+				branchBase, _, err = forkPhaseBranch(repoDir, root, branchName)
+				if err != nil {
 					_ = os.Remove(dir)
-					return fmt.Errorf("git checkout -b %s: %w\n%s", branchName, err, out)
+					return err
 				}
 			}
 
@@ -217,7 +216,7 @@ func phaseInsert() *cobra.Command {
 
 			Printf("inserted %s at position %d in %s\n", id, phase.DisplayNumber(m.Phases, id), version)
 			if hasGit {
-				Printf("checked out %s\n", branchName)
+				Printf("checked out %s (rooted on %s)\n", branchName, branchBase)
 			}
 			Print("Next: /dross-spec to write spec.toml, then /dross-plan")
 			return nil

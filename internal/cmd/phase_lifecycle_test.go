@@ -501,8 +501,8 @@ func TestPhaseLifecycleCover_InsertGitBranch(t *testing.T) {
 		t.Fatalf("insert with git: %v", err)
 	}
 
-	// Preflight passed (line 181) and checkout -b ran (line 190): the phase was
-	// spliced in and its dir created rather than the command returning early.
+	// forkPhaseBranch ran (guards + checkout -b): the phase was spliced in and
+	// its dir created rather than the command returning early.
 	if got, want := milestonePhases(t, root, "v1"), []string{"p1", "new-phase", "p2", "p3"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("array after git insert = %v, want %v", got, want)
 	}
@@ -512,5 +512,33 @@ func TestPhaseLifecycleCover_InsertGitBranch(t *testing.T) {
 	// checkout -b succeeded, so we are now on the new phase branch.
 	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "phase/new-phase" {
 		t.Errorf("HEAD = %q, want phase/new-phase (checkout -b must have run)", cur)
+	}
+}
+
+// TestPhaseInsertForksOffMilestone proves phase insert — the second checkout -b
+// site — roots the new phase on milestone/<version> when one is active, matching
+// phase create. Uses an ancestor probe against a milestone-only commit.
+func TestPhaseInsertForksOffMilestone(t *testing.T) {
+	dir := setupLifecycleFixture(t) // current_milestone=v1, phases p1,p2,p3
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remote)
+	mustGit(t, dir, "add", "-A")
+	mustGit(t, dir, "commit", "-q", "-m", "init")
+
+	// milestone/v1 branch carrying a commit that is NOT on main.
+	mustGit(t, dir, "branch", "milestone/v1")
+	mustGit(t, dir, "checkout", "-q", "milestone/v1")
+	mustWrite(t, filepath.Join(dir, "ms.txt"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "milestone only")
+	msCommit := mustGit(t, dir, "rev-parse", "HEAD")
+	mustGit(t, dir, "checkout", "-q", "main")
+
+	if err := runCmd(t, Phase(), "insert", "New Phase", "--after", "p1"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := gitNoOut(dir, "merge-base", "--is-ancestor", msCommit, "refs/heads/phase/new-phase"); err != nil {
+		t.Errorf("inserted phase/new-phase not rooted on milestone/v1 (milestone commit not ancestor): %v", err)
 	}
 }

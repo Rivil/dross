@@ -11,7 +11,7 @@ Scope a milestone — populate `.dross/milestones/<version>.toml` with title, su
    - `<version>` (e.g. `v0.1`, `v1.0`) → use it directly.
    - empty → ask the user via `AskUserQuestion`. Default to next minor if a previous milestone exists, else `v0.1`.
 3. Determine create-vs-resume:
-   - If `.dross/milestones/<version>.toml` does NOT exist → run `dross milestone create <version>`. This writes the skeleton with `status="planning"` and today's date.
+   - If `.dross/milestones/<version>.toml` does NOT exist → run `dross milestone create <version>`. This writes the skeleton with `status="planning"` and today's date, **and cuts + pushes the `milestone/<version>` integration branch from main** (HEAD stays on main) — the branch topology every phase/quick under this milestone forks off. It prints `cut …`/`pushed …` lines; surface them. Idempotent, and skips silently in a non-git dir or when there's no origin.
    - If it DOES exist → run `dross milestone show <version>`, print the current state, and ask: "Milestone already scoped. Extend (add more criteria/phases) or replace (start over)?" If replace: delete `.dross/milestones/<version>.toml` and re-run create. If extend: continue from §3 onwards, skipping any field already populated unless the user wants to revise.
 
 ## 1. Read context

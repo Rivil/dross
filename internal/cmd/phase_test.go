@@ -64,16 +64,25 @@ func TestPhaseCreateRefusesDirtyTree(t *testing.T) {
 	}
 }
 
-func TestPhaseCreateRefusesWrongBranch(t *testing.T) {
+// Under the v0.7 branch model the must-be-on-main guard is gone: create forks
+// off the resolved base (main here, no milestone) regardless of the branch you
+// happen to be on, so commits from the current branch must NOT leak in.
+func TestPhaseCreateFromNonMainRootsOnBase(t *testing.T) {
 	dir := initWithGit(t)
 	mustGit(t, dir, "checkout", "-q", "-b", "feature")
+	mustWrite(t, filepath.Join(dir, "feature.txt"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feature only")
+	featureCommit := mustGit(t, dir, "rev-parse", "HEAD")
 
-	err := runCmd(t, Phase(), "create", "auth")
-	if err == nil {
-		t.Fatal("expected error when not on main")
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create from non-main should now succeed: %v", err)
 	}
-	if !strings.Contains(err.Error(), "must be on main") {
-		t.Errorf("error should mention main: %v", err)
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "phase/auth" {
+		t.Errorf("expected HEAD on phase/auth, got %q", cur)
+	}
+	if err := gitNoOut(dir, "merge-base", "--is-ancestor", featureCommit, "refs/heads/phase/auth"); err == nil {
+		t.Error("phase/auth must root on main, not the current feature branch (feature commit leaked in)")
 	}
 }
 
@@ -113,23 +122,19 @@ func TestPhaseCreateNoBranchSkipsGit(t *testing.T) {
 func TestPhaseCreateRollsBackDirOnBranchFailure(t *testing.T) {
 	dir := initWithGit(t)
 
-	// Pre-create the would-be branch to force the git checkout step to
-	// fail. Then verify the phase dir doesn't leak.
-	//
-	// Note: preflight catches the duplicate BEFORE the dir is created,
-	// so the dir-rollback path only triggers on a different class of
-	// git failure (e.g., dirty tree appearing mid-flight, signing
-	// configured but no key). Asserting "preflight prevents dir
-	// creation" is the practical guarantee we care about.
+	// Pre-create the would-be branch so forkPhaseBranch's no-existing-ref
+	// guard trips. The guard now runs after the phase dir is mkdir'd, so the
+	// guarantee under test is the rollback: an errored create leaves no
+	// stray phase dir behind (dir is os.Remove'd on any fork failure).
 	mustGit(t, dir, "branch", "phase/auth")
 
 	if err := runCmd(t, Phase(), "create", "auth"); err == nil {
 		t.Fatal("expected error from existing branch")
 	}
 
-	// Phase dir must NOT have been created — preflight runs first.
+	// Phase dir must NOT survive — the fork failure rolled it back.
 	if _, err := os.Stat(filepath.Join(dir, ".dross", "phases", "auth")); err == nil {
-		t.Error("phase dir should not exist when preflight fails")
+		t.Error("phase dir should not exist after a rolled-back create")
 	}
 }
 
@@ -1010,5 +1015,179 @@ func TestPhaseCover_ShowMissingVsPresent(t *testing.T) {
 	}
 	if !strings.Contains(out, "(missing)") {
 		t.Errorf("absent plan.toml should print the (missing) placeholder; got:\n%s", out)
+	}
+}
+
+func TestPhaseCreateRootsOnMilestoneBranch(t *testing.T) {
+	dir := initWithGit(t)
+	// Activate the milestone and commit it, so the tree is clean before create.
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.9"); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "scope v0.9")
+
+	// A milestone branch carrying a commit that is NOT on main.
+	mustGit(t, dir, "branch", "milestone/v0.9")
+	mustGit(t, dir, "checkout", "-q", "milestone/v0.9")
+	mustWrite(t, filepath.Join(dir, "ms.txt"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "milestone only")
+	msCommit := mustGit(t, dir, "rev-parse", "HEAD")
+	mustGit(t, dir, "checkout", "-q", "main")
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	// Ancestor probe, not tip equality: tips coincide when main==milestone, so
+	// only ancestry proves phase/auth forked off the milestone branch.
+	if err := gitNoOut(dir, "merge-base", "--is-ancestor", msCommit, "refs/heads/phase/auth"); err != nil {
+		t.Errorf("phase/auth not rooted on milestone/v0.9 (milestone commit not ancestor): %v", err)
+	}
+}
+
+func TestPhaseCreateRootsOnMainNoMilestone(t *testing.T) {
+	dir := initWithGit(t)
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	mainTip := mustGit(t, dir, "rev-parse", "main")
+	phaseTip := mustGit(t, dir, "rev-parse", "phase/auth")
+	if mainTip != phaseTip {
+		t.Errorf("phase/auth tip %s != main tip %s (should root on main with no milestone)", phaseTip, mainTip)
+	}
+}
+
+func TestPhaseCreateNudgesNoMilestone(t *testing.T) {
+	initWithGit(t)
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+	})
+	if !strings.Contains(out, "dross milestone") {
+		t.Errorf("no-milestone create should nudge naming `dross milestone`; got:\n%s", out)
+	}
+}
+
+// completeMilestoneFixture mirrors completeFixture but under an active milestone:
+// the phase forks off milestone/<version>, and the simulated squash-merge lands
+// on origin/milestone/<version> (not origin/main). Local milestone/<version> is
+// left behind origin so complete can fast-forward it. Returns dir, phase id, version.
+func completeMilestoneFixture(t *testing.T) (string, string, string) {
+	t.Helper()
+	version := "v0.9"
+	dir := t.TempDir()
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remoteDir)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	// Activate the milestone, then cut + push its integration branch.
+	if err := runCmd(t, State(), "set", "current_milestone", version); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: scope "+version)
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+	mustGit(t, dir, "branch", "milestone/"+version)
+	mustGit(t, dir, "push", "-q", "-u", "origin", "milestone/"+version)
+
+	// Phase forks off the milestone branch (t-3 behaviour).
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("phase create: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "src/auth.ts"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
+
+	// Simulate the upstream squash-merge onto the MILESTONE branch: a synthetic
+	// squash on top of origin/milestone/<v> carrying the completion record that
+	// complete reads as its merge guard.
+	mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/milestone/"+version)
+	mustGit(t, dir, "checkout", "phase/auth", "--", "src/")
+	mustGit(t, dir, "add", "src/")
+	stPath := filepath.Join(dir, ".dross", "state.json")
+	sq, err := state.Load(stPath)
+	if err != nil {
+		t.Fatalf("load squash state: %v", err)
+	}
+	sq.CurrentPhase = ""
+	sq.CurrentPhaseStatus = ""
+	sq.Touch("completed auth")
+	if err := sq.Save(stPath); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, dir, "add", filepath.Join(".dross", "state.json"))
+	mustGit(t, dir, "commit", "-q", "-m", "feat(squash): auth")
+	mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:milestone/"+version)
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	mustGit(t, dir, "branch", "-D", "squash-sim")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	return dir, "auth", version
+}
+
+func TestPhaseCompleteFastForwardsMilestone(t *testing.T) {
+	dir, _, version := completeMilestoneFixture(t)
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	// Local milestone branch fast-forwarded to origin (not main).
+	local := mustGit(t, dir, "rev-parse", "milestone/"+version)
+	origin := mustGit(t, dir, "rev-parse", "origin/milestone/"+version)
+	if local != origin {
+		t.Errorf("milestone/%s not ff'd to origin: local %s != origin %s", version, local, origin)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "milestone/"+version {
+		t.Errorf("HEAD = %q; want milestone/%s (reconcile branch, not main)", cur, version)
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/*"); b != "" {
+		t.Errorf("phase/* should be deleted, got %q", b)
+	}
+}
+
+func TestPhaseCompleteNoMilestoneFfsMain(t *testing.T) {
+	dir, _ := completeFixture(t) // no milestone active → main reconcile preserved
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "main" {
+		t.Errorf("no-milestone complete should ff main; HEAD = %q", cur)
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/*"); b != "" {
+		t.Errorf("phase/* should be deleted, got %q", b)
+	}
+}
+
+func TestPhaseCompleteMilestoneDivergedAborts(t *testing.T) {
+	dir, _, version := completeMilestoneFixture(t)
+	// Introduce local divergence: a commit on local milestone/<v> that origin
+	// lacks (origin carries the squash the local branch doesn't) → ff aborts.
+	mustGit(t, dir, "checkout", "-q", "milestone/"+version)
+	mustWrite(t, filepath.Join(dir, "local-only.txt"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "local divergence")
+	localBefore := mustGit(t, dir, "rev-parse", "milestone/"+version)
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected non-destructive abort on a diverged milestone branch")
+	}
+	if !strings.Contains(err.Error(), "diverged") {
+		t.Errorf("error should explain divergence: %v", err)
+	}
+	// Nothing reset: local milestone tip unchanged and phase branch still present.
+	if after := mustGit(t, dir, "rev-parse", "milestone/"+version); after != localBefore {
+		t.Errorf("milestone/%s tip changed (should be untouched): %s -> %s", version, localBefore, after)
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); b == "" {
+		t.Error("phase/auth should NOT be deleted on a non-destructive abort")
 	}
 }
