@@ -2,18 +2,10 @@
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
   "current_phase": "ship-architecture-autogen",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-01T10:46:15.204135Z",
-  "last_action": "phase ship-architecture-autogen executed (1/1 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-01T10:46:47.008096Z",
+  "last_action": "verified ship-architecture-autogen: pass (3/3 covered, mutation not a signal — prompt+test-only)",
   "history": [
-    {
-      "at": "2026-07-01T05:37:16.185877Z",
-      "action": "plan locked: ship-auto-noninteractive (3 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-01T05:43:17.576196Z",
-      "action": "plan reviewed: ship-auto-noninteractive (0 blocking, 1 flag)"
-    },
     {
       "at": "2026-07-01T05:45:44.038384Z",
       "action": "set version=0.7.1.0"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-01T10:46:15.204135Z",
       "action": "phase ship-architecture-autogen executed (1/1 done)"
+    },
+    {
+      "at": "2026-07-01T10:46:47.001201Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-01T10:46:47.008096Z",
+      "action": "verified ship-architecture-autogen: pass (3/3 covered, mutation not a signal — prompt+test-only)"
     }
   ]
 }
