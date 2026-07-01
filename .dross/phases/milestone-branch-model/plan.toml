@@ -30,9 +30,10 @@ description   = """
 Add resolveNewWorkBase(repoDir, root) -> (base, milestoneActive, err): returns
 milestone/<current_milestone> only when that ref exists, else git_main_branch.
 This single function pins both the locked rollout_cutover and no_milestone_fallback.
-Enabler — powers c-2, c-3, c-4, c-6; delivers no criterion on its own.
+Enabler — powers c-2, c-3, c-4, c-6; delivers no criterion on its own (covers empty
+by design; c-1 is delivered by t-1).
 """
-covers        = ["c-1"]
+covers        = []
 test_contract = [
   "if the resolver stops preferring the milestone branch, TestResolveBase_MilestoneBranchExists fails (current_milestone=v0.9 + ref present must yield milestone/v0.9,true)",
   "if the ref-existence check is removed (blindly return milestone/<v>), TestResolveBase_CutoverNoBranch fails (current_milestone=v0.7 with no ref must yield main,false — the v0.7 non-retrofit cutover)",
@@ -72,11 +73,14 @@ Add a `dross base-branch` command that prints resolveNewWorkBase's result.
 Rewrite quick.md's standalone branch step to consume `dross base-branch` instead
 of hardcoding repo.git_main_branch, so a standalone quick roots on the milestone
 branch when one is active. Go tests guard the exact string the prompt consumes.
+When falling back to main (no active milestone branch), `dross base-branch` also
+emits the scope-a-milestone nudge to stderr, matching t-3's phase-create nudge.
 """
 covers        = ["c-3"]
 test_contract = [
   "if the command stops preferring the milestone branch, TestBaseBranchCmdPrintsMilestone fails (must print milestone/v0.9 when that branch exists + current_milestone=v0.9)",
   "if the fallback breaks, TestBaseBranchCmdPrintsMainNoMilestone fails (must print git_main_branch otherwise)",
+  "if the fallback nudge is dropped, TestBaseBranchCmdNudgesNoMilestone fails (main-fallback output must name `dross milestone` on stderr, leaving stdout the bare branch name)",
 ]
 status        = "pending"
 
@@ -90,20 +94,22 @@ description   = """
 Replace the hardcoded baseBranch := p.Repo.GitMainBranch (ship.go:~222) with
 resolveNewWorkBase. Extend the provider mock to capture doc["base"]/doc["head"].
 Add a pre-flight guard (before push + OpenPR) that refuses when the resolved base
-is absent on origin, pointing at scope-time creation.
+is absent on origin, pointing at scope-time creation. When ship falls back to main
+(no active milestone), emit the same scope-a-milestone nudge as create/quick.
 """
 covers        = ["c-4"]
 test_contract = [
   "if ship stops targeting the milestone branch, TestShipTargetsMilestoneBranch fails (opened PR must have base==milestone/v0.9, head==phase/<id>)",
   "if the fallback regresses, TestShipTargetsMainNoMilestone fails (no milestone branch → base==main)",
   "if the missing-remote-base guard is dropped, TestShipRefusesMissingRemoteBase fails (ship opens a PR against a nonexistent base instead of refusing)",
+  "if the main-fallback nudge is dropped, TestShipNudgesNoMilestone fails (a no-milestone ship's narration must name `dross milestone`)",
 ]
 status        = "pending"
 
 [[task]]
 id            = "t-6"
 wave          = 2
-depends_on    = ["t-1", "t-2"]
+depends_on    = ["t-1", "t-2", "t-3"]
 title         = "phase complete fast-forwards milestone branch"
 files         = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
 description   = """
@@ -132,12 +138,14 @@ Add `dross milestone complete`: open exactly one PR of milestone/<version> into
 main (reuse buildOpenOpts + ship.OpenPR), idempotent on re-run. Post-merge
 finalize path (mirrors phase complete): ff local main from origin and delete
 milestone/<version> local+remote, refusing while origin/main lacks the merge.
-Note the non-squash merge-commit method (milestone_main_merge) in ship.md.
+Enforce the non-squash merge-commit method (milestone_main_merge) — the milestone
+PR must NOT inherit the repo's squash_merge=true default; document it in ship.md.
 """
 covers        = ["c-5"]
 test_contract = [
   "if the PR direction is wrong, TestMilestoneCompleteOpensSinglePRToMain fails (exactly one POST /pulls with base==main, head==milestone/v0.9; second run opens no duplicate; swapped head/base fails)",
   "if cleanup breaks, TestMilestoneCompleteFinalizeCleansUp fails (post-merge must ff local main from origin and delete milestone/v0.9 local+remote)",
   "if the unmerged guard is dropped, TestMilestoneCleanupRefusesUnmerged fails (deletes the branch while origin/main lacks the merge — destroying unmerged integration work)",
+  "if milestone complete inherits the squash_merge default, TestMilestoneCompleteUsesMergeCommit fails (the milestone→main PR must be configured as a non-squash merge-commit regardless of remote.squash_merge=true, honoring milestone_main_merge)",
 ]
 status        = "pending"

@@ -3,13 +3,9 @@
   "current_milestone": "v0.7",
   "current_phase": "milestone-branch-model",
   "current_phase_status": "planned",
-  "last_activity": "2026-07-01T07:31:29.939393Z",
-  "last_action": "plan locked: milestone-branch-model (7 tasks across 2 waves)",
+  "last_activity": "2026-07-01T07:34:20.792294Z",
+  "last_action": "plan reviewed: milestone-branch-model (0 blocking, 4 flags)",
   "history": [
-    {
-      "at": "2026-06-30T14:47:37.138013Z",
-      "action": "set current_phase=retrofit-readmostly-commands"
-    },
     {
       "at": "2026-06-30T14:47:37.14502Z",
       "action": "spec locked: retrofit-readmostly-commands"
@@ -205,6 +201,10 @@
     {
       "at": "2026-07-01T07:31:29.939393Z",
       "action": "plan locked: milestone-branch-model (7 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-01T07:34:20.792294Z",
+      "action": "plan reviewed: milestone-branch-model (0 blocking, 4 flags)"
     }
   ]
 }
