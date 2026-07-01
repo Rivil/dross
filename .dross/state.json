@@ -2,18 +2,10 @@
   "version": "0.7.2.0",
   "current_milestone": "v0.7",
   "current_phase": "milestone-branch-model",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-01T08:14:52.697215Z",
-  "last_action": "phase milestone-branch-model executed (7/7 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-01T08:24:15.275348Z",
+  "last_action": "verified milestone-branch-model: pass (6/6 covered, mutation 0.96 measured, efficacy 1.00 on covered)",
   "history": [
-    {
-      "at": "2026-06-30T15:37:23.48546Z",
-      "action": "phase retrofit-readmostly-commands executed (4/4 done)"
-    },
-    {
-      "at": "2026-06-30T15:49:47.330649Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-06-30T15:49:47.335776Z",
       "action": "verified retrofit-readmostly-commands: pass (6/6 covered, mutation 0.84 measured, efficacy 1.00 on covered)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-01T08:14:52.697215Z",
       "action": "phase milestone-branch-model executed (7/7 done)"
+    },
+    {
+      "at": "2026-07-01T08:24:15.268625Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-01T08:24:15.275348Z",
+      "action": "verified milestone-branch-model: pass (6/6 covered, mutation 0.96 measured, efficacy 1.00 on covered)"
     }
   ]
 }
