@@ -36,6 +36,14 @@ archives:
 checksum:
   name_template: checksums.txt
 
+signs:
+  - id: minisign
+    cmd: minisign
+    signature: "${artifact}.minisig"
+    args: ["-S", "-s", "{{ .Env.MINISIGN_KEY_FILE }}", "-x", "${signature}", "-m", "${artifact}"]
+    stdin: "{{ .Env.MINISIGN_PASSWORD }}"
+    artifacts: checksum
+
 snapshot:
   version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
 

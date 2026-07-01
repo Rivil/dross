@@ -1,0 +1,32 @@
+[phase]
+  id = "release-trust-and-distribution"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Signature-verification core in internal/update (minisign, embedded public key)"
+  files = ["internal/update/signature.go", "internal/update/signature_test.go", "go.mod", "go.sum"]
+  description = "Add minisign signature verification to the pure update core. Introduce the maintained\nminisign-format library aead.dev/minisign (go get it; it verifies both the legacy and\nthe HASHED signature variants — minisign 0.12 produces hashed .minisig, confirmed\nlocally). New file internal/update/signature.go:\n  - const EmbeddedMinisignPublicKey = \"RWRGVzaFqxFDZpeqfa4BbxCTnkoKCE2iyau5AB8C/aL+w10g41xlSbqi\"\n    (the base64 key line of the production minisign.pub, key id 664311AB85365746 — the\n    trust anchor; safe to commit).\n  - var TrustedMinisignKey = EmbeddedMinisignPublicKey  — an OVERRIDE SEAM (exported var,\n    same pattern as ghCommand / PRMergedFunc elsewhere) so cmd-flow tests can swap in a\n    throwaway public key.\n  - sentinels ErrSignatureMismatch and ErrNoSignature (mirroring ErrChecksumMismatch).\n  - func VerifySignature(signed, signature []byte, pubKeyText string) error:\n      * if len(signature)==0 → ErrNoSignature (fail-closed on a missing .minisig).\n      * PublicKey.UnmarshalText([]byte(pubKeyText)); minisign.Verify(pub, signed, signature).\n      * false → ErrSignatureMismatch; true → nil.\nUnit tests (signature_test.go) are fully self-contained via aead.dev/minisign.GenerateKey\n+ Sign — NO external minisign binary, NO production private key: a fixture checksums.txt\nsigned by a generated test key verifies (nil); a tampered body, a signature from a DIFFERENT\ngenerated key, and an empty/nil signature each return the right sentinel.\n"
+  covers = ["c-2", "c-3"]
+  test_contract = ["a checksums.txt signed by test key K, verified against K's public key → VerifySignature returns nil", "the same bytes verified against a DIFFERENT key's public key → ErrSignatureMismatch", "flipping one byte of the signed content (checksums.txt) → ErrSignatureMismatch", "an empty signature → ErrNoSignature (never a silent pass)"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Gate dross update on the signature before any checksum/extract/swap"
+  files = ["internal/cmd/update.go", "internal/cmd/update_test.go"]
+  description = "In internal/cmd/update.go, between the checksums.txt download (~line 129) and\nupdate.VerifyChecksum (~line 133), insert signature verification as the OUTER trust gate:\n  - resolve rel.AssetURL(\"checksums.txt.minisig\"); if \"\" → refuse with ErrNoSignature\n    (fail-closed: every release from this version on is signed).\n  - client.Download it; update.VerifySignature(sums, sig, update.TrustedMinisignKey);\n    on error → `return fmt.Errorf(\"refusing update: %w\", err)` BEFORE extractBinary /\n    AtomicReplace — no binary is touched on a bad or missing signature.\n  - only then proceed to the existing VerifyChecksum(tarball, ...) integrity check.\nExtend internal/cmd/update_test.go: the httptest release now serves a checksums.txt.minisig\nsigned by a throwaway key (generated in-test via aead.dev/minisign), and the test overrides\nupdate.TrustedMinisignKey to that key's public key (restore via t.Cleanup). Assert: valid\nsignature → update proceeds (existing happy-path assertions still hold); NO .minisig asset →\nrefuses, binary unchanged; a .minisig signed by a different key → refuses, binary unchanged.\nSignature refusal must occur before the checksum stage (a tampered-checksums test still\nrefuses, now for the signature reason if unsigned).\n"
+  covers = ["c-2", "c-3"]
+  test_contract = ["valid signed checksums.txt.minisig + override key → update applies (binary swapped) exactly as before signing existed", "release with no checksums.txt.minisig asset → update refuses and leaves the target binary byte-for-byte unchanged", "checksums.txt.minisig signed by a non-trusted key → update refuses before extract/swap", "existing update_test happy-path and checksum-mismatch cases stay green once they serve a validly-signed .minisig"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 3
+  title = "Sign checksums.txt in the release pipeline (goreleaser + workflow), audit CI"
+  files = [".goreleaser.yaml", ".github/workflows/release.yml"]
+  description = "Make the release pipeline emit checksums.txt.minisig.\n.goreleaser.yaml: add a signs block —\n  signs:\n    - id: minisign\n      cmd: minisign\n      signature: \"${artifact}.minisig\"\n      args: [\"-S\", \"-s\", \"{{ .Env.MINISIGN_KEY_FILE }}\", \"-x\", \"${signature}\", \"-m\", \"${artifact}\"]\n      stdin: \"{{ .Env.MINISIGN_PASSWORD }}\"\n      artifacts: checksum\n(minisign 0.12 reads the password from stdin non-interactively — confirmed locally — so the\nuser's password-protected key works as-is.)\n.github/workflows/release.yml: before the goreleaser step, add a step (guarded by the same\nnew_tag != '' condition) that writes the secret key to an EPHEMERAL file:\n    printf '%s\\n' \"$MINISIGN_SECRET_KEY\" > \"$RUNNER_TEMP/minisign.key\"; chmod 600 it\n  (env: MINISIGN_SECRET_KEY from secrets; never echoed, never in the repo tree). Add to the\n  goreleaser step's env: MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }} and\n  MINISIGN_KEY_FILE: ${{ runner.temp }}/minisign.key.\nCI hygiene: no new `uses:` (nothing to SHA-pin), no @latest, permissions stay contents:write\n(signing needs no more), MINISIGN_* correctly modeled as secrets. Audited against the\nsupply-chain hardening checklist in the same edit. This step is statically verified only\n(a live signed release can't be exercised unattended); the signing MECHANICS are proven by\nthe local empirical minisign test and the Go verify tests in t-1/t-2.\n"
+  covers = ["c-1"]
+  test_contract = ["goreleaser config parses and the signs block targets artifacts: checksum, emitting ${artifact}.minisig", "the workflow writes the secret key only to $RUNNER_TEMP and passes MINISIGN_PASSWORD + key path to goreleaser via env", "no CI-hardening regression: no new unpinned action, no @latest, permissions unchanged, secrets used only for real secrets"]
+  status = "done"
