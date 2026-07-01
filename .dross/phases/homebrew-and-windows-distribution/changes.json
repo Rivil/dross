@@ -1,0 +1,53 @@
+{
+  "phase": "homebrew-and-windows-distribution",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/update/update.go",
+        "internal/update/update_test.go",
+        "internal/cmd/update.go",
+        "internal/cmd/update_test.go"
+      ],
+      "commit": "0007570",
+      "completed_at": "2026-07-01T13:52:53.784886Z",
+      "landmarks": [
+        {
+          "feature": "Windows self-update",
+          "symbol": "BinaryName",
+          "loc": "internal/update/update.go:96",
+          "what": "dross update handles windows zip + dross.exe with a goos/goarch test seam; extraction after the signature/checksum gate"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        ".goreleaser.yaml",
+        "internal/cmd/release_signing_test.go"
+      ],
+      "commit": "24a7c77",
+      "completed_at": "2026-07-01T13:52:53.791878Z",
+      "landmarks": [
+        {
+          "feature": "Windows build + Homebrew tap",
+          "loc": ".goreleaser.yaml:15",
+          "what": "goreleaser builds windows amd64/arm64 zips and pushes a formula to the Rivil/homebrew-dross tap"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "install.ps1",
+        "README.md"
+      ],
+      "commit": "b00d2f3",
+      "completed_at": "2026-07-01T13:52:53.798449Z",
+      "landmarks": [
+        {
+          "feature": "Windows install channel",
+          "loc": "install.ps1:76",
+          "what": "PowerShell bootstrap mirrors install.sh with verify-before-place; README documents Homebrew + Windows channels"
+        }
+      ]
+    }
+  }
+}
