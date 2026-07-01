@@ -1,15 +1,9 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.7",
-  "current_phase": "interaction-defer-or-add-framing",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-01T09:08:43.618159Z",
-  "last_action": "verified interaction-defer-or-add-framing: pass (4/4 covered, mutation not a signal — prompt+test-only change)",
+  "last_activity": "2026-07-01T09:12:30.680948Z",
+  "last_action": "completed interaction-defer-or-add-framing",
   "history": [
-    {
-      "at": "2026-06-30T15:37:05.187563Z",
-      "action": "executed t-4 (Document the coverage convention)"
-    },
     {
       "at": "2026-06-30T15:37:23.479463Z",
       "action": "set current_phase_status=complete"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-01T09:08:43.618159Z",
       "action": "verified interaction-defer-or-add-framing: pass (4/4 covered, mutation not a signal — prompt+test-only change)"
+    },
+    {
+      "at": "2026-07-01T09:12:30.680948Z",
+      "action": "completed interaction-defer-or-add-framing"
     }
   ]
 }
