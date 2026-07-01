@@ -71,6 +71,36 @@ func TestShipPromptReadsTypedLandmarks(t *testing.T) {
 	}
 }
 
+// TestShipPromptAutoFastPath (c-2) gates the non-interactive --auto path: ship.md
+// must document an --auto fast-path that skips the §1 body-preview dump, the §2
+// body-override prompt, and the §3 reviewer prompt, and shells out to
+// `dross ship --auto`. The uniquely-added tokens ("dross ship --auto",
+// "non-interactive", "returns without merging") are absent from the rest of the
+// prompt, so deleting the fast-path section drops them and fails this test.
+func TestShipPromptAutoFastPath(t *testing.T) {
+	content := shipPromptContent(t)
+
+	// Tokens unique to the fast-path section — these carry the fail-on-removal
+	// guarantee (none appear elsewhere in ship.md).
+	for _, needle := range []string{
+		"dross ship --auto", // shells out to the non-interactive CLI path
+		"non-interactive",   // the section's defining property
+		"returns without merging", // c-4: --auto opens the PR and stops
+	} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("ship.md --auto fast-path missing unique token %q", needle)
+		}
+	}
+
+	// The section must name what it skips: the body-override and reviewer
+	// prompts (and the body preview).
+	for _, needle := range []string{"skip", "body override", "reviewers"} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("ship.md --auto fast-path must name skipped step %q", needle)
+		}
+	}
+}
+
 // TestShipPromptGitLabSections proves c-4: ship.md's §5 (CI gate) and §6 (merge
 // gate) carry the GitLab pipeline-watch and squash-merge steps, and §5 pins the
 // ENTIRE locked pipeline_status_mapping — terminal, keep-polling, AND ambiguous
