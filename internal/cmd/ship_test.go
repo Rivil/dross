@@ -449,6 +449,74 @@ func TestShipAutoExplicitBodyWins(t *testing.T) {
 	}
 }
 
+// TestShipJSONEmitsSingleObjectAndSuppressesNarration proves c-5: `ship --json`
+// writes exactly one parseable JSON object with keys url/number/result to stdout
+// and suppresses the human narration lines.
+func TestShipJSONEmitsSingleObjectAndSuppressesNarration(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship(), "--json"); err != nil {
+			t.Fatalf("ship --json: %v", err)
+		}
+	})
+
+	// No human narration leaked onto stdout.
+	for _, line := range []string{"Pushed", "PR opened", "Completion record folded"} {
+		if strings.Contains(out, line) {
+			t.Errorf("--json must suppress the %q narration line, got:\n%s", line, out)
+		}
+	}
+
+	// Exactly one line, parseable as a JSON object with the three keys.
+	trimmed := strings.TrimSpace(out)
+	if strings.Contains(trimmed, "\n") {
+		t.Errorf("--json should emit exactly one line, got:\n%s", out)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(trimmed), &obj); err != nil {
+		t.Fatalf("--json output should parse as one JSON object, got %q: %v", trimmed, err)
+	}
+	for _, k := range []string{"url", "number", "result"} {
+		if _, ok := obj[k]; !ok {
+			t.Errorf("--json object missing key %q: %v", k, obj)
+		}
+	}
+}
+
+// TestShipAutoJSONComposable proves c-5's composability clause: `ship --auto
+// --json` emits clean JSON that parses, with result "opened" and the PR
+// url/number, while still requesting zero reviewers.
+func TestShipAutoJSONComposable(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap := shipMockFlow(t, dir)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship(), "--auto", "--json"); err != nil {
+			t.Fatalf("ship --auto --json: %v", err)
+		}
+	})
+
+	var obj struct {
+		URL    string `json:"url"`
+		Number int    `json:"number"`
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &obj); err != nil {
+		t.Fatalf("--auto --json should emit parseable JSON, got %q: %v", out, err)
+	}
+	if obj.Result != "opened" {
+		t.Errorf("result should be \"opened\", got %q", obj.Result)
+	}
+	if obj.URL == "" || obj.Number != 99 {
+		t.Errorf("JSON should carry the PR url/number, got url=%q number=%d", obj.URL, obj.Number)
+	}
+	if cap.reviewersHit {
+		t.Error("--auto --json must still request zero reviewers")
+	}
+}
+
 // TestShipReshipIsIdempotent ships the same phase twice. Because the first
 // ship clears current_phase (folded into the squash), the re-ship must name
 // the phase explicitly — and must not error on the second commit/push. A
