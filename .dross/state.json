@@ -1,35 +1,11 @@
 {
-  "version": "0.7.1.0",
+  "version": "0.7.3.0",
   "current_milestone": "v0.7",
   "current_phase": "interaction-defer-or-add-framing",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-01T08:56:16.803913Z",
-  "last_action": "plan reviewed: interaction-defer-or-add-framing (0 blocking, 3 flags)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-01T09:07:01.435743Z",
+  "last_action": "phase interaction-defer-or-add-framing executed (3/3 done)",
   "history": [
-    {
-      "at": "2026-06-30T14:47:37.14502Z",
-      "action": "spec locked: retrofit-readmostly-commands"
-    },
-    {
-      "at": "2026-06-30T15:09:16.41238Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-06-30T15:09:16.418502Z",
-      "action": "plan locked: retrofit-readmostly-commands (4 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-06-30T15:12:42.128283Z",
-      "action": "plan reviewed: retrofit-readmostly-commands (0 blocking, 3 flags)"
-    },
-    {
-      "at": "2026-06-30T15:22:50.287239Z",
-      "action": "set version=0.6.9.0"
-    },
-    {
-      "at": "2026-06-30T15:27:43.114732Z",
-      "action": "executed t-1 (Fail-closed interaction-coverage check)"
-    },
     {
       "at": "2026-06-30T15:29:03.17793Z",
       "action": "executed t-3 (Confirm + pin pre-existing coverage)"
@@ -205,6 +181,30 @@
     {
       "at": "2026-07-01T08:56:16.803913Z",
       "action": "plan reviewed: interaction-defer-or-add-framing (0 blocking, 3 flags)"
+    },
+    {
+      "at": "2026-07-01T08:58:55.763532Z",
+      "action": "set version=0.7.3.0"
+    },
+    {
+      "at": "2026-07-01T09:00:49.572097Z",
+      "action": "executed t-1 (Document defer-or-add pattern in playbook)"
+    },
+    {
+      "at": "2026-07-01T09:04:56.500468Z",
+      "action": "executed t-2 (Apply defer-first either/or in spec.md)"
+    },
+    {
+      "at": "2026-07-01T09:06:54.054466Z",
+      "action": "executed t-3 (Apply defer-first framing in plan.md)"
+    },
+    {
+      "at": "2026-07-01T09:07:01.429419Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-01T09:07:01.435743Z",
+      "action": "phase interaction-defer-or-add-framing executed (3/3 done)"
     }
   ]
 }
