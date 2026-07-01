@@ -1,15 +1,9 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "current_phase": "ship-architecture-autogen",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-01T10:46:47.008096Z",
-  "last_action": "verified ship-architecture-autogen: pass (3/3 covered, mutation not a signal — prompt+test-only)",
+  "last_activity": "2026-07-01T10:47:41.71719Z",
+  "last_action": "completed ship-architecture-autogen",
   "history": [
-    {
-      "at": "2026-07-01T05:45:44.038384Z",
-      "action": "set version=0.7.1.0"
-    },
     {
       "at": "2026-07-01T05:49:54.95017Z",
       "action": "executed t-1 (Add --auto flag to dross ship)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-01T10:46:47.008096Z",
       "action": "verified ship-architecture-autogen: pass (3/3 covered, mutation not a signal — prompt+test-only)"
+    },
+    {
+      "at": "2026-07-01T10:47:41.71719Z",
+      "action": "completed ship-architecture-autogen"
     }
   ]
 }
