@@ -313,6 +313,8 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 type shipCapture struct {
 	openedTitle  string
 	openedBody   string
+	openedBase   string
+	openedHead   string
 	reviewersHit bool
 }
 
@@ -336,6 +338,8 @@ func shipMockFlow(t *testing.T, dir string) *shipCapture {
 			_ = json.Unmarshal(body, &doc)
 			cap.openedTitle, _ = doc["title"].(string)
 			cap.openedBody, _ = doc["body"].(string)
+			cap.openedBase, _ = doc["base"].(string)
+			cap.openedHead, _ = doc["head"].(string)
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"number":99,"html_url":"https://forge.example/me/p/pulls/99"}`))
 			return
@@ -723,5 +727,71 @@ func TestShipCover_ResultTag(t *testing.T) {
 		if got := shipResultTag(c.res, c.err); got != c.want {
 			t.Errorf("%s: shipResultTag = %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+// activateMilestone sets current_milestone and commits it (keeping the tree
+// clean for ship), then creates the local milestone/<version> branch. The
+// caller pushes it to origin (or not, to exercise the missing-remote guard).
+func activateMilestone(t *testing.T, dir, version string) {
+	t.Helper()
+	if err := runCmd(t, State(), "set", "current_milestone", version); err != nil {
+		t.Fatalf("state set current_milestone: %v", err)
+	}
+	gitCommit(t, dir, "scope "+version)
+	mustGit(t, dir, "branch", "milestone/"+version)
+}
+
+func TestShipTargetsMilestoneBranch(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap := shipMockFlow(t, dir)
+	activateMilestone(t, dir, "v0.9")
+	mustGit(t, dir, "push", "origin", "milestone/v0.9") // base present on origin
+
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	if cap.openedBase != "milestone/v0.9" || cap.openedHead != "phase/x" {
+		t.Errorf("PR base/head = %q/%q; want milestone/v0.9 / phase/x", cap.openedBase, cap.openedHead)
+	}
+}
+
+func TestShipTargetsMainNoMilestone(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap := shipMockFlow(t, dir)
+
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	if cap.openedBase != "main" {
+		t.Errorf("PR base = %q; want main (no milestone)", cap.openedBase)
+	}
+}
+
+func TestShipRefusesMissingRemoteBase(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+	activateMilestone(t, dir, "v0.9") // local branch, deliberately NOT pushed
+
+	err := runCmd(t, Ship())
+	if err == nil {
+		t.Fatal("expected refusal when the milestone base is absent on origin")
+	}
+	if !strings.Contains(err.Error(), "not on origin") {
+		t.Errorf("error should point at the missing origin base: %v", err)
+	}
+}
+
+func TestShipNudgesNoMilestone(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship()); err != nil {
+			t.Fatalf("ship: %v", err)
+		}
+	})
+	if !strings.Contains(out, "dross milestone") {
+		t.Errorf("no-milestone ship should nudge naming `dross milestone`; got:\n%s", out)
 	}
 }
