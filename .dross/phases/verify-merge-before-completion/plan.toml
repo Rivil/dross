@@ -1,75 +1,33 @@
 [phase]
-id = "verify-merge-before-completion"
+  id = "verify-merge-before-completion"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Persist + commit PR number per-phase at ship"
-files         = ["internal/changes/changes.go", "internal/cmd/ship.go", "internal/changes/changes_test.go", "internal/cmd/ship_test.go"]
-description   = """
-Add a phase-level `PR int` field to the Changes struct (+ a setter that
-loads/sets/saves changes.json). In ship.go, after `res, err := ship.OpenPR(opts)`
-(post-push, res.Number in scope at ship.go:264-269), persist res.Number into the
-phase's changes.json ONLY when res != nil && res.Number > 0 (never write PR:0),
-then COMMIT that changes.json onto phase/<id> — a local post-push commit is safe
-because the branch is deleted at complete, so it never reaches main / re-seeds
-divergence, and it leaves a clean tree for complete's clean-tree guard.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "if ship stops writing+committing the opened PR number into the phase's changes.json (leaving it unpersisted or the tree dirty), the ship_test asserting a committed changes.PR fails",
-  "if the changes schema drops/renames the PR field, the changes_test marshal/unmarshal round-trip fails",
-  "if ship persists a PR when res is nil or res.Number <= 0, the guard test fails (no PR:0 written)",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Persist + commit PR number per-phase at ship"
+  files = ["internal/changes/changes.go", "internal/cmd/ship.go", "internal/changes/changes_test.go", "internal/cmd/ship_test.go"]
+  description = "Add a phase-level `PR int` field to the Changes struct (+ a setter that\nloads/sets/saves changes.json). In ship.go, after `res, err := ship.OpenPR(opts)`\n(post-push, res.Number in scope at ship.go:264-269), persist res.Number into the\nphase's changes.json ONLY when res != nil && res.Number > 0 (never write PR:0),\nthen COMMIT that changes.json onto phase/<id> — a local post-push commit is safe\nbecause the branch is deleted at complete, so it never reaches main / re-seeds\ndivergence, and it leaves a clean tree for complete's clean-tree guard.\n"
+  covers = ["c-4"]
+  test_contract = ["if ship stops writing+committing the opened PR number into the phase's changes.json (leaving it unpersisted or the tree dirty), the ship_test asserting a committed changes.PR fails", "if the changes schema drops/renames the PR field, the changes_test marshal/unmarshal round-trip fails", "if ship persists a PR when res is nil or res.Number <= 0, the guard test fails (no PR:0 written)"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "Provider PR-merged lookup + exported seam"
-files         = ["internal/ship/merged.go", "internal/ship/merged_test.go"]
-description   = """
-New ship.PRMerged(opts) (bool, error) mirroring OpenPR's provider dispatch: GitHub
-via the overridable ghCommand (`gh pr view <n> --json state,mergedAt`, merged ==
-state "MERGED"); providers not implemented (forgejo/gitea/gitlab) return a sentinel
-ErrMergeStatusUnsupported so callers fall back rather than block. Expose an
-EXPORTED, overridable seam `ship.PRMergedFunc` (a package var defaulting to the
-real PRMerged) so cmd-package tests (phase_test.go) can stub merged status without
-a gh binary or network — the unexported ghCommand seam is unreachable from cmd.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "if the GitHub path reports merged for a non-MERGED PR (state != MERGED), the merged_test table case fails",
-  "if an unimplemented provider silently returns merged=true instead of ErrMergeStatusUnsupported, the unsupported-provider test fails",
-  "if PRMergedFunc is not an exported overridable var, t-3's cmd-level stub can't compile — asserted by t-3's tests",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Provider PR-merged lookup + exported seam"
+  files = ["internal/ship/merged.go", "internal/ship/merged_test.go"]
+  description = "New ship.PRMerged(opts) (bool, error) mirroring OpenPR's provider dispatch: GitHub\nvia the overridable ghCommand (`gh pr view <n> --json state,mergedAt`, merged ==\nstate \"MERGED\"); providers not implemented (forgejo/gitea/gitlab) return a sentinel\nErrMergeStatusUnsupported so callers fall back rather than block. Expose an\nEXPORTED, overridable seam `ship.PRMergedFunc` (a package var defaulting to the\nreal PRMerged) so cmd-package tests (phase_test.go) can stub merged status without\na gh binary or network — the unexported ghCommand seam is unreachable from cmd.\n"
+  covers = ["c-3"]
+  test_contract = ["if the GitHub path reports merged for a non-MERGED PR (state != MERGED), the merged_test table case fails", "if an unimplemented provider silently returns merged=true instead of ErrMergeStatusUnsupported, the unsupported-provider test fails", "if PRMergedFunc is not an exported overridable var, t-3's cmd-level stub can't compile — asserted by t-3's tests"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-1", "t-2"]
-title         = "Gate complete on merge + migrate fixtures"
-files         = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
-description   = """
-Replace the strings.Contains(originState, "completed <id>") sole guard in
-phaseComplete with an authoritative gate: read the phase's recorded PR number from
-changes.json on the phase branch BEFORE the `git checkout <reconcile>` at
-phase.go:304, then require ship.PRMergedFunc == true. When there is no PR number or
-the provider returns ErrMergeStatusUnsupported / an error, fall back to
-`git merge-base --is-ancestor origin/phase/<id> origin/<base>`; map BOTH a git error
-(ref missing — deleted by `gh pr merge --squash --delete-branch`) AND a false result
-onto the SAME guided refusal (--recover / verify manually) — never crash, never
-trust the breadcrumb (demoted to a corroborating hint). Update the command Long help
-(phase.go:231-232) to describe the new gate. Migrate existing fixtures so they
-satisfy the gate in this same commit (atomic-green): completeFixture gets a recorded
-PR + stubbed PRMergedFunc=merged; the ship-driven happy-path/consecutive/zero-manual
-tests stub PRMergedFunc=merged so they stay green.
-"""
-covers        = ["c-1", "c-2", "c-3", "c-5"]
-test_contract = [
-  "TestPhaseCompleteRefusesDraggedBreadcrumb: unmerged PR (PRMergedFunc=false) but a 'completed <id>' row dragged onto the base via a later phase → refused, no ff/branch-delete — fails if complete accepts it",
-  "happy path: recorded PR with PRMergedFunc=merged completes (ff + cleanup); TestPhaseCompleteHappyPath / TestConsecutivePhasesNoDivergence / TestShipToCompleteLeavesZeroManualGit stay green after fixture migration",
-  "offline/deleted-ref: no PR number and a missing origin/phase/<id> ref → guided refusal with a clean error (no panic/crash) — fails if complete crashes or false-completes",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Gate complete on merge + migrate fixtures"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+  description = "Replace the strings.Contains(originState, \"completed <id>\") sole guard in\nphaseComplete with an authoritative gate: read the phase's recorded PR number from\nchanges.json on the phase branch BEFORE the `git checkout <reconcile>` at\nphase.go:304, then require ship.PRMergedFunc == true. When there is no PR number or\nthe provider returns ErrMergeStatusUnsupported / an error, fall back to\n`git merge-base --is-ancestor origin/phase/<id> origin/<base>`; map BOTH a git error\n(ref missing — deleted by `gh pr merge --squash --delete-branch`) AND a false result\nonto the SAME guided refusal (--recover / verify manually) — never crash, never\ntrust the breadcrumb (demoted to a corroborating hint). Update the command Long help\n(phase.go:231-232) to describe the new gate. Migrate existing fixtures so they\nsatisfy the gate in this same commit (atomic-green): completeFixture gets a recorded\nPR + stubbed PRMergedFunc=merged; the ship-driven happy-path/consecutive/zero-manual\ntests stub PRMergedFunc=merged so they stay green.\n"
+  covers = ["c-1", "c-2", "c-3", "c-5"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["TestPhaseCompleteRefusesDraggedBreadcrumb: unmerged PR (PRMergedFunc=false) but a 'completed <id>' row dragged onto the base via a later phase → refused, no ff/branch-delete — fails if complete accepts it", "happy path: recorded PR with PRMergedFunc=merged completes (ff + cleanup); TestPhaseCompleteHappyPath / TestConsecutivePhasesNoDivergence / TestShipToCompleteLeavesZeroManualGit stay green after fixture migration", "offline/deleted-ref: no PR number and a missing origin/phase/<id> ref → guided refusal with a clean error (no panic/crash) — fails if complete crashes or false-completes"]
+  status = "done"
