@@ -1,15 +1,9 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "current_phase": "secure-quality-findings-followups",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-01T13:19:43.692596Z",
-  "last_action": "created secure-quality-findings-followups",
+  "last_activity": "2026-07-01T13:30:39.022123Z",
+  "last_action": "completed secure-quality-findings-followups",
   "history": [
-    {
-      "at": "2026-07-01T08:58:55.763532Z",
-      "action": "set version=0.7.3.0"
-    },
     {
       "at": "2026-07-01T09:00:49.572097Z",
       "action": "executed t-1 (Document defer-or-add pattern in playbook)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-01T13:19:43.692596Z",
       "action": "created secure-quality-findings-followups"
+    },
+    {
+      "at": "2026-07-01T13:30:39.022123Z",
+      "action": "completed secure-quality-findings-followups"
     }
   ]
 }
