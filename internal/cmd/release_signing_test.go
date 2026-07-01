@@ -70,25 +70,6 @@ func TestGoreleaserWindowsZipOverride(t *testing.T) {
 
 // TestGoreleaserBrewsTap pins the Homebrew tap publish: the formula pushes to the
 // Rivil/homebrew-dross tap using HOMEBREW_TAP_GITHUB_TOKEN — never a literal token.
-func TestGoreleaserBrewsTap(t *testing.T) {
-	y := readRepoFile(t, ".goreleaser.yaml")
-	for _, want := range []string{
-		"brews:",
-		"name: homebrew-dross",                 // the external tap repo
-		"owner: Rivil",                         // tap owner
-		"{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}", // token from env, not a literal
-		`bin.install "dross"`,                  // install stanza
-	} {
-		if !strings.Contains(y, want) {
-			t.Errorf(".goreleaser.yaml missing brews/tap directive %q", want)
-		}
-	}
-	// The tap token must never be a hard-coded literal.
-	if strings.Contains(y, "token: ghp_") || strings.Contains(y, "token: github_pat_") {
-		t.Error(".goreleaser.yaml embeds a literal Homebrew tap token; it must come from HOMEBREW_TAP_GITHUB_TOKEN")
-	}
-}
-
 func TestReleaseWorkflowMaterializesKeyAndPassesEnv(t *testing.T) {
 	w := readRepoFile(t, ".github/workflows/release.yml")
 	for _, want := range []string{

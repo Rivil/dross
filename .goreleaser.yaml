@@ -41,24 +41,6 @@ archives:
 checksum:
   name_template: checksums.txt
 
-# Push a Homebrew formula to the external Rivil/homebrew-dross tap. The tap repo and
-# the HOMEBREW_TAP_GITHUB_TOKEN (a PAT with contents:write on the tap) are provisioned
-# by the maintainer; the live push runs only when both exist. macOS/Linux only —
-# windows uses install.ps1 / dross update.
-brews:
-  - name: dross
-    homepage: "https://github.com/Rivil/dross"
-    description: "Milestone-driven, spec-first workflow engine for Claude Code"
-    license: "AGPL-3.0-only"
-    repository:
-      owner: Rivil
-      name: homebrew-dross
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    install: |
-      bin.install "dross"
-    test: |
-      system "#{bin}/dross", "version"
-
 signs:
   - id: minisign
     cmd: minisign

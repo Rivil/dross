@@ -183,16 +183,6 @@ export PATH="$HOME/.local/bin:$PATH"
 
 Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` (existing repo).
 
-### Homebrew (macOS / Linux)
-
-```sh
-brew install rivil/dross/dross
-```
-
-This taps [`Rivil/homebrew-dross`](https://github.com/Rivil/homebrew-dross) and installs the `dross` binary. After installing, run `dross install` once to materialize the slash commands and prompts into `~/.claude`. Upgrades follow the normal `brew upgrade dross`.
-
-> The tap is published by GoReleaser's `brews` block on each release. The live formula push requires the external tap repo plus a `HOMEBREW_TAP_GITHUB_TOKEN`; that publish is a maintainer step and is not exercised by this repo's tests.
-
 ### Windows
 
 ```powershell
