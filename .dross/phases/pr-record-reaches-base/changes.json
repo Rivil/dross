@@ -1,0 +1,22 @@
+{
+  "phase": "pr-record-reaches-base",
+  "pr": 43,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "9e37c37",
+      "completed_at": "2026-07-01T10:56:50.632729Z",
+      "landmarks": [
+        {
+          "feature": "Shipping / pull requests",
+          "symbol": "Ship",
+          "loc": "internal/cmd/ship.go:305",
+          "what": "ship pushes the PR-record commit so the squash carries the recorded PR to base for mergeGate"
+        }
+      ]
+    }
+  }
+}

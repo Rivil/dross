@@ -1,53 +1,9 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "last_activity": "2026-07-01T10:47:41.71719Z",
-  "last_action": "completed ship-architecture-autogen",
+  "last_activity": "2026-07-01T11:05:19.789207Z",
+  "last_action": "completed pr-record-reaches-base",
   "history": [
-    {
-      "at": "2026-07-01T05:49:54.95017Z",
-      "action": "executed t-1 (Add --auto flag to dross ship)"
-    },
-    {
-      "at": "2026-07-01T05:52:51.159904Z",
-      "action": "executed t-2 (Add --json flag to dross ship)"
-    },
-    {
-      "at": "2026-07-01T05:55:54.68642Z",
-      "action": "executed t-3 (Document --auto fast-path in ship prompt)"
-    },
-    {
-      "at": "2026-07-01T05:56:05.969386Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-01T05:56:05.976109Z",
-      "action": "phase ship-auto-noninteractive executed (3/3 done)"
-    },
-    {
-      "at": "2026-07-01T06:48:52.785738Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-01T06:48:52.793483Z",
-      "action": "verified ship-auto-noninteractive: pass (5/5 covered, mutation 0.96 after coverage fold-in)"
-    },
-    {
-      "at": "2026-07-01T06:59:30.563231Z",
-      "action": "completed ship-auto-noninteractive"
-    },
-    {
-      "at": "2026-07-01T08:29:28.310622Z",
-      "action": "created interaction-defer-or-add-framing"
-    },
-    {
-      "at": "2026-07-01T08:44:42.643091Z",
-      "action": "set current_phase=interaction-defer-or-add-framing"
-    },
-    {
-      "at": "2026-07-01T08:44:42.650314Z",
-      "action": "spec locked: interaction-defer-or-add-framing"
-    },
     {
       "at": "2026-07-01T08:53:44.598071Z",
       "action": "set current_phase_status=planned"
@@ -203,6 +159,50 @@
     {
       "at": "2026-07-01T10:47:41.71719Z",
       "action": "completed ship-architecture-autogen"
+    },
+    {
+      "at": "2026-07-01T10:52:05.609336Z",
+      "action": "created pr-record-reaches-base"
+    },
+    {
+      "at": "2026-07-01T10:53:20.3257Z",
+      "action": "set current_phase=pr-record-reaches-base"
+    },
+    {
+      "at": "2026-07-01T10:53:20.332689Z",
+      "action": "spec locked: pr-record-reaches-base"
+    },
+    {
+      "at": "2026-07-01T10:53:43.585985Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-01T10:53:43.592613Z",
+      "action": "plan locked: pr-record-reaches-base (1 task, no-review: focused single-file fix)"
+    },
+    {
+      "at": "2026-07-01T10:56:50.647786Z",
+      "action": "executed t-1 (Push the PR-record commit to the phase branch)"
+    },
+    {
+      "at": "2026-07-01T10:58:07.427214Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-01T10:58:07.434837Z",
+      "action": "phase pr-record-reaches-base executed (1/1 done)"
+    },
+    {
+      "at": "2026-07-01T11:04:29.145076Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-01T11:04:29.152058Z",
+      "action": "verified pr-record-reaches-base: pass (3/3 covered, mutation 0.96, efficacy 1.00 on covered)"
+    },
+    {
+      "at": "2026-07-01T11:05:19.789207Z",
+      "action": "completed pr-record-reaches-base"
     }
   ]
 }
