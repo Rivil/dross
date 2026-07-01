@@ -1,0 +1,24 @@
+[phase]
+id = "ship-architecture-autogen"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Auto-backfill ARCHITECTURE.md on ship when absent"
+files         = ["assets/prompts/ship.md", "internal/cmd/ship_prompt_test.go"]
+description   = """
+Rewrite ship.md §3.5 step 2: when ARCHITECTURE.md is absent, the interactive ship
+flow AUTOMATICALLY runs the backfill (reads ~/.claude/dross/prompts/architecture.md
+and generates the doc from a code+git scan) before merging landmarks — self-heal,
+no manual step — and skips only if backfill can't run (non-blocking note; a missing
+doc must never block the ship). Extend the §0.5/--auto note so backfill is called
+out as part of the §3.5 skip under --auto (interactive-only). Add ship_prompt_test
+content assertions pinning all three.
+"""
+covers        = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "if ship.md §3.5 regresses to 'run /dross-architecture manually or skip' instead of an automatic backfill when the doc is absent, the ship_prompt_test auto-backfill assertion fails",
+  "if the --auto note stops documenting that backfill is skipped non-interactively, the assertion fails",
+  "if the non-blocking 'must not block the ship' clause for backfill is removed, the assertion fails",
+]
+status        = "pending"
