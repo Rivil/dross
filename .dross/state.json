@@ -2,18 +2,10 @@
   "version": "0.7.1.0",
   "current_milestone": "v0.7",
   "current_phase": "milestone-branch-model",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-01T07:17:16.402004Z",
-  "last_action": "spec locked: milestone-branch-model",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-01T07:31:29.939393Z",
+  "last_action": "plan locked: milestone-branch-model (7 tasks across 2 waves)",
   "history": [
-    {
-      "at": "2026-06-30T14:06:44.900387Z",
-      "action": "merged architecture-doc-enhancements"
-    },
-    {
-      "at": "2026-06-30T14:17:58.60491Z",
-      "action": "created retrofit-readmostly-commands"
-    },
     {
       "at": "2026-06-30T14:47:37.138013Z",
       "action": "set current_phase=retrofit-readmostly-commands"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-01T07:17:16.402004Z",
       "action": "spec locked: milestone-branch-model"
+    },
+    {
+      "at": "2026-07-01T07:31:29.932264Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-01T07:31:29.939393Z",
+      "action": "plan locked: milestone-branch-model (7 tasks across 2 waves)"
     }
   ]
 }
