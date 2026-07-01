@@ -306,6 +306,149 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	}
 }
 
+// shipCapture records what a mock provider received, so --auto assertions
+// can check the reviewer endpoint was never hit and the posted body/title.
+type shipCapture struct {
+	openedTitle  string
+	openedBody   string
+	reviewersHit bool
+}
+
+// shipMockFlow stands up a bare-init "remote" plus a mock Forgejo server for
+// the given fixture repo, points remote.api_base at it (committing so the tree
+// stays clean), and returns a capture the caller inspects after shipping. It
+// mirrors TestShipFullFlowAgainstMockProvider's setup, factored out so the
+// --auto tests don't duplicate the httptest scaffolding.
+func shipMockFlow(t *testing.T, dir string) *shipCapture {
+	t.Helper()
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare")
+	mustGit(t, dir, "remote", "set-url", "origin", remoteDir)
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+
+	cap := &shipCapture{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if strings.HasSuffix(r.URL.Path, "/pulls") && r.Method == "POST" {
+			var doc map[string]any
+			_ = json.Unmarshal(body, &doc)
+			cap.openedTitle, _ = doc["title"].(string)
+			cap.openedBody, _ = doc["body"].(string)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"number":99,"html_url":"https://forge.example/me/p/pulls/99"}`))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/requested_reviewers") {
+			cap.reviewersHit = true
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	t.Cleanup(server.Close)
+
+	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, dir, "test: point api_base at mock")
+	return cap
+}
+
+// TestShipAutoRequestsZeroReviewers proves c-1's reviewer behaviour: with
+// remote.reviewers=[alice] configured, `ship --auto` opens the PR requesting
+// zero reviewers (the provider's requested_reviewers endpoint is never hit and
+// no "Reviewers requested" line is printed), records a reviewers count of 0 in
+// telemetry, and leaves the remote.reviewers config untouched (per the locked
+// reviewers_under_auto decision — per-invocation, non-destructive).
+func TestShipAutoRequestsZeroReviewers(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	// Isolate HOME and re-enable telemetry so we can read back the outcome
+	// event's reviewers count. shipFixture's chdir pinned DROSS_NO_TELEMETRY=1.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "")
+
+	cap := shipMockFlow(t, dir)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship(), "--auto"); err != nil {
+			t.Fatalf("ship --auto: %v", err)
+		}
+	})
+
+	// Zero reviewers requested: the endpoint is never called, and the
+	// narration line stays silent.
+	if cap.reviewersHit {
+		t.Error("--auto must request zero reviewers, but the requested_reviewers endpoint was hit")
+	}
+	if strings.Contains(out, "Reviewers requested") {
+		t.Errorf("--auto must not print a 'Reviewers requested' line:\n%s", out)
+	}
+
+	// remote.reviewers config is left untouched (still the fixture's "alice").
+	p, _, err := loadProject()
+	if err != nil {
+		t.Fatalf("reload project: %v", err)
+	}
+	if len(p.Remote.Reviewers) != 1 || p.Remote.Reviewers[0] != "alice" {
+		t.Errorf("--auto must not mutate remote.reviewers, got %v", p.Remote.Reviewers)
+	}
+
+	// Telemetry records a reviewers count of 0 and the auto tag.
+	telem := mustRead(t, filepath.Join(home, ".claude/dross", "telemetry.jsonl"))
+	if !strings.Contains(telem, `"reviewers":0`) {
+		t.Errorf("--auto telemetry should record reviewers count 0:\n%s", telem)
+	}
+	if !strings.Contains(telem, `"auto":"true"`) {
+		t.Errorf("--auto telemetry should carry the auto tag:\n%s", telem)
+	}
+}
+
+// TestShipAutoStillHonorsVerifyGate proves c-3: --auto does not bypass the
+// "verify must be pass" gate. A pending verdict still fails unless
+// --force-unverified is also passed.
+func TestShipAutoStillHonorsVerifyGate(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	verifyPath := filepath.Join(dir, ".dross", "phases", "x", "verify.toml")
+	body, _ := os.ReadFile(verifyPath)
+	body = []byte(strings.Replace(string(body), `verdict = "pass"`, `verdict = "pending"`, 1))
+	if err := os.WriteFile(verifyPath, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// --auto alone must still hit the gate on a pending verdict.
+	err := runCmd(t, Ship(), "--auto", "--no-push")
+	if err == nil {
+		t.Fatal("--auto must still fail the verify gate on a pending verdict")
+	}
+	if !strings.Contains(err.Error(), "force-unverified") {
+		t.Errorf("gate error should mention --force-unverified: %v", err)
+	}
+
+	// With --force-unverified the gate is bypassed even under --auto.
+	gitCommit(t, dir, "test: flip verdict to pending") // clean tree
+	if err := runCmd(t, Ship(), "--auto", "--no-push", "--force-unverified"); err != nil {
+		t.Errorf("--auto --force-unverified should bypass the verify gate: %v", err)
+	}
+}
+
+// TestShipAutoExplicitBodyWins proves the locked explicit_flags_win decision:
+// --auto governs prompts/defaults only, so an explicit --body still overrides
+// the generated body.
+func TestShipAutoExplicitBodyWins(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap := shipMockFlow(t, dir)
+
+	if err := runCmd(t, Ship(), "--auto", "--body", "CUSTOM BODY"); err != nil {
+		t.Fatalf("ship --auto --body: %v", err)
+	}
+	if cap.openedBody != "CUSTOM BODY" {
+		t.Errorf("explicit --body must win over --auto's generated default, got %q", cap.openedBody)
+	}
+}
+
 // TestShipReshipIsIdempotent ships the same phase twice. Because the first
 // ship clears current_phase (folded into the squash), the re-ship must name
 // the phase explicitly — and must not error on the second commit/push. A

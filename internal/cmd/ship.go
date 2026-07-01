@@ -59,6 +59,7 @@ func Ship() *cobra.Command {
 		forceUnverified bool
 		forcePush       bool
 		printBody       bool
+		auto            bool
 	)
 	c := &cobra.Command{
 		Use:   "ship [phase-id]",
@@ -217,14 +218,28 @@ func Ship() *cobra.Command {
 			opts.Title = title
 			opts.Body = body
 			opts.Draft = draft
+			if auto {
+				// Per-invocation, non-destructive: request zero reviewers
+				// for this run without mutating remote.reviewers config.
+				// --auto governs prompts/defaults only — the generated body
+				// stays the default and explicit --body/--body-file/--draft
+				// still win (they were already applied above). Downstream
+				// narration + telemetry read opts.Reviewers, so clearing it
+				// here is the single source that suppresses the "Reviewers
+				// requested" line and zeroes the telemetry count too.
+				opts.Reviewers = nil
+			}
 			res, err := ship.OpenPR(opts)
 			if err != nil && res == nil {
 				return fmt.Errorf("open PR: %w", err)
 			}
 			if res != nil {
 				Printf("PR opened: %s (#%d)\n", res.URL, res.Number)
-				if len(p.Remote.Reviewers) > 0 {
-					Printf("Reviewers requested: %s\n", strings.Join(p.Remote.Reviewers, ", "))
+				// Read opts.Reviewers, not p.Remote.Reviewers: under --auto
+				// the former is cleared, so no reviewers were actually
+				// requested and this line must stay silent.
+				if len(opts.Reviewers) > 0 {
+					Printf("Reviewers requested: %s\n", strings.Join(opts.Reviewers, ", "))
 				}
 			}
 			if err != nil {
@@ -245,8 +260,13 @@ func Ship() *cobra.Command {
 			if forceUnverified || forcePush {
 				tags["force"] = "true"
 			}
+			if auto {
+				tags["auto"] = "true"
+			}
 			counts := map[string]int{
-				"reviewers":   len(p.Remote.Reviewers),
+				// opts.Reviewers is post-auto-clearing: --auto records 0,
+				// matching what was actually requested.
+				"reviewers":   len(opts.Reviewers),
 				"body_chars":  len(body),
 				"title_chars": len(title),
 			}
@@ -263,6 +283,8 @@ func Ship() *cobra.Command {
 	c.Flags().BoolVar(&forcePush, "force", false,
 		"force-with-lease the push (use when re-pushing after rewriting phase/<id>)")
 	c.Flags().BoolVar(&printBody, "print-body", false, "print the generated PR body and exit (no push, no PR)")
+	c.Flags().BoolVar(&auto, "auto", false,
+		"non-interactive: request zero reviewers for this run (without mutating remote.reviewers) and use the generated body; for scripts and loops")
 	c.AddCommand(shipComment())
 	c.AddCommand(shipRecover())
 	return c
