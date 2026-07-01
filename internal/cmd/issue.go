@@ -106,7 +106,9 @@ func boardConfig(b project.Board) forge.Config {
 		Provider: b.Provider,
 		APIBase:  b.BaseURL,
 		AuthEnv:  b.AuthEnv,
+		AuthUser: b.AuthUser,
 		Project:  b.Project,
+		BoardID:  b.GitHubProject,
 		URL:      "https://board.local/" + b.Project,
 	}
 	if strings.ToLower(b.Provider) == "gitlab" {
@@ -141,11 +143,11 @@ func issueEnable() *cobra.Command {
 			}
 			Print("board sync enabled")
 			switch strings.ToLower(p.Board.Provider) {
-			case "forgejo", "gitea", "gitlab", "youtrack":
+			case "forgejo", "gitea", "gitlab", "youtrack", "jira", "github":
 			case "":
-				Print("note: [board].provider is unset — set it to forgejo/gitea/gitlab/youtrack")
+				Print("note: [board].provider is unset — set it to forgejo/gitea/gitlab/youtrack/jira/github")
 			default:
-				Printf("note: provider %q has no board backend (forgejo/gitea/gitlab/youtrack)\n", p.Board.Provider)
+				Printf("note: provider %q has no board backend (forgejo/gitea/gitlab/youtrack/jira/github)\n", p.Board.Provider)
 			}
 			if p.Board.BaseURL == "" {
 				Print("note: [board].base_url is unset — needed for the board API")
@@ -229,11 +231,17 @@ func ensureMilestoneLink(ctx *boardCtx, version string) (string, error) {
 	}
 	desc := strings.Join(m.Scope.SuccessCriteria, "\n")
 	var id string
-	if yt, ok := ctx.client.(*forge.YouTrackClient); ok {
+	switch c := ctx.client.(type) {
+	case *forge.YouTrackClient:
 		// YouTrack maps a milestone to an entity per [board].milestone_mode
 		// (version bundle / agile board / epic), not a forge-style milestone.
-		id, err = yt.EnsureMilestoneEntity(ctx.proj.Board.MilestoneMode, version, desc)
-	} else {
+		id, err = c.EnsureMilestoneEntity(ctx.proj.Board.MilestoneMode, version, desc)
+	case *forge.JiraClient:
+		// Jira maps a milestone to a project VERSION (string id via the concrete
+		// path). The returned id is numeric, so the phase-sync int-milestone path
+		// still attaches it (as a Fix Version) downstream.
+		id, err = c.EnsureMilestoneEntity(ctx.proj.Board.MilestoneMode, version, desc)
+	default:
 		id, err = ctx.client.EnsureMilestone(version, milestoneBody(title, desc))
 	}
 	if err != nil {
@@ -453,6 +461,15 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 	// state warns and skips inside SetState without failing the sync.
 	if yt, ok := ctx.client.(*forge.YouTrackClient); ok && status != "" {
 		if err := yt.SetState(key, status, ctx.proj.Board.StateMap); err != nil {
+			return wrapBoard(err)
+		}
+	}
+	// Jira tracks lifecycle by moving the issue through a workflow transition,
+	// mapped via the default map overridden by [board].state_map. An unmapped
+	// state (or a target with no available transition) warns and skips inside
+	// SetState without failing the sync.
+	if jr, ok := ctx.client.(*forge.JiraClient); ok && status != "" {
+		if err := jr.SetState(key, status, ctx.proj.Board.StateMap); err != nil {
 			return wrapBoard(err)
 		}
 	}

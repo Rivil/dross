@@ -1,0 +1,21 @@
+{
+  "phase": "ship-architecture-autogen",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "assets/prompts/ship.md",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "94f7b0b",
+      "completed_at": "2026-07-01T10:46:09.408589Z",
+      "landmarks": [
+        {
+          "feature": "Shipping / pull requests",
+          "symbol": "TestShipPromptAutoBackfill",
+          "loc": "internal/cmd/ship_prompt_test.go",
+          "what": "ship self-heals an absent ARCHITECTURE.md via automatic backfill · non-blocking · --auto skips"
+        }
+      ]
+    }
+  }
+}

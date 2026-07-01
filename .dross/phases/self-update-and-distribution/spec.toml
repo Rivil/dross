@@ -56,11 +56,14 @@
 [[deferred]]
   text = "Release signing (minisign or cosign) in CI plus signature verification in `dross update` — embed a public key, sign checksums.txt in goreleaser, ed25519-verify before swap. The update_trust path is built to accept this additively."
   why = "Checksum-over-HTTPS is enough for now (solo project, GitHub is the trust root); signing adds account-compromise resistance later. Someday."
+  target = "release-trust-and-distribution"
 
 [[deferred]]
   text = "Windows support — a windows/amd64 (and arm64) goreleaser build plus the different install path (no ~/.claude symlink semantics, %USERPROFILE% layout)."
   why = "Author is on darwin/linux; cross-platform Windows install is out of scope for the first cut. Someday."
+  target = "release-trust-and-distribution"
 
 [[deferred]]
   text = "Package-manager distribution channels — a Homebrew tap (and possibly others) as an alternative install/update route alongside curl|sh + `dross update`."
   why = "curl|sh + self-update covers the author's machines; package-manager channels are a marketing/convenience concern, premature while unmarketed. Someday."
+  target = "release-trust-and-distribution"

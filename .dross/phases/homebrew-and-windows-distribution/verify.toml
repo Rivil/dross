@@ -1,0 +1,249 @@
+[verify]
+  phase = "homebrew-and-windows-distribution"
+  generated_at = 2026-07-01T13:53:06.913951Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9626320064987814
+  mutants_killed = 1185
+  mutants_survived = 46
+  mutants_not_covered = 46
+  criteria_total = 3
+  criteria_covered = 3
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/update/update_test.go:TestAssetName (windows/amd64+arm64 → .zip)",
+    "internal/update/update_test.go:TestBinaryName",
+    "internal/cmd/update_test.go:TestUpdateAppliesWindowsZip",
+    "internal/cmd/update_test.go:TestUpdateRefusesOnBadChecksumWindowsZip",
+  ]
+  notes = "dross update handles windows via a goos/goarch seam on updateOpts (defaults to runtime), so the windows path is exercised on this darwin host: a validly-signed .zip containing dross.exe extracts and swaps; a bad checksum still refuses BEFORE extract on the zip path (signature+checksum gate unchanged). Mutation: internal/update (AssetName/BinaryName) and the new zip dispatch/extractBinaryZip had zero surviving mutants."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/cmd/release_signing_test.go:TestGoreleaserBuildsWindows",
+    "internal/cmd/release_signing_test.go:TestGoreleaserWindowsZipOverride",
+    "internal/cmd/release_signing_test.go:TestGoreleaserBrewsTap",
+  ]
+  notes = "Config guards pin the windows build target, the windows→zip format override, and the brews block (tap Rivil/homebrew-dross, HOMEBREW_TAP_GITHUB_TOKEN via env, no literal token). goreleaser schema was checked against the v2 docs (homebrew_formulas + archive). goreleaser is not installed here so `goreleaser check` was NOT run — static + guard-test only, per the honest verify posture."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/release_signing_test.go:TestInstallPs1VerifiesBeforePlace"]
+  notes = "install.ps1's load-bearing safety is pinned: the SHA-256 verify precedes archive extraction and the move onto PATH, plus DROSS_INSTALL_BASE + dross.exe. install.ps1 was authored from PowerShell docs and reviewed statically; it is NOT executed or lint-run here (no windows/pwsh; no ps1 CI linter). README documents the Homebrew tap + Windows channels."
+
+[[finding]]
+  severity = "NOTE"
+  text = "TRIAGE (survivors): the 46 surviving mutants are pre-existing, outside this phase's change region. The two in update.go (181/184) are the os.Executable()/EvalSymlinks err-guards shifted down by this phase's additions — NOT the new zip/windows code (which had zero survivors); the rest are the package-wide switch-case/err-guard ceiling triaged in prior v0.9 phases (env.go, status.go, doctor.go, ship.go, phase.go, etc.)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "UNVERIFIED-UNATTENDED (documented, NOT reported green): (1) a real Windows binary run end-to-end — the update LOGIC is unit-tested but no dross.exe was executed on Windows; (2) goreleaser's live Homebrew formula push — needs the Rivil/homebrew-dross tap repo + HOMEBREW_TAP_GITHUB_TOKEN; (3) install.ps1 not executed/lint-run; (4) `goreleaser check` not run (goreleaser not installed)."
+
+[[finding]]
+  severity = "FLAG"
+  text = "FOLLOW-UP: goreleaser deprecated `brews:` in v2.10 in favor of `homebrew_casks:` (the modern path for prebuilt binaries). `brews:` still works and is the locked choice for this phase; consider migrating to homebrew_casks when standing up the tap. Guard test TestGoreleaserBrewsTap pins the current form and will need updating on migration."
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:105 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:109 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:114 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:119 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: install.go:65 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone.go:147 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:27 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:411 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:411 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:413 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:413 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:413 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:441 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:443 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:23 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: rule.go:143 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:446 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:446 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:448 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:448 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:450 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:181 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:184 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:271 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:273 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:445 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:447 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:66 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:66 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:68 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:68 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:71 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:71 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:184 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:187 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:187 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:96 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: deferred.go:138 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .goreleaser.yaml: no mutation adapter for .yaml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped install.ps1: no mutation adapter for .ps1"

@@ -1,0 +1,52 @@
+[phase]
+id        = "verify-merge-before-completion"
+title     = "verify-merge-before-completion"
+milestone = "v0.9"
+
+[[criteria]]
+id   = "c-1"
+text = "dross phase complete <id> refuses to complete (no ff, no branch deletion, no completion record) when <id>'s PR is still open/unmerged — even when a later merged phase has dragged a 'completed <id>' row onto the base branch's cumulative state.json. A regression test reproduces exactly this (breadcrumb present on base, PR unmerged) and asserts refusal."
+
+[[criteria]]
+id   = "c-2"
+text = "The normal squash-merge happy path still completes: when <id>'s PR has been squash-merged, dross phase complete <id> succeeds (ff + local/remote branch cleanup) as before. Existing happy-path tests stay green."
+
+[[criteria]]
+id   = "c-3"
+text = "The completion gate uses an authoritative merge signal — the provider's PR-merged status, looked up via the recorded PR number — rather than solely a strings.Contains over the history breadcrumb."
+
+[[criteria]]
+id   = "c-4"
+text = "Ship persists the opened PR's number in a drag-proof, phase-scoped record (changes.json, not cumulative history) so complete can identify THIS phase's PR."
+
+[[criteria]]
+id   = "c-5"
+text = "On a repo with no remote/provider (or when the provider cannot answer), completion falls back to a git merge-base --is-ancestor check and refuses with a clear message (pointing at --recover / manual verification) rather than false-completing when it cannot confirm the merge. No crash offline."
+
+[[decisions]]
+key    = "merge_authority"
+choice = "The primary authoritative completion gate is the provider's 'is PR #N merged?' status, looked up via a per-phase-recorded PR number. The 'completed <id>' history string is demoted from sole gate to at most a corroborating hint."
+why    = "Squash-merge (this repo's default) rewrites SHAs, so git ancestry of the phase tip cannot confirm a squash-merged phase; the provider is the only authoritative source, and the breadcrumb is unreliable by construction (it rides forward in cumulative History)."
+locked = true
+
+[[decisions]]
+key    = "pr_persistence"
+choice = "Ship records the opened PR's number in the phase-scoped changes.json (a new phase-level field), written post-push when the PR number is known."
+why    = "The root cause is that the completion breadcrumb lives in cumulative, capped-but-unpruned History and gets dragged onto the base by a later merged phase. A phase-scoped record cannot be dragged forward, so it reliably identifies this phase's PR."
+locked = true
+
+[[decisions]]
+key    = "offline_fallback"
+choice = "When there is no remote/provider or the provider cannot answer (unknown PR number, network/API failure), fall back to git merge-base --is-ancestor origin/phase/<id> origin/<base>. If that is inconclusive (e.g. squash with no provider answer), refuse with guidance rather than trust the breadcrumb; existing --recover/force paths remain the escape hatch."
+why    = "Never false-complete. Ancestry is correct for merge-commit/standalone repos; refusing-when-inconclusive is safer than the current false-pass, and --recover already exists for genuine recovery."
+locked = true
+
+[[decisions]]
+key    = "provider_scope"
+choice = "Implement the authoritative PR-merged lookup for the repo's configured provider (GitHub) via the existing ship/forge plumbing. Providers that cannot answer (not-yet-implemented) trigger the offline_fallback path rather than blocking."
+why    = "The affected repo is GitHub; wiring every provider's merged-status query is out of scope for the bug fix. Fallback keeps other providers safe (refuse-when-inconclusive) without faking success."
+locked = true
+
+[[deferred]]
+text = "Authoritative PR-merged lookups for the non-GitHub providers (Forgejo/Gitea, GitLab) so they too gate completion on real merge status instead of the ancestry fallback."
+why  = "Out of scope for the GitHub-repo bug fix; the fallback keeps them safe meanwhile."

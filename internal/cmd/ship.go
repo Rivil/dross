@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/ship"
@@ -279,6 +280,51 @@ func Ship() *cobra.Command {
 				narrate("Warning: %v\n", err)
 			}
 			narrate("Completion record folded into %s — squash-merge will land it on %s\n", phaseBranch, baseBranch)
+
+			// Persist the opened PR number into the phase-scoped changes.json
+			// so `dross phase complete` can gate on THIS phase's authoritative
+			// merge status (a phase-scoped record can't be dragged forward in
+			// cumulative state history the way the completion breadcrumb is).
+			// Only when a real PR number is known — never write PR:0. Commit it
+			// onto phase/<id> AND push it: the PR number is known only after the
+			// PR is opened (post first-push), so this record can't ride the
+			// initial push — it needs a second push so the open PR (and thus its
+			// squash-merge) carries the recorded number onto the base branch's
+			// changes.json, where mergeGate reads it. A local-only post-push
+			// commit (the old behaviour) never reached the base, so mergeGate's
+			// authoritative recorded-PR path was unreachable and every
+			// squash-merged completion fell back to the ancestry check and
+			// refused. The --no-push path returned earlier (no PR), so this is
+			// naturally skipped there.
+			if res != nil && res.Number > 0 {
+				if err := changes.SetPR(root, phaseID, res.Number); err != nil {
+					return fmt.Errorf("persist PR number: %w", err)
+				}
+				changesRel := filepath.Join(".dross", "phases", phaseID, changes.File)
+				if out, err := gitCombined(repoDir, "add", changesRel); err != nil {
+					return fmt.Errorf("git add changes.json: %w\n%s", err, out)
+				}
+				// Only commit + push when the add actually staged a change, so a
+				// re-ship that records the same PR number doesn't error on
+				// "nothing to commit" and doesn't fire a redundant push.
+				if err := gitNoOut(repoDir, "diff", "--cached", "--quiet"); err != nil {
+					prMsg := fmt.Sprintf("chore(dross): record PR #%d for %s", res.Number, phaseID)
+					if out, err := gitCombined(repoDir, "commit", "-m", prMsg); err != nil {
+						return fmt.Errorf("git commit PR number: %w\n%s", err, out)
+					}
+					// Push the record onto the phase branch so it reaches the
+					// open PR / squash / base. Mirror the initial push's
+					// force-with-lease handling under --force.
+					recordPushArgs := []string{"push", "origin", phaseBranch}
+					if forcePush {
+						recordPushArgs = []string{"push", "--force-with-lease", "origin", phaseBranch}
+					}
+					if out, err := gitCombined(repoDir, recordPushArgs...); err != nil {
+						return fmt.Errorf("git push PR record: %w\n%s", err, out)
+					}
+					narrate("Pushed PR record to %s\n", phaseBranch)
+				}
+			}
 
 			// 8) Telemetry — capture shape of this ship without leaking
 			//    repo URL, body content, or reviewer names.

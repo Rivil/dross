@@ -1,0 +1,216 @@
+[verify]
+  phase = "secure-quality-findings-followups"
+  generated_at = 2026-07-01T13:24:30.820029Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9616346955796498
+  mutants_killed = 1153
+  mutants_survived = 46
+  mutants_not_covered = 46
+  criteria_total = 1
+  criteria_covered = 1
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/secure_prompt_test.go:TestSecurePromptMandatedSections/private-code_semgrep_no-egress_guidance"]
+  notes = "c-1 is a prompt-guidance criterion: secure.md's §2.3 sweep now mandates a no-egress semgrep invocation for private/proprietary code (--metrics=off, pinned/local rules over --config auto, which logs the project URL to semgrep.dev). Pinned by a new case in TestSecurePromptMandatedSections; removing the guidance from secure.md fails exactly that sub-test. This phase changed no production Go (only the prompt, its pin test, and the v0.9 non-goal wording), so there is no new mutable logic — the mutation run just re-measures internal/cmd."
+
+[[finding]]
+  severity = "NOTE"
+  text = "TRIAGE: the 46 surviving mutants below are pre-existing and unrelated to this phase, which added ZERO production Go (the only .go change is a test-file assertion). Same known switch-case / err-guard go-cover attribution ceiling triaged in prior v0.9 phases (status.go, doctor.go, ship.go, env.go, phase.go, etc.). Verdict pass: c-1 is covered by the prompt-pin test; no change-region survivors exist because there is no change-region production code."
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone.go:147 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: rule.go:143 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:66 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:66 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:68 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:68 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:71 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:71 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:184 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:187 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:187 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:105 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:109 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:114 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:119 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:411 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:411 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:413 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:413 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:413 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:441 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:443 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: deferred.go:138 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:160 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:163 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:27 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:446 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:446 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:448 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:448 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:450 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:23 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: install.go:65 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:271 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:273 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:445 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:447 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:96 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .dross/milestones/v0.9.toml: no mutation adapter for .toml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/secure.md: no mutation adapter for .md"

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
@@ -295,16 +296,155 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 		t.Errorf("pushed ref should carry cleared current_phase, got %q", pushed.CurrentPhase)
 	}
 
-	// Ship must return on a clean working tree: the completion write is
-	// committed as part of ship, not left uncommitted. If the commit step is
-	// dropped, the state.json save dirties the tree and this fails.
+	// Ship must return on a clean working tree: both the completion write and
+	// the PR-number record are committed as part of ship, not left
+	// uncommitted. If either commit step is dropped, the tree is dirty here.
 	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
 		t.Errorf("working tree should be clean after ship, got: %q", st)
 	}
-	// That write lands as a `chore(dross): ship <id>` commit at HEAD. If
-	// state isn't committed, HEAD is still the api_base test commit.
-	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); msg != "chore(dross): ship x" {
-		t.Errorf("HEAD should be the ship state commit, got: %q", msg)
+	// t-1: the opened PR number (99 from the mock) is persisted into the
+	// phase's changes.json and committed post-push, so `dross phase complete`
+	// can look up THIS phase's authoritative merge status. That record commit
+	// is HEAD; the `chore(dross): ship x` state commit is its parent.
+	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), "x"), "x")
+	if err != nil {
+		t.Fatalf("load changes.json: %v", err)
+	}
+	if ch.PR != 99 {
+		t.Errorf("changes.json should carry the opened PR number 99, got %d", ch.PR)
+	}
+	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); msg != "chore(dross): record PR #99 for x" {
+		t.Errorf("HEAD should be the PR-record commit, got: %q", msg)
+	}
+	if msg := mustGit(t, dir, "log", "-1", "--skip=1", "--pretty=%s"); msg != "chore(dross): ship x" {
+		t.Errorf("ship-state commit should be HEAD~1, got: %q", msg)
+	}
+}
+
+// TestShipPushesPRRecordToPhaseBranch proves c-1/c-2: the PR-number record
+// commit is PUSHED to origin's phase-branch ref, not left as a local-only
+// post-push commit. It reads changes.json at the pushed branch tip in the bare
+// remote and asserts it carries the opened PR number. Before this fix the record
+// commit was made after the push and never reached origin, so the pushed tree's
+// changes.json had PR:0 — which made phase complete's mergeGate fall back and
+// refuse every squash-merged completion.
+func TestShipPushesPRRecordToPhaseBranch(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare")
+	mustGit(t, dir, "remote", "set-url", "origin", remoteDir)
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/pulls") && r.Method == "POST" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"number":99,"html_url":"https://forge.example/me/p/pulls/99"}`))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/requested_reviewers") {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, dir, "test: point api_base at mock")
+
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+
+	// The record commit must be HEAD of the PUSHED ref, not a local-only commit
+	// past origin. If the push were dropped, origin/phase-x would trail local
+	// HEAD by the record commit and this SHA comparison would differ.
+	localHead := mustGit(t, dir, "rev-parse", "HEAD")
+	remoteHead := mustGit(t, remoteDir, "rev-parse", "phase/x")
+	if localHead != remoteHead {
+		t.Fatalf("PR-record commit is local-only: local HEAD %s != pushed phase/x %s", localHead, remoteHead)
+	}
+
+	// Read changes.json at the pushed branch tip in the bare remote and assert it
+	// carries the opened PR number — i.e. the record actually reached origin (and
+	// so will reach the base via the squash-merge).
+	pushedChanges := mustGit(t, remoteDir, "show", "phase/x:.dross/phases/x/changes.json")
+	var pushed changes.Changes
+	if err := json.Unmarshal([]byte(pushedChanges), &pushed); err != nil {
+		t.Fatalf("parse pushed changes.json: %v", err)
+	}
+	if pushed.PR != 99 {
+		t.Errorf("pushed changes.json should carry PR 99, got %d (record left local-only)", pushed.PR)
+	}
+
+	// And the pushed tip must be the record commit itself.
+	if msg := mustGit(t, remoteDir, "log", "-1", "--pretty=%s", "phase/x"); msg != "chore(dross): record PR #99 for x" {
+		t.Errorf("pushed phase/x tip should be the PR-record commit, got: %q", msg)
+	}
+}
+
+// TestShipNoPushIssuesNoRecordPush proves c-3's --no-push scope: with --no-push
+// ship returns before opening a PR, so no PR-record push (or any push) can fire.
+// A bare remote is wired up; if ship pushed anything, phase/x would appear there.
+func TestShipNoPushIssuesNoRecordPush(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare")
+	mustGit(t, dir, "remote", "set-url", "origin", remoteDir)
+
+	if err := runCmd(t, Ship(), "--no-push"); err != nil {
+		t.Fatalf("ship --no-push: %v", err)
+	}
+
+	// Nothing was pushed: the bare remote has no branches at all.
+	if refs := mustGit(t, remoteDir, "for-each-ref", "--format=%(refname:short)", "refs/heads"); strings.TrimSpace(refs) != "" {
+		t.Errorf("--no-push must not push any ref, but remote has: %q", refs)
+	}
+}
+
+// TestShipDoesNotPersistPRWhenOpenFails pins t-1's guard: when the provider
+// rejects the PR open (OpenPR returns res==nil), ship must persist NO PR
+// number and leave no `record PR` commit — never a misleading PR:0.
+func TestShipDoesNotPersistPRWhenOpenFails(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare")
+	mustGit(t, dir, "remote", "set-url", "origin", remoteDir)
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Reject the PR-open so openForgejoPR returns (nil, err).
+		if strings.HasSuffix(r.URL.Path, "/pulls") && r.Method == "POST" {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"boom"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(server.Close)
+
+	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, dir, "test: point api_base at mock")
+
+	if err := runCmd(t, Ship()); err == nil {
+		t.Fatal("expected ship to fail when the provider rejects the PR open")
+	}
+	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), "x"), "x")
+	if err != nil {
+		t.Fatalf("load changes.json: %v", err)
+	}
+	if ch.PR != 0 {
+		t.Errorf("no PR should be persisted when open fails, got %d", ch.PR)
+	}
+	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); strings.Contains(msg, "record PR") {
+		t.Errorf("no PR-record commit should exist when open fails, HEAD: %q", msg)
 	}
 }
 

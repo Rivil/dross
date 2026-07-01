@@ -29,6 +29,7 @@ type OpenOpts struct {
 	Body       string
 	Reviewers  []string
 	Draft      bool
+	PRNumber   int // PRMerged: the PR/MR number whose merged status to look up
 }
 
 // OpenResult is the minimal successful response shape.

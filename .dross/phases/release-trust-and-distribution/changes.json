@@ -1,0 +1,55 @@
+{
+  "phase": "release-trust-and-distribution",
+  "pr": 44,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/update/signature.go",
+        "internal/update/signature_test.go",
+        "go.mod",
+        "go.sum"
+      ],
+      "commit": "46c091a",
+      "completed_at": "2026-07-01T12:44:09.66965Z",
+      "landmarks": [
+        {
+          "feature": "Release signature verification",
+          "symbol": "VerifySignature",
+          "loc": "internal/update/signature.go:43",
+          "what": "minisign signature over checksums.txt verified against the embedded public key; empty sig fail-closed; wrong-key sig refused"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/update.go",
+        "internal/cmd/update_test.go"
+      ],
+      "commit": "46c091a",
+      "completed_at": "2026-07-01T12:43:57.087453Z",
+      "landmarks": [
+        {
+          "feature": "Self-update trust gate",
+          "symbol": "runUpdate",
+          "loc": "internal/cmd/update.go:133",
+          "what": "signature over checksums.txt verified before checksum/extract/swap; missing checksums.txt.minisig refuses the update"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        ".goreleaser.yaml",
+        ".github/workflows/release.yml"
+      ],
+      "commit": "65025e4",
+      "completed_at": "2026-07-01T12:44:09.676026Z",
+      "landmarks": [
+        {
+          "feature": "Release signing",
+          "loc": ".goreleaser.yaml:39",
+          "what": "goreleaser signs checksums.txt with minisign in CI and publishes checksums.txt.minisig"
+        }
+      ]
+    }
+  }
+}

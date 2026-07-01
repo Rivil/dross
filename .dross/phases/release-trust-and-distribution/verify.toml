@@ -1,0 +1,245 @@
+[verify]
+  phase = "release-trust-and-distribution"
+  generated_at = 2026-07-01T12:44:47.892461Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9624183006535948
+  mutants_killed = 1178
+  mutants_survived = 46
+  mutants_not_covered = 46
+  criteria_total = 3
+  criteria_covered = 3
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/cmd/release_signing_test.go:TestGoreleaserSignsChecksumsWithMinisign",
+    "internal/cmd/release_signing_test.go:TestReleaseWorkflowMaterializesKeyAndPassesEnv",
+  ]
+  notes = "YAML has no mutation adapter, so c-1 is pinned by two config-regression guards: the goreleaser signs block (cmd: minisign, artifacts: checksum, ${artifact}.minisig, key/password via env) and the release workflow's ephemeral-key materialization ($RUNNER_TEMP only, chmod 600, secrets-sourced) + env wiring. The signing MECHANICS were also proven empirically locally: minisign 0.12 signs checksums non-interactively with a stdin password and the signature verifies. A live signed release cannot be exercised unattended (documented scope limit); the consumer side is fully covered by c-2/c-3."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/update/signature_test.go (VerifySignature: valid/wrong-key/tampered/empty)",
+    "internal/cmd/update_test.go:TestUpdateRefusesOnMissingSignature",
+    "internal/cmd/update_test.go:TestUpdateRefusesOnWrongKeySignature",
+    "internal/cmd/update_test.go:TestUpdateRefusesOnBadChecksum",
+  ]
+  notes = "dross update verifies the minisign signature over checksums.txt against the embedded public key BEFORE trusting any hash or touching the binary. Missing .minisig → ErrNoSignature (fail-closed); wrong-key/tampered → ErrSignatureMismatch; both leave the target binary byte-for-byte unchanged and never run resync. The bad-checksum test now serves a VALID signature, proving the signature gate is the outer check and the checksum gate still bites inside it (asserted errors.Is ErrChecksumMismatch)."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/update/signature_test.go (throwaway GenerateKey+Sign, no production key)",
+    "internal/cmd/update_test.go:TestUpdateAppliesAndResyncs (valid signed .minisig → applies)",
+    "internal/cmd/update_test.go:TestUpdateRefusesOnMissingSignature",
+    "internal/cmd/update_test.go:TestUpdateRefusesOnWrongKeySignature",
+  ]
+  notes = "All signature tests are self-contained via aead.dev/minisign.GenerateKey+Sign — no external minisign binary and no production private key. A fixture checksums.txt signed by a throwaway key verifies and the update proceeds; a tampered body, a different-key signature, and an absent .minisig each refuse before any swap. Mutation: internal/update scored killed=25 / lived=0 / not_covered=0, efficacy 100% — every mutant in signature.go and the update.go gate was killed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "TRIAGE: the 46 surviving mutants below are NOT in this phase's change region. Mutation ran over the whole internal/cmd package; every survivor is in an unrelated file (status.go, doctor.go, ship.go, env.go, phase.go, validate.go, milestone.go, rule.go, install.go, deferred.go, statusline.go, phase_lifecycle.go) or in pre-existing update.go err-guards at 160/163 (os.Executable / EvalSymlinks fallbacks shifted down 15 lines by this phase's insertion). They are the known go-cover switch-case / err-guard attribution ceiling (not real test gaps) documented across prior dross phases. This phase's NEW code — internal/update/signature.go and the update.go signature gate — was mutation-tested at killed=25 / lived=0 / not_covered=0 (efficacy 100%). Verdict pass: 0 survivors in the change region."
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:411 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:413 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:413 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:413 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:441 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:443 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:96 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone.go:147 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:66 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:66 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:68 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:68 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:71 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:71 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:184 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:187 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:187 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: install.go:65 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: rule.go:143 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:446 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:446 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:448 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:448 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:450 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: deferred.go:138 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:160 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:163 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:105 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:109 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:114 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:119 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:271 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:273 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:445 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:447 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:23 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:27 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .github/workflows/release.yml: no mutation adapter for .yml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .goreleaser.yaml: no mutation adapter for .yaml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped go.mod: no mutation adapter for .mod"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped go.sum: no mutation adapter for .sum"

@@ -37,6 +37,7 @@ func TestSecurePromptMandatedSections(t *testing.T) {
 		{"c-6 read-only, no --fix, never edits app code", []string{"no --fix", "never edit"}},
 		{"c-5 propose-then-ask before locking the scaffold", []string{"propose-then-ask before locking"}},
 		{"c-1/c-3 post-scan reconcile against prior state", []string{"dross security findings reconcile"}},
+		{"private-code semgrep no-egress guidance", []string{"metrics=off", "config auto", "semgrep.dev", "private"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

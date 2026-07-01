@@ -27,6 +27,9 @@ func TestAssetName(t *testing.T) {
 		{"darwin", "amd64", "dross_0.6.0_darwin_amd64.tar.gz"},
 		{"linux", "arm64", "dross_0.6.0_linux_arm64.tar.gz"},
 		{"linux", "amd64", "dross_0.6.0_linux_amd64.tar.gz"},
+		// windows archives are .zip (goreleaser format_overrides), not .tar.gz.
+		{"windows", "amd64", "dross_0.6.0_windows_amd64.zip"},
+		{"windows", "arm64", "dross_0.6.0_windows_arm64.zip"},
 	}
 	for _, c := range cases {
 		got, err := AssetName("v0.6.0", c.os, c.arch)
@@ -42,11 +45,25 @@ func TestAssetName(t *testing.T) {
 		t.Errorf("AssetName without v-prefix = %q", got)
 	}
 	// Unsupported platform must error, not fabricate a name.
-	if _, err := AssetName("v0.6.0", "windows", "amd64"); !errors.Is(err, ErrUnsupportedPlatform) {
-		t.Errorf("windows/amd64: want ErrUnsupportedPlatform, got %v", err)
+	if _, err := AssetName("v0.6.0", "freebsd", "amd64"); !errors.Is(err, ErrUnsupportedPlatform) {
+		t.Errorf("freebsd/amd64: want ErrUnsupportedPlatform, got %v", err)
 	}
 	if _, err := AssetName("v0.6.0", "linux", "riscv64"); !errors.Is(err, ErrUnsupportedPlatform) {
 		t.Errorf("linux/riscv64: want ErrUnsupportedPlatform, got %v", err)
+	}
+}
+
+// TestBinaryName pins the in-archive executable name per OS: dross.exe on windows
+// (Go appends .exe), dross elsewhere. A regression here would make the windows
+// extractor look for the wrong file and fail every windows self-update.
+func TestBinaryName(t *testing.T) {
+	if got := BinaryName("windows"); got != "dross.exe" {
+		t.Errorf(`BinaryName("windows") = %q, want "dross.exe"`, got)
+	}
+	for _, goos := range []string{"darwin", "linux", ""} {
+		if got := BinaryName(goos); got != "dross" {
+			t.Errorf("BinaryName(%q) = %q, want \"dross\"", goos, got)
+		}
 	}
 }
 
@@ -86,9 +103,9 @@ func TestVerifyChecksum(t *testing.T) {
 // equal or older -> UpToDate (no downgrade); a dev/unknown running build -> NeedsConfirm.
 func TestNewerOnly(t *testing.T) {
 	cases := []struct {
-		name                       string
-		latest, version, commit    string
-		want                       Decision
+		name                    string
+		latest, version, commit string
+		want                    Decision
 	}{
 		{"strictly newer", "v0.6.1", "0.6.0", "abc1234", UpdateAvailable},
 		{"newer minor", "v0.7.0", "0.6.9", "abc1234", UpdateAvailable},

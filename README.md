@@ -183,6 +183,18 @@ export PATH="$HOME/.local/bin:$PATH"
 
 Then in any Claude Code session, `/dross-init` (greenfield) or `/dross-onboard` (existing repo).
 
+### Windows
+
+```powershell
+irm https://raw.githubusercontent.com/Rivil/dross/main/install.ps1 | iex
+```
+
+`install.ps1` is the PowerShell analog of `install.sh`: it detects your architecture (`amd64`/`arm64`), downloads the latest Windows release `.zip`, verifies its SHA-256 against `checksums.txt` **before** placing anything on PATH, extracts `dross.exe` into `%USERPROFILE%\.local\bin` (overridable via `DROSS_BIN_DIR`), adds that dir to your user PATH, and runs `dross install`. Prefer a manual download? Grab `dross_<version>_windows_<arch>.zip` from [releases](https://github.com/Rivil/dross/releases), verify it against `checksums.txt`, extract `dross.exe` onto your PATH, then run `dross install`.
+
+Once installed, `dross update` self-updates on Windows too (it fetches the signed Windows `.zip`, verifies signature + checksum, and atomically swaps `dross.exe`).
+
+> The self-update, archive extraction, and SHA-256 verification are unit-tested in Go, but `install.ps1` and a real end-to-end Windows binary run have not been exercised on a Windows host in this repo — treat the first Windows run as maintainer-verified, not CI-verified.
+
 ### Updating
 
 ```sh
@@ -195,7 +207,7 @@ dross update --force  # reinstall the latest regardless of version
 
 ### Manual binary download
 
-GoReleaser publishes archives for `darwin/arm64` (primary), `darwin/amd64`, `linux/arm64`, and `linux/amd64` on every `v*` tag. Grab the matching `.tar.gz` from [releases](https://github.com/Rivil/dross/releases), extract, drop the `dross` binary on your PATH, then run `dross install` to set up the slash commands and prompts.
+GoReleaser publishes archives for `darwin/arm64` (primary), `darwin/amd64`, `linux/arm64`, `linux/amd64`, and `windows/arm64`+`windows/amd64` on every `v*` tag. Grab the matching archive from [releases](https://github.com/Rivil/dross/releases) — `.tar.gz` on macOS/Linux, `.zip` on Windows — extract, drop the `dross` binary (`dross.exe` on Windows) on your PATH, then run `dross install` to set up the slash commands and prompts.
 
 ### From source
 

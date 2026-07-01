@@ -67,22 +67,40 @@ func (d Decision) String() string {
 	}
 }
 
-var supportedOS = map[string]bool{"darwin": true, "linux": true}
+var supportedOS = map[string]bool{"darwin": true, "linux": true, "windows": true}
 var supportedArch = map[string]bool{"arm64": true, "amd64": true}
 
-// AssetName returns the release tarball name for the given version and platform,
-// matching the .goreleaser name_template exactly:
+// AssetName returns the release archive name for the given version and platform,
+// matching the .goreleaser name_template + format_overrides exactly:
 //
-//	dross_{Version}_{Os}_{Arch}.tar.gz
+//	dross_{Version}_{Os}_{Arch}.tar.gz   (darwin, linux)
+//	dross_{Version}_windows_{Arch}.zip   (windows — format_overrides emits .zip)
 //
 // goreleaser's {{.Version}} is the tag without a leading "v", and {{.Os}}/{{.Arch}}
-// are the lowercase GOOS/GOARCH. An unsupported platform returns ErrUnsupportedPlatform.
+// are the lowercase GOOS/GOARCH. windows archives are .zip (matching the goreleaser
+// format_overrides) and contain dross.exe; every other platform is .tar.gz with
+// dross. An unsupported platform returns ErrUnsupportedPlatform.
 func AssetName(version, goos, goarch string) (string, error) {
 	if !supportedOS[goos] || !supportedArch[goarch] {
 		return "", fmt.Errorf("%w: %s/%s", ErrUnsupportedPlatform, goos, goarch)
 	}
 	v := strings.TrimPrefix(version, "v")
-	return fmt.Sprintf("%s_%s_%s_%s.tar.gz", RepoName, v, goos, goarch), nil
+	ext := "tar.gz"
+	if goos == "windows" {
+		ext = "zip"
+	}
+	return fmt.Sprintf("%s_%s_%s_%s.%s", RepoName, v, goos, goarch, ext), nil
+}
+
+// BinaryName returns the executable name inside the release archive for goos:
+// "dross.exe" on windows (Go appends .exe to the windows build) and "dross"
+// everywhere else. The self-update extractor uses this to pull the right file
+// out of the archive.
+func BinaryName(goos string) string {
+	if goos == "windows" {
+		return "dross.exe"
+	}
+	return "dross"
 }
 
 // ParseChecksums parses a goreleaser checksums.txt (sha256sum format:

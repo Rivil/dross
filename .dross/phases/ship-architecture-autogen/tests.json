@@ -1,0 +1,15 @@
+{
+  "phase": "ship-architecture-autogen",
+  "generated_at": "2026-07-01T10:46:26.829147Z",
+  "languages": null,
+  "skipped": [
+    {
+      "file": "assets/prompts/ship.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "internal/cmd/ship_prompt_test.go",
+      "reason": "no mutation adapter for .go"
+    }
+  ]
+}

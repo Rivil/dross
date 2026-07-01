@@ -1,0 +1,39 @@
+[verify]
+  phase = "pr-record-reaches-base"
+  generated_at = 2026-07-01T10:58:15.936057Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9615384615384616
+  mutants_killed = 1150
+  mutants_survived = 46
+  mutants_not_covered = 46
+  criteria_total = 3
+  criteria_covered = 3
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/ship_test.go:TestShipPushesPRRecordToPhaseBranch"]
+  notes = "Ships against a bare-init origin + mock provider (PR #99); asserts local HEAD == origin phase-branch tip and that the bare remote's changes.json carries PR:99 — proving the record commit is pushed (and so reaches base via squash), not local-only."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/ship_test.go:TestShipPushesPRRecordToPhaseBranch"]
+  notes = "The bare-remote round-trip (git show phase/x:.dross/phases/x/changes.json → PR==99) is the exact reachability the bug lacked; if the push is dropped, origin trails local by the record commit and the assertion fails."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/cmd/ship_test.go:TestShipNoPushIssuesNoRecordPush",
+    "internal/cmd/ship_test.go (existing full-flow / --auto / --json / reship-idempotent tests)",
+  ]
+  notes = "--no-push ships with zero remote branches (no push fires); the added push is inside the PR-opened guard and only after an actual record commit (diff --cached --quiet), so re-ship is idempotent and existing ship tests stay green."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation measured via gremlins: score 0.96, efficacy 1.00 on covered mutants, 0 real survivors (46 survivors all NOT-COVERED). The not-covered mutants in ship.go are at 446-450 — pre-existing, outside this phase's change region (~311-325, the new PR-record push); every mutant in the new push logic was killed by the two new tests."

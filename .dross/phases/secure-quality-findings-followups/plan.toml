@@ -1,0 +1,12 @@
+[phase]
+  id = "secure-quality-findings-followups"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Private-repo-safe semgrep guidance in secure.md + pin test + milestone reword"
+  files = ["assets/prompts/secure.md", "internal/cmd/secure_prompt_test.go", ".dross/milestones/v0.9.toml"]
+  description = "In assets/prompts/secure.md, extend the §2.3 Sweep step with a private/proprietary-code\nnote: when scanning a repo the user does not own or that is not public, run registry-backed\nscanners in a no-egress mode — for semgrep specifically, pass `--metrics=off` and prefer a\npinned/local ruleset over `--config auto` (which logs the project URL to semgrep.dev). Keep\nit short and honest about the tradeoff (registry rules are convenient but leak project\nmetadata). Add a case to TestSecurePromptMandatedSections asserting the guidance is present\n(needles survive the normalizer: lowercased, backticks/emphasis stripped) — e.g. \"metrics=off\",\n\"config auto\", \"semgrep.dev\", \"private\". Reword the v0.9 non-goal that says \"CodeQL is the only\nnew scanner\" to reflect the decision: Semgrep is the SAST scanner (already in the catalog) and\nCodeQL is not pursued because it requires paid licensing for private code.\n"
+  covers = ["c-1"]
+  test_contract = ["if secure.md lacks the private-code semgrep guidance, the new TestSecurePromptMandatedSections case fails", "the reworded v0.9 non-goal no longer claims CodeQL as the new scanner", "existing secure-prompt mandated-section cases stay green"]
+  status = "done"
