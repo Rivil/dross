@@ -1,35 +1,11 @@
 {
-  "version": "0.6.16.0",
+  "version": "0.7.1.0",
   "current_milestone": "v0.7",
   "current_phase": "ship-auto-noninteractive",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-01T05:43:17.576196Z",
-  "last_action": "plan reviewed: ship-auto-noninteractive (0 blocking, 1 flag)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-01T05:56:05.976109Z",
+  "last_action": "phase ship-auto-noninteractive executed (3/3 done)",
   "history": [
-    {
-      "at": "2026-06-29T13:52:08.286287Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-06-29T13:52:08.292254Z",
-      "action": "phase self-update-and-distribution executed (7/7 done)"
-    },
-    {
-      "at": "2026-06-29T17:09:24.458881Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-06-29T17:09:24.465408Z",
-      "action": "verified self-update-and-distribution: pass (5/5 covered, mutation 0.84 measured)"
-    },
-    {
-      "at": "2026-06-29T18:18:08.155334Z",
-      "action": "completed self-update-and-distribution"
-    },
-    {
-      "at": "2026-06-30T07:06:00.974275Z",
-      "action": "bump internal 0.6.13.0 → 0.6.13.1"
-    },
     {
       "at": "2026-06-30T07:06:00.981531Z",
       "action": "quick: add install.sh smoke test"
@@ -205,6 +181,30 @@
     {
       "at": "2026-07-01T05:43:17.576196Z",
       "action": "plan reviewed: ship-auto-noninteractive (0 blocking, 1 flag)"
+    },
+    {
+      "at": "2026-07-01T05:45:44.038384Z",
+      "action": "set version=0.7.1.0"
+    },
+    {
+      "at": "2026-07-01T05:49:54.95017Z",
+      "action": "executed t-1 (Add --auto flag to dross ship)"
+    },
+    {
+      "at": "2026-07-01T05:52:51.159904Z",
+      "action": "executed t-2 (Add --json flag to dross ship)"
+    },
+    {
+      "at": "2026-07-01T05:55:54.68642Z",
+      "action": "executed t-3 (Document --auto fast-path in ship prompt)"
+    },
+    {
+      "at": "2026-07-01T05:56:05.969386Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-01T05:56:05.976109Z",
+      "action": "phase ship-auto-noninteractive executed (3/3 done)"
     }
   ]
 }

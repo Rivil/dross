@@ -1,61 +1,34 @@
 [phase]
-id = "ship-auto-noninteractive"
+  id = "ship-auto-noninteractive"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Add --auto flag to dross ship"
-files         = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
-description   = """
-Add an --auto bool flag. When set, request zero reviewers for this run
-(override OpenOpts.Reviewers to empty; never read or mutate remote.reviewers)
-and use the generated body by default. Gate the reviewer-facing narration and
-telemetry on --auto too: suppress the "Reviewers requested: …" line and count
-zero reviewers in telemetry, rather than reading p.Remote.Reviewers directly.
-The verify gate and no-merge behaviour are untouched; explicit --body /
---body-file / --draft still win.
-"""
-covers        = ["c-1", "c-3", "c-4"]
-test_contract = [
-  "with remote.reviewers=[alice,bob] set, `ship --auto` calls OpenPR with an empty OpenOpts.Reviewers and leaves the remote.reviewers config unchanged",
-  "with remote.reviewers=[alice,bob] set, `ship --auto` prints no \"Reviewers requested\" line and records a reviewers count of 0 in telemetry",
-  "`ship --auto` on a phase whose verify verdict is \"pending\" still returns the verify-gate error unless --force-unverified is also passed",
-  "`ship --auto --body 'X'` sends body 'X' to OpenPR (explicit --body wins over --auto)",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Add --auto flag to dross ship"
+  files = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
+  description = "Add an --auto bool flag. When set, request zero reviewers for this run\n(override OpenOpts.Reviewers to empty; never read or mutate remote.reviewers)\nand use the generated body by default. Gate the reviewer-facing narration and\ntelemetry on --auto too: suppress the \"Reviewers requested: …\" line and count\nzero reviewers in telemetry, rather than reading p.Remote.Reviewers directly.\nThe verify gate and no-merge behaviour are untouched; explicit --body /\n--body-file / --draft still win.\n"
+  covers = ["c-1", "c-3", "c-4"]
+  test_contract = ["with remote.reviewers=[alice,bob] set, `ship --auto` calls OpenPR with an empty OpenOpts.Reviewers and leaves the remote.reviewers config unchanged", "with remote.reviewers=[alice,bob] set, `ship --auto` prints no \"Reviewers requested\" line and records a reviewers count of 0 in telemetry", "`ship --auto` on a phase whose verify verdict is \"pending\" still returns the verify-gate error unless --force-unverified is also passed", "`ship --auto --body 'X'` sends body 'X' to OpenPR (explicit --body wins over --auto)"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Add --json flag to dross ship"
-files         = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
-description   = """
-Add a --json bool flag. Route the human narration Print/Printf lines through a
-suppressible path so --json silences them, then emit a single JSON object
-{url, number, result} to stdout. Composable with --auto.
-"""
-covers        = ["c-5"]
-test_contract = [
-  "`ship --json` writes exactly one parseable JSON object with keys url/number/result to stdout and none of the 'Pushed …' / 'PR opened …' narration lines",
-  "`ship --auto --json` emits clean JSON that parses, with result \"opened\" and the PR url/number, and zero reviewers requested",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 2
+  title = "Add --json flag to dross ship"
+  files = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
+  description = "Add a --json bool flag. Route the human narration Print/Printf lines through a\nsuppressible path so --json silences them, then emit a single JSON object\n{url, number, result} to stdout. Composable with --auto.\n"
+  covers = ["c-5"]
+  depends_on = ["t-1"]
+  test_contract = ["`ship --json` writes exactly one parseable JSON object with keys url/number/result to stdout and none of the 'Pushed …' / 'PR opened …' narration lines", "`ship --auto --json` emits clean JSON that parses, with result \"opened\" and the PR url/number, and zero reviewers requested"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Document --auto fast-path in ship prompt"
-files         = ["assets/prompts/ship.md", "internal/cmd/ship_prompt_test.go"]
-description   = """
-Add an --auto fast-path to ship.md: when --auto is in the args, skip the §1
-body-preview dump, the §2 body-override AskUserQuestion, and the §3 reviewers
-AskUserQuestion, and shell out to `dross ship --auto`. Gate it with a
-prompt-content test.
-"""
-covers        = ["c-2"]
-test_contract = [
-  "ship_prompt_test asserts ship.md contains an --auto section naming the skipped body-override and reviewer prompts and shelling to `dross ship --auto`; removing the --auto section fails it",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Document --auto fast-path in ship prompt"
+  files = ["assets/prompts/ship.md", "internal/cmd/ship_prompt_test.go"]
+  description = "Add an --auto fast-path to ship.md: when --auto is in the args, skip the §1\nbody-preview dump, the §2 body-override AskUserQuestion, and the §3 reviewers\nAskUserQuestion, and shell out to `dross ship --auto`. Gate it with a\nprompt-content test.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["ship_prompt_test asserts ship.md contains an --auto section naming the skipped body-override and reviewer prompts and shelling to `dross ship --auto`; removing the --auto section fails it"]
+  status = "done"
