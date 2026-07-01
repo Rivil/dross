@@ -107,3 +107,32 @@ func TestReleaseWorkflowMaterializesKeyAndPassesEnv(t *testing.T) {
 		t.Error("release.yml writes minisign.key into the working tree; it must stay in $RUNNER_TEMP")
 	}
 }
+
+// TestInstallPs1VerifiesBeforePlace pins the Windows bootstrap's load-bearing
+// safety: it must verify the SHA-256 against checksums.txt BEFORE it extracts or
+// moves the binary onto PATH (mirroring install.sh), and honor DROSS_INSTALL_BASE.
+// install.ps1 can't be executed/lint-run in this repo, so this content guard is the
+// reproducible check for milestone criterion c-4's Windows install channel.
+func TestInstallPs1VerifiesBeforePlace(t *testing.T) {
+	ps := readRepoFile(t, "install.ps1")
+	for _, want := range []string{
+		"Assert-Checksum", // a checksum-verification step exists
+		"DROSS_INSTALL_BASE",
+		"dross.exe",
+	} {
+		if !strings.Contains(ps, want) {
+			t.Errorf("install.ps1 missing %q", want)
+		}
+	}
+	// The verify call must appear BEFORE the archive is expanded and BEFORE the
+	// binary is moved onto PATH — a failed download must never leave a binary behind.
+	verifyAt := strings.Index(ps, "Assert-Checksum -File")
+	expandAt := strings.Index(ps, "Expand-Archive")
+	moveAt := strings.Index(ps, "Move-Item")
+	if verifyAt < 0 || expandAt < 0 || moveAt < 0 {
+		t.Fatalf("install.ps1 missing a verify/expand/move step (verify=%d expand=%d move=%d)", verifyAt, expandAt, moveAt)
+	}
+	if verifyAt > expandAt || verifyAt > moveAt {
+		t.Errorf("install.ps1 verifies the checksum AFTER extract/place (verify=%d expand=%d move=%d); must verify first", verifyAt, expandAt, moveAt)
+	}
+}
