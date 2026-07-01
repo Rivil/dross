@@ -19,6 +19,27 @@ Open a PR for a verified phase. Pushes the `phase/<id>` branch to the provider (
 5. **Verify HEAD is on `phase/<id>`** with `git symbolic-ref --short HEAD`. `dross ship` requires this — the phase branch is what gets pushed. If not on it: `git checkout phase/<id>` (it should exist from `dross phase create`).
 6. `git status --porcelain` — must be empty. If dirty, ask user to commit or stash first.
 
+## 0.5 Non-interactive fast-path (`--auto`)
+
+If `--auto` is in this command's arguments, run to completion non-interactively — suitable to call from a script or loop. Skip every interactive turn below:
+
+- **§1 body-preview dump** — skipped; nothing is shown for approval.
+- **§2 body override** — skipped; no AskUserQuestion, the generated body is used.
+- **§3 reviewers** — skipped; no AskUserQuestion, zero reviewers are requested for this run (the configured `remote.reviewers` default is left untouched).
+- **§3.5 landmark merge** — skipped under `--auto` (it shows a diff and asks for an OK, which a non-interactive run can't answer); fold landmarks in later via an interactive ship or `/dross-architecture`.
+
+§0 pre-flight still runs — the verify-pass gate is **not** bypassed (add `--force-unverified` too only if you must ship unverified). Then shell out directly:
+
+```
+dross ship --auto <phase-id>
+```
+
+Add `--json` for machine-readable output to capture in the caller: `dross ship --auto --json <phase-id>` prints a single `{url, number, result}` object on stdout and suppresses the narration.
+
+`--auto` opens the PR and **returns without merging** — do not drive the §5 CI-watch or §6 merge gate; the caller (or a later interactive `/dross-ship`) owns the merge. Report the PR URL and stop.
+
+Everything below (§1–§7) is the interactive path, taken when `--auto` is absent.
+
 ## 1. Preview
 
 Run `dross ship --no-push <phase-id>` for a dry run (no push, no PR). To preview the review diff: `git diff <main>..phase/<id>`. To preview the PR body: `dross ship --print-body <phase-id>`.

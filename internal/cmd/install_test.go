@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Rivil/dross/assets"
@@ -171,5 +172,131 @@ func TestInstallSparesNonDross(t *testing.T) {
 	}
 	if string(got) != "user content" {
 		t.Errorf("non-dross user file mutated: %q", got)
+	}
+}
+
+// TestInstallCover_HomeResolveError drives install.go:39 — os.UserHomeDir failing.
+// With HOME empty, UserHomeDir errors and RunE returns a "resolve home" error.
+// Negating the guard would swallow that error and proceed with an empty home.
+func TestInstallCover_HomeResolveError(t *testing.T) {
+	t.Setenv("HOME", "")
+	err := runCmd(t, Install())
+	if err == nil {
+		t.Fatal("expected an error when HOME is unset")
+	}
+	if !strings.Contains(err.Error(), "resolve home") {
+		t.Fatalf("error = %v, want it to mention \"resolve home\"", err)
+	}
+}
+
+// TestInstallCover_RunError drives install.go:57 — the `if err := in.run(); err != nil`
+// guard. A ~/.claude that is a regular file makes MkdirAll of the skills tree fail, so
+// run() returns an error that RunE must propagate. Negating the guard would drop the
+// error and return nil.
+func TestInstallCover_RunError(t *testing.T) {
+	home := t.TempDir()
+	// A regular file where the .claude dir must go => MkdirAll fails inside run().
+	if err := os.WriteFile(filepath.Join(home, ".claude"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wd := t.TempDir() // no assets/commands here => copy mode
+	chdir(t, wd)
+	t.Setenv("HOME", home)
+	if err := runCmd(t, Install()); err == nil {
+		t.Fatal("expected an error when in.run() cannot build the skills tree")
+	}
+}
+
+// TestInstallCover_DetectSourceDir drives install.go:93 — the
+// `err == nil && st.IsDir()` guard in detectSourceDir. The three cases pin every part
+// of the condition: a real commands dir (true), commands as a plain file (IsDir false),
+// and no assets at all (Stat errors).
+func TestInstallCover_DetectSourceDir(t *testing.T) {
+	t.Run("commands dir present => ok", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, "assets", "commands"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		chdir(t, dir)
+		wd, err := os.Getwd()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, ok := detectSourceDir()
+		if !ok {
+			t.Fatal("expected ok=true when assets/commands exists")
+		}
+		if want := filepath.Join(wd, "assets"); got != want {
+			t.Errorf("src = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("commands is a file => not ok", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "assets", "commands"), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		chdir(t, dir)
+		if got, ok := detectSourceDir(); ok {
+			t.Errorf("expected ok=false when commands is a file, got %q", got)
+		}
+	})
+
+	t.Run("no assets => not ok", func(t *testing.T) {
+		dir := t.TempDir()
+		chdir(t, dir)
+		if got, ok := detectSourceDir(); ok {
+			t.Errorf("expected ok=false when assets absent, got %q", got)
+		}
+	})
+}
+
+// TestInstallCover_CopyDropsPromptsSymlink drives install.go:231 — the os.Remove guard
+// that drops a prior prompts symlink before a copy-mode install. Remove succeeds, so the
+// install completes and the prompts dir becomes a real directory. Negating the guard
+// would return a "clear prompts symlink" error even though Remove succeeded.
+func TestInstallCover_CopyDropsPromptsSymlink(t *testing.T) {
+	home := t.TempDir()
+	promptsDir := filepath.Join(home, ".claude", "dross", "prompts")
+	if err := os.MkdirAll(filepath.Dir(promptsDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := t.TempDir()
+	if err := os.Symlink(target, promptsDir); err != nil {
+		t.Fatal(err)
+	}
+	in := &installer{home: home, link: false, out: io.Discard}
+	if err := in.run(); err != nil {
+		t.Fatalf("copy install over a prompts symlink should succeed: %v", err)
+	}
+	fi, err := os.Lstat(promptsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		t.Errorf("prompts dir is still a symlink after copy install; want a real dir")
+	}
+}
+
+// TestInstallCover_ClearPathRealDir drives install.go:291 — the symlink-vs-dir branch in
+// clearPath. On a non-empty real directory clearPath must RemoveAll (succeeds); negating
+// the guard would take the os.Remove path, which fails on a non-empty directory.
+func TestInstallCover_ClearPathRealDir(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "victim")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "f.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := clearPath(sub); err != nil {
+		t.Fatalf("clearPath on a non-empty real dir should RemoveAll cleanly: %v", err)
+	}
+	if _, err := os.Stat(sub); !os.IsNotExist(err) {
+		t.Errorf("clearPath did not remove the directory (err=%v)", err)
 	}
 }

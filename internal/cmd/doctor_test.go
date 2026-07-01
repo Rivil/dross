@@ -513,3 +513,174 @@ func runCmdCapturing(t *testing.T, out *string, cmd *cobra.Command, args ...stri
 	})
 	return err
 }
+
+// TestDoctorCover_RemoteSwitch exercises all three explicit arms of the
+// gitURL/[remote].url switch (doctor.go:66/68/71) with distinguishing
+// assertions, plus the exact issue count so the case-68 issues++ (line 70)
+// is caught if flipped to a decrement.
+func TestDoctorCover_RemoteSwitch(t *testing.T) {
+	t.Run("greenfield: no origin and no [remote] passes", func(t *testing.T) {
+		dir := t.TempDir()
+		chdir(t, dir)
+		t.Setenv("HOME", t.TempDir()) // isolate defaults so [remote] stays empty
+		if err := runCmd(t, Init()); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		var out string
+		if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+			t.Fatalf("greenfield should pass, got %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "no git origin and no [remote] configured") {
+			t.Errorf("expected the greenfield ✓ line:\n%s", out)
+		}
+	})
+
+	t.Run("[remote].url set but git has no origin is one issue", func(t *testing.T) {
+		dir := t.TempDir()
+		chdir(t, dir)
+		t.Setenv("HOME", t.TempDir())
+		if err := runCmd(t, Init()); err != nil { // no git → no origin
+			t.Fatalf("init: %v", err)
+		}
+		if err := runCmd(t, Project(), "set", "remote.url", "https://github.com/Rivil/dross"); err != nil {
+			t.Fatalf("project set: %v", err)
+		}
+		var out string
+		err := runCmdCapturing(t, &out, Doctor())
+		if err == nil || err.Error() != "1 project-level issue(s) found" {
+			t.Fatalf("expected exactly one issue, got err=%v\n%s", err, out)
+		}
+		if !strings.Contains(out, "but git has no origin") {
+			t.Errorf("expected the ⚠ url-without-origin line:\n%s", out)
+		}
+	})
+
+	t.Run("git origin but no [remote] in toml is an issue", func(t *testing.T) {
+		dir := t.TempDir()
+		chdir(t, dir)
+		t.Setenv("HOME", t.TempDir())
+		if err := runCmd(t, Init()); err != nil { // init first, no git → toml has no [remote]
+			t.Fatalf("init: %v", err)
+		}
+		gitInit(t, dir, "https://github.com/Rivil/dross.git") // add origin AFTER init
+		var out string
+		err := runCmdCapturing(t, &out, Doctor())
+		if err == nil {
+			t.Fatalf("expected an issue, got nil\n%s", out)
+		}
+		if !strings.Contains(out, "but project.toml has no [remote]") {
+			t.Errorf("expected the ✗ origin-without-remote line:\n%s", out)
+		}
+	})
+}
+
+// TestDoctorCover_BoardAuthEnvUnset drives the config-level empty auth_env
+// branch (doctor.go:121-123): board.auth_env is left unset while every other
+// board field is well-formed, so boardIssues is exactly 1. The exact final
+// count catches the line-123 boardIssues++ if flipped to a decrement.
+func TestDoctorCover_BoardAuthEnvUnset(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	t.Setenv("HOME", t.TempDir())
+	gitInit(t, dir, "https://gitlab.com/Rivil/dross.git")
+	if err := runCmd(t, Init()); err != nil { // captures the gitlab remote → remote block clean
+		t.Fatalf("init: %v", err)
+	}
+	for k, v := range map[string]string{
+		"board.provider":       "youtrack",
+		"board.base_url":       "https://yt.example.com",
+		"board.milestone_mode": "version",
+		// board.auth_env deliberately left empty → line 122/123
+	} {
+		if err := runCmd(t, Project(), "set", k, v); err != nil {
+			t.Fatalf("project set %s: %v", k, err)
+		}
+	}
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err == nil || err.Error() != "1 project-level issue(s) found" {
+		t.Fatalf("expected exactly one (board auth_env) issue, got err=%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "[board].auth_env is not set") {
+		t.Errorf("expected the config-level empty auth_env ✗ line:\n%s", out)
+	}
+}
+
+// TestDoctorCover_GitattributesUnreadable makes .gitattributes a directory so
+// os.ReadFile fails with a non-NotExist error, driving the "couldn't read"
+// branch (doctor.go:158-160). The exact final count catches the line-160
+// issues++ if flipped to a decrement.
+func TestDoctorCover_GitattributesUnreadable(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	t.Setenv("HOME", t.TempDir())
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	// Replace the .gitattributes file with a directory: os.ReadFile then
+	// returns an EISDIR error (not fs.ErrNotExist) → the error branch.
+	ga := filepath.Join(dir, ".gitattributes")
+	if err := os.Remove(ga); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(ga, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err == nil || err.Error() != "1 project-level issue(s) found" {
+		t.Fatalf("expected exactly one (.gitattributes) issue, got err=%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "couldn't read .gitattributes") {
+		t.Errorf("expected the unreadable-gitattributes ⚠ line:\n%s", out)
+	}
+}
+
+// TestDoctorCover_PhaseHygieneBranches covers the default and error arms of the
+// phase-hygiene switch (doctor.go:184/187). The clean-main default arm has
+// len(leaked)==0 and must NOT add an issue, which pins both the >0 boundary and
+// the negation on line 187 (either mutant would enter the leaked branch and add
+// an issue). The error arm forces phaseCommitsOnMain to fail on a missing
+// origin/main ref, and asserts it stays advisory (line 184).
+func TestDoctorCover_PhaseHygieneBranches(t *testing.T) {
+	t.Run("clean main takes the default ✓ arm", func(t *testing.T) {
+		dir := t.TempDir()
+		chdir(t, dir)
+		t.Setenv("HOME", t.TempDir())
+		gitInit(t, dir, "https://github.com/Rivil/dross.git")
+		if err := runCmd(t, Init()); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		var out string
+		if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+			t.Fatalf("clean repo should pass (no phase issue), got %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "no recorded phase commits on local main") {
+			t.Errorf("expected the ✓ default phase-hygiene line:\n%s", out)
+		}
+	})
+
+	t.Run("unreachable origin/main takes the advisory error arm", func(t *testing.T) {
+		dir := t.TempDir()
+		chdir(t, dir)
+		t.Setenv("HOME", t.TempDir())
+		gitInit(t, dir, "https://github.com/Rivil/dross.git") // fake, unfetched → no origin/main ref
+		if err := runCmd(t, Init()); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		// A recorded phase commit forces phaseCommitsOnMain past its
+		// empty-recorded early return, so it runs `git rev-list
+		// origin/main..main` and errors on the missing origin ref.
+		mustWrite(t, filepath.Join(dir, ".dross", "phases", "pp", "changes.json"),
+			`{"tasks":{"t1":{"commit":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"}}}`)
+		var out string
+		err := runCmdCapturing(t, &out, Doctor())
+		if !strings.Contains(out, "couldn't check phase commits on main") {
+			t.Errorf("expected the advisory error ⚠ line:\n%s", out)
+		}
+		if err != nil {
+			t.Errorf("the phase-hygiene error path is advisory and must not add an issue; got err=%v\n%s", err, out)
+		}
+	})
+}

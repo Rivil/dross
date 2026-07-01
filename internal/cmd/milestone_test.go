@@ -290,3 +290,74 @@ func TestMilestoneNoVersionNoCurrentErrors(t *testing.T) {
 		t.Errorf("expected current_milestone error, got: %v", err)
 	}
 }
+
+// TestMilestoneCover_ShowStateLoadError exercises milestoneShow line 103
+// (state.Load err != nil): .dross exists so FindRoot succeeds, but state.json
+// is removed so the fallback state load fails. Kills the CONDITIONALS_NEGATION
+// mutant — negating the guard would panic/skip instead of returning this error.
+func TestMilestoneCover_ShowStateLoadError(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "create", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+	// Remove state.json so state.Load errors while root still resolves.
+	if err := os.Remove(filepath.Join(dir, ".dross", "state.json")); err != nil {
+		t.Fatal(err)
+	}
+	err := runCmd(t, Milestone(), "show")
+	if err == nil || !strings.Contains(err.Error(), "load state") {
+		t.Errorf("expected 'load state' error when state.json missing, got: %v", err)
+	}
+}
+
+// TestMilestoneCover_ShowNoCurrentMilestone exercises milestoneShow line 107
+// true branch (version == "" after a clean state load): state loads fine but
+// current_milestone is empty, so show with no arg must return the
+// current_milestone guidance error rather than proceeding.
+func TestMilestoneCover_ShowNoCurrentMilestone(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "create", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+	// Init leaves current_milestone empty; omitting the version must fail here.
+	err := runCmd(t, Milestone(), "show")
+	if err == nil || !strings.Contains(err.Error(), "current_milestone") {
+		t.Errorf("expected current_milestone error, got: %v", err)
+	}
+}
+
+// TestMilestoneCover_ShowDefaultsToCurrent exercises milestoneShow line 103
+// err == nil and line 107 version != "" (both false branches): state loads and
+// current_milestone is set, so show with no arg prints that milestone's toml.
+// Kills the negation mutants that would instead error on this happy path.
+func TestMilestoneCover_ShowDefaultsToCurrent(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "create", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+	var showErr error
+	out := captureStdout(t, func() {
+		showErr = runCmd(t, Milestone(), "show")
+	})
+	if showErr != nil {
+		t.Fatalf("show with no version should default to current: %v", showErr)
+	}
+	for _, want := range []string{"v0.1.toml", `version = "v0.1"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("show defaulted to current missing %q:\n%s", want, out)
+		}
+	}
+}

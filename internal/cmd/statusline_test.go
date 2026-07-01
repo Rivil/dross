@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -150,5 +151,60 @@ func TestStatuslineRegistered(t *testing.T) {
 	}
 	if !strings.Contains(string(b), "cmd.Statusline()") {
 		t.Error("cmd.Statusline() is not registered in cmd/dross/main.go — `dross statusline` would be unreachable")
+	}
+}
+
+// TestStatuslineCover_StdinDeadline pins the bounded stdin deadline constant (kills the
+// ARITHMETIC_BASE mutant on `3 * time.Second`: /, +, - all yield a different duration).
+func TestStatuslineCover_StdinDeadline(t *testing.T) {
+	if stdinDeadline != 3*time.Second {
+		t.Errorf("stdinDeadline = %v, want 3s", stdinDeadline)
+	}
+}
+
+// TestStatuslineCover_SettingsPath exercises both branches of the CLAUDE_CONFIG_DIR
+// override in statuslineSettingsPath (kills the CONDITIONALS_NEGATION at line 109).
+func TestStatuslineCover_SettingsPath(t *testing.T) {
+	setEnv := func(k string) string {
+		if k == "CLAUDE_CONFIG_DIR" {
+			return "/cfg"
+		}
+		return ""
+	}
+	if got, want := statuslineSettingsPath("/home/u", setEnv), filepath.Join("/cfg", "settings.json"); got != want {
+		t.Errorf("CLAUDE_CONFIG_DIR set: got %q, want %q", got, want)
+	}
+	if got, want := statuslineSettingsPath("/home/u", nilEnv), filepath.Join("/home/u", ".claude", "settings.json"); got != want {
+		t.Errorf("CLAUDE_CONFIG_DIR unset: got %q, want %q", got, want)
+	}
+}
+
+// TestStatuslineCover_EnableRunESuccess drives the enable subcommand's RunE on the happy
+// path so the UserHomeDir and resolveStatuslineBinary error guards (lines 54, 58) run
+// their false branch: negating either would make a successful resolve return an error.
+func TestStatuslineCover_EnableRunESuccess(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	cmd := statuslineEnable()
+	cmd.SetOut(io.Discard)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("enable RunE on happy path returned error: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "settings.json")); err != nil {
+		t.Fatalf("enable did not write settings.json: %v", err)
+	}
+}
+
+// TestStatuslineCover_DisableRunESuccess drives the disable subcommand's RunE (no file
+// present => a no-op that returns nil) so the UserHomeDir and resolveStatuslineBinary
+// error guards (lines 75, 79) run their false branch; negating either makes the
+// successful resolve return a non-nil error.
+func TestStatuslineCover_DisableRunESuccess(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	cmd := statuslineDisable()
+	cmd.SetOut(io.Discard)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("disable RunE on happy path returned error: %v", err)
 	}
 }

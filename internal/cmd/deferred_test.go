@@ -418,3 +418,47 @@ func TestDeferredUnrouteDismissedGuard(t *testing.T) {
 func intToStr(i int) string {
 	return strconv.Itoa(i)
 }
+
+// TestDeferredListCover_SomedayMarkerVsRoutedTarget: the default table renders
+// "(someday)" only in the TARGET column of an unrouted (empty-target) row, and a
+// routed row shows its real target. This pins deferred.go:138 (`case tgt == ""`):
+// negating it to `tgt != ""` would blank the someday row and stamp "(someday)"
+// onto the routed row instead.
+func TestDeferredListCover_SomedayMarkerVsRoutedTarget(t *testing.T) {
+	setupDeferredFixture(t)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Deferred(), "list"); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+
+	lineFor := func(text string) string {
+		for _, ln := range strings.Split(out, "\n") {
+			if strings.Contains(ln, text) {
+				return ln
+			}
+		}
+		return ""
+	}
+
+	// Someday row: TARGET column must read "(someday)".
+	someday := lineFor("alpha someday idea")
+	if someday == "" {
+		t.Fatalf("no row for the someday item in:\n%s", out)
+	}
+	if !strings.Contains(someday, "(someday)") {
+		t.Errorf("someday row should render (someday) in TARGET, got:\n%s", someday)
+	}
+
+	// Routed row: TARGET column must read the real target (beta), never (someday).
+	routed := lineFor("alpha routed idea")
+	if routed == "" {
+		t.Fatalf("no row for the routed item in:\n%s", out)
+	}
+	if !strings.Contains(routed, "beta") {
+		t.Errorf("routed row should render its target (beta) in TARGET, got:\n%s", routed)
+	}
+	if strings.Contains(routed, "(someday)") {
+		t.Errorf("routed row must not render as (someday), got:\n%s", routed)
+	}
+}

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -59,6 +60,8 @@ func Ship() *cobra.Command {
 		forceUnverified bool
 		forcePush       bool
 		printBody       bool
+		auto            bool
+		jsonOut         bool
 	)
 	c := &cobra.Command{
 		Use:   "ship [phase-id]",
@@ -70,6 +73,15 @@ func Ship() *cobra.Command {
 				return err
 			}
 			repoDir := filepath.Dir(root)
+
+			// narrate is the human-facing progress channel. Under --json it
+			// goes silent so stdout carries exactly one machine-readable JSON
+			// object (emitted at the end); otherwise it prints as usual.
+			narrate := func(format string, a ...any) {
+				if !jsonOut {
+					Printf(format, a...)
+				}
+			}
 			p, _, err := loadProject()
 			if err != nil {
 				return err
@@ -155,7 +167,7 @@ func Ship() *cobra.Command {
 			}
 
 			if noPush {
-				Print("--no-push set; not pushing or opening PR.")
+				narrate("--no-push set; not pushing or opening PR.\n")
 				return nil
 			}
 
@@ -204,7 +216,7 @@ func Ship() *cobra.Command {
 			if perr != nil {
 				return fmt.Errorf("git push: %w\n%s", perr, pushOut)
 			}
-			Printf("Pushed %s to origin\n", phaseBranch)
+			narrate("Pushed %s to origin\n", phaseBranch)
 
 			// 7) Open the PR via the provider.
 			baseBranch := p.Repo.GitMainBranch
@@ -217,21 +229,35 @@ func Ship() *cobra.Command {
 			opts.Title = title
 			opts.Body = body
 			opts.Draft = draft
+			if auto {
+				// Per-invocation, non-destructive: request zero reviewers
+				// for this run without mutating remote.reviewers config.
+				// --auto governs prompts/defaults only — the generated body
+				// stays the default and explicit --body/--body-file/--draft
+				// still win (they were already applied above). Downstream
+				// narration + telemetry read opts.Reviewers, so clearing it
+				// here is the single source that suppresses the "Reviewers
+				// requested" line and zeroes the telemetry count too.
+				opts.Reviewers = nil
+			}
 			res, err := ship.OpenPR(opts)
 			if err != nil && res == nil {
 				return fmt.Errorf("open PR: %w", err)
 			}
 			if res != nil {
-				Printf("PR opened: %s (#%d)\n", res.URL, res.Number)
-				if len(p.Remote.Reviewers) > 0 {
-					Printf("Reviewers requested: %s\n", strings.Join(p.Remote.Reviewers, ", "))
+				narrate("PR opened: %s (#%d)\n", res.URL, res.Number)
+				// Read opts.Reviewers, not p.Remote.Reviewers: under --auto
+				// the former is cleared, so no reviewers were actually
+				// requested and this line must stay silent.
+				if len(opts.Reviewers) > 0 {
+					narrate("Reviewers requested: %s\n", strings.Join(opts.Reviewers, ", "))
 				}
 			}
 			if err != nil {
 				// Non-fatal post-PR errors (e.g. reviewer add failed).
-				Printf("Warning: %v\n", err)
+				narrate("Warning: %v\n", err)
 			}
-			Printf("Completion record folded into %s — squash-merge will land it on %s\n", phaseBranch, baseBranch)
+			narrate("Completion record folded into %s — squash-merge will land it on %s\n", phaseBranch, baseBranch)
 
 			// 8) Telemetry — capture shape of this ship without leaking
 			//    repo URL, body content, or reviewer names.
@@ -245,12 +271,37 @@ func Ship() *cobra.Command {
 			if forceUnverified || forcePush {
 				tags["force"] = "true"
 			}
+			if auto {
+				tags["auto"] = "true"
+			}
 			counts := map[string]int{
-				"reviewers":   len(p.Remote.Reviewers),
+				// opts.Reviewers is post-auto-clearing: --auto records 0,
+				// matching what was actually requested.
+				"reviewers":   len(opts.Reviewers),
 				"body_chars":  len(body),
 				"title_chars": len(title),
 			}
 			RecordOutcomeEvent("ship", counts, nil, tags)
+
+			// --json: emit a single machine-readable object on stdout (the
+			// only thing printed under --json, since narration was suppressed).
+			// Composable with --auto — result is the same shipResultTag bucket.
+			if jsonOut {
+				out := struct {
+					URL    string `json:"url"`
+					Number int    `json:"number"`
+					Result string `json:"result"`
+				}{Result: shipResultTag(res, err)}
+				if res != nil {
+					out.URL = res.URL
+					out.Number = res.Number
+				}
+				b, mErr := json.Marshal(out)
+				if mErr != nil {
+					return fmt.Errorf("marshal --json output: %w", mErr)
+				}
+				Print(string(b))
+			}
 			return nil
 		},
 	}
@@ -263,6 +314,10 @@ func Ship() *cobra.Command {
 	c.Flags().BoolVar(&forcePush, "force", false,
 		"force-with-lease the push (use when re-pushing after rewriting phase/<id>)")
 	c.Flags().BoolVar(&printBody, "print-body", false, "print the generated PR body and exit (no push, no PR)")
+	c.Flags().BoolVar(&auto, "auto", false,
+		"non-interactive: request zero reviewers for this run (without mutating remote.reviewers) and use the generated body; for scripts and loops")
+	c.Flags().BoolVar(&jsonOut, "json", false,
+		"emit a single JSON object {url, number, result} on stdout and suppress human narration; composable with --auto for scripts and loops")
 	c.AddCommand(shipComment())
 	c.AddCommand(shipRecover())
 	return c

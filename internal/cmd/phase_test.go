@@ -913,3 +913,102 @@ func TestPhaseCompleteRecoverRefusesDirty(t *testing.T) {
 		t.Errorf("local main must be unchanged when recovery aborts on a dirty tree: was %s, now %s", mainSHA, got)
 	}
 }
+
+// TestPhaseCover_CompleteArgResolvesPhaseID exercises the `len(args) == 1`
+// switch arm (phase.go:255). With an explicit id AND an empty current_phase,
+// resolution must take args[0] (non-empty), so the run advances to the
+// dirty-tree guard. Negating the arm would drop through to the branch fallback
+// on `main`, yield an empty id, and fail with "no phase id given" instead —
+// the two errors distinguish the mutant.
+func TestPhaseCover_CompleteArgResolvesPhaseID(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	// current_phase stays empty (Init leaves it so); dirty the tree so a
+	// resolved non-empty id lands on the dirty guard, not any git-network step.
+	mustWrite(t, filepath.Join(dir, "uncommitted.txt"), "x\n")
+
+	err := runCmd(t, Phase(), "complete", "explicit-phase")
+	if err == nil {
+		t.Fatal("expected dirty-tree error once the id resolves from args[0]")
+	}
+	if !strings.Contains(err.Error(), "working tree is dirty") {
+		t.Errorf("args[0] should resolve the id and reach the dirty guard; got: %v", err)
+	}
+	if strings.Contains(err.Error(), "no phase id given") {
+		t.Errorf("args[0] arm must supply the id, not fall through to the empty-id error: %v", err)
+	}
+}
+
+// TestPhaseCover_CompleteStateResolvesPhaseID exercises the
+// `s.CurrentPhase != ""` switch arm (phase.go:257). With NO args but a set
+// current_phase, resolution must take state (non-empty) and reach the
+// dirty-tree guard. Negating the arm to `== ""` would skip it, fall through to
+// the branch fallback on `main`, yield an empty id, and fail with "no phase id
+// given".
+func TestPhaseCover_CompleteStateResolvesPhaseID(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := runCmd(t, State(), "set", "current_phase", "state-phase"); err != nil {
+		t.Fatalf("set current_phase: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "uncommitted.txt"), "x\n")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected dirty-tree error once the id resolves from current_phase")
+	}
+	if !strings.Contains(err.Error(), "working tree is dirty") {
+		t.Errorf("current_phase should resolve the id and reach the dirty guard; got: %v", err)
+	}
+	if strings.Contains(err.Error(), "no phase id given") {
+		t.Errorf("current_phase arm must supply the id: %v", err)
+	}
+}
+
+// TestPhaseCover_ShowErrorsWithoutRoot exercises the FindRoot error guard in
+// phase show (phase.go:460). With no .dross up the tree, FindRoot errors and
+// show must propagate it. Negating `if err != nil` would swallow the error,
+// continue with an empty root, and return nil after printing "(missing)".
+func TestPhaseCover_ShowErrorsWithoutRoot(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Phase(), "show", "whatever"); err == nil {
+		t.Fatal("expected an error when no .dross root is found")
+	}
+}
+
+// TestPhaseCover_ShowMissingVsPresent exercises both branches of the ReadFile
+// error check in phase show (phase.go:467): a present spec.toml prints its body,
+// an absent plan.toml prints the "(missing)" placeholder. Negating the check
+// swaps the two — a present file would print "(missing)" and a missing one
+// would print an empty body — so each assertion pins one direction.
+func TestPhaseCover_ShowMissingVsPresent(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	// spec.toml present, plan.toml absent.
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "myp", "spec.toml"),
+		`id = "myp" # PHASESHOW_SPEC_MARKER`)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "show", "myp"); err != nil {
+			t.Fatalf("show: %v", err)
+		}
+	})
+	if !strings.Contains(out, "PHASESHOW_SPEC_MARKER") {
+		t.Errorf("present spec.toml body should be printed; got:\n%s", out)
+	}
+	if !strings.Contains(out, "(missing)") {
+		t.Errorf("absent plan.toml should print the (missing) placeholder; got:\n%s", out)
+	}
+}

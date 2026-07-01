@@ -434,3 +434,83 @@ func TestPhaseRenameRenamesLocalBranch(t *testing.T) {
 		t.Errorf("new branch phase/beta missing: %q", branches)
 	}
 }
+
+// TestPhaseLifecycleCover_resolveAnchor pins the exact anchor/isBefore/error
+// returned for every combination of --after/--before, killing the
+// CONDITIONALS_NEGATION mutants on the switch cases at phase_lifecycle.go:23,25,27.
+func TestPhaseLifecycleCover_resolveAnchor(t *testing.T) {
+	cases := []struct {
+		name       string
+		after      string
+		before     string
+		wantAnchor string
+		wantBefore bool
+		wantErr    string // exact error string; "" means no error
+	}{
+		// Both set → line 23 fires; must reject with the "not both" message.
+		{"both set", "p1", "p2", "", false, "pass exactly one of --after or --before, not both"},
+		// Neither set → line 25 fires; distinct message with no ", not both".
+		{"neither set", "", "", "", false, "pass exactly one of --after or --before"},
+		// Only --before → line 27 fires; anchor=before, isBefore=true.
+		{"only before", "", "p2", "p2", true, ""},
+		// Only --after → default arm; anchor=after, isBefore=false.
+		{"only after", "p1", "", "p1", false, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			anchor, isBefore, err := resolveAnchor(tc.after, tc.before)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("resolveAnchor(%q,%q): unexpected error: %v", tc.after, tc.before, err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("resolveAnchor(%q,%q): want error %q, got nil", tc.after, tc.before, tc.wantErr)
+				}
+				if err.Error() != tc.wantErr {
+					t.Fatalf("resolveAnchor(%q,%q) error = %q, want exactly %q", tc.after, tc.before, err.Error(), tc.wantErr)
+				}
+			}
+			if anchor != tc.wantAnchor {
+				t.Errorf("resolveAnchor(%q,%q) anchor = %q, want %q", tc.after, tc.before, anchor, tc.wantAnchor)
+			}
+			if isBefore != tc.wantBefore {
+				t.Errorf("resolveAnchor(%q,%q) isBefore = %v, want %v", tc.after, tc.before, isBefore, tc.wantBefore)
+			}
+		})
+	}
+}
+
+// TestPhaseLifecycleCover_InsertGitBranch drives phaseInsert against a real git
+// repo so the hasGit branch runs. It exercises the success (err==nil) side of
+// both the preflight guard (phase_lifecycle.go:181) and the checkout -b guard
+// (phase_lifecycle.go:190): the array must splice, the dir must be created, and
+// HEAD must move to phase/new-phase. The line-181 negation would return early
+// (no splice/dir/branch); the line-190 negation would delete the dir and error.
+func TestPhaseLifecycleCover_InsertGitBranch(t *testing.T) {
+	dir := setupLifecycleFixture(t)
+	root := filepath.Join(dir, ".dross")
+
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remote)
+	mustGit(t, dir, "add", "-A")
+	mustGit(t, dir, "commit", "-q", "-m", "init")
+
+	if err := runCmd(t, Phase(), "insert", "New Phase", "--after", "p1"); err != nil {
+		t.Fatalf("insert with git: %v", err)
+	}
+
+	// Preflight passed (line 181) and checkout -b ran (line 190): the phase was
+	// spliced in and its dir created rather than the command returning early.
+	if got, want := milestonePhases(t, root, "v1"), []string{"p1", "new-phase", "p2", "p3"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("array after git insert = %v, want %v", got, want)
+	}
+	if !isDir(filepath.Join(root, "phases", "new-phase")) {
+		t.Error("insert did not create phases/new-phase")
+	}
+	// checkout -b succeeded, so we are now on the new phase branch.
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "phase/new-phase" {
+		t.Errorf("HEAD = %q, want phase/new-phase (checkout -b must have run)", cur)
+	}
+}

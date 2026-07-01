@@ -316,3 +316,59 @@ func TestSecurityRunReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestSecurityCover_ReconcileLoadsRealLedger drives the REAL securityFindings
+// ItemsForRun closure (not the fakeTool stub) end-to-end via `reconcile <run-dir>`.
+// A valid findings.toml with one finding must reconcile as "1 new". If either
+// guard in the closure — containedPath's err check (security.go:46) or
+// security.Load's err check (security.go:50) — is negated to `if err == nil`, the
+// closure returns early with zero items and the output reads "0 new" instead.
+func TestSecurityCover_ReconcileLoadsRealLedger(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(security.SecurityDir(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runDir := t.TempDir()
+	ledger := security.Ledger{Findings: []security.Finding{
+		{ID: "f-1", Title: "tainted exec", Severity: security.SeverityHigh,
+			Class: "cmd-injection", File: "x.go", Refutation: "panel: confirmed"},
+	}}
+	if err := security.Save(filepath.Join(runDir, "findings.toml"), ledger); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, securityFindings(), "reconcile", runDir); err != nil {
+			t.Fatalf("reconcile: %v", err)
+		}
+	})
+	if !strings.Contains(out, "1 new") {
+		t.Fatalf("reconcile of a one-finding ledger must report 1 new (proves the real "+
+			"ItemsForRun loaded the ledger, not an early return):\n%s", out)
+	}
+}
+
+// TestSecurityCover_ReconcileMalformedLedgerErrors pins the security.Load error
+// guard in the ItemsForRun closure (security.go:50). A garbled findings.toml makes
+// security.Load return an error; the real guard returns it and reconcile fails.
+// Negating that guard to `if err == nil` would swallow the error, fall through to
+// ledger.Items() on an empty ledger, and report a bogus success.
+func TestSecurityCover_ReconcileMalformedLedgerErrors(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	runDir := t.TempDir()
+	mustWrite(t, filepath.Join(runDir, "findings.toml"), "this is not = valid toml [[[")
+
+	if err := runCmd(t, securityFindings(), "reconcile", runDir); err == nil {
+		t.Fatal("reconcile of a malformed findings.toml returned nil; the security.Load " +
+			"error guard must surface the parse error")
+	}
+}

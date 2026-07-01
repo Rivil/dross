@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -306,6 +308,217 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	}
 }
 
+// shipCapture records what a mock provider received, so --auto assertions
+// can check the reviewer endpoint was never hit and the posted body/title.
+type shipCapture struct {
+	openedTitle  string
+	openedBody   string
+	reviewersHit bool
+}
+
+// shipMockFlow stands up a bare-init "remote" plus a mock Forgejo server for
+// the given fixture repo, points remote.api_base at it (committing so the tree
+// stays clean), and returns a capture the caller inspects after shipping. It
+// mirrors TestShipFullFlowAgainstMockProvider's setup, factored out so the
+// --auto tests don't duplicate the httptest scaffolding.
+func shipMockFlow(t *testing.T, dir string) *shipCapture {
+	t.Helper()
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare")
+	mustGit(t, dir, "remote", "set-url", "origin", remoteDir)
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+
+	cap := &shipCapture{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if strings.HasSuffix(r.URL.Path, "/pulls") && r.Method == "POST" {
+			var doc map[string]any
+			_ = json.Unmarshal(body, &doc)
+			cap.openedTitle, _ = doc["title"].(string)
+			cap.openedBody, _ = doc["body"].(string)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"number":99,"html_url":"https://forge.example/me/p/pulls/99"}`))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/requested_reviewers") {
+			cap.reviewersHit = true
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	t.Cleanup(server.Close)
+
+	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, dir, "test: point api_base at mock")
+	return cap
+}
+
+// TestShipAutoRequestsZeroReviewers proves c-1's reviewer behaviour: with
+// remote.reviewers=[alice] configured, `ship --auto` opens the PR requesting
+// zero reviewers (the provider's requested_reviewers endpoint is never hit and
+// no "Reviewers requested" line is printed), records a reviewers count of 0 in
+// telemetry, and leaves the remote.reviewers config untouched (per the locked
+// reviewers_under_auto decision — per-invocation, non-destructive).
+func TestShipAutoRequestsZeroReviewers(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	// Isolate HOME and re-enable telemetry so we can read back the outcome
+	// event's reviewers count. shipFixture's chdir pinned DROSS_NO_TELEMETRY=1.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "")
+
+	cap := shipMockFlow(t, dir)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship(), "--auto"); err != nil {
+			t.Fatalf("ship --auto: %v", err)
+		}
+	})
+
+	// Zero reviewers requested: the endpoint is never called, and the
+	// narration line stays silent.
+	if cap.reviewersHit {
+		t.Error("--auto must request zero reviewers, but the requested_reviewers endpoint was hit")
+	}
+	if strings.Contains(out, "Reviewers requested") {
+		t.Errorf("--auto must not print a 'Reviewers requested' line:\n%s", out)
+	}
+
+	// remote.reviewers config is left untouched (still the fixture's "alice").
+	p, _, err := loadProject()
+	if err != nil {
+		t.Fatalf("reload project: %v", err)
+	}
+	if len(p.Remote.Reviewers) != 1 || p.Remote.Reviewers[0] != "alice" {
+		t.Errorf("--auto must not mutate remote.reviewers, got %v", p.Remote.Reviewers)
+	}
+
+	// Telemetry records a reviewers count of 0 and the auto tag.
+	telem := mustRead(t, filepath.Join(home, ".claude/dross", "telemetry.jsonl"))
+	if !strings.Contains(telem, `"reviewers":0`) {
+		t.Errorf("--auto telemetry should record reviewers count 0:\n%s", telem)
+	}
+	if !strings.Contains(telem, `"auto":"true"`) {
+		t.Errorf("--auto telemetry should carry the auto tag:\n%s", telem)
+	}
+}
+
+// TestShipAutoStillHonorsVerifyGate proves c-3: --auto does not bypass the
+// "verify must be pass" gate. A pending verdict still fails unless
+// --force-unverified is also passed.
+func TestShipAutoStillHonorsVerifyGate(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	verifyPath := filepath.Join(dir, ".dross", "phases", "x", "verify.toml")
+	body, _ := os.ReadFile(verifyPath)
+	body = []byte(strings.Replace(string(body), `verdict = "pass"`, `verdict = "pending"`, 1))
+	if err := os.WriteFile(verifyPath, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// --auto alone must still hit the gate on a pending verdict.
+	err := runCmd(t, Ship(), "--auto", "--no-push")
+	if err == nil {
+		t.Fatal("--auto must still fail the verify gate on a pending verdict")
+	}
+	if !strings.Contains(err.Error(), "force-unverified") {
+		t.Errorf("gate error should mention --force-unverified: %v", err)
+	}
+
+	// With --force-unverified the gate is bypassed even under --auto.
+	gitCommit(t, dir, "test: flip verdict to pending") // clean tree
+	if err := runCmd(t, Ship(), "--auto", "--no-push", "--force-unverified"); err != nil {
+		t.Errorf("--auto --force-unverified should bypass the verify gate: %v", err)
+	}
+}
+
+// TestShipAutoExplicitBodyWins proves the locked explicit_flags_win decision:
+// --auto governs prompts/defaults only, so an explicit --body still overrides
+// the generated body.
+func TestShipAutoExplicitBodyWins(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap := shipMockFlow(t, dir)
+
+	if err := runCmd(t, Ship(), "--auto", "--body", "CUSTOM BODY"); err != nil {
+		t.Fatalf("ship --auto --body: %v", err)
+	}
+	if cap.openedBody != "CUSTOM BODY" {
+		t.Errorf("explicit --body must win over --auto's generated default, got %q", cap.openedBody)
+	}
+}
+
+// TestShipJSONEmitsSingleObjectAndSuppressesNarration proves c-5: `ship --json`
+// writes exactly one parseable JSON object with keys url/number/result to stdout
+// and suppresses the human narration lines.
+func TestShipJSONEmitsSingleObjectAndSuppressesNarration(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship(), "--json"); err != nil {
+			t.Fatalf("ship --json: %v", err)
+		}
+	})
+
+	// No human narration leaked onto stdout.
+	for _, line := range []string{"Pushed", "PR opened", "Completion record folded"} {
+		if strings.Contains(out, line) {
+			t.Errorf("--json must suppress the %q narration line, got:\n%s", line, out)
+		}
+	}
+
+	// Exactly one line, parseable as a JSON object with the three keys.
+	trimmed := strings.TrimSpace(out)
+	if strings.Contains(trimmed, "\n") {
+		t.Errorf("--json should emit exactly one line, got:\n%s", out)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(trimmed), &obj); err != nil {
+		t.Fatalf("--json output should parse as one JSON object, got %q: %v", trimmed, err)
+	}
+	for _, k := range []string{"url", "number", "result"} {
+		if _, ok := obj[k]; !ok {
+			t.Errorf("--json object missing key %q: %v", k, obj)
+		}
+	}
+}
+
+// TestShipAutoJSONComposable proves c-5's composability clause: `ship --auto
+// --json` emits clean JSON that parses, with result "opened" and the PR
+// url/number, while still requesting zero reviewers.
+func TestShipAutoJSONComposable(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap := shipMockFlow(t, dir)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship(), "--auto", "--json"); err != nil {
+			t.Fatalf("ship --auto --json: %v", err)
+		}
+	})
+
+	var obj struct {
+		URL    string `json:"url"`
+		Number int    `json:"number"`
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &obj); err != nil {
+		t.Fatalf("--auto --json should emit parseable JSON, got %q: %v", out, err)
+	}
+	if obj.Result != "opened" {
+		t.Errorf("result should be \"opened\", got %q", obj.Result)
+	}
+	if obj.URL == "" || obj.Number != 99 {
+		t.Errorf("JSON should carry the PR url/number, got url=%q number=%d", obj.URL, obj.Number)
+	}
+	if cap.reviewersHit {
+		t.Error("--auto --json must still request zero reviewers")
+	}
+}
+
 // TestShipReshipIsIdempotent ships the same phase twice. Because the first
 // ship clears current_phase (folded into the squash), the re-ship must name
 // the phase explicitly — and must not error on the second commit/push. A
@@ -353,5 +566,162 @@ func TestShipReshipIsIdempotent(t *testing.T) {
 	}
 	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
 		t.Errorf("tree should be clean after re-ship, got: %q", st)
+	}
+}
+
+// shipCoverInitProject inits a dross repo in a fresh temp dir with an isolated
+// HOME (no git origin, so [remote] starts empty), then applies the given
+// remote.<field>=<value> pairs. Used by the shipComment coverage tests to drive
+// its [remote] preflight gate into specific states.
+func shipCoverInitProject(t *testing.T, sets ...[2]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	chdir(t, dir)
+	t.Setenv("HOME", t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	for _, kv := range sets {
+		if err := runCmd(t, Project(), "set", kv[0], kv[1]); err != nil {
+			t.Fatalf("project set %s=%s: %v", kv[0], kv[1], err)
+		}
+	}
+	return dir
+}
+
+// TestShipCover_CommentEarlyReturns exercises shipComment's argument-validation
+// gates that return before any project load: the --pr guard (line 339, both the
+// boundary and the negation via pr=0, plus the negation-reverse via pr=5), the
+// "need --body or --body-file" guard (line 342, both operands), and the
+// --body-file read + error branch (lines 345, 347).
+func TestShipCover_CommentEarlyReturns(t *testing.T) {
+	chdir(t, t.TempDir()) // no .dross here: these gates all return before loadProject
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"pr zero", []string{"comment", "--pr", "0", "--body", "hi"}, "--pr is required"},
+		{"no body and no file", []string{"comment", "--pr", "5"}, "either --body or --body-file"},
+		{"unreadable body-file", []string{"comment", "--pr", "5", "--body-file", filepath.Join(t.TempDir(), "nope.md")}, "read --body-file"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := runCmd(t, Ship(), c.args...)
+			if err == nil {
+				t.Fatalf("expected error for %s", c.name)
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Errorf("error %q should contain %q", err, c.want)
+			}
+		})
+	}
+}
+
+// TestShipCover_CommentLoadProjectError drives shipComment's loadProject error
+// branch (line 353): with --pr and --body both valid but no .dross root,
+// loadProject returns ErrNoRoot and shipComment must surface it (the mutated
+// `err == nil` branch would fall through to a nil-project deref instead).
+func TestShipCover_CommentLoadProjectError(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	err := runCmd(t, Ship(), "comment", "--pr", "5", "--body", "hi")
+	if err == nil {
+		t.Fatal("expected loadProject error without a .dross root")
+	}
+	if !strings.Contains(err.Error(), "no .dross") {
+		t.Errorf("error should surface the missing-root failure, got: %v", err)
+	}
+}
+
+// TestShipCover_CommentRemoteMissingURL drives the first operand of shipComment's
+// [remote] preflight (line 356): provider is set but url is empty, so the gate
+// must fire before reaching PostComment.
+func TestShipCover_CommentRemoteMissingURL(t *testing.T) {
+	shipCoverInitProject(t, [2]string{"remote.provider", "forgejo"})
+	err := runCmd(t, Ship(), "comment", "--pr", "5", "--body", "hi")
+	if err == nil {
+		t.Fatal("expected [remote] gate to fire with empty url")
+	}
+	if !strings.Contains(err.Error(), "[remote]") {
+		t.Errorf("error should name the missing [remote] config, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "post comment") {
+		t.Errorf("must not reach PostComment when url is empty, got: %v", err)
+	}
+}
+
+// TestShipCover_CommentRemoteMissingProvider drives the second operand of line
+// 356: url is set but provider is empty.
+func TestShipCover_CommentRemoteMissingProvider(t *testing.T) {
+	shipCoverInitProject(t, [2]string{"remote.url", "https://forge.example/me/p"})
+	err := runCmd(t, Ship(), "comment", "--pr", "5", "--body", "hi")
+	if err == nil {
+		t.Fatal("expected [remote] gate to fire with empty provider")
+	}
+	if !strings.Contains(err.Error(), "[remote]") {
+		t.Errorf("error should name the missing [remote] config, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "post comment") {
+		t.Errorf("must not reach PostComment when provider is empty, got: %v", err)
+	}
+}
+
+// TestShipCover_CommentReachesPostComment drives the both-configured path of
+// line 356 (gate passes) into the PostComment error branch (line 362): with a
+// valid url+provider but no api_base, PostComment fails and shipComment wraps it
+// as "post comment". The mutated `err == nil` branch would instead print
+// "Posted comment" and return nil.
+func TestShipCover_CommentReachesPostComment(t *testing.T) {
+	shipCoverInitProject(t,
+		[2]string{"remote.provider", "forgejo"},
+		[2]string{"remote.url", "https://forge.example/me/p"},
+		[2]string{"remote.auth_env", "MOCK_FORGEJO_TOKEN"},
+	)
+	err := runCmd(t, Ship(), "comment", "--pr", "5", "--body", "hi")
+	if err == nil {
+		t.Fatal("expected PostComment to fail without api_base")
+	}
+	if !strings.Contains(err.Error(), "post comment") {
+		t.Errorf("shipComment must wrap the PostComment failure as 'post comment', got: %v", err)
+	}
+}
+
+// TestShipCover_ShipBadBodyFile drives the --body-file read-error branch of the
+// main ship flow (line 155): a missing --body-file must abort with "read
+// --body-file" before any push (guarded by --no-push). The mutated `err == nil`
+// branch would swallow the read failure and return cleanly.
+func TestShipCover_ShipBadBodyFile(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	err := runCmd(t, Ship(), "--no-push", "--body-file", filepath.Join(dir, "no-such-body.md"))
+	if err == nil {
+		t.Fatal("expected error for unreadable --body-file")
+	}
+	if !strings.Contains(err.Error(), "read --body-file") {
+		t.Errorf("error should mention read --body-file, got: %v", err)
+	}
+}
+
+// TestShipCover_ResultTag pins shipResultTag's four-way classification (lines
+// 379/381/383): the (err, res) matrix maps to failed/partial/opened/noop, so
+// negating any operand in those case guards misroutes at least one row.
+func TestShipCover_ResultTag(t *testing.T) {
+	boom := errors.New("boom")
+	res := &ship.OpenResult{URL: "u", Number: 7}
+	cases := []struct {
+		name string
+		err  error
+		res  *ship.OpenResult
+		want string
+	}{
+		{"failed", boom, nil, "failed"},
+		{"partial", boom, res, "partial"},
+		{"opened", nil, res, "opened"},
+		{"noop", nil, nil, "noop"},
+	}
+	for _, c := range cases {
+		if got := shipResultTag(c.res, c.err); got != c.want {
+			t.Errorf("%s: shipResultTag = %q, want %q", c.name, got, c.want)
+		}
 	}
 }

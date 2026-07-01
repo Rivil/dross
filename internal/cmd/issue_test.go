@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -760,4 +761,411 @@ func readBoardJSON(dir string) (*struct {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// --- mutation-coverage tests (kill NOT-COVERED mutants in issue.go) ---
+
+// TestIssueCover_wrapBoard exercises both arms of wrapBoard's nil guard
+// (issue.go:121). Nil in → nil out; a real error is wrapped under "board:".
+func TestIssueCover_wrapBoard(t *testing.T) {
+	if got := wrapBoard(nil); got != nil {
+		t.Errorf("wrapBoard(nil) = %v, want nil", got)
+	}
+	base := errors.New("boom")
+	got := wrapBoard(base)
+	if got == nil {
+		t.Fatal("wrapBoard(non-nil) returned nil, want a wrapped error")
+	}
+	if !strings.Contains(got.Error(), "board: boom") {
+		t.Errorf("wrapBoard error = %q, want to contain 'board: boom'", got.Error())
+	}
+	if !errors.Is(got, base) {
+		t.Error("wrapBoard should wrap the base error with %w so errors.Is matches")
+	}
+}
+
+// TestIssueCover_phaseSyncMilestoneLinks drives syncPhase down the
+// milestone-declared branch: ensureMilestoneLink must succeed and the phase
+// issue is created afterwards (issue.go:419). If the nil-guard is negated the
+// command returns early with no issue created and no output.
+func TestIssueCover_phaseSyncMilestoneLinks(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/milestones") && r.Method == "GET":
+			_, _ = w.Write([]byte(`[]`))
+		case strings.HasSuffix(r.URL.Path, "/milestones") && r.Method == "POST":
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":5}`))
+		case strings.HasSuffix(r.URL.Path, "/labels") && r.Method == "GET":
+			_, _ = w.Write([]byte(`[{"id":1,"name":"dross"},{"id":2,"name":"dross/status:planning"}]`))
+		case strings.HasSuffix(r.URL.Path, "/issues") && r.Method == "POST":
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"number":12,"state":"open"}`))
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := boardRepo(t, srv.URL, true)
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v0.1.toml"), `
+[milestone]
+version = "v0.1"
+title = "First"
+
+[scope]
+success_criteria = ["ships"]
+`)
+	writeSpec(t, dir, "01-m", `
+[phase]
+id = "01-m"
+title = "Milestoned"
+milestone = "v0.1"
+`)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "phase-sync", "01-m"); err != nil {
+			t.Fatalf("phase-sync: %v", err)
+		}
+	})
+	if !strings.Contains(out, "board 12") {
+		t.Errorf("output = %q, want 'board 12' (issue created after milestone link)", out)
+	}
+	bj, err := readBoardJSON(dir)
+	if err != nil || bj.Phases["01-m"] != "12" || bj.Milestones["v0.1"] != "5" {
+		t.Errorf("links not stored: %+v err=%v", bj, err)
+	}
+}
+
+// TestIssueCover_phaseSyncCloseOnCreate drives the close-on-create edge in
+// syncPhase (issue.go:460-461): a brand-new phase issue is created then closed
+// in the same call. Success prints "(closed)" and persists the link; negating
+// the CloseIssue error-guard returns early so neither happens.
+func TestIssueCover_phaseSyncCloseOnCreate(t *testing.T) {
+	var closed bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/labels") && r.Method == "GET":
+			_, _ = w.Write([]byte(`[{"id":1,"name":"dross"},{"id":2,"name":"dross/status:planning"}]`))
+		case strings.HasSuffix(r.URL.Path, "/issues") && r.Method == "POST":
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"number":12,"state":"open"}`))
+		case strings.HasSuffix(r.URL.Path, "/issues/12") && r.Method == "PATCH":
+			closed = true
+			_, _ = w.Write([]byte(`{"number":12,"state":"closed"}`))
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := boardRepo(t, srv.URL, true)
+	writeSpec(t, dir, "01-c", "[phase]\nid=\"01-c\"\ntitle=\"Closable\"\n")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "phase-sync", "01-c", "--close"); err != nil {
+			t.Fatalf("phase-sync --close: %v", err)
+		}
+	})
+	if !closed {
+		t.Error("CloseIssue was never called for the close-on-create edge")
+	}
+	if !strings.Contains(out, "board 12") || !strings.Contains(out, "(closed)") {
+		t.Errorf("output = %q, want 'board 12' + '(closed)'", out)
+	}
+	bj, err := readBoardJSON(dir)
+	if err != nil || bj.Phases["01-c"] != "12" {
+		t.Errorf("phase link not persisted after close: %+v err=%v", bj, err)
+	}
+}
+
+// TestIssueCover_quickCreate opens a quick issue with a title (issue.go:531-564).
+// It pins: the openBoard error-guard (532), the title-required boundary/negation
+// (552), the CreateIssue guard (560), and the Save-then-print guard (564). Any of
+// those mutated flips to an early return so the "quick … -> board" line vanishes.
+func TestIssueCover_quickCreate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/labels") && r.Method == "GET":
+			_, _ = w.Write([]byte(`[{"id":1,"name":"dross"},{"id":2,"name":"dross/quick"}]`))
+		case strings.HasSuffix(r.URL.Path, "/issues") && r.Method == "POST":
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"number":77,"state":"open"}`))
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := boardRepo(t, srv.URL, true)
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "quick", "myref", "My title"); err != nil {
+			t.Fatalf("quick create: %v", err)
+		}
+	})
+	if !strings.Contains(out, "quick myref -> board 77") {
+		t.Errorf("output = %q, want 'quick myref -> board 77'", out)
+	}
+	bj, err := readBoardJSON(dir)
+	if err != nil || bj.Quicks["myref"] != "77" {
+		t.Errorf("quick link not stored: %+v err=%v", bj, err)
+	}
+}
+
+// TestIssueCover_quickRequiresTitle exercises the true arm of the
+// title-required guard (issue.go:552): a quick with only a ref and no --close
+// must error before any board call.
+func TestIssueCover_quickRequiresTitle(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("no board call expected when a title is missing: %s %s", r.Method, r.URL.Path)
+	}))
+	t.Cleanup(srv.Close)
+
+	boardRepo(t, srv.URL, true)
+	err := runCmd(t, Issue(), "quick", "myref")
+	if err == nil {
+		t.Fatal("quick with no title should error")
+	}
+	if !strings.Contains(err.Error(), "title is required") {
+		t.Errorf("error = %v, want 'title is required'", err)
+	}
+}
+
+// TestIssueCover_quickClose closes a linked quick issue (issue.go:540-548). The
+// success path prints "(closed)"; negating the CloseIssue guard (545) returns
+// nil early and skips that line.
+func TestIssueCover_quickClose(t *testing.T) {
+	var patched bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/issues/88") && r.Method == "PATCH":
+			patched = true
+			_, _ = w.Write([]byte(`{"number":88,"state":"closed"}`))
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := boardRepo(t, srv.URL, true)
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"phases":{},"quicks":{"myref":"88"},"milestones":{}}`)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "quick", "myref", "--close"); err != nil {
+			t.Fatalf("quick --close: %v", err)
+		}
+	})
+	if !patched {
+		t.Error("CloseIssue (PATCH /issues/88) was never called")
+	}
+	if !strings.Contains(out, "quick myref -> board 88 (closed)") {
+		t.Errorf("output = %q, want 'quick myref -> board 88 (closed)'", out)
+	}
+}
+
+// TestIssueCover_quickCloseUnlinked exercises the false/error arm of the quick
+// close lookup: closing a ref with no linked issue errors before any board call.
+func TestIssueCover_quickCloseUnlinked(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("no board call expected for an unlinked ref: %s %s", r.Method, r.URL.Path)
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := boardRepo(t, srv.URL, true)
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"phases":{},"quicks":{},"milestones":{}}`)
+
+	err := runCmd(t, Issue(), "quick", "nosuch", "--close")
+	if err == nil || !strings.Contains(err.Error(), "no board issue linked") {
+		t.Errorf("err = %v, want 'no board issue linked'", err)
+	}
+}
+
+// TestIssueCover_pullMarkPrints proves the mark-then-print sequence in pull
+// (issue.go:612-614): with --mark the board is saved and the JSON is still
+// emitted. Negating the Save guard returns nil early, dropping the output.
+func TestIssueCover_pullMarkPrints(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[{"number":21,"title":"a real bug","state":"open"}]`))
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := boardRepo(t, srv.URL, true)
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "pull", "--mark", "--json"); err != nil {
+			t.Fatalf("pull --mark --json: %v", err)
+		}
+	})
+	var got []map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
+		t.Fatalf("pull --mark --json not valid JSON: %v\noutput=%q", err, out)
+	}
+	if len(got) != 1 || got[0]["Key"].(string) != "21" {
+		t.Errorf("inbound = %v, want a single issue keyed 21", got)
+	}
+	// --mark must have persisted last_pull.
+	body := mustRead(t, filepath.Join(dir, ".dross", "board.json"))
+	if !strings.Contains(body, "last_pull") {
+		t.Errorf("board.json missing last_pull after --mark:\n%s", body)
+	}
+}
+
+// TestIssueCover_pullEmptyMessage exercises the len(inbound)==0 arm of pull's
+// non-JSON output (issue.go:627): every listed issue is linked/dismissed, so it
+// prints the empty-state message rather than a triage list.
+func TestIssueCover_pullEmptyMessage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[
+			{"number":12,"title":"phase issue","state":"open"},
+			{"number":20,"title":"dismissed one","state":"open"}
+		]`))
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := boardRepo(t, srv.URL, true)
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"phases":{"01-x":"12"},"quicks":{},"milestones":{},"dismissed":["20"]}`)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "pull"); err != nil {
+			t.Fatalf("pull: %v", err)
+		}
+	})
+	if !strings.Contains(out, "no new issues on the board") {
+		t.Errorf("output = %q, want 'no new issues on the board'", out)
+	}
+	if strings.Contains(out, "to triage") {
+		t.Errorf("output = %q, should not print a triage header when empty", out)
+	}
+}
+
+// TestIssueCover_pullListsLabels exercises pull's non-JSON triage list
+// (issue.go:627,634,635): two inbound issues, one labelled and one bare. The
+// labelled one renders "  [bug, enhancement]"; the bare one has no brackets.
+func TestIssueCover_pullListsLabels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[
+			{"number":21,"title":"a real bug","state":"open","labels":[{"name":"bug"},{"name":"enhancement"}]},
+			{"number":22,"title":"a bare one","state":"open"}
+		]`))
+	}))
+	t.Cleanup(srv.Close)
+
+	boardRepo(t, srv.URL, true)
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "pull"); err != nil {
+			t.Fatalf("pull: %v", err)
+		}
+	})
+	if !strings.Contains(out, "2 new issue(s) to triage:") {
+		t.Errorf("output = %q, want '2 new issue(s) to triage:'", out)
+	}
+	if !strings.Contains(out, "  21 a real bug  [bug, enhancement]") {
+		t.Errorf("output = %q, want the labelled row '  21 a real bug  [bug, enhancement]'", out)
+	}
+	// The bare issue must render without a label bracket.
+	if !strings.Contains(out, "  22 a bare one\n") || strings.Contains(out, "22 a bare one  [") {
+		t.Errorf("output = %q, bare issue must have no label bracket", out)
+	}
+}
+
+// TestIssueCover_listNoRoot proves the FindRoot guard in issue list
+// (issue.go:715-716): run outside any .dross tree and it must error.
+func TestIssueCover_listNoRoot(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Issue(), "list"); err == nil {
+		t.Fatal("issue list should error with no .dross root")
+	}
+}
+
+// TestIssueCover_listBadBoard proves the board.Load guard in issue list
+// (issue.go:719-720): a malformed board.json makes list error.
+func TestIssueCover_listBadBoard(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"), `{not valid json`)
+	if err := runCmd(t, Issue(), "list"); err == nil {
+		t.Fatal("issue list should error on a malformed board.json")
+	}
+}
+
+// TestIssueCover_listStates drives the empty-vs-populated guard in issue list
+// (issue.go:723): only-one-map-populated cases must print that link and NOT the
+// empty-state message, while a truly empty board prints it.
+func TestIssueCover_listStates(t *testing.T) {
+	cases := []struct {
+		name        string
+		boardJSON   string
+		wantContain string
+		emptyMsg    bool // expect "(no board links yet)"
+	}{
+		{"empty", `{"phases":{},"quicks":{},"milestones":{}}`, "", true},
+		{"onlyMilestones", `{"phases":{},"quicks":{},"milestones":{"v0.1":"5"}}`, "milestone v0.1 -> board 5", false},
+		{"onlyPhases", `{"phases":{"01-x":"12"},"quicks":{},"milestones":{}}`, "phase 01-x -> issue 12", false},
+		{"onlyQuicks", `{"phases":{},"quicks":{"r1":"9"},"milestones":{}}`, "quick r1 -> issue 9", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			chdir(t, dir)
+			if err := runCmd(t, Init()); err != nil {
+				t.Fatal(err)
+			}
+			mustWrite(t, filepath.Join(dir, ".dross", "board.json"), tc.boardJSON)
+			out := captureStdout(t, func() {
+				if err := runCmd(t, Issue(), "list"); err != nil {
+					t.Fatalf("list: %v", err)
+				}
+			})
+			hasEmpty := strings.Contains(out, "(no board links yet)")
+			if tc.emptyMsg && !hasEmpty {
+				t.Errorf("output = %q, want '(no board links yet)'", out)
+			}
+			if !tc.emptyMsg {
+				if hasEmpty {
+					t.Errorf("output = %q, should NOT print the empty-state message", out)
+				}
+				if !strings.Contains(out, tc.wantContain) {
+					t.Errorf("output = %q, want to contain %q", out, tc.wantContain)
+				}
+			}
+		})
+	}
+}
+
+// TestIssueCover_listDismissed drives the dismissed footer in issue list
+// (issue.go:736): a board with dismissed ids prints the footer; one without
+// omits it. This pins both the boundary and negation of len(Dismissed) > 0.
+func TestIssueCover_listDismissed(t *testing.T) {
+	cases := []struct {
+		name      string
+		boardJSON string
+		wantDis   bool
+	}{
+		{"withDismissed", `{"phases":{"01-x":"12"},"quicks":{},"milestones":{},"dismissed":["20","21"]}`, true},
+		{"noDismissed", `{"phases":{"01-x":"12"},"quicks":{},"milestones":{}}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			chdir(t, dir)
+			if err := runCmd(t, Init()); err != nil {
+				t.Fatal(err)
+			}
+			mustWrite(t, filepath.Join(dir, ".dross", "board.json"), tc.boardJSON)
+			out := captureStdout(t, func() {
+				if err := runCmd(t, Issue(), "list"); err != nil {
+					t.Fatalf("list: %v", err)
+				}
+			})
+			if got := strings.Contains(out, "dismissed:"); got != tc.wantDis {
+				t.Errorf("output = %q, dismissed-footer present=%v want %v", out, got, tc.wantDis)
+			}
+		})
+	}
 }

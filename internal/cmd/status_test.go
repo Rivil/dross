@@ -743,3 +743,76 @@ func TestStatusNoStaleOnMain(t *testing.T) {
 		t.Errorf("no stale warning when origin/main carries the completion:\n%s", out)
 	}
 }
+
+// TestStatusCover_HumanizeAgeBuckets pins humanizeAge across its three buckets
+// and both threshold boundaries. Kills the CONDITIONALS_BOUNDARY /
+// CONDITIONALS_NEGATION mutants on the `d < time.Hour` and `d < 24*time.Hour`
+// switch guards, plus the ARITHMETIC_BASE on `24*time.Hour` (a mutated `24 /
+// time.Hour` collapses to 0, so the hours bucket would fall through to days).
+func TestStatusCover_HumanizeAgeBuckets(t *testing.T) {
+	cases := []struct {
+		name string
+		d    time.Duration
+		want string
+	}{
+		{"minutes", 30 * time.Minute, "30m ago"},
+		// Exactly one hour: `<` (not `<=`) means this is NOT minutes; it is the
+		// hours bucket -> "1h ago". A `<=` boundary mutant would render "60m ago".
+		{"one-hour-boundary", time.Hour, "1h ago"},
+		{"hours", 5 * time.Hour, "5h ago"},
+		// Exactly 24h: `<` (not `<=`) means this is NOT hours; it is days ->
+		// "1d ago". A `<=` boundary mutant would render "24h ago".
+		{"one-day-boundary", 24 * time.Hour, "1d ago"},
+		{"days", 72 * time.Hour, "3d ago"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := humanizeAge(tc.d); got != tc.want {
+				t.Errorf("humanizeAge(%v) = %q, want %q", tc.d, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestStatusCover_RenderActionAreasPlannedBranch drives the two lower switch
+// arms of renderActionAreas. An available area with a command renders
+// "<cmd> · <signal>" (line 441); an unavailable area that still carries a
+// command renders "<cmd> (planned)" (line 443) — distinct from the bare
+// "(planned)" a command-less area gets. Kills the CONDITIONALS_NEGATION mutants
+// on both `!= ""` guards.
+func TestStatusCover_RenderActionAreasPlannedBranch(t *testing.T) {
+	now := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
+	lines := renderActionAreas([]areaSignal{
+		{area: actionArea{label: "sec", command: "/dross-secure", available: true}, lastRun: now.Add(-90 * time.Minute)},
+		{area: actionArea{label: "planned-cmd", command: "dross future", available: false}},
+		{area: actionArea{label: "bare", command: "", available: false}},
+	}, now)
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 lines, got %d: %v", len(lines), lines)
+	}
+	// Line 441: available + command -> runnable command with a run signal, no "(planned)".
+	if !strings.Contains(lines[0], "/dross-secure · last run") || strings.Contains(lines[0], "(planned)") {
+		t.Errorf("available area must render command + signal, not planned:\n%s", lines[0])
+	}
+	// Line 443: unavailable but command != "" -> "<cmd> (planned)".
+	if !strings.Contains(lines[1], "dross future (planned)") {
+		t.Errorf("unavailable area with a command must render \"<cmd> (planned)\":\n%s", lines[1])
+	}
+	// default: no command -> bare "(planned)" with no command prefix.
+	if !strings.Contains(lines[2], "(planned)") || strings.Contains(lines[2], "dross future") {
+		t.Errorf("command-less area must render bare (planned):\n%s", lines[2])
+	}
+}
+
+// TestStatusCover_ProgressBarEmptyTotal exercises the total==0 branch of
+// progressBar (line 499), which returns an all-dots bar of the requested width.
+func TestStatusCover_ProgressBarEmptyTotal(t *testing.T) {
+	if got := progressBar(0, 0, 5); got != "[·····]" {
+		t.Errorf("progressBar(0,0,5) = %q, want %q", got, "[·····]")
+	}
+	// A non-zero total must NOT take the empty-total branch — proves the guard
+	// actually gates the all-dots return.
+	if got := progressBar(2, 4, 4); got != "[██··]" {
+		t.Errorf("progressBar(2,4,4) = %q, want %q", got, "[██··]")
+	}
+}

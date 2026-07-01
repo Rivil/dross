@@ -1,0 +1,53 @@
+{
+  "phase": "ship-auto-noninteractive",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "3eebc2a",
+      "completed_at": "2026-07-01T05:50:03.81338Z",
+      "landmarks": [
+        {
+          "feature": "non-interactive ship",
+          "symbol": "Ship",
+          "loc": "internal/cmd/ship.go:63",
+          "what": "--auto flag requests zero reviewers per-run without mutating config · gates narration+telemetry off opts.Reviewers"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "b0f8d15",
+      "completed_at": "2026-07-01T05:52:51.1447Z",
+      "landmarks": [
+        {
+          "feature": "non-interactive ship",
+          "symbol": "Ship",
+          "loc": "internal/cmd/ship.go:64",
+          "what": "--json emits a single {url·number·result} object on stdout via a suppressible narrate closure · composable with --auto"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/ship.md",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "5772e84",
+      "completed_at": "2026-07-01T05:55:54.674455Z",
+      "landmarks": [
+        {
+          "feature": "non-interactive ship",
+          "symbol": "ship.md §0.5",
+          "loc": "assets/prompts/ship.md:24",
+          "what": "--auto fast-path skips the body-preview/body-override/reviewer prompts and shells to dross ship --auto · returns without merging"
+        }
+      ]
+    }
+  }
+}

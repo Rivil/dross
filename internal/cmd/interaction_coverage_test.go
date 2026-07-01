@@ -159,3 +159,82 @@ func TestParseExemptListReadsRealDoc(t *testing.T) {
 		}
 	}
 }
+
+// interactionCovWrite lays down an arbitrary file tree under a fresh temp dir and
+// returns the root, so a test can drive interactionCoverage past an exact branch.
+func interactionCovWrite(t *testing.T, files map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	for rel, content := range files {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+// interactionCovReason pulls the Uncovered reason string for name out of a result.
+func interactionCovReason(res coverageResult, name string) (string, bool) {
+	for _, g := range res.Uncovered {
+		if g.Name == name {
+			return g.Reason, true
+		}
+	}
+	return "", false
+}
+
+// TestInteractionCoverageCover_uncoveredReasons pins the exact human-readable
+// Reason string for each interactive-side gap branch. The reason embeds the
+// command name via `+ name +` string concatenation (interaction_coverage.go:63
+// and :66); asserting the fully-composed message — name spliced into the middle —
+// is what catches a mutated concatenation that would otherwise change nothing
+// observable, since the other coverage tests only inspect Uncovered names.
+func TestInteractionCoverageCover_uncoveredReasons(t *testing.T) {
+	cases := []struct {
+		name    string
+		cmdName string
+		// files beyond the shim+prompt for cmdName; the audit doc always exists.
+		auditDoc   string
+		wantReason string
+	}{
+		{
+			// interactive && isExempt → interaction_coverage.go:62-63
+			name:     "interactive_but_exempt",
+			cmdName:  "qux",
+			auditDoc: "# Interaction audit\n\n## Exempt\n\n| Command | Reason |\n|---|---|\n| qux | listed here by mistake |\n",
+			wantReason: "shim lists AskUserQuestion but it is on the Exempt list — " +
+				"give it a `### dross-qux` audit section instead",
+		},
+		{
+			// interactive && !hasSection (and not exempt) → interaction_coverage.go:64-66
+			name:       "interactive_no_section",
+			cmdName:    "quux",
+			auditDoc:   "# Interaction audit\n\n## Exempt\n\n| Command | Reason |\n|---|---|\n",
+			wantReason: "interactive but has no `### dross-quux` section in interaction-audit.md",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := interactionCovWrite(t, map[string]string{
+				"assets/commands/dross-" + tc.cmdName + ".md": "allowed-tools: AskUserQuestion\n",
+				"assets/prompts/" + tc.cmdName + ".md":        "# " + tc.cmdName + "\n",
+				"docs/interaction-audit.md":                   tc.auditDoc,
+			})
+			res, err := interactionCoverage(root)
+			if err != nil {
+				t.Fatalf("interactionCoverage: %v", err)
+			}
+			got, ok := interactionCovReason(res, tc.cmdName)
+			if !ok {
+				t.Fatalf("%q should be uncovered; uncovered=%v", tc.cmdName, uncoveredSet(res))
+			}
+			if got != tc.wantReason {
+				t.Errorf("reason mismatch:\n got: %q\nwant: %q", got, tc.wantReason)
+			}
+		})
+	}
+}

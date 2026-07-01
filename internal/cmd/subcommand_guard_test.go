@@ -99,6 +99,30 @@ func TestEnforceSubcommandKnown_Recurses(t *testing.T) {
 	}
 }
 
+func TestSubcommandGuardCover_SuggestionBlockExactString(t *testing.T) {
+	// Pin the exact concatenation on subcommand_guard.go:37 so any mutation of
+	// the `+=`/`+` that assembles the "Did you mean this?" block is observable.
+	root := &cobra.Command{Use: "root"}
+	parent := &cobra.Command{Use: "parent"}
+	parent.AddCommand(&cobra.Command{Use: "list", RunE: func(*cobra.Command, []string) error { return nil }})
+	root.AddCommand(parent)
+	EnforceSubcommandKnown(root)
+
+	err := runCmd(t, root, "parent", "lits")
+	if err == nil {
+		t.Fatal("expected error for near-miss subcommand 'lits'")
+	}
+	// The block must appear verbatim: header, blank line, then a tab-indented
+	// suggestion. A dropped or altered concatenation would change this exactly.
+	if !strings.Contains(err.Error(), "\n\nDid you mean this?\n\tlist") {
+		t.Errorf("suggestion block not assembled verbatim, got: %q", err.Error())
+	}
+	// And the far-off "Available subcommands" branch must NOT have fired.
+	if strings.Contains(err.Error(), "Available subcommands") {
+		t.Errorf("near-miss must not list available subcommands: %q", err.Error())
+	}
+}
+
 func TestEnforceSubcommandKnown_ListsAvailableWhenNoSuggestion(t *testing.T) {
 	root := &cobra.Command{Use: "root"}
 	parent := &cobra.Command{Use: "parent"}
