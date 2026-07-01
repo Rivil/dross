@@ -1,66 +1,69 @@
 [phase]
-id        = "secure-quality-findings-lifecycle"
-title     = "Secure & quality findings lifecycle"
-milestone = "v0.6"
+  id = "secure-quality-findings-lifecycle"
+  title = "Secure & quality findings lifecycle"
+  milestone = "v0.6"
 
 [[criteria]]
-id   = "c-1"
-text = "After a fresh run completes, its findings are reconciled against prior tracked items so the same issue across runs resolves to one durable identity; matching happens only at reconciliation, never fed to the scanners."
+  id = "c-1"
+  text = "After a fresh run completes, its findings are reconciled against prior tracked items so the same issue across runs resolves to one durable identity; matching happens only at reconciliation, never fed to the scanners."
 
 [[criteria]]
-id   = "c-2"
-text = "dross security and dross quality expose a CLI to set a finding's state to tracked / resolved / dismissed, persisted across runs."
+  id = "c-2"
+  text = "dross security and dross quality expose a CLI to set a finding's state to tracked / resolved / dismissed, persisted across runs."
 
 [[criteria]]
-id   = "c-3"
-text = "During post-scan reconciliation, a fresh finding matching a dismissed or resolved prior item is folded to its carried state rather than listed as new — while the scan itself still surfaced it unprejudiced."
+  id = "c-3"
+  text = "During post-scan reconciliation, a fresh finding matching a dismissed or resolved prior item is folded to its carried state rather than listed as new — while the scan itself still surfaced it unprejudiced."
 
 [[criteria]]
-id   = "c-4"
-text = "A finding previously marked resolved that reappears in a later run is flagged regressed at reconciliation."
+  id = "c-4"
+  text = "A finding previously marked resolved that reappears in a later run is flagged regressed at reconciliation."
 
 [[criteria]]
-id   = "c-5"
-text = "dross security and dross quality expose a command to list tracked findings with their current state (tracked / resolved / dismissed / regressed) across runs."
+  id = "c-5"
+  text = "dross security and dross quality expose a command to list tracked findings with their current state (tracked / resolved / dismissed / regressed) across runs."
 
 [[decisions]]
-key    = "reconciliation_timing"
-choice = "Reconciliation against prior state is strictly post-scan; prior state is never an input to the scanning agents."
-why    = "Feeding prior state into the scan would prejudice the runner — the audit must surface findings fresh and unbiased, then reconcile."
-locked = true
+  key = "reconciliation_timing"
+  choice = "Reconciliation against prior state is strictly post-scan; prior state is never an input to the scanning agents."
+  why = "Feeding prior state into the scan would prejudice the runner — the audit must surface findings fresh and unbiased, then reconcile."
+  locked = true
 
 [[decisions]]
-key    = "finding_fingerprint"
-choice = "Cross-run identity is a fingerprint of class/dimension + normalized file path + title (no line number)."
-why    = "Line numbers drift on unrelated edits, breaking identity; class+file+title stays stable while the issue and its file persist."
-locked = true
+  key = "finding_fingerprint"
+  choice = "Cross-run identity is a fingerprint of class/dimension + normalized file path + title (no line number)."
+  why = "Line numbers drift on unrelated edits, breaking identity; class+file+title stays stable while the issue and its file persist."
+  locked = true
 
 [[decisions]]
-key    = "state_store"
-choice = "Durable state lives in a gitignored top-level ledger per tool (.dross/security/state.toml, .dross/quality/state.toml), keyed by fingerprint, separate from the timestamped run dirs."
-why    = "Keeps state durable across run-dir pruning while honoring the locked no-pre-disclosure-on-a-public-repo decision (run artifacts stay gitignored)."
-locked = true
+  key = "state_store"
+  choice = "Durable state lives in a gitignored top-level ledger per tool (.dross/security/state.toml, .dross/quality/state.toml), keyed by fingerprint, separate from the timestamped run dirs."
+  why = "Keeps state durable across run-dir pruning while honoring the locked no-pre-disclosure-on-a-public-repo decision (run artifacts stay gitignored)."
+  locked = true
 
 [[decisions]]
-key    = "cli_shape"
-choice = "State commands attach as a findings subcommand group: `dross <tool> findings list` and `dross <tool> findings <id> --state tracked|resolved|dismissed`, where <id> is the per-run finding id resolved to its fingerprint."
-why    = "Mirrors the existing detect/run/scaffold noun style and keeps the verb surface small; --state flag is validated and discoverable."
-locked = true
+  key = "cli_shape"
+  choice = "State commands attach as a findings subcommand group: `dross <tool> findings list` and `dross <tool> findings <id> --state tracked|resolved|dismissed`, where <id> is the per-run finding id resolved to its fingerprint."
+  why = "Mirrors the existing detect/run/scaffold noun style and keeps the verb surface small; --state flag is validated and discoverable."
+  locked = true
 
 [[decisions]]
-key    = "regressed_handling"
-choice = "A resolved finding that reappears stays state=resolved but reconciliation marks regressed=true and surfaces it prominently."
-why    = "Preserves the human's resolved decision while loudly flagging the regression; avoids silently erasing the resolved-then-returned history."
-locked = true
+  key = "regressed_handling"
+  choice = "A resolved finding that reappears stays state=resolved but reconciliation marks regressed=true and surfaces it prominently."
+  why = "Preserves the human's resolved decision while loudly flagging the regression; avoids silently erasing the resolved-then-returned history."
+  locked = true
 
 [[deferred]]
-text = "Cross-run quality trend tracking / scoring over time."
-why  = "Beyond track/resolve/dismiss — a scoring capability for a future quality-trends phase. Someday."
+  text = "Cross-run quality trend tracking / scoring over time."
+  why = "Beyond track/resolve/dismiss — a scoring capability for a future quality-trends phase. Someday."
+  target = "secure-quality-findings-followups"
 
 [[deferred]]
-text = "CodeQL integration (secure)."
-why  = "Scanner coverage, unrelated to the findings lifecycle; belongs with scanner-coverage work. Someday."
+  text = "CodeQL integration (secure)."
+  why = "Scanner coverage, unrelated to the findings lifecycle; belongs with scanner-coverage work. Someday."
+  target = "secure-quality-findings-followups"
 
 [[deferred]]
-text = "Committed / public in-git audit trail (secure)."
-why  = "Conflicts with the reaffirmed gitignored state-store decision (no pre-disclosure on a public repo); effectively declined unless that stance changes."
+  text = "Committed / public in-git audit trail (secure)."
+  why = "Conflicts with the reaffirmed gitignored state-store decision (no pre-disclosure on a public repo); effectively declined unless that stance changes."
+  target = "secure-quality-findings-followups"

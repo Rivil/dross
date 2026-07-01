@@ -60,7 +60,9 @@
 [[deferred]]
   text = "GitHub board backend: implement a `github` [board].provider carrying BOTH issue sync (c-2..c-5 equivalent) and backlog sync (c-6 equivalent), so the full tracking + backlog loop works on GitHub (today the forge factory returns ErrNotImplemented for github). The [board] decoupling makes it tractable."
   why = "Out of scope for the YouTrack phase; someday — resurfaces via /dross-inbox."
+  target = "additional-board-backends"
 
 [[deferred]]
   text = "Jira board backend: implement a `jira` [board].provider (Jira REST: issues/projects/versions, custom-field state) carrying both issue sync and backlog sync, mirroring the GitHub backend plan — a second future provider so dross can track on Jira."
   why = "Out of scope for the YouTrack phase; someday — resurfaces via /dross-inbox. Planned similarly to the GitHub backend."
+  target = "additional-board-backends"

@@ -1,0 +1,8 @@
+phases = ["ship-architecture-autogen", "secure-quality-findings-followups", "release-trust-and-distribution", "additional-board-backends"]
+
+[milestone]
+  version = "v0.9"
+  status = "planning"
+  started = "2026-07-01"
+
+[scope]
