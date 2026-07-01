@@ -1,13 +1,11 @@
 {
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
-  "last_activity": "2026-07-01T12:57:59.886181Z",
-  "last_action": "completed release-trust-and-distribution",
+  "current_phase": "secure-quality-findings-followups",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-01T13:19:43.692596Z",
+  "last_action": "created secure-quality-findings-followups",
   "history": [
-    {
-      "at": "2026-07-01T08:56:16.803913Z",
-      "action": "plan reviewed: interaction-defer-or-add-framing (0 blocking, 3 flags)"
-    },
     {
       "at": "2026-07-01T08:58:55.763532Z",
       "action": "set version=0.7.3.0"
@@ -203,6 +201,10 @@
     {
       "at": "2026-07-01T12:57:59.886181Z",
       "action": "completed release-trust-and-distribution"
+    },
+    {
+      "at": "2026-07-01T13:19:43.692596Z",
+      "action": "created secure-quality-findings-followups"
     }
   ]
 }
