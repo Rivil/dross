@@ -1,0 +1,123 @@
+{
+  "phase": "milestone-branch-model",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_test.go",
+        "assets/prompts/milestone.md"
+      ],
+      "commit": "81fc9f3",
+      "completed_at": "2026-07-01T07:43:54.07786Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch topology",
+          "symbol": "ensureMilestoneBranch",
+          "loc": "internal/cmd/milestone.go:114",
+          "what": "milestone create cuts+pushes milestone/\u003cversion\u003e from main at scope time"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/basebranch.go",
+        "internal/cmd/basebranch_test.go"
+      ],
+      "commit": "131c128",
+      "completed_at": "2026-07-01T07:45:29.814626Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch topology",
+          "symbol": "resolveNewWorkBase",
+          "loc": "internal/cmd/basebranch.go:26",
+          "what": "existence-aware resolver picks milestone/\u003cversion\u003e when its ref exists else main; pins cutover + no-milestone fallback"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_lifecycle.go",
+        "internal/cmd/phase_test.go",
+        "internal/cmd/phase_lifecycle_test.go"
+      ],
+      "commit": "1ac817b",
+      "completed_at": "2026-07-01T07:55:14.953801Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch topology",
+          "symbol": "forkPhaseBranch",
+          "loc": "internal/cmd/phase.go:403",
+          "what": "phase create+insert fork phase/\u003cid\u003e off resolveNewWorkBase (milestone branch when active) with no-milestone nudge"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/basebranch.go",
+        "internal/cmd/basebranch_test.go",
+        "assets/prompts/quick.md",
+        "cmd/dross/main.go"
+      ],
+      "commit": "c404950",
+      "completed_at": "2026-07-01T07:58:00.916172Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch topology",
+          "symbol": "BaseBranch",
+          "loc": "internal/cmd/basebranch.go:19",
+          "what": "dross base-branch prints resolved base (stdout) + no-milestone nudge (stderr); standalone quick consumes it"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "7121427",
+      "completed_at": "2026-07-01T08:02:37.052765Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch topology",
+          "symbol": "Ship",
+          "loc": "internal/cmd/ship.go:209",
+          "what": "ship PR base resolves to milestone branch when active with a missing-remote-base guard + no-milestone nudge"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "553987a",
+      "completed_at": "2026-07-01T08:07:47.884276Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch topology",
+          "symbol": "phaseComplete",
+          "loc": "internal/cmd/phase.go:281",
+          "what": "phase complete ff's milestone/\u003cversion\u003e (reconcile branch) when active; diverged milestone aborts non-destructively"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_test.go",
+        "assets/prompts/ship.md"
+      ],
+      "commit": "18af618",
+      "completed_at": "2026-07-01T08:14:39.801694Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch topology",
+          "symbol": "milestoneComplete",
+          "loc": "internal/cmd/milestone.go:41",
+          "what": "dross milestone complete opens one milestone-\u003emain PR (merge-commit) and --finalize ff's main + deletes the branch"
+        }
+      ]
+    }
+  }
+}

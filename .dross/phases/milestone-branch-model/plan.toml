@@ -1,151 +1,76 @@
 [phase]
-id = "milestone-branch-model"
+  id = "milestone-branch-model"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Create + push milestone branch at scope"
-files         = ["internal/cmd/milestone.go", "internal/cmd/milestone_test.go", "assets/prompts/milestone.md"]
-description   = """
-Fold milestone/<version> creation into `dross milestone create`: cut the branch
-from main (no checkout — HEAD stays on main) and push it eagerly to origin.
-Idempotent when the ref already exists locally/remotely. Skips cleanly in a
-non-git dir. Wire milestone.md to reflect the branch as a scope side effect.
-"""
-covers        = ["c-1"]
-test_contract = [
-  "if create stops cutting the branch, TestMilestoneCreateCutsBranchFromMain fails (refs/heads/milestone/v0.9 missing, or HEAD moved off main, or tip != main tip)",
-  "if the eager push is dropped, TestMilestoneCreatePushesEagerly fails (git ls-remote --heads origin milestone/v0.9 empty against a bare origin)",
-  "if re-run isn't idempotent, TestMilestoneCreateRerunIdempotent fails (second scope with ref already on origin errors instead of no-op)",
-  "if the non-git guard breaks, TestMilestoneCreateNoGitSkips fails (create errors in a non-git dir instead of just writing the toml)",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Create + push milestone branch at scope"
+  files = ["internal/cmd/milestone.go", "internal/cmd/milestone_test.go", "assets/prompts/milestone.md"]
+  description = "Fold milestone/<version> creation into `dross milestone create`: cut the branch\nfrom main (no checkout — HEAD stays on main) and push it eagerly to origin.\nIdempotent when the ref already exists locally/remotely. Skips cleanly in a\nnon-git dir. Wire milestone.md to reflect the branch as a scope side effect.\n"
+  covers = ["c-1"]
+  test_contract = ["if create stops cutting the branch, TestMilestoneCreateCutsBranchFromMain fails (refs/heads/milestone/v0.9 missing, or HEAD moved off main, or tip != main tip)", "if the eager push is dropped, TestMilestoneCreatePushesEagerly fails (git ls-remote --heads origin milestone/v0.9 empty against a bare origin)", "if re-run isn't idempotent, TestMilestoneCreateRerunIdempotent fails (second scope with ref already on origin errors instead of no-op)", "if the non-git guard breaks, TestMilestoneCreateNoGitSkips fails (create errors in a non-git dir instead of just writing the toml)"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "Extract existence-aware base resolver"
-files         = ["internal/cmd/basebranch.go", "internal/cmd/basebranch_test.go"]
-description   = """
-Add resolveNewWorkBase(repoDir, root) -> (base, milestoneActive, err): returns
-milestone/<current_milestone> only when that ref exists, else git_main_branch.
-This single function pins both the locked rollout_cutover and no_milestone_fallback.
-Enabler — powers c-2, c-3, c-4, c-6; delivers no criterion on its own (covers empty
-by design; c-1 is delivered by t-1).
-"""
-covers        = []
-test_contract = [
-  "if the resolver stops preferring the milestone branch, TestResolveBase_MilestoneBranchExists fails (current_milestone=v0.9 + ref present must yield milestone/v0.9,true)",
-  "if the ref-existence check is removed (blindly return milestone/<v>), TestResolveBase_CutoverNoBranch fails (current_milestone=v0.7 with no ref must yield main,false — the v0.7 non-retrofit cutover)",
-  "if the no-milestone fallback breaks, TestResolveBase_NoMilestone fails (empty current_milestone must yield git_main_branch,false)",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Extract existence-aware base resolver"
+  files = ["internal/cmd/basebranch.go", "internal/cmd/basebranch_test.go"]
+  description = "Add resolveNewWorkBase(repoDir, root) -> (base, milestoneActive, err): returns\nmilestone/<current_milestone> only when that ref exists, else git_main_branch.\nThis single function pins both the locked rollout_cutover and no_milestone_fallback.\nEnabler — powers c-2, c-3, c-4, c-6; delivers no criterion on its own (covers empty\nby design; c-1 is delivered by t-1).\n"
+  test_contract = ["if the resolver stops preferring the milestone branch, TestResolveBase_MilestoneBranchExists fails (current_milestone=v0.9 + ref present must yield milestone/v0.9,true)", "if the ref-existence check is removed (blindly return milestone/<v>), TestResolveBase_CutoverNoBranch fails (current_milestone=v0.7 with no ref must yield main,false — the v0.7 non-retrofit cutover)", "if the no-milestone fallback breaks, TestResolveBase_NoMilestone fails (empty current_milestone must yield git_main_branch,false)"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-1", "t-2"]
-title         = "Root phase branch on resolved base"
-files         = ["internal/cmd/phase.go", "internal/cmd/phase_lifecycle.go", "internal/cmd/phase_test.go", "internal/cmd/phase_lifecycle_test.go"]
-description   = """
-Route both checkout -b sites (phase create in phase.go and phase insert in
-phase_lifecycle.go) through one forkPhaseBranch helper that forks off
-resolveNewWorkBase. Emit a nudge to scope a milestone when falling back to main.
-Retain clean-tree + no-existing-ref guards.
-"""
-covers        = ["c-2"]
-test_contract = [
-  "if create roots on main under an active milestone, TestPhaseCreateRootsOnMilestoneBranch fails (git merge-base --is-ancestor of a milestone-only commit into phase/<id> must succeed — ancestor probe, not tip equality)",
-  "if the fallback regresses, TestPhaseCreateRootsOnMainNoMilestone fails (no milestone branch → phase/<id> tip must equal main tip)",
-  "if the nudge is dropped, TestPhaseCreateNudgesNoMilestone fails (no-milestone create output must name `dross milestone`)",
-  "if phase insert isn't rerouted, TestPhaseInsertForksOffMilestone fails (insert forks off main under an active milestone)",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Root phase branch on resolved base"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_lifecycle.go", "internal/cmd/phase_test.go", "internal/cmd/phase_lifecycle_test.go"]
+  description = "Route both checkout -b sites (phase create in phase.go and phase insert in\nphase_lifecycle.go) through one forkPhaseBranch helper that forks off\nresolveNewWorkBase. Emit a nudge to scope a milestone when falling back to main.\nRetain clean-tree + no-existing-ref guards.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if create roots on main under an active milestone, TestPhaseCreateRootsOnMilestoneBranch fails (git merge-base --is-ancestor of a milestone-only commit into phase/<id> must succeed — ancestor probe, not tip equality)", "if the fallback regresses, TestPhaseCreateRootsOnMainNoMilestone fails (no milestone branch → phase/<id> tip must equal main tip)", "if the nudge is dropped, TestPhaseCreateNudgesNoMilestone fails (no-milestone create output must name `dross milestone`)", "if phase insert isn't rerouted, TestPhaseInsertForksOffMilestone fails (insert forks off main under an active milestone)"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 2
-depends_on    = ["t-1", "t-2"]
-title         = "base-branch CLI + quick roots on it"
-files         = ["internal/cmd/basebranch.go", "internal/cmd/basebranch_test.go", "assets/prompts/quick.md", "cmd/dross/main.go"]
-description   = """
-Add a `dross base-branch` command that prints resolveNewWorkBase's result.
-Rewrite quick.md's standalone branch step to consume `dross base-branch` instead
-of hardcoding repo.git_main_branch, so a standalone quick roots on the milestone
-branch when one is active. Go tests guard the exact string the prompt consumes.
-When falling back to main (no active milestone branch), `dross base-branch` also
-emits the scope-a-milestone nudge to stderr, matching t-3's phase-create nudge.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "if the command stops preferring the milestone branch, TestBaseBranchCmdPrintsMilestone fails (must print milestone/v0.9 when that branch exists + current_milestone=v0.9)",
-  "if the fallback breaks, TestBaseBranchCmdPrintsMainNoMilestone fails (must print git_main_branch otherwise)",
-  "if the fallback nudge is dropped, TestBaseBranchCmdNudgesNoMilestone fails (main-fallback output must name `dross milestone` on stderr, leaving stdout the bare branch name)",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 2
+  title = "base-branch CLI + quick roots on it"
+  files = ["internal/cmd/basebranch.go", "internal/cmd/basebranch_test.go", "assets/prompts/quick.md", "cmd/dross/main.go"]
+  description = "Add a `dross base-branch` command that prints resolveNewWorkBase's result.\nRewrite quick.md's standalone branch step to consume `dross base-branch` instead\nof hardcoding repo.git_main_branch, so a standalone quick roots on the milestone\nbranch when one is active. Go tests guard the exact string the prompt consumes.\nWhen falling back to main (no active milestone branch), `dross base-branch` also\nemits the scope-a-milestone nudge to stderr, matching t-3's phase-create nudge.\n"
+  covers = ["c-3"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if the command stops preferring the milestone branch, TestBaseBranchCmdPrintsMilestone fails (must print milestone/v0.9 when that branch exists + current_milestone=v0.9)", "if the fallback breaks, TestBaseBranchCmdPrintsMainNoMilestone fails (must print git_main_branch otherwise)", "if the fallback nudge is dropped, TestBaseBranchCmdNudgesNoMilestone fails (main-fallback output must name `dross milestone` on stderr, leaving stdout the bare branch name)"]
+  status = "done"
 
 [[task]]
-id            = "t-5"
-wave          = 2
-depends_on    = ["t-1", "t-2"]
-title         = "Ship PR base = resolved base + remote guard"
-files         = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
-description   = """
-Replace the hardcoded baseBranch := p.Repo.GitMainBranch (ship.go:~222) with
-resolveNewWorkBase. Extend the provider mock to capture doc["base"]/doc["head"].
-Add a pre-flight guard (before push + OpenPR) that refuses when the resolved base
-is absent on origin, pointing at scope-time creation. When ship falls back to main
-(no active milestone), emit the same scope-a-milestone nudge as create/quick.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "if ship stops targeting the milestone branch, TestShipTargetsMilestoneBranch fails (opened PR must have base==milestone/v0.9, head==phase/<id>)",
-  "if the fallback regresses, TestShipTargetsMainNoMilestone fails (no milestone branch → base==main)",
-  "if the missing-remote-base guard is dropped, TestShipRefusesMissingRemoteBase fails (ship opens a PR against a nonexistent base instead of refusing)",
-  "if the main-fallback nudge is dropped, TestShipNudgesNoMilestone fails (a no-milestone ship's narration must name `dross milestone`)",
-]
-status        = "pending"
+  id = "t-5"
+  wave = 2
+  title = "Ship PR base = resolved base + remote guard"
+  files = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
+  description = "Replace the hardcoded baseBranch := p.Repo.GitMainBranch (ship.go:~222) with\nresolveNewWorkBase. Extend the provider mock to capture doc[\"base\"]/doc[\"head\"].\nAdd a pre-flight guard (before push + OpenPR) that refuses when the resolved base\nis absent on origin, pointing at scope-time creation. When ship falls back to main\n(no active milestone), emit the same scope-a-milestone nudge as create/quick.\n"
+  covers = ["c-4"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if ship stops targeting the milestone branch, TestShipTargetsMilestoneBranch fails (opened PR must have base==milestone/v0.9, head==phase/<id>)", "if the fallback regresses, TestShipTargetsMainNoMilestone fails (no milestone branch → base==main)", "if the missing-remote-base guard is dropped, TestShipRefusesMissingRemoteBase fails (ship opens a PR against a nonexistent base instead of refusing)", "if the main-fallback nudge is dropped, TestShipNudgesNoMilestone fails (a no-milestone ship's narration must name `dross milestone`)"]
+  status = "done"
 
 [[task]]
-id            = "t-6"
-wave          = 2
-depends_on    = ["t-1", "t-2", "t-3"]
-title         = "phase complete fast-forwards milestone branch"
-files         = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
-description   = """
-Under an active milestone, phase complete ff's milestone/<version> from origin
-(not main) and deletes phase/<id> local+remote; the merged-record guard reads
-origin/milestone/<v>:.dross/state.json. No milestone → original main-ff preserved.
-On a diverged local milestone branch, abort non-destructively (ff-only, no reset).
-NOTE: full --recover reconcile-branch parameterization is deferred.
-"""
-covers        = ["c-6"]
-test_contract = [
-  "if complete ff's the wrong branch, TestPhaseCompleteFastForwardsMilestone fails (local milestone/v0.9 must end == origin/milestone/v0.9 and phase/<id> deleted; guard must read origin/milestone/v0.9, not origin/main)",
-  "if the cutover regresses, TestPhaseCompleteNoMilestoneFfsMain fails (no milestone branch → original main-ff must be preserved)",
-  "if the divergence abort turns destructive, TestPhaseCompleteMilestoneDivergedAborts fails (a diverged milestone branch must abort ff-only with nothing reset, without --recover)",
-]
-status        = "pending"
+  id = "t-6"
+  wave = 2
+  title = "phase complete fast-forwards milestone branch"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+  description = "Under an active milestone, phase complete ff's milestone/<version> from origin\n(not main) and deletes phase/<id> local+remote; the merged-record guard reads\norigin/milestone/<v>:.dross/state.json. No milestone → original main-ff preserved.\nOn a diverged local milestone branch, abort non-destructively (ff-only, no reset).\nNOTE: full --recover reconcile-branch parameterization is deferred.\n"
+  covers = ["c-6"]
+  depends_on = ["t-1", "t-2", "t-3"]
+  test_contract = ["if complete ff's the wrong branch, TestPhaseCompleteFastForwardsMilestone fails (local milestone/v0.9 must end == origin/milestone/v0.9 and phase/<id> deleted; guard must read origin/milestone/v0.9, not origin/main)", "if the cutover regresses, TestPhaseCompleteNoMilestoneFfsMain fails (no milestone branch → original main-ff must be preserved)", "if the divergence abort turns destructive, TestPhaseCompleteMilestoneDivergedAborts fails (a diverged milestone branch must abort ff-only with nothing reset, without --recover)"]
+  status = "done"
 
 [[task]]
-id            = "t-7"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "milestone complete: one PR into main"
-files         = ["internal/cmd/milestone.go", "internal/cmd/milestone_test.go", "assets/prompts/ship.md"]
-description   = """
-Add `dross milestone complete`: open exactly one PR of milestone/<version> into
-main (reuse buildOpenOpts + ship.OpenPR), idempotent on re-run. Post-merge
-finalize path (mirrors phase complete): ff local main from origin and delete
-milestone/<version> local+remote, refusing while origin/main lacks the merge.
-Enforce the non-squash merge-commit method (milestone_main_merge) — the milestone
-PR must NOT inherit the repo's squash_merge=true default; document it in ship.md.
-"""
-covers        = ["c-5"]
-test_contract = [
-  "if the PR direction is wrong, TestMilestoneCompleteOpensSinglePRToMain fails (exactly one POST /pulls with base==main, head==milestone/v0.9; second run opens no duplicate; swapped head/base fails)",
-  "if cleanup breaks, TestMilestoneCompleteFinalizeCleansUp fails (post-merge must ff local main from origin and delete milestone/v0.9 local+remote)",
-  "if the unmerged guard is dropped, TestMilestoneCleanupRefusesUnmerged fails (deletes the branch while origin/main lacks the merge — destroying unmerged integration work)",
-  "if milestone complete inherits the squash_merge default, TestMilestoneCompleteUsesMergeCommit fails (the milestone→main PR must be configured as a non-squash merge-commit regardless of remote.squash_merge=true, honoring milestone_main_merge)",
-]
-status        = "pending"
+  id = "t-7"
+  wave = 2
+  title = "milestone complete: one PR into main"
+  files = ["internal/cmd/milestone.go", "internal/cmd/milestone_test.go", "assets/prompts/ship.md"]
+  description = "Add `dross milestone complete`: open exactly one PR of milestone/<version> into\nmain (reuse buildOpenOpts + ship.OpenPR), idempotent on re-run. Post-merge\nfinalize path (mirrors phase complete): ff local main from origin and delete\nmilestone/<version> local+remote, refusing while origin/main lacks the merge.\nEnforce the non-squash merge-commit method (milestone_main_merge) — the milestone\nPR must NOT inherit the repo's squash_merge=true default; document it in ship.md.\n"
+  covers = ["c-5"]
+  depends_on = ["t-1"]
+  test_contract = ["if the PR direction is wrong, TestMilestoneCompleteOpensSinglePRToMain fails (exactly one POST /pulls with base==main, head==milestone/v0.9; second run opens no duplicate; swapped head/base fails)", "if cleanup breaks, TestMilestoneCompleteFinalizeCleansUp fails (post-merge must ff local main from origin and delete milestone/v0.9 local+remote)", "if the unmerged guard is dropped, TestMilestoneCleanupRefusesUnmerged fails (deletes the branch while origin/main lacks the merge — destroying unmerged integration work)", "if milestone complete inherits the squash_merge default, TestMilestoneCompleteUsesMergeCommit fails (the milestone→main PR must be configured as a non-squash merge-commit regardless of remote.squash_merge=true, honoring milestone_main_merge)"]
+  status = "done"
