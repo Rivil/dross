@@ -1,9 +1,11 @@
 package changes
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -53,6 +55,57 @@ func TestRecordAndRoundTrip(t *testing.T) {
 	}
 	if got.Tasks["t-1"].CompletedAt.IsZero() {
 		t.Error("CompletedAt should be set")
+	}
+}
+
+// TestPRFieldRoundTrips pins the phase-scoped PR number through
+// marshal/unmarshal — `dross phase complete` looks it up to gate on the
+// provider's merge status, so dropping or renaming the field would silently
+// disable the authoritative gate.
+func TestPRFieldRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "changes.json")
+
+	c := New("phase-x")
+	c.PR = 99
+	c.Record("t-1", []string{"a.go"}, "abc1234", "", nil)
+	if err := c.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got, err := Load(path, "phase-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PR != 99 {
+		t.Errorf("PR lost through round-trip: got %d want 99", got.PR)
+	}
+}
+
+// TestPRZeroOmitted proves the omitempty tag keeps a zero PR out of the JSON,
+// so a phase that never shipped carries no misleading `"pr":0`.
+func TestPRZeroOmitted(t *testing.T) {
+	b, err := json.Marshal(New("p"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"pr"`) {
+		t.Errorf("PR:0 should be omitted from JSON, got %s", b)
+	}
+}
+
+// TestSetPRPersists proves the load/set/save helper records the PR into the
+// phase's changes.json at the canonical FilePath, creating it when absent.
+func TestSetPRPersists(t *testing.T) {
+	root := t.TempDir()
+	if err := SetPR(root, "phase-x", 42); err != nil {
+		t.Fatalf("SetPR: %v", err)
+	}
+	got, err := Load(FilePath(root, "phase-x"), "phase-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PR != 42 {
+		t.Errorf("SetPR did not persist the PR number: got %d want 42", got.PR)
 	}
 }
 

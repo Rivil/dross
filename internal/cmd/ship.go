@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/ship"
@@ -279,6 +280,34 @@ func Ship() *cobra.Command {
 				narrate("Warning: %v\n", err)
 			}
 			narrate("Completion record folded into %s — squash-merge will land it on %s\n", phaseBranch, baseBranch)
+
+			// Persist the opened PR number into the phase-scoped changes.json
+			// so `dross phase complete` can gate on THIS phase's authoritative
+			// merge status (a phase-scoped record can't be dragged forward in
+			// cumulative state history the way the completion breadcrumb is).
+			// Only when a real PR number is known — never write PR:0. Commit it
+			// onto phase/<id>: a local post-push commit is safe because the
+			// branch is deleted at complete, so it never reaches the base or
+			// re-seeds divergence, and it keeps the tree clean for complete's
+			// clean-tree guard.
+			if res != nil && res.Number > 0 {
+				if err := changes.SetPR(root, phaseID, res.Number); err != nil {
+					return fmt.Errorf("persist PR number: %w", err)
+				}
+				changesRel := filepath.Join(".dross", "phases", phaseID, changes.File)
+				if out, err := gitCombined(repoDir, "add", changesRel); err != nil {
+					return fmt.Errorf("git add changes.json: %w\n%s", err, out)
+				}
+				// Only commit when the add actually staged a change, so a
+				// re-ship that records the same PR number doesn't error on
+				// "nothing to commit".
+				if err := gitNoOut(repoDir, "diff", "--cached", "--quiet"); err != nil {
+					prMsg := fmt.Sprintf("chore(dross): record PR #%d for %s", res.Number, phaseID)
+					if out, err := gitCombined(repoDir, "commit", "-m", prMsg); err != nil {
+						return fmt.Errorf("git commit PR number: %w\n%s", err, out)
+					}
+				}
+			}
 
 			// 8) Telemetry — capture shape of this ship without leaking
 			//    repo URL, body content, or reviewer names.
