@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/verify"
 )
 
 // These tests exercise the verify CLI's dispatch + skeleton-write
@@ -292,5 +294,220 @@ func TestDockerPrefixDerivation(t *testing.T) {
 		if got := dockerPrefix(p); got != c.want {
 			t.Errorf("dockerPrefix(mode=%q, test=%q) = %q want %q", c.mode, c.testCmd, got, c.want)
 		}
+	}
+}
+
+// --- printVerifySummary coverage (verify.go:248-284) ---
+//
+// These call printVerifySummary directly with hand-built Tests/Verify so
+// each branch of the efficacy-note math runs with an exactly-asserted
+// value. Numbers are chosen so that every arithmetic mutant produces a
+// different printed figure.
+
+// verifyCovTests wraps a single language run + mutation report.
+func verifyCovTests(m *mutation.Report) *verify.Tests {
+	return &verify.Tests{
+		Phase: "01-cov",
+		Languages: []verify.LanguageRun{
+			{Name: "go", Tool: "gremlins", Files: []string{"a.go", "b.go"}, Mutation: m},
+		},
+	}
+}
+
+func verifyCovVerify(status string) *verify.Verify {
+	v := &verify.Verify{}
+	v.Verify.Verdict = "pending"
+	v.Summary.MutationStatus = status
+	return v
+}
+
+// TestVerifyCover_SummaryEfficacyNote exercises the non-nil-mutation
+// branch (253), the NotCovered>0 branch (260), efficacyDenom math (265),
+// the denom>0 branch (266), and the efficacy + printed sum (267,269).
+// Killed=6, Survived=4, NotCovered=2, Timeout=1:
+//
+//	efficacyDenom = 6 + (4 - 2) = 8
+//	efficacy      = 6 / 8       = 0.75
+//	printed total = 6 + 4 + 1   = 11
+func TestVerifyCover_SummaryEfficacyNote(t *testing.T) {
+	m := &mutation.Report{
+		Tool: "gremlins", Killed: 6, Survived: 4, NotCovered: 2, Timeout: 1, Errors: 0, Score: 0.60,
+	}
+	out := captureStdout(t, func() {
+		printVerifySummary(verifyCovTests(m), verifyCovVerify(verify.MutationMeasured))
+	})
+	for _, want := range []string{
+		"killed=6 survived=4 (not_covered=2) timeout=1 errors=0 score=0.60",
+		"note: 2/11 mutants NOT COVERED",
+		"efficacy excluding them = 0.75",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("summary missing %q\n--- out ---\n%s", want, out)
+		}
+	}
+}
+
+// TestVerifyCover_SummaryNoNoteWhenCovered pins the NotCovered==0 side of
+// branch 260: no efficacy note is printed. Kills the boundary (>=0 would
+// print) and negation mutants on line 260.
+func TestVerifyCover_SummaryNoNoteWhenCovered(t *testing.T) {
+	m := &mutation.Report{
+		Tool: "gremlins", Killed: 6, Survived: 4, NotCovered: 0, Timeout: 1, Score: 0.60,
+	}
+	out := captureStdout(t, func() {
+		printVerifySummary(verifyCovTests(m), verifyCovVerify(verify.MutationMeasured))
+	})
+	if !strings.Contains(out, "killed=6 survived=4 (not_covered=0)") {
+		t.Errorf("expected killed/survived line:\n%s", out)
+	}
+	if strings.Contains(out, "NOT COVERED") || strings.Contains(out, "efficacy excluding") {
+		t.Errorf("no efficacy note expected when NotCovered==0:\n%s", out)
+	}
+}
+
+// TestVerifyCover_SummaryDenomZeroSkipsEfficacy drives NotCovered>0 (enters
+// block 260) but efficacyDenom==0 (branch 266 false), so the inner efficacy
+// line is skipped. Killed=0, Survived=2, NotCovered=2 → denom = 0+(2-2)=0.
+// Kills the boundary (>=0 would divide 0/0 and print) and negation on 266.
+func TestVerifyCover_SummaryDenomZeroSkipsEfficacy(t *testing.T) {
+	m := &mutation.Report{
+		Tool: "gremlins", Killed: 0, Survived: 2, NotCovered: 2, Timeout: 0, Score: 0.0,
+	}
+	out := captureStdout(t, func() {
+		printVerifySummary(verifyCovTests(m), verifyCovVerify(verify.MutationMeasured))
+	})
+	if !strings.Contains(out, "(not_covered=2)") {
+		t.Errorf("expected not_covered=2 line:\n%s", out)
+	}
+	if strings.Contains(out, "efficacy excluding") {
+		t.Errorf("efficacy line must be skipped when denom==0:\n%s", out)
+	}
+}
+
+// TestVerifyCover_SummaryNilMutation pins the nil-mutation side of branch
+// 253: prints "no mutation report" and skips the detailed line.
+func TestVerifyCover_SummaryNilMutation(t *testing.T) {
+	tests := &verify.Tests{
+		Phase: "01-cov",
+		Languages: []verify.LanguageRun{
+			{Name: "html", Tool: "none", Files: []string{"x.html"}, Mutation: nil},
+		},
+	}
+	out := captureStdout(t, func() {
+		printVerifySummary(tests, verifyCovVerify(verify.MutationMeasured))
+	})
+	if !strings.Contains(out, "no mutation report") {
+		t.Errorf("expected 'no mutation report':\n%s", out)
+	}
+	if strings.Contains(out, "killed=") {
+		t.Errorf("detailed killed line must not print for nil mutation:\n%s", out)
+	}
+}
+
+// TestVerifyCover_SummaryStatusMessages covers the mutation-status switch
+// (lines 277-284) including the unmeasurable message whose text spans the
+// string concatenations on 278-279.
+func TestVerifyCover_SummaryStatusMessages(t *testing.T) {
+	cases := []struct {
+		status string
+		want   string
+	}{
+		{verify.MutationUnmeasurable, "mutation status: unmeasurable — adapter ran but instrumented 0 mutants (likely the project's mutation scope excludes"},
+		{verify.MutationSkipped, "mutation status: skipped — no adapter ran."},
+	}
+	for _, c := range cases {
+		empty := &verify.Tests{Phase: "01-cov"}
+		out := captureStdout(t, func() {
+			printVerifySummary(empty, verifyCovVerify(c.status))
+		})
+		if !strings.Contains(out, c.want) {
+			t.Errorf("status %q: missing %q\n--- out ---\n%s", c.status, c.want, out)
+		}
+	}
+}
+
+// --- recordVerifyOutcome coverage (verify.go:211-236) ---
+//
+// recordVerifyOutcome emits a telemetry "outcome" event. We enable
+// telemetry into an isolated HOME and read telemetry.jsonl back to assert
+// the exact computed nums/counts, so the arithmetic and conditional
+// mutants produce an observable difference.
+
+func verifyCovEnableTelemetry(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "") // re-enable (chdir pins it to "1")
+	return filepath.Join(home, ".claude", "dross", "telemetry.jsonl")
+}
+
+// TestVerifyCover_RecordOutcomeWithTests exercises the t!=nil branch,
+// including the per-language accumulation guard (219) and the mutation_score
+// division (228). Killed=6, Survived=4 → score = 6/10 = 0.6. If line 219 is
+// negated, accumulation is skipped and mutants_killed drops to 0; if 228's
+// division becomes multiplication, the score becomes 60 not 0.6.
+func TestVerifyCover_RecordOutcomeWithTests(t *testing.T) {
+	chdir(t, t.TempDir())
+	telemPath := verifyCovEnableTelemetry(t)
+
+	tests := verifyCovTests(&mutation.Report{
+		Tool: "gremlins", Killed: 6, Survived: 4, Score: 0.6,
+	})
+	v := &verify.Verify{}
+	v.Verify.Verdict = "pass"
+
+	recordVerifyOutcome(tests, v)
+
+	body := mustRead(t, telemPath)
+	for _, want := range []string{
+		`"mutants_killed":6`,
+		`"mutants_survived":4`,
+		`"mutation_score":0.6`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("telemetry missing %q\n--- body ---\n%s", want, body)
+		}
+	}
+}
+
+// TestVerifyCover_RecordOutcomeNilTestsScored drives the t==nil fallback
+// with a positive summary score, pinning the true side of branch 233:
+// mutation_score is recorded from the summary.
+func TestVerifyCover_RecordOutcomeNilTestsScored(t *testing.T) {
+	chdir(t, t.TempDir())
+	telemPath := verifyCovEnableTelemetry(t)
+
+	v := &verify.Verify{}
+	v.Verify.Verdict = "partial"
+	v.Summary.MutantsKilled = 3
+	v.Summary.MutantsSurvived = 1
+	v.Summary.MutationScore = 0.7
+
+	recordVerifyOutcome(nil, v)
+
+	body := mustRead(t, telemPath)
+	for _, want := range []string{`"mutants_killed":3`, `"mutation_score":0.7`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("telemetry missing %q\n--- body ---\n%s", want, body)
+		}
+	}
+}
+
+// TestVerifyCover_RecordOutcomeNilTestsZeroScore pins the false side of
+// branch 233 (MutationScore>0): with score==0 no mutation_score number is
+// emitted. Kills both the boundary (>=0 would emit 0) and negation mutants.
+func TestVerifyCover_RecordOutcomeNilTestsZeroScore(t *testing.T) {
+	chdir(t, t.TempDir())
+	telemPath := verifyCovEnableTelemetry(t)
+
+	v := &verify.Verify{}
+	v.Verify.Verdict = "fail"
+	v.Summary.MutationScore = 0.0
+
+	recordVerifyOutcome(nil, v)
+
+	body := mustRead(t, telemPath)
+	if strings.Contains(body, "mutation_score") || strings.Contains(body, `"nums"`) {
+		t.Errorf("no mutation_score expected when summary score is 0:\n%s", body)
 	}
 }

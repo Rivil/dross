@@ -141,6 +141,80 @@ func TestMutateSettingsCreatesFile(t *testing.T) {
 	}
 }
 
+// TestEnvCover_SetEmptyKeyErrors drives env.go:96 (if key == ""). A
+// whitespace-only KEY trims to empty and must return the "KEY must be
+// non-empty" error before any password read. Under CONDITIONALS_NEGATION
+// (key != "") the empty key would instead fall through to ReadPassword and
+// surface a different error, so the exact-message assertion kills the mutant.
+func TestEnvCover_SetEmptyKeyErrors(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+
+	err := runCmd(t, Env(), "set", "   ")
+	if err == nil {
+		t.Fatal("expected error for whitespace-only KEY")
+	}
+	if !strings.Contains(err.Error(), "KEY must be non-empty") {
+		t.Errorf("expected non-empty KEY error, got: %v", err)
+	}
+}
+
+// TestEnvCover_SetReadPasswordErrorsOnNonTTY drives env.go:102 (if err !=
+// nil after term.ReadPassword). With stdin pointed at /dev/null (a non-tty),
+// ReadPassword's IoctlGetTermios fails, so the handler returns a "read
+// password" error. Under CONDITIONALS_NEGATION (err == nil) the handler would
+// skip the return and fall through to the empty-value abort path, yielding a
+// different message — the "read password" assertion distinguishes them.
+func TestEnvCover_SetReadPasswordErrorsOnNonTTY(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	orig := os.Stdin
+	os.Stdin = f
+	defer func() { os.Stdin = orig }()
+
+	err = runCmd(t, Env(), "set", "MYKEY")
+	if err == nil {
+		t.Fatal("expected read-password error on non-tty stdin")
+	}
+	if !strings.Contains(err.Error(), "read password") {
+		t.Errorf("expected read-password error, got: %v", err)
+	}
+}
+
+// TestEnvCover_UnsetPropagatesMutateError drives env.go:148 (if err != nil
+// after mutateSettings). Malformed JSON makes mutateSettings' internal
+// readSettings fail to parse, so unset returns that error. Under
+// CONDITIONALS_NEGATION (err == nil) the failure would be swallowed and the
+// handler would print "nothing to do" and return nil, so asserting a non-nil
+// parse error kills the mutant.
+func TestEnvCover_UnsetPropagatesMutateError(t *testing.T) {
+	chdir(t, t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	settingsFile := filepath.Join(home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settingsFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(settingsFile, []byte("{not valid json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := runCmd(t, Env(), "unset", "FOO")
+	if err == nil {
+		t.Fatal("expected error when settings.json is malformed")
+	}
+	if !strings.Contains(err.Error(), "parse") {
+		t.Errorf("expected parse error, got: %v", err)
+	}
+}
+
 func TestMutateSettingsPreservesUnrelatedKeys(t *testing.T) {
 	home := t.TempDir()
 	path := filepath.Join(home, ".claude", "settings.json")

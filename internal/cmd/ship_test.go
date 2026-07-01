@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -564,5 +566,162 @@ func TestShipReshipIsIdempotent(t *testing.T) {
 	}
 	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
 		t.Errorf("tree should be clean after re-ship, got: %q", st)
+	}
+}
+
+// shipCoverInitProject inits a dross repo in a fresh temp dir with an isolated
+// HOME (no git origin, so [remote] starts empty), then applies the given
+// remote.<field>=<value> pairs. Used by the shipComment coverage tests to drive
+// its [remote] preflight gate into specific states.
+func shipCoverInitProject(t *testing.T, sets ...[2]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	chdir(t, dir)
+	t.Setenv("HOME", t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	for _, kv := range sets {
+		if err := runCmd(t, Project(), "set", kv[0], kv[1]); err != nil {
+			t.Fatalf("project set %s=%s: %v", kv[0], kv[1], err)
+		}
+	}
+	return dir
+}
+
+// TestShipCover_CommentEarlyReturns exercises shipComment's argument-validation
+// gates that return before any project load: the --pr guard (line 339, both the
+// boundary and the negation via pr=0, plus the negation-reverse via pr=5), the
+// "need --body or --body-file" guard (line 342, both operands), and the
+// --body-file read + error branch (lines 345, 347).
+func TestShipCover_CommentEarlyReturns(t *testing.T) {
+	chdir(t, t.TempDir()) // no .dross here: these gates all return before loadProject
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"pr zero", []string{"comment", "--pr", "0", "--body", "hi"}, "--pr is required"},
+		{"no body and no file", []string{"comment", "--pr", "5"}, "either --body or --body-file"},
+		{"unreadable body-file", []string{"comment", "--pr", "5", "--body-file", filepath.Join(t.TempDir(), "nope.md")}, "read --body-file"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := runCmd(t, Ship(), c.args...)
+			if err == nil {
+				t.Fatalf("expected error for %s", c.name)
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Errorf("error %q should contain %q", err, c.want)
+			}
+		})
+	}
+}
+
+// TestShipCover_CommentLoadProjectError drives shipComment's loadProject error
+// branch (line 353): with --pr and --body both valid but no .dross root,
+// loadProject returns ErrNoRoot and shipComment must surface it (the mutated
+// `err == nil` branch would fall through to a nil-project deref instead).
+func TestShipCover_CommentLoadProjectError(t *testing.T) {
+	chdir(t, t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	err := runCmd(t, Ship(), "comment", "--pr", "5", "--body", "hi")
+	if err == nil {
+		t.Fatal("expected loadProject error without a .dross root")
+	}
+	if !strings.Contains(err.Error(), "no .dross") {
+		t.Errorf("error should surface the missing-root failure, got: %v", err)
+	}
+}
+
+// TestShipCover_CommentRemoteMissingURL drives the first operand of shipComment's
+// [remote] preflight (line 356): provider is set but url is empty, so the gate
+// must fire before reaching PostComment.
+func TestShipCover_CommentRemoteMissingURL(t *testing.T) {
+	shipCoverInitProject(t, [2]string{"remote.provider", "forgejo"})
+	err := runCmd(t, Ship(), "comment", "--pr", "5", "--body", "hi")
+	if err == nil {
+		t.Fatal("expected [remote] gate to fire with empty url")
+	}
+	if !strings.Contains(err.Error(), "[remote]") {
+		t.Errorf("error should name the missing [remote] config, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "post comment") {
+		t.Errorf("must not reach PostComment when url is empty, got: %v", err)
+	}
+}
+
+// TestShipCover_CommentRemoteMissingProvider drives the second operand of line
+// 356: url is set but provider is empty.
+func TestShipCover_CommentRemoteMissingProvider(t *testing.T) {
+	shipCoverInitProject(t, [2]string{"remote.url", "https://forge.example/me/p"})
+	err := runCmd(t, Ship(), "comment", "--pr", "5", "--body", "hi")
+	if err == nil {
+		t.Fatal("expected [remote] gate to fire with empty provider")
+	}
+	if !strings.Contains(err.Error(), "[remote]") {
+		t.Errorf("error should name the missing [remote] config, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "post comment") {
+		t.Errorf("must not reach PostComment when provider is empty, got: %v", err)
+	}
+}
+
+// TestShipCover_CommentReachesPostComment drives the both-configured path of
+// line 356 (gate passes) into the PostComment error branch (line 362): with a
+// valid url+provider but no api_base, PostComment fails and shipComment wraps it
+// as "post comment". The mutated `err == nil` branch would instead print
+// "Posted comment" and return nil.
+func TestShipCover_CommentReachesPostComment(t *testing.T) {
+	shipCoverInitProject(t,
+		[2]string{"remote.provider", "forgejo"},
+		[2]string{"remote.url", "https://forge.example/me/p"},
+		[2]string{"remote.auth_env", "MOCK_FORGEJO_TOKEN"},
+	)
+	err := runCmd(t, Ship(), "comment", "--pr", "5", "--body", "hi")
+	if err == nil {
+		t.Fatal("expected PostComment to fail without api_base")
+	}
+	if !strings.Contains(err.Error(), "post comment") {
+		t.Errorf("shipComment must wrap the PostComment failure as 'post comment', got: %v", err)
+	}
+}
+
+// TestShipCover_ShipBadBodyFile drives the --body-file read-error branch of the
+// main ship flow (line 155): a missing --body-file must abort with "read
+// --body-file" before any push (guarded by --no-push). The mutated `err == nil`
+// branch would swallow the read failure and return cleanly.
+func TestShipCover_ShipBadBodyFile(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	err := runCmd(t, Ship(), "--no-push", "--body-file", filepath.Join(dir, "no-such-body.md"))
+	if err == nil {
+		t.Fatal("expected error for unreadable --body-file")
+	}
+	if !strings.Contains(err.Error(), "read --body-file") {
+		t.Errorf("error should mention read --body-file, got: %v", err)
+	}
+}
+
+// TestShipCover_ResultTag pins shipResultTag's four-way classification (lines
+// 379/381/383): the (err, res) matrix maps to failed/partial/opened/noop, so
+// negating any operand in those case guards misroutes at least one row.
+func TestShipCover_ResultTag(t *testing.T) {
+	boom := errors.New("boom")
+	res := &ship.OpenResult{URL: "u", Number: 7}
+	cases := []struct {
+		name string
+		err  error
+		res  *ship.OpenResult
+		want string
+	}{
+		{"failed", boom, nil, "failed"},
+		{"partial", boom, res, "partial"},
+		{"opened", nil, res, "opened"},
+		{"noop", nil, nil, "noop"},
+	}
+	for _, c := range cases {
+		if got := shipResultTag(c.res, c.err); got != c.want {
+			t.Errorf("%s: shipResultTag = %q, want %q", c.name, got, c.want)
+		}
 	}
 }

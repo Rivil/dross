@@ -86,6 +86,56 @@ func TestChangesRecordEmptyFilesValueIsRejected(t *testing.T) {
 	}
 }
 
+// TestChangesCover_ValidLandmarkRecorded exercises changes.go:39 on the
+// err==nil branch: a well-formed --landmark parses cleanly, so record must
+// proceed and persist the landmark. If the CONDITIONALS_NEGATION mutant flips
+// the guard (`if err == nil { return err }`), the handler returns early before
+// recording — no changes.json, so the landmark never appears in show output.
+func TestChangesCover_ValidLandmarkRecorded(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Changes(),
+		"record", "01-lm", "t-1",
+		"--files", "a.ts",
+		"--landmark", "feature=Auth, symbol=Login, loc=x.ts:9, what=adds login",
+	); err != nil {
+		t.Fatalf("record with valid landmark should succeed: %v", err)
+	}
+	out := captureStdout(t, func() {
+		runCmd(t, Changes(), "show", "01-lm")
+	})
+	for _, want := range []string{`"feature": "Auth"`, `"symbol": "Login"`, `"what": "adds login"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("show missing landmark field %q\n%s", want, out)
+		}
+	}
+}
+
+// TestChangesCover_InvalidLandmarkErrors exercises changes.go:39 on the
+// err!=nil branch: a malformed --landmark makes ParseLandmark return an error,
+// so record must return it. The mutated guard (`if err == nil`) would instead
+// swallow the error, append a zero landmark, and succeed — so asserting a
+// non-nil error distinguishes real from mutant.
+func TestChangesCover_InvalidLandmarkErrors(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	err := runCmd(t, Changes(),
+		"record", "01-lm", "t-1",
+		"--files", "a.ts",
+		"--landmark", "color=blue", // unknown key → ParseLandmark errors
+	)
+	if err == nil {
+		t.Fatal("expected error for a malformed landmark, got nil")
+	}
+	if !strings.Contains(err.Error(), "landmark") {
+		t.Errorf("error should come from ParseLandmark: %v", err)
+	}
+}
+
 func TestChangesShowEmpty(t *testing.T) {
 	chdir(t, t.TempDir())
 	if err := runCmd(t, Init()); err != nil {

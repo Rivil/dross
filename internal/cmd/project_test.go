@@ -277,3 +277,29 @@ func TestWriteDottedRejectsBadBool(t *testing.T) {
 		t.Error("expected error for invalid bool")
 	}
 }
+
+// TestProjectCover_ShowPropagatesLoadError drives projectShow's
+// `if err != nil` (project.go:30) down its error branch: with no .dross
+// root, loadProject fails and `show` must return that error. The negated
+// mutant would skip the return and proceed with a nil project instead of
+// surfacing the failure.
+func TestProjectCover_ShowPropagatesLoadError(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Project(), "show"); err == nil {
+		t.Fatal("expected project show to error when no .dross root exists")
+	}
+}
+
+// TestProjectCover_GetPropagatesLoadError drives projectGet's
+// `if err != nil` (project.go:47) down its error branch: with no .dross
+// root, loadProject fails and `get` must return that error before it ever
+// reaches readDotted. The negated mutant would skip the return and deref a
+// nil project.
+func TestProjectCover_GetPropagatesLoadError(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Project(), "get", "project.name"); err == nil {
+		t.Fatal("expected project get to error when no .dross root exists")
+	}
+}
