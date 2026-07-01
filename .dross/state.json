@@ -2,22 +2,10 @@
   "version": "0.7.3.0",
   "current_milestone": "v0.9",
   "current_phase": "ship-architecture-autogen",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-01T10:43:26.766281Z",
-  "last_action": "plan locked: ship-architecture-autogen (1 task, no-review: trivial prompt phase)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-01T10:46:15.204135Z",
+  "last_action": "phase ship-architecture-autogen executed (1/1 done)",
   "history": [
-    {
-      "at": "2026-06-30T20:18:21.818954Z",
-      "action": "set current_phase=ship-auto-noninteractive"
-    },
-    {
-      "at": "2026-06-30T20:18:21.823594Z",
-      "action": "spec locked: ship-auto-noninteractive"
-    },
-    {
-      "at": "2026-07-01T05:37:16.179536Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-07-01T05:37:16.185877Z",
       "action": "plan locked: ship-auto-noninteractive (3 tasks across 2 waves)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-07-01T10:43:26.766281Z",
       "action": "plan locked: ship-architecture-autogen (1 task, no-review: trivial prompt phase)"
+    },
+    {
+      "at": "2026-07-01T10:46:09.421476Z",
+      "action": "executed t-1 (Auto-backfill ARCHITECTURE.md on ship when absent)"
+    },
+    {
+      "at": "2026-07-01T10:46:15.19637Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-01T10:46:15.204135Z",
+      "action": "phase ship-architecture-autogen executed (1/1 done)"
     }
   ]
 }
