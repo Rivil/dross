@@ -1,9 +1,110 @@
 package phase
 
 import (
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
+
+func ptr[T any](v T) *T { return &v }
+
+func TestAddTask(t *testing.T) {
+	// Insert after an anchor: existing tasks keep their id/fields and order.
+	pre := []Task{
+		{ID: "t-1", Wave: 1, Title: "one"},
+		{ID: "t-2", Wave: 1, Title: "two"},
+		{ID: "t-3", Wave: 2, Title: "three"},
+	}
+	p := &Plan{TaskSeq: 3, Task: slices.Clone(pre)}
+	got, err := p.AddTask(NewTask{Title: "new", Covers: []string{"c-1"}}, "t-1", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantOrder := []string{"t-1", "t-4", "t-2", "t-3"}
+	var order []string
+	for _, tk := range p.Task {
+		order = append(order, tk.ID)
+	}
+	if !reflect.DeepEqual(order, wantOrder) {
+		t.Errorf("order = %v, want %v", order, wantOrder)
+	}
+	if got.ID != "t-4" {
+		t.Errorf("new id = %s, want t-4", got.ID)
+	}
+	if p.TaskSeq != 4 {
+		t.Errorf("high-water = %d, want 4 (advanced)", p.TaskSeq)
+	}
+	// Existing tasks byte-equal to their pre-image (placement never renumbers).
+	for _, want := range pre {
+		if fresh := p.FindTask(want.ID); !reflect.DeepEqual(*fresh, want) {
+			t.Errorf("existing task %s mutated: got %+v, want %+v", want.ID, *fresh, want)
+		}
+	}
+
+	// No anchor -> tail append.
+	tail := &Plan{TaskSeq: 3, Task: slices.Clone(pre)}
+	if _, err := tail.AddTask(NewTask{Title: "last"}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if last := tail.Task[len(tail.Task)-1]; last.ID != "t-4" || last.Title != "last" {
+		t.Errorf("tail append = %+v, want id t-4 title last at end", last)
+	}
+}
+
+func TestRemoveTask(t *testing.T) {
+	newPlan := func() *Plan {
+		return &Plan{TaskSeq: 2, Task: []Task{
+			{ID: "t-1", Wave: 1},
+			{ID: "t-2", Wave: 2, DependsOn: []string{"t-1"}},
+		}}
+	}
+
+	// force=false with a dependent refuses and mutates nothing.
+	p := newPlan()
+	err := p.RemoveTask("t-1", false)
+	if err == nil {
+		t.Fatal("expected refusal when t-1 is depended on")
+	}
+	if len(p.Task) != 2 || !slices.Contains(p.FindTask("t-2").DependsOn, "t-1") {
+		t.Errorf("refusal mutated the plan: %+v", p.Task)
+	}
+
+	// force=true drops t-1 and strips the dangling dep, wave unchanged, no reflow.
+	p = newPlan()
+	if err := p.RemoveTask("t-1", true); err != nil {
+		t.Fatal(err)
+	}
+	if p.FindTask("t-1") != nil {
+		t.Error("t-1 not removed under force")
+	}
+	t2 := p.FindTask("t-2")
+	if slices.Contains(t2.DependsOn, "t-1") {
+		t.Error("no dangling dep: t-1 must be stripped from t-2.depends_on")
+	}
+	if t2.Wave != 2 {
+		t.Errorf("t-2 wave reflowed to %d, want 2 (no reflow)", t2.Wave)
+	}
+}
+
+func TestEditTask(t *testing.T) {
+	pre := Task{ID: "t-2", Wave: 2, Title: "old", Covers: []string{"c-1"}, DependsOn: []string{"t-1"}, Files: []string{"a.go"}, Status: StatusDone}
+	p := &Plan{Task: []Task{{ID: "t-1", Wave: 1}, pre}}
+
+	if err := p.EditTask("t-2", TaskEdit{Title: ptr("new")}); err != nil {
+		t.Fatal(err)
+	}
+	t2 := p.FindTask("t-2")
+	if t2.Title != "new" {
+		t.Errorf("title = %q, want new", t2.Title)
+	}
+	// Every other field equal to the pre-image.
+	want := pre
+	want.Title = "new"
+	if !reflect.DeepEqual(*t2, want) {
+		t.Errorf("edit changed more than Title: got %+v, want %+v", *t2, want)
+	}
+}
 
 func TestValidatePlan(t *testing.T) {
 	spec := &Spec{Criteria: []Criterion{{ID: "c-1"}, {ID: "c-2"}}}
