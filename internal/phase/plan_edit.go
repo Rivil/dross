@@ -67,3 +67,55 @@ func deriveWave(explicitWave int, dependsOn []string, tasks []Task) int {
 	}
 	return deepest + 1
 }
+
+// ValidatePlan checks a plan for the integrity invariants the task-lifecycle
+// mutators must preserve. It is a superset of `dross validate`'s plan checks:
+// it keeps the covers->criterion rule in parity (identical "covers unknown
+// criterion" phrasing, see internal/cmd/validate.go) and adds the duplicate-id
+// and unknown-depends_on checks that validator lacks. A nil spec skips only the
+// covers->criterion check, so callers without a spec still get the structural
+// id/dependency guards.
+//
+// Every defect is reported together in one error, each naming the offending id,
+// so a single call surfaces all problems at once.
+func ValidatePlan(plan *Plan, spec *Spec) error {
+	var problems []string
+
+	// Duplicate task ids.
+	ids := map[string]bool{}
+	for _, t := range plan.Task {
+		if ids[t.ID] {
+			problems = append(problems, fmt.Sprintf("duplicate task id %s", t.ID))
+		}
+		ids[t.ID] = true
+	}
+
+	// depends_on must reference a task that exists in the plan.
+	for _, t := range plan.Task {
+		for _, dep := range t.DependsOn {
+			if !ids[dep] {
+				problems = append(problems, fmt.Sprintf("task %s depends on unknown task %s", t.ID, dep))
+			}
+		}
+	}
+
+	// covers must reference a criterion in the spec — parity with `dross validate`.
+	if spec != nil {
+		crit := map[string]bool{}
+		for _, c := range spec.Criteria {
+			crit[c.ID] = true
+		}
+		for _, t := range plan.Task {
+			for _, cov := range t.Covers {
+				if !crit[cov] {
+					problems = append(problems, fmt.Sprintf("task %s covers unknown criterion %s", t.ID, cov))
+				}
+			}
+		}
+	}
+
+	if len(problems) == 0 {
+		return nil
+	}
+	return fmt.Errorf("invalid plan: %s", strings.Join(problems, "; "))
+}

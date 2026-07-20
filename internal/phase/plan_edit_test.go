@@ -1,6 +1,72 @@
 package phase
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestValidatePlan(t *testing.T) {
+	spec := &Spec{Criteria: []Criterion{{ID: "c-1"}, {ID: "c-2"}}}
+	cases := []struct {
+		name       string
+		plan       *Plan
+		wantErr    bool
+		wantNaming string // substring the error must contain when wantErr
+	}{
+		{
+			name:    "clean plan",
+			plan:    &Plan{Task: []Task{{ID: "t-1", Covers: []string{"c-1"}}, {ID: "t-2", DependsOn: []string{"t-1"}}}},
+			wantErr: false,
+		},
+		{
+			name:       "duplicate id",
+			plan:       &Plan{Task: []Task{{ID: "t-2"}, {ID: "t-2"}}},
+			wantErr:    true,
+			wantNaming: "duplicate task id t-2",
+		},
+		{
+			name:       "unknown depends_on",
+			plan:       &Plan{Task: []Task{{ID: "t-1", DependsOn: []string{"t-99"}}}},
+			wantErr:    true,
+			wantNaming: "t-99",
+		},
+		{
+			name:       "covers unknown criterion",
+			plan:       &Plan{Task: []Task{{ID: "t-1", Covers: []string{"c-99"}}}},
+			wantErr:    true,
+			wantNaming: "c-99",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidatePlan(tc.plan, spec)
+			if tc.wantErr && err == nil {
+				t.Fatalf("ValidatePlan() = nil, want error")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("ValidatePlan() = %v, want nil", err)
+			}
+			if tc.wantErr && !strings.Contains(err.Error(), tc.wantNaming) {
+				t.Errorf("ValidatePlan() = %q, want it to name %q", err, tc.wantNaming)
+			}
+		})
+	}
+}
+
+// TestValidatePlanCoversParity pins ValidatePlan's covers->criterion wording to
+// the string `dross validate` (internal/cmd/validate.go) emits, so the c-1
+// post-write validate can never disagree with this pre-write guard.
+func TestValidatePlanCoversParity(t *testing.T) {
+	spec := &Spec{Criteria: []Criterion{{ID: "c-1"}}}
+	plan := &Plan{Task: []Task{{ID: "t-1", Covers: []string{"c-99"}}}}
+	err := ValidatePlan(plan, spec)
+	if err == nil {
+		t.Fatal("expected covers error")
+	}
+	if want := "task t-1 covers unknown criterion c-99"; !strings.Contains(err.Error(), want) {
+		t.Errorf("parity: got %q, want it to contain %q", err, want)
+	}
+}
 
 func TestNextTaskID(t *testing.T) {
 	cases := []struct {
