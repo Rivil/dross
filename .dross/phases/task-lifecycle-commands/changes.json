@@ -1,0 +1,120 @@
+{
+  "phase": "task-lifecycle-commands",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/plan_edit.go",
+        "internal/phase/plan_edit_test.go"
+      ],
+      "commit": "adae0de",
+      "completed_at": "2026-07-20T14:01:31.985123Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "Plan.NextTaskID",
+          "loc": "internal/phase/plan_edit.go:33",
+          "what": "persisted high-water task-id counter + dependency-derived wave placement"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/phase/plan_edit.go",
+        "internal/phase/plan_edit_test.go"
+      ],
+      "commit": "238b120",
+      "completed_at": "2026-07-20T14:02:47.621467Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "ValidatePlan",
+          "loc": "internal/phase/plan_edit.go:78",
+          "what": "pre-write plan integrity guard (duplicate-id + unknown-dep + covers parity with dross validate)"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/phase/plan_edit.go",
+        "internal/phase/plan_edit_test.go"
+      ],
+      "commit": "dd73e36",
+      "completed_at": "2026-07-20T14:04:49.18455Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "Plan.AddTask",
+          "loc": "internal/phase/plan_edit.go:112",
+          "what": "pure in-memory mutators: anchor-placed add with high-water id · dependency-safe remove with force-strip · partial edit"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/task.go",
+        "internal/cmd/task_test.go"
+      ],
+      "commit": "baaac98",
+      "completed_at": "2026-07-20T14:10:18.393512Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "taskAdd",
+          "loc": "internal/cmd/task.go:123",
+          "what": "dross task add verb — tail-append by default · resolveAnchor only for --after/--before · saveIfValid validates before writing"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/phase/plan_edit.go",
+        "internal/phase/plan_edit_test.go",
+        "internal/cmd/task.go",
+        "internal/cmd/task_test.go"
+      ],
+      "commit": "af8bc49",
+      "completed_at": "2026-07-20T14:17:08.305566Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "taskRemove",
+          "loc": "internal/cmd/task.go:174",
+          "what": "dross task remove verb (dependency-safe with --force strip) + RemoveTask high-water backfill so a freed highest id is never reissued"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/task.go",
+        "internal/cmd/task_test.go"
+      ],
+      "commit": "6823038",
+      "completed_at": "2026-07-20T14:19:22.669829Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "taskEdit",
+          "loc": "internal/cmd/task.go:200",
+          "what": "dross task edit verb — partial field update via flag.Changed · no --status flag so dross task status stays sole owner"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/phase_test.go"
+      ],
+      "commit": "367c723",
+      "completed_at": "2026-07-20T14:07:05.387994Z",
+      "landmarks": [
+        {
+          "feature": "plan persistence",
+          "symbol": "saveTOML",
+          "loc": "internal/phase/phase.go:385",
+          "what": "atomic write via temp sibling + os.Rename so a mid-write failure leaves the existing file untruncated"
+        }
+      ]
+    }
+  }
+}

@@ -1,128 +1,76 @@
 [phase]
-id = "task-lifecycle-commands"
+  id = "task-lifecycle-commands"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "High-water NextTaskID + deriveWave helpers"
-files         = ["internal/phase/phase.go", "internal/phase/plan_edit.go", "internal/phase/plan_edit_test.go"]
-description   = """
-New cobra-free plan_edit.go core: add a persisted high-water field (TaskSeq) to
-the Plan struct in phase.go, and NextTaskID/deriveWave helpers over it.
-"""
-covers        = ["c-1", "c-2"]
-test_contract = [
-  "NextTaskID uses the persisted high-water (Plan.TaskSeq), backfilled from the current max id when unset: over {t-1,t-3} with seq=3 -> t-4; after removing the HIGHEST task (t-3 of {t-1,t-2,t-3}) the next id is still t-4, never the freed t-3; over an empty plan -> t-1",
-  "deriveWave: depends_on at waves [1,3] and no --wave -> 4 (deepest+1); explicit --wave 2 -> 2; no deps -> 1. Ignoring the deepest dep or an off-by-one each flips one table case",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "High-water NextTaskID + deriveWave helpers"
+  files = ["internal/phase/phase.go", "internal/phase/plan_edit.go", "internal/phase/plan_edit_test.go"]
+  description = "New cobra-free plan_edit.go core: add a persisted high-water field (TaskSeq) to\nthe Plan struct in phase.go, and NextTaskID/deriveWave helpers over it.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["NextTaskID uses the persisted high-water (Plan.TaskSeq), backfilled from the current max id when unset: over {t-1,t-3} with seq=3 -> t-4; after removing the HIGHEST task (t-3 of {t-1,t-2,t-3}) the next id is still t-4, never the freed t-3; over an empty plan -> t-1", "deriveWave: depends_on at waves [1,3] and no --wave -> 4 (deepest+1); explicit --wave 2 -> 2; no deps -> 1. Ignoring the deepest dep or an off-by-one each flips one table case"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "ValidatePlan integrity guard (superset of dross validate)"
-files         = ["internal/phase/plan_edit.go", "internal/phase/plan_edit_test.go"]
-description   = """
-A ValidatePlan(plan, spec) that is a superset of `dross validate`: it adds the
-duplicate-id and unknown-depends_on checks the existing validator lacks, plus the
-covers->criterion check kept in parity.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "ValidatePlan flags each defect on a hand-seeded fixture: two tasks sharing id=t-2 -> error naming the duplicate; depends_on=[t-99] absent -> error naming the unknown dep; covers=[c-99] absent from spec -> error; a clean plan+spec -> nil. Deleting any one branch flips exactly that case from error to false-pass",
-  "Parity check: ValidatePlan's covers->criterion rule matches `dross validate` (validate.go), so c-1's post-write validate can't disagree with this pre-write guard",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "ValidatePlan integrity guard (superset of dross validate)"
+  files = ["internal/phase/plan_edit.go", "internal/phase/plan_edit_test.go"]
+  description = "A ValidatePlan(plan, spec) that is a superset of `dross validate`: it adds the\nduplicate-id and unknown-depends_on checks the existing validator lacks, plus the\ncovers->criterion check kept in parity.\n"
+  covers = ["c-4"]
+  test_contract = ["ValidatePlan flags each defect on a hand-seeded fixture: two tasks sharing id=t-2 -> error naming the duplicate; depends_on=[t-99] absent -> error naming the unknown dep; covers=[c-99] absent from spec -> error; a clean plan+spec -> nil. Deleting any one branch flips exactly that case from error to false-pass", "Parity check: ValidatePlan's covers->criterion rule matches `dross validate` (validate.go), so c-1's post-write validate can't disagree with this pre-write guard"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 1
-depends_on    = ["t-1"]
-title         = "AddTask / RemoveTask / EditTask mutators"
-files         = ["internal/phase/plan_edit.go", "internal/phase/plan_edit_test.go"]
-description   = """
-The three pure in-memory mutators. Add places relative to an anchor (or tail),
-bumping the high-water; Remove is dependency-safe with a force-strip; Edit is a
-partial field update.
-"""
-covers        = ["c-2", "c-3", "c-5"]
-test_contract = [
-  "AddTask(anchor=t-1) into [t-1,t-2,t-3] -> [t-1,new,t-2,t-3] with every existing id and field byte-equal (placement never renumbers), and the high-water advanced; no anchor -> tail append",
-  "RemoveTask(t-1, force=false) when t-2.depends_on=[t-1] -> refusal that mutates nothing; force=true drops t-1 AND strips it from t-2.depends_on with t-2.wave unchanged (no reflow) — omitting the strip fails a 'no dangling dep' assertion",
-  "EditTask(t-2, {Title:X}) changes only Title; Covers/Wave/DependsOn/Files/Status compare equal to the pre-image",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 1
+  title = "AddTask / RemoveTask / EditTask mutators"
+  files = ["internal/phase/plan_edit.go", "internal/phase/plan_edit_test.go"]
+  description = "The three pure in-memory mutators. Add places relative to an anchor (or tail),\nbumping the high-water; Remove is dependency-safe with a force-strip; Edit is a\npartial field update.\n"
+  covers = ["c-2", "c-3", "c-5"]
+  depends_on = ["t-1"]
+  test_contract = ["AddTask(anchor=t-1) into [t-1,t-2,t-3] -> [t-1,new,t-2,t-3] with every existing id and field byte-equal (placement never renumbers), and the high-water advanced; no anchor -> tail append", "RemoveTask(t-1, force=false) when t-2.depends_on=[t-1] -> refusal that mutates nothing; force=true drops t-1 AND strips it from t-2.depends_on with t-2.wave unchanged (no reflow) — omitting the strip fails a 'no dangling dep' assertion", "EditTask(t-2, {Title:X}) changes only Title; Covers/Wave/DependsOn/Files/Status compare equal to the pre-image"]
+  status = "done"
 
 [[task]]
-id            = "t-7"
-wave          = 1
-title         = "Atomic saveTOML (temp file + rename)"
-files         = ["internal/phase/phase.go", "internal/phase/phase_test.go"]
-description   = """
-Make saveTOML crash-safe: write to a temp sibling then os.Rename over the target,
-replacing the truncate-in-place os.Create so a mid-save crash can't corrupt the
-file. (Panel-found pre-existing bug; strengthens c-4's byte-unchanged guarantee.)
-"""
-covers        = ["c-4"]
-test_contract = [
-  "saveTOML writes via a temp file + os.Rename: with a directory pre-created at <path>.tmp to force the temp write to fail, saveTOML returns an error and the live file is byte-identical to before (no truncation). Reverting to os.Create truncate-in-place fails the survive-on-failed-write assertion",
-]
-status        = "pending"
+  id = "t-7"
+  wave = 1
+  title = "Atomic saveTOML (temp file + rename)"
+  files = ["internal/phase/phase.go", "internal/phase/phase_test.go"]
+  description = "Make saveTOML crash-safe: write to a temp sibling then os.Rename over the target,\nreplacing the truncate-in-place os.Create so a mid-save crash can't corrupt the\nfile. (Panel-found pre-existing bug; strengthens c-4's byte-unchanged guarantee.)\n"
+  covers = ["c-4"]
+  test_contract = ["saveTOML writes via a temp file + os.Rename: with a directory pre-created at <path>.tmp to force the temp write to fail, saveTOML returns an error and the live file is byte-identical to before (no truncation). Reverting to os.Create truncate-in-place fails the survive-on-failed-write assertion"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 2
-depends_on    = ["t-2", "t-3"]
-title         = "Wire dross task add + saveIfValid harness"
-files         = ["internal/cmd/task.go", "internal/cmd/task_test.go"]
-description   = """
-The `dross task add` cobra verb: parse flags, append to the tail by default and
-only call the existing resolveAnchor when --after/--before is given (resolveAnchor
-errors on neither-flag, so it can't own the default-append path). Introduce
-saveIfValid(plan,spec,path) = ValidatePlan then Save-only-if-valid, with an
-assertPlanUnchanged test helper.
-"""
-covers        = ["c-1", "c-2", "c-4"]
-test_contract = [
-  "`task add <phase> --title T --covers c-1` with NO placement flag appends to the tail and grows plan.toml by one task whose id is the high-water+1, and `dross validate` exits 0 (the default-append path must NOT route through resolveAnchor, which errors when neither --after/--before is set)",
-  "`--after t-1` places the record after t-1 with every existing task's bytes intact, via resolveAnchor (which enforces exactly-one-of --after/--before)",
-  "`--covers c-99` exits non-zero and assertPlanUnchanged holds (a mustRead byte-compare, mirroring TestPhaseMoveNoOp); if saveIfValid Saves before validating, this case fails",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 2
+  title = "Wire dross task add + saveIfValid harness"
+  files = ["internal/cmd/task.go", "internal/cmd/task_test.go"]
+  description = "The `dross task add` cobra verb: parse flags, append to the tail by default and\nonly call the existing resolveAnchor when --after/--before is given (resolveAnchor\nerrors on neither-flag, so it can't own the default-append path). Introduce\nsaveIfValid(plan,spec,path) = ValidatePlan then Save-only-if-valid, with an\nassertPlanUnchanged test helper.\n"
+  covers = ["c-1", "c-2", "c-4"]
+  depends_on = ["t-2", "t-3"]
+  test_contract = ["`task add <phase> --title T --covers c-1` with NO placement flag appends to the tail and grows plan.toml by one task whose id is the high-water+1, and `dross validate` exits 0 (the default-append path must NOT route through resolveAnchor, which errors when neither --after/--before is set)", "`--after t-1` places the record after t-1 with every existing task's bytes intact, via resolveAnchor (which enforces exactly-one-of --after/--before)", "`--covers c-99` exits non-zero and assertPlanUnchanged holds (a mustRead byte-compare, mirroring TestPhaseMoveNoOp); if saveIfValid Saves before validating, this case fails"]
+  status = "done"
 
 [[task]]
-id            = "t-5"
-wave          = 3
-depends_on    = ["t-3", "t-4"]
-title         = "Wire dross task remove"
-files         = ["internal/cmd/task.go", "internal/cmd/task_test.go"]
-description   = """
-The `dross task remove` verb over RemoveTask, co-editing task.go's command
-registration and reusing saveIfValid/assertPlanUnchanged from t-4.
-"""
-covers        = ["c-3", "c-4"]
-test_contract = [
-  "`task remove <phase> t-1` with t-2.depends_on=[t-1] exits non-zero, the message names t-2, and assertPlanUnchanged holds",
-  "`--force` deletes t-1, strips it from t-2.depends_on, and `dross validate` still passes; a subsequent `task add` does NOT reuse the freed id (high-water)",
-  "removing an unknown id errors and mutates nothing",
-]
-status        = "pending"
+  id = "t-5"
+  wave = 3
+  title = "Wire dross task remove"
+  files = ["internal/cmd/task.go", "internal/cmd/task_test.go"]
+  description = "The `dross task remove` verb over RemoveTask, co-editing task.go's command\nregistration and reusing saveIfValid/assertPlanUnchanged from t-4.\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-3", "t-4"]
+  test_contract = ["`task remove <phase> t-1` with t-2.depends_on=[t-1] exits non-zero, the message names t-2, and assertPlanUnchanged holds", "`--force` deletes t-1, strips it from t-2.depends_on, and `dross validate` still passes; a subsequent `task add` does NOT reuse the freed id (high-water)", "removing an unknown id errors and mutates nothing"]
+  status = "done"
 
 [[task]]
-id            = "t-6"
-wave          = 3
-depends_on    = ["t-2", "t-3", "t-4"]
-title         = "Wire dross task edit (no --status flag)"
-files         = ["internal/cmd/task.go", "internal/cmd/task_test.go"]
-description   = """
-The `dross task edit` verb over EditTask: partial update of an existing task,
-sharing saveIfValid. Exposes no --status flag so `dross task status` stays the
-sole status owner.
-"""
-covers        = ["c-4", "c-5"]
-test_contract = [
-  "`task edit <phase> t-2 --title New` rewrites only the title; a reload shows Covers/Wave/DependsOn preserved",
-  "`--covers c-99` exits non-zero and assertPlanUnchanged holds (shares saveIfValid)",
-  "the command exposes no --status flag: `--status done` errors as an unknown flag, proving `task status` remains the sole status owner",
-]
-status        = "pending"
+  id = "t-6"
+  wave = 3
+  title = "Wire dross task edit (no --status flag)"
+  files = ["internal/cmd/task.go", "internal/cmd/task_test.go"]
+  description = "The `dross task edit` verb over EditTask: partial update of an existing task,\nsharing saveIfValid. Exposes no --status flag so `dross task status` stays the\nsole status owner.\n"
+  covers = ["c-4", "c-5"]
+  depends_on = ["t-2", "t-3", "t-4"]
+  test_contract = ["`task edit <phase> t-2 --title New` rewrites only the title; a reload shows Covers/Wave/DependsOn preserved", "`--covers c-99` exits non-zero and assertPlanUnchanged holds (shares saveIfValid)", "the command exposes no --status flag: `--status done` errors as an unknown flag, proving `task status` remains the sole status owner"]
+  status = "done"

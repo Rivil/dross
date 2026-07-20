@@ -1,51 +1,11 @@
 {
-  "version": "0.10.0.0",
+  "version": "0.10.1.0",
   "current_milestone": "v0.10",
   "current_phase": "task-lifecycle-commands",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-20T13:57:45.444798Z",
-  "last_action": "plan reviewed: task-lifecycle-commands (0 blocking, 3 flags; 2 fixed inline → 3 waves)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-20T14:19:36.886558Z",
+  "last_action": "phase task-lifecycle-commands executed (7/7 done)",
   "history": [
-    {
-      "at": "2026-07-01T10:46:47.001201Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-01T10:46:47.008096Z",
-      "action": "verified ship-architecture-autogen: pass (3/3 covered, mutation not a signal — prompt+test-only)"
-    },
-    {
-      "at": "2026-07-01T10:47:41.71719Z",
-      "action": "completed ship-architecture-autogen"
-    },
-    {
-      "at": "2026-07-01T10:52:05.609336Z",
-      "action": "created pr-record-reaches-base"
-    },
-    {
-      "at": "2026-07-01T10:53:20.3257Z",
-      "action": "set current_phase=pr-record-reaches-base"
-    },
-    {
-      "at": "2026-07-01T10:53:20.332689Z",
-      "action": "spec locked: pr-record-reaches-base"
-    },
-    {
-      "at": "2026-07-01T10:53:43.585985Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-01T10:53:43.592613Z",
-      "action": "plan locked: pr-record-reaches-base (1 task, no-review: focused single-file fix)"
-    },
-    {
-      "at": "2026-07-01T10:56:50.647786Z",
-      "action": "executed t-1 (Push the PR-record commit to the phase branch)"
-    },
-    {
-      "at": "2026-07-01T10:58:07.427214Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-07-01T10:58:07.434837Z",
       "action": "phase pr-record-reaches-base executed (1/1 done)"
@@ -205,6 +165,46 @@
     {
       "at": "2026-07-20T13:57:45.444798Z",
       "action": "plan reviewed: task-lifecycle-commands (0 blocking, 3 flags; 2 fixed inline → 3 waves)"
+    },
+    {
+      "at": "2026-07-20T13:59:01.316636Z",
+      "action": "set version=0.10.1.0"
+    },
+    {
+      "at": "2026-07-20T14:01:32.005519Z",
+      "action": "executed t-1 (High-water NextTaskID + deriveWave helpers)"
+    },
+    {
+      "at": "2026-07-20T14:02:47.63581Z",
+      "action": "executed t-2 (ValidatePlan integrity guard)"
+    },
+    {
+      "at": "2026-07-20T14:04:49.198513Z",
+      "action": "executed t-3 (AddTask / RemoveTask / EditTask mutators)"
+    },
+    {
+      "at": "2026-07-20T14:07:05.409597Z",
+      "action": "executed t-7 (Atomic saveTOML)"
+    },
+    {
+      "at": "2026-07-20T14:10:18.40844Z",
+      "action": "executed t-4 (Wire dross task add + saveIfValid harness)"
+    },
+    {
+      "at": "2026-07-20T14:17:08.320838Z",
+      "action": "executed t-5 (Wire dross task remove + high-water backfill)"
+    },
+    {
+      "at": "2026-07-20T14:19:22.684202Z",
+      "action": "executed t-6 (Wire dross task edit)"
+    },
+    {
+      "at": "2026-07-20T14:19:36.879958Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-20T14:19:36.886558Z",
+      "action": "phase task-lifecycle-commands executed (7/7 done)"
     }
   ]
 }
