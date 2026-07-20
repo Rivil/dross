@@ -40,7 +40,7 @@
   covers = ["c-1", "c-2", "c-3", "c-4", "c-5"]
   depends_on = ["t-1", "t-2", "t-4"]
   test_contract = ["TestWatchJSONShapeAndExit: output unmarshals into {new, current, drift, suggested_command} and the process exits 0 (c-1)", "TestWatchReadOnlyBoundary: board.json bytes (incl. last_pull) byte-identical before/after and the only file written under .dross is watch.state.json; an httptest handler records HTTP method+path and asserts only GET was hit (any POST/PATCH/PUT/DELETE fails it) (c-4)", "TestWatchSecondRunZeroNew: two consecutive runs against an unchanged feed -> run 2's new set is empty (c-2)", "TestWatchBoardDisabled: board.enabled=false -> empty board set + populated drift, exit 0 (c-5)", "TestWatchBoardUnreachable: board client erroring -> error swallowed, drift-only digest, exit 0, and watch.state.json is written ONLY when the board was reached so the baseline is preserved (a propagated error or re-flagged backlog fails it) (c-5)", "TestSuggestPrecedence: suggested_command ranks verify->ship->inbox->status (complete-unverified AND new issues -> verify, not inbox); returns exactly one, never empty/multiple; idle-no-new -> /dross-status (c-3 machine half)"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -51,4 +51,4 @@
   covers = ["c-3", "c-5"]
   depends_on = ["t-3"]
   test_contract = ["TestWatchPromptInvokesCommand: watch.md calls `dross watch --json`", "TestWatchPromptSuggestionPrecedence: the prompt states the ranked order verify->ship->/dross-inbox->/dross-status and prints the digest's single suggested_command verbatim (c-3)", "TestWatchPromptBoardOffPath: mirrors inbox.md — announces skipping the board source and still renders a drift-only digest when board is off (c-5)", "TestWatchShimNonInteractive: dross-watch.md omits AskUserQuestion and declares allowed-tools Read+Bash only", "TestInteractionCoverageFailClosed (existing): passes only because watch is enrolled in docs/interaction-audit.md ## Exempt in this commit — a missing row flips it red", "TestCommandsPromptsParity (existing): the shim and prompt keep their 1:1 invariant"]
-  status = "pending"
+  status = "done"

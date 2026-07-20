@@ -33,6 +33,23 @@
         }
       ]
     },
+    "t-3": {
+      "files": [
+        "internal/cmd/watch.go",
+        "cmd/dross/main.go",
+        "internal/cmd/watch_test.go"
+      ],
+      "commit": "5694cf5",
+      "completed_at": "2026-07-20T10:02:25.2698Z",
+      "landmarks": [
+        {
+          "feature": "watch digest",
+          "symbol": "Watch",
+          "loc": "internal/cmd/watch.go:27",
+          "what": "read-only dross watch --json assembling inbound diff + phase drift + ranked suggested_command; degrades to drift-only when board off/unreachable"
+        }
+      ]
+    },
     "t-4": {
       "files": [
         "internal/cmd/issue.go",
@@ -46,6 +63,24 @@
           "symbol": "collectInbound",
           "loc": "internal/cmd/issue.go:600",
           "what": "mark-free inbound filter shared by issue pull and watch so no read-only caller can re-introduce a board mutation"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "assets/prompts/watch.md",
+        "assets/commands/dross-watch.md",
+        "docs/interaction-audit.md",
+        "internal/cmd/watch_prompt_test.go"
+      ],
+      "commit": "b82396e",
+      "completed_at": "2026-07-20T10:06:27.188249Z",
+      "landmarks": [
+        {
+          "feature": "watch skill",
+          "symbol": "dross-watch prompt",
+          "loc": "assets/prompts/watch.md:1",
+          "what": "non-interactive broadcast that runs dross watch --json and renders the digest ending in the verbatim suggested_command; enrolled non-interactive in interaction-audit"
         }
       ]
     }
