@@ -1,0 +1,54 @@
+[phase]
+id        = "task-lifecycle-commands"
+title     = "task-lifecycle-commands"
+milestone = "v0.10"
+
+[[criteria]]
+id   = "c-1"
+text = "`dross task add <phase>` with --title/--wave/--covers/--depends-on appends a new task to plan.toml with a fresh unique id, and `dross validate` passes afterward."
+
+[[criteria]]
+id   = "c-2"
+text = "The added task can be placed appended by default, or positioned relative to an existing task (--after <id> / --before <id>), landing in the correct order without renumbering existing task ids."
+
+[[criteria]]
+id   = "c-3"
+text = "`dross task remove <phase> <id>` deletes a task and is dependency-safe: it refuses with a clear error when another task lists that id in depends_on, unless --force is passed."
+
+[[criteria]]
+id   = "c-4"
+text = "Any add/remove/edit that would produce an invalid plan (--covers referencing a non-existent criterion, --depends-on referencing an unknown task, or a duplicate id) is rejected with a clear error and leaves plan.toml unchanged."
+
+[[criteria]]
+id   = "c-5"
+text = "`dross task edit <phase> <id>` mutates an existing task's fields in place (--title / --covers / --depends-on / --wave); only the flags passed change, the rest are preserved, and the same integrity guard as c-4 applies."
+
+[[decisions]]
+key    = "id_scheme"
+choice = "New task ids are auto-assigned monotonically (max existing +1) and never reused, even after a remove frees one. No --id override."
+why    = "Collision-free and predictable; reusing a freed id would silently repoint stale references or landmarks to a different task."
+locked = true
+
+[[decisions]]
+key    = "wave_placement"
+choice = "A new task's wave is the explicit --wave if given, else derived as (deepest --depends-on task's wave + 1), else wave 1. --after/--before set list position only, not the wave."
+why    = "Keeps the wave label semantically tied to dependencies rather than to display position."
+locked = true
+
+[[decisions]]
+key    = "remove_force"
+choice = "remove refuses when the task is depended on; --force strips the removed id from every dependent's depends_on (keeping the plan valid) and does not auto-reflow waves."
+why    = "Leaving a dangling depends_on would violate the very integrity the c-4 guard enforces; auto-reflowing waves would surprise the user."
+locked = true
+
+[[decisions]]
+key    = "edit_semantics"
+choice = "edit is a partial update — only the flags passed are changed, all other fields preserved. Task status is not editable here; `dross task status` remains its owner."
+why    = "Least-surprise partial update, and status already has a dedicated command."
+locked = true
+
+[[decisions]]
+key    = "cli_shape"
+choice = "add (with --after/--before placement), remove, and edit are subcommands of `dross task`, mirroring phase-lifecycle-commands' cobra structure. plan.toml is mutated only through these commands, never hand-edited."
+why    = "Consistency with the existing phase-lifecycle commands and a single owner for plan.toml writes."
+locked = true
