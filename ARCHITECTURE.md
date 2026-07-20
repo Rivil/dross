@@ -208,6 +208,15 @@ Create, list, number, migrate, complete, and reorder/insert/rename phases on ded
 
 _c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · 6d99599_
 
+### Plan persistence
+
+Phase artefacts (plan.toml / spec.toml) are written atomically: saveTOML encodes into a temp sibling and os.Rename's it over the target only after a fully successful write, so a mid-write crash or a failed encode leaves the previous file byte-identical rather than truncated. This is the durability guarantee behind the task-lifecycle integrity checks — a rejected or interrupted mutation can never corrupt the plan.
+
+- `saveTOML` (atomic temp-file + rename write) — `internal/phase/phase.go:398`
+- `Plan.Save` / `Spec.Save` — `internal/phase/phase.go`
+
+_introduced task-lifecycle-commands · 367c723_
+
 ### Repo onboarding
 
 Scan an existing repo's signal files (Dockerfile, package.json, go.mod, …) into a draft project.toml, seeding `[runtime]` + `[stack].profile` from the matched stack profile.
@@ -332,6 +341,18 @@ Render Claude Code's status line as a native `dross statusline` Go subcommand �
 - `enableStatuslineIn` (install --statusline wiring, absolute path, consent-gated) — `internal/cmd/statusline.go:119`
 
 _introduced native-statusline · 46e5025_
+
+### Task lifecycle
+
+Add, remove, and edit tasks inside a phase's plan.toml through guarded CLI verbs, so the plan is mutated only through dross and never hand-edited. New task ids come from a persisted per-plan high-water counter (Plan.TaskSeq): NextTaskID assigns high_water+1, and RemoveTask backfills the counter before deleting, so a freed id — even the highest — is never reissued; a new task's wave is the explicit --wave or one past its deepest dependency's wave (deriveWave). `add` appends at the tail by default and only positions relative to an anchor (--after/--before) when asked; `remove` is dependency-safe, refusing when another task depends on the target unless --force strips the id from every dependent; `edit` is a partial field update that changes only the flags passed and never status (dross task status stays that owner). Every mutation passes through saveIfValid → ValidatePlan (duplicate-id, unknown-depends_on, and covers→criterion parity with dross validate) and is written only if valid, leaving plan.toml byte-unchanged on rejection.
+
+- `taskAdd` / `taskRemove` / `taskEdit` (CLI verbs) — `internal/cmd/task.go:121`
+- `saveIfValid` (validate-then-write guard) — `internal/cmd/task.go:252`
+- `Plan.AddTask` / `Plan.RemoveTask` / `Plan.EditTask` (pure in-memory mutators) — `internal/phase/plan_edit.go:143`
+- `Plan.NextTaskID` / `deriveWave` (high-water id + dependency-derived wave) — `internal/phase/plan_edit.go:35`
+- `ValidatePlan` (pre-write integrity guard) — `internal/phase/plan_edit.go:82`
+
+_introduced task-lifecycle-commands · dd73e36_
 
 ### Tech-debt scan (dross techdebt)
 
