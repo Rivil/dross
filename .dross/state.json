@@ -1,21 +1,11 @@
 {
   "version": "0.9.7.0",
   "current_milestone": "v0.9",
-  "last_activity": "2026-07-01T14:42:32.268867Z",
-  "last_action": "completed additional-board-backends",
+  "current_phase": "dross-watch",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-20T08:55:28.288769Z",
+  "last_action": "spec locked: dross-watch",
   "history": [
-    {
-      "at": "2026-07-01T09:07:01.435743Z",
-      "action": "phase interaction-defer-or-add-framing executed (3/3 done)"
-    },
-    {
-      "at": "2026-07-01T09:08:43.612058Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-01T09:08:43.618159Z",
-      "action": "verified interaction-defer-or-add-framing: pass (4/4 covered, mutation not a signal — prompt+test-only change)"
-    },
     {
       "at": "2026-07-01T09:12:30.680948Z",
       "action": "completed interaction-defer-or-add-framing"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-01T14:42:32.268867Z",
       "action": "completed additional-board-backends"
+    },
+    {
+      "at": "2026-07-20T08:23:42.664472Z",
+      "action": "created dross-watch"
+    },
+    {
+      "at": "2026-07-20T08:55:28.280923Z",
+      "action": "set current_phase=dross-watch"
+    },
+    {
+      "at": "2026-07-20T08:55:28.288769Z",
+      "action": "spec locked: dross-watch"
     }
   ]
 }

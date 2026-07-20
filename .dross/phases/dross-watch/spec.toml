@@ -1,0 +1,65 @@
+[phase]
+  id = "dross-watch"
+  title = "dross-watch"
+  milestone = "v0.9"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross watch --json` emits a structured JSON digest of the current board-inbound set and phase-drift state, exits 0, and performs no board or git mutation."
+
+[[criteria]]
+  id = "c-2"
+  text = "The digest distinguishes items new-since-last-tick from carried-over ones by diffing against `.dross/watch.state.json`; a second consecutive run with nothing changed reports zero new items."
+
+[[criteria]]
+  id = "c-3"
+  text = "The `/dross-watch` skill renders the digest as a compact human-readable block and ends with exactly one suggested next command (`/dross-inbox` when new board issues exist, otherwise `/dross-status`)."
+
+[[criteria]]
+  id = "c-4"
+  text = "A watch run mutates nothing but `.dross/watch.state.json`: board.json (incl. last_pull), git, and all phase files are byte-identical before and after, and no board issue is created, edited, or closed."
+
+[[criteria]]
+  id = "c-5"
+  text = "With board sync disabled (`board.enabled=false`) or unreachable, watch skips the board source, still emits a valid phase-drift-only digest, and exits 0 — it never errors out."
+
+[[decisions]]
+  key = "substrate"
+  choice = "Local `/loop`-driven, non-interactive `/dross-watch` skill over a `dross watch --json` Go command; no cloud scheduler in this phase."
+  why = "Lowest-infra option with full board/MCP auth from the user's machine; cadence is the harness `/loop`'s job, not dross's."
+  locked = true
+
+[[decisions]]
+  key = "read_only_boundary"
+  choice = "The only write is `.dross/watch.state.json`; no `--mark` on the pull, and no board/git/phase mutation of any kind."
+  why = "Keeps watch on the safe side of the commit-safety rules and the milestone's 'boards mirror, they don't master' non-goal."
+  locked = true
+
+[[decisions]]
+  key = "first_run_baseline"
+  choice = "First run (no state file) seeds the baseline and labels existing items `current`, with an empty `new` set."
+  why = "'new' then strictly means 'appeared since you started watching', so tick one never floods with the whole backlog."
+  locked = true
+
+[[decisions]]
+  key = "delta_identity"
+  choice = "Track board issues by readable id + open/closed state; a reopened issue re-surfaces as new, a cosmetic retitle/edit does not."
+  why = "Matches how a human thinks about 'new work to triage' without re-flagging on filer edits."
+  locked = true
+
+[[decisions]]
+  key = "suggestion_precedence"
+  choice = "The single suggested command is ranked: verify (complete-but-unverified) → ship (verified-but-unshipped) → /dross-inbox (new issues) → /dross-status (nothing pressing)."
+  why = "Nudges closing in-flight phases before pulling in new intake."
+  locked = true
+
+[[decisions]]
+  key = "drift_signals"
+  choice = "Reuse the phase states `dross status` already computes (in-progress / complete-but-unverified / verified-but-unshipped); no new drift thresholds are invented."
+  why = "Stays consistent with existing status output and avoids adding configuration in this phase."
+  locked = true
+
+[[deferred]]
+  text = "watch reports open ship-PR check/CI status in the digest"
+  why = "Needs provider PR-list plumbing beyond what's wired today; its own follow-up phase (slug watch-pr-ci-status)."
+  target = "watch-pr-ci-status"
