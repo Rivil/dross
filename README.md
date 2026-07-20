@@ -10,65 +10,15 @@ A leaner successor to [GSD](https://github.com/gsd-build/get-shit-done) for work
 
 ## Why
 
-GSD is genuinely good at imposing planning discipline, but at a cost: ~3 MB of prompt material loaded across 65 skills, 33 subagents, and 76 workflows. A single `/gsd-plan-phase` invocation reads ~3,000 lines of instructions before doing anything. Subagent spawns multiply that.
+Dross is built around three design pivots:
 
-Dross is a rebuild around three pivots:
-
-1. **Lean prompts.** Target ≤300 lines per slash command. Most state lives in machine-parseable TOML, not prose Markdown.
-2. **Pair-mode execute by default.** Code is authored *with* you, not delivered *to* you. Subagent spawns kept to genuinely independent work (parallel mutation runs, multi-language audits).
-3. **Test efficacy as a first-class gate.** GSD checks that tests *exist*. Dross checks that tests *catch breakage* — via mutation testing (Stryker / Gremlins), coverage delta, and an LLM judge mapping each acceptance criterion to a specific test.
+1. **Lean prompts.** Target ≤300 lines per slash command, with most state in machine-parseable TOML rather than prose Markdown — so a command boots cheaply and subagent spawns stay bounded and explicit.
+2. **Pair-mode execute by default.** Code is authored *with* you, not delivered *to* you. Subagent spawns are kept to genuinely independent work (parallel mutation runs, multi-language audits).
+3. **Test efficacy as a first-class gate.** It's not enough that tests *exist* — dross checks that tests *catch breakage*, via mutation testing (Stryker / Gremlins), coverage delta, and an LLM judge mapping each acceptance criterion to a specific test.
 
 ## The name
 
 Dross is the AI sidekick from Will Wight's [Cradle](https://www.willwight.com/cradle) series — a Presence that lives in the protagonist's head, compiling battle plans, predicting opponents, crafting illusions, and handling "unimportant thoughts" to free up his bandwidth. Sarcastic, dramatic, fond of his person.
-
-## Footprint vs GSD
-
-Measured by recursively resolving `@`-imports for each command and summing bytes. Token estimate is `bytes ÷ 4`, the standard heuristic for English+markdown — accurate to ±15% vs an exact tokenizer.
-
-**Per-command boot** (what loads before the model writes a single response):
-
-| Command | Bytes | Est. tokens |
-|---|---:|---:|
-| GSD `/gsd-execute-phase` | 185,972 | ~46,500 |
-| GSD `/gsd-plan-phase` | 103,413 | ~25,900 |
-| GSD `/gsd-new-project` | 69,637 | ~17,400 |
-| GSD `/gsd-progress` | 37,864 | ~9,500 |
-| Dross `/dross-init` | 7,418 | **~1,850** |
-| Dross `/dross-onboard` | 5,872 | **~1,470** |
-| Dross `/dross-options` | 6,405 | **~1,600** |
-| Dross `/dross-milestone` | 6,562 | **~1,640** |
-| Dross `/dross-ship` | 7,753 | **~1,940** |
-| Dross `/dross-review` | 7,819 | **~1,950** |
-| Dross `/dross-secure` | 7,163 | **~1,790** |
-| Dross `/dross-quality` | 8,077 | **~2,020** |
-| Dross `/dross-architecture` | 4,259 | **~1,060** |
-| Dross `/dross-rule` | 2,261 | **~570** |
-| Dross `/dross-spec` | 12,248 | **~3,060** |
-| Dross `/dross-plan` | 13,682 | **~3,420** |
-| Dross `/dross-plan-review` | 5,672 | **~1,420** |
-| Dross `/dross-execute` | 12,056 | **~3,010** |
-| Dross `/dross-verify` | 10,853 | **~2,710** |
-| Dross `/dross-quick` | 11,020 | **~2,760** |
-| Dross `/dross-inbox` | 4,364 | **~1,090** |
-| Dross `/dross-status` | 2,548 | **~640** |
-| Dross `/dross-pause` | 5,300 | **~1,330** |
-| Dross `/dross-resume` | 4,503 | **~1,130** |
-
-**Total prompt-surface** (everything that could ever load):
-
-| | Bytes | Est. tokens |
-|---|---:|---:|
-| GSD (workflows + references + skills + agents) | 2,494,659 | ~624,000 |
-| Dross (commands + prompts) | 145,835 | ~36,500 |
-| **Ratio** | | **≈ 17×** |
-
-**Being honest about these numbers:**
-
-- **Dross is still incomplete.** The codex indexer covers Go (stdlib `go/ast`) and TS/TSX/Svelte/C#/GDScript (`ast-grep` shell-out, graceful no-op when absent); HTML/CSS get sibling + git-log enrichment only. Mutation testing is wired for TS/JS/Svelte (Stryker) and Go (Gremlins); C# (Stryker.NET) is fixture-tested but not yet dogfooded against a real project, and GDScript/visual diffs remain designed-only. `/dross-verify` sits at ~2,710 tokens — ~17× cheaper than GSD's 46,500 — though that's slash-command boot only; the verify loop reads project test files at runtime, which adds variable cost.
-- **Per-invocation isn't the runtime cost.** GSD spawns subagents (planner, plan-checker, executor, verifier). Each loads its own agent prompt + references in fresh context, multiplying the real per-flow cost by 2-3×. The 25.9k for `/gsd-plan-phase` is closer to ~60-80k of total prompt material per phase. Dross runs inline by default — subagent spawns are bounded and explicit: `/dross-review`'s four lenses, `/dross-plan-review`'s single cold reviewer (also auto-run at the end of `/dross-plan` unless `--no-review`), and `/dross-plan --panel`'s three lens planners + judge (opt-in, ~4-5× a single-pass plan).
-- **Prompt caching mitigates this.** Anthropic's prompt cache amortises repeats, so steady-state cost is much lower than the load surface implies. Cold starts, branch switches, and subagent spawns break the cache; that's where the bill actually shows up.
-- **The ratio is the worst-case load surface, not a runtime bill.** It's still directionally meaningful — fewer files, smaller files, fewer spawns add up — but don't expect the same multiplier in your monthly Anthropic invoice.
 
 ## Concept
 
