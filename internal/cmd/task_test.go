@@ -5,9 +5,40 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/phase"
 )
 
-// helpers shared with cmd_test.go: chdir, runCmd, captureStdout, mustWrite.
+// helpers shared with cmd_test.go: chdir, runCmd, captureStdout, mustWrite,
+// mustRead.
+
+// assertPlanUnchanged fails if plan.toml differs from the given snapshot — the
+// byte-unchanged guarantee a rejected mutation must uphold (mirrors the
+// mustRead byte-compare in TestPhaseMoveNoOp).
+func assertPlanUnchanged(t *testing.T, planPath, before string) {
+	t.Helper()
+	if after := mustRead(t, planPath); after != before {
+		t.Errorf("plan.toml was mutated:\n--- before ---\n%s\n--- after ---\n%s", before, after)
+	}
+}
+
+// twoTaskPlan is a plan.toml body with t-1 (wave 1) and t-2 (wave 1), both
+// covering c-1 — the shared fixture for the add/remove/edit wiring tests.
+const twoTaskPlan = `[phase]
+id = "01-test"
+[[task]]
+id = "t-1"
+wave = 1
+title = "first"
+files = ["a.go"]
+covers = ["c-1"]
+[[task]]
+id = "t-2"
+wave = 1
+title = "second"
+files = ["b.go"]
+covers = ["c-1"]
+`
 
 // scaffoldPhaseWithPlan creates a phase dir with both spec.toml and plan.toml.
 // Tests that don't need spec/plan content can chain mustRunSet + Phase create
@@ -167,6 +198,74 @@ covers = ["c-1"]
 	if err == nil {
 		t.Fatal("expected error for missing task id")
 	}
+}
+
+func TestTaskAddTailAppend(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	// No placement flag: appends at the tail with the high-water+1 id.
+	if err := runCmd(t, Task(), "add", "01-test", "--title", "third", "--covers", "c-1"); err != nil {
+		t.Fatalf("add (tail): %v", err)
+	}
+	plan, err := phase.LoadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Task) != 3 {
+		t.Fatalf("want 3 tasks after add, got %d", len(plan.Task))
+	}
+	last := plan.Task[2]
+	if last.ID != "t-3" {
+		t.Errorf("new id = %s, want t-3 (high-water+1)", last.ID)
+	}
+	if last.Title != "third" {
+		t.Errorf("new title = %q, want third", last.Title)
+	}
+	// The default-append path must NOT route through resolveAnchor (which errors
+	// when neither --after/--before is set) — success above already proves it.
+	if err := runCmd(t, Validate()); err != nil {
+		t.Errorf("validate after add: %v", err)
+	}
+}
+
+func TestTaskAddAfterAnchor(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	if err := runCmd(t, Task(), "add", "01-test", "--title", "mid", "--covers", "c-1", "--after", "t-1"); err != nil {
+		t.Fatalf("add --after t-1: %v", err)
+	}
+	plan, err := phase.LoadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, tk := range plan.Task {
+		order = append(order, tk.ID)
+	}
+	if got, want := strings.Join(order, ","), "t-1,t-3,t-2"; got != want {
+		t.Errorf("order = %s, want %s", got, want)
+	}
+	// Existing tasks keep their ids and titles (placement never renumbers).
+	if plan.FindTask("t-1").Title != "first" || plan.FindTask("t-2").Title != "second" {
+		t.Errorf("placement renumbered/altered existing tasks: %+v", plan.Task)
+	}
+}
+
+func TestTaskAddRejectsUnknownCriterion(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+	before := mustRead(t, planPath)
+
+	// --covers c-99 must be rejected pre-write; plan.toml stays byte-unchanged.
+	if err := runCmd(t, Task(), "add", "01-test", "--title", "bad", "--covers", "c-99"); err == nil {
+		t.Fatal("expected add with unknown criterion to fail")
+	}
+	assertPlanUnchanged(t, planPath, before)
 }
 
 func TestTaskShowFormatsAllFields(t *testing.T) {

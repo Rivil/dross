@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -10,13 +11,13 @@ import (
 	"github.com/Rivil/dross/internal/phase"
 )
 
-// Task registers `dross task {next,show,status}`.
+// Task registers `dross task {next,show,status,add,remove,edit}`.
 func Task() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "task",
 		Short: "Inspect and update tasks within a phase plan",
 	}
-	c.AddCommand(taskNext(), taskShow(), taskStatus())
+	c.AddCommand(taskNext(), taskShow(), taskStatus(), taskAdd())
 	return c
 }
 
@@ -113,6 +114,72 @@ func taskStatus() *cobra.Command {
 	}
 }
 
+// taskAdd wires `dross task add`: build a task from flags and splice it into
+// plan.toml. It appends at the tail by default and only consults resolveAnchor
+// when --after/--before is given — resolveAnchor errors on neither-flag, so it
+// can't own the default-append path.
+func taskAdd() *cobra.Command {
+	var title, description, after, before string
+	var wave int
+	var covers, dependsOn, files []string
+	c := &cobra.Command{
+		Use:   "add <phase-id>",
+		Short: "Append or insert a new task into a phase plan",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if strings.TrimSpace(title) == "" {
+				return errors.New("--title is required")
+			}
+			plan, spec, planPath, err := loadPhasePlanAndSpec(args[0])
+			if err != nil {
+				return err
+			}
+			var anchor string
+			var isBefore bool
+			if after != "" || before != "" {
+				if anchor, isBefore, err = resolveAnchor(after, before); err != nil {
+					return err
+				}
+			}
+			t, err := plan.AddTask(phase.NewTask{
+				Title:       title,
+				Files:       files,
+				Covers:      covers,
+				DependsOn:   dependsOn,
+				Description: description,
+				Wave:        wave,
+			}, anchor, isBefore)
+			if err != nil {
+				return err
+			}
+			if err := saveIfValid(plan, spec, planPath); err != nil {
+				return err
+			}
+			Printf("added %s (%s) to %s at wave %d\n", t.ID, t.Title, args[0], t.Wave)
+			return nil
+		},
+	}
+	c.Flags().StringVar(&title, "title", "", "task title (required)")
+	c.Flags().StringVar(&description, "description", "", "task description")
+	c.Flags().IntVar(&wave, "wave", 0, "explicit wave (default: derived from --depends-on)")
+	c.Flags().StringSliceVar(&covers, "covers", nil, "criterion ids this task covers (comma-separated)")
+	c.Flags().StringSliceVar(&dependsOn, "depends-on", nil, "task ids this task depends on (comma-separated)")
+	c.Flags().StringSliceVar(&files, "files", nil, "files this task touches (comma-separated)")
+	c.Flags().StringVar(&after, "after", "", "insert immediately after this task id")
+	c.Flags().StringVar(&before, "before", "", "insert immediately before this task id")
+	return c
+}
+
+// saveIfValid runs the pre-write integrity guard (phase.ValidatePlan) and writes
+// plan.toml only when the plan is valid, so a rejected mutation leaves the file
+// byte-unchanged. spec may be nil (skips the covers->criterion check).
+func saveIfValid(plan *phase.Plan, spec *phase.Spec, path string) error {
+	if err := phase.ValidatePlan(plan, spec); err != nil {
+		return err
+	}
+	return plan.Save(path)
+}
+
 func orPending(s string) string {
 	if s == "" {
 		return phase.StatusPending
@@ -132,4 +199,25 @@ func loadPhasePlan(phaseID string) (*phase.Plan, string, error) {
 		return nil, "", err
 	}
 	return plan, planPath, nil
+}
+
+// loadPhasePlanAndSpec loads both plan.toml and spec.toml for a phase — the
+// mutating verbs (add/remove/edit) need the spec to run the covers->criterion
+// guard in saveIfValid.
+func loadPhasePlanAndSpec(phaseID string) (*phase.Plan, *phase.Spec, string, error) {
+	root, err := FindRoot()
+	if err != nil {
+		return nil, nil, "", err
+	}
+	dir := phase.Dir(root, phaseID)
+	planPath := filepath.Join(dir, "plan.toml")
+	plan, err := phase.LoadPlan(planPath)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	spec, err := phase.LoadSpec(filepath.Join(dir, "spec.toml"))
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return plan, spec, planPath, nil
 }
