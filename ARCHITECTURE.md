@@ -363,3 +363,16 @@ Map acceptance criteria to tests and run mutation testing; decide pass/partial/f
 - `verify.Run` — `internal/verify/verify.go:125`
 
 _e31bdbd_
+
+### Watch heartbeat (dross-watch)
+
+Read-only `/loop` heartbeat: `dross watch --json` surfaces board issues new-since-last-tick vs carried (an atomically-persisted seen-set diff keyed on id + open/closed state) plus the current milestone's drifting phases, and ends with exactly one ranked suggested command. A board that is off or unreachable degrades to a drift-only digest; the only thing a run ever writes is `.dross/watch.state.json`.
+
+- `Watch` (`dross watch --json`) — `internal/cmd/watch.go:27`
+- `suggestedCommand` (ranked verify→ship→inbox→status) — `internal/cmd/watch.go:115`
+- `watch.State.Diff` (new/carried seen-set delta) — `internal/watch/watch.go:85`
+- `watch.ClassifyDrift` (milestone-scoped phase drift) — `internal/watch/drift.go:39`
+- `collectInbound` (mark-free inbound filter, shared with `issue pull`) — `internal/cmd/issue.go:600`
+- `/dross-watch` prompt (non-interactive broadcast) — `assets/prompts/watch.md:1`
+
+_introduced dross-watch · 5694cf5_
