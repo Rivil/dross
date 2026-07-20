@@ -259,9 +259,17 @@ type Deferred struct {
 }
 
 // Plan is the task graph for a phase.
+//
+// TaskSeq is a per-plan high-water mark: the highest task-id ordinal ever
+// assigned in this plan. It is written first so it serialises as a top-level
+// key ahead of the [phase] / [[task]] tables. A zero value means "unset" — for
+// pre-existing plans NextTaskID backfills it from the current maximum id. An id
+// freed by a remove is never handed out again because the counter only ever
+// advances (see NextTaskID / AddTask).
 type Plan struct {
-	Phase PlanPhase `toml:"phase"`
-	Task  []Task    `toml:"task"` // ordered
+	TaskSeq int       `toml:"task_seq,omitempty"`
+	Phase   PlanPhase `toml:"phase"`
+	Task    []Task    `toml:"task"` // ordered
 }
 
 type PlanPhase struct {
