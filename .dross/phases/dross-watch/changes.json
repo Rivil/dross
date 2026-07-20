@@ -1,0 +1,53 @@
+{
+  "phase": "dross-watch",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/watch/watch.go",
+        "internal/watch/watch_test.go"
+      ],
+      "commit": "52675dc",
+      "completed_at": "2026-07-20T09:19:31.666623Z",
+      "landmarks": [
+        {
+          "feature": "watch delta",
+          "symbol": "State.Diff",
+          "loc": "internal/watch/watch.go:85",
+          "what": "board-issue new/carried delta over an atomically-persisted seen-set keyed on id+open/closed state"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/watch/drift.go",
+        "internal/watch/drift_test.go"
+      ],
+      "commit": "fbb3540",
+      "completed_at": "2026-07-20T09:23:40.943127Z",
+      "landmarks": [
+        {
+          "feature": "watch drift",
+          "symbol": "ClassifyDrift",
+          "loc": "internal/watch/drift.go:38",
+          "what": "classify every phase into in_progress/complete_unverified/verified_unshipped from phase files + state history (board-free)"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "d388398",
+      "completed_at": "2026-07-20T09:27:49.021873Z",
+      "landmarks": [
+        {
+          "feature": "watch read-only boundary",
+          "symbol": "collectInbound",
+          "loc": "internal/cmd/issue.go:600",
+          "what": "mark-free inbound filter shared by issue pull and watch so no read-only caller can re-introduce a board mutation"
+        }
+      ]
+    }
+  }
+}

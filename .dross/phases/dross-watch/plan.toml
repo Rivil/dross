@@ -1,102 +1,54 @@
 [phase]
-id = "dross-watch"
+  id = "dross-watch"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Watch state file + new/carried diff"
-files         = ["internal/watch/watch.go", "internal/watch/watch_test.go"]
-description   = """
-New internal/watch package: the watch.state.json Save/Load (atomic temp-file+rename)
-and the diff that classifies feed items as new vs current against the prior seen-set,
-keyed on issue id + open/closed state.
-"""
-covers        = ["c-2", "c-4"]
-test_contract = [
-  "TestWatchDiff: id absent from prior seen-set -> New; same id flipped open->closed -> New (reopen); same id+state, title changed -> NOT New (cosmetic edit); byte-identical feed -> New is empty (second-tick-no-change)",
-  "TestWatchFirstRun: nil/absent prior seeds the baseline -> New empty, every feed item labelled current",
-  "TestWatchStateRoundTrip: Save then Load reproduces the seen-set; Load of a missing file returns an empty baseline, not an error",
-  "TestSaveAtomicRename: Save is temp-file+rename; a simulated mid-write interruption leaves the prior state file intact",
-  "TestLoadCorruptDegrades: malformed watch.state.json degrades to an empty baseline rather than erroring",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Watch state file + new/carried diff"
+  files = ["internal/watch/watch.go", "internal/watch/watch_test.go"]
+  description = "New internal/watch package: the watch.state.json Save/Load (atomic temp-file+rename)\nand the diff that classifies feed items as new vs current against the prior seen-set,\nkeyed on issue id + open/closed state.\n"
+  covers = ["c-2", "c-4"]
+  test_contract = ["TestWatchDiff: id absent from prior seen-set -> New; same id flipped open->closed -> New (reopen); same id+state, title changed -> NOT New (cosmetic edit); byte-identical feed -> New is empty (second-tick-no-change)", "TestWatchFirstRun: nil/absent prior seeds the baseline -> New empty, every feed item labelled current", "TestWatchStateRoundTrip: Save then Load reproduces the seen-set; Load of a missing file returns an empty baseline, not an error", "TestSaveAtomicRename: Save is temp-file+rename; a simulated mid-write interruption leaves the prior state file intact", "TestLoadCorruptDegrades: malformed watch.state.json degrades to an empty baseline rather than erroring"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "Phase-drift classifier over all phases"
-files         = ["internal/watch/drift.go", "internal/watch/drift_test.go"]
-description   = """
-Classify every phase into a drift bucket from phase files + state.json, reusing the
-same signals status.go uses (runnable/failed task, verify verdict, `completed <slug>`
-in history) reimplemented in-package to avoid an internal/cmd import cycle.
-"""
-covers        = ["c-1", "c-5"]
-test_contract = [
-  "TestClassifyDrift over a fixture .dross tree: runnable/failed task -> in_progress; all tasks done + verify absent-or-pending -> complete_unverified; verify verdict pass with no `completed <slug>` in history -> verified_unshipped; verify pass WITH `completed <slug>` -> omitted (shipped)",
-  "TestClassifyDriftNoBoard: classifier returns a full result reading only phase files + state.json with the board client nil (the drift-only path c-5 relies on)",
-  "TestDriftMissingPlanTolerated: a phase dir with a missing/garbled plan.toml does not panic",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Phase-drift classifier over all phases"
+  files = ["internal/watch/drift.go", "internal/watch/drift_test.go"]
+  description = "Classify every phase into a drift bucket from phase files + state.json, reusing the\nsame signals status.go uses (runnable/failed task, verify verdict, `completed <slug>`\nin history) reimplemented in-package to avoid an internal/cmd import cycle.\n"
+  covers = ["c-1", "c-5"]
+  test_contract = ["TestClassifyDrift over a fixture .dross tree: runnable/failed task -> in_progress; all tasks done + verify absent-or-pending -> complete_unverified; verify verdict pass with no `completed <slug>` in history -> verified_unshipped; verify pass WITH `completed <slug>` -> omitted (shipped)", "TestClassifyDriftNoBoard: classifier returns a full result reading only phase files + state.json with the board client nil (the drift-only path c-5 relies on)", "TestDriftMissingPlanTolerated: a phase dir with a missing/garbled plan.toml does not panic"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 1
-title         = "Extract mark-free inbound helper from issue pull"
-files         = ["internal/cmd/issue.go", "internal/cmd/issue_test.go"]
-description   = """
-Refactor issuePull to expose collectInbound(ctx, filter): the IsLinked/IsDismissed
--filtered issue set with no last_pull stamp, so watch reuses one filter path that
-can never re-introduce --mark.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "TestCollectInboundNoMark: collectInbound returns the IsLinked/IsDismissed-filtered set AND leaves board.LastPull zero (board.json byte-identical) — the reuse path never stamps last_pull",
-  "TestIssuePullStillMarks: `issue pull --mark` still updates last_pull and plain `issue pull` still does not — existing behaviour preserved through the refactor",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 1
+  title = "Extract mark-free inbound helper from issue pull"
+  files = ["internal/cmd/issue.go", "internal/cmd/issue_test.go"]
+  description = "Refactor issuePull to expose collectInbound(ctx, filter): the IsLinked/IsDismissed\n-filtered issue set with no last_pull stamp, so watch reuses one filter path that\ncan never re-introduce --mark.\n"
+  covers = ["c-4"]
+  test_contract = ["TestCollectInboundNoMark: collectInbound returns the IsLinked/IsDismissed-filtered set AND leaves board.LastPull zero (board.json byte-identical) — the reuse path never stamps last_pull", "TestIssuePullStillMarks: `issue pull --mark` still updates last_pull and plain `issue pull` still does not — existing behaviour preserved through the refactor"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-1", "t-2", "t-4"]
-title         = "dross watch --json command + ranker"
-files         = ["internal/cmd/watch.go", "cmd/dross/main.go", "internal/cmd/watch_test.go"]
-description   = """
-The cobra `dross watch --json` command: read-only inbound pull (via collectInbound)
-+ drift classification + the Go-computed suggested_command ranker, assembled into the
-JSON digest and registered in main.go.
-"""
-covers        = ["c-1", "c-2", "c-3", "c-4", "c-5"]
-test_contract = [
-  "TestWatchJSONShapeAndExit: output unmarshals into {new, current, drift, suggested_command} and the process exits 0 (c-1)",
-  "TestWatchReadOnlyBoundary: board.json bytes (incl. last_pull) byte-identical before/after and the only file written under .dross is watch.state.json; an httptest handler records HTTP method+path and asserts only GET was hit (any POST/PATCH/PUT/DELETE fails it) (c-4)",
-  "TestWatchSecondRunZeroNew: two consecutive runs against an unchanged feed -> run 2's new set is empty (c-2)",
-  "TestWatchBoardDisabled: board.enabled=false -> empty board set + populated drift, exit 0 (c-5)",
-  "TestWatchBoardUnreachable: board client erroring -> error swallowed, drift-only digest, exit 0, and watch.state.json is written ONLY when the board was reached so the baseline is preserved (a propagated error or re-flagged backlog fails it) (c-5)",
-  "TestSuggestPrecedence: suggested_command ranks verify->ship->inbox->status (complete-unverified AND new issues -> verify, not inbox); returns exactly one, never empty/multiple; idle-no-new -> /dross-status (c-3 machine half)",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "dross watch --json command + ranker"
+  files = ["internal/cmd/watch.go", "cmd/dross/main.go", "internal/cmd/watch_test.go"]
+  description = "The cobra `dross watch --json` command: read-only inbound pull (via collectInbound)\n+ drift classification + the Go-computed suggested_command ranker, assembled into the\nJSON digest and registered in main.go.\n"
+  covers = ["c-1", "c-2", "c-3", "c-4", "c-5"]
+  depends_on = ["t-1", "t-2", "t-4"]
+  test_contract = ["TestWatchJSONShapeAndExit: output unmarshals into {new, current, drift, suggested_command} and the process exits 0 (c-1)", "TestWatchReadOnlyBoundary: board.json bytes (incl. last_pull) byte-identical before/after and the only file written under .dross is watch.state.json; an httptest handler records HTTP method+path and asserts only GET was hit (any POST/PATCH/PUT/DELETE fails it) (c-4)", "TestWatchSecondRunZeroNew: two consecutive runs against an unchanged feed -> run 2's new set is empty (c-2)", "TestWatchBoardDisabled: board.enabled=false -> empty board set + populated drift, exit 0 (c-5)", "TestWatchBoardUnreachable: board client erroring -> error swallowed, drift-only digest, exit 0, and watch.state.json is written ONLY when the board was reached so the baseline is preserved (a propagated error or re-flagged backlog fails it) (c-5)", "TestSuggestPrecedence: suggested_command ranks verify->ship->inbox->status (complete-unverified AND new issues -> verify, not inbox); returns exactly one, never empty/multiple; idle-no-new -> /dross-status (c-3 machine half)"]
+  status = "pending"
 
 [[task]]
-id            = "t-5"
-wave          = 3
-depends_on    = ["t-3"]
-title         = "/dross-watch skill + prompt tests + Exempt enrollment"
-files         = ["assets/prompts/watch.md", "assets/commands/dross-watch.md", "docs/interaction-audit.md", "internal/cmd/watch_prompt_test.go"]
-description   = """
-The non-interactive /dross-watch skill (thin command shim + prompt) that runs
-`dross watch --json` and renders the digest, ending with the digest's single
-suggested_command. Enroll watch in the interaction-audit Exempt list in the same
-commit to keep the fail-closed coverage gate green.
-"""
-covers        = ["c-3", "c-5"]
-test_contract = [
-  "TestWatchPromptInvokesCommand: watch.md calls `dross watch --json`",
-  "TestWatchPromptSuggestionPrecedence: the prompt states the ranked order verify->ship->/dross-inbox->/dross-status and prints the digest's single suggested_command verbatim (c-3)",
-  "TestWatchPromptBoardOffPath: mirrors inbox.md — announces skipping the board source and still renders a drift-only digest when board is off (c-5)",
-  "TestWatchShimNonInteractive: dross-watch.md omits AskUserQuestion and declares allowed-tools Read+Bash only",
-  "TestInteractionCoverageFailClosed (existing): passes only because watch is enrolled in docs/interaction-audit.md ## Exempt in this commit — a missing row flips it red",
-  "TestCommandsPromptsParity (existing): the shim and prompt keep their 1:1 invariant",
-]
-status        = "pending"
+  id = "t-5"
+  wave = 3
+  title = "/dross-watch skill + prompt tests + Exempt enrollment"
+  files = ["assets/prompts/watch.md", "assets/commands/dross-watch.md", "docs/interaction-audit.md", "internal/cmd/watch_prompt_test.go"]
+  description = "The non-interactive /dross-watch skill (thin command shim + prompt) that runs\n`dross watch --json` and renders the digest, ending with the digest's single\nsuggested_command. Enroll watch in the interaction-audit Exempt list in the same\ncommit to keep the fail-closed coverage gate green.\n"
+  covers = ["c-3", "c-5"]
+  depends_on = ["t-3"]
+  test_contract = ["TestWatchPromptInvokesCommand: watch.md calls `dross watch --json`", "TestWatchPromptSuggestionPrecedence: the prompt states the ranked order verify->ship->/dross-inbox->/dross-status and prints the digest's single suggested_command verbatim (c-3)", "TestWatchPromptBoardOffPath: mirrors inbox.md — announces skipping the board source and still renders a drift-only digest when board is off (c-5)", "TestWatchShimNonInteractive: dross-watch.md omits AskUserQuestion and declares allowed-tools Read+Bash only", "TestInteractionCoverageFailClosed (existing): passes only because watch is enrolled in docs/interaction-audit.md ## Exempt in this commit — a missing row flips it red", "TestCommandsPromptsParity (existing): the shim and prompt keep their 1:1 invariant"]
+  status = "pending"
