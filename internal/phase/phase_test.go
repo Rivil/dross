@@ -485,3 +485,38 @@ func TestSummaryCounts(t *testing.T) {
 		t.Errorf("got d=%d ip=%d f=%d p=%d", done, inProgress, failed, pending)
 	}
 }
+
+// TestSaveTOMLAtomicFailurePreservesFile forces the temp write to fail (by
+// occupying <path>.tmp with a directory) and asserts the live file survives
+// byte-identical — the guarantee the old truncate-in-place os.Create lacked.
+func TestSaveTOMLAtomicFailurePreservesFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "plan.toml")
+
+	original := &Plan{Phase: PlanPhase{ID: "orig"}, Task: []Task{{ID: "t-1", Wave: 1, Title: "one"}}}
+	if err := original.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Occupy the temp path with a directory so os.Create(<path>.tmp) fails.
+	if err := os.Mkdir(path+".tmp", 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	changed := &Plan{Phase: PlanPhase{ID: "changed"}, Task: []Task{{ID: "t-9", Wave: 9, Title: "nine"}}}
+	if err := changed.Save(path); err == nil {
+		t.Fatal("expected Save to fail when the temp path is unavailable")
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("live file was mutated on failed save:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
