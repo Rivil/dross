@@ -1,15 +1,9 @@
 {
   "version": "0.9.8.1",
   "current_milestone": "v0.9",
-  "current_phase": "dross-watch",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-20T10:26:58.937894Z",
-  "last_action": "verified dross-watch: pass (5/5 covered, mutation 0.96 measured; 47/49 survivors pre-existing/untouched, 2 switch-case ceiling)",
+  "last_activity": "2026-07-20T11:04:55.32479Z",
+  "last_action": "completed dross-watch",
   "history": [
-    {
-      "at": "2026-07-01T10:34:03.610902Z",
-      "action": "verified verify-merge-before-completion: pass (5/5 covered, mutation 0.96 measured, efficacy 1.00 on covered)"
-    },
     {
       "at": "2026-07-01T10:36:12.283461Z",
       "action": "completed verify-merge-before-completion"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-20T10:26:58.937894Z",
       "action": "verified dross-watch: pass (5/5 covered, mutation 0.96 measured; 47/49 survivors pre-existing/untouched, 2 switch-case ceiling)"
+    },
+    {
+      "at": "2026-07-20T11:04:55.32479Z",
+      "action": "completed dross-watch"
     }
   ]
 }
