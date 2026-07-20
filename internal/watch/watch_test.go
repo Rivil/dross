@@ -18,10 +18,10 @@ func ids(items []Item) map[string]bool {
 
 func TestWatchDiff(t *testing.T) {
 	cases := []struct {
-		name      string
-		prior     *State
-		feed      []Item
-		wantNew   []string
+		name        string
+		prior       *State
+		feed        []Item
+		wantNew     []string
 		wantCurrent []string
 	}{
 		{
