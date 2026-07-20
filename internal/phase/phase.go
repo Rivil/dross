@@ -390,16 +390,30 @@ func LoadPlan(path string) (*Plan, error) {
 
 func (p *Plan) Save(path string) error { return saveTOML(path, p) }
 
+// saveTOML writes v as TOML to path atomically: it encodes into a temp sibling
+// (<path>.tmp) and os.Rename's it over the target only after a fully successful
+// write. A mid-write failure (encode error, or a temp path that can't be
+// created) therefore leaves any existing file byte-identical rather than
+// truncated — the crash-safety guarantee the truncate-in-place os.Create lacked.
 func saveTOML(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	f, err := os.Create(path)
+	tmp := path + ".tmp"
+	f, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 	enc := toml.NewEncoder(f)
 	enc.Indent = "  "
-	return enc.Encode(v)
+	if err := enc.Encode(v); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
 }
