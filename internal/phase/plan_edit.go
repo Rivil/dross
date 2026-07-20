@@ -188,6 +188,15 @@ func (p *Plan) RemoveTask(id string, force bool) error {
 	if len(dependents) > 0 && !force {
 		return fmt.Errorf("cannot remove %s: depended on by %s (use --force to strip)", id, strings.Join(dependents, ", "))
 	}
+	// Backfill the high-water from the current ids BEFORE deleting — placed
+	// after the refusal check so a refused remove still mutates nothing. This
+	// captures the removed task's ordinal even on a plan that predates the
+	// counter (TaskSeq unset), so a freed HIGHEST id is never reissued.
+	for _, t := range p.Task {
+		if n := taskIDNum(t.ID); n > p.TaskSeq {
+			p.TaskSeq = n
+		}
+	}
 	p.Task = slices.Delete(p.Task, i, i+1)
 	if force {
 		for j := range p.Task {

@@ -17,7 +17,7 @@ func Task() *cobra.Command {
 		Use:   "task",
 		Short: "Inspect and update tasks within a phase plan",
 	}
-	c.AddCommand(taskNext(), taskShow(), taskStatus(), taskAdd())
+	c.AddCommand(taskNext(), taskShow(), taskStatus(), taskAdd(), taskRemove())
 	return c
 }
 
@@ -167,6 +167,34 @@ func taskAdd() *cobra.Command {
 	c.Flags().StringSliceVar(&files, "files", nil, "files this task touches (comma-separated)")
 	c.Flags().StringVar(&after, "after", "", "insert immediately after this task id")
 	c.Flags().StringVar(&before, "before", "", "insert immediately before this task id")
+	return c
+}
+
+// taskRemove wires `dross task remove`: delete a task, dependency-safe. Without
+// --force it refuses when another task depends on the target; with --force it
+// strips the removed id from every dependent so the plan stays valid.
+func taskRemove() *cobra.Command {
+	var force bool
+	c := &cobra.Command{
+		Use:   "remove <phase-id> <task-id>",
+		Short: "Remove a task from a phase plan (dependency-safe)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			plan, spec, planPath, err := loadPhasePlanAndSpec(args[0])
+			if err != nil {
+				return err
+			}
+			if err := plan.RemoveTask(args[1], force); err != nil {
+				return err
+			}
+			if err := saveIfValid(plan, spec, planPath); err != nil {
+				return err
+			}
+			Printf("removed %s from %s\n", args[1], args[0])
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&force, "force", false, "strip the removed id from dependents' depends_on instead of refusing")
 	return c
 }
 

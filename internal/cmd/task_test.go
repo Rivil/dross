@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -38,6 +39,25 @@ wave = 1
 title = "second"
 files = ["b.go"]
 covers = ["c-1"]
+`
+
+// depPlan is twoTaskPlan with t-2 depending on t-1 — the fixture for the
+// dependency-safe remove tests.
+const depPlan = `[phase]
+id = "01-test"
+[[task]]
+id = "t-1"
+wave = 1
+title = "first"
+files = ["a.go"]
+covers = ["c-1"]
+[[task]]
+id = "t-2"
+wave = 2
+title = "second"
+files = ["b.go"]
+covers = ["c-1"]
+depends_on = ["t-1"]
 `
 
 // scaffoldPhaseWithPlan creates a phase dir with both spec.toml and plan.toml.
@@ -264,6 +284,69 @@ func TestTaskAddRejectsUnknownCriterion(t *testing.T) {
 	// --covers c-99 must be rejected pre-write; plan.toml stays byte-unchanged.
 	if err := runCmd(t, Task(), "add", "01-test", "--title", "bad", "--covers", "c-99"); err == nil {
 		t.Fatal("expected add with unknown criterion to fail")
+	}
+	assertPlanUnchanged(t, planPath, before)
+}
+
+func TestTaskRemoveRefusesDependedOn(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", depPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+	before := mustRead(t, planPath)
+
+	err := runCmd(t, Task(), "remove", "01-test", "t-1")
+	if err == nil {
+		t.Fatal("expected refusal when t-1 is depended on")
+	}
+	if !strings.Contains(err.Error(), "t-2") {
+		t.Errorf("refusal should name the dependent t-2: %v", err)
+	}
+	assertPlanUnchanged(t, planPath, before)
+}
+
+func TestTaskRemoveForceStripsAndKeepsHighWater(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", depPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	if err := runCmd(t, Task(), "remove", "01-test", "t-1", "--force"); err != nil {
+		t.Fatalf("remove --force: %v", err)
+	}
+	plan, err := phase.LoadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.FindTask("t-1") != nil {
+		t.Error("t-1 not removed under --force")
+	}
+	if slices.Contains(plan.FindTask("t-2").DependsOn, "t-1") {
+		t.Error("dangling dep: t-1 must be stripped from t-2.depends_on")
+	}
+	if err := runCmd(t, Validate()); err != nil {
+		t.Errorf("validate after force-remove: %v", err)
+	}
+
+	// A subsequent add must NOT reuse the freed id t-1 (high-water).
+	if err := runCmd(t, Task(), "add", "01-test", "--title", "new", "--covers", "c-1"); err != nil {
+		t.Fatalf("add after remove: %v", err)
+	}
+	plan, err = phase.LoadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.FindTask("t-1") != nil {
+		t.Error("freed id t-1 was reused by a subsequent add")
+	}
+}
+
+func TestTaskRemoveUnknownID(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+	before := mustRead(t, planPath)
+
+	if err := runCmd(t, Task(), "remove", "01-test", "t-99"); err == nil {
+		t.Fatal("expected error removing unknown id")
 	}
 	assertPlanUnchanged(t, planPath, before)
 }

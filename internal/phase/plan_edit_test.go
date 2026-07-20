@@ -87,6 +87,30 @@ func TestRemoveTask(t *testing.T) {
 	}
 }
 
+func TestRemoveTaskBackfillsHighWater(t *testing.T) {
+	// Fresh plan (TaskSeq unset): removing the HIGHEST task must still advance
+	// the high-water so the freed id is never reissued (locked id_scheme).
+	p := &Plan{Task: []Task{{ID: "t-1"}, {ID: "t-2"}, {ID: "t-3"}}}
+	if err := p.RemoveTask("t-3", false); err != nil {
+		t.Fatal(err)
+	}
+	if p.TaskSeq != 3 {
+		t.Errorf("high-water = %d, want 3 (backfilled from the removed highest)", p.TaskSeq)
+	}
+	if got := p.NextTaskID(); got != "t-4" {
+		t.Errorf("NextTaskID after removing highest = %s, want t-4 (freed id not reused)", got)
+	}
+
+	// A refused remove must not backfill either — it mutates nothing.
+	q := &Plan{Task: []Task{{ID: "t-1"}, {ID: "t-2", DependsOn: []string{"t-1"}}}}
+	if err := q.RemoveTask("t-1", false); err == nil {
+		t.Fatal("expected refusal when t-1 is depended on")
+	}
+	if q.TaskSeq != 0 {
+		t.Errorf("refused remove bumped high-water to %d, want 0 (mutates nothing)", q.TaskSeq)
+	}
+}
+
 func TestEditTask(t *testing.T) {
 	pre := Task{ID: "t-2", Wave: 2, Title: "old", Covers: []string{"c-1"}, DependsOn: []string{"t-1"}, Files: []string{"a.go"}, Status: StatusDone}
 	p := &Plan{Task: []Task{{ID: "t-1", Wave: 1}, pre}}
