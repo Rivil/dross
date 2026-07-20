@@ -1,0 +1,56 @@
+[verify]
+  phase = "dross-watch"
+  generated_at = 2026-07-20T10:18:21.232738Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9605475040257649
+  mutants_killed = 1193
+  mutants_survived = 49
+  mutants_not_covered = 49
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/watch_test.go:TestWatchJSONShapeAndExit", "internal/watch/drift_test.go:TestClassifyDrift"]
+  notes = "digest unmarshals into {new,current,drift,suggested_command} and exits 0; the no-mutation half is asserted by c-4"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/watch_test.go:TestWatchSecondRunZeroNew", "internal/watch/watch_test.go:TestWatchDiff", "internal/watch/watch_test.go:TestWatchFirstRun", "internal/watch/watch_test.go:TestWatchStateRoundTrip"]
+  notes = "new-vs-carried delta incl. reopen identity + first-run baseline + save/load round-trip; second run flags only the genuinely new issue"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/watch_test.go:TestSuggestPrecedence", "internal/cmd/watch_prompt_test.go:TestWatchPromptSuggestionPrecedence", "internal/cmd/watch_prompt_test.go:TestWatchPromptInvokesCommand"]
+  notes = "ranker precedence (verify>ship>inbox>status, exactly one) + prompt prints suggested_command verbatim; the watch.go:130 switch-case survivor is a go-cover attribution artifact, not a gap (see NOTE)"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/watch_test.go:TestWatchReadOnlyBoundary", "internal/cmd/issue_test.go:TestCollectInboundNoMark", "internal/cmd/issue_test.go:TestIssuePullStillMarks"]
+  notes = "board.json byte-identical + GET-only httptest + only watch.state.json written; collectInbound proven mark-free and pull --mark behaviour preserved"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/watch_test.go:TestWatchBoardDisabled", "internal/cmd/watch_test.go:TestWatchBoardUnreachable", "internal/cmd/watch_prompt_test.go:TestWatchPromptBoardOffPath"]
+  notes = "board disabled AND unreachable both degrade to a drift-only digest, exit 0; unreachable tick preserves the baseline"
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation 0.96 (1193 killed / 49 survived); mutation_status=measured. 47 of 49 survivors are PRE-EXISTING mutants in files this phase never touched (status.go, ship.go, env.go, doctor.go, phase.go, update.go, validate.go, phase_lifecycle.go, milestone.go, rule.go, statusline.go, install.go, deferred.go). gremlins mutates whole packages, so package-mates of the changed files surface as survivors — not regressions introduced here."
+
+[[finding]]
+  severity = "NOTE"
+  text = "watch.go:130 (2 survivors — the ONLY survivors in new code): the `case newCount > 0` switch condition. tests.json reports all 49 survivors as NotCovered because go-cover cannot attribute coverage to switch-case condition lines, so gremlins never credits the covering test. TestSuggestPrecedence does exercise all four branches incl. the newCount 0-vs->0 boundary. Known gremlins switch-case ceiling, not a test gap — so it does not downgrade c-3 or force a partial verdict."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/commands/dross-watch.md, assets/prompts/watch.md, docs/interaction-audit.md: no mutation adapter for .md. Prompt/skill behaviour is instead covered by the watch_prompt_test.go content-gate tests and the fail-closed interaction-coverage gate."

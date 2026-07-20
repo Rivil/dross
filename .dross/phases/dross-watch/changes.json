@@ -1,0 +1,89 @@
+{
+  "phase": "dross-watch",
+  "pr": 50,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/watch/watch.go",
+        "internal/watch/watch_test.go"
+      ],
+      "commit": "52675dc",
+      "completed_at": "2026-07-20T09:19:31.666623Z",
+      "landmarks": [
+        {
+          "feature": "watch delta",
+          "symbol": "State.Diff",
+          "loc": "internal/watch/watch.go:85",
+          "what": "board-issue new/carried delta over an atomically-persisted seen-set keyed on id+open/closed state"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/watch/drift.go",
+        "internal/watch/drift_test.go"
+      ],
+      "commit": "fbb3540",
+      "completed_at": "2026-07-20T09:23:40.943127Z",
+      "landmarks": [
+        {
+          "feature": "watch drift",
+          "symbol": "ClassifyDrift",
+          "loc": "internal/watch/drift.go:38",
+          "what": "classify every phase into in_progress/complete_unverified/verified_unshipped from phase files + state history (board-free)"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/watch.go",
+        "cmd/dross/main.go",
+        "internal/cmd/watch_test.go"
+      ],
+      "commit": "5694cf5",
+      "completed_at": "2026-07-20T10:02:25.2698Z",
+      "landmarks": [
+        {
+          "feature": "watch digest",
+          "symbol": "Watch",
+          "loc": "internal/cmd/watch.go:27",
+          "what": "read-only dross watch --json assembling inbound diff + phase drift + ranked suggested_command; degrades to drift-only when board off/unreachable"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "d388398",
+      "completed_at": "2026-07-20T09:27:49.021873Z",
+      "landmarks": [
+        {
+          "feature": "watch read-only boundary",
+          "symbol": "collectInbound",
+          "loc": "internal/cmd/issue.go:600",
+          "what": "mark-free inbound filter shared by issue pull and watch so no read-only caller can re-introduce a board mutation"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "assets/prompts/watch.md",
+        "assets/commands/dross-watch.md",
+        "docs/interaction-audit.md",
+        "internal/cmd/watch_prompt_test.go"
+      ],
+      "commit": "b82396e",
+      "completed_at": "2026-07-20T10:06:27.188249Z",
+      "landmarks": [
+        {
+          "feature": "watch skill",
+          "symbol": "dross-watch prompt",
+          "loc": "assets/prompts/watch.md:1",
+          "what": "non-interactive broadcast that runs dross watch --json and renders the digest ending in the verbatim suggested_command; enrolled non-interactive in interaction-audit"
+        }
+      ]
+    }
+  }
+}

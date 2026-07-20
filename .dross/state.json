@@ -1,85 +1,9 @@
 {
-  "version": "0.9.7.0",
+  "version": "0.9.8.1",
   "current_milestone": "v0.9",
-  "last_activity": "2026-07-01T14:42:32.268867Z",
-  "last_action": "completed additional-board-backends",
+  "last_activity": "2026-07-20T11:04:55.32479Z",
+  "last_action": "completed dross-watch",
   "history": [
-    {
-      "at": "2026-07-01T09:07:01.435743Z",
-      "action": "phase interaction-defer-or-add-framing executed (3/3 done)"
-    },
-    {
-      "at": "2026-07-01T09:08:43.612058Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-01T09:08:43.618159Z",
-      "action": "verified interaction-defer-or-add-framing: pass (4/4 covered, mutation not a signal — prompt+test-only change)"
-    },
-    {
-      "at": "2026-07-01T09:12:30.680948Z",
-      "action": "completed interaction-defer-or-add-framing"
-    },
-    {
-      "at": "2026-07-01T09:38:33.251085Z",
-      "action": "set current_milestone=v0.9"
-    },
-    {
-      "at": "2026-07-01T09:38:33.258334Z",
-      "action": "scoped milestone v0.9: 5 criteria, 4 phases"
-    },
-    {
-      "at": "2026-07-01T09:58:46.339574Z",
-      "action": "created verify-merge-before-completion"
-    },
-    {
-      "at": "2026-07-01T09:59:17.27806Z",
-      "action": "set current_phase=verify-merge-before-completion"
-    },
-    {
-      "at": "2026-07-01T09:59:17.28599Z",
-      "action": "spec locked: verify-merge-before-completion"
-    },
-    {
-      "at": "2026-07-01T10:00:26.086696Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-01T10:00:26.093503Z",
-      "action": "plan locked: verify-merge-before-completion (3 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-01T10:06:26.776721Z",
-      "action": "plan reviewed: verify-merge-before-completion (2 blocking resolved, 4 flags folded)"
-    },
-    {
-      "at": "2026-07-01T10:16:10.172106Z",
-      "action": "executed t-1 (Persist + commit PR number per-phase at ship)"
-    },
-    {
-      "at": "2026-07-01T10:17:28.390032Z",
-      "action": "executed t-2 (Provider PR-merged lookup + exported seam)"
-    },
-    {
-      "at": "2026-07-01T10:22:37.0253Z",
-      "action": "executed t-3 (Gate complete on merge + migrate fixtures)"
-    },
-    {
-      "at": "2026-07-01T10:25:50.459418Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-01T10:25:50.466801Z",
-      "action": "phase verify-merge-before-completion executed (3/3 done)"
-    },
-    {
-      "at": "2026-07-01T10:34:03.603741Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-01T10:34:03.610902Z",
-      "action": "verified verify-merge-before-completion: pass (5/5 covered, mutation 0.96 measured, efficacy 1.00 on covered)"
-    },
     {
       "at": "2026-07-01T10:36:12.283461Z",
       "action": "completed verify-merge-before-completion"
@@ -203,6 +127,82 @@
     {
       "at": "2026-07-01T14:42:32.268867Z",
       "action": "completed additional-board-backends"
+    },
+    {
+      "at": "2026-07-20T08:23:42.664472Z",
+      "action": "created dross-watch"
+    },
+    {
+      "at": "2026-07-20T08:55:28.280923Z",
+      "action": "set current_phase=dross-watch"
+    },
+    {
+      "at": "2026-07-20T08:55:28.288769Z",
+      "action": "spec locked: dross-watch"
+    },
+    {
+      "at": "2026-07-20T09:08:23.10806Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-20T09:08:23.114886Z",
+      "action": "plan locked: dross-watch (5 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-07-20T09:11:59.410928Z",
+      "action": "plan reviewed: dross-watch (0 blocking, 2 flags)"
+    },
+    {
+      "at": "2026-07-20T09:15:51.758264Z",
+      "action": "set version=0.9.8.0"
+    },
+    {
+      "at": "2026-07-20T09:19:31.683822Z",
+      "action": "executed t-1 (Watch state file + new/carried diff)"
+    },
+    {
+      "at": "2026-07-20T09:23:28.862331Z",
+      "action": "executed t-2 (Phase-drift classifier over all phases)"
+    },
+    {
+      "at": "2026-07-20T09:27:49.034651Z",
+      "action": "executed t-4 (Extract mark-free inbound helper from issue pull)"
+    },
+    {
+      "at": "2026-07-20T10:02:25.283601Z",
+      "action": "executed t-3 (dross watch --json command + ranker)"
+    },
+    {
+      "at": "2026-07-20T10:06:27.205759Z",
+      "action": "executed t-5 (/dross-watch skill + prompt tests + Exempt enrollment)"
+    },
+    {
+      "at": "2026-07-20T10:06:46.977267Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-20T10:06:46.98467Z",
+      "action": "phase dross-watch executed (5/5 done)"
+    },
+    {
+      "at": "2026-07-20T10:11:31.70683Z",
+      "action": "set version=0.9.8.1"
+    },
+    {
+      "at": "2026-07-20T10:11:31.714124Z",
+      "action": "fix: scope watch drift to current milestone (history-cap false positives)"
+    },
+    {
+      "at": "2026-07-20T10:26:58.928885Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-20T10:26:58.937894Z",
+      "action": "verified dross-watch: pass (5/5 covered, mutation 0.96 measured; 47/49 survivors pre-existing/untouched, 2 switch-case ceiling)"
+    },
+    {
+      "at": "2026-07-20T11:04:55.32479Z",
+      "action": "completed dross-watch"
     }
   ]
 }

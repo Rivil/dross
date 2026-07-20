@@ -591,6 +591,27 @@ func issueQuick() *cobra.Command {
 
 // --- pull (inbound triage feed) ---
 
+// collectInbound returns the board's inbound triage feed: issues matching the
+// filter, minus those already linked to a phase/quick or dismissed. It is
+// deliberately MARK-FREE — it never stamps last_pull — so read-only callers
+// (dross watch, dross status) share one filter path with `issue pull` and can
+// never re-introduce a board mutation. The filter's State scopes the feed;
+// callers wanting reopen-resurfaces semantics pass State:"open".
+func collectInbound(ctx *boardCtx, filter forge.IssueFilter) ([]forge.Issue, error) {
+	issues, err := ctx.client.ListIssues(filter)
+	if err != nil {
+		return nil, wrapBoard(err)
+	}
+	var inbound []forge.Issue
+	for _, iss := range issues {
+		if ctx.board.IsLinked(iss.Key) || ctx.board.IsDismissed(iss.Key) {
+			continue
+		}
+		inbound = append(inbound, iss)
+	}
+	return inbound, nil
+}
+
 func issuePull() *cobra.Command {
 	var labels, state string
 	var asJSON, mark bool
@@ -612,16 +633,9 @@ func issuePull() *cobra.Command {
 			if labels != "" {
 				filter.Labels = splitCSV(labels)
 			}
-			issues, err := ctx.client.ListIssues(filter)
+			inbound, err := collectInbound(ctx, filter)
 			if err != nil {
-				return wrapBoard(err)
-			}
-			var inbound []forge.Issue
-			for _, iss := range issues {
-				if ctx.board.IsLinked(iss.Key) || ctx.board.IsDismissed(iss.Key) {
-					continue
-				}
-				inbound = append(inbound, iss)
+				return err
 			}
 
 			// Read-only by default so /dross-status can poll without

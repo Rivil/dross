@@ -34,6 +34,7 @@ func main() {
 		cmd.Changes(),
 		cmd.Verify(),
 		cmd.Status(),
+		cmd.Watch(),
 		cmd.Codex(),
 		cmd.Profile(),
 		cmd.VersionCmd(),
