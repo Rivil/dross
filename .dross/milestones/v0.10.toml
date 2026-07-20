@@ -1,0 +1,10 @@
+phases = ["task-lifecycle-commands", "task-reordering", "landmark-comma-fix", "telemetry-bucket-graduation", "telemetry-taxonomy-overhaul", "ship-clean-tree", "verify-auto-finalize"]
+
+[milestone]
+  version = "v0.10"
+  title = "Workflow ergonomics: task lifecycle & telemetry clarity"
+  status = "active"
+  started = "2026-07-20"
+
+[scope]
+  success_criteria = ["A task can be added, inserted at a position, and removed in a phase's plan via the dross task CLI (no plan.toml hand-editing), with the change re-validated so covers/depends_on stay consistent", "The telemetry 'other' error bucket shrinks: recurring shapes (cobra arg-count errors, unknown flags, landmark-parse failures) each classify into a named bucket visible in dross stats", "dross changes record --landmark accepts commas inside a field value (e.g. what=a, b) without breaking the key=value parse", "The common dross ship path completes with a clean tree and no force-override: .dross bookkeeping is committed automatically so dirty-tree rejections and forced pushes stop being routine", "A passed verify no longer sits unfinalized: the verdict is recorded automatically (or gated so it can't be skipped), so pending-but-unfinalized verifies stop accumulating"]
