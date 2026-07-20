@@ -76,21 +76,23 @@ depends_on    = ["t-2", "t-3"]
 title         = "Wire dross task add + saveIfValid harness"
 files         = ["internal/cmd/task.go", "internal/cmd/task_test.go"]
 description   = """
-The `dross task add` cobra verb: parse flags, place via the existing resolveAnchor
-(--after/--before), and introduce saveIfValid(plan,spec,path) = ValidatePlan then
-Save-only-if-valid, with an assertPlanUnchanged test helper.
+The `dross task add` cobra verb: parse flags, append to the tail by default and
+only call the existing resolveAnchor when --after/--before is given (resolveAnchor
+errors on neither-flag, so it can't own the default-append path). Introduce
+saveIfValid(plan,spec,path) = ValidatePlan then Save-only-if-valid, with an
+assertPlanUnchanged test helper.
 """
 covers        = ["c-1", "c-2", "c-4"]
 test_contract = [
-  "`task add <phase> --title T --covers c-1` grows plan.toml by one task whose id is the high-water+1, and `dross validate` exits 0",
-  "`--after t-1` places the record after t-1 with every existing task's bytes intact, reusing resolveAnchor (which already enforces exactly-one-of --after/--before)",
+  "`task add <phase> --title T --covers c-1` with NO placement flag appends to the tail and grows plan.toml by one task whose id is the high-water+1, and `dross validate` exits 0 (the default-append path must NOT route through resolveAnchor, which errors when neither --after/--before is set)",
+  "`--after t-1` places the record after t-1 with every existing task's bytes intact, via resolveAnchor (which enforces exactly-one-of --after/--before)",
   "`--covers c-99` exits non-zero and assertPlanUnchanged holds (a mustRead byte-compare, mirroring TestPhaseMoveNoOp); if saveIfValid Saves before validating, this case fails",
 ]
 status        = "pending"
 
 [[task]]
 id            = "t-5"
-wave          = 2
+wave          = 3
 depends_on    = ["t-3", "t-4"]
 title         = "Wire dross task remove"
 files         = ["internal/cmd/task.go", "internal/cmd/task_test.go"]
@@ -108,7 +110,7 @@ status        = "pending"
 
 [[task]]
 id            = "t-6"
-wave          = 2
+wave          = 3
 depends_on    = ["t-2", "t-3", "t-4"]
 title         = "Wire dross task edit (no --status flag)"
 files         = ["internal/cmd/task.go", "internal/cmd/task_test.go"]

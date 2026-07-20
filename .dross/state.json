@@ -3,13 +3,9 @@
   "current_milestone": "v0.10",
   "current_phase": "task-lifecycle-commands",
   "current_phase_status": "planned",
-  "last_activity": "2026-07-20T13:52:43.383161Z",
-  "last_action": "plan locked: task-lifecycle-commands (7 tasks across 2 waves)",
+  "last_activity": "2026-07-20T13:57:45.444798Z",
+  "last_action": "plan reviewed: task-lifecycle-commands (0 blocking, 3 flags; 2 fixed inline → 3 waves)",
   "history": [
-    {
-      "at": "2026-07-01T10:46:15.204135Z",
-      "action": "phase ship-architecture-autogen executed (1/1 done)"
-    },
     {
       "at": "2026-07-01T10:46:47.001201Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +201,10 @@
     {
       "at": "2026-07-20T13:52:43.383161Z",
       "action": "plan locked: task-lifecycle-commands (7 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-20T13:57:45.444798Z",
+      "action": "plan reviewed: task-lifecycle-commands (0 blocking, 3 flags; 2 fixed inline → 3 waves)"
     }
   ]
 }
