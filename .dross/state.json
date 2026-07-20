@@ -2,18 +2,10 @@
   "version": "0.10.1.0",
   "current_milestone": "v0.10",
   "current_phase": "task-lifecycle-commands",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-20T14:19:36.886558Z",
-  "last_action": "phase task-lifecycle-commands executed (7/7 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-20T14:29:25.971368Z",
+  "last_action": "verified task-lifecycle-commands: pass (5/5 covered, mutation 0.96 measured, efficacy 1.00 on executed code)",
   "history": [
-    {
-      "at": "2026-07-01T10:58:07.434837Z",
-      "action": "phase pr-record-reaches-base executed (1/1 done)"
-    },
-    {
-      "at": "2026-07-01T11:04:29.145076Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-07-01T11:04:29.152058Z",
       "action": "verified pr-record-reaches-base: pass (3/3 covered, mutation 0.96, efficacy 1.00 on covered)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-20T14:19:36.886558Z",
       "action": "phase task-lifecycle-commands executed (7/7 done)"
+    },
+    {
+      "at": "2026-07-20T14:29:25.963385Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-20T14:29:25.971368Z",
+      "action": "verified task-lifecycle-commands: pass (5/5 covered, mutation 0.96 measured, efficacy 1.00 on executed code)"
     }
   ]
 }
