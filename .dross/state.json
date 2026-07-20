@@ -2,18 +2,10 @@
   "version": "0.10.0.0",
   "current_milestone": "v0.10",
   "current_phase": "task-lifecycle-commands",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-20T13:10:20.895832Z",
-  "last_action": "spec locked: task-lifecycle-commands",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-20T13:52:43.383161Z",
+  "last_action": "plan locked: task-lifecycle-commands (7 tasks across 2 waves)",
   "history": [
-    {
-      "at": "2026-07-01T10:46:09.421476Z",
-      "action": "executed t-1 (Auto-backfill ARCHITECTURE.md on ship when absent)"
-    },
-    {
-      "at": "2026-07-01T10:46:15.19637Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-07-01T10:46:15.204135Z",
       "action": "phase ship-architecture-autogen executed (1/1 done)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-20T13:10:20.895832Z",
       "action": "spec locked: task-lifecycle-commands"
+    },
+    {
+      "at": "2026-07-20T13:52:43.370833Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-20T13:52:43.383161Z",
+      "action": "plan locked: task-lifecycle-commands (7 tasks across 2 waves)"
     }
   ]
 }
