@@ -1,19 +1,11 @@
 {
-  "version": "0.9.8.0",
+  "version": "0.9.8.1",
   "current_milestone": "v0.9",
   "current_phase": "dross-watch",
   "current_phase_status": "complete",
-  "last_activity": "2026-07-20T10:06:46.98467Z",
-  "last_action": "phase dross-watch executed (5/5 done)",
+  "last_activity": "2026-07-20T10:11:31.714124Z",
+  "last_action": "fix: scope watch drift to current milestone (history-cap false positives)",
   "history": [
-    {
-      "at": "2026-07-01T10:22:37.0253Z",
-      "action": "executed t-3 (Gate complete on merge + migrate fixtures)"
-    },
-    {
-      "at": "2026-07-01T10:25:50.459418Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-07-01T10:25:50.466801Z",
       "action": "phase verify-merge-before-completion executed (3/3 done)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-20T10:06:46.98467Z",
       "action": "phase dross-watch executed (5/5 done)"
+    },
+    {
+      "at": "2026-07-20T10:11:31.70683Z",
+      "action": "set version=0.9.8.1"
+    },
+    {
+      "at": "2026-07-20T10:11:31.714124Z",
+      "action": "fix: scope watch drift to current milestone (history-cap false positives)"
     }
   ]
 }
