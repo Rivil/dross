@@ -11,6 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/forge"
 )
 
 // boardRepo scaffolds a .dross repo whose [board] points at a forgejo tracker
@@ -1167,5 +1170,77 @@ func TestIssueCover_listDismissed(t *testing.T) {
 				t.Errorf("output = %q, dismissed-footer present=%v want %v", out, got, tc.wantDis)
 			}
 		})
+	}
+}
+
+// fakeInboundClient is a forge.BoardClient that returns a fixed issue list and
+// records nothing — enough to unit-test collectInbound in isolation.
+type fakeInboundClient struct{ issues []forge.Issue }
+
+func (f fakeInboundClient) EnsureMilestone(string, string) (string, error)     { return "", nil }
+func (f fakeInboundClient) CreateIssue(forge.IssueInput) (*forge.Issue, error) { return nil, nil }
+func (f fakeInboundClient) GetIssue(string) (*forge.Issue, error)              { return nil, nil }
+func (f fakeInboundClient) UpdateIssue(string, forge.IssuePatch) (*forge.Issue, error) {
+	return nil, nil
+}
+func (f fakeInboundClient) CloseIssue(string) error                             { return nil }
+func (f fakeInboundClient) ListIssues(forge.IssueFilter) ([]forge.Issue, error) { return f.issues, nil }
+
+// TestCollectInboundNoMark proves the mark-free reuse path (c-4): collectInbound
+// drops linked/dismissed issues and never stamps last_pull.
+func TestCollectInboundNoMark(t *testing.T) {
+	bd := board.New()
+	bd.SetPhase("01-x", "12") // #12 already linked to a phase
+	bd.Dismiss("20")          // #20 dismissed away
+
+	client := fakeInboundClient{issues: []forge.Issue{
+		{Key: "12", Title: "linked"},
+		{Key: "20", Title: "dismissed"},
+		{Key: "21", Title: "fresh"},
+	}}
+	ctx := &boardCtx{client: client, board: bd}
+
+	got, err := collectInbound(ctx, forge.IssueFilter{State: "open"})
+	if err != nil {
+		t.Fatalf("collectInbound: %v", err)
+	}
+	if len(got) != 1 || got[0].Key != "21" {
+		t.Fatalf("filter wrong, want only #21 inbound, got %v", got)
+	}
+	if !ctx.board.LastPull.IsZero() {
+		t.Fatal("collectInbound must be mark-free, but LastPull was stamped")
+	}
+}
+
+// TestIssuePullStillMarks proves the refactor preserved pull's behaviour:
+// plain `pull` stays read-only, `pull --mark` still stamps last_pull.
+func TestIssuePullStillMarks(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"number":21,"title":"a real bug","state":"open"}]`))
+	}))
+	t.Cleanup(srv.Close)
+	dir := boardRepo(t, srv.URL, true)
+	boardJSON := filepath.Join(dir, ".dross", "board.json")
+
+	// Plain pull must not stamp last_pull.
+	captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "pull", "--json"); err != nil {
+			t.Fatalf("pull: %v", err)
+		}
+	})
+	if _, err := os.Stat(boardJSON); err == nil {
+		if strings.Contains(mustRead(t, boardJSON), "last_pull") {
+			t.Errorf("plain pull must stay read-only, but board.json carries last_pull")
+		}
+	}
+
+	// pull --mark must stamp last_pull.
+	captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "pull", "--mark", "--json"); err != nil {
+			t.Fatalf("pull --mark: %v", err)
+		}
+	})
+	if !strings.Contains(mustRead(t, boardJSON), "last_pull") {
+		t.Errorf("pull --mark must stamp last_pull after the refactor")
 	}
 }
