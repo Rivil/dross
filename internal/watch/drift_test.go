@@ -123,3 +123,32 @@ func TestDriftMissingPlanTolerated(t *testing.T) {
 		}
 	}
 }
+
+// TestClassifyDriftScopedToMilestone proves the heartbeat only surfaces the
+// current milestone's phases — old phases from past milestones (whose
+// `completed` record has aged out of the 50-entry history) don't pollute drift.
+func TestClassifyDriftScopedToMilestone(t *testing.T) {
+	root := t.TempDir()
+	writePhase(t, root, "01-inscope", planPending, "")
+	writePhase(t, root, "02-outofscope", planPending, "")
+
+	mdir := filepath.Join(root, "milestones")
+	if err := os.MkdirAll(mdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mdir, "v1.toml"), []byte("phases = [\"01-inscope\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st := &state.State{CurrentMilestone: "v1"}
+
+	ds, err := ClassifyDrift(root, st)
+	if err != nil {
+		t.Fatalf("ClassifyDrift: %v", err)
+	}
+	if _, ok := driftKind(ds, "01-inscope"); !ok {
+		t.Error("in-scope phase should still appear as drift")
+	}
+	if kind, ok := driftKind(ds, "02-outofscope"); ok {
+		t.Errorf("out-of-scope phase must be filtered from drift, got %q", kind)
+	}
+}

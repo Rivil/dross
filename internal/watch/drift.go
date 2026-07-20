@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -40,6 +41,15 @@ func ClassifyDrift(root string, st *state.State) ([]PhaseDrift, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Scope to the current milestone's phases when one is set. A heartbeat
+	// surfaces in-flight work, not every phase ever — and scoping sidesteps the
+	// state.History 50-entry cap: a phase shipped many milestones ago has no
+	// `completed <slug>` record left, so unscoped it would misread as
+	// verified_unshipped forever. With no current milestone (or an unloadable
+	// one), fall back to every phase.
+	if scope := currentMilestonePhases(root, st); scope != nil {
+		ids = intersect(ids, scope)
+	}
 	var out []PhaseDrift
 	for _, id := range ids {
 		if kind, drifting := classifyPhase(root, id, st); drifting {
@@ -47,6 +57,34 @@ func ClassifyDrift(root string, st *state.State) ([]PhaseDrift, error) {
 		}
 	}
 	return out, nil
+}
+
+// currentMilestonePhases returns the set of phase ids in the current milestone,
+// or nil when there's no current milestone or it can't be loaded (→ no scoping).
+func currentMilestonePhases(root string, st *state.State) map[string]bool {
+	if st == nil || st.CurrentMilestone == "" {
+		return nil
+	}
+	m, err := milestone.Load(milestone.FilePath(root, st.CurrentMilestone))
+	if err != nil {
+		return nil
+	}
+	set := make(map[string]bool, len(m.Phases))
+	for _, p := range m.Phases {
+		set[p] = true
+	}
+	return set
+}
+
+// intersect keeps only the phase ids present in scope, preserving order.
+func intersect(ids []string, scope map[string]bool) []string {
+	var out []string
+	for _, id := range ids {
+		if scope[id] {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // classifyPhase returns a phase's drift bucket and whether it drifts at all.
