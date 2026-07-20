@@ -351,6 +351,60 @@ func TestTaskRemoveUnknownID(t *testing.T) {
 	assertPlanUnchanged(t, planPath, before)
 }
 
+func TestTaskEditPartialUpdate(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", depPlan) // t-2: wave 2, covers c-1, depends_on t-1
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	if err := runCmd(t, Task(), "edit", "01-test", "t-2", "--title", "New"); err != nil {
+		t.Fatalf("edit --title: %v", err)
+	}
+	plan, err := phase.LoadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t2 := plan.FindTask("t-2")
+	if t2.Title != "New" {
+		t.Errorf("title = %q, want New", t2.Title)
+	}
+	// Every other field preserved.
+	if t2.Wave != 2 {
+		t.Errorf("wave = %d, want 2 (preserved)", t2.Wave)
+	}
+	if !slices.Equal(t2.Covers, []string{"c-1"}) {
+		t.Errorf("covers = %v, want [c-1] (preserved)", t2.Covers)
+	}
+	if !slices.Equal(t2.DependsOn, []string{"t-1"}) {
+		t.Errorf("depends_on = %v, want [t-1] (preserved)", t2.DependsOn)
+	}
+}
+
+func TestTaskEditRejectsUnknownCriterion(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+	before := mustRead(t, planPath)
+
+	if err := runCmd(t, Task(), "edit", "01-test", "t-2", "--covers", "c-99"); err == nil {
+		t.Fatal("expected edit with unknown criterion to fail")
+	}
+	assertPlanUnchanged(t, planPath, before)
+}
+
+func TestTaskEditHasNoStatusFlag(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+
+	// --status must be an unknown flag: `dross task status` stays the sole owner.
+	err := runCmd(t, Task(), "edit", "01-test", "t-2", "--status", "done")
+	if err == nil {
+		t.Fatal("task edit must not accept a --status flag")
+	}
+	if !strings.Contains(err.Error(), "unknown flag") {
+		t.Errorf("want an unknown-flag error, got: %v", err)
+	}
+}
+
 func TestTaskShowFormatsAllFields(t *testing.T) {
 	chdir(t, t.TempDir())
 	scaffoldPhaseWithPlan(t, "01-test", `[phase]

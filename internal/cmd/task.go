@@ -17,7 +17,7 @@ func Task() *cobra.Command {
 		Use:   "task",
 		Short: "Inspect and update tasks within a phase plan",
 	}
-	c.AddCommand(taskNext(), taskShow(), taskStatus(), taskAdd(), taskRemove())
+	c.AddCommand(taskNext(), taskShow(), taskStatus(), taskAdd(), taskRemove(), taskEdit())
 	return c
 }
 
@@ -195,6 +195,54 @@ func taskRemove() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&force, "force", false, "strip the removed id from dependents' depends_on instead of refusing")
+	return c
+}
+
+// taskEdit wires `dross task edit`: a partial update where only the flags
+// actually passed change the task, all other fields preserved. It deliberately
+// exposes no --status flag — `dross task status` stays the sole status owner.
+func taskEdit() *cobra.Command {
+	var title string
+	var wave int
+	var covers, dependsOn []string
+	c := &cobra.Command{
+		Use:   "edit <phase-id> <task-id>",
+		Short: "Update an existing task's fields (partial; status not editable)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			plan, spec, planPath, err := loadPhasePlanAndSpec(args[0])
+			if err != nil {
+				return err
+			}
+			// Only flags the user actually set become non-nil, so unset flags
+			// leave their fields untouched (partial update).
+			var e phase.TaskEdit
+			if cmd.Flags().Changed("title") {
+				e.Title = &title
+			}
+			if cmd.Flags().Changed("covers") {
+				e.Covers = &covers
+			}
+			if cmd.Flags().Changed("depends-on") {
+				e.DependsOn = &dependsOn
+			}
+			if cmd.Flags().Changed("wave") {
+				e.Wave = &wave
+			}
+			if err := plan.EditTask(args[1], e); err != nil {
+				return err
+			}
+			if err := saveIfValid(plan, spec, planPath); err != nil {
+				return err
+			}
+			Printf("edited %s in %s\n", args[1], args[0])
+			return nil
+		},
+	}
+	c.Flags().StringVar(&title, "title", "", "new task title")
+	c.Flags().IntVar(&wave, "wave", 0, "new wave")
+	c.Flags().StringSliceVar(&covers, "covers", nil, "replace covered criterion ids (comma-separated)")
+	c.Flags().StringSliceVar(&dependsOn, "depends-on", nil, "replace depends_on task ids (comma-separated)")
 	return c
 }
 
