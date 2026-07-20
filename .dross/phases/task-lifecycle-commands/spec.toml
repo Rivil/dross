@@ -25,8 +25,8 @@ text = "`dross task edit <phase> <id>` mutates an existing task's fields in plac
 
 [[decisions]]
 key    = "id_scheme"
-choice = "New task ids are auto-assigned monotonically (max existing +1) and never reused, even after a remove frees one. No --id override."
-why    = "Collision-free and predictable; reusing a freed id would silently repoint stale references or landmarks to a different task."
+choice = "New task ids come from a persisted per-plan high-water mark: the plan records the highest task id ever assigned (backfilled from the current max id on first use for pre-existing plans), and each add assigns high_water+1. An id freed by a remove — even the highest — is never handed out again. No --id override."
+why    = "Plain max+1 reuses the id of a removed HIGHEST task, silently repointing stale references/landmarks; a monotonic high-water counter delivers the decision's actual intent — truly never reused. (Panel-surfaced flaw in the original max+1 wording, 2026-07-20.)"
 locked = true
 
 [[decisions]]
