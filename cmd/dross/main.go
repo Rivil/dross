@@ -50,6 +50,7 @@ func main() {
 		cmd.Stack(),
 		cmd.Deferred(),
 		cmd.Pause(),
+		cmd.Reentry(),
 		cmd.Install(),
 		cmd.Update(),
 		cmd.Statusline(),

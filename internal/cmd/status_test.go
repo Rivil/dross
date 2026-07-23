@@ -482,7 +482,7 @@ func TestRankAreas(t *testing.T) {
 	now := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
 	in := []areaSignal{
 		{area: actionArea{label: "security"}, lastRun: now.Add(-5 * 24 * time.Hour)},
-		{area: actionArea{label: "quality"}},                                  // never run
+		{area: actionArea{label: "quality"}}, // never run
 		{area: actionArea{label: "tech-debt"}, lastRun: now.Add(-1 * 24 * time.Hour)},
 	}
 	got := rankAreas(in)

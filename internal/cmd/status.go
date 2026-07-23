@@ -110,9 +110,11 @@ func Status() *cobra.Command {
 				}
 			}
 
-			// Next suggested action — heuristic from current state
+			// Fresh-session re-entry footer — the LAST line of status, byte-equal
+			// to `dross reentry` output so re-orienting after /clear reads the
+			// same line whichever surface the user (or SessionStart hook) hits.
 			Print("")
-			Printf("next:      %s\n", suggestNext(root, proj, st))
+			Print(reentryLine(root, proj, st))
 			return nil
 		},
 	}
