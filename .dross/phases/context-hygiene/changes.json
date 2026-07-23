@@ -53,6 +53,23 @@
         }
       ]
     },
+    "quick-4": {
+      "files": [
+        "internal/cmd/hooks.go",
+        "internal/cmd/hooks_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "4609087",
+      "completed_at": "2026-07-23T12:19:14.356484Z",
+      "landmarks": [
+        {
+          "feature": "claude hooks scaffolding",
+          "symbol": "Hooks",
+          "loc": "internal/cmd/hooks.go:26",
+          "what": "standalone dross hooks ensure verb wires PreCompact+SessionStart without re-running init/onboard"
+        }
+      ]
+    },
     "t-1": {
       "files": [
         "internal/hooks/settings.go",
