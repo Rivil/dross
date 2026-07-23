@@ -210,6 +210,8 @@ Phase <id> execution complete.
   Skipped: <K>
 
 Next: /dross-verify <phase> — check criterion coverage and test efficacy.
+
+state is on disk — safe to /clear · fresh session: /dross-verify <phase>
 ```
 When this phase changed no measurable Go (or Stryker isn't installed), append the conditional hint under the `Next:` line:
 ```
