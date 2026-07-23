@@ -1,51 +1,11 @@
 {
-  "version": "0.10.1.0",
+  "version": "0.10.8.0",
   "current_milestone": "v0.10",
   "current_phase": "context-hygiene",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-23T11:20:23.62439Z",
-  "last_action": "plan reviewed: context-hygiene (0 blocking, 4 flags; applied 2)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-23T11:40:26.38274Z",
+  "last_action": "phase context-hygiene executed (7/7 done)",
   "history": [
-    {
-      "at": "2026-07-01T14:05:17.567171Z",
-      "action": "created additional-board-backends"
-    },
-    {
-      "at": "2026-07-01T14:42:32.268867Z",
-      "action": "completed additional-board-backends"
-    },
-    {
-      "at": "2026-07-20T08:23:42.664472Z",
-      "action": "created dross-watch"
-    },
-    {
-      "at": "2026-07-20T08:55:28.280923Z",
-      "action": "set current_phase=dross-watch"
-    },
-    {
-      "at": "2026-07-20T08:55:28.288769Z",
-      "action": "spec locked: dross-watch"
-    },
-    {
-      "at": "2026-07-20T09:08:23.10806Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-20T09:08:23.114886Z",
-      "action": "plan locked: dross-watch (5 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-07-20T09:11:59.410928Z",
-      "action": "plan reviewed: dross-watch (0 blocking, 2 flags)"
-    },
-    {
-      "at": "2026-07-20T09:15:51.758264Z",
-      "action": "set version=0.9.8.0"
-    },
-    {
-      "at": "2026-07-20T09:19:31.683822Z",
-      "action": "executed t-1 (Watch state file + new/carried diff)"
-    },
     {
       "at": "2026-07-20T09:23:28.862331Z",
       "action": "executed t-2 (Phase-drift classifier over all phases)"
@@ -205,6 +165,46 @@
     {
       "at": "2026-07-23T11:20:23.62439Z",
       "action": "plan reviewed: context-hygiene (0 blocking, 4 flags; applied 2)"
+    },
+    {
+      "at": "2026-07-23T11:22:31.909535Z",
+      "action": "set version=0.10.8.0"
+    },
+    {
+      "at": "2026-07-23T11:25:36.000592Z",
+      "action": "executed t-1 (Add hook-merge helper for settings.json)"
+    },
+    {
+      "at": "2026-07-23T11:29:16.103503Z",
+      "action": "executed t-2 (Add dross pause --auto snapshot verb)"
+    },
+    {
+      "at": "2026-07-23T11:31:17.480983Z",
+      "action": "executed t-3 (Add clear-point footer to boundary prompts)"
+    },
+    {
+      "at": "2026-07-23T11:33:28.845141Z",
+      "action": "executed t-4 (Add dross reentry + status re-entry footer)"
+    },
+    {
+      "at": "2026-07-23T11:35:06.995102Z",
+      "action": "executed t-5 (Add post-commit checkpoint gate to execute)"
+    },
+    {
+      "at": "2026-07-23T11:37:52.614452Z",
+      "action": "executed t-6 (Add footer-audit doc + fail-closed gate)"
+    },
+    {
+      "at": "2026-07-23T11:40:15.482603Z",
+      "action": "executed t-7 (Scaffold user-level hooks in init/onboard)"
+    },
+    {
+      "at": "2026-07-23T11:40:26.376104Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-23T11:40:26.38274Z",
+      "action": "phase context-hygiene executed (7/7 done)"
     }
   ]
 }
