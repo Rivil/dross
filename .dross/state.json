@@ -2,22 +2,10 @@
   "version": "0.10.1.0",
   "current_milestone": "v0.10",
   "current_phase": "context-hygiene",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-23T10:55:28.465936Z",
-  "last_action": "spec locked: context-hygiene",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-23T11:20:23.62439Z",
+  "last_action": "plan reviewed: context-hygiene (0 blocking, 4 flags; applied 2)",
   "history": [
-    {
-      "at": "2026-07-01T13:30:39.022123Z",
-      "action": "completed secure-quality-findings-followups"
-    },
-    {
-      "at": "2026-07-01T13:39:12.636685Z",
-      "action": "created homebrew-and-windows-distribution"
-    },
-    {
-      "at": "2026-07-01T14:02:48.193346Z",
-      "action": "completed homebrew-and-windows-distribution"
-    },
     {
       "at": "2026-07-01T14:05:17.567171Z",
       "action": "created additional-board-backends"
@@ -205,6 +193,18 @@
     {
       "at": "2026-07-23T10:55:28.465936Z",
       "action": "spec locked: context-hygiene"
+    },
+    {
+      "at": "2026-07-23T11:15:13.287468Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-23T11:15:13.294591Z",
+      "action": "plan locked: context-hygiene (7 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-23T11:20:23.62439Z",
+      "action": "plan reviewed: context-hygiene (0 blocking, 4 flags; applied 2)"
     }
   ]
 }
