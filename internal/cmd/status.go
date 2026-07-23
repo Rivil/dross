@@ -341,14 +341,13 @@ type actionArea struct {
 	available bool
 }
 
-// actionCatalog is the fixed set of non-spine areas. All three are now runnable:
-// /dross-secure and /dross-quality are slash commands, `dross techdebt` is a CLI
-// command. Each carries a state.toml under .dross/<stateDir>/ that records its
-// last run, so status can rank them by staleness.
+// actionCatalog is the fixed set of non-spine areas. All three are runnable
+// slash commands. Each carries a state.toml under .dross/<stateDir>/ that
+// records its last run, so status can rank them by staleness.
 var actionCatalog = []actionArea{
 	{label: "security", command: "/dross-secure", stateDir: "security", available: true},
 	{label: "quality", command: "/dross-quality", stateDir: "quality", available: true},
-	{label: "tech-debt", command: "dross techdebt", stateDir: "techdebt", available: true},
+	{label: "tech-debt", command: "/dross-techdebt", stateDir: "techdebt", available: true},
 }
 
 // areaSignal pairs an action area with its store-level last_run. A zero lastRun

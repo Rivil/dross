@@ -59,4 +59,5 @@ the build unless the command gains a footer.
 | rule | quick config edit — applied on the spot |
 | secure | audit — same subagent posture as quality |
 | status | read-only — its own last line *is* the re-entry line (c-4) |
+| techdebt | deterministic scan digest — run artefacts are gitignored, ends by routing findings; no in-flight phase state |
 | watch | read-only digest — ends with one suggested command, no state written |

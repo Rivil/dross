@@ -43,6 +43,7 @@ becomes interactive (gains an `AskUserQuestion` shim + a section above).
 |---|---|
 | status | read-only — prints `dross status` and stops; no decision points |
 | plan-review | subagent-only — spawns a cold reviewer and relays findings; no user turns |
+| techdebt | thin scan wrapper — runs `dross techdebt`, digests the report; no decision points |
 | watch | read-only broadcast — prints the digest + one suggested command; no decision points |
 
 ---
