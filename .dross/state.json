@@ -1,15 +1,9 @@
 {
   "version": "0.10.2.0",
   "current_milestone": "v0.10",
-  "current_phase": "task-reordering",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-23T14:19:07.520053Z",
-  "last_action": "verified task-reordering: pass (7/7, mutation 0.95)",
+  "last_activity": "2026-07-23T15:36:26.902237Z",
+  "last_action": "completed task-reordering",
   "history": [
-    {
-      "at": "2026-07-23T10:55:28.465936Z",
-      "action": "spec locked: context-hygiene"
-    },
     {
       "at": "2026-07-23T11:15:13.287468Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-23T14:19:07.520053Z",
       "action": "verified task-reordering: pass (7/7, mutation 0.95)"
+    },
+    {
+      "at": "2026-07-23T15:36:26.902237Z",
+      "action": "completed task-reordering"
     }
   ]
 }
