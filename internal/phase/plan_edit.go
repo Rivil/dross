@@ -206,6 +206,119 @@ func (p *Plan) RemoveTask(id string, force bool) error {
 	return nil
 }
 
+// MoveTask repositions the task with the given id immediately before or after
+// the anchor task (before=true → before), preserving the relative order of
+// every other task. Position is the only thing a move changes about the plan's
+// shape: ids and TaskSeq are never touched, so history/telemetry references
+// stay valid.
+//
+// Wave semantics (locked move_wave_semantics): the mover adopts the anchor's
+// wave, and the waves of its PENDING dependents reflow transitively so every
+// dependent stays in a wave strictly greater than its dependency's. Waves of
+// done/in_progress tasks are frozen — execution history is never rewritten.
+//
+// A move is rejected — mutating nothing — when it would:
+//   - place the mover before one of its dependencies, or after a dependent;
+//   - give the mover a wave <= its deepest dependency's wave;
+//   - move a non-pending task (locked move_execution_guard);
+//   - land the mover before a done/in_progress task.
+//
+// Unknown task/anchor ids and anchor==self error likewise without mutating.
+// Moving a task to the position it already holds is a no-op returning nil.
+func (p *Plan) MoveTask(id, anchor string, before bool) error {
+	from := slices.IndexFunc(p.Task, func(t Task) bool { return t.ID == id })
+	if from < 0 {
+		return fmt.Errorf("task not found: %s", id)
+	}
+	if id == anchor {
+		return fmt.Errorf("cannot move %s relative to itself", id)
+	}
+	ai := slices.IndexFunc(p.Task, func(t Task) bool { return t.ID == anchor })
+	if ai < 0 {
+		return fmt.Errorf("anchor task not found: %s", anchor)
+	}
+	mover := p.Task[from]
+	if mover.Status != "" && mover.Status != StatusPending {
+		return fmt.Errorf("cannot move %s: status is %s (only pending tasks can be moved)", id, mover.Status)
+	}
+
+	// Build the candidate order on a clone; p.Task is untouched until every
+	// guard has passed.
+	next := slices.Delete(slices.Clone(p.Task), from, from+1)
+	mi := slices.IndexFunc(next, func(t Task) bool { return t.ID == anchor })
+	if !before {
+		mi++
+	}
+	next = slices.Insert(next, mi, mover)
+
+	// Dependency-order guard: every dependency stays before the mover, every
+	// dependent stays after it.
+	for i, t := range next {
+		if i > mi && slices.Contains(mover.DependsOn, t.ID) {
+			return fmt.Errorf("cannot move %s before its dependency %s", id, t.ID)
+		}
+		if i < mi && slices.Contains(t.DependsOn, id) {
+			return fmt.Errorf("cannot move %s after its dependent %s", id, t.ID)
+		}
+	}
+
+	// Execution guard: a pending task never lands before a done/in_progress
+	// task — history stays frozen. Checked before the no-op short-circuit so
+	// that requesting a placement ahead of frozen history is rejected loudly
+	// even when the mover already sits there (out-of-order history).
+	for i := mi + 1; i < len(next); i++ {
+		if s := next[i].Status; s == StatusDone || s == StatusInProgress {
+			return fmt.Errorf("cannot move %s before %s: %s is %s and execution history stays frozen", id, next[i].ID, next[i].ID, s)
+		}
+	}
+
+	if mi == from {
+		return nil // already in place — no-op
+	}
+
+	// Wave adoption: the mover takes the anchor's wave, which must stay
+	// strictly after its deepest dependency's wave.
+	newWave := p.Task[ai].Wave
+	for _, dep := range mover.DependsOn {
+		for _, t := range p.Task {
+			if t.ID == dep && t.Wave >= newWave {
+				return fmt.Errorf("cannot move %s: adopted wave %d is not after its dependency %s (wave %d)", id, newWave, t.ID, t.Wave)
+			}
+		}
+	}
+	next[mi].Wave = newWave
+
+	// Reflow PENDING dependents transitively: every dependent's wave must stay
+	// strictly greater than its dependency's. Done/in_progress waves are
+	// frozen. The step cap is a defensive bound: on a (never valid) dependency
+	// cycle the bump chain would otherwise not terminate.
+	queue := []string{id}
+	steps, limit := 0, len(next)*len(next)
+	for len(queue) > 0 && steps <= limit {
+		cur := queue[0]
+		queue = queue[1:]
+		ci := slices.IndexFunc(next, func(t Task) bool { return t.ID == cur })
+		for i := range next {
+			t := &next[i]
+			if !slices.Contains(t.DependsOn, cur) {
+				continue
+			}
+			if t.Status != "" && t.Status != StatusPending {
+				continue // frozen
+			}
+			if t.Wave > next[ci].Wave {
+				continue
+			}
+			t.Wave = next[ci].Wave + 1
+			queue = append(queue, t.ID)
+			steps++
+		}
+	}
+
+	p.Task = next
+	return nil
+}
+
 // TaskEdit carries the fields EditTask may change. A nil pointer means "leave
 // unchanged"; a non-nil pointer (even to an empty value) replaces the current
 // field. Status and Files are intentionally absent — status is owned by

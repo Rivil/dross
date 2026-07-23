@@ -130,6 +130,219 @@ func TestEditTask(t *testing.T) {
 	}
 }
 
+// snapshotPlan deep-copies a plan so tests can assert a rejected move mutated
+// nothing (Task is cloned; nested slices are shared but never written by a
+// rejected move, and reflect.DeepEqual still catches any in-place write).
+func snapshotPlan(p *Plan) *Plan {
+	return &Plan{TaskSeq: p.TaskSeq, Phase: p.Phase, Task: slices.Clone(p.Task)}
+}
+
+func taskOrder(p *Plan) []string {
+	var order []string
+	for _, t := range p.Task {
+		order = append(order, t.ID)
+	}
+	return order
+}
+
+func TestMoveTaskRejectsBeforeDependency(t *testing.T) {
+	p := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 1, Status: StatusPending},
+		{ID: "t-2", Wave: 2, Status: StatusPending, DependsOn: []string{"t-1"}},
+	}}
+	pre := snapshotPlan(p)
+	err := p.MoveTask("t-2", "t-1", true)
+	if err == nil {
+		t.Fatal("expected rejection: t-2 moved before its dependency t-1")
+	}
+	if !strings.Contains(err.Error(), "t-2") || !strings.Contains(err.Error(), "t-1") {
+		t.Errorf("error must name both ids, got %q", err)
+	}
+	if !reflect.DeepEqual(p, pre) {
+		t.Errorf("rejected move mutated the plan: got %+v, want %+v", p, pre)
+	}
+}
+
+func TestMoveTaskRejectsAfterDependent(t *testing.T) {
+	p := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 1, Status: StatusPending},
+		{ID: "t-2", Wave: 2, Status: StatusPending, DependsOn: []string{"t-1"}},
+	}}
+	pre := snapshotPlan(p)
+	err := p.MoveTask("t-1", "t-2", false)
+	if err == nil {
+		t.Fatal("expected rejection: t-1 moved after its dependent t-2")
+	}
+	if !reflect.DeepEqual(p, pre) {
+		t.Errorf("rejected move mutated the plan: got %+v, want %+v", p, pre)
+	}
+}
+
+func TestMoveTaskExecutionGuard(t *testing.T) {
+	// Moving a done task errors.
+	p := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 1, Status: StatusDone},
+		{ID: "t-2", Wave: 1, Status: StatusPending},
+	}}
+	pre := snapshotPlan(p)
+	if err := p.MoveTask("t-1", "t-2", false); err == nil {
+		t.Error("expected rejection: t-1 is done, only pending tasks move")
+	}
+	if !reflect.DeepEqual(p, pre) {
+		t.Errorf("rejected move mutated the plan: %+v", p)
+	}
+
+	// Moving a pending task before an in_progress task errors.
+	q := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 1, Status: StatusInProgress},
+		{ID: "t-2", Wave: 1, Status: StatusPending},
+	}}
+	qpre := snapshotPlan(q)
+	if err := q.MoveTask("t-2", "t-1", true); err == nil {
+		t.Error("expected rejection: pending t-2 moved before in_progress t-1")
+	}
+	if !reflect.DeepEqual(q, qpre) {
+		t.Errorf("rejected move mutated the plan: %+v", q)
+	}
+}
+
+func TestMoveTaskOutOfOrderHistory(t *testing.T) {
+	// Done tasks mid-array: a pending task may not land before either of them,
+	// but moving it past the later one is legal.
+	newPlan := func() *Plan {
+		return &Plan{Task: []Task{
+			{ID: "t-1", Wave: 1, Status: StatusDone},
+			{ID: "t-2", Wave: 1, Status: StatusPending},
+			{ID: "t-3", Wave: 1, Status: StatusDone},
+		}}
+	}
+	p := newPlan()
+	if err := p.MoveTask("t-2", "t-3", true); err == nil {
+		t.Error("expected rejection: t-2 before done t-3")
+	}
+	p = newPlan()
+	if err := p.MoveTask("t-2", "t-3", false); err != nil {
+		t.Fatalf("move after the last done task must succeed, got %v", err)
+	}
+	if want := []string{"t-1", "t-3", "t-2"}; !reflect.DeepEqual(taskOrder(p), want) {
+		t.Errorf("order = %v, want %v", taskOrder(p), want)
+	}
+}
+
+func TestMoveTaskAdoptsAnchorWaveAndReflows(t *testing.T) {
+	// t-4 is a done transitive dependent (via t-3): reflow must leave its wave
+	// frozen even as t-3's wave bumps past it.
+	p := &Plan{Task: []Task{
+		{ID: "t-4", Wave: 2, Status: StatusDone, DependsOn: []string{"t-3"}},
+		{ID: "t-1", Wave: 1, Status: StatusPending},
+		{ID: "t-2", Wave: 2, Status: StatusPending},
+		{ID: "t-3", Wave: 2, Status: StatusPending, DependsOn: []string{"t-1"}},
+	}}
+	if err := p.MoveTask("t-1", "t-2", false); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"t-4", "t-2", "t-1", "t-3"}; !reflect.DeepEqual(taskOrder(p), want) {
+		t.Errorf("order = %v, want %v", taskOrder(p), want)
+	}
+	if got := p.FindTask("t-1").Wave; got != 2 {
+		t.Errorf("mover wave = %d, want 2 (adopted from anchor)", got)
+	}
+	if got := p.FindTask("t-3").Wave; got != 3 {
+		t.Errorf("pending dependent wave = %d, want 3 (bumped past mover)", got)
+	}
+	if got := p.FindTask("t-4").Wave; got != 2 {
+		t.Errorf("done transitive dependent wave = %d, want 2 (frozen)", got)
+	}
+	if err := ValidatePlan(p, nil); err != nil {
+		t.Errorf("plan invalid after legal move: %v", err)
+	}
+}
+
+func TestMoveTaskRejectsWaveIllegalAdoption(t *testing.T) {
+	// t-3's dependency sits in wave 2; moving it before the wave-1 anchor t-2
+	// would adopt wave 1 <= 2 — rejected even though the array order is legal.
+	p := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 2, Status: StatusDone},
+		{ID: "t-2", Wave: 1, Status: StatusPending},
+		{ID: "t-3", Wave: 3, Status: StatusPending, DependsOn: []string{"t-1"}},
+	}}
+	pre := snapshotPlan(p)
+	if err := p.MoveTask("t-3", "t-2", true); err == nil {
+		t.Fatal("expected rejection: adopted wave 1 is not after dependency wave 2")
+	}
+	if !reflect.DeepEqual(p, pre) {
+		t.Errorf("rejected move mutated the plan: %+v", p)
+	}
+}
+
+func TestMoveTaskKeepsIDsStable(t *testing.T) {
+	p := &Plan{TaskSeq: 3, Task: []Task{
+		{ID: "t-1", Wave: 1, Status: StatusPending},
+		{ID: "t-2", Wave: 1, Status: StatusPending},
+		{ID: "t-3", Wave: 1, Status: StatusPending},
+	}}
+	preIDs := taskOrder(p)
+	preSeq := p.TaskSeq
+	preNext := p.NextTaskID()
+	if err := p.MoveTask("t-3", "t-1", true); err != nil {
+		t.Fatal(err)
+	}
+	gotIDs := taskOrder(p)
+	slices.Sort(preIDs)
+	slices.Sort(gotIDs)
+	if !reflect.DeepEqual(gotIDs, preIDs) {
+		t.Errorf("id set changed: %v vs %v", gotIDs, preIDs)
+	}
+	if p.TaskSeq != preSeq {
+		t.Errorf("TaskSeq = %d, want %d (untouched)", p.TaskSeq, preSeq)
+	}
+	if got := p.NextTaskID(); got != preNext {
+		t.Errorf("NextTaskID = %s, want %s (unchanged)", got, preNext)
+	}
+}
+
+func TestMoveTaskBadInputs(t *testing.T) {
+	newPlan := func() *Plan {
+		return &Plan{Task: []Task{
+			{ID: "t-1", Wave: 1, Status: StatusPending},
+			{ID: "t-2", Wave: 1, Status: StatusPending},
+		}}
+	}
+
+	// Unknown anchor: exact AddTask-parity wording, plan unchanged.
+	p := newPlan()
+	pre := snapshotPlan(p)
+	err := p.MoveTask("t-1", "t-9", false)
+	if err == nil || !strings.Contains(err.Error(), "anchor task not found: t-9") {
+		t.Errorf("unknown anchor error = %v, want 'anchor task not found: t-9'", err)
+	}
+	if !reflect.DeepEqual(p, pre) {
+		t.Errorf("unknown anchor mutated the plan: %+v", p)
+	}
+
+	// Unknown mover.
+	p = newPlan()
+	if err := p.MoveTask("t-9", "t-1", false); err == nil {
+		t.Error("expected error for unknown task id")
+	}
+
+	// anchor == self.
+	p = newPlan()
+	if err := p.MoveTask("t-1", "t-1", false); err == nil {
+		t.Error("expected error for anchor==self")
+	}
+
+	// No-op move: nil error, plan unchanged.
+	p = newPlan()
+	pre = snapshotPlan(p)
+	if err := p.MoveTask("t-2", "t-1", false); err != nil {
+		t.Fatalf("no-op move must return nil, got %v", err)
+	}
+	if !reflect.DeepEqual(p, pre) {
+		t.Errorf("no-op move mutated the plan: %+v", p)
+	}
+}
+
 func TestValidatePlan(t *testing.T) {
 	spec := &Spec{Criteria: []Criterion{{ID: "c-1"}, {ID: "c-2"}}}
 	cases := []struct {
