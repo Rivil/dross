@@ -250,6 +250,10 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 		Print("  (nothing to mutation-test)")
 	}
 	for _, lr := range t.Languages {
+		if lr.Error != "" {
+			Printf("  %s (%s): %d files — adapter FAILED: %s\n", lr.Name, lr.Tool, len(lr.Files), lr.Error)
+			continue
+		}
 		if lr.Mutation == nil {
 			Printf("  %s (%s): %d files — no mutation report\n", lr.Name, lr.Tool, len(lr.Files))
 			continue
