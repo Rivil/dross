@@ -110,6 +110,33 @@ verdict = "partial"
 			t.Errorf("partial verdict should name the exact re-entry command '/dross-execute 01-auth':\n%s", line)
 		}
 	})
+
+	t.Run("pass verify with recorded changes suggests ship", func(t *testing.T) {
+		chdir(t, t.TempDir())
+		scaffoldPhaseWithSpecAndPlan(t, "01-auth", `[phase]
+id = "01-auth"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+		mustWrite(t, ".dross/phases/01-auth/verify.toml", `[verify]
+phase = "01-auth"
+verdict = "pass"
+`)
+		mustWrite(t, ".dross/phases/01-auth/changes.json", `{"phase":"01-auth","tasks":{"t-1":{"files":["x.ts"]}}}`)
+		out := captureStdout(t, func() {
+			if err := runCmd(t, Reentry()); err != nil {
+				t.Fatal(err)
+			}
+		})
+		if line := decodeReentry(t, out); !strings.Contains(line, "/dross-ship") {
+			t.Errorf("pass verdict with unshipped changes should point at /dross-ship:\n%s", line)
+		}
+	})
 }
 
 // TestStatusEndsWithReentryLine pins c-4: the LAST printed line of

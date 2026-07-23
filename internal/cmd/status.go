@@ -247,10 +247,10 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 		case "fail", "partial":
 			return "verify is " + verdict + " — /dross-execute " + st.CurrentPhase + " to amend, findings in " + filepath.Join(".dross/phases", st.CurrentPhase, "verify.toml")
 		case "pass":
-			// recorded changes? at least confirm there are some
+			// recorded changes = unshipped work → shipping is the next step
 			ch, _ := changes.Load(changes.FilePath(root, st.CurrentPhase), st.CurrentPhase)
 			if ch != nil && len(ch.Tasks) > 0 {
-				return "phase verified — start a new phase or move on"
+				return "/dross-ship — open the PR and complete the phase"
 			}
 		}
 	}
