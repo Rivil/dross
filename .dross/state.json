@@ -1,13 +1,9 @@
 {
   "version": "0.10.1.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-20T15:28:56.640844Z",
-  "last_action": "completed task-lifecycle-commands",
+  "last_activity": "2026-07-20T16:52:57.186762Z",
+  "last_action": "paused — shipped task-lifecycle-commands (PR #51 → milestone/v0.10); next: spec the next v0.10 phase",
   "history": [
-    {
-      "at": "2026-07-01T11:05:19.789207Z",
-      "action": "completed pr-record-reaches-base"
-    },
     {
       "at": "2026-07-01T12:24:58.452743Z",
       "action": "created release-trust-and-distribution"
@@ -203,6 +199,10 @@
     {
       "at": "2026-07-20T15:28:56.640844Z",
       "action": "completed task-lifecycle-commands"
+    },
+    {
+      "at": "2026-07-20T16:52:57.186762Z",
+      "action": "paused — shipped task-lifecycle-commands (PR #51 → milestone/v0.10); next: spec the next v0.10 phase"
     }
   ]
 }
