@@ -1,114 +1,55 @@
+task_seq = 0
+
 [phase]
-id = "task-reordering"
+  id = "task-reordering"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Add Plan.MoveTask engine with guards and reflow"
-files         = ["internal/phase/plan_edit.go", "internal/phase/plan_edit_test.go"]
-description   = """
-Add MoveTask(id, anchor, before): splice the task relative to the anchor in
-p.Task; on a legal cross-wave move adopt the anchor's wave and reflow PENDING
-dependents' waves transitively so every dependent stays > the mover's wave;
-done/in_progress waves stay frozen. Reject — mutating nothing — a move that
-places the mover before a dependency or after a dependent, gives the mover a
-wave <= its deepest dep's wave, moves a non-pending task, or lands a pending
-task before a done/in_progress task. IDs and TaskSeq are never touched.
-Own the bad-input paths: unknown task/anchor, anchor==self, no-op move.
-"""
-covers        = ["c-2", "c-3", "c-4"]
-test_contract = [
-  "if the before-dependency guard breaks, TestMoveTaskRejectsBeforeDependency fails: t-2 (depends_on t-1) moved before t-1 must error naming both ids with the plan deep-equal to its pre-call snapshot",
-  "if the after-dependent guard breaks, TestMoveTaskRejectsAfterDependent fails: moving t-1 after its dependent t-2 must error with the plan unchanged",
-  "if the execution guard breaks, TestMoveTaskExecutionGuard fails: moving a done task errors; moving a pending task before an in_progress task errors",
-  "if the guard mishandles mid-array done tasks, the out-of-order-history case fails: with [t-1 done, t-2 pending, t-3 done], moving t-2 before t-3 is rejected, after t-3 succeeds",
-  "if wave adoption or dependent reflow breaks, TestMoveTaskAdoptsAnchorWaveAndReflows fails: a wave-1 task moved after a wave-2 anchor gets wave 2, its pending dependent bumps 2 -> 3, and ValidatePlan returns nil",
-  "if the wave-illegality rejection breaks, TestMoveTaskRejectsWaveIllegalAdoption fails: a mover whose dependency sits in wave 2 moved before a wave-1 anchor must error",
-  "if reflow touches history, the frozen-wave assertion fails: a done task's wave field is unchanged after a reflowing move",
-  "if id stability breaks, TestMoveTaskKeepsIDsStable fails: after a legal move all ids, TaskSeq, and NextTaskID() are identical to before",
-  "if bad-input handling breaks, the input-path cases fail: unknown anchor errors 'anchor task not found: t-9' with plan unchanged; anchor==self errors; a no-op move returns nil with plan unchanged",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Add Plan.MoveTask engine with guards and reflow"
+  files = ["internal/phase/plan_edit.go", "internal/phase/plan_edit_test.go"]
+  description = "Add MoveTask(id, anchor, before): splice the task relative to the anchor in\np.Task; on a legal cross-wave move adopt the anchor's wave and reflow PENDING\ndependents' waves transitively so every dependent stays > the mover's wave;\ndone/in_progress waves stay frozen. Reject — mutating nothing — a move that\nplaces the mover before a dependency or after a dependent, gives the mover a\nwave <= its deepest dep's wave, moves a non-pending task, or lands a pending\ntask before a done/in_progress task. IDs and TaskSeq are never touched.\nOwn the bad-input paths: unknown task/anchor, anchor==self, no-op move.\n"
+  covers = ["c-2", "c-3", "c-4"]
+  test_contract = ["if the before-dependency guard breaks, TestMoveTaskRejectsBeforeDependency fails: t-2 (depends_on t-1) moved before t-1 must error naming both ids with the plan deep-equal to its pre-call snapshot", "if the after-dependent guard breaks, TestMoveTaskRejectsAfterDependent fails: moving t-1 after its dependent t-2 must error with the plan unchanged", "if the execution guard breaks, TestMoveTaskExecutionGuard fails: moving a done task errors; moving a pending task before an in_progress task errors", "if the guard mishandles mid-array done tasks, the out-of-order-history case fails: with [t-1 done, t-2 pending, t-3 done], moving t-2 before t-3 is rejected, after t-3 succeeds", "if wave adoption or dependent reflow breaks, TestMoveTaskAdoptsAnchorWaveAndReflows fails: a wave-1 task moved after a wave-2 anchor gets wave 2, its pending dependent bumps 2 -> 3, and ValidatePlan returns nil", "if the wave-illegality rejection breaks, TestMoveTaskRejectsWaveIllegalAdoption fails: a mover whose dependency sits in wave 2 moved before a wave-1 anchor must error", "if reflow touches history, the frozen-wave assertion fails: a done task's wave field is unchanged after a reflowing move", "if id stability breaks, TestMoveTaskKeepsIDsStable fails: after a legal move all ids, TaskSeq, and NextTaskID() are identical to before", "if bad-input handling breaks, the input-path cases fail: unknown anchor errors 'anchor task not found: t-9' with plan unchanged; anchor==self errors; a no-op move returns nil with plan unchanged"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "Order-aware NextRunnable tie-break"
-files         = ["internal/phase/phase.go", "internal/phase/phase_test.go"]
-description   = """
-Change NextRunnable's same-wave tie-break from lexicographic id to array
-position in plan.toml. Wave still dominates; deps-done filter unchanged.
-"""
-covers        = ["c-5"]
-test_contract = [
-  "if the tie-break stays lexicographic, TestNextRunnableFollowsDocumentOrder fails: array listing t-2 before t-1 (both wave 1, pending, no deps) must return t-2 (this test fails on current code)",
-  "if wave dominance breaks, the wave-dominates case fails: a pending wave-1 task listed after a pending wave-2 task is still returned first",
-  "if the deps-done filter regresses, existing TestTaskNextRespectsWaveAndDeps in internal/cmd/task_test.go fails",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Order-aware NextRunnable tie-break"
+  files = ["internal/phase/phase.go", "internal/phase/phase_test.go"]
+  description = "Change NextRunnable's same-wave tie-break from lexicographic id to array\nposition in plan.toml. Wave still dominates; deps-done filter unchanged.\n"
+  covers = ["c-5"]
+  test_contract = ["if the tie-break stays lexicographic, TestNextRunnableFollowsDocumentOrder fails: array listing t-2 before t-1 (both wave 1, pending, no deps) must return t-2 (this test fails on current code)", "if wave dominance breaks, the wave-dominates case fails: a pending wave-1 task listed after a pending wave-2 task is still returned first", "if the deps-done filter regresses, existing TestTaskNextRespectsWaveAndDeps in internal/cmd/task_test.go fails"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 1
-title         = "Replace spec §2 free-recall with candidate slate"
-files         = ["assets/prompts/spec.md", "internal/cmd/spec_prompt_test.go"]
-description   = """
-Rewrite §2: open with a proposed candidate-criteria slate derived from
-milestone scope (milestone.toml success criteria + phase position) and
-CLI/context gap analysis, each item gated accept/reword/drop one per turn;
-delete the freeform "list 3-7 outcomes" ask. Keep the quality bar, the
-trailing "anything missing?" catch-all, and §1 deferred-idea resurfacing
-feeding the slate.
-"""
-covers        = ["c-6"]
-test_contract = [
-  "if the free-recall ask returns, the prompt pin fails: normalized spec.md §2 containing the 'list 3-7' phrase fails the test",
-  "if the slate framing is missing, the needle pins fail: §2 must contain propose/candidate framing, milestone-scope + gap-analysis derivation, and a per-item accept/reword/drop gate",
-  "if the quality bar is dropped, the existing §2 quality-bar pins (testable/measurable pushback) fail",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 1
+  title = "Replace spec §2 free-recall with candidate slate"
+  files = ["assets/prompts/spec.md", "internal/cmd/spec_prompt_test.go"]
+  description = "Rewrite §2: open with a proposed candidate-criteria slate derived from\nmilestone scope (milestone.toml success criteria + phase position) and\nCLI/context gap analysis, each item gated accept/reword/drop one per turn;\ndelete the freeform \"list 3-7 outcomes\" ask. Keep the quality bar, the\ntrailing \"anything missing?\" catch-all, and §1 deferred-idea resurfacing\nfeeding the slate.\n"
+  covers = ["c-6"]
+  test_contract = ["if the free-recall ask returns, the prompt pin fails: normalized spec.md §2 containing the 'list 3-7' phrase fails the test", "if the slate framing is missing, the needle pins fail: §2 must contain propose/candidate framing, milestone-scope + gap-analysis derivation, and a per-item accept/reword/drop gate", "if the quality bar is dropped, the existing §2 quality-bar pins (testable/measurable pushback) fail"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 1
-title         = "Ship /dross-techdebt skill, repoint status action"
-files         = ["assets/commands/dross-techdebt.md", "assets/prompts/techdebt.md", "internal/cmd/status.go", "internal/cmd/status_test.go"]
-description   = """
-Add the thin skill pair — dross-techdebt.md shim (frontmatter +
-@~/.claude/dross/prompts/techdebt.md, mirroring an existing shim) and
-prompts/techdebt.md: run `dross techdebt`, read the newest .dross/techdebt
-run report, summarize top findings — no agent panel. Flip actionCatalog's
-tech-debt entry from "dross techdebt" to "/dross-techdebt".
-"""
-covers        = ["c-7"]
-test_contract = [
-  "if either new asset file ships without its twin, TestCommandsPromptsParity fails",
-  "if both techdebt asset files are deleted, the explicit presence pin fails: cmds[\"techdebt\"] && prompts[\"techdebt\"] asserted directly",
-  "if the tech-debt action regresses to the bare CLI string, the slash-prefix assertion in status_test fails: every actionCatalog command must start with '/'",
-  "if the action line drops the run stamp, the render pin fails: the rendered actions block for a stamped techdebt store must contain '/dross-techdebt · last run'",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 1
+  title = "Ship /dross-techdebt skill, repoint status action"
+  files = ["assets/commands/dross-techdebt.md", "assets/prompts/techdebt.md", "internal/cmd/status.go", "internal/cmd/status_test.go"]
+  description = "Add the thin skill pair — dross-techdebt.md shim (frontmatter +\n@~/.claude/dross/prompts/techdebt.md, mirroring an existing shim) and\nprompts/techdebt.md: run `dross techdebt`, read the newest .dross/techdebt\nrun report, summarize top findings — no agent panel. Flip actionCatalog's\ntech-debt entry from \"dross techdebt\" to \"/dross-techdebt\".\n"
+  covers = ["c-7"]
+  test_contract = ["if either new asset file ships without its twin, TestCommandsPromptsParity fails", "if both techdebt asset files are deleted, the explicit presence pin fails: cmds[\"techdebt\"] && prompts[\"techdebt\"] asserted directly", "if the tech-debt action regresses to the bare CLI string, the slash-prefix assertion in status_test fails: every actionCatalog command must start with '/'", "if the action line drops the run stamp, the render pin fails: the rendered actions block for a stamped techdebt store must contain '/dross-techdebt · last run'"]
+  status = "done"
 
 [[task]]
-id            = "t-5"
-wave          = 2
-depends_on    = ["t-1", "t-2"]
-title         = "Wire dross task move subcommand"
-files         = ["internal/cmd/task.go", "internal/cmd/task_test.go"]
-description   = """
-Register taskMove() in Task(): `dross task move <phase-id> <task-id>
---before/--after <other-id>`; flag validation via the existing resolveAnchor
-(exactly one required), mutation via Plan.MoveTask, persistence via
-saveIfValid so a rejected move never reaches Save and plan.toml stays
-byte-unchanged. E2E-proves the move->next chain and post-move validity.
-"""
-covers        = ["c-1", "c-2", "c-3", "c-4", "c-5"]
-test_contract = [
-  "if repositioning breaks, TestTaskMoveRepositions fails: seed t-1,t-2,t-3, run `task move ph t-3 --before t-1`, reloaded plan.toml must order t-3,t-1,t-2",
-  "if flag validation breaks, the resolveAnchor cases fail: both --before and --after, or neither, produce resolveAnchor's exact error strings with no file write",
-  "if a rejected move writes, the byte-identity case fails: an illegal move (mover after its dependent) exits non-zero with plan.toml bytes captured before/after identical",
-  "if the move->next chain breaks, the e2e case fails: both tasks wave-1 pending, after `task move ph t-2 --before t-1`, `task next ph` prints t-2",
-  "if id stability breaks end-to-end, TestTaskMoveKeepsID fails: after the move `task show ph t-3` still resolves and the saved file contains id 't-3' exactly once",
-  "if re-derived waves are invalid, the validate e2e fails: after a legal cross-wave move, `dross validate` over the fixture phase reports no problems",
-]
-status        = "pending"
+  id = "t-5"
+  wave = 2
+  title = "Wire dross task move subcommand"
+  files = ["internal/cmd/task.go", "internal/cmd/task_test.go"]
+  description = "Register taskMove() in Task(): `dross task move <phase-id> <task-id>\n--before/--after <other-id>`; flag validation via the existing resolveAnchor\n(exactly one required), mutation via Plan.MoveTask, persistence via\nsaveIfValid so a rejected move never reaches Save and plan.toml stays\nbyte-unchanged. E2E-proves the move->next chain and post-move validity.\n"
+  covers = ["c-1", "c-2", "c-3", "c-4", "c-5"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if repositioning breaks, TestTaskMoveRepositions fails: seed t-1,t-2,t-3, run `task move ph t-3 --before t-1`, reloaded plan.toml must order t-3,t-1,t-2", "if flag validation breaks, the resolveAnchor cases fail: both --before and --after, or neither, produce resolveAnchor's exact error strings with no file write", "if a rejected move writes, the byte-identity case fails: an illegal move (mover after its dependent) exits non-zero with plan.toml bytes captured before/after identical", "if the move->next chain breaks, the e2e case fails: both tasks wave-1 pending, after `task move ph t-2 --before t-1`, `task next ph` prints t-2", "if id stability breaks end-to-end, TestTaskMoveKeepsID fails: after the move `task show ph t-3` still resolves and the saved file contains id 't-3' exactly once", "if re-derived waves are invalid, the validate e2e fails: after a legal cross-wave move, `dross validate` over the fixture phase reports no problems"]
+  status = "done"

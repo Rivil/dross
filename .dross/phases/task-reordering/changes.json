@@ -1,0 +1,88 @@
+{
+  "phase": "task-reordering",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/phase/plan_edit.go",
+        "internal/phase/plan_edit_test.go"
+      ],
+      "commit": "c60186a",
+      "completed_at": "2026-07-23T13:40:21.037653Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "Plan.MoveTask",
+          "loc": "internal/phase/plan_edit.go:230",
+          "what": "guarded task reposition with anchor-wave adoption + transitive pending-dependent reflow; history frozen"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/phase_test.go"
+      ],
+      "commit": "595fab0",
+      "completed_at": "2026-07-23T13:42:15.956398Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "Plan.NextRunnable",
+          "loc": "internal/phase/phase.go:303",
+          "what": "same-wave tie-break switched from lexicographic id to plan-array position so task move steers task next"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/spec.md",
+        "internal/cmd/spec_prompt_test.go"
+      ],
+      "commit": "fc185e6",
+      "completed_at": "2026-07-23T13:44:17.896351Z",
+      "landmarks": [
+        {
+          "feature": "spec conversation flow",
+          "symbol": "spec.md §2",
+          "loc": "assets/prompts/spec.md:45",
+          "what": "§2 opens with a proposed candidate-criteria slate (milestone scope + gap analysis + parked ideas) gated accept/reword/drop; free-recall ask deleted"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "assets/commands/dross-techdebt.md",
+        "assets/prompts/techdebt.md",
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go"
+      ],
+      "commit": "c86b0d3",
+      "completed_at": "2026-07-23T13:49:16.824782Z",
+      "notes": "deviation: enrolled techdebt prompt in footer/interaction audit Exempt tables (fail-closed gates)",
+      "landmarks": [
+        {
+          "feature": "status actions",
+          "symbol": "actionCatalog",
+          "loc": "internal/cmd/status.go:348",
+          "what": "/dross-techdebt thin skill (shim + prompt over dross techdebt) shipped; tech-debt action repointed so all three actions are slash commands"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/task.go",
+        "internal/cmd/task_test.go"
+      ],
+      "commit": "7e02b96",
+      "completed_at": "2026-07-23T14:08:47.618093Z",
+      "landmarks": [
+        {
+          "feature": "task lifecycle",
+          "symbol": "taskMove",
+          "loc": "internal/cmd/task.go:252",
+          "what": "dross task move \u003cphase\u003e \u003ctask\u003e --before/--after wired over Plan.MoveTask via resolveAnchor + saveIfValid; rejected moves leave plan.toml byte-unchanged"
+        }
+      ]
+    }
+  }
+}
