@@ -511,3 +511,37 @@ func TestVerifyCover_RecordOutcomeNilTestsZeroScore(t *testing.T) {
 		t.Errorf("no mutation_score expected when summary score is 0:\n%s", body)
 	}
 }
+
+// TestConfiguredAdaptersAllowlist pins the [mutation] adapters escape hatch:
+// empty means all adapters; non-empty filters by Name(), so a polyglot repo
+// can run only the adapter that's actually set up.
+func TestConfiguredAdaptersAllowlist(t *testing.T) {
+	names := func(as []mutation.Adapter) []string {
+		var out []string
+		for _, a := range as {
+			out = append(out, a.Name())
+		}
+		return out
+	}
+
+	p := &project.Project{}
+	if got := names(configuredAdapters(p, "", false)); len(got) != 3 {
+		t.Fatalf("empty allowlist must return all adapters, got %v", got)
+	}
+
+	p.Mutation.Adapters = []string{"gremlins"}
+	got := names(configuredAdapters(p, "", false))
+	if len(got) != 1 || got[0] != "gremlins" {
+		t.Errorf("allowlist [gremlins] must filter to gremlins only, got %v", got)
+	}
+
+	p.Mutation.Adapters = []string{"stryker", "gremlins"}
+	got = names(configuredAdapters(p, "", false))
+	if len(got) != 2 {
+		t.Errorf("allowlist [stryker gremlins] must keep both, got %v", got)
+	}
+
+	if got := configuredAdapters(p, "", true); got != nil {
+		t.Errorf("--skip-mutation must still return nil regardless of allowlist, got %v", names(got))
+	}
+}

@@ -149,6 +149,12 @@ type Goals struct {
 // Each sub-table is optional; unset values fall back to the adapter's
 // built-in default.
 type Mutation struct {
+	// Adapters is an allowlist of adapter names ("gremlins", "stryker",
+	// "stryker.net"). Non-empty means run ONLY these; files whose adapter
+	// is filtered out fall into verify's Skipped path ("no mutation adapter
+	// for .ts"). The escape hatch for a polyglot repo where one adapter
+	// isn't set up yet.
+	Adapters []string         `toml:"adapters,omitempty"`
 	Gremlins MutationGremlins `toml:"gremlins,omitempty"`
 	Stryker  MutationStryker  `toml:"stryker,omitempty"`
 }
