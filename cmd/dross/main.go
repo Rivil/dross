@@ -49,6 +49,7 @@ func main() {
 		cmd.Techdebt(),
 		cmd.Stack(),
 		cmd.Deferred(),
+		cmd.Pause(),
 		cmd.Install(),
 		cmd.Update(),
 		cmd.Statusline(),
