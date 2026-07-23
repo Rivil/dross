@@ -2,18 +2,10 @@
   "version": "0.10.2.0",
   "current_milestone": "v0.10",
   "current_phase": "task-reordering",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-23T14:08:59.437959Z",
-  "last_action": "phase task-reordering executed (5/5 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-23T14:19:07.520053Z",
+  "last_action": "verified task-reordering: pass (7/7, mutation 0.95)",
   "history": [
-    {
-      "at": "2026-07-23T10:48:00.198785Z",
-      "action": "created context-hygiene"
-    },
-    {
-      "at": "2026-07-23T10:55:28.458716Z",
-      "action": "set current_phase=context-hygiene"
-    },
     {
       "at": "2026-07-23T10:55:28.465936Z",
       "action": "spec locked: context-hygiene"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-23T14:08:59.437959Z",
       "action": "phase task-reordering executed (5/5 done)"
+    },
+    {
+      "at": "2026-07-23T14:19:07.513906Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-23T14:19:07.520053Z",
+      "action": "verified task-reordering: pass (7/7, mutation 0.95)"
     }
   ]
 }
