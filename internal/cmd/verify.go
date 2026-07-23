@@ -153,7 +153,7 @@ func configuredAdapters(p *project.Project, _ string, skip bool) []mutation.Adap
 	// If docker volume layout diverges, this is where we'd surface config.
 	cwd, _ := os.Getwd()
 	return []mutation.Adapter{
-		&mutation.Stryker{Prefix: prefix, ProjectRoot: cwd},
+		&mutation.Stryker{Prefix: prefix, ProjectRoot: cwd, Workdir: p.Mutation.Stryker.Workdir},
 		&mutation.Gremlins{
 			Prefix:             prefix,
 			ProjectRoot:        cwd,

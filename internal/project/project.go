@@ -150,6 +150,17 @@ type Goals struct {
 // built-in default.
 type Mutation struct {
 	Gremlins MutationGremlins `toml:"gremlins,omitempty"`
+	Stryker  MutationStryker  `toml:"stryker,omitempty"`
+}
+
+// MutationStryker surfaces the stryker adapter's tunable settings.
+//
+// Workdir is the repo-relative package that hosts stryker and its config in
+// a monorepo (e.g. "web" when vitest + stryker.config.json live in web/).
+// The adapter runs there, strips the prefix from --mutate paths, and
+// re-prefixes report paths so tests.json stays repo-relative.
+type MutationStryker struct {
+	Workdir string `toml:"workdir,omitempty"`
 }
 
 // MutationGremlins surfaces the gremlins adapter's tunable settings.
