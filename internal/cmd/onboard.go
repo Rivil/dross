@@ -83,6 +83,11 @@ func Onboard() *cobra.Command {
 			if p.Remote.URL != "" {
 				Printf("  • git remote: %s (provider: %s)\n", p.Remote.URL, providerOrUnknown(p.Remote.Provider))
 			}
+			if err := ensureUserHooks(); err != nil {
+				Printf("  • Could not wire user-level Claude hooks (non-fatal): %v\n", err)
+			} else {
+				Print("  • Ensured user-level Claude hooks (PreCompact → dross pause --auto, SessionStart → dross reentry)")
+			}
 			Print("\nNext: /dross-onboard to confirm captured runtime + rules")
 			return nil
 		},
