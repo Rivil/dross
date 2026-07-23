@@ -56,6 +56,35 @@ covers = ["c-1"]
 			t.Errorf("runnable task should point at /dross-execute:\n%s", out)
 		}
 	})
+
+	t.Run("partial verify suggests execute on the phase", func(t *testing.T) {
+		chdir(t, t.TempDir())
+		scaffoldPhaseWithSpecAndPlan(t, "01-auth", `[phase]
+id = "01-auth"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+		mustWrite(t, ".dross/phases/01-auth/verify.toml", `[verify]
+phase = "01-auth"
+verdict = "partial"
+`)
+		out := captureStdout(t, func() {
+			if err := runCmd(t, Reentry()); err != nil {
+				t.Fatal(err)
+			}
+		})
+		if !strings.Contains(out, "verify is partial") {
+			t.Errorf("partial verdict should be named:\n%s", out)
+		}
+		if !strings.Contains(out, "/dross-execute 01-auth") {
+			t.Errorf("partial verdict should name the exact re-entry command '/dross-execute 01-auth':\n%s", out)
+		}
+	})
 }
 
 // TestStatusEndsWithReentryLine pins c-4: the LAST printed line of

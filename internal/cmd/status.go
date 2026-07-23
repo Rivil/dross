@@ -244,7 +244,7 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	if verdict := readVerifyVerdict(filepath.Join(dir, "verify.toml")); verdict != "" {
 		switch verdict {
 		case "fail", "partial":
-			return "verify is " + verdict + " — open " + filepath.Join(".dross/phases", st.CurrentPhase, "verify.toml") + " for findings"
+			return "verify is " + verdict + " — /dross-execute " + st.CurrentPhase + " to amend, findings in " + filepath.Join(".dross/phases", st.CurrentPhase, "verify.toml")
 		case "pass":
 			// recorded changes? at least confirm there are some
 			ch, _ := changes.Load(changes.FilePath(root, st.CurrentPhase), st.CurrentPhase)
