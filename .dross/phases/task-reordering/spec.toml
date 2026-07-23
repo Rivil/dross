@@ -1,0 +1,44 @@
+[phase]
+  id = "task-reordering"
+  title = "task-reordering"
+  milestone = "v0.10"
+
+[[criteria]]
+  id = "c-1"
+  text = "dross task move <phase-id> <task-id> --before/--after <other-id> repositions an existing task in plan.toml; no hand-editing."
+
+[[criteria]]
+  id = "c-2"
+  text = "A move that would break dependency order (task lands before a dependency, or after a dependent) is rejected with a clear error; plan.toml is left untouched."
+
+[[criteria]]
+  id = "c-3"
+  text = "After a legal move, waves are re-derived so wave/depends_on/covers stay consistent and dross validate passes."
+
+[[criteria]]
+  id = "c-4"
+  text = "Task ids are stable across a move — only position changes, so history/telemetry references to t-N stay valid."
+
+[[criteria]]
+  id = "c-5"
+  text = "dross task next respects the new order — the next runnable task reflects the reordered sequence, not the original one."
+
+[[criteria]]
+  id = "c-6"
+  text = "/dross-spec §2 opens with a proposed candidate-criteria slate (derived from milestone scope + CLI/context gap analysis), gated accept/reword/drop per item — the free-recall 'list 3-7 outcomes' ask is gone."
+
+[[criteria]]
+  id = "c-7"
+  text = "/dross-techdebt exists as a thin skill over `dross techdebt`, and dross status's actions line points at it — all three actions are slash commands."
+
+[[decisions]]
+  key = "move_wave_semantics"
+  choice = "Cross-wave move adopts the anchor task's wave when dependencies allow; otherwise the c-2 guard rejects the move."
+  why = "Move means 'put it there' — position-driven is the intuitive contract; dep legality is already enforced by c-2."
+  locked = true
+
+[[decisions]]
+  key = "move_execution_guard"
+  choice = "Only pending tasks can be moved, and never to a position before a done/in-progress task."
+  why = "Execution history stays frozen; reordering exists to steer upcoming work, not rewrite the past."
+  locked = true

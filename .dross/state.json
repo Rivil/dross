@@ -1,21 +1,11 @@
 {
   "version": "0.10.8.7",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-23T13:02:19.491969Z",
-  "last_action": "completed context-hygiene",
+  "current_phase": "task-reordering",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-23T13:19:05.643862Z",
+  "last_action": "spec locked: task-reordering",
   "history": [
-    {
-      "at": "2026-07-20T13:59:01.316636Z",
-      "action": "set version=0.10.1.0"
-    },
-    {
-      "at": "2026-07-20T14:01:32.005519Z",
-      "action": "executed t-1 (High-water NextTaskID + deriveWave helpers)"
-    },
-    {
-      "at": "2026-07-20T14:02:47.63581Z",
-      "action": "executed t-2 (ValidatePlan integrity guard)"
-    },
     {
       "at": "2026-07-20T14:04:49.198513Z",
       "action": "executed t-3 (AddTask / RemoveTask / EditTask mutators)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-23T13:02:19.491969Z",
       "action": "completed context-hygiene"
+    },
+    {
+      "at": "2026-07-23T13:09:44.178802Z",
+      "action": "created task-reordering"
+    },
+    {
+      "at": "2026-07-23T13:19:05.637417Z",
+      "action": "set current_phase=task-reordering"
+    },
+    {
+      "at": "2026-07-23T13:19:05.643862Z",
+      "action": "spec locked: task-reordering"
     }
   ]
 }
