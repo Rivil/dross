@@ -96,6 +96,15 @@
       "completed_at": "2026-07-23T12:33:45.221846Z",
       "notes": "quick: reentry emits SessionStart hook JSON envelope (systemMessage + additionalContext) so the re-entry line is user-visible after /clear"
     },
+    "quick-7": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/reentry_test.go"
+      ],
+      "commit": "42b9121",
+      "completed_at": "2026-07-23T12:59:06.260889Z",
+      "notes": "quick: suggestNext pass verdict points at /dross-ship (align with verify footer)"
+    },
     "t-1": {
       "files": [
         "internal/hooks/settings.go",
