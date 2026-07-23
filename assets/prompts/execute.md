@@ -198,7 +198,24 @@ dross task status <phase> <task-id> done
 dross state touch "executed <task-id> (<task.title>)"
 ```
 
-Loop back to 1a.
+Continue to the 1g post-commit gate.
+
+### 1g. Post-commit gate
+
+The task is committed — a durable boundary. Surface it before picking the next task.
+
+In **pair mode**, one `AskUserQuestion` with options:
+- `continue` — loop back to 1a and pick the next task.
+- `checkpoint` — end the session cleanly here. First confirm plan.toml + state are consistent — run `dross validate` and `dross task next <phase>` (the id it prints is `<next-task>`) — **then** print the re-entry command and stop:
+  ```
+  checkpoint — state is on disk — safe to /clear · fresh session: /dross-execute --from <next-task>
+  ```
+  (If `dross task next` prints nothing, the phase is done — go to step 2 instead.)
+- `stop` — halt the loop without picking a next task; current state is preserved.
+
+**Option order follows the wave boundary (checkpoint_posture).** When the just-committed task closes its wave — `dross task next` names a task in a *higher* wave, or nothing — lead with `checkpoint` as the recommended option: wave edges are the natural durable boundary. Mid-wave, lead with `continue` and keep `checkpoint` as a passive option.
+
+In **solo mode**: skip the gate, loop back to 1a.
 
 ## 2. Phase completion
 
@@ -210,6 +227,8 @@ Phase <id> execution complete.
   Skipped: <K>
 
 Next: /dross-verify <phase> — check criterion coverage and test efficacy.
+
+state is on disk — safe to /clear · fresh session: /dross-verify <phase>
 ```
 When this phase changed no measurable Go (or Stryker isn't installed), append the conditional hint under the `Next:` line:
 ```
@@ -241,7 +260,7 @@ and update state status to `partial` instead.
 
 ## Hard rules
 
-- **Follow the interaction playbook (`_interaction.md`).** Drive each pair-mode turn as a single-decision `AskUserQuestion` that leads with the default — the §1c approval and §1e red-path are separate turns, never bundled, and the next task's approval never rides along behind the current one.
+- **Follow the interaction playbook (`_interaction.md`).** Drive each pair-mode turn as a single-decision `AskUserQuestion` that leads with the default — the §1c approval, §1e red-path, and §1g post-commit gate are separate turns, never bundled, and the next task's approval never rides along behind the current one.
 - **Pair mode is the default.** Never write code without an explicit user `proceed` in pair mode. The whole point is the user is part of the loop.
 - **Phase work commits to `phase/<id>`, never the main branch.** If `git symbolic-ref --short HEAD` returns the main branch, stop and fix before continuing.
 - **Atomic commits.** Exactly one commit per completed task. No batched multi-task commits.

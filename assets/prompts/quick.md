@@ -172,6 +172,8 @@ Quick task complete.
 
 Next: continue working, or /dross-quick "<another task>" — another small change.
       ↳ --solo — run it autonomously when the change is trivial and well-specified.
+
+state is on disk — safe to /clear · fresh session: /dross-status
 ```
 
 The quick task is committed and done, so close its board issue (no-op unless board sync is on):

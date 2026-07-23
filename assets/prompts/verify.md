@@ -176,6 +176,8 @@ Next:
       ↳ --no-push          — preview the PR body and diff without pushing
   /dross-spec <next-id>    — start the next phase
   dross phase list         — see all phases
+
+state is on disk — safe to /clear · fresh session: /dross-ship
 ```
 
 3. Otherwise (last phase in the milestone), print:
@@ -187,6 +189,8 @@ Next:
       ↳ --draft            — open the PR in draft (work-in-progress)
       ↳ --no-push          — preview the PR body and diff without pushing
   dross milestone show     — review milestone status before tagging the release
+
+state is on disk — safe to /clear · fresh session: /dross-ship
 ```
 
 If `partial` or `fail`:
@@ -197,6 +201,8 @@ Next:
   /dross-execute <id>      — amend the failing task (add tests / fix code)
       ↳ --from <task-id>   — resume at the failing task, skipping earlier done tasks
   /dross-verify            — re-run after addressing blocking findings
+
+state is on disk — safe to /clear · fresh session: /dross-execute <id>
 ```
 
 ## Hard rules

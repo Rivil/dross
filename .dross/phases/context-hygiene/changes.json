@@ -1,0 +1,236 @@
+{
+  "phase": "context-hygiene",
+  "pr": 52,
+  "tasks": {
+    "quick-1": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/verify/verify_test.go",
+        "internal/cmd/verify.go"
+      ],
+      "commit": "9c6d028",
+      "completed_at": "2026-07-23T12:00:27.854306Z",
+      "landmarks": [
+        {
+          "feature": "mutation verify pipeline",
+          "symbol": "LanguageRun.Error",
+          "loc": "internal/verify/verify.go:60",
+          "what": "adapter failure records LanguageRun.Error + FLAG finding instead of discarding other legs' reports"
+        }
+      ]
+    },
+    "quick-2": {
+      "files": [
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_test.go",
+        "internal/project/project.go",
+        "internal/cmd/verify.go"
+      ],
+      "commit": "5d8654a",
+      "completed_at": "2026-07-23T12:00:27.861311Z",
+      "landmarks": [
+        {
+          "feature": "mutation verify pipeline",
+          "symbol": "Stryker.runArgs",
+          "loc": "internal/mutation/stryker.go:100",
+          "what": "npx @stryker-mutator/core (not deprecated bare stryker) · [mutation.stryker] workdir monorepo knob with repo-relative path round-trip"
+        }
+      ]
+    },
+    "quick-3": {
+      "files": [
+        "internal/project/project.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_test.go"
+      ],
+      "commit": "53b3dd7",
+      "completed_at": "2026-07-23T12:00:27.867506Z",
+      "landmarks": [
+        {
+          "feature": "mutation verify pipeline",
+          "symbol": "configuredAdapters",
+          "loc": "internal/cmd/verify.go:160",
+          "what": "[mutation] adapters allowlist filters adapters by name · filtered files fall to Skipped"
+        }
+      ]
+    },
+    "quick-4": {
+      "files": [
+        "internal/cmd/hooks.go",
+        "internal/cmd/hooks_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "4609087",
+      "completed_at": "2026-07-23T12:19:14.356484Z",
+      "landmarks": [
+        {
+          "feature": "claude hooks scaffolding",
+          "symbol": "Hooks",
+          "loc": "internal/cmd/hooks.go:26",
+          "what": "standalone dross hooks ensure verb wires PreCompact+SessionStart without re-running init/onboard"
+        }
+      ]
+    },
+    "quick-5": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/reentry_test.go"
+      ],
+      "commit": "e115b17",
+      "completed_at": "2026-07-23T12:21:15.337062Z",
+      "landmarks": [
+        {
+          "feature": "session reentry",
+          "symbol": "suggestNext",
+          "loc": "internal/cmd/status.go:247",
+          "what": "partial/fail verdict line names the exact /dross-execute \u003cphase\u003e command (footer parity)"
+        }
+      ]
+    },
+    "quick-6": {
+      "files": [
+        "internal/cmd/reentry.go",
+        "internal/cmd/reentry_test.go",
+        "internal/cmd/status.go"
+      ],
+      "commit": "e6f6590",
+      "completed_at": "2026-07-23T12:33:45.221846Z",
+      "notes": "quick: reentry emits SessionStart hook JSON envelope (systemMessage + additionalContext) so the re-entry line is user-visible after /clear"
+    },
+    "quick-7": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/reentry_test.go"
+      ],
+      "commit": "42b9121",
+      "completed_at": "2026-07-23T12:59:06.260889Z",
+      "notes": "quick: suggestNext pass verdict points at /dross-ship (align with verify footer)"
+    },
+    "t-1": {
+      "files": [
+        "internal/hooks/settings.go",
+        "internal/hooks/settings_test.go"
+      ],
+      "commit": "eb46cae",
+      "completed_at": "2026-07-23T11:25:35.987121Z",
+      "landmarks": [
+        {
+          "feature": "claude hooks scaffolding",
+          "symbol": "MergeHook",
+          "loc": "internal/hooks/settings.go:41",
+          "what": "order-preserving idempotent merge of dross PreCompact/SessionStart entries into settings.json · foreign entries survive · malformed input = error not clobber"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/pause_test.go"
+      ],
+      "commit": "42efda8",
+      "completed_at": "2026-07-23T12:25:32.989392Z",
+      "notes": "verify re-entry: closes the c-3 weak finding from the 2026-07-23 partial verify",
+      "landmarks": [
+        {
+          "feature": "compaction-safe handoff snapshot",
+          "symbol": "TestPauseAutoSnapshotCapturesGitState",
+          "loc": "internal/cmd/pause_test.go:148",
+          "what": "git-facing snapshot content (branch + dirty truncation + clean) pinned by tests in a real git repo"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/spec.md",
+        "assets/prompts/plan.md",
+        "assets/prompts/execute.md",
+        "assets/prompts/verify.md",
+        "assets/prompts/ship.md",
+        "assets/prompts/quick.md",
+        "assets/prompts/pause.md"
+      ],
+      "commit": "90e9f38",
+      "completed_at": "2026-07-23T11:31:17.470777Z",
+      "landmarks": [
+        {
+          "feature": "clear-point protocol",
+          "symbol": "spec.md close block",
+          "loc": "assets/prompts/spec.md:192",
+          "what": "uniform 'state is on disk — safe to /clear · fresh session: /dross-…' sentinel closes all 7 durable-boundary prompts"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/reentry.go",
+        "internal/cmd/reentry_test.go",
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "dda7434",
+      "completed_at": "2026-07-23T11:33:28.83364Z",
+      "landmarks": [
+        {
+          "feature": "fresh-session reentry",
+          "symbol": "reentryLine",
+          "loc": "internal/cmd/reentry.go:47",
+          "what": "dross reentry prints 'you are here + next' via suggestNext · status's last line is byte-equal · silent no-op outside dross repos (SessionStart-safe)"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "assets/prompts/execute.md",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "f2e80dc",
+      "completed_at": "2026-07-23T11:35:06.984086Z",
+      "landmarks": [
+        {
+          "feature": "execute checkpoint gate",
+          "symbol": "execute.md §1g",
+          "loc": "assets/prompts/execute.md:203",
+          "what": "post-commit continue/stop/checkpoint gate · checkpoint validates then emits /clear → /dross-execute --from \u003cnext-task\u003e · wave boundaries lead with checkpoint"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/footer_coverage.go",
+        "internal/cmd/footer_coverage_test.go",
+        "docs/footer-audit.md"
+      ],
+      "commit": "6208ff7",
+      "completed_at": "2026-07-23T11:37:52.603666Z",
+      "landmarks": [
+        {
+          "feature": "clear-point protocol",
+          "symbol": "footerCoverage",
+          "loc": "internal/cmd/footer_coverage.go:31",
+          "what": "fail-closed gate over docs/footer-audit.md · every command-backed prompt footer-bearing or exempt-with-reason · malformed sentinels and reason-less exempt rows fail by name"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/hooks.go",
+        "internal/cmd/hooks_test.go",
+        "internal/cmd/init.go",
+        "internal/cmd/onboard.go",
+        "internal/cmd/init_test.go",
+        "internal/cmd/onboard_test.go",
+        "internal/cmd/cmd_test.go"
+      ],
+      "commit": "a4b30d6",
+      "completed_at": "2026-07-23T11:40:15.468664Z",
+      "landmarks": [
+        {
+          "feature": "claude hooks scaffolding",
+          "symbol": "ensureUserHooks",
+          "loc": "internal/cmd/hooks.go:25",
+          "what": "init/onboard idempotently wire user-level PreCompact → dross pause --auto and SessionStart → dross reentry via hooks.MergeHook · honours CLAUDE_CONFIG_DIR · byte-stable when already wired"
+        }
+      ]
+    }
+  }
+}

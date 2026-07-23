@@ -2,6 +2,8 @@ package mutation
 
 import (
 	"math"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -191,5 +193,62 @@ func TestDispatch(t *testing.T) {
 	}
 	if got := Dispatch("main.go", adapters); got != nil {
 		t.Error("expected nil for .go (no go adapter yet)")
+	}
+}
+
+// TestStrykerRunArgsScopedPackage pins the npx package name: bare "stryker"
+// on the registry is the ancient pre-scoped package that crashes on modern
+// Node — the invocation must use @stryker-mutator/core.
+func TestStrykerRunArgsScopedPackage(t *testing.T) {
+	s := &Stryker{ProjectRoot: "/repo"}
+	args := s.runArgs([]string{"src/a.ts", "src/b.ts"})
+
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "@stryker-mutator/core run") {
+		t.Errorf("must invoke the scoped package: %v", args)
+	}
+	for _, a := range args {
+		if a == "stryker" {
+			t.Errorf("bare 'stryker' package must not be invoked: %v", args)
+		}
+	}
+	if !strings.Contains(joined, "--mutate src/a.ts,src/b.ts") {
+		t.Errorf("mutate list wrong: %v", args)
+	}
+}
+
+// TestStrykerWorkdirMonorepo pins the workdir plumbing: --mutate paths are
+// workdir-relative, stryker runs and reports under <root>/<workdir>, and
+// parsed report paths are re-prefixed back to repo-relative.
+func TestStrykerWorkdirMonorepo(t *testing.T) {
+	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
+
+	args := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"})
+	if !strings.Contains(strings.Join(args, " "), "--mutate src/a.ts,src/b.svelte") {
+		t.Errorf("workdir prefix must be stripped from --mutate: %v", args)
+	}
+
+	if got, want := s.workDir(), filepath.Join("/repo", "web"); got != want {
+		t.Errorf("workDir = %q, want %q", got, want)
+	}
+	if got, want := s.reportPath(), filepath.Join("/repo", "web", "reports", "mutation", "mutation.json"); got != want {
+		t.Errorf("reportPath = %q, want %q", got, want)
+	}
+
+	r := &Report{Surviving: []Mutant{{File: "src/a.ts", Line: 3}}}
+	s.rePrefixFiles(r)
+	if r.Surviving[0].File != "web/src/a.ts" {
+		t.Errorf("report paths must be re-prefixed repo-relative, got %q", r.Surviving[0].File)
+	}
+
+	// Workdir unset: everything is a no-op passthrough.
+	bare := &Stryker{ProjectRoot: "/repo"}
+	r2 := &Report{Surviving: []Mutant{{File: "src/a.ts"}}}
+	bare.rePrefixFiles(r2)
+	if r2.Surviving[0].File != "src/a.ts" {
+		t.Errorf("no-workdir rePrefix must be a no-op, got %q", r2.Surviving[0].File)
+	}
+	if bare.workDir() != "/repo" {
+		t.Errorf("no-workdir workDir = %q, want /repo", bare.workDir())
 	}
 }

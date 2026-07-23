@@ -1,0 +1,53 @@
+[phase]
+  id = "context-hygiene"
+  title = "context-hygiene"
+  milestone = "v0.10"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every command ending at a durable state boundary (spec, plan, execute, verify, ship, quick, pause) closes with a clear-point footer: 'state is on disk — safe to /clear' plus the exact next command for a fresh session; enforced fail-closed by a coverage test (interaction-audit convention)."
+
+[[criteria]]
+  id = "c-2"
+  text = "In /dross-execute pair mode, the gate after each task commit offers a 'checkpoint' option alongside continue/stop: it confirms plan.toml + state are consistent, then ends the session with the exact re-entry command (/clear → /dross-execute --from <next-task>)."
+
+[[criteria]]
+  id = "c-3"
+  text = "A non-interactive `dross pause --auto` writes/merges a mechanical snapshot (branch, dirty files, dross status, timestamp) into .dross/handoff.md without prompting; dross init/onboard scaffold a Claude Code PreCompact hook that runs it, so compaction never loses the workflow thread."
+
+[[criteria]]
+  id = "c-4"
+  text = "dross status ends with a fresh-session re-entry line — 'you are here' + the exact next command — designed to be the first thing run after /clear."
+
+[[criteria]]
+  id = "c-5"
+  text = "dross init/onboard also ensure a user-level SessionStart hook that injects the short re-entry line (from handoff.md / dross status) into fresh sessions in dross repos, and no-ops outside them."
+
+[[decisions]]
+  key = "hook_scope"
+  choice = "Hooks (PreCompact + SessionStart) live user-level in ~/.claude/settings.json; init/onboard idempotently ensure they exist."
+  why = "dross already installs globally (skills symlinked into ~/.claude); `dross pause --auto` no-ops instantly outside dross repos, so one setup covers every repo with zero per-repo files."
+  locked = true
+
+[[decisions]]
+  key = "checkpoint_posture"
+  choice = "Checkpoint option present at every task gate; becomes the recommended lead option at wave boundaries."
+  why = "Passive options never get used (the original problem), but per-task nagging is friction; wave edges are the natural durable boundary."
+  locked = true
+
+[[decisions]]
+  key = "auto_handoff_merge"
+  choice = "`pause --auto` only writes a dedicated auto-snapshot section of handoff.md; it never touches the hand-written Thread / open-loops sections."
+  why = "Protects the user's own working notes from being clobbered by an unattended hook."
+  locked = true
+
+[[decisions]]
+  key = "footer_coverage"
+  choice = "The c-1 coverage test mirrors the interaction-audit convention: every command is classified footer-bearing or exempt-with-reason, fail-closed."
+  why = "Reuses an existing, already-enforced convention instead of inventing a parallel one."
+  locked = true
+
+[[deferred]]
+  text = "Subagent offload audit: push verify/execute's heavy inline reading (mutation logs, big diffs) into subagents to keep the main context lean."
+  why = "Polish relative to the footer/checkpoint/hook bundle; deserves its own pass."
+  target = "subagent-offload-audit"

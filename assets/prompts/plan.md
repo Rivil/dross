@@ -238,6 +238,8 @@ End with the standard next block:
 Plan ready and reviewed (B blocking resolved, F flags in REVIEW.md).
 
 Next: /dross-execute — run the first task (pair-mode by default).
+
+state is on disk — safe to /clear · fresh session: /dross-execute
 ```
 When the plan is trivial or purely mechanical, append the hint under the `Next:` line:
 ```

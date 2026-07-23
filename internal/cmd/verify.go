@@ -152,8 +152,8 @@ func configuredAdapters(p *project.Project, _ string, skip bool) []mutation.Adap
 	// or the host cwd for docker (we read the report via bind-mounted fs).
 	// If docker volume layout diverges, this is where we'd surface config.
 	cwd, _ := os.Getwd()
-	return []mutation.Adapter{
-		&mutation.Stryker{Prefix: prefix, ProjectRoot: cwd},
+	all := []mutation.Adapter{
+		&mutation.Stryker{Prefix: prefix, ProjectRoot: cwd, Workdir: p.Mutation.Stryker.Workdir},
 		&mutation.Gremlins{
 			Prefix:             prefix,
 			ProjectRoot:        cwd,
@@ -161,6 +161,22 @@ func configuredAdapters(p *project.Project, _ string, skip bool) []mutation.Adap
 		},
 		&mutation.StrykerNet{Prefix: prefix, ProjectRoot: cwd},
 	}
+	if len(p.Mutation.Adapters) == 0 {
+		return all
+	}
+	// [mutation] adapters = [...] allowlist: files whose adapter is filtered
+	// out fall into verify's existing Skipped path downstream.
+	allowed := map[string]bool{}
+	for _, name := range p.Mutation.Adapters {
+		allowed[name] = true
+	}
+	var out []mutation.Adapter
+	for _, a := range all {
+		if allowed[a.Name()] {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // dockerPrefix returns the runtime command prefix for docker mode.
@@ -250,6 +266,10 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 		Print("  (nothing to mutation-test)")
 	}
 	for _, lr := range t.Languages {
+		if lr.Error != "" {
+			Printf("  %s (%s): %d files — adapter FAILED: %s\n", lr.Name, lr.Tool, len(lr.Files), lr.Error)
+			continue
+		}
 		if lr.Mutation == nil {
 			Printf("  %s (%s): %d files — no mutation report\n", lr.Name, lr.Tool, len(lr.Files))
 			continue

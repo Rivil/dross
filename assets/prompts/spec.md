@@ -188,6 +188,8 @@ End with the standard next block — the `Next:` line, plus the conditional flag
 Spec locked.
 
 Next: /dross-plan — break the locked spec into tasks.
+
+state is on disk — safe to /clear · fresh session: /dross-plan
 ```
 When the phase is a new subsystem, has multiple plausible architectures, or looks like 4+ tasks, append the hint under the `Next:` line:
 ```

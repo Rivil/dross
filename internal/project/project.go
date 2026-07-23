@@ -149,7 +149,24 @@ type Goals struct {
 // Each sub-table is optional; unset values fall back to the adapter's
 // built-in default.
 type Mutation struct {
+	// Adapters is an allowlist of adapter names ("gremlins", "stryker",
+	// "stryker.net"). Non-empty means run ONLY these; files whose adapter
+	// is filtered out fall into verify's Skipped path ("no mutation adapter
+	// for .ts"). The escape hatch for a polyglot repo where one adapter
+	// isn't set up yet.
+	Adapters []string         `toml:"adapters,omitempty"`
 	Gremlins MutationGremlins `toml:"gremlins,omitempty"`
+	Stryker  MutationStryker  `toml:"stryker,omitempty"`
+}
+
+// MutationStryker surfaces the stryker adapter's tunable settings.
+//
+// Workdir is the repo-relative package that hosts stryker and its config in
+// a monorepo (e.g. "web" when vitest + stryker.config.json live in web/).
+// The adapter runs there, strips the prefix from --mutate paths, and
+// re-prefixes report paths so tests.json stays repo-relative.
+type MutationStryker struct {
+	Workdir string `toml:"workdir,omitempty"`
 }
 
 // MutationGremlins surfaces the gremlins adapter's tunable settings.

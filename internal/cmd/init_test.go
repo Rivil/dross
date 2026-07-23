@@ -123,3 +123,36 @@ func TestInitDoesNotClobberExistingArchitecture(t *testing.T) {
 		t.Errorf("init clobbered existing ARCHITECTURE.md:\ngot:  %q\nwant: %q", got, existing)
 	}
 }
+
+// TestInitEnsuresHooksIdempotent pins the hook_scope contract: init wires the
+// user-level PreCompact + SessionStart hooks, and a second init (fresh repo,
+// same CLAUDE_CONFIG_DIR) leaves settings.json byte-identical with exactly one
+// dross entry per event.
+func TestInitEnsuresHooksIdempotent(t *testing.T) {
+	cfg := t.TempDir()
+	settings := filepath.Join(cfg, "settings.json")
+
+	chdir(t, t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg) // after chdir, which pins its own temp dir
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("first init: %v", err)
+	}
+	first := mustRead(t, settings)
+
+	chdir(t, t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("second init: %v", err)
+	}
+	second := mustRead(t, settings)
+
+	if first != second {
+		t.Errorf("second init's ensure not byte-identical:\n--- first ---\n%s\n--- second ---\n%s", first, second)
+	}
+	if n := countIn(readHookCommands(t, settings, "PreCompact"), preCompactHookCommand); n != 1 {
+		t.Errorf("want exactly 1 dross PreCompact entry after two inits, got %d", n)
+	}
+	if n := countIn(readHookCommands(t, settings, "SessionStart"), sessionStartHookCommand); n != 1 {
+		t.Errorf("want exactly 1 dross SessionStart entry after two inits, got %d", n)
+	}
+}

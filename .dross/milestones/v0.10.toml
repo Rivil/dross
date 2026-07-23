@@ -1,4 +1,4 @@
-phases = ["task-lifecycle-commands", "task-reordering", "landmark-comma-fix", "telemetry-bucket-graduation", "telemetry-taxonomy-overhaul", "ship-clean-tree", "verify-auto-finalize"]
+phases = ["task-lifecycle-commands", "task-reordering", "landmark-comma-fix", "telemetry-bucket-graduation", "telemetry-taxonomy-overhaul", "ship-clean-tree", "verify-auto-finalize", "context-hygiene", "subagent-offload-audit"]
 
 [milestone]
   version = "v0.10"

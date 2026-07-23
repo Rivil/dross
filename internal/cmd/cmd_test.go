@@ -18,9 +18,13 @@ import (
 // outcome events emitted by verify/ship/phase create don't write to
 // the developer's real ~/.claude/dross/telemetry.jsonl. Tests that
 // specifically exercise telemetry should opt back in via t.Setenv.
+// Same guard for CLAUDE_CONFIG_DIR: init/onboard ensure user-level
+// hooks in settings.json, which must land in a temp dir, never the
+// developer's real ~/.claude. Hook tests override with their own dir.
 func chdir(t *testing.T, dir string) {
 	t.Helper()
 	t.Setenv("DROSS_NO_TELEMETRY", "1")
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	prev, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)

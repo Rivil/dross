@@ -110,9 +110,12 @@ func Status() *cobra.Command {
 				}
 			}
 
-			// Next suggested action — heuristic from current state
+			// Fresh-session re-entry footer — the LAST line of status, byte-equal
+			// to the line inside `dross reentry`'s hook envelope so re-orienting
+			// after /clear reads the same text whichever surface the user (or
+			// SessionStart hook) hits.
 			Print("")
-			Printf("next:      %s\n", suggestNext(root, proj, st))
+			Print(reentryLine(root, proj, st))
 			return nil
 		},
 	}
@@ -242,12 +245,12 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	if verdict := readVerifyVerdict(filepath.Join(dir, "verify.toml")); verdict != "" {
 		switch verdict {
 		case "fail", "partial":
-			return "verify is " + verdict + " — open " + filepath.Join(".dross/phases", st.CurrentPhase, "verify.toml") + " for findings"
+			return "verify is " + verdict + " — /dross-execute " + st.CurrentPhase + " to amend, findings in " + filepath.Join(".dross/phases", st.CurrentPhase, "verify.toml")
 		case "pass":
-			// recorded changes? at least confirm there are some
+			// recorded changes = unshipped work → shipping is the next step
 			ch, _ := changes.Load(changes.FilePath(root, st.CurrentPhase), st.CurrentPhase)
 			if ch != nil && len(ch.Tasks) > 0 {
-				return "phase verified — start a new phase or move on"
+				return "/dross-ship — open the PR and complete the phase"
 			}
 		}
 	}

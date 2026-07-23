@@ -56,6 +56,11 @@ type LanguageRun struct {
 	Tool     string           `json:"tool"` // "stryker" | "gremlins" | ...
 	Files    []string         `json:"files"`
 	Mutation *mutation.Report `json:"mutation,omitempty"`
+	// Error records an adapter failure for this language leg. One broken
+	// adapter must not discard the other legs' finished reports — the run
+	// is recorded with Mutation nil and the error text, and Skeleton
+	// surfaces it as a FLAG finding.
+	Error string `json:"error,omitempty"`
 }
 
 type SkippedFile struct {
@@ -155,7 +160,16 @@ func Run(phaseID string, files []string, adapters []mutation.Adapter) (*Tests, e
 		a := adapterByName[name]
 		report, err := a.Run(byAdapter[name])
 		if err != nil {
-			return nil, fmt.Errorf("%s adapter: %w", name, err)
+			// Record-and-continue: adapters run in sorted-name order, so a
+			// failing early adapter (e.g. stryker misconfigured) must not
+			// throw away a finished gremlins report.
+			t.Languages = append(t.Languages, LanguageRun{
+				Name:  adapterLanguage(name),
+				Tool:  name,
+				Files: byAdapter[name],
+				Error: err.Error(),
+			})
+			continue
 		}
 		t.Languages = append(t.Languages, LanguageRun{
 			Name:     adapterLanguage(name),
@@ -277,6 +291,12 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		})
 	}
 	for _, lr := range t.Languages {
+		if lr.Error != "" {
+			v.Findings = append(v.Findings, Finding{
+				Severity: "FLAG",
+				Text:     fmt.Sprintf("mutation adapter %s failed: %s", lr.Tool, lr.Error),
+			})
+		}
 		if lr.Mutation == nil {
 			continue
 		}

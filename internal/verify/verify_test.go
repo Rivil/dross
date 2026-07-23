@@ -92,14 +92,73 @@ func TestRunNoFiles(t *testing.T) {
 	}
 }
 
-func TestRunPropagatesAdapterError(t *testing.T) {
+// TestRunRecordsAdapterErrorAndContinues pins the record-and-continue
+// contract: one failing adapter must not discard the other adapters'
+// finished reports. Adapters run in sorted-name order (gremlins < stryker),
+// so this is exactly the "stryker misconfigured destroys the gremlins
+// report" polyglot failure.
+func TestRunRecordsAdapterErrorAndContinues(t *testing.T) {
 	stry := &fakeAdapter{
 		name:        "stryker",
 		supportsExt: []string{".ts"},
 		err:         errExample{},
 	}
-	if _, err := Run("p", []string{"x.ts"}, []mutation.Adapter{stry}); err == nil {
-		t.Fatal("expected error from adapter to propagate")
+	gremlins := &fakeAdapter{
+		name:        "gremlins",
+		supportsExt: []string{".go"},
+		report: &mutation.Report{
+			Tool: "gremlins", Killed: 2, Survived: 0, Score: 1.0,
+		},
+	}
+
+	got, err := Run("p", []string{"x.ts", "y.go"}, []mutation.Adapter{stry, gremlins})
+	if err != nil {
+		t.Fatalf("adapter failure must not fail the whole run: %v", err)
+	}
+	if len(got.Languages) != 2 {
+		t.Fatalf("both legs must be recorded, got %d", len(got.Languages))
+	}
+	byTool := map[string]LanguageRun{}
+	for _, lr := range got.Languages {
+		byTool[lr.Tool] = lr
+	}
+	if g := byTool["gremlins"]; g.Mutation == nil || g.Error != "" {
+		t.Errorf("gremlins leg must keep its report: %+v", g)
+	}
+	if s := byTool["stryker"]; s.Error != "boom" || s.Mutation != nil {
+		t.Errorf("stryker leg must record the error with nil Mutation: %+v", s)
+	}
+}
+
+// TestSkeletonSurfacesAdapterError: an errored leg becomes a FLAG finding,
+// and a measured leg alongside it still promotes mutation_status to
+// measured — the errored leg's nil Mutation is skipped by the status logic.
+func TestSkeletonSurfacesAdapterError(t *testing.T) {
+	tests := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{
+			{Name: "typescript", Tool: "stryker", Files: []string{"x.ts"}, Error: "boom"},
+			{Name: "go", Tool: "gremlins", Files: []string{"y.go"},
+				Mutation: &mutation.Report{Tool: "gremlins", Killed: 2, Score: 1.0}},
+		},
+	}
+	v := Skeleton(tests, []string{"c-1"})
+
+	if v.Summary.MutationStatus != MutationMeasured {
+		t.Errorf("measured gremlins leg must promote status past the errored leg, got %q", v.Summary.MutationStatus)
+	}
+	want := "mutation adapter stryker failed: boom"
+	found := false
+	for _, f := range v.Findings {
+		if f.Text == want {
+			found = true
+			if f.Severity != "FLAG" {
+				t.Errorf("adapter-failure finding severity = %q, want FLAG", f.Severity)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("missing adapter-failure FLAG finding %q in %+v", want, v.Findings)
 	}
 }
 

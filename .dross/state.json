@@ -1,157 +1,9 @@
 {
-  "version": "0.10.1.0",
+  "version": "0.10.8.7",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-20T15:28:56.640844Z",
-  "last_action": "completed task-lifecycle-commands",
+  "last_activity": "2026-07-23T13:02:19.491969Z",
+  "last_action": "completed context-hygiene",
   "history": [
-    {
-      "at": "2026-07-01T11:05:19.789207Z",
-      "action": "completed pr-record-reaches-base"
-    },
-    {
-      "at": "2026-07-01T12:24:58.452743Z",
-      "action": "created release-trust-and-distribution"
-    },
-    {
-      "at": "2026-07-01T12:57:59.886181Z",
-      "action": "completed release-trust-and-distribution"
-    },
-    {
-      "at": "2026-07-01T13:19:43.692596Z",
-      "action": "created secure-quality-findings-followups"
-    },
-    {
-      "at": "2026-07-01T13:30:39.022123Z",
-      "action": "completed secure-quality-findings-followups"
-    },
-    {
-      "at": "2026-07-01T13:39:12.636685Z",
-      "action": "created homebrew-and-windows-distribution"
-    },
-    {
-      "at": "2026-07-01T14:02:48.193346Z",
-      "action": "completed homebrew-and-windows-distribution"
-    },
-    {
-      "at": "2026-07-01T14:05:17.567171Z",
-      "action": "created additional-board-backends"
-    },
-    {
-      "at": "2026-07-01T14:42:32.268867Z",
-      "action": "completed additional-board-backends"
-    },
-    {
-      "at": "2026-07-20T08:23:42.664472Z",
-      "action": "created dross-watch"
-    },
-    {
-      "at": "2026-07-20T08:55:28.280923Z",
-      "action": "set current_phase=dross-watch"
-    },
-    {
-      "at": "2026-07-20T08:55:28.288769Z",
-      "action": "spec locked: dross-watch"
-    },
-    {
-      "at": "2026-07-20T09:08:23.10806Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-20T09:08:23.114886Z",
-      "action": "plan locked: dross-watch (5 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-07-20T09:11:59.410928Z",
-      "action": "plan reviewed: dross-watch (0 blocking, 2 flags)"
-    },
-    {
-      "at": "2026-07-20T09:15:51.758264Z",
-      "action": "set version=0.9.8.0"
-    },
-    {
-      "at": "2026-07-20T09:19:31.683822Z",
-      "action": "executed t-1 (Watch state file + new/carried diff)"
-    },
-    {
-      "at": "2026-07-20T09:23:28.862331Z",
-      "action": "executed t-2 (Phase-drift classifier over all phases)"
-    },
-    {
-      "at": "2026-07-20T09:27:49.034651Z",
-      "action": "executed t-4 (Extract mark-free inbound helper from issue pull)"
-    },
-    {
-      "at": "2026-07-20T10:02:25.283601Z",
-      "action": "executed t-3 (dross watch --json command + ranker)"
-    },
-    {
-      "at": "2026-07-20T10:06:27.205759Z",
-      "action": "executed t-5 (/dross-watch skill + prompt tests + Exempt enrollment)"
-    },
-    {
-      "at": "2026-07-20T10:06:46.977267Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-20T10:06:46.98467Z",
-      "action": "phase dross-watch executed (5/5 done)"
-    },
-    {
-      "at": "2026-07-20T10:11:31.70683Z",
-      "action": "set version=0.9.8.1"
-    },
-    {
-      "at": "2026-07-20T10:11:31.714124Z",
-      "action": "fix: scope watch drift to current milestone (history-cap false positives)"
-    },
-    {
-      "at": "2026-07-20T10:26:58.928885Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-20T10:26:58.937894Z",
-      "action": "verified dross-watch: pass (5/5 covered, mutation 0.96 measured; 47/49 survivors pre-existing/untouched, 2 switch-case ceiling)"
-    },
-    {
-      "at": "2026-07-20T11:04:55.32479Z",
-      "action": "completed dross-watch"
-    },
-    {
-      "at": "2026-07-20T12:21:14.49726Z",
-      "action": "set version=0.10.0.0"
-    },
-    {
-      "at": "2026-07-20T12:21:14.503227Z",
-      "action": "set current_milestone=v0.10"
-    },
-    {
-      "at": "2026-07-20T12:21:14.508929Z",
-      "action": "scoped milestone v0.10: 5 criteria, 7 phases"
-    },
-    {
-      "at": "2026-07-20T12:23:12.464925Z",
-      "action": "created task-lifecycle-commands"
-    },
-    {
-      "at": "2026-07-20T13:10:20.888384Z",
-      "action": "set current_phase=task-lifecycle-commands"
-    },
-    {
-      "at": "2026-07-20T13:10:20.895832Z",
-      "action": "spec locked: task-lifecycle-commands"
-    },
-    {
-      "at": "2026-07-20T13:52:43.370833Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-20T13:52:43.383161Z",
-      "action": "plan locked: task-lifecycle-commands (7 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-20T13:57:45.444798Z",
-      "action": "plan reviewed: task-lifecycle-commands (0 blocking, 3 flags; 2 fixed inline → 3 waves)"
-    },
     {
       "at": "2026-07-20T13:59:01.316636Z",
       "action": "set version=0.10.1.0"
@@ -203,6 +55,154 @@
     {
       "at": "2026-07-20T15:28:56.640844Z",
       "action": "completed task-lifecycle-commands"
+    },
+    {
+      "at": "2026-07-20T16:52:57.186762Z",
+      "action": "paused — shipped task-lifecycle-commands (PR #51 → milestone/v0.10); next: spec the next v0.10 phase"
+    },
+    {
+      "at": "2026-07-23T10:48:00.198785Z",
+      "action": "created context-hygiene"
+    },
+    {
+      "at": "2026-07-23T10:55:28.458716Z",
+      "action": "set current_phase=context-hygiene"
+    },
+    {
+      "at": "2026-07-23T10:55:28.465936Z",
+      "action": "spec locked: context-hygiene"
+    },
+    {
+      "at": "2026-07-23T11:15:13.287468Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-23T11:15:13.294591Z",
+      "action": "plan locked: context-hygiene (7 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-23T11:20:23.62439Z",
+      "action": "plan reviewed: context-hygiene (0 blocking, 4 flags; applied 2)"
+    },
+    {
+      "at": "2026-07-23T11:22:31.909535Z",
+      "action": "set version=0.10.8.0"
+    },
+    {
+      "at": "2026-07-23T11:25:36.000592Z",
+      "action": "executed t-1 (Add hook-merge helper for settings.json)"
+    },
+    {
+      "at": "2026-07-23T11:29:16.103503Z",
+      "action": "executed t-2 (Add dross pause --auto snapshot verb)"
+    },
+    {
+      "at": "2026-07-23T11:31:17.480983Z",
+      "action": "executed t-3 (Add clear-point footer to boundary prompts)"
+    },
+    {
+      "at": "2026-07-23T11:33:28.845141Z",
+      "action": "executed t-4 (Add dross reentry + status re-entry footer)"
+    },
+    {
+      "at": "2026-07-23T11:35:06.995102Z",
+      "action": "executed t-5 (Add post-commit checkpoint gate to execute)"
+    },
+    {
+      "at": "2026-07-23T11:37:52.614452Z",
+      "action": "executed t-6 (Add footer-audit doc + fail-closed gate)"
+    },
+    {
+      "at": "2026-07-23T11:40:15.482603Z",
+      "action": "executed t-7 (Scaffold user-level hooks in init/onboard)"
+    },
+    {
+      "at": "2026-07-23T11:40:26.376104Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-23T11:40:26.38274Z",
+      "action": "phase context-hygiene executed (7/7 done)"
+    },
+    {
+      "at": "2026-07-23T11:53:52.993709Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-23T11:53:52.999061Z",
+      "action": "verified context-hygiene: partial (4/5 covered, 1 weak, mutation 0.95)"
+    },
+    {
+      "at": "2026-07-23T12:00:16.81109Z",
+      "action": "bump internal 0.10.8.0 → 0.10.8.1"
+    },
+    {
+      "at": "2026-07-23T12:00:16.818296Z",
+      "action": "bump internal 0.10.8.1 → 0.10.8.2"
+    },
+    {
+      "at": "2026-07-23T12:00:16.82407Z",
+      "action": "bump internal 0.10.8.2 → 0.10.8.3"
+    },
+    {
+      "at": "2026-07-23T12:00:27.873168Z",
+      "action": "3 quicks: mutation adapter resilience (record-and-continue, scoped stryker+workdir, adapters allowlist) → 0.10.8.3"
+    },
+    {
+      "at": "2026-07-23T12:12:11.636008Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-23T12:12:11.642659Z",
+      "action": "re-verified context-hygiene: partial (4/5 covered, 1 weak c-3, mutation 0.94 clean adapter run)"
+    },
+    {
+      "at": "2026-07-23T12:19:14.349194Z",
+      "action": "bump internal 0.10.8.3 → 0.10.8.4"
+    },
+    {
+      "at": "2026-07-23T12:19:14.361693Z",
+      "action": "quick: add standalone dross hooks ensure verb"
+    },
+    {
+      "at": "2026-07-23T12:21:15.331259Z",
+      "action": "bump internal 0.10.8.4 → 0.10.8.5"
+    },
+    {
+      "at": "2026-07-23T12:21:15.34324Z",
+      "action": "quick: reentry partial/fail line names /dross-execute \u003cphase\u003e"
+    },
+    {
+      "at": "2026-07-23T12:25:32.995605Z",
+      "action": "amended t-2: pause snapshot git-content tests (c-3 weak finding)"
+    },
+    {
+      "at": "2026-07-23T12:33:39.497374Z",
+      "action": "bump internal 0.10.8.5 → 0.10.8.6"
+    },
+    {
+      "at": "2026-07-23T12:33:45.228628Z",
+      "action": "quick: reentry hook JSON envelope makes re-entry line user-visible"
+    },
+    {
+      "at": "2026-07-23T12:50:37.856786Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-23T12:50:37.862535Z",
+      "action": "verified context-hygiene: pass (5/5, mutation 0.95)"
+    },
+    {
+      "at": "2026-07-23T12:59:01.923636Z",
+      "action": "bump internal 0.10.8.6 → 0.10.8.7"
+    },
+    {
+      "at": "2026-07-23T12:59:06.267876Z",
+      "action": "quick: suggestNext pass verdict points at /dross-ship"
+    },
+    {
+      "at": "2026-07-23T13:02:19.491969Z",
+      "action": "completed context-hygiene"
     }
   ]
 }
