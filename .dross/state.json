@@ -1,19 +1,11 @@
 {
-  "version": "0.10.8.4",
+  "version": "0.10.8.5",
   "current_milestone": "v0.10",
   "current_phase": "context-hygiene",
   "current_phase_status": "verified",
-  "last_activity": "2026-07-23T12:19:14.361693Z",
-  "last_action": "quick: add standalone dross hooks ensure verb",
+  "last_activity": "2026-07-23T12:21:15.34324Z",
+  "last_action": "quick: reentry partial/fail line names /dross-execute \u003cphase\u003e",
   "history": [
-    {
-      "at": "2026-07-20T11:04:55.32479Z",
-      "action": "completed dross-watch"
-    },
-    {
-      "at": "2026-07-20T12:21:14.49726Z",
-      "action": "set version=0.10.0.0"
-    },
     {
       "at": "2026-07-20T12:21:14.503227Z",
       "action": "set current_milestone=v0.10"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-23T12:19:14.361693Z",
       "action": "quick: add standalone dross hooks ensure verb"
+    },
+    {
+      "at": "2026-07-23T12:21:15.331259Z",
+      "action": "bump internal 0.10.8.4 → 0.10.8.5"
+    },
+    {
+      "at": "2026-07-23T12:21:15.34324Z",
+      "action": "quick: reentry partial/fail line names /dross-execute \u003cphase\u003e"
     }
   ]
 }

@@ -70,6 +70,22 @@
         }
       ]
     },
+    "quick-5": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/reentry_test.go"
+      ],
+      "commit": "e115b17",
+      "completed_at": "2026-07-23T12:21:15.337062Z",
+      "landmarks": [
+        {
+          "feature": "session reentry",
+          "symbol": "suggestNext",
+          "loc": "internal/cmd/status.go:247",
+          "what": "partial/fail verdict line names the exact /dross-execute \u003cphase\u003e command (footer parity)"
+        }
+      ]
+    },
     "t-1": {
       "files": [
         "internal/hooks/settings.go",
