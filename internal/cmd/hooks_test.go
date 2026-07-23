@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -121,5 +122,39 @@ func TestEnsureUserHooksRefusesGarbage(t *testing.T) {
 	}
 	if got := mustRead(t, settings); got != garbage {
 		t.Errorf("malformed settings.json must be left untouched, got:\n%s", got)
+	}
+}
+
+// TestHooksEnsureCommand: the standalone `dross hooks ensure` verb wires both
+// hooks without going through init/onboard, and a second run is a byte-stable
+// no-op.
+func TestHooksEnsureCommand(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	settings := filepath.Join(cfg, "settings.json")
+
+	run := func() {
+		t.Helper()
+		c := Hooks()
+		c.SetOut(new(bytes.Buffer))
+		c.SetErr(new(bytes.Buffer))
+		c.SetArgs([]string{"ensure"})
+		if err := c.Execute(); err != nil {
+			t.Fatalf("hooks ensure: %v", err)
+		}
+	}
+
+	run()
+	if n := countIn(readHookCommands(t, settings, "PreCompact"), preCompactHookCommand); n != 1 {
+		t.Errorf("want exactly 1 PreCompact %q entry, got %d", preCompactHookCommand, n)
+	}
+	if n := countIn(readHookCommands(t, settings, "SessionStart"), sessionStartHookCommand); n != 1 {
+		t.Errorf("want exactly 1 SessionStart %q entry, got %d", sessionStartHookCommand, n)
+	}
+
+	first := mustRead(t, settings)
+	run()
+	if second := mustRead(t, settings); first != second {
+		t.Errorf("second `hooks ensure` not byte-identical:\n--- first ---\n%s\n--- second ---\n%s", first, second)
 	}
 }

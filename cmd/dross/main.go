@@ -51,6 +51,7 @@ func main() {
 		cmd.Deferred(),
 		cmd.Pause(),
 		cmd.Reentry(),
+		cmd.Hooks(),
 		cmd.Install(),
 		cmd.Update(),
 		cmd.Statusline(),

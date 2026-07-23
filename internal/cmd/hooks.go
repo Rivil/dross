@@ -7,8 +7,48 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
+
 	"github.com/Rivil/dross/internal/hooks"
 )
+
+// Hooks exposes the user-level hook wiring as its own verb. init and onboard
+// ensure the hooks as a side effect, but installs that predate the hooks (or
+// users who never re-run init/onboard) need a standalone way in.
+func Hooks() *cobra.Command {
+	root := &cobra.Command{
+		Use:   "hooks",
+		Short: "Manage the dross-owned Claude Code hooks",
+	}
+	root.AddCommand(&cobra.Command{
+		Use:   "ensure",
+		Short: "Idempotently wire the dross PreCompact + SessionStart hooks into user-level settings.json",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			path, err := userSettingsPath()
+			if err != nil {
+				return err
+			}
+			before, err := os.ReadFile(path)
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			if err := ensureUserHooks(); err != nil {
+				return err
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if bytes.Equal(before, after) {
+				Printf("hooks already wired → %s\n", path)
+				return nil
+			}
+			Printf("hooks ensured: PreCompact (%s) + SessionStart (%s) → %s\n", preCompactHookCommand, sessionStartHookCommand, path)
+			return nil
+		},
+	})
+	return root
+}
 
 // Hook command strings are plan-fixed constants (the hook_scope locked
 // decision): user-level hooks fire in every repo, and both verbs no-op
