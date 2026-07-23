@@ -1,0 +1,93 @@
+[verify]
+  phase = "context-hygiene"
+  generated_at = 2026-07-23T11:44:28.970528Z
+  verdict = "partial"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9478458049886621
+  mutants_killed = 1254
+  mutants_survived = 69
+  mutants_not_covered = 69
+  criteria_total = 5
+  criteria_covered = 4
+  criteria_uncovered = 1
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/cmd/footer_coverage_test.go:TestBoundaryPromptsCarryFooter",
+    "internal/cmd/footer_coverage_test.go:TestFooterCoverageFailClosed",
+    "internal/cmd/footer_coverage_test.go:TestFooterCoverageNamesDeletedFooter",
+    "internal/cmd/footer_coverage_test.go:TestClearPointExemptRemovalFails",
+    "internal/cmd/footer_coverage_test.go:TestFooterCoverageExemptReasonRequired",
+  ]
+  notes = "Deleting any of the 7 prompts' sentinels fails by name; audit-doc shrinkage and reason-less exempt rows fail. footer_coverage.go switch-arm NOT COVERED marks are the known gremlins switch-case attribution ceiling — every arm has a dedicated fixture test."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/cmd/execute_prompt_test.go:TestExecutePromptPostCommitGateOptions",
+    "internal/cmd/execute_prompt_test.go:TestExecutePromptCheckpointConsistencyBeforeReentry",
+    "internal/cmd/execute_prompt_test.go:TestExecutePromptCheckpointWaveLead",
+  ]
+  notes = "Gate is section-extracted (§1g) so a checkpoint grafted onto the pre-task gate fails; ordering (validate before --from) and wave-lead posture pinned. Prompt .md has no mutation adapter — content tests are the gate."
+
+[[criterion]]
+  id = "c-3"
+  status = "weak"
+  tests = [
+    "internal/cmd/pause_test.go:TestPauseAutoPreservesHandwritten",
+    "internal/cmd/pause_test.go:TestPauseAutoIdempotentMerge",
+    "internal/cmd/pause_test.go:TestPauseAutoNoPrompt",
+    "internal/cmd/pause_test.go:TestPauseAutoNoopOutsideRepo",
+    "internal/cmd/hooks_test.go:TestEnsureUserHooksIdempotent",
+    "internal/cmd/init_test.go:TestInitEnsuresHooksIdempotent",
+  ]
+  notes = "Merge semantics, no-prompt, no-op-outside, and the PreCompact scaffold are all well tested. WEAK because the snapshot's git-facing content is not: no pause test runs inside a git repo, so the '- branch:' and '- dirty:' fields (two of the four c-3 names) have no test that fails if they break — dirtySummary's parse/truncation paths (pause.go:105-117) and the branch capture (pause.go:85-86) are NOT COVERED by any test."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/cmd/reentry_test.go:TestStatusEndsWithReentryLine",
+    "internal/cmd/reentry_test.go:TestReentryMatchesSuggestNext",
+  ]
+  notes = "Asserts status's LAST line is byte-equal to `dross reentry` output — a mid-output regression fails; suggestion parity pinned across two lifecycle stages."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [
+    "internal/cmd/reentry_test.go:TestReentryNoopOutsideRepo",
+    "internal/cmd/hooks_test.go:TestEnsureUserHooksIdempotent",
+    "internal/cmd/hooks_test.go:TestEnsureUserHooksPreservesForeign",
+    "internal/cmd/onboard_test.go:TestOnboardEnsuresSameHooks",
+  ]
+  notes = "SessionStart entry asserted (exactly one, foreign entries survive); reentry exits 0 with empty stdout outside a dross repo; init/onboard parity byte-equal."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-3 snapshot content untested against a real git repo: pause.go:85-86 (branch capture) and pause.go:105-117 (dirtySummary parse + >5-file truncation) have zero covering tests — a pause_test running in a gitInit'd dirty repo asserting '- branch:' and '- dirty: N file(s)' closes this"
+
+[[finding]]
+  severity = "FLAG"
+  text = "hooks.go:60 (userSettingsPath HOME fallback) NOT COVERED — tests always set CLAUDE_CONFIG_DIR, so the ~/.claude default path is never exercised"
+
+[[finding]]
+  severity = "NOTE"
+  text = "zero mutants genuinely survived under test (Lived: 0 in every package); the summary's survived=69 is entirely NOT COVERED mutants, efficacy over exercised code = 1.00, overall score 0.95"
+
+[[finding]]
+  severity = "NOTE"
+  text = "footer_coverage.go:52-60 NOT COVERED marks are the known gremlins/go-cover switch-case attribution ceiling (proven 2026-07-01) — all four switch arms have dedicated fixture tests (NamesDeletedFooter, FlagsFooteredExempt, ExemptReasonRequired, ClearPointExemptRemovalFails); not a test gap, do not chase"
+
+[[finding]]
+  severity = "NOTE"
+  text = "remaining NOT COVERED mutants are in files this phase did not touch (issue.go, phase_lifecycle.go, statusline.go, env.go, doctor.go, ship.go, rule.go, install.go, status.go:413-445, deferred.go, update.go, phase.go, watch.go, milestone.go, validate.go, main.go) — pre-existing background, full list in tests.json / reports/gremlins/"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped (no mutation adapter for .md): assets/prompts/{execute,pause,plan,quick,ship,spec,verify}.md, docs/footer-audit.md — prompt content is gated by the Go content tests instead"
