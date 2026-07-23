@@ -86,6 +86,16 @@
         }
       ]
     },
+    "quick-6": {
+      "files": [
+        "internal/cmd/reentry.go",
+        "internal/cmd/reentry_test.go",
+        "internal/cmd/status.go"
+      ],
+      "commit": "e6f6590",
+      "completed_at": "2026-07-23T12:33:45.221846Z",
+      "notes": "quick: reentry emits SessionStart hook JSON envelope (systemMessage + additionalContext) so the re-entry line is user-visible after /clear"
+    },
     "t-1": {
       "files": [
         "internal/hooks/settings.go",
