@@ -572,6 +572,58 @@ status = "done"
 	}
 }
 
+// TestTechdebtSkillPairPresent pins c-7's asset half directly: both the
+// dross-techdebt command shim and its prompt body exist. The parity test alone
+// would still pass if BOTH files were deleted — this pin fails then.
+func TestTechdebtSkillPairPresent(t *testing.T) {
+	root := repoRootFromTest(t)
+	cmds := mdNamesIn(t, filepath.Join(root, "assets", "commands"), "dross-")
+	prompts := mdNamesIn(t, filepath.Join(root, "assets", "prompts"), "")
+	if !cmds["techdebt"] {
+		t.Error("assets/commands/dross-techdebt.md is missing")
+	}
+	if !prompts["techdebt"] {
+		t.Error("assets/prompts/techdebt.md is missing")
+	}
+}
+
+// TestActionCatalogAllSlashCommands pins c-7's repoint: every actionCatalog
+// command is a slash command — no bare CLI string remains in the actions line.
+func TestActionCatalogAllSlashCommands(t *testing.T) {
+	for _, a := range actionCatalog {
+		if !strings.HasPrefix(a.command, "/") {
+			t.Errorf("area %q command %q must start with '/'", a.label, a.command)
+		}
+	}
+}
+
+// TestStatusTechdebtActionRendersSlashCommand pins the rendered actions line for
+// a stamped techdebt store: it must carry the runnable slash command plus its
+// run signal.
+func TestStatusTechdebtActionRendersSlashCommand(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	scaffoldPhaseWithSpecAndPlan(t, "01-done", `[phase]
+id = "01-done"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+	mustWrite(t, ".dross/phases/01-done/verify.toml", "verdict = \"pass\"\n")
+
+	root := filepath.Join(dir, ".dross")
+	stampArea(t, root, "techdebt", time.Now().UTC().Add(-2*24*time.Hour))
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if !strings.Contains(out, "/dross-techdebt · last run") {
+		t.Fatalf("stamped techdebt actions line must contain \"/dross-techdebt · last run\", got:\n%s", out)
+	}
+}
+
 // TestActionAreaCommandsResolve pins c-3's no-dead-command guard: every available
 // area's command resolves to a real surface — a slash command's assets file, or a
 // CLI command registered on the root in main.go.

@@ -1,77 +1,9 @@
 {
-  "version": "0.10.8.7",
+  "version": "0.10.2.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-23T13:02:19.491969Z",
-  "last_action": "completed context-hygiene",
+  "last_activity": "2026-07-23T15:36:26.902237Z",
+  "last_action": "completed task-reordering",
   "history": [
-    {
-      "at": "2026-07-20T13:59:01.316636Z",
-      "action": "set version=0.10.1.0"
-    },
-    {
-      "at": "2026-07-20T14:01:32.005519Z",
-      "action": "executed t-1 (High-water NextTaskID + deriveWave helpers)"
-    },
-    {
-      "at": "2026-07-20T14:02:47.63581Z",
-      "action": "executed t-2 (ValidatePlan integrity guard)"
-    },
-    {
-      "at": "2026-07-20T14:04:49.198513Z",
-      "action": "executed t-3 (AddTask / RemoveTask / EditTask mutators)"
-    },
-    {
-      "at": "2026-07-20T14:07:05.409597Z",
-      "action": "executed t-7 (Atomic saveTOML)"
-    },
-    {
-      "at": "2026-07-20T14:10:18.40844Z",
-      "action": "executed t-4 (Wire dross task add + saveIfValid harness)"
-    },
-    {
-      "at": "2026-07-20T14:17:08.320838Z",
-      "action": "executed t-5 (Wire dross task remove + high-water backfill)"
-    },
-    {
-      "at": "2026-07-20T14:19:22.684202Z",
-      "action": "executed t-6 (Wire dross task edit)"
-    },
-    {
-      "at": "2026-07-20T14:19:36.879958Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-20T14:19:36.886558Z",
-      "action": "phase task-lifecycle-commands executed (7/7 done)"
-    },
-    {
-      "at": "2026-07-20T14:29:25.963385Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-20T14:29:25.971368Z",
-      "action": "verified task-lifecycle-commands: pass (5/5 covered, mutation 0.96 measured, efficacy 1.00 on executed code)"
-    },
-    {
-      "at": "2026-07-20T15:28:56.640844Z",
-      "action": "completed task-lifecycle-commands"
-    },
-    {
-      "at": "2026-07-20T16:52:57.186762Z",
-      "action": "paused — shipped task-lifecycle-commands (PR #51 → milestone/v0.10); next: spec the next v0.10 phase"
-    },
-    {
-      "at": "2026-07-23T10:48:00.198785Z",
-      "action": "created context-hygiene"
-    },
-    {
-      "at": "2026-07-23T10:55:28.458716Z",
-      "action": "set current_phase=context-hygiene"
-    },
-    {
-      "at": "2026-07-23T10:55:28.465936Z",
-      "action": "spec locked: context-hygiene"
-    },
     {
       "at": "2026-07-23T11:15:13.287468Z",
       "action": "set current_phase_status=planned"
@@ -203,6 +135,74 @@
     {
       "at": "2026-07-23T13:02:19.491969Z",
       "action": "completed context-hygiene"
+    },
+    {
+      "at": "2026-07-23T13:09:44.178802Z",
+      "action": "created task-reordering"
+    },
+    {
+      "at": "2026-07-23T13:19:05.637417Z",
+      "action": "set current_phase=task-reordering"
+    },
+    {
+      "at": "2026-07-23T13:19:05.643862Z",
+      "action": "spec locked: task-reordering"
+    },
+    {
+      "at": "2026-07-23T13:30:13.842384Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-23T13:30:13.84877Z",
+      "action": "plan locked: task-reordering (5 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-23T13:32:37.759108Z",
+      "action": "plan reviewed: task-reordering (0 blocking, 2 flags)"
+    },
+    {
+      "at": "2026-07-23T13:34:17.377835Z",
+      "action": "set version=0.10.2.0"
+    },
+    {
+      "at": "2026-07-23T13:40:21.052922Z",
+      "action": "executed t-1 (Add Plan.MoveTask engine with guards and reflow)"
+    },
+    {
+      "at": "2026-07-23T13:42:15.967928Z",
+      "action": "executed t-2 (Order-aware NextRunnable tie-break)"
+    },
+    {
+      "at": "2026-07-23T13:44:17.9081Z",
+      "action": "executed t-3 (Replace spec §2 free-recall with candidate slate)"
+    },
+    {
+      "at": "2026-07-23T13:49:16.838594Z",
+      "action": "executed t-4 (Ship /dross-techdebt skill, repoint status action)"
+    },
+    {
+      "at": "2026-07-23T14:08:47.631358Z",
+      "action": "executed t-5 (Wire dross task move subcommand)"
+    },
+    {
+      "at": "2026-07-23T14:08:59.432572Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-23T14:08:59.437959Z",
+      "action": "phase task-reordering executed (5/5 done)"
+    },
+    {
+      "at": "2026-07-23T14:19:07.513906Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-23T14:19:07.520053Z",
+      "action": "verified task-reordering: pass (7/7, mutation 0.95)"
+    },
+    {
+      "at": "2026-07-23T15:36:26.902237Z",
+      "action": "completed task-reordering"
     }
   ]
 }

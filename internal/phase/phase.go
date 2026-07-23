@@ -297,7 +297,8 @@ const (
 )
 
 // NextRunnable returns the next task with status==pending whose
-// dependencies are all done, picked by lowest wave then by id.
+// dependencies are all done, picked by lowest wave then by array position in
+// the plan — so `dross task move` reorders what runs next within a wave.
 // Returns nil if nothing is runnable (all done, all blocked, or empty plan).
 func (p *Plan) NextRunnable() *Task {
 	doneSet := map[string]bool{}
@@ -322,9 +323,8 @@ func (p *Plan) NextRunnable() *Task {
 		if blocked {
 			continue
 		}
-		if best == nil ||
-			t.Wave < best.Wave ||
-			(t.Wave == best.Wave && t.ID < best.ID) {
+		// Wave dominates; within a wave the first in document order wins.
+		if best == nil || t.Wave < best.Wave {
 			best = t
 		}
 	}

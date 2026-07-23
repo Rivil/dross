@@ -11,13 +11,13 @@ import (
 	"github.com/Rivil/dross/internal/phase"
 )
 
-// Task registers `dross task {next,show,status,add,remove,edit}`.
+// Task registers `dross task {next,show,status,add,remove,edit,move}`.
 func Task() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "task",
 		Short: "Inspect and update tasks within a phase plan",
 	}
-	c.AddCommand(taskNext(), taskShow(), taskStatus(), taskAdd(), taskRemove(), taskEdit())
+	c.AddCommand(taskNext(), taskShow(), taskStatus(), taskAdd(), taskRemove(), taskEdit(), taskMove())
 	return c
 }
 
@@ -243,6 +243,46 @@ func taskEdit() *cobra.Command {
 	c.Flags().IntVar(&wave, "wave", 0, "new wave")
 	c.Flags().StringSliceVar(&covers, "covers", nil, "replace covered criterion ids (comma-separated)")
 	c.Flags().StringSliceVar(&dependsOn, "depends-on", nil, "replace depends_on task ids (comma-separated)")
+	return c
+}
+
+// taskMove wires `dross task move`: reposition an existing task immediately
+// before/after an anchor task. Flag validation via resolveAnchor (exactly one
+// of --after/--before required), mutation via Plan.MoveTask (which owns every
+// guard: dependency order, frozen history, wave adoption), persistence via
+// saveIfValid — a rejected move errors before Save, so plan.toml stays
+// byte-unchanged.
+func taskMove() *cobra.Command {
+	var after, before string
+	c := &cobra.Command{
+		Use:   "move <phase-id> <task-id>",
+		Short: "Reposition a task relative to another (--after/--before)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			anchor, isBefore, err := resolveAnchor(after, before)
+			if err != nil {
+				return err
+			}
+			plan, spec, planPath, err := loadPhasePlanAndSpec(args[0])
+			if err != nil {
+				return err
+			}
+			if err := plan.MoveTask(args[1], anchor, isBefore); err != nil {
+				return err
+			}
+			if err := saveIfValid(plan, spec, planPath); err != nil {
+				return err
+			}
+			rel := "after"
+			if isBefore {
+				rel = "before"
+			}
+			Printf("moved %s %s %s in %s (wave %d)\n", args[1], rel, anchor, args[0], plan.FindTask(args[1]).Wave)
+			return nil
+		},
+	}
+	c.Flags().StringVar(&after, "after", "", "move immediately after this task id")
+	c.Flags().StringVar(&before, "before", "", "move immediately before this task id")
 	return c
 }
 

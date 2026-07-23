@@ -396,7 +396,28 @@ func TestNextRunnableLowestWaveFirst(t *testing.T) {
 	}}
 	got := p.NextRunnable()
 	if got == nil || got.ID != "t-2" {
-		t.Errorf("expected t-2 (wave 1, alphabetic first); got %v", got)
+		t.Errorf("expected t-2 (wave 1, document-order first); got %v", got)
+	}
+}
+
+func TestNextRunnableFollowsDocumentOrder(t *testing.T) {
+	// Same wave, no deps: array position breaks the tie, not lexicographic id.
+	p := &Plan{Task: []Task{
+		{ID: "t-2", Wave: 1, Status: StatusPending},
+		{ID: "t-1", Wave: 1, Status: StatusPending},
+	}}
+	if got := p.NextRunnable(); got == nil || got.ID != "t-2" {
+		t.Errorf("expected t-2 (listed first); got %v", got)
+	}
+
+	// Wave still dominates document order: a wave-1 task listed after a
+	// wave-2 task is returned first.
+	q := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 2, Status: StatusPending},
+		{ID: "t-2", Wave: 1, Status: StatusPending},
+	}}
+	if got := q.NextRunnable(); got == nil || got.ID != "t-2" {
+		t.Errorf("expected t-2 (wave dominates position); got %v", got)
 	}
 }
 
