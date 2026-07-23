@@ -3,17 +3,9 @@
   "current_milestone": "v0.10",
   "current_phase": "context-hygiene",
   "current_phase_status": "verified",
-  "last_activity": "2026-07-23T12:00:27.873168Z",
-  "last_action": "3 quicks: mutation adapter resilience (record-and-continue, scoped stryker+workdir, adapters allowlist) → 0.10.8.3",
+  "last_activity": "2026-07-23T12:12:11.642659Z",
+  "last_action": "re-verified context-hygiene: partial (4/5 covered, 1 weak c-3, mutation 0.94 clean adapter run)",
   "history": [
-    {
-      "at": "2026-07-20T10:11:31.70683Z",
-      "action": "set version=0.9.8.1"
-    },
-    {
-      "at": "2026-07-20T10:11:31.714124Z",
-      "action": "fix: scope watch drift to current milestone (history-cap false positives)"
-    },
     {
       "at": "2026-07-20T10:26:58.928885Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-23T12:00:27.873168Z",
       "action": "3 quicks: mutation adapter resilience (record-and-continue, scoped stryker+workdir, adapters allowlist) → 0.10.8.3"
+    },
+    {
+      "at": "2026-07-23T12:12:11.636008Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-23T12:12:11.642659Z",
+      "action": "re-verified context-hygiene: partial (4/5 covered, 1 weak c-3, mutation 0.94 clean adapter run)"
     }
   ]
 }
