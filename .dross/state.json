@@ -1,21 +1,11 @@
 {
   "version": "0.10.2.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-23T15:36:26.902237Z",
-  "last_action": "completed task-reordering",
+  "current_phase": "ship-clean-tree",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-23T16:28:18.852845Z",
+  "last_action": "spec locked: ship-clean-tree",
   "history": [
-    {
-      "at": "2026-07-23T11:15:13.287468Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-23T11:15:13.294591Z",
-      "action": "plan locked: context-hygiene (7 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-23T11:20:23.62439Z",
-      "action": "plan reviewed: context-hygiene (0 blocking, 4 flags; applied 2)"
-    },
     {
       "at": "2026-07-23T11:22:31.909535Z",
       "action": "set version=0.10.8.0"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-23T15:36:26.902237Z",
       "action": "completed task-reordering"
+    },
+    {
+      "at": "2026-07-23T15:59:07.002131Z",
+      "action": "created ship-clean-tree"
+    },
+    {
+      "at": "2026-07-23T16:28:18.846516Z",
+      "action": "set current_phase=ship-clean-tree"
+    },
+    {
+      "at": "2026-07-23T16:28:18.852845Z",
+      "action": "spec locked: ship-clean-tree"
     }
   ]
 }
