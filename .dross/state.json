@@ -3,17 +3,9 @@
   "current_milestone": "v0.10",
   "current_phase": "context-hygiene",
   "current_phase_status": "verified",
-  "last_activity": "2026-07-23T12:33:45.228628Z",
-  "last_action": "quick: reentry hook JSON envelope makes re-entry line user-visible",
+  "last_activity": "2026-07-23T12:50:37.862535Z",
+  "last_action": "verified context-hygiene: pass (5/5, mutation 0.95)",
   "history": [
-    {
-      "at": "2026-07-20T13:10:20.888384Z",
-      "action": "set current_phase=task-lifecycle-commands"
-    },
-    {
-      "at": "2026-07-20T13:10:20.895832Z",
-      "action": "spec locked: task-lifecycle-commands"
-    },
     {
       "at": "2026-07-20T13:52:43.370833Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-23T12:33:45.228628Z",
       "action": "quick: reentry hook JSON envelope makes re-entry line user-visible"
+    },
+    {
+      "at": "2026-07-23T12:50:37.856786Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-23T12:50:37.862535Z",
+      "action": "verified context-hygiene: pass (5/5, mutation 0.95)"
     }
   ]
 }
