@@ -1,6 +1,58 @@
 {
   "phase": "context-hygiene",
   "tasks": {
+    "quick-1": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/verify/verify_test.go",
+        "internal/cmd/verify.go"
+      ],
+      "commit": "9c6d028",
+      "completed_at": "2026-07-23T12:00:27.854306Z",
+      "landmarks": [
+        {
+          "feature": "mutation verify pipeline",
+          "symbol": "LanguageRun.Error",
+          "loc": "internal/verify/verify.go:60",
+          "what": "adapter failure records LanguageRun.Error + FLAG finding instead of discarding other legs' reports"
+        }
+      ]
+    },
+    "quick-2": {
+      "files": [
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_test.go",
+        "internal/project/project.go",
+        "internal/cmd/verify.go"
+      ],
+      "commit": "5d8654a",
+      "completed_at": "2026-07-23T12:00:27.861311Z",
+      "landmarks": [
+        {
+          "feature": "mutation verify pipeline",
+          "symbol": "Stryker.runArgs",
+          "loc": "internal/mutation/stryker.go:100",
+          "what": "npx @stryker-mutator/core (not deprecated bare stryker) · [mutation.stryker] workdir monorepo knob with repo-relative path round-trip"
+        }
+      ]
+    },
+    "quick-3": {
+      "files": [
+        "internal/project/project.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_test.go"
+      ],
+      "commit": "53b3dd7",
+      "completed_at": "2026-07-23T12:00:27.867506Z",
+      "landmarks": [
+        {
+          "feature": "mutation verify pipeline",
+          "symbol": "configuredAdapters",
+          "loc": "internal/cmd/verify.go:160",
+          "what": "[mutation] adapters allowlist filters adapters by name · filtered files fall to Skipped"
+        }
+      ]
+    },
     "t-1": {
       "files": [
         "internal/hooks/settings.go",

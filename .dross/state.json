@@ -1,27 +1,11 @@
 {
-  "version": "0.10.8.0",
+  "version": "0.10.8.3",
   "current_milestone": "v0.10",
   "current_phase": "context-hygiene",
   "current_phase_status": "verified",
-  "last_activity": "2026-07-23T11:53:52.999061Z",
-  "last_action": "verified context-hygiene: partial (4/5 covered, 1 weak, mutation 0.95)",
+  "last_activity": "2026-07-23T12:00:27.873168Z",
+  "last_action": "3 quicks: mutation adapter resilience (record-and-continue, scoped stryker+workdir, adapters allowlist) → 0.10.8.3",
   "history": [
-    {
-      "at": "2026-07-20T10:02:25.283601Z",
-      "action": "executed t-3 (dross watch --json command + ranker)"
-    },
-    {
-      "at": "2026-07-20T10:06:27.205759Z",
-      "action": "executed t-5 (/dross-watch skill + prompt tests + Exempt enrollment)"
-    },
-    {
-      "at": "2026-07-20T10:06:46.977267Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-20T10:06:46.98467Z",
-      "action": "phase dross-watch executed (5/5 done)"
-    },
     {
       "at": "2026-07-20T10:11:31.70683Z",
       "action": "set version=0.9.8.1"
@@ -205,6 +189,22 @@
     {
       "at": "2026-07-23T11:53:52.999061Z",
       "action": "verified context-hygiene: partial (4/5 covered, 1 weak, mutation 0.95)"
+    },
+    {
+      "at": "2026-07-23T12:00:16.81109Z",
+      "action": "bump internal 0.10.8.0 → 0.10.8.1"
+    },
+    {
+      "at": "2026-07-23T12:00:16.818296Z",
+      "action": "bump internal 0.10.8.1 → 0.10.8.2"
+    },
+    {
+      "at": "2026-07-23T12:00:16.82407Z",
+      "action": "bump internal 0.10.8.2 → 0.10.8.3"
+    },
+    {
+      "at": "2026-07-23T12:00:27.873168Z",
+      "action": "3 quicks: mutation adapter resilience (record-and-continue, scoped stryker+workdir, adapters allowlist) → 0.10.8.3"
     }
   ]
 }
