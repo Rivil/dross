@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -11,10 +12,24 @@ import (
 	"github.com/Rivil/dross/internal/state"
 )
 
+// sessionStartOutput is the Claude Code SessionStart hook JSON envelope.
+// Plain hook stdout reaches only the model's context; systemMessage is the
+// documented user-visible channel, so the same line rides both fields — the
+// human and the model re-orient off identical text.
+type sessionStartOutput struct {
+	SystemMessage      string                 `json:"systemMessage"`
+	HookSpecificOutput sessionStartHookOutput `json:"hookSpecificOutput"`
+}
+
+type sessionStartHookOutput struct {
+	HookEventName     string `json:"hookEventName"`
+	AdditionalContext string `json:"additionalContext"`
+}
+
 // Reentry prints the one-line "you are here + next command" summary a fresh
-// session needs after /clear. It is the SessionStart hook target, so outside a
-// dross repo it exits 0 with no output — a non-dross cwd is the normal case,
-// not an error.
+// session needs after /clear, wrapped in the SessionStart hook JSON envelope.
+// It is the SessionStart hook target, so outside a dross repo it exits 0 with
+// no output — a non-dross cwd is the normal case, not an error.
 func Reentry() *cobra.Command {
 	return &cobra.Command{
 		Use:   "reentry",
@@ -35,15 +50,27 @@ func Reentry() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			Print(reentryLine(root, proj, st))
+			line := reentryLine(root, proj, st)
+			out, err := json.Marshal(sessionStartOutput{
+				SystemMessage: line,
+				HookSpecificOutput: sessionStartHookOutput{
+					HookEventName:     "SessionStart",
+					AdditionalContext: line,
+				},
+			})
+			if err != nil {
+				return err
+			}
+			Print(string(out))
 			return nil
 		},
 	}
 }
 
 // reentryLine is the shared generator behind `dross reentry` and the final
-// line of `dross status` — the two surfaces must stay byte-equal, so a fresh
-// session reads the same "you are here" whichever it runs first.
+// line of `dross status` — status prints it verbatim, reentry embeds it in
+// the hook envelope, so a fresh session reads the same "you are here"
+// whichever it runs first.
 func reentryLine(root string, proj *project.Project, st *state.State) string {
 	where := "(no phase)"
 	if st.CurrentPhase != "" {

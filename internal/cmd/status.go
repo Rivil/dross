@@ -111,8 +111,9 @@ func Status() *cobra.Command {
 			}
 
 			// Fresh-session re-entry footer — the LAST line of status, byte-equal
-			// to `dross reentry` output so re-orienting after /clear reads the
-			// same line whichever surface the user (or SessionStart hook) hits.
+			// to the line inside `dross reentry`'s hook envelope so re-orienting
+			// after /clear reads the same text whichever surface the user (or
+			// SessionStart hook) hits.
 			Print("")
 			Print(reentryLine(root, proj, st))
 			return nil
