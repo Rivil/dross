@@ -1,15 +1,9 @@
 {
   "version": "0.10.8.7",
   "current_milestone": "v0.10",
-  "current_phase": "context-hygiene",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-23T12:59:06.267876Z",
-  "last_action": "quick: suggestNext pass verdict points at /dross-ship",
+  "last_activity": "2026-07-23T13:02:19.491969Z",
+  "last_action": "completed context-hygiene",
   "history": [
-    {
-      "at": "2026-07-20T13:57:45.444798Z",
-      "action": "plan reviewed: task-lifecycle-commands (0 blocking, 3 flags; 2 fixed inline → 3 waves)"
-    },
     {
       "at": "2026-07-20T13:59:01.316636Z",
       "action": "set version=0.10.1.0"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-23T12:59:06.267876Z",
       "action": "quick: suggestNext pass verdict points at /dross-ship"
+    },
+    {
+      "at": "2026-07-23T13:02:19.491969Z",
+      "action": "completed context-hygiene"
     }
   ]
 }
