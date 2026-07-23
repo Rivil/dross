@@ -104,18 +104,17 @@
     },
     "t-2": {
       "files": [
-        "internal/cmd/pause.go",
-        "internal/cmd/pause_test.go",
-        "cmd/dross/main.go"
+        "internal/cmd/pause_test.go"
       ],
-      "commit": "0cd87b0",
-      "completed_at": "2026-07-23T11:29:16.092334Z",
+      "commit": "42efda8",
+      "completed_at": "2026-07-23T12:25:32.989392Z",
+      "notes": "verify re-entry: closes the c-3 weak finding from the 2026-07-23 partial verify",
       "landmarks": [
         {
-          "feature": "auto handoff snapshot",
-          "symbol": "pauseAuto",
-          "loc": "internal/cmd/pause.go:45",
-          "what": "dross pause --auto merges branch/dirty/phase/next snapshot into handoff.md's Auto-snapshot section only · silent no-op outside dross repos · never prompts"
+          "feature": "compaction-safe handoff snapshot",
+          "symbol": "TestPauseAutoSnapshotCapturesGitState",
+          "loc": "internal/cmd/pause_test.go:148",
+          "what": "git-facing snapshot content (branch + dirty truncation + clean) pinned by tests in a real git repo"
         }
       ]
     },

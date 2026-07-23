@@ -3,13 +3,9 @@
   "current_milestone": "v0.10",
   "current_phase": "context-hygiene",
   "current_phase_status": "verified",
-  "last_activity": "2026-07-23T12:21:15.34324Z",
-  "last_action": "quick: reentry partial/fail line names /dross-execute \u003cphase\u003e",
+  "last_activity": "2026-07-23T12:25:32.995605Z",
+  "last_action": "amended t-2: pause snapshot git-content tests (c-3 weak finding)",
   "history": [
-    {
-      "at": "2026-07-20T12:21:14.503227Z",
-      "action": "set current_milestone=v0.10"
-    },
     {
       "at": "2026-07-20T12:21:14.508929Z",
       "action": "scoped milestone v0.10: 5 criteria, 7 phases"
@@ -205,6 +201,10 @@
     {
       "at": "2026-07-23T12:21:15.34324Z",
       "action": "quick: reentry partial/fail line names /dross-execute \u003cphase\u003e"
+    },
+    {
+      "at": "2026-07-23T12:25:32.995605Z",
+      "action": "amended t-2: pause snapshot git-content tests (c-3 weak finding)"
     }
   ]
 }
