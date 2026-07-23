@@ -444,3 +444,160 @@ status = "in_progress"
 		}
 	}
 }
+
+// threeTaskPlan is twoTaskPlan plus a third wave-1 task — the fixture for the
+// move wiring tests (all pending, no deps, so any reorder is legal).
+const threeTaskPlan = `[phase]
+id = "01-test"
+[[task]]
+id = "t-1"
+wave = 1
+title = "first"
+files = ["a.go"]
+covers = ["c-1"]
+[[task]]
+id = "t-2"
+wave = 1
+title = "second"
+files = ["b.go"]
+covers = ["c-1"]
+[[task]]
+id = "t-3"
+wave = 1
+title = "third"
+files = ["c.go"]
+covers = ["c-1"]
+`
+
+func TestTaskMoveRepositions(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", threeTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	if err := runCmd(t, Task(), "move", "01-test", "t-3", "--before", "t-1"); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	plan, err := phase.LoadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, tk := range plan.Task {
+		order = append(order, tk.ID)
+	}
+	if want := []string{"t-3", "t-1", "t-2"}; !slices.Equal(order, want) {
+		t.Errorf("reloaded order = %v, want %v", order, want)
+	}
+}
+
+// TestTaskMoveFlagValidation pins the resolveAnchor contract: both flags or
+// neither produce its exact error strings, with no file write either way.
+func TestTaskMoveFlagValidation(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", threeTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+	pre := mustRead(t, planPath)
+
+	err := runCmd(t, Task(), "move", "01-test", "t-1", "--before", "t-2", "--after", "t-3")
+	if err == nil || err.Error() != "pass exactly one of --after or --before, not both" {
+		t.Errorf("both flags: got %v, want resolveAnchor's exact both-flags error", err)
+	}
+	err = runCmd(t, Task(), "move", "01-test", "t-1")
+	if err == nil || err.Error() != "pass exactly one of --after or --before" {
+		t.Errorf("neither flag: got %v, want resolveAnchor's exact neither-flag error", err)
+	}
+	assertPlanUnchanged(t, planPath, pre)
+}
+
+// TestTaskMoveRejectedLeavesFileUntouched pins the byte-identity guarantee: an
+// illegal move (mover after its dependent) errors with plan.toml byte-unchanged.
+func TestTaskMoveRejectedLeavesFileUntouched(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", depPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+	pre := mustRead(t, planPath)
+
+	err := runCmd(t, Task(), "move", "01-test", "t-1", "--after", "t-2")
+	if err == nil {
+		t.Fatal("expected rejection: t-1 moved after its dependent t-2")
+	}
+	assertPlanUnchanged(t, planPath, pre)
+}
+
+// TestTaskMoveThenNext proves the move->next chain end to end: after moving
+// t-2 before t-1 (both wave 1, pending), `task next` returns t-2.
+func TestTaskMoveThenNext(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+
+	if err := runCmd(t, Task(), "move", "01-test", "t-2", "--before", "t-1"); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Task(), "next", "01-test"); err != nil {
+			t.Errorf("next: %v", err)
+		}
+	})
+	if strings.TrimSpace(out) != "t-2" {
+		t.Errorf("next after move = %q, want t-2", strings.TrimSpace(out))
+	}
+}
+
+// TestTaskMoveKeepsID pins end-to-end id stability: after a move `task show`
+// still resolves the mover, and its id appears exactly once in the saved file.
+func TestTaskMoveKeepsID(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", threeTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	if err := runCmd(t, Task(), "move", "01-test", "t-3", "--before", "t-1"); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Task(), "show", "01-test", "t-3"); err != nil {
+			t.Errorf("show after move: %v", err)
+		}
+	})
+	if !strings.Contains(out, "id:           t-3") {
+		t.Errorf("show t-3 after move did not resolve:\n%s", out)
+	}
+	if got := strings.Count(mustRead(t, planPath), `"t-3"`); got != 1 {
+		t.Errorf("saved file contains %d occurrences of id \"t-3\", want exactly 1", got)
+	}
+}
+
+// TestTaskMoveCrossWaveValidates proves the re-derived waves survive the full
+// validator: after a legal cross-wave move, `dross validate` reports no problems.
+func TestTaskMoveCrossWaveValidates(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", `[phase]
+id = "01-test"
+[[task]]
+id = "t-1"
+wave = 1
+title = "first"
+files = ["a.go"]
+covers = ["c-1"]
+[[task]]
+id = "t-2"
+wave = 2
+title = "second"
+files = ["b.go"]
+covers = ["c-1"]
+`)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	if err := runCmd(t, Task(), "move", "01-test", "t-1", "--after", "t-2"); err != nil {
+		t.Fatalf("cross-wave move: %v", err)
+	}
+	plan, err := phase.LoadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plan.FindTask("t-1").Wave; got != 2 {
+		t.Errorf("mover wave = %d, want 2 (adopted from anchor)", got)
+	}
+	if err := runCmd(t, Validate()); err != nil {
+		t.Errorf("dross validate after legal cross-wave move: %v", err)
+	}
+}
