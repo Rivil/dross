@@ -143,3 +143,58 @@ func TestPauseWithoutAutoErrors(t *testing.T) {
 		t.Fatal("bare `dross pause` should refuse — only --auto is implemented")
 	}
 }
+
+func TestPauseAutoSnapshotCapturesGitState(t *testing.T) {
+	dir := pauseRepo(t)
+	gitInit(t, dir, "https://forge.example/me/p.git")
+	mustGit(t, dir, "add", "-A")
+	mustGit(t, dir, "commit", "-qm", "baseline")
+	mustGit(t, dir, "checkout", "-qb", "phase/pause-test")
+	for _, name := range []string{"d1.txt", "d2.txt", "d3.txt", "d4.txt", "d5.txt", "d6.txt", "d7.txt"} {
+		mustWrite(t, filepath.Join(dir, name), "x")
+	}
+
+	if err := pauseAuto(pauseNow); err != nil {
+		t.Fatalf("pauseAuto: %v", err)
+	}
+	handoff := filepath.Join(dir, ".dross", "handoff.md")
+	got := mustRead(t, handoff)
+	if !strings.Contains(got, "- branch: phase/pause-test\n") {
+		t.Errorf("branch line missing or wrong:\n%s", got)
+	}
+	if !strings.Contains(got, "- dirty: 7 file(s): d1.txt, d2.txt, d3.txt, d4.txt, d5.txt +2 more\n") {
+		t.Errorf("dirty line should truncate past 5 paths:\n%s", got)
+	}
+
+	// Exactly 5 dirty entries must list every path with no "+N more" tail.
+	mustGit(t, dir, "add", "-A")
+	mustGit(t, dir, "commit", "-qm", "checkpoint")
+	for _, name := range []string{"e1.txt", "e2.txt", "e3.txt", "e4.txt", "e5.txt"} {
+		mustWrite(t, filepath.Join(dir, name), "x")
+	}
+	if err := pauseAuto(pauseNow); err != nil {
+		t.Fatalf("second pauseAuto: %v", err)
+	}
+	got = mustRead(t, handoff)
+	if !strings.Contains(got, "- dirty: 5 file(s): e1.txt, e2.txt, e3.txt, e4.txt, e5.txt\n") {
+		t.Errorf("five-entry dirty line should list all paths without a more-tail:\n%s", got)
+	}
+}
+
+func TestPauseAutoSnapshotCleanRepo(t *testing.T) {
+	dir := pauseRepo(t)
+	gitInit(t, dir, "https://forge.example/me/p.git")
+	mustGit(t, dir, "add", "-A")
+	mustGit(t, dir, "commit", "-qm", "baseline")
+
+	if err := pauseAuto(pauseNow); err != nil {
+		t.Fatalf("pauseAuto: %v", err)
+	}
+	got := mustRead(t, filepath.Join(dir, ".dross", "handoff.md"))
+	if !strings.Contains(got, "- branch: main\n") {
+		t.Errorf("branch line should name main:\n%s", got)
+	}
+	if !strings.Contains(got, "- dirty: clean\n") {
+		t.Errorf("clean repo should render '- dirty: clean':\n%s", got)
+	}
+}
