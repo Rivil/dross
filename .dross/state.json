@@ -1,15 +1,9 @@
 {
   "version": "0.10.3.0",
   "current_milestone": "v0.10",
-  "current_phase": "landmark-comma-fix",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-24T08:56:31.145497Z",
-  "last_action": "verified landmark-comma-fix: pass (4/4, mutation 0.96)",
+  "last_activity": "2026-07-24T09:08:16.133186Z",
+  "last_action": "completed landmark-comma-fix",
   "history": [
-    {
-      "at": "2026-07-23T12:59:06.267876Z",
-      "action": "quick: suggestNext pass verdict points at /dross-ship"
-    },
     {
       "at": "2026-07-23T13:02:19.491969Z",
       "action": "completed context-hygiene"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-24T08:56:31.145497Z",
       "action": "verified landmark-comma-fix: pass (4/4, mutation 0.96)"
+    },
+    {
+      "at": "2026-07-24T09:08:16.133186Z",
+      "action": "completed landmark-comma-fix"
     }
   ]
 }
