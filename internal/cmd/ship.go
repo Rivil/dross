@@ -240,6 +240,18 @@ func Ship() *cobra.Command {
 				narrate("no milestone active — PR targets %s; scope one with `dross milestone <version>` for a staging branch\n", baseBranch)
 			}
 
+			// Safety net (c-2): .dross-only chores sitting unpushed on the
+			// local base re-seed divergence at the next squash-merge. Ship
+			// already requires network, so it absorbs the push; a code-ahead
+			// base or a failed push is a hard refusal.
+			basePushed, err := pushBaseIfAheadDrossOnly(repoDir, baseBranch)
+			if err != nil {
+				return err
+			}
+			if basePushed {
+				narrate("pushed unpushed .dross chores on %s to origin\n", baseBranch)
+			}
+
 			// 7) Push phase/<id> directly. The provider's squash-merge will
 			//    collapse the per-task commits into one on the base; no
 			//    client-side synthetic branch needed.

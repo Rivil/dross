@@ -333,6 +333,19 @@ points at a manual reconcile.`,
 				return fmt.Errorf("git fetch: %w\n%s", err, out)
 			}
 
+			// Safety net (c-2): .dross-only chores sitting unpushed on the
+			// local base (pause auto-snapshot, gate auto-commits) re-seed
+			// divergence at the next squash-merge. Complete already requires
+			// network, so it absorbs the push; a code-ahead base or a failed
+			// push is a hard refusal.
+			basePushed, err := pushBaseIfAheadDrossOnly(repoDir, reconcileBranch)
+			if err != nil {
+				return err
+			}
+			if basePushed {
+				Printf("pushed unpushed .dross chores on %s to origin\n", reconcileBranch)
+			}
+
 			// Origin-side fallback for the recorded PR (c-3): post-squash-merge
 			// the local working tree can be stale — ship committed the PR
 			// record onto phase/<id> and the squash carried it to origin/<base>,
