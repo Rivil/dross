@@ -1,31 +1,11 @@
 {
-  "version": "0.10.6.0",
+  "version": "0.10.3.0",
   "current_milestone": "v0.10",
   "current_phase": "landmark-comma-fix",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-24T08:34:14.360457Z",
-  "last_action": "plan reviewed: landmark-comma-fix (0 blocking, 1 flag)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-24T08:40:36.714978Z",
+  "last_action": "phase landmark-comma-fix executed (2/2 done)",
   "history": [
-    {
-      "at": "2026-07-23T12:21:15.34324Z",
-      "action": "quick: reentry partial/fail line names /dross-execute \u003cphase\u003e"
-    },
-    {
-      "at": "2026-07-23T12:25:32.995605Z",
-      "action": "amended t-2: pause snapshot git-content tests (c-3 weak finding)"
-    },
-    {
-      "at": "2026-07-23T12:33:39.497374Z",
-      "action": "bump internal 0.10.8.5 → 0.10.8.6"
-    },
-    {
-      "at": "2026-07-23T12:33:45.228628Z",
-      "action": "quick: reentry hook JSON envelope makes re-entry line user-visible"
-    },
-    {
-      "at": "2026-07-23T12:50:37.856786Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-07-23T12:50:37.862535Z",
       "action": "verified context-hygiene: pass (5/5, mutation 0.95)"
@@ -205,6 +185,26 @@
     {
       "at": "2026-07-24T08:34:14.360457Z",
       "action": "plan reviewed: landmark-comma-fix (0 blocking, 1 flag)"
+    },
+    {
+      "at": "2026-07-24T08:35:11.455337Z",
+      "action": "set version=0.10.3.0"
+    },
+    {
+      "at": "2026-07-24T08:38:19.602097Z",
+      "action": "executed t-1 (Rewrite ParseLandmark with key=-boundary splitting)"
+    },
+    {
+      "at": "2026-07-24T08:40:19.908379Z",
+      "action": "executed t-2 (Update --landmark help text, add e2e comma test)"
+    },
+    {
+      "at": "2026-07-24T08:40:36.708397Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-24T08:40:36.714978Z",
+      "action": "phase landmark-comma-fix executed (2/2 done)"
     }
   ]
 }
