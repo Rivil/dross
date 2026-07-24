@@ -56,14 +56,18 @@ var landmarkKeys = map[string]func(*Landmark, string){
 	"what":    func(l *Landmark, v string) { l.What = v },
 }
 
-// ParseLandmark parses one --landmark value: comma-separated key=value pairs
-// (feature/symbol/loc/what). Each pair splits on its FIRST '=' only, so a value
-// may itself contain '=' or '·'. A pair with no '=' or an empty/unknown key is
-// an error — never a silent empty-key entry.
+// ParseLandmark parses one --landmark value: key=value pairs
+// (feature/symbol/loc/what). A comma starts a NEW pair only when the text
+// after it begins with a recognised key followed by '='; any other comma is
+// part of the current value, preserved as typed (whitespace trimmed only at
+// the value's ends). Each pair splits on its FIRST '=' only, so a value may
+// itself contain '=' or '·'. A pair with an empty/unknown key, a first
+// segment with no '=', or a duplicate key is an error — never a silent
+// empty-key entry and never last-writer-wins.
 func ParseLandmark(s string) (Landmark, error) {
 	var lm Landmark
-	seen := false
-	for _, pair := range strings.Split(s, ",") {
+	seen := map[string]bool{}
+	for _, pair := range splitLandmarkPairs(s) {
 		pair = strings.TrimSpace(pair)
 		if pair == "" {
 			continue
@@ -81,13 +85,42 @@ func ParseLandmark(s string) (Landmark, error) {
 		if !ok {
 			return Landmark{}, fmt.Errorf("unknown landmark key %q (want feature/symbol/loc/what)", key)
 		}
+		if seen[key] {
+			return Landmark{}, fmt.Errorf("duplicate landmark key %q in %q", key, s)
+		}
+		seen[key] = true
 		set(&lm, val)
-		seen = true
 	}
-	if !seen {
+	if len(seen) == 0 {
 		return Landmark{}, fmt.Errorf("empty landmark %q", s)
 	}
 	return lm, nil
+}
+
+// splitLandmarkPairs cuts s into pair substrings at each comma whose following
+// text (ignoring leading whitespace) starts a recognised landmark key=. Commas
+// that don't open a new pair stay inside the current substring verbatim, so
+// values round-trip as typed.
+func splitLandmarkPairs(s string) []string {
+	var pairs []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == ',' && startsLandmarkKey(s[i+1:]) {
+			pairs = append(pairs, s[start:i])
+			start = i + 1
+		}
+	}
+	return append(pairs, s[start:])
+}
+
+// startsLandmarkKey reports whether s (after leading whitespace) begins with a
+// recognised landmark key followed by '='.
+func startsLandmarkKey(s string) bool {
+	eq := strings.IndexByte(s, '=')
+	if eq < 0 {
+		return false
+	}
+	return landmarkKeys[strings.TrimSpace(s[:eq])] != nil
 }
 
 func New(phaseID string) *Changes {

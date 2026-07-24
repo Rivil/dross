@@ -1,65 +1,9 @@
 {
-  "version": "0.10.6.0",
+  "version": "0.10.3.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-24T06:45:43.319806Z",
-  "last_action": "completed ship-clean-tree",
+  "last_activity": "2026-07-24T09:08:16.133186Z",
+  "last_action": "completed landmark-comma-fix",
   "history": [
-    {
-      "at": "2026-07-23T12:00:27.873168Z",
-      "action": "3 quicks: mutation adapter resilience (record-and-continue, scoped stryker+workdir, adapters allowlist) → 0.10.8.3"
-    },
-    {
-      "at": "2026-07-23T12:12:11.636008Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-23T12:12:11.642659Z",
-      "action": "re-verified context-hygiene: partial (4/5 covered, 1 weak c-3, mutation 0.94 clean adapter run)"
-    },
-    {
-      "at": "2026-07-23T12:19:14.349194Z",
-      "action": "bump internal 0.10.8.3 → 0.10.8.4"
-    },
-    {
-      "at": "2026-07-23T12:19:14.361693Z",
-      "action": "quick: add standalone dross hooks ensure verb"
-    },
-    {
-      "at": "2026-07-23T12:21:15.331259Z",
-      "action": "bump internal 0.10.8.4 → 0.10.8.5"
-    },
-    {
-      "at": "2026-07-23T12:21:15.34324Z",
-      "action": "quick: reentry partial/fail line names /dross-execute \u003cphase\u003e"
-    },
-    {
-      "at": "2026-07-23T12:25:32.995605Z",
-      "action": "amended t-2: pause snapshot git-content tests (c-3 weak finding)"
-    },
-    {
-      "at": "2026-07-23T12:33:39.497374Z",
-      "action": "bump internal 0.10.8.5 → 0.10.8.6"
-    },
-    {
-      "at": "2026-07-23T12:33:45.228628Z",
-      "action": "quick: reentry hook JSON envelope makes re-entry line user-visible"
-    },
-    {
-      "at": "2026-07-23T12:50:37.856786Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-23T12:50:37.862535Z",
-      "action": "verified context-hygiene: pass (5/5, mutation 0.95)"
-    },
-    {
-      "at": "2026-07-23T12:59:01.923636Z",
-      "action": "bump internal 0.10.8.6 → 0.10.8.7"
-    },
-    {
-      "at": "2026-07-23T12:59:06.267876Z",
-      "action": "quick: suggestNext pass verdict points at /dross-ship"
-    },
     {
       "at": "2026-07-23T13:02:19.491969Z",
       "action": "completed context-hygiene"
@@ -203,6 +147,62 @@
     {
       "at": "2026-07-24T06:45:43.319806Z",
       "action": "completed ship-clean-tree"
+    },
+    {
+      "at": "2026-07-24T07:57:58.832047Z",
+      "action": "created landmark-comma-fix"
+    },
+    {
+      "at": "2026-07-24T08:03:41.445998Z",
+      "action": "set current_phase=landmark-comma-fix"
+    },
+    {
+      "at": "2026-07-24T08:03:41.453553Z",
+      "action": "spec locked: landmark-comma-fix"
+    },
+    {
+      "at": "2026-07-24T08:32:27.065608Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-24T08:32:27.072488Z",
+      "action": "plan locked: landmark-comma-fix (2 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-24T08:34:14.360457Z",
+      "action": "plan reviewed: landmark-comma-fix (0 blocking, 1 flag)"
+    },
+    {
+      "at": "2026-07-24T08:35:11.455337Z",
+      "action": "set version=0.10.3.0"
+    },
+    {
+      "at": "2026-07-24T08:38:19.602097Z",
+      "action": "executed t-1 (Rewrite ParseLandmark with key=-boundary splitting)"
+    },
+    {
+      "at": "2026-07-24T08:40:19.908379Z",
+      "action": "executed t-2 (Update --landmark help text, add e2e comma test)"
+    },
+    {
+      "at": "2026-07-24T08:40:36.708397Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-24T08:40:36.714978Z",
+      "action": "phase landmark-comma-fix executed (2/2 done)"
+    },
+    {
+      "at": "2026-07-24T08:56:31.13755Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-24T08:56:31.145497Z",
+      "action": "verified landmark-comma-fix: pass (4/4, mutation 0.96)"
+    },
+    {
+      "at": "2026-07-24T09:08:16.133186Z",
+      "action": "completed landmark-comma-fix"
     }
   ]
 }

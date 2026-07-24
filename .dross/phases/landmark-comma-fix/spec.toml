@@ -1,0 +1,38 @@
+[phase]
+id        = "landmark-comma-fix"
+title     = "landmark-comma-fix"
+milestone = "v0.10"
+
+[[criteria]]
+id   = "c-1"
+text = "dross changes record --landmark \"feature=X, what=a, b\" succeeds end-to-end with stored what = \"a, b\" — a comma inside a value joins the value instead of erroring"
+
+[[criteria]]
+id   = "c-2"
+text = "A comma followed by a recognized key= (feature/symbol/loc/what) still starts a new pair — every currently-valid multi-field landmark parses to the same result as today (carve-out: duplicate-key inputs now error per dup_keys decision)"
+
+[[criteria]]
+id   = "c-3"
+text = "Malformed input still errors loudly — unknown key, empty landmark, and a first segment with no '=' all return errors, never silent acceptance"
+
+[[criteria]]
+id   = "c-4"
+text = "The --landmark flag help text documents the comma rule: values may contain commas; a new pair starts only at a recognized key="
+
+[[decisions]]
+key    = "dup_keys"
+choice = "A duplicate key within one --landmark value is a parse error (replaces silent last-writer-wins)"
+why    = "A duplicate key almost always signals an accidental comma mis-split; failing loud keeps corrupted landmarks out of changes.json"
+locked = true
+
+[[decisions]]
+key    = "value_join"
+choice = "Comma segments that don't start a new key= join the previous value preserving the original text; trim whitespace only at the value's ends"
+why    = "Typed prose values must round-trip as written; re-normalizing interior whitespace would corrupt them"
+locked = true
+
+[[decisions]]
+key    = "no_escape_syntax"
+choice = "No quoting/escape mechanism — the key=-boundary rule plus loud duplicate errors is the whole contract, documented in --landmark help"
+why    = "Quoting syntax is scope creep for a fix phase; the boundary rule covers real usage"
+locked = true

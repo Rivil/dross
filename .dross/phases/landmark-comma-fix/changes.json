@@ -1,0 +1,38 @@
+{
+  "phase": "landmark-comma-fix",
+  "pr": 55,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/changes/changes_test.go"
+      ],
+      "commit": "46b68ef",
+      "completed_at": "2026-07-24T08:38:19.587009Z",
+      "landmarks": [
+        {
+          "feature": "landmark parsing",
+          "symbol": "ParseLandmark",
+          "loc": "internal/changes/changes.go:67",
+          "what": "comma opens a new pair only at a recognised key= boundary; duplicate keys error loudly"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/changes.go",
+        "internal/cmd/changes_test.go"
+      ],
+      "commit": "6f23ce8",
+      "completed_at": "2026-07-24T08:40:19.893807Z",
+      "landmarks": [
+        {
+          "feature": "landmark parsing",
+          "symbol": "changesRecord",
+          "loc": "internal/cmd/changes.go:72",
+          "what": "--landmark help documents the comma rule; e2e test pins comma-in-value record+show"
+        }
+      ]
+    }
+  }
+}
