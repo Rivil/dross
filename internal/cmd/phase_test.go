@@ -1366,3 +1366,110 @@ func TestPhaseCompleteMixedDirtStillRefuses(t *testing.T) {
 		t.Errorf("refusal must create zero commits: %s -> %s", before, after)
 	}
 }
+
+// completeFixtureOriginPR is completeFixture's stale-tree variant (c-3): the
+// PR record is NOT committed on phase/auth — it exists only inside the squash
+// pushed to origin/main (originPR > 0), exactly the 2026-07-23 state where the
+// local checkout predates ship's record commit. originPR == 0 leaves no record
+// anywhere. origin/phase/auth is never pushed, so the ancestry fallback can
+// never confirm the merge — only the provider path (via an origin-side PR
+// read) can.
+func completeFixtureOriginPR(t *testing.T, originPR int) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remoteDir)
+	chdir(t, dir)
+
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("phase create: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "src/auth.ts"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
+
+	// Simulate the upstream squash-merge, carrying the completion record —
+	// and, when originPR > 0, the phase's changes.json with the PR number
+	// (as ship's post-push record commit does before the squash collapses it).
+	mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
+	mustGit(t, dir, "checkout", "phase/auth", "--", "src/")
+	mustGit(t, dir, "add", "src/")
+	if originPR > 0 {
+		mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
+			fmt.Sprintf(`{"phase":"auth","pr":%d,"tasks":{}}`, originPR))
+		mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
+	}
+	stPath := filepath.Join(dir, ".dross", "state.json")
+	sqState, err := state.Load(stPath)
+	if err != nil {
+		t.Fatalf("load state for squash sim: %v", err)
+	}
+	sqState.CurrentPhase = ""
+	sqState.CurrentPhaseStatus = ""
+	sqState.Touch("completed auth")
+	if err := sqState.Save(stPath); err != nil {
+		t.Fatalf("save squash state: %v", err)
+	}
+	mustGit(t, dir, "add", filepath.Join(".dross", "state.json"))
+	mustGit(t, dir, "commit", "-q", "-m", "feat(squash): auth")
+	mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	mustGit(t, dir, "branch", "-D", "squash-sim")
+	// Deliberately NO local record of the PR and NO fetch — complete itself
+	// fetches; the working tree is the stale pre-record checkout.
+
+	return dir, "auth"
+}
+
+// c-3: with the working-tree changes.json absent but origin/main carrying
+// PR #7, mergeGate must resolve 7 from origin and take the provider path —
+// the ancestry fallback (origin/phase/auth missing) would refuse.
+func TestPhaseCompleteResolvesRecordedPRFromOrigin(t *testing.T) {
+	dir, _ := completeFixtureOriginPR(t, 7)
+	gotPR := 0
+	prev := ship.PRMergedFunc
+	ship.PRMergedFunc = func(o ship.OpenOpts) (bool, error) {
+		gotPR = o.PRNumber
+		return true, nil
+	}
+	t.Cleanup(func() { ship.PRMergedFunc = prev })
+
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete should succeed via the origin-resolved PR: %v", err)
+	}
+	if gotPR != 7 {
+		t.Errorf("mergeGate should query the provider with the origin-recorded PR #7, got %d", gotPR)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "main" {
+		t.Errorf("expected HEAD on main after complete, got %q", cur)
+	}
+}
+
+// c-3 fallback: no PR in the working tree nor on origin → recordedPR stays 0,
+// the provider is never queried, and the ancestry fallback refuses unchanged.
+func TestPhaseCompleteNoPRAnywhereTakesAncestryFallback(t *testing.T) {
+	_, _ = completeFixtureOriginPR(t, 0)
+	prev := ship.PRMergedFunc
+	ship.PRMergedFunc = func(ship.OpenOpts) (bool, error) {
+		t.Error("provider must not be queried when no PR is recorded anywhere")
+		return false, nil
+	}
+	t.Cleanup(func() { ship.PRMergedFunc = prev })
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected the ancestry fallback to refuse (origin/phase/auth missing)")
+	}
+	if !strings.Contains(err.Error(), "cannot confirm") {
+		t.Errorf("expected the guided ancestry refusal, got: %v", err)
+	}
+}

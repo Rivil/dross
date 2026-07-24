@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -332,6 +333,17 @@ points at a manual reconcile.`,
 				return fmt.Errorf("git fetch: %w\n%s", err, out)
 			}
 
+			// Origin-side fallback for the recorded PR (c-3): post-squash-merge
+			// the local working tree can be stale — ship committed the PR
+			// record onto phase/<id> and the squash carried it to origin/<base>,
+			// while the local read above saw a pre-record (or absent) file.
+			// Now that origin is fetched, read the record from origin/<base>'s
+			// tree so mergeGate can still take the authoritative provider path
+			// instead of the ancestry fallback.
+			if recordedPR == 0 {
+				recordedPR = originRecordedPR(repoDir, reconcileBranch, phaseID)
+			}
+
 			// Authoritative merge gate. Prefer the provider's "is PR #N
 			// merged?" status (via the recorded PR number): squash-merge
 			// rewrites SHAs so git ancestry can't confirm a squash-merged
@@ -426,6 +438,26 @@ points at a manual reconcile.`,
 	c.Flags().BoolVar(&recoverFlag, "recover", false,
 		"on a diverged main, reset to origin and restore .dross/ in one shot instead of aborting")
 	return c
+}
+
+// originRecordedPR reads the phase's recorded PR number out of
+// origin/<base>'s committed tree (post-fetch). It exists for the stale-tree
+// completion state: the squash-merge landed .dross/phases/<id>/changes.json —
+// PR number included — on origin/<base>, but the local checkout predates the
+// record so the working-tree read comes up empty. Best-effort: any git or
+// parse failure (ref missing, file absent on that ref, malformed JSON) returns
+// 0 and the caller's ancestry fallback stands.
+func originRecordedPR(repoDir, base, phaseID string) int {
+	ref := "origin/" + base + ":" + ".dross/phases/" + phaseID + "/changes.json"
+	out, err := exec.Command("git", "-C", repoDir, "show", ref).Output()
+	if err != nil {
+		return 0
+	}
+	var ch changes.Changes
+	if err := json.Unmarshal(out, &ch); err != nil {
+		return 0
+	}
+	return ch.PR
 }
 
 // mergeGate is the authoritative completion gate for `dross phase complete`.
