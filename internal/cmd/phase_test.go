@@ -1308,3 +1308,61 @@ func TestPhaseCompleteMilestoneDivergedAborts(t *testing.T) {
 		t.Error("phase/auth should NOT be deleted on a non-destructive abort")
 	}
 }
+
+// c-1: phase create's clean-tree gate auto-commits .dross-only dirt (a pause
+// state-touch shouldn't block starting the next phase) instead of refusing.
+func TestPhaseCreateAutoCommitsDrossDirt(t *testing.T) {
+	dir := initWithGit(t)
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# handoff\n")
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create should proceed past .dross-only dirt: %v", err)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "phase/auth" {
+		t.Errorf("expected HEAD on phase/auth, got %q", cur)
+	}
+	log := mustGit(t, dir, "log", "--format=%s")
+	if !strings.Contains(log, "chore(dross): auto-commit bookkeeping") {
+		t.Errorf("expected an auto-commit chore in the log:\n%s", log)
+	}
+}
+
+// c-1: phase complete's clean-tree gate auto-commits .dross-only dirt and
+// proceeds (here to the fetch step, which fails on the empty origin — the
+// point is the error is no longer the dirty-tree refusal).
+func TestPhaseCompleteAutoCommitsDrossDirt(t *testing.T) {
+	dir := initWithGit(t)
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# handoff\n")
+
+	err := runCmd(t, Phase(), "complete", "x")
+	if err == nil {
+		t.Fatal("expected complete to fail later (empty origin), just not on the dirty gate")
+	}
+	if strings.Contains(err.Error(), "working tree is dirty") {
+		t.Errorf(".dross-only dirt must not trip the dirty gate: %v", err)
+	}
+	log := mustGit(t, dir, "log", "--format=%s")
+	if !strings.Contains(log, "chore(dross): auto-commit bookkeeping") {
+		t.Errorf("expected an auto-commit chore in the log:\n%s", log)
+	}
+	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
+		t.Errorf("tree should be clean after the auto-commit gate, got: %q", st)
+	}
+}
+
+// The refusal path is unchanged for real code dirt at the complete gate — and
+// the .dross half must NOT be partially committed alongside the refusal.
+func TestPhaseCompleteMixedDirtStillRefuses(t *testing.T) {
+	dir := initWithGit(t)
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# handoff\n")
+	mustWrite(t, filepath.Join(dir, "src.go"), "package src\n")
+	before := mustGit(t, dir, "rev-list", "--count", "HEAD")
+
+	err := runCmd(t, Phase(), "complete", "x")
+	if err == nil || !strings.Contains(err.Error(), "working tree is dirty") {
+		t.Fatalf("mixed dirt must still hit the dirty-tree refusal: %v", err)
+	}
+	if after := mustGit(t, dir, "rev-list", "--count", "HEAD"); after != before {
+		t.Errorf("refusal must create zero commits: %s -> %s", before, after)
+	}
+}

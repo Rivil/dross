@@ -172,6 +172,18 @@ func Ship() *cobra.Command {
 				return nil
 			}
 
+			// Pre-stage gate: the tree must be clean before ship starts
+			// staging its own commits. Bookkeeping-only dirt under .dross/
+			// is auto-committed so it rides the push; any other dirt refuses
+			// before anything is staged or pushed.
+			drossCommitted, err := autoCommitDrossDirt(repoDir, "shipping")
+			if err != nil {
+				return err
+			}
+			if drossCommitted {
+				narrate("auto-committed .dross-only bookkeeping\n")
+			}
+
 			// 5) Fold the completion record into the squash. Write the
 			//    completed-state transition (clear current_phase + status,
 			//    append a `completed <id>` history entry) and commit it

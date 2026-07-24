@@ -294,14 +294,15 @@ points at a manual reconcile.`,
 			phaseBranch := "phase/" + phaseID
 
 			// Working tree must be clean — checkout and branch -D both
-			// behave better on a clean tree, and a dirty one usually
-			// signals the user hasn't finished the previous step.
-			status, err := gitTrim(repoDir, "status", "--porcelain")
+			// behave better on a clean tree. Bookkeeping-only dirt under
+			// .dross/ (a pause state-touch) is auto-committed and never
+			// blocks; any real code dirt still refuses.
+			committed, err := autoCommitDrossDirt(repoDir, "completing")
 			if err != nil {
-				return fmt.Errorf("git status: %w", err)
+				return err
 			}
-			if status != "" {
-				return dirtyTreeError("completing", status)
+			if committed {
+				Printf("auto-committed .dross-only bookkeeping\n")
 			}
 
 			// Read THIS phase's recorded PR number from its phase-scoped
@@ -471,16 +472,17 @@ func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconci
 // It keeps the clean-tree and no-existing-ref guards but — unlike the old
 // preflight — does NOT require being on main first, because under the v0.7
 // branch topology the base may be a milestone integration branch reached from
-// anywhere. The checkout is the only side effect; the caller owns directory
-// creation and rollback. Returns the resolved base and whether a milestone
-// branch was used (so create can tailor the no-milestone nudge).
+// anywhere. Side effects are the checkout plus at most one chore(dross)
+// auto-commit of .dross-only dirt (autoCommitDrossDirt); the caller owns
+// directory creation and rollback. Returns the resolved base and whether a
+// milestone branch was used (so create can tailor the no-milestone nudge).
 func forkPhaseBranch(repoDir, root, branchName string) (base string, milestoneActive bool, err error) {
-	status, err := gitTrim(repoDir, "status", "--porcelain")
+	committed, err := autoCommitDrossDirt(repoDir, "starting a phase")
 	if err != nil {
-		return "", false, fmt.Errorf("git status: %w", err)
+		return "", false, err
 	}
-	if status != "" {
-		return "", false, dirtyTreeError("starting a phase", status)
+	if committed {
+		Printf("auto-committed .dross-only bookkeeping\n")
 	}
 	if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branchName); err == nil {
 		return "", false, fmt.Errorf("branch %s already exists locally; delete it first or pass --no-branch", branchName)
