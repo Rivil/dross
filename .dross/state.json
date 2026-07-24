@@ -3,13 +3,9 @@
   "current_milestone": "v0.10",
   "current_phase": "landmark-comma-fix",
   "current_phase_status": "planned",
-  "last_activity": "2026-07-24T08:32:27.072488Z",
-  "last_action": "plan locked: landmark-comma-fix (2 tasks across 2 waves)",
+  "last_activity": "2026-07-24T08:34:14.360457Z",
+  "last_action": "plan reviewed: landmark-comma-fix (0 blocking, 1 flag)",
   "history": [
-    {
-      "at": "2026-07-23T12:21:15.331259Z",
-      "action": "bump internal 0.10.8.4 → 0.10.8.5"
-    },
     {
       "at": "2026-07-23T12:21:15.34324Z",
       "action": "quick: reentry partial/fail line names /dross-execute \u003cphase\u003e"
@@ -205,6 +201,10 @@
     {
       "at": "2026-07-24T08:32:27.072488Z",
       "action": "plan locked: landmark-comma-fix (2 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-24T08:34:14.360457Z",
+      "action": "plan reviewed: landmark-comma-fix (0 blocking, 1 flag)"
     }
   ]
 }

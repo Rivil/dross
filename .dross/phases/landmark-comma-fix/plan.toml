@@ -22,6 +22,7 @@ test_contract = [
   "if key=-boundary detection breaks, the compat test asserting the 4-field landmark \"feature=…, symbol=…, loc=…, what=…\" parses to the same result as today fails",
   "if duplicate keys stop erroring, the test asserting ParseLandmark(\"feature=x, feature=y\") returns an error fails",
   "if malformed-input errors regress, the tests asserting \"color=blue\" (unknown key), \"   \" (empty), and \"feature\" (first segment without '=') each return errors fail",
+  "if unrecognized key= segments stop joining, the test asserting ParseLandmark(\"what=a, y=2\") yields What == \"a, y=2\" (no error) fails",
 ]
 status = "pending"
 
