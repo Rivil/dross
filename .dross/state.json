@@ -2,18 +2,10 @@
   "version": "0.10.3.0",
   "current_milestone": "v0.10",
   "current_phase": "landmark-comma-fix",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-24T08:40:36.714978Z",
-  "last_action": "phase landmark-comma-fix executed (2/2 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-24T08:56:31.145497Z",
+  "last_action": "verified landmark-comma-fix: pass (4/4, mutation 0.96)",
   "history": [
-    {
-      "at": "2026-07-23T12:50:37.862535Z",
-      "action": "verified context-hygiene: pass (5/5, mutation 0.95)"
-    },
-    {
-      "at": "2026-07-23T12:59:01.923636Z",
-      "action": "bump internal 0.10.8.6 → 0.10.8.7"
-    },
     {
       "at": "2026-07-23T12:59:06.267876Z",
       "action": "quick: suggestNext pass verdict points at /dross-ship"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-24T08:40:36.714978Z",
       "action": "phase landmark-comma-fix executed (2/2 done)"
+    },
+    {
+      "at": "2026-07-24T08:56:31.13755Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-24T08:56:31.145497Z",
+      "action": "verified landmark-comma-fix: pass (4/4, mutation 0.96)"
     }
   ]
 }
