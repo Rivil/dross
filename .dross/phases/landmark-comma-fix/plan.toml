@@ -1,0 +1,48 @@
+[phase]
+id = "landmark-comma-fix"
+
+[[task]]
+id    = "t-1"
+wave  = 1
+title = "Rewrite ParseLandmark with key=-boundary splitting"
+files = [
+  "internal/changes/changes.go",
+  "internal/changes/changes_test.go",
+]
+description = """
+Split a --landmark value on commas only when the next segment starts with a
+recognized key= (feature/symbol/loc/what); other comma segments join the
+previous value preserving original text, trimming whitespace only at the
+value's ends. A duplicate key within one landmark is a parse error. Keep the
+existing loud errors: unknown key, empty landmark, first segment with no '='.
+"""
+covers = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "if comma-in-value joining breaks, the test asserting ParseLandmark(\"what=a, b\") yields What == \"a, b\" fails",
+  "if key=-boundary detection breaks, the compat test asserting the 4-field landmark \"feature=…, symbol=…, loc=…, what=…\" parses to the same result as today fails",
+  "if duplicate keys stop erroring, the test asserting ParseLandmark(\"feature=x, feature=y\") returns an error fails",
+  "if malformed-input errors regress, the tests asserting \"color=blue\" (unknown key), \"   \" (empty), and \"feature\" (first segment without '=') each return errors fail",
+]
+status = "pending"
+
+[[task]]
+id         = "t-2"
+wave       = 2
+depends_on = ["t-1"]
+title      = "Update --landmark help text, add e2e comma test"
+files = [
+  "internal/cmd/changes.go",
+  "internal/cmd/changes_test.go",
+]
+description = """
+Document the comma rule in the --landmark flag help: values may contain
+commas; a new pair starts only at a recognized key=. Add a cmd-level test
+that `changes record --landmark "feature=X, what=a, b"` succeeds end-to-end
+and show prints the joined what value.
+"""
+covers = ["c-4", "c-1"]
+test_contract = [
+  "if the CLI record path breaks for comma-in-value landmarks, the end-to-end test recording --landmark \"feature=X, what=a, b\" and asserting show prints \"a, b\" fails",
+  "if the comma rule is dropped from the flag usage string, the help-text assertion on the --landmark flag usage fails",
+]
+status = "pending"

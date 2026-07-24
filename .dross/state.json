@@ -2,18 +2,10 @@
   "version": "0.10.6.0",
   "current_milestone": "v0.10",
   "current_phase": "landmark-comma-fix",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-24T08:03:41.453553Z",
-  "last_action": "spec locked: landmark-comma-fix",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-24T08:32:27.072488Z",
+  "last_action": "plan locked: landmark-comma-fix (2 tasks across 2 waves)",
   "history": [
-    {
-      "at": "2026-07-23T12:19:14.349194Z",
-      "action": "bump internal 0.10.8.3 → 0.10.8.4"
-    },
-    {
-      "at": "2026-07-23T12:19:14.361693Z",
-      "action": "quick: add standalone dross hooks ensure verb"
-    },
     {
       "at": "2026-07-23T12:21:15.331259Z",
       "action": "bump internal 0.10.8.4 → 0.10.8.5"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-24T08:03:41.453553Z",
       "action": "spec locked: landmark-comma-fix"
+    },
+    {
+      "at": "2026-07-24T08:32:27.065608Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-24T08:32:27.072488Z",
+      "action": "plan locked: landmark-comma-fix (2 tasks across 2 waves)"
     }
   ]
 }
