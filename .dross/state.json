@@ -1,15 +1,9 @@
 {
   "version": "0.10.6.0",
   "current_milestone": "v0.10",
-  "current_phase": "ship-clean-tree",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-24T06:18:10.978647Z",
-  "last_action": "verified ship-clean-tree: pass (5/5, mutation 0.96)",
+  "last_activity": "2026-07-24T06:45:43.319806Z",
+  "last_action": "completed ship-clean-tree",
   "history": [
-    {
-      "at": "2026-07-23T12:00:16.82407Z",
-      "action": "bump internal 0.10.8.2 → 0.10.8.3"
-    },
     {
       "at": "2026-07-23T12:00:27.873168Z",
       "action": "3 quicks: mutation adapter resilience (record-and-continue, scoped stryker+workdir, adapters allowlist) → 0.10.8.3"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-24T06:18:10.978647Z",
       "action": "verified ship-clean-tree: pass (5/5, mutation 0.96)"
+    },
+    {
+      "at": "2026-07-24T06:45:43.319806Z",
+      "action": "completed ship-clean-tree"
     }
   ]
 }
