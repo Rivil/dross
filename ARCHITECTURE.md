@@ -48,11 +48,20 @@ _c8b346e_
 
 Append-only per-task record of files touched, plus a typed `--landmark` record (feature/symbol/loc/what) parsed into a structured `Landmarks` array — replacing the old landmark-carried-in-`--notes` convention.
 
-- `Changes.Record` — `internal/changes/changes.go:133`
-- `changes.ParseLandmark` / `Landmark` — `internal/changes/changes.go:62`
+- `Changes.Record` — `internal/changes/changes.go:150`
+- `changes.ParseLandmark` / `Landmark` — `internal/changes/changes.go:63`
 - `Changes` (CLI, repeatable `--landmark`) — `internal/cmd/changes.go:15`
 
 _introduced 1d1f85a · extended 01-architecture-comprehension-layer · extended architecture-doc-enhancements · 12513fc_
+
+### Clean-tree gates
+
+Keep `.dross/` bookkeeping from blocking or diverging the git flow. The dirty-tree gates in ship, phase complete, and phase create/start share one helper that auto-commits `.dross/`-only dirt as a single chore commit (per repo convention) instead of refusing, while a tree with any non-`.dross` dirt still refuses having staged nothing. A ship/complete pre-flight safety net then pushes a base branch that is purely ahead of origin by `.dross/`-only chores (pause snapshots, recovery restores), so after any ship/complete/recover local base == origin/base; a code-ahead base refuses and pushes nothing, a diverged base defers to recovery, and a failed push is a hard refusal (proceeding would re-seed the divergence) — local-only writers like pause never touch the network.
+
+- `autoCommitDrossDirt` (shared gate helper: ship / phase complete / phase create) — `internal/cmd/cleantree.go:20`
+- `pushBaseIfAheadDrossOnly` (safety-net push of .dross-only base chores) — `internal/cmd/basebranch.go:62`
+
+_introduced ship-clean-tree · cfa0023_
 
 ### Code insight (codex)
 
@@ -160,7 +169,7 @@ _introduced 10-interaction-contract · extended 11-retrofit-core-loop · extende
 
 Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue board — driven solely by a dedicated `[board]` config block, independent of `[remote]`, so a repo ships code to one host and tracks issues on another. Backends sit behind a `BoardClient` interface that `forge.NewBoard` dispatches by provider: the provider-aware forge `*Client` (forgejo/gitea/gitlab), a sibling `YouTrackClient` (REST CRUD, bearer permanent-token, readable-id `PROJ-7` addressing, `?fields` projection), a `JiraClient` (Jira Cloud REST v3, HTTP Basic email:token, string `PROJ-123` keys, ADF bodies, transition-driven state, milestones as project versions), or a `GitHubClient` (repo issues with integer milestones — forge-shaped — plus an isolated Projects v2 `addProjectV2ItemById` add-to-board on create when a board is configured). board.json links every artefact by the tracker's readable **string** id. YouTrack adds milestone entities per `[board].milestone_mode` (version bundle / agile board / epic), lifecycle→State mapping via the default map + `[board].state_map` (unmapped warns and skips), and backlog sync of unscaffolded slugs + someday ideas attached per mode (Fix versions / Epic subtask / project-based board). `dross doctor` validates a configured `[board]`; the inbox board source is gated on `[board].enabled`.
 
-- `forge.BoardClient` (interface) + `forge.NewBoard` (provider dispatch) — `internal/forge/forge.go:121`
+- `forge.BoardClient` (interface) + `forge.NewBoard` (provider dispatch) — `internal/forge/forge.go:123`
 - `forge.YouTrackClient` + `NewYouTrack` — `internal/forge/youtrack.go:25`
 - `YouTrackClient.EnsureMilestoneEntity` / `SetState` — `internal/forge/youtrack.go:184`
 - `forge.JiraClient` + `NewJira` (REST v3, versions, transitions) — `internal/forge/jira.go:25`
@@ -175,7 +184,7 @@ _extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2_
 
 Author and validate milestone.toml — title, success criteria, non-goals, phase order.
 
-- `Milestone` (CLI) — `internal/cmd/milestone.go:17`
+- `Milestone` (CLI) — `internal/cmd/milestone.go:19`
 - `milestone.Milestone` — `internal/milestone/milestone.go:20`
 
 _c8b346e_
@@ -187,26 +196,27 @@ Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Sve
 - `Adapter` — `internal/mutation/adapter.go:46`
 - `Report` — `internal/mutation/adapter.go:18`
 - `Gremlins.Run` — `internal/mutation/gremlins.go:82`
-- `Stryker.Run` — `internal/mutation/stryker.go:40`
+- `Stryker.Run` — `internal/mutation/stryker.go:46`
 
 _introduced c8b346e · extended 01c10f0_
 
 ### Phase lifecycle
 
-Create, list, number, migrate, complete, and reorder/insert/rename phases on dedicated phase/<id> git branches. Phase identity is the bare slug and order lives solely in the milestone `phases` array (phase.Ordered), so create makes bare-slug dirs and appends to the array, while `phase number` / status / the version patch digit all read the 1-based array position (DisplayNumber) and `phase migrate` converts a legacy NN-slug repo idempotently — skipping the in-flight phase and disambiguating colliding slugs — with phase.Dir resolving old NN-slug ids for permanent back-compat. complete is fast-forward + branch-delete only (no commit to main), gated by an **authoritative merge check** (`mergeGate`): it reads the phase's recorded PR number from changes.json and requires the provider (`ship.PRMergedFunc`) to report that PR merged, falling back to a `git merge-base --is-ancestor` check that **refuses-when-inconclusive** (a missing/squash-deleted ref or a non-ancestor both refuse) — replacing the old cumulative `completed <id>` breadcrumb, which a later merged phase could drag onto the base and thereby false-complete an unmerged phase; only on a confirmed merge does it delete both the local and the remote phase branch idempotently. The lifecycle verbs `insert` / `move` / `rename` edit a phase's array slot and identity through pure splice helpers (InsertRelative / MoveRelative / RenameInArray) and shared plumbing (exactly-one-anchor validation, no-op-before-collision, ship-guard via the origin branch); insert scaffolds with a strict slug (no auto-suffix) and rename moves dir + spec id + array entry + deferred targets + local branch atomically — all leaving every other phase byte-for-byte untouched.
+Create, list, number, migrate, complete, and reorder/insert/rename phases on dedicated phase/<id> git branches. Phase identity is the bare slug and order lives solely in the milestone `phases` array (phase.Ordered), so create makes bare-slug dirs and appends to the array, while `phase number` / status / the version patch digit all read the 1-based array position (DisplayNumber) and `phase migrate` converts a legacy NN-slug repo idempotently — skipping the in-flight phase and disambiguating colliding slugs — with phase.Dir resolving old NN-slug ids for permanent back-compat. complete is fast-forward + branch-delete only (no commit to main), gated by an **authoritative merge check** (`mergeGate`): it reads the phase's recorded PR number from changes.json — resolving it from origin/<base>'s fetched changes.json (`originRecordedPR`) when the stale post-squash-merge working tree lacks it — and requires the provider (`ship.PRMergedFunc`) to report that PR merged, falling back to a `git merge-base --is-ancestor` check that **refuses-when-inconclusive** (a missing/squash-deleted ref or a non-ancestor both refuse) — replacing the old cumulative `completed <id>` breadcrumb, which a later merged phase could drag onto the base and thereby false-complete an unmerged phase; only on a confirmed merge does it delete both the local and the remote phase branch idempotently. The lifecycle verbs `insert` / `move` / `rename` edit a phase's array slot and identity through pure splice helpers (InsertRelative / MoveRelative / RenameInArray) and shared plumbing (exactly-one-anchor validation, no-op-before-collision, ship-guard via the origin branch); insert scaffolds with a strict slug (no auto-suffix) and rename moves dir + spec id + array entry + deferred targets + local branch atomically — all leaving every other phase byte-for-byte untouched.
 
-- `Phase` (CLI) — `internal/cmd/phase.go:18`
-- `phaseCreate` — `internal/cmd/phase.go:112`
-- `phaseNumber` — `internal/cmd/phase.go:33`
+- `Phase` (CLI) — `internal/cmd/phase.go:21`
+- `phaseCreate` — `internal/cmd/phase.go:115`
+- `phaseNumber` — `internal/cmd/phase.go:36`
 - `phaseMigrate` — `internal/cmd/migrate.go:31`
-- `phaseComplete` — `internal/cmd/phase.go:209`
-- `mergeGate` (authoritative completion gate: recorded-PR merge status + ancestry refuse-when-inconclusive fallback) — `internal/cmd/phase.go:440`
+- `phaseComplete` — `internal/cmd/phase.go:216`
+- `mergeGate` (authoritative completion gate: recorded-PR merge status + ancestry refuse-when-inconclusive fallback) — `internal/cmd/phase.go:480`
+- `originRecordedPR` (post-fetch recorded-PR resolution from origin/<base>'s changes.json) — `internal/cmd/phase.go:475`
 - `ship.PRMergedFunc` / `ship.PRMerged` (provider PR-merged lookup, GitHub via gh, unsupported-provider sentinel, exported overridable seam) — `internal/ship/merged.go:38`
 - `phaseMove` / `phaseInsert` / `phaseRename` — `internal/cmd/phase_lifecycle.go`
 - array-order splice helpers (`InsertRelative`, `MoveRelative`, `RenameInArray`) — `internal/phase/phase.go`
 - slug identity helpers (`Dir`, `Ordered`, `DisplayNumber`, `UniqueSlug`) — `internal/phase/phase.go:33`
 
-_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · 6d99599_
+_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · 0e99b65_
 
 ### Plan persistence
 
@@ -222,8 +232,8 @@ _introduced task-lifecycle-commands · 367c723_
 Scan an existing repo's signal files (Dockerfile, package.json, go.mod, …) into a draft project.toml, seeding `[runtime]` + `[stack].profile` from the matched stack profile.
 
 - `Onboard` — `internal/cmd/onboard.go:26`
-- `scanRepo` — `internal/cmd/onboard.go:110`
-- `toProject` — `internal/cmd/onboard.go:141`
+- `scanRepo` — `internal/cmd/onboard.go:115`
+- `toProject` — `internal/cmd/onboard.go:146`
 
 _c8b346e · extended 07-stack-profiles · eb602f1_
 
@@ -261,7 +271,7 @@ Ship dross as a single self-contained binary that carries its own assets and upd
 - `assets.FS` (`go:embed all:commands all:prompts`) — `assets/embed.go:20`
 - `update.AssetName` / `update.BinaryName` (per-OS archive + binary name: .zip/dross.exe on windows) / `VerifyChecksum` / `Decide` / `AtomicReplace` — `internal/update/update.go`
 - `update.VerifySignature` / `EmbeddedMinisignPublicKey` / `TrustedMinisignKey` (signature trust anchor + override seam) — `internal/update/signature.go:43`
-- `update.Client` (latest release + download) — `internal/update/update.go:214`
+- `update.Client` (latest release + download) — `internal/update/update.go:232`
 - `Install` (symlink/copy materialize + dross-* prune) — `internal/cmd/install.go:26`
 - `Update` signature gate (verify `checksums.txt.minisig` before checksum/extract/swap) — `internal/cmd/update.go:133`
 - `extractBinaryZip` (windows .zip extraction; tar.gz vs zip dispatch on asset suffix) — `internal/cmd/update.go:235`
@@ -275,23 +285,23 @@ _extended homebrew-and-windows-distribution (windows zip self-update + Homebrew 
 
 ### Ship recovery
 
-Heal origin/main vs local main divergence after a squash-merge — a shared, delta-gated routine reused by two entry points and documented as a three-state cookbook. `dross ship recover` is the standalone legacy-repo healer; `dross phase complete --recover` heals a diverged main in-loop (the ff-only abort is the divergence signal) and refuses with a pointer when the flag is absent. The shared `runDrossRecovery` resets main to origin, restores the full cumulative `.dross/` tree (every phase's artefacts, not just the current one), and commits only on a real delta — so an in-sync repo is a clean no-op with no phantom commit. The `ship.md` `## Recovery` section maps the three mid-merge failure states (ff-abort / diverged main / dirty post-push tree) each to a one-command fix, with no manual `.dross/` surgery (guarded by a prompt-presence test).
+Heal local-vs-origin base divergence after a squash-merge — a shared, delta-gated routine parameterized by the base branch (main or a `milestone/<version>` reconcile branch, no longer aborting on the latter), reused by two entry points and documented as a three-state cookbook. `dross ship recover` is the standalone legacy-repo healer; `dross phase complete --recover` performs its reset/heal *before* re-evaluating the merge gate, so the flag works in exactly the diverged/stale state its own error recommends it for — while merge verification still precedes the destructive reset (an unmerged PR refuses with the local base byte-unchanged) — and refuses with a pointer when the flag is absent. The shared `runDrossRecovery` resets the base to origin, restores the full cumulative `.dross/` tree (every phase's artefacts, not just the current one), commits only on a real delta — so an in-sync repo is a clean no-op with no phantom commit — and pushes the restore commit via the clean-tree safety-net policy so the heal doesn't itself re-seed divergence. The `ship.md` `## Recovery` section maps the three mid-merge failure states (ff-abort / diverged main / dirty post-push tree) each to a one-command fix, with no manual `.dross/` surgery (guarded by a prompt-presence test).
 
-- `runDrossRecovery` (shared delta-gated reset+restore+commit) — `internal/cmd/ship_recover.go:132`
-- `shipRecover` (standalone CLI entry, delegates to the shared routine) — `internal/cmd/ship_recover.go:31`
-- `phaseComplete` `--recover` (in-loop heal) — `internal/cmd/phase.go:209`
+- `runDrossRecovery` (shared delta-gated reset+restore+commit+push, base-branch parameterized) — `internal/cmd/ship_recover.go:133`
+- `shipRecover` (standalone CLI entry, delegates to the shared routine) — `internal/cmd/ship_recover.go:30`
+- `phaseComplete` `--recover` (in-loop heal-before-gate) — `internal/cmd/phase.go:216`
 
-_52f6c75 · extended ship-complete-recovery-hardening · 3a1fd7d_
+_52f6c75 · extended ship-complete-recovery-hardening · extended ship-clean-tree · df17d75_
 
 ### Shipping / pull requests
 
 Push the phase branch and open a provider-aware PR/MR (GitHub/Forgejo/GitLab) with reviewers, merging the phase's landmarks into ARCHITECTURE.md first — auto-backfilling the whole doc via the prompt-driven generation when it's absent, so an older repo self-heals on its next interactive ship (non-blocking; `--auto` skips it) — folds the completed-state transition (cleared current_phase + `completed <id>` history) into the phase branch and commits it BEFORE the push, so the squash-merge carries the completion record to main and ship returns on a clean tree; squash-merge collapses per-task commits. The GitLab path is raw REST (no `gh`/`glab` CLI): `openGitLabPR` opens a Merge Request (source/target branch, `Draft:` prefix, `web_url`→URL, `iid`→Number) and resolves reviewer usernames→ids non-fatally; `postGitLabComment` posts an MR note. The post-push PR/MR URL is intentionally printed, not persisted to state.json (avoids the completion-chore divergence); the PR *number*, however, is recorded per-phase in changes.json (`changes.SetPR`), then committed **and pushed** onto the phase branch — drag-proof, unlike cumulative history — so the squash-merge carries the record onto the base's changes.json where `phase complete`'s `mergeGate` reads it to authoritatively confirm the merge (the push is essential: a local-only record never reaches the PR/squash/base, which would leave `mergeGate` blind and refusing every squash-merged completion). The CI-watch + squash-merge steps are prompt-driven (ship.md §5/§6) with the locked GitLab pipeline-status mapping. A non-interactive fast-path makes ship callable from a script or loop: `dross ship --auto` requests zero reviewers for the run without mutating `remote.reviewers` (gating the narration + telemetry off `opts.Reviewers`) and keeps the generated body, while `--json` emits a single `{url, number, result}` object on stdout through a suppressible `narrate` closure — the two compose, and explicit `--body`/`--body-file`/`--draft` still win. `ship.md §0.5` skips the interactive body-preview/body-override/reviewer turns and shells to `dross ship --auto`, opening the PR and returning without driving the merge.
 
-- `Ship` (CLI; `--auto` / `--json` non-interactive flags) — `internal/cmd/ship.go:53`
-- `ship.OpenPR` (provider switch → github/forgejo/`openGitLabPR`) — `internal/ship/open.go:41`
+- `Ship` (CLI; `--auto` / `--json` non-interactive flags) — `internal/cmd/ship.go:54`
+- `ship.OpenPR` (provider switch → github/forgejo/`openGitLabPR`) — `internal/ship/open.go:42`
 - `ship.PostComment` / `postGitLabComment` — `internal/ship/comment.go`
 - `buildOpenOpts` / `buildCommentOpts` (thread remote auth_scheme/project_id) — `internal/cmd/ship.go`
-- `changes.SetPR` (records opened PR number per-phase for the completion merge-gate) — `internal/changes/changes.go:96`
+- `changes.SetPR` (records opened PR number per-phase for the completion merge-gate) — `internal/changes/changes.go:103`
 - `ship.BuildPRBody` — `internal/ship/body.go:20`
 
 _introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended gitlab-ship-provider · extended ship-auto-noninteractive · extended verify-merge-before-completion · extended ship-architecture-autogen · extended pr-record-reaches-base · 9e37c37_
@@ -320,11 +330,11 @@ Track current milestone/phase/version + activity in state.json; summarise "where
 - `state.State` — `internal/state/state.go:17`
 - `State` (CLI) — `internal/cmd/state.go:16`
 - `Status` — `internal/cmd/status.go:22`
-- `staleCompletedState` (shipped-but-unmerged-branch warning) — `internal/cmd/status.go:462`
-- `spineIdle` — `internal/cmd/status.go:262`
-- `rankAreas` — `internal/cmd/status.go:378`
-- `formatRunSignal` — `internal/cmd/status.go:397`
-- `renderActionAreas` — `internal/cmd/status.go:425`
+- `staleCompletedState` (shipped-but-unmerged-branch warning) — `internal/cmd/status.go:464`
+- `spineIdle` — `internal/cmd/status.go:265`
+- `rankAreas` — `internal/cmd/status.go:380`
+- `formatRunSignal` — `internal/cmd/status.go:399`
+- `renderActionAreas` — `internal/cmd/status.go:427`
 
 _c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · 2b6d344_
 
@@ -347,7 +357,7 @@ _introduced native-statusline · 46e5025_
 Add, remove, and edit tasks inside a phase's plan.toml through guarded CLI verbs, so the plan is mutated only through dross and never hand-edited. New task ids come from a persisted per-plan high-water counter (Plan.TaskSeq): NextTaskID assigns high_water+1, and RemoveTask backfills the counter before deleting, so a freed id — even the highest — is never reissued; a new task's wave is the explicit --wave or one past its deepest dependency's wave (deriveWave). `add` appends at the tail by default and only positions relative to an anchor (--after/--before) when asked; `remove` is dependency-safe, refusing when another task depends on the target unless --force strips the id from every dependent; `edit` is a partial field update that changes only the flags passed and never status (dross task status stays that owner). Every mutation passes through saveIfValid → ValidatePlan (duplicate-id, unknown-depends_on, and covers→criterion parity with dross validate) and is written only if valid, leaving plan.toml byte-unchanged on rejection.
 
 - `taskAdd` / `taskRemove` / `taskEdit` (CLI verbs) — `internal/cmd/task.go:121`
-- `saveIfValid` (validate-then-write guard) — `internal/cmd/task.go:252`
+- `saveIfValid` (validate-then-write guard) — `internal/cmd/task.go:292`
 - `Plan.AddTask` / `Plan.RemoveTask` / `Plan.EditTask` (pure in-memory mutators) — `internal/phase/plan_edit.go:143`
 - `Plan.NextTaskID` / `deriveWave` (high-water id + dependency-derived wave) — `internal/phase/plan_edit.go:35`
 - `ValidatePlan` (pre-write integrity guard) — `internal/phase/plan_edit.go:82`
@@ -381,7 +391,7 @@ _a1b9c23_
 Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail.
 
 - `Verify` (CLI) — `internal/cmd/verify.go:27`
-- `verify.Run` — `internal/verify/verify.go:125`
+- `verify.Run` — `internal/verify/verify.go:130`
 
 _e31bdbd_
 
