@@ -2,18 +2,10 @@
   "version": "0.10.6.0",
   "current_milestone": "v0.10",
   "current_phase": "ship-clean-tree",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-24T06:08:28.224581Z",
-  "last_action": "phase ship-clean-tree executed (4/4 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-24T06:18:10.978647Z",
+  "last_action": "verified ship-clean-tree: pass (5/5, mutation 0.96)",
   "history": [
-    {
-      "at": "2026-07-23T12:00:16.81109Z",
-      "action": "bump internal 0.10.8.0 → 0.10.8.1"
-    },
-    {
-      "at": "2026-07-23T12:00:16.818296Z",
-      "action": "bump internal 0.10.8.1 → 0.10.8.2"
-    },
     {
       "at": "2026-07-23T12:00:16.82407Z",
       "action": "bump internal 0.10.8.2 → 0.10.8.3"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-24T06:08:28.224581Z",
       "action": "phase ship-clean-tree executed (4/4 done)"
+    },
+    {
+      "at": "2026-07-24T06:18:10.971236Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-24T06:18:10.978647Z",
+      "action": "verified ship-clean-tree: pass (5/5, mutation 0.96)"
     }
   ]
 }
