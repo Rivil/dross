@@ -1,108 +1,46 @@
+task_seq = 0
+
 [phase]
-id = "ship-clean-tree"
+  id = "ship-clean-tree"
 
 [[task]]
-id          = "t-1"
-wave        = 1
-title       = "Auto-commit .dross-only dirt at gates"
-files       = [
-  "internal/cmd/cleantree.go",
-  "internal/cmd/cleantree_test.go",
-  "internal/cmd/ship.go",
-  "internal/cmd/ship_test.go",
-  "internal/cmd/phase.go",
-  "internal/cmd/phase_test.go",
-]
-description = """
-Shared helper beside dirtyTreeError: partition git status --porcelain; all paths
-under .dross/ -> git add .dross/ + one chore(dross): commit and proceed; any path
-outside -> dirtyTreeError, stage nothing. Wire into all three gates per the
-autocommit_coverage decision: phaseComplete, forkPhaseBranch (phase create/start),
-and a new pre-stage gate in ship RunE.
-"""
-covers        = ["c-1"]
-test_contract = [
-  "if the .dross-only partition breaks, the test asserting 'only .dross/handoff.md dirty -> exactly one chore(dross): commit and command proceeds' fails",
-  "if the refusal path breaks, the test asserting '.dross/ + README.md both dirty -> dirtyTreeError with zero commits (no partial commit of the .dross half)' fails",
-  "if ship's new gate breaks, the test asserting 'ship with a stray src edit refuses before any push; ship with only .dross dirt auto-commits then pushes' fails",
-  "if the prefix guard breaks, the tests asserting 'rename R .dross/a -> .dross/b parses both sides as under .dross' and '.drosszz/x or notes-.dross.txt is NOT under .dross -> refuses' fail",
-  "if empty-commit protection breaks, the test asserting 'clean tree produces zero commits' fails",
-]
-depends_on = []
-status     = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Auto-commit .dross-only dirt at gates"
+  files = ["internal/cmd/cleantree.go", "internal/cmd/cleantree_test.go", "internal/cmd/ship.go", "internal/cmd/ship_test.go", "internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+  description = "Shared helper beside dirtyTreeError: partition git status --porcelain; all paths\nunder .dross/ -> git add .dross/ + one chore(dross): commit and proceed; any path\noutside -> dirtyTreeError, stage nothing. Wire into all three gates per the\nautocommit_coverage decision: phaseComplete, forkPhaseBranch (phase create/start),\nand a new pre-stage gate in ship RunE.\n"
+  covers = ["c-1"]
+  test_contract = ["if the .dross-only partition breaks, the test asserting 'only .dross/handoff.md dirty -> exactly one chore(dross): commit and command proceeds' fails", "if the refusal path breaks, the test asserting '.dross/ + README.md both dirty -> dirtyTreeError with zero commits (no partial commit of the .dross half)' fails", "if ship's new gate breaks, the test asserting 'ship with a stray src edit refuses before any push; ship with only .dross dirt auto-commits then pushes' fails", "if the prefix guard breaks, the tests asserting 'rename R .dross/a -> .dross/b parses both sides as under .dross' and '.drosszz/x or notes-.dross.txt is NOT under .dross -> refuses' fail", "if empty-commit protection breaks, the test asserting 'clean tree produces zero commits' fails"]
+  status = "done"
 
 [[task]]
-id          = "t-2"
-wave        = 2
-title       = "Safety-net push of base-ahead .dross chores"
-files       = [
-  "internal/cmd/basebranch.go",
-  "internal/cmd/basebranch_test.go",
-  "internal/cmd/ship.go",
-  "internal/cmd/phase.go",
-]
-description = """
-pushBaseIfAheadDrossOnly(repoDir, base): fetch; rev-list origin/<base>..<base>
-empty -> no-op; every ahead commit .dross-only -> git push origin <base>; any
-ahead commit touching non-.dross -> refuse, push nothing. Called as ship +
-phase-complete pre-flight. Push failure is a hard returned error (push_failure
-decision). pause.go stays local-only (chore_push decision).
-"""
-covers        = ["c-2"]
-test_contract = [
-  "if the safety-net push breaks, the test asserting 'local base one .dross-only chore ahead -> pre-flight pushes; git rev-list origin/<base>..<base> empty afterward' fails",
-  "if the code-commit guard breaks, the test asserting 'local base ahead by a src/ commit -> pre-flight refuses and pushes nothing' fails",
-  "if hard-refusal-on-push-failure breaks, the test asserting 'unreachable origin -> non-nil error, no success line' fails",
-  "if local-only writers regress, the test asserting 'dross pause performs no push even when base ends up ahead' fails",
-]
-depends_on = ["t-1"]
-status     = "pending"
+  id = "t-2"
+  wave = 2
+  title = "Safety-net push of base-ahead .dross chores"
+  files = ["internal/cmd/basebranch.go", "internal/cmd/basebranch_test.go", "internal/cmd/ship.go", "internal/cmd/phase.go"]
+  description = "pushBaseIfAheadDrossOnly(repoDir, base): fetch; rev-list origin/<base>..<base>\nempty -> no-op; every ahead commit .dross-only -> git push origin <base>; any\nahead commit touching non-.dross -> refuse, push nothing. Called as ship +\nphase-complete pre-flight. Push failure is a hard returned error (push_failure\ndecision). pause.go stays local-only (chore_push decision).\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["if the safety-net push breaks, the test asserting 'local base one .dross-only chore ahead -> pre-flight pushes; git rev-list origin/<base>..<base> empty afterward' fails", "if the code-commit guard breaks, the test asserting 'local base ahead by a src/ commit -> pre-flight refuses and pushes nothing' fails", "if hard-refusal-on-push-failure breaks, the test asserting 'unreachable origin -> non-nil error, no success line' fails", "if local-only writers regress, the test asserting 'dross pause performs no push even when base ends up ahead' fails"]
+  status = "done"
 
 [[task]]
-id          = "t-3"
-wave        = 1
-title       = "Resolve recorded PR from origin in mergeGate"
-files       = [
-  "internal/cmd/phase.go",
-  "internal/cmd/phase_test.go",
-]
-description = """
-In phaseComplete, resolve recordedPR from git show origin/<base>:.dross/phases/
-<id>/changes.json (post-fetch) when the working-tree changes.json lacks it.
-mergeGate gates on the origin-sourced PR instead of only the stale local read.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "if origin-side PR resolution breaks, the test asserting 'working-tree changes.json absent/PR=0 but origin/<base> records merged PR #7 -> mergeGate resolves 7 via ship.PRMergedFunc (provider path), not the ancestry fallback' fails",
-  "if the fallback regresses, the test asserting 'no PR in working tree nor origin -> recordedPR stays 0 and mergeGate takes the ancestry fallback unchanged' fails",
-]
-depends_on = []
-status     = "pending"
+  id = "t-3"
+  wave = 1
+  title = "Resolve recorded PR from origin in mergeGate"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+  description = "In phaseComplete, resolve recordedPR from git show origin/<base>:.dross/phases/\n<id>/changes.json (post-fetch) when the working-tree changes.json lacks it.\nmergeGate gates on the origin-sourced PR instead of only the stale local read.\n"
+  covers = ["c-3"]
+  test_contract = ["if origin-side PR resolution breaks, the test asserting 'working-tree changes.json absent/PR=0 but origin/<base> records merged PR #7 -> mergeGate resolves 7 via ship.PRMergedFunc (provider path), not the ancestry fallback' fails", "if the fallback regresses, the test asserting 'no PR in working tree nor origin -> recordedPR stays 0 and mergeGate takes the ancestry fallback unchanged' fails"]
+  status = "done"
 
 [[task]]
-id          = "t-4"
-wave        = 2
-title       = "Milestone-aware recover after merge verification"
-files       = [
-  "internal/cmd/phase.go",
-  "internal/cmd/phase_test.go",
-  "internal/cmd/ship_recover.go",
-  "internal/cmd/ship_recover_test.go",
-]
-description = """
-(c-4) Reorder --recover: merge verification (mergeGate with t-3's origin-sourced
-PR) runs first, then the destructive reset/heal (runDrossRecovery), then
-completion. (c-5) Parameterize runDrossRecovery by branch, drop the milestone
-abort, reset/restore against origin/milestone/<version> when that's the base.
-(c-2 tail) Push the restored .dross/ tree at runDrossRecovery's network-bearing
-end, targeting the parameterized branch, reusing t-2's hard-error push policy.
-"""
-covers        = ["c-2", "c-4", "c-5"]
-test_contract = [
-  "if the recover reorder breaks, the test asserting 'diverged/stale main + merged PR + --recover -> resets to origin/main, restores .dross/, does not refuse (HEAD==origin/main)' fails",
-  "if verify-before-reset breaks, the test asserting '--recover with an UNMERGED recorded PR refuses BEFORE any git reset --hard (local base SHA unchanged after refusal)' fails",
-  "if milestone support breaks, TestPhaseCompleteMilestoneDivergedAborts' replacement asserting 'base milestone/v0.10 diverged + --recover -> HEAD==origin/milestone/v0.10, no milestone-unsupported abort' fails",
-  "if the recovery-restore push breaks, the test asserting 'after a restore commit, git rev-list origin/<base>..<base> is empty (restore pushed to main OR milestone base)' fails",
-]
-depends_on = ["t-3"]
-status     = "pending"
+  id = "t-4"
+  wave = 2
+  title = "Milestone-aware recover after merge verification"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_test.go", "internal/cmd/ship_recover.go", "internal/cmd/ship_recover_test.go"]
+  description = "(c-4) Reorder --recover: merge verification (mergeGate with t-3's origin-sourced\nPR) runs first, then the destructive reset/heal (runDrossRecovery), then\ncompletion. (c-5) Parameterize runDrossRecovery by branch, drop the milestone\nabort, reset/restore against origin/milestone/<version> when that's the base.\n(c-2 tail) Push the restored .dross/ tree at runDrossRecovery's network-bearing\nend, targeting the parameterized branch, reusing t-2's hard-error push policy.\n"
+  covers = ["c-2", "c-4", "c-5"]
+  depends_on = ["t-3"]
+  test_contract = ["if the recover reorder breaks, the test asserting 'diverged/stale main + merged PR + --recover -> resets to origin/main, restores .dross/, does not refuse (HEAD==origin/main)' fails", "if verify-before-reset breaks, the test asserting '--recover with an UNMERGED recorded PR refuses BEFORE any git reset --hard (local base SHA unchanged after refusal)' fails", "if milestone support breaks, TestPhaseCompleteMilestoneDivergedAborts' replacement asserting 'base milestone/v0.10 diverged + --recover -> HEAD==origin/milestone/v0.10, no milestone-unsupported abort' fails", "if the recovery-restore push breaks, the test asserting 'after a restore commit, git rev-list origin/<base>..<base> is empty (restore pushed to main OR milestone base)' fails"]
+  status = "done"

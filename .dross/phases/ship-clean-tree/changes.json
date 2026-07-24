@@ -1,0 +1,77 @@
+{
+  "phase": "ship-clean-tree",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/cleantree.go",
+        "internal/cmd/cleantree_test.go",
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "9e58377",
+      "completed_at": "2026-07-24T05:55:45.438387Z",
+      "landmarks": [
+        {
+          "feature": "clean-tree gates",
+          "symbol": "autoCommitDrossDirt",
+          "loc": "internal/cmd/cleantree.go:20",
+          "what": "ship/complete/create gates auto-commit .dross-only dirt as one chore commit; non-.dross dirt still refuses staging nothing"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/basebranch.go",
+        "internal/cmd/basebranch_test.go",
+        "internal/cmd/ship.go",
+        "internal/cmd/phase.go"
+      ],
+      "commit": "cfa0023",
+      "completed_at": "2026-07-24T06:03:47.430752Z",
+      "landmarks": [
+        {
+          "feature": "clean-tree gates",
+          "symbol": "pushBaseIfAheadDrossOnly",
+          "loc": "internal/cmd/basebranch.go:62",
+          "what": "ship/complete pre-flight pushes purely-ahead .dross-only base chores; code-ahead refuses · diverged defers to recovery · push failure is hard"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "0e99b65",
+      "completed_at": "2026-07-24T05:58:19.572599Z",
+      "landmarks": [
+        {
+          "feature": "phase completion gate",
+          "symbol": "originRecordedPR",
+          "loc": "internal/cmd/phase.go:475",
+          "what": "post-fetch mergeGate resolves the recorded PR from origin/\u003cbase\u003e's changes.json when the stale working tree lacks it"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go",
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/ship_recover_test.go"
+      ],
+      "commit": "df17d75",
+      "completed_at": "2026-07-24T06:08:21.882505Z",
+      "landmarks": [
+        {
+          "feature": "squash-merge recovery",
+          "symbol": "runDrossRecovery",
+          "loc": "internal/cmd/ship_recover.go:135",
+          "what": "recovery parameterized by base branch (milestone/\u003cv\u003e supported) · merge verified before destructive reset · restore commit pushed via safety-net policy"
+        }
+      ]
+    }
+  }
+}
