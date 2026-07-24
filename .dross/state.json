@@ -3,17 +3,9 @@
   "current_milestone": "v0.10",
   "current_phase": "ship-clean-tree",
   "current_phase_status": "planned",
-  "last_activity": "2026-07-23T17:08:06.72168Z",
-  "last_action": "plan reviewed: ship-clean-tree (0 blocking, 3 flags; t-2 now depends t-1)",
+  "last_activity": "2026-07-24T05:48:00.262797Z",
+  "last_action": "resumed — execute t-1 (auto-commit .dross-only dirt at gates)",
   "history": [
-    {
-      "at": "2026-07-23T11:31:17.480983Z",
-      "action": "executed t-3 (Add clear-point footer to boundary prompts)"
-    },
-    {
-      "at": "2026-07-23T11:33:28.845141Z",
-      "action": "executed t-4 (Add dross reentry + status re-entry footer)"
-    },
     {
       "at": "2026-07-23T11:35:06.995102Z",
       "action": "executed t-5 (Add post-commit checkpoint gate to execute)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-23T17:08:06.72168Z",
       "action": "plan reviewed: ship-clean-tree (0 blocking, 3 flags; t-2 now depends t-1)"
+    },
+    {
+      "at": "2026-07-23T17:09:42.339873Z",
+      "action": "paused — ship-clean-tree planned (4 tasks/2 waves, panel+review); next: execute t-1"
+    },
+    {
+      "at": "2026-07-24T05:48:00.262797Z",
+      "action": "resumed — execute t-1 (auto-commit .dross-only dirt at gates)"
     }
   ]
 }
