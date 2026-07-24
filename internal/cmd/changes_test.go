@@ -136,6 +136,47 @@ func TestChangesCover_InvalidLandmarkErrors(t *testing.T) {
 	}
 }
 
+// TestChangesRecordCommaInLandmarkValue pins the comma rule end-to-end: a
+// comma inside a value joins the value (here `what=a, b`), so record succeeds
+// and show prints the joined text. Before the key=-boundary fix this input
+// errored with "unknown landmark key \"b\"".
+func TestChangesRecordCommaInLandmarkValue(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Changes(),
+		"record", "01-lm", "t-1",
+		"--files", "a.go",
+		"--landmark", "feature=X, what=a, b",
+	); err != nil {
+		t.Fatalf("record with comma-in-value landmark should succeed: %v", err)
+	}
+	out := captureStdout(t, func() {
+		runCmd(t, Changes(), "show", "01-lm")
+	})
+	for _, want := range []string{`"feature": "X"`, `"what": "a, b"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("show missing joined landmark field %q\n%s", want, out)
+		}
+	}
+}
+
+// TestChangesLandmarkHelpDocumentsCommaRule keeps the comma rule discoverable:
+// the --landmark usage string must state that values may contain commas and
+// that a new pair starts only at a recognised key=.
+func TestChangesLandmarkHelpDocumentsCommaRule(t *testing.T) {
+	f := changesRecord().Flags().Lookup("landmark")
+	if f == nil {
+		t.Fatal("--landmark flag not registered")
+	}
+	for _, want := range []string{"may contain commas", "recognised key="} {
+		if !strings.Contains(f.Usage, want) {
+			t.Errorf("--landmark usage missing %q: %s", want, f.Usage)
+		}
+	}
+}
+
 func TestChangesShowEmpty(t *testing.T) {
 	chdir(t, t.TempDir())
 	if err := runCmd(t, Init()); err != nil {
