@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -109,7 +108,7 @@ longer holds the pre-merge .dross/ tree:
 			// shared recovery routine — the same one `dross phase complete
 			// --recover` delegates to, so the heal procedure can't drift
 			// between the two entry points.
-			return runDrossRecovery(repoDir, root, p, s, phaseID, preMergeSHA)
+			return runDrossRecovery(repoDir, root, s, phaseID, preMergeSHA, mainBranch)
 		},
 	}
 	c.Flags().StringVar(&preMergeSHA, "pre-merge-sha", "",
@@ -118,23 +117,20 @@ longer holds the pre-merge .dross/ tree:
 }
 
 // runDrossRecovery performs the core post-squash-merge recovery shared by
-// `dross ship recover` and `dross phase complete --recover`: reset main to
-// origin, restore the cumulative .dross/ tree from the pre-merge SHA, and —
-// only when that produces a real delta vs origin — commit it. Callers own
-// their own pre-conditions (clean tree, correct branch); this routine assumes
-// them.
+// `dross ship recover` and `dross phase complete --recover`: reset baseBranch
+// to origin, restore the cumulative .dross/ tree from the pre-merge SHA, and —
+// only when that produces a real delta vs origin — commit it and push the
+// restore so the base doesn't sit ahead again (c-2). Callers own their own
+// pre-conditions (clean tree, correct branch) and pass the base explicitly —
+// main for the legacy `ship recover` path, main or milestone/<version> for
+// `phase complete --recover` (c-5); this routine assumes them.
 //
-// The delta gate is what makes recovery idempotent (c-6): when origin/main
+// The delta gate is what makes recovery idempotent (c-6): when origin/<base>
 // already carries the full .dross/ tree (the healed, linguist-generated era),
 // the restore stages nothing and the routine is a clean no-op — no phantom
 // commit. The full-tree `checkout <sha> -- .dross/` is what makes it restore
 // every phase's artefacts at once (c-2), not just the current phase's.
-func runDrossRecovery(repoDir, root string, p *project.Project, s *state.State, phaseID, preMergeSHA string) error {
-	mainBranch := p.Repo.GitMainBranch
-	if mainBranch == "" {
-		mainBranch = "main"
-	}
-
+func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA, baseBranch string) error {
 	// Capture the SHA holding the pre-merge .dross/ tree *before* we mutate
 	// anything. Default: current HEAD (which still has the phase commits, as
 	// the divergent steady state requires). Override: --pre-merge-sha when the
@@ -160,8 +156,8 @@ func runDrossRecovery(repoDir, root string, p *project.Project, s *state.State, 
 	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
 		return fmt.Errorf("git fetch: %w\n%s", err, out)
 	}
-	if out, err := gitCombined(repoDir, "reset", "--hard", "origin/"+mainBranch); err != nil {
-		return fmt.Errorf("git reset --hard origin/%s: %w\n%s", mainBranch, err, out)
+	if out, err := gitCombined(repoDir, "reset", "--hard", "origin/"+baseBranch); err != nil {
+		return fmt.Errorf("git reset --hard origin/%s: %w\n%s", baseBranch, err, out)
 	}
 	if out, err := gitCombined(repoDir, "checkout", sha, "--", ".dross/"); err != nil {
 		return fmt.Errorf("git checkout %s -- .dross/: %w\n%s", short(sha), err, out)
@@ -185,7 +181,7 @@ func runDrossRecovery(repoDir, root string, p *project.Project, s *state.State, 
 			nil,
 			map[string]string{"result": "in_sync"},
 		)
-		Printf("main already in sync with origin/%s — nothing to restore for %s\n", mainBranch, phaseID)
+		Printf("%s already in sync with origin/%s — nothing to restore for %s\n", baseBranch, baseBranch, phaseID)
 		return nil
 	}
 
@@ -202,6 +198,18 @@ func runDrossRecovery(repoDir, root string, p *project.Project, s *state.State, 
 	msg := fmt.Sprintf("chore(dross): restore .dross/ after squash-merge for %s + merge", phaseID)
 	if out, err := gitCombined(repoDir, "commit", "-m", msg); err != nil {
 		return fmt.Errorf("git commit: %w\n%s", err, out)
+	}
+
+	// Push the restore (c-2): recovery is already a network-bearing command
+	// (it fetched), and leaving the restore commit unpushed re-seeds the
+	// exact base-ahead divergence the safety net exists to kill. The shared
+	// pusher's guards are all satisfied here — we just reset to origin and
+	// committed one .dross-only chore, a purely-ahead base — and its
+	// push-failure policy (hard error) applies unchanged.
+	if pushed, err := pushBaseIfAheadDrossOnly(repoDir, baseBranch); err != nil {
+		return fmt.Errorf("push restored .dross/ on %s: %w", baseBranch, err)
+	} else if pushed {
+		Printf("pushed restored .dross/ on %s to origin\n", baseBranch)
 	}
 
 	RecordOutcomeEvent("ship_recover",

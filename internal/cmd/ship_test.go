@@ -935,3 +935,48 @@ func TestShipNudgesNoMilestone(t *testing.T) {
 		t.Errorf("no-milestone ship should nudge naming `dross milestone`; got:\n%s", out)
 	}
 }
+
+// c-1: ship's pre-stage gate refuses real code dirt before anything is staged
+// or pushed — the bare remote must never see phase/x.
+func TestShipRefusesStrayCodeDirtBeforePush(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+	mustWrite(t, filepath.Join(dir, "src/stray.ts"), "x\n")
+
+	err := runCmd(t, Ship())
+	if err == nil || !strings.Contains(err.Error(), "working tree is dirty") {
+		t.Fatalf("expected dirty-tree refusal on stray code dirt, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "stray.ts") {
+		t.Errorf("refusal should name the offending path: %v", err)
+	}
+	remoteDir := mustGit(t, dir, "remote", "get-url", "origin")
+	refs := mustGit(t, remoteDir, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+	if strings.Contains(refs, "phase/x") {
+		t.Errorf("refusal must land before the push; remote has: %q", refs)
+	}
+}
+
+// c-1: ship with only .dross dirt auto-commits it and proceeds — the pushed
+// ref carries the bookkeeping, and the local tree ends clean.
+func TestShipAutoCommitsDrossDirtThenPushes(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# handoff\n")
+
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship should proceed past .dross-only dirt: %v", err)
+	}
+	log := mustGit(t, dir, "log", "--format=%s")
+	if !strings.Contains(log, "chore(dross): auto-commit bookkeeping") {
+		t.Errorf("expected an auto-commit chore in the log:\n%s", log)
+	}
+	remoteDir := mustGit(t, dir, "remote", "get-url", "origin")
+	pushed := mustGit(t, remoteDir, "show", "phase/x:.dross/handoff.md")
+	if !strings.Contains(pushed, "handoff") {
+		t.Errorf("pushed ref should carry the auto-committed file, got: %q", pushed)
+	}
+	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
+		t.Errorf("tree should be clean after ship, got: %q", st)
+	}
+}

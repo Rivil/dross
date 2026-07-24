@@ -1,81 +1,9 @@
 {
-  "version": "0.10.2.0",
+  "version": "0.10.6.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-23T15:36:26.902237Z",
-  "last_action": "completed task-reordering",
+  "last_activity": "2026-07-24T06:45:43.319806Z",
+  "last_action": "completed ship-clean-tree",
   "history": [
-    {
-      "at": "2026-07-23T11:15:13.287468Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-23T11:15:13.294591Z",
-      "action": "plan locked: context-hygiene (7 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-23T11:20:23.62439Z",
-      "action": "plan reviewed: context-hygiene (0 blocking, 4 flags; applied 2)"
-    },
-    {
-      "at": "2026-07-23T11:22:31.909535Z",
-      "action": "set version=0.10.8.0"
-    },
-    {
-      "at": "2026-07-23T11:25:36.000592Z",
-      "action": "executed t-1 (Add hook-merge helper for settings.json)"
-    },
-    {
-      "at": "2026-07-23T11:29:16.103503Z",
-      "action": "executed t-2 (Add dross pause --auto snapshot verb)"
-    },
-    {
-      "at": "2026-07-23T11:31:17.480983Z",
-      "action": "executed t-3 (Add clear-point footer to boundary prompts)"
-    },
-    {
-      "at": "2026-07-23T11:33:28.845141Z",
-      "action": "executed t-4 (Add dross reentry + status re-entry footer)"
-    },
-    {
-      "at": "2026-07-23T11:35:06.995102Z",
-      "action": "executed t-5 (Add post-commit checkpoint gate to execute)"
-    },
-    {
-      "at": "2026-07-23T11:37:52.614452Z",
-      "action": "executed t-6 (Add footer-audit doc + fail-closed gate)"
-    },
-    {
-      "at": "2026-07-23T11:40:15.482603Z",
-      "action": "executed t-7 (Scaffold user-level hooks in init/onboard)"
-    },
-    {
-      "at": "2026-07-23T11:40:26.376104Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-23T11:40:26.38274Z",
-      "action": "phase context-hygiene executed (7/7 done)"
-    },
-    {
-      "at": "2026-07-23T11:53:52.993709Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-23T11:53:52.999061Z",
-      "action": "verified context-hygiene: partial (4/5 covered, 1 weak, mutation 0.95)"
-    },
-    {
-      "at": "2026-07-23T12:00:16.81109Z",
-      "action": "bump internal 0.10.8.0 → 0.10.8.1"
-    },
-    {
-      "at": "2026-07-23T12:00:16.818296Z",
-      "action": "bump internal 0.10.8.1 → 0.10.8.2"
-    },
-    {
-      "at": "2026-07-23T12:00:16.82407Z",
-      "action": "bump internal 0.10.8.2 → 0.10.8.3"
-    },
     {
       "at": "2026-07-23T12:00:27.873168Z",
       "action": "3 quicks: mutation adapter resilience (record-and-continue, scoped stryker+workdir, adapters allowlist) → 0.10.8.3"
@@ -203,6 +131,78 @@
     {
       "at": "2026-07-23T15:36:26.902237Z",
       "action": "completed task-reordering"
+    },
+    {
+      "at": "2026-07-23T15:59:07.002131Z",
+      "action": "created ship-clean-tree"
+    },
+    {
+      "at": "2026-07-23T16:28:18.846516Z",
+      "action": "set current_phase=ship-clean-tree"
+    },
+    {
+      "at": "2026-07-23T16:28:18.852845Z",
+      "action": "spec locked: ship-clean-tree"
+    },
+    {
+      "at": "2026-07-23T17:04:39.682729Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-23T17:04:39.689806Z",
+      "action": "plan locked: ship-clean-tree (4 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-23T17:08:06.72168Z",
+      "action": "plan reviewed: ship-clean-tree (0 blocking, 3 flags; t-2 now depends t-1)"
+    },
+    {
+      "at": "2026-07-23T17:09:42.339873Z",
+      "action": "paused — ship-clean-tree planned (4 tasks/2 waves, panel+review); next: execute t-1"
+    },
+    {
+      "at": "2026-07-24T05:48:00.262797Z",
+      "action": "resumed — execute t-1 (auto-commit .dross-only dirt at gates)"
+    },
+    {
+      "at": "2026-07-24T05:48:37.879164Z",
+      "action": "set version=0.10.6.0"
+    },
+    {
+      "at": "2026-07-24T05:55:45.453241Z",
+      "action": "executed t-1 (Auto-commit .dross-only dirt at gates)"
+    },
+    {
+      "at": "2026-07-24T05:58:19.586816Z",
+      "action": "executed t-3 (Resolve recorded PR from origin in mergeGate)"
+    },
+    {
+      "at": "2026-07-24T06:03:47.444201Z",
+      "action": "executed t-2 (Safety-net push of base-ahead .dross chores)"
+    },
+    {
+      "at": "2026-07-24T06:08:21.896577Z",
+      "action": "executed t-4 (Milestone-aware recover after merge verification)"
+    },
+    {
+      "at": "2026-07-24T06:08:28.21718Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-24T06:08:28.224581Z",
+      "action": "phase ship-clean-tree executed (4/4 done)"
+    },
+    {
+      "at": "2026-07-24T06:18:10.971236Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-24T06:18:10.978647Z",
+      "action": "verified ship-clean-tree: pass (5/5, mutation 0.96)"
+    },
+    {
+      "at": "2026-07-24T06:45:43.319806Z",
+      "action": "completed ship-clean-tree"
     }
   ]
 }

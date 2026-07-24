@@ -1005,6 +1005,29 @@ func TestPhaseCompleteRecoverHeals(t *testing.T) {
 	if status := mustGit(t, dir, "status", "--porcelain"); status != "" {
 		t.Errorf("working tree should be clean after recovery, got: %q", status)
 	}
+	// c-2 tail: the restore commit is pushed, so main doesn't sit ahead again.
+	if ahead := mustGit(t, dir, "rev-list", "origin/main..main"); ahead != "" {
+		t.Errorf("the restore commit must be pushed (origin/main..main empty), got: %q", ahead)
+	}
+}
+
+// c-4 verify-before-reset: --recover with an UNMERGED recorded PR refuses at
+// the merge gate BEFORE any git reset --hard — local main is byte-for-byte
+// unchanged after the refusal.
+func TestPhaseCompleteRecoverUnmergedPRRefusesBeforeReset(t *testing.T) {
+	dir, _, mainSHA := divergedCompleteFixture(t)
+	stubPRMerged(t, false) // the recorded PR is authoritatively NOT merged
+
+	err := runCmd(t, Phase(), "complete", "--recover")
+	if err == nil {
+		t.Fatal("expected the merge gate to refuse --recover on an unmerged PR")
+	}
+	if !strings.Contains(err.Error(), "not merged") {
+		t.Errorf("refusal should say the PR isn't merged: %v", err)
+	}
+	if got := mustGit(t, dir, "rev-parse", "main"); got != mainSHA {
+		t.Errorf("local main must be untouched when the gate refuses: was %s, now %s", mainSHA, got)
+	}
 }
 
 // TestPhaseCompleteRecoverRefusesDirty (c-3): --recover on a diverged AND dirty
@@ -1281,30 +1304,236 @@ func TestPhaseCompleteNoMilestoneFfsMain(t *testing.T) {
 	}
 }
 
-func TestPhaseCompleteMilestoneDivergedAborts(t *testing.T) {
-	dir, _, version := completeMilestoneFixture(t)
-	stubPRMerged(t, true) // gate passes; the ff-divergence is what's under test
-	// Introduce local divergence: a commit on local milestone/<v> that origin
-	// lacks (origin carries the squash the local branch doesn't) → ff aborts.
+// divergeMilestone puts a local-only commit on milestone/<version> (origin
+// carries the squash the local branch doesn't → true divergence), returning
+// the pre-divergence local tip. Leaves the working copy on phase/auth.
+func divergeMilestone(t *testing.T, dir, version string) string {
+	t.Helper()
 	mustGit(t, dir, "checkout", "-q", "milestone/"+version)
 	mustWrite(t, filepath.Join(dir, "local-only.txt"), "x\n")
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "local divergence")
-	localBefore := mustGit(t, dir, "rev-parse", "milestone/"+version)
+	local := mustGit(t, dir, "rev-parse", "milestone/"+version)
 	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	return local
+}
+
+// Without --recover, a diverged milestone base still refuses non-destructively
+// — but now pointing at --recover (c-5 dropped the milestone-unsupported abort).
+func TestPhaseCompleteMilestoneDivergedNoFlagStops(t *testing.T) {
+	dir, _, version := completeMilestoneFixture(t)
+	stubPRMerged(t, true) // gate passes; the ff-divergence refusal is under test
+	localBefore := divergeMilestone(t, dir, version)
 
 	err := runCmd(t, Phase(), "complete")
 	if err == nil {
-		t.Fatal("expected non-destructive abort on a diverged milestone branch")
+		t.Fatal("expected non-destructive refusal on a diverged milestone branch without --recover")
 	}
-	if !strings.Contains(err.Error(), "diverged") {
-		t.Errorf("error should explain divergence: %v", err)
+	if !strings.Contains(err.Error(), "--recover") {
+		t.Errorf("refusal should point at --recover: %v", err)
+	}
+	if strings.Contains(err.Error(), "does not yet support") {
+		t.Errorf("the milestone-unsupported abort must be gone: %v", err)
 	}
 	// Nothing reset: local milestone tip unchanged and phase branch still present.
 	if after := mustGit(t, dir, "rev-parse", "milestone/"+version); after != localBefore {
 		t.Errorf("milestone/%s tip changed (should be untouched): %s -> %s", version, localBefore, after)
 	}
 	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); b == "" {
-		t.Error("phase/auth should NOT be deleted on a non-destructive abort")
+		t.Error("phase/auth should NOT be deleted on a non-destructive refusal")
+	}
+}
+
+// c-5 (replaces TestPhaseCompleteMilestoneDivergedAborts): a diverged
+// milestone base + --recover resets/restores against origin/milestone/<v>
+// instead of aborting with "does not yet support milestone branches" — and
+// the restore is pushed (c-2 tail), so the milestone base ends in sync.
+func TestPhaseCompleteMilestoneDivergedRecovers(t *testing.T) {
+	dir, _, version := completeMilestoneFixture(t)
+	stubPRMerged(t, true)
+	divergeMilestone(t, dir, version)
+
+	if err := runCmd(t, Phase(), "complete", "--recover"); err != nil {
+		t.Fatalf("--recover should heal a diverged milestone base: %v", err)
+	}
+	// The local milestone branch ends level with origin — reset to the
+	// origin squash, restore pushed back up.
+	if ahead := mustGit(t, dir, "rev-list", "origin/milestone/"+version+"..milestone/"+version); ahead != "" {
+		t.Errorf("milestone/%s should be fully pushed after recovery, got ahead: %q", version, ahead)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "milestone/"+version {
+		t.Errorf("expected HEAD on milestone/%s after recovery, got %q", version, cur)
+	}
+	// The divergent local-only commit was reset away (destructive, as warned).
+	if tree := mustGit(t, dir, "ls-tree", "-r", "--name-only", "HEAD"); strings.Contains(tree, "local-only.txt") {
+		t.Error("the divergent local-only commit should have been reset away")
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); b != "" {
+		t.Errorf("phase/auth should be deleted after a successful recovery, got: %q", b)
+	}
+}
+
+// c-1: phase create's clean-tree gate auto-commits .dross-only dirt (a pause
+// state-touch shouldn't block starting the next phase) instead of refusing.
+func TestPhaseCreateAutoCommitsDrossDirt(t *testing.T) {
+	dir := initWithGit(t)
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# handoff\n")
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create should proceed past .dross-only dirt: %v", err)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "phase/auth" {
+		t.Errorf("expected HEAD on phase/auth, got %q", cur)
+	}
+	log := mustGit(t, dir, "log", "--format=%s")
+	if !strings.Contains(log, "chore(dross): auto-commit bookkeeping") {
+		t.Errorf("expected an auto-commit chore in the log:\n%s", log)
+	}
+}
+
+// c-1: phase complete's clean-tree gate auto-commits .dross-only dirt and
+// proceeds (here to the fetch step, which fails on the empty origin — the
+// point is the error is no longer the dirty-tree refusal).
+func TestPhaseCompleteAutoCommitsDrossDirt(t *testing.T) {
+	dir := initWithGit(t)
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# handoff\n")
+
+	err := runCmd(t, Phase(), "complete", "x")
+	if err == nil {
+		t.Fatal("expected complete to fail later (empty origin), just not on the dirty gate")
+	}
+	if strings.Contains(err.Error(), "working tree is dirty") {
+		t.Errorf(".dross-only dirt must not trip the dirty gate: %v", err)
+	}
+	log := mustGit(t, dir, "log", "--format=%s")
+	if !strings.Contains(log, "chore(dross): auto-commit bookkeeping") {
+		t.Errorf("expected an auto-commit chore in the log:\n%s", log)
+	}
+	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
+		t.Errorf("tree should be clean after the auto-commit gate, got: %q", st)
+	}
+}
+
+// The refusal path is unchanged for real code dirt at the complete gate — and
+// the .dross half must NOT be partially committed alongside the refusal.
+func TestPhaseCompleteMixedDirtStillRefuses(t *testing.T) {
+	dir := initWithGit(t)
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# handoff\n")
+	mustWrite(t, filepath.Join(dir, "src.go"), "package src\n")
+	before := mustGit(t, dir, "rev-list", "--count", "HEAD")
+
+	err := runCmd(t, Phase(), "complete", "x")
+	if err == nil || !strings.Contains(err.Error(), "working tree is dirty") {
+		t.Fatalf("mixed dirt must still hit the dirty-tree refusal: %v", err)
+	}
+	if after := mustGit(t, dir, "rev-list", "--count", "HEAD"); after != before {
+		t.Errorf("refusal must create zero commits: %s -> %s", before, after)
+	}
+}
+
+// completeFixtureOriginPR is completeFixture's stale-tree variant (c-3): the
+// PR record is NOT committed on phase/auth — it exists only inside the squash
+// pushed to origin/main (originPR > 0), exactly the 2026-07-23 state where the
+// local checkout predates ship's record commit. originPR == 0 leaves no record
+// anywhere. origin/phase/auth is never pushed, so the ancestry fallback can
+// never confirm the merge — only the provider path (via an origin-side PR
+// read) can.
+func completeFixtureOriginPR(t *testing.T, originPR int) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remoteDir)
+	chdir(t, dir)
+
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("phase create: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "src/auth.ts"), "x\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
+
+	// Simulate the upstream squash-merge, carrying the completion record —
+	// and, when originPR > 0, the phase's changes.json with the PR number
+	// (as ship's post-push record commit does before the squash collapses it).
+	mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
+	mustGit(t, dir, "checkout", "phase/auth", "--", "src/")
+	mustGit(t, dir, "add", "src/")
+	if originPR > 0 {
+		mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
+			fmt.Sprintf(`{"phase":"auth","pr":%d,"tasks":{}}`, originPR))
+		mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
+	}
+	stPath := filepath.Join(dir, ".dross", "state.json")
+	sqState, err := state.Load(stPath)
+	if err != nil {
+		t.Fatalf("load state for squash sim: %v", err)
+	}
+	sqState.CurrentPhase = ""
+	sqState.CurrentPhaseStatus = ""
+	sqState.Touch("completed auth")
+	if err := sqState.Save(stPath); err != nil {
+		t.Fatalf("save squash state: %v", err)
+	}
+	mustGit(t, dir, "add", filepath.Join(".dross", "state.json"))
+	mustGit(t, dir, "commit", "-q", "-m", "feat(squash): auth")
+	mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	mustGit(t, dir, "branch", "-D", "squash-sim")
+	// Deliberately NO local record of the PR and NO fetch — complete itself
+	// fetches; the working tree is the stale pre-record checkout.
+
+	return dir, "auth"
+}
+
+// c-3: with the working-tree changes.json absent but origin/main carrying
+// PR #7, mergeGate must resolve 7 from origin and take the provider path —
+// the ancestry fallback (origin/phase/auth missing) would refuse.
+func TestPhaseCompleteResolvesRecordedPRFromOrigin(t *testing.T) {
+	dir, _ := completeFixtureOriginPR(t, 7)
+	gotPR := 0
+	prev := ship.PRMergedFunc
+	ship.PRMergedFunc = func(o ship.OpenOpts) (bool, error) {
+		gotPR = o.PRNumber
+		return true, nil
+	}
+	t.Cleanup(func() { ship.PRMergedFunc = prev })
+
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete should succeed via the origin-resolved PR: %v", err)
+	}
+	if gotPR != 7 {
+		t.Errorf("mergeGate should query the provider with the origin-recorded PR #7, got %d", gotPR)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "main" {
+		t.Errorf("expected HEAD on main after complete, got %q", cur)
+	}
+}
+
+// c-3 fallback: no PR in the working tree nor on origin → recordedPR stays 0,
+// the provider is never queried, and the ancestry fallback refuses unchanged.
+func TestPhaseCompleteNoPRAnywhereTakesAncestryFallback(t *testing.T) {
+	_, _ = completeFixtureOriginPR(t, 0)
+	prev := ship.PRMergedFunc
+	ship.PRMergedFunc = func(ship.OpenOpts) (bool, error) {
+		t.Error("provider must not be queried when no PR is recorded anywhere")
+		return false, nil
+	}
+	t.Cleanup(func() { ship.PRMergedFunc = prev })
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected the ancestry fallback to refuse (origin/phase/auth missing)")
+	}
+	if !strings.Contains(err.Error(), "cannot confirm") {
+		t.Errorf("expected the guided ancestry refusal, got: %v", err)
 	}
 }
