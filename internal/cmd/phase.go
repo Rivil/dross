@@ -288,7 +288,7 @@ points at a manual reconcile.`,
 			// (milestone/<version>) when one exists, else main — the same base
 			// resolver create/ship use. Under a milestone, complete ff's the
 			// milestone branch so main only advances at the milestone boundary.
-			reconcileBranch, milestoneActive, err := resolveNewWorkBase(repoDir, root)
+			reconcileBranch, _, err := resolveNewWorkBase(repoDir, root)
 			if err != nil {
 				return err
 			}
@@ -374,39 +374,33 @@ points at a manual reconcile.`,
 			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+reconcileBranch); err != nil {
 				// The ff abort IS the divergence signal: local <branch> holds
 				// commits origin/<branch> doesn't. The clean-tree guard above
-				// already ran, so no uncommitted work is at risk.
-				if milestoneActive {
-					// --recover's reconcile branch is still hardcoded to main
-					// (deferred), so it must NOT be pointed at a milestone
-					// branch — that would reset the wrong branch. Abort
-					// non-destructively and steer to a manual reconcile.
-					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged.\n%s\n"+
-						"Reconcile it manually (save any local commits, then `git reset --hard origin/%s`). "+
-						"`--recover` does not yet support milestone branches, so nothing was reset.",
-						reconcileBranch, reconcileBranch, out, reconcileBranch)
-				}
-				// main path. Without --recover, refuse and point at the fix,
-				// changing nothing destructive.
+				// already ran, so no uncommitted work is at risk. The merge
+				// gate above already verified the PR is merged, so recovery
+				// (a destructive reset) never runs on an unverified merge.
+				//
+				// Without --recover, refuse and point at the fix, changing
+				// nothing destructive.
 				if !recoverFlag {
 					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged.\n%s\n"+
 						"Re-run `dross phase complete --recover` to reset %s to origin and restore .dross/ "+
 						"(or use `dross ship recover`). Recovery is a destructive reset of local %s — read the abort first.",
 						reconcileBranch, reconcileBranch, out, reconcileBranch, reconcileBranch)
 				}
-				// --recover: reload state from the (now checked-out) main
-				// working tree so the recovery commit carries main's .dross/
-				// state, not the phase branch's stale copy loaded at the top of
-				// this RunE. Then delegate to the shared routine — the same heal
-				// `dross ship recover` runs — which resets to origin and restores
-				// the cumulative .dross/ tree in one shot.
+				// --recover: reload state from the (now checked-out) base
+				// working tree so the recovery commit carries the base's
+				// .dross/ state, not the phase branch's stale copy loaded at
+				// the top of this RunE. Then delegate to the shared routine —
+				// the same heal `dross ship recover` runs — which resets the
+				// base (main or milestone/<version>, c-5) to origin, restores
+				// the cumulative .dross/ tree, and pushes the restore.
 				rs, lerr := state.Load(filepath.Join(root, state.File))
 				if lerr != nil {
 					return fmt.Errorf("reload state for recovery: %w", lerr)
 				}
-				if rerr := runDrossRecovery(repoDir, root, p, rs, phaseID, ""); rerr != nil {
+				if rerr := runDrossRecovery(repoDir, root, rs, phaseID, "", reconcileBranch); rerr != nil {
 					return fmt.Errorf("recover diverged %s during complete: %w", reconcileBranch, rerr)
 				}
-				// Healed: main reset to origin with .dross/ restored. Fall
+				// Healed: base reset to origin with .dross/ restored. Fall
 				// through to the branch teardown below.
 			}
 
@@ -449,7 +443,7 @@ points at a manual reconcile.`,
 		},
 	}
 	c.Flags().BoolVar(&recoverFlag, "recover", false,
-		"on a diverged main, reset to origin and restore .dross/ in one shot instead of aborting")
+		"on a diverged base (main or milestone/<version>), reset to origin and restore .dross/ in one shot instead of aborting")
 	return c
 }
 

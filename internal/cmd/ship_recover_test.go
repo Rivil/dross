@@ -85,10 +85,14 @@ func TestShipRecoverHappyPath(t *testing.T) {
 		t.Fatalf("recover: %v", err)
 	}
 
-	// HEAD should be 1 commit ahead of origin/main (the restore commit).
-	ahead := mustGit(t, dir, "rev-list", "--count", "origin/main..HEAD")
-	if ahead != "1" {
-		t.Errorf("expected 1 commit ahead of origin/main, got %s", ahead)
+	// The restore commit exists on HEAD AND is pushed (c-2): local main ends
+	// level with origin/main, not sitting one chore ahead to re-seed
+	// divergence at the next squash-merge.
+	if msg := mustGit(t, dir, "log", "-1", "--format=%s"); !strings.Contains(msg, "restore .dross/") {
+		t.Errorf("HEAD should be the restore commit, got: %q", msg)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/main..HEAD"); ahead != "" {
+		t.Errorf("the restore commit must be pushed (origin/main..HEAD empty), got: %q", ahead)
 	}
 
 	// .dross/ phase artefacts must be back in the tree.

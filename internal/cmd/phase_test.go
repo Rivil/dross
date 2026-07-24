@@ -1005,6 +1005,29 @@ func TestPhaseCompleteRecoverHeals(t *testing.T) {
 	if status := mustGit(t, dir, "status", "--porcelain"); status != "" {
 		t.Errorf("working tree should be clean after recovery, got: %q", status)
 	}
+	// c-2 tail: the restore commit is pushed, so main doesn't sit ahead again.
+	if ahead := mustGit(t, dir, "rev-list", "origin/main..main"); ahead != "" {
+		t.Errorf("the restore commit must be pushed (origin/main..main empty), got: %q", ahead)
+	}
+}
+
+// c-4 verify-before-reset: --recover with an UNMERGED recorded PR refuses at
+// the merge gate BEFORE any git reset --hard — local main is byte-for-byte
+// unchanged after the refusal.
+func TestPhaseCompleteRecoverUnmergedPRRefusesBeforeReset(t *testing.T) {
+	dir, _, mainSHA := divergedCompleteFixture(t)
+	stubPRMerged(t, false) // the recorded PR is authoritatively NOT merged
+
+	err := runCmd(t, Phase(), "complete", "--recover")
+	if err == nil {
+		t.Fatal("expected the merge gate to refuse --recover on an unmerged PR")
+	}
+	if !strings.Contains(err.Error(), "not merged") {
+		t.Errorf("refusal should say the PR isn't merged: %v", err)
+	}
+	if got := mustGit(t, dir, "rev-parse", "main"); got != mainSHA {
+		t.Errorf("local main must be untouched when the gate refuses: was %s, now %s", mainSHA, got)
+	}
 }
 
 // TestPhaseCompleteRecoverRefusesDirty (c-3): --recover on a diverged AND dirty
@@ -1281,31 +1304,72 @@ func TestPhaseCompleteNoMilestoneFfsMain(t *testing.T) {
 	}
 }
 
-func TestPhaseCompleteMilestoneDivergedAborts(t *testing.T) {
-	dir, _, version := completeMilestoneFixture(t)
-	stubPRMerged(t, true) // gate passes; the ff-divergence is what's under test
-	// Introduce local divergence: a commit on local milestone/<v> that origin
-	// lacks (origin carries the squash the local branch doesn't) → ff aborts.
+// divergeMilestone puts a local-only commit on milestone/<version> (origin
+// carries the squash the local branch doesn't → true divergence), returning
+// the pre-divergence local tip. Leaves the working copy on phase/auth.
+func divergeMilestone(t *testing.T, dir, version string) string {
+	t.Helper()
 	mustGit(t, dir, "checkout", "-q", "milestone/"+version)
 	mustWrite(t, filepath.Join(dir, "local-only.txt"), "x\n")
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "local divergence")
-	localBefore := mustGit(t, dir, "rev-parse", "milestone/"+version)
+	local := mustGit(t, dir, "rev-parse", "milestone/"+version)
 	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	return local
+}
+
+// Without --recover, a diverged milestone base still refuses non-destructively
+// — but now pointing at --recover (c-5 dropped the milestone-unsupported abort).
+func TestPhaseCompleteMilestoneDivergedNoFlagStops(t *testing.T) {
+	dir, _, version := completeMilestoneFixture(t)
+	stubPRMerged(t, true) // gate passes; the ff-divergence refusal is under test
+	localBefore := divergeMilestone(t, dir, version)
 
 	err := runCmd(t, Phase(), "complete")
 	if err == nil {
-		t.Fatal("expected non-destructive abort on a diverged milestone branch")
+		t.Fatal("expected non-destructive refusal on a diverged milestone branch without --recover")
 	}
-	if !strings.Contains(err.Error(), "diverged") {
-		t.Errorf("error should explain divergence: %v", err)
+	if !strings.Contains(err.Error(), "--recover") {
+		t.Errorf("refusal should point at --recover: %v", err)
+	}
+	if strings.Contains(err.Error(), "does not yet support") {
+		t.Errorf("the milestone-unsupported abort must be gone: %v", err)
 	}
 	// Nothing reset: local milestone tip unchanged and phase branch still present.
 	if after := mustGit(t, dir, "rev-parse", "milestone/"+version); after != localBefore {
 		t.Errorf("milestone/%s tip changed (should be untouched): %s -> %s", version, localBefore, after)
 	}
 	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); b == "" {
-		t.Error("phase/auth should NOT be deleted on a non-destructive abort")
+		t.Error("phase/auth should NOT be deleted on a non-destructive refusal")
+	}
+}
+
+// c-5 (replaces TestPhaseCompleteMilestoneDivergedAborts): a diverged
+// milestone base + --recover resets/restores against origin/milestone/<v>
+// instead of aborting with "does not yet support milestone branches" — and
+// the restore is pushed (c-2 tail), so the milestone base ends in sync.
+func TestPhaseCompleteMilestoneDivergedRecovers(t *testing.T) {
+	dir, _, version := completeMilestoneFixture(t)
+	stubPRMerged(t, true)
+	divergeMilestone(t, dir, version)
+
+	if err := runCmd(t, Phase(), "complete", "--recover"); err != nil {
+		t.Fatalf("--recover should heal a diverged milestone base: %v", err)
+	}
+	// The local milestone branch ends level with origin — reset to the
+	// origin squash, restore pushed back up.
+	if ahead := mustGit(t, dir, "rev-list", "origin/milestone/"+version+"..milestone/"+version); ahead != "" {
+		t.Errorf("milestone/%s should be fully pushed after recovery, got ahead: %q", version, ahead)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "milestone/"+version {
+		t.Errorf("expected HEAD on milestone/%s after recovery, got %q", version, cur)
+	}
+	// The divergent local-only commit was reset away (destructive, as warned).
+	if tree := mustGit(t, dir, "ls-tree", "-r", "--name-only", "HEAD"); strings.Contains(tree, "local-only.txt") {
+		t.Error("the divergent local-only commit should have been reset away")
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); b != "" {
+		t.Errorf("phase/auth should be deleted after a successful recovery, got: %q", b)
 	}
 }
 
