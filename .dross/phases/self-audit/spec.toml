@@ -30,3 +30,7 @@ key    = "acceptance_bar"
 choice = "Only BLOCKING/critical findings must be fixed; everything else may be accepted with a reason (milestone non-goal restated at phase level)"
 why    = "1.0 is a trust stamp: what matters is that every finding was SEEN and dispositioned, not that the repo is finding-free"
 locked = true
+
+[[deferred]]
+text = "config-trust-hardening: leading-dash rejection on config-derived git branch names, `--` separators before positional file/ref args, npx version pin, and an auth_env host allowlist — defense-in-depth for the clone-a-malicious-repo-and-run-dross threat surfaced by the self-audit exec-injection panel (inj-1/5/6/10)"
+why  = "Inherent to the build-tool category and LOW for the solo-author audience; accepted-with-reason for v1.0, worth a future hardening pass"
