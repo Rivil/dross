@@ -1,43 +1,11 @@
 {
-  "version": "0.10.3.0",
+  "version": "0.10.4.0",
   "current_milestone": "v0.10",
   "current_phase": "telemetry-bucket-graduation",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-25T05:52:51.546163Z",
-  "last_action": "plan reviewed: telemetry-bucket-graduation (0 blocking, 6 flags; 5 folded in)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-25T06:53:07.001564Z",
+  "last_action": "phase telemetry-bucket-graduation executed (5/5 done)",
   "history": [
-    {
-      "at": "2026-07-23T13:34:17.377835Z",
-      "action": "set version=0.10.2.0"
-    },
-    {
-      "at": "2026-07-23T13:40:21.052922Z",
-      "action": "executed t-1 (Add Plan.MoveTask engine with guards and reflow)"
-    },
-    {
-      "at": "2026-07-23T13:42:15.967928Z",
-      "action": "executed t-2 (Order-aware NextRunnable tie-break)"
-    },
-    {
-      "at": "2026-07-23T13:44:17.9081Z",
-      "action": "executed t-3 (Replace spec §2 free-recall with candidate slate)"
-    },
-    {
-      "at": "2026-07-23T13:49:16.838594Z",
-      "action": "executed t-4 (Ship /dross-techdebt skill, repoint status action)"
-    },
-    {
-      "at": "2026-07-23T14:08:47.631358Z",
-      "action": "executed t-5 (Wire dross task move subcommand)"
-    },
-    {
-      "at": "2026-07-23T14:08:59.432572Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-23T14:08:59.437959Z",
-      "action": "phase task-reordering executed (5/5 done)"
-    },
     {
       "at": "2026-07-23T14:19:07.513906Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +173,38 @@
     {
       "at": "2026-07-25T05:52:51.546163Z",
       "action": "plan reviewed: telemetry-bucket-graduation (0 blocking, 6 flags; 5 folded in)"
+    },
+    {
+      "at": "2026-07-25T06:39:43.305478Z",
+      "action": "set version=0.10.4.0"
+    },
+    {
+      "at": "2026-07-25T06:42:57.749241Z",
+      "action": "executed t-1 (Graduate identifier-only CLI shapes into buckets)"
+    },
+    {
+      "at": "2026-07-25T06:46:08.458178Z",
+      "action": "executed t-2 (Add detail-free merge, config and env buckets)"
+    },
+    {
+      "at": "2026-07-25T06:47:42.339539Z",
+      "action": "executed t-3 (Extract ClassifyMessage and add Reclassify)"
+    },
+    {
+      "at": "2026-07-25T06:50:05.187621Z",
+      "action": "executed t-4 (Reclassify other at read time, print tail)"
+    },
+    {
+      "at": "2026-07-25T06:52:50.275345Z",
+      "action": "executed t-5 (Check in err_detail corpus, enforce 15% ceiling)"
+    },
+    {
+      "at": "2026-07-25T06:53:06.993143Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T06:53:07.001564Z",
+      "action": "phase telemetry-bucket-graduation executed (5/5 done)"
     }
   ]
 }
