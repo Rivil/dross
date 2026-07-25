@@ -3,7 +3,7 @@ phases = ["task-lifecycle-commands", "task-reordering", "landmark-comma-fix", "t
 [milestone]
   version = "v0.10"
   title = "Workflow ergonomics: task lifecycle & telemetry clarity"
-  status = "active"
+  status = "complete"
   started = "2026-07-20"
 
 [scope]

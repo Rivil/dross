@@ -189,7 +189,7 @@ Milestone work rides a `milestone/<version>` integration branch: scoping a miles
 
 - `ensureMilestoneBranch` (create cuts+pushes at scope time) — `internal/cmd/milestone.go:257`
 - `resolveNewWorkBase` (existence-aware base resolver: milestone branch when its ref exists, else main) — `internal/cmd/basebranch.go:126`
-- `forkPhaseBranch` (phase create/insert fork off the resolved base) — `internal/cmd/phase.go:518`
+- `forkPhaseBranch` (phase create/insert fork off the resolved base) — `internal/cmd/phase.go:541`
 - `BaseBranch` (`dross base-branch`: resolved base on stdout, no-milestone nudge on stderr) — `internal/cmd/basebranch.go:20`
 - ship PR-base resolution + missing-remote-base guard — `internal/cmd/ship.go:222`
 - `milestoneComplete` (one milestone→main PR; `--finalize` ff + branch delete) — `internal/cmd/milestone.go:41`
@@ -221,13 +221,13 @@ _introduced c8b346e · extended 01c10f0 · extended context-hygiene · de8b076_
 
 Create, list, number, migrate, complete, and reorder/insert/rename phases on dedicated phase/<id> git branches. Phase identity is the bare slug and order lives solely in the milestone `phases` array (phase.Ordered), so create makes bare-slug dirs and appends to the array, while `phase number` / status / the version patch digit all read the 1-based array position (DisplayNumber) and `phase migrate` converts a legacy NN-slug repo idempotently — skipping the in-flight phase and disambiguating colliding slugs — with phase.Dir resolving old NN-slug ids for permanent back-compat. complete is fast-forward + branch-delete only (no commit to main), gated by an **authoritative merge check** (`mergeGate`): it reads the phase's recorded PR number from changes.json — resolving it from origin/<base>'s fetched changes.json (`originRecordedPR`) when the stale post-squash-merge working tree lacks it — and requires the provider (`ship.PRMergedFunc`) to report that PR merged, falling back to a `git merge-base --is-ancestor` check that **refuses-when-inconclusive** (a missing/squash-deleted ref or a non-ancestor both refuse) — replacing the old cumulative `completed <id>` breadcrumb, which a later merged phase could drag onto the base and thereby false-complete an unmerged phase; only on a confirmed merge does it delete both the local and the remote phase branch idempotently. The lifecycle verbs `insert` / `move` / `rename` edit a phase's array slot and identity through pure splice helpers (InsertRelative / MoveRelative / RenameInArray) and shared plumbing (exactly-one-anchor validation, no-op-before-collision, ship-guard via the origin branch); insert scaffolds with a strict slug (no auto-suffix) and rename moves dir + spec id + array entry + deferred targets + local branch atomically — all leaving every other phase byte-for-byte untouched.
 
-- `Phase` (CLI) — `internal/cmd/phase.go:21`
-- `phaseCreate` — `internal/cmd/phase.go:115`
-- `phaseNumber` — `internal/cmd/phase.go:36`
+- `Phase` (CLI) — `internal/cmd/phase.go:22`
+- `phaseCreate` — `internal/cmd/phase.go:116`
+- `phaseNumber` — `internal/cmd/phase.go:37`
 - `phaseMigrate` — `internal/cmd/migrate.go:31`
-- `phaseComplete` — `internal/cmd/phase.go:216`
-- `mergeGate` (authoritative completion gate: recorded-PR merge status + ancestry refuse-when-inconclusive fallback) — `internal/cmd/phase.go:480`
-- `originRecordedPR` (post-fetch recorded-PR resolution from origin/<base>'s changes.json) — `internal/cmd/phase.go:457`
+- `phaseComplete` — `internal/cmd/phase.go:217`
+- `mergeGate` (authoritative completion gate: recorded-PR merge status + ancestry refuse-when-inconclusive fallback) — `internal/cmd/phase.go:503`
+- `originRecordedPR` (post-fetch recorded-PR resolution from origin/<base>'s changes.json) — `internal/cmd/phase.go:480`
 - `ship.PRMergedFunc` / `ship.PRMerged` (provider PR-merged lookup, GitHub via gh, unsupported-provider sentinel, exported overridable seam) — `internal/ship/merged.go:38`
 - `phaseMove` / `phaseInsert` / `phaseRename` — `internal/cmd/phase_lifecycle.go`
 - array-order splice helpers (`InsertRelative`, `MoveRelative`, `RenameInArray`) — `internal/phase/phase.go`
@@ -419,13 +419,13 @@ _introduced status-action-surfaces-v2 · extended task-reordering · db72f34_
 Local-only event log (counts / durations / error classes, never file content), queryable via `dross stats`. Failures classify into named buckets — cobra arg-count / unknown-flag / unknown-subcommand, landmark-parse, merge-refusal, `.dross` config-load and missing-env-token — with an `err_detail` attached only for identifier-only shapes, so paths, phase ids and token names never reach the log. The taxonomy itself is an ordered first-match-wins rule table (`classRules`) arranged in tiers (root/state → workflow-specific → CLI surface → generic safety-net → other); order is enforced by a shadowing guard (an earlier matcher subsuming a later one fails the build), the generic tier prefers the more diagnostic bucket (permission > git > network > invalid > missing), and a table-driven doc test keeps the README bucket list complete. `dross stats` re-derives the class of stored `other` events at read time (the append-only log is never rewritten) and prints the top 5 surviving unclassified shapes as a graduation queue, omitted once drained. A checked-in corpus of real `err_detail` shapes pins each to its bucket and enforces an under-15% unclassified ceiling.
 
 - `telemetry.Append` — `internal/telemetry/telemetry.go:83`
-- `telemetry.ClassifyError` — `internal/telemetry/telemetry.go:211`
+- `telemetry.ClassifyError` — `internal/telemetry/telemetry.go:217`
 - `telemetry.ClassifyMessage` (walks the rule table) — `internal/telemetry/telemetry.go:229`
-- `classRules` (ordered taxonomy — first-match-wins tiers as data) — `internal/telemetry/telemetry.go:262`
+- `classRules` (ordered taxonomy — first-match-wins tiers as data) — `internal/telemetry/telemetry.go:269`
 - `TestNoTokenShadowing` (order-dependence enforced) — `internal/telemetry/taxonomy_test.go:33`
-- `TestReadmeDocumentsBucketTiers` (table-driven README completeness) — `internal/telemetry/telemetry_test.go:470`
-- `telemetry.CarriesDetail` (detail allowlist) — `internal/telemetry/telemetry.go:432`
-- `telemetry.Reclassify` (read-time re-derivation) — `internal/telemetry/telemetry.go:450`
+- `TestReadmeDocumentsBucketTiers` (table-driven README completeness) — `internal/telemetry/telemetry_test.go:479`
+- `telemetry.CarriesDetail` (detail allowlist) — `internal/telemetry/telemetry.go:422`
+- `telemetry.Reclassify` (read-time re-derivation) — `internal/telemetry/telemetry.go:440`
 - `renderErrorBuckets` — `internal/cmd/stats.go:185`
 - `renderOtherTail` (graduation queue) — `internal/cmd/stats.go:232`
 - `RecordCLIEvent` — `internal/cmd/telemetry.go:23`
@@ -438,11 +438,11 @@ _a1b9c23 · extended telemetry-bucket-graduation · extended verify-auto-finaliz
 
 Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
 
-- `Verify` (CLI) — `internal/cmd/verify.go:27`
-- `verify.Run` — `internal/verify/verify.go:130`
+- `Verify` (CLI) — `internal/cmd/verify.go:29`
+- `verify.Run` — `internal/verify/verify.go:137`
 - `LanguageRun.Error` (record-and-continue adapter failure) — `internal/verify/verify.go:54`
-- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:146`
-- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:126`
+- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:178`
+- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:146`
 - verify.md §2 size-gated offload (large criterion-mapping reads fan to read-only subagents; judgement + verdict stay main-loop) — `internal/cmd/verify_prompt_test.go:17`
 
 _e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79_

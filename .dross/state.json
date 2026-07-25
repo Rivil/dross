@@ -1,13 +1,9 @@
 {
   "version": "0.10.9.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-25T09:20:30.63431Z",
-  "last_action": "completed subagent-offload-audit",
+  "last_activity": "2026-07-25T09:25:38.428877Z",
+  "last_action": "milestone v0.10 complete — merged to main (#60), handoff closed",
   "history": [
-    {
-      "at": "2026-07-25T06:53:07.001564Z",
-      "action": "phase telemetry-bucket-graduation executed (5/5 done)"
-    },
     {
       "at": "2026-07-25T07:05:15.600722Z",
       "action": "set current_phase_status=verified"
@@ -203,6 +199,10 @@
     {
       "at": "2026-07-25T09:20:30.63431Z",
       "action": "completed subagent-offload-audit"
+    },
+    {
+      "at": "2026-07-25T09:25:38.428877Z",
+      "action": "milestone v0.10 complete — merged to main (#60), handoff closed"
     }
   ]
 }
