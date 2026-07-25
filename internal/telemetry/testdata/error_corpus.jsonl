@@ -1,0 +1,27 @@
+{"detail": "unknown subcommand \"get\" for \"dross state\"\n\nDid you mean this?\n\tset\n\nRun 'dross state --help' for available subcommands.", "want": "unknown_subcommand"}
+{"detail": "unknown subcommand \"list\" for \"dross task\"\n\nAvailable subcommands:\n\tnext\n\tshow\n\tstatus\n\nRun 'dross task --help' for available subcommands.", "want": "unknown_subcommand"}
+{"detail": "unknown subcommand \"status\" for \"dross phase\"\n\nAvailable subcommands:\n\tcomplete\n\tcreate\n\tinsert\n\tlist\n\tmigrate\n\tmove\n\tnumber\n\trename\n\tshow\n\nRun 'dross phase --help' for available subcommands.", "want": "unknown_subcommand"}
+{"detail": "unknown command \"hooks\" for \"dross\"", "want": "unknown_subcommand"}
+{"detail": "unknown command \"mutation\" for \"dross\"", "want": "unknown_subcommand"}
+{"detail": "accepts 3 arg(s), received 2", "want": "arg_count"}
+{"detail": "accepts 1 arg(s), received 0", "want": "arg_count"}
+{"detail": "accepts 2 arg(s), received 1", "want": "arg_count"}
+{"detail": "accepts 3 arg(s), received 0", "want": "arg_count"}
+{"detail": "unknown flag: --milestone", "want": "unknown_flag"}
+{"detail": "unknown flag: --version", "want": "unknown_flag"}
+{"detail": "unknown flag: --json", "want": "unknown_flag"}
+{"detail": "flag needs an argument: --commit", "want": "unknown_flag"}
+{"detail": "landmark pair \"dross-source-tree only\" has no '=' (want key=value)", "want": "landmark_parse"}
+{"detail": "landmark pair \"fractions\" has no '=' (want key=value)", "want": "landmark_parse"}
+{"detail": "unknown milestone field: status", "want": "unknown_field"}
+{"detail": "unknown or unsettable field: repo.remote", "want": "unknown_field"}
+{"detail": "unknown field: stack.locked", "want": "unknown_field"}
+{"detail": "decode ~/Development/infra/.dross/project.toml: open ~/Development/infra/.dross/project.toml: no such file or directory", "want": "config_io"}
+{"detail": "read ~/Development/feastahead/.dross/state.json: open ~/Development/feastahead/.dross/state.json: no such file or directory", "want": "config_io"}
+{"detail": "decode ~/Development/feastahead/web-app/.dross/project.toml: toml: line 47 (last key \"remote.project_id\"): incompatible types: TOML value has type int64; destination has type string", "want": "config_io"}
+{"detail": "$JIRA_API_TOKEN is not set; run `dross env set JIRA_API_TOKEN` in your shell", "want": "env_token"}
+{"detail": "$FORGEJO_TOKEN is not set; run `dross env set FORGEJO_TOKEN` in your shell", "want": "env_token"}
+{"detail": "cannot confirm 19-gitlab-ci-and-tooling has merged into milestone/v1.4 — no merged-PR status was available and origin/phase/19-gitlab-ci-and-tooling is not an ancestor of origin/milestone/v1.4 (the phase branch may have been squash-deleted,…", "want": "merge_pending"}
+{"detail": "origin/main carries no `completed 52-end-user-i18n-coverage` record — has the PR merged upstream? Refusing so the phase branch isn't lost", "want": "merge_pending"}
+{"detail": "origin/milestone/v1.15 is not merged into origin/main yet — has the milestone PR merged? Refusing so the milestone branch isn't lost", "want": "merge_pending"}
+{"detail": "corpus sentinel: a shape no bucket claims", "want": "other"}
