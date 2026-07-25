@@ -190,6 +190,8 @@ func readDotted(p *project.Project, path string) (string, bool) {
 		return p.Board.BaseURL, true
 	case "board.auth_env":
 		return p.Board.AuthEnv, true
+	case "board.auth_user":
+		return p.Board.AuthUser, true
 	case "board.project":
 		return p.Board.Project, true
 	case "board.enabled":
@@ -345,6 +347,8 @@ func writeDotted(p *project.Project, path, value string) error {
 		p.Board.BaseURL = value
 	case "board.auth_env":
 		p.Board.AuthEnv = value
+	case "board.auth_user":
+		p.Board.AuthUser = value
 	case "board.project":
 		p.Board.Project = value
 	case "board.enabled":
