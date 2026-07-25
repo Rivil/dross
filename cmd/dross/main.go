@@ -10,7 +10,10 @@ import (
 	"github.com/Rivil/dross/internal/cmd"
 )
 
-func main() {
+// newRoot assembles the full dross command tree. Extracted from main so
+// tests (e.g. the README↔command parity check) can inspect the real set
+// of commands without duplicating the AddCommand list.
+func newRoot() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "dross",
 		Short:         "Dross — refine intent into verified code",
@@ -62,6 +65,11 @@ func main() {
 	// Without this, `dross phase add` (or any unknown subcommand under a
 	// parent that has no Run of its own) silently prints help and exits 0.
 	cmd.EnforceSubcommandKnown(root)
+	return root
+}
+
+func main() {
+	root := newRoot()
 
 	// Telemetry: capture resolved subcommand at PreRun, write the event
 	// after Execute returns so we get duration + final error class.
