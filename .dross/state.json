@@ -1,21 +1,11 @@
 {
   "version": "0.10.4.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-25T07:48:44.290122Z",
-  "last_action": "completed telemetry-bucket-graduation",
+  "current_phase": "verify-auto-finalize",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-25T08:26:08.486751Z",
+  "last_action": "spec locked: verify-auto-finalize",
   "history": [
-    {
-      "at": "2026-07-23T15:59:07.002131Z",
-      "action": "created ship-clean-tree"
-    },
-    {
-      "at": "2026-07-23T16:28:18.846516Z",
-      "action": "set current_phase=ship-clean-tree"
-    },
-    {
-      "at": "2026-07-23T16:28:18.852845Z",
-      "action": "spec locked: ship-clean-tree"
-    },
     {
       "at": "2026-07-23T17:04:39.682729Z",
       "action": "set current_phase_status=planned"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-25T07:48:44.290122Z",
       "action": "completed telemetry-bucket-graduation"
+    },
+    {
+      "at": "2026-07-25T08:25:10.786554Z",
+      "action": "created verify-auto-finalize"
+    },
+    {
+      "at": "2026-07-25T08:26:08.479435Z",
+      "action": "set current_phase=verify-auto-finalize"
+    },
+    {
+      "at": "2026-07-25T08:26:08.486751Z",
+      "action": "spec locked: verify-auto-finalize"
     }
   ]
 }
