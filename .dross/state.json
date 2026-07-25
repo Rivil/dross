@@ -2,22 +2,10 @@
   "version": "0.10.4.0",
   "current_milestone": "v0.10",
   "current_phase": "verify-auto-finalize",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-25T08:26:08.486751Z",
-  "last_action": "spec locked: verify-auto-finalize",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-25T08:31:05.96599Z",
+  "last_action": "plan reviewed: verify-auto-finalize (1 blocking resolved, 3 flags)",
   "history": [
-    {
-      "at": "2026-07-23T17:04:39.682729Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-23T17:04:39.689806Z",
-      "action": "plan locked: ship-clean-tree (4 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-23T17:08:06.72168Z",
-      "action": "plan reviewed: ship-clean-tree (0 blocking, 3 flags; t-2 now depends t-1)"
-    },
     {
       "at": "2026-07-23T17:09:42.339873Z",
       "action": "paused — ship-clean-tree planned (4 tasks/2 waves, panel+review); next: execute t-1"
@@ -205,6 +193,18 @@
     {
       "at": "2026-07-25T08:26:08.486751Z",
       "action": "spec locked: verify-auto-finalize"
+    },
+    {
+      "at": "2026-07-25T08:27:37.136497Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T08:27:37.14186Z",
+      "action": "plan locked: verify-auto-finalize (4 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-25T08:31:05.96599Z",
+      "action": "plan reviewed: verify-auto-finalize (1 blocking resolved, 3 flags)"
     }
   ]
 }
