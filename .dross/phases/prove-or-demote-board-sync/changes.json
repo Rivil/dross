@@ -1,0 +1,53 @@
+{
+  "phase": "prove-or-demote-board-sync",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/project.go",
+        "internal/cmd/project_test.go",
+        "internal/forge/jira.go",
+        "internal/forge/jira_test.go"
+      ],
+      "commit": "50290f0",
+      "completed_at": "2026-07-25T17:42:18.261237Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "JiraClient.ListIssues",
+          "loc": "internal/forge/jira.go:176",
+          "what": "Jira board sync proven e2e; fixed auth_user-unsettable + removed-/search-endpoint bugs the live run surfaced"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        ".dross/phases/prove-or-demote-board-sync/proof.md"
+      ],
+      "commit": "50290f0",
+      "completed_at": "2026-07-25T17:42:18.26671Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "proof",
+          "loc": ".dross/phases/prove-or-demote-board-sync/proof.md:1",
+          "what": "round-trip proof captured; MYJ-13+version deleted, board config reverted"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "README.md"
+      ],
+      "commit": "0615275",
+      "completed_at": "2026-07-25T17:43:26.162617Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "README",
+          "loc": "README.md:207",
+          "what": "board-sync claim corrected to proven-against-Jira with the right [board] config + full backend list"
+        }
+      ]
+    }
+  }
+}

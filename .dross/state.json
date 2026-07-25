@@ -2,26 +2,10 @@
   "version": "1.0.2.0",
   "current_milestone": "v1.0",
   "current_phase": "prove-or-demote-board-sync",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-25T17:31:01.323645Z",
-  "last_action": "spec+plan locked: prove-or-demote-board-sync (3 tasks)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-25T17:43:33.668304Z",
+  "last_action": "phase prove-or-demote-board-sync executed (3/3 done)",
   "history": [
-    {
-      "at": "2026-07-25T08:54:58.509059Z",
-      "action": "spec locked: telemetry-taxonomy-overhaul"
-    },
-    {
-      "at": "2026-07-25T08:55:38.341592Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-25T08:55:38.347948Z",
-      "action": "plan locked: telemetry-taxonomy-overhaul (4 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-25T08:58:50.382334Z",
-      "action": "plan reviewed: telemetry-taxonomy-overhaul (0 blocking, 3 flags folded in)"
-    },
     {
       "at": "2026-07-25T08:58:54.805964Z",
       "action": "set version=0.10.5.0"
@@ -205,6 +189,22 @@
     {
       "at": "2026-07-25T17:31:01.323645Z",
       "action": "spec+plan locked: prove-or-demote-board-sync (3 tasks)"
+    },
+    {
+      "at": "2026-07-25T17:42:18.284759Z",
+      "action": "executed t-1+t-2 (Jira e2e proven + 2 bugs fixed + cleanup)"
+    },
+    {
+      "at": "2026-07-25T17:43:26.174283Z",
+      "action": "executed t-3 (README/MEMORY board-sync claim corrected)"
+    },
+    {
+      "at": "2026-07-25T17:43:33.660931Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T17:43:33.668304Z",
+      "action": "phase prove-or-demote-board-sync executed (3/3 done)"
     }
   ]
 }
