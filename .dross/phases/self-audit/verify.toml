@@ -1,0 +1,48 @@
+[verify]
+  phase = "self-audit"
+  generated_at = 2026-07-25T11:34:49.297311Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-07-25T11:42:36.01195Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9583033788641265
+  mutants_killed = 1333
+  mutants_survived = 58
+  mutants_not_covered = 58
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/techdebt_test.go:TestTrackedFilesExcludesDrossDir", ".dross/techdebt/20260725T111945-b0aea96/report.md", ".dross/phases/self-audit/triage-techdebt.md"]
+  notes = "scan ran (605->100 after the .dross-exclusion fix, which is test-pinned); every finding class dispositioned in the triage record"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [".dross/security/20260725T112048-01e2adb/report.md", "go.mod", "govulncheck+trivy clean after bump"]
+  notes = "full-coverage secure sweep ran (8 scanners); the one HIGH (x/crypto CVE) fixed by dep bump, verified by trivy 21->1 + govulncheck clean; all gosec/gitleaks/IaC findings accepted-with-reason in report.md"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/verify_test.go:TestDockerPrefixDerivation", ".dross/quality/20260725T112856-e7bf8d7/report.md"]
+  notes = "full-coverage quality sweep ran (6 analyzers + exec-injection panel); dockerPrefix exact-match fix test-pinned, SummaryDir dead-code removed; complexity/dup/deadcode/clone-and-run findings accepted-with-reason"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/techdebt_test.go:TestTrackedFilesExcludesDrossDir", "internal/cmd/verify_test.go:TestDockerPrefixDerivation"]
+  notes = "each of the 3 fixes is its own commit with a test where testable (techdebt exclusion, dockerPrefix) or scanner-verified (dep bump); acceptances traceable in the three run reports + triage-techdebt.md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "58/1391 mutants not-covered — the documented gremlins switch-case/const attribution ceiling (locked calibration 2026-07-01). The one survivor in a touched file (milestone.go:147) is a pre-existing checkout conditional unrelated to this phase's changes; the new dockerPrefix exact-match guard and techdebt .dross-exclusion both had their mutants killed. Efficacy excluding not-covered = 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "This is a process/audit phase: c-1..c-3 are partly observational (the audits ran, evidenced by their gitignored run dirs + committed triage/report records), with every code fix additionally test-pinned. No BLOCKING/critical finding remains open; clone-and-run defense-in-depth routed to the config-trust-hardening backlog item."
