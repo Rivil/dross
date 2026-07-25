@@ -1,65 +1,9 @@
 {
-  "version": "0.10.5.0",
+  "version": "0.10.9.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-25T09:08:03.752247Z",
-  "last_action": "completed telemetry-taxonomy-overhaul",
+  "last_activity": "2026-07-25T09:20:30.63431Z",
+  "last_action": "completed subagent-offload-audit",
   "history": [
-    {
-      "at": "2026-07-25T05:17:22.338405Z",
-      "action": "resumed — handoff pruned to 2 loops; next: scaffold the next v0.10 phase"
-    },
-    {
-      "at": "2026-07-25T05:18:32.10597Z",
-      "action": "created telemetry-bucket-graduation"
-    },
-    {
-      "at": "2026-07-25T05:25:58.395326Z",
-      "action": "set current_phase=telemetry-bucket-graduation"
-    },
-    {
-      "at": "2026-07-25T05:25:58.402823Z",
-      "action": "spec locked: telemetry-bucket-graduation"
-    },
-    {
-      "at": "2026-07-25T05:41:29.523996Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-25T05:41:29.532134Z",
-      "action": "plan locked: telemetry-bucket-graduation (5 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-25T05:52:51.546163Z",
-      "action": "plan reviewed: telemetry-bucket-graduation (0 blocking, 6 flags; 5 folded in)"
-    },
-    {
-      "at": "2026-07-25T06:39:43.305478Z",
-      "action": "set version=0.10.4.0"
-    },
-    {
-      "at": "2026-07-25T06:42:57.749241Z",
-      "action": "executed t-1 (Graduate identifier-only CLI shapes into buckets)"
-    },
-    {
-      "at": "2026-07-25T06:46:08.458178Z",
-      "action": "executed t-2 (Add detail-free merge, config and env buckets)"
-    },
-    {
-      "at": "2026-07-25T06:47:42.339539Z",
-      "action": "executed t-3 (Extract ClassifyMessage and add Reclassify)"
-    },
-    {
-      "at": "2026-07-25T06:50:05.187621Z",
-      "action": "executed t-4 (Reclassify other at read time, print tail)"
-    },
-    {
-      "at": "2026-07-25T06:52:50.275345Z",
-      "action": "executed t-5 (Check in err_detail corpus, enforce 15% ceiling)"
-    },
-    {
-      "at": "2026-07-25T06:53:06.993143Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-07-25T06:53:07.001564Z",
       "action": "phase telemetry-bucket-graduation executed (5/5 done)"
@@ -203,6 +147,62 @@
     {
       "at": "2026-07-25T09:08:03.752247Z",
       "action": "completed telemetry-taxonomy-overhaul"
+    },
+    {
+      "at": "2026-07-25T09:10:15.315448Z",
+      "action": "created subagent-offload-audit"
+    },
+    {
+      "at": "2026-07-25T09:11:13.005499Z",
+      "action": "set current_phase=subagent-offload-audit"
+    },
+    {
+      "at": "2026-07-25T09:11:13.011751Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T09:11:13.017997Z",
+      "action": "spec+plan locked: subagent-offload-audit (3 tasks)"
+    },
+    {
+      "at": "2026-07-25T09:13:29.39247Z",
+      "action": "plan reviewed: subagent-offload-audit (0 blocking, 1 flag folded)"
+    },
+    {
+      "at": "2026-07-25T09:13:29.427563Z",
+      "action": "set version=0.10.9.0"
+    },
+    {
+      "at": "2026-07-25T09:16:34.68311Z",
+      "action": "executed t-1 (offload audit doc)"
+    },
+    {
+      "at": "2026-07-25T09:17:43.911663Z",
+      "action": "executed t-2 (verify offload)"
+    },
+    {
+      "at": "2026-07-25T09:19:11.498663Z",
+      "action": "executed t-3 (execute offload)"
+    },
+    {
+      "at": "2026-07-25T09:19:15.660999Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T09:19:15.666945Z",
+      "action": "phase subagent-offload-audit executed (3/3 done)"
+    },
+    {
+      "at": "2026-07-25T09:19:53.188534Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T09:19:53.195309Z",
+      "action": "verified subagent-offload-audit: pass (4/4, mutation skipped)"
+    },
+    {
+      "at": "2026-07-25T09:20:30.63431Z",
+      "action": "completed subagent-offload-audit"
     }
   ]
 }

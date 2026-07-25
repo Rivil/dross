@@ -162,8 +162,11 @@ The propose-and-react contract for interactive commands — a terse builtin rule
 - core-loop wiring + prompt-sentinel guards — `internal/cmd/interaction_coreloop_test.go`
 - setup/config wiring + anchor + no-bundle guards — `internal/cmd/interaction_setupcmds_test.go`
 - audit/handoff wiring + audit-conformance + README guards — `internal/cmd/interaction_othercmds_test.go`
+- subagent-offload audit (per-prompt disposition of heavy inline reads — offloads-already / offload-worthy / inline-only — fail-closed like the interaction audit; verify §2 and execute §1b carry size-gated read-only offload passages whose agent-gate boundary and conditional phrasing are test-pinned) — `docs/subagent-offload-audit.md`
+- `TestSubagentOffloadAuditCoversEveryPrompt` (offload-audit coverage gate) — `internal/cmd/subagent_offload_audit_test.go:41`
+- `TestVerifyPromptOffloadGuidance` / `TestExecutePromptOffloadGuidance` (offload passages pinned) — `internal/cmd/verify_prompt_test.go` / `internal/cmd/execute_prompt_test.go`
 
-_introduced 10-interaction-contract · extended 11-retrofit-core-loop · extended 12-retrofit-setup-commands · extended 13-audit-and-readme · extended retrofit-readmostly-commands · extended gray-area-walkthrough · extended interaction-defer-or-add-framing · extended task-reordering · d4d05f2_
+_introduced 10-interaction-contract · extended 11-retrofit-core-loop · extended 12-retrofit-setup-commands · extended 13-audit-and-readme · extended retrofit-readmostly-commands · extended gray-area-walkthrough · extended interaction-defer-or-add-framing · extended task-reordering · extended subagent-offload-audit · de83813_
 
 ### Issue board sync
 
@@ -440,8 +443,9 @@ Map acceptance criteria to tests and run mutation testing; decide pass/partial/f
 - `LanguageRun.Error` (record-and-continue adapter failure) — `internal/verify/verify.go:54`
 - `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:146`
 - `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:126`
+- verify.md §2 size-gated offload (large criterion-mapping reads fan to read-only subagents; judgement + verdict stay main-loop) — `internal/cmd/verify_prompt_test.go:17`
 
-_e31bdbd · extended context-hygiene · extended verify-auto-finalize · e99dbd1_
+_e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79_
 
 ### Watch heartbeat (dross-watch)
 

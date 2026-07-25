@@ -42,6 +42,8 @@ If mutation testing fails to run (e.g. Stryker not installed), surface the error
 
 For each criterion in `spec.toml`, find the test(s) that would fail if that criterion broke. This is where you actually *do* the verify work.
 
+**Offload the reading when the surface is large.** When this phase's surface is large — many criteria × many test files, or a long surviving-mutant list in `tests.json` — don't drag it all into the main context: fan out read-only subagents (one per criterion or per test area) that read `tests.json` and grep the test files, and return per-criterion **candidate** mappings (test name, file:line, what its assertion exercises, relevant surviving mutants). The classification judgement (§ step 4), the mutation cross-check, and the verdict stay in the main loop — per the `dross-agent-gate` rule, fan-out agents are read-only and never fill in verify.toml or decide the verdict. For a small phase, stay inline — the subagent hop isn't worth it (see docs/subagent-offload-audit.md).
+
 For each criterion `c-N`:
 
 1. Restate the criterion in your own words. ("c-1: user can attach up to 10 tags per meal.")

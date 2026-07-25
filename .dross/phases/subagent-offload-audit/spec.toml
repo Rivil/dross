@@ -1,0 +1,32 @@
+[phase]
+id        = "subagent-offload-audit"
+title     = "subagent-offload-audit"
+milestone = "v0.10"
+
+[[criteria]]
+id   = "c-1"
+text = "docs/subagent-offload-audit.md dispositions every prompt in assets/prompts — heavy inline-read steps named with an offload verdict, or 'inline-only' with a reason — enforced fail-closed by a Go coverage test in the interaction-audit pattern"
+
+[[criteria]]
+id   = "c-2"
+text = "verify.md's criterion-mapping step carries size-gated offload guidance: when the mutant/test surface is large, read-only subagents do the tests.json + test-file reading and return per-criterion candidates, judgement and verdict staying in the main loop — pinned by a prompt-content test"
+
+[[criteria]]
+id   = "c-3"
+text = "execute.md's code-insight step carries size-gated offload guidance: large/many task files fan out to read-only subagents that return the 3-5 key observations, implementation staying in the main loop — pinned by a prompt-content test"
+
+[[criteria]]
+id   = "c-4"
+text = "Every offload passage restates the agent-gate boundary (read-only fan-out, findings return to the main loop, no writes/verdicts/commits from fan-out agents) — the prompt tests assert the boundary text sits with the guidance"
+
+[[decisions]]
+key    = "offload_posture"
+choice = "Offload is a size-gated conditional preference, never mandatory — small phases stay inline for latency; the prompt names the threshold heuristically (large diff / many mutants / many files), not as a hard number"
+why    = "Mirrors the locked MCP posture: conditional preferences over the inline fallback; a mandatory subagent hop would tax every small phase"
+locked = true
+
+[[decisions]]
+key    = "audit_convention"
+choice = "Audit doc at docs/subagent-offload-audit.md with a fail-closed coverage test over assets/prompts/*.md, mirroring docs/interaction-audit.md + interaction_coverage_test.go"
+why    = "The interaction-audit convention already proved the doc+test shape keeps a per-prompt inventory honest as prompts are added"
+locked = true
