@@ -1,63 +1,36 @@
+task_seq = 0
+
 [phase]
-id = "subagent-offload-audit"
+  id = "subagent-offload-audit"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Audit doc + fail-closed coverage test"
-files         = ["docs/subagent-offload-audit.md", "internal/cmd/subagent_offload_audit_test.go"]
-description   = """
-Audit all assets/prompts/*.md: for each, name its heavy inline-read steps and
-the disposition (offload-worthy with the gating condition, or inline-only with
-reason). Coverage test walks assets/prompts and fails when a prompt has no
-`### <name>` section in the doc (underscore partials exempt), mirroring
-interaction_coverage_test.go.
-"""
-covers        = ["c-1"]
-test_contract = [
-  "if a prompt file is added without an audit section, TestSubagentOffloadAuditCoversEveryPrompt fails naming it",
-  "if the audit doc is deleted or a section renamed away, the same test fails",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Audit doc + fail-closed coverage test"
+  files = ["docs/subagent-offload-audit.md", "internal/cmd/subagent_offload_audit_test.go"]
+  description = "Audit all assets/prompts/*.md: for each, name its heavy inline-read steps and\nthe disposition (offload-worthy with the gating condition, or inline-only with\nreason). Coverage test walks assets/prompts and fails when a prompt has no\n`### <name>` section in the doc (underscore partials exempt), mirroring\ninteraction_coverage_test.go.\n"
+  covers = ["c-1"]
+  test_contract = ["if a prompt file is added without an audit section, TestSubagentOffloadAuditCoversEveryPrompt fails naming it", "if the audit doc is deleted or a section renamed away, the same test fails"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Verify prompt: size-gated criterion-mapping offload"
-files         = ["assets/prompts/verify.md", "internal/cmd/verify_prompt_test.go"]
-description   = """
-In verify.md §2, add the offload guidance per the audit: large surface (many
-criteria x many tests, or a big surviving-mutant list) -> fan read-only
-subagents to read tests.json + test files and return per-criterion candidate
-mappings; classification judgement, cross-check and verdict stay in the main
-loop. Restate the agent-gate boundary inline. New prompt test pins the
-guidance + boundary text.
-"""
-covers        = ["c-2", "c-4"]
-test_contract = [
-  "if the verify offload guidance is dropped, TestVerifyPromptOffloadGuidance fails",
-  "if the read-only/no-verdict boundary sentence is removed from the passage, the same test fails",
-  "if the size-gate/conditional phrasing is rewritten to unconditional offload, the pinned when-large wording assertion fails (offload_posture lock)",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 2
+  title = "Verify prompt: size-gated criterion-mapping offload"
+  files = ["assets/prompts/verify.md", "internal/cmd/verify_prompt_test.go"]
+  description = "In verify.md §2, add the offload guidance per the audit: large surface (many\ncriteria x many tests, or a big surviving-mutant list) -> fan read-only\nsubagents to read tests.json + test files and return per-criterion candidate\nmappings; classification judgement, cross-check and verdict stay in the main\nloop. Restate the agent-gate boundary inline. New prompt test pins the\nguidance + boundary text.\n"
+  covers = ["c-2", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if the verify offload guidance is dropped, TestVerifyPromptOffloadGuidance fails", "if the read-only/no-verdict boundary sentence is removed from the passage, the same test fails", "if the size-gate/conditional phrasing is rewritten to unconditional offload, the pinned when-large wording assertion fails (offload_posture lock)"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Execute prompt: size-gated code-insight offload"
-files         = ["assets/prompts/execute.md", "internal/cmd/execute_prompt_test.go"]
-description   = """
-In execute.md §1b, add the offload guidance per the audit: many/large task
-files -> read-only subagent(s) return the 3-5 key observations + sibling
-patterns; implementation, edits and commits stay in the main loop. Restate
-the agent-gate boundary inline. Extend execute_prompt_test.go to pin it.
-"""
-covers        = ["c-3", "c-4"]
-test_contract = [
-  "if the execute code-insight offload guidance is dropped, TestExecutePromptOffloadGuidance fails",
-  "if the boundary sentence (read-only, no edits/commits from fan-out agents) is removed, the same test fails",
-  "if the size-gate/conditional phrasing is rewritten to unconditional offload, the pinned when-large wording assertion fails (offload_posture lock)",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Execute prompt: size-gated code-insight offload"
+  files = ["assets/prompts/execute.md", "internal/cmd/execute_prompt_test.go"]
+  description = "In execute.md §1b, add the offload guidance per the audit: many/large task\nfiles -> read-only subagent(s) return the 3-5 key observations + sibling\npatterns; implementation, edits and commits stay in the main loop. Restate\nthe agent-gate boundary inline. Extend execute_prompt_test.go to pin it.\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if the execute code-insight offload guidance is dropped, TestExecutePromptOffloadGuidance fails", "if the boundary sentence (read-only, no edits/commits from fan-out agents) is removed, the same test fails", "if the size-gate/conditional phrasing is rewritten to unconditional offload, the pinned when-large wording assertion fails (offload_posture lock)"]
+  status = "done"
