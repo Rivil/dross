@@ -1,0 +1,36 @@
+task_seq = 0
+
+[phase]
+  id = "prove-or-demote-board-sync"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Configure Jira board + run the e2e round-trip"
+  files = [".dross/phases/prove-or-demote-board-sync/proof.md"]
+  description = "Point [board] at Jira/MYJ (provider, base_url, auth_user, auth_env=JIRA_TOKEN,\nproject=MYJ) via the dross CLI, enable sync, then run milestone-sync v1.0 +\nphase-sync (a real issue) + pull. Capture the created issue key(s) and command\noutput into proof.md. Requires JIRA_TOKEN exported (user-provisioned).\n"
+  covers = ["c-1"]
+  test_contract = ["if the JiraClient create/read path is broken, phase-sync or pull errors and no issue key lands in proof.md", "if milestone-sync's version mapping is broken, milestone-sync errors before an issue is created"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Clean up proof issues + revert board config"
+  files = [".dross/phases/prove-or-demote-board-sync/proof.md"]
+  description = "Close/resolve the issues dross created in MYJ (via dross issue close paths or\nthe Atlassian MCP), disable board sync, and confirm the repo's committed config\ncarries no live board dependency. Record the cleanup outcome in proof.md.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["if cleanup is skipped, proof.md's cleanup section lacks the closed-issue confirmation — verify checks it", "if board sync is left enabled, dross project get board.enabled reports true after the phase"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 3
+  title = "Correct the board-sync claim in README + MEMORY"
+  files = ["README.md"]
+  description = "Replace the 'board sync never exercised end-to-end' status with 'proven against\nJira Cloud (MYJ), <date>, issue <key>'. Update the board-sync memory note\nlikewise so the durable record reflects reality.\n"
+  covers = ["c-3"]
+  depends_on = ["t-2"]
+  test_contract = ["if the README still claims board sync is unproven/never-exercised, a grep in the phase verify fails", "if the proof reference (Jira + issue key/date) is absent from the README board section, the same check fails"]
+  status = "done"

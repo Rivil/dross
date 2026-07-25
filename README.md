@@ -204,7 +204,7 @@ export PATH="$HOME/.local/bin:$PATH"
 | `dross ship <phase-id>` | Push `phase/<id>` to the provider, open PR, request reviewers. Provider's squash-merge collapses per-task commits | ✅ |
 | `dross ship comment` | Post a markdown comment to a PR via provider (used by /dross-review) | ✅ |
 | `dross ship recover` | One-shot migration tool for legacy repos with phase commits on main or `.dross/` stripped from prior PRs — fetch + reset + restore `.dross/` + commit, atomically | ✅ |
-| `dross issue {enable,disable,milestone-sync,phase-sync,quick,pull,dismiss,link,list}` | Opt-in Forgejo/Gitea issue-board sync. Mirrors milestones/phases/quicks → board issues (idempotent), pulls inbound issues for triage. Off by default; `enable` needs `[remote].provider` (forgejo/gitea) + `api_base` + `auth_env` | ✅ |
+| `dross issue {enable,disable,milestone-sync,phase-sync,quick,pull,dismiss,link,list}` | Opt-in issue-board sync (Forgejo/Gitea/GitLab/YouTrack/Jira/GitHub). Mirrors milestones/phases/quicks → board issues (idempotent), pulls inbound issues for triage. Off by default; configured under `[board]` (`provider` + `base_url` + `auth_env`, plus `auth_user` for Jira). **Proven end-to-end against Jira Cloud (2026-07-25)** — full milestone-sync → phase-sync → pull round-trip; other backends wired but not yet dogfooded. | ✅ |
 | `dross stats {show,path,opt-in,opt-out}` | Aggregates over the local telemetry log; toggle the recorder | ✅ |
 | `dross architecture check` | Inspect/repair `ARCHITECTURE.md` symbol links — reports drift, `--fix` re-resolves `file:line` targets | ✅ |
 | `dross deferred {list,route,unroute,dismiss}` | Inspect and route deferred items across phase specs | ✅ |

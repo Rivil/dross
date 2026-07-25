@@ -1,57 +1,9 @@
 {
-  "version": "1.0.1.0",
+  "version": "1.0.2.0",
   "current_milestone": "v1.0",
-  "last_activity": "2026-07-25T11:43:26.77104Z",
-  "last_action": "completed self-audit",
+  "last_activity": "2026-07-25T17:53:13.037651Z",
+  "last_action": "completed prove-or-demote-board-sync",
   "history": [
-    {
-      "at": "2026-07-25T08:49:46.483946Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-25T08:49:46.489635Z",
-      "action": "verified verify-auto-finalize: pass (4/4, mutation 0.96)"
-    },
-    {
-      "at": "2026-07-25T08:51:06.998936Z",
-      "action": "completed verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:54:13.435541Z",
-      "action": "created telemetry-taxonomy-overhaul"
-    },
-    {
-      "at": "2026-07-25T08:54:58.503457Z",
-      "action": "set current_phase=telemetry-taxonomy-overhaul"
-    },
-    {
-      "at": "2026-07-25T08:54:58.509059Z",
-      "action": "spec locked: telemetry-taxonomy-overhaul"
-    },
-    {
-      "at": "2026-07-25T08:55:38.341592Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-25T08:55:38.347948Z",
-      "action": "plan locked: telemetry-taxonomy-overhaul (4 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-25T08:58:50.382334Z",
-      "action": "plan reviewed: telemetry-taxonomy-overhaul (0 blocking, 3 flags folded in)"
-    },
-    {
-      "at": "2026-07-25T08:58:54.805964Z",
-      "action": "set version=0.10.5.0"
-    },
-    {
-      "at": "2026-07-25T09:01:24.663135Z",
-      "action": "executed t-1 (rule table)"
-    },
-    {
-      "at": "2026-07-25T09:03:02.878437Z",
-      "action": "executed t-2 (shadowing guard)"
-    },
     {
       "at": "2026-07-25T09:05:07.612811Z",
       "action": "executed t-3 (generic-tier audit)"
@@ -203,6 +155,54 @@
     {
       "at": "2026-07-25T11:43:26.77104Z",
       "action": "completed self-audit"
+    },
+    {
+      "at": "2026-07-25T17:30:20.062079Z",
+      "action": "created prove-or-demote-board-sync"
+    },
+    {
+      "at": "2026-07-25T17:30:20.068551Z",
+      "action": "set version=1.0.2.0"
+    },
+    {
+      "at": "2026-07-25T17:31:01.310362Z",
+      "action": "set current_phase=prove-or-demote-board-sync"
+    },
+    {
+      "at": "2026-07-25T17:31:01.317634Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T17:31:01.323645Z",
+      "action": "spec+plan locked: prove-or-demote-board-sync (3 tasks)"
+    },
+    {
+      "at": "2026-07-25T17:42:18.284759Z",
+      "action": "executed t-1+t-2 (Jira e2e proven + 2 bugs fixed + cleanup)"
+    },
+    {
+      "at": "2026-07-25T17:43:26.174283Z",
+      "action": "executed t-3 (README/MEMORY board-sync claim corrected)"
+    },
+    {
+      "at": "2026-07-25T17:43:33.660931Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T17:43:33.668304Z",
+      "action": "phase prove-or-demote-board-sync executed (3/3 done)"
+    },
+    {
+      "at": "2026-07-25T17:52:38.409069Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T17:52:38.416359Z",
+      "action": "verified prove-or-demote-board-sync: pass (3/3, mutation 0.95)"
+    },
+    {
+      "at": "2026-07-25T17:53:13.037651Z",
+      "action": "completed prove-or-demote-board-sync"
     }
   ]
 }

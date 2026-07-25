@@ -197,8 +197,11 @@ func TestJiraListIssuesJQL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListIssues: %v", err)
 	}
-	if gotPath != "/rest/api/3/search" {
-		t.Fatalf("list hit %s, want /rest/api/3/search", gotPath)
+	// Must be the current /search/jql endpoint — the legacy /search was
+	// removed by Jira Cloud (HTTP 410, CHANGE-2046). Pinning the old path
+	// here is what let the removed-endpoint bug ship unnoticed.
+	if gotPath != "/rest/api/3/search/jql" {
+		t.Fatalf("list hit %s, want /rest/api/3/search/jql", gotPath)
 	}
 	if !strings.Contains(gotJQL, "project = ") {
 		t.Errorf("JQL %q missing project scope", gotJQL)

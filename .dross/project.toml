@@ -7,25 +7,25 @@
 [stack]
   languages = ["go"]
 
-[[stack.locked]]
-  choice = "Go, distributed as a single static binary CLI"
-  why = "No runtime dependencies for users; one install artifact."
-  locked_at = "2026-06-19"
+  [[stack.locked]]
+    choice = "Go, distributed as a single static binary CLI"
+    why = "No runtime dependencies for users; one install artifact."
+    locked_at = "2026-06-19"
 
-[[stack.locked]]
-  choice = "Cobra for command structure"
-  why = "Standard Go CLI framework; subcommand tree matches dross's verb model."
-  locked_at = "2026-06-19"
+  [[stack.locked]]
+    choice = "Cobra for command structure"
+    why = "Standard Go CLI framework; subcommand tree matches dross's verb model."
+    locked_at = "2026-06-19"
 
-[[stack.locked]]
-  choice = "TOML for all .dross config and state schemas"
-  why = "Hand-editable, comment-friendly, round-trips cleanly."
-  locked_at = "2026-06-19"
+  [[stack.locked]]
+    choice = "TOML for all .dross config and state schemas"
+    why = "Hand-editable, comment-friendly, round-trips cleanly."
+    locked_at = "2026-06-19"
 
-[[stack.locked]]
-  choice = "Slash commands shipped as Claude Code skills from assets/"
-  why = "CLI provides state; markdown prompts symlinked into ~/.claude provide orchestration."
-  locked_at = "2026-06-19"
+  [[stack.locked]]
+    choice = "Slash commands shipped as Claude Code skills from assets/"
+    why = "CLI provides state; markdown prompts symlinked into ~/.claude provide orchestration."
+    locked_at = "2026-06-19"
 
 [runtime]
   mode = "native"
@@ -56,8 +56,4 @@
 [goals]
   core_value = "A low-overhead, pair-mode spec→plan→execute→verify→ship loop for AI-assisted development on real repos."
   audience = "Solo developer (the author) using Claude Code on real repos; public but unmarketed."
-  non_goals = [
-    "Not a general-purpose or marketed tool",
-    "No feature PRs that don't match the author's workflow",
-    "No formal semver / milestones / contribution structure until there are real users",
-  ]
+  non_goals = ["Not a general-purpose or marketed tool", "No feature PRs that don't match the author's workflow", "No formal semver / milestones / contribution structure until there are real users"]
