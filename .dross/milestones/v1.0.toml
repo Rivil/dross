@@ -1,0 +1,11 @@
+phases = ["self-audit", "prove-or-demote-board-sync", "readme-truth-pass"]
+
+[milestone]
+  version = "v1.0"
+  title = "1.0 hardening — every claim proven"
+  status = "active"
+  started = "2026-07-25"
+
+[scope]
+  success_criteria = ["dross-secure, dross-quality and dross-techdebt have each been run against the dross repo itself; every BLOCKING/critical finding is fixed or explicitly accepted with a recorded reason, and dross status no longer shows 'never run' for any of the three actions", "Board sync is proven or demoted: either one observed end-to-end round-trip (issue pull + phase-sync + milestone-sync) against the real Jira board, or the README and prompts label board sync experimental/unproven", "README truth-pass: every capability claim in README maps to something that ran (a test, a shipped phase, or an observed run); stale or unproven claims corrected", "Loose ends closed: v0.9.toml status resolved to complete, and the remaining unresolved/ambiguous ARCHITECTURE.md symbol links repointed or annotated", "A v1.0.0 release is tagged and published through the signed-release pipeline, and dross update from the previous version verifies the signature and swaps to it"]
+  non_goals = ["No new features or commands — hardening and proving only", "Not fixing every non-critical audit finding — accept-with-reason is a valid resolution; only BLOCKING/critical findings must be fixed", "v1.0 is the author's trust stamp (every claim seen working), NOT a public semver compatibility promise — the project non-goal on formal semver still stands"]

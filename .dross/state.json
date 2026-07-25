@@ -1,21 +1,9 @@
 {
-  "version": "0.10.9.0",
-  "current_milestone": "v0.10",
-  "last_activity": "2026-07-25T09:25:38.428877Z",
-  "last_action": "milestone v0.10 complete — merged to main (#60), handoff closed",
+  "version": "1.0.0.0",
+  "current_milestone": "v1.0",
+  "last_activity": "2026-07-25T11:15:32.726862Z",
+  "last_action": "scoped milestone v1.0: 5 criteria, 3 phases",
   "history": [
-    {
-      "at": "2026-07-25T07:05:15.600722Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-25T07:05:15.607854Z",
-      "action": "verified telemetry-bucket-graduation: pass (7/7, mutation 0.96)"
-    },
-    {
-      "at": "2026-07-25T07:48:44.290122Z",
-      "action": "completed telemetry-bucket-graduation"
-    },
     {
       "at": "2026-07-25T08:25:10.786554Z",
       "action": "created verify-auto-finalize"
@@ -203,6 +191,18 @@
     {
       "at": "2026-07-25T09:25:38.428877Z",
       "action": "milestone v0.10 complete — merged to main (#60), handoff closed"
+    },
+    {
+      "at": "2026-07-25T11:15:32.714037Z",
+      "action": "set current_milestone=v1.0"
+    },
+    {
+      "at": "2026-07-25T11:15:32.721041Z",
+      "action": "set version=1.0.0.0"
+    },
+    {
+      "at": "2026-07-25T11:15:32.726862Z",
+      "action": "scoped milestone v1.0: 5 criteria, 3 phases"
     }
   ]
 }
