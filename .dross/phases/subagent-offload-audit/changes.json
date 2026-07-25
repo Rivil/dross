@@ -1,5 +1,6 @@
 {
   "phase": "subagent-offload-audit",
+  "pr": 59,
   "tasks": {
     "t-1": {
       "files": [
