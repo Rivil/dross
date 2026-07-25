@@ -411,13 +411,19 @@ _introduced status-action-surfaces-v2 · extended task-reordering · db72f34_
 
 ### Telemetry & stats
 
-Local-only event log (counts / durations / error classes, never file content), queryable via `dross stats`.
+Local-only event log (counts / durations / error classes, never file content), queryable via `dross stats`. Failures classify into named buckets — cobra arg-count / unknown-flag / unknown-subcommand, landmark-parse, merge-refusal, `.dross` config-load and missing-env-token — with an `err_detail` attached only for identifier-only shapes, so paths, phase ids and token names never reach the log. `dross stats` re-derives the class of stored `other` events at read time (the append-only log is never rewritten) and prints the top 5 surviving unclassified shapes as a graduation queue, omitted once drained. A checked-in corpus of real `err_detail` shapes pins each to its bucket and enforces an under-15% unclassified ceiling.
 
-- `telemetry.Append` — `internal/telemetry/telemetry.go:82`
-- `telemetry.ClassifyError` — `internal/telemetry/telemetry.go:210`
+- `telemetry.Append` — `internal/telemetry/telemetry.go:83`
+- `telemetry.ClassifyError` — `internal/telemetry/telemetry.go:211`
+- `telemetry.ClassifyMessage` (bucket table) — `internal/telemetry/telemetry.go:223`
+- `telemetry.CarriesDetail` (detail allowlist) — `internal/telemetry/telemetry.go:432`
+- `telemetry.Reclassify` (read-time re-derivation) — `internal/telemetry/telemetry.go:450`
+- `renderErrorBuckets` — `internal/cmd/stats.go:185`
+- `renderOtherTail` (graduation queue) — `internal/cmd/stats.go:232`
 - `RecordCLIEvent` — `internal/cmd/telemetry.go:23`
+- `TestCorpusOtherShareUnderCeiling` (15% ceiling) — `internal/telemetry/corpus_test.go:97`
 
-_a1b9c23_
+_a1b9c23 · extended telemetry-bucket-graduation · 4244216_
 
 ### Verification
 
