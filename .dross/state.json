@@ -2,30 +2,10 @@
   "version": "1.0.3.0",
   "current_milestone": "v1.0",
   "current_phase": "readme-truth-pass",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-25T17:56:08.46269Z",
-  "last_action": "spec+plan locked: readme-truth-pass (3 tasks)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-25T18:04:45.997113Z",
+  "last_action": "phase readme-truth-pass executed (3/3 done)",
   "history": [
-    {
-      "at": "2026-07-25T09:07:26.35872Z",
-      "action": "verified telemetry-taxonomy-overhaul: pass (4/4, mutation 0.95)"
-    },
-    {
-      "at": "2026-07-25T09:08:03.752247Z",
-      "action": "completed telemetry-taxonomy-overhaul"
-    },
-    {
-      "at": "2026-07-25T09:10:15.315448Z",
-      "action": "created subagent-offload-audit"
-    },
-    {
-      "at": "2026-07-25T09:11:13.005499Z",
-      "action": "set current_phase=subagent-offload-audit"
-    },
-    {
-      "at": "2026-07-25T09:11:13.011751Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-07-25T09:11:13.017997Z",
       "action": "spec+plan locked: subagent-offload-audit (3 tasks)"
@@ -205,6 +185,26 @@
     {
       "at": "2026-07-25T17:56:08.46269Z",
       "action": "spec+plan locked: readme-truth-pass (3 tasks)"
+    },
+    {
+      "at": "2026-07-25T18:00:12.040439Z",
+      "action": "executed t-1 (README audit + parity guard)"
+    },
+    {
+      "at": "2026-07-25T18:01:49.487371Z",
+      "action": "executed t-2 (v0.6/v0.7/v0.9 status -\u003e complete)"
+    },
+    {
+      "at": "2026-07-25T18:04:41.513836Z",
+      "action": "executed t-3 (arch links: 1 repointed, residual class annotated)"
+    },
+    {
+      "at": "2026-07-25T18:04:45.966532Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T18:04:45.997113Z",
+      "action": "phase readme-truth-pass executed (3/3 done)"
     }
   ]
 }
