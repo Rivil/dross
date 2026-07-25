@@ -1,15 +1,9 @@
 {
   "version": "1.0.2.0",
   "current_milestone": "v1.0",
-  "current_phase": "prove-or-demote-board-sync",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-25T17:52:38.416359Z",
-  "last_action": "verified prove-or-demote-board-sync: pass (3/3, mutation 0.95)",
+  "last_activity": "2026-07-25T17:53:13.037651Z",
+  "last_action": "completed prove-or-demote-board-sync",
   "history": [
-    {
-      "at": "2026-07-25T09:03:02.878437Z",
-      "action": "executed t-2 (shadowing guard)"
-    },
     {
       "at": "2026-07-25T09:05:07.612811Z",
       "action": "executed t-3 (generic-tier audit)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-25T17:52:38.416359Z",
       "action": "verified prove-or-demote-board-sync: pass (3/3, mutation 0.95)"
+    },
+    {
+      "at": "2026-07-25T17:53:13.037651Z",
+      "action": "completed prove-or-demote-board-sync"
     }
   ]
 }
