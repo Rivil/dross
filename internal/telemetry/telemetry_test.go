@@ -199,6 +199,26 @@ func TestClassifyError(t *testing.T) {
 
 		// CLI surface
 		{errors.New("unknown subcommand \"add\" for \"dross phase\""), "unknown_subcommand"},
+		// cobra's wording for a bad top-level verb routes into the same
+		// bucket rather than a near-duplicate one (locked: bucket_granularity).
+		{errors.New("unknown command \"quick\" for \"dross\""), "unknown_subcommand"},
+
+		// cobra flag-parse failures
+		{errors.New("unknown flag: --json"), "unknown_flag"},
+		{errors.New("unknown shorthand flag: 'x' in -x"), "unknown_flag"},
+		{errors.New("flag needs an argument: --commit"), "unknown_flag"},
+
+		// cobra arity failures — all four wordings it emits
+		{errors.New("accepts 3 arg(s), received 2"), "arg_count"},
+		{errors.New("accepts 1 arg(s), received 0"), "arg_count"},
+		{errors.New("requires at least 1 arg(s), only received 0"), "arg_count"},
+		{errors.New("accepts between 1 and 2 arg(s), received 3"), "arg_count"},
+
+		// --landmark parse failures, above the unknown-field group
+		{errors.New("unknown landmark key \"loco\" (want feature/symbol/loc/what)"), "landmark_parse"},
+		{errors.New("landmark pair \"what=fixed the thing\" has no '=' (want key=value)"), "landmark_parse"},
+		{errors.New("landmark pair \"\" has an empty key"), "landmark_parse"},
+
 		{errors.New("unknown field: nonsense"), "unknown_field"},
 		{errors.New("unsupported segment \"patch\" (only `internal` is bumpable)"), "unknown_field"},
 		{errors.New("not a list field (or unknown): scope.phases"), "unknown_field"},
@@ -257,11 +277,29 @@ func TestDetail(t *testing.T) {
 }
 
 func TestCarriesDetail(t *testing.T) {
-	carries := []string{"other", "unknown_subcommand", "unknown_field"}
-	for _, c := range carries {
+	// Set equality, not a spot-check: the allowlist is the privacy posture,
+	// so both a graduated shape silently losing its err_detail and a new
+	// bucket silently gaining one have to fail here.
+	want := map[string]bool{
+		"other":              true,
+		"unknown_subcommand": true,
+		"unknown_field":      true,
+		"arg_count":          true,
+		"unknown_flag":       true,
+		"landmark_parse":     true,
+	}
+	for c := range want {
 		if !CarriesDetail(c) {
 			t.Errorf("CarriesDetail(%q) = false, want true", c)
 		}
+	}
+	for c := range detailBuckets {
+		if !want[c] {
+			t.Errorf("detailBuckets gained %q — every allowlisted bucket must be a bounded identifier", c)
+		}
+	}
+	if len(detailBuckets) != len(want) {
+		t.Errorf("detailBuckets has %d entries, want %d", len(detailBuckets), len(want))
 	}
 	// Every other classified bucket must NOT carry text — that's the
 	// privacy posture. Spot-check a representative set.
@@ -269,6 +307,53 @@ func TestCarriesDetail(t *testing.T) {
 		if CarriesDetail(c) {
 			t.Errorf("CarriesDetail(%q) = true, want false", c)
 		}
+	}
+}
+
+// TestGraduatedBucketsKeepTheirIdentifier is the counterweight to graduation:
+// pulling a shape out of "other" must not blind the very thing it graduated.
+// The rejected identifier has to survive into err_detail.
+func TestGraduatedBucketsKeepTheirIdentifier(t *testing.T) {
+	cases := []struct {
+		err   error
+		class string
+		want  string
+	}{
+		{errors.New("unknown flag: --json"), "unknown_flag", "--json"},
+		{errors.New("accepts 3 arg(s), received 2"), "arg_count", "received 2"},
+		{errors.New(`landmark pair "what=fixed the thing" has no '=' (want key=value)`), "landmark_parse", `"what=fixed the thing"`},
+	}
+	for _, c := range cases {
+		if got := ClassifyError(c.err); got != c.class {
+			t.Fatalf("ClassifyError(%v) = %q want %q", c.err, got, c.class)
+		}
+		if !CarriesDetail(c.class) {
+			t.Fatalf("%s must carry detail", c.class)
+		}
+		if got := Detail(c.err); !strings.Contains(got, c.want) {
+			t.Errorf("Detail(%v) = %q, want it to contain %q", c.err, got, c.want)
+		}
+	}
+}
+
+// TestReadmeDocumentsDetailAllowlist guards the user-facing claim. The README
+// enumerates the buckets and describes which of them carry err_detail; once
+// arg_count / unknown_flag / landmark_parse carry detail, a README that still
+// calls `other` the one exception is simply false.
+func TestReadmeDocumentsDetailAllowlist(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := string(b)
+
+	for _, bucket := range []string{"`unknown_flag`", "`arg_count`", "`landmark_parse`"} {
+		if !strings.Contains(readme, bucket) {
+			t.Errorf("README's error-bucket list omits %s — the list is presented as complete", bucket)
+		}
+	}
+	if strings.Contains(readme, "The one exception is the catch-all `other`") {
+		t.Error("README still claims `other` is the one bucket carrying err_detail — the identifier-only buckets carry it too")
 	}
 }
 

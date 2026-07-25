@@ -9,11 +9,12 @@
 //     text, no commit messages, no file paths beyond a stable hash).
 //   - A narrow exception: a small allowlist of buckets also carry a
 //     redacted, length-capped copy of the message in err_detail. "other" is
-//     the unclassified tail (countable but otherwise opaque); unknown_subcommand
-//     and unknown_field carry only the rejected CLI identifier (a bad
-//     subcommand or field path the user typed) — not content like criterion
-//     text or commit messages — which is the diagnostic needed to see WHAT
-//     was typed wrong. The home directory is collapsed to "~" so absolute
+//     the unclassified tail (countable but otherwise opaque); the identifier-only
+//     buckets — unknown_subcommand, unknown_field, unknown_flag, arg_count and
+//     landmark_parse — carry only the rejected CLI identifier (a bad subcommand,
+//     field path, flag, arg count or landmark pair the user typed) — not content
+//     like criterion text or commit messages — which is the diagnostic needed to
+//     see WHAT was typed wrong. The home directory is collapsed to "~" so absolute
 //     paths don't leak, and the log stays local-only. Every other classified
 //     error stores no text. See CarriesDetail.
 //   - Default ON, opt-out via DROSS_NO_TELEMETRY=1 or
@@ -65,7 +66,7 @@ type Event struct {
 	DurationMS  int64              `json:"dur_ms,omitempty"`     // CLI invocation duration
 	ExitCode    int                `json:"exit,omitempty"`       // 0 for success
 	ErrorClass  string             `json:"err,omitempty"`        // bucketed error type, never the message
-	ErrorDetail string             `json:"err_detail,omitempty"` // redacted message, ONLY when ErrorClass == "other" — makes the unclassified tail diagnosable
+	ErrorDetail string             `json:"err_detail,omitempty"` // redacted message, only for the CarriesDetail allowlist — the "other" tail plus the identifier-only buckets
 	RepoHash    string             `json:"repo,omitempty"`       // sha256 of repo root path, first 12 chars
 	Phase       string             `json:"phase,omitempty"`      // phase id when relevant
 	Counts      map[string]int     `json:"counts,omitempty"`     // size/shape data: criteria=4, tasks=12
@@ -283,8 +284,32 @@ func ClassifyError(err error) string {
 		return "board"
 
 	// CLI surface: arg validation, unknown fields, user-facing config.
-	case strings.Contains(msg, "unknown subcommand"):
+	//
+	// The cobra-generated shapes below (unknown command / unknown flag / arg
+	// counts) were the biggest contributors to the "other" tail. Each has a
+	// different fix, so each earns its own line in stats — except cobra's
+	// "unknown command" wording for a bad top-level verb, which routes into
+	// the existing unknown_subcommand rather than a near-duplicate bucket.
+	case strings.Contains(msg, "unknown subcommand"),
+		strings.Contains(msg, "unknown command"):
 		return "unknown_subcommand"
+	// Cobra flag-parse failures: an unrecognised long flag, an unrecognised
+	// shorthand, or a flag given without its value.
+	case strings.Contains(msg, "unknown flag"),
+		strings.Contains(msg, "unknown shorthand flag"),
+		strings.Contains(msg, "flag needs an argument"):
+		return "unknown_flag"
+	// Cobra arity failures. Every wording cobra emits — "accepts N arg(s)",
+	// "requires at least N arg(s)", "accepts between N and M arg(s)" — shares
+	// the "arg(s)" token, so match that rather than enumerating each phrasing.
+	case strings.Contains(msg, "arg(s)"):
+		return "arg_count"
+	// `dross changes record --landmark` parse failures. Placed above the
+	// unknown-field group so an "unknown landmark key" reads as a malformed
+	// landmark rather than a generic unknown field.
+	case strings.Contains(msg, "landmark pair"),
+		strings.Contains(msg, "unknown landmark key"):
+		return "landmark_parse"
 	case strings.Contains(msg, "unknown field"),
 		strings.Contains(msg, "unknown milestone field"),
 		strings.Contains(msg, "unknown or unsettable"),
@@ -343,15 +368,19 @@ func ClassifyError(err error) string {
 
 // detailBuckets are the error classes that additionally store a redacted
 // err_detail. "other" is the unclassified tail — undiagnosable without it.
-// unknown_subcommand and unknown_field carry only a CLI identifier (the
-// rejected subcommand or field path), not user content, which is exactly
-// what graduates them from "agent typed something wrong" into "agent typed
-// THIS wrong". Keep this list tight: only add a bucket whose message is
-// known to be a bounded identifier, never free-form user text.
+// The rest carry only a CLI identifier the user typed (a rejected subcommand,
+// field path, flag, arg count or landmark pair), not user content, which is
+// exactly what graduates them from "agent typed something wrong" into "agent
+// typed THIS wrong". Keep this list tight: only add a bucket whose message is
+// known to be a bounded identifier, never free-form user text — buckets whose
+// messages embed phase ids, config paths or token names stay detail-free.
 var detailBuckets = map[string]bool{
 	"other":              true,
 	"unknown_subcommand": true,
 	"unknown_field":      true,
+	"arg_count":          true,
+	"unknown_flag":       true,
+	"landmark_parse":     true,
 }
 
 // CarriesDetail reports whether an error class should store a redacted
@@ -365,10 +394,10 @@ func CarriesDetail(class string) bool {
 const maxDetailLen = 240
 
 // Detail returns a redacted, length-capped form of an error message,
-// intended for the buckets CarriesDetail allows — the "other" tail plus
-// unknown_subcommand / unknown_field, whose messages are bounded CLI
-// identifiers. Callers must gate on CarriesDetail; attaching a detail to
-// any other classified bucket would leak text for no diagnostic gain.
+// intended for the buckets CarriesDetail allows — the "other" tail plus the
+// identifier-only buckets, whose messages are bounded CLI identifiers.
+// Callers must gate on CarriesDetail; attaching a detail to any other
+// classified bucket would leak text for no diagnostic gain.
 //
 // Redaction: the user's home directory is collapsed to "~" so absolute
 // paths don't leak. This is a deliberate, narrow exception to the
