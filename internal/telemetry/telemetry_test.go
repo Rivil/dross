@@ -168,6 +168,15 @@ func TestClassifyError(t *testing.T) {
 		{errors.New("working tree is dirty; commit or stash before completing"), "dirty_tree"},
 		{errors.New("origin/main hasn't advanced past phase/04-x's base — has the PR actually merged upstream?"), "merge_pending"},
 		{errors.New("fast-forward of main from origin failed: exit 1"), "merge_pending"},
+		// The explicit refusals: phase complete, milestone complete, and the
+		// unconfirmed-merge path. Each is a separately reachable shape.
+		{errors.New("PR #55 for 03-x is not merged upstream — refusing to complete so the phase branch isn't lost."), "merge_pending"},
+		{errors.New("origin/milestone/v1.15 is not merged into origin/main yet — has the milestone PR merged? Refusing so the milestone branch isn't lost"), "merge_pending"},
+		{errors.New("cannot confirm phase/03-x has merged into main — no merged-PR status was available and origin/main is not an ancestor of origin/main"), "merge_pending"},
+		// No live code path errors with this one: `dross status` reports the
+		// shipped-but-unmerged window as a warning. It reaches the classifier
+		// only via read-time reclassify of historical `other` events.
+		{errors.New("origin/main carries no `completed 54-telemetry` record — has the PR merged upstream?"), "merge_pending"},
 
 		// phase-create pre-flight: refused because we're not on main (still
 		// on a previous phase branch). Used to land in "other".
@@ -177,6 +186,17 @@ func TestClassifyError(t *testing.T) {
 		{errors.New("save state: write .dross/state.json: permission denied"), "state_io"},
 		{errors.New("unmarshal state: bad json"), "state_io"},
 		{errors.New("marshal state: cycle"), "state_io"},
+
+		// .dross config absent or unreadable — must sit below state_io (so a
+		// state write failure keeps its bucket) and below the phase/plan/spec/
+		// verify/milestone group (whose messages also name a .toml).
+		{errors.New("decode ~/proj/.dross/project.toml: toml: line 47 (last key \"stack\"): expected value"), "config_io"},
+		{errors.New("read ~/proj/.dross/state.json: open ~/proj/.dross/state.json: no such file or directory"), "config_io"},
+
+		// env token missing from the shell — below "board:" so a board op
+		// failing for want of a token still reads as a board failure.
+		{errors.New("$JIRA_API_TOKEN is not set; run `dross env set JIRA_API_TOKEN` in your shell"), "env_token"},
+		{errors.New("board: create issue: $JIRA_API_TOKEN is not set"), "board"},
 
 		// verify / mutation pipeline
 		{errors.New("verify.toml not found at .dross/phases/01/verify.toml — run `dross verify 01` first"), "verify_state"},
@@ -303,7 +323,9 @@ func TestCarriesDetail(t *testing.T) {
 	}
 	// Every other classified bucket must NOT carry text — that's the
 	// privacy posture. Spot-check a representative set.
-	for _, c := range []string{"", "dirty_tree", "merge_pending", "verify_state", "mutation", "no_root", "provider", "git"} {
+	// merge_pending, config_io and env_token embed phase ids, config paths and
+	// token names, so they are deliberately detail-free (locked: detail_allowlist).
+	for _, c := range []string{"", "dirty_tree", "merge_pending", "config_io", "env_token", "verify_state", "mutation", "no_root", "provider", "git"} {
 		if CarriesDetail(c) {
 			t.Errorf("CarriesDetail(%q) = true, want false", c)
 		}
@@ -347,7 +369,7 @@ func TestReadmeDocumentsDetailAllowlist(t *testing.T) {
 	}
 	readme := string(b)
 
-	for _, bucket := range []string{"`unknown_flag`", "`arg_count`", "`landmark_parse`"} {
+	for _, bucket := range []string{"`unknown_flag`", "`arg_count`", "`landmark_parse`", "`config_io`", "`env_token`"} {
 		if !strings.Contains(readme, bucket) {
 			t.Errorf("README's error-bucket list omits %s — the list is presented as complete", bucket)
 		}

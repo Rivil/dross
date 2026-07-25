@@ -243,10 +243,21 @@ func ClassifyError(err error) string {
 	// Bucketing them separately makes the friction visible in stats.
 	case strings.Contains(msg, "working tree is dirty"):
 		return "dirty_tree"
+	// The ff-only shapes above are joined by the explicit refusals: phase
+	// complete and milestone complete both refuse to advance while the PR is
+	// still open, and `dross status` reports the shipped-but-unmerged window
+	// where branch-local state records `completed <id>` but origin/<main>
+	// doesn't. All four are the same friction — waiting on an upstream merge —
+	// so they share a bucket. Detail-free: the messages embed phase ids and
+	// branch names (locked: detail_allowlist).
 	case strings.Contains(msg, "hasn't advanced past"),
 		strings.Contains(msg, "has the pr actually merged"),
 		strings.Contains(msg, "fast-forward of"),
-		strings.Contains(msg, "ff-only"):
+		strings.Contains(msg, "ff-only"),
+		strings.Contains(msg, "is not merged upstream"),
+		strings.Contains(msg, "is not merged into"),
+		strings.Contains(msg, "cannot confirm"),
+		strings.Contains(msg, "carries no") && strings.Contains(msg, "record"):
 		return "merge_pending"
 	// Phase start refused because we're not on the main branch — usually
 	// still on a previous phase/<id> branch. User-actionable (switch back
@@ -282,6 +293,14 @@ func ClassifyError(err error) string {
 	case strings.Contains(msg, "board:"),
 		strings.Contains(msg, "issue-board"):
 		return "board"
+
+	// A required auth token is missing from the shell. The fix is `dross env
+	// set <VAR>`, not a config or CLI change, so it gets its own bucket.
+	// Placed below "board:" so a board op that fails for want of a token
+	// still reads as a board failure. Detail-free: the message names the
+	// env var (locked: detail_allowlist).
+	case strings.Contains(msg, "is not set"):
+		return "env_token"
 
 	// CLI surface: arg validation, unknown fields, user-facing config.
 	//
@@ -347,6 +366,19 @@ func ClassifyError(err error) string {
 		strings.Contains(msg, "unmarshal state"),
 		strings.Contains(msg, "load state"):
 		return "state_io"
+
+	// The .dross config itself is absent or unreadable: no project.toml, no
+	// state.json, or a TOML syntax error in either. Distinct from state_io
+	// (which is dross failing to persist its own progress) — here the config
+	// never loaded, so the workflow can't start at all. Placed AFTER state_io
+	// so a state-write failure keeps its more specific bucket, and after the
+	// phase/plan/spec/verify/milestone group so their own `.toml` load errors
+	// keep theirs. Detail-free: the messages embed absolute config paths
+	// (locked: detail_allowlist).
+	case strings.Contains(msg, "project.toml"),
+		strings.Contains(msg, "state.json"),
+		strings.Contains(msg, "toml:"):
+		return "config_io"
 
 	// Generic buckets — kept for safety-net coverage.
 	case strings.Contains(msg, "already exists"):
