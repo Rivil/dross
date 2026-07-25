@@ -1,15 +1,9 @@
 {
   "version": "1.0.1.0",
   "current_milestone": "v1.0",
-  "current_phase": "self-audit",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-25T11:42:36.024123Z",
-  "last_action": "verified self-audit: pass (4/4, mutation 0.96)",
+  "last_activity": "2026-07-25T11:43:26.77104Z",
+  "last_action": "completed self-audit",
   "history": [
-    {
-      "at": "2026-07-25T08:41:16.068226Z",
-      "action": "phase verify-auto-finalize executed (4/4 done)"
-    },
     {
       "at": "2026-07-25T08:49:46.483946Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-25T11:42:36.024123Z",
       "action": "verified self-audit: pass (4/4, mutation 0.96)"
+    },
+    {
+      "at": "2026-07-25T11:43:26.77104Z",
+      "action": "completed self-audit"
     }
   ]
 }
