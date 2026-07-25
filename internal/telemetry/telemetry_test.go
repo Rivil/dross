@@ -141,11 +141,16 @@ func TestHashRepoStable(t *testing.T) {
 	}
 }
 
-func TestClassifyError(t *testing.T) {
-	cases := []struct {
-		err  error
-		want string
-	}{
+// classifyCase is one row of the classifier table. It's a named type (rather
+// than an anonymous struct inside TestClassifyError) so the delegation test
+// below can drive the exact same rows through ClassifyMessage.
+type classifyCase struct {
+	err  error
+	want string
+}
+
+func classifyCases() []classifyCase {
+	return []classifyCase{
 		{nil, ""},
 		{errors.New("no .dross directory found"), "no_root"},
 		{errors.New("milestone v0.1 already exists"), "already_exists"},
@@ -257,10 +262,57 @@ func TestClassifyError(t *testing.T) {
 
 		{errors.New("something weird"), "other"},
 	}
-	for _, c := range cases {
+}
+
+func TestClassifyError(t *testing.T) {
+	for _, c := range classifyCases() {
 		got := ClassifyError(c.err)
 		if got != c.want {
 			t.Errorf("ClassifyError(%v) = %q want %q", c.err, got, c.want)
+		}
+	}
+}
+
+// TestClassifyMessageMatchesClassifyError pins the delegation: ClassifyError is
+// a thin wrapper over ClassifyMessage, so every row must classify identically
+// whether it arrives as an error or as a stored err_detail string. If the
+// extraction ever drops a case from one path, the row that case covers fails.
+func TestClassifyMessageMatchesClassifyError(t *testing.T) {
+	for _, c := range classifyCases() {
+		if c.err == nil {
+			continue
+		}
+		want := ClassifyError(c.err)
+		if got := ClassifyMessage(c.err.Error()); got != want {
+			t.Errorf("ClassifyMessage(%q) = %q, ClassifyError gives %q", c.err.Error(), got, want)
+		}
+	}
+	// The empty message is the nil-error equivalent: it must NOT fall through
+	// to "other" and manufacture a phantom bucket for detail-free events.
+	if got := ClassifyMessage(""); got != "" {
+		t.Errorf("ClassifyMessage(\"\") = %q, want empty", got)
+	}
+}
+
+// TestReclassify covers the read-time re-derivation that makes a new bucket
+// apply to history. The log is never rewritten; readers call this instead.
+func TestReclassify(t *testing.T) {
+	cases := []struct {
+		name string
+		ev   Event
+		want string
+	}{
+		{"other with a detail re-derives", Event{ErrorClass: "other", ErrorDetail: "unknown flag: --json"}, "unknown_flag"},
+		{"other with a still-unclassified detail stays other", Event{ErrorClass: "other", ErrorDetail: "something weird"}, "other"},
+		// Gating is on the stored class, not on the presence of a detail: a
+		// named bucket keeps its class even when it carries one.
+		{"named bucket keeps its class", Event{ErrorClass: "dirty_tree", ErrorDetail: "unknown flag: --json"}, "dirty_tree"},
+		{"other without a detail stays other", Event{ErrorClass: "other"}, "other"},
+		{"success event stays unclassified", Event{}, ""},
+	}
+	for _, c := range cases {
+		if got := Reclassify(c.ev); got != c.want {
+			t.Errorf("%s: Reclassify(%+v) = %q want %q", c.name, c.ev, got, c.want)
 		}
 	}
 }

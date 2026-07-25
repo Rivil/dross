@@ -212,7 +212,19 @@ func ClassifyError(err error) string {
 	if err == nil {
 		return ""
 	}
-	msg := strings.ToLower(err.Error())
+	return ClassifyMessage(err.Error())
+}
+
+// ClassifyMessage is ClassifyError over a bare message string. It exists so
+// stored err_detail strings can be re-run through the classifier at read time
+// (see Reclassify) without reconstructing an error value. An empty message
+// classifies as "" — the same as a nil error — rather than manufacturing a
+// phantom "other".
+func ClassifyMessage(message string) string {
+	if message == "" {
+		return ""
+	}
+	msg := strings.ToLower(message)
 	switch {
 	// Root / scaffold state.
 	case strings.Contains(msg, "no .dross"):
@@ -419,6 +431,27 @@ var detailBuckets = map[string]bool{
 // err_detail alongside the bucket. The caller pairs this with Detail.
 func CarriesDetail(class string) bool {
 	return detailBuckets[class]
+}
+
+// Reclassify returns the effective error class of a stored event: the class it
+// was recorded with, unless that class is the catch-all "other" and the event
+// kept a detail, in which case the detail is re-run through the current
+// classifier.
+//
+// This is what lets a newly added bucket apply retroactively. Without it a
+// graduation only affects future events and the historical "other" count stays
+// fat, hiding the very shapes that were just solved. Readers call this; the log
+// itself is append-only and is never rewritten.
+//
+// Gating on the stored class (not merely on the presence of a detail) is
+// deliberate: an already-classified bucket keeps its recorded class even when
+// it carries a detail, so a re-run can never move an event out of a named
+// bucket — only out of "other".
+func Reclassify(ev Event) string {
+	if ev.ErrorClass != "other" || ev.ErrorDetail == "" {
+		return ev.ErrorClass
+	}
+	return ClassifyMessage(ev.ErrorDetail)
 }
 
 // maxDetailLen caps the err_detail string. Error messages are short; the
