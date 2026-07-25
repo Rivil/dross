@@ -204,10 +204,16 @@ func HashRepo(repoRoot string) string {
 // ClassifyError buckets errors into a small set of strings. Never
 // returns the raw message — that might contain user paths or content.
 //
-// Order matters: specific buckets (verify state, mutation adapters,
-// phase/plan/spec state) are checked before generic ones (invalid,
-// missing) so a "no current_phase" error doesn't end up in
-// "missing".
+// Order matters: classification walks the classRules table
+// first-match-wins, arranged in tiers — root/scaffold state, then
+// workflow-specific buckets (verify state, mutation adapters,
+// phase/plan/spec state, provider/board), then the CLI surface, then
+// the generic safety-net buckets (where the more diagnostic bucket
+// wins: already_exists, permission, git, network, then
+// invalid/missing), with "other" as the fallback — so a "no
+// current_phase" error doesn't end up in "missing". The tier order is
+// enforced by TestNoTokenShadowing and documented in the README's
+// error-bucket section, kept in sync by TestReadmeDocumentsBucketTiers.
 func ClassifyError(err error) string {
 	if err == nil {
 		return ""
