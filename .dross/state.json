@@ -1,15 +1,9 @@
 {
   "version": "0.10.4.0",
   "current_milestone": "v0.10",
-  "current_phase": "telemetry-bucket-graduation",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-25T07:05:15.607854Z",
-  "last_action": "verified telemetry-bucket-graduation: pass (7/7, mutation 0.96)",
+  "last_activity": "2026-07-25T07:48:44.290122Z",
+  "last_action": "completed telemetry-bucket-graduation",
   "history": [
-    {
-      "at": "2026-07-23T15:36:26.902237Z",
-      "action": "completed task-reordering"
-    },
     {
       "at": "2026-07-23T15:59:07.002131Z",
       "action": "created ship-clean-tree"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-25T07:05:15.607854Z",
       "action": "verified telemetry-bucket-graduation: pass (7/7, mutation 0.96)"
+    },
+    {
+      "at": "2026-07-25T07:48:44.290122Z",
+      "action": "completed telemetry-bucket-graduation"
     }
   ]
 }
