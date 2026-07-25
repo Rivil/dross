@@ -1,73 +1,9 @@
 {
-  "version": "0.10.4.0",
+  "version": "0.10.7.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-25T07:48:44.290122Z",
-  "last_action": "completed telemetry-bucket-graduation",
+  "last_activity": "2026-07-25T08:51:06.998936Z",
+  "last_action": "completed verify-auto-finalize",
   "history": [
-    {
-      "at": "2026-07-23T15:59:07.002131Z",
-      "action": "created ship-clean-tree"
-    },
-    {
-      "at": "2026-07-23T16:28:18.846516Z",
-      "action": "set current_phase=ship-clean-tree"
-    },
-    {
-      "at": "2026-07-23T16:28:18.852845Z",
-      "action": "spec locked: ship-clean-tree"
-    },
-    {
-      "at": "2026-07-23T17:04:39.682729Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-23T17:04:39.689806Z",
-      "action": "plan locked: ship-clean-tree (4 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-23T17:08:06.72168Z",
-      "action": "plan reviewed: ship-clean-tree (0 blocking, 3 flags; t-2 now depends t-1)"
-    },
-    {
-      "at": "2026-07-23T17:09:42.339873Z",
-      "action": "paused — ship-clean-tree planned (4 tasks/2 waves, panel+review); next: execute t-1"
-    },
-    {
-      "at": "2026-07-24T05:48:00.262797Z",
-      "action": "resumed — execute t-1 (auto-commit .dross-only dirt at gates)"
-    },
-    {
-      "at": "2026-07-24T05:48:37.879164Z",
-      "action": "set version=0.10.6.0"
-    },
-    {
-      "at": "2026-07-24T05:55:45.453241Z",
-      "action": "executed t-1 (Auto-commit .dross-only dirt at gates)"
-    },
-    {
-      "at": "2026-07-24T05:58:19.586816Z",
-      "action": "executed t-3 (Resolve recorded PR from origin in mergeGate)"
-    },
-    {
-      "at": "2026-07-24T06:03:47.444201Z",
-      "action": "executed t-2 (Safety-net push of base-ahead .dross chores)"
-    },
-    {
-      "at": "2026-07-24T06:08:21.896577Z",
-      "action": "executed t-4 (Milestone-aware recover after merge verification)"
-    },
-    {
-      "at": "2026-07-24T06:08:28.21718Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-24T06:08:28.224581Z",
-      "action": "phase ship-clean-tree executed (4/4 done)"
-    },
-    {
-      "at": "2026-07-24T06:18:10.971236Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-07-24T06:18:10.978647Z",
       "action": "verified ship-clean-tree: pass (5/5, mutation 0.96)"
@@ -203,6 +139,70 @@
     {
       "at": "2026-07-25T07:48:44.290122Z",
       "action": "completed telemetry-bucket-graduation"
+    },
+    {
+      "at": "2026-07-25T08:25:10.786554Z",
+      "action": "created verify-auto-finalize"
+    },
+    {
+      "at": "2026-07-25T08:26:08.479435Z",
+      "action": "set current_phase=verify-auto-finalize"
+    },
+    {
+      "at": "2026-07-25T08:26:08.486751Z",
+      "action": "spec locked: verify-auto-finalize"
+    },
+    {
+      "at": "2026-07-25T08:27:37.136497Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T08:27:37.14186Z",
+      "action": "plan locked: verify-auto-finalize (4 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-25T08:31:05.96599Z",
+      "action": "plan reviewed: verify-auto-finalize (1 blocking resolved, 3 flags)"
+    },
+    {
+      "at": "2026-07-25T08:31:58.645087Z",
+      "action": "set version=0.10.7.0"
+    },
+    {
+      "at": "2026-07-25T08:35:09.193163Z",
+      "action": "executed t-1 (Idempotent finalize core with finalized marker)"
+    },
+    {
+      "at": "2026-07-25T08:37:13.351055Z",
+      "action": "executed t-2 (Ship verify-gate auto-heals unfinalized verdicts)"
+    },
+    {
+      "at": "2026-07-25T08:38:56.387715Z",
+      "action": "executed t-3 (Phase complete auto-heals unfinalized verdicts)"
+    },
+    {
+      "at": "2026-07-25T08:41:09.947781Z",
+      "action": "executed t-4 (Stats counts unresolved pendings only)"
+    },
+    {
+      "at": "2026-07-25T08:41:16.061589Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T08:41:16.068226Z",
+      "action": "phase verify-auto-finalize executed (4/4 done)"
+    },
+    {
+      "at": "2026-07-25T08:49:46.483946Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T08:49:46.489635Z",
+      "action": "verified verify-auto-finalize: pass (4/4, mutation 0.96)"
+    },
+    {
+      "at": "2026-07-25T08:51:06.998936Z",
+      "action": "completed verify-auto-finalize"
     }
   ]
 }

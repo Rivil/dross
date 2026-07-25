@@ -122,6 +122,26 @@ func Ship() *cobra.Command {
 			if p.Remote.URL == "" || p.Remote.Provider == "" {
 				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
 			}
+			// Heal-before-gate: a resolved verdict that was never
+			// finalized gets its outcome event recorded here, BEFORE the
+			// pass-only refusal — a partial/fail verdict is recorded,
+			// then still refused. Keeps the forget-to-finalize hole from
+			// leaking pending events into stats. The marker write dirties
+			// verify.toml; the pre-stage autoCommitDrossDirt below folds
+			// it into the push.
+			switch vrf.Verify.Verdict {
+			case "pass", "partial", "fail":
+				if !vrf.Verify.Finalized {
+					recorded, verdict, err := finalizeVerify(root, phaseID)
+					if err != nil {
+						return fmt.Errorf("auto-finalize verify for %s: %w", phaseID, err)
+					}
+					if recorded {
+						narrate("auto-finalized verify verdict=%s (was resolved but unrecorded)\n", verdict)
+					}
+					vrf.Verify.Finalized = true
+				}
+			}
 			if vrf.Verify.Verdict != "pass" && !forceUnverified {
 				switch vrf.Verify.Verdict {
 				case "pending":

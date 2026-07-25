@@ -147,7 +147,7 @@ Record the resolved verdict in telemetry so `dross stats` and downstream gates c
 ```
 dross verify finalize <phase-id>
 ```
-This is only valid after the verdict in `verify.toml` is one of `pass | partial | fail`. If you skipped step 3 or left `verdict = "pending"`, this command will refuse — go back and finalize the file first.
+This is only valid after the verdict in `verify.toml` is one of `pass | partial | fail`. If you skipped step 3 or left `verdict = "pending"`, this command will refuse — go back and finalize the file first. Finalize is idempotent (a re-run reports "already recorded"), and it writes a `finalized = true` marker into `verify.toml` — include that change in the verify-artefacts commit below. Safety net: if this step is skipped, `dross ship` and `dross phase complete` auto-finalize a resolved verdict themselves — but run it here anyway so telemetry reflects when the verdict was actually decided.
 
 Update state:
 ```

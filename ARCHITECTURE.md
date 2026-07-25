@@ -229,8 +229,9 @@ Create, list, number, migrate, complete, and reorder/insert/rename phases on ded
 - `phaseMove` / `phaseInsert` / `phaseRename` — `internal/cmd/phase_lifecycle.go`
 - array-order splice helpers (`InsertRelative`, `MoveRelative`, `RenameInArray`) — `internal/phase/phase.go`
 - slug identity helpers (`Dir`, `Ordered`, `DisplayNumber`, `UniqueSlug`) — `internal/phase/phase.go:34`
+- complete-path verify heal (records a resolved-but-unfinalized verdict before the branch switch; never invents a verdict) — `internal/cmd/phase.go:296`
 
-_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · 0e99b65_
+_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · extended verify-auto-finalize · df239d8_
 
 ### Plan persistence
 
@@ -331,8 +332,9 @@ Push the phase branch and open a provider-aware PR/MR (GitHub/Forgejo/GitLab) wi
 - `buildOpenOpts` / `buildCommentOpts` (thread remote auth_scheme/project_id) — `internal/cmd/ship.go`
 - `changes.SetPR` (records opened PR number per-phase for the completion merge-gate) — `internal/changes/changes.go:136`
 - `ship.BuildPRBody` — `internal/ship/body.go:20`
+- verify-gate auto-heal (records a resolved-but-unrecorded verdict via `finalizeVerify` BEFORE the pass-only refusal — partial/fail recorded, then still refused) — `internal/cmd/ship.go:123`
 
-_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended gitlab-ship-provider · extended ship-auto-noninteractive · extended verify-merge-before-completion · extended ship-architecture-autogen · extended pr-record-reaches-base · 9e37c37_
+_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended gitlab-ship-provider · extended ship-auto-noninteractive · extended verify-merge-before-completion · extended ship-architecture-autogen · extended pr-record-reaches-base · extended verify-auto-finalize · 9208e45_
 
 ### Stack profiles
 
@@ -422,19 +424,21 @@ Local-only event log (counts / durations / error classes, never file content), q
 - `renderOtherTail` (graduation queue) — `internal/cmd/stats.go:232`
 - `RecordCLIEvent` — `internal/cmd/telemetry.go:23`
 - `TestCorpusOtherShareUnderCeiling` (15% ceiling) — `internal/telemetry/corpus_test.go:97`
+- `renderOutcomes` (pending verify count = phases whose latest phase-stamped event is unresolved, not raw pending events; legacy phase-less events excluded) — `internal/cmd/stats.go:290`
 
-_a1b9c23 · extended telemetry-bucket-graduation · 4244216_
+_a1b9c23 · extended telemetry-bucket-graduation · extended verify-auto-finalize · 25a1f5e_
 
 ### Verification
 
-Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing.
+Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
 
 - `Verify` (CLI) — `internal/cmd/verify.go:27`
 - `verify.Run` — `internal/verify/verify.go:130`
 - `LanguageRun.Error` (record-and-continue adapter failure) — `internal/verify/verify.go:54`
 - `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:146`
+- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:126`
 
-_e31bdbd · extended context-hygiene · de8b076_
+_e31bdbd · extended context-hygiene · extended verify-auto-finalize · e99dbd1_
 
 ### Watch heartbeat (dross-watch)
 

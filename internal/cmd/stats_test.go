@@ -437,3 +437,72 @@ func TestStatsCover_renderForceFlagsCount(t *testing.T) {
 		t.Errorf("want 'force-flag invocations: 2' (decrement mutant prints -2):\n%s", out)
 	}
 }
+
+// --- unresolved-pending counting (verify-auto-finalize c-4) ---
+
+// TestStatsPendingClearedByResolvedEvent: a pending verify event that a
+// later resolved event for the same phase closes must not be counted —
+// no pending= segment and no finalize nag.
+func TestStatsPendingClearedByResolvedEvent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "")
+
+	path := filepath.Join(home, ".claude", "dross", telemetry.File)
+	for _, ev := range []telemetry.Event{
+		{Kind: "outcome", Command: "verify", Phase: "p1", RepoHash: "r1", Tags: map[string]string{"verdict": "pending"}},
+		{Kind: "outcome", Command: "verify", Phase: "p1", RepoHash: "r1", Tags: map[string]string{"verdict": "pass"}},
+	} {
+		if err := telemetry.Append(path, ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Stats(), "show"); err != nil {
+			t.Fatalf("stats show: %v", err)
+		}
+	})
+	if !strings.Contains(out, "pass=1") {
+		t.Errorf("resolved verdict should be counted:\n%s", out)
+	}
+	if strings.Contains(out, "pending=") {
+		t.Errorf("resolved phase must not be counted as pending:\n%s", out)
+	}
+	if strings.Contains(out, "have not been finalized") {
+		t.Errorf("nag must be suppressed when all pendings are resolved:\n%s", out)
+	}
+}
+
+// TestStatsPendingCountsUnresolvedPhasesOnly: one genuinely unresolved
+// phase counts; a resolved phase and a legacy phase-less pending event
+// do not.
+func TestStatsPendingCountsUnresolvedPhasesOnly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "")
+
+	path := filepath.Join(home, ".claude", "dross", telemetry.File)
+	for _, ev := range []telemetry.Event{
+		{Kind: "outcome", Command: "verify", Phase: "p1", RepoHash: "r1", Tags: map[string]string{"verdict": "pending"}},
+		{Kind: "outcome", Command: "verify", Phase: "p2", RepoHash: "r1", Tags: map[string]string{"verdict": "pending"}},
+		{Kind: "outcome", Command: "verify", Phase: "p2", RepoHash: "r1", Tags: map[string]string{"verdict": "partial"}},
+		{Kind: "outcome", Command: "verify", Tags: map[string]string{"verdict": "pending"}}, // legacy, no phase
+	} {
+		if err := telemetry.Append(path, ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Stats(), "show"); err != nil {
+			t.Fatalf("stats show: %v", err)
+		}
+	})
+	if !strings.Contains(out, "pending=1") {
+		t.Errorf("exactly the unresolved phase should count as pending:\n%s", out)
+	}
+	if !strings.Contains(out, "have not been finalized") {
+		t.Errorf("nag should print while an unresolved pending exists:\n%s", out)
+	}
+}

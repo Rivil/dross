@@ -868,3 +868,41 @@ func TestStatusCover_ProgressBarEmptyTotal(t *testing.T) {
 		t.Errorf("progressBar(2,4,4) = %q, want %q", got, "[██··]")
 	}
 }
+
+// --- status nag vs healed verifies (verify-auto-finalize c-4) ---
+
+// TestStatusNagSkipsResolvedFinalizedVerify: a phase whose verify.toml
+// verdict is resolved (and marker-finalized, as after a gate heal) must
+// not appear in status' unfinalized-verdicts nag; a genuinely pending
+// one must.
+func TestStatusNagSkipsResolvedFinalizedVerify(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "01-x")
+	mustWrite(t, ".dross/phases/01-x/verify.toml", `[verify]
+phase = "01-x"
+verdict = "pass"
+finalized = true
+`)
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Status()); err != nil {
+			t.Fatalf("status: %v", err)
+		}
+	})
+	if strings.Contains(out, "unfinalized verdict") {
+		t.Errorf("healed phase must not be nagged:\n%s", out)
+	}
+
+	// Flip to a genuinely pending verdict — the nag must appear.
+	mustWrite(t, ".dross/phases/01-x/verify.toml", `[verify]
+phase = "01-x"
+verdict = "pending"
+`)
+	out = captureStdout(t, func() {
+		if err := runCmd(t, Status()); err != nil {
+			t.Fatalf("status: %v", err)
+		}
+	})
+	if !strings.Contains(out, "unfinalized verdict") {
+		t.Errorf("pending verdict should be nagged:\n%s", out)
+	}
+}

@@ -289,6 +289,14 @@ func renderForceFlags(events []telemetry.Event) {
 
 func renderOutcomes(events []telemetry.Event) {
 	verifyVerdicts := map[string]int{}
+	// latestVerifyByPhase tracks the most recent verify verdict per
+	// phase (events arrive timestamp-ordered from Load). "pending" is
+	// counted from here — a phase whose pending event was later closed
+	// by a resolved event (finalize, or a gate's auto-heal) is NOT an
+	// unfinalized verify, so raw pending-event counting would nag
+	// forever. Legacy events without a phase id can't be matched and
+	// are excluded from the pending count.
+	latestVerifyByPhase := map[string]string{}
 	mutationScores := []float64{}
 	shipResults := map[string]int{}
 	doctorResults := map[string]int{}
@@ -300,7 +308,12 @@ func renderOutcomes(events []telemetry.Event) {
 		switch e.Command {
 		case "verify":
 			if v := e.Tags["verdict"]; v != "" {
-				verifyVerdicts[v]++
+				if v != "pending" {
+					verifyVerdicts[v]++
+				}
+				if e.Phase != "" {
+					latestVerifyByPhase[e.RepoHash+"/"+e.Phase] = v
+				}
 			}
 			if s, ok := e.Numbers["mutation_score"]; ok {
 				mutationScores = append(mutationScores, s)
@@ -314,6 +327,11 @@ func renderOutcomes(events []telemetry.Event) {
 				doctorResults[r]++
 			}
 			doctorIssues += e.Counts["issues"]
+		}
+	}
+	for _, v := range latestVerifyByPhase {
+		if v == "pending" {
+			verifyVerdicts["pending"]++
 		}
 	}
 	if len(verifyVerdicts) == 0 && len(shipResults) == 0 && len(doctorResults) == 0 {

@@ -1,0 +1,32 @@
+[phase]
+id        = "verify-auto-finalize"
+title     = "verify-auto-finalize"
+milestone = "v0.10"
+
+[[criteria]]
+id   = "c-1"
+text = "dross ship's verify gate auto-records the finalize outcome event when verify.toml holds a resolved verdict (pass/partial/fail) not yet finalized — shipping a verified phase leaves no pending-verdict telemetry for that phase"
+
+[[criteria]]
+id   = "c-2"
+text = "dross verify finalize is idempotent: re-running it (or running it after a gate already auto-finalized) emits no duplicate outcome event and exits 0 with a 'already recorded' notice"
+
+[[criteria]]
+id   = "c-3"
+text = "dross phase complete applies the same heal: completing a phase whose verify.toml verdict is resolved but unfinalized records the outcome event before proceeding"
+
+[[criteria]]
+id   = "c-4"
+text = "After an auto-finalize, dross status drops the phase from the unfinalized-verdicts nag and dross stats counts the resolved verdict instead of pending"
+
+[[decisions]]
+key    = "finalize_mode"
+choice = "Auto-heal at downstream gates (ship, phase complete) rather than hard-gating; `dross verify finalize` stays as the manual/primary path in the verify prompt"
+why    = "Matches the milestone's heal-before-gate direction set by ship-clean-tree: the common path self-repairs instead of adding another refusal for the user to resolve by hand"
+locked = true
+
+[[decisions]]
+key    = "pending_nag_retention"
+choice = "status/stats pending-verdict surfacing stays for genuinely unresolved (pending/empty) verdicts; only resolved-but-unrecorded ones are healed"
+why    = "A verdict nobody has decided is real outstanding work — healing must never invent a verdict"
+locked = true

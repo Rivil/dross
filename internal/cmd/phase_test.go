@@ -1537,3 +1537,71 @@ func TestPhaseCompleteNoPRAnywhereTakesAncestryFallback(t *testing.T) {
 		t.Errorf("expected the guided ancestry refusal, got: %v", err)
 	}
 }
+
+// --- phase complete auto-heal of unfinalized verdicts (verify-auto-finalize c-3) ---
+
+// completeVerifyToml drops a resolved-but-unfinalized verify.toml on the
+// phase branch, committed so the tree stays clean for complete's gates.
+func completeVerifyToml(t *testing.T, dir, phaseID, verdict string) {
+	t.Helper()
+	mustWrite(t, filepath.Join(dir, ".dross/phases/"+phaseID+"/verify.toml"), `[verify]
+phase = "`+phaseID+`"
+generated_at = 2026-07-25T10:00:00Z
+verdict = "`+verdict+`"
+
+[summary]
+criteria_total = 1
+criteria_covered = 1
+`)
+	mustGit(t, dir, "add", ".dross/phases/"+phaseID+"/verify.toml")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record verify for "+phaseID)
+}
+
+// TestPhaseCompleteHealsUnfinalizedVerdict: completing a phase whose
+// verify.toml verdict is resolved but never finalized records the
+// outcome event before proceeding, and completion still succeeds.
+func TestPhaseCompleteHealsUnfinalizedVerdict(t *testing.T) {
+	dir, phaseID := completeFixture(t)
+	completeVerifyToml(t, dir, phaseID, "pass")
+	stubPRMerged(t, true)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "") // re-enable (chdir pins it to "1")
+
+	if err := runCmd(t, Phase(), "complete", phaseID); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+
+	telemBody := mustRead(t, filepath.Join(home, ".claude/dross", "telemetry.jsonl"))
+	if !strings.Contains(telemBody, `"verdict":"pass"`) {
+		t.Errorf("complete should record the resolved verdict outcome event:\n%s", telemBody)
+	}
+}
+
+// TestPhaseCompleteHealIdempotent: completing an already-finalized
+// phase must not emit a duplicate outcome event.
+func TestPhaseCompleteHealIdempotent(t *testing.T) {
+	dir, phaseID := completeFixture(t)
+	completeVerifyToml(t, dir, phaseID, "pass")
+	stubPRMerged(t, true)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "")
+
+	if err := runCmd(t, Verify(), "finalize", phaseID); err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+	mustGit(t, dir, "add", ".dross/phases/"+phaseID+"/verify.toml")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): finalized marker")
+
+	if err := runCmd(t, Phase(), "complete", phaseID); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+
+	telemBody := mustRead(t, filepath.Join(home, ".claude/dross", "telemetry.jsonl"))
+	if got := strings.Count(telemBody, `"verdict":"pass"`); got != 1 {
+		t.Errorf("complete on finalized phase must not duplicate the outcome event, got %d:\n%s", got, telemBody)
+	}
+}
