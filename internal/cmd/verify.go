@@ -223,7 +223,13 @@ func dockerPrefix(p *project.Project) string {
 		return ""
 	}
 	tc := p.Runtime.TestCommand
-	if !strings.HasPrefix(tc, "docker") {
+	fields := strings.Fields(tc)
+	// The prefix's leading binary must be EXACTLY "docker" — not merely a
+	// string starting with "docker" (HasPrefix would accept "dockerevil",
+	// promoting an arbitrary PATH binary into the exec prefix built below).
+	// project.toml is a committed file, so under clone-and-run this is the
+	// difference between a bounded `docker` invocation and arbitrary code.
+	if len(fields) == 0 || fields[0] != "docker" {
 		return "docker compose exec app"
 	}
 	runners := map[string]bool{
@@ -231,7 +237,6 @@ func dockerPrefix(p *project.Project) string {
 		"node": true, "deno": true,
 		"go": true, "make": true,
 	}
-	fields := strings.Fields(tc)
 	// We need at minimum [docker, compose, exec, <service>] before any
 	// runner, so start scanning from index 4.
 	for i := 4; i < len(fields); i++ {

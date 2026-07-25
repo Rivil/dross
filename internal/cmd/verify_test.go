@@ -288,6 +288,11 @@ func TestDockerPrefixDerivation(t *testing.T) {
 		{"docker", "weird invocation", "docker compose exec app"},
 		// docker mode with no test_command at all — falls back to default
 		{"docker", "", "docker compose exec app"},
+		// self-audit inj-4a: a binary that merely STARTS WITH "docker"
+		// (dockerevil) must NOT be promoted into the exec prefix — the
+		// leading field has to be exactly "docker". Falls back to default.
+		{"docker", "dockerevil compose exec app pnpm test", "docker compose exec app"},
+		{"docker", "docker-malicious run --privileged x", "docker compose exec app"},
 	}
 	for _, c := range cases {
 		p := &project.Project{Runtime: project.Runtime{Mode: c.mode, TestCommand: c.testCmd}}
