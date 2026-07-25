@@ -16,6 +16,7 @@ import (
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
+	"github.com/Rivil/dross/internal/verify"
 )
 
 func Phase() *cobra.Command {
@@ -293,6 +294,28 @@ points at a manual reconcile.`,
 				return err
 			}
 			phaseBranch := "phase/" + phaseID
+
+			// Heal-before-gate (mirrors ship's verify gate): a resolved
+			// verdict that was never finalized gets its outcome event
+			// recorded before completion proceeds. Runs before the branch
+			// switch — the phase's verify.toml lives on phase/<id> — and
+			// before autoCommitDrossDirt, which folds the marker write in.
+			// A missing verify.toml or unresolved verdict is left alone:
+			// complete doesn't gate on verify, and healing must never
+			// invent a verdict.
+			_, vToml := verify.FilePaths(root, phaseID)
+			if v, verr := verify.LoadVerify(vToml); verr == nil && v != nil && !v.Verify.Finalized {
+				switch v.Verify.Verdict {
+				case "pass", "partial", "fail":
+					recorded, verdict, herr := finalizeVerify(root, phaseID)
+					if herr != nil {
+						return fmt.Errorf("auto-finalize verify for %s: %w", phaseID, herr)
+					}
+					if recorded {
+						Printf("auto-finalized verify verdict=%s (was resolved but unrecorded)\n", verdict)
+					}
+				}
+			}
 
 			// Working tree must be clean — checkout and branch -D both
 			// behave better on a clean tree. Bookkeeping-only dirt under
