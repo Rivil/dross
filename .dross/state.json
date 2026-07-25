@@ -1,15 +1,9 @@
 {
   "version": "0.10.5.0",
   "current_milestone": "v0.10",
-  "current_phase": "telemetry-taxonomy-overhaul",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-25T09:07:26.35872Z",
-  "last_action": "verified telemetry-taxonomy-overhaul: pass (4/4, mutation 0.95)",
+  "last_activity": "2026-07-25T09:08:03.752247Z",
+  "last_action": "completed telemetry-taxonomy-overhaul",
   "history": [
-    {
-      "at": "2026-07-24T09:08:16.133186Z",
-      "action": "completed landmark-comma-fix"
-    },
     {
       "at": "2026-07-25T05:17:22.338405Z",
       "action": "resumed — handoff pruned to 2 loops; next: scaffold the next v0.10 phase"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-25T09:07:26.35872Z",
       "action": "verified telemetry-taxonomy-overhaul: pass (4/4, mutation 0.95)"
+    },
+    {
+      "at": "2026-07-25T09:08:03.752247Z",
+      "action": "completed telemetry-taxonomy-overhaul"
     }
   ]
 }
