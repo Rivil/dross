@@ -1,0 +1,38 @@
+{
+  "phase": "readme-truth-pass",
+  "generated_at": "2026-07-25T18:04:55.140486Z",
+  "languages": [
+    {
+      "name": "go",
+      "tool": "gremlins",
+      "files": [
+        "cmd/dross/main.go",
+        "cmd/dross/main_test.go"
+      ],
+      "mutation": {
+        "Tool": "gremlins",
+        "Killed": 0,
+        "Survived": 0,
+        "Timeout": 0,
+        "Errors": 0,
+        "Score": 0,
+        "Surviving": null,
+        "NotCovered": 0
+      }
+    }
+  ],
+  "skipped": [
+    {
+      "file": ".dross/milestones/v0.9.toml",
+      "reason": "no mutation adapter for .toml"
+    },
+    {
+      "file": "ARCHITECTURE.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "README.md",
+      "reason": "no mutation adapter for .md"
+    }
+  ]
+}
