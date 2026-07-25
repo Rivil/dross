@@ -1,15 +1,11 @@
 {
-  "version": "1.0.0.0",
+  "version": "1.0.1.0",
   "current_milestone": "v1.0",
   "current_phase": "self-audit",
   "current_phase_status": "planned",
-  "last_activity": "2026-07-25T11:17:19.099071Z",
-  "last_action": "spec+plan locked: self-audit (3 tasks)",
+  "last_activity": "2026-07-25T11:17:24.652581Z",
+  "last_action": "set version=1.0.1.0",
   "history": [
-    {
-      "at": "2026-07-25T08:27:37.14186Z",
-      "action": "plan locked: verify-auto-finalize (4 tasks across 2 waves)"
-    },
     {
       "at": "2026-07-25T08:31:05.96599Z",
       "action": "plan reviewed: verify-auto-finalize (1 blocking resolved, 3 flags)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-07-25T11:17:19.099071Z",
       "action": "spec+plan locked: self-audit (3 tasks)"
+    },
+    {
+      "at": "2026-07-25T11:17:24.652581Z",
+      "action": "set version=1.0.1.0"
     }
   ]
 }
