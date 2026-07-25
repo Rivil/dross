@@ -1,15 +1,9 @@
 {
   "version": "0.10.9.0",
   "current_milestone": "v0.10",
-  "current_phase": "subagent-offload-audit",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-25T09:19:53.195309Z",
-  "last_action": "verified subagent-offload-audit: pass (4/4, mutation skipped)",
+  "last_activity": "2026-07-25T09:20:30.63431Z",
+  "last_action": "completed subagent-offload-audit",
   "history": [
-    {
-      "at": "2026-07-25T06:53:06.993143Z",
-      "action": "set current_phase_status=complete"
-    },
     {
       "at": "2026-07-25T06:53:07.001564Z",
       "action": "phase telemetry-bucket-graduation executed (5/5 done)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-25T09:19:53.195309Z",
       "action": "verified subagent-offload-audit: pass (4/4, mutation skipped)"
+    },
+    {
+      "at": "2026-07-25T09:20:30.63431Z",
+      "action": "completed subagent-offload-audit"
     }
   ]
 }
