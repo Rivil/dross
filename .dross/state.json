@@ -2,18 +2,10 @@
   "version": "0.10.4.0",
   "current_milestone": "v0.10",
   "current_phase": "telemetry-bucket-graduation",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-25T06:53:07.001564Z",
-  "last_action": "phase telemetry-bucket-graduation executed (5/5 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-25T07:05:15.607854Z",
+  "last_action": "verified telemetry-bucket-graduation: pass (7/7, mutation 0.96)",
   "history": [
-    {
-      "at": "2026-07-23T14:19:07.513906Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-23T14:19:07.520053Z",
-      "action": "verified task-reordering: pass (7/7, mutation 0.95)"
-    },
     {
       "at": "2026-07-23T15:36:26.902237Z",
       "action": "completed task-reordering"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-25T06:53:07.001564Z",
       "action": "phase telemetry-bucket-graduation executed (5/5 done)"
+    },
+    {
+      "at": "2026-07-25T07:05:15.600722Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T07:05:15.607854Z",
+      "action": "verified telemetry-bucket-graduation: pass (7/7, mutation 0.96)"
     }
   ]
 }
