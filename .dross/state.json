@@ -2,18 +2,10 @@
   "version": "0.10.9.0",
   "current_milestone": "v0.10",
   "current_phase": "subagent-offload-audit",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-25T09:19:15.666945Z",
-  "last_action": "phase subagent-offload-audit executed (3/3 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-25T09:19:53.195309Z",
+  "last_action": "verified subagent-offload-audit: pass (4/4, mutation skipped)",
   "history": [
-    {
-      "at": "2026-07-25T06:50:05.187621Z",
-      "action": "executed t-4 (Reclassify other at read time, print tail)"
-    },
-    {
-      "at": "2026-07-25T06:52:50.275345Z",
-      "action": "executed t-5 (Check in err_detail corpus, enforce 15% ceiling)"
-    },
     {
       "at": "2026-07-25T06:53:06.993143Z",
       "action": "set current_phase_status=complete"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-25T09:19:15.666945Z",
       "action": "phase subagent-offload-audit executed (3/3 done)"
+    },
+    {
+      "at": "2026-07-25T09:19:53.188534Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T09:19:53.195309Z",
+      "action": "verified subagent-offload-audit: pass (4/4, mutation skipped)"
     }
   ]
 }

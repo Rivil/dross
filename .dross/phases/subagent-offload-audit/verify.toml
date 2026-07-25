@@ -1,0 +1,44 @@
+[verify]
+  phase = "subagent-offload-audit"
+  generated_at = 2026-07-25T09:19:28.828555Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-07-25T09:19:53.182452Z
+
+[summary]
+  mutation_status = "skipped"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/subagent_offload_audit_test.go:TestSubagentOffloadAuditCoversEveryPrompt", "internal/cmd/subagent_offload_audit_test.go:TestSubagentOffloadAuditFailsOnMissingSection"]
+  notes = "live fail-closed gate over assets/prompts + fixture test pinning the fail path"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/verify_prompt_test.go:TestVerifyPromptOffloadGuidance"]
+  notes = "pins guidance, size gate, boundary sentence and audit-doc pointer in verify.md §2"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/execute_prompt_test.go:TestExecutePromptOffloadGuidance"]
+  notes = "pins guidance, size gate, boundary sentence and audit-doc pointer in execute.md §1b"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/verify_prompt_test.go:TestVerifyPromptOffloadGuidance", "internal/cmd/execute_prompt_test.go:TestExecutePromptOffloadGuidance"]
+  notes = "both prompt tests assert the read-only/no-writes boundary text sits inside the offload passages"
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation skipped: --skip-mutation passed — this phase changed only docs, prompt markdown, and _test.go files; there is no production code for mutation to measure, so the verdict is based on criterion coverage alone"

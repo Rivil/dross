@@ -1,0 +1,31 @@
+{
+  "phase": "subagent-offload-audit",
+  "generated_at": "2026-07-25T09:19:28.828555Z",
+  "languages": null,
+  "skipped": [
+    {
+      "file": "assets/prompts/execute.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/verify.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "docs/subagent-offload-audit.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "internal/cmd/execute_prompt_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/cmd/subagent_offload_audit_test.go",
+      "reason": "no mutation adapter for .go"
+    },
+    {
+      "file": "internal/cmd/verify_prompt_test.go",
+      "reason": "no mutation adapter for .go"
+    }
+  ]
+}
