@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -171,15 +172,34 @@ func renderTopCommands(events []telemetry.Event) {
 	Print("")
 }
 
+// tailTopN caps the unclassified-shape list printed under the errors table.
+// The tail is a work queue — the shapes worth graduating into named buckets —
+// so it wants the head of the distribution, not the whole long tail.
+const tailTopN = 5
+
+// tailDetailLen caps a tail line. err_detail is already capped at 240 runes,
+// but a wrapped error that long turns the block into a wall; 100 runes is
+// enough to recognise a shape.
+const tailDetailLen = 100
+
 func renderErrorBuckets(events []telemetry.Event) {
 	by := map[string]int{}
+	tail := map[string]int{}
 	total := 0
 	for _, e := range events {
 		if e.ErrorClass == "" {
 			continue
 		}
-		by[e.ErrorClass]++
+		// Count the effective class, not the stored one: a bucket added after
+		// an event was written still applies to it. The log is not rewritten.
+		class := telemetry.Reclassify(e)
+		by[class]++
 		total++
+		// Whatever is still "other" after re-derivation is genuinely
+		// unclassified — that's the graduation queue.
+		if class == "other" && e.ErrorDetail != "" {
+			tail[e.ErrorDetail]++
+		}
 	}
 	if total == 0 {
 		Print("## errors")
@@ -201,7 +221,53 @@ func renderErrorBuckets(events []telemetry.Event) {
 	for _, r := range rows {
 		Printf("  %-16s %4d\n", r.k, r.v)
 	}
+	renderOtherTail(tail)
 	Print("")
+}
+
+// renderOtherTail prints the unclassified `other` shapes as an indented block
+// under the errors table — the queue of message shapes that have earned a named
+// bucket but not got one yet. Omitted entirely when the tail is empty, so the
+// section costs nothing once the bucket is drained.
+func renderOtherTail(tail map[string]int) {
+	if len(tail) == 0 {
+		return
+	}
+	type kv struct {
+		k string
+		v int
+	}
+	rows := make([]kv, 0, len(tail))
+	for k, v := range tail {
+		rows = append(rows, kv{k, v})
+	}
+	// Count descending, then shape ascending — map iteration order must not
+	// leak into the output, or equal-count shapes reorder between runs.
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].v != rows[j].v {
+			return rows[i].v > rows[j].v
+		}
+		return rows[i].k < rows[j].k
+	})
+	if len(rows) > tailTopN {
+		rows = rows[:tailTopN]
+	}
+	Printf("  unclassified `other` shapes (top %d):\n", len(rows))
+	for _, r := range rows {
+		Printf("    %4d  %s\n", r.v, oneLineDetail(r.k))
+	}
+}
+
+// oneLineDetail flattens an err_detail for the tail block: embedded newlines
+// and tabs collapse to single spaces (cobra's "Did you mean this?" suggestions
+// are multi-line, and telemetry.Detail preserves them), then the result is
+// truncated so one shape occupies exactly one line.
+func oneLineDetail(detail string) string {
+	s := strings.Join(strings.Fields(detail), " ")
+	if r := []rune(s); len(r) > tailDetailLen {
+		s = string(r[:tailDetailLen]) + "…"
+	}
+	return s
 }
 
 func renderForceFlags(events []telemetry.Event) {
