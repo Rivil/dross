@@ -3,7 +3,7 @@ phases = ["self-audit", "prove-or-demote-board-sync", "readme-truth-pass"]
 [milestone]
   version = "v1.0"
   title = "1.0 hardening — every claim proven"
-  status = "active"
+  status = "complete"
   started = "2026-07-25"
 
 [scope]

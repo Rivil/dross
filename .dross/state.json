@@ -1,13 +1,9 @@
 {
   "version": "1.0.3.0",
   "current_milestone": "v1.0",
-  "last_activity": "2026-07-25T18:06:42.25072Z",
-  "last_action": "completed readme-truth-pass",
+  "last_activity": "2026-07-25T18:13:48.65168Z",
+  "last_action": "milestone v1.0 complete — landed on main (#64), v1.0.3 signed release published",
   "history": [
-    {
-      "at": "2026-07-25T09:16:34.68311Z",
-      "action": "executed t-1 (offload audit doc)"
-    },
     {
       "at": "2026-07-25T09:17:43.911663Z",
       "action": "executed t-2 (verify offload)"
@@ -203,6 +199,10 @@
     {
       "at": "2026-07-25T18:06:42.25072Z",
       "action": "completed readme-truth-pass"
+    },
+    {
+      "at": "2026-07-25T18:13:48.65168Z",
+      "action": "milestone v1.0 complete — landed on main (#64), v1.0.3 signed release published"
     }
   ]
 }
