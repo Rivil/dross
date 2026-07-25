@@ -1,29 +1,11 @@
 {
   "version": "0.10.5.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-25T09:08:03.752247Z",
-  "last_action": "completed telemetry-taxonomy-overhaul",
+  "current_phase": "subagent-offload-audit",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-25T09:13:29.39247Z",
+  "last_action": "plan reviewed: subagent-offload-audit (0 blocking, 1 flag folded)",
   "history": [
-    {
-      "at": "2026-07-25T05:17:22.338405Z",
-      "action": "resumed — handoff pruned to 2 loops; next: scaffold the next v0.10 phase"
-    },
-    {
-      "at": "2026-07-25T05:18:32.10597Z",
-      "action": "created telemetry-bucket-graduation"
-    },
-    {
-      "at": "2026-07-25T05:25:58.395326Z",
-      "action": "set current_phase=telemetry-bucket-graduation"
-    },
-    {
-      "at": "2026-07-25T05:25:58.402823Z",
-      "action": "spec locked: telemetry-bucket-graduation"
-    },
-    {
-      "at": "2026-07-25T05:41:29.523996Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-07-25T05:41:29.532134Z",
       "action": "plan locked: telemetry-bucket-graduation (5 tasks across 2 waves)"
@@ -203,6 +185,26 @@
     {
       "at": "2026-07-25T09:08:03.752247Z",
       "action": "completed telemetry-taxonomy-overhaul"
+    },
+    {
+      "at": "2026-07-25T09:10:15.315448Z",
+      "action": "created subagent-offload-audit"
+    },
+    {
+      "at": "2026-07-25T09:11:13.005499Z",
+      "action": "set current_phase=subagent-offload-audit"
+    },
+    {
+      "at": "2026-07-25T09:11:13.011751Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T09:11:13.017997Z",
+      "action": "spec+plan locked: subagent-offload-audit (3 tasks)"
+    },
+    {
+      "at": "2026-07-25T09:13:29.39247Z",
+      "action": "plan reviewed: subagent-offload-audit (0 blocking, 1 flag folded)"
     }
   ]
 }
