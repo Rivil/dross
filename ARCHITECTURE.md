@@ -259,6 +259,16 @@ Phase artefacts (plan.toml / spec.toml) are written atomically: saveTOML encodes
 
 _introduced task-lifecycle-commands · 367c723_
 
+### README accuracy guard
+
+Keeps the README's command table from lying about the CLI: `newRoot` is extracted from `main` so a test can inspect the real assembled command tree, and a parity test asserts every `` `dross <cmd>` `` the README advertises is a real top-level command (the over-claim failure mode) plus that the status line isn't a stale `v0.x`. Under-claiming (an internal command the table omits) is allowed.
+
+- `newRoot` (testable command-tree assembly) — `cmd/dross/main.go:13`
+- `TestReadmeAdvertisesOnlyRealCommands` (over-claim guard) — `cmd/dross/main_test.go:20`
+- `TestReadmeStatusNotStale` (stale-version guard) — `cmd/dross/main_test.go:57`
+
+_introduced readme-truth-pass · 6fc4186_
+
 ### Repo onboarding
 
 Scan an existing repo's signal files (Dockerfile, package.json, go.mod, …) into a draft project.toml, seeding `[runtime]` + `[stack].profile` from the matched stack profile.
