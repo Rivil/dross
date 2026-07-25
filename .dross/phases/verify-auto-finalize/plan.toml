@@ -1,80 +1,47 @@
+task_seq = 0
+
 [phase]
-id = "verify-auto-finalize"
+  id = "verify-auto-finalize"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Idempotent finalize core with finalized marker"
-files         = ["internal/verify/verify.go", "internal/cmd/verify.go", "internal/cmd/verify_test.go"]
-description   = """
-Add finalized/finalized_at fields to the [verify] block schema plus a save path.
-Extract finalizeVerify(root, phaseID) helper: load verify.toml, require resolved
-verdict, no-op with notice when already finalized, else emit outcome event and
-write finalized=true back. Rewire `dross verify finalize` onto it.
-Stamp Event.Phase on the verify pending + outcome events (RecordOutcomeEvent
-currently drops phase identity) so t-4's per-phase matching is possible.
-"""
-covers        = ["c-2"]
-test_contract = [
-  "if the already-finalized short-circuit breaks, the double-finalize test fails (second run must emit no outcome event, exit 0, print 'already recorded')",
-  "if the marker write-back breaks, the test asserting finalized=true lands in verify.toml after finalize fails",
-  "if the resolved-verdict gate breaks, the pending-verdict-refusal test fails",
-  "if phase stamping breaks, the test asserting verify pending/outcome events carry the phase id fails",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Idempotent finalize core with finalized marker"
+  files = ["internal/verify/verify.go", "internal/cmd/verify.go", "internal/cmd/verify_test.go"]
+  description = "Add finalized/finalized_at fields to the [verify] block schema plus a save path.\nExtract finalizeVerify(root, phaseID) helper: load verify.toml, require resolved\nverdict, no-op with notice when already finalized, else emit outcome event and\nwrite finalized=true back. Rewire `dross verify finalize` onto it.\nStamp Event.Phase on the verify pending + outcome events (RecordOutcomeEvent\ncurrently drops phase identity) so t-4's per-phase matching is possible.\n"
+  covers = ["c-2"]
+  test_contract = ["if the already-finalized short-circuit breaks, the double-finalize test fails (second run must emit no outcome event, exit 0, print 'already recorded')", "if the marker write-back breaks, the test asserting finalized=true lands in verify.toml after finalize fails", "if the resolved-verdict gate breaks, the pending-verdict-refusal test fails", "if phase stamping breaks, the test asserting verify pending/outcome events carry the phase id fails"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Ship verify-gate auto-heals unfinalized verdicts"
-files         = ["internal/cmd/ship.go", "internal/cmd/ship_test.go", "assets/prompts/verify.md"]
-description   = """
-In ship's pre-flight verify gate: when the loaded verdict is resolved but not
-finalized, call finalizeVerify (print one heal line) BEFORE the pass-only
-refusal — a partial/fail verdict is recorded, then still refused.
-Note the self-heal in the verify.md prompt wrap section.
-"""
-covers        = ["c-1"]
-test_contract = [
-  "if the ship heal breaks, the test shipping a resolved-but-unfinalized phase fails (telemetry must gain a verify outcome event with the verdict tag)",
-  "if heal idempotency breaks, the ship-on-already-finalized test fails (no duplicate outcome event)",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 2
+  title = "Ship verify-gate auto-heals unfinalized verdicts"
+  files = ["internal/cmd/ship.go", "internal/cmd/ship_test.go", "assets/prompts/verify.md"]
+  description = "In ship's pre-flight verify gate: when the loaded verdict is resolved but not\nfinalized, call finalizeVerify (print one heal line) BEFORE the pass-only\nrefusal — a partial/fail verdict is recorded, then still refused.\nNote the self-heal in the verify.md prompt wrap section.\n"
+  covers = ["c-1"]
+  depends_on = ["t-1"]
+  test_contract = ["if the ship heal breaks, the test shipping a resolved-but-unfinalized phase fails (telemetry must gain a verify outcome event with the verdict tag)", "if heal idempotency breaks, the ship-on-already-finalized test fails (no duplicate outcome event)"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Phase complete auto-heals unfinalized verdicts"
-files         = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
-description   = """
-In phaseComplete, before proceeding past its gates: same finalizeVerify call
-when verify.toml holds a resolved-but-unfinalized verdict.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "if the complete-path heal breaks, the test completing a resolved-but-unfinalized phase fails (outcome event recorded)",
-  "if its idempotency breaks, the complete-on-already-finalized test fails (no duplicate event)",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Phase complete auto-heals unfinalized verdicts"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+  description = "In phaseComplete, before proceeding past its gates: same finalizeVerify call\nwhen verify.toml holds a resolved-but-unfinalized verdict.\n"
+  covers = ["c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["if the complete-path heal breaks, the test completing a resolved-but-unfinalized phase fails (outcome event recorded)", "if its idempotency breaks, the complete-on-already-finalized test fails (no duplicate event)"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Stats counts unresolved pendings only"
-files         = ["internal/cmd/stats.go", "internal/cmd/stats_test.go", "internal/cmd/status_test.go"]
-description   = """
-Change stats' pending verify count to phases whose LATEST verify event is still
-pending (a later resolved event for the same phase clears it). Legacy events
-without a phase id are excluded from the pending nag. Nag line only when
-unresolved pendings exist. Status-side regression test: healed phase never
-appears in status' unfinalized-verdicts nag.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "if pending-resolution matching breaks, the stats test with a pending event followed by a resolved event for the same phase fails (pending must not be counted)",
-  "if the nag suppression breaks, the test asserting no 'have not been finalized' line when all pendings are resolved fails",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 2
+  title = "Stats counts unresolved pendings only"
+  files = ["internal/cmd/stats.go", "internal/cmd/stats_test.go", "internal/cmd/status_test.go"]
+  description = "Change stats' pending verify count to phases whose LATEST verify event is still\npending (a later resolved event for the same phase clears it). Legacy events\nwithout a phase id are excluded from the pending nag. Nag line only when\nunresolved pendings exist. Status-side regression test: healed phase never\nappears in status' unfinalized-verdicts nag.\n"
+  covers = ["c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if pending-resolution matching breaks, the stats test with a pending event followed by a resolved event for the same phase fails (pending must not be counted)", "if the nag suppression breaks, the test asserting no 'have not been finalized' line when all pendings are resolved fails"]
+  status = "done"
