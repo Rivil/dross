@@ -1,21 +1,11 @@
 {
   "version": "0.10.7.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-25T08:51:06.998936Z",
-  "last_action": "completed verify-auto-finalize",
+  "current_phase": "telemetry-taxonomy-overhaul",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-25T08:54:58.509059Z",
+  "last_action": "spec locked: telemetry-taxonomy-overhaul",
   "history": [
-    {
-      "at": "2026-07-24T06:18:10.978647Z",
-      "action": "verified ship-clean-tree: pass (5/5, mutation 0.96)"
-    },
-    {
-      "at": "2026-07-24T06:45:43.319806Z",
-      "action": "completed ship-clean-tree"
-    },
-    {
-      "at": "2026-07-24T07:57:58.832047Z",
-      "action": "created landmark-comma-fix"
-    },
     {
       "at": "2026-07-24T08:03:41.445998Z",
       "action": "set current_phase=landmark-comma-fix"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-25T08:51:06.998936Z",
       "action": "completed verify-auto-finalize"
+    },
+    {
+      "at": "2026-07-25T08:54:13.435541Z",
+      "action": "created telemetry-taxonomy-overhaul"
+    },
+    {
+      "at": "2026-07-25T08:54:58.503457Z",
+      "action": "set current_phase=telemetry-taxonomy-overhaul"
+    },
+    {
+      "at": "2026-07-25T08:54:58.509059Z",
+      "action": "spec locked: telemetry-taxonomy-overhaul"
     }
   ]
 }
