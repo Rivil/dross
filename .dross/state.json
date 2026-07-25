@@ -1,29 +1,11 @@
 {
-  "version": "1.0.1.0",
+  "version": "1.0.2.0",
   "current_milestone": "v1.0",
-  "last_activity": "2026-07-25T11:43:26.77104Z",
-  "last_action": "completed self-audit",
+  "current_phase": "prove-or-demote-board-sync",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-25T17:31:01.323645Z",
+  "last_action": "spec+plan locked: prove-or-demote-board-sync (3 tasks)",
   "history": [
-    {
-      "at": "2026-07-25T08:49:46.483946Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-25T08:49:46.489635Z",
-      "action": "verified verify-auto-finalize: pass (4/4, mutation 0.96)"
-    },
-    {
-      "at": "2026-07-25T08:51:06.998936Z",
-      "action": "completed verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:54:13.435541Z",
-      "action": "created telemetry-taxonomy-overhaul"
-    },
-    {
-      "at": "2026-07-25T08:54:58.503457Z",
-      "action": "set current_phase=telemetry-taxonomy-overhaul"
-    },
     {
       "at": "2026-07-25T08:54:58.509059Z",
       "action": "spec locked: telemetry-taxonomy-overhaul"
@@ -203,6 +185,26 @@
     {
       "at": "2026-07-25T11:43:26.77104Z",
       "action": "completed self-audit"
+    },
+    {
+      "at": "2026-07-25T17:30:20.062079Z",
+      "action": "created prove-or-demote-board-sync"
+    },
+    {
+      "at": "2026-07-25T17:30:20.068551Z",
+      "action": "set version=1.0.2.0"
+    },
+    {
+      "at": "2026-07-25T17:31:01.310362Z",
+      "action": "set current_phase=prove-or-demote-board-sync"
+    },
+    {
+      "at": "2026-07-25T17:31:01.317634Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T17:31:01.323645Z",
+      "action": "spec+plan locked: prove-or-demote-board-sync (3 tasks)"
     }
   ]
 }
