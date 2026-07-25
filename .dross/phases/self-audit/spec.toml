@@ -1,0 +1,32 @@
+[phase]
+id        = "self-audit"
+title     = "self-audit"
+milestone = "v1.0"
+
+[[criteria]]
+id   = "c-1"
+text = "dross techdebt has run against the dross repo; the newest run report's top findings are each triaged (fixed here, or accepted with a recorded reason), and dross status shows a last-run for tech-debt instead of 'never run'"
+
+[[criteria]]
+id   = "c-2"
+text = "/dross-secure has run against the dross repo; every BLOCKING/critical security finding is fixed in this phase, every other finding accepted with a recorded reason, and dross status shows a last-run for security"
+
+[[criteria]]
+id   = "c-3"
+text = "/dross-quality has run against the dross repo; every BLOCKING/critical maintainability finding is fixed in this phase, every other finding accepted with a recorded reason, and dross status shows a last-run for quality"
+
+[[criteria]]
+id   = "c-4"
+text = "Every fix made from a finding lands as its own commit in this phase with a test where the fix is testable; every acceptance is traceable (finding id + reason recorded in the findings store or phase notes)"
+
+[[decisions]]
+key    = "audit_home"
+choice = "Remediation folds into THIS phase — no separately scaffolded remediation phases; a finding too large to fix here is accepted-with-reason and routed to the backlog via dross deferred"
+why    = "The milestone is 3 phases by design; expected finding volume on a repo this size doesn't justify satellite phases"
+locked = true
+
+[[decisions]]
+key    = "acceptance_bar"
+choice = "Only BLOCKING/critical findings must be fixed; everything else may be accepted with a reason (milestone non-goal restated at phase level)"
+why    = "1.0 is a trust stamp: what matters is that every finding was SEEN and dispositioned, not that the repo is finding-free"
+locked = true

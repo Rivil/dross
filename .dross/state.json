@@ -1,25 +1,11 @@
 {
   "version": "1.0.0.0",
   "current_milestone": "v1.0",
-  "last_activity": "2026-07-25T11:15:32.726862Z",
-  "last_action": "scoped milestone v1.0: 5 criteria, 3 phases",
+  "current_phase": "self-audit",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-25T11:17:19.099071Z",
+  "last_action": "spec+plan locked: self-audit (3 tasks)",
   "history": [
-    {
-      "at": "2026-07-25T08:25:10.786554Z",
-      "action": "created verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:26:08.479435Z",
-      "action": "set current_phase=verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:26:08.486751Z",
-      "action": "spec locked: verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:27:37.136497Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-07-25T08:27:37.14186Z",
       "action": "plan locked: verify-auto-finalize (4 tasks across 2 waves)"
@@ -203,6 +189,22 @@
     {
       "at": "2026-07-25T11:15:32.726862Z",
       "action": "scoped milestone v1.0: 5 criteria, 3 phases"
+    },
+    {
+      "at": "2026-07-25T11:16:39.419703Z",
+      "action": "created self-audit"
+    },
+    {
+      "at": "2026-07-25T11:17:19.088577Z",
+      "action": "set current_phase=self-audit"
+    },
+    {
+      "at": "2026-07-25T11:17:19.093701Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T11:17:19.099071Z",
+      "action": "spec+plan locked: self-audit (3 tasks)"
     }
   ]
 }
