@@ -1,0 +1,28 @@
+[phase]
+id        = "prove-or-demote-board-sync"
+title     = "prove-or-demote-board-sync"
+milestone = "v1.0"
+
+[[criteria]]
+id   = "c-1"
+text = "dross board sync is exercised end-to-end against the live Jira Cloud instance (fluffyleopardlabs, project MYJ): a milestone-sync creates/finds the version, a phase-sync creates a real issue, and pull reads that issue back — the created issue key is captured as proof"
+
+[[criteria]]
+id   = "c-2"
+text = "The proof run cleans up after itself: the issues dross created for the round-trip are closed/removed so my-journal isn't left cluttered, and board sync is disabled again (or left enabled per an explicit choice) so the dross repo's steady state is unchanged"
+
+[[criteria]]
+id   = "c-3"
+text = "The README and MEMORY board-sync claim is corrected to reflect reality: it now states board sync is PROVEN against Jira (with the run evidence), replacing the prior 'never exercised end-to-end' status"
+
+[[decisions]]
+key    = "target_board"
+choice = "Jira Cloud, site fluffyleopardlabs.atlassian.net, project MYJ (my-journal), auth via HTTP Basic (admin@fluffyleopardlabs.com + API token in env JIRA_TOKEN)"
+why    = "User's live instance; MYJ chosen as the scratch board so existing product projects (FeastAhead etc.) aren't polluted"
+locked = true
+
+[[decisions]]
+key    = "proof_then_revert"
+choice = "Full round-trip (milestone-sync + phase-sync + pull) then cleanup: close the created issues and disable board sync, so the committed dross repo does not carry a live board dependency"
+why    = "The criterion is to PROVE the code path works once, not to adopt Jira as dross's permanent tracker; the repo's steady state must stay backend-agnostic"
+locked = true

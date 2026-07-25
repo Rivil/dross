@@ -1,161 +1,9 @@
 {
-  "version": "1.0.0.0",
+  "version": "1.0.3.0",
   "current_milestone": "v1.0",
-  "last_activity": "2026-07-25T11:15:32.726862Z",
-  "last_action": "scoped milestone v1.0: 5 criteria, 3 phases",
+  "last_activity": "2026-07-25T18:06:42.25072Z",
+  "last_action": "completed readme-truth-pass",
   "history": [
-    {
-      "at": "2026-07-25T08:25:10.786554Z",
-      "action": "created verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:26:08.479435Z",
-      "action": "set current_phase=verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:26:08.486751Z",
-      "action": "spec locked: verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:27:37.136497Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-25T08:27:37.14186Z",
-      "action": "plan locked: verify-auto-finalize (4 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-25T08:31:05.96599Z",
-      "action": "plan reviewed: verify-auto-finalize (1 blocking resolved, 3 flags)"
-    },
-    {
-      "at": "2026-07-25T08:31:58.645087Z",
-      "action": "set version=0.10.7.0"
-    },
-    {
-      "at": "2026-07-25T08:35:09.193163Z",
-      "action": "executed t-1 (Idempotent finalize core with finalized marker)"
-    },
-    {
-      "at": "2026-07-25T08:37:13.351055Z",
-      "action": "executed t-2 (Ship verify-gate auto-heals unfinalized verdicts)"
-    },
-    {
-      "at": "2026-07-25T08:38:56.387715Z",
-      "action": "executed t-3 (Phase complete auto-heals unfinalized verdicts)"
-    },
-    {
-      "at": "2026-07-25T08:41:09.947781Z",
-      "action": "executed t-4 (Stats counts unresolved pendings only)"
-    },
-    {
-      "at": "2026-07-25T08:41:16.061589Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-25T08:41:16.068226Z",
-      "action": "phase verify-auto-finalize executed (4/4 done)"
-    },
-    {
-      "at": "2026-07-25T08:49:46.483946Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-25T08:49:46.489635Z",
-      "action": "verified verify-auto-finalize: pass (4/4, mutation 0.96)"
-    },
-    {
-      "at": "2026-07-25T08:51:06.998936Z",
-      "action": "completed verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:54:13.435541Z",
-      "action": "created telemetry-taxonomy-overhaul"
-    },
-    {
-      "at": "2026-07-25T08:54:58.503457Z",
-      "action": "set current_phase=telemetry-taxonomy-overhaul"
-    },
-    {
-      "at": "2026-07-25T08:54:58.509059Z",
-      "action": "spec locked: telemetry-taxonomy-overhaul"
-    },
-    {
-      "at": "2026-07-25T08:55:38.341592Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-25T08:55:38.347948Z",
-      "action": "plan locked: telemetry-taxonomy-overhaul (4 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-25T08:58:50.382334Z",
-      "action": "plan reviewed: telemetry-taxonomy-overhaul (0 blocking, 3 flags folded in)"
-    },
-    {
-      "at": "2026-07-25T08:58:54.805964Z",
-      "action": "set version=0.10.5.0"
-    },
-    {
-      "at": "2026-07-25T09:01:24.663135Z",
-      "action": "executed t-1 (rule table)"
-    },
-    {
-      "at": "2026-07-25T09:03:02.878437Z",
-      "action": "executed t-2 (shadowing guard)"
-    },
-    {
-      "at": "2026-07-25T09:05:07.612811Z",
-      "action": "executed t-3 (generic-tier audit)"
-    },
-    {
-      "at": "2026-07-25T09:06:28.892231Z",
-      "action": "executed t-4 (tier docs)"
-    },
-    {
-      "at": "2026-07-25T09:06:33.316364Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-25T09:06:33.324113Z",
-      "action": "phase telemetry-taxonomy-overhaul executed (4/4 done)"
-    },
-    {
-      "at": "2026-07-25T09:07:26.352922Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-25T09:07:26.35872Z",
-      "action": "verified telemetry-taxonomy-overhaul: pass (4/4, mutation 0.95)"
-    },
-    {
-      "at": "2026-07-25T09:08:03.752247Z",
-      "action": "completed telemetry-taxonomy-overhaul"
-    },
-    {
-      "at": "2026-07-25T09:10:15.315448Z",
-      "action": "created subagent-offload-audit"
-    },
-    {
-      "at": "2026-07-25T09:11:13.005499Z",
-      "action": "set current_phase=subagent-offload-audit"
-    },
-    {
-      "at": "2026-07-25T09:11:13.011751Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-25T09:11:13.017997Z",
-      "action": "spec+plan locked: subagent-offload-audit (3 tasks)"
-    },
-    {
-      "at": "2026-07-25T09:13:29.39247Z",
-      "action": "plan reviewed: subagent-offload-audit (0 blocking, 1 flag folded)"
-    },
-    {
-      "at": "2026-07-25T09:13:29.427563Z",
-      "action": "set version=0.10.9.0"
-    },
     {
       "at": "2026-07-25T09:16:34.68311Z",
       "action": "executed t-1 (offload audit doc)"
@@ -203,6 +51,158 @@
     {
       "at": "2026-07-25T11:15:32.726862Z",
       "action": "scoped milestone v1.0: 5 criteria, 3 phases"
+    },
+    {
+      "at": "2026-07-25T11:16:39.419703Z",
+      "action": "created self-audit"
+    },
+    {
+      "at": "2026-07-25T11:17:19.088577Z",
+      "action": "set current_phase=self-audit"
+    },
+    {
+      "at": "2026-07-25T11:17:19.093701Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T11:17:19.099071Z",
+      "action": "spec+plan locked: self-audit (3 tasks)"
+    },
+    {
+      "at": "2026-07-25T11:17:24.652581Z",
+      "action": "set version=1.0.1.0"
+    },
+    {
+      "at": "2026-07-25T11:20:12.47574Z",
+      "action": "executed t-1 (techdebt run + triage: 605-\u003e100, 1 fix)"
+    },
+    {
+      "at": "2026-07-25T11:28:50.774975Z",
+      "action": "executed t-2 (secure run: 1 HIGH fixed, gosec/gitleaks/trivy triaged)"
+    },
+    {
+      "at": "2026-07-25T11:34:20.892422Z",
+      "action": "executed t-3 (quality run: 1 sec-correctness fix, 1 dead removed, rest triaged)"
+    },
+    {
+      "at": "2026-07-25T11:34:38.263008Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T11:34:38.26884Z",
+      "action": "phase self-audit executed (3/3 done)"
+    },
+    {
+      "at": "2026-07-25T11:42:36.018356Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T11:42:36.024123Z",
+      "action": "verified self-audit: pass (4/4, mutation 0.96)"
+    },
+    {
+      "at": "2026-07-25T11:43:26.77104Z",
+      "action": "completed self-audit"
+    },
+    {
+      "at": "2026-07-25T17:30:20.062079Z",
+      "action": "created prove-or-demote-board-sync"
+    },
+    {
+      "at": "2026-07-25T17:30:20.068551Z",
+      "action": "set version=1.0.2.0"
+    },
+    {
+      "at": "2026-07-25T17:31:01.310362Z",
+      "action": "set current_phase=prove-or-demote-board-sync"
+    },
+    {
+      "at": "2026-07-25T17:31:01.317634Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T17:31:01.323645Z",
+      "action": "spec+plan locked: prove-or-demote-board-sync (3 tasks)"
+    },
+    {
+      "at": "2026-07-25T17:42:18.284759Z",
+      "action": "executed t-1+t-2 (Jira e2e proven + 2 bugs fixed + cleanup)"
+    },
+    {
+      "at": "2026-07-25T17:43:26.174283Z",
+      "action": "executed t-3 (README/MEMORY board-sync claim corrected)"
+    },
+    {
+      "at": "2026-07-25T17:43:33.660931Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T17:43:33.668304Z",
+      "action": "phase prove-or-demote-board-sync executed (3/3 done)"
+    },
+    {
+      "at": "2026-07-25T17:52:38.409069Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T17:52:38.416359Z",
+      "action": "verified prove-or-demote-board-sync: pass (3/3, mutation 0.95)"
+    },
+    {
+      "at": "2026-07-25T17:53:13.037651Z",
+      "action": "completed prove-or-demote-board-sync"
+    },
+    {
+      "at": "2026-07-25T17:55:36.964316Z",
+      "action": "created readme-truth-pass"
+    },
+    {
+      "at": "2026-07-25T17:55:36.970824Z",
+      "action": "set version=1.0.3.0"
+    },
+    {
+      "at": "2026-07-25T17:56:08.450981Z",
+      "action": "set current_phase=readme-truth-pass"
+    },
+    {
+      "at": "2026-07-25T17:56:08.456885Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T17:56:08.46269Z",
+      "action": "spec+plan locked: readme-truth-pass (3 tasks)"
+    },
+    {
+      "at": "2026-07-25T18:00:12.040439Z",
+      "action": "executed t-1 (README audit + parity guard)"
+    },
+    {
+      "at": "2026-07-25T18:01:49.487371Z",
+      "action": "executed t-2 (v0.6/v0.7/v0.9 status -\u003e complete)"
+    },
+    {
+      "at": "2026-07-25T18:04:41.513836Z",
+      "action": "executed t-3 (arch links: 1 repointed, residual class annotated)"
+    },
+    {
+      "at": "2026-07-25T18:04:45.966532Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T18:04:45.997113Z",
+      "action": "phase readme-truth-pass executed (3/3 done)"
+    },
+    {
+      "at": "2026-07-25T18:05:31.421976Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T18:05:31.463759Z",
+      "action": "verified readme-truth-pass: pass (3/3, mutation unmeasurable)"
+    },
+    {
+      "at": "2026-07-25T18:06:42.25072Z",
+      "action": "completed readme-truth-pass"
     }
   ]
 }

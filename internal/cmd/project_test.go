@@ -240,6 +240,7 @@ func TestBoardDottedArmsRoundTrip(t *testing.T) {
 		"board.provider":       "youtrack",
 		"board.base_url":       "https://yt.example.com",
 		"board.auth_env":       "YOUTRACK_TOKEN",
+		"board.auth_user":      "me@example.com",
 		"board.project":        "PROJ",
 		"board.enabled":        "true",
 		"board.milestone_mode": "version",

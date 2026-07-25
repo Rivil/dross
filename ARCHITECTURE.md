@@ -19,6 +19,17 @@ Entries are maintained automatically: dross-ship merges each phase's landmarks
 into the matching feature entry (updating in place), and /dross-architecture can
 regenerate the whole document from a scan of the code and git history.
 
+> **On `dross architecture check` residuals.** The link checker resolves the
+> text *before* the `—` as a bare top-level Go symbol. Some anchors deliberately
+> use a **struct field** (`Deferred.Target`, `LanguageRun.Error`), a **method**
+> (`watch.State.Diff`), or a **descriptive label** for a behavior that spans
+> several symbols (`verify-gate auto-heal`, `ship PR-base resolution`, `Update
+> signature gate`, …). These report as `unresolved`/`ambiguous` even though their
+> `file:line` targets are accurate and point at the right code — the checker just
+> can't match non-bare-symbol syntax. This residual class is **intentional**;
+> what the check must still catch is a *new* break: an anchor whose file no longer
+> exists, or a bare symbol that genuinely moved (repoint those with `--fix`).
+
 <!-- entries below, alphabetical by feature -->
 
 ### Architecture comprehension
@@ -170,17 +181,19 @@ _introduced 10-interaction-contract · extended 11-retrofit-core-loop · extende
 
 ### Issue board sync
 
-Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue board — driven solely by a dedicated `[board]` config block, independent of `[remote]`, so a repo ships code to one host and tracks issues on another. Backends sit behind a `BoardClient` interface that `forge.NewBoard` dispatches by provider: the provider-aware forge `*Client` (forgejo/gitea/gitlab), a sibling `YouTrackClient` (REST CRUD, bearer permanent-token, readable-id `PROJ-7` addressing, `?fields` projection), a `JiraClient` (Jira Cloud REST v3, HTTP Basic email:token, string `PROJ-123` keys, ADF bodies, transition-driven state, milestones as project versions), or a `GitHubClient` (repo issues with integer milestones — forge-shaped — plus an isolated Projects v2 `addProjectV2ItemById` add-to-board on create when a board is configured). board.json links every artefact by the tracker's readable **string** id. YouTrack adds milestone entities per `[board].milestone_mode` (version bundle / agile board / epic), lifecycle→State mapping via the default map + `[board].state_map` (unmapped warns and skips), and backlog sync of unscaffolded slugs + someday ideas attached per mode (Fix versions / Epic subtask / project-based board). `dross doctor` validates a configured `[board]`; the inbox board source is gated on `[board].enabled`.
+Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue board — driven solely by a dedicated `[board]` config block, independent of `[remote]`, so a repo ships code to one host and tracks issues on another. Backends sit behind a `BoardClient` interface that `forge.NewBoard` dispatches by provider: the provider-aware forge `*Client` (forgejo/gitea/gitlab), a sibling `YouTrackClient` (REST CRUD, bearer permanent-token, readable-id `PROJ-7` addressing, `?fields` projection), a `JiraClient` (Jira Cloud REST v3, HTTP Basic email:token, string `PROJ-123` keys, ADF bodies, transition-driven state, milestones as project versions), or a `GitHubClient` (repo issues with integer milestones — forge-shaped — plus an isolated Projects v2 `addProjectV2ItemById` add-to-board on create when a board is configured). board.json links every artefact by the tracker's readable **string** id. YouTrack adds milestone entities per `[board].milestone_mode` (version bundle / agile board / epic), lifecycle→State mapping via the default map + `[board].state_map` (unmapped warns and skips), and backlog sync of unscaffolded slugs + someday ideas attached per mode (Fix versions / Epic subtask / project-based board). `dross doctor` validates a configured `[board]`; the inbox board source is gated on `[board].enabled`. The Jira path is **proven end-to-end against live Jira Cloud** (2026-07-25 v1.0 self-audit): the round-trip surfaced and fixed two bugs the httptest coverage had hidden — `board.auth_user` (required by `NewJira`) wasn't wired into `dross project set`, and `ListIssues` used Jira's removed `/rest/api/3/search` endpoint (HTTP 410), now migrated to `/search/jql`.
 
 - `forge.BoardClient` (interface) + `forge.NewBoard` (provider dispatch) — `internal/forge/forge.go:123`
 - `forge.YouTrackClient` + `NewYouTrack` — `internal/forge/youtrack.go:25`
 - `YouTrackClient.EnsureMilestoneEntity` / `SetState` — `internal/forge/youtrack.go:184`
 - `forge.JiraClient` + `NewJira` (REST v3, versions, transitions) — `internal/forge/jira.go:25`
+- `JiraClient.ListIssues` (current `/search/jql` endpoint; the legacy `/search` was removed) — `internal/forge/jira.go:176`
 - `forge.GitHubClient` + `NewGitHubProjects` (repo issues + Projects v2 attach) — `internal/forge/github.go:26`
 - `board.Board` (string readable-id link registry) — `internal/board/board.go:29`
 - `openBoard` (resolves client solely from `[board]`) / `syncBacklog` — `internal/cmd/issue.go:70`
+- `board.*` dotted config incl. `auth_user` — `internal/cmd/project.go:193`
 
-_a073ab7 · extended gitlab-ship-provider · 27e1a4f · extended youtrack-board-integration · 4bdea81_
+_a073ab7 · extended gitlab-ship-provider · 27e1a4f · extended youtrack-board-integration · extended prove-or-demote-board-sync · 50290f0_
 _extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2_
 
 ### Milestone branch model
@@ -207,15 +220,16 @@ _c8b346e_
 
 ### Mutation testing adapters
 
-Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Svelte, Gremlins for Go invoked per-package). Stryker is invoked as `npx @stryker-mutator/core` (not the deprecated bare `stryker`), with a `[mutation.stryker] workdir` monorepo knob that round-trips repo-relative paths.
+Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Svelte, Gremlins for Go invoked per-package). Stryker is invoked as `npx @stryker-mutator/core` (not the deprecated bare `stryker`), with a `[mutation.stryker] workdir` monorepo knob that round-trips repo-relative paths. In docker runtime mode the exec prefix is derived from `runtime.test_command` by `dockerPrefix`, whose leading binary must be **exactly** `docker` (a field check, not `HasPrefix`) so a committed `dockerevil …` can't promote an arbitrary PATH binary into the adapter's argv under clone-and-run.
 
 - `Adapter` — `internal/mutation/adapter.go:46`
 - `Report` — `internal/mutation/adapter.go:18`
 - `Gremlins.Run` — `internal/mutation/gremlins.go:82`
 - `Stryker.Run` — `internal/mutation/stryker.go:46`
 - `Stryker.runArgs` (npx invocation + workdir knob) — `internal/mutation/stryker.go:86`
+- `dockerPrefix` (exact-`docker` exec-prefix guard) — `internal/cmd/verify.go:221`
 
-_introduced c8b346e · extended 01c10f0 · extended context-hygiene · de8b076_
+_introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076_
 
 ### Phase lifecycle
 
@@ -244,6 +258,16 @@ Phase artefacts (plan.toml / spec.toml) are written atomically: saveTOML encodes
 - `Plan.Save` / `Spec.Save` — `internal/phase/phase.go`
 
 _introduced task-lifecycle-commands · 367c723_
+
+### README accuracy guard
+
+Keeps the README's command table from lying about the CLI: `newRoot` is extracted from `main` so a test can inspect the real assembled command tree, and a parity test asserts every `` `dross <cmd>` `` the README advertises is a real top-level command (the over-claim failure mode) plus that the status line isn't a stale `v0.x`. Under-claiming (an internal command the table omits) is allowed.
+
+- `newRoot` (testable command-tree assembly) — `cmd/dross/main.go:13`
+- `TestReadmeAdvertisesOnlyRealCommands` (over-claim guard) — `cmd/dross/main_test.go:20`
+- `TestReadmeStatusNotStale` (stale-version guard) — `cmd/dross/main_test.go:57`
+
+_introduced readme-truth-pass · 6fc4186_
 
 ### Repo onboarding
 
@@ -402,17 +426,18 @@ _introduced task-lifecycle-commands · extended task-reordering · db72f34_
 
 ### Tech-debt scan (dross techdebt)
 
-Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (word-boundary) plus size heuristics (oversized files, over-long lines) over git-tracked files, written to a prune-proof run dir with a store-level `last_run` that feeds the status action surface. Distinct from the dross-quality analyzer audit — markers are self-flagged debt, not analyzer findings. Surfaced as the `/dross-techdebt` thin skill (shim + prompt over `dross techdebt`), so all three status actions are runnable slash commands.
+Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (word-boundary) plus size heuristics (oversized files, over-long lines) over git-tracked files — `.dross/` bookkeeping is excluded on both the ls-files and tree-walk enumeration paths so generated planning artefacts don't drown code debt — written to a prune-proof run dir with a store-level `last_run` that feeds the status action surface. Distinct from the dross-quality analyzer audit — markers are self-flagged debt, not analyzer findings. Surfaced as the `/dross-techdebt` thin skill (shim + prompt over `dross techdebt`), so all three status actions are runnable slash commands.
 
 - `Scan` — `internal/techdebt/scan.go:53`
 - `NewRun` — `internal/techdebt/run.go:54`
 - `StatePath` — `internal/techdebt/state.go:16`
 - `Techdebt` (CLI) — `internal/cmd/techdebt.go:22`
+- `trackedFiles` (.dross-excluded scan set, both enumeration paths) — `internal/cmd/techdebt.go:68`
 - `findings.StampLastRun` — `internal/findings/state.go:121`
 - `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:347`
 - `/dross-techdebt` thin skill — `assets/prompts/techdebt.md`
 
-_introduced status-action-surfaces-v2 · extended task-reordering · db72f34_
+_introduced status-action-surfaces-v2 · extended task-reordering · extended self-audit · 01e2adb_
 
 ### Telemetry & stats
 

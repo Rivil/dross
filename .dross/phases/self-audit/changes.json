@@ -1,0 +1,56 @@
+{
+  "phase": "self-audit",
+  "pr": 61,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/techdebt.go",
+        "internal/cmd/techdebt_test.go",
+        ".dross/phases/self-audit/triage-techdebt.md"
+      ],
+      "commit": "01e2adb",
+      "completed_at": "2026-07-25T11:20:12.464629Z",
+      "landmarks": [
+        {
+          "feature": "tech-debt scan",
+          "symbol": "trackedFiles",
+          "loc": "internal/cmd/techdebt.go:69",
+          "what": ".dross excluded from scan set on both enumeration paths — planning artefacts no longer drown code debt"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "go.mod",
+        "go.sum"
+      ],
+      "commit": "e7bf8d7",
+      "completed_at": "2026-07-25T11:28:50.763296Z",
+      "landmarks": [
+        {
+          "feature": "security audit",
+          "symbol": "go.mod",
+          "loc": "go.mod:1",
+          "what": "full-coverage secure sweep run on dross itself; HIGH x/crypto CVE fixed by dep bump, all gosec path/subprocess findings refuted as local-CLI non-exploitable"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_test.go",
+        "internal/milestone/milestone.go"
+      ],
+      "commit": "94f46d7",
+      "completed_at": "2026-07-25T11:34:20.881474Z",
+      "landmarks": [
+        {
+          "feature": "code-quality audit",
+          "symbol": "dockerPrefix",
+          "loc": "internal/cmd/verify.go:221",
+          "what": "quality run on dross; exact-docker exec-prefix fix + dead SummaryDir removed, complexity/dup/deadcode triaged"
+        }
+      ]
+    }
+  }
+}

@@ -59,17 +59,21 @@ func Techdebt() *cobra.Command {
 
 // trackedFiles returns the absolute paths of the repo's tracked files via
 // `git ls-files`, honoring the locked "scan tracked files" decision (untracked,
-// ignored, and vendored files are excluded). When repoDir is not a git repo (so
-// ls-files fails), it falls back to a tree walk that skips .git and .dross, so
-// the scan still runs — the run id will carry the "nogit" sha.
+// ignored, and vendored files are excluded). `.dross/` bookkeeping is excluded
+// on both paths — planning artefacts (milestone prose, plan.toml strings,
+// tests.json dumps) are generated workflow state, and scanning them drowned
+// real code debt 5:1 on this repo's own v1.0 self-audit. When repoDir is not a
+// git repo (so ls-files fails), it falls back to a tree walk that skips .git
+// and .dross, so the scan still runs — the run id will carry the "nogit" sha.
 func trackedFiles(repoDir string) ([]string, error) {
 	out, err := exec.Command("git", "-C", repoDir, "ls-files", "-z").Output()
 	if err == nil {
 		var paths []string
 		for _, rel := range strings.Split(strings.TrimRight(string(out), "\x00"), "\x00") {
-			if rel != "" {
-				paths = append(paths, filepath.Join(repoDir, rel))
+			if rel == "" || rel == ".dross" || strings.HasPrefix(rel, ".dross/") {
+				continue
 			}
+			paths = append(paths, filepath.Join(repoDir, rel))
 		}
 		return paths, nil
 	}

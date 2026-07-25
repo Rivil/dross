@@ -42,11 +42,6 @@ func FilePath(root, version string) string {
 	return filepath.Join(root, "milestones", version+".toml")
 }
 
-// SummaryDir returns the prose retrospective dir.
-func SummaryDir(root, version string) string {
-	return filepath.Join(root, "milestones", version)
-}
-
 func Load(path string) (*Milestone, error) {
 	var m Milestone
 	if _, err := toml.DecodeFile(path, &m); err != nil {
