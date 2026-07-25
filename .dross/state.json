@@ -1,15 +1,9 @@
 {
   "version": "1.0.3.0",
   "current_milestone": "v1.0",
-  "current_phase": "readme-truth-pass",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-25T18:05:31.463759Z",
-  "last_action": "verified readme-truth-pass: pass (3/3, mutation unmeasurable)",
+  "last_activity": "2026-07-25T18:06:42.25072Z",
+  "last_action": "completed readme-truth-pass",
   "history": [
-    {
-      "at": "2026-07-25T09:13:29.427563Z",
-      "action": "set version=0.10.9.0"
-    },
     {
       "at": "2026-07-25T09:16:34.68311Z",
       "action": "executed t-1 (offload audit doc)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-25T18:05:31.463759Z",
       "action": "verified readme-truth-pass: pass (3/3, mutation unmeasurable)"
+    },
+    {
+      "at": "2026-07-25T18:06:42.25072Z",
+      "action": "completed readme-truth-pass"
     }
   ]
 }
