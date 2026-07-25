@@ -1,21 +1,11 @@
 {
   "version": "0.10.3.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-25T05:17:22.338405Z",
-  "last_action": "resumed — handoff pruned to 2 loops; next: scaffold the next v0.10 phase",
+  "current_phase": "telemetry-bucket-graduation",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-25T05:25:58.402823Z",
+  "last_action": "spec locked: telemetry-bucket-graduation",
   "history": [
-    {
-      "at": "2026-07-23T13:09:44.178802Z",
-      "action": "created task-reordering"
-    },
-    {
-      "at": "2026-07-23T13:19:05.637417Z",
-      "action": "set current_phase=task-reordering"
-    },
-    {
-      "at": "2026-07-23T13:19:05.643862Z",
-      "action": "spec locked: task-reordering"
-    },
     {
       "at": "2026-07-23T13:30:13.842384Z",
       "action": "set current_phase_status=planned"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-25T05:17:22.338405Z",
       "action": "resumed — handoff pruned to 2 loops; next: scaffold the next v0.10 phase"
+    },
+    {
+      "at": "2026-07-25T05:18:32.10597Z",
+      "action": "created telemetry-bucket-graduation"
+    },
+    {
+      "at": "2026-07-25T05:25:58.395326Z",
+      "action": "set current_phase=telemetry-bucket-graduation"
+    },
+    {
+      "at": "2026-07-25T05:25:58.402823Z",
+      "action": "spec locked: telemetry-bucket-graduation"
     }
   ]
 }
