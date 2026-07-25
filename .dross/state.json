@@ -2,22 +2,10 @@
   "version": "0.10.3.0",
   "current_milestone": "v0.10",
   "current_phase": "telemetry-bucket-graduation",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-25T05:25:58.402823Z",
-  "last_action": "spec locked: telemetry-bucket-graduation",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-25T05:52:51.546163Z",
+  "last_action": "plan reviewed: telemetry-bucket-graduation (0 blocking, 6 flags; 5 folded in)",
   "history": [
-    {
-      "at": "2026-07-23T13:30:13.842384Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-23T13:30:13.84877Z",
-      "action": "plan locked: task-reordering (5 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-23T13:32:37.759108Z",
-      "action": "plan reviewed: task-reordering (0 blocking, 2 flags)"
-    },
     {
       "at": "2026-07-23T13:34:17.377835Z",
       "action": "set version=0.10.2.0"
@@ -205,6 +193,18 @@
     {
       "at": "2026-07-25T05:25:58.402823Z",
       "action": "spec locked: telemetry-bucket-graduation"
+    },
+    {
+      "at": "2026-07-25T05:41:29.523996Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T05:41:29.532134Z",
+      "action": "plan locked: telemetry-bucket-graduation (5 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-25T05:52:51.546163Z",
+      "action": "plan reviewed: telemetry-bucket-graduation (0 blocking, 6 flags; 5 folded in)"
     }
   ]
 }

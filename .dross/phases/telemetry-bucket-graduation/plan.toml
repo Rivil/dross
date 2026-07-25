@@ -1,0 +1,147 @@
+task_seq = 0
+
+[phase]
+  id = "telemetry-bucket-graduation"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Graduate identifier-only CLI shapes into buckets"
+  files = [
+    "internal/telemetry/telemetry.go",
+    "internal/telemetry/telemetry_test.go",
+    "README.md",
+  ]
+  description = """
+Add `arg_count`, `unknown_flag` and `landmark_parse` cases to the CLI-surface
+section of the ClassifyError switch. Extend the existing `unknown_subcommand`
+case to also match cobra's `unknown command` wording. Add exactly those three
+new classes to `detailBuckets`, and refresh both the package-doc allowlist
+prose and the `ErrorDetail` struct-field comment (telemetry.go:68, which still
+says detail is stored ONLY when ErrorClass == "other" — already false today).
+In README.md, add the three buckets to the enumerated list and correct the
+detail-allowlist sentence that claims `other` is the one exception.
+"""
+  covers = ["c-1", "c-2"]
+  test_contract = [
+    "if arg_count matches only the exact-arity wording, the TestClassifyError rows for \"requires at least 1 arg(s), only received 0\" and \"accepts between 1 and 2 arg(s), received 3\" fall back to \"other\" and fail",
+    "if the arg_count case is dropped, the rows for the live log shapes \"accepts 3 arg(s), received 2\" and \"accepts 1 arg(s), received 0\" fail",
+    "if unknown_flag misses cobra's shorthand wording, the rows for \"unknown flag: --json\", \"unknown shorthand flag: 'x' in -x\" and \"flag needs an argument: --commit\" fail",
+    "if a separate `unknown_command` bucket is introduced instead of reusing the existing one, the row asserting `unknown command \"quick\" for \"dross\"` -> unknown_subcommand fails (bucket_granularity is locked to reuse), and the shipped row `unknown subcommand \"add\" for \"dross phase\"` must still pass",
+    "if the landmark_parse case is placed below the unknown-field group, the row asserting `unknown landmark key \"loco\" (want feature/symbol/loc/what)` -> landmark_parse fails because unknown_field swallows it",
+    "if landmark_parse misses a malformed-pair shape, the rows for `landmark pair \"what=fixed the thing\" has no '=' (want key=value)` and `landmark pair \"\" has an empty key` fail",
+    "if detailBuckets loses or gains an entry, TestCarriesDetail fails: it asserts set equality against {other, unknown_subcommand, unknown_field, arg_count, unknown_flag, landmark_parse}, so a graduated shape silently losing its err_detail fails too",
+    "if graduation blinds the shape it graduated, the tests asserting Detail(errors.New(\"unknown flag: --json\")) still contains \"--json\" and Detail on the landmark error still contains the rejected pair fail",
+    "if the new cases swallow shipped assignments, the pre-existing rows asserting \"--pr is required\" stays cli_args and \"unknown field: nonsense\" stays unknown_field fail",
+    "if README.md's detail-allowlist sentence still claims `other` is the one exception that carries a redacted message, the doc assertion fails — the claim is user-facing and false once arg_count, unknown_flag and landmark_parse carry detail",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Add detail-free merge, config and env buckets"
+  files = [
+    "internal/telemetry/telemetry.go",
+    "internal/telemetry/telemetry_test.go",
+    "internal/cmd/telemetry_test.go",
+    "README.md",
+  ]
+  description = """
+Extend the existing `merge_pending` case with the ship/complete refusal shapes.
+Add a single `config_io` bucket covering absent or unreadable project.toml and
+state.json plus TOML decode failures, placed AFTER `state_io`. Add `env_token`
+in the CLI-surface section, below the `board:` case. None of the three is added
+to detailBuckets. Add `config_io` and `env_token` to README.md's enumerated
+bucket list.
+"""
+  covers = ["c-3", "c-4", "c-5"]
+  test_contract = [
+    "if merge_pending matches only the \"cannot confirm\" substring, the three other rows fail independently: \"PR #55 for 03-x is not merged upstream — refusing to complete\", \"origin/main carries no `completed 54-…` record — has the PR merged upstream?\", and \"origin/milestone/v1.15 is not merged into origin/main yet\"",
+    "if the missing-completed-record shape is dropped, the row asserting `origin/main carries no completed <slug> record` -> merge_pending fails; no current code path emits it, so it is reachable only through read-time reclassify of history",
+    "if config_io is placed above state_io or matches a bare \"state.json\", the shipped row \"save state: write .dross/state.json: permission denied\" -> state_io is stolen and fails, as do the shipped \"unmarshal state: bad json\" and \"marshal state: cycle\" rows",
+    "if the config_io case is dropped, the rows for `decode ~/proj/.dross/project.toml: toml: line 47 (last key…` and `read ~/proj/.dross/state.json: open …: no such file or directory` fall back to \"other\" and fail",
+    "if config_io's `.toml` matching is hoisted above the phase/plan/spec section, four ordering-regression rows fail: \"load milestone .dross/milestones/v0.1.toml: open: no such file\" stays no_milestone, \"decode plan plan.toml: bad toml\" stays no_plan, \"verify.toml not found at .dross/phases/01/verify.toml\" stays verify_state, \"read spec spec.toml: open: no such file\" stays no_spec",
+    "if env_token is inserted above the `board:` case, the shipped row \"board: create issue: $JIRA_API_TOKEN is not set\" -> board is stolen and fails",
+    "if env_token over-matches, the rows asserting \"--pr is required\", \"KEY must be non-empty\" and \"comment body is empty\" still classify as cli_args fail; if it under-matches, the row for \"$JIRA_API_TOKEN is not set; run `dross env set JIRA_API_TOKEN` in your shell\" -> env_token fails",
+    "if merge_pending, config_io or env_token is ever added to detailBuckets, TestCarriesDetail fails (locked detail_allowlist)",
+    "if the CarriesDetail map stops gating the write, the internal/cmd/telemetry_test.go assertions fail: RecordCLIEvent given a merge_pending, config_io or env_token error must append an event whose err_detail is the empty string, so no phase id, config path or token name reaches the log",
+    "if README.md's enumerated bucket list omits config_io or env_token, the doc assertion fails — the list is presented as complete",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Extract ClassifyMessage and add Reclassify"
+  files = ["internal/telemetry/telemetry.go", "internal/telemetry/telemetry_test.go"]
+  description = """
+Extract the ClassifyError switch body into an exported ClassifyMessage(string),
+with ClassifyError delegating to it. Add Reclassify(Event) returning the
+effective class: the stored class, unless it is "other" AND ErrorDetail is
+non-empty, in which case ClassifyMessage(ErrorDetail).
+"""
+  covers = ["c-6"]
+  test_contract = [
+    "if the delegation drops a case, the table test asserting ClassifyMessage(row.msg) == ClassifyError(errors.New(row.msg)) for every TestClassifyError row fails on that row",
+    "if Reclassify gates on the presence of a detail instead of on the stored class, the row asserting Reclassify({ErrorClass:\"dirty_tree\", ErrorDetail:\"unknown flag: --json\"}) == \"dirty_tree\" fails",
+    "if Reclassify stops re-deriving, the row asserting Reclassify({ErrorClass:\"other\", ErrorDetail:\"unknown flag: --json\"}) == \"unknown_flag\" fails",
+    "if Reclassify re-derives without a detail, the row asserting Reclassify({ErrorClass:\"other\"}) == \"other\" fails, as does Reclassify({}) == \"\"",
+    "if the empty string falls through to \"other\" and manufactures a phantom bucket, the row asserting ClassifyMessage(\"\") == \"\" fails",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Reclassify other at read time, print tail"
+  files = ["internal/cmd/stats.go", "internal/cmd/stats_test.go"]
+  description = """
+renderErrorBuckets counts telemetry.Reclassify(e) instead of e.ErrorClass, then
+prints an indented block of the top 5 surviving `other` detail strings with
+counts under the errors table, omitted entirely when that set is empty. The log
+is never rewritten. Each tail line collapses embedded newlines and tabs to
+single spaces, then truncates the detail to 100 runes with an ellipsis, so one
+line of output means one shape.
+"""
+  covers = ["c-6"]
+  depends_on = ["t-3"]
+  test_contract = [
+    "if the counter reverts to e.ErrorClass, the test seeding {err:\"other\", err_detail:\"unknown flag: --json\"} fails on both counts — it renders other=1 / unknown_flag=0 where the assertion wants no \"other\" row and the event under unknown_flag",
+    "if a fall-through counts both the stored and the re-derived class, the test asserting an `other` event whose detail still classifies as \"other\" is counted exactly once fails on the doubled total",
+    "if the top-N cap changes to 4 or 6, the test seeding 6 residual shapes at counts 6/5/4/3/2/1 fails: it asserts exactly the 5 highest print in descending count order, each with its count, and that the count-1 string is absent",
+    "if tail ordering depends on Go map iteration, the test seeding two residual shapes with equal counts flakes; it asserts a deterministic shape-string order",
+    "if the tail heading is unconditional, or prints \"(none)\" under it, the test asserting that zero surviving `other` events yield neither the heading nor any indented tail line fails",
+    "if reclassification stops being a no-op for detail-free events, the shipped TestStatsCover_renderErrorBucketsOrder fails — its events carry only ErrorClass and no err_detail",
+    "if stats show rewrites the log, the test reading telemetry.jsonl before and after `dross stats show` and asserting the bytes are identical fails (locked: the log is never rewritten)",
+    "if the 100-rune truncation is dropped, the test seeding a 240-rune err_detail fails — it asserts the tail line is one line, capped at 100 runes plus an ellipsis",
+    "if embedded newlines are not collapsed before rendering, the test seeding the live multi-line shape `unknown subcommand \"get\" for \"dross state\"\\n\\nDid you mean this?\\n\\tset` fails — telemetry.Detail preserves newlines, so an uncollapsed detail emits four lines and breaks the indented block",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Check in err_detail corpus, enforce 15% ceiling"
+  files = [
+    "internal/telemetry/testdata/error_corpus.jsonl",
+    "internal/telemetry/corpus_test.go",
+  ]
+  description = """
+New fixture, one JSON object per line: {"detail":"<real redacted err_detail>",
+"want":"<bucket>"}, curated from the distinct shapes in the live telemetry log
+with home paths already collapsed to "~". New table test drives ClassifyMessage
+over every line. Every live shape classifies into a named bucket once t-1 and
+t-2 land, so the required want:"other" line is a deliberate synthetic sentinel,
+not a curation leftover — do not delete it.
+"""
+  covers = ["c-7"]
+  depends_on = ["t-1", "t-2", "t-3"]
+  test_contract = [
+    "if a shape is re-bucketed — e.g. `landmark pair …` moved from landmark_parse to invalid — the corpus test fails naming the line number and both buckets, even though the overall `other` ratio is unchanged",
+    "if any one of t-1's or t-2's cases is reverted, the assertion that the share of lines classifying as \"other\" is < 0.15 fails, printing the actual ratio and the offending details",
+    "if the corpus is emptied or truncated, the floor assertions fail loudly instead of passing vacuously at 0/0: >= 20 lines, each with a non-empty detail and a non-empty want",
+    "if the fixture is tuned to zero unclassified shapes, the assertion that at least one line has want == \"other\" fails — without that row the ratio gate is unfalsifiable",
+    "if a malformed JSON line or a line duplicating an existing shape is silently skipped, the test fails instead — a shrinking denominator would let the 15% gate pass by attrition",
+  ]
+  status = "pending"
