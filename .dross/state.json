@@ -1,61 +1,9 @@
 {
-  "version": "1.0.0.0",
+  "version": "1.0.1.0",
   "current_milestone": "v1.0",
-  "last_activity": "2026-07-25T11:15:32.726862Z",
-  "last_action": "scoped milestone v1.0: 5 criteria, 3 phases",
+  "last_activity": "2026-07-25T11:43:26.77104Z",
+  "last_action": "completed self-audit",
   "history": [
-    {
-      "at": "2026-07-25T08:25:10.786554Z",
-      "action": "created verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:26:08.479435Z",
-      "action": "set current_phase=verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:26:08.486751Z",
-      "action": "spec locked: verify-auto-finalize"
-    },
-    {
-      "at": "2026-07-25T08:27:37.136497Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-25T08:27:37.14186Z",
-      "action": "plan locked: verify-auto-finalize (4 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-25T08:31:05.96599Z",
-      "action": "plan reviewed: verify-auto-finalize (1 blocking resolved, 3 flags)"
-    },
-    {
-      "at": "2026-07-25T08:31:58.645087Z",
-      "action": "set version=0.10.7.0"
-    },
-    {
-      "at": "2026-07-25T08:35:09.193163Z",
-      "action": "executed t-1 (Idempotent finalize core with finalized marker)"
-    },
-    {
-      "at": "2026-07-25T08:37:13.351055Z",
-      "action": "executed t-2 (Ship verify-gate auto-heals unfinalized verdicts)"
-    },
-    {
-      "at": "2026-07-25T08:38:56.387715Z",
-      "action": "executed t-3 (Phase complete auto-heals unfinalized verdicts)"
-    },
-    {
-      "at": "2026-07-25T08:41:09.947781Z",
-      "action": "executed t-4 (Stats counts unresolved pendings only)"
-    },
-    {
-      "at": "2026-07-25T08:41:16.061589Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-25T08:41:16.068226Z",
-      "action": "phase verify-auto-finalize executed (4/4 done)"
-    },
     {
       "at": "2026-07-25T08:49:46.483946Z",
       "action": "set current_phase_status=verified"
@@ -203,6 +151,58 @@
     {
       "at": "2026-07-25T11:15:32.726862Z",
       "action": "scoped milestone v1.0: 5 criteria, 3 phases"
+    },
+    {
+      "at": "2026-07-25T11:16:39.419703Z",
+      "action": "created self-audit"
+    },
+    {
+      "at": "2026-07-25T11:17:19.088577Z",
+      "action": "set current_phase=self-audit"
+    },
+    {
+      "at": "2026-07-25T11:17:19.093701Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T11:17:19.099071Z",
+      "action": "spec+plan locked: self-audit (3 tasks)"
+    },
+    {
+      "at": "2026-07-25T11:17:24.652581Z",
+      "action": "set version=1.0.1.0"
+    },
+    {
+      "at": "2026-07-25T11:20:12.47574Z",
+      "action": "executed t-1 (techdebt run + triage: 605-\u003e100, 1 fix)"
+    },
+    {
+      "at": "2026-07-25T11:28:50.774975Z",
+      "action": "executed t-2 (secure run: 1 HIGH fixed, gosec/gitleaks/trivy triaged)"
+    },
+    {
+      "at": "2026-07-25T11:34:20.892422Z",
+      "action": "executed t-3 (quality run: 1 sec-correctness fix, 1 dead removed, rest triaged)"
+    },
+    {
+      "at": "2026-07-25T11:34:38.263008Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T11:34:38.26884Z",
+      "action": "phase self-audit executed (3/3 done)"
+    },
+    {
+      "at": "2026-07-25T11:42:36.018356Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T11:42:36.024123Z",
+      "action": "verified self-audit: pass (4/4, mutation 0.96)"
+    },
+    {
+      "at": "2026-07-25T11:43:26.77104Z",
+      "action": "completed self-audit"
     }
   ]
 }

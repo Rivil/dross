@@ -1,0 +1,36 @@
+task_seq = 0
+
+[phase]
+  id = "self-audit"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Run dross techdebt, triage top findings"
+  files = [".dross/techdebt"]
+  description = "Run the deterministic scan (dross techdebt), read the newest run report,\ntriage every top finding: fix small ones here, accept-with-reason the rest.\nFix commits ride separately under c-4.\n"
+  covers = ["c-1"]
+  test_contract = ["if the scan didn't run, dross status still shows 'never run' for tech-debt (observational gate)", "if a top finding is left undispositioned, the phase's triage record in the run report/notes lacks its id — verify checks the disposition list against the report"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Run /dross-secure, fix criticals, accept rest"
+  files = [".dross/secure"]
+  description = "Drive the dross-secure skill (real scanners + refute panel) against the repo.\nFix every surviving BLOCKING/critical here (own commits, tests where testable);\nrecord accept-with-reason for the rest in the findings store.\n"
+  covers = ["c-2", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if the audit didn't run, dross status still shows 'never run' for security (observational gate)", "if a critical is left unfixed and unaccepted, the findings store shows a critical with neither resolved nor accepted status — verify checks the store"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 3
+  title = "Run /dross-quality, fix criticals, accept rest"
+  files = [".dross/quality"]
+  description = "Drive the dross-quality skill (analyzers + refute panel) against the repo.\nSame disposition contract as t-2: criticals fixed here, rest accepted with\nreasons in the findings store.\n"
+  covers = ["c-3", "c-4"]
+  depends_on = ["t-2"]
+  test_contract = ["if the audit didn't run, dross status still shows 'never run' for quality (observational gate)", "if a critical is left unfixed and unaccepted, the findings store shows a critical with neither resolved nor accepted status — verify checks the store"]
+  status = "done"

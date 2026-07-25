@@ -207,15 +207,16 @@ _c8b346e_
 
 ### Mutation testing adapters
 
-Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Svelte, Gremlins for Go invoked per-package). Stryker is invoked as `npx @stryker-mutator/core` (not the deprecated bare `stryker`), with a `[mutation.stryker] workdir` monorepo knob that round-trips repo-relative paths.
+Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Svelte, Gremlins for Go invoked per-package). Stryker is invoked as `npx @stryker-mutator/core` (not the deprecated bare `stryker`), with a `[mutation.stryker] workdir` monorepo knob that round-trips repo-relative paths. In docker runtime mode the exec prefix is derived from `runtime.test_command` by `dockerPrefix`, whose leading binary must be **exactly** `docker` (a field check, not `HasPrefix`) so a committed `dockerevil …` can't promote an arbitrary PATH binary into the adapter's argv under clone-and-run.
 
 - `Adapter` — `internal/mutation/adapter.go:46`
 - `Report` — `internal/mutation/adapter.go:18`
 - `Gremlins.Run` — `internal/mutation/gremlins.go:82`
 - `Stryker.Run` — `internal/mutation/stryker.go:46`
 - `Stryker.runArgs` (npx invocation + workdir knob) — `internal/mutation/stryker.go:86`
+- `dockerPrefix` (exact-`docker` exec-prefix guard) — `internal/cmd/verify.go:221`
 
-_introduced c8b346e · extended 01c10f0 · extended context-hygiene · de8b076_
+_introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076_
 
 ### Phase lifecycle
 
@@ -402,17 +403,18 @@ _introduced task-lifecycle-commands · extended task-reordering · db72f34_
 
 ### Tech-debt scan (dross techdebt)
 
-Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (word-boundary) plus size heuristics (oversized files, over-long lines) over git-tracked files, written to a prune-proof run dir with a store-level `last_run` that feeds the status action surface. Distinct from the dross-quality analyzer audit — markers are self-flagged debt, not analyzer findings. Surfaced as the `/dross-techdebt` thin skill (shim + prompt over `dross techdebt`), so all three status actions are runnable slash commands.
+Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (word-boundary) plus size heuristics (oversized files, over-long lines) over git-tracked files — `.dross/` bookkeeping is excluded on both the ls-files and tree-walk enumeration paths so generated planning artefacts don't drown code debt — written to a prune-proof run dir with a store-level `last_run` that feeds the status action surface. Distinct from the dross-quality analyzer audit — markers are self-flagged debt, not analyzer findings. Surfaced as the `/dross-techdebt` thin skill (shim + prompt over `dross techdebt`), so all three status actions are runnable slash commands.
 
 - `Scan` — `internal/techdebt/scan.go:53`
 - `NewRun` — `internal/techdebt/run.go:54`
 - `StatePath` — `internal/techdebt/state.go:16`
 - `Techdebt` (CLI) — `internal/cmd/techdebt.go:22`
+- `trackedFiles` (.dross-excluded scan set, both enumeration paths) — `internal/cmd/techdebt.go:69`
 - `findings.StampLastRun` — `internal/findings/state.go:121`
 - `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:347`
 - `/dross-techdebt` thin skill — `assets/prompts/techdebt.md`
 
-_introduced status-action-surfaces-v2 · extended task-reordering · db72f34_
+_introduced status-action-surfaces-v2 · extended task-reordering · extended self-audit · 01e2adb_
 
 ### Telemetry & stats
 

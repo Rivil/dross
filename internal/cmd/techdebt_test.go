@@ -103,3 +103,34 @@ func gitRun(t *testing.T, dir string, args ...string) {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
+
+// TestTrackedFilesExcludesDrossDir pins the ls-files path's .dross
+// exclusion (v1.0 self-audit): planning artefacts are generated workflow
+// state and must not enter the tech-debt scan — on this repo they
+// outnumbered real code findings 5:1 before the filter.
+func TestTrackedFilesExcludesDrossDir(t *testing.T) {
+	dir := t.TempDir()
+	mustGit(t, dir, "init", "-q", "-b", "main")
+	mustWrite(t, filepath.Join(dir, "code.go"), "package x\n")
+	mustWrite(t, filepath.Join(dir, ".dross/state.json"), "{}\n")
+	mustWrite(t, filepath.Join(dir, ".dross/phases/p/plan.toml"), "x\n")
+	mustGit(t, dir, "add", "-f", ".")
+	mustGit(t, dir, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "seed")
+
+	paths, err := trackedFiles(dir)
+	if err != nil {
+		t.Fatalf("trackedFiles: %v", err)
+	}
+	sawCode := false
+	for _, p := range paths {
+		if strings.Contains(p, ".dross") {
+			t.Errorf(".dross path leaked into the scan set: %s", p)
+		}
+		if strings.HasSuffix(p, "code.go") {
+			sawCode = true
+		}
+	}
+	if !sawCode {
+		t.Error("tracked code file missing from scan set")
+	}
+}
