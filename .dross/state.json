@@ -2,22 +2,10 @@
   "version": "0.10.7.0",
   "current_milestone": "v0.10",
   "current_phase": "telemetry-taxonomy-overhaul",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-25T08:54:58.509059Z",
-  "last_action": "spec locked: telemetry-taxonomy-overhaul",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-25T08:58:50.382334Z",
+  "last_action": "plan reviewed: telemetry-taxonomy-overhaul (0 blocking, 3 flags folded in)",
   "history": [
-    {
-      "at": "2026-07-24T08:03:41.445998Z",
-      "action": "set current_phase=landmark-comma-fix"
-    },
-    {
-      "at": "2026-07-24T08:03:41.453553Z",
-      "action": "spec locked: landmark-comma-fix"
-    },
-    {
-      "at": "2026-07-24T08:32:27.065608Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-07-24T08:32:27.072488Z",
       "action": "plan locked: landmark-comma-fix (2 tasks across 2 waves)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-07-25T08:54:58.509059Z",
       "action": "spec locked: telemetry-taxonomy-overhaul"
+    },
+    {
+      "at": "2026-07-25T08:55:38.341592Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T08:55:38.347948Z",
+      "action": "plan locked: telemetry-taxonomy-overhaul (4 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-25T08:58:50.382334Z",
+      "action": "plan reviewed: telemetry-taxonomy-overhaul (0 blocking, 3 flags folded in)"
     }
   ]
 }
