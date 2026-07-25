@@ -160,6 +160,14 @@ func classifyCases() []classifyCase {
 		{errors.New("git push failed"), "git"},
 		{errors.New("http 500"), "network"},
 
+		// generic-tier precedence: within the safety net the more
+		// diagnostic bucket wins — permission > git > network >
+		// invalid > missing (pinned by the taxonomy-overhaul audit)
+		{errors.New("permission denied: git push to origin rejected"), "permission"},
+		{errors.New("git push origin failed: http 502 bad gateway"), "git"},
+		{errors.New("github api: http 404 — pr not found"), "network"},
+		{errors.New("invalid milestone version — not found in milestones dir"), "invalid"},
+
 		// phase / plan / spec state
 		{errors.New("no phase id given and state has no current_phase"), "no_phase"},
 		{errors.New("PhaseID is required"), "no_phase"},

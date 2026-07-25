@@ -380,13 +380,18 @@ var classRules = []classRule{
 	// (locked: detail_allowlist).
 	{"config_io", [][]string{{"project.toml"}, {"state.json"}, {"toml:"}}},
 
-	// Generic buckets — kept for safety-net coverage.
+	// Generic buckets — kept for safety-net coverage. Within the tier the
+	// more diagnostic bucket wins: already_exists (near-exact phrase) and
+	// permission first, then the transport/tool buckets (git, network), and
+	// only then the vague invalid/missing pair — an "http 404: pr not found"
+	// is a network failure that happens to mention absence, not a missing
+	// file, so network must see it before "not found" does.
 	{"already_exists", [][]string{{"already exists"}}},
-	{"invalid", [][]string{{"validate"}, {"invalid"}}},
-	{"missing", [][]string{{"not found"}, {"missing"}}},
 	{"permission", [][]string{{"permission"}, {"denied"}}},
 	{"git", [][]string{{"git "}}},
 	{"network", [][]string{{"http"}, {"network"}}},
+	{"invalid", [][]string{{"validate"}, {"invalid"}}},
+	{"missing", [][]string{{"not found"}, {"missing"}}},
 }
 
 // detailBuckets are the error classes that additionally store a redacted
