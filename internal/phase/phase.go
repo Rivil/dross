@@ -259,9 +259,17 @@ type Deferred struct {
 }
 
 // Plan is the task graph for a phase.
+//
+// TaskSeq is a per-plan high-water mark: the highest task-id ordinal ever
+// assigned in this plan. It is written first so it serialises as a top-level
+// key ahead of the [phase] / [[task]] tables. A zero value means "unset" — for
+// pre-existing plans NextTaskID backfills it from the current maximum id. An id
+// freed by a remove is never handed out again because the counter only ever
+// advances (see NextTaskID / AddTask).
 type Plan struct {
-	Phase PlanPhase `toml:"phase"`
-	Task  []Task    `toml:"task"` // ordered
+	TaskSeq int       `toml:"task_seq,omitempty"`
+	Phase   PlanPhase `toml:"phase"`
+	Task    []Task    `toml:"task"` // ordered
 }
 
 type PlanPhase struct {
@@ -289,7 +297,8 @@ const (
 )
 
 // NextRunnable returns the next task with status==pending whose
-// dependencies are all done, picked by lowest wave then by id.
+// dependencies are all done, picked by lowest wave then by array position in
+// the plan — so `dross task move` reorders what runs next within a wave.
 // Returns nil if nothing is runnable (all done, all blocked, or empty plan).
 func (p *Plan) NextRunnable() *Task {
 	doneSet := map[string]bool{}
@@ -314,9 +323,8 @@ func (p *Plan) NextRunnable() *Task {
 		if blocked {
 			continue
 		}
-		if best == nil ||
-			t.Wave < best.Wave ||
-			(t.Wave == best.Wave && t.ID < best.ID) {
+		// Wave dominates; within a wave the first in document order wins.
+		if best == nil || t.Wave < best.Wave {
 			best = t
 		}
 	}
@@ -382,16 +390,30 @@ func LoadPlan(path string) (*Plan, error) {
 
 func (p *Plan) Save(path string) error { return saveTOML(path, p) }
 
+// saveTOML writes v as TOML to path atomically: it encodes into a temp sibling
+// (<path>.tmp) and os.Rename's it over the target only after a fully successful
+// write. A mid-write failure (encode error, or a temp path that can't be
+// created) therefore leaves any existing file byte-identical rather than
+// truncated — the crash-safety guarantee the truncate-in-place os.Create lacked.
 func saveTOML(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	f, err := os.Create(path)
+	tmp := path + ".tmp"
+	f, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 	enc := toml.NewEncoder(f)
 	enc.Indent = "  "
-	return enc.Encode(v)
+	if err := enc.Encode(v); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
 }

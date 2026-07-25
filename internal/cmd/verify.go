@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/verify"
 )
 
@@ -117,28 +119,58 @@ func verifyFinalize() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			testsPath, verifyPath := verify.FilePaths(root, phaseID)
-			v, err := verify.LoadVerify(verifyPath)
+			recorded, verdict, err := finalizeVerify(root, phaseID)
 			if err != nil {
-				return fmt.Errorf("read verify.toml: %w", err)
+				return err
 			}
-			if v == nil {
-				return fmt.Errorf("verify.toml not found at %s — run `dross verify %s` first", verifyPath, phaseID)
+			if recorded {
+				Printf("verify finalize: %s — verdict=%s recorded\n", phaseID, verdict)
+			} else {
+				Printf("verify finalize: %s — verdict=%s already recorded\n", phaseID, verdict)
 			}
-			switch v.Verify.Verdict {
-			case "pass", "partial", "fail":
-				// ok — accepted final verdicts
-			case "pending", "":
-				return fmt.Errorf("verify.toml verdict is %q — fill in pass | partial | fail before finalizing", v.Verify.Verdict)
-			default:
-				return fmt.Errorf("verify.toml verdict %q is not one of pass | partial | fail", v.Verify.Verdict)
-			}
-			t, _ := verify.LoadTests(testsPath) // optional — may be absent under --skip-mutation manual cleanup
-			recordVerifyOutcome(t, v)
-			Printf("verify finalize: %s — verdict=%s recorded\n", phaseID, v.Verify.Verdict)
 			return nil
 		},
 	}
+}
+
+// finalizeVerify records the resolved verdict from a phase's
+// verify.toml as a telemetry outcome event, exactly once. The
+// `finalized` marker in verify.toml is the idempotency guard: a second
+// call (manual re-run, or a downstream gate healing after a manual
+// finalize) is a no-op. Callers: `dross verify finalize`, plus the
+// auto-heal in `dross ship` and `dross phase complete`.
+//
+// Returns recorded=true when this call emitted the event, false when
+// it was already recorded. Errors on a missing verify.toml or an
+// unresolved verdict — healing must never invent a verdict.
+func finalizeVerify(root, phaseID string) (recorded bool, verdict string, err error) {
+	testsPath, verifyPath := verify.FilePaths(root, phaseID)
+	v, err := verify.LoadVerify(verifyPath)
+	if err != nil {
+		return false, "", fmt.Errorf("read verify.toml: %w", err)
+	}
+	if v == nil {
+		return false, "", fmt.Errorf("verify.toml not found at %s — run `dross verify %s` first", verifyPath, phaseID)
+	}
+	switch v.Verify.Verdict {
+	case "pass", "partial", "fail":
+		// ok — accepted final verdicts
+	case "pending", "":
+		return false, v.Verify.Verdict, fmt.Errorf("verify.toml verdict is %q — fill in pass | partial | fail before finalizing", v.Verify.Verdict)
+	default:
+		return false, v.Verify.Verdict, fmt.Errorf("verify.toml verdict %q is not one of pass | partial | fail", v.Verify.Verdict)
+	}
+	if v.Verify.Finalized {
+		return false, v.Verify.Verdict, nil
+	}
+	t, _ := verify.LoadTests(testsPath) // optional — may be absent under --skip-mutation manual cleanup
+	recordVerifyOutcome(t, v)
+	v.Verify.Finalized = true
+	v.Verify.FinalizedAt = time.Now().UTC()
+	if err := v.Save(verifyPath); err != nil {
+		return true, v.Verify.Verdict, fmt.Errorf("write finalized marker to verify.toml: %w", err)
+	}
+	return true, v.Verify.Verdict, nil
 }
 
 // configuredAdapters returns the list of mutation adapters appropriate
@@ -152,8 +184,8 @@ func configuredAdapters(p *project.Project, _ string, skip bool) []mutation.Adap
 	// or the host cwd for docker (we read the report via bind-mounted fs).
 	// If docker volume layout diverges, this is where we'd surface config.
 	cwd, _ := os.Getwd()
-	return []mutation.Adapter{
-		&mutation.Stryker{Prefix: prefix, ProjectRoot: cwd},
+	all := []mutation.Adapter{
+		&mutation.Stryker{Prefix: prefix, ProjectRoot: cwd, Workdir: p.Mutation.Stryker.Workdir},
 		&mutation.Gremlins{
 			Prefix:             prefix,
 			ProjectRoot:        cwd,
@@ -161,6 +193,22 @@ func configuredAdapters(p *project.Project, _ string, skip bool) []mutation.Adap
 		},
 		&mutation.StrykerNet{Prefix: prefix, ProjectRoot: cwd},
 	}
+	if len(p.Mutation.Adapters) == 0 {
+		return all
+	}
+	// [mutation] adapters = [...] allowlist: files whose adapter is filtered
+	// out fall into verify's existing Skipped path downstream.
+	allowed := map[string]bool{}
+	for _, name := range p.Mutation.Adapters {
+		allowed[name] = true
+	}
+	var out []mutation.Adapter
+	for _, a := range all {
+		if allowed[a.Name()] {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // dockerPrefix returns the runtime command prefix for docker mode.
@@ -241,7 +289,32 @@ func recordVerifyOutcome(t *verify.Tests, v *verify.Verify) {
 	if v.Summary.MutationStatus != "" {
 		tags["mutation_status"] = v.Summary.MutationStatus
 	}
-	RecordOutcomeEvent("verify", counts, nums, tags)
+	recordVerifyPhaseOutcome(v.Verify.Phase, counts, nums, tags)
+}
+
+// recordVerifyPhaseOutcome mirrors RecordOutcomeEvent but stamps the
+// phase id on the event. Verify events (mechanical pending + resolved
+// finalize) need phase identity so `dross stats` can match a later
+// resolved event to the pending one it closes; without it every
+// mechanical run inflates the pending count forever. Same
+// swallow-on-error guarantee as RecordOutcomeEvent.
+func recordVerifyPhaseOutcome(phaseID string, counts map[string]int, numbers map[string]float64, tags map[string]string) {
+	if !telemetryEnabled() {
+		return
+	}
+	repoHash := ""
+	if root, err := FindRoot(); err == nil {
+		repoHash = telemetry.HashRepo(filepath.Dir(root))
+	}
+	_ = telemetry.Append(telemetryPath(), telemetry.Event{
+		Kind:     "outcome",
+		Command:  "verify",
+		Phase:    phaseID,
+		Counts:   counts,
+		Numbers:  numbers,
+		Tags:     tags,
+		RepoHash: repoHash,
+	})
 }
 
 func printVerifySummary(t *verify.Tests, v *verify.Verify) {
@@ -250,6 +323,10 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 		Print("  (nothing to mutation-test)")
 	}
 	for _, lr := range t.Languages {
+		if lr.Error != "" {
+			Printf("  %s (%s): %d files — adapter FAILED: %s\n", lr.Name, lr.Tool, len(lr.Files), lr.Error)
+			continue
+		}
 		if lr.Mutation == nil {
 			Printf("  %s (%s): %d files — no mutation report\n", lr.Name, lr.Tool, len(lr.Files))
 			continue

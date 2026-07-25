@@ -1,0 +1,48 @@
+[verify]
+  phase = "verify-auto-finalize"
+  generated_at = 2026-07-25T08:41:30.205051Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-07-25T08:49:46.477221Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9587188612099644
+  mutants_killed = 1347
+  mutants_survived = 58
+  mutants_not_covered = 58
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/ship_test.go:TestShipHealsUnfinalizedVerdict", "internal/cmd/ship_test.go:TestShipHealIdempotent", "internal/cmd/ship_test.go:TestShipHealRecordsPartialThenRefuses"]
+  notes = "asserts the outcome event + finalized marker land during ship, and partial is recorded then still refused"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/verify_test.go:TestVerifyFinalizeIdempotentAndStampsPhase", "internal/cmd/verify_test.go:TestVerifyFinalizeRecordsResolvedVerdict"]
+  notes = "second finalize: no duplicate event, exit 0, 'already recorded'; pending refusal pinned by the pre-existing test"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestPhaseCompleteHealsUnfinalizedVerdict", "internal/cmd/phase_test.go:TestPhaseCompleteHealIdempotent"]
+  notes = "complete records the resolved verdict before proceeding; no duplicate when already finalized"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/stats_test.go:TestStatsPendingClearedByResolvedEvent", "internal/cmd/stats_test.go:TestStatsPendingCountsUnresolvedPhasesOnly", "internal/cmd/status_test.go:TestStatusNagSkipsResolvedFinalizedVerify"]
+  notes = "pending count is per-phase latest-event; nag suppressed when resolved; status never nags a healed phase"
+
+[[finding]]
+  severity = "NOTE"
+  text = "58/1405 mutants not-covered — all are the documented gremlins switch-case/const-initializer attribution ceiling (go-cover limit, locked calibration 2026-07-01). In this phase's touched files they sit only on pre-existing switch case-conditions (phase.go:273/275/508/510, ship.go:490-494), none on the new heal/finalize code, whose mutants were all killed. Efficacy excluding not-covered = 1.00. Detail in tests.json."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/verify.md: no mutation adapter for .md"

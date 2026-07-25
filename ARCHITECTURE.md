@@ -46,13 +46,22 @@ _c8b346e_
 
 ### Change tracking & landmarks
 
-Append-only per-task record of files touched, plus a typed `--landmark` record (feature/symbol/loc/what) parsed into a structured `Landmarks` array — replacing the old landmark-carried-in-`--notes` convention.
+Append-only per-task record of files touched, plus a typed `--landmark` record (feature/symbol/loc/what) parsed into a structured `Landmarks` array — replacing the old landmark-carried-in-`--notes` convention. Values may contain commas: a comma opens a new pair only at a recognised `key=` boundary (duplicate keys error loudly), and the `--landmark` help text documents the rule.
 
-- `Changes.Record` — `internal/changes/changes.go:133`
-- `changes.ParseLandmark` / `Landmark` — `internal/changes/changes.go:62`
+- `Changes.Record` — `internal/changes/changes.go:183`
+- `changes.ParseLandmark` / `Landmark` (comma-in-value join, dup-key error) — `internal/changes/changes.go:67`
 - `Changes` (CLI, repeatable `--landmark`) — `internal/cmd/changes.go:15`
 
-_introduced 1d1f85a · extended 01-architecture-comprehension-layer · extended architecture-doc-enhancements · 12513fc_
+_introduced 1d1f85a · extended 01-architecture-comprehension-layer · extended architecture-doc-enhancements · extended landmark-comma-fix · c896695_
+
+### Clean-tree gates
+
+Keep `.dross/` bookkeeping from blocking or diverging the git flow. The dirty-tree gates in ship, phase complete, and phase create/start share one helper that auto-commits `.dross/`-only dirt as a single chore commit (per repo convention) instead of refusing, while a tree with any non-`.dross` dirt still refuses having staged nothing. A ship/complete pre-flight safety net then pushes a base branch that is purely ahead of origin by `.dross/`-only chores (pause snapshots, recovery restores), so after any ship/complete/recover local base == origin/base; a code-ahead base refuses and pushes nothing, a diverged base defers to recovery, and a failed push is a hard refusal (proceeding would re-seed the divergence) — local-only writers like pause never touch the network.
+
+- `autoCommitDrossDirt` (shared gate helper: ship / phase complete / phase create) — `internal/cmd/cleantree.go:20`
+- `pushBaseIfAheadDrossOnly` (safety-net push of .dross-only base chores) — `internal/cmd/basebranch.go:62`
+
+_introduced ship-clean-tree · cfa0023_
 
 ### Code insight (codex)
 
@@ -96,15 +105,15 @@ _c8b346e · extended gitlab-ship-provider · 0f209c9_
 
 Give every deferred idea a destination instead of leaving it write-only: `/dross-spec` routes each (pull-into-phase / milestone-backlog / named-phase / someday), parked ideas re-surface as candidate criteria when their target phase is scaffolded, and someday items get triaged through `/dross-inbox`. An item lives in one of three states — someday (no target), routed (target set, cleared back to someday with `dross deferred unroute`), or dismissed (`dross deferred dismiss`, `--undo` to reverse); a board-less repo still triages its local deferred backlog because `/dross-inbox` §0 skips the board source rather than hard-stopping.
 
-- `Deferred.Target` (schema) — `internal/phase/phase.go:196`
-- `Deferred.Dismissed` (dismissed-state flag) — `internal/phase/phase.go:201`
+- `Deferred.Target` (schema) — `internal/phase/phase.go:253`
+- `Deferred.Dismissed` (dismissed-state flag) — `internal/phase/phase.go:258`
 - `Deferred` (dross deferred list/route/unroute/dismiss) — `internal/cmd/deferred.go:29`
 - `collectDeferred` (scan + filter) — `internal/cmd/deferred.go:40`
 - `deferredRoute` (stamp target on disk) — `internal/cmd/deferred.go:155`
 - `deferredDismiss` (retire to dismissed, someday-only) — `internal/cmd/deferred.go:194`
 - `deferredUnroute` (clear target → someday; idempotent, refuses dismissed) — `internal/cmd/deferred.go:248`
-- `deferredList --dismissed` (hide/surface dismissed) — `internal/cmd/deferred.go:69`
-- dangling-target guard in `Validate` — `internal/cmd/validate.go:117`
+- `deferredList --dismissed` (hide/surface dismissed) — `internal/cmd/deferred.go:74`
+- dangling-target guard in `Validate` — `internal/cmd/validate.go:118`
 - `/dross-inbox` board-off fallback + dismiss funnel — `assets/prompts/inbox.md`
 
 _introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps · 539d475 · extended deferred-unroute-command · fb24bc2_
@@ -135,7 +144,7 @@ _c8b346e · extended 07-stack-profiles · eb602f1_
 
 ### Interaction contract
 
-The propose-and-react contract for interactive commands — a terse builtin rule in every `dross rule show`, the full `_interaction.md` playbook, and a `dross interaction show` emitter that injects the playbook verbatim into interactive prompts (the c-3 pilot disproved nested @-include, so delivery is the CLI emitter), plus a per-decision-point audit checklist. **Every** interactive command is now wired and audited: the five core-loop prompts (plan/execute/verify/ship/review), the seven setup/config prompts (init/onboard/options/rule/inbox/quick/milestone), and the five remaining audit/handoff prompts (architecture/secure/quality/pause/resume) — each restructured to one-decision-per-turn (per-field identity walks, an options section-pick gate, per-criterion milestone scoping, single-gated-turn scaffolds, summary-confirm instead of artifact paste-back), guarded by grep + per-section prompt-sentinel tests. The model is documented as a first-class loop behaviour in the README's `## Interaction` section. Coverage is now **fail-closed**: a shared classifier proves every command-backed prompt is either interactive-with-an-audit-section or enrolled in the audit doc's machine-read `## Exempt` list (status, plan-review), failing the build on any unclassified prompt, with `dross doctor` surfacing the same verdict on-demand inside the dross source tree. `/dross-spec`'s §3 takes the contract further: instead of a multiSelect "which gray areas?" pre-selection, it walks **every** area Claude is *genuinely uncertain* about, one at a time, with a user off-ramp — the discriminator is Claude's own uncertainty, not whether the user might have an opinion. Candidate surfacing now shares a **defer-or-add** framing documented once in `_interaction.md`: a borderline/optional candidate is offered as a defer-first either/or ("defer it" leads, "add to current phase" follows), applied in spec `§4a` as a two-step entry-gate-then-destination route that drops the old §4a double-offer, and in plan `§3`/`§4` for borderline task proposals and the coverage-gap check — so spec and plan inherit the convention instead of restating it.
+The propose-and-react contract for interactive commands — a terse builtin rule in every `dross rule show`, the full `_interaction.md` playbook, and a `dross interaction show` emitter that injects the playbook verbatim into interactive prompts (the c-3 pilot disproved nested @-include, so delivery is the CLI emitter), plus a per-decision-point audit checklist. **Every** interactive command is now wired and audited: the five core-loop prompts (plan/execute/verify/ship/review), the seven setup/config prompts (init/onboard/options/rule/inbox/quick/milestone), and the five remaining audit/handoff prompts (architecture/secure/quality/pause/resume) — each restructured to one-decision-per-turn (per-field identity walks, an options section-pick gate, per-criterion milestone scoping, single-gated-turn scaffolds, summary-confirm instead of artifact paste-back), guarded by grep + per-section prompt-sentinel tests. The model is documented as a first-class loop behaviour in the README's `## Interaction` section. Coverage is now **fail-closed**: a shared classifier proves every command-backed prompt is either interactive-with-an-audit-section or enrolled in the audit doc's machine-read `## Exempt` list (status, plan-review), failing the build on any unclassified prompt, with `dross doctor` surfacing the same verdict on-demand inside the dross source tree. `/dross-spec`'s §3 takes the contract further: instead of a multiSelect "which gray areas?" pre-selection, it walks **every** area Claude is *genuinely uncertain* about, one at a time, with a user off-ramp — the discriminator is Claude's own uncertainty, not whether the user might have an opinion. Candidate surfacing now shares a **defer-or-add** framing documented once in `_interaction.md`: a borderline/optional candidate is offered as a defer-first either/or ("defer it" leads, "add to current phase" follows), applied in spec `§4a` as a two-step entry-gate-then-destination route that drops the old §4a double-offer, and in plan `§3`/`§4` for borderline task proposals and the coverage-gap check — so spec and plan inherit the convention instead of restating it. `/dross-spec` §2 now opens with a *proposed candidate-criteria slate* (derived from milestone scope, gap analysis, and parked ideas) gated accept/reword/drop per item — replacing the free-recall "list 3–7 outcomes" ask.
 
 - `Interaction` / `interactionShow` (CLI) — `internal/cmd/interaction.go:10`
 - `assets.InteractionPlaybook` (re-derived from `assets.FS`) — `assets/embed.go:26`
@@ -153,14 +162,17 @@ The propose-and-react contract for interactive commands — a terse builtin rule
 - core-loop wiring + prompt-sentinel guards — `internal/cmd/interaction_coreloop_test.go`
 - setup/config wiring + anchor + no-bundle guards — `internal/cmd/interaction_setupcmds_test.go`
 - audit/handoff wiring + audit-conformance + README guards — `internal/cmd/interaction_othercmds_test.go`
+- subagent-offload audit (per-prompt disposition of heavy inline reads — offloads-already / offload-worthy / inline-only — fail-closed like the interaction audit; verify §2 and execute §1b carry size-gated read-only offload passages whose agent-gate boundary and conditional phrasing are test-pinned) — `docs/subagent-offload-audit.md`
+- `TestSubagentOffloadAuditCoversEveryPrompt` (offload-audit coverage gate) — `internal/cmd/subagent_offload_audit_test.go:41`
+- `TestVerifyPromptOffloadGuidance` / `TestExecutePromptOffloadGuidance` (offload passages pinned) — `internal/cmd/verify_prompt_test.go` / `internal/cmd/execute_prompt_test.go`
 
-_introduced 10-interaction-contract · extended 11-retrofit-core-loop · extended 12-retrofit-setup-commands · extended 13-audit-and-readme · extended retrofit-readmostly-commands · extended gray-area-walkthrough · extended interaction-defer-or-add-framing · d4d05f2_
+_introduced 10-interaction-contract · extended 11-retrofit-core-loop · extended 12-retrofit-setup-commands · extended 13-audit-and-readme · extended retrofit-readmostly-commands · extended gray-area-walkthrough · extended interaction-defer-or-add-framing · extended task-reordering · extended subagent-offload-audit · de83813_
 
 ### Issue board sync
 
 Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue board — driven solely by a dedicated `[board]` config block, independent of `[remote]`, so a repo ships code to one host and tracks issues on another. Backends sit behind a `BoardClient` interface that `forge.NewBoard` dispatches by provider: the provider-aware forge `*Client` (forgejo/gitea/gitlab), a sibling `YouTrackClient` (REST CRUD, bearer permanent-token, readable-id `PROJ-7` addressing, `?fields` projection), a `JiraClient` (Jira Cloud REST v3, HTTP Basic email:token, string `PROJ-123` keys, ADF bodies, transition-driven state, milestones as project versions), or a `GitHubClient` (repo issues with integer milestones — forge-shaped — plus an isolated Projects v2 `addProjectV2ItemById` add-to-board on create when a board is configured). board.json links every artefact by the tracker's readable **string** id. YouTrack adds milestone entities per `[board].milestone_mode` (version bundle / agile board / epic), lifecycle→State mapping via the default map + `[board].state_map` (unmapped warns and skips), and backlog sync of unscaffolded slugs + someday ideas attached per mode (Fix versions / Epic subtask / project-based board). `dross doctor` validates a configured `[board]`; the inbox board source is gated on `[board].enabled`.
 
-- `forge.BoardClient` (interface) + `forge.NewBoard` (provider dispatch) — `internal/forge/forge.go:121`
+- `forge.BoardClient` (interface) + `forge.NewBoard` (provider dispatch) — `internal/forge/forge.go:123`
 - `forge.YouTrackClient` + `NewYouTrack` — `internal/forge/youtrack.go:25`
 - `YouTrackClient.EnsureMilestoneEntity` / `SetState` — `internal/forge/youtrack.go:184`
 - `forge.JiraClient` + `NewJira` (REST v3, versions, transitions) — `internal/forge/jira.go:25`
@@ -171,50 +183,75 @@ Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue 
 _a073ab7 · extended gitlab-ship-provider · 27e1a4f · extended youtrack-board-integration · 4bdea81_
 _extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2_
 
+### Milestone branch model
+
+Milestone work rides a `milestone/<version>` integration branch: scoping a milestone cuts+pushes the branch from main, new phases and quicks fork from it (via one existence-aware base resolver, falling back to main with a nudge when no milestone is active), ship targets phase PRs at it, `phase complete` fast-forwards it, and `dross milestone complete` opens the single milestone→main PR (merge-commit; `--finalize` fast-forwards main and deletes the branch).
+
+- `ensureMilestoneBranch` (create cuts+pushes at scope time) — `internal/cmd/milestone.go:257`
+- `resolveNewWorkBase` (existence-aware base resolver: milestone branch when its ref exists, else main) — `internal/cmd/basebranch.go:126`
+- `forkPhaseBranch` (phase create/insert fork off the resolved base) — `internal/cmd/phase.go:518`
+- `BaseBranch` (`dross base-branch`: resolved base on stdout, no-milestone nudge on stderr) — `internal/cmd/basebranch.go:20`
+- ship PR-base resolution + missing-remote-base guard — `internal/cmd/ship.go:222`
+- `milestoneComplete` (one milestone→main PR; `--finalize` ff + branch delete) — `internal/cmd/milestone.go:41`
+
+_introduced milestone-branch-model · 403d647_
+
 ### Milestone scoping
 
 Author and validate milestone.toml — title, success criteria, non-goals, phase order.
 
-- `Milestone` (CLI) — `internal/cmd/milestone.go:17`
+- `Milestone` (CLI) — `internal/cmd/milestone.go:19`
 - `milestone.Milestone` — `internal/milestone/milestone.go:20`
 
 _c8b346e_
 
 ### Mutation testing adapters
 
-Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Svelte, Gremlins for Go invoked per-package).
+Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Svelte, Gremlins for Go invoked per-package). Stryker is invoked as `npx @stryker-mutator/core` (not the deprecated bare `stryker`), with a `[mutation.stryker] workdir` monorepo knob that round-trips repo-relative paths.
 
 - `Adapter` — `internal/mutation/adapter.go:46`
 - `Report` — `internal/mutation/adapter.go:18`
 - `Gremlins.Run` — `internal/mutation/gremlins.go:82`
-- `Stryker.Run` — `internal/mutation/stryker.go:40`
+- `Stryker.Run` — `internal/mutation/stryker.go:46`
+- `Stryker.runArgs` (npx invocation + workdir knob) — `internal/mutation/stryker.go:86`
 
-_introduced c8b346e · extended 01c10f0_
+_introduced c8b346e · extended 01c10f0 · extended context-hygiene · de8b076_
 
 ### Phase lifecycle
 
-Create, list, number, migrate, complete, and reorder/insert/rename phases on dedicated phase/<id> git branches. Phase identity is the bare slug and order lives solely in the milestone `phases` array (phase.Ordered), so create makes bare-slug dirs and appends to the array, while `phase number` / status / the version patch digit all read the 1-based array position (DisplayNumber) and `phase migrate` converts a legacy NN-slug repo idempotently — skipping the in-flight phase and disambiguating colliding slugs — with phase.Dir resolving old NN-slug ids for permanent back-compat. complete is fast-forward + branch-delete only (no commit to main), gated by an **authoritative merge check** (`mergeGate`): it reads the phase's recorded PR number from changes.json and requires the provider (`ship.PRMergedFunc`) to report that PR merged, falling back to a `git merge-base --is-ancestor` check that **refuses-when-inconclusive** (a missing/squash-deleted ref or a non-ancestor both refuse) — replacing the old cumulative `completed <id>` breadcrumb, which a later merged phase could drag onto the base and thereby false-complete an unmerged phase; only on a confirmed merge does it delete both the local and the remote phase branch idempotently. The lifecycle verbs `insert` / `move` / `rename` edit a phase's array slot and identity through pure splice helpers (InsertRelative / MoveRelative / RenameInArray) and shared plumbing (exactly-one-anchor validation, no-op-before-collision, ship-guard via the origin branch); insert scaffolds with a strict slug (no auto-suffix) and rename moves dir + spec id + array entry + deferred targets + local branch atomically — all leaving every other phase byte-for-byte untouched.
+Create, list, number, migrate, complete, and reorder/insert/rename phases on dedicated phase/<id> git branches. Phase identity is the bare slug and order lives solely in the milestone `phases` array (phase.Ordered), so create makes bare-slug dirs and appends to the array, while `phase number` / status / the version patch digit all read the 1-based array position (DisplayNumber) and `phase migrate` converts a legacy NN-slug repo idempotently — skipping the in-flight phase and disambiguating colliding slugs — with phase.Dir resolving old NN-slug ids for permanent back-compat. complete is fast-forward + branch-delete only (no commit to main), gated by an **authoritative merge check** (`mergeGate`): it reads the phase's recorded PR number from changes.json — resolving it from origin/<base>'s fetched changes.json (`originRecordedPR`) when the stale post-squash-merge working tree lacks it — and requires the provider (`ship.PRMergedFunc`) to report that PR merged, falling back to a `git merge-base --is-ancestor` check that **refuses-when-inconclusive** (a missing/squash-deleted ref or a non-ancestor both refuse) — replacing the old cumulative `completed <id>` breadcrumb, which a later merged phase could drag onto the base and thereby false-complete an unmerged phase; only on a confirmed merge does it delete both the local and the remote phase branch idempotently. The lifecycle verbs `insert` / `move` / `rename` edit a phase's array slot and identity through pure splice helpers (InsertRelative / MoveRelative / RenameInArray) and shared plumbing (exactly-one-anchor validation, no-op-before-collision, ship-guard via the origin branch); insert scaffolds with a strict slug (no auto-suffix) and rename moves dir + spec id + array entry + deferred targets + local branch atomically — all leaving every other phase byte-for-byte untouched.
 
-- `Phase` (CLI) — `internal/cmd/phase.go:18`
-- `phaseCreate` — `internal/cmd/phase.go:112`
-- `phaseNumber` — `internal/cmd/phase.go:33`
+- `Phase` (CLI) — `internal/cmd/phase.go:21`
+- `phaseCreate` — `internal/cmd/phase.go:115`
+- `phaseNumber` — `internal/cmd/phase.go:36`
 - `phaseMigrate` — `internal/cmd/migrate.go:31`
-- `phaseComplete` — `internal/cmd/phase.go:209`
-- `mergeGate` (authoritative completion gate: recorded-PR merge status + ancestry refuse-when-inconclusive fallback) — `internal/cmd/phase.go:440`
+- `phaseComplete` — `internal/cmd/phase.go:216`
+- `mergeGate` (authoritative completion gate: recorded-PR merge status + ancestry refuse-when-inconclusive fallback) — `internal/cmd/phase.go:480`
+- `originRecordedPR` (post-fetch recorded-PR resolution from origin/<base>'s changes.json) — `internal/cmd/phase.go:457`
 - `ship.PRMergedFunc` / `ship.PRMerged` (provider PR-merged lookup, GitHub via gh, unsupported-provider sentinel, exported overridable seam) — `internal/ship/merged.go:38`
 - `phaseMove` / `phaseInsert` / `phaseRename` — `internal/cmd/phase_lifecycle.go`
 - array-order splice helpers (`InsertRelative`, `MoveRelative`, `RenameInArray`) — `internal/phase/phase.go`
-- slug identity helpers (`Dir`, `Ordered`, `DisplayNumber`, `UniqueSlug`) — `internal/phase/phase.go:33`
+- slug identity helpers (`Dir`, `Ordered`, `DisplayNumber`, `UniqueSlug`) — `internal/phase/phase.go:34`
+- complete-path verify heal (records a resolved-but-unfinalized verdict before the branch switch; never invents a verdict) — `internal/cmd/phase.go:296`
 
-_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · 6d99599_
+_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · extended verify-auto-finalize · df239d8_
+
+### Plan persistence
+
+Phase artefacts (plan.toml / spec.toml) are written atomically: saveTOML encodes into a temp sibling and os.Rename's it over the target only after a fully successful write, so a mid-write crash or a failed encode leaves the previous file byte-identical rather than truncated. This is the durability guarantee behind the task-lifecycle integrity checks — a rejected or interrupted mutation can never corrupt the plan.
+
+- `saveTOML` (atomic temp-file + rename write) — `internal/phase/phase.go:398`
+- `Plan.Save` / `Spec.Save` — `internal/phase/phase.go`
+
+_introduced task-lifecycle-commands · 367c723_
 
 ### Repo onboarding
 
 Scan an existing repo's signal files (Dockerfile, package.json, go.mod, …) into a draft project.toml, seeding `[runtime]` + `[stack].profile` from the matched stack profile.
 
 - `Onboard` — `internal/cmd/onboard.go:26`
-- `scanRepo` — `internal/cmd/onboard.go:110`
-- `toProject` — `internal/cmd/onboard.go:141`
+- `scanRepo` — `internal/cmd/onboard.go:115`
+- `toProject` — `internal/cmd/onboard.go:146`
 
 _c8b346e · extended 07-stack-profiles · eb602f1_
 
@@ -238,7 +275,7 @@ Context-free, read-only multi-pass security audit: real scanners plus an adversa
 - `security.BuildManifest` — `internal/security/recon.go`
 - `security.ScaffoldSpec` — `internal/security/scaffold.go`
 - `security.DecideDockle` (three-state image-scan decision: run-supplied / skip-no-image / skip-missing-bin, never builds) — `internal/security/dockle.go:43`
-- `securityRun --image` / `resolveImage` (`--image` flag, `$DROSS_IMAGE` fallback) — `internal/cmd/security.go:108`
+- `securityRun --image` / `resolveImage` (`--image` flag, `$DROSS_IMAGE` fallback) — `internal/cmd/security.go:134`
 - `Security` (CLI) — `internal/cmd/security.go:27`
 
 The scanner catalog now sources language-dedicated tools from the active stack profile (agnostic tools stay inline); `recon.DetectLanguages` delegates to the single `stack.DetectLanguages`. `BuildManifest` also unions any marker-file stack's scanners (via `stack.MarkerProfiles`) additively on top of the detected languages, so a marker-only repo (e.g. a Dockerfile with no source extension) still gets its scanners — including the deepened IaC/container loadout (`checkov` cross-family, `dockle` for docker), each surfaced installed-vs-missing. The security surface also covers **container image-layer scanning**: `DecideDockle` is a pure three-state decision that never runs `docker build`, and `dross security run --image <ref>` (or `$DROSS_IMAGE`) feeds it — with no image the run skips-with-reason rather than emitting a silent all-clear.
@@ -252,9 +289,9 @@ Ship dross as a single self-contained binary that carries its own assets and upd
 - `assets.FS` (`go:embed all:commands all:prompts`) — `assets/embed.go:20`
 - `update.AssetName` / `update.BinaryName` (per-OS archive + binary name: .zip/dross.exe on windows) / `VerifyChecksum` / `Decide` / `AtomicReplace` — `internal/update/update.go`
 - `update.VerifySignature` / `EmbeddedMinisignPublicKey` / `TrustedMinisignKey` (signature trust anchor + override seam) — `internal/update/signature.go:43`
-- `update.Client` (latest release + download) — `internal/update/update.go:214`
+- `update.Client` (latest release + download) — `internal/update/update.go:232`
 - `Install` (symlink/copy materialize + dross-* prune) — `internal/cmd/install.go:26`
-- `Update` signature gate (verify `checksums.txt.minisig` before checksum/extract/swap) — `internal/cmd/update.go:133`
+- `Update` signature gate (verify `checksums.txt.minisig` before checksum/extract/swap) — `internal/cmd/update.go:145`
 - `extractBinaryZip` (windows .zip extraction; tar.gz vs zip dispatch on asset suffix) — `internal/cmd/update.go:235`
 - release signing + build matrix (`signs:` minisign, windows build, `brews:` tap) — `.goreleaser.yaml` / `.github/workflows/release.yml`
 - `install.sh` (curl|sh bootstrap) / `install.ps1` (Windows PowerShell bootstrap, verify-before-place) — `install.sh` / `install.ps1`
@@ -264,28 +301,43 @@ _introduced self-update-and-distribution · 0ccce6a_
 _extended release-trust-and-distribution (minisign signing + verify-before-swap) · 46c091a_
 _extended homebrew-and-windows-distribution (windows zip self-update + Homebrew tap + install.ps1) · 0007570_
 
+### Session continuity & context hygiene
+
+Survive `/clear` and compaction without losing the workflow thread: every durable-boundary prompt closes with a "state is on disk — safe to /clear" footer naming the exact re-entry command (enforced fail-closed by a footer-coverage gate over `docs/footer-audit.md`), `dross pause --auto` merges a mechanical snapshot (branch, dirty files, status, timestamp) into `.dross/handoff.md` without prompting, and `dross hooks ensure` (also run by init/onboard) idempotently wires user-level Claude Code hooks — PreCompact → `dross pause --auto`, SessionStart → `dross reentry` — that no-op outside dross repos and never disturb foreign settings.json entries. `/dross-execute` pair mode adds a post-commit continue/stop/checkpoint gate whose checkpoint path validates state then ends the session with the `/clear → /dross-execute --from <next-task>` re-entry.
+
+- `hooks.MergeHook` (order-preserving idempotent settings.json merge; foreign entries survive verbatim) — `internal/hooks/settings.go:39`
+- `Hooks` (`dross hooks ensure`) / `ensureUserHooks` (init/onboard wiring) — `internal/cmd/hooks.go:18`
+- `Reentry` / `reentryLine` ("you are here + next", byte-equal to status's last line) — `internal/cmd/reentry.go:33`
+- `Pause` (`dross pause --auto` mechanical snapshot merge) — `internal/cmd/pause.go:24`
+- `footerCoverage` (fail-closed clear-point footer gate) — `internal/cmd/footer_coverage.go:30`
+- execute checkpoint gate (§1g continue/stop/checkpoint) — `assets/prompts/execute.md`
+- clear-point footers across the durable-boundary prompts — `assets/prompts/spec.md`
+
+_introduced context-hygiene · de8b076_
+
 ### Ship recovery
 
-Heal origin/main vs local main divergence after a squash-merge — a shared, delta-gated routine reused by two entry points and documented as a three-state cookbook. `dross ship recover` is the standalone legacy-repo healer; `dross phase complete --recover` heals a diverged main in-loop (the ff-only abort is the divergence signal) and refuses with a pointer when the flag is absent. The shared `runDrossRecovery` resets main to origin, restores the full cumulative `.dross/` tree (every phase's artefacts, not just the current one), and commits only on a real delta — so an in-sync repo is a clean no-op with no phantom commit. The `ship.md` `## Recovery` section maps the three mid-merge failure states (ff-abort / diverged main / dirty post-push tree) each to a one-command fix, with no manual `.dross/` surgery (guarded by a prompt-presence test).
+Heal local-vs-origin base divergence after a squash-merge — a shared, delta-gated routine parameterized by the base branch (main or a `milestone/<version>` reconcile branch, no longer aborting on the latter), reused by two entry points and documented as a three-state cookbook. `dross ship recover` is the standalone legacy-repo healer; `dross phase complete --recover` performs its reset/heal *before* re-evaluating the merge gate, so the flag works in exactly the diverged/stale state its own error recommends it for — while merge verification still precedes the destructive reset (an unmerged PR refuses with the local base byte-unchanged) — and refuses with a pointer when the flag is absent. The shared `runDrossRecovery` resets the base to origin, restores the full cumulative `.dross/` tree (every phase's artefacts, not just the current one), commits only on a real delta — so an in-sync repo is a clean no-op with no phantom commit — and pushes the restore commit via the clean-tree safety-net policy so the heal doesn't itself re-seed divergence. The `ship.md` `## Recovery` section maps the three mid-merge failure states (ff-abort / diverged main / dirty post-push tree) each to a one-command fix, with no manual `.dross/` surgery (guarded by a prompt-presence test).
 
-- `runDrossRecovery` (shared delta-gated reset+restore+commit) — `internal/cmd/ship_recover.go:132`
-- `shipRecover` (standalone CLI entry, delegates to the shared routine) — `internal/cmd/ship_recover.go:31`
-- `phaseComplete` `--recover` (in-loop heal) — `internal/cmd/phase.go:209`
+- `runDrossRecovery` (shared delta-gated reset+restore+commit+push, base-branch parameterized) — `internal/cmd/ship_recover.go:133`
+- `shipRecover` (standalone CLI entry, delegates to the shared routine) — `internal/cmd/ship_recover.go:30`
+- `phaseComplete` `--recover` (in-loop heal-before-gate) — `internal/cmd/phase.go:216`
 
-_52f6c75 · extended ship-complete-recovery-hardening · 3a1fd7d_
+_52f6c75 · extended ship-complete-recovery-hardening · extended ship-clean-tree · df17d75_
 
 ### Shipping / pull requests
 
 Push the phase branch and open a provider-aware PR/MR (GitHub/Forgejo/GitLab) with reviewers, merging the phase's landmarks into ARCHITECTURE.md first — auto-backfilling the whole doc via the prompt-driven generation when it's absent, so an older repo self-heals on its next interactive ship (non-blocking; `--auto` skips it) — folds the completed-state transition (cleared current_phase + `completed <id>` history) into the phase branch and commits it BEFORE the push, so the squash-merge carries the completion record to main and ship returns on a clean tree; squash-merge collapses per-task commits. The GitLab path is raw REST (no `gh`/`glab` CLI): `openGitLabPR` opens a Merge Request (source/target branch, `Draft:` prefix, `web_url`→URL, `iid`→Number) and resolves reviewer usernames→ids non-fatally; `postGitLabComment` posts an MR note. The post-push PR/MR URL is intentionally printed, not persisted to state.json (avoids the completion-chore divergence); the PR *number*, however, is recorded per-phase in changes.json (`changes.SetPR`), then committed **and pushed** onto the phase branch — drag-proof, unlike cumulative history — so the squash-merge carries the record onto the base's changes.json where `phase complete`'s `mergeGate` reads it to authoritatively confirm the merge (the push is essential: a local-only record never reaches the PR/squash/base, which would leave `mergeGate` blind and refusing every squash-merged completion). The CI-watch + squash-merge steps are prompt-driven (ship.md §5/§6) with the locked GitLab pipeline-status mapping. A non-interactive fast-path makes ship callable from a script or loop: `dross ship --auto` requests zero reviewers for the run without mutating `remote.reviewers` (gating the narration + telemetry off `opts.Reviewers`) and keeps the generated body, while `--json` emits a single `{url, number, result}` object on stdout through a suppressible `narrate` closure — the two compose, and explicit `--body`/`--body-file`/`--draft` still win. `ship.md §0.5` skips the interactive body-preview/body-override/reviewer turns and shells to `dross ship --auto`, opening the PR and returning without driving the merge.
 
-- `Ship` (CLI; `--auto` / `--json` non-interactive flags) — `internal/cmd/ship.go:53`
-- `ship.OpenPR` (provider switch → github/forgejo/`openGitLabPR`) — `internal/ship/open.go:41`
+- `Ship` (CLI; `--auto` / `--json` non-interactive flags) — `internal/cmd/ship.go:54`
+- `ship.OpenPR` (provider switch → github/forgejo/`openGitLabPR`) — `internal/ship/open.go:42`
 - `ship.PostComment` / `postGitLabComment` — `internal/ship/comment.go`
 - `buildOpenOpts` / `buildCommentOpts` (thread remote auth_scheme/project_id) — `internal/cmd/ship.go`
-- `changes.SetPR` (records opened PR number per-phase for the completion merge-gate) — `internal/changes/changes.go:96`
+- `changes.SetPR` (records opened PR number per-phase for the completion merge-gate) — `internal/changes/changes.go:136`
 - `ship.BuildPRBody` — `internal/ship/body.go:20`
+- verify-gate auto-heal (records a resolved-but-unrecorded verdict via `finalizeVerify` BEFORE the pass-only refusal — partial/fail recorded, then still refused) — `internal/cmd/ship.go:123`
 
-_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended gitlab-ship-provider · extended ship-auto-noninteractive · extended verify-merge-before-completion · extended ship-architecture-autogen · extended pr-record-reaches-base · 9e37c37_
+_introduced d392501 · extended 01-architecture-comprehension-layer · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended gitlab-ship-provider · extended ship-auto-noninteractive · extended verify-merge-before-completion · extended ship-architecture-autogen · extended pr-record-reaches-base · extended verify-auto-finalize · 9208e45_
 
 ### Stack profiles
 
@@ -311,11 +363,11 @@ Track current milestone/phase/version + activity in state.json; summarise "where
 - `state.State` — `internal/state/state.go:17`
 - `State` (CLI) — `internal/cmd/state.go:16`
 - `Status` — `internal/cmd/status.go:22`
-- `staleCompletedState` (shipped-but-unmerged-branch warning) — `internal/cmd/status.go:462`
-- `spineIdle` — `internal/cmd/status.go:262`
-- `rankAreas` — `internal/cmd/status.go:378`
-- `formatRunSignal` — `internal/cmd/status.go:397`
-- `renderActionAreas` — `internal/cmd/status.go:425`
+- `staleCompletedState` (shipped-but-unmerged-branch warning) — `internal/cmd/status.go:464`
+- `spineIdle` — `internal/cmd/status.go:265`
+- `rankAreas` — `internal/cmd/status.go:380`
+- `formatRunSignal` — `internal/cmd/status.go:399`
+- `renderActionAreas` — `internal/cmd/status.go:427`
 
 _c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · 2b6d344_
 
@@ -333,36 +385,67 @@ Render Claude Code's status line as a native `dross statusline` Go subcommand �
 
 _introduced native-statusline · 46e5025_
 
+### Task lifecycle
+
+Add, remove, edit, and reposition tasks inside a phase's plan.toml through guarded CLI verbs, so the plan is mutated only through dross and never hand-edited. New task ids come from a persisted per-plan high-water counter (Plan.TaskSeq): NextTaskID assigns high_water+1, and RemoveTask backfills the counter before deleting, so a freed id — even the highest — is never reissued; a new task's wave is the explicit --wave or one past its deepest dependency's wave (deriveWave). `add` appends at the tail by default and only positions relative to an anchor (--after/--before) when asked; `remove` is dependency-safe, refusing when another task depends on the target unless --force strips the id from every dependent; `edit` is a partial field update that changes only the flags passed and never status (dross task status stays that owner). `move` repositions a task relative to an `--before`/`--after` anchor: a move that would break dependency order is rejected with plan.toml untouched, a legal move adopts the anchor's wave and reflows transitive pending dependents (history stays frozen), ids stay stable across a move, and `task next` follows the new order because its same-wave tie-break is plan-array position rather than lexicographic id. Every mutation passes through saveIfValid → ValidatePlan (duplicate-id, unknown-depends_on, and covers→criterion parity with dross validate) and is written only if valid, leaving plan.toml byte-unchanged on rejection.
+
+- `taskAdd` / `taskRemove` / `taskEdit` (CLI verbs) — `internal/cmd/task.go:121`
+- `taskMove` (`dross task move --before/--after`, resolveAnchor + saveIfValid) — `internal/cmd/task.go:255`
+- `saveIfValid` (validate-then-write guard) — `internal/cmd/task.go:292`
+- `Plan.AddTask` / `Plan.RemoveTask` / `Plan.EditTask` (pure in-memory mutators) — `internal/phase/plan_edit.go:143`
+- `Plan.MoveTask` (guarded reposition, anchor-wave adoption + dependent reflow) — `internal/phase/plan_edit.go:228`
+- `Plan.NextRunnable` (same-wave tie-break by plan-array position) — `internal/phase/phase.go:303`
+- `Plan.NextTaskID` / `deriveWave` (high-water id + dependency-derived wave) — `internal/phase/plan_edit.go:35`
+- `ValidatePlan` (pre-write integrity guard) — `internal/phase/plan_edit.go:82`
+
+_introduced task-lifecycle-commands · extended task-reordering · db72f34_
+
 ### Tech-debt scan (dross techdebt)
 
-Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (word-boundary) plus size heuristics (oversized files, over-long lines) over git-tracked files, written to a prune-proof run dir with a store-level `last_run` that feeds the status action surface. Distinct from the dross-quality analyzer audit — markers are self-flagged debt, not analyzer findings.
+Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (word-boundary) plus size heuristics (oversized files, over-long lines) over git-tracked files, written to a prune-proof run dir with a store-level `last_run` that feeds the status action surface. Distinct from the dross-quality analyzer audit — markers are self-flagged debt, not analyzer findings. Surfaced as the `/dross-techdebt` thin skill (shim + prompt over `dross techdebt`), so all three status actions are runnable slash commands.
 
 - `Scan` — `internal/techdebt/scan.go:53`
 - `NewRun` — `internal/techdebt/run.go:54`
 - `StatePath` — `internal/techdebt/state.go:16`
 - `Techdebt` (CLI) — `internal/cmd/techdebt.go:22`
 - `findings.StampLastRun` — `internal/findings/state.go:121`
+- `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:347`
+- `/dross-techdebt` thin skill — `assets/prompts/techdebt.md`
 
-_introduced status-action-surfaces-v2 · 510e772_
+_introduced status-action-surfaces-v2 · extended task-reordering · db72f34_
 
 ### Telemetry & stats
 
-Local-only event log (counts / durations / error classes, never file content), queryable via `dross stats`.
+Local-only event log (counts / durations / error classes, never file content), queryable via `dross stats`. Failures classify into named buckets — cobra arg-count / unknown-flag / unknown-subcommand, landmark-parse, merge-refusal, `.dross` config-load and missing-env-token — with an `err_detail` attached only for identifier-only shapes, so paths, phase ids and token names never reach the log. The taxonomy itself is an ordered first-match-wins rule table (`classRules`) arranged in tiers (root/state → workflow-specific → CLI surface → generic safety-net → other); order is enforced by a shadowing guard (an earlier matcher subsuming a later one fails the build), the generic tier prefers the more diagnostic bucket (permission > git > network > invalid > missing), and a table-driven doc test keeps the README bucket list complete. `dross stats` re-derives the class of stored `other` events at read time (the append-only log is never rewritten) and prints the top 5 surviving unclassified shapes as a graduation queue, omitted once drained. A checked-in corpus of real `err_detail` shapes pins each to its bucket and enforces an under-15% unclassified ceiling.
 
-- `telemetry.Append` — `internal/telemetry/telemetry.go:82`
-- `telemetry.ClassifyError` — `internal/telemetry/telemetry.go:210`
+- `telemetry.Append` — `internal/telemetry/telemetry.go:83`
+- `telemetry.ClassifyError` — `internal/telemetry/telemetry.go:211`
+- `telemetry.ClassifyMessage` (walks the rule table) — `internal/telemetry/telemetry.go:229`
+- `classRules` (ordered taxonomy — first-match-wins tiers as data) — `internal/telemetry/telemetry.go:262`
+- `TestNoTokenShadowing` (order-dependence enforced) — `internal/telemetry/taxonomy_test.go:33`
+- `TestReadmeDocumentsBucketTiers` (table-driven README completeness) — `internal/telemetry/telemetry_test.go:470`
+- `telemetry.CarriesDetail` (detail allowlist) — `internal/telemetry/telemetry.go:432`
+- `telemetry.Reclassify` (read-time re-derivation) — `internal/telemetry/telemetry.go:450`
+- `renderErrorBuckets` — `internal/cmd/stats.go:185`
+- `renderOtherTail` (graduation queue) — `internal/cmd/stats.go:232`
 - `RecordCLIEvent` — `internal/cmd/telemetry.go:23`
+- `TestCorpusOtherShareUnderCeiling` (15% ceiling) — `internal/telemetry/corpus_test.go:97`
+- `renderOutcomes` (pending verify count = phases whose latest phase-stamped event is unresolved, not raw pending events; legacy phase-less events excluded) — `internal/cmd/stats.go:290`
 
-_a1b9c23_
+_a1b9c23 · extended telemetry-bucket-graduation · extended verify-auto-finalize · extended telemetry-taxonomy-overhaul · ded2340_
 
 ### Verification
 
-Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail.
+Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
 
 - `Verify` (CLI) — `internal/cmd/verify.go:27`
-- `verify.Run` — `internal/verify/verify.go:125`
+- `verify.Run` — `internal/verify/verify.go:130`
+- `LanguageRun.Error` (record-and-continue adapter failure) — `internal/verify/verify.go:54`
+- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:146`
+- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:126`
+- verify.md §2 size-gated offload (large criterion-mapping reads fan to read-only subagents; judgement + verdict stay main-loop) — `internal/cmd/verify_prompt_test.go:17`
 
-_e31bdbd_
+_e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79_
 
 ### Watch heartbeat (dross-watch)
 

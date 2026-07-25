@@ -9,11 +9,12 @@
 //     text, no commit messages, no file paths beyond a stable hash).
 //   - A narrow exception: a small allowlist of buckets also carry a
 //     redacted, length-capped copy of the message in err_detail. "other" is
-//     the unclassified tail (countable but otherwise opaque); unknown_subcommand
-//     and unknown_field carry only the rejected CLI identifier (a bad
-//     subcommand or field path the user typed) — not content like criterion
-//     text or commit messages — which is the diagnostic needed to see WHAT
-//     was typed wrong. The home directory is collapsed to "~" so absolute
+//     the unclassified tail (countable but otherwise opaque); the identifier-only
+//     buckets — unknown_subcommand, unknown_field, unknown_flag, arg_count and
+//     landmark_parse — carry only the rejected CLI identifier (a bad subcommand,
+//     field path, flag, arg count or landmark pair the user typed) — not content
+//     like criterion text or commit messages — which is the diagnostic needed to
+//     see WHAT was typed wrong. The home directory is collapsed to "~" so absolute
 //     paths don't leak, and the log stays local-only. Every other classified
 //     error stores no text. See CarriesDetail.
 //   - Default ON, opt-out via DROSS_NO_TELEMETRY=1 or
@@ -65,7 +66,7 @@ type Event struct {
 	DurationMS  int64              `json:"dur_ms,omitempty"`     // CLI invocation duration
 	ExitCode    int                `json:"exit,omitempty"`       // 0 for success
 	ErrorClass  string             `json:"err,omitempty"`        // bucketed error type, never the message
-	ErrorDetail string             `json:"err_detail,omitempty"` // redacted message, ONLY when ErrorClass == "other" — makes the unclassified tail diagnosable
+	ErrorDetail string             `json:"err_detail,omitempty"` // redacted message, only for the CarriesDetail allowlist — the "other" tail plus the identifier-only buckets
 	RepoHash    string             `json:"repo,omitempty"`       // sha256 of repo root path, first 12 chars
 	Phase       string             `json:"phase,omitempty"`      // phase id when relevant
 	Counts      map[string]int     `json:"counts,omitempty"`     // size/shape data: criteria=4, tasks=12
@@ -203,155 +204,217 @@ func HashRepo(repoRoot string) string {
 // ClassifyError buckets errors into a small set of strings. Never
 // returns the raw message — that might contain user paths or content.
 //
-// Order matters: specific buckets (verify state, mutation adapters,
-// phase/plan/spec state) are checked before generic ones (invalid,
-// missing) so a "no current_phase" error doesn't end up in
-// "missing".
+// Order matters: classification walks the classRules table
+// first-match-wins, arranged in tiers — root/scaffold state, then
+// workflow-specific buckets (verify state, mutation adapters,
+// phase/plan/spec state, provider/board), then the CLI surface, then
+// the generic safety-net buckets (where the more diagnostic bucket
+// wins: already_exists, permission, git, network, then
+// invalid/missing), with "other" as the fallback — so a "no
+// current_phase" error doesn't end up in "missing". The tier order is
+// enforced by TestNoTokenShadowing and documented in the README's
+// error-bucket section, kept in sync by TestReadmeDocumentsBucketTiers.
 func ClassifyError(err error) string {
 	if err == nil {
 		return ""
 	}
-	msg := strings.ToLower(err.Error())
-	switch {
+	return ClassifyMessage(err.Error())
+}
+
+// ClassifyMessage is ClassifyError over a bare message string. It exists so
+// stored err_detail strings can be re-run through the classifier at read time
+// (see Reclassify) without reconstructing an error value. An empty message
+// classifies as "" — the same as a nil error — rather than manufacturing a
+// phantom "other".
+func ClassifyMessage(message string) string {
+	if message == "" {
+		return ""
+	}
+	msg := strings.ToLower(message)
+	for _, r := range classRules {
+		for _, tokens := range r.matchers {
+			all := true
+			for _, tok := range tokens {
+				if !strings.Contains(msg, tok) {
+					all = false
+					break
+				}
+			}
+			if all {
+				return r.bucket
+			}
+		}
+	}
+	return "other"
+}
+
+// classRule is one row of the ordered taxonomy table. A rule fires when
+// ANY of its matchers fires; a matcher fires when ALL of its tokens are
+// present in the (lowercased) message. Most matchers are single-token —
+// the multi-token form exists for compound shapes like
+// {"carries no", "record"}.
+type classRule struct {
+	bucket   string
+	matchers [][]string
+}
+
+// classRules is the taxonomy. ORDER IS THE CONTRACT: rules are walked
+// top to bottom and the first match wins, so the table is arranged in
+// tiers — root/scaffold state, then workflow-specific buckets, then the
+// CLI surface, then the generic safety-net buckets, with "other" as the
+// implicit fallback when nothing matches. A more-specific bucket must
+// sit above any generic bucket whose token could also match its
+// messages; TestNoTokenShadowing enforces that an earlier token never
+// makes a later rule unreachable.
+var classRules = []classRule{
 	// Root / scaffold state.
-	case strings.Contains(msg, "no .dross"):
-		return "no_root"
+	{"no_root", [][]string{{"no .dross"}}},
 
 	// Phase / plan / spec state — the user is somewhere the workflow
 	// can't pick up. Distinct from generic "missing" because the fix
 	// is a specific dross command, not a file path.
-	case strings.Contains(msg, "no current_phase"),
-		strings.Contains(msg, "phaseid is required"),
-		strings.Contains(msg, "no phase id given"):
-		return "no_phase"
-	case strings.Contains(msg, "load spec"),
-		strings.Contains(msg, "read spec"),
-		strings.Contains(msg, "decode spec"):
-		return "no_spec"
-	case strings.Contains(msg, "decode plan"),
-		strings.Contains(msg, "load plan"),
-		strings.Contains(msg, "read plan"):
-		return "no_plan"
-	case strings.Contains(msg, "no current_milestone"),
-		strings.Contains(msg, "load milestone"):
-		return "no_milestone"
+	{"no_phase", [][]string{{"no current_phase"}, {"phaseid is required"}, {"no phase id given"}}},
+	{"no_spec", [][]string{{"load spec"}, {"read spec"}, {"decode spec"}}},
+	{"no_plan", [][]string{{"decode plan"}, {"load plan"}, {"read plan"}}},
+	{"no_milestone", [][]string{{"no current_milestone"}, {"load milestone"}}},
 
 	// Phase-complete pre-flight failures — these used to land in "other"
 	// even though they're user-actionable: dirty tree, or the upstream
 	// merge hasn't actually landed yet so the ff-only refuses to advance.
 	// Bucketing them separately makes the friction visible in stats.
-	case strings.Contains(msg, "working tree is dirty"):
-		return "dirty_tree"
-	case strings.Contains(msg, "hasn't advanced past"),
-		strings.Contains(msg, "has the pr actually merged"),
-		strings.Contains(msg, "fast-forward of"),
-		strings.Contains(msg, "ff-only"):
-		return "merge_pending"
+	{"dirty_tree", [][]string{{"working tree is dirty"}}},
+	// The ff-only shapes above are joined by the explicit refusals: phase
+	// complete and milestone complete both refuse to advance while the PR is
+	// still open, and `dross status` reports the shipped-but-unmerged window
+	// where branch-local state records `completed <id>` but origin/<main>
+	// doesn't. All four are the same friction — waiting on an upstream merge —
+	// so they share a bucket. Detail-free: the messages embed phase ids and
+	// branch names (locked: detail_allowlist).
+	{"merge_pending", [][]string{
+		{"hasn't advanced past"},
+		{"has the pr actually merged"},
+		{"fast-forward of"},
+		{"ff-only"},
+		{"is not merged upstream"},
+		{"is not merged into"},
+		{"cannot confirm"},
+		{"carries no", "record"},
+	}},
 	// Phase start refused because we're not on the main branch — usually
 	// still on a previous phase/<id> branch. User-actionable (switch back
 	// or pass --no-branch), not a tool failure. Used to land in "other".
-	case strings.Contains(msg, "to start a phase"):
-		return "wrong_branch"
+	{"wrong_branch", [][]string{{"to start a phase"}}},
 
 	// Verify / mutation pipeline — these errors actively hide what's
 	// wrong when bucketed as "other".
-	case strings.Contains(msg, "verify.toml"),
-		strings.Contains(msg, "load verify"),
-		strings.Contains(msg, "verify verdict"):
-		return "verify_state"
-	case strings.Contains(msg, "stryker"),
-		strings.Contains(msg, "gremlins"),
-		strings.Contains(msg, "mutation adapter"),
-		strings.Contains(msg, "ast-grep"):
-		return "mutation"
+	{"verify_state", [][]string{{"verify.toml"}, {"load verify"}, {"verify verdict"}}},
+	{"mutation", [][]string{{"stryker"}, {"gremlins"}, {"mutation adapter"}, {"ast-grep"}}},
 
 	// Provider / remote.
-	case strings.Contains(msg, "github backend"),
-		strings.Contains(msg, "forgejo backend"),
-		strings.Contains(msg, "gitlab backend"),
-		strings.Contains(msg, "unsupported provider"),
-		strings.Contains(msg, "no [remote]"),
-		strings.Contains(msg, "[remote].url"):
-		return "provider"
+	{"provider", [][]string{
+		{"github backend"},
+		{"forgejo backend"},
+		{"gitlab backend"},
+		{"unsupported provider"},
+		{"no [remote]"},
+		{"[remote].url"},
+	}},
 
 	// Issue-board sync (Forgejo board mirroring). Operational failures from
 	// the forge client are wrapped "board:" so a flaky board never hides
 	// inside the generic network/other buckets. Placed after provider so
 	// config errors (missing api_base etc.) still read as provider.
-	case strings.Contains(msg, "board:"),
-		strings.Contains(msg, "issue-board"):
-		return "board"
+	{"board", [][]string{{"board:"}, {"issue-board"}}},
+
+	// A required auth token is missing from the shell. The fix is `dross env
+	// set <VAR>`, not a config or CLI change, so it gets its own bucket.
+	// Placed below "board:" so a board op that fails for want of a token
+	// still reads as a board failure. Detail-free: the message names the
+	// env var (locked: detail_allowlist).
+	{"env_token", [][]string{{"is not set"}}},
 
 	// CLI surface: arg validation, unknown fields, user-facing config.
-	case strings.Contains(msg, "unknown subcommand"):
-		return "unknown_subcommand"
-	case strings.Contains(msg, "unknown field"),
-		strings.Contains(msg, "unknown milestone field"),
-		strings.Contains(msg, "unknown or unsettable"),
-		strings.Contains(msg, "unknown scope"),
-		strings.Contains(msg, "unsupported segment"),
-		strings.Contains(msg, "not a list field"):
-		return "unknown_field"
-	case strings.Contains(msg, "is required"),
-		strings.Contains(msg, "must be set"),
-		strings.Contains(msg, "must be non-empty"),
-		strings.Contains(msg, "is empty"):
-		return "cli_args"
+	//
+	// The cobra-generated shapes below (unknown command / unknown flag / arg
+	// counts) were the biggest contributors to the "other" tail. Each has a
+	// different fix, so each earns its own line in stats — except cobra's
+	// "unknown command" wording for a bad top-level verb, which routes into
+	// the existing unknown_subcommand rather than a near-duplicate bucket.
+	{"unknown_subcommand", [][]string{{"unknown subcommand"}, {"unknown command"}}},
+	// Cobra flag-parse failures: an unrecognised long flag, an unrecognised
+	// shorthand, or a flag given without its value.
+	{"unknown_flag", [][]string{{"unknown flag"}, {"unknown shorthand flag"}, {"flag needs an argument"}}},
+	// Cobra arity failures. Every wording cobra emits — "accepts N arg(s)",
+	// "requires at least N arg(s)", "accepts between N and M arg(s)" — shares
+	// the "arg(s)" token, so match that rather than enumerating each phrasing.
+	{"arg_count", [][]string{{"arg(s)"}}},
+	// `dross changes record --landmark` parse failures. Placed above the
+	// unknown-field group so an "unknown landmark key" reads as a malformed
+	// landmark rather than a generic unknown field.
+	{"landmark_parse", [][]string{{"landmark pair"}, {"unknown landmark key"}}},
+	{"unknown_field", [][]string{
+		{"unknown field"},
+		{"unknown milestone field"},
+		{"unknown or unsettable"},
+		{"unknown scope"},
+		{"unsupported segment"},
+		{"not a list field"},
+	}},
+	{"cli_args", [][]string{{"is required"}, {"must be set"}, {"must be non-empty"}, {"is empty"}}},
 
 	// User cancelled mid-flow.
-	case strings.Contains(msg, "aborted:"),
-		strings.Contains(msg, "cancelled"),
-		strings.Contains(msg, "canceled"):
-		return "cancelled"
+	{"cancelled", [][]string{{"aborted:"}, {"cancelled"}, {"canceled"}}},
 
 	// Health-check commands (doctor) return errors to gate CI / exit
 	// non-zero, but "N issue(s) found" is a useful outcome, not a tool
 	// failure. Bucketing distinguishes the two so a noisy doctor doesn't
 	// look like a broken doctor in stats.
-	case strings.Contains(msg, "issue(s) found"),
-		strings.Contains(msg, "issues found"),
-		strings.Contains(msg, "problem(s) found"),
-		strings.Contains(msg, "problems found"):
-		return "check_issues"
+	{"check_issues", [][]string{{"issue(s) found"}, {"issues found"}, {"problem(s) found"}, {"problems found"}}},
 
 	// dross state.json read/write failures — the workflow can't persist
 	// progress. Distinct from a generic file error because the fix is
 	// about the state file specifically. Used to land in "other".
-	case strings.Contains(msg, "save state"),
-		strings.Contains(msg, "marshal state"),
-		strings.Contains(msg, "unmarshal state"),
-		strings.Contains(msg, "load state"):
-		return "state_io"
+	{"state_io", [][]string{{"save state"}, {"marshal state"}, {"unmarshal state"}, {"load state"}}},
 
-	// Generic buckets — kept for safety-net coverage.
-	case strings.Contains(msg, "already exists"):
-		return "already_exists"
-	case strings.Contains(msg, "validate"), strings.Contains(msg, "invalid"):
-		return "invalid"
-	case strings.Contains(msg, "not found"), strings.Contains(msg, "missing"):
-		return "missing"
-	case strings.Contains(msg, "permission"), strings.Contains(msg, "denied"):
-		return "permission"
-	case strings.Contains(msg, "git "):
-		return "git"
-	case strings.Contains(msg, "http"), strings.Contains(msg, "network"):
-		return "network"
-	default:
-		return "other"
-	}
+	// The .dross config itself is absent or unreadable: no project.toml, no
+	// state.json, or a TOML syntax error in either. Distinct from state_io
+	// (which is dross failing to persist its own progress) — here the config
+	// never loaded, so the workflow can't start at all. Placed AFTER state_io
+	// so a state-write failure keeps its more specific bucket, and after the
+	// phase/plan/spec/verify/milestone group so their own `.toml` load errors
+	// keep theirs. Detail-free: the messages embed absolute config paths
+	// (locked: detail_allowlist).
+	{"config_io", [][]string{{"project.toml"}, {"state.json"}, {"toml:"}}},
+
+	// Generic buckets — kept for safety-net coverage. Within the tier the
+	// more diagnostic bucket wins: already_exists (near-exact phrase) and
+	// permission first, then the transport/tool buckets (git, network), and
+	// only then the vague invalid/missing pair — an "http 404: pr not found"
+	// is a network failure that happens to mention absence, not a missing
+	// file, so network must see it before "not found" does.
+	{"already_exists", [][]string{{"already exists"}}},
+	{"permission", [][]string{{"permission"}, {"denied"}}},
+	{"git", [][]string{{"git "}}},
+	{"network", [][]string{{"http"}, {"network"}}},
+	{"invalid", [][]string{{"validate"}, {"invalid"}}},
+	{"missing", [][]string{{"not found"}, {"missing"}}},
 }
 
 // detailBuckets are the error classes that additionally store a redacted
 // err_detail. "other" is the unclassified tail — undiagnosable without it.
-// unknown_subcommand and unknown_field carry only a CLI identifier (the
-// rejected subcommand or field path), not user content, which is exactly
-// what graduates them from "agent typed something wrong" into "agent typed
-// THIS wrong". Keep this list tight: only add a bucket whose message is
-// known to be a bounded identifier, never free-form user text.
+// The rest carry only a CLI identifier the user typed (a rejected subcommand,
+// field path, flag, arg count or landmark pair), not user content, which is
+// exactly what graduates them from "agent typed something wrong" into "agent
+// typed THIS wrong". Keep this list tight: only add a bucket whose message is
+// known to be a bounded identifier, never free-form user text — buckets whose
+// messages embed phase ids, config paths or token names stay detail-free.
 var detailBuckets = map[string]bool{
 	"other":              true,
 	"unknown_subcommand": true,
 	"unknown_field":      true,
+	"arg_count":          true,
+	"unknown_flag":       true,
+	"landmark_parse":     true,
 }
 
 // CarriesDetail reports whether an error class should store a redacted
@@ -360,15 +423,36 @@ func CarriesDetail(class string) bool {
 	return detailBuckets[class]
 }
 
+// Reclassify returns the effective error class of a stored event: the class it
+// was recorded with, unless that class is the catch-all "other" and the event
+// kept a detail, in which case the detail is re-run through the current
+// classifier.
+//
+// This is what lets a newly added bucket apply retroactively. Without it a
+// graduation only affects future events and the historical "other" count stays
+// fat, hiding the very shapes that were just solved. Readers call this; the log
+// itself is append-only and is never rewritten.
+//
+// Gating on the stored class (not merely on the presence of a detail) is
+// deliberate: an already-classified bucket keeps its recorded class even when
+// it carries a detail, so a re-run can never move an event out of a named
+// bucket — only out of "other".
+func Reclassify(ev Event) string {
+	if ev.ErrorClass != "other" || ev.ErrorDetail == "" {
+		return ev.ErrorClass
+	}
+	return ClassifyMessage(ev.ErrorDetail)
+}
+
 // maxDetailLen caps the err_detail string. Error messages are short; the
 // cap guards against a pathological wrapped error blowing up the log.
 const maxDetailLen = 240
 
 // Detail returns a redacted, length-capped form of an error message,
-// intended for the buckets CarriesDetail allows — the "other" tail plus
-// unknown_subcommand / unknown_field, whose messages are bounded CLI
-// identifiers. Callers must gate on CarriesDetail; attaching a detail to
-// any other classified bucket would leak text for no diagnostic gain.
+// intended for the buckets CarriesDetail allows — the "other" tail plus the
+// identifier-only buckets, whose messages are bounded CLI identifiers.
+// Callers must gate on CarriesDetail; attaching a detail to any other
+// classified bucket would leak text for no diagnostic gain.
 //
 // Redaction: the user's home directory is collapsed to "~" so absolute
 // paths don't leak. This is a deliberate, narrow exception to the

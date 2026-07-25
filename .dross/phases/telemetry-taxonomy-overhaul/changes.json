@@ -1,0 +1,71 @@
+{
+  "phase": "telemetry-taxonomy-overhaul",
+  "pr": 58,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/telemetry/telemetry.go",
+        "internal/telemetry/telemetry_test.go"
+      ],
+      "commit": "396f481",
+      "completed_at": "2026-07-25T09:01:24.652975Z",
+      "landmarks": [
+        {
+          "feature": "telemetry \u0026 stats",
+          "symbol": "classRules",
+          "loc": "internal/telemetry/telemetry.go:248",
+          "what": "taxonomy as ordered data — first-match-wins rule table replaces hand-ordered switch"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/telemetry/taxonomy_test.go"
+      ],
+      "commit": "e831c5b",
+      "completed_at": "2026-07-25T09:03:02.864769Z",
+      "landmarks": [
+        {
+          "feature": "telemetry \u0026 stats",
+          "symbol": "TestNoTokenShadowing",
+          "loc": "internal/telemetry/taxonomy_test.go:33",
+          "what": "order-dependence enforced — earlier matcher subsuming a later one fails the build"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/telemetry/testdata/error_corpus.jsonl",
+        "internal/telemetry/telemetry.go",
+        "internal/telemetry/telemetry_test.go"
+      ],
+      "commit": "ded2340",
+      "completed_at": "2026-07-25T09:05:07.601661Z",
+      "landmarks": [
+        {
+          "feature": "telemetry \u0026 stats",
+          "symbol": "classRules",
+          "loc": "internal/telemetry/telemetry.go:330",
+          "what": "generic-tier precedence: permission \u003e git \u003e network \u003e invalid \u003e missing, pinned by ambiguous-shape corpus rows"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/telemetry/telemetry.go",
+        "README.md",
+        "internal/telemetry/telemetry_test.go"
+      ],
+      "commit": "82ea84d",
+      "completed_at": "2026-07-25T09:06:28.880245Z",
+      "landmarks": [
+        {
+          "feature": "telemetry \u0026 stats",
+          "symbol": "TestReadmeDocumentsBucketTiers",
+          "loc": "internal/telemetry/telemetry_test.go:470",
+          "what": "README taxonomy claims kept honest — table-driven bucket completeness + tier-description pin"
+        }
+      ]
+    }
+  }
+}

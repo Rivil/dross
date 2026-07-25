@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -42,6 +43,69 @@ func BaseBranch() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// pushBaseIfAheadDrossOnly is the ship / phase-complete pre-flight safety net
+// (the chore_push locked decision): .dross-only chores committed to the local
+// base branch — a pause auto-snapshot, a gate auto-commit, a recovery restore —
+// sit unpushed and re-seed base divergence at the next squash-merge. Local-only
+// writers like pause never push; the commands already doing network absorb it.
+//
+// After a fetch it examines rev-list origin/<base>..<base>:
+//   - empty (or origin/<base> doesn't exist yet) → no-op
+//   - every ahead commit touches only .dross/ paths → git push origin <base>
+//   - any ahead commit touches a non-.dross path → refuse and push nothing;
+//     unpushed code on the base is a real divergence the user must reconcile
+//
+// A failed push is a hard error (the push_failure locked decision):
+// proceeding past it would re-seed the exact divergence this exists to kill.
+func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
+	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
+		return false, fmt.Errorf("git fetch: %w\n%s", err, out)
+	}
+	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/remotes/origin/"+base) != nil {
+		return false, nil // no origin/<base> to be ahead of
+	}
+	ahead, err := gitTrim(repoDir, "rev-list", "origin/"+base+".."+base)
+	if err != nil {
+		return false, fmt.Errorf("git rev-list origin/%s..%s: %w", base, base, err)
+	}
+	if ahead == "" {
+		return false, nil
+	}
+	behind, err := gitTrim(repoDir, "rev-list", base+"..origin/"+base)
+	if err != nil {
+		return false, fmt.Errorf("git rev-list %s..origin/%s: %w", base, base, err)
+	}
+	if behind != "" {
+		// True divergence (ahead AND behind): a push can't fast-forward, and
+		// the ff-only / --recover machinery downstream owns this state with
+		// its own guided errors — the safety net stays out of it. It only
+		// handles the purely-ahead base, where origin/<base> is an ancestor.
+		return false, nil
+	}
+	for _, sha := range strings.Fields(ahead) {
+		files, err := gitTrim(repoDir, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", sha)
+		if err != nil {
+			return false, fmt.Errorf("git diff-tree %s: %w", sha, err)
+		}
+		for _, f := range strings.Split(files, "\n") {
+			if f == "" {
+				continue
+			}
+			if !underDross(unquotePath(f)) {
+				return false, fmt.Errorf("local %s is ahead of origin/%s with commits touching non-.dross paths (e.g. %s in %.7s) — "+
+					"push or reconcile %s manually before continuing; refusing to push it for you",
+					base, base, f, sha, base)
+			}
+		}
+	}
+	if out, err := gitCombined(repoDir, "push", "origin", base); err != nil {
+		return false, fmt.Errorf("safety-net push of .dross chores on %s failed: %w\n%s\n"+
+			"Refusing to continue — proceeding would leave %s diverged from origin again.",
+			base, err, out, base)
+	}
+	return true, nil
 }
 
 // resolveNewWorkBase decides the branch that new phase/quick work should fork

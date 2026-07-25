@@ -482,7 +482,7 @@ func TestRankAreas(t *testing.T) {
 	now := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
 	in := []areaSignal{
 		{area: actionArea{label: "security"}, lastRun: now.Add(-5 * 24 * time.Hour)},
-		{area: actionArea{label: "quality"}},                                  // never run
+		{area: actionArea{label: "quality"}}, // never run
 		{area: actionArea{label: "tech-debt"}, lastRun: now.Add(-1 * 24 * time.Hour)},
 	}
 	got := rankAreas(in)
@@ -569,6 +569,58 @@ status = "done"
 	line := actionLine(t, out, "tech-debt")
 	if !strings.Contains(line, "last run") || strings.Contains(line, "never run") {
 		t.Fatalf("pruned-run-dir tech-debt line should read 'last run', got %q", line)
+	}
+}
+
+// TestTechdebtSkillPairPresent pins c-7's asset half directly: both the
+// dross-techdebt command shim and its prompt body exist. The parity test alone
+// would still pass if BOTH files were deleted — this pin fails then.
+func TestTechdebtSkillPairPresent(t *testing.T) {
+	root := repoRootFromTest(t)
+	cmds := mdNamesIn(t, filepath.Join(root, "assets", "commands"), "dross-")
+	prompts := mdNamesIn(t, filepath.Join(root, "assets", "prompts"), "")
+	if !cmds["techdebt"] {
+		t.Error("assets/commands/dross-techdebt.md is missing")
+	}
+	if !prompts["techdebt"] {
+		t.Error("assets/prompts/techdebt.md is missing")
+	}
+}
+
+// TestActionCatalogAllSlashCommands pins c-7's repoint: every actionCatalog
+// command is a slash command — no bare CLI string remains in the actions line.
+func TestActionCatalogAllSlashCommands(t *testing.T) {
+	for _, a := range actionCatalog {
+		if !strings.HasPrefix(a.command, "/") {
+			t.Errorf("area %q command %q must start with '/'", a.label, a.command)
+		}
+	}
+}
+
+// TestStatusTechdebtActionRendersSlashCommand pins the rendered actions line for
+// a stamped techdebt store: it must carry the runnable slash command plus its
+// run signal.
+func TestStatusTechdebtActionRendersSlashCommand(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	scaffoldPhaseWithSpecAndPlan(t, "01-done", `[phase]
+id = "01-done"
+[[task]]
+id = "t-1"
+wave = 1
+title = "schema"
+files = ["x.ts"]
+covers = ["c-1"]
+status = "done"
+`)
+	mustWrite(t, ".dross/phases/01-done/verify.toml", "verdict = \"pass\"\n")
+
+	root := filepath.Join(dir, ".dross")
+	stampArea(t, root, "techdebt", time.Now().UTC().Add(-2*24*time.Hour))
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if !strings.Contains(out, "/dross-techdebt · last run") {
+		t.Fatalf("stamped techdebt actions line must contain \"/dross-techdebt · last run\", got:\n%s", out)
 	}
 }
 
@@ -814,5 +866,43 @@ func TestStatusCover_ProgressBarEmptyTotal(t *testing.T) {
 	// actually gates the all-dots return.
 	if got := progressBar(2, 4, 4); got != "[██··]" {
 		t.Errorf("progressBar(2,4,4) = %q, want %q", got, "[██··]")
+	}
+}
+
+// --- status nag vs healed verifies (verify-auto-finalize c-4) ---
+
+// TestStatusNagSkipsResolvedFinalizedVerify: a phase whose verify.toml
+// verdict is resolved (and marker-finalized, as after a gate heal) must
+// not appear in status' unfinalized-verdicts nag; a genuinely pending
+// one must.
+func TestStatusNagSkipsResolvedFinalizedVerify(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "01-x")
+	mustWrite(t, ".dross/phases/01-x/verify.toml", `[verify]
+phase = "01-x"
+verdict = "pass"
+finalized = true
+`)
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Status()); err != nil {
+			t.Fatalf("status: %v", err)
+		}
+	})
+	if strings.Contains(out, "unfinalized verdict") {
+		t.Errorf("healed phase must not be nagged:\n%s", out)
+	}
+
+	// Flip to a genuinely pending verdict — the nag must appear.
+	mustWrite(t, ".dross/phases/01-x/verify.toml", `[verify]
+phase = "01-x"
+verdict = "pending"
+`)
+	out = captureStdout(t, func() {
+		if err := runCmd(t, Status()); err != nil {
+			t.Fatalf("status: %v", err)
+		}
+	})
+	if !strings.Contains(out, "unfinalized verdict") {
+		t.Errorf("pending verdict should be nagged:\n%s", out)
 	}
 }

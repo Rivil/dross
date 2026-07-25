@@ -396,7 +396,28 @@ func TestNextRunnableLowestWaveFirst(t *testing.T) {
 	}}
 	got := p.NextRunnable()
 	if got == nil || got.ID != "t-2" {
-		t.Errorf("expected t-2 (wave 1, alphabetic first); got %v", got)
+		t.Errorf("expected t-2 (wave 1, document-order first); got %v", got)
+	}
+}
+
+func TestNextRunnableFollowsDocumentOrder(t *testing.T) {
+	// Same wave, no deps: array position breaks the tie, not lexicographic id.
+	p := &Plan{Task: []Task{
+		{ID: "t-2", Wave: 1, Status: StatusPending},
+		{ID: "t-1", Wave: 1, Status: StatusPending},
+	}}
+	if got := p.NextRunnable(); got == nil || got.ID != "t-2" {
+		t.Errorf("expected t-2 (listed first); got %v", got)
+	}
+
+	// Wave still dominates document order: a wave-1 task listed after a
+	// wave-2 task is returned first.
+	q := &Plan{Task: []Task{
+		{ID: "t-1", Wave: 2, Status: StatusPending},
+		{ID: "t-2", Wave: 1, Status: StatusPending},
+	}}
+	if got := q.NextRunnable(); got == nil || got.ID != "t-2" {
+		t.Errorf("expected t-2 (wave dominates position); got %v", got)
 	}
 }
 
@@ -483,5 +504,40 @@ func TestSummaryCounts(t *testing.T) {
 	pending, inProgress, done, failed := p.Summary()
 	if done != 2 || inProgress != 1 || failed != 1 || pending != 2 {
 		t.Errorf("got d=%d ip=%d f=%d p=%d", done, inProgress, failed, pending)
+	}
+}
+
+// TestSaveTOMLAtomicFailurePreservesFile forces the temp write to fail (by
+// occupying <path>.tmp with a directory) and asserts the live file survives
+// byte-identical — the guarantee the old truncate-in-place os.Create lacked.
+func TestSaveTOMLAtomicFailurePreservesFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "plan.toml")
+
+	original := &Plan{Phase: PlanPhase{ID: "orig"}, Task: []Task{{ID: "t-1", Wave: 1, Title: "one"}}}
+	if err := original.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Occupy the temp path with a directory so os.Create(<path>.tmp) fails.
+	if err := os.Mkdir(path+".tmp", 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	changed := &Plan{Phase: PlanPhase{ID: "changed"}, Task: []Task{{ID: "t-9", Wave: 9, Title: "nine"}}}
+	if err := changed.Save(path); err == nil {
+		t.Fatal("expected Save to fail when the temp path is unavailable")
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("live file was mutated on failed save:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }

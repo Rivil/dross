@@ -1,0 +1,32 @@
+[phase]
+id        = "telemetry-taxonomy-overhaul"
+title     = "telemetry-taxonomy-overhaul"
+milestone = "v0.10"
+
+[[criteria]]
+id   = "c-1"
+text = "ClassifyMessage's precedence lives in an ordered rule table (data), not a hand-ordered switch; every checked-in corpus row keeps its current bucket after the refactor"
+
+[[criteria]]
+id   = "c-2"
+text = "A shadowing guard test fails when any earlier rule token would make a later rule's token unreachable (substring shadowing) — the order-dependence is enforced, not folklore"
+
+[[criteria]]
+id   = "c-3"
+text = "Generic-bucket overlap is audited: ambiguous multi-token shapes (invalid+missing, git+http, validate vs invalid, not-set vs missing) get corpus rows pinning the intended winner, with any real misclassifications fixed by reorder or token tightening"
+
+[[criteria]]
+id   = "c-4"
+text = "The taxonomy's tier order (root/state -> workflow-specific -> CLI surface -> generic safety-net -> other) is documented in the telemetry package doc and README bucket list, kept honest by a doc-sync test in the pattern of TestReadmeDocumentsDetailAllowlist"
+
+[[decisions]]
+key    = "rule_table"
+choice = "Refactor the classifier switch into an ordered []rule{bucket, tokens} table walked in order; behavior pinned by the corpus"
+why    = "Order is the taxonomy's central invariant — as data it becomes testable (shadowing guard) instead of comment-enforced"
+locked = true
+
+[[decisions]]
+key    = "bucket_stability"
+choice = "No bucket renames or removals; token sets may tighten or move but every existing bucket name survives"
+why    = "The append-only log and Reclassify re-derive history at read time — renames would silently orphan recorded classes in stats"
+locked = true

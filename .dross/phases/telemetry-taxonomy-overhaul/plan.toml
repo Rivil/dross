@@ -1,0 +1,47 @@
+task_seq = 0
+
+[phase]
+  id = "telemetry-taxonomy-overhaul"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Refactor classifier switch into ordered rule table"
+  files = ["internal/telemetry/telemetry.go", "internal/telemetry/telemetry_test.go"]
+  description = "Replace ClassifyMessage's switch with a package-level ordered rule table:\neach rule = bucket + matchers, a matcher = token set ALL required (covers the\n\"carries no\"+\"record\" compound case; most are single-token). Walk in order.\nBehavior identical: classifyCases + corpus stay green untouched. Export the\ntable read-only within the package for the guard test.\n"
+  covers = ["c-1"]
+  test_contract = ["if any rule's tokens or order drift from the old switch, the existing classifyCases table test fails", "if a corpus shape changes bucket, TestCorpusShapesClassifyAsExpected fails", "if the compound carries-no+record matcher regresses to single-token, the merge_pending classify case fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Add shadowing guard test over the rule table"
+  files = ["internal/telemetry/taxonomy_test.go"]
+  description = "New test walking rule pairs (i<j): a single-token matcher of an earlier rule\nwhose token is a substring of a later rule's matcher token makes that later\ntoken unreachable — fail with both bucket names and tokens. Test-only task:\nanything real it surfaces is fixed in t-3 (which owns reorder/tightening and\nruns after this guard exists).\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["if someone reorders the table so a generic token shadows a specific bucket's token, TestNoTokenShadowing fails naming both buckets", "if the guard itself is weakened (skips multi-rule scan), a seeded self-check case in the test fails"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 3
+  title = "Corpus rows pinning generic-bucket overlap winners"
+  files = ["internal/telemetry/testdata/error_corpus.jsonl", "internal/telemetry/telemetry.go", "internal/telemetry/telemetry_test.go"]
+  description = "Add corpus rows + classifyCases for ambiguous multi-token shapes: invalid+missing,\ngit+http/network, validate-vs-invalid, is-not-set-vs-missing, already-exists+invalid.\nWhere the current winner is wrong for a real shape, fix by reorder/token\ntightening in the table (bucket names untouched per bucket_stability).\n"
+  covers = ["c-3"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if precedence between the generic safety-net buckets changes, the new ambiguous-shape corpus rows fail naming the expected winner", "if a token tightening regresses a previously-classified real shape to 'other', TestCorpusOtherShareUnderCeiling or its row fails"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 4
+  title = "Document taxonomy tiers, doc-sync tested"
+  files = ["internal/telemetry/telemetry.go", "README.md", "internal/telemetry/telemetry_test.go"]
+  description = "Describe the tier order (root/state -> workflow-specific -> CLI surface ->\ngeneric safety-net -> other) in the package doc and the README bucket section.\nAdd TestReadmeDocumentsBucketTiers: iterate t-1's rule table and assert every\nbucket name appears in the README's bucket list (table-driven completeness,\nnot a fixed name list), plus pin the tier description text.\n"
+  covers = ["c-4"]
+  depends_on = ["t-1", "t-3"]
+  test_contract = ["if the README tier description is dropped or renamed away, TestReadmeDocumentsBucketTiers fails", "if any bucket in the rule table is missing from the README bucket list (including future additions), the table-driven completeness check fails"]
+  status = "done"

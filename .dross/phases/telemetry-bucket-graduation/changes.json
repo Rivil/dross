@@ -1,0 +1,89 @@
+{
+  "phase": "telemetry-bucket-graduation",
+  "pr": 56,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/telemetry/telemetry.go",
+        "internal/telemetry/telemetry_test.go",
+        "README.md"
+      ],
+      "commit": "aa18c3f",
+      "completed_at": "2026-07-25T06:42:57.732934Z",
+      "landmarks": [
+        {
+          "feature": "telemetry error classification",
+          "symbol": "ClassifyError",
+          "loc": "internal/telemetry/telemetry.go:285",
+          "what": "cobra arg-count/unknown-flag and landmark-parse shapes graduate out of the other bucket while keeping their rejected identifier in err_detail"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/telemetry/telemetry.go",
+        "internal/telemetry/telemetry_test.go",
+        "internal/cmd/telemetry_test.go",
+        "README.md"
+      ],
+      "commit": "e62aed6",
+      "completed_at": "2026-07-25T06:46:08.442916Z",
+      "landmarks": [
+        {
+          "feature": "telemetry error classification",
+          "symbol": "ClassifyError",
+          "loc": "internal/telemetry/telemetry.go:243",
+          "what": "merge-refusal, .dross config-load and missing-env-token shapes get named detail-free buckets"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/telemetry/telemetry.go",
+        "internal/telemetry/telemetry_test.go"
+      ],
+      "commit": "6d952e5",
+      "completed_at": "2026-07-25T06:47:42.323671Z",
+      "landmarks": [
+        {
+          "feature": "telemetry error classification",
+          "symbol": "Reclassify",
+          "loc": "internal/telemetry/telemetry.go:420",
+          "what": "read-time re-derivation of the effective class so new buckets apply to historical 'other' events without rewriting the append-only log"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/stats.go",
+        "internal/cmd/stats_test.go"
+      ],
+      "commit": "534862a",
+      "completed_at": "2026-07-25T06:50:05.175336Z",
+      "landmarks": [
+        {
+          "feature": "telemetry stats report",
+          "symbol": "renderOtherTail",
+          "loc": "internal/cmd/stats.go:238",
+          "what": "stats counts the re-derived class and prints the top 5 surviving unclassified shapes as the graduation queue, omitted when drained"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/telemetry/testdata/error_corpus.jsonl",
+        "internal/telemetry/corpus_test.go"
+      ],
+      "commit": "4244216",
+      "completed_at": "2026-07-25T06:52:50.25986Z",
+      "landmarks": [
+        {
+          "feature": "telemetry error classification",
+          "symbol": "TestCorpusOtherShareUnderCeiling",
+          "loc": "internal/telemetry/corpus_test.go:92",
+          "what": "checked-in corpus of real err_detail shapes pins each to its bucket and enforces an under-15% unclassified ceiling"
+        }
+      ]
+    }
+  }
+}

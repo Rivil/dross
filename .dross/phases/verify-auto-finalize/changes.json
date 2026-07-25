@@ -1,0 +1,73 @@
+{
+  "phase": "verify-auto-finalize",
+  "pr": 57,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_test.go"
+      ],
+      "commit": "e99dbd1",
+      "completed_at": "2026-07-25T08:35:09.177939Z",
+      "landmarks": [
+        {
+          "feature": "verify lifecycle",
+          "symbol": "finalizeVerify",
+          "loc": "internal/cmd/verify.go:126",
+          "what": "idempotent finalize core — finalized marker in verify.toml + phase-stamped telemetry events"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go",
+        "assets/prompts/verify.md"
+      ],
+      "commit": "9208e45",
+      "completed_at": "2026-07-25T08:37:13.337976Z",
+      "landmarks": [
+        {
+          "feature": "ship gates",
+          "symbol": "Ship",
+          "loc": "internal/cmd/ship.go:123",
+          "what": "verify gate heals resolved-but-unrecorded verdicts (records outcome event pre-refusal)"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "df239d8",
+      "completed_at": "2026-07-25T08:38:56.376601Z",
+      "landmarks": [
+        {
+          "feature": "phase lifecycle",
+          "symbol": "phaseComplete",
+          "loc": "internal/cmd/phase.go:296",
+          "what": "complete heals resolved-but-unrecorded verify verdicts before completion bookkeeping"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/stats.go",
+        "internal/cmd/stats_test.go",
+        "internal/cmd/status_test.go"
+      ],
+      "commit": "25a1f5e",
+      "completed_at": "2026-07-25T08:41:09.934743Z",
+      "landmarks": [
+        {
+          "feature": "telemetry stats",
+          "symbol": "renderOutcomes",
+          "loc": "internal/cmd/stats.go:290",
+          "what": "pending verify count = phases whose latest event is unresolved, not raw pending events"
+        }
+      ]
+    }
+  }
+}

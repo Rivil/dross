@@ -70,7 +70,7 @@ func changesRecord() *cobra.Command {
 	// StringArray (not StringSlice): each --landmark is one landmark whose value
 	// is comma-separated key=value pairs — cobra must NOT split it on commas.
 	c.Flags().StringArrayVar(&landmarkFlags, "landmark", nil,
-		`typed landmark "feature=…, symbol=…, loc=file:line, what=…" (repeatable)`)
+		`typed landmark "feature=…, symbol=…, loc=file:line, what=…" (repeatable; values may contain commas — a new pair starts only at a recognised key=)`)
 	_ = c.MarkFlagRequired("files")
 	return c
 }

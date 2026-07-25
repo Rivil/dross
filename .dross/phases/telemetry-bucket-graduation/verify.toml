@@ -1,0 +1,324 @@
+[verify]
+  phase = "telemetry-bucket-graduation"
+  generated_at = 2026-07-25T06:54:27.952624Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9575070821529745
+  mutants_killed = 1352
+  mutants_survived = 60
+  mutants_not_covered = 60
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/telemetry/telemetry_test.go:TestClassifyError (rows: `accepts 3 arg(s), received 2`, `requires at least 1 arg(s)`, `accepts between 1 and 2 arg(s)` -> arg_count)", "internal/telemetry/telemetry_test.go:TestClassifyError (rows: `unknown flag: --json`, `unknown shorthand flag: 'x' in -x`, `flag needs an argument: --commit` -> unknown_flag)", "internal/telemetry/telemetry_test.go:TestClassifyError (row: `unknown command \"quick\" for \"dross\"` -> unknown_subcommand)", "internal/telemetry/telemetry_test.go:TestGraduatedBucketsKeepTheirIdentifier", "internal/telemetry/corpus_test.go:TestCorpusShapesClassifyAsExpected (4 arg_count + 4 unknown_flag + 5 unknown_subcommand real shapes)"]
+  notes = "all three cobra surfaces asserted on the literal wordings cobra emits; the same shapes appear verbatim in the live log, so the table is not a synthetic restatement. Reverting any arm flips both the unit row and the corpus row."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/telemetry/telemetry_test.go:TestClassifyError (rows: `unknown landmark key \"loco\"`, `landmark pair \"what=...\" has no '='`, `landmark pair \"\" has an empty key` -> landmark_parse)", "internal/telemetry/corpus_test.go:TestCorpusShapesClassifyAsExpected (2 landmark_parse shapes)", "internal/telemetry/telemetry_test.go:TestGraduatedBucketsKeepTheirIdentifier"]
+  notes = "ordering above unknown_field is exercised by the `unknown landmark key` row — it contains \"unknown\" and would fall through to unknown_field if the case moved."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/telemetry/telemetry_test.go:TestClassifyError (rows: `is not merged upstream`, `is not merged into ... yet`, `cannot confirm ... has merged`, `carries no `completed <id>` record`, `hasn't advanced past`, `fast-forward of` -> merge_pending)", "internal/cmd/telemetry_test.go:TestTelemetryDetailFreeBucketsWriteNoText (merge_pending case)", "internal/telemetry/corpus_test.go:TestCorpusShapesClassifyAsExpected (3 merge_pending shapes)"]
+  notes = "all three named shapes (unmerged branch, unconfirmed PR, missing completed record) have their own row; the detail-free half is asserted at the write site, not just on the allowlist map."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/telemetry/telemetry_test.go:TestClassifyError (rows: `decode ~/proj/.dross/project.toml: toml: line 47 ...`, `read ~/proj/.dross/state.json: open ...: no such file` -> config_io)", "internal/cmd/telemetry_test.go:TestTelemetryDetailFreeBucketsWriteNoText (config_io case asserts the path never reaches the log)", "internal/telemetry/corpus_test.go:TestCorpusShapesClassifyAsExpected (3 config_io shapes)"]
+  notes = "covers all three sub-shapes (missing project.toml, missing state.json, TOML syntax error). Placement below state_io and below the spec/plan/verify group is pinned by those groups' own rows, which also name a .toml."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/telemetry/telemetry_test.go:TestClassifyError (row: `$JIRA_API_TOKEN is not set` -> env_token, plus `board: ... $JIRA_API_TOKEN is not set` -> board)", "internal/cmd/telemetry_test.go:TestTelemetryDetailFreeBucketsWriteNoText (env_token case asserts the token name never reaches the log)", "internal/telemetry/corpus_test.go:TestCorpusShapesClassifyAsExpected (2 env_token shapes)"]
+  notes = "the paired board row pins the ordering — moving env_token above `board:` would steal a board failure, and that row fails."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/stats_test.go:TestStatsTailTopFive (cap at 5 + descending count order + the count-1 shape cut)", "internal/cmd/stats_test.go:TestStatsTailOmittedWhenEmpty (no heading, no `(none)` placeholder)", "internal/cmd/stats_test.go:TestStatsTailTieOrderDeterministic", "internal/cmd/stats_test.go:TestStatsTailOneLinePerShape", "internal/cmd/stats_test.go:TestStatsReclassifiesOtherAtReadTime", "internal/cmd/stats_test.go:TestStatsReclassifyCountsEachEventOnce", "internal/cmd/stats_test.go:TestStatsShowNeverRewritesTheLog", "internal/telemetry/telemetry_test.go:TestReclassify"]
+  notes = "counts, cap, ordering and the empty-tail omission are each separately asserted; the locked read_time_reclassify decision is pinned by a byte-identical log assertion. Placement under the errors table is structural (renderOtherTail is the last call in renderErrorBuckets) rather than asserted by position — the only sub-clause without a direct assertion."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/telemetry/corpus_test.go:TestCorpusOtherShareUnderCeiling (share < 0.15 over the checked-in corpus)", "internal/telemetry/corpus_test.go:TestCorpusShapesClassifyAsExpected (per-shape regression, ratio-independent)", "internal/telemetry/corpus_test.go:loadCorpus (min 20 lines, no duplicate shapes, strict decode, non-empty fields)"]
+  notes = "gate is falsifiable by construction: loadCorpus refuses a shrunken or duplicated corpus and the ceiling test refuses a corpus with no want=\"other\" sentinel. Verified independently against the live log outside the test suite — 59 distinct real err_detail shapes, 0 still classify as other (0.0% vs the 15% ceiling), so the fixture is not flattering the number."
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: basebranch.go:104 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:105 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:109 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:114 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:119 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:470 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:470 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:472 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:472 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:474 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: pause.go:85 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: pause.go:86 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: pause.go:86 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:23 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: deferred.go:138 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:66 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:66 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:68 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:68 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:71 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:71 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:184 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:187 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:187 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:52 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:55 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:58 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:60 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:272 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:274 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:485 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:487 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:413 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:413 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:415 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:415 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:415 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:443 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:445 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:181 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:184 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:96 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: install.go:65 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: rule.go:143 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hooks.go:100 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: issue.go:472 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:27 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone.go:147 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: telemetry.go:46 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: telemetry.go:46 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/telemetry/testdata/error_corpus.jsonl: no mutation adapter for .jsonl"
+
+[[finding]]
+  severity = "NOTE"
+  text = "all 60 seeded FLAG mutants are NOT-COVERED, not survived-under-test: gremlins mutates the whole package, so 58 of them sit in internal/cmd files this phase never touched (env.go, ship.go, doctor.go, phase.go, status.go, ...). Efficacy excluding not-covered is 1.00. Consistent with the ship-clean-tree and landmark-comma-fix verifies, which passed with 58 of the same seeded FLAGs; these are not treated as partial-forcing."
+
+[[finding]]
+  severity = "NOTE"
+  text = "the only not-covered mutants in a file this phase touched are the two ARITHMETIC_BASE on internal/telemetry/telemetry.go:46 (`const MaxBytes = 10 * 1024 * 1024`). Const initializers are a known go-cover attribution ceiling, not a test gap, and MaxBytes participates in no criterion."
+
+[[finding]]
+  severity = "NOTE"
+  text = "zero surviving mutants in the criterion-bearing surface: ClassifyError / ClassifyMessage / Reclassify / CarriesDetail (internal/telemetry/telemetry.go:230-460) and renderErrorBuckets / renderOtherTail (internal/cmd/stats.go) are all fully killed, so no covered criterion downgrades to weak."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-7 cross-checked outside the fixture: replaying every distinct detail-carrying err_detail in ~/.claude/dross/telemetry.jsonl (59 shapes) through the current ClassifyMessage leaves 0 in `other`. The 15% ceiling holds on real data, not just the 27-line corpus."
+
+[[finding]]
+  severity = "NOTE"
+  text = "pre-existing, out of scope: renderErrorBuckets sorts the main bucket table by count only (stats.go:218, unchanged since the original stats commit 049e108), so equal-count buckets can reorder between runs. The new tail block does tie-break by shape. Candidate for telemetry-taxonomy-overhaul."

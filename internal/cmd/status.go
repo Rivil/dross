@@ -110,9 +110,12 @@ func Status() *cobra.Command {
 				}
 			}
 
-			// Next suggested action — heuristic from current state
+			// Fresh-session re-entry footer — the LAST line of status, byte-equal
+			// to the line inside `dross reentry`'s hook envelope so re-orienting
+			// after /clear reads the same text whichever surface the user (or
+			// SessionStart hook) hits.
 			Print("")
-			Printf("next:      %s\n", suggestNext(root, proj, st))
+			Print(reentryLine(root, proj, st))
 			return nil
 		},
 	}
@@ -242,12 +245,12 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	if verdict := readVerifyVerdict(filepath.Join(dir, "verify.toml")); verdict != "" {
 		switch verdict {
 		case "fail", "partial":
-			return "verify is " + verdict + " — open " + filepath.Join(".dross/phases", st.CurrentPhase, "verify.toml") + " for findings"
+			return "verify is " + verdict + " — /dross-execute " + st.CurrentPhase + " to amend, findings in " + filepath.Join(".dross/phases", st.CurrentPhase, "verify.toml")
 		case "pass":
-			// recorded changes? at least confirm there are some
+			// recorded changes = unshipped work → shipping is the next step
 			ch, _ := changes.Load(changes.FilePath(root, st.CurrentPhase), st.CurrentPhase)
 			if ch != nil && len(ch.Tasks) > 0 {
-				return "phase verified — start a new phase or move on"
+				return "/dross-ship — open the PR and complete the phase"
 			}
 		}
 	}
@@ -338,14 +341,13 @@ type actionArea struct {
 	available bool
 }
 
-// actionCatalog is the fixed set of non-spine areas. All three are now runnable:
-// /dross-secure and /dross-quality are slash commands, `dross techdebt` is a CLI
-// command. Each carries a state.toml under .dross/<stateDir>/ that records its
-// last run, so status can rank them by staleness.
+// actionCatalog is the fixed set of non-spine areas. All three are runnable
+// slash commands. Each carries a state.toml under .dross/<stateDir>/ that
+// records its last run, so status can rank them by staleness.
 var actionCatalog = []actionArea{
 	{label: "security", command: "/dross-secure", stateDir: "security", available: true},
 	{label: "quality", command: "/dross-quality", stateDir: "quality", available: true},
-	{label: "tech-debt", command: "dross techdebt", stateDir: "techdebt", available: true},
+	{label: "tech-debt", command: "/dross-techdebt", stateDir: "techdebt", available: true},
 }
 
 // areaSignal pairs an action area with its store-level last_run. A zero lastRun

@@ -70,3 +70,28 @@ func TestOnboardCover_NativeDevCommandFromPM(t *testing.T) {
 		t.Errorf("dev_command = %q, want %q (pm + \" dev\")", got.Runtime.DevCommand, "npm dev")
 	}
 }
+
+// TestOnboardEnsuresSameHooks pins init/onboard parity: onboard's ensure
+// produces a settings.json byte-identical to init's, so the two entry points
+// can never wire diverging hooks.
+func TestOnboardEnsuresSameHooks(t *testing.T) {
+	initCfg := t.TempDir()
+	chdir(t, t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", initCfg)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	onboardCfg := t.TempDir()
+	chdir(t, t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", onboardCfg)
+	if err := runCmd(t, Onboard()); err != nil {
+		t.Fatalf("onboard: %v", err)
+	}
+
+	initSettings := mustRead(t, filepath.Join(initCfg, "settings.json"))
+	onboardSettings := mustRead(t, filepath.Join(onboardCfg, "settings.json"))
+	if initSettings != onboardSettings {
+		t.Errorf("onboard's hooks diverge from init's:\n--- init ---\n%s\n--- onboard ---\n%s", initSettings, onboardSettings)
+	}
+}

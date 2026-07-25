@@ -511,3 +511,132 @@ func TestVerifyCover_RecordOutcomeNilTestsZeroScore(t *testing.T) {
 		t.Errorf("no mutation_score expected when summary score is 0:\n%s", body)
 	}
 }
+
+// TestConfiguredAdaptersAllowlist pins the [mutation] adapters escape hatch:
+// empty means all adapters; non-empty filters by Name(), so a polyglot repo
+// can run only the adapter that's actually set up.
+func TestConfiguredAdaptersAllowlist(t *testing.T) {
+	names := func(as []mutation.Adapter) []string {
+		var out []string
+		for _, a := range as {
+			out = append(out, a.Name())
+		}
+		return out
+	}
+
+	p := &project.Project{}
+	if got := names(configuredAdapters(p, "", false)); len(got) != 3 {
+		t.Fatalf("empty allowlist must return all adapters, got %v", got)
+	}
+
+	p.Mutation.Adapters = []string{"gremlins"}
+	got := names(configuredAdapters(p, "", false))
+	if len(got) != 1 || got[0] != "gremlins" {
+		t.Errorf("allowlist [gremlins] must filter to gremlins only, got %v", got)
+	}
+
+	p.Mutation.Adapters = []string{"stryker", "gremlins"}
+	got = names(configuredAdapters(p, "", false))
+	if len(got) != 2 {
+		t.Errorf("allowlist [stryker gremlins] must keep both, got %v", got)
+	}
+
+	if got := configuredAdapters(p, "", true); got != nil {
+		t.Errorf("--skip-mutation must still return nil regardless of allowlist, got %v", names(got))
+	}
+}
+
+// --- finalize idempotency + phase stamping (verify-auto-finalize c-2) ---
+
+// TestVerifyFinalizeIdempotentAndStampsPhase drives the full finalize
+// lifecycle: the mechanical run's pending event and the finalize
+// outcome event both carry the phase id; the first finalize writes the
+// finalized=true marker back into verify.toml; a second finalize emits
+// no duplicate outcome event, exits 0, and says "already recorded".
+func TestVerifyFinalizeIdempotentAndStampsPhase(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "") // re-enable telemetry recording
+
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	mustRunSet(t, "project.name", "x")
+	mustRunSet(t, "runtime.mode", "native")
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, ".dross/phases/01-auth/spec.toml", `[phase]
+id = "01-auth"
+title = "auth"
+[[criteria]]
+id = "c-1"
+text = "x"
+`)
+	mustWrite(t, ".dross/phases/01-auth/plan.toml", `[phase]
+id = "01-auth"
+[[task]]
+id = "t-1"
+wave = 1
+title = "x"
+files = ["src/auth.ts"]
+covers = ["c-1"]
+`)
+	if err := runCmd(t, Changes(), "record", "01-auth", "t-1",
+		"--files", "src/auth.ts", "--commit", "abc1234"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Verify(), "01-auth", "--skip-mutation"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+
+	telemPath := filepath.Join(home, ".claude/dross", "telemetry.jsonl")
+
+	// The mechanical pending event must carry the phase id.
+	if body := mustRead(t, telemPath); !strings.Contains(body, `"phase":"01-auth"`) {
+		t.Errorf("pending verify event should be phase-stamped:\n%s", body)
+	}
+
+	// Resolve the verdict as /dross-verify would.
+	verifyPath := filepath.Join(dir, ".dross/phases/01-auth/verify.toml")
+	body := mustRead(t, verifyPath)
+	mustWrite(t, ".dross/phases/01-auth/verify.toml",
+		strings.Replace(body, `verdict = "pending"`, `verdict = "pass"`, 1))
+
+	// First finalize: records, and writes the marker back.
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Verify(), "finalize", "01-auth"); err != nil {
+			t.Fatalf("finalize: %v", err)
+		}
+	})
+	if !strings.Contains(out, "verdict=pass recorded") {
+		t.Errorf("first finalize should say recorded:\n%s", out)
+	}
+	if vbody := mustRead(t, verifyPath); !strings.Contains(vbody, "finalized = true") {
+		t.Errorf("finalize must write finalized=true into verify.toml:\n%s", vbody)
+	}
+	telemBody := mustRead(t, telemPath)
+	if got := strings.Count(telemBody, `"verdict":"pass"`); got != 1 {
+		t.Fatalf("want exactly 1 pass outcome event after first finalize, got %d:\n%s", got, telemBody)
+	}
+	if !strings.Contains(telemBody, `"phase":"01-auth"`) {
+		t.Errorf("finalize outcome event should be phase-stamped:\n%s", telemBody)
+	}
+
+	// Second finalize: no duplicate event, exit 0, "already recorded".
+	out = captureStdout(t, func() {
+		if err := runCmd(t, Verify(), "finalize", "01-auth"); err != nil {
+			t.Fatalf("second finalize must exit 0, got: %v", err)
+		}
+	})
+	if !strings.Contains(out, "already recorded") {
+		t.Errorf("second finalize should say already recorded:\n%s", out)
+	}
+	telemBody = mustRead(t, telemPath)
+	if got := strings.Count(telemBody, `"verdict":"pass"`); got != 1 {
+		t.Errorf("second finalize emitted a duplicate outcome event (%d):\n%s", got, telemBody)
+	}
+}

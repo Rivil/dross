@@ -173,6 +173,8 @@ Status: merged | awaiting-merge
 
 Next: /dross-status — see where things stand.
       ↳ /dross-spec --new "<title>" — start the next phase.
+
+state is on disk — safe to /clear · fresh session: /dross-status
 ```
 
 If the PR opened but reviewer-request failed, surface that — it's non-fatal but the user should know.

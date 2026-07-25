@@ -1,0 +1,42 @@
+[phase]
+id        = "ship-clean-tree"
+title     = "ship-clean-tree"
+milestone = "v0.10"
+
+[[criteria]]
+id   = "c-1"
+text = "dross ship and dross phase complete auto-commit .dross/-only dirty bookkeeping (chore commit per repo convention) instead of refusing; a tree with non-.dross dirt still refuses"
+
+[[criteria]]
+id   = "c-2"
+text = ".dross/ chores committed to the base branch (pause auto-snapshot, recovery restore) no longer sit unpushed — after any ship/complete/recover, local base == origin/base"
+
+[[criteria]]
+id   = "c-3"
+text = "mergeGate resolves the recorded PR number even when the working tree is stale post-squash-merge (reads from origin/<base>'s tree or pre-reset fetched state), so phase complete no longer refuses in the 2026-07-23 stale-tree state"
+
+[[criteria]]
+id   = "c-4"
+text = "phase complete --recover performs its reset/heal before re-evaluating the merge gate, so the flag works in the diverged/stale state its own error recommends it for (merge verification still precedes the destructive reset)"
+
+[[criteria]]
+id   = "c-5"
+text = "--recover supports a milestone reconcile branch — resets/restores against milestone/<version> when that's the base instead of aborting with 'does not yet support milestone branches'"
+
+[[decisions]]
+key    = "chore_push"
+choice = "ship/complete pre-flight safety net: detect 'local base ahead of origin by .dross-only chores' and push then; writers like pause stay local-only"
+why    = "No network ops added to local commands; the commands already doing network absorb the push"
+locked = true
+
+[[decisions]]
+key    = "push_failure"
+choice = "safety-net push failure is a hard refusal with a clear error, not warn-and-continue"
+why    = "ship/complete already require network; proceeding past a failed push re-seeds the divergence this phase exists to kill"
+locked = true
+
+[[decisions]]
+key    = "autocommit_coverage"
+choice = "all three dirty-tree gates auto-commit .dross-only dirt: ship, phase complete, and phase create/start — one shared helper"
+why    = "A pause state-touch left dirty shouldn't block starting the next phase either; consistent behavior across gates"
+locked = true

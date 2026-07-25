@@ -24,6 +24,12 @@ type Stryker struct {
 	// For native, this is the cwd. For docker, this is the cwd on the host
 	// (we still read reports from the host filesystem).
 	ProjectRoot string
+	// Workdir is the repo-relative package that hosts stryker and its config
+	// in a monorepo (e.g. "web" when vitest + stryker.config.json live in
+	// web/, not the repo root). Empty means the repo root. The adapter runs
+	// stryker there, strips the prefix from --mutate paths, and re-prefixes
+	// report paths so tests.json stays repo-relative.
+	Workdir string
 }
 
 func (s *Stryker) Name() string { return "stryker" }
@@ -42,16 +48,8 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		return &Report{Tool: s.Name()}, nil
 	}
 
-	// Build mutate glob argument: "src/api/tags.ts,src/api/users.ts"
-	mutateArg := strings.Join(files, ",")
-
-	// Stryker invocation. --reporters json forces the json reporter so
-	// reports/mutation/mutation.json is written.
-	args := []string{"npx", "--yes", "stryker", "run",
-		"--mutate", mutateArg,
-		"--reporters", "json"}
-
-	cmd := s.buildCmd(args)
+	cmd := s.buildCmd(s.runArgs(files))
+	cmd.Dir = s.workDir()
 	cmd.Stdout = os.Stderr // streamed to user, not captured
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -64,7 +62,7 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		}
 	}
 
-	reportPath := filepath.Join(s.ProjectRoot, "reports", "mutation", "mutation.json")
+	reportPath := s.reportPath()
 	b, err := os.ReadFile(reportPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -72,7 +70,55 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		}
 		return nil, fmt.Errorf("read stryker report: %w", err)
 	}
-	return ParseStrykerJSON(b)
+	report, err := ParseStrykerJSON(b)
+	if err != nil {
+		return nil, err
+	}
+	s.rePrefixFiles(report)
+	return report, nil
+}
+
+// runArgs builds the stryker invocation. The scoped package name matters:
+// bare "stryker" on the npm registry is the ancient pre-scoped package and
+// crashes on modern Node (MODULE_NOT_FOUND); npx resolves a project-local
+// @stryker-mutator/core first and --yes fetches the right fallback.
+// --mutate paths are workdir-relative because stryker runs in Workdir.
+func (s *Stryker) runArgs(files []string) []string {
+	mutate := make([]string, 0, len(files))
+	for _, f := range files {
+		if s.Workdir != "" {
+			f = strings.TrimPrefix(f, s.Workdir+"/")
+		}
+		mutate = append(mutate, f)
+	}
+	return []string{"npx", "--yes", "@stryker-mutator/core", "run",
+		"--mutate", strings.Join(mutate, ","),
+		"--reporters", "json"}
+}
+
+// workDir is the directory stryker runs in — ProjectRoot, or the monorepo
+// package under it.
+func (s *Stryker) workDir() string {
+	if s.Workdir == "" {
+		return s.ProjectRoot
+	}
+	return filepath.Join(s.ProjectRoot, s.Workdir)
+}
+
+// reportPath is where stryker's json reporter writes, under the workdir.
+func (s *Stryker) reportPath() string {
+	return filepath.Join(s.workDir(), "reports", "mutation", "mutation.json")
+}
+
+// rePrefixFiles restores repo-relative paths in a report parsed from a
+// workdir run, so tests.json speaks the same paths as changes.json.
+func (s *Stryker) rePrefixFiles(r *Report) {
+	if s.Workdir == "" {
+		return
+	}
+	for i := range r.Surviving {
+		r.Surviving[i].File = s.Workdir + "/" + r.Surviving[i].File
+	}
 }
 
 // buildCmd returns an exec.Cmd that respects s.Prefix.

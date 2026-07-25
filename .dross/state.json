@@ -1,208 +1,208 @@
 {
-  "version": "0.9.8.1",
-  "current_milestone": "v0.9",
-  "last_activity": "2026-07-20T11:04:55.32479Z",
-  "last_action": "completed dross-watch",
+  "version": "0.10.9.0",
+  "current_milestone": "v0.10",
+  "last_activity": "2026-07-25T09:20:30.63431Z",
+  "last_action": "completed subagent-offload-audit",
   "history": [
     {
-      "at": "2026-07-01T10:36:12.283461Z",
-      "action": "completed verify-merge-before-completion"
+      "at": "2026-07-25T06:53:07.001564Z",
+      "action": "phase telemetry-bucket-graduation executed (5/5 done)"
     },
     {
-      "at": "2026-07-01T10:42:04.604424Z",
-      "action": "created ship-architecture-autogen"
-    },
-    {
-      "at": "2026-07-01T10:42:48.107525Z",
-      "action": "set current_phase=ship-architecture-autogen"
-    },
-    {
-      "at": "2026-07-01T10:42:48.113659Z",
-      "action": "spec locked: ship-architecture-autogen"
-    },
-    {
-      "at": "2026-07-01T10:43:26.759316Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-01T10:43:26.766281Z",
-      "action": "plan locked: ship-architecture-autogen (1 task, no-review: trivial prompt phase)"
-    },
-    {
-      "at": "2026-07-01T10:46:09.421476Z",
-      "action": "executed t-1 (Auto-backfill ARCHITECTURE.md on ship when absent)"
-    },
-    {
-      "at": "2026-07-01T10:46:15.19637Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-01T10:46:15.204135Z",
-      "action": "phase ship-architecture-autogen executed (1/1 done)"
-    },
-    {
-      "at": "2026-07-01T10:46:47.001201Z",
+      "at": "2026-07-25T07:05:15.600722Z",
       "action": "set current_phase_status=verified"
     },
     {
-      "at": "2026-07-01T10:46:47.008096Z",
-      "action": "verified ship-architecture-autogen: pass (3/3 covered, mutation not a signal — prompt+test-only)"
+      "at": "2026-07-25T07:05:15.607854Z",
+      "action": "verified telemetry-bucket-graduation: pass (7/7, mutation 0.96)"
     },
     {
-      "at": "2026-07-01T10:47:41.71719Z",
-      "action": "completed ship-architecture-autogen"
+      "at": "2026-07-25T07:48:44.290122Z",
+      "action": "completed telemetry-bucket-graduation"
     },
     {
-      "at": "2026-07-01T10:52:05.609336Z",
-      "action": "created pr-record-reaches-base"
+      "at": "2026-07-25T08:25:10.786554Z",
+      "action": "created verify-auto-finalize"
     },
     {
-      "at": "2026-07-01T10:53:20.3257Z",
-      "action": "set current_phase=pr-record-reaches-base"
+      "at": "2026-07-25T08:26:08.479435Z",
+      "action": "set current_phase=verify-auto-finalize"
     },
     {
-      "at": "2026-07-01T10:53:20.332689Z",
-      "action": "spec locked: pr-record-reaches-base"
+      "at": "2026-07-25T08:26:08.486751Z",
+      "action": "spec locked: verify-auto-finalize"
     },
     {
-      "at": "2026-07-01T10:53:43.585985Z",
+      "at": "2026-07-25T08:27:37.136497Z",
       "action": "set current_phase_status=planned"
     },
     {
-      "at": "2026-07-01T10:53:43.592613Z",
-      "action": "plan locked: pr-record-reaches-base (1 task, no-review: focused single-file fix)"
+      "at": "2026-07-25T08:27:37.14186Z",
+      "action": "plan locked: verify-auto-finalize (4 tasks across 2 waves)"
     },
     {
-      "at": "2026-07-01T10:56:50.647786Z",
-      "action": "executed t-1 (Push the PR-record commit to the phase branch)"
+      "at": "2026-07-25T08:31:05.96599Z",
+      "action": "plan reviewed: verify-auto-finalize (1 blocking resolved, 3 flags)"
     },
     {
-      "at": "2026-07-01T10:58:07.427214Z",
+      "at": "2026-07-25T08:31:58.645087Z",
+      "action": "set version=0.10.7.0"
+    },
+    {
+      "at": "2026-07-25T08:35:09.193163Z",
+      "action": "executed t-1 (Idempotent finalize core with finalized marker)"
+    },
+    {
+      "at": "2026-07-25T08:37:13.351055Z",
+      "action": "executed t-2 (Ship verify-gate auto-heals unfinalized verdicts)"
+    },
+    {
+      "at": "2026-07-25T08:38:56.387715Z",
+      "action": "executed t-3 (Phase complete auto-heals unfinalized verdicts)"
+    },
+    {
+      "at": "2026-07-25T08:41:09.947781Z",
+      "action": "executed t-4 (Stats counts unresolved pendings only)"
+    },
+    {
+      "at": "2026-07-25T08:41:16.061589Z",
       "action": "set current_phase_status=complete"
     },
     {
-      "at": "2026-07-01T10:58:07.434837Z",
-      "action": "phase pr-record-reaches-base executed (1/1 done)"
+      "at": "2026-07-25T08:41:16.068226Z",
+      "action": "phase verify-auto-finalize executed (4/4 done)"
     },
     {
-      "at": "2026-07-01T11:04:29.145076Z",
+      "at": "2026-07-25T08:49:46.483946Z",
       "action": "set current_phase_status=verified"
     },
     {
-      "at": "2026-07-01T11:04:29.152058Z",
-      "action": "verified pr-record-reaches-base: pass (3/3 covered, mutation 0.96, efficacy 1.00 on covered)"
+      "at": "2026-07-25T08:49:46.489635Z",
+      "action": "verified verify-auto-finalize: pass (4/4, mutation 0.96)"
     },
     {
-      "at": "2026-07-01T11:05:19.789207Z",
-      "action": "completed pr-record-reaches-base"
+      "at": "2026-07-25T08:51:06.998936Z",
+      "action": "completed verify-auto-finalize"
     },
     {
-      "at": "2026-07-01T12:24:58.452743Z",
-      "action": "created release-trust-and-distribution"
+      "at": "2026-07-25T08:54:13.435541Z",
+      "action": "created telemetry-taxonomy-overhaul"
     },
     {
-      "at": "2026-07-01T12:57:59.886181Z",
-      "action": "completed release-trust-and-distribution"
+      "at": "2026-07-25T08:54:58.503457Z",
+      "action": "set current_phase=telemetry-taxonomy-overhaul"
     },
     {
-      "at": "2026-07-01T13:19:43.692596Z",
-      "action": "created secure-quality-findings-followups"
+      "at": "2026-07-25T08:54:58.509059Z",
+      "action": "spec locked: telemetry-taxonomy-overhaul"
     },
     {
-      "at": "2026-07-01T13:30:39.022123Z",
-      "action": "completed secure-quality-findings-followups"
-    },
-    {
-      "at": "2026-07-01T13:39:12.636685Z",
-      "action": "created homebrew-and-windows-distribution"
-    },
-    {
-      "at": "2026-07-01T14:02:48.193346Z",
-      "action": "completed homebrew-and-windows-distribution"
-    },
-    {
-      "at": "2026-07-01T14:05:17.567171Z",
-      "action": "created additional-board-backends"
-    },
-    {
-      "at": "2026-07-01T14:42:32.268867Z",
-      "action": "completed additional-board-backends"
-    },
-    {
-      "at": "2026-07-20T08:23:42.664472Z",
-      "action": "created dross-watch"
-    },
-    {
-      "at": "2026-07-20T08:55:28.280923Z",
-      "action": "set current_phase=dross-watch"
-    },
-    {
-      "at": "2026-07-20T08:55:28.288769Z",
-      "action": "spec locked: dross-watch"
-    },
-    {
-      "at": "2026-07-20T09:08:23.10806Z",
+      "at": "2026-07-25T08:55:38.341592Z",
       "action": "set current_phase_status=planned"
     },
     {
-      "at": "2026-07-20T09:08:23.114886Z",
-      "action": "plan locked: dross-watch (5 tasks across 3 waves)"
+      "at": "2026-07-25T08:55:38.347948Z",
+      "action": "plan locked: telemetry-taxonomy-overhaul (4 tasks across 2 waves)"
     },
     {
-      "at": "2026-07-20T09:11:59.410928Z",
-      "action": "plan reviewed: dross-watch (0 blocking, 2 flags)"
+      "at": "2026-07-25T08:58:50.382334Z",
+      "action": "plan reviewed: telemetry-taxonomy-overhaul (0 blocking, 3 flags folded in)"
     },
     {
-      "at": "2026-07-20T09:15:51.758264Z",
-      "action": "set version=0.9.8.0"
+      "at": "2026-07-25T08:58:54.805964Z",
+      "action": "set version=0.10.5.0"
     },
     {
-      "at": "2026-07-20T09:19:31.683822Z",
-      "action": "executed t-1 (Watch state file + new/carried diff)"
+      "at": "2026-07-25T09:01:24.663135Z",
+      "action": "executed t-1 (rule table)"
     },
     {
-      "at": "2026-07-20T09:23:28.862331Z",
-      "action": "executed t-2 (Phase-drift classifier over all phases)"
+      "at": "2026-07-25T09:03:02.878437Z",
+      "action": "executed t-2 (shadowing guard)"
     },
     {
-      "at": "2026-07-20T09:27:49.034651Z",
-      "action": "executed t-4 (Extract mark-free inbound helper from issue pull)"
+      "at": "2026-07-25T09:05:07.612811Z",
+      "action": "executed t-3 (generic-tier audit)"
     },
     {
-      "at": "2026-07-20T10:02:25.283601Z",
-      "action": "executed t-3 (dross watch --json command + ranker)"
+      "at": "2026-07-25T09:06:28.892231Z",
+      "action": "executed t-4 (tier docs)"
     },
     {
-      "at": "2026-07-20T10:06:27.205759Z",
-      "action": "executed t-5 (/dross-watch skill + prompt tests + Exempt enrollment)"
-    },
-    {
-      "at": "2026-07-20T10:06:46.977267Z",
+      "at": "2026-07-25T09:06:33.316364Z",
       "action": "set current_phase_status=complete"
     },
     {
-      "at": "2026-07-20T10:06:46.98467Z",
-      "action": "phase dross-watch executed (5/5 done)"
+      "at": "2026-07-25T09:06:33.324113Z",
+      "action": "phase telemetry-taxonomy-overhaul executed (4/4 done)"
     },
     {
-      "at": "2026-07-20T10:11:31.70683Z",
-      "action": "set version=0.9.8.1"
-    },
-    {
-      "at": "2026-07-20T10:11:31.714124Z",
-      "action": "fix: scope watch drift to current milestone (history-cap false positives)"
-    },
-    {
-      "at": "2026-07-20T10:26:58.928885Z",
+      "at": "2026-07-25T09:07:26.352922Z",
       "action": "set current_phase_status=verified"
     },
     {
-      "at": "2026-07-20T10:26:58.937894Z",
-      "action": "verified dross-watch: pass (5/5 covered, mutation 0.96 measured; 47/49 survivors pre-existing/untouched, 2 switch-case ceiling)"
+      "at": "2026-07-25T09:07:26.35872Z",
+      "action": "verified telemetry-taxonomy-overhaul: pass (4/4, mutation 0.95)"
     },
     {
-      "at": "2026-07-20T11:04:55.32479Z",
-      "action": "completed dross-watch"
+      "at": "2026-07-25T09:08:03.752247Z",
+      "action": "completed telemetry-taxonomy-overhaul"
+    },
+    {
+      "at": "2026-07-25T09:10:15.315448Z",
+      "action": "created subagent-offload-audit"
+    },
+    {
+      "at": "2026-07-25T09:11:13.005499Z",
+      "action": "set current_phase=subagent-offload-audit"
+    },
+    {
+      "at": "2026-07-25T09:11:13.011751Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T09:11:13.017997Z",
+      "action": "spec+plan locked: subagent-offload-audit (3 tasks)"
+    },
+    {
+      "at": "2026-07-25T09:13:29.39247Z",
+      "action": "plan reviewed: subagent-offload-audit (0 blocking, 1 flag folded)"
+    },
+    {
+      "at": "2026-07-25T09:13:29.427563Z",
+      "action": "set version=0.10.9.0"
+    },
+    {
+      "at": "2026-07-25T09:16:34.68311Z",
+      "action": "executed t-1 (offload audit doc)"
+    },
+    {
+      "at": "2026-07-25T09:17:43.911663Z",
+      "action": "executed t-2 (verify offload)"
+    },
+    {
+      "at": "2026-07-25T09:19:11.498663Z",
+      "action": "executed t-3 (execute offload)"
+    },
+    {
+      "at": "2026-07-25T09:19:15.660999Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T09:19:15.666945Z",
+      "action": "phase subagent-offload-audit executed (3/3 done)"
+    },
+    {
+      "at": "2026-07-25T09:19:53.188534Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T09:19:53.195309Z",
+      "action": "verified subagent-offload-audit: pass (4/4, mutation skipped)"
+    },
+    {
+      "at": "2026-07-25T09:20:30.63431Z",
+      "action": "completed subagent-offload-audit"
     }
   ]
 }

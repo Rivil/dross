@@ -1,0 +1,54 @@
+{
+  "phase": "subagent-offload-audit",
+  "pr": 59,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "docs/subagent-offload-audit.md",
+        "internal/cmd/subagent_offload_audit_test.go"
+      ],
+      "commit": "de83813",
+      "completed_at": "2026-07-25T09:16:34.67149Z",
+      "landmarks": [
+        {
+          "feature": "interaction contract",
+          "symbol": "TestSubagentOffloadAuditCoversEveryPrompt",
+          "loc": "internal/cmd/subagent_offload_audit_test.go:41",
+          "what": "fail-closed per-prompt offload disposition audit (docs/subagent-offload-audit.md)"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "assets/prompts/verify.md",
+        "internal/cmd/verify_prompt_test.go"
+      ],
+      "commit": "5c21b79",
+      "completed_at": "2026-07-25T09:17:43.898858Z",
+      "landmarks": [
+        {
+          "feature": "verification",
+          "symbol": "TestVerifyPromptOffloadGuidance",
+          "loc": "internal/cmd/verify_prompt_test.go:17",
+          "what": "verify §2 offloads large criterion-mapping reads to read-only subagents; verdict stays main-loop"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "assets/prompts/execute.md",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "080e253",
+      "completed_at": "2026-07-25T09:19:11.487882Z",
+      "landmarks": [
+        {
+          "feature": "phase execution",
+          "symbol": "TestExecutePromptOffloadGuidance",
+          "loc": "internal/cmd/execute_prompt_test.go:130",
+          "what": "execute §1b offloads large code-insight reads to read-only subagents; edits stay main-loop"
+        }
+      ]
+    }
+  }
+}

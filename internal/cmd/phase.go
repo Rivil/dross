@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
+	"github.com/Rivil/dross/internal/verify"
 )
 
 func Phase() *cobra.Command {
@@ -287,21 +289,44 @@ points at a manual reconcile.`,
 			// (milestone/<version>) when one exists, else main — the same base
 			// resolver create/ship use. Under a milestone, complete ff's the
 			// milestone branch so main only advances at the milestone boundary.
-			reconcileBranch, milestoneActive, err := resolveNewWorkBase(repoDir, root)
+			reconcileBranch, _, err := resolveNewWorkBase(repoDir, root)
 			if err != nil {
 				return err
 			}
 			phaseBranch := "phase/" + phaseID
 
-			// Working tree must be clean — checkout and branch -D both
-			// behave better on a clean tree, and a dirty one usually
-			// signals the user hasn't finished the previous step.
-			status, err := gitTrim(repoDir, "status", "--porcelain")
-			if err != nil {
-				return fmt.Errorf("git status: %w", err)
+			// Heal-before-gate (mirrors ship's verify gate): a resolved
+			// verdict that was never finalized gets its outcome event
+			// recorded before completion proceeds. Runs before the branch
+			// switch — the phase's verify.toml lives on phase/<id> — and
+			// before autoCommitDrossDirt, which folds the marker write in.
+			// A missing verify.toml or unresolved verdict is left alone:
+			// complete doesn't gate on verify, and healing must never
+			// invent a verdict.
+			_, vToml := verify.FilePaths(root, phaseID)
+			if v, verr := verify.LoadVerify(vToml); verr == nil && v != nil && !v.Verify.Finalized {
+				switch v.Verify.Verdict {
+				case "pass", "partial", "fail":
+					recorded, verdict, herr := finalizeVerify(root, phaseID)
+					if herr != nil {
+						return fmt.Errorf("auto-finalize verify for %s: %w", phaseID, herr)
+					}
+					if recorded {
+						Printf("auto-finalized verify verdict=%s (was resolved but unrecorded)\n", verdict)
+					}
+				}
 			}
-			if status != "" {
-				return dirtyTreeError("completing", status)
+
+			// Working tree must be clean — checkout and branch -D both
+			// behave better on a clean tree. Bookkeeping-only dirt under
+			// .dross/ (a pause state-touch) is auto-committed and never
+			// blocks; any real code dirt still refuses.
+			committed, err := autoCommitDrossDirt(repoDir, "completing")
+			if err != nil {
+				return err
+			}
+			if committed {
+				Printf("auto-committed .dross-only bookkeeping\n")
 			}
 
 			// Read THIS phase's recorded PR number from its phase-scoped
@@ -331,6 +356,30 @@ points at a manual reconcile.`,
 				return fmt.Errorf("git fetch: %w\n%s", err, out)
 			}
 
+			// Safety net (c-2): .dross-only chores sitting unpushed on the
+			// local base (pause auto-snapshot, gate auto-commits) re-seed
+			// divergence at the next squash-merge. Complete already requires
+			// network, so it absorbs the push; a code-ahead base or a failed
+			// push is a hard refusal.
+			basePushed, err := pushBaseIfAheadDrossOnly(repoDir, reconcileBranch)
+			if err != nil {
+				return err
+			}
+			if basePushed {
+				Printf("pushed unpushed .dross chores on %s to origin\n", reconcileBranch)
+			}
+
+			// Origin-side fallback for the recorded PR (c-3): post-squash-merge
+			// the local working tree can be stale — ship committed the PR
+			// record onto phase/<id> and the squash carried it to origin/<base>,
+			// while the local read above saw a pre-record (or absent) file.
+			// Now that origin is fetched, read the record from origin/<base>'s
+			// tree so mergeGate can still take the authoritative provider path
+			// instead of the ancestry fallback.
+			if recordedPR == 0 {
+				recordedPR = originRecordedPR(repoDir, reconcileBranch, phaseID)
+			}
+
 			// Authoritative merge gate. Prefer the provider's "is PR #N
 			// merged?" status (via the recorded PR number): squash-merge
 			// rewrites SHAs so git ancestry can't confirm a squash-merged
@@ -348,39 +397,33 @@ points at a manual reconcile.`,
 			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+reconcileBranch); err != nil {
 				// The ff abort IS the divergence signal: local <branch> holds
 				// commits origin/<branch> doesn't. The clean-tree guard above
-				// already ran, so no uncommitted work is at risk.
-				if milestoneActive {
-					// --recover's reconcile branch is still hardcoded to main
-					// (deferred), so it must NOT be pointed at a milestone
-					// branch — that would reset the wrong branch. Abort
-					// non-destructively and steer to a manual reconcile.
-					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged.\n%s\n"+
-						"Reconcile it manually (save any local commits, then `git reset --hard origin/%s`). "+
-						"`--recover` does not yet support milestone branches, so nothing was reset.",
-						reconcileBranch, reconcileBranch, out, reconcileBranch)
-				}
-				// main path. Without --recover, refuse and point at the fix,
-				// changing nothing destructive.
+				// already ran, so no uncommitted work is at risk. The merge
+				// gate above already verified the PR is merged, so recovery
+				// (a destructive reset) never runs on an unverified merge.
+				//
+				// Without --recover, refuse and point at the fix, changing
+				// nothing destructive.
 				if !recoverFlag {
 					return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged.\n%s\n"+
 						"Re-run `dross phase complete --recover` to reset %s to origin and restore .dross/ "+
 						"(or use `dross ship recover`). Recovery is a destructive reset of local %s — read the abort first.",
 						reconcileBranch, reconcileBranch, out, reconcileBranch, reconcileBranch)
 				}
-				// --recover: reload state from the (now checked-out) main
-				// working tree so the recovery commit carries main's .dross/
-				// state, not the phase branch's stale copy loaded at the top of
-				// this RunE. Then delegate to the shared routine — the same heal
-				// `dross ship recover` runs — which resets to origin and restores
-				// the cumulative .dross/ tree in one shot.
+				// --recover: reload state from the (now checked-out) base
+				// working tree so the recovery commit carries the base's
+				// .dross/ state, not the phase branch's stale copy loaded at
+				// the top of this RunE. Then delegate to the shared routine —
+				// the same heal `dross ship recover` runs — which resets the
+				// base (main or milestone/<version>, c-5) to origin, restores
+				// the cumulative .dross/ tree, and pushes the restore.
 				rs, lerr := state.Load(filepath.Join(root, state.File))
 				if lerr != nil {
 					return fmt.Errorf("reload state for recovery: %w", lerr)
 				}
-				if rerr := runDrossRecovery(repoDir, root, p, rs, phaseID, ""); rerr != nil {
+				if rerr := runDrossRecovery(repoDir, root, rs, phaseID, "", reconcileBranch); rerr != nil {
 					return fmt.Errorf("recover diverged %s during complete: %w", reconcileBranch, rerr)
 				}
-				// Healed: main reset to origin with .dross/ restored. Fall
+				// Healed: base reset to origin with .dross/ restored. Fall
 				// through to the branch teardown below.
 			}
 
@@ -423,8 +466,28 @@ points at a manual reconcile.`,
 		},
 	}
 	c.Flags().BoolVar(&recoverFlag, "recover", false,
-		"on a diverged main, reset to origin and restore .dross/ in one shot instead of aborting")
+		"on a diverged base (main or milestone/<version>), reset to origin and restore .dross/ in one shot instead of aborting")
 	return c
+}
+
+// originRecordedPR reads the phase's recorded PR number out of
+// origin/<base>'s committed tree (post-fetch). It exists for the stale-tree
+// completion state: the squash-merge landed .dross/phases/<id>/changes.json —
+// PR number included — on origin/<base>, but the local checkout predates the
+// record so the working-tree read comes up empty. Best-effort: any git or
+// parse failure (ref missing, file absent on that ref, malformed JSON) returns
+// 0 and the caller's ancestry fallback stands.
+func originRecordedPR(repoDir, base, phaseID string) int {
+	ref := "origin/" + base + ":" + ".dross/phases/" + phaseID + "/changes.json"
+	out, err := exec.Command("git", "-C", repoDir, "show", ref).Output()
+	if err != nil {
+		return 0
+	}
+	var ch changes.Changes
+	if err := json.Unmarshal(out, &ch); err != nil {
+		return 0
+	}
+	return ch.PR
 }
 
 // mergeGate is the authoritative completion gate for `dross phase complete`.
@@ -471,16 +534,17 @@ func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconci
 // It keeps the clean-tree and no-existing-ref guards but — unlike the old
 // preflight — does NOT require being on main first, because under the v0.7
 // branch topology the base may be a milestone integration branch reached from
-// anywhere. The checkout is the only side effect; the caller owns directory
-// creation and rollback. Returns the resolved base and whether a milestone
-// branch was used (so create can tailor the no-milestone nudge).
+// anywhere. Side effects are the checkout plus at most one chore(dross)
+// auto-commit of .dross-only dirt (autoCommitDrossDirt); the caller owns
+// directory creation and rollback. Returns the resolved base and whether a
+// milestone branch was used (so create can tailor the no-milestone nudge).
 func forkPhaseBranch(repoDir, root, branchName string) (base string, milestoneActive bool, err error) {
-	status, err := gitTrim(repoDir, "status", "--porcelain")
+	committed, err := autoCommitDrossDirt(repoDir, "starting a phase")
 	if err != nil {
-		return "", false, fmt.Errorf("git status: %w", err)
+		return "", false, err
 	}
-	if status != "" {
-		return "", false, dirtyTreeError("starting a phase", status)
+	if committed {
+		Printf("auto-committed .dross-only bookkeeping\n")
 	}
 	if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branchName); err == nil {
 		return "", false, fmt.Errorf("branch %s already exists locally; delete it first or pass --no-branch", branchName)

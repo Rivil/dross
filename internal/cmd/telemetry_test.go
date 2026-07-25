@@ -187,3 +187,44 @@ func TestTelemetryCover_RunErrBranch(t *testing.T) {
 		t.Errorf("want exactly one exit=0 event, got %d", exit0)
 	}
 }
+
+// TestTelemetryDetailFreeBucketsWriteNoText is the privacy end of the
+// detail_allowlist decision, asserted where the write actually happens rather
+// than on the allowlist map alone. merge_pending, config_io and env_token
+// messages embed a phase id, a config path and a token name respectively; if
+// RecordCLIEvent ever stopped gating the detail on CarriesDetail, all three
+// would reach the log. The assertions check both the bucket (so a
+// misclassified row can't pass vacuously) and the empty err_detail.
+func TestTelemetryDetailFreeBucketsWriteNoText(t *testing.T) {
+	telemetryCovEnable(t)
+
+	cases := []struct {
+		err    error
+		class  string
+		secret string // the substring that must not reach the log
+	}{
+		{errors.New("PR #55 for 03-telemetry is not merged upstream — refusing to complete"), "merge_pending", "03-telemetry"},
+		{errors.New("decode ~/proj/.dross/project.toml: toml: line 47: expected value"), "config_io", "project.toml"},
+		{errors.New("$JIRA_API_TOKEN is not set; run `dross env set JIRA_API_TOKEN` in your shell"), "env_token", "JIRA_API_TOKEN"},
+	}
+	for _, c := range cases {
+		RecordCLIEvent(nil, 0, c.err)
+	}
+
+	evs, err := telemetry.Load(telemetryPath())
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(evs) != len(cases) {
+		t.Fatalf("want %d events, got %d", len(cases), len(evs))
+	}
+	for i, e := range evs {
+		c := cases[i]
+		if e.ErrorClass != c.class {
+			t.Errorf("event %d: ErrorClass = %q want %q", i, e.ErrorClass, c.class)
+		}
+		if e.ErrorDetail != "" {
+			t.Errorf("event %d (%s): err_detail must be empty, got %q — %q would leak", i, c.class, e.ErrorDetail, c.secret)
+		}
+	}
+}

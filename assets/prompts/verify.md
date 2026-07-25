@@ -42,6 +42,8 @@ If mutation testing fails to run (e.g. Stryker not installed), surface the error
 
 For each criterion in `spec.toml`, find the test(s) that would fail if that criterion broke. This is where you actually *do* the verify work.
 
+**Offload the reading when the surface is large.** When this phase's surface is large — many criteria × many test files, or a long surviving-mutant list in `tests.json` — don't drag it all into the main context: fan out read-only subagents (one per criterion or per test area) that read `tests.json` and grep the test files, and return per-criterion **candidate** mappings (test name, file:line, what its assertion exercises, relevant surviving mutants). The classification judgement (§ step 4), the mutation cross-check, and the verdict stay in the main loop — per the `dross-agent-gate` rule, fan-out agents are read-only and never fill in verify.toml or decide the verdict. For a small phase, stay inline — the subagent hop isn't worth it (see docs/subagent-offload-audit.md).
+
 For each criterion `c-N`:
 
 1. Restate the criterion in your own words. ("c-1: user can attach up to 10 tags per meal.")
@@ -147,7 +149,7 @@ Record the resolved verdict in telemetry so `dross stats` and downstream gates c
 ```
 dross verify finalize <phase-id>
 ```
-This is only valid after the verdict in `verify.toml` is one of `pass | partial | fail`. If you skipped step 3 or left `verdict = "pending"`, this command will refuse — go back and finalize the file first.
+This is only valid after the verdict in `verify.toml` is one of `pass | partial | fail`. If you skipped step 3 or left `verdict = "pending"`, this command will refuse — go back and finalize the file first. Finalize is idempotent (a re-run reports "already recorded"), and it writes a `finalized = true` marker into `verify.toml` — include that change in the verify-artefacts commit below. Safety net: if this step is skipped, `dross ship` and `dross phase complete` auto-finalize a resolved verdict themselves — but run it here anyway so telemetry reflects when the verdict was actually decided.
 
 Update state:
 ```
@@ -176,6 +178,8 @@ Next:
       ↳ --no-push          — preview the PR body and diff without pushing
   /dross-spec <next-id>    — start the next phase
   dross phase list         — see all phases
+
+state is on disk — safe to /clear · fresh session: /dross-ship
 ```
 
 3. Otherwise (last phase in the milestone), print:
@@ -187,6 +191,8 @@ Next:
       ↳ --draft            — open the PR in draft (work-in-progress)
       ↳ --no-push          — preview the PR body and diff without pushing
   dross milestone show     — review milestone status before tagging the release
+
+state is on disk — safe to /clear · fresh session: /dross-ship
 ```
 
 If `partial` or `fail`:
@@ -197,6 +203,8 @@ Next:
   /dross-execute <id>      — amend the failing task (add tests / fix code)
       ↳ --from <task-id>   — resume at the failing task, skipping earlier done tasks
   /dross-verify            — re-run after addressing blocking findings
+
+state is on disk — safe to /clear · fresh session: /dross-execute <id>
 ```
 
 ## Hard rules

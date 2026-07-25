@@ -1,0 +1,77 @@
+task_seq = 0
+
+[phase]
+  id = "context-hygiene"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add hook-merge helper for settings.json"
+  files = ["internal/hooks/settings.go", "internal/hooks/settings_test.go"]
+  description = "New internal/hooks package: merge a dross hook entry (PreCompact / SessionStart)\ninto an existing ~/.claude/settings.json without disturbing foreign entries.\n"
+  covers = ["c-3", "c-5"]
+  test_contract = ["if idempotency breaks, TestMergeHookIdempotent fails: installing the same hook twice must yield byte-identical settings.json", "if merge clobbers, TestMergeHookPreservesForeign fails: a pre-existing foreign PreCompact or SessionStart entry survives untouched, unreordered, sibling keys intact", "if error handling breaks, TestMergeHookRejectsGarbage fails: malformed settings.json returns an error and writes nothing (no partial clobber)"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Add dross pause --auto snapshot verb"
+  files = ["internal/cmd/pause.go", "internal/cmd/pause_test.go", "internal/cmd/root.go"]
+  description = "Non-interactive `dross pause --auto`: write/merge ONLY a dedicated\n'## Auto-snapshot' block (branch, dirty files, dross status, injected timestamp)\ninto .dross/handoff.md. Never prompts; no-ops (exit 0) outside a dross repo.\n"
+  covers = ["c-3"]
+  test_contract = ["if section scoping breaks, TestPauseAutoPreservesHandwritten fails: hand-edited '## Thread' / '## Open loops' sections stay byte-identical, only '## Auto-snapshot' is rewritten", "if merge breaks, TestPauseAutoIdempotentMerge fails: a second run updates the block in place — no duplicate section, next '##' heading not consumed", "if interactivity leaks, TestPauseAutoNoPrompt fails: --auto never reads stdin", "if repo detection breaks, TestPauseAutoNoopOutsideRepo fails: outside a dross repo exits 0 and creates no file"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Add clear-point footer to boundary prompts"
+  files = ["assets/prompts/spec.md", "assets/prompts/plan.md", "assets/prompts/execute.md", "assets/prompts/verify.md", "assets/prompts/ship.md", "assets/prompts/quick.md", "assets/prompts/pause.md"]
+  description = "Each boundary prompt's wrap-up ends with the literal sentinel\n'state is on disk — safe to /clear' plus the exact next command for a fresh\nsession. Uniform wording so the t-6 gate matches one sentinel.\n"
+  covers = ["c-1"]
+  test_contract = ["if a footer is missing or malformed, TestBoundaryPromptsCarryFooter fails naming the prompt: each of the seven must contain the sentinel followed by a concrete /dross-… next command"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Add dross reentry + status re-entry footer"
+  files = ["internal/cmd/reentry.go", "internal/cmd/reentry_test.go", "internal/cmd/status.go", "internal/cmd/status_test.go", "internal/cmd/root.go"]
+  description = "Shared reentryLine() generator feeds both surfaces: new `dross reentry` prints\none 'you are here + exact next command' line (reusing suggestNext), silent exit 0\noutside a dross repo (SessionStart-safe); `dross status` ends with the same line.\n"
+  covers = ["c-4", "c-5"]
+  test_contract = ["if repo detection breaks, TestReentryNoopOutsideRepo fails: outside a dross repo `dross reentry` exits 0 with empty stdout", "if the suggestion drifts, TestReentryMatchesSuggestNext fails: the line names the same command suggestNext returns (no plan → /dross-spec; next-runnable → /dross-execute)", "if the status footer regresses, TestStatusEndsWithReentryLine fails: `dross status`'s LAST printed line is byte-equal to `dross reentry`'s output"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Add post-commit checkpoint gate to execute"
+  files = ["assets/prompts/execute.md", "internal/cmd/execute_prompt_test.go"]
+  description = "Introduce a post-commit pair-mode gate (execute.md has none today): after each\ntask commit, offer continue / stop / checkpoint. Checkpoint confirms plan.toml +\nstate consistency, then ends the session with '/clear → /dross-execute --from\n<next-task>'. Checkpoint is the recommended lead at wave boundaries\n(checkpoint_posture decision). Depends on t-3: both edit execute.md.\n"
+  covers = ["c-2"]
+  depends_on = ["t-3"]
+  test_contract = ["if the gate is missing or grafted onto the pre-task approach gate, the prompt test fails: execute.md must have a POST-COMMIT gate enumerating continue, stop, AND checkpoint", "if ordering breaks, the prompt test fails: checkpoint instructs the plan.toml/state consistency check BEFORE emitting --from <next-task>", "if posture regresses, the prompt test fails: the wave-boundary branch marks checkpoint as the recommended lead option"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Add footer-audit doc + fail-closed gate"
+  files = ["internal/cmd/footer_coverage.go", "internal/cmd/footer_coverage_test.go", "docs/footer-audit.md"]
+  description = "Mirror the interaction-audit convention (footer_coverage decision): classify\nevery command-backed prompt as footer-bearing or exempt-with-reason in a\ndedicated docs/footer-audit.md, enforced by a fail-closed Go gate.\n"
+  covers = ["c-1"]
+  depends_on = ["t-3"]
+  test_contract = ["if a footer is deleted, TestFooterCoverageFailClosed fails naming the prompt (e.g. removing ship.md's sentinel names 'ship')", "if classification lapses, the gate fails: a new boundary prompt with neither footer nor Exempt row fails; an exempt row without a reason cell fails", "if the audit shrinks, TestClearPointExemptRemovalFails fails: dropping an existing command from the Exempt list is rejected"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 2
+  title = "Scaffold user-level hooks in init/onboard"
+  files = ["internal/cmd/hooks.go", "internal/cmd/hooks_test.go", "internal/cmd/init.go", "internal/cmd/onboard.go", "internal/cmd/init_test.go", "internal/cmd/onboard_test.go"]
+  description = "Idempotent ensure wiring user-level ~/.claude/settings.json — PreCompact →\n`dross pause --auto`, SessionStart → `dross reentry` — via t-1's merge helper;\nboth init and onboard call it (hook_scope decision). Depends on t-2/t-4 for the\nverbs' existence; hook command strings are plan-fixed constants.\n"
+  covers = ["c-3", "c-5"]
+  depends_on = ["t-1", "t-2", "t-4"]
+  test_contract = ["if idempotency breaks, TestInitEnsuresHooksIdempotent fails: running init's ensure twice (vs a temp CLAUDE_CONFIG_DIR) leaves exactly one dross PreCompact and one dross SessionStart entry", "if merge clobbers, the test fails: a pre-existing foreign PreCompact hook survives the ensure", "if the paths diverge, TestOnboardEnsuresSameHooks fails: onboard's ensure produces settings.json byte-identical to init's"]
+  status = "done"

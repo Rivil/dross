@@ -248,6 +248,52 @@ func TestParseLandmark(t *testing.T) {
 	}
 }
 
+func TestParseLandmarkCommaInValue(t *testing.T) {
+	// Contract: a comma joins the value unless it opens a recognised key= pair.
+	lm, err := ParseLandmark("what=a, b")
+	if err != nil {
+		t.Fatalf("comma-in-value should parse: %v", err)
+	}
+	if lm.What != "a, b" {
+		t.Errorf("comma-joined value: got %q, want %q", lm.What, "a, b")
+	}
+
+	// An unrecognised key= after a comma joins too — only the four landmark
+	// keys open a new pair. This is the boundary rule's discriminator.
+	lm, err = ParseLandmark("what=a, y=2")
+	if err != nil {
+		t.Fatalf("unrecognised key= segment should join, not error: %v", err)
+	}
+	if lm.What != "a, y=2" {
+		t.Errorf("unrecognised key= join: got %q, want %q", lm.What, "a, y=2")
+	}
+
+	// Mixed: a real pair boundary after a comma-bearing value.
+	lm, err = ParseLandmark("feature=X, what=a, b")
+	if err != nil {
+		t.Fatalf("mixed landmark should parse: %v", err)
+	}
+	if lm.Feature != "X" || lm.What != "a, b" {
+		t.Errorf("mixed landmark fields: %+v", lm)
+	}
+
+	// Interior text is preserved as typed; only the value's ends are trimmed.
+	lm, err = ParseLandmark("what=  a,  b  ")
+	if err != nil {
+		t.Fatalf("padded value should parse: %v", err)
+	}
+	if lm.What != "a,  b" {
+		t.Errorf("interior whitespace must survive: got %q, want %q", lm.What, "a,  b")
+	}
+}
+
+func TestParseLandmarkDuplicateKey(t *testing.T) {
+	// Contract: a duplicate key is a loud parse error, not last-writer-wins.
+	if _, err := ParseLandmark("feature=x, feature=y"); err == nil {
+		t.Error("expected error for duplicate landmark key, got nil")
+	}
+}
+
 func TestLandmarkRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "changes.json")

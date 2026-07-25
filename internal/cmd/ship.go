@@ -122,6 +122,26 @@ func Ship() *cobra.Command {
 			if p.Remote.URL == "" || p.Remote.Provider == "" {
 				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
 			}
+			// Heal-before-gate: a resolved verdict that was never
+			// finalized gets its outcome event recorded here, BEFORE the
+			// pass-only refusal — a partial/fail verdict is recorded,
+			// then still refused. Keeps the forget-to-finalize hole from
+			// leaking pending events into stats. The marker write dirties
+			// verify.toml; the pre-stage autoCommitDrossDirt below folds
+			// it into the push.
+			switch vrf.Verify.Verdict {
+			case "pass", "partial", "fail":
+				if !vrf.Verify.Finalized {
+					recorded, verdict, err := finalizeVerify(root, phaseID)
+					if err != nil {
+						return fmt.Errorf("auto-finalize verify for %s: %w", phaseID, err)
+					}
+					if recorded {
+						narrate("auto-finalized verify verdict=%s (was resolved but unrecorded)\n", verdict)
+					}
+					vrf.Verify.Finalized = true
+				}
+			}
 			if vrf.Verify.Verdict != "pass" && !forceUnverified {
 				switch vrf.Verify.Verdict {
 				case "pending":
@@ -170,6 +190,18 @@ func Ship() *cobra.Command {
 			if noPush {
 				narrate("--no-push set; not pushing or opening PR.\n")
 				return nil
+			}
+
+			// Pre-stage gate: the tree must be clean before ship starts
+			// staging its own commits. Bookkeeping-only dirt under .dross/
+			// is auto-committed so it rides the push; any other dirt refuses
+			// before anything is staged or pushed.
+			drossCommitted, err := autoCommitDrossDirt(repoDir, "shipping")
+			if err != nil {
+				return err
+			}
+			if drossCommitted {
+				narrate("auto-committed .dross-only bookkeeping\n")
 			}
 
 			// 5) Fold the completion record into the squash. Write the
@@ -226,6 +258,18 @@ func Ship() *cobra.Command {
 			// branch model).
 			if !milestoneActive && s.CurrentMilestone == "" {
 				narrate("no milestone active — PR targets %s; scope one with `dross milestone <version>` for a staging branch\n", baseBranch)
+			}
+
+			// Safety net (c-2): .dross-only chores sitting unpushed on the
+			// local base re-seed divergence at the next squash-merge. Ship
+			// already requires network, so it absorbs the push; a code-ahead
+			// base or a failed push is a hard refusal.
+			basePushed, err := pushBaseIfAheadDrossOnly(repoDir, baseBranch)
+			if err != nil {
+				return err
+			}
+			if basePushed {
+				narrate("pushed unpushed .dross chores on %s to origin\n", baseBranch)
 			}
 
 			// 7) Push phase/<id> directly. The provider's squash-merge will

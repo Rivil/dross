@@ -150,6 +150,50 @@ func TestSpecPromptSomedayOnlyExplicit(t *testing.T) {
 	}
 }
 
+// TestSpecPromptNoFreeRecall proves the deletion half of the slate rework: the
+// §2 free-recall "list 3-7 outcomes" ask is gone. Restore the phrase and this
+// fails.
+func TestSpecPromptNoFreeRecall(t *testing.T) {
+	content := specPromptContent(t)
+	if strings.Contains(content, "list 3-7") {
+		t.Error("spec.md §2 must not free-ask 'list 3-7' outcomes — the candidate slate replaced it")
+	}
+}
+
+// TestSpecPromptCandidateSlate proves the slate half: §2 opens with a proposed
+// candidate slate derived from milestone scope + gap analysis, gated per item
+// with accept/reword/drop, and keeps the trailing catch-all.
+func TestSpecPromptCandidateSlate(t *testing.T) {
+	content := specPromptContent(t)
+	for _, needle := range []string{
+		"candidate slate",        // propose/candidate framing
+		"milestone scope",        // derivation: milestone success criteria + position
+		"gap analysis",           // derivation: CLI/context delta
+		"accept / reword / drop", // per-item gate
+		"one per turn",           // per-item, not batched
+		"anything missing",       // retained catch-all
+	} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("spec.md §2 candidate-slate framing missing %q", needle)
+		}
+	}
+}
+
+// TestSpecPromptQualityBar pins the retained §2 quality bar — the
+// testable/measurable pushback survives the slate rework.
+func TestSpecPromptQualityBar(t *testing.T) {
+	content := specPromptContent(t)
+	for _, needle := range []string{
+		"push back",
+		"not testable",
+		"measurable",
+	} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("spec.md §2 quality bar missing %q", needle)
+		}
+	}
+}
+
 // TestSpecPromptResurfaceSeed proves c-4: §1 seeds candidate criteria via the
 // `dross deferred list --target … --json` CLI lookup, not a prompt-side grep.
 func TestSpecPromptResurfaceSeed(t *testing.T) {

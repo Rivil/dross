@@ -1,0 +1,72 @@
+[verify]
+  phase = "task-lifecycle-commands"
+  generated_at = 2026-07-20T14:20:39.900356Z
+  verdict = "pass"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9569811320754718
+  mutants_killed = 1268
+  mutants_survived = 57
+  mutants_not_covered = 57
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [
+    "internal/cmd/task_test.go:TestTaskAddTailAppend",
+    "internal/phase/plan_edit_test.go:TestNextTaskID",
+  ]
+  notes = "add --title/--covers appends a task with a fresh high-water id and dross validate exits 0; NextTaskID unit test pins the id assignment."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [
+    "internal/cmd/task_test.go:TestTaskAddAfterAnchor",
+    "internal/cmd/task_test.go:TestTaskAddTailAppend",
+    "internal/phase/plan_edit_test.go:TestAddTask",
+  ]
+  notes = "default tail-append and --after placement both proven; TestAddTask asserts existing ids/fields are byte-equal (no renumber)."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = [
+    "internal/cmd/task_test.go:TestTaskRemoveRefusesDependedOn",
+    "internal/cmd/task_test.go:TestTaskRemoveForceStripsAndKeepsHighWater",
+    "internal/phase/plan_edit_test.go:TestRemoveTask",
+  ]
+  notes = "refusal names the dependent and mutates nothing; --force deletes and strips the dangling dep."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = [
+    "internal/cmd/task_test.go:TestTaskAddRejectsUnknownCriterion",
+    "internal/cmd/task_test.go:TestTaskEditRejectsUnknownCriterion",
+    "internal/cmd/task_test.go:TestTaskRemoveUnknownID",
+    "internal/phase/plan_edit_test.go:TestValidatePlan",
+  ]
+  notes = "covers->criterion rejection proven end-to-end (add + edit) with a byte-unchanged assertion via saveIfValid; TestValidatePlan pins the duplicate-id and unknown-depends_on branches, which share the same saveIfValid guard path."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = [
+    "internal/cmd/task_test.go:TestTaskEditPartialUpdate",
+    "internal/cmd/task_test.go:TestTaskEditHasNoStatusFlag",
+    "internal/phase/plan_edit_test.go:TestEditTask",
+  ]
+  notes = "only the passed flag changes (others preserved); --status is an unknown flag so dross task status stays the sole owner; same integrity guard as c-4 applies."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation efficacy on executed code = 1.00 (gremlins: killed=1268, lived=0). Every mutant in the new logic (plan_edit.go, task.go) and the atomic saveTOML was KILLED."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The 57 'survived' mutants are all NOT-COVERED (never executed), not true survivors. None are in this phase's new files — they land in pre-existing untouched code (doctor.go, ship.go, status.go, env.go, phase_lifecycle.go, validate.go, watch.go, update.go, statusline.go, rule.go, install.go, milestone.go, deferred.go, issue.go) pulled in by gremlins' package-level scan, plus known gremlins artifacts in phase.go (Slugify switch-case at :190, struct declarations at :271/:273). Cross-check: no survivor participates in any criterion's covering test, so no covered->weak downgrade applies. Documented gremlins package-rollup + switch-case ceiling, not a test gap in this phase."

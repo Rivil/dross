@@ -38,19 +38,24 @@ Read these and surface their relevant bits to the user before asking questions:
 ```
 dross deferred list --target <id> --json
 ```
-Each returned item is a candidate acceptance criterion for §2 — surface them ("phase `<source>` parked this for you: …") and let the user accept / reword / drop, same as any other criterion. This is the loop-closer: a punted idea reaches the planner instead of dying as a bare roadmap slug.
+Each returned item is a candidate acceptance criterion — it joins the §2 candidate slate ("phase `<source>` parked this for you: …") and gets the same accept / reword / drop gate as any other slate item. This is the loop-closer: a punted idea reaches the planner instead of dying as a bare roadmap slug.
 
 Print a short orientation block: "Working on phase X. Project core value: Y. Milestone success criteria: Z. Locked decisions you can't relitigate: ..."
 
 ## 2. Acceptance criteria
 
-Ask once (freeform): **"What does success look like for this phase? List 3-7 user-observable, testable outcomes."**
+**Open with a proposed candidate slate — never a free-recall ask.** Compose the candidate criteria yourself from the §1 context before asking the user anything, derived from:
 
-Then walk the answers **one at a time** — not as a wall:
-- Tighten each into a one-liner and assign id `c-1`, `c-2`, …
-- Confirm that one criterion before moving to the next: `AskUserQuestion` (`accept` / `reword` / `drop`) when a quick gate fits, freeform when it needs discussion. **One criterion per turn.**
+- **Milestone scope** — the milestone's success criteria plus this phase's position in its `phases` array: which slice of the milestone does this phase own?
+- **CLI/context gap analysis** — the delta between what exists today (code, commands, §1 context) and what the phase title promises.
+- **Parked ideas** — the §1 `dross deferred list` candidates routed to this phase join the slate directly.
+
+Tighten each candidate into a one-liner and assign id `c-1`, `c-2`, … — a soft 3-7 in total; don't pad, don't truncate a real outcome. Present the slate once as short one-liners, then gate **each item, one per turn** — the propose-and-react shape from the playbook:
+
+- `AskUserQuestion` per criterion: `accept` / `reword` / `drop`. Freeform only where an item needs real discussion.
+- `accept` — the criterion stands as written. `reword` — keep the idea, user adjusts wording or scope. `drop` — not this phase; if it's really a separate capability, capture it as a deferred idea (§4).
 - Keep each turn to the criterion in hand — don't echo the whole growing list back every time; a short "c-3 added" is enough.
-- Only after the user's list is exhausted, ask once: **"anything missing?"**
+- Only after the slate is walked, ask once: **"anything missing?"** — a user addition gets the same per-item gate and quality bar.
 
 **Quality bar — push back (within that criterion's turn) if it fails any of these:**
 - Not testable (you can't write a test that fails when it breaks)
@@ -188,6 +193,8 @@ End with the standard next block — the `Next:` line, plus the conditional flag
 Spec locked.
 
 Next: /dross-plan — break the locked spec into tasks.
+
+state is on disk — safe to /clear · fresh session: /dross-plan
 ```
 When the phase is a new subsystem, has multiple plausible architectures, or looks like 4+ tasks, append the hint under the `Next:` line:
 ```
