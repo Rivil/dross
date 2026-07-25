@@ -1,0 +1,57 @@
+[phase]
+id = "readme-truth-pass"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Audit + correct README capability claims"
+files         = ["README.md"]
+description   = """
+Walk the README command table + status/feature prose. For each capability claim,
+confirm it against code/tests/shipped phases; correct any that misstate command
+shape, config key, or proven-vs-wired status. Fold in the v1.0 status-line update
+(no longer 'v0.10.x'). Cross-check the command table against the actual cobra
+command tree.
+"""
+covers        = ["c-1", "c-2"]
+test_contract = [
+  "if the README still advertises a command/flag that the cobra tree doesn't expose, a command-parity check flags the mismatch",
+  "if the status line still says v0.10.x while the milestone is v1.0, the grep in verify fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 1
+title         = "Resolve v0.9.toml status to complete"
+files         = [".dross/milestones/v0.9.toml"]
+description   = """
+v0.9's milestone landed on main long ago but its toml still reads status=active
+(watch-pr-ci-status backlog). Set status=complete so the milestone ledger is
+honest. Confirm dross validate stays green.
+"""
+covers        = ["c-2"]
+test_contract = [
+  "if v0.9.toml is left status=active, a grep in verify fails (the milestone shipped; active is a lie)",
+  "if the edit breaks the toml schema, dross validate errors",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 2
+depends_on    = ["t-1"]
+title         = "Repoint or annotate residual ARCHITECTURE.md links"
+files         = ["ARCHITECTURE.md"]
+description   = """
+Run dross architecture check; repoint every moved link (--fix) and, for each
+remaining unresolved/ambiguous symbol, either correct it to a real symbol or
+drop/annotate the stale bullet so the doc stops citing symbols that no longer
+exist. Goal: the check is clean or every residual is deliberate.
+"""
+covers        = ["c-3"]
+test_contract = [
+  "if a repointed link still targets a moved/absent symbol, dross architecture check reports it unresolved",
+  "if the doc still cites a symbol that doesn't exist and isn't annotated, the residual-count check fails",
+]
+status        = "pending"

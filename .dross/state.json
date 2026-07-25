@@ -1,29 +1,11 @@
 {
-  "version": "1.0.2.0",
+  "version": "1.0.3.0",
   "current_milestone": "v1.0",
-  "last_activity": "2026-07-25T17:53:13.037651Z",
-  "last_action": "completed prove-or-demote-board-sync",
+  "current_phase": "readme-truth-pass",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-25T17:56:08.46269Z",
+  "last_action": "spec+plan locked: readme-truth-pass (3 tasks)",
   "history": [
-    {
-      "at": "2026-07-25T09:05:07.612811Z",
-      "action": "executed t-3 (generic-tier audit)"
-    },
-    {
-      "at": "2026-07-25T09:06:28.892231Z",
-      "action": "executed t-4 (tier docs)"
-    },
-    {
-      "at": "2026-07-25T09:06:33.316364Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-25T09:06:33.324113Z",
-      "action": "phase telemetry-taxonomy-overhaul executed (4/4 done)"
-    },
-    {
-      "at": "2026-07-25T09:07:26.352922Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-07-25T09:07:26.35872Z",
       "action": "verified telemetry-taxonomy-overhaul: pass (4/4, mutation 0.95)"
@@ -203,6 +185,26 @@
     {
       "at": "2026-07-25T17:53:13.037651Z",
       "action": "completed prove-or-demote-board-sync"
+    },
+    {
+      "at": "2026-07-25T17:55:36.964316Z",
+      "action": "created readme-truth-pass"
+    },
+    {
+      "at": "2026-07-25T17:55:36.970824Z",
+      "action": "set version=1.0.3.0"
+    },
+    {
+      "at": "2026-07-25T17:56:08.450981Z",
+      "action": "set current_phase=readme-truth-pass"
+    },
+    {
+      "at": "2026-07-25T17:56:08.456885Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T17:56:08.46269Z",
+      "action": "spec+plan locked: readme-truth-pass (3 tasks)"
     }
   ]
 }
