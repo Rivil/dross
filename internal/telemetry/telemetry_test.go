@@ -141,11 +141,16 @@ func TestHashRepoStable(t *testing.T) {
 	}
 }
 
-func TestClassifyError(t *testing.T) {
-	cases := []struct {
-		err  error
-		want string
-	}{
+// classifyCase is one row of the classifier table. It's a named type (rather
+// than an anonymous struct inside TestClassifyError) so the delegation test
+// below can drive the exact same rows through ClassifyMessage.
+type classifyCase struct {
+	err  error
+	want string
+}
+
+func classifyCases() []classifyCase {
+	return []classifyCase{
 		{nil, ""},
 		{errors.New("no .dross directory found"), "no_root"},
 		{errors.New("milestone v0.1 already exists"), "already_exists"},
@@ -168,6 +173,15 @@ func TestClassifyError(t *testing.T) {
 		{errors.New("working tree is dirty; commit or stash before completing"), "dirty_tree"},
 		{errors.New("origin/main hasn't advanced past phase/04-x's base — has the PR actually merged upstream?"), "merge_pending"},
 		{errors.New("fast-forward of main from origin failed: exit 1"), "merge_pending"},
+		// The explicit refusals: phase complete, milestone complete, and the
+		// unconfirmed-merge path. Each is a separately reachable shape.
+		{errors.New("PR #55 for 03-x is not merged upstream — refusing to complete so the phase branch isn't lost."), "merge_pending"},
+		{errors.New("origin/milestone/v1.15 is not merged into origin/main yet — has the milestone PR merged? Refusing so the milestone branch isn't lost"), "merge_pending"},
+		{errors.New("cannot confirm phase/03-x has merged into main — no merged-PR status was available and origin/main is not an ancestor of origin/main"), "merge_pending"},
+		// No live code path errors with this one: `dross status` reports the
+		// shipped-but-unmerged window as a warning. It reaches the classifier
+		// only via read-time reclassify of historical `other` events.
+		{errors.New("origin/main carries no `completed 54-telemetry` record — has the PR merged upstream?"), "merge_pending"},
 
 		// phase-create pre-flight: refused because we're not on main (still
 		// on a previous phase branch). Used to land in "other".
@@ -177,6 +191,17 @@ func TestClassifyError(t *testing.T) {
 		{errors.New("save state: write .dross/state.json: permission denied"), "state_io"},
 		{errors.New("unmarshal state: bad json"), "state_io"},
 		{errors.New("marshal state: cycle"), "state_io"},
+
+		// .dross config absent or unreadable — must sit below state_io (so a
+		// state write failure keeps its bucket) and below the phase/plan/spec/
+		// verify/milestone group (whose messages also name a .toml).
+		{errors.New("decode ~/proj/.dross/project.toml: toml: line 47 (last key \"stack\"): expected value"), "config_io"},
+		{errors.New("read ~/proj/.dross/state.json: open ~/proj/.dross/state.json: no such file or directory"), "config_io"},
+
+		// env token missing from the shell — below "board:" so a board op
+		// failing for want of a token still reads as a board failure.
+		{errors.New("$JIRA_API_TOKEN is not set; run `dross env set JIRA_API_TOKEN` in your shell"), "env_token"},
+		{errors.New("board: create issue: $JIRA_API_TOKEN is not set"), "board"},
 
 		// verify / mutation pipeline
 		{errors.New("verify.toml not found at .dross/phases/01/verify.toml — run `dross verify 01` first"), "verify_state"},
@@ -199,6 +224,26 @@ func TestClassifyError(t *testing.T) {
 
 		// CLI surface
 		{errors.New("unknown subcommand \"add\" for \"dross phase\""), "unknown_subcommand"},
+		// cobra's wording for a bad top-level verb routes into the same
+		// bucket rather than a near-duplicate one (locked: bucket_granularity).
+		{errors.New("unknown command \"quick\" for \"dross\""), "unknown_subcommand"},
+
+		// cobra flag-parse failures
+		{errors.New("unknown flag: --json"), "unknown_flag"},
+		{errors.New("unknown shorthand flag: 'x' in -x"), "unknown_flag"},
+		{errors.New("flag needs an argument: --commit"), "unknown_flag"},
+
+		// cobra arity failures — all four wordings it emits
+		{errors.New("accepts 3 arg(s), received 2"), "arg_count"},
+		{errors.New("accepts 1 arg(s), received 0"), "arg_count"},
+		{errors.New("requires at least 1 arg(s), only received 0"), "arg_count"},
+		{errors.New("accepts between 1 and 2 arg(s), received 3"), "arg_count"},
+
+		// --landmark parse failures, above the unknown-field group
+		{errors.New("unknown landmark key \"loco\" (want feature/symbol/loc/what)"), "landmark_parse"},
+		{errors.New("landmark pair \"what=fixed the thing\" has no '=' (want key=value)"), "landmark_parse"},
+		{errors.New("landmark pair \"\" has an empty key"), "landmark_parse"},
+
 		{errors.New("unknown field: nonsense"), "unknown_field"},
 		{errors.New("unsupported segment \"patch\" (only `internal` is bumpable)"), "unknown_field"},
 		{errors.New("not a list field (or unknown): scope.phases"), "unknown_field"},
@@ -217,10 +262,57 @@ func TestClassifyError(t *testing.T) {
 
 		{errors.New("something weird"), "other"},
 	}
-	for _, c := range cases {
+}
+
+func TestClassifyError(t *testing.T) {
+	for _, c := range classifyCases() {
 		got := ClassifyError(c.err)
 		if got != c.want {
 			t.Errorf("ClassifyError(%v) = %q want %q", c.err, got, c.want)
+		}
+	}
+}
+
+// TestClassifyMessageMatchesClassifyError pins the delegation: ClassifyError is
+// a thin wrapper over ClassifyMessage, so every row must classify identically
+// whether it arrives as an error or as a stored err_detail string. If the
+// extraction ever drops a case from one path, the row that case covers fails.
+func TestClassifyMessageMatchesClassifyError(t *testing.T) {
+	for _, c := range classifyCases() {
+		if c.err == nil {
+			continue
+		}
+		want := ClassifyError(c.err)
+		if got := ClassifyMessage(c.err.Error()); got != want {
+			t.Errorf("ClassifyMessage(%q) = %q, ClassifyError gives %q", c.err.Error(), got, want)
+		}
+	}
+	// The empty message is the nil-error equivalent: it must NOT fall through
+	// to "other" and manufacture a phantom bucket for detail-free events.
+	if got := ClassifyMessage(""); got != "" {
+		t.Errorf("ClassifyMessage(\"\") = %q, want empty", got)
+	}
+}
+
+// TestReclassify covers the read-time re-derivation that makes a new bucket
+// apply to history. The log is never rewritten; readers call this instead.
+func TestReclassify(t *testing.T) {
+	cases := []struct {
+		name string
+		ev   Event
+		want string
+	}{
+		{"other with a detail re-derives", Event{ErrorClass: "other", ErrorDetail: "unknown flag: --json"}, "unknown_flag"},
+		{"other with a still-unclassified detail stays other", Event{ErrorClass: "other", ErrorDetail: "something weird"}, "other"},
+		// Gating is on the stored class, not on the presence of a detail: a
+		// named bucket keeps its class even when it carries one.
+		{"named bucket keeps its class", Event{ErrorClass: "dirty_tree", ErrorDetail: "unknown flag: --json"}, "dirty_tree"},
+		{"other without a detail stays other", Event{ErrorClass: "other"}, "other"},
+		{"success event stays unclassified", Event{}, ""},
+	}
+	for _, c := range cases {
+		if got := Reclassify(c.ev); got != c.want {
+			t.Errorf("%s: Reclassify(%+v) = %q want %q", c.name, c.ev, got, c.want)
 		}
 	}
 }
@@ -257,18 +349,85 @@ func TestDetail(t *testing.T) {
 }
 
 func TestCarriesDetail(t *testing.T) {
-	carries := []string{"other", "unknown_subcommand", "unknown_field"}
-	for _, c := range carries {
+	// Set equality, not a spot-check: the allowlist is the privacy posture,
+	// so both a graduated shape silently losing its err_detail and a new
+	// bucket silently gaining one have to fail here.
+	want := map[string]bool{
+		"other":              true,
+		"unknown_subcommand": true,
+		"unknown_field":      true,
+		"arg_count":          true,
+		"unknown_flag":       true,
+		"landmark_parse":     true,
+	}
+	for c := range want {
 		if !CarriesDetail(c) {
 			t.Errorf("CarriesDetail(%q) = false, want true", c)
 		}
 	}
+	for c := range detailBuckets {
+		if !want[c] {
+			t.Errorf("detailBuckets gained %q — every allowlisted bucket must be a bounded identifier", c)
+		}
+	}
+	if len(detailBuckets) != len(want) {
+		t.Errorf("detailBuckets has %d entries, want %d", len(detailBuckets), len(want))
+	}
 	// Every other classified bucket must NOT carry text — that's the
 	// privacy posture. Spot-check a representative set.
-	for _, c := range []string{"", "dirty_tree", "merge_pending", "verify_state", "mutation", "no_root", "provider", "git"} {
+	// merge_pending, config_io and env_token embed phase ids, config paths and
+	// token names, so they are deliberately detail-free (locked: detail_allowlist).
+	for _, c := range []string{"", "dirty_tree", "merge_pending", "config_io", "env_token", "verify_state", "mutation", "no_root", "provider", "git"} {
 		if CarriesDetail(c) {
 			t.Errorf("CarriesDetail(%q) = true, want false", c)
 		}
+	}
+}
+
+// TestGraduatedBucketsKeepTheirIdentifier is the counterweight to graduation:
+// pulling a shape out of "other" must not blind the very thing it graduated.
+// The rejected identifier has to survive into err_detail.
+func TestGraduatedBucketsKeepTheirIdentifier(t *testing.T) {
+	cases := []struct {
+		err   error
+		class string
+		want  string
+	}{
+		{errors.New("unknown flag: --json"), "unknown_flag", "--json"},
+		{errors.New("accepts 3 arg(s), received 2"), "arg_count", "received 2"},
+		{errors.New(`landmark pair "what=fixed the thing" has no '=' (want key=value)`), "landmark_parse", `"what=fixed the thing"`},
+	}
+	for _, c := range cases {
+		if got := ClassifyError(c.err); got != c.class {
+			t.Fatalf("ClassifyError(%v) = %q want %q", c.err, got, c.class)
+		}
+		if !CarriesDetail(c.class) {
+			t.Fatalf("%s must carry detail", c.class)
+		}
+		if got := Detail(c.err); !strings.Contains(got, c.want) {
+			t.Errorf("Detail(%v) = %q, want it to contain %q", c.err, got, c.want)
+		}
+	}
+}
+
+// TestReadmeDocumentsDetailAllowlist guards the user-facing claim. The README
+// enumerates the buckets and describes which of them carry err_detail; once
+// arg_count / unknown_flag / landmark_parse carry detail, a README that still
+// calls `other` the one exception is simply false.
+func TestReadmeDocumentsDetailAllowlist(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := string(b)
+
+	for _, bucket := range []string{"`unknown_flag`", "`arg_count`", "`landmark_parse`", "`config_io`", "`env_token`"} {
+		if !strings.Contains(readme, bucket) {
+			t.Errorf("README's error-bucket list omits %s — the list is presented as complete", bucket)
+		}
+	}
+	if strings.Contains(readme, "The one exception is the catch-all `other`") {
+		t.Error("README still claims `other` is the one bucket carrying err_detail — the identifier-only buckets carry it too")
 	}
 }
 

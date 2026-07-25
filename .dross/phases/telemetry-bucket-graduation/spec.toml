@@ -1,0 +1,67 @@
+[phase]
+  id = "telemetry-bucket-graduation"
+  title = "telemetry-bucket-graduation"
+  milestone = "v0.10"
+
+[[criteria]]
+  id = "c-1"
+  text = "A cobra arg-count error, an unknown or incomplete flag, and an unknown top-level command each classify into a named error bucket instead of `other`."
+
+[[criteria]]
+  id = "c-2"
+  text = "A landmark parse failure classifies into a named error bucket instead of `other`."
+
+[[criteria]]
+  id = "c-3"
+  text = "A merge-confirmation refusal classifies as `merge_pending` instead of `other`, covering the unmerged-branch, unconfirmed-PR, and missing-completed-record message shapes."
+
+[[criteria]]
+  id = "c-4"
+  text = "An absent or unreadable `.dross` config — missing project.toml or state.json, or a TOML syntax error — classifies into a named bucket instead of `other`."
+
+[[criteria]]
+  id = "c-5"
+  text = "A required-but-unset environment token classifies into a named bucket instead of `other`."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross stats` prints the top 5 unclassified `other` detail shapes with counts under the errors table, and omits the section entirely when the tail is empty."
+
+[[criteria]]
+  id = "c-7"
+  text = "Under 15% of the detail-carrying error shapes in the checked-in telemetry corpus classify as `other`."
+
+[[decisions]]
+  key = "detail_allowlist"
+  choice = "Add only the identifier-only buckets (unknown flag, arg count, landmark parse) to `detailBuckets`; the merge, config, and env buckets stay detail-free."
+  why = "Graduating a shape out of `other` otherwise strips its err_detail, so bucket counts rise while diagnosability drops. Identifier-only messages are bounded CLI tokens; merge/config/env messages embed phase ids and paths, which the privacy posture keeps out of the log."
+  locked = true
+
+[[decisions]]
+  key = "bucket_granularity"
+  choice = "Three buckets for the cobra surface: `arg_count`, `unknown_flag`, and route unknown-command into the existing `unknown_subcommand`."
+  why = "Each shape has a different fix, so each earns its own line in stats; routing unknown-command into the existing bucket reuses a bucket rather than adding a near-duplicate."
+  locked = true
+
+[[decisions]]
+  key = "coverage_measurement"
+  choice = "Measure c-7 against a checked-in testdata corpus of distinct real err_detail shapes with expected buckets, asserted by a table test. No new CLI surface."
+  why = "The live log is not reproducible in CI and keeps growing. A fixture makes the target enforceable and lets future graduations extend it."
+  locked = true
+
+[[decisions]]
+  key = "tail_display"
+  choice = "Print the c-6 tail inline as an indented block under the errors table, top 5 by count, omitted when the tail is empty."
+  why = "Stats output is already long; an empty-tail omission costs nothing once the bucket is drained, while inline placement keeps it discoverable without a flag."
+  locked = true
+
+[[decisions]]
+  key = "read_time_reclassify"
+  choice = "`dross stats` re-runs the classifier at read time on events whose stored class is `other` and that carry an err_detail. The log itself is never rewritten."
+  why = "New buckets otherwise only apply to future events, leaving the historical `other` count fat and c-6's tail polluted with already-solved shapes. Re-classifying on read retro-benefits history while keeping the log append-only."
+  locked = true
+
+[[deferred]]
+  text = "Audit the existing generic safety-net buckets (invalid, missing, git, network) for overlap, and review the order-dependence of the ClassifyError substring switch."
+  why = "A distinct capability from graduating the tail, and the v0.10 roadmap already has telemetry-taxonomy-overhaul as its home."
+  target = "telemetry-taxonomy-overhaul"
