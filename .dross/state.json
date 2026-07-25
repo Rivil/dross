@@ -2,30 +2,10 @@
   "version": "1.0.1.0",
   "current_milestone": "v1.0",
   "current_phase": "self-audit",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-25T11:17:24.652581Z",
-  "last_action": "set version=1.0.1.0",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-25T11:34:38.26884Z",
+  "last_action": "phase self-audit executed (3/3 done)",
   "history": [
-    {
-      "at": "2026-07-25T08:31:05.96599Z",
-      "action": "plan reviewed: verify-auto-finalize (1 blocking resolved, 3 flags)"
-    },
-    {
-      "at": "2026-07-25T08:31:58.645087Z",
-      "action": "set version=0.10.7.0"
-    },
-    {
-      "at": "2026-07-25T08:35:09.193163Z",
-      "action": "executed t-1 (Idempotent finalize core with finalized marker)"
-    },
-    {
-      "at": "2026-07-25T08:37:13.351055Z",
-      "action": "executed t-2 (Ship verify-gate auto-heals unfinalized verdicts)"
-    },
-    {
-      "at": "2026-07-25T08:38:56.387715Z",
-      "action": "executed t-3 (Phase complete auto-heals unfinalized verdicts)"
-    },
     {
       "at": "2026-07-25T08:41:09.947781Z",
       "action": "executed t-4 (Stats counts unresolved pendings only)"
@@ -205,6 +185,26 @@
     {
       "at": "2026-07-25T11:17:24.652581Z",
       "action": "set version=1.0.1.0"
+    },
+    {
+      "at": "2026-07-25T11:20:12.47574Z",
+      "action": "executed t-1 (techdebt run + triage: 605-\u003e100, 1 fix)"
+    },
+    {
+      "at": "2026-07-25T11:28:50.774975Z",
+      "action": "executed t-2 (secure run: 1 HIGH fixed, gosec/gitleaks/trivy triaged)"
+    },
+    {
+      "at": "2026-07-25T11:34:20.892422Z",
+      "action": "executed t-3 (quality run: 1 sec-correctness fix, 1 dead removed, rest triaged)"
+    },
+    {
+      "at": "2026-07-25T11:34:38.263008Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T11:34:38.26884Z",
+      "action": "phase self-audit executed (3/3 done)"
     }
   ]
 }
