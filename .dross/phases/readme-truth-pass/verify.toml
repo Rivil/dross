@@ -1,0 +1,38 @@
+[verify]
+  phase = "readme-truth-pass"
+  generated_at = 2026-07-25T18:04:55.140486Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-07-25T18:05:31.357818Z
+
+[summary]
+  mutation_status = "unmeasurable"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  criteria_total = 3
+  criteria_covered = 3
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["cmd/dross/main_test.go:TestReadmeAdvertisesOnlyRealCommands", "cmd/dross/main_test.go:TestReadmeStatusNotStale"]
+  notes = "README command table audited against the real cobra tree; four under-claims corrected; parity test guards over-claims + stale status line (both green in the normal suite)"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["cmd/dross/main_test.go:TestReadmeStatusNotStale", "dross validate (green)"]
+  notes = "v0.6/v0.7/v0.9 flipped active->complete (only v1.0 active); README status line v0.10.x->v1.0, pinned by TestReadmeStatusNotStale"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["dross architecture check (0 dangling-file residuals)", "ARCHITECTURE.md:22 residual-class annotation"]
+  notes = "moved link repointed via --fix; the 16 remaining unresolved/ambiguous are one documented intentional class (fields/methods/prose anchors with accurate file:line), verified to point at real files"
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation unmeasurable: the only Go touched (cmd/dross/main.go + main_test.go) is package main, outside gremlins' per-package instrumentation scope, so 0 mutants were generated. Verdict is based on criterion coverage alone (per the mutation_status=unmeasurable rule). The parity tests themselves run and pass in the standard go test suite."

@@ -3,7 +3,7 @@ phases = ["multilang-stack-profiles", "multilang-analyzer-catalogs", "container-
 [milestone]
   version = "v0.6"
   title = "Surface depth & loop hardening"
-  status = "active"
+  status = "complete"
   started = "2026-06-26"
 
 [scope]

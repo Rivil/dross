@@ -19,6 +19,17 @@ Entries are maintained automatically: dross-ship merges each phase's landmarks
 into the matching feature entry (updating in place), and /dross-architecture can
 regenerate the whole document from a scan of the code and git history.
 
+> **On `dross architecture check` residuals.** The link checker resolves the
+> text *before* the `—` as a bare top-level Go symbol. Some anchors deliberately
+> use a **struct field** (`Deferred.Target`, `LanguageRun.Error`), a **method**
+> (`watch.State.Diff`), or a **descriptive label** for a behavior that spans
+> several symbols (`verify-gate auto-heal`, `ship PR-base resolution`, `Update
+> signature gate`, …). These report as `unresolved`/`ambiguous` even though their
+> `file:line` targets are accurate and point at the right code — the checker just
+> can't match non-bare-symbol syntax. This residual class is **intentional**;
+> what the check must still catch is a *new* break: an anchor whose file no longer
+> exists, or a bare symbol that genuinely moved (repoint those with `--fix`).
+
 <!-- entries below, alphabetical by feature -->
 
 ### Architecture comprehension
@@ -248,6 +259,16 @@ Phase artefacts (plan.toml / spec.toml) are written atomically: saveTOML encodes
 
 _introduced task-lifecycle-commands · 367c723_
 
+### README accuracy guard
+
+Keeps the README's command table from lying about the CLI: `newRoot` is extracted from `main` so a test can inspect the real assembled command tree, and a parity test asserts every `` `dross <cmd>` `` the README advertises is a real top-level command (the over-claim failure mode) plus that the status line isn't a stale `v0.x`. Under-claiming (an internal command the table omits) is allowed.
+
+- `newRoot` (testable command-tree assembly) — `cmd/dross/main.go:13`
+- `TestReadmeAdvertisesOnlyRealCommands` (over-claim guard) — `cmd/dross/main_test.go:20`
+- `TestReadmeStatusNotStale` (stale-version guard) — `cmd/dross/main_test.go:57`
+
+_introduced readme-truth-pass · 6fc4186_
+
 ### Repo onboarding
 
 Scan an existing repo's signal files (Dockerfile, package.json, go.mod, …) into a draft project.toml, seeding `[runtime]` + `[stack].profile` from the matched stack profile.
@@ -411,7 +432,7 @@ Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (
 - `NewRun` — `internal/techdebt/run.go:54`
 - `StatePath` — `internal/techdebt/state.go:16`
 - `Techdebt` (CLI) — `internal/cmd/techdebt.go:22`
-- `trackedFiles` (.dross-excluded scan set, both enumeration paths) — `internal/cmd/techdebt.go:69`
+- `trackedFiles` (.dross-excluded scan set, both enumeration paths) — `internal/cmd/techdebt.go:68`
 - `findings.StampLastRun` — `internal/findings/state.go:121`
 - `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:347`
 - `/dross-techdebt` thin skill — `assets/prompts/techdebt.md`

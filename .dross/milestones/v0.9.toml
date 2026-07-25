@@ -3,7 +3,7 @@ phases = ["ship-architecture-autogen", "secure-quality-findings-followups", "rel
 [milestone]
   version = "v0.9"
   title = "Backlog burn-down: trust, findings & integrations"
-  status = "active"
+  status = "complete"
   started = "2026-07-01"
 
 [scope]

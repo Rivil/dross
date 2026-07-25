@@ -1,0 +1,28 @@
+[phase]
+id        = "readme-truth-pass"
+title     = "readme-truth-pass"
+milestone = "v1.0"
+
+[[criteria]]
+id   = "c-1"
+text = "Every capability claim in README's command table and feature/status prose is traced to something that ran (a test, a shipped phase, or an observed run); any claim that overstates or misstates reality (wrong config key, unproven-as-proven, stale command shape) is corrected"
+
+[[criteria]]
+id   = "c-2"
+text = "v0.9.toml status is resolved to complete (its milestone landed on main long ago; the lingering status=active is corrected), and the README status line no longer implies v0.10.x when the repo is at v1.0"
+
+[[criteria]]
+id   = "c-3"
+text = "The remaining unresolved/ambiguous ARCHITECTURE.md symbol links are either repointed to a real symbol or annotated as intentionally-unresolved, so dross doctor's architecture-link check is clean or every residual is explained"
+
+[[decisions]]
+key    = "truth_bar"
+choice = "A claim is 'true enough' if a reader following it hits the described behavior — exact command shapes, config keys, and proven-vs-wired status must match; aspirational roadmap items stay as roadmap, not present-tense capability claims"
+why    = "1.0 is the trust stamp: the README is the tool's headline claim about itself and must not mislead a first-time reader"
+locked = true
+
+[[decisions]]
+key    = "release_gate"
+choice = "This phase does NOT itself tag v1.0.0 — after it ships and the milestone lands on main, the v1.0.0 tag + signed release is a separate, user-confirmed step (milestone criterion c-5), because publishing a release is outward-facing and hard to reverse"
+why    = "Tagging/releasing is a durable public action that needs an explicit go-ahead, not an autonomous side effect of a docs phase"
+locked = true

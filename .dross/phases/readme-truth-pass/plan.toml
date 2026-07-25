@@ -1,0 +1,35 @@
+task_seq = 0
+
+[phase]
+  id = "readme-truth-pass"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Audit + correct README capability claims"
+  files = ["README.md"]
+  description = "Walk the README command table + status/feature prose. For each capability claim,\nconfirm it against code/tests/shipped phases; correct any that misstate command\nshape, config key, or proven-vs-wired status. Fold in the v1.0 status-line update\n(no longer 'v0.10.x'). Cross-check the command table against the actual cobra\ncommand tree.\n"
+  covers = ["c-1", "c-2"]
+  test_contract = ["if the README still advertises a command/flag that the cobra tree doesn't expose, a command-parity check flags the mismatch", "if the status line still says v0.10.x while the milestone is v1.0, the grep in verify fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Resolve v0.9.toml status to complete"
+  files = [".dross/milestones/v0.9.toml"]
+  description = "v0.9's milestone landed on main long ago but its toml still reads status=active\n(watch-pr-ci-status backlog). Set status=complete so the milestone ledger is\nhonest. Confirm dross validate stays green.\n"
+  covers = ["c-2"]
+  test_contract = ["if v0.9.toml is left status=active, a grep in verify fails (the milestone shipped; active is a lie)", "if the edit breaks the toml schema, dross validate errors"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Repoint or annotate residual ARCHITECTURE.md links"
+  files = ["ARCHITECTURE.md"]
+  description = "Run dross architecture check; repoint every moved link (--fix) and, for each\nremaining unresolved/ambiguous symbol, either correct it to a real symbol or\ndrop/annotate the stale bullet so the doc stops citing symbols that no longer\nexist. Goal: the check is clean or every residual is deliberate.\n"
+  covers = ["c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["if a repointed link still targets a moved/absent symbol, dross architecture check reports it unresolved", "if the doc still cites a symbol that doesn't exist and isn't annotated, the residual-count check fails"]
+  status = "done"

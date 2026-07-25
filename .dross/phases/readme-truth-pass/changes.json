@@ -1,0 +1,53 @@
+{
+  "phase": "readme-truth-pass",
+  "pr": 63,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "README.md",
+        "cmd/dross/main.go",
+        "cmd/dross/main_test.go"
+      ],
+      "commit": "6fc4186",
+      "completed_at": "2026-07-25T18:00:12.02888Z",
+      "landmarks": [
+        {
+          "feature": "readme accuracy",
+          "symbol": "TestReadmeAdvertisesOnlyRealCommands",
+          "loc": "cmd/dross/main_test.go:20",
+          "what": "README command claims audited+corrected against cobra tree; parity test guards over-claims"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        ".dross/milestones/v0.9.toml"
+      ],
+      "commit": "0978763",
+      "completed_at": "2026-07-25T18:01:49.476913Z",
+      "landmarks": [
+        {
+          "feature": "milestone ledger",
+          "symbol": "v0.9.toml",
+          "loc": ".dross/milestones/v0.9.toml:6",
+          "what": "shipped milestones v0.6/v0.7/v0.9 flipped active-\u003ecomplete; only v1.0 active"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "ARCHITECTURE.md"
+      ],
+      "commit": "6e0995c",
+      "completed_at": "2026-07-25T18:04:41.42488Z",
+      "landmarks": [
+        {
+          "feature": "architecture doc format",
+          "symbol": "ARCHITECTURE.md",
+          "loc": "ARCHITECTURE.md:22",
+          "what": "residual anchor class (fields/methods/prose labels) documented; moved link repointed; zero dangling-file links"
+        }
+      ]
+    }
+  }
+}
