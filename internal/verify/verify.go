@@ -80,6 +80,13 @@ type VerifyMeta struct {
 	Phase       string    `toml:"phase"`
 	GeneratedAt time.Time `toml:"generated_at"`
 	Verdict     string    `toml:"verdict"` // pass | fail | partial | pending
+	// Finalized marks that the resolved verdict has been recorded as a
+	// telemetry outcome event (by `dross verify finalize` or a
+	// downstream gate's auto-heal). It makes finalization idempotent
+	// without scanning the telemetry log — which may be opted out of or
+	// rotated away.
+	Finalized   bool      `toml:"finalized,omitempty"`
+	FinalizedAt time.Time `toml:"finalized_at,omitempty"`
 }
 
 type VerifySummary struct {
