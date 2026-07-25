@@ -1,15 +1,11 @@
 {
-  "version": "0.10.7.0",
+  "version": "0.10.5.0",
   "current_milestone": "v0.10",
   "current_phase": "telemetry-taxonomy-overhaul",
   "current_phase_status": "planned",
-  "last_activity": "2026-07-25T08:58:50.382334Z",
-  "last_action": "plan reviewed: telemetry-taxonomy-overhaul (0 blocking, 3 flags folded in)",
+  "last_activity": "2026-07-25T08:58:54.805964Z",
+  "last_action": "set version=0.10.5.0",
   "history": [
-    {
-      "at": "2026-07-24T08:32:27.072488Z",
-      "action": "plan locked: landmark-comma-fix (2 tasks across 2 waves)"
-    },
     {
       "at": "2026-07-24T08:34:14.360457Z",
       "action": "plan reviewed: landmark-comma-fix (0 blocking, 1 flag)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-07-25T08:58:50.382334Z",
       "action": "plan reviewed: telemetry-taxonomy-overhaul (0 blocking, 3 flags folded in)"
+    },
+    {
+      "at": "2026-07-25T08:58:54.805964Z",
+      "action": "set version=0.10.5.0"
     }
   ]
 }
