@@ -90,6 +90,8 @@ Look for **sibling patterns** the task should mirror:
 
 Don't dump everything — surface the 3-5 most useful observations.
 
+**Offload the reading when the task's file surface is large.** When `task.files` is long or the files are big (a sprawling module, a generated file, a wide sibling directory), don't pull it all inline: fan out read-only subagents that do the §1b reading and return just the 3-5 key observations plus the sibling patterns worth mirroring. Implementation stays here — per the `dross-agent-gate` rule, fan-out agents are read-only and never edit files or commit; only the main loop writes code. For a typical small task, stay inline — the subagent hop isn't worth it (see docs/subagent-offload-audit.md).
+
 ### 1c. Propose approach
 
 In one block, write 3-7 lines covering:

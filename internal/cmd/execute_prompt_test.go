@@ -120,3 +120,25 @@ func TestExecutePromptEmitsTypedLandmark(t *testing.T) {
 		t.Error("execute.md must not encode the landmark in --notes (legacy `--notes \"feature: …\"` form survived)")
 	}
 }
+
+// TestExecutePromptOffloadGuidance pins execute.md §1b's offload passage
+// (subagent-offload-audit c-3/c-4): code insight fans out read-only
+// subagents when the file surface is large, and the passage keeps both
+// halves of the contract — the size gate (offload_posture lock:
+// conditional, never mandatory) and the agent-gate boundary (only the
+// main loop writes code).
+func TestExecutePromptOffloadGuidance(t *testing.T) {
+	prompt := executePromptContent(t)
+
+	for _, phrase := range []string{
+		"offload the reading when the task's file surface is large",
+		"read-only subagents",
+		"never edit files or commit; only the main loop writes code",
+		"for a typical small task, stay inline",
+		"docs/subagent-offload-audit.md",
+	} {
+		if !strings.Contains(prompt, phrase) {
+			t.Errorf("execute.md lost its offload guidance phrase %q", phrase)
+		}
+	}
+}
