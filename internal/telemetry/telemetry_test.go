@@ -160,6 +160,14 @@ func classifyCases() []classifyCase {
 		{errors.New("git push failed"), "git"},
 		{errors.New("http 500"), "network"},
 
+		// generic-tier precedence: within the safety net the more
+		// diagnostic bucket wins — permission > git > network >
+		// invalid > missing (pinned by the taxonomy-overhaul audit)
+		{errors.New("permission denied: git push to origin rejected"), "permission"},
+		{errors.New("git push origin failed: http 502 bad gateway"), "git"},
+		{errors.New("github api: http 404 — pr not found"), "network"},
+		{errors.New("invalid milestone version — not found in milestones dir"), "invalid"},
+
 		// phase / plan / spec state
 		{errors.New("no phase id given and state has no current_phase"), "no_phase"},
 		{errors.New("PhaseID is required"), "no_phase"},
@@ -457,5 +465,39 @@ func TestUnknownFieldCarriesRejectedToken(t *testing.T) {
 	}
 	if d := Detail(err); !strings.Contains(d, "milestone.staus") {
 		t.Errorf("detail should preserve the rejected field path: %q", d)
+	}
+}
+
+// TestReadmeDocumentsBucketTiers keeps the README's taxonomy claims in
+// sync with the code. Two guards: (1) table-driven completeness — every
+// bucket in classRules (plus the "other" fallback) must appear
+// backticked in the README's error-bucket section, so a future bucket
+// can't ship undocumented; (2) the tier description itself must
+// survive — the README explains first-match-wins tier order and the
+// generic-tier precedence, and dropping that explanation would orphan
+// the shadowing guard's rationale.
+func TestReadmeDocumentsBucketTiers(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := string(b)
+
+	for _, r := range classRules {
+		if !strings.Contains(readme, "`"+r.bucket+"`") {
+			t.Errorf("README's error-bucket list omits `%s` — the list is presented as complete", r.bucket)
+		}
+	}
+	if !strings.Contains(readme, "`other`") {
+		t.Error("README's error-bucket list omits the `other` fallback")
+	}
+
+	for _, phrase := range []string{
+		"ordered rule table first-match-wins",
+		"generic safety-net buckets",
+	} {
+		if !strings.Contains(readme, phrase) {
+			t.Errorf("README no longer documents the taxonomy tiers (missing %q)", phrase)
+		}
 	}
 }

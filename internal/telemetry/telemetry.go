@@ -204,10 +204,16 @@ func HashRepo(repoRoot string) string {
 // ClassifyError buckets errors into a small set of strings. Never
 // returns the raw message — that might contain user paths or content.
 //
-// Order matters: specific buckets (verify state, mutation adapters,
-// phase/plan/spec state) are checked before generic ones (invalid,
-// missing) so a "no current_phase" error doesn't end up in
-// "missing".
+// Order matters: classification walks the classRules table
+// first-match-wins, arranged in tiers — root/scaffold state, then
+// workflow-specific buckets (verify state, mutation adapters,
+// phase/plan/spec state, provider/board), then the CLI surface, then
+// the generic safety-net buckets (where the more diagnostic bucket
+// wins: already_exists, permission, git, network, then
+// invalid/missing), with "other" as the fallback — so a "no
+// current_phase" error doesn't end up in "missing". The tier order is
+// enforced by TestNoTokenShadowing and documented in the README's
+// error-bucket section, kept in sync by TestReadmeDocumentsBucketTiers.
 func ClassifyError(err error) string {
 	if err == nil {
 		return ""
@@ -225,36 +231,58 @@ func ClassifyMessage(message string) string {
 		return ""
 	}
 	msg := strings.ToLower(message)
-	switch {
+	for _, r := range classRules {
+		for _, tokens := range r.matchers {
+			all := true
+			for _, tok := range tokens {
+				if !strings.Contains(msg, tok) {
+					all = false
+					break
+				}
+			}
+			if all {
+				return r.bucket
+			}
+		}
+	}
+	return "other"
+}
+
+// classRule is one row of the ordered taxonomy table. A rule fires when
+// ANY of its matchers fires; a matcher fires when ALL of its tokens are
+// present in the (lowercased) message. Most matchers are single-token —
+// the multi-token form exists for compound shapes like
+// {"carries no", "record"}.
+type classRule struct {
+	bucket   string
+	matchers [][]string
+}
+
+// classRules is the taxonomy. ORDER IS THE CONTRACT: rules are walked
+// top to bottom and the first match wins, so the table is arranged in
+// tiers — root/scaffold state, then workflow-specific buckets, then the
+// CLI surface, then the generic safety-net buckets, with "other" as the
+// implicit fallback when nothing matches. A more-specific bucket must
+// sit above any generic bucket whose token could also match its
+// messages; TestNoTokenShadowing enforces that an earlier token never
+// makes a later rule unreachable.
+var classRules = []classRule{
 	// Root / scaffold state.
-	case strings.Contains(msg, "no .dross"):
-		return "no_root"
+	{"no_root", [][]string{{"no .dross"}}},
 
 	// Phase / plan / spec state — the user is somewhere the workflow
 	// can't pick up. Distinct from generic "missing" because the fix
 	// is a specific dross command, not a file path.
-	case strings.Contains(msg, "no current_phase"),
-		strings.Contains(msg, "phaseid is required"),
-		strings.Contains(msg, "no phase id given"):
-		return "no_phase"
-	case strings.Contains(msg, "load spec"),
-		strings.Contains(msg, "read spec"),
-		strings.Contains(msg, "decode spec"):
-		return "no_spec"
-	case strings.Contains(msg, "decode plan"),
-		strings.Contains(msg, "load plan"),
-		strings.Contains(msg, "read plan"):
-		return "no_plan"
-	case strings.Contains(msg, "no current_milestone"),
-		strings.Contains(msg, "load milestone"):
-		return "no_milestone"
+	{"no_phase", [][]string{{"no current_phase"}, {"phaseid is required"}, {"no phase id given"}}},
+	{"no_spec", [][]string{{"load spec"}, {"read spec"}, {"decode spec"}}},
+	{"no_plan", [][]string{{"decode plan"}, {"load plan"}, {"read plan"}}},
+	{"no_milestone", [][]string{{"no current_milestone"}, {"load milestone"}}},
 
 	// Phase-complete pre-flight failures — these used to land in "other"
 	// even though they're user-actionable: dirty tree, or the upstream
 	// merge hasn't actually landed yet so the ff-only refuses to advance.
 	// Bucketing them separately makes the friction visible in stats.
-	case strings.Contains(msg, "working tree is dirty"):
-		return "dirty_tree"
+	{"dirty_tree", [][]string{{"working tree is dirty"}}},
 	// The ff-only shapes above are joined by the explicit refusals: phase
 	// complete and milestone complete both refuse to advance while the PR is
 	// still open, and `dross status` reports the shipped-but-unmerged window
@@ -262,57 +290,48 @@ func ClassifyMessage(message string) string {
 	// doesn't. All four are the same friction — waiting on an upstream merge —
 	// so they share a bucket. Detail-free: the messages embed phase ids and
 	// branch names (locked: detail_allowlist).
-	case strings.Contains(msg, "hasn't advanced past"),
-		strings.Contains(msg, "has the pr actually merged"),
-		strings.Contains(msg, "fast-forward of"),
-		strings.Contains(msg, "ff-only"),
-		strings.Contains(msg, "is not merged upstream"),
-		strings.Contains(msg, "is not merged into"),
-		strings.Contains(msg, "cannot confirm"),
-		strings.Contains(msg, "carries no") && strings.Contains(msg, "record"):
-		return "merge_pending"
+	{"merge_pending", [][]string{
+		{"hasn't advanced past"},
+		{"has the pr actually merged"},
+		{"fast-forward of"},
+		{"ff-only"},
+		{"is not merged upstream"},
+		{"is not merged into"},
+		{"cannot confirm"},
+		{"carries no", "record"},
+	}},
 	// Phase start refused because we're not on the main branch — usually
 	// still on a previous phase/<id> branch. User-actionable (switch back
 	// or pass --no-branch), not a tool failure. Used to land in "other".
-	case strings.Contains(msg, "to start a phase"):
-		return "wrong_branch"
+	{"wrong_branch", [][]string{{"to start a phase"}}},
 
 	// Verify / mutation pipeline — these errors actively hide what's
 	// wrong when bucketed as "other".
-	case strings.Contains(msg, "verify.toml"),
-		strings.Contains(msg, "load verify"),
-		strings.Contains(msg, "verify verdict"):
-		return "verify_state"
-	case strings.Contains(msg, "stryker"),
-		strings.Contains(msg, "gremlins"),
-		strings.Contains(msg, "mutation adapter"),
-		strings.Contains(msg, "ast-grep"):
-		return "mutation"
+	{"verify_state", [][]string{{"verify.toml"}, {"load verify"}, {"verify verdict"}}},
+	{"mutation", [][]string{{"stryker"}, {"gremlins"}, {"mutation adapter"}, {"ast-grep"}}},
 
 	// Provider / remote.
-	case strings.Contains(msg, "github backend"),
-		strings.Contains(msg, "forgejo backend"),
-		strings.Contains(msg, "gitlab backend"),
-		strings.Contains(msg, "unsupported provider"),
-		strings.Contains(msg, "no [remote]"),
-		strings.Contains(msg, "[remote].url"):
-		return "provider"
+	{"provider", [][]string{
+		{"github backend"},
+		{"forgejo backend"},
+		{"gitlab backend"},
+		{"unsupported provider"},
+		{"no [remote]"},
+		{"[remote].url"},
+	}},
 
 	// Issue-board sync (Forgejo board mirroring). Operational failures from
 	// the forge client are wrapped "board:" so a flaky board never hides
 	// inside the generic network/other buckets. Placed after provider so
 	// config errors (missing api_base etc.) still read as provider.
-	case strings.Contains(msg, "board:"),
-		strings.Contains(msg, "issue-board"):
-		return "board"
+	{"board", [][]string{{"board:"}, {"issue-board"}}},
 
 	// A required auth token is missing from the shell. The fix is `dross env
 	// set <VAR>`, not a config or CLI change, so it gets its own bucket.
 	// Placed below "board:" so a board op that fails for want of a token
 	// still reads as a board failure. Detail-free: the message names the
 	// env var (locked: detail_allowlist).
-	case strings.Contains(msg, "is not set"):
-		return "env_token"
+	{"env_token", [][]string{{"is not set"}}},
 
 	// CLI surface: arg validation, unknown fields, user-facing config.
 	//
@@ -321,63 +340,41 @@ func ClassifyMessage(message string) string {
 	// different fix, so each earns its own line in stats — except cobra's
 	// "unknown command" wording for a bad top-level verb, which routes into
 	// the existing unknown_subcommand rather than a near-duplicate bucket.
-	case strings.Contains(msg, "unknown subcommand"),
-		strings.Contains(msg, "unknown command"):
-		return "unknown_subcommand"
+	{"unknown_subcommand", [][]string{{"unknown subcommand"}, {"unknown command"}}},
 	// Cobra flag-parse failures: an unrecognised long flag, an unrecognised
 	// shorthand, or a flag given without its value.
-	case strings.Contains(msg, "unknown flag"),
-		strings.Contains(msg, "unknown shorthand flag"),
-		strings.Contains(msg, "flag needs an argument"):
-		return "unknown_flag"
+	{"unknown_flag", [][]string{{"unknown flag"}, {"unknown shorthand flag"}, {"flag needs an argument"}}},
 	// Cobra arity failures. Every wording cobra emits — "accepts N arg(s)",
 	// "requires at least N arg(s)", "accepts between N and M arg(s)" — shares
 	// the "arg(s)" token, so match that rather than enumerating each phrasing.
-	case strings.Contains(msg, "arg(s)"):
-		return "arg_count"
+	{"arg_count", [][]string{{"arg(s)"}}},
 	// `dross changes record --landmark` parse failures. Placed above the
 	// unknown-field group so an "unknown landmark key" reads as a malformed
 	// landmark rather than a generic unknown field.
-	case strings.Contains(msg, "landmark pair"),
-		strings.Contains(msg, "unknown landmark key"):
-		return "landmark_parse"
-	case strings.Contains(msg, "unknown field"),
-		strings.Contains(msg, "unknown milestone field"),
-		strings.Contains(msg, "unknown or unsettable"),
-		strings.Contains(msg, "unknown scope"),
-		strings.Contains(msg, "unsupported segment"),
-		strings.Contains(msg, "not a list field"):
-		return "unknown_field"
-	case strings.Contains(msg, "is required"),
-		strings.Contains(msg, "must be set"),
-		strings.Contains(msg, "must be non-empty"),
-		strings.Contains(msg, "is empty"):
-		return "cli_args"
+	{"landmark_parse", [][]string{{"landmark pair"}, {"unknown landmark key"}}},
+	{"unknown_field", [][]string{
+		{"unknown field"},
+		{"unknown milestone field"},
+		{"unknown or unsettable"},
+		{"unknown scope"},
+		{"unsupported segment"},
+		{"not a list field"},
+	}},
+	{"cli_args", [][]string{{"is required"}, {"must be set"}, {"must be non-empty"}, {"is empty"}}},
 
 	// User cancelled mid-flow.
-	case strings.Contains(msg, "aborted:"),
-		strings.Contains(msg, "cancelled"),
-		strings.Contains(msg, "canceled"):
-		return "cancelled"
+	{"cancelled", [][]string{{"aborted:"}, {"cancelled"}, {"canceled"}}},
 
 	// Health-check commands (doctor) return errors to gate CI / exit
 	// non-zero, but "N issue(s) found" is a useful outcome, not a tool
 	// failure. Bucketing distinguishes the two so a noisy doctor doesn't
 	// look like a broken doctor in stats.
-	case strings.Contains(msg, "issue(s) found"),
-		strings.Contains(msg, "issues found"),
-		strings.Contains(msg, "problem(s) found"),
-		strings.Contains(msg, "problems found"):
-		return "check_issues"
+	{"check_issues", [][]string{{"issue(s) found"}, {"issues found"}, {"problem(s) found"}, {"problems found"}}},
 
 	// dross state.json read/write failures — the workflow can't persist
 	// progress. Distinct from a generic file error because the fix is
 	// about the state file specifically. Used to land in "other".
-	case strings.Contains(msg, "save state"),
-		strings.Contains(msg, "marshal state"),
-		strings.Contains(msg, "unmarshal state"),
-		strings.Contains(msg, "load state"):
-		return "state_io"
+	{"state_io", [][]string{{"save state"}, {"marshal state"}, {"unmarshal state"}, {"load state"}}},
 
 	// The .dross config itself is absent or unreadable: no project.toml, no
 	// state.json, or a TOML syntax error in either. Distinct from state_io
@@ -387,27 +384,20 @@ func ClassifyMessage(message string) string {
 	// phase/plan/spec/verify/milestone group so their own `.toml` load errors
 	// keep theirs. Detail-free: the messages embed absolute config paths
 	// (locked: detail_allowlist).
-	case strings.Contains(msg, "project.toml"),
-		strings.Contains(msg, "state.json"),
-		strings.Contains(msg, "toml:"):
-		return "config_io"
+	{"config_io", [][]string{{"project.toml"}, {"state.json"}, {"toml:"}}},
 
-	// Generic buckets — kept for safety-net coverage.
-	case strings.Contains(msg, "already exists"):
-		return "already_exists"
-	case strings.Contains(msg, "validate"), strings.Contains(msg, "invalid"):
-		return "invalid"
-	case strings.Contains(msg, "not found"), strings.Contains(msg, "missing"):
-		return "missing"
-	case strings.Contains(msg, "permission"), strings.Contains(msg, "denied"):
-		return "permission"
-	case strings.Contains(msg, "git "):
-		return "git"
-	case strings.Contains(msg, "http"), strings.Contains(msg, "network"):
-		return "network"
-	default:
-		return "other"
-	}
+	// Generic buckets — kept for safety-net coverage. Within the tier the
+	// more diagnostic bucket wins: already_exists (near-exact phrase) and
+	// permission first, then the transport/tool buckets (git, network), and
+	// only then the vague invalid/missing pair — an "http 404: pr not found"
+	// is a network failure that happens to mention absence, not a missing
+	// file, so network must see it before "not found" does.
+	{"already_exists", [][]string{{"already exists"}}},
+	{"permission", [][]string{{"permission"}, {"denied"}}},
+	{"git", [][]string{{"git "}}},
+	{"network", [][]string{{"http"}, {"network"}}},
+	{"invalid", [][]string{{"validate"}, {"invalid"}}},
+	{"missing", [][]string{{"not found"}, {"missing"}}},
 }
 
 // detailBuckets are the error classes that additionally store a redacted

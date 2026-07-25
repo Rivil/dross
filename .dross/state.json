@@ -1,73 +1,9 @@
 {
-  "version": "0.10.7.0",
+  "version": "0.10.5.0",
   "current_milestone": "v0.10",
-  "last_activity": "2026-07-25T08:51:06.998936Z",
-  "last_action": "completed verify-auto-finalize",
+  "last_activity": "2026-07-25T09:08:03.752247Z",
+  "last_action": "completed telemetry-taxonomy-overhaul",
   "history": [
-    {
-      "at": "2026-07-24T06:18:10.978647Z",
-      "action": "verified ship-clean-tree: pass (5/5, mutation 0.96)"
-    },
-    {
-      "at": "2026-07-24T06:45:43.319806Z",
-      "action": "completed ship-clean-tree"
-    },
-    {
-      "at": "2026-07-24T07:57:58.832047Z",
-      "action": "created landmark-comma-fix"
-    },
-    {
-      "at": "2026-07-24T08:03:41.445998Z",
-      "action": "set current_phase=landmark-comma-fix"
-    },
-    {
-      "at": "2026-07-24T08:03:41.453553Z",
-      "action": "spec locked: landmark-comma-fix"
-    },
-    {
-      "at": "2026-07-24T08:32:27.065608Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-24T08:32:27.072488Z",
-      "action": "plan locked: landmark-comma-fix (2 tasks across 2 waves)"
-    },
-    {
-      "at": "2026-07-24T08:34:14.360457Z",
-      "action": "plan reviewed: landmark-comma-fix (0 blocking, 1 flag)"
-    },
-    {
-      "at": "2026-07-24T08:35:11.455337Z",
-      "action": "set version=0.10.3.0"
-    },
-    {
-      "at": "2026-07-24T08:38:19.602097Z",
-      "action": "executed t-1 (Rewrite ParseLandmark with key=-boundary splitting)"
-    },
-    {
-      "at": "2026-07-24T08:40:19.908379Z",
-      "action": "executed t-2 (Update --landmark help text, add e2e comma test)"
-    },
-    {
-      "at": "2026-07-24T08:40:36.708397Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-24T08:40:36.714978Z",
-      "action": "phase landmark-comma-fix executed (2/2 done)"
-    },
-    {
-      "at": "2026-07-24T08:56:31.13755Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-24T08:56:31.145497Z",
-      "action": "verified landmark-comma-fix: pass (4/4, mutation 0.96)"
-    },
-    {
-      "at": "2026-07-24T09:08:16.133186Z",
-      "action": "completed landmark-comma-fix"
-    },
     {
       "at": "2026-07-25T05:17:22.338405Z",
       "action": "resumed — handoff pruned to 2 loops; next: scaffold the next v0.10 phase"
@@ -203,6 +139,70 @@
     {
       "at": "2026-07-25T08:51:06.998936Z",
       "action": "completed verify-auto-finalize"
+    },
+    {
+      "at": "2026-07-25T08:54:13.435541Z",
+      "action": "created telemetry-taxonomy-overhaul"
+    },
+    {
+      "at": "2026-07-25T08:54:58.503457Z",
+      "action": "set current_phase=telemetry-taxonomy-overhaul"
+    },
+    {
+      "at": "2026-07-25T08:54:58.509059Z",
+      "action": "spec locked: telemetry-taxonomy-overhaul"
+    },
+    {
+      "at": "2026-07-25T08:55:38.341592Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-25T08:55:38.347948Z",
+      "action": "plan locked: telemetry-taxonomy-overhaul (4 tasks across 2 waves)"
+    },
+    {
+      "at": "2026-07-25T08:58:50.382334Z",
+      "action": "plan reviewed: telemetry-taxonomy-overhaul (0 blocking, 3 flags folded in)"
+    },
+    {
+      "at": "2026-07-25T08:58:54.805964Z",
+      "action": "set version=0.10.5.0"
+    },
+    {
+      "at": "2026-07-25T09:01:24.663135Z",
+      "action": "executed t-1 (rule table)"
+    },
+    {
+      "at": "2026-07-25T09:03:02.878437Z",
+      "action": "executed t-2 (shadowing guard)"
+    },
+    {
+      "at": "2026-07-25T09:05:07.612811Z",
+      "action": "executed t-3 (generic-tier audit)"
+    },
+    {
+      "at": "2026-07-25T09:06:28.892231Z",
+      "action": "executed t-4 (tier docs)"
+    },
+    {
+      "at": "2026-07-25T09:06:33.316364Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-25T09:06:33.324113Z",
+      "action": "phase telemetry-taxonomy-overhaul executed (4/4 done)"
+    },
+    {
+      "at": "2026-07-25T09:07:26.352922Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T09:07:26.35872Z",
+      "action": "verified telemetry-taxonomy-overhaul: pass (4/4, mutation 0.95)"
+    },
+    {
+      "at": "2026-07-25T09:08:03.752247Z",
+      "action": "completed telemetry-taxonomy-overhaul"
     }
   ]
 }

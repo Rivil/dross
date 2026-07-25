@@ -413,11 +413,14 @@ _introduced status-action-surfaces-v2 · extended task-reordering · db72f34_
 
 ### Telemetry & stats
 
-Local-only event log (counts / durations / error classes, never file content), queryable via `dross stats`. Failures classify into named buckets — cobra arg-count / unknown-flag / unknown-subcommand, landmark-parse, merge-refusal, `.dross` config-load and missing-env-token — with an `err_detail` attached only for identifier-only shapes, so paths, phase ids and token names never reach the log. `dross stats` re-derives the class of stored `other` events at read time (the append-only log is never rewritten) and prints the top 5 surviving unclassified shapes as a graduation queue, omitted once drained. A checked-in corpus of real `err_detail` shapes pins each to its bucket and enforces an under-15% unclassified ceiling.
+Local-only event log (counts / durations / error classes, never file content), queryable via `dross stats`. Failures classify into named buckets — cobra arg-count / unknown-flag / unknown-subcommand, landmark-parse, merge-refusal, `.dross` config-load and missing-env-token — with an `err_detail` attached only for identifier-only shapes, so paths, phase ids and token names never reach the log. The taxonomy itself is an ordered first-match-wins rule table (`classRules`) arranged in tiers (root/state → workflow-specific → CLI surface → generic safety-net → other); order is enforced by a shadowing guard (an earlier matcher subsuming a later one fails the build), the generic tier prefers the more diagnostic bucket (permission > git > network > invalid > missing), and a table-driven doc test keeps the README bucket list complete. `dross stats` re-derives the class of stored `other` events at read time (the append-only log is never rewritten) and prints the top 5 surviving unclassified shapes as a graduation queue, omitted once drained. A checked-in corpus of real `err_detail` shapes pins each to its bucket and enforces an under-15% unclassified ceiling.
 
 - `telemetry.Append` — `internal/telemetry/telemetry.go:83`
 - `telemetry.ClassifyError` — `internal/telemetry/telemetry.go:211`
-- `telemetry.ClassifyMessage` (bucket table) — `internal/telemetry/telemetry.go:223`
+- `telemetry.ClassifyMessage` (walks the rule table) — `internal/telemetry/telemetry.go:229`
+- `classRules` (ordered taxonomy — first-match-wins tiers as data) — `internal/telemetry/telemetry.go:262`
+- `TestNoTokenShadowing` (order-dependence enforced) — `internal/telemetry/taxonomy_test.go:33`
+- `TestReadmeDocumentsBucketTiers` (table-driven README completeness) — `internal/telemetry/telemetry_test.go:470`
 - `telemetry.CarriesDetail` (detail allowlist) — `internal/telemetry/telemetry.go:432`
 - `telemetry.Reclassify` (read-time re-derivation) — `internal/telemetry/telemetry.go:450`
 - `renderErrorBuckets` — `internal/cmd/stats.go:185`
@@ -426,7 +429,7 @@ Local-only event log (counts / durations / error classes, never file content), q
 - `TestCorpusOtherShareUnderCeiling` (15% ceiling) — `internal/telemetry/corpus_test.go:97`
 - `renderOutcomes` (pending verify count = phases whose latest phase-stamped event is unresolved, not raw pending events; legacy phase-less events excluded) — `internal/cmd/stats.go:290`
 
-_a1b9c23 · extended telemetry-bucket-graduation · extended verify-auto-finalize · 25a1f5e_
+_a1b9c23 · extended telemetry-bucket-graduation · extended verify-auto-finalize · extended telemetry-taxonomy-overhaul · ded2340_
 
 ### Verification
 

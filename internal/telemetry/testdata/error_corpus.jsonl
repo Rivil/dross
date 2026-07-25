@@ -25,3 +25,9 @@
 {"detail": "origin/main carries no `completed 52-end-user-i18n-coverage` record — has the PR merged upstream? Refusing so the phase branch isn't lost", "want": "merge_pending"}
 {"detail": "origin/milestone/v1.15 is not merged into origin/main yet — has the milestone PR merged? Refusing so the milestone branch isn't lost", "want": "merge_pending"}
 {"detail": "corpus sentinel: a shape no bucket claims", "want": "other"}
+{"detail": "git push origin phase/x failed: http 502 bad gateway", "want": "git"}
+{"detail": "github api: http 404 — pr not found", "want": "network"}
+{"detail": "permission denied: git push to origin rejected", "want": "permission"}
+{"detail": "invalid milestone version — not found in milestones dir", "want": "invalid"}
+{"detail": "validate: plan references missing criterion c-9", "want": "invalid"}
+{"detail": "phase dir already exists: invalid slug reuse", "want": "already_exists"}

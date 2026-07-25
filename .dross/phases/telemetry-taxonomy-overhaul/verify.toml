@@ -1,0 +1,48 @@
+[verify]
+  phase = "telemetry-taxonomy-overhaul"
+  generated_at = 2026-07-25T09:06:36.604789Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-07-25T09:07:26.345691Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9523809523809523
+  mutants_killed = 40
+  mutants_survived = 2
+  mutants_not_covered = 2
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/telemetry/telemetry_test.go:TestClassifyError", "internal/telemetry/telemetry_test.go:TestClassifyMessageMatchesClassifyError", "internal/telemetry/corpus_test.go:TestCorpusShapesClassifyAsExpected"]
+  notes = "table refactor pinned behavior-identical by the pre-existing classify cases and every corpus row"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/telemetry/taxonomy_test.go:TestNoTokenShadowing", "internal/telemetry/taxonomy_test.go:TestMatcherShadowsSelfCheck"]
+  notes = "guard walks all rule pairs; seeded self-check pins the subsumption logic itself"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/telemetry/corpus_test.go:TestCorpusShapesClassifyAsExpected (6 new ambiguous rows)", "internal/telemetry/telemetry_test.go:TestClassifyError (generic-tier precedence cases)"]
+  notes = "audit found + fixed one real misclassification (http 404/not-found read as missing); winners pinned"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/telemetry/telemetry_test.go:TestReadmeDocumentsBucketTiers"]
+  notes = "table-driven completeness: every classRules bucket must appear in README; tier phrases pinned"
+
+[[finding]]
+  severity = "NOTE"
+  text = "2/42 mutants not-covered, both on the MaxBytes const initializer (telemetry.go:46) — the documented gremlins const-initializer attribution ceiling (locked calibration 2026-07-01), a line this phase never touched. Every mutant in the refactored classifier was killed; efficacy excluding not-covered = 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md and testdata/error_corpus.jsonl: no mutation adapter for .md/.jsonl"
