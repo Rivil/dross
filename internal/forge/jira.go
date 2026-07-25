@@ -179,7 +179,11 @@ func (c *JiraClient) ListIssues(f IssueFilter) ([]Issue, error) {
 	q.Set("fields", "summary,description,status,labels")
 	q.Set("maxResults", "50")
 	var raw jiraSearch
-	if err := c.do("GET", c.endpoint("/search")+"?"+q.Encode(), nil, &raw); err != nil {
+	// Jira Cloud removed the legacy /search endpoint (HTTP 410, CHANGE-2046);
+	// the replacement /search/jql takes the same jql/fields/maxResults params
+	// and returns the same `issues` array (plus token-based pagination fields
+	// we don't page through here).
+	if err := c.do("GET", c.endpoint("/search/jql")+"?"+q.Encode(), nil, &raw); err != nil {
 		return nil, fmt.Errorf("list issues: %w", err)
 	}
 	out := make([]Issue, 0, len(raw.Issues))
