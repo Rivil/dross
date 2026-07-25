@@ -1,15 +1,11 @@
 {
-  "version": "0.10.5.0",
+  "version": "0.10.9.0",
   "current_milestone": "v0.10",
   "current_phase": "subagent-offload-audit",
   "current_phase_status": "planned",
-  "last_activity": "2026-07-25T09:13:29.39247Z",
-  "last_action": "plan reviewed: subagent-offload-audit (0 blocking, 1 flag folded)",
+  "last_activity": "2026-07-25T09:13:29.427563Z",
+  "last_action": "set version=0.10.9.0",
   "history": [
-    {
-      "at": "2026-07-25T05:41:29.532134Z",
-      "action": "plan locked: telemetry-bucket-graduation (5 tasks across 2 waves)"
-    },
     {
       "at": "2026-07-25T05:52:51.546163Z",
       "action": "plan reviewed: telemetry-bucket-graduation (0 blocking, 6 flags; 5 folded in)"
@@ -205,6 +201,10 @@
     {
       "at": "2026-07-25T09:13:29.39247Z",
       "action": "plan reviewed: subagent-offload-audit (0 blocking, 1 flag folded)"
+    },
+    {
+      "at": "2026-07-25T09:13:29.427563Z",
+      "action": "set version=0.10.9.0"
     }
   ]
 }
