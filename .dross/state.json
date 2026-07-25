@@ -2,18 +2,10 @@
   "version": "0.10.7.0",
   "current_milestone": "v0.10",
   "current_phase": "verify-auto-finalize",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-25T08:41:16.068226Z",
-  "last_action": "phase verify-auto-finalize executed (4/4 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-25T08:49:46.489635Z",
+  "last_action": "verified verify-auto-finalize: pass (4/4, mutation 0.96)",
   "history": [
-    {
-      "at": "2026-07-24T06:08:28.21718Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-24T06:08:28.224581Z",
-      "action": "phase ship-clean-tree executed (4/4 done)"
-    },
     {
       "at": "2026-07-24T06:18:10.971236Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-25T08:41:16.068226Z",
       "action": "phase verify-auto-finalize executed (4/4 done)"
+    },
+    {
+      "at": "2026-07-25T08:49:46.483946Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-25T08:49:46.489635Z",
+      "action": "verified verify-auto-finalize: pass (4/4, mutation 0.96)"
     }
   ]
 }
