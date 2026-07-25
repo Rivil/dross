@@ -1,0 +1,42 @@
+[verify]
+  phase = "prove-or-demote-board-sync"
+  generated_at = 2026-07-25T17:43:45.759389Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-07-25T17:52:38.402287Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.95481220657277
+  mutants_killed = 1627
+  mutants_survived = 77
+  mutants_not_covered = 77
+  criteria_total = 3
+  criteria_covered = 3
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/project_test.go:TestBoardDottedArmsRoundTrip", "internal/forge/jira_test.go:TestJiraListIssuesJQL", ".dross/phases/prove-or-demote-board-sync/proof.md"]
+  notes = "live e2e round-trip captured in proof.md (milestone-sync 10000 -> phase-sync MYJ-13 -> pull read-back); the two blocking bugs it surfaced are each test-pinned (auth_user round-trip, /search/jql endpoint)"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = [".dross/phases/prove-or-demote-board-sync/proof.md", "project.toml has no [board] section"]
+  notes = "MYJ-13 + version 10000 deleted (verified 404), board sync disabled, [board] config removed so the committed repo carries no live board dependency; token file deleted"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["README.md:207", "memory/dross_board_sync.md"]
+  notes = "README board row corrected ([board] config, six backends, proven-against-Jira 2026-07-25); durable MEMORY note flipped from 'never exercised' to proven"
+
+[[finding]]
+  severity = "NOTE"
+  text = "77/1704 mutants not-covered — the documented gremlins switch-case ceiling. The survivors in a touched file (jira.go:511/517) are pre-existing error-hint string formatting (snippet truncation + status-code hint text), not the endpoint fix; ListIssues' /search/jql migration had its mutants killed by TestJiraListIssuesJQL. Efficacy excluding not-covered = 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Process+fix phase: c-1 proven by a live Jira round-trip (observational, proof.md) plus two test-pinned bug fixes the run surfaced. The API token was used inline only, never committed, and deleted at wrap — but it appeared in the session transcript, so it should be revoked/rotated at id.atlassian.com."
