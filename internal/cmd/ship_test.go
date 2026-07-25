@@ -980,3 +980,84 @@ func TestShipAutoCommitsDrossDirtThenPushes(t *testing.T) {
 		t.Errorf("tree should be clean after ship, got: %q", st)
 	}
 }
+
+// --- ship auto-heal of unfinalized verdicts (verify-auto-finalize c-1) ---
+
+// TestShipHealsUnfinalizedVerdict: shipping a phase whose verify.toml
+// verdict is resolved but never finalized must record the verify
+// outcome event (with the verdict tag) and write the finalized marker
+// back, before the pass gate evaluates.
+func TestShipHealsUnfinalizedVerdict(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "") // re-enable (chdir pins it to "1")
+
+	if err := runCmd(t, Ship(), "--no-push"); err != nil {
+		t.Fatalf("ship --no-push: %v", err)
+	}
+
+	telemBody := mustRead(t, filepath.Join(home, ".claude/dross", "telemetry.jsonl"))
+	if !strings.Contains(telemBody, `"verdict":"pass"`) {
+		t.Errorf("ship should record the resolved verdict outcome event:\n%s", telemBody)
+	}
+	vbody := mustRead(t, filepath.Join(dir, ".dross", "phases", "x", "verify.toml"))
+	if !strings.Contains(vbody, "finalized = true") {
+		t.Errorf("ship heal must write finalized=true into verify.toml:\n%s", vbody)
+	}
+}
+
+// TestShipHealIdempotent: shipping an already-finalized phase must not
+// emit a duplicate outcome event.
+func TestShipHealIdempotent(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "")
+
+	// Manual finalize first — the primary path.
+	if err := runCmd(t, Verify(), "finalize", "x"); err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+	gitCommit(t, dir, "chore(dross): record verify") // marker write dirties the tree
+
+	if err := runCmd(t, Ship(), "--no-push"); err != nil {
+		t.Fatalf("ship --no-push: %v", err)
+	}
+
+	telemBody := mustRead(t, filepath.Join(home, ".claude/dross", "telemetry.jsonl"))
+	if got := strings.Count(telemBody, `"verdict":"pass"`); got != 1 {
+		t.Errorf("ship on finalized phase must not duplicate the outcome event, got %d:\n%s", got, telemBody)
+	}
+}
+
+// TestShipHealRecordsPartialThenRefuses: a partial verdict is recorded
+// (heal fires) but the pass-only gate still refuses the ship.
+func TestShipHealRecordsPartialThenRefuses(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DROSS_NO_TELEMETRY", "")
+
+	verifyPath := filepath.Join(dir, ".dross", "phases", "x", "verify.toml")
+	body, _ := os.ReadFile(verifyPath)
+	body = []byte(strings.Replace(string(body), `verdict = "pass"`, `verdict = "partial"`, 1))
+	if err := os.WriteFile(verifyPath, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := runCmd(t, Ship(), "--no-push")
+	if err == nil {
+		t.Fatal("expected refusal for partial verdict")
+	}
+	if !strings.Contains(err.Error(), "force-unverified") {
+		t.Errorf("refusal should mention --force-unverified: %v", err)
+	}
+	telemBody := mustRead(t, filepath.Join(home, ".claude/dross", "telemetry.jsonl"))
+	if !strings.Contains(telemBody, `"verdict":"partial"`) {
+		t.Errorf("partial verdict should be recorded before the refusal:\n%s", telemBody)
+	}
+}
