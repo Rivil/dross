@@ -1,17 +1,9 @@
 {
   "version": "1.0.3.0",
-  "current_milestone": "v1.0",
-  "last_activity": "2026-07-25T18:13:48.65168Z",
-  "last_action": "milestone v1.0 complete — landed on main (#64), v1.0.3 signed release published",
+  "current_milestone": "v1.1",
+  "last_activity": "2026-07-28T18:28:14.049149Z",
+  "last_action": "scoped milestone v1.1: 5 criteria, 3 phases",
   "history": [
-    {
-      "at": "2026-07-25T09:17:43.911663Z",
-      "action": "executed t-2 (verify offload)"
-    },
-    {
-      "at": "2026-07-25T09:19:11.498663Z",
-      "action": "executed t-3 (execute offload)"
-    },
     {
       "at": "2026-07-25T09:19:15.660999Z",
       "action": "set current_phase_status=complete"
@@ -203,6 +195,14 @@
     {
       "at": "2026-07-25T18:13:48.65168Z",
       "action": "milestone v1.0 complete — landed on main (#64), v1.0.3 signed release published"
+    },
+    {
+      "at": "2026-07-28T18:28:14.042213Z",
+      "action": "set current_milestone=v1.1"
+    },
+    {
+      "at": "2026-07-28T18:28:14.049149Z",
+      "action": "scoped milestone v1.1: 5 criteria, 3 phases"
     }
   ]
 }

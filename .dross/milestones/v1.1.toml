@@ -1,0 +1,11 @@
+phases = ["validator-truth", "root-robustness", "cli-surface-sweep"]
+
+[milestone]
+  version = "v1.1"
+  title = "1.1 friction pass — the logs stop repeating themselves"
+  status = "active"
+  started = "2026-07-28"
+
+[scope]
+  success_criteria = ["A .dross/ directory that exists but is incomplete (missing project.toml or state.json) is treated as 'not a dross repo' by hook-target commands: reentry, status and state touch exit 0 silently instead of erroring, and /dross-pause refuses to create .dross/ in a repo that was never initialised", "Every command, subcommand and flag reached for in the telemetry window that did not exist either resolves or is rejected with a message naming the correct alternative — covering task list, task done, dross hooks, phase create --title, security run --new, task edit --files", "State, project and milestone are fully readable and writable through the CLI without hand-editing TOML: dross state show --json and a single-call multi-field project read exist, and milestone.status and board.auth_user are settable", "No dross validator rejects a value the rest of the CLI accepts — doctor's [board].provider set matches issue.go's, and the two are kept in sync by a shared constant or a test that fails when they diverge", "A telemetry review taken after this milestone ships shows none of the friction classes from the 2026-07-15 to 2026-07-28 window recurring: no reentry/status/state touch errors from incomplete roots, no unknown_subcommand for task list/done, no unknown_field for milestone.status, no doctor rejection of a working provider"]
+  non_goals = ["Teaching doctor to accept jira is a validator fix, not Jira feature work — no new Jira board capabilities in this milestone", "dross changes only — fixing the already-broken .dross/ dirs in other repos (infra, feastahead) is manual cleanup, not milestone work", "The existing telemetry error buckets are sufficient; config_io staying detail-free is a deliberate path-redaction choice, not a gap to close"]
