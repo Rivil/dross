@@ -1,21 +1,11 @@
 {
   "version": "1.0.3.0",
   "current_milestone": "v1.1",
-  "last_activity": "2026-07-28T18:28:14.049149Z",
-  "last_action": "scoped milestone v1.1: 5 criteria, 3 phases",
+  "current_phase": "validator-truth",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-28T19:12:48.543759Z",
+  "last_action": "spec locked: validator-truth",
   "history": [
-    {
-      "at": "2026-07-25T09:19:15.660999Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-25T09:19:15.666945Z",
-      "action": "phase subagent-offload-audit executed (3/3 done)"
-    },
-    {
-      "at": "2026-07-25T09:19:53.188534Z",
-      "action": "set current_phase_status=verified"
-    },
     {
       "at": "2026-07-25T09:19:53.195309Z",
       "action": "verified subagent-offload-audit: pass (4/4, mutation skipped)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-28T18:28:14.049149Z",
       "action": "scoped milestone v1.1: 5 criteria, 3 phases"
+    },
+    {
+      "at": "2026-07-28T19:12:48.529199Z",
+      "action": "set current_phase=validator-truth"
+    },
+    {
+      "at": "2026-07-28T19:12:48.537097Z",
+      "action": "set current_phase_status=created"
+    },
+    {
+      "at": "2026-07-28T19:12:48.543759Z",
+      "action": "spec locked: validator-truth"
     }
   ]
 }
