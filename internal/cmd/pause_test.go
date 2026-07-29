@@ -283,3 +283,75 @@ func TestPauseAutoDegradesWithoutGit(t *testing.T) {
 		t.Errorf("snapshot should degrade the branch line to (no git):\n%s", b)
 	}
 }
+
+// TestPauseAutoRendersPhaseStatus covers the phase line's two nested guards.
+// Every other pause fixture is a fresh `dross init` repo whose current_phase is
+// empty, so the phase name and its "(status)" suffix were never executed by any
+// test. The rows are chosen so each guard fails independently: an unconditional
+// concat breaks "phase only", a dropped suffix breaks "phase and status", and
+// hoisting the suffix out of the outer guard breaks "status only".
+//
+// Assertions stop at "· v" rather than naming a version — the suffix is the
+// contract here, not `dross init`'s default version string.
+func TestPauseAutoRendersPhaseStatus(t *testing.T) {
+	cases := []struct {
+		name    string
+		phase   string
+		status  string
+		want    string
+		notWant string
+	}{
+		{
+			name:   "phase and status",
+			phase:  "root-robustness",
+			status: "verified",
+			want:   "- phase: root-robustness (verified) · v",
+		},
+		{
+			name:  "phase only",
+			phase: "root-robustness",
+			want:  "- phase: root-robustness · v",
+			// A suffix rendered from an empty status would leave "root-robustness ()".
+			notWant: "root-robustness (",
+		},
+		{
+			name:   "status only",
+			status: "verified",
+			want:   "- phase: (none) · v",
+			// The suffix lives inside the current_phase guard: no phase, no status.
+			notWant: "verified",
+		},
+		{
+			name: "neither",
+			want: "- phase: (none) · v",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := pauseRepo(t)
+			if tc.phase != "" {
+				if err := runCmd(t, State(), "set", "current_phase", tc.phase); err != nil {
+					t.Fatalf("set current_phase: %v", err)
+				}
+			}
+			if tc.status != "" {
+				if err := runCmd(t, State(), "set", "current_phase_status", tc.status); err != nil {
+					t.Fatalf("set current_phase_status: %v", err)
+				}
+			}
+
+			if err := pauseAuto(pauseNow); err != nil {
+				t.Fatalf("pauseAuto: %v", err)
+			}
+
+			got := mustRead(t, filepath.Join(dir, ".dross", "handoff.md"))
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("snapshot missing %q:\n%s", tc.want, got)
+			}
+			if tc.notWant != "" && strings.Contains(got, tc.notWant) {
+				t.Errorf("snapshot should not contain %q:\n%s", tc.notWant, got)
+			}
+		})
+	}
+}
