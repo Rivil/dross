@@ -2,22 +2,10 @@
   "version": "1.1.2.0",
   "current_milestone": "v1.1",
   "current_phase": "cli-surface-sweep",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-29T15:14:07.802601Z",
-  "last_action": "spec locked: cli-surface-sweep",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-29T16:45:43.440155Z",
+  "last_action": "plan reviewed: cli-surface-sweep (0 blocking, 5 flags — all folded in)",
   "history": [
-    {
-      "at": "2026-07-29T05:59:01.749119Z",
-      "action": "plan locked: validator-truth (10 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-07-29T06:34:32.44829Z",
-      "action": "plan reviewed: validator-truth (1 blocking, 6 flags)"
-    },
-    {
-      "at": "2026-07-29T07:06:54.172963Z",
-      "action": "set version=1.1.1.0"
-    },
     {
       "at": "2026-07-29T07:10:09.829573Z",
       "action": "executed t-1 (Add internal/configenum normalising enum sets)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-07-29T15:14:07.802601Z",
       "action": "spec locked: cli-surface-sweep"
+    },
+    {
+      "at": "2026-07-29T15:55:51.775941Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-29T15:55:51.783903Z",
+      "action": "plan locked: cli-surface-sweep (9 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-07-29T16:45:43.440155Z",
+      "action": "plan reviewed: cli-surface-sweep (0 blocking, 5 flags — all folded in)"
     }
   ]
 }
