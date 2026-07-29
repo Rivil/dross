@@ -2,34 +2,10 @@
   "version": "1.1.1.0",
   "current_milestone": "v1.1",
   "current_phase": "validator-truth",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-29T07:45:10.345378Z",
-  "last_action": "executed t-8 (Correct provider lists in init/onboard prompts)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-29T08:13:21.696134Z",
+  "last_action": "phase validator-truth executed (10/10 done)",
   "history": [
-    {
-      "at": "2026-07-25T11:17:24.652581Z",
-      "action": "set version=1.0.1.0"
-    },
-    {
-      "at": "2026-07-25T11:20:12.47574Z",
-      "action": "executed t-1 (techdebt run + triage: 605-\u003e100, 1 fix)"
-    },
-    {
-      "at": "2026-07-25T11:28:50.774975Z",
-      "action": "executed t-2 (secure run: 1 HIGH fixed, gosec/gitleaks/trivy triaged)"
-    },
-    {
-      "at": "2026-07-25T11:34:20.892422Z",
-      "action": "executed t-3 (quality run: 1 sec-correctness fix, 1 dead removed, rest triaged)"
-    },
-    {
-      "at": "2026-07-25T11:34:38.263008Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-25T11:34:38.26884Z",
-      "action": "phase self-audit executed (3/3 done)"
-    },
     {
       "at": "2026-07-25T11:42:36.018356Z",
       "action": "set current_phase_status=verified"
@@ -205,6 +181,30 @@
     {
       "at": "2026-07-29T07:45:10.345378Z",
       "action": "executed t-8 (Correct provider lists in init/onboard prompts)"
+    },
+    {
+      "at": "2026-07-29T07:50:39.798816Z",
+      "action": "executed t-4 (Bitbucket comment + merge-status backends)"
+    },
+    {
+      "at": "2026-07-29T08:03:04.331434Z",
+      "action": "executed t-9 (doctor cross-field combination warnings)"
+    },
+    {
+      "at": "2026-07-29T08:06:45.100309Z",
+      "action": "executed t-5 (auth_user threaded through ship opt builders)"
+    },
+    {
+      "at": "2026-07-29T08:13:14.248222Z",
+      "action": "executed t-10 (validator/dispatch divergence guard)"
+    },
+    {
+      "at": "2026-07-29T08:13:21.689054Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-29T08:13:21.696134Z",
+      "action": "phase validator-truth executed (10/10 done)"
     }
   ]
 }

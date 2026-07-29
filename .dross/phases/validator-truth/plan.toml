@@ -43,7 +43,7 @@ task_seq = 0
   covers = ["c-6"]
   depends_on = ["t-3"]
   test_contract = ["if the comment payload is flat {body:...} rather than {content:{raw:...}}, or posts to a Forgejo-shaped /issues/{n}/comments path, TestPostBitbucketCommentHappyPath fails", "if merged-state is implemented as != OPEN, TestPRMergedBitbucket fails — true only for MERGED, false for OPEN, DECLINED and SUPERSEDED", "if bitbucket is left in the unsupported-provider table, TestPRMergedUnsupportedProvider fails", "if a missing auth_user isn't caught before the request, TestPostBitbucketCommentMissingAuthUser fails", "if PostComment or PRMerged still uses bare ToLower, a leading-space provider that doctor accepts dispatches nowhere — TestCommentAndMergedNormaliseProvider fails", "if either unsupported-provider message stays hand-typed, it omits bitbucket once the arms land — TestShipMessagesListShipProviders fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -54,7 +54,7 @@ task_seq = 0
   covers = ["c-6"]
   depends_on = ["t-2", "t-3", "t-4"]
   test_contract = ["if buildOpenOpts drops Remote.AuthUser, TestBuildOpenOptsCarriesAuthUser fails — without it every ship-package test passes and every real Bitbucket ship 401s", "if buildCommentOpts drops it, TestBuildCommentOptsCarriesAuthUser fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-6"
@@ -98,7 +98,7 @@ task_seq = 0
   covers = ["c-5", "c-6"]
   depends_on = ["t-1", "t-2", "t-6"]
   test_contract = ["if jira + epic doesn't emit a warning, or emits an error instead, TestDoctorWarnsJiraEpicCombination fails; youtrack + epic must emit nothing", "if the implementation does issues++ instead of warnings++, TestDoctorCombinationWarningKeepsExitZero fails — the regression guard for the locked severity", "if provider=jira with an empty board.auth_user isn't warned, TestDoctorWarnsJiraMissingAuthUser fails", "if an unshippable remote provider (sourcehut) isn't warned, or bitbucket/none/empty is warned, TestDoctorWarnsUnshippableRemoteProvider fails", "if remote.provider = bitbucket or auth_scheme = basic with an empty remote.auth_user isn't warned, TestDoctorWarnsBasicAuthMissingAuthUser fails — that pairing 401s on every ship", "if auth_scheme = basic on a gitlab remote isn't warned, TestDoctorWarnsBasicOnNonBitbucketRemote fails — it passes doctor clean today and 401s on every ship", "if a genuinely invalid value stops exiting non-zero, TestDoctorHardFailureStillNonZero fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-10"
@@ -109,4 +109,4 @@ task_seq = 0
   covers = ["c-3"]
   depends_on = ["t-1", "t-3", "t-4", "t-7"]
   test_contract = ["if bitbucket is implemented in OpenPR but forgotten in PostComment, TestShipDispatchMatchesShipProviders fails naming the function", "if the board guard compares only NewBoard's cases, TestBoardDispatchMatchesBoardProviders fails — NewBoard has no default arm and falls through to New, so the union is what must match", "if the ast walker silently extracts nothing, TestProviderCasesInParsesFixture fails on an in-test source string — without it both guards could pass vacuously", "if a host mapping is added to remote.go without teaching ship, TestRemoteWriterSubsetOfShipProviders fails — the writer side is where the original bitbucket divergence came from", "if the api-base switch and ShipProviders diverge, TestRemoteAPIBaseMatchesShipProviders fails; asserting equality against the 4-value host map instead would fail on day one", "if a mode is added to MilestoneModes without teaching jira.go/youtrack.go, TestMilestoneModeDispatchMatchesConfigenum fails — jira's set is [version] only, so it is a subset assertion, youtrack's is equality", "if a scanned function yields fewer than 3 literals (e.g. dispatch refactored to a map), TestGuardsSeeNonEmptySets fails loudly instead of passing empty", "if any scanned dispatch site normalises with bare strings.ToLower instead of configenum.Normalize, TestDispatchUsesConfigenumNormalize fails — this is what keeps validator and consumer leniency identical by construction"]
-  status = "pending"
+  status = "done"
