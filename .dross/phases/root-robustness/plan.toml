@@ -1,0 +1,234 @@
+[phase]
+id = "root-robustness"
+
+[[task]]
+id          = "t-1"
+wave        = 1
+title       = "Add LocateRoot and incomplete-root sentinel"
+files       = [
+  "internal/cmd/root.go",
+  "internal/cmd/root_test.go",
+  "internal/cmd/ship_recover.go",
+  "internal/cmd/findings_test.go",
+  "internal/cmd/telemetry_test.go",
+]
+description = """
+Add MissingRootFiles(dir) []string — the completeness check for a single directory, no walking.
+Build LocateRoot() (root, missing []string, err) on top of it: locate the first `.dross/` and
+stop there, reporting which of project.toml / state.json are absent without erroring. FindRoot()
+turns a non-empty missing list into an IncompleteRootError wrapping ErrNoRoot. Add the shared
+RepairHint constant with the fixed text: "run `dross onboard` to adopt this directory into dross".
+`ship recover` moves to LocateRoot so the escape hatch survives a half-wiped `.dross/`. Migrate
+the bare-`.dross` test fixtures that now resolve to not-a-repo.
+"""
+covers      = ["c-1", "c-3"]
+test_contract = [
+  "`.dross/` with project.toml but no state.json: errors.Is(err, ErrNoRoot) is true — unwrapping the sentinel flips this false and every hook target goes loud",
+  "table over {state.json absent, project.toml absent, both absent}: the message names each absent path and contains RepairHint; the single-miss row must not name the file that is present",
+  "walk_stop: parent has a COMPLETE `.dross/`, child an INCOMPLETE one, cwd = child/deep — FindRoot errors and never returns the parent path",
+  "completeness_check: state.json = `{{{` — FindRoot SUCCEEDS; a mutant that parses to decide completeness fails here",
+  "zero-byte project.toml + state.json still resolve successfully — completeness is existence, never parse",
+  "`.dross` present as a regular file does not stop the walk and does not panic; `.dross` present but chmod 000 returns a non-ErrNoRoot error rather than being misread as not-a-dross-repo",
+  "LocateRoot on the same fixture returns the `.dross` path, missing == [\".dross/state.json\"], err == nil — the surface doctor needs",
+  "MissingRootFiles on a directory path returns the same missing list without walking: called against a child `.dross/` whose parent has a complete one, it reports the child's misses and never returns the parent's — this is the seam onboard uses to stay cwd-scoped",
+  "RepairHint's literal text is `run `dross onboard` to adopt this directory into dross`; changing it fails every task that asserts on it rather than silently drifting",
+  "`dross ship recover` still resolves the root when only `.dross/project.toml` survives",
+  "fixture migration proven at runtime, not by compilation: the four chdirDross call sites (findings_test.go:15) and TestTelemetryCover_RepoHashInRepo (telemetry_test.go:108) pass against the new FindRoot because their fixtures now scaffold both files",
+]
+status      = "pending"
+
+[[task]]
+id          = "t-2"
+wave        = 1
+title       = "Refuse /dross-pause without an initialised root"
+files       = ["assets/prompts/pause.md", "internal/cmd/pause_prompt_test.go"]
+description = """
+Add a §0 pre-flight gate: probe with `dross state show`; on a non-zero exit print one refusal
+line naming why and pointing at `dross onboard`, then stop — no `.dross/`, no handoff.md, no
+gitignore edit, no `dross state touch`, and never run onboard itself. Add a matching hard rule.
+The §4 wrap-up block must not print in the refusal case. (r-01: prompt edits need `make install`.)
+"""
+covers      = ["c-4"]
+test_contract = [
+  "one failing subtest per needle over the normalised prompt (same helper shape as resume_prompt_test.go's resumePromptContent): probe names `dross state show`; refusal contains \"not a dross repo\" and a write-nothing phrase; repair pointer contains \"dross onboard\"",
+  "the refusal covers BOTH the absent and the incomplete case as separate needles — locked pause_refusal is one concept, not two",
+  "the Hard rules section contains \"never create .dross\" AND \"handoff.md\": removing only the hard rule and leaving the pre-flight still fails, so both halves of c-4 are pinned independently",
+  "byte offset of the gate is lower than that of the `## 1. Draft the handoff` heading (pause.md:27) — anchoring it to the §3 write line (pause.md:68) is near-vacuous, since any placement in §0-§2 would satisfy that",
+  "the prompt never instructs running `dross init` or `dross onboard` itself",
+]
+status      = "pending"
+
+[[task]]
+id          = "t-3"
+wave        = 2
+depends_on  = ["t-1"]
+title       = "Silence status and state touch on a non-root"
+files       = [
+  "internal/cmd/status.go",
+  "internal/cmd/state.go",
+  "internal/state/state.go",
+  "internal/cmd/status_test.go",
+  "internal/cmd/state_test.go",
+]
+description = """
+Status and stateTouch treat errors.Is(err, ErrNoRoot) as exit 0 with no output. The branch
+goes in the two handlers, never in loadState() — `state show` / `set` / `bump` stay loud.
+state.Load's unmarshal error (internal/state/state.go:46) currently returns "unmarshal state: %w"
+with no path, unlike its read sibling at :42 — wrap it with the path so the corrupt-file rows
+below are satisfiable at all.
+"""
+covers      = ["c-2"]
+test_contract = [
+  "`.dross/` with project.toml only: runCmd(Status()) returns nil AND captureStdout returns \"\" — a partial fix that prints a header before bailing fails on the non-empty stdout",
+  "replacing TestStatusFreshDirSuggestsInit (status_test.go:18): bare temp dir returns nil error and empty stdout, pinning that absent and incomplete stay one signal",
+  "`state touch` on an incomplete root returns nil, prints nothing, and `.dross/state.json` still does not exist afterwards — kills a silently-create-the-file fix",
+  "`state show` on the same fixture returns a non-nil error naming \".dross/state.json\" — the scoping test: moving the swallow into loadState() makes show silent and fails here",
+  "status against state.json = `{{{` returns a non-nil error mentioning state.json — a swallow-everything fix passes the other rows and dies here",
+  "`state touch x` against state.json = `{{{` also returns a non-nil error naming state.json: locked completeness_check makes corrupt loud in the hook targets too, and an implementation that swallows every loadState error in the handler instead of only ErrNoRoot passes every other row in this plan",
+  "state.Load on an unparseable file returns an error containing the file path — pinning the :46 unmarshal wrap, without which the two corrupt-file rows above cannot pass",
+]
+status      = "pending"
+
+[[task]]
+id          = "t-4"
+wave        = 2
+depends_on  = ["t-1"]
+title       = "Silence pause --auto, keep corrupt files loud"
+files       = [
+  "internal/cmd/pause.go",
+  "internal/cmd/pause_test.go",
+  "internal/cmd/reentry_test.go",
+]
+description = """
+pauseAuto already returns nil on ErrNoRoot (pause.go:47), which now covers the incomplete case.
+Change autoSnapshot to surface project.toml / state.json decode failures instead of degrading
+past them (today's `if stErr == nil` skip), so a corrupt file is loud in the PreCompact hook too.
+Git failures keep degrading — an environment fact, not broken state.
+"""
+covers      = ["c-2"]
+test_contract = [
+  "`.dross/` with project.toml only: pauseAuto returns nil AND `.dross/handoff.md` does not exist — the file-existence half is the real assertion",
+  "state.json truncated to `{\"version\":`, project.toml valid: non-nil error naming state.json AND handoff.md not written; a pre-existing handoff.md is byte-identical after the run",
+  "same shape for a project.toml that fails TOML decode — a separate row, so fixing only the state path leaves a named failure",
+  "the existing no-git fixture still renders \"- branch: (no git)\" and exits 0 — pins loud-vs-soft",
+  "`dross reentry` against an incomplete `.dross/` returns nil AND captureStdout is \"\" — reentry.go:39 already does this for free after t-1, which is exactly why nothing would catch a regression that makes it loud; it is the one c-2 command with no silent-case assertion otherwise",
+  "`dross reentry` against a project.toml containing bad TOML exits non-zero naming project.toml, rather than the ErrNoRoot silence",
+]
+status      = "pending"
+
+[[task]]
+id          = "t-5"
+wave        = 2
+depends_on  = ["t-1"]
+title       = "Diagnose an incomplete root in doctor"
+files       = ["internal/cmd/doctor.go", "internal/cmd/doctor_test.go"]
+description = """
+Doctor resolves its root via LocateRoot (doctor.go:31 currently uses FindRoot, which after t-1
+would die before reaching the diagnosis) so an incomplete `.dross/` reaches the foundational-files
+block; missing-file lines reuse the shared RepairHint. Add a distinct verdict for "not a dross repo
+(incomplete `.dross/`)", separate from an ordinary repairable issue such as a missing rules.toml,
+rendered as its own output block listing exactly LocateRoot's Missing pair — checkFoundationalFiles
+(doctor.go:423) stays a trio and keeps its own block.
+"""
+covers      = ["c-5"]
+test_contract = [
+  "`.dross/` with project.toml only: stdout contains \"✗ .dross/state.json — missing\" AND the returned error names a project-level issue — leaving doctor on FindRoot prints nothing and fails both halves",
+  "`.dross/` holding only rules.toml: output names BOTH \".dross/project.toml\" and \".dross/state.json\" — a short-circuit after the first miss fails the second needle",
+  "the incomplete-root verdict is never collapsed with the ordinary repairable verdict: a rules.toml-only-missing repo and an incomplete root produce different verdicts",
+  "doctor's missing-file output contains RepairHint verbatim, so doctor and root.go cannot drift to two repair strings",
+  "doctor's existing `dross ship recover` sentence (doctor.go:55) survives alongside RepairHint — both strings present on the same missing-file line; replacing rather than appending fails this row",
+  "the incomplete-root block's list equals the Missing slice LocateRoot returns for the same directory — scoped to that block, not to doctor's whole missing-file output: on the project.toml-only fixture the trio block also names rules.toml, which is deliberately not part of root completeness",
+  "existing TestDoctorFlagsMissingFoundationalFile stays green — rules.toml is doctor's trio and deliberately NOT part of root completeness",
+]
+status      = "pending"
+
+[[task]]
+id          = "t-6"
+wave        = 2
+depends_on  = ["t-1"]
+title       = "Let onboard adopt an incomplete .dross"
+files       = ["internal/cmd/onboard.go", "internal/cmd/onboard_test.go"]
+description = """
+onboard.go:37 refuses whenever `.dross/` exists at all, and the `--force` escape does
+os.RemoveAll on it — so the repair command every new error message names is a dead end on
+exactly the roots it should repair. Narrow the refusal to a COMPLETE root; adopt an incomplete
+one in place, preserving files already present. Completeness comes from t-1's MissingRootFiles
+against the cwd-local `.dross` — onboard must NOT call LocateRoot, which would give it an
+up-walk and let it adopt an ancestor's root (locked walk_stop).
+"""
+covers      = ["c-3"]
+test_contract = [
+  "`dross onboard` in a dir whose `.dross/` holds only project.toml exits 0, creates state.json, and leaves the existing project.toml byte-identical — today this run fails with \".dross already exists\"",
+  "`dross onboard` against a complete root still refuses with the existing message unless --force",
+  "after the adopting run, `dross status` in the same dir produces output — the round trip the error message promises actually terminates",
+  "`dross onboard` in a subdirectory of a repo that already has a complete `.dross/` at its root creates a NEW `.dross/` in the subdirectory rather than adopting the ancestor's — onboard stays cwd-scoped and never climbs",
+]
+status      = "pending"
+
+[[task]]
+id          = "t-7"
+wave        = 2
+depends_on  = ["t-1"]
+title       = "Narrow rule.go degradation to an absent root"
+files       = ["internal/cmd/rule.go", "internal/cmd/rule_test.go"]
+description = """
+loadMerged (rule.go:224) swallows ErrNoRoot and treats project rules as empty. After t-1 that
+swallow absorbs the incomplete case too, so `rule show` would exit 0 on a broken root — a live
+c-3 hole. Degrade only for a genuinely absent `.dross/`.
+"""
+covers      = ["c-3"]
+test_contract = [
+  "`rule show` against a `.dross/` missing state.json returns a non-nil error naming \".dross/state.json\" and RepairHint",
+  "`rule show` in a bare temp dir exits 0 listing global rules only — pins that the change narrows the degradation rather than deleting it",
+]
+status      = "pending"
+
+[[task]]
+id          = "t-8"
+wave        = 2
+depends_on  = ["t-1"]
+title       = "Bucket the incomplete-root error in telemetry"
+files       = [
+  "internal/cmd/telemetry.go",
+  "internal/cmd/verify.go",
+  "internal/telemetry/telemetry.go",
+  "internal/telemetry/telemetry_test.go",
+]
+description = """
+Add an `incomplete_root` class rule above `no_root`, and switch the RepoHash lookups
+(telemetry.go:32, :91) to LocateRoot so an incomplete repo still attributes its failures.
+recordVerifyPhaseOutcome (verify.go:311) has the identical `if root, err := FindRoot(); err == nil`
+swallow and moves too — otherwise verify outcome events lose attribution while CLI events keep it.
+"""
+covers      = ["c-3"]
+test_contract = [
+  "ClassifyError on the real IncompleteRootError message returns \"incomplete_root\", not \"other\" and not \"no_root\"",
+  "existing TestNoTokenShadowing stays green with the new rule inserted — the guard that the new tier does not make a later rule unreachable",
+  "RecordCLIEvent inside a `.dross/` missing state.json still writes a non-empty RepoHash",
+  "a verify outcome event recorded inside a `.dross/` missing state.json also carries a non-empty RepoHash — fixing telemetry.go alone leaves this row red",
+]
+status      = "pending"
+
+[[task]]
+id          = "t-9"
+wave        = 3
+depends_on  = ["t-3", "t-4", "t-5", "t-6", "t-7", "t-8"]
+title       = "Fail loudly elsewhere, close the allowlist"
+files       = ["internal/cmd/incompleteroot_test.go"]
+description = """
+One new test file holding the cross-cutting guarantees: the cross-command loud-failure table,
+the no-write assertion for the silent set, and the source-level guard pinning which files may
+swallow ErrNoRoot or call LocateRoot. Placed last so its allowlist is a regression gate for
+command 57 rather than something rewritten mid-phase. The sets below are the pinned expectation,
+not a starting guess: check them against the tree after wave 2, and if the derived set differs,
+surface the difference as a finding rather than widening the allowlist to match.
+"""
+covers      = ["c-1", "c-2", "c-3", "c-4"]
+test_contract = [
+  "table over `state show`, `project show`, `validate`, `task list`, `verify`, `rule show`, `phase list`, `milestone show` against a `.dross/` missing state.json: every row returns a non-nil error containing \".dross/state.json\" AND RepairHint, each command its own subtest so a regression names the command",
+  "no-write snapshot: after running `reentry`, `status`, `state touch x` and `pause --auto` in a dir with an incomplete `.dross/`, a recursive dir snapshot before and after is byte-identical — no handoff.md, no state.json, no new `.dross/`",
+  "the same four commands in a dir with NO `.dross/` at all also create nothing and print nothing — the c-1 indistinguishability assertion",
+  "source scan over non-test internal/cmd/*.go for ErrNoRoot: the file set must be a subset of {root.go, reentry.go, status.go, state.go, pause.go, rule.go}, and the set calling LocateRoot exactly {root.go, doctor.go, ship_recover.go, telemetry.go, verify.go} — a new command copying the silent pattern fails by filename",
+  "onboard.go appears in the MissingRootFiles caller set and NOT in the LocateRoot caller set — the row that fails if onboard is ever given an up-walk (locked walk_stop)",
+]
+status      = "pending"
