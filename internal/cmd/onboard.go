@@ -34,15 +34,49 @@ func Onboard() *cobra.Command {
 				return err
 			}
 			root := filepath.Join(cwd, RootDirName)
-			if _, err := os.Stat(root); err == nil && !force {
-				return errors.New(".dross already exists — use --force to overwrite")
-			}
-			if err == nil && force {
-				if err := os.RemoveAll(root); err != nil {
+			exists := true
+			if _, err := os.Stat(root); err != nil {
+				if !errors.Is(err, fs.ErrNotExist) {
 					return err
 				}
-			} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return err
+				exists = false
+			}
+
+			// Branch order matters, and --force wins outright: it wipes and
+			// re-scaffolds whatever is there, complete or not. Without it, a
+			// COMPLETE root still refuses, but an INCOMPLETE one is adopted in
+			// place — onboard is the repair command every not-a-dross-repo
+			// message now names, so refusing on exactly the roots it should
+			// repair would make that pointer a dead end.
+			//
+			// Completeness comes from MissingRootFiles against the cwd-local
+			// `.dross`, never LocateRoot: an up-walk here would let onboard
+			// adopt an ancestor project's root (locked walk_stop).
+			adopt := false
+			if exists {
+				if force {
+					if err := os.RemoveAll(root); err != nil {
+						return err
+					}
+				} else {
+					missing, err := MissingRootFiles(root)
+					if err != nil {
+						return err
+					}
+					if len(missing) == 0 {
+						return errors.New(".dross already exists — use --force to overwrite")
+					}
+					adopt = true
+				}
+			}
+			// Adopting preserves what's already there; only the absent files
+			// are written.
+			keepExisting := func(path string) bool {
+				if !adopt {
+					return false
+				}
+				_, err := os.Stat(path)
+				return err == nil
 			}
 			for _, d := range []string{root, filepath.Join(root, "milestones"), filepath.Join(root, "phases")} {
 				if err := os.MkdirAll(d, 0o755); err != nil {
@@ -54,19 +88,25 @@ func Onboard() *cobra.Command {
 			p := scan.toProject()
 			p.Remote, _ = seedRemote(cwd)
 			seedRuntimeFromProfile(cwd, p)
-			if err := p.Save(filepath.Join(root, project.File)); err != nil {
-				return err
+			if projPath := filepath.Join(root, project.File); !keepExisting(projPath) {
+				if err := p.Save(projPath); err != nil {
+					return err
+				}
 			}
 
-			s := state.New()
-			s.Touch("dross onboard")
-			if err := s.Save(filepath.Join(root, state.File)); err != nil {
-				return err
+			if statePath := filepath.Join(root, state.File); !keepExisting(statePath) {
+				s := state.New()
+				s.Touch("dross onboard")
+				if err := s.Save(statePath); err != nil {
+					return err
+				}
 			}
 
-			rs := &rules.Set{}
-			if err := rs.SaveFile(filepath.Join(root, rules.File)); err != nil {
-				return err
+			if rulesPath := filepath.Join(root, rules.File); !keepExisting(rulesPath) {
+				rs := &rules.Set{}
+				if err := rs.SaveFile(rulesPath); err != nil {
+					return err
+				}
 			}
 
 			if err := ensureDrossGitattributes(cwd); err != nil {
