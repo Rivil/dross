@@ -31,7 +31,7 @@ func Doctor() *cobra.Command {
 			// LocateRoot, not FindRoot: an incomplete `.dross/` is doctor's
 			// diagnosis to make, so it has to reach the foundational-files
 			// block below rather than being turned away as not-a-dross-repo.
-			root, _, err := LocateRoot()
+			root, rootMissing, err := LocateRoot()
 			if err != nil {
 				return err
 			}
@@ -55,10 +55,20 @@ func Doctor() *cobra.Command {
 			missing := checkFoundationalFiles(root)
 			if len(missing) > 0 {
 				for _, m := range missing {
-					Printf("  ✗ %s — missing. If a recent squash-merge wiped .dross/, run `dross ship recover` to restore from the pre-merge HEAD.\n", m)
+					Printf("  ✗ %s — missing. If a recent squash-merge wiped .dross/, run `dross ship recover` to restore from the pre-merge HEAD. Otherwise %s.\n", m, RepairHint)
 					issues++
 				}
 				Print("")
+				// Two different diagnoses share this block. A missing
+				// rules.toml is an ordinary repairable issue — the trio is
+				// doctor's own, wider notion of "foundational". A missing
+				// project.toml or state.json means the root isn't a dross repo
+				// at all, which every other command now reports as such, so
+				// doctor names it separately rather than collapsing the two.
+				if len(rootMissing) > 0 {
+					printIncompleteRoot(rootMissing)
+					return finalizeIncompleteRoot(rootMissing, issues, len(warnings))
+				}
 				return finalizeDoctor(issues, len(warnings))
 			}
 			Print("  ✓ project.toml, rules.toml, state.json present")
@@ -416,6 +426,34 @@ func finalizeDoctor(issues, warnings int) error {
 		return nil
 	}
 	return fmt.Errorf("%d project-level issue(s) found", issues)
+}
+
+// incompleteRootHeading opens doctor's incomplete-root block. The block runs
+// from this line to the next blank line and lists exactly LocateRoot's Missing
+// slice — never doctor's wider foundational trio, which also covers rules.toml.
+const incompleteRootHeading = "Not a dross repo — .dross/ is incomplete:"
+
+func printIncompleteRoot(rootMissing []string) {
+	Print(incompleteRootHeading)
+	for _, m := range rootMissing {
+		Printf("  ✗ %s — missing\n", m)
+	}
+	Printf("  → %s\n", RepairHint)
+	Print("")
+}
+
+// finalizeIncompleteRoot is the incomplete-root verdict — deliberately not
+// finalizeDoctor's. A repo missing only rules.toml is repairable in place; one
+// missing project.toml or state.json is not a dross repo, and the two must not
+// read as the same outcome to a human or to telemetry.
+func finalizeIncompleteRoot(rootMissing []string, issues, warnings int) error {
+	RecordOutcomeEvent("doctor",
+		map[string]int{"issues": issues, "warnings": warnings},
+		nil,
+		map[string]string{"result": "incomplete_root"},
+	)
+	return fmt.Errorf("not a dross repo — .dross/ is incomplete, missing %s (%d project-level issue(s) found)",
+		strings.Join(rootMissing, ", "), issues)
 }
 
 // checkFoundationalFiles returns the list of missing foundational files
