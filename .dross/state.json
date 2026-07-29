@@ -1,13 +1,9 @@
 {
   "version": "1.1.1.0",
   "current_milestone": "v1.1",
-  "last_activity": "2026-07-29T08:37:36.330126Z",
+  "last_activity": "2026-07-29T08:38:16.849667Z",
   "last_action": "completed validator-truth",
   "history": [
-    {
-      "at": "2026-07-25T17:30:20.062079Z",
-      "action": "created prove-or-demote-board-sync"
-    },
     {
       "at": "2026-07-25T17:30:20.068551Z",
       "action": "set version=1.0.2.0"
@@ -202,6 +198,10 @@
     },
     {
       "at": "2026-07-29T08:37:36.330126Z",
+      "action": "completed validator-truth"
+    },
+    {
+      "at": "2026-07-29T08:38:16.849667Z",
       "action": "completed validator-truth"
     }
   ]
