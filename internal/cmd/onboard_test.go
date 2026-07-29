@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -93,5 +94,90 @@ func TestOnboardEnsuresSameHooks(t *testing.T) {
 	onboardSettings := mustRead(t, filepath.Join(onboardCfg, "settings.json"))
 	if initSettings != onboardSettings {
 		t.Errorf("onboard's hooks diverge from init's:\n--- init ---\n%s\n--- onboard ---\n%s", initSettings, onboardSettings)
+	}
+}
+
+// TestOnboardAdoptsIncompleteRoot (c-3): onboard is the repair command every
+// not-a-dross-repo message names, so it must terminate on exactly the roots it
+// points at. Today this run fails with ".dross already exists".
+func TestOnboardAdoptsIncompleteRoot(t *testing.T) {
+	dir := realTempDir(t)
+	root := mkRoot(t, dir)
+	const existing = "[project]\n  name = \"kept\"\n"
+	if err := os.WriteFile(filepath.Join(root, "project.toml"), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+
+	if err := runCmd(t, Onboard()); err != nil {
+		t.Fatalf("onboard should adopt an incomplete root, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "state.json")); err != nil {
+		t.Errorf("onboard should have created state.json: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(root, "project.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != existing {
+		t.Errorf("existing project.toml was overwritten:\n%s", got)
+	}
+}
+
+// TestOnboardStillRefusesCompleteRoot: narrowing the refusal must not delete
+// it — a complete root is still off-limits without --force.
+func TestOnboardStillRefusesCompleteRoot(t *testing.T) {
+	dir := realTempDir(t)
+	mkRoot(t, dir, "project.toml", "state.json")
+	chdir(t, dir)
+
+	err := runCmd(t, Onboard())
+	if err == nil {
+		t.Fatal("onboard should refuse a complete root without --force")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("error should be the existing refusal, got %v", err)
+	}
+}
+
+// TestOnboardAdoptRoundTrip: the repair the error message promises actually
+// terminates — after adopting, status produces output instead of exiting
+// silently as a non-root.
+func TestOnboardAdoptRoundTrip(t *testing.T) {
+	dir := realTempDir(t)
+	mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	if err := runCmd(t, Onboard()); err != nil {
+		t.Fatalf("onboard: %v", err)
+	}
+	var out string
+	err := runCmdCapturing(t, &out, Status())
+	if err != nil {
+		t.Fatalf("status after adopt: %v", err)
+	}
+	if out == "" {
+		t.Error("status still prints nothing after onboard adopted the root")
+	}
+}
+
+// TestOnboardStaysCwdScoped pins locked walk_stop at the onboard seam: in a
+// subdirectory of a repo that already has a complete `.dross/`, onboard
+// creates a NEW one rather than climbing to the ancestor's. Swapping
+// MissingRootFiles for LocateRoot gives it an up-walk and fails here.
+func TestOnboardStaysCwdScoped(t *testing.T) {
+	parent := realTempDir(t)
+	mkRoot(t, parent, "project.toml", "state.json")
+	child := filepath.Join(parent, "child")
+	if err := os.MkdirAll(child, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, child)
+
+	if err := runCmd(t, Onboard()); err != nil {
+		t.Fatalf("onboard in a subdirectory: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(child, ".dross", "project.toml")); err != nil {
+		t.Errorf("onboard should have created a .dross in the subdirectory: %v", err)
 	}
 }

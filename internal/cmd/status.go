@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +27,14 @@ func Status() *cobra.Command {
 		RunE: func(_ *cobra.Command, _ []string) error {
 			root, err := FindRoot()
 			if err != nil {
+				// Hook target (c-2): status runs in whatever directory the
+				// session opens in, so "not a dross repo" — absent or
+				// incomplete alike — is a silent exit 0, not an error. The
+				// branch lives here and not in a shared loader: `state show`
+				// and friends must stay loud on the same input.
+				if errors.Is(err, ErrNoRoot) {
+					return nil
+				}
 				return err
 			}
 

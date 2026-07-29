@@ -501,3 +501,22 @@ func TestReadmeDocumentsBucketTiers(t *testing.T) {
 		}
 	}
 }
+
+// TestClassifyIncompleteRoot pins the new tier against the real error text an
+// incomplete root produces, not a hand-written approximation: it must land in
+// incomplete_root, never in the opaque "other" tail and never collapsed into
+// no_root, which is a different piece of friction with a different fix.
+func TestClassifyIncompleteRoot(t *testing.T) {
+	const msg = "not a dross repo: /repo/.dross is incomplete — missing .dross/state.json — " +
+		"run `dross onboard` to adopt this directory into dross"
+
+	if got := ClassifyError(errors.New(msg)); got != "incomplete_root" {
+		t.Errorf("ClassifyError(%q) = %q, want %q", msg, got, "incomplete_root")
+	}
+
+	// The absent-root message must stay in its own bucket.
+	const absent = "no .dross directory found in current dir or any parent — run `dross init` or `dross onboard`"
+	if got := ClassifyError(errors.New(absent)); got != "no_root" {
+		t.Errorf("ClassifyError(absent-root) = %q, want %q", got, "no_root")
+	}
+}

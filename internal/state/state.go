@@ -43,7 +43,9 @@ func Load(path string) (*State, error) {
 	}
 	var s State
 	if err := json.Unmarshal(b, &s); err != nil {
-		return nil, fmt.Errorf("unmarshal state: %w", err)
+		// Name the path, like the read error above: callers that report a
+		// corrupt state file loudly have nothing else to name it with.
+		return nil, fmt.Errorf("unmarshal %s: %w", path, err)
 	}
 	return &s, nil
 }

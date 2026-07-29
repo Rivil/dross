@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -75,6 +76,15 @@ func stateTouch() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, path, err := loadState()
 			if err != nil {
+				// Hook target (c-2): slash commands stamp activity from
+				// wherever they run, so "not a dross repo" is a silent exit 0
+				// and writes nothing. Scoped to this handler on purpose —
+				// putting it in loadState() would silence `state show` / `set`
+				// / `bump` too, and a corrupt state.json (not ErrNoRoot) stays
+				// loud here as well (locked completeness_check).
+				if errors.Is(err, ErrNoRoot) {
+					return nil
+				}
 				return err
 			}
 			s.Touch(args[0])

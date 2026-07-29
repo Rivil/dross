@@ -1,0 +1,70 @@
+[verify]
+  phase = "root-robustness"
+  generated_at = 2026-07-29T13:27:19.179894Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-07-29T13:38:14.364686Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9588194921070693
+  mutants_killed = 1397
+  mutants_survived = 60
+  mutants_not_covered = 60
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/root_test.go:TestFindRootIncompleteIsNoRoot — errors.Is(err, ErrNoRoot) on a .dross/ with project.toml only", "internal/cmd/root_test.go:TestFindRootIncompleteMessage — table over {state.json absent, project.toml absent, both}; asserts the present file is NOT named", "internal/cmd/root_test.go:TestFindRootStopsAtFirstDross — locked walk_stop: never returns the ancestor's complete root", "internal/cmd/root_test.go:TestFindRootCompletenessIsExistenceNotParse — `{{{` state.json and zero-byte files both resolve", "internal/cmd/root_test.go:TestFindRootDrossAsRegularFile / TestFindRootUnreadableDross — non-ErrNoRoot for a broken environment", "internal/cmd/root_test.go:TestLocateRootReportsMissing / TestMissingRootFilesDoesNotWalk / TestRepairHintText", "internal/cmd/incompleteroot_test.go:TestHookTargetsWriteNothing/no_.dross_at_all — the indistinguishability half, asserted as behaviour"]
+  notes = "Indistinguishability is pinned twice over: as an error identity (errors.Is → ErrNoRoot) and as observable behaviour (the absent and incomplete fixtures produce byte-identical trees and empty stdout across all four hook targets)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/reentry_test.go:TestReentrySilentOnIncompleteRoot / TestReentryLoudOnCorruptProject", "internal/cmd/status_test.go:TestStatusSilentOnNonRoot (bare dir + incomplete rows) / TestStatusLoudOnCorruptState", "internal/cmd/state_test.go:TestStateTouchSilentOnNonRoot — nil err, empty stdout, and state.json still absent afterwards", "internal/cmd/state_test.go:TestStateShowLoudOnNonRoot — the scoping test: moving the swallow into loadState() fails here", "internal/cmd/state_test.go:TestStateTouchLoudOnCorruptState / TestStateLoadNamesPathOnCorrupt", "internal/cmd/pause_test.go:TestPauseAutoSilentOnIncompleteRoot / TestPauseAutoLoudOnCorruptFile / TestPauseAutoDegradesWithoutGit", "internal/cmd/pause_test.go:TestPauseAutoRendersPhaseStatus — 4 rows over the nested current_phase / current_phase_status guards in autoSnapshot", "internal/cmd/incompleteroot_test.go:TestHookTargetsWriteNothing — all four commands in one tree snapshot"]
+  notes = "All four hook targets have both a silent-case and a loud-corrupt counterpart, so a swallow-everything implementation is caught. TestPauseAutoLoudOnCorruptFile additionally asserts a pre-existing handoff.md is byte-identical after the failed run. t-10 closed the previous FLAG on pause.go:100-101: the rows are chosen so each guard fails independently (unconditional concat breaks 'phase only' via the empty `()`; a hoisted suffix breaks 'status only'), and both mutants are now killed — pause.go no longer appears in the survivor list."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/incompleteroot_test.go:TestIncompleteRootIsLoudEverywhere — 8 subtests (state show, project show, validate, task next, verify, rule show, phase list, milestone show), each asserting the error names .dross/state.json AND RepairHint", "internal/cmd/incompleteroot_test.go:TestRootHelperCallersAreAllowlisted — AST scan closing the ErrNoRoot / LocateRoot caller sets", "internal/cmd/rule_test.go:TestRuleShowLoudOnIncompleteRoot / TestRuleShowDegradesOutsideRepo", "internal/cmd/onboard_test.go:TestOnboardAdoptsIncompleteRoot / TestOnboardStillRefusesCompleteRoot / TestOnboardAdoptRoundTrip / TestOnboardStaysCwdScoped", "internal/cmd/telemetry_test.go:TestClassifyRealIncompleteRootError — classifies real error values (FindRoot's own return, a wrapped copy, a constructed IncompleteRootError) plus the no_root contrast row", "internal/cmd/telemetry_test.go:TestTelemetryRepoHashOnIncompleteRoot — both recorders (CLI event + verify outcome)", "internal/telemetry/telemetry_test.go:TestClassifyIncompleteRoot — retained as the in-package rule-ordering guard", "internal/cmd/root_test.go:TestShipRecoverResolvesIncompleteRoot"]
+  notes = "The loud-failure surface is covered strongly (8 commands x 2 needles, plus the AST allowlist as a regression gate for future commands). t-11 closed the previous FLAG: the telemetry bucketing is now pinned to values FindRoot really returns rather than a hand-copied message literal, so rewording root.go's prefix turns the test red instead of silently mis-bucketing."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/pause_prompt_test.go:TestPausePromptRefusesWithoutRoot — 7 needle subtests (probe, refusal wording, write-nothing, repair pointer, absent, incomplete, never-runs-the-repair)", "internal/cmd/pause_prompt_test.go:TestPausePromptHardRuleNoWrites — Hard rules section scoped separately, so removing only the rule fails", "internal/cmd/pause_prompt_test.go:TestPausePromptGatePrecedesDrafting — byte-offset placement ahead of `## 1. Draft the handoff`", "internal/cmd/incompleteroot_test.go:TestHookTargetsWriteNothing — the no-write half, asserted at CLI level"]
+  notes = "Prompt-content gating is the strongest available check for an instruction artifact — the assertions are specific (7 independent needles, section-scoped rule check, placement by byte offset), not generic. The residual ceiling is inherent: no test executes the prompt, so obedience is not proven, only instruction presence. The behavioural half of the no-write claim is covered at CLI level by TestHookTargetsWriteNothing."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/doctor_test.go:TestDoctorDiagnosesIncompleteRoot — stdout names `✗ .dross/state.json — missing` AND the verdict names a project-level issue", "internal/cmd/doctor_test.go:TestDoctorNamesEveryRootMiss — both files named, so a short-circuit after the first miss fails", "internal/cmd/doctor_test.go:TestDoctorIncompleteRootVerdictIsDistinct — the incomplete-root verdict never collapses into the ordinary repairable one", "internal/cmd/doctor_test.go:TestDoctorMissingFileLineCarriesBothHints — RepairHint and the `dross ship recover` sentence on the same line", "internal/cmd/doctor_test.go:TestDoctorIncompleteRootBlockMatchesLocateRoot — the block equals LocateRoot's Missing slice, on a fixture where the trio block deliberately differs", "internal/cmd/doctor_test.go:TestDoctorFlagsMissingFoundationalFile — rules.toml stays doctor's trio, not root completeness"]
+  notes = "The block-equals-LocateRoot test is the strongest row: its fixture is chosen so the trio block and the root-completeness block differ, which makes the equality meaningful rather than accidental."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Both FLAGs from the 2026-07-29 partial verdict are closed and re-measured, not merely asserted. pause.go:100-101 has disappeared from the survivor list (63 → 60 survivors, killed 1394 → 1397) after t-10's TestPauseAutoRendersPhaseStatus; t-11's TestClassifyRealIncompleteRootError replaces the hand-copied literal with real FindRoot return values. `go test ./internal/...` is green across all 27 packages."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation cross-check: survived (60) equals not_covered (60) exactly — no covered mutant survived, so efficacy on mutants the tests actually reach is 1.00. Only three survivors intersect lines this branch changed: root.go:57, doctor.go:158 and issue.go:149 (the last from the merged validator-truth phase, out of scope). All three were read back and confirmed to be `switch {}` case-conditions, which gremlins marks NOT COVERED even when exercised — a go-cover attribution limit, not a test gap. root.go:57 (`case err == nil:` in MissingRootFiles) has all three branches named by tests: err==nil via the zero-byte fixture, fs.ErrNotExist via TestLocateRootReportsMissing, and the default via TestFindRootUnreadableDross."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The 60 surviving-mutant sites seeded as FLAG by the mechanical pass were reclassified FLAG → NOTE after inspection, on the documented gremlins switch-case/const-initializer attribution ceiling: install.go:65, statusline.go:23/189, basebranch.go:104, hooks.go:100, milestone.go:147, status.go:422/424/452/454, watch.go:130, deferred.go:138, root.go:57, ship.go:494/496/498, doctor.go:87/89/92/158/222/225, env.go:105/109/114/119/148, issue.go:149/479, update.go:181/184, footer_coverage.go:52/55/58/60, phase.go:273/275/508/510, phase_lifecycle.go:23/25/27, rule.go:143, validate.go:92/96, telemetry.go:46. All but the three named in the note above fall outside this phase's diff. The reclassification is recorded rather than silent: leaving them FLAG would force `partial` on every Go phase regardless of test quality."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Plan deviation, accepted: t-9's contract named `task list` in the cross-command loud-failure table; the test uses `task next` with an inline comment, because dross has no `task list` subcommand. The row's intent (a task-family command fails loudly) is preserved."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/pause.md: no mutation adapter for .md"

@@ -29,8 +29,11 @@ func RecordCLIEvent(c *cobra.Command, dur time.Duration, runErr error) {
 		cmdPath = c.CommandPath()
 	}
 	repoHash := ""
-	if root, err := FindRoot(); err == nil {
-		// FindRoot returns the .dross dir; hash its parent (repo root).
+	// LocateRoot, not FindRoot: an incomplete `.dross/` is still this repo, and
+	// dropping its hash would blind telemetry to exactly the failures this
+	// phase is about.
+	if root, _, err := LocateRoot(); err == nil {
+		// LocateRoot returns the .dross dir; hash its parent (repo root).
 		repoHash = telemetry.HashRepo(filepath.Dir(root))
 	}
 
@@ -88,7 +91,7 @@ func RecordOutcomeEvent(name string, counts map[string]int, numbers map[string]f
 		return
 	}
 	repoHash := ""
-	if root, err := FindRoot(); err == nil {
+	if root, _, err := LocateRoot(); err == nil {
 		repoHash = telemetry.HashRepo(filepath.Dir(root))
 	}
 	_ = telemetry.Append(telemetryPath(), telemetry.Event{

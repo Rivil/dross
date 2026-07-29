@@ -142,6 +142,7 @@ func TestStackApplyResyncsRuntime(t *testing.T) {
 	if err := os.MkdirAll(drossDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	writeCompleteRoot(t, drossDir) // FindRoot needs a complete root
 	stale := &project.Project{
 		Stack:   project.Stack{Languages: []string{"go"}},
 		Runtime: project.Runtime{Mode: "native", TestCommand: "STALE test", BuildCommand: "STALE build"},
@@ -175,6 +176,7 @@ func TestStackApplyUnsupportedDoesNotFabricate(t *testing.T) {
 	if err := os.MkdirAll(drossDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	writeCompleteRoot(t, drossDir) // FindRoot needs a complete root
 	p0 := &project.Project{Runtime: project.Runtime{Mode: "native"}}
 	if err := p0.Save(filepath.Join(drossDir, project.File)); err != nil {
 		t.Fatal(err)

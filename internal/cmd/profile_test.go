@@ -59,6 +59,7 @@ func TestProfileCover_showProjectKeepsLoaded(t *testing.T) {
 	t.Setenv("HOME", t.TempDir()) // empty global
 	mustWrite(t, filepath.Join(dir, ".dross", "profile.toml"),
 		"[dimensions]\n[dimensions.testdim]\nrating = \"projval\"\n")
+	writeCompleteRoot(t, filepath.Join(dir, ".dross")) // FindRoot needs a complete root
 
 	var err error
 	out := captureStdout(t, func() {

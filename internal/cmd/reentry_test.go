@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -163,5 +165,44 @@ func TestStatusEndsWithReentryLine(t *testing.T) {
 	want := decodeReentry(t, reentryOut)
 	if last != want {
 		t.Errorf("status's last line != reentry envelope line:\nstatus last: %q\nreentry:     %q", last, want)
+	}
+}
+
+// TestReentrySilentOnIncompleteRoot (c-2): reentry inherits the silence from
+// FindRoot for free, which is exactly why nothing else would catch a
+// regression that made it loud — it is the one c-2 command with no other
+// silent-case assertion.
+func TestReentrySilentOnIncompleteRoot(t *testing.T) {
+	dir := realTempDir(t)
+	mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	var err error
+	out := captureStdout(t, func() { err = runCmd(t, Reentry()) })
+	if err != nil {
+		t.Errorf("want silent exit 0 on an incomplete root, got: %v", err)
+	}
+	if out != "" {
+		t.Errorf("want empty stdout on an incomplete root, got:\n%s", out)
+	}
+}
+
+// TestReentryLoudOnCorruptProject (locked completeness_check): the SessionStart
+// hook stays loud on broken state, rather than folding it into the ErrNoRoot
+// silence.
+func TestReentryLoudOnCorruptProject(t *testing.T) {
+	dir := realTempDir(t)
+	root := mkRoot(t, dir, "state.json")
+	if err := os.WriteFile(filepath.Join(root, "project.toml"), []byte("[[[not toml"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+
+	err := runCmd(t, Reentry())
+	if err == nil {
+		t.Fatal("reentry should fail on an undecodable project.toml")
+	}
+	if !strings.Contains(err.Error(), "project.toml") {
+		t.Errorf("error should name project.toml, got %v", err)
 	}
 }

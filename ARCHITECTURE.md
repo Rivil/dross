@@ -286,15 +286,30 @@ Scan an existing repo's signal files (Dockerfile, package.json, go.mod, …) int
 
 _c8b346e · extended 07-stack-profiles · eb602f1_
 
+### Root resolution
+
+Decide what counts as a dross repo, and say so the same way everywhere. A `.dross/` that exists but is missing `project.toml` or `state.json` resolves to *not a dross repo* — indistinguishable from no `.dross/` at all to callers — so a half-built directory can never be mistaken for an initialised one. The up-walk stops at the first `.dross/` it finds, complete or not (locked `walk_stop`), so a stray directory in a nested repo can never silently bind writes to an ancestor project's real root. Completeness is an *existence* check only (locked `completeness_check`): a file that exists but fails to parse is a broken state, not an uninitialised one, and stays loud everywhere — including in the hook targets. `LocateRoot` reports the misses without erroring, which is the seam doctor and `ship recover` read; `FindRoot` mints the `IncompleteRootError` that carries them, every message naming the missing file plus the single shared `RepairHint`. Silent exit 0 is scoped to the four hook targets alone — every other command fails loudly against an incomplete root, and a `go/ast` allowlist gates which files may swallow `ErrNoRoot` or call `LocateRoot`, so a future command can't quietly join the silent set. `dross doctor` projects the same misses as a distinct not-a-dross-repo verdict (its block is pinned equal to `LocateRoot`'s slice), and `dross onboard` adopts an incomplete `.dross/` in place, preserving what's already there.
+
+- `FindRoot` / `ErrNoRoot` / `RequiredRootFiles` / `RepairHint` — `internal/cmd/root.go:17`
+- `IncompleteRootError` — `internal/cmd/root.go:32`
+- `MissingRootFiles` — `internal/cmd/root.go:52`
+- `LocateRoot` (misses without erroring — doctor + ship-recover seam) — `internal/cmd/root.go:72`
+- `finalizeIncompleteRoot` (doctor's distinct verdict) / `incompleteRootHeading` — `internal/cmd/doctor.go:449`
+- `Onboard` (adopts an incomplete root in place) — `internal/cmd/onboard.go:36`
+- `TestRootHelperCallersAreAllowlisted` (AST allowlist over the swallow set) — `internal/cmd/incompleteroot_test.go:166`
+
+_introduced root-robustness · 6d33d3b_
+
 ### Rules system
 
-Two-tier (builtin + project) MUST-FOLLOW rules, merged and rendered via `dross rule show`.
+Two-tier (builtin + project) MUST-FOLLOW rules, merged and rendered via `dross rule show`. Project-rule degradation is scoped to a *genuinely absent* root: `loadMerged` falls back to builtins-only when there is no `.dross/` at all, but an incomplete or corrupt root surfaces its error, so `dross rule show` never quietly drops a repo's project rules.
 
 - `rules.Set` — `internal/rules/rules.go:41`
 - `rules.Merge` — `internal/rules/rules.go:82`
 - `Rule` (CLI) — `internal/cmd/rule.go:14`
+- `loadMerged` (degrades only for an absent root) — `internal/cmd/rule.go:216`
 
-_c8b346e_
+_c8b346e · extended root-robustness · 6d33d3b_
 
 ### Security audit (dross-secure)
 
@@ -340,11 +355,15 @@ Survive `/clear` and compaction without losing the workflow thread: every durabl
 - `Hooks` (`dross hooks ensure`) / `ensureUserHooks` (init/onboard wiring) — `internal/cmd/hooks.go:18`
 - `Reentry` / `reentryLine` ("you are here + next", byte-equal to status's last line) — `internal/cmd/reentry.go:33`
 - `Pause` (`dross pause --auto` mechanical snapshot merge) — `internal/cmd/pause.go:24`
+- `pauseAuto` / `autoSnapshot` (silent on a non-root, loud on a corrupt one, degrades without git) — `internal/cmd/pause.go:45`
+- `pause.md` §0 not-a-dross-repo gate — `assets/prompts/pause.md:18`
 - `footerCoverage` (fail-closed clear-point footer gate) — `internal/cmd/footer_coverage.go:30`
 - execute checkpoint gate (§1g continue/stop/checkpoint) — `assets/prompts/execute.md`
 - clear-point footers across the durable-boundary prompts — `assets/prompts/spec.md`
 
-_introduced context-hygiene · de8b076_
+Pause refuses rather than scaffolds. `/dross-pause` in a repo with no initialised root — absent *or* incomplete, one concept per the locked `pause_refusal` decision — writes nothing, creates neither `.dross/` nor `handoff.md`, prints one line naming why and pointing at the repair, and does not run the repair itself. `dross pause --auto` agrees at CLI level: silent exit 0 on a non-root, but an undecodable `project.toml`/`state.json` surfaces its error and leaves any pre-existing `handoff.md` byte-identical; a missing git only degrades the branch line.
+
+_introduced context-hygiene · extended root-robustness · 6d33d3b_
 
 ### Ship recovery
 
@@ -401,8 +420,11 @@ Track current milestone/phase/version + activity in state.json; summarise "where
 - `rankAreas` — `internal/cmd/status.go:380`
 - `formatRunSignal` — `internal/cmd/status.go:399`
 - `renderActionAreas` — `internal/cmd/status.go:427`
+- `stateTouch` (silent on a non-root, loud on a corrupt one) — `internal/cmd/state.go:71`
 
-_c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · 2b6d344_
+As hook targets, `dross status` and `dross state touch` exit 0 with no output in a repo that isn't a dross repo — see [Root resolution](#root-resolution) for what that means. The swallow is scoped to those two entry points, not pushed down into `loadState`: `dross state show` stays loud on a non-root, and a corrupt `state.json` is loud everywhere and names its path.
+
+_c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · extended root-robustness · 6d33d3b_
 
 ### Status line (native)
 
@@ -462,11 +484,14 @@ Local-only event log (counts / durations / error classes, never file content), q
 - `telemetry.Reclassify` (read-time re-derivation) — `internal/telemetry/telemetry.go:440`
 - `renderErrorBuckets` — `internal/cmd/stats.go:185`
 - `renderOtherTail` (graduation queue) — `internal/cmd/stats.go:232`
-- `RecordCLIEvent` — `internal/cmd/telemetry.go:23`
+- `RecordCLIEvent` (repo hash via `LocateRoot`, so a half-built repo still attributes) — `internal/cmd/telemetry.go:23`
+- `TestClassifyRealIncompleteRootError` (bucketing pinned to real `FindRoot` values, not a copied literal) — `internal/cmd/telemetry_test.go:283`
 - `TestCorpusOtherShareUnderCeiling` (15% ceiling) — `internal/telemetry/corpus_test.go:97`
 - `renderOutcomes` (pending verify count = phases whose latest phase-stamped event is unresolved, not raw pending events; legacy phase-less events excluded) — `internal/cmd/stats.go:290`
 
-_a1b9c23 · extended telemetry-bucket-graduation · extended verify-auto-finalize · extended telemetry-taxonomy-overhaul · ded2340_
+The root tier carries its own `incomplete_root` bucket, ordered *above* `no_root`: a half-built `.dross/` is a different friction with a different fix (`dross onboard`, not `dross init`) and must not collapse into the absent-root case or the opaque `other` tail. Both recorders resolve the repo hash through `LocateRoot`, so events from an incomplete repo are still attributed rather than dropped. Because `internal/telemetry` is imported by `cmd`, it can only pin the bucket against a hand-copied message; the load-bearing test lives in `cmd` and classifies the error value `FindRoot` really returns — so rewording the message turns the test red instead of silently mis-bucketing real failures.
+
+_a1b9c23 · extended telemetry-bucket-graduation · extended verify-auto-finalize · extended telemetry-taxonomy-overhaul · extended root-robustness · 6d33d3b_
 
 ### Verification
 

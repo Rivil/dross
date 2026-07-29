@@ -15,14 +15,27 @@ The handoff is a **living document** at `.dross/handoff.md`: one file, gitignore
 ## 0. Pre-flight
 
 1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for the §2 confirm+amend turn.
-2. Read `.dross/state.json`. Note `current_phase`, `current_phase_status`, `version`. (May be empty — that's fine, you can pause standalone work too.)
-3. Capture the mechanical snapshot:
+2. **Gate — is there an initialised root to pause?** Probe with:
+   ```
+   dross state show
+   ```
+   Three outcomes:
+
+   - **Exit 0** — there's a root. Continue to step 3.
+   - **Non-zero, and the message is the not-a-dross-repo signal** (`no .dross directory found…`, or `not a dross repo: … is incomplete`) — the root is either **absent** or **incomplete**, and those are one case, not two. Print exactly one line and stop:
+     ```
+     not a dross repo — nothing to pause. Run `dross onboard` to adopt this directory into dross.
+     ```
+     Then **write nothing**: no `.dross/`, no `.dross/handoff.md`, no `.gitignore` edit, no `dross state touch`. Never run `dross onboard or dross init` yourself — name the repair and let the user choose it. Skip every remaining step, including the §4 wrap-up block.
+   - **Non-zero with any other message** — the root is there but a file under it is broken (a corrupt `state.json`, an unreadable `.dross/`). Surface that error as-is and stop. Do *not* call this "not a dross repo" and do *not* point at `dross onboard`: the repair is fixing the file the error names, and adopting the directory would not fix it.
+3. Read `.dross/state.json`. Note `current_phase`, `current_phase_status`, `version`. (May be empty — that's fine, you can pause standalone work too.)
+4. Capture the mechanical snapshot:
    ```
    git symbolic-ref --short HEAD        # current branch
    git status --porcelain               # dirty / untracked files
    dross status                         # phase + task progress + next-runnable
    ```
-4. If `.dross/handoff.md` **already exists**, read it. This is a re-pause — you'll merge into it (keep still-open loops, add new ones), not clobber it.
+5. If `.dross/handoff.md` **already exists**, read it. This is a re-pause — you'll merge into it (keep still-open loops, add new ones), not clobber it.
 
 ## 1. Draft the handoff
 
@@ -97,6 +110,7 @@ Then stop. Pause does not commit, stash, or change branches — it only records.
 
 ## Hard rules
 
+- **No initialised root → refuse and write nothing.** An absent `.dross/` and an incomplete one are the same refusal (§0 step 2): never create `.dross`, never write `.dross/handoff.md`, never edit `.gitignore`, never touch state. Pause records a session; it does not bootstrap a project.
 - **Record only — never mutate work.** No commits, no stashing, no `git checkout`, no code edits. Pause writes one markdown file and touches state. That's the whole contract.
 - **One living file.** Always `.dross/handoff.md`. Never timestamped copies, never an archive directory — re-pausing updates the same file.
 - **Gitignored, always.** The handoff is local working memory. If you can't confirm it's ignored, ignore it before writing the content.

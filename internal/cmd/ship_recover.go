@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -57,12 +58,15 @@ longer holds the pre-merge .dross/ tree:
   dross ship recover --pre-merge-sha=$(git rev-parse HEAD@{1}) <phase-id>`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			root, err := FindRoot()
+			// LocateRoot, not FindRoot: recovery is the escape hatch for a
+			// half-wiped `.dross/`, so an incomplete root must reach the
+			// restore rather than being turned away as not-a-dross-repo.
+			root, _, err := LocateRoot()
 			if err != nil {
 				return err
 			}
 			repoDir := filepath.Dir(root)
-			p, _, err := loadProject()
+			p, err := project.Load(filepath.Join(root, project.File))
 			if err != nil {
 				return err
 			}

@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -1039,5 +1040,160 @@ func TestDoctorHardFailureStillNonZero(t *testing.T) {
 				t.Errorf("expected a hard-failure line:\n%s", out)
 			}
 		})
+	}
+}
+
+// incompleteRootBlock extracts doctor's incomplete-root block — the lines from
+// its heading to the next blank line — and returns the file paths it lists.
+// Scoping to the block matters: on a project.toml-only fixture the wider
+// foundational-trio block also names rules.toml, which is deliberately not
+// part of root completeness.
+func incompleteRootBlock(t *testing.T, out string) []string {
+	t.Helper()
+	idx := strings.Index(out, incompleteRootHeading)
+	if idx < 0 {
+		t.Fatalf("doctor output has no incomplete-root block:\n%s", out)
+	}
+	var files []string
+	for _, line := range strings.Split(out[idx:], "\n")[1:] {
+		if strings.TrimSpace(line) == "" {
+			break
+		}
+		if !strings.HasPrefix(line, "  ✗ ") {
+			continue
+		}
+		files = append(files, strings.TrimSuffix(strings.TrimPrefix(line, "  ✗ "), " — missing"))
+	}
+	return files
+}
+
+// TestDoctorDiagnosesIncompleteRoot (c-5): an incomplete `.dross/` reaches the
+// diagnosis instead of dying at root resolution. Leaving doctor on FindRoot
+// prints nothing and fails both halves.
+func TestDoctorDiagnosesIncompleteRoot(t *testing.T) {
+	dir := realTempDir(t)
+	mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err == nil {
+		t.Fatal("doctor should report an issue on an incomplete root")
+	}
+	if !strings.Contains(out, "✗ .dross/state.json — missing") {
+		t.Errorf("output should name the missing file:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "project-level issue") {
+		t.Errorf("verdict should name a project-level issue, got %v", err)
+	}
+}
+
+// TestDoctorNamesEveryRootMiss: a short-circuit after the first miss fails the
+// second needle.
+func TestDoctorNamesEveryRootMiss(t *testing.T) {
+	dir := realTempDir(t)
+	root := mkRoot(t, dir)
+	if err := os.WriteFile(filepath.Join(root, "rules.toml"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Fatal("doctor should report issues when both root files are missing")
+	}
+	for _, want := range []string{".dross/project.toml", ".dross/state.json"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output should name %s:\n%s", want, out)
+		}
+	}
+}
+
+// TestDoctorIncompleteRootVerdictIsDistinct: an ordinary repairable issue (a
+// missing rules.toml) and an incomplete root must not collapse into the same
+// verdict — the first is fixable in place, the second means this isn't a dross
+// repo at all.
+func TestDoctorIncompleteRootVerdictIsDistinct(t *testing.T) {
+	repairable := realTempDir(t)
+	chdir(t, repairable)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(repairable, ".dross", "rules.toml")); err != nil {
+		t.Fatal(err)
+	}
+	var repairableOut string
+	repairableErr := runCmdCapturing(t, &repairableOut, Doctor())
+	if repairableErr == nil {
+		t.Fatal("doctor should report the missing rules.toml")
+	}
+	if strings.Contains(repairableOut, incompleteRootHeading) {
+		t.Errorf("a missing rules.toml is not an incomplete root:\n%s", repairableOut)
+	}
+
+	incomplete := realTempDir(t)
+	mkRoot(t, incomplete, "project.toml")
+	chdir(t, incomplete)
+	incompleteErr := runCmdCapturing(t, new(string), Doctor())
+	if incompleteErr == nil {
+		t.Fatal("doctor should report the incomplete root")
+	}
+
+	if repairableErr.Error() == incompleteErr.Error() {
+		t.Errorf("both verdicts read identically: %q", repairableErr)
+	}
+}
+
+// TestDoctorMissingFileLineCarriesBothHints: doctor and root.go must not drift
+// to two repair strings, and the pre-existing `dross ship recover` sentence has
+// to survive alongside RepairHint on the same line — replacing rather than
+// appending fails this.
+func TestDoctorMissingFileLineCarriesBothHints(t *testing.T) {
+	dir := realTempDir(t)
+	mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Fatal("doctor should report an issue on an incomplete root")
+	}
+	if !strings.Contains(out, RepairHint) {
+		t.Errorf("output should contain RepairHint verbatim:\n%s", out)
+	}
+	var found bool
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "dross ship recover") && strings.Contains(line, RepairHint) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no missing-file line carries both the recover sentence and RepairHint:\n%s", out)
+	}
+}
+
+// TestDoctorIncompleteRootBlockMatchesLocateRoot: the block lists exactly
+// LocateRoot's Missing slice. The fixture is chosen so the two differ — the
+// foundational trio also flags rules.toml — which is what makes the equality
+// meaningful rather than accidental.
+func TestDoctorIncompleteRootBlockMatchesLocateRoot(t *testing.T) {
+	dir := realTempDir(t)
+	mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	_, want, err := LocateRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Fatal("doctor should report an issue on an incomplete root")
+	}
+	got := incompleteRootBlock(t, out)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("incomplete-root block lists %v, LocateRoot reports %v", got, want)
+	}
+	if strings.Contains(strings.Join(got, ","), "rules.toml") {
+		t.Errorf("rules.toml is doctor's trio, not root completeness: %v", got)
 	}
 }
