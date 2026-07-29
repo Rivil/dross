@@ -2,22 +2,10 @@
   "version": "1.0.3.0",
   "current_milestone": "v1.1",
   "current_phase": "validator-truth",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-28T19:12:48.543759Z",
-  "last_action": "spec locked: validator-truth",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-29T06:34:32.44829Z",
+  "last_action": "plan reviewed: validator-truth (1 blocking, 6 flags)",
   "history": [
-    {
-      "at": "2026-07-25T09:19:53.195309Z",
-      "action": "verified subagent-offload-audit: pass (4/4, mutation skipped)"
-    },
-    {
-      "at": "2026-07-25T09:20:30.63431Z",
-      "action": "completed subagent-offload-audit"
-    },
-    {
-      "at": "2026-07-25T09:25:38.428877Z",
-      "action": "milestone v0.10 complete — merged to main (#60), handoff closed"
-    },
     {
       "at": "2026-07-25T11:15:32.714037Z",
       "action": "set current_milestone=v1.0"
@@ -205,6 +193,18 @@
     {
       "at": "2026-07-28T19:12:48.543759Z",
       "action": "spec locked: validator-truth"
+    },
+    {
+      "at": "2026-07-29T05:59:01.742399Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-29T05:59:01.749119Z",
+      "action": "plan locked: validator-truth (10 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-07-29T06:34:32.44829Z",
+      "action": "plan reviewed: validator-truth (1 blocking, 6 flags)"
     }
   ]
 }
