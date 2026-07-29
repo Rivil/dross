@@ -1,0 +1,440 @@
+{
+  "phase": "root-robustness",
+  "generated_at": "2026-07-29T12:21:45.523725Z",
+  "languages": [
+    {
+      "name": "go",
+      "tool": "gremlins",
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go",
+        "internal/cmd/findings_test.go",
+        "internal/cmd/incompleteroot_test.go",
+        "internal/cmd/milestone_test.go",
+        "internal/cmd/onboard.go",
+        "internal/cmd/onboard_test.go",
+        "internal/cmd/pause.go",
+        "internal/cmd/pause_prompt_test.go",
+        "internal/cmd/pause_test.go",
+        "internal/cmd/profile_test.go",
+        "internal/cmd/quality_findings_test.go",
+        "internal/cmd/reentry_test.go",
+        "internal/cmd/root.go",
+        "internal/cmd/root_test.go",
+        "internal/cmd/rule.go",
+        "internal/cmd/rule_test.go",
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/stack_test.go",
+        "internal/cmd/state.go",
+        "internal/cmd/state_test.go",
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go",
+        "internal/cmd/telemetry.go",
+        "internal/cmd/telemetry_test.go",
+        "internal/cmd/verify.go",
+        "internal/state/state.go",
+        "internal/telemetry/telemetry.go",
+        "internal/telemetry/telemetry_test.go"
+      ],
+      "mutation": {
+        "Tool": "gremlins",
+        "Killed": 1394,
+        "Survived": 63,
+        "Timeout": 0,
+        "Errors": 0,
+        "Score": 0.9567604667124228,
+        "Surviving": [
+          {
+            "File": "root.go",
+            "Line": 57,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "rule.go",
+            "Line": 143,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "ship.go",
+            "Line": 494,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "ship.go",
+            "Line": 494,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "ship.go",
+            "Line": 496,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "ship.go",
+            "Line": 496,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "ship.go",
+            "Line": 498,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "deferred.go",
+            "Line": 138,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "validate.go",
+            "Line": 92,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "validate.go",
+            "Line": 96,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "doctor.go",
+            "Line": 87,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "doctor.go",
+            "Line": 87,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "doctor.go",
+            "Line": 89,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "doctor.go",
+            "Line": 89,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "doctor.go",
+            "Line": 92,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "doctor.go",
+            "Line": 92,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "doctor.go",
+            "Line": 158,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "doctor.go",
+            "Line": 222,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "doctor.go",
+            "Line": 225,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "doctor.go",
+            "Line": 225,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "hooks.go",
+            "Line": 100,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "pause.go",
+            "Line": 100,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "pause.go",
+            "Line": 101,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          },
+          {
+            "File": "pause.go",
+            "Line": 101,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          },
+          {
+            "File": "statusline.go",
+            "Line": 23,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          },
+          {
+            "File": "statusline.go",
+            "Line": 189,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "statusline.go",
+            "Line": 189,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "env.go",
+            "Line": 105,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "env.go",
+            "Line": 109,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "env.go",
+            "Line": 114,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "env.go",
+            "Line": 119,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "env.go",
+            "Line": 148,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 422,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 422,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 424,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 424,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 424,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 452,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 454,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "milestone.go",
+            "Line": 147,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase_lifecycle.go",
+            "Line": 23,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase_lifecycle.go",
+            "Line": 23,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase_lifecycle.go",
+            "Line": 25,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase_lifecycle.go",
+            "Line": 25,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase_lifecycle.go",
+            "Line": 27,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "watch.go",
+            "Line": 130,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "watch.go",
+            "Line": 130,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "basebranch.go",
+            "Line": 104,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          },
+          {
+            "File": "install.go",
+            "Line": 65,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "issue.go",
+            "Line": 149,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "issue.go",
+            "Line": 479,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase.go",
+            "Line": 273,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase.go",
+            "Line": 275,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase.go",
+            "Line": 508,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase.go",
+            "Line": 510,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "update.go",
+            "Line": 181,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "update.go",
+            "Line": 184,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "footer_coverage.go",
+            "Line": 52,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "footer_coverage.go",
+            "Line": 55,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "footer_coverage.go",
+            "Line": 58,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "footer_coverage.go",
+            "Line": 60,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "telemetry.go",
+            "Line": 46,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          },
+          {
+            "File": "telemetry.go",
+            "Line": 46,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          }
+        ],
+        "NotCovered": 63
+      }
+    }
+  ],
+  "skipped": [
+    {
+      "file": "README.md",
+      "reason": "no mutation adapter for .md"
+    },
+    {
+      "file": "assets/prompts/pause.md",
+      "reason": "no mutation adapter for .md"
+    }
+  ]
+}

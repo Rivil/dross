@@ -1,0 +1,74 @@
+[verify]
+  phase = "root-robustness"
+  generated_at = 2026-07-29T12:21:45.523725Z
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-07-29T12:36:05.180406Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9567604667124228
+  mutants_killed = 1394
+  mutants_survived = 63
+  mutants_not_covered = 63
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/root_test.go:TestFindRootIncompleteIsNoRoot — errors.Is(err, ErrNoRoot) on a .dross/ with project.toml only", "internal/cmd/root_test.go:TestFindRootIncompleteMessage — table over {state.json absent, project.toml absent, both}; asserts the present file is NOT named", "internal/cmd/root_test.go:TestFindRootStopsAtFirstDross — locked walk_stop: never returns the ancestor's complete root", "internal/cmd/root_test.go:TestFindRootCompletenessIsExistenceNotParse — `{{{` state.json and zero-byte files both resolve", "internal/cmd/root_test.go:TestFindRootDrossAsRegularFile / TestFindRootUnreadableDross — non-ErrNoRoot for a broken environment", "internal/cmd/root_test.go:TestLocateRootReportsMissing / TestMissingRootFilesDoesNotWalk / TestRepairHintText", "internal/cmd/incompleteroot_test.go:TestHookTargetsWriteNothing/no_.dross_at_all — the indistinguishability half, asserted as behaviour"]
+  notes = "Indistinguishability is pinned twice over: as an error identity (errors.Is → ErrNoRoot) and as observable behaviour (the absent and incomplete fixtures produce byte-identical trees and empty stdout across all four hook targets)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/reentry_test.go:TestReentrySilentOnIncompleteRoot / TestReentryLoudOnCorruptProject", "internal/cmd/status_test.go:TestStatusSilentOnNonRoot (bare dir + incomplete rows) / TestStatusLoudOnCorruptState", "internal/cmd/state_test.go:TestStateTouchSilentOnNonRoot — nil err, empty stdout, and state.json still absent afterwards", "internal/cmd/state_test.go:TestStateShowLoudOnNonRoot — the scoping test: moving the swallow into loadState() fails here", "internal/cmd/state_test.go:TestStateTouchLoudOnCorruptState / TestStateLoadNamesPathOnCorrupt", "internal/cmd/pause_test.go:TestPauseAutoSilentOnIncompleteRoot / TestPauseAutoLoudOnCorruptFile / TestPauseAutoDegradesWithoutGit", "internal/cmd/incompleteroot_test.go:TestHookTargetsWriteNothing — all four commands in one tree snapshot"]
+  notes = "All four hook targets have both a silent-case and a loud-corrupt counterpart, so a swallow-everything implementation is caught. TestPauseAutoLoudOnCorruptFile additionally asserts a pre-existing handoff.md is byte-identical after the failed run."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/incompleteroot_test.go:TestIncompleteRootIsLoudEverywhere — 8 subtests (state show, project show, validate, task next, verify, rule show, phase list, milestone show), each asserting the error names .dross/state.json AND RepairHint", "internal/cmd/incompleteroot_test.go:TestRootHelperCallersAreAllowlisted — AST scan closing the ErrNoRoot / LocateRoot caller sets", "internal/cmd/rule_test.go:TestRuleShowLoudOnIncompleteRoot / TestRuleShowDegradesOutsideRepo", "internal/cmd/onboard_test.go:TestOnboardAdoptsIncompleteRoot / TestOnboardStillRefusesCompleteRoot / TestOnboardAdoptRoundTrip / TestOnboardStaysCwdScoped", "internal/cmd/telemetry_test.go:TestTelemetryRepoHashOnIncompleteRoot — both recorders (CLI event + verify outcome)", "internal/telemetry/telemetry_test.go:TestClassifyIncompleteRoot", "internal/cmd/root_test.go:TestShipRecoverResolvesIncompleteRoot"]
+  notes = "The loud-failure surface itself is covered strongly (8 commands x 2 needles, plus the AST allowlist as a regression gate for future commands). See the FLAG on TestClassifyIncompleteRoot: the telemetry bucketing sub-part is pinned against a hand-copied message literal rather than a real IncompleteRootError."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/pause_prompt_test.go:TestPausePromptRefusesWithoutRoot — 7 needle subtests (probe, refusal wording, write-nothing, repair pointer, absent, incomplete, never-runs-the-repair)", "internal/cmd/pause_prompt_test.go:TestPausePromptHardRuleNoWrites — Hard rules section scoped separately, so removing only the rule fails", "internal/cmd/pause_prompt_test.go:TestPausePromptGatePrecedesDrafting — byte-offset placement ahead of `## 1. Draft the handoff`", "internal/cmd/incompleteroot_test.go:TestHookTargetsWriteNothing — the no-write half, asserted at CLI level"]
+  notes = "Prompt-content gating is the strongest available check for an instruction artifact — the assertions are specific (7 independent needles, section-scoped rule check, placement by byte offset), not generic. The residual ceiling is inherent: no test executes the prompt, so obedience is not proven, only instruction presence. The behavioural half of the no-write claim is covered at CLI level by TestHookTargetsWriteNothing."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/doctor_test.go:TestDoctorDiagnosesIncompleteRoot — stdout names `✗ .dross/state.json — missing` AND the verdict names a project-level issue", "internal/cmd/doctor_test.go:TestDoctorNamesEveryRootMiss — both files named, so a short-circuit after the first miss fails", "internal/cmd/doctor_test.go:TestDoctorIncompleteRootVerdictIsDistinct — the incomplete-root verdict never collapses into the ordinary repairable one", "internal/cmd/doctor_test.go:TestDoctorMissingFileLineCarriesBothHints — RepairHint and the `dross ship recover` sentence on the same line", "internal/cmd/doctor_test.go:TestDoctorIncompleteRootBlockMatchesLocateRoot — the block equals LocateRoot's Missing slice, on a fixture where the trio block deliberately differs", "internal/cmd/doctor_test.go:TestDoctorFlagsMissingFoundationalFile — rules.toml stays doctor's trio, not root completeness"]
+  notes = "The block-equals-LocateRoot test is the strongest row: its fixture is chosen so the trio block and the root-completeness block differ, which makes the equality meaningful rather than accidental."
+
+[[finding]]
+  severity = "FLAG"
+  text = "pause.go:100-101 — the phase-status suffix in autoSnapshot (the `if st.CurrentPhaseStatus != \"\"` guard and the phase-concat below it) is re-indented by t-4 but never executed by any test: every pause fixture is a fresh `dross init` repo with an empty current_phase, so the `if st.CurrentPhase != \"\"` guard above it is always false. This is a genuine NOT-COVERED hole in changed lines, not the gremlins switch-case artifact. Not part of any criterion's surface (c-2 is about silence/loudness on a non-root), hence FLAG rather than a criterion downgrade. Fix: give one pause fixture a current_phase + current_phase_status and assert the rendered suffix."
+
+[[finding]]
+  severity = "FLAG"
+  text = "internal/telemetry/telemetry_test.go:509 TestClassifyIncompleteRoot pins the `incomplete_root` bucket against a hand-copied message literal, not a real IncompleteRootError. Plan t-8's test_contract asked for \"the real IncompleteRootError message\". The literal matches root.go:40's format today, so classification is correct now — but if that prefix is ever reworded away from the `not a dross repo` token, the test still passes while real incomplete-root failures silently fall back into the opaque `other` bucket, which is the exact regression this task existed to prevent. internal/telemetry cannot import internal/cmd (cmd imports telemetry), so the fix belongs in package cmd: assert telemetry.ClassifyError on an actual IncompleteRootError value."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation cross-check: survived (63) equals not_covered (63) exactly — no covered mutant survived, so efficacy on mutants the tests actually reach is 1.00. Four survivors intersect lines this branch changed: root.go:57, doctor.go:158, issue.go:149 (from the merged validator-truth phase, out of scope) and pause.go:100-101. The first three are `switch {}` case-conditions, which gremlins marks NOT COVERED even when exercised — a go-cover attribution limit, not a test gap. root.go:57 (`case err == nil:` in MissingRootFiles) has all three branches named by tests: err==nil via the zero-byte fixture, fs.ErrNotExist via TestLocateRootReportsMissing, and the default via TestFindRootUnreadableDross. Only pause.go:100-101 is a real hole; it is raised as its own FLAG above."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The remaining 46 surviving-mutant sites seeded by the mechanical pass were reclassified FLAG → NOTE after inspection, on the documented gremlins switch-case/const-initializer attribution ceiling: root.go:57, rule.go:143, ship.go:494, ship.go:496, ship.go:498, deferred.go:138, validate.go:92, validate.go:96, doctor.go:87, doctor.go:89, doctor.go:92, doctor.go:158, doctor.go:222, doctor.go:225, hooks.go:100, statusline.go:23, statusline.go:189, env.go:105, env.go:109, env.go:114, env.go:119, env.go:148, status.go:422, status.go:424, status.go:452, status.go:454, milestone.go:147, phase_lifecycle.go:23, phase_lifecycle.go:25, phase_lifecycle.go:27, watch.go:130, basebranch.go:104, install.go:65, issue.go:149, issue.go:479, phase.go:273, phase.go:275, phase.go:508, phase.go:510, update.go:181, update.go:184, footer_coverage.go:52, footer_coverage.go:55, footer_coverage.go:58, footer_coverage.go:60, telemetry.go:46. All but the four listed in the note above are outside this phase's diff. The reclassification is recorded rather than silent: leaving them FLAG would force `partial` on every Go phase regardless of test quality."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Plan deviation, accepted: t-9's contract named `task list` in the cross-command loud-failure table; the test uses `task next` with an inline comment, because dross has no `task list` subcommand. The row's intent (a task-family command fails loudly) is preserved."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/pause.md: no mutation adapter for .md"
