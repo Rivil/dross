@@ -230,3 +230,40 @@ func TestTelemetryDetailFreeBucketsWriteNoText(t *testing.T) {
 		}
 	}
 }
+
+// TestTelemetryRepoHashOnIncompleteRoot (c-3): a repo with a half-built
+// `.dross/` is still this repo, so its failures must stay attributable. Both
+// recorders are asserted — fixing telemetry.go alone leaves verify outcome
+// events silently unattributed while CLI events keep their hash.
+func TestTelemetryRepoHashOnIncompleteRoot(t *testing.T) {
+	cases := []struct {
+		name   string
+		record func()
+	}{
+		{"cli event", func() { RecordCLIEvent(nil, 0, nil) }},
+		{"verify outcome event", func() {
+			recordVerifyPhaseOutcome("some-phase", map[string]int{}, nil, map[string]string{"result": "x"})
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := realTempDir(t)
+			mkRoot(t, dir, "project.toml") // incomplete: no state.json
+			chdir(t, dir)
+			telemetryCovEnable(t)
+
+			tc.record()
+
+			evs, err := telemetry.Load(telemetryPath())
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			if len(evs) != 1 {
+				t.Fatalf("want 1 event, got %d", len(evs))
+			}
+			if evs[0].RepoHash == "" {
+				t.Error("an incomplete root should still attribute its events, got an empty RepoHash")
+			}
+		})
+	}
+}
