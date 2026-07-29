@@ -1,39 +1,11 @@
 {
-  "version": "1.0.3.0",
+  "version": "1.1.1.0",
   "current_milestone": "v1.1",
   "current_phase": "validator-truth",
   "current_phase_status": "planned",
-  "last_activity": "2026-07-29T06:34:32.44829Z",
-  "last_action": "plan reviewed: validator-truth (1 blocking, 6 flags)",
+  "last_activity": "2026-07-29T07:45:10.345378Z",
+  "last_action": "executed t-8 (Correct provider lists in init/onboard prompts)",
   "history": [
-    {
-      "at": "2026-07-25T11:15:32.714037Z",
-      "action": "set current_milestone=v1.0"
-    },
-    {
-      "at": "2026-07-25T11:15:32.721041Z",
-      "action": "set version=1.0.0.0"
-    },
-    {
-      "at": "2026-07-25T11:15:32.726862Z",
-      "action": "scoped milestone v1.0: 5 criteria, 3 phases"
-    },
-    {
-      "at": "2026-07-25T11:16:39.419703Z",
-      "action": "created self-audit"
-    },
-    {
-      "at": "2026-07-25T11:17:19.088577Z",
-      "action": "set current_phase=self-audit"
-    },
-    {
-      "at": "2026-07-25T11:17:19.093701Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-25T11:17:19.099071Z",
-      "action": "spec+plan locked: self-audit (3 tasks)"
-    },
     {
       "at": "2026-07-25T11:17:24.652581Z",
       "action": "set version=1.0.1.0"
@@ -205,6 +177,34 @@
     {
       "at": "2026-07-29T06:34:32.44829Z",
       "action": "plan reviewed: validator-truth (1 blocking, 6 flags)"
+    },
+    {
+      "at": "2026-07-29T07:06:54.172963Z",
+      "action": "set version=1.1.1.0"
+    },
+    {
+      "at": "2026-07-29T07:10:09.829573Z",
+      "action": "executed t-1 (Add internal/configenum normalising enum sets)"
+    },
+    {
+      "at": "2026-07-29T07:14:38.223092Z",
+      "action": "executed t-2 (Add remote.auth_user and basic auth scheme)"
+    },
+    {
+      "at": "2026-07-29T07:23:01.094582Z",
+      "action": "executed t-3 (Add Bitbucket PR-open backend over Basic auth)"
+    },
+    {
+      "at": "2026-07-29T07:32:14.961192Z",
+      "action": "executed t-6 (Route doctor's enum checks through configenum)"
+    },
+    {
+      "at": "2026-07-29T07:41:44.031453Z",
+      "action": "executed t-7 (Route issue + forge through configenum; forge Basic)"
+    },
+    {
+      "at": "2026-07-29T07:45:10.345378Z",
+      "action": "executed t-8 (Correct provider lists in init/onboard prompts)"
     }
   ]
 }
