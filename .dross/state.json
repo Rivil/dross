@@ -1,15 +1,9 @@
 {
   "version": "1.1.2.0",
   "current_milestone": "v1.1",
-  "current_phase": "root-robustness",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-29T13:38:17.600993Z",
-  "last_action": "verified root-robustness: pass (5/5 covered, mutation 0.96, both FLAGs closed)",
+  "last_activity": "2026-07-29T13:47:26.617842Z",
+  "last_action": "completed root-robustness",
   "history": [
-    {
-      "at": "2026-07-28T19:12:48.529199Z",
-      "action": "set current_phase=validator-truth"
-    },
     {
       "at": "2026-07-28T19:12:48.537097Z",
       "action": "set current_phase_status=created"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-29T13:38:17.600993Z",
       "action": "verified root-robustness: pass (5/5 covered, mutation 0.96, both FLAGs closed)"
+    },
+    {
+      "at": "2026-07-29T13:47:26.617842Z",
+      "action": "completed root-robustness"
     }
   ]
 }
