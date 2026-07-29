@@ -19,15 +19,18 @@ import (
 )
 
 // buildOpenOpts maps a project's [remote] config onto ship.OpenOpts. Extracted
-// from the inline ship literal so the provider / auth_scheme / project_id wiring
-// is unit-testable — a dropped field (e.g. GitLab silently using default auth or
-// a derived project id even when the user overrode them) is caught by ship_test.go.
+// from the inline ship literal so the provider / auth_user / auth_scheme /
+// project_id wiring is unit-testable — a dropped field (e.g. GitLab silently
+// using default auth or a derived project id even when the user overrode them,
+// or Bitbucket losing the user half of its Basic credential and 401ing on every
+// ship) is caught by ship_test.go.
 func buildOpenOpts(p *project.Project) ship.OpenOpts {
 	return ship.OpenOpts{
 		Provider:   p.Remote.Provider,
 		URL:        p.Remote.URL,
 		APIBase:    p.Remote.APIBase,
 		AuthEnv:    p.Remote.AuthEnv,
+		AuthUser:   p.Remote.AuthUser,
 		AuthScheme: p.Remote.AuthScheme,
 		ProjectID:  p.Remote.ProjectID,
 		Reviewers:  p.Remote.Reviewers,
@@ -42,6 +45,7 @@ func buildCommentOpts(p *project.Project) ship.CommentOpts {
 		URL:        p.Remote.URL,
 		APIBase:    p.Remote.APIBase,
 		AuthEnv:    p.Remote.AuthEnv,
+		AuthUser:   p.Remote.AuthUser,
 		AuthScheme: p.Remote.AuthScheme,
 		ProjectID:  p.Remote.ProjectID,
 	}
