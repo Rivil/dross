@@ -272,6 +272,59 @@ func TestBoardDottedArmsRoundTrip(t *testing.T) {
 	}
 }
 
+// remote.auth_user is the [remote] half of Basic auth: the Bitbucket ship
+// backend sends base64(auth_user:$auth_env) and 401s without it. It has to
+// survive a Save→Load cycle or the credential silently vanishes between
+// `dross project set` and the ship that needs it.
+func TestRemoteAuthUserRoundTrip(t *testing.T) {
+	p := &project.Project{}
+	cases := map[string]string{
+		"remote.auth_user":   "bb-workspace-user",
+		"remote.auth_scheme": "basic",
+	}
+	for path, value := range cases {
+		if err := writeDotted(p, path, value); err != nil {
+			t.Errorf("writeDotted(%q, %q): %v", path, value, err)
+		}
+	}
+	if p.Remote.AuthUser != "bb-workspace-user" {
+		t.Errorf("Remote.AuthUser = %q, want %q", p.Remote.AuthUser, "bb-workspace-user")
+	}
+
+	path := filepath.Join(t.TempDir(), "project.toml")
+	if err := p.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err := project.Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	for dotted, want := range cases {
+		got, ok := readDotted(loaded, dotted)
+		if !ok {
+			t.Errorf("readDotted(%q): missing after Save→Load", dotted)
+			continue
+		}
+		if got != want {
+			t.Errorf("round-trip %q: got %q want %q", dotted, got, want)
+		}
+	}
+}
+
+// The new arm must be an exact case, not a remote.* catch-all — a typo has to
+// keep erroring rather than being written to a field nothing reads.
+func TestUnknownRemoteDottedKeyStillRejected(t *testing.T) {
+	for _, bad := range []string{"remote.auth_users", "remote.auth_user.name", "remote.user"} {
+		p := &project.Project{}
+		if err := writeDotted(p, bad, "x"); err == nil {
+			t.Errorf("writeDotted(%q) succeeded; unknown keys must error", bad)
+		}
+		if _, ok := readDotted(p, bad); ok {
+			t.Errorf("readDotted(%q) = ok; unknown keys must report missing", bad)
+		}
+	}
+}
+
 func TestWriteDottedRejectsBadBool(t *testing.T) {
 	p := &project.Project{}
 	if err := writeDotted(p, "remote.public", "maybe"); err == nil {

@@ -177,6 +177,8 @@ func readDotted(p *project.Project, path string) (string, bool) {
 		return fmt.Sprintf("%t", p.Remote.LogAPI), true
 	case "remote.auth_env":
 		return p.Remote.AuthEnv, true
+	case "remote.auth_user":
+		return p.Remote.AuthUser, true
 	case "remote.auth_scheme":
 		return p.Remote.AuthScheme, true
 	case "remote.project_id":
@@ -334,6 +336,8 @@ func writeDotted(p *project.Project, path, value string) error {
 		return setBool(&p.Remote.LogAPI)
 	case "remote.auth_env":
 		p.Remote.AuthEnv = value
+	case "remote.auth_user":
+		p.Remote.AuthUser = value
 	case "remote.auth_scheme":
 		p.Remote.AuthScheme = value
 	case "remote.project_id":
