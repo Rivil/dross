@@ -13,14 +13,17 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 // OpenOpts is everything OpenPR needs across providers.
 type OpenOpts struct {
-	Provider   string // "github" | "forgejo" | "gitea" | "gitlab"
+	Provider   string // one of configenum.ShipProviders
 	URL        string // canonical https URL of the repo
-	APIBase    string // forgejo/gitea/gitlab: base of the REST API; ignored for github
-	AuthEnv    string // env var name holding the token; only used for forgejo/gitea/gitlab
+	APIBase    string // forgejo/gitea/gitlab/bitbucket: base of the REST API; ignored for github
+	AuthEnv    string // env var name holding the token; only used for forgejo/gitea/gitlab/bitbucket
+	AuthUser   string // bitbucket: account user for HTTP Basic auth (user:token)
 	AuthScheme string // gitlab: "private-token" (default) | "bearer"
 	ProjectID  string // gitlab: numeric project-id override; empty = derive from URL
 	HeadBranch string // e.g. "pr/01-x"
@@ -40,15 +43,17 @@ type OpenResult struct {
 
 // OpenPR dispatches to the right backend based on Provider.
 func OpenPR(opts OpenOpts) (*OpenResult, error) {
-	switch strings.ToLower(opts.Provider) {
+	switch configenum.Normalize(opts.Provider) {
 	case "github":
 		return openGitHubPR(opts)
 	case "forgejo", "gitea":
 		return openForgejoPR(opts)
 	case "gitlab":
 		return openGitLabPR(opts)
+	case "bitbucket":
+		return openBitbucketPR(opts)
 	default:
-		return nil, fmt.Errorf("unsupported provider %q (expected github | forgejo | gitea | gitlab)", opts.Provider)
+		return nil, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())
 	}
 }
 
@@ -226,7 +231,7 @@ func gitlabProjectRef(owner, repo string, projectID int) string {
 // uses Authorization: Bearer; anything else (incl. "" and "private-token") uses
 // the PRIVATE-TOKEN header. Exactly one scheme's header is set.
 func gitlabAuthHeader(req *http.Request, scheme, token string) {
-	if strings.ToLower(scheme) == "bearer" {
+	if configenum.Normalize(scheme) == "bearer" {
 		req.Header.Set("Authorization", "Bearer "+token)
 		return
 	}
