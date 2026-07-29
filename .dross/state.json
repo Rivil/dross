@@ -2,18 +2,10 @@
   "version": "1.1.1.0",
   "current_milestone": "v1.1",
   "current_phase": "validator-truth",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-29T08:13:21.696134Z",
-  "last_action": "phase validator-truth executed (10/10 done)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-29T08:27:14.823957Z",
+  "last_action": "verified validator-truth: pass (6/6, mutation 0.95)",
   "history": [
-    {
-      "at": "2026-07-25T11:42:36.018356Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-25T11:42:36.024123Z",
-      "action": "verified self-audit: pass (4/4, mutation 0.96)"
-    },
     {
       "at": "2026-07-25T11:43:26.77104Z",
       "action": "completed self-audit"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-29T08:13:21.696134Z",
       "action": "phase validator-truth executed (10/10 done)"
+    },
+    {
+      "at": "2026-07-29T08:27:14.816663Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-29T08:27:14.823957Z",
+      "action": "verified validator-truth: pass (6/6, mutation 0.95)"
     }
   ]
 }
