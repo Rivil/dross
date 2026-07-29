@@ -1,21 +1,11 @@
 {
   "version": "1.1.2.0",
   "current_milestone": "v1.1",
-  "last_activity": "2026-07-29T13:47:26.617842Z",
-  "last_action": "completed root-robustness",
+  "current_phase": "cli-surface-sweep",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-29T15:14:07.802601Z",
+  "last_action": "spec locked: cli-surface-sweep",
   "history": [
-    {
-      "at": "2026-07-28T19:12:48.537097Z",
-      "action": "set current_phase_status=created"
-    },
-    {
-      "at": "2026-07-28T19:12:48.543759Z",
-      "action": "spec locked: validator-truth"
-    },
-    {
-      "at": "2026-07-29T05:59:01.742399Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-07-29T05:59:01.749119Z",
       "action": "plan locked: validator-truth (10 tasks across 3 waves)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-29T13:47:26.617842Z",
       "action": "completed root-robustness"
+    },
+    {
+      "at": "2026-07-29T13:53:13.434362Z",
+      "action": "created cli-surface-sweep"
+    },
+    {
+      "at": "2026-07-29T15:14:07.795023Z",
+      "action": "set current_phase=cli-surface-sweep"
+    },
+    {
+      "at": "2026-07-29T15:14:07.802601Z",
+      "action": "spec locked: cli-surface-sweep"
     }
   ]
 }
