@@ -39,7 +39,7 @@ relaxes the context-free audit scope above.
 2. Resolve the target path from `$ARGUMENTS` (default: repo root).
 3. Create the run directory and detect available tooling:
    ```
-   dross security run --new            # creates .dross/security/<timestamp>-<short-sha>/
+   dross security run                  # creates .dross/security/<timestamp>-<short-sha>/
    dross security detect <path>        # languages → recommended scanners, installed vs missing
    ```
    The run dir holds `report.md` (human) and `findings.toml` (the machine-readable
