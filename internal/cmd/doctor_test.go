@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 func TestSameRemoteURL(t *testing.T) {
@@ -683,4 +685,184 @@ func TestDoctorCover_PhaseHygieneBranches(t *testing.T) {
 			t.Errorf("the phase-hygiene error path is advisory and must not add an issue; got err=%v\n%s", err, out)
 		}
 	})
+}
+
+// --- configenum-backed enum checks (phase validator-truth) ---
+
+// runDoctorEnum inits a repo with a well-formed youtrack [board] baseline,
+// applies overrides, and runs doctor. An override with an empty value means
+// "leave this field unset" rather than "set it to the empty string", so the
+// optional-base_url cases can be expressed.
+func runDoctorEnum(t *testing.T, overrides map[string]string) (string, error) {
+	t.Helper()
+	const tokenEnv = "DROSS_TEST_ENUM_TOKEN"
+	dir := t.TempDir()
+	gitInit(t, dir, "https://gitlab.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	fields := map[string]string{
+		"remote.auth_env":      tokenEnv,
+		"board.provider":       "youtrack",
+		"board.base_url":       "https://yt.example.com",
+		"board.auth_env":       tokenEnv,
+		"board.project":        "PROJ",
+		"board.enabled":        "true",
+		"board.milestone_mode": "version",
+	}
+	for k, v := range overrides {
+		if v == "" {
+			delete(fields, k)
+			continue
+		}
+		fields[k] = v
+	}
+	for k, v := range fields {
+		if err := runCmd(t, Project(), "set", k, v); err != nil {
+			t.Fatalf("project set %s: %v", k, err)
+		}
+	}
+	t.Setenv(tokenEnv, "secret")
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	return out, err
+}
+
+// The c-1 regression: doctor rejected jira and github outright, so a board the
+// CLI dispatches happily could not pass its own validator. Driving the loop off
+// BoardProviders means a seventh backend added without teaching doctor fails
+// here rather than in the user's terminal.
+func TestDoctorAcceptsEveryDispatchableBoardProvider(t *testing.T) {
+	for _, provider := range configenum.BoardProviders.Values() {
+		t.Run(provider, func(t *testing.T) {
+			out, err := runDoctorEnum(t, map[string]string{"board.provider": provider})
+			if err != nil {
+				t.Errorf("doctor rejects a dispatchable board provider %q:\n%s", provider, out)
+			}
+			if strings.Contains(out, "provider = ") && strings.Contains(out, "is invalid") {
+				t.Errorf("provider %q reported invalid:\n%s", provider, out)
+			}
+		})
+	}
+}
+
+func TestDoctorBoardBaseURLOptionalForGitHub(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"board.provider": "github",
+		"board.base_url": "", // unset
+	})
+	if err != nil {
+		t.Errorf("a github board needs no base_url (the backend defaults to api.github.com):\n%s", out)
+	}
+
+	// The relaxation must not leak: every other backend is self-hosted or
+	// per-tenant and has no address to guess.
+	out, err = runDoctorEnum(t, map[string]string{
+		"board.provider": "youtrack",
+		"board.base_url": "", // unset
+	})
+	if err == nil {
+		t.Errorf("a youtrack board with no base_url must still fail:\n%s", out)
+	}
+	if !strings.Contains(out, "base_url") {
+		t.Errorf("expected a base_url line:\n%s", out)
+	}
+}
+
+// Optional is not unvalidated. Implementing the github relaxation by skipping
+// the whole URL branch would silently accept a malformed value.
+func TestDoctorGitHubMalformedBaseURLStillFails(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"board.provider": "github",
+		"board.base_url": "not-a-url",
+	})
+	if err == nil {
+		t.Errorf("a set-but-malformed github base_url must fail:\n%s", out)
+	}
+	if !strings.Contains(out, "base_url") {
+		t.Errorf("expected a base_url line:\n%s", out)
+	}
+}
+
+// BoardProviders carries no default, so Set.Has("") is false for it — the guard
+// against a uniformly-true empty policy leaking in from AuthSchemes.
+func TestDoctorRejectsEmptyBoardProvider(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{"board.provider": ""})
+	if err == nil {
+		t.Errorf("an unset [board].provider dispatches nowhere and must fail:\n%s", out)
+	}
+	if !strings.Contains(out, "provider") || !strings.Contains(out, "invalid") {
+		t.Errorf("expected an invalid-provider line:\n%s", out)
+	}
+}
+
+// doctor must be exactly as forgiving as the consumers: forge lowercases and
+// trims before matching, so a capitalised or padded mode is legal downstream.
+func TestDoctorNormalisesMilestoneMode(t *testing.T) {
+	for _, mode := range []string{"version", "Version", " version", "EPIC", "\tagile "} {
+		out, err := runDoctorEnum(t, map[string]string{
+			"board.milestone_mode": mode,
+			// epic/agile are youtrack modes; the baseline provider is youtrack.
+		})
+		if err != nil {
+			t.Errorf("milestone_mode %q rejected but accepted by the consumer:\n%s", mode, out)
+		}
+	}
+	out, err := runDoctorEnum(t, map[string]string{"board.milestone_mode": "bogus"})
+	if err == nil {
+		t.Errorf("a genuinely unknown milestone_mode must still fail:\n%s", out)
+	}
+	if !strings.Contains(out, configenum.MilestoneModes.List()) {
+		t.Errorf("message must be derived from MilestoneModes:\n%s", out)
+	}
+}
+
+func TestDoctorNormalisesAuthScheme(t *testing.T) {
+	for _, scheme := range []string{"private-token", "bearer", "basic", " Basic", "BEARER\t"} {
+		out, err := runDoctorEnum(t, map[string]string{"remote.auth_scheme": scheme})
+		if err != nil {
+			t.Errorf("auth_scheme %q rejected:\n%s", scheme, out)
+		}
+	}
+	out, err := runDoctorEnum(t, map[string]string{"remote.auth_scheme": "token"})
+	if err == nil {
+		t.Errorf("an unknown auth_scheme must still fail:\n%s", out)
+	}
+	if !strings.Contains(out, configenum.AuthSchemes.List()) {
+		t.Errorf("message must list %q, got:\n%s", configenum.AuthSchemes.List(), out)
+	}
+}
+
+// A partial migration — one switch left behind while the message is already
+// derived — is the failure this pins. It forbids accept-set literals (the
+// pipe-joined message strings and multi-provider case lines), not every mention
+// of a provider name: single-provider cross-field checks are legitimate.
+func TestDoctorCarriesNoProviderLiterals(t *testing.T) {
+	path := filepath.Join(repoRootFromTest(t), "internal", "cmd", "doctor.go")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(raw)
+
+	if !strings.Contains(src, "configenum.") {
+		t.Fatal("doctor.go does not reference configenum at all")
+	}
+	for _, set := range []configenum.Set{
+		configenum.BoardProviders,
+		configenum.ShipProviders,
+		configenum.AuthSchemes,
+		configenum.MilestoneModes,
+	} {
+		if strings.Contains(src, set.List()) {
+			t.Errorf("doctor.go hand-types the accept-set %q; derive it from configenum", set.List())
+		}
+	}
+	// The switch shape the migration replaced.
+	for _, lit := range []string{`case "forgejo"`, `case "youtrack"`, `case "", "version"`} {
+		if strings.Contains(src, lit) {
+			t.Errorf("doctor.go still carries a literal enum switch: %s", lit)
+		}
+	}
 }

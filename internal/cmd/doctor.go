@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/architecture"
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 // Doctor checks project-level health for the current dross repo.
@@ -89,11 +90,11 @@ func Doctor() *cobra.Command {
 				}
 			}
 
-			// auth_scheme is the GitLab credential selector: empty defaults to
-			// private-token in code, so only a non-empty, non-recognised value
-			// is a misconfiguration worth flagging.
-			if scheme := strings.ToLower(p.Remote.AuthScheme); scheme != "" && scheme != "private-token" && scheme != "bearer" {
-				Printf("  ✗ [remote].auth_scheme = %q is invalid (expected private-token | bearer)\n", p.Remote.AuthScheme)
+			// auth_scheme selects the credential header. The empty case is the
+			// Set's own business — it carries private-token as the code default,
+			// so Has("") is true here and false for [board].provider below.
+			if !configenum.AuthSchemes.Has(p.Remote.AuthScheme) {
+				Printf("  ✗ [remote].auth_scheme = %q is invalid (expected %s)\n", p.Remote.AuthScheme, configenum.AuthSchemes.List())
 				issues++
 			}
 
@@ -110,11 +111,12 @@ func Doctor() *cobra.Command {
 				Print("Board:")
 				boardIssues := 0
 
-				switch strings.ToLower(b.Provider) {
-				case "forgejo", "gitea", "gitlab", "youtrack":
-					// recognised
-				default:
-					Printf("  ✗ [board].provider = %q is invalid (expected forgejo | gitea | gitlab | youtrack)\n", b.Provider)
+				// The accept-set is configenum's, not a copy of it: doctor used
+				// to reject jira and github boards the CLI dispatches happily,
+				// which is the divergence this whole indirection exists to kill.
+				// An empty provider stays invalid — BoardProviders has no default.
+				if !configenum.BoardProviders.Has(b.Provider) {
+					Printf("  ✗ [board].provider = %q is invalid (expected %s)\n", b.Provider, configenum.BoardProviders.List())
 					boardIssues++
 				}
 
@@ -126,23 +128,35 @@ func Doctor() *cobra.Command {
 					boardIssues++
 				}
 
-				if !looksLikeBoardURL(b.BaseURL) {
+				// base_url is optional only where the backend has an address to
+				// fall back on (github → https://api.github.com). Optional is
+				// not unvalidated: a value that *is* set is still parsed, so a
+				// malformed github base_url fails rather than being ignored.
+				switch {
+				case b.BaseURL == "":
+					if configenum.BoardRequiresBaseURL(b.Provider) {
+						Printf("  ✗ [board].base_url is not set (the %s backend has no default API address)\n", b.Provider)
+						boardIssues++
+					}
+				case !looksLikeBoardURL(b.BaseURL):
 					Printf("  ✗ [board].base_url = %q is not a valid URL (expected http(s)://host)\n", b.BaseURL)
 					boardIssues++
 				}
 
-				// Empty milestone_mode defaults to "version" in code, so only a
-				// non-empty, unrecognised value is a misconfiguration.
-				switch b.MilestoneMode {
-				case "", "version", "agile", "epic":
-					// recognised (empty = version default)
-				default:
-					Printf("  ✗ [board].milestone_mode = %q is invalid (expected version | agile | epic)\n", b.MilestoneMode)
+				// Empty milestone_mode defaults to version in code; the Set
+				// carries that default, and Has normalises exactly as the
+				// consumers in forge do.
+				if !configenum.MilestoneModes.Has(b.MilestoneMode) {
+					Printf("  ✗ [board].milestone_mode = %q is invalid (expected %s)\n", b.MilestoneMode, configenum.MilestoneModes.List())
 					boardIssues++
 				}
 
 				if boardIssues == 0 {
-					Printf("  ✓ [board] is well-formed (%s @ %s)\n", b.Provider, b.BaseURL)
+					if b.BaseURL == "" {
+						Printf("  ✓ [board] is well-formed (%s)\n", b.Provider)
+					} else {
+						Printf("  ✓ [board] is well-formed (%s @ %s)\n", b.Provider, b.BaseURL)
+					}
 				}
 				issues += boardIssues
 				Print("")
