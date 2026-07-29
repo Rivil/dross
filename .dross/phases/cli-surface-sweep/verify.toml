@@ -1,9 +1,9 @@
 [verify]
   phase = "cli-surface-sweep"
-  generated_at = 2026-07-29T17:34:54.081175Z
-  verdict = "partial"
+  generated_at = 2026-07-29T18:39:46.535178Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-07-29T17:47:53.427409Z
+  finalized_at = 2026-07-29T18:52:26.70086Z
 
 [summary]
   mutation_status = "measured"
@@ -66,24 +66,24 @@
 [[criterion]]
   id = "c-9"
   status = "covered"
-  tests = ["internal/cmd/project_test.go:TestProjectUnsetStateMapEntry — removes only the named key; the sibling entry and board.provider survive; unsetting the last entry leaves no empty [board.state_map] table", "internal/cmd/project_test.go:TestProjectUnsetScalarAndList — a bool yields false, a list becomes absent, and the literal string \"<nil>\" is never written", "internal/cmd/project_test.go:TestProjectUnsetUnknownPathLeavesFileUnchanged — same message `set` gives for the same path, and project.toml is byte-unchanged (no truncate-then-fail)"]
-  notes = "The criterion's own surface is fully covered. See the FLAG below: the arity guards `--unset` introduced alongside it are unexercised — adjacent to the criterion rather than part of it, so this stays `covered`."
-
-[[finding]]
-  severity = "FLAG"
-  text = "internal/cmd/project.go:73-78 — the hand-rolled arity switch on `project set` is unexercised by any test (confirmed by go-cover: both case blocks show 0 executions, not by gremlins attribution). This phase loosened `Args` from cobra's ExactArgs(2) to RangeArgs(1,2) and moved arity enforcement into that switch, so `dross project set <path>` with no value now depends entirely on untested code — and a regression there indexes args[1] out of range. Both branches were probed manually and behave correctly today (`accepts 2 arg(s), received 1` and `--unset takes a path and no value`), so this is a missing test, not a live defect. Fix: two rows in project_test.go asserting each arity error."
+  tests = ["internal/cmd/project_test.go:TestProjectUnsetStateMapEntry — removes only the named key; the sibling entry and board.provider survive; unsetting the last entry leaves no empty [board.state_map] table", "internal/cmd/project_test.go:TestProjectUnsetScalarAndList — a bool yields false, a list becomes absent, and the literal string \"<nil>\" is never written", "internal/cmd/project_test.go:TestProjectUnsetUnknownPathLeavesFileUnchanged — same message `set` gives for the same path, and project.toml is byte-unchanged (no truncate-then-fail)", "internal/cmd/project_test.go:TestProjectSetArityGuards — both arms of the hand-rolled arity switch `--unset` forced in (project.go:73-78): `--unset` with a value, and the one-arg `set` that RangeArgs(1,2) no longer rejects; each asserts the exact message and that project.toml is byte-unchanged"]
+  notes = "TestProjectSetArityGuards (t-10) closes the FLAG the previous verify raised. The guard is what stands between `dross project set <path>` and an args[1] index-out-of-range now that Args was loosened from ExactArgs(2); go-cover run against that test alone shows both case blocks at count 1, where the previous run showed 0."
 
 [[finding]]
   severity = "NOTE"
-  text = "Mutation cross-check: gremlins reports Lived: 0 across all 22 files — survived (68) equals not_covered (68) exactly, so no mutant the tests actually reach survived, and efficacy on reached mutants is 1.00. The 0.9555 score is the not-covered population, not a test-quality signal."
+  text = "The previous verify's only FLAG — the unexercised arity switch at internal/cmd/project.go:73-78 — is closed by TestProjectSetArityGuards (commit a99c952, t-10). Re-confirmed by go-cover rather than by gremlins: `go test -run TestProjectSetArityGuards -coverprofile` reports project.go:74.33,75.59 and 76.34,77.66 at count 1 each. gremlins still lists project.go:74:28 and 76:29 as NOT COVERED because the mutated positions are the switch-case *conditions*, which sit before the covered block boundaries at columns 33/34 — the documented go-cover attribution ceiling for `switch {}` case-conditions, not a test gap. Status is NOT COVERED, never LIVED."
 
 [[finding]]
   severity = "NOTE"
-  text = "The 68 not-covered sites seeded as FLAG by the mechanical pass were reclassified FLAG → NOTE, matching the precedent recorded in root-robustness/verify.toml. All but five fall outside this phase's diff entirely (status.go, ship.go, watch.go, update.go, statusline.go, env.go, phase.go, phase_lifecycle.go, footer_coverage.go, rule.go, validate.go, install.go, basebranch.go, hooks.go, issue.go, deferred.go, root.go, and the pre-existing regions of doctor.go and milestone.go). The reclassification is recorded rather than silent: leaving them FLAG would force `partial` on every Go phase in this repo regardless of test quality."
+  text = "Mutation cross-check: gremlins reports Lived: 0 across all 22 files — survived (68) equals not_covered (68) exactly, so no mutant the tests actually reach survived, and efficacy on reached mutants is 1.00. The 0.9555 score is the not-covered population, not a test-quality signal. Full `go test ./...` observed green (exit 0) in this session."
 
 [[finding]]
   severity = "NOTE"
-  text = "Only five not-covered sites land in code this phase wrote, and each was read back and classified against go-cover rather than gremlins' attribution. hints.go:86/88 are `switch {}` case-conditions inside Nearest, which gremlins marks NOT COVERED even when exercised (the documented go-cover attribution ceiling); TestNearest reaches both the d>max and d<best branches. The genuinely unexercised remainder is defensive or cosmetic: hints.go:90 (the equal-distance tie branch of Nearest), hints.go:133 (the sort.Slice second-level tiebreak, unreachable while all four curated keys have distinct command paths), dotget.go:58-59 (the `%v` fallback for a non-string non-list value) and its two json.Marshal error paths, and flag_hint.go's nil-root / nil-err / hidden-flag guards. project.go:74-77 is the exception and is raised as a FLAG above."
+  text = "The 68 not-covered sites seeded as FLAG by the mechanical pass were reclassified FLAG → NOTE, matching the precedent recorded in root-robustness/verify.toml and in this phase's previous verify. All but five fall outside this phase's diff entirely (status.go, ship.go, watch.go, update.go, statusline.go, env.go, phase.go, phase_lifecycle.go, footer_coverage.go, rule.go, validate.go, install.go, basebranch.go, hooks.go, issue.go, deferred.go, root.go, and the pre-existing regions of doctor.go and milestone.go). The reclassification is recorded rather than silent: leaving them FLAG would force `partial` on every Go phase in this repo regardless of test quality."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Of the not-covered sites landing in code this phase wrote, each was read back and classified against go-cover rather than gremlins' attribution. hints.go:86/88 are `switch {}` case-conditions inside Nearest, which gremlins marks NOT COVERED even when exercised (same attribution ceiling as project.go above); TestNearest reaches both the d>max and d<best branches. The genuinely unexercised remainder is defensive or cosmetic: hints.go:90 (the equal-distance tie branch of Nearest), hints.go:133 (the sort.Slice second-level tiebreak, unreachable while all four curated keys have distinct command paths), dotget.go:58-59 (the `%v` fallback for a non-string non-list value) and its two json.Marshal error paths, and flag_hint.go's nil-root / nil-err / hidden-flag guards."
 
 [[finding]]
   severity = "NOTE"
