@@ -10,7 +10,8 @@ import (
 	"github.com/Rivil/dross/internal/findings"
 )
 
-// chdirDross creates a temp dir with a .dross subdir, chdirs into it so
+// chdirDross creates a temp dir with a COMPLETE .dross subdir (project.toml
+// and state.json both present, as FindRoot now requires), chdirs into it so
 // FindRoot succeeds, and returns the .dross root path.
 func chdirDross(t *testing.T) string {
 	t.Helper()
@@ -19,8 +20,33 @@ func chdirDross(t *testing.T) string {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	writeCompleteRoot(t, root)
 	chdir(t, dir)
 	return root
+}
+
+// writeCompleteRoot fills in whichever of RequiredRootFiles are absent from an
+// existing .dross dir, so FindRoot resolves it. Files already present are left
+// alone — callers that scaffold a real project.toml only need the rest topped
+// up. Contents are minimal-but-parseable: completeness is an existence check,
+// but a fixture whose files can't be decoded would break the moment a test
+// loads one.
+func writeCompleteRoot(t *testing.T, root string) {
+	t.Helper()
+	body := map[string]string{"project.toml": "", "state.json": "{}\n"}
+	for _, name := range RequiredRootFiles {
+		content, ok := body[name]
+		if !ok {
+			t.Fatalf("writeCompleteRoot has no body for required root file %q", name)
+		}
+		path := filepath.Join(root, name)
+		if _, err := os.Stat(path); err == nil {
+			continue
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func fakeTool(statePath string, items []findings.Item, runID string, resolve map[string]findings.Item) FindingsTool {

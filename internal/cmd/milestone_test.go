@@ -297,8 +297,14 @@ func TestMilestoneNoVersionNoCurrentErrors(t *testing.T) {
 
 // TestMilestoneCover_ShowStateLoadError exercises milestoneShow line 103
 // (state.Load err != nil): .dross exists so FindRoot succeeds, but state.json
-// is removed so the fallback state load fails. Kills the CONDITIONALS_NEGATION
-// mutant — negating the guard would panic/skip instead of returning this error.
+// is unparseable so the fallback state load fails. Kills the
+// CONDITIONALS_NEGATION mutant — negating the guard would panic/skip instead
+// of returning this error.
+//
+// state.json is corrupted rather than removed: removing it makes the root
+// incomplete, which FindRoot reports as not-a-dross-repo before the load is
+// ever attempted. A corrupt-but-present file is the case that reaches here,
+// and is loud by design (locked decision: completeness_check).
 func TestMilestoneCover_ShowStateLoadError(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
@@ -308,8 +314,8 @@ func TestMilestoneCover_ShowStateLoadError(t *testing.T) {
 	if err := runCmd(t, Milestone(), "create", "v0.1"); err != nil {
 		t.Fatal(err)
 	}
-	// Remove state.json so state.Load errors while root still resolves.
-	if err := os.Remove(filepath.Join(dir, ".dross", "state.json")); err != nil {
+	// Corrupt state.json so state.Load errors while root still resolves.
+	if err := os.WriteFile(filepath.Join(dir, ".dross", "state.json"), []byte("{{{"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	err := runCmd(t, Milestone(), "show")

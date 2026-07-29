@@ -64,6 +64,7 @@ func TestQualityFoldSurvivesRerun(t *testing.T) {
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	writeCompleteRoot(t, filepath.Join(dir, ".dross")) // FindRoot needs a complete root
 	led := quality.Ledger{Findings: []quality.Finding{
 		{ID: "f-1", Dimension: quality.Complexity, Risk: quality.RiskHigh, File: "a.go", Title: "cyclomatic spike"},
 	}}

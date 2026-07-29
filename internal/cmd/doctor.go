@@ -28,7 +28,10 @@ func Doctor() *cobra.Command {
 		Use:   "doctor",
 		Short: "Check project-level health (.dross/project.toml vs reality)",
 		RunE: func(c *cobra.Command, _ []string) error {
-			root, err := FindRoot()
+			// LocateRoot, not FindRoot: an incomplete `.dross/` is doctor's
+			// diagnosis to make, so it has to reach the foundational-files
+			// block below rather than being turned away as not-a-dross-repo.
+			root, _, err := LocateRoot()
 			if err != nil {
 				return err
 			}

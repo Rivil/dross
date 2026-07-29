@@ -105,11 +105,13 @@ func TestTelemetryCover_CommandPathBranch(t *testing.T) {
 // the hash and leave RepoHash empty here, so a non-empty RepoHash kills the mutant.
 func TestTelemetryCover_RepoHashInRepo(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, ".dross"), 0o755); err != nil {
+	root := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	chdir(t, dir)         // cwd now has a .dross so FindRoot resolves
-	telemetryCovEnable(t) // temp HOME + clear opt-out (after chdir set it)
+	writeCompleteRoot(t, root) // FindRoot now requires a COMPLETE root
+	chdir(t, dir)              // cwd now has a .dross so FindRoot resolves
+	telemetryCovEnable(t)      // temp HOME + clear opt-out (after chdir set it)
 
 	RecordCLIEvent(nil, 0, nil)
 
