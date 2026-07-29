@@ -1197,3 +1197,161 @@ func TestDoctorIncompleteRootBlockMatchesLocateRoot(t *testing.T) {
 		t.Errorf("rules.toml is doctor's trio, not root completeness: %v", got)
 	}
 }
+
+// scaffoldDoctorRepo builds a git-backed dross repo whose remote matches, so
+// doctor's other sections stay quiet and the task-status verdict is the only
+// thing moving the exit code.
+func scaffoldDoctorRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	// Silence the unrelated baseline issues so the exit code tracks the
+	// task-status verdict alone.
+	t.Setenv("FORGEJO_TOKEN", "x")
+	mustRunSet(t, "project.name", "x")
+	mustRunSet(t, "runtime.mode", "native")
+	if err := runCmd(t, Doctor()); err != nil {
+		t.Fatalf("baseline repo is not doctor-clean: %v", err)
+	}
+	return dir
+}
+
+// writePlan drops a plan.toml (and the spec.toml beside it) into a phase dir.
+func writeStatusPlan(t *testing.T, phaseID, body string) {
+	t.Helper()
+	dir := filepath.Join(".dross", "phases", phaseID)
+	mustWrite(t, filepath.Join(dir, "spec.toml"), `[phase]
+id = "`+phaseID+`"
+title = "test"
+[[criteria]]
+id = "c-1"
+text = "x"
+`)
+	mustWrite(t, filepath.Join(dir, "plan.toml"), body)
+}
+
+func planWithStatus(phaseID, status string) string {
+	body := `[phase]
+id = "` + phaseID + `"
+[[task]]
+id = "t-1"
+wave = 1
+title = "x"
+files = ["a.go"]
+covers = ["c-1"]
+`
+	if status != "" {
+		body += "status = \"" + status + "\"\n"
+	}
+	return body
+}
+
+func TestDoctorFlagsUnrecognisedTaskStatus(t *testing.T) {
+	// "Done" and "in-progress" are exactly the near-misses NextRunnable
+	// skips in silence today.
+	for _, bad := range []string{"Done", "in-progress"} {
+		t.Run(bad, func(t *testing.T) {
+			scaffoldDoctorRepo(t)
+			writeStatusPlan(t, "01-test", planWithStatus("01-test", bad))
+
+			var out string
+			err := runCmdCapturing(t, &out, Doctor())
+			if err == nil {
+				t.Fatalf("doctor exited 0 with task status %q", bad)
+			}
+			var line string
+			for _, l := range strings.Split(out, "\n") {
+				if strings.Contains(l, bad) {
+					line = l
+					break
+				}
+			}
+			if line == "" {
+				t.Fatalf("no line mentions status %q:\n%s", bad, out)
+			}
+			if !strings.Contains(line, "01-test") || !strings.Contains(line, "t-1") {
+				t.Errorf("line %q must name both the phase and the task id", line)
+			}
+			// The issue must gate the exit code, not sit in the advisory
+			// warnings block.
+			if !strings.Contains(err.Error(), "issue(s) found") {
+				t.Errorf("error = %v, want it counted as a project-level issue", err)
+			}
+		})
+	}
+}
+
+func TestDoctorAcceptsEveryRunnableTaskStatus(t *testing.T) {
+	// "" means the status field is omitted — pending everywhere else in the
+	// code, so it must not be reported here either.
+	for _, ok := range []string{"", "pending", "in_progress", "done", "failed"} {
+		t.Run("status="+ok, func(t *testing.T) {
+			scaffoldDoctorRepo(t)
+			writeStatusPlan(t, "01-test", planWithStatus("01-test", ok))
+
+			var out string
+			err := runCmdCapturing(t, &out, Doctor())
+			if err != nil {
+				t.Errorf("doctor errored on a valid status %q: %v\n%s", ok, err, out)
+			}
+			if !strings.Contains(out, "✓ every task status is") {
+				t.Errorf("status %q did not get a clean verdict:\n%s", ok, out)
+			}
+		})
+	}
+}
+
+func TestDoctorSkipsPhaseDirWithNoPlan(t *testing.T) {
+	scaffoldDoctorRepo(t)
+	// Spec'd but not yet planned — normal, and must not derail the section.
+	mustWrite(t, filepath.Join(".dross", "phases", "01-unplanned", "spec.toml"), `[phase]
+id = "01-unplanned"
+title = "t"
+[[criteria]]
+id = "c-1"
+text = "x"
+`)
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+		t.Errorf("doctor errored on a phase with no plan.toml: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "✓ every task status is") {
+		t.Errorf("doctor did not reach the task-status verdict:\n%s", out)
+	}
+}
+
+func TestDoctorReportsUnparseablePlan(t *testing.T) {
+	scaffoldDoctorRepo(t)
+	writeStatusPlan(t, "01-test", "[phase\nthis is not toml\n")
+
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err == nil {
+		t.Fatal("doctor exited 0 on an unparseable plan.toml")
+	}
+	if strings.Contains(out, "✓ every task status is") {
+		t.Errorf("unparseable plan was swallowed into a clean verdict:\n%s", out)
+	}
+	if !strings.Contains(out, "01-test") {
+		t.Errorf("the report does not name the phase:\n%s", out)
+	}
+}
+
+// TestValidateIgnoresTaskStatus pins status_check_home: the enum check is
+// doctor's, and validate — which runs in every slash command's wrap step —
+// must stay structural-only.
+func TestValidateIgnoresTaskStatus(t *testing.T) {
+	scaffoldDoctorRepo(t)
+	writeStatusPlan(t, "01-test", planWithStatus("01-test", "Done"))
+
+	if err := runCmd(t, Validate()); err != nil {
+		t.Errorf("dross validate rejected an unrecognised task status: %v", err)
+	}
+	if err := runCmd(t, Doctor()); err == nil {
+		t.Error("doctor accepted it too — the check landed nowhere")
+	}
+}

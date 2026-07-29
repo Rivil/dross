@@ -14,6 +14,7 @@ import (
 
 	"github.com/Rivil/dross/internal/architecture"
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/phase"
 )
 
 // Doctor checks project-level health for the current dross repo.
@@ -236,6 +237,27 @@ func Doctor() *cobra.Command {
 			}
 			Print("")
 
+			// --- Task statuses ---
+			//
+			// NextRunnable only ever advances a task whose status is one of
+			// pending|in_progress|done|failed (empty meaning pending), so a
+			// hand-edited "Done" or "in-progress" drops that task out of the
+			// loop in total silence. Report it here rather than in `dross
+			// validate`: validate is structural-only and runs in every slash
+			// command's wrap step, where a newly-failing enum check would
+			// break existing repos (locked status_check_home).
+			Print("Task statuses:")
+			if bad := taskStatusIssues(root); len(bad) == 0 {
+				Print("  ✓ every task status is one of pending|in_progress|done|failed")
+			} else {
+				for _, b := range bad {
+					Printf("  ✗ %s\n", b)
+					issues++
+				}
+				Print("    Fix: `dross task status <phase-id> <task-id> <pending|in_progress|done|failed>`.")
+			}
+			Print("")
+
 			// --- Architecture links ---
 			//
 			// ARCHITECTURE.md's `Symbol — file:line` bullets go stale as code
@@ -395,6 +417,41 @@ func interactionCoverageWarnings(repoDir string) (warnings []string, present boo
 		warnings = append(warnings, fmt.Sprintf("%s — %s", gap.Name, gap.Reason))
 	}
 	return warnings, true
+}
+
+// taskStatusIssues walks every phase's plan.toml and returns one line per task
+// whose status is outside the runnable set, each naming both the phase and the
+// task so the offender is addressable without opening the file.
+//
+// A phase directory with no plan.toml is skipped silently — a spec'd but
+// unplanned phase is normal. An unparseable plan.toml is its own issue: it
+// would otherwise be swallowed into a clean ✓, which is the same silence the
+// check exists to remove.
+func taskStatusIssues(root string) []string {
+	ids, err := phase.List(root)
+	if err != nil {
+		return []string{fmt.Sprintf("couldn't list phases: %v", err)}
+	}
+	var out []string
+	for _, id := range ids {
+		planPath := filepath.Join(phase.Dir(root, id), "plan.toml")
+		if _, err := os.Stat(planPath); err != nil {
+			continue
+		}
+		plan, err := phase.LoadPlan(planPath)
+		if err != nil {
+			out = append(out, fmt.Sprintf("phase %s — plan.toml is unreadable: %v", id, err))
+			continue
+		}
+		for _, t := range plan.Task {
+			switch t.Status {
+			case "", phase.StatusPending, phase.StatusInProgress, phase.StatusDone, phase.StatusFailed:
+			default:
+				out = append(out, fmt.Sprintf("phase %s, task %s — unrecognised status %q (want pending|in_progress|done|failed); NextRunnable skips it silently", id, t.ID, t.Status))
+			}
+		}
+	}
+	return out
 }
 
 // looksLikeBoardURL reports whether s is a plausible instance base URL: an
