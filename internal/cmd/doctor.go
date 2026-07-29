@@ -35,6 +35,13 @@ func Doctor() *cobra.Command {
 			repoDir := filepath.Dir(root) // root is .dross; parent is repo cwd
 			issues := 0
 
+			// Cross-field warnings are a second, softer class: each field is
+			// individually legal but the *combination* fails at runtime. They
+			// are reported and never added to issues — doctor's exit code gates
+			// CI and pre-push hooks, and this class exists to stop doctor lying,
+			// not to start breaking repos that work today.
+			var warnings []string
+
 			// --- Foundational files ---
 			//
 			// project.toml + rules.toml + state.json must exist before
@@ -49,7 +56,7 @@ func Doctor() *cobra.Command {
 					issues++
 				}
 				Print("")
-				return finalizeDoctor(issues)
+				return finalizeDoctor(issues, len(warnings))
 			}
 			Print("  ✓ project.toml, rules.toml, state.json present")
 			Print("")
@@ -97,6 +104,8 @@ func Doctor() *cobra.Command {
 				Printf("  ✗ [remote].auth_scheme = %q is invalid (expected %s)\n", p.Remote.AuthScheme, configenum.AuthSchemes.List())
 				issues++
 			}
+
+			warnings = append(warnings, remoteCombinationWarnings(p.Remote.Provider, p.Remote.AuthScheme, p.Remote.AuthUser)...)
 
 			Print("")
 
@@ -150,6 +159,8 @@ func Doctor() *cobra.Command {
 					Printf("  ✗ [board].milestone_mode = %q is invalid (expected %s)\n", b.MilestoneMode, configenum.MilestoneModes.List())
 					boardIssues++
 				}
+
+				warnings = append(warnings, boardCombinationWarnings(b.Provider, b.MilestoneMode, b.AuthUser)...)
 
 				if boardIssues == 0 {
 					if b.BaseURL == "" {
@@ -256,9 +267,79 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues)
+			// --- Cross-field combinations ---
+			//
+			// Collected above, reported here as one advisory block. Each value
+			// involved is individually valid, so none of these touch `issues`;
+			// what they catch is a pairing that only fails once a command runs.
+			if len(warnings) > 0 {
+				Print("Combinations:")
+				for _, w := range warnings {
+					Printf("  ⚠ %s\n", w)
+				}
+				Print("    Advisory only — these never change doctor's exit code.")
+				Print("")
+			}
+
+			return finalizeDoctor(issues, len(warnings))
 		},
 	}
+}
+
+// remoteCombinationWarnings reports [remote] pairings that are individually
+// valid but fail once ship runs. Empty and "none" providers stay silent: they
+// mean "this repo has no remote", not a misconfigured one.
+func remoteCombinationWarnings(provider, authScheme, authUser string) []string {
+	var out []string
+	prov := configenum.Normalize(provider)
+	scheme := configenum.Normalize(authScheme)
+	if prov == "" || prov == "none" {
+		return nil
+	}
+
+	// A provider the tooling happily writes but ship cannot dispatch: the PR
+	// step is the first thing to say so, at the end of a phase.
+	if !configenum.ShipProviders.Has(prov) {
+		out = append(out, fmt.Sprintf("[remote].provider = %q — ship cannot open a PR for it (expected %s); /dross-ship will fail at the PR step", provider, configenum.ShipProviders.List()))
+	}
+
+	// Basic auth is user:token on the wire, so a missing user sends
+	// base64(:token) and 401s on every call — a guaranteed ship failure that
+	// nothing else surfaces until the token looks to blame.
+	if (prov == "bitbucket" || scheme == "basic") && strings.TrimSpace(authUser) == "" {
+		out = append(out, "[remote].auth_user is not set but the credential is HTTP Basic user:token — every ship call will 401")
+	}
+
+	// Only bitbucket dispatches Basic: gitlab falls through to PRIVATE-TOKEN
+	// and github ignores the scheme entirely, so setting it elsewhere is a
+	// silent no-op that reads as configured.
+	if scheme == "basic" && prov != "bitbucket" {
+		out = append(out, fmt.Sprintf("[remote].auth_scheme = basic but the %s backend sends no Basic credential — the setting has no effect", prov))
+	}
+	return out
+}
+
+// boardCombinationWarnings reports [board] pairings that pass every per-field
+// check and still error at the first board op.
+func boardCombinationWarnings(provider, milestoneMode, authUser string) []string {
+	var out []string
+	prov := configenum.Normalize(provider)
+
+	// A mode outside the provider's own accept-set. Skipped when the mode is
+	// globally invalid (already a hard failure above) or when the provider maps
+	// milestones by some other means and never reads the field at all.
+	if configenum.MilestoneModes.Has(milestoneMode) {
+		if modes := configenum.MilestoneModesFor(prov); modes != nil && !modes.Has(milestoneMode) {
+			out = append(out, fmt.Sprintf("[board].milestone_mode = %q is not supported by the %s backend (expected %s) — milestone sync will error", milestoneMode, prov, modes.List()))
+		}
+	}
+
+	// Jira's REST credential is Basic email:token; auth_env alone authenticates
+	// nothing.
+	if prov == "jira" && strings.TrimSpace(authUser) == "" {
+		out = append(out, "[board].auth_user is not set but Jira authenticates as Basic email:token — board ops will 401")
+	}
+	return out
 }
 
 // architectureLinkWarnings resolves every symbol link in ARCHITECTURE.md against
@@ -314,13 +395,16 @@ func looksLikeBoardURL(s string) bool {
 // appropriate error (or nil) for the issue count. Shared between the
 // foundational-files short-circuit path and the full-check path so the
 // telemetry shape stays consistent.
-func finalizeDoctor(issues int) error {
+//
+// warnings is reported alongside issues and deliberately never folded into it:
+// the exit code answers "is anything invalid", not "is anything suspicious".
+func finalizeDoctor(issues, warnings int) error {
 	result := "passed"
 	if issues > 0 {
 		result = "issues_found"
 	}
 	RecordOutcomeEvent("doctor",
-		map[string]int{"issues": issues},
+		map[string]int{"issues": issues, "warnings": warnings},
 		nil,
 		map[string]string{"result": result},
 	)
