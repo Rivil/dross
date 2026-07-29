@@ -198,3 +198,88 @@ func TestPauseAutoSnapshotCleanRepo(t *testing.T) {
 		t.Errorf("clean repo should render '- dirty: clean':\n%s", got)
 	}
 }
+
+// TestPauseAutoSilentOnIncompleteRoot (c-2): the PreCompact hook fires
+// everywhere, so an incomplete `.dross/` is a silent exit 0. The real
+// assertion is the file-existence half — a fix that returns nil after writing
+// the snapshot passes an error check and fails here.
+func TestPauseAutoSilentOnIncompleteRoot(t *testing.T) {
+	dir := realTempDir(t)
+	root := mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	if err := pauseAuto(pauseNow); err != nil {
+		t.Fatalf("pause --auto should exit 0 on an incomplete root, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "handoff.md")); !os.IsNotExist(err) {
+		t.Errorf("pause --auto must not write handoff.md on an incomplete root; stat err = %v", err)
+	}
+}
+
+// TestPauseAutoLoudOnCorruptFile (locked completeness_check): a file that
+// exists but won't decode is broken state, loud even in the hook target. Each
+// file is its own row, so fixing only the state path leaves a named failure.
+// Every row also asserts the write never happened — an error returned *after*
+// clobbering handoff.md would be a worse bug than the silence it replaces.
+func TestPauseAutoLoudOnCorruptFile(t *testing.T) {
+	cases := []struct {
+		name    string
+		file    string
+		content string
+	}{
+		{"truncated state.json", "state.json", `{"version":`},
+		{"undecodable project.toml", "project.toml", "[[[not toml"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := realTempDir(t)
+			root := mkRoot(t, dir, "project.toml")
+			if err := os.WriteFile(filepath.Join(root, "state.json"), []byte("{}"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, tc.file), []byte(tc.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			// A handoff the user already wrote must survive the failed run.
+			handoff := filepath.Join(root, "handoff.md")
+			const prior = "# Handoff\n\nhand-written thread\n"
+			if err := os.WriteFile(handoff, []byte(prior), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			chdir(t, dir)
+
+			err := pauseAuto(pauseNow)
+			if err == nil {
+				t.Fatalf("pause --auto should fail on a corrupt %s", tc.file)
+			}
+			if !strings.Contains(err.Error(), tc.file) {
+				t.Errorf("error should name %s, got %v", tc.file, err)
+			}
+			got, readErr := os.ReadFile(handoff)
+			if readErr != nil {
+				t.Fatalf("pre-existing handoff.md disappeared: %v", readErr)
+			}
+			if string(got) != prior {
+				t.Errorf("handoff.md was modified by a failed run:\n%s", got)
+			}
+		})
+	}
+}
+
+// TestPauseAutoDegradesWithoutGit pins the other side of the loud/soft split:
+// a missing git repo is an environment fact, not broken state, so the snapshot
+// still renders and the hook still exits 0.
+func TestPauseAutoDegradesWithoutGit(t *testing.T) {
+	dir := pauseRepo(t) // dross-initialised, never git-initialised
+
+	if err := pauseAuto(pauseNow); err != nil {
+		t.Fatalf("pause --auto should degrade past a missing git repo, got %v", err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, ".dross", "handoff.md"))
+	if err != nil {
+		t.Fatalf("handoff.md should have been written: %v", err)
+	}
+	if !strings.Contains(string(b), "- branch: (no git)") {
+		t.Errorf("snapshot should degrade the branch line to (no git):\n%s", b)
+	}
+}
