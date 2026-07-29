@@ -91,6 +91,16 @@ var ShipProviders = newSet("", "github", "forgejo", "gitea", "gitlab", "bitbucke
 // defaults to private-token in code, so an unset scheme is valid.
 var AuthSchemes = newSet("private-token", "private-token", "bearer", "basic")
 
+// MilestoneStatuses is the set of [milestone].status values. It is pinned by
+// the on-disk corpus rather than by any completion path: `dross milestone
+// create` writes "planning", the generic setter writes the rest, and `dross
+// milestone complete` writes no status at all — so what the milestone tomls
+// actually carry (complete, and active on the one in flight) is the truth.
+//
+// Empty is rejected: a blank status says nothing about where a milestone is,
+// and blanking the field through `milestone set` is a mistake, not a default.
+var MilestoneStatuses = newSet("", "planning", "active", "complete")
+
 // MilestoneModes is the union of [board].milestone_mode values across the
 // trackers. Empty defaults to version in code. Not every provider accepts every
 // mode — see MilestoneModesFor.

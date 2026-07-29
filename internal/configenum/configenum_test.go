@@ -182,3 +182,23 @@ func TestValuesIsDefensiveCopy(t *testing.T) {
 		t.Error("Values() aliases the package-level Set; a caller mutated it")
 	}
 }
+
+// TestMilestoneStatusesMatchesDisk pins the set to what the milestone tomls
+// actually carry (D1), not to the doc comment that once said
+// shipped|archived. `milestone complete` writes no status at all, so the only
+// writers are `milestone create` ("planning") and the generic setter.
+func TestMilestoneStatusesMatchesDisk(t *testing.T) {
+	if got, want := MilestoneStatuses.Values(), []string{"planning", "active", "complete"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("MilestoneStatuses = %v, want %v", got, want)
+	}
+	for _, v := range []string{"planning", "active", "complete", "Complete", " active "} {
+		if !MilestoneStatuses.Has(v) {
+			t.Errorf("Has(%q) = false, want true", v)
+		}
+	}
+	for _, v := range []string{"shipped", "archived", "", "   ", "done"} {
+		if MilestoneStatuses.Has(v) {
+			t.Errorf("Has(%q) = true, want false", v)
+		}
+	}
+}

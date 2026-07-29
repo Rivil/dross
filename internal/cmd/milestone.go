@@ -11,6 +11,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
@@ -358,6 +359,10 @@ func milestoneSet() *cobra.Command {
 			if len(args) == 3 {
 				version, dotted, value = args[0], args[1], args[2]
 			}
+			dotted, err := resolveBareMilestoneField(dotted, milestoneSettablePaths)
+			if err != nil {
+				return err
+			}
 			m, path, err := loadMilestone(version)
 			if err != nil {
 				return err
@@ -445,6 +450,42 @@ func readMilestoneDotted(m *milestone.Milestone, path string) (string, bool, []s
 	return "", false, nil
 }
 
+// milestoneSettablePaths is the scalar surface writeMilestoneDotted accepts —
+// the candidate list the bare-name resolver expands against. List fields are
+// deliberately absent: `milestone add` owns those.
+var milestoneSettablePaths = []string{
+	"milestone.version",
+	"milestone.title",
+	"milestone.status",
+	"milestone.started",
+	"milestone.shipped",
+}
+
+// resolveBareMilestoneField expands an unambiguous bare field name — `status`
+// — to its full dotted path, so the shape people reach for first works. It is
+// purely additive: an already-dotted path passes through untouched, and a name
+// matching no candidate is returned unchanged so writeMilestoneDotted still
+// produces its own unknown-field error rather than a nearest-guess.
+func resolveBareMilestoneField(name string, candidates []string) (string, error) {
+	if strings.Contains(name, ".") {
+		return name, nil
+	}
+	var matches []string
+	for _, c := range candidates {
+		if _, leaf, _ := strings.Cut(c, "."); leaf == name {
+			matches = append(matches, c)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return name, nil
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("ambiguous field name %q: matches %s — use the full dotted path", name, strings.Join(matches, ", "))
+	}
+}
+
 func writeMilestoneDotted(m *milestone.Milestone, path, value string) error {
 	switch path {
 	case "milestone.version":
@@ -452,7 +493,12 @@ func writeMilestoneDotted(m *milestone.Milestone, path, value string) error {
 	case "milestone.title":
 		m.Milestone.Title = value
 	case "milestone.status":
-		m.Milestone.Status = value
+		// Rejected before the caller reaches Save, so an out-of-set status
+		// leaves the milestone toml byte-identical.
+		if !configenum.MilestoneStatuses.Has(value) {
+			return fmt.Errorf("invalid milestone status: %q (want %s)", value, configenum.MilestoneStatuses.List())
+		}
+		m.Milestone.Status = configenum.Normalize(value)
 	case "milestone.started":
 		m.Milestone.Started = value
 	case "milestone.shipped":
