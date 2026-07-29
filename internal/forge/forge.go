@@ -10,6 +10,7 @@ package forge
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 // ErrNotImplemented is returned by every Client method when the configured
@@ -42,7 +45,8 @@ type Client struct {
 	apiBase    string
 	token      string
 	authEnv    string // env var name (kept for diagnostic error messages)
-	authScheme string // gitlab: "private-token" (default) | "bearer"
+	authScheme string // one of configenum.AuthSchemes; empty = private-token
+	authUser   string // basic: the Basic-auth username paired with token
 	projectID  string // gitlab: numeric project-id override (else derived from owner/repo)
 
 	http     *http.Client
@@ -67,14 +71,14 @@ type Config struct {
 // a ready Client. It errors early on the same conditions the ship backend
 // checks: missing APIBase/AuthEnv, unset token, unparseable repo URL.
 func New(cfg Config) (*Client, error) {
-	provider := strings.ToLower(cfg.Provider)
+	provider := configenum.Normalize(cfg.Provider)
 	switch provider {
 	case "forgejo", "gitea", "gitlab":
 		// supported below
 	case "github":
 		return nil, ErrNotImplemented
 	default:
-		return nil, fmt.Errorf("unsupported provider %q (expected forgejo | gitea | gitlab)", cfg.Provider)
+		return nil, fmt.Errorf("unsupported provider %q (expected %s)", cfg.Provider, configenum.ForgeRESTProviders.List())
 	}
 	// backendName makes config errors carry the active provider so telemetry
 	// classifies them under "provider" (see telemetry.ClassifyError).
@@ -87,6 +91,12 @@ func New(cfg Config) (*Client, error) {
 	}
 	if cfg.AuthEnv == "" {
 		return nil, fmt.Errorf("%s backend needs AuthEnv (set [remote].auth_env)", backendName)
+	}
+	// The basic scheme is half a credential without its username: sending
+	// Basic base64(:token) would 401 with nothing the user can act on, so fail
+	// here and name the setting instead.
+	if configenum.Normalize(cfg.AuthScheme) == "basic" && strings.TrimSpace(cfg.AuthUser) == "" {
+		return nil, fmt.Errorf("%s backend: auth_scheme = basic needs an auth_user (set [board].auth_user or [remote].auth_user)", backendName)
 	}
 	token := os.Getenv(cfg.AuthEnv)
 	if token == "" {
@@ -104,6 +114,7 @@ func New(cfg Config) (*Client, error) {
 		token:      token,
 		authEnv:    cfg.AuthEnv,
 		authScheme: cfg.AuthScheme,
+		authUser:   strings.TrimSpace(cfg.AuthUser),
 		projectID:  strings.TrimSpace(cfg.ProjectID),
 		http:       &http.Client{Timeout: 30 * time.Second},
 		labelIDs:   map[string]int{},
@@ -137,7 +148,7 @@ var _ BoardClient = (*Client)(nil)
 // REST Client (forgejo/gitea/gitlab). It is the single entry point board
 // operations use to resolve a client from the [board] config.
 func NewBoard(cfg Config) (BoardClient, error) {
-	switch strings.ToLower(cfg.Provider) {
+	switch configenum.Normalize(cfg.Provider) {
 	case "youtrack":
 		return NewYouTrack(cfg)
 	case "jira":
@@ -608,13 +619,20 @@ func (c *Client) do(method, endpoint string, body any, out any) error {
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if c.isGitLab() {
-		if strings.ToLower(c.authScheme) == "bearer" {
+	// Exactly one auth header is set. basic is checked first and wins outright:
+	// pairing it with GitLab's PRIVATE-TOKEN would send two credentials, and the
+	// scheme is an explicit choice the caller made over the provider default.
+	switch {
+	case configenum.Normalize(c.authScheme) == "basic":
+		cred := base64.StdEncoding.EncodeToString([]byte(c.authUser + ":" + c.token))
+		req.Header.Set("Authorization", "Basic "+cred)
+	case c.isGitLab():
+		if configenum.Normalize(c.authScheme) == "bearer" {
 			req.Header.Set("Authorization", "Bearer "+c.token)
 		} else {
 			req.Header.Set("PRIVATE-TOKEN", c.token)
 		}
-	} else {
+	default:
 		req.Header.Set("Authorization", "token "+c.token)
 	}
 

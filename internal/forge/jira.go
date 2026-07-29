@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 // JiraClient talks to a Jira Cloud instance's REST API v3. Like the
@@ -224,7 +226,7 @@ func (c *JiraClient) EnsureMilestone(title, description string) (string, error) 
 // milestone to a project version, so mode is accepted for signature symmetry
 // but only "version" (or empty) is meaningful.
 func (c *JiraClient) EnsureMilestoneEntity(mode, name, description string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
+	switch configenum.Normalize(mode) {
 	case "", "version":
 		return c.ensureVersion(name, description)
 	default:
