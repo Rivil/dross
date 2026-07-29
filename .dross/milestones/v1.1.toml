@@ -1,4 +1,4 @@
-phases = ["validator-truth", "root-robustness", "cli-surface-sweep"]
+phases = ["validator-truth", "root-robustness", "cli-surface-sweep", "board-state-map-truth"]
 
 [milestone]
   version = "v1.1"

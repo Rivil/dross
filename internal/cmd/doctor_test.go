@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 func TestSameRemoteURL(t *testing.T) {
@@ -683,4 +685,359 @@ func TestDoctorCover_PhaseHygieneBranches(t *testing.T) {
 			t.Errorf("the phase-hygiene error path is advisory and must not add an issue; got err=%v\n%s", err, out)
 		}
 	})
+}
+
+// --- configenum-backed enum checks (phase validator-truth) ---
+
+// runDoctorEnum inits a repo with a well-formed youtrack [board] baseline,
+// applies overrides, and runs doctor. An override with an empty value means
+// "leave this field unset" rather than "set it to the empty string", so the
+// optional-base_url cases can be expressed.
+func runDoctorEnum(t *testing.T, overrides map[string]string) (string, error) {
+	t.Helper()
+	const tokenEnv = "DROSS_TEST_ENUM_TOKEN"
+	dir := t.TempDir()
+	gitInit(t, dir, "https://gitlab.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	fields := map[string]string{
+		"remote.auth_env":      tokenEnv,
+		"board.provider":       "youtrack",
+		"board.base_url":       "https://yt.example.com",
+		"board.auth_env":       tokenEnv,
+		"board.project":        "PROJ",
+		"board.enabled":        "true",
+		"board.milestone_mode": "version",
+	}
+	for k, v := range overrides {
+		if v == "" {
+			delete(fields, k)
+			continue
+		}
+		fields[k] = v
+	}
+	for k, v := range fields {
+		if err := runCmd(t, Project(), "set", k, v); err != nil {
+			t.Fatalf("project set %s: %v", k, err)
+		}
+	}
+	t.Setenv(tokenEnv, "secret")
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	return out, err
+}
+
+// The c-1 regression: doctor rejected jira and github outright, so a board the
+// CLI dispatches happily could not pass its own validator. Driving the loop off
+// BoardProviders means a seventh backend added without teaching doctor fails
+// here rather than in the user's terminal.
+func TestDoctorAcceptsEveryDispatchableBoardProvider(t *testing.T) {
+	for _, provider := range configenum.BoardProviders.Values() {
+		t.Run(provider, func(t *testing.T) {
+			out, err := runDoctorEnum(t, map[string]string{"board.provider": provider})
+			if err != nil {
+				t.Errorf("doctor rejects a dispatchable board provider %q:\n%s", provider, out)
+			}
+			if strings.Contains(out, "provider = ") && strings.Contains(out, "is invalid") {
+				t.Errorf("provider %q reported invalid:\n%s", provider, out)
+			}
+		})
+	}
+}
+
+func TestDoctorBoardBaseURLOptionalForGitHub(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"board.provider": "github",
+		"board.base_url": "", // unset
+	})
+	if err != nil {
+		t.Errorf("a github board needs no base_url (the backend defaults to api.github.com):\n%s", out)
+	}
+
+	// The relaxation must not leak: every other backend is self-hosted or
+	// per-tenant and has no address to guess.
+	out, err = runDoctorEnum(t, map[string]string{
+		"board.provider": "youtrack",
+		"board.base_url": "", // unset
+	})
+	if err == nil {
+		t.Errorf("a youtrack board with no base_url must still fail:\n%s", out)
+	}
+	if !strings.Contains(out, "base_url") {
+		t.Errorf("expected a base_url line:\n%s", out)
+	}
+}
+
+// Optional is not unvalidated. Implementing the github relaxation by skipping
+// the whole URL branch would silently accept a malformed value.
+func TestDoctorGitHubMalformedBaseURLStillFails(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"board.provider": "github",
+		"board.base_url": "not-a-url",
+	})
+	if err == nil {
+		t.Errorf("a set-but-malformed github base_url must fail:\n%s", out)
+	}
+	if !strings.Contains(out, "base_url") {
+		t.Errorf("expected a base_url line:\n%s", out)
+	}
+}
+
+// BoardProviders carries no default, so Set.Has("") is false for it — the guard
+// against a uniformly-true empty policy leaking in from AuthSchemes.
+func TestDoctorRejectsEmptyBoardProvider(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{"board.provider": ""})
+	if err == nil {
+		t.Errorf("an unset [board].provider dispatches nowhere and must fail:\n%s", out)
+	}
+	if !strings.Contains(out, "provider") || !strings.Contains(out, "invalid") {
+		t.Errorf("expected an invalid-provider line:\n%s", out)
+	}
+}
+
+// doctor must be exactly as forgiving as the consumers: forge lowercases and
+// trims before matching, so a capitalised or padded mode is legal downstream.
+func TestDoctorNormalisesMilestoneMode(t *testing.T) {
+	for _, mode := range []string{"version", "Version", " version", "EPIC", "\tagile "} {
+		out, err := runDoctorEnum(t, map[string]string{
+			"board.milestone_mode": mode,
+			// epic/agile are youtrack modes; the baseline provider is youtrack.
+		})
+		if err != nil {
+			t.Errorf("milestone_mode %q rejected but accepted by the consumer:\n%s", mode, out)
+		}
+	}
+	out, err := runDoctorEnum(t, map[string]string{"board.milestone_mode": "bogus"})
+	if err == nil {
+		t.Errorf("a genuinely unknown milestone_mode must still fail:\n%s", out)
+	}
+	if !strings.Contains(out, configenum.MilestoneModes.List()) {
+		t.Errorf("message must be derived from MilestoneModes:\n%s", out)
+	}
+}
+
+func TestDoctorNormalisesAuthScheme(t *testing.T) {
+	for _, scheme := range []string{"private-token", "bearer", "basic", " Basic", "BEARER\t"} {
+		out, err := runDoctorEnum(t, map[string]string{"remote.auth_scheme": scheme})
+		if err != nil {
+			t.Errorf("auth_scheme %q rejected:\n%s", scheme, out)
+		}
+	}
+	out, err := runDoctorEnum(t, map[string]string{"remote.auth_scheme": "token"})
+	if err == nil {
+		t.Errorf("an unknown auth_scheme must still fail:\n%s", out)
+	}
+	if !strings.Contains(out, configenum.AuthSchemes.List()) {
+		t.Errorf("message must list %q, got:\n%s", configenum.AuthSchemes.List(), out)
+	}
+}
+
+// A partial migration — one switch left behind while the message is already
+// derived — is the failure this pins. It forbids accept-set literals (the
+// pipe-joined message strings and multi-provider case lines), not every mention
+// of a provider name: single-provider cross-field checks are legitimate.
+func TestDoctorCarriesNoProviderLiterals(t *testing.T) {
+	path := filepath.Join(repoRootFromTest(t), "internal", "cmd", "doctor.go")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(raw)
+
+	if !strings.Contains(src, "configenum.") {
+		t.Fatal("doctor.go does not reference configenum at all")
+	}
+	for _, set := range []configenum.Set{
+		configenum.BoardProviders,
+		configenum.ShipProviders,
+		configenum.AuthSchemes,
+		configenum.MilestoneModes,
+	} {
+		if strings.Contains(src, set.List()) {
+			t.Errorf("doctor.go hand-types the accept-set %q; derive it from configenum", set.List())
+		}
+	}
+	// The switch shape the migration replaced.
+	for _, lit := range []string{`case "forgejo"`, `case "youtrack"`, `case "", "version"`} {
+		if strings.Contains(src, lit) {
+			t.Errorf("doctor.go still carries a literal enum switch: %s", lit)
+		}
+	}
+}
+
+// --- cross-field combination warnings (phase validator-truth, c-5 + c-6) ---
+
+// jira maps a milestone to a fixVersion and errors on anything else, so
+// milestone_mode = epic is a guaranteed runtime failure that every per-field
+// check passes: epic is a real mode, jira is a real provider.
+func TestDoctorWarnsJiraEpicCombination(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"board.provider":       "jira",
+		"board.auth_user":      "me@example.com",
+		"board.milestone_mode": "epic",
+	})
+	if err != nil {
+		t.Errorf("a combination warning must not change the exit code:\n%s", out)
+	}
+	if !strings.Contains(out, "milestone_mode") || !strings.Contains(out, "⚠") {
+		t.Errorf("expected a milestone_mode combination warning:\n%s", out)
+	}
+
+	// youtrack accepts every mode, so the same value there is not a warning.
+	// Warning on it would train the user to ignore the section.
+	out, err = runDoctorEnum(t, map[string]string{
+		"board.provider":       "youtrack",
+		"board.milestone_mode": "epic",
+	})
+	if err != nil {
+		t.Fatalf("youtrack + epic is a valid combination:\n%s", out)
+	}
+	if strings.Contains(out, "Combinations:") {
+		t.Errorf("youtrack accepts epic — no warning expected:\n%s", out)
+	}
+}
+
+// The regression guard for the locked new_check_severity decision. doctor's
+// exit code gates CI and pre-push hooks; an `issues++` here would start
+// breaking repos that work today.
+func TestDoctorCombinationWarningKeepsExitZero(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"board.provider":       "jira",
+		"board.milestone_mode": "epic",
+	})
+	if err != nil {
+		t.Fatalf("combination warnings must keep exit 0, got err=%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Combinations:") {
+		t.Fatalf("the warning did not fire, so this proves nothing:\n%s", out)
+	}
+	if !strings.Contains(out, "All project-level checks passed.") {
+		t.Errorf("a warnings-only run must still report as passed:\n%s", out)
+	}
+}
+
+// Jira authenticates as Basic email:token — auth_env alone authenticates
+// nothing, and the 401 that follows reads as a bad token.
+func TestDoctorWarnsJiraMissingAuthUser(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{"board.provider": "jira"})
+	if err != nil {
+		t.Errorf("a missing board.auth_user is a warning, not a failure:\n%s", out)
+	}
+	if !strings.Contains(out, "[board].auth_user") {
+		t.Errorf("expected a board.auth_user warning:\n%s", out)
+	}
+
+	out, _ = runDoctorEnum(t, map[string]string{
+		"board.provider":  "jira",
+		"board.auth_user": "me@example.com",
+	})
+	if strings.Contains(out, "[board].auth_user") {
+		t.Errorf("a configured auth_user must silence the warning:\n%s", out)
+	}
+}
+
+// c-6's writer side: the tooling writes [remote].provider from the git origin,
+// so a host ship cannot dispatch is written happily and only surfaces at the
+// PR step, at the end of a phase.
+func TestDoctorWarnsUnshippableRemoteProvider(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{"remote.provider": "sourcehut"})
+	if err != nil {
+		t.Errorf("an unshippable provider is a warning, not a failure:\n%s", out)
+	}
+	if !strings.Contains(out, "cannot open a PR") {
+		t.Errorf("expected an unshippable-provider warning:\n%s", out)
+	}
+
+	// bitbucket is dispatchable now — warning on it would be the exact lie
+	// this phase exists to remove.
+	out, _ = runDoctorEnum(t, map[string]string{"remote.provider": "bitbucket"})
+	if strings.Contains(out, "cannot open a PR") {
+		t.Errorf("bitbucket is a dispatchable provider:\n%s", out)
+	}
+
+	// "none" is the no-remote sentinel, not a broken backend.
+	out, _ = runDoctorEnum(t, map[string]string{"remote.provider": "none"})
+	if strings.Contains(out, "Combinations:") {
+		t.Errorf("the none sentinel must stay silent:\n%s", out)
+	}
+
+	// An unset provider likewise. runDoctorEnum cannot express "set to empty",
+	// so the empty case is asserted against the check directly.
+	if w := remoteCombinationWarnings("", "", ""); len(w) != 0 {
+		t.Errorf("an unset remote provider must stay silent, got: %v", w)
+	}
+}
+
+// Basic auth is user:token on the wire. Without the user half it sends
+// base64(:token) and 401s on every ship — guaranteed, not merely suspicious.
+func TestDoctorWarnsBasicAuthMissingAuthUser(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{"remote.provider": "bitbucket"})
+	if err != nil {
+		t.Errorf("a missing remote.auth_user is a warning, not a failure:\n%s", out)
+	}
+	if !strings.Contains(out, "[remote].auth_user") {
+		t.Errorf("bitbucket with no auth_user must warn:\n%s", out)
+	}
+
+	// The scheme reaches the same conclusion independently of the provider.
+	out, _ = runDoctorEnum(t, map[string]string{"remote.auth_scheme": "basic"})
+	if !strings.Contains(out, "[remote].auth_user") {
+		t.Errorf("auth_scheme = basic with no auth_user must warn:\n%s", out)
+	}
+
+	out, _ = runDoctorEnum(t, map[string]string{
+		"remote.provider":  "bitbucket",
+		"remote.auth_user": "wsuser",
+	})
+	if strings.Contains(out, "[remote].auth_user") {
+		t.Errorf("a configured auth_user must silence the warning:\n%s", out)
+	}
+}
+
+// Only bitbucket dispatches Basic — gitlab falls through to PRIVATE-TOKEN and
+// github ignores the scheme entirely. Today this pairing passes doctor clean
+// and 401s on every ship.
+func TestDoctorWarnsBasicOnNonBitbucketRemote(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"remote.auth_scheme": "basic",
+		"remote.auth_user":   "someone", // isolate the scheme/provider pairing
+	})
+	if err != nil {
+		t.Errorf("a no-op auth_scheme is a warning, not a failure:\n%s", out)
+	}
+	if !strings.Contains(out, "no Basic credential") {
+		t.Errorf("basic on a gitlab remote must warn:\n%s", out)
+	}
+
+	out, _ = runDoctorEnum(t, map[string]string{
+		"remote.provider":    "bitbucket",
+		"remote.auth_scheme": "basic",
+		"remote.auth_user":   "wsuser",
+	})
+	if strings.Contains(out, "no Basic credential") {
+		t.Errorf("bitbucket is exactly where basic belongs:\n%s", out)
+	}
+}
+
+// The soft class must not soften the hard one: a value no consumer can
+// dispatch at all still exits non-zero, so CI and pre-push hooks keep working.
+func TestDoctorHardFailureStillNonZero(t *testing.T) {
+	cases := map[string]map[string]string{
+		"invalid milestone_mode": {"board.milestone_mode": "bogus"},
+		"invalid auth_scheme":    {"remote.auth_scheme": "token"},
+		"invalid board provider": {"board.provider": "trello"},
+	}
+	for name, overrides := range cases {
+		t.Run(name, func(t *testing.T) {
+			out, err := runDoctorEnum(t, overrides)
+			if err == nil {
+				t.Errorf("a genuinely invalid value must exit non-zero:\n%s", out)
+			}
+			if !strings.Contains(out, "✗") {
+				t.Errorf("expected a hard-failure line:\n%s", out)
+			}
+		})
+	}
 }

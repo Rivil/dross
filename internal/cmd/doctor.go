@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/architecture"
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 // Doctor checks project-level health for the current dross repo.
@@ -34,6 +35,13 @@ func Doctor() *cobra.Command {
 			repoDir := filepath.Dir(root) // root is .dross; parent is repo cwd
 			issues := 0
 
+			// Cross-field warnings are a second, softer class: each field is
+			// individually legal but the *combination* fails at runtime. They
+			// are reported and never added to issues — doctor's exit code gates
+			// CI and pre-push hooks, and this class exists to stop doctor lying,
+			// not to start breaking repos that work today.
+			var warnings []string
+
 			// --- Foundational files ---
 			//
 			// project.toml + rules.toml + state.json must exist before
@@ -48,7 +56,7 @@ func Doctor() *cobra.Command {
 					issues++
 				}
 				Print("")
-				return finalizeDoctor(issues)
+				return finalizeDoctor(issues, len(warnings))
 			}
 			Print("  ✓ project.toml, rules.toml, state.json present")
 			Print("")
@@ -89,13 +97,15 @@ func Doctor() *cobra.Command {
 				}
 			}
 
-			// auth_scheme is the GitLab credential selector: empty defaults to
-			// private-token in code, so only a non-empty, non-recognised value
-			// is a misconfiguration worth flagging.
-			if scheme := strings.ToLower(p.Remote.AuthScheme); scheme != "" && scheme != "private-token" && scheme != "bearer" {
-				Printf("  ✗ [remote].auth_scheme = %q is invalid (expected private-token | bearer)\n", p.Remote.AuthScheme)
+			// auth_scheme selects the credential header. The empty case is the
+			// Set's own business — it carries private-token as the code default,
+			// so Has("") is true here and false for [board].provider below.
+			if !configenum.AuthSchemes.Has(p.Remote.AuthScheme) {
+				Printf("  ✗ [remote].auth_scheme = %q is invalid (expected %s)\n", p.Remote.AuthScheme, configenum.AuthSchemes.List())
 				issues++
 			}
+
+			warnings = append(warnings, remoteCombinationWarnings(p.Remote.Provider, p.Remote.AuthScheme, p.Remote.AuthUser)...)
 
 			Print("")
 
@@ -110,11 +120,12 @@ func Doctor() *cobra.Command {
 				Print("Board:")
 				boardIssues := 0
 
-				switch strings.ToLower(b.Provider) {
-				case "forgejo", "gitea", "gitlab", "youtrack":
-					// recognised
-				default:
-					Printf("  ✗ [board].provider = %q is invalid (expected forgejo | gitea | gitlab | youtrack)\n", b.Provider)
+				// The accept-set is configenum's, not a copy of it: doctor used
+				// to reject jira and github boards the CLI dispatches happily,
+				// which is the divergence this whole indirection exists to kill.
+				// An empty provider stays invalid — BoardProviders has no default.
+				if !configenum.BoardProviders.Has(b.Provider) {
+					Printf("  ✗ [board].provider = %q is invalid (expected %s)\n", b.Provider, configenum.BoardProviders.List())
 					boardIssues++
 				}
 
@@ -126,23 +137,37 @@ func Doctor() *cobra.Command {
 					boardIssues++
 				}
 
-				if !looksLikeBoardURL(b.BaseURL) {
+				// base_url is optional only where the backend has an address to
+				// fall back on (github → https://api.github.com). Optional is
+				// not unvalidated: a value that *is* set is still parsed, so a
+				// malformed github base_url fails rather than being ignored.
+				switch {
+				case b.BaseURL == "":
+					if configenum.BoardRequiresBaseURL(b.Provider) {
+						Printf("  ✗ [board].base_url is not set (the %s backend has no default API address)\n", b.Provider)
+						boardIssues++
+					}
+				case !looksLikeBoardURL(b.BaseURL):
 					Printf("  ✗ [board].base_url = %q is not a valid URL (expected http(s)://host)\n", b.BaseURL)
 					boardIssues++
 				}
 
-				// Empty milestone_mode defaults to "version" in code, so only a
-				// non-empty, unrecognised value is a misconfiguration.
-				switch b.MilestoneMode {
-				case "", "version", "agile", "epic":
-					// recognised (empty = version default)
-				default:
-					Printf("  ✗ [board].milestone_mode = %q is invalid (expected version | agile | epic)\n", b.MilestoneMode)
+				// Empty milestone_mode defaults to version in code; the Set
+				// carries that default, and Has normalises exactly as the
+				// consumers in forge do.
+				if !configenum.MilestoneModes.Has(b.MilestoneMode) {
+					Printf("  ✗ [board].milestone_mode = %q is invalid (expected %s)\n", b.MilestoneMode, configenum.MilestoneModes.List())
 					boardIssues++
 				}
 
+				warnings = append(warnings, boardCombinationWarnings(b.Provider, b.MilestoneMode, b.AuthUser)...)
+
 				if boardIssues == 0 {
-					Printf("  ✓ [board] is well-formed (%s @ %s)\n", b.Provider, b.BaseURL)
+					if b.BaseURL == "" {
+						Printf("  ✓ [board] is well-formed (%s)\n", b.Provider)
+					} else {
+						Printf("  ✓ [board] is well-formed (%s @ %s)\n", b.Provider, b.BaseURL)
+					}
 				}
 				issues += boardIssues
 				Print("")
@@ -242,9 +267,79 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues)
+			// --- Cross-field combinations ---
+			//
+			// Collected above, reported here as one advisory block. Each value
+			// involved is individually valid, so none of these touch `issues`;
+			// what they catch is a pairing that only fails once a command runs.
+			if len(warnings) > 0 {
+				Print("Combinations:")
+				for _, w := range warnings {
+					Printf("  ⚠ %s\n", w)
+				}
+				Print("    Advisory only — these never change doctor's exit code.")
+				Print("")
+			}
+
+			return finalizeDoctor(issues, len(warnings))
 		},
 	}
+}
+
+// remoteCombinationWarnings reports [remote] pairings that are individually
+// valid but fail once ship runs. Empty and "none" providers stay silent: they
+// mean "this repo has no remote", not a misconfigured one.
+func remoteCombinationWarnings(provider, authScheme, authUser string) []string {
+	var out []string
+	prov := configenum.Normalize(provider)
+	scheme := configenum.Normalize(authScheme)
+	if prov == "" || prov == "none" {
+		return nil
+	}
+
+	// A provider the tooling happily writes but ship cannot dispatch: the PR
+	// step is the first thing to say so, at the end of a phase.
+	if !configenum.ShipProviders.Has(prov) {
+		out = append(out, fmt.Sprintf("[remote].provider = %q — ship cannot open a PR for it (expected %s); /dross-ship will fail at the PR step", provider, configenum.ShipProviders.List()))
+	}
+
+	// Basic auth is user:token on the wire, so a missing user sends
+	// base64(:token) and 401s on every call — a guaranteed ship failure that
+	// nothing else surfaces until the token looks to blame.
+	if (prov == "bitbucket" || scheme == "basic") && strings.TrimSpace(authUser) == "" {
+		out = append(out, "[remote].auth_user is not set but the credential is HTTP Basic user:token — every ship call will 401")
+	}
+
+	// Only bitbucket dispatches Basic: gitlab falls through to PRIVATE-TOKEN
+	// and github ignores the scheme entirely, so setting it elsewhere is a
+	// silent no-op that reads as configured.
+	if scheme == "basic" && prov != "bitbucket" {
+		out = append(out, fmt.Sprintf("[remote].auth_scheme = basic but the %s backend sends no Basic credential — the setting has no effect", prov))
+	}
+	return out
+}
+
+// boardCombinationWarnings reports [board] pairings that pass every per-field
+// check and still error at the first board op.
+func boardCombinationWarnings(provider, milestoneMode, authUser string) []string {
+	var out []string
+	prov := configenum.Normalize(provider)
+
+	// A mode outside the provider's own accept-set. Skipped when the mode is
+	// globally invalid (already a hard failure above) or when the provider maps
+	// milestones by some other means and never reads the field at all.
+	if configenum.MilestoneModes.Has(milestoneMode) {
+		if modes := configenum.MilestoneModesFor(prov); modes != nil && !modes.Has(milestoneMode) {
+			out = append(out, fmt.Sprintf("[board].milestone_mode = %q is not supported by the %s backend (expected %s) — milestone sync will error", milestoneMode, prov, modes.List()))
+		}
+	}
+
+	// Jira's REST credential is Basic email:token; auth_env alone authenticates
+	// nothing.
+	if prov == "jira" && strings.TrimSpace(authUser) == "" {
+		out = append(out, "[board].auth_user is not set but Jira authenticates as Basic email:token — board ops will 401")
+	}
+	return out
 }
 
 // architectureLinkWarnings resolves every symbol link in ARCHITECTURE.md against
@@ -300,13 +395,16 @@ func looksLikeBoardURL(s string) bool {
 // appropriate error (or nil) for the issue count. Shared between the
 // foundational-files short-circuit path and the full-check path so the
 // telemetry shape stays consistent.
-func finalizeDoctor(issues int) error {
+//
+// warnings is reported alongside issues and deliberately never folded into it:
+// the exit code answers "is anything invalid", not "is anything suspicious".
+func finalizeDoctor(issues, warnings int) error {
 	result := "passed"
 	if issues > 0 {
 		result = "issues_found"
 	}
 	RecordOutcomeEvent("doctor",
-		map[string]int{"issues": issues},
+		map[string]int{"issues": issues, "warnings": warnings},
 		nil,
 		map[string]string{"result": result},
 	)

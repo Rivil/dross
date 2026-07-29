@@ -1,0 +1,180 @@
+package ship
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+)
+
+// Bitbucket Cloud transport.
+//
+// Bitbucket is the odd one out on both axes this file has to bridge. Its
+// credential is HTTP Basic user:token — neither Forgejo's "Authorization: token"
+// nor GitLab's PRIVATE-TOKEN — which is why [remote].auth_user exists and why
+// every entry point here checks it before opening a socket. And its PR payload
+// nests the branch names (source.branch.name) where every other backend keeps
+// them flat, so a GitHub-shaped body silently creates the wrong PR.
+
+// bbBasicAuth sets Bitbucket's credential header and nothing else. Exactly one
+// auth header is set: a stray PRIVATE-TOKEN or "Authorization: token" alongside
+// this one is what a copy-paste from the GitLab/Forgejo paths would produce.
+func bbBasicAuth(req *http.Request, user, token string) {
+	cred := base64.StdEncoding.EncodeToString([]byte(user + ":" + token))
+	req.Header.Set("Authorization", "Basic "+cred)
+}
+
+// bbRepoRef splits a canonical https://bitbucket.org/workspace/slug URL into its
+// workspace and repo-slug path segments, which every Bitbucket endpoint is keyed
+// by. Bitbucket calls them workspace/repo_slug; they occupy the same two URL
+// positions as owner/repo elsewhere.
+func bbRepoRef(repoURL string) (workspace, slug string, err error) {
+	workspace, slug, err = splitOwnerRepo(repoURL)
+	if err != nil {
+		return "", "", fmt.Errorf("bitbucket: %w", err)
+	}
+	return workspace, slug, nil
+}
+
+// bbRequest performs a Bitbucket REST request with Basic auth, returning the raw
+// body and status. body is JSON-encoded when non-nil. Endpoints are relative to
+// api_base, which project.DetectRemote autodetects as
+// https://api.bitbucket.org/2.0 for a bitbucket.org remote.
+func bbRequest(method, endpoint, user, token string, body any) ([]byte, int, error) {
+	var buf io.Reader
+	if body != nil {
+		b := new(bytes.Buffer)
+		if err := json.NewEncoder(b).Encode(body); err != nil {
+			return nil, 0, err
+		}
+		buf = b
+	}
+	req, err := http.NewRequest(method, endpoint, buf)
+	if err != nil {
+		return nil, 0, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.Header.Set("Accept", "application/json")
+	bbBasicAuth(req, user, token)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	return respBody, resp.StatusCode, nil
+}
+
+// bbCredentials resolves the Basic-auth pair for a Bitbucket call, erroring
+// before any request is made when a piece is missing. auth_user is checked here
+// rather than at the transport: sending Basic base64(:token) would 401 with a
+// message that names nothing the user can act on.
+func bbCredentials(apiBase, authEnv, authUser string) (user, token string, err error) {
+	if apiBase == "" {
+		return "", "", errors.New("bitbucket backend needs APIBase (set [remote].api_base)")
+	}
+	if authEnv == "" {
+		return "", "", errors.New("bitbucket backend needs AuthEnv (set [remote].auth_env)")
+	}
+	if strings.TrimSpace(authUser) == "" {
+		return "", "", errors.New("bitbucket backend needs AuthUser (set [remote].auth_user) — its credential is HTTP Basic user:token")
+	}
+	token = os.Getenv(authEnv)
+	if token == "" {
+		return "", "", fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", authEnv, authEnv)
+	}
+	return strings.TrimSpace(authUser), token, nil
+}
+
+// bbReviewerRefs maps configured reviewer strings to Bitbucket user objects.
+// Bitbucket dropped username-based references, so a reviewer is identified by
+// its UUID (the "{...}" form) or its account id; the shape is chosen per entry
+// so a config holding either kind works.
+func bbReviewerRefs(reviewers []string) []map[string]any {
+	refs := make([]map[string]any, 0, len(reviewers))
+	for _, r := range reviewers {
+		r = strings.TrimSpace(r)
+		if r == "" {
+			continue
+		}
+		if strings.HasPrefix(r, "{") && strings.HasSuffix(r, "}") {
+			refs = append(refs, map[string]any{"uuid": r})
+			continue
+		}
+		refs = append(refs, map[string]any{"account_id": r})
+	}
+	return refs
+}
+
+// openBitbucketPR creates a pull request on Bitbucket Cloud.
+//
+// Unlike Forgejo and GitLab, draft is a real boolean on this API — there is no
+// "Draft:" title-prefix convention to imitate here.
+func openBitbucketPR(opts OpenOpts) (*OpenResult, error) {
+	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser)
+	if err != nil {
+		return nil, err
+	}
+	workspace, slug, err := bbRepoRef(opts.URL)
+	if err != nil {
+		return nil, err
+	}
+
+	body := map[string]any{
+		"title":       opts.Title,
+		"description": opts.Body,
+		"source":      map[string]any{"branch": map[string]any{"name": opts.HeadBranch}},
+		"destination": map[string]any{"branch": map[string]any{"name": opts.BaseBranch}},
+	}
+	if opts.Draft {
+		body["draft"] = true
+	}
+
+	base := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf("/repositories/%s/%s/pullrequests", workspace, slug)
+	respBody, status, err := bbRequest("POST", base, user, token, body)
+	if err != nil {
+		return nil, fmt.Errorf("create PR: %w", err)
+	}
+	if status >= 300 {
+		return nil, fmt.Errorf("create PR: HTTP %d: %s", status, string(respBody))
+	}
+	var pr struct {
+		ID    int `json:"id"`
+		Links struct {
+			HTML struct {
+				Href string `json:"href"`
+			} `json:"html"`
+		} `json:"links"`
+	}
+	_ = json.Unmarshal(respBody, &pr)
+	if pr.ID == 0 {
+		return nil, fmt.Errorf("bitbucket response missing id: %s", string(respBody))
+	}
+	result := &OpenResult{Number: pr.ID, URL: pr.Links.HTML.Href}
+
+	if refs := bbReviewerRefs(opts.Reviewers); len(refs) > 0 {
+		// Reviewers go on a follow-up update, so a rejected reviewer never
+		// costs the caller an already-open PR — return the result *and* the
+		// error, as the Forgejo and GitLab backends do.
+		updEndpoint := base + fmt.Sprintf("/%d", pr.ID)
+		rb, st, err := bbRequest("PUT", updEndpoint, user, token, map[string]any{
+			// Bitbucket's PR update wants the title alongside any mutation.
+			"title":     opts.Title,
+			"reviewers": refs,
+		})
+		if err != nil || st >= 300 {
+			return result, fmt.Errorf("PR opened (#%d) but reviewer assignment failed (HTTP %d): %v %s", pr.ID, st, err, string(rb))
+		}
+	}
+	return result, nil
+}

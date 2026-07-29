@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
@@ -111,7 +112,7 @@ func boardConfig(b project.Board) forge.Config {
 		BoardID:  b.GitHubProject,
 		URL:      "https://board.local/" + b.Project,
 	}
-	if strings.ToLower(b.Provider) == "gitlab" {
+	if configenum.Normalize(b.Provider) == "gitlab" {
 		cfg.ProjectID = b.Project
 	}
 	return cfg
@@ -142,14 +143,17 @@ func issueEnable() *cobra.Command {
 				return err
 			}
 			Print("board sync enabled")
-			switch strings.ToLower(p.Board.Provider) {
-			case "forgejo", "gitea", "gitlab", "youtrack", "jira", "github":
-			case "":
-				Print("note: [board].provider is unset — set it to forgejo/gitea/gitlab/youtrack/jira/github")
+			switch {
+			case configenum.BoardProviders.Has(p.Board.Provider):
+				// recognised
+			case configenum.Normalize(p.Board.Provider) == "":
+				Printf("note: [board].provider is unset — set it to %s\n", configenum.BoardProviders.List())
 			default:
-				Printf("note: provider %q has no board backend (forgejo/gitea/gitlab/youtrack/jira/github)\n", p.Board.Provider)
+				Printf("note: provider %q has no board backend (%s)\n", p.Board.Provider, configenum.BoardProviders.List())
 			}
-			if p.Board.BaseURL == "" {
+			// Only nag about base_url where the backend has no default address
+			// — a github board resolves to api.github.com on its own.
+			if p.Board.BaseURL == "" && configenum.BoardRequiresBaseURL(p.Board.Provider) {
 				Print("note: [board].base_url is unset — needed for the board API")
 			}
 			if p.Board.AuthEnv == "" {
@@ -304,7 +308,10 @@ func syncBacklog(ctx *boardCtx, version string) error {
 	// sets the item's Fix versions to the bundle value; epic mode links it as a
 	// subtask of the Epic; agile boards are query/project-based, so an item
 	// created in the project already appears on the board (no per-item call).
-	mode := strings.ToLower(ctx.proj.Board.MilestoneMode)
+	// Normalize, not a bare ToLower: doctor accepts a padded " version" now, and
+	// an untrimmed read here would silently skip the fixVersion branch for a
+	// value the validator just blessed.
+	mode := configenum.Normalize(ctx.proj.Board.MilestoneMode)
 	fixVersion := ""
 	if mode == "" || mode == "version" {
 		fixVersion = entityID

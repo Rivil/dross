@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 // YouTrackClient talks to a YouTrack instance's REST API. Unlike the forge
@@ -182,7 +184,7 @@ func (c *YouTrackClient) EnsureMilestone(title, description string) (string, err
 //     warns and skips (no error, "" id) rather than failing the sync.
 //   - epic: a create-or-reuse Epic issue. Returns its idReadable.
 func (c *YouTrackClient) EnsureMilestoneEntity(mode, name, description string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
+	switch configenum.Normalize(mode) {
 	case "", "version":
 		return c.ensureVersion(name)
 	case "agile":

@@ -64,6 +64,45 @@ func TestBuildCommentOptsMapsGitLabFields(t *testing.T) {
 	}
 }
 
+// bitbucketRemote is the [remote] shape whose credential is HTTP Basic
+// user:token — the only one where a dropped auth_user is fatal.
+func bitbucketRemote() *project.Project {
+	return &project.Project{Remote: project.Remote{
+		Provider:   "bitbucket",
+		URL:        "https://bitbucket.org/acme/widget",
+		APIBase:    "https://api.bitbucket.org/2.0",
+		AuthEnv:    "BB_TOKEN",
+		AuthUser:   "wsuser",
+		AuthScheme: "basic",
+	}}
+}
+
+// TestBuildOpenOptsCarriesAuthUser pins the join point between the schema field
+// (project.Remote.AuthUser) and the backend that needs it. This is the one gap
+// no ship-package test can see: those construct OpenOpts directly, so every one
+// of them passes while a real Bitbucket ship 401s on base64(:token).
+func TestBuildOpenOptsCarriesAuthUser(t *testing.T) {
+	got := buildOpenOpts(bitbucketRemote())
+	if got.AuthUser != "wsuser" {
+		t.Errorf("auth_user not copied onto OpenOpts: %q", got.AuthUser)
+	}
+	// The mergeGate path builds OpenOpts too, so the same field is what lets
+	// PRMerged answer for a Bitbucket PR rather than erroring on credentials.
+	if got.Provider != "bitbucket" || got.AuthEnv != "BB_TOKEN" || got.AuthScheme != "basic" {
+		t.Errorf("bitbucket remote fields not copied: %+v", got)
+	}
+}
+
+func TestBuildCommentOptsCarriesAuthUser(t *testing.T) {
+	got := buildCommentOpts(bitbucketRemote())
+	if got.AuthUser != "wsuser" {
+		t.Errorf("auth_user not copied onto CommentOpts: %q", got.AuthUser)
+	}
+	if got.Provider != "bitbucket" || got.AuthEnv != "BB_TOKEN" || got.AuthScheme != "basic" {
+		t.Errorf("bitbucket remote fields not copied: %+v", got)
+	}
+}
+
 // shipFixture builds a fully-initialised dross repo with a phase that
 // has spec, verify (pass), and changes recorded — ready to ship.
 // Returns the repo dir.

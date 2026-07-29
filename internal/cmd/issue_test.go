@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/forge"
 )
 
@@ -1242,5 +1243,131 @@ func TestIssuePullStillMarks(t *testing.T) {
 	})
 	if !strings.Contains(mustRead(t, boardJSON), "last_pull") {
 		t.Errorf("pull --mark must stamp last_pull after the refactor")
+	}
+}
+
+// --- configenum-backed board recognition (phase validator-truth) ---
+
+// enableOutput sets [board].provider to p (plus any extra fields) and returns
+// what `dross issue enable` printed.
+func enableOutput(t *testing.T, provider string, extra map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if provider != "" {
+		mustRunSet(t, "board.provider", provider)
+	}
+	for k, v := range extra {
+		mustRunSet(t, k, v)
+	}
+	var out string
+	if err := runCmdCapturing(t, &out, Issue(), "enable"); err != nil {
+		t.Fatalf("issue enable: %v", err)
+	}
+	return out
+}
+
+// issue enable and doctor must agree on the accept-set: a provider one blesses
+// and the other calls backend-less is exactly the divergence this phase kills.
+func TestIssueEnableAcceptsEveryBoardProvider(t *testing.T) {
+	for _, provider := range configenum.BoardProviders.Values() {
+		t.Run(provider, func(t *testing.T) {
+			out := enableOutput(t, provider, nil)
+			if strings.Contains(out, "has no board backend") {
+				t.Errorf("issue enable rejects a dispatchable provider %q:\n%s", provider, out)
+			}
+		})
+	}
+}
+
+func TestIssueEnableNoteListsConfigenumSet(t *testing.T) {
+	// Unrecognised provider → the note names the real set.
+	out := enableOutput(t, "sourcehut", nil)
+	if !strings.Contains(out, configenum.BoardProviders.List()) {
+		t.Errorf("note must be derived from BoardProviders, got:\n%s", out)
+	}
+	// Unset provider → same set, different sentence.
+	out = enableOutput(t, "", nil)
+	if !strings.Contains(out, "provider] is unset") && !strings.Contains(out, "provider is unset") {
+		t.Errorf("expected an unset-provider note:\n%s", out)
+	}
+	if !strings.Contains(out, configenum.BoardProviders.List()) {
+		t.Errorf("unset-provider note must list the set, got:\n%s", out)
+	}
+}
+
+// bitbucket is a [remote] provider with no board backend. forge_test.go cannot
+// catch a mistaken addition: NewBoard has no default arm and falls through to
+// New, which errors identically either way.
+func TestIssueEnableRejectsBitbucket(t *testing.T) {
+	out := enableOutput(t, "bitbucket", nil)
+	if !strings.Contains(out, "has no board backend") {
+		t.Errorf("bitbucket has no board backend and must be flagged:\n%s", out)
+	}
+	if configenum.BoardProviders.Has("bitbucket") {
+		t.Error("bitbucket must not be a member of BoardProviders")
+	}
+}
+
+func TestIssueEnableSkipsBaseURLNoteForGitHub(t *testing.T) {
+	out := enableOutput(t, "github", nil)
+	if strings.Contains(out, "base_url is unset") {
+		t.Errorf("a github board defaults to api.github.com and must not be nagged:\n%s", out)
+	}
+	// The relaxation must not leak to backends with no default address.
+	out = enableOutput(t, "youtrack", nil)
+	if !strings.Contains(out, "base_url is unset") {
+		t.Errorf("a youtrack board with no base_url must still be nagged:\n%s", out)
+	}
+}
+
+// doctor now accepts a padded milestone_mode (t-6). If this read stays a bare
+// ToLower, " version" skips the fixVersion branch and backlog items are created
+// unattached — a value the validator blessed, silently doing nothing.
+func TestMilestoneSyncTrimsMilestoneMode(t *testing.T) {
+	var createBodies []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/customFields") && r.Method == "GET":
+			_, _ = io.WriteString(w, `[{"field":{"name":"Fix versions"},"bundle":{"id":"B1","$type":"VersionBundle","values":[]}}]`)
+		case strings.Contains(r.URL.Path, "/bundles/version/B1/values") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"name":"v0.1"}`)
+		case r.URL.Path == "/api/issues" && r.Method == "POST":
+			raw, _ := io.ReadAll(r.Body)
+			var b map[string]any
+			_ = json.Unmarshal(raw, &b)
+			createBodies = append(createBodies, b)
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 300+len(createBodies)))
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustRunSet(t, "board.milestone_mode", " Version") // padded and capitalised
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v0.1.toml"), `
+phases = ["future-x"]
+
+[milestone]
+version = "v0.1"
+title = "First cut"
+
+[scope]
+success_criteria = ["ships"]
+`)
+	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+		t.Fatalf("backlog-sync: %v", err)
+	}
+	if len(createBodies) == 0 {
+		t.Fatal("no backlog item was created")
+	}
+	for i, b := range createBodies {
+		if !hasFixVersion(b, "v0.1") {
+			t.Errorf("item %d not attached to the milestone entity — a padded milestone_mode skipped the version branch: %v", i, b)
+		}
 	}
 }

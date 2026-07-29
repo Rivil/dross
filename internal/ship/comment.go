@@ -7,16 +7,19 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 // CommentOpts is the input shape for posting a comment to an open PR.
 // Mirrors OpenOpts where it overlaps so callers configure them
 // identically.
 type CommentOpts struct {
-	Provider   string // "github" | "forgejo" | "gitea" | "gitlab"
+	Provider   string // one of configenum.ShipProviders
 	URL        string // canonical https URL of the repo
-	APIBase    string // forgejo/gitea/gitlab: REST API base; ignored for github
-	AuthEnv    string // env var holding the token; only forgejo/gitea/gitlab
+	APIBase    string // forgejo/gitea/gitlab/bitbucket: REST API base; ignored for github
+	AuthEnv    string // env var holding the token; only forgejo/gitea/gitlab/bitbucket
+	AuthUser   string // bitbucket: account user for HTTP Basic auth (user:token)
 	AuthScheme string // gitlab: "private-token" (default) | "bearer"
 	ProjectID  string // gitlab: numeric project-id override; empty = derive from URL
 	PRNumber   int    // PR / MR / issue number to comment on (gitlab: MR iid)
@@ -33,15 +36,17 @@ func PostComment(opts CommentOpts) error {
 	if opts.PRNumber <= 0 {
 		return errors.New("PRNumber must be set")
 	}
-	switch strings.ToLower(opts.Provider) {
+	switch configenum.Normalize(opts.Provider) {
 	case "github":
 		return postGitHubComment(opts)
 	case "forgejo", "gitea":
 		return postForgejoComment(opts)
 	case "gitlab":
 		return postGitLabComment(opts)
+	case "bitbucket":
+		return postBitbucketComment(opts)
 	default:
-		return fmt.Errorf("unsupported provider %q (expected github | forgejo | gitea | gitlab)", opts.Provider)
+		return fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())
 	}
 }
 
@@ -113,6 +118,35 @@ func postGitLabComment(opts CommentOpts) error {
 	}
 	if status >= 300 {
 		return fmt.Errorf("post note: HTTP %d: %s", status, string(rb))
+	}
+	return nil
+}
+
+// postBitbucketComment posts a PR comment on Bitbucket Cloud.
+//
+// Two shapes differ from every other backend here: the body nests under
+// content.raw rather than being a flat "body", and PR comments live under the
+// pullrequests endpoint — Bitbucket has no shared issue/PR number space to
+// reuse the way Forgejo does.
+func postBitbucketComment(opts CommentOpts) error {
+	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser)
+	if err != nil {
+		return err
+	}
+	workspace, slug, err := bbRepoRef(opts.URL)
+	if err != nil {
+		return err
+	}
+	endpoint := strings.TrimRight(opts.APIBase, "/") +
+		fmt.Sprintf("/repositories/%s/%s/pullrequests/%d/comments", workspace, slug, opts.PRNumber)
+	rb, status, err := bbRequest("POST", endpoint, user, token, map[string]any{
+		"content": map[string]any{"raw": opts.Body},
+	})
+	if err != nil {
+		return fmt.Errorf("post comment: %w", err)
+	}
+	if status >= 300 {
+		return fmt.Errorf("post comment: HTTP %d: %s", status, string(rb))
 	}
 	return nil
 }
