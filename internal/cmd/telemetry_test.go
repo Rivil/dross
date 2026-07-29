@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -263,6 +264,86 @@ func TestTelemetryRepoHashOnIncompleteRoot(t *testing.T) {
 			}
 			if evs[0].RepoHash == "" {
 				t.Error("an incomplete root should still attribute its events, got an empty RepoHash")
+			}
+		})
+	}
+}
+
+// TestClassifyRealIncompleteRootError (c-3) pins the incomplete_root bucket
+// against real error *values*, which its counterpart in internal/telemetry
+// cannot: that package is imported by cmd, so it can only hand-copy the message
+// text. A hand-copied literal keeps passing after root.go's prefix is reworded,
+// while real incomplete-root failures quietly fall back into the opaque `other`
+// bucket — the exact regression t-8 existed to prevent.
+//
+// The FindRoot rows are the load-bearing ones: they classify whatever the
+// production path actually returns, not what this test thinks it returns.
+// FindRoot is the entry point that mints the error — LocateRoot deliberately
+// reports missing files without erroring, which is doctor's seam, not this one.
+func TestClassifyRealIncompleteRootError(t *testing.T) {
+	// incompleteRoot returns FindRoot's error inside a `.dross/` that exists
+	// but is missing state.json.
+	incompleteRoot := func(t *testing.T) error {
+		t.Helper()
+		dir := realTempDir(t)
+		mkRoot(t, dir, "project.toml")
+		chdir(t, dir)
+		_, err := FindRoot()
+		if err == nil {
+			t.Fatal("FindRoot should reject an incomplete root")
+		}
+		return err
+	}
+
+	cases := []struct {
+		name string
+		err  func(*testing.T) error
+		want string
+	}{
+		{
+			name: "constructed value",
+			err: func(*testing.T) error {
+				return &IncompleteRootError{
+					Root:    "/repo/.dross",
+					Missing: []string{".dross/state.json"},
+				}
+			},
+			want: "incomplete_root",
+		},
+		{
+			name: "value FindRoot really returns",
+			err:  incompleteRoot,
+			want: "incomplete_root",
+		},
+		{
+			// Telemetry never sees a bare sentinel — commands wrap first.
+			name: "wrapped by a caller",
+			err: func(t *testing.T) error {
+				return fmt.Errorf("state show: %w", incompleteRoot(t))
+			},
+			want: "incomplete_root",
+		},
+		{
+			// The absent-root case stays its own tier: different friction,
+			// different fix (`dross init`, not `dross onboard`).
+			name: "no .dross at all",
+			err: func(t *testing.T) error {
+				chdir(t, realTempDir(t))
+				_, err := FindRoot()
+				if err == nil {
+					t.Fatal("FindRoot should reject a bare directory")
+				}
+				return err
+			},
+			want: "no_root",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.err(t)
+			if got := telemetry.ClassifyError(err); got != tc.want {
+				t.Errorf("ClassifyError(%v) = %q, want %q", err, got, tc.want)
 			}
 		})
 	}
