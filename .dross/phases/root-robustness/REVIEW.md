@@ -8,135 +8,107 @@ Plan: 9 tasks across 3 waves
 
 ## FLAG
 
-- [coverage] c-2 names four commands; `dross reentry` is the only one with no assertion that it
-  exits 0 silently on an incomplete root. t-3 pins `status` and `state touch` (nil error + empty
-  stdout), t-4 pins `pause --auto` (nil + handoff.md absent). reentry gets two rows across the
-  plan and neither is the silent case: t-4 row 5 is the *loud* bad-TOML case, and t-9's no-write
-  snapshot proves reentry writes nothing but never checks its exit code or stdout. reentry.go:39
-  already does `errors.Is(err, ErrNoRoot) → nil`, so it works for free after t-1 — which is
-  exactly why nothing would catch a regression that makes it loud.
-  Suggestion: add a row to t-4 — incomplete `.dross/`, `runCmd(Reentry())` returns nil and
-  captureStdout is `""`.
+- [antipatterns] t-6 leaves `--force` on an *incomplete* root undefined, and an existing test
+  already pins the opposite of what the description implies. `TestOnboardCover_ForceRemovesAndRecreates`
+  (internal/cmd/onboard_test.go:38) builds exactly the incomplete fixture t-6 is about — a bare
+  `.dross/` containing only a sentinel file — runs `onboard --force`, and asserts the sentinel is
+  **wiped**. t-6's description says an incomplete root is "adopt[ed] in place, preserving files
+  already present". Whether the new incomplete branch runs before or after the `--force` RemoveAll
+  decides whether that test stays green, and nothing in the plan says which. t-6's contract covers
+  `--force` only against a *complete* root ("still refuses ... unless --force").
+  Suggestion: state in t-6's description that `--force` keeps its wipe semantics on both complete
+  and incomplete roots (the branch order), and add one contract row pinning it — otherwise the
+  executor discovers the collision as a mystery red in a pre-existing test.
 
-- [test-contract] t-1's final row asserts the fixture migration is "proven by the package
-  compiling green". It is not. `chdirDross` (findings_test.go:15) and
-  TestTelemetryCover_RepoHashInRepo (telemetry_test.go:108) build their `.dross/` with
-  `os.MkdirAll` inside a `t.TempDir()` at runtime; adding project.toml and state.json there
-  cannot change whether the package compiles. The migration is gated by those tests *passing*
-  under the new FindRoot. (Carried over unchanged from the previous review.)
-  Suggestion: restate as the runtime gate — the four chdirDross call sites and
-  TestTelemetryCover_RepoHashInRepo pass against the new FindRoot.
-
-- [test-contract] t-5 row 6 ("the missing-file list doctor prints for an incomplete root equals
-  the Missing slice LocateRoot returns for the same directory") is unsatisfiable under the
-  obvious reading and in tension with rows 1 and 7. `checkFoundationalFiles` (doctor.go:423) is a
-  trio — project.toml, rules.toml, state.json — while root completeness is a pair. On row 1's
-  fixture (`.dross/` with project.toml only) doctor prints `.dross/state.json` **and**
-  `.dross/rules.toml`; LocateRoot's Missing is `[".dross/state.json"]`. Equality holds only if
-  doctor emits a *separate* incomplete-root block whose list is distinct from the trio block —
-  which row 3's "distinct verdict" hints at but the description never states.
-  Suggestion: say in t-5's description whether the incomplete-root diagnosis is its own output
-  block, and scope row 6 to that block's list rather than to doctor's whole missing-file output.
-
-- [test-contract] Two rows demand an error that names state.json on a **decode** failure, but the
-  code path can't produce one and no listed file can fix it centrally. `state.Load`
-  (internal/state/state.go:46) returns `fmt.Errorf("unmarshal state: %w", err)` — no path. Its
-  read-failure sibling at :42 does include the path, so t-3 row 4 (`state show`, state.json
-  absent) is fine, but t-3 row 5 (`status` against `{{{`) and t-4 row 2 (`pause --auto`,
-  truncated state.json) both require the filename on the unmarshal path. `internal/state/state.go`
-  appears in no task's `files`.
-  Suggestion: either add internal/state/state.go to t-3 and change :46 to name the path, or say
-  explicitly that status.go / pause.go wrap the load error with the path themselves.
-
-- [coverage] The locked `completeness_check` decision says a corrupt file is loud "everywhere —
-  including in the hook targets", and c-2 names four. Corrupt-file loudness is pinned for
-  `status` (t-3 row 5), `pause --auto` (t-4 rows 2-3) and `reentry` (t-4 row 5) but still not for
-  `state touch`. `stateTouch` (state.go:76) goes through the same `loadState`; an implementation
-  that swallows every `loadState` error in the handler instead of only `ErrNoRoot` passes every
-  row in the plan. (Carried over from the previous review — not addressed.)
-  Suggestion: add a `state touch` row against a corrupt state.json to t-3.
-
-- [antipatterns] `verify.go:311` has the identical `if root, err := FindRoot(); err == nil`
-  RepoHash swallow that t-8 fixes at telemetry.go:32 and :91, but verify.go is not in t-8's
-  files. After t-1, `dross verify` outcome events in an incomplete repo lose repo attribution
-  while CLI events keep it. Worse, t-9's source scan pins the LocateRoot caller set as *exactly*
-  `{root.go, doctor.go, ship_recover.go, telemetry.go}` — so the consistent fix is actively
-  forbidden by the regression gate.
-  Suggestion: either add verify.go to t-8 and to t-9's expected set, or state in t-8 why verify's
-  attribution is deliberately left behind.
-
-- [antipatterns] t-9's description says "Re-derive both allowlists from the tree as it stands
-  after wave 2 — do not copy them from the panel drafts", and then the test contract hardcodes
-  both sets verbatim. The executor is told to derive and simultaneously given the answer; if the
-  derived set differs, it is not clear which wins.
-  Suggestion: keep the hardcoded sets as the expectation (they are the point of a regression
-  gate) and drop the re-derive instruction, or keep the instruction and mark the sets as
-  "expected, verify before pinning".
-
-- [test-contract] t-2's byte-offset row is close to vacuous. `assets/prompts/pause.md` already
-  has a `## 0. Pre-flight` at line 15 and the handoff write at line 70 (`## 3. Write + ignore`),
-  so *any* placement in §0-§2 satisfies "gate offset < write offset" — including one placed after
-  §1's drafting work. The row that would bite is ordering against the first side effect, which in
-  §3 is the `.gitignore` append, and against §0 step 3's `dross status` probe.
-  Suggestion: pin the gate's offset below the `## 1. Draft the handoff` heading, not below the
-  §3 write line.
-
-- [granularity] t-1 touches 5 files, tripping the split threshold. Honest read: it should not be
-  split. root_test.go, findings_test.go and telemetry_test.go are fixture fallout that must land
-  in the same commit or the package goes red, and ship_recover.go is a one-call-site swap.
-  Recorded because the threshold was crossed, not because a split is advisable.
-  Suggestion: leave as-is.
+- [test-contract] t-2's probe, `dross state show`, cannot distinguish "no root" from "corrupt
+  state.json", and the plan gives it no row for the corrupt case. After t-3, `state show` is
+  non-zero for three different reasons: absent `.dross/`, incomplete `.dross/`, and a `.dross/`
+  that is complete but holds unparseable JSON. The first two are what locked `pause_refusal`
+  wants. The third makes `/dross-pause` print "not a dross repo — run `dross onboard`", which is a
+  misdiagnosis of a broken state (locked `completeness_check`: a corrupt file "is a real error,
+  reported loudly everywhere") *and* a dead-end pointer, since after t-6 `onboard` still refuses a
+  complete root. The CLI stays loud; it is the prompt's rendering that flattens three signals into
+  one wrong sentence.
+  Suggestion: either have the refusal surface the probe's own error text rather than a fixed
+  not-a-dross-repo line, or add a t-2 needle stating that the gate distinguishes a failed probe
+  caused by a corrupt file from an uninitialised root. One row, not a redesign.
 
 ## NOTE
 
-- [wave-order] t-2's *test* contract is prompt-text-only and genuinely wave-1-safe, but its
-  runtime behaviour depends on t-1. On a `.dross/` holding state.json but no project.toml, today's
-  `dross state show` **succeeds** (it loads only state.json), so the probe would wave that repo
-  through the gate until t-1 makes FindRoot error. Nothing in the plan catches this because no
-  test executes the probe. Same-phase delivery makes it a non-issue; recording it so the gate's
-  reliance on t-1 is explicit rather than accidental.
+- [coverage] All five criteria are covered: c-1 (t-1, t-9), c-2 (t-3, t-4, t-9), c-3 (t-1, t-6,
+  t-7, t-8, t-9), c-4 (t-2, t-9), c-5 (t-5).
 
-- [antipatterns] Every line reference re-checks out against the working tree: root.go:16/18,
-  onboard.go:37, rule.go:224, doctor.go:31 and :55, pause.go:47, telemetry.go:32 and :91,
-  findings_test.go:15, telemetry_test.go:108, status_test.go:18, resume_prompt_test.go's
-  `resumePromptContent` helper. The two files that don't exist —
-  `internal/cmd/pause_prompt_test.go` (t-2) and `internal/cmd/incompleteroot_test.go` (t-9) — are
-  created by the tasks that list them. The plan was written against the code, not from memory.
-
-- [locked-decisions] No conflicts. walk_stop is honoured and pinned twice (t-1 row 3's
-  parent-complete/child-incomplete fixture, t-9 row 5's onboard-not-in-LocateRoot-callers row);
-  completeness_check is pinned by the `{{{` row requiring FindRoot to *succeed*; pause_refusal by
-  t-2's both-cases-as-separate-needles row plus "never runs onboard itself".
+- [locked-decisions] No conflicts. `walk_stop` is pinned three ways (t-1 row 3's
+  parent-complete/child-incomplete fixture, t-6's explicit "onboard must NOT call LocateRoot",
+  t-9 row 5's caller-set row). `completeness_check` is pinned by the `{{{` row requiring FindRoot
+  to *succeed*, plus the corrupt-loud rows in t-3, t-4 and t-8. `pause_refusal` is pinned by t-2's
+  both-cases-as-separate-needles row and "never instructs running `dross init` or `dross onboard`
+  itself".
 
 - [forbidden-actions] No violation. The only project rule is r-01 (`make install` after prompt/Go
-  edits), which t-2 cites explicitly. `~/.claude/dross/rules.toml` does not exist. runtime.mode is
-  `native` with `go test -count=1 ./...`; nothing in the plan reaches for another runner.
+  edits), cited explicitly in t-2. `~/.claude/dross/rules.toml` does not exist. Nothing reaches
+  outside `go test -count=1 ./...`.
 
-- [prior-review] Three of the previous review's flags are resolved: the onboard/LocateRoot
-  collision (t-1 now exposes `MissingRootFiles(dir)`, t-6 forbids LocateRoot by name, t-9 row 5
-  pins it), t-9's missing `depends_on` edges to t-5/t-8, and RepairHint's undefined text (t-1 now
-  fixes the literal string and t-5 row 5 requires the ship-recover sentence to survive alongside
-  it). Three were not addressed and are re-raised above: the "compiling green" row, t-5's
-  equality row, and the missing `state touch` corrupt-file row.
+- [antipatterns] Blast radius independently re-derived and the file lists hold. FindRoot has ~29
+  non-test callers, but only three swallow it silently via `err == nil` — telemetry.go:32,
+  telemetry.go:91, verify.go:311 — and t-8 now owns all three. `ErrNoRoot` appears in exactly four
+  non-test files today (root.go, reentry.go, pause.go, rule.go); t-9's allowlist adds status.go and
+  state.go, matching t-3 exactly. On test fixtures: the only bare-`.dross` roots that reach FindRoot
+  are `chdirDross` (findings_test.go:15) and telemetry_test.go's RepoHash test — cmd_test.go:103 and
+  :118 are `Init()` refusal tests that never call FindRoot, cmd_test.go:423's `TestFindRootWalksUp`
+  scaffolds via `runCmd(t, Init())` so it stays complete, and onboard_test.go:42 belongs to t-6.
+  t-1's five-file list is neither over- nor under-scoped.
 
-- [strengths] Contracts are mutant-oriented rather than behaviour-restating — rows name the wrong
-  fix they kill ("a mutant that parses to decide completeness fails here", "moving the swallow
-  into loadState() makes show silent and fails here", "a partial fix that prints a header before
-  bailing fails on the non-empty stdout"). That is the difference between a contract and a wish.
+- [test-contract] Two small factual slips in t-1's last row, neither load-bearing: `chdirDross` has
+  three call sites (findings_test.go:53, :75, :103), not four; and
+  `TestTelemetryCover_RepoHashInRepo` starts at telemetry_test.go:106 (:108 is its `MkdirAll`).
+  Every other line reference in the plan re-verified exact — root.go, pause.go:47, doctor.go:31/:55/:423,
+  onboard.go:37, rule.go:224, telemetry.go:32/:91, verify.go:311, state.go:42/:46, status_test.go:18,
+  pause.md:27/:68.
 
-- [strengths] t-6 and t-7 are second-order consequences found by reading the tree, not the spec:
-  onboard.go:37's blanket refusal turns the repair command every new error message advertises
-  into a dead end on exactly the roots it should repair, and rule.go:224's ErrNoRoot swallow
-  silently widens into a live c-3 hole the moment IncompleteRootError wraps the sentinel. Neither
-  is derivable from spec.toml.
+- [coverage] c-3's wording ("a non-hook command ... fails with a non-zero exit") is blanket, and
+  two non-hook commands are deliberate carve-outs: `onboard` succeeds by adopting (t-6), and
+  `doctor` succeeds at loading and then diagnoses (t-5). Both carve-outs are correct — c-3's own
+  "and the repair command" clause presupposes the repair works — and the plan assigns them
+  explicitly. Recorded so the verify pass doesn't read c-3 literally and call them regressions.
 
-- [strengths] The silent/loud boundary is scoped defensively. t-3 puts the swallow in the two
-  handlers and adds the row that fails if it migrates into `loadState()`; t-9 turns that boundary
-  into a filename-level source scan so command 57 copying the pattern fails by name rather than
-  by behaviour. That is the right shape for a rule that will outlive the phase.
+- [granularity] Thresholds crossed by t-1 (5 files) and t-3 (5 files, two packages). Neither should
+  be split. t-1's three test files are fixture fallout from the FindRoot semantics change and must
+  land in the same commit or the package goes red; t-3's `internal/state/state.go:46` path-wrap is
+  a two-line prerequisite for its own corrupt-file rows and is worthless as a standalone commit.
+  Recorded because the threshold was crossed, not because a split is advisable.
+
+- [wave-order] Waves are tight. Every wave-2 task consumes a t-1 output by name (LocateRoot,
+  MissingRootFiles, RepairHint, or the new ErrNoRoot-wrapping semantics), t-9 legitimately needs
+  all of wave 2 because it pins the post-wave-2 file sets, and t-2 is prompt-text-only so its
+  wave-1 placement is real parallelism, not padding. No task could drop a wave.
+
+- [strengths] The contracts name the fix they kill, not the behaviour they restate — "a mutant that
+  parses to decide completeness fails here", "moving the swallow into loadState() makes show silent
+  and fails here", "an implementation that swallows every loadState error in the handler instead of
+  only ErrNoRoot passes every other row in this plan". That last one is the plan reviewing itself.
+
+- [strengths] t-6, t-7 and t-8's verify.go half are second-order consequences found by reading the
+  tree, not derivable from spec.toml: onboard.go:37 turns the advertised repair command into a dead
+  end on exactly the roots it should repair; rule.go:224's ErrNoRoot swallow silently widens into a
+  live c-3 hole the moment IncompleteRootError wraps the sentinel.
+
+- [strengths] t-9 converts a convention into a filename-level source scan with an explicit
+  precedence rule ("if the derived set differs, surface the difference as a finding rather than
+  widening the allowlist to match"). That is the right shape for a boundary that has to survive
+  command 57, and the ambiguity in the prior revision's derive-vs-hardcode instruction is gone.
+
+- [prior-review] All nine flags from the previous round are addressed in this revision: reentry's
+  silent case (t-4 row 5), the "compiling green" row restated as a runtime gate (t-1 row 11), t-5's
+  equality row scoped to its own output block with the trio/pair split spelled out in the
+  description, internal/state/state.go added to t-3 with a row pinning the :46 path wrap, the
+  `state touch` corrupt-file row (t-3 row 6), verify.go added to t-8 *and* to t-9's LocateRoot set,
+  t-9's derive-vs-pin precedence made explicit, t-2's byte-offset row re-anchored to pause.md:27,
+  and t-1's granularity consciously left as-is.
 
 ## Summary
-No blockers — the plan is grounded in the actual tree and its contracts are unusually
-mutant-aware, but reentry's half of c-2 is never asserted, two rows demand a state.json filename
-the decode path doesn't emit, and three flags from the prior review (the "compiling green" row,
-t-5's equality row, the `state touch` corrupt case) are still open.
+No blockers and clear diminishing returns — this revision closes every prior finding, its line
+references and blast-radius claims survive independent re-derivation, and the two remaining flags
+(`--force` semantics on an incomplete root in t-6, and the `dross state show` probe conflating a
+corrupt root with an uninitialised one in t-2) are each a one-row clarification rather than a
+structural change; the plan is execution-ready.

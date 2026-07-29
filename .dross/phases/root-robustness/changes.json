@@ -1,0 +1,164 @@
+{
+  "phase": "root-robustness",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/root.go",
+        "internal/cmd/root_test.go",
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/findings_test.go",
+        "internal/cmd/telemetry_test.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/milestone_test.go",
+        "internal/cmd/profile_test.go",
+        "internal/cmd/quality_findings_test.go",
+        "internal/cmd/stack_test.go"
+      ],
+      "commit": "8c48e80",
+      "completed_at": "2026-07-29T10:03:09.761309Z",
+      "landmarks": [
+        {
+          "feature": "dross root resolution",
+          "symbol": "LocateRoot",
+          "loc": "internal/cmd/root.go:72",
+          "what": "an incomplete .dross/ resolves to not-a-dross-repo; LocateRoot exposes the misses for doctor and ship recover without erroring"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "assets/prompts/pause.md",
+        "internal/cmd/pause_prompt_test.go"
+      ],
+      "commit": "111743c",
+      "completed_at": "2026-07-29T10:05:23.41512Z",
+      "landmarks": [
+        {
+          "feature": "pause handoff capture",
+          "symbol": "pause.md §0 gate",
+          "loc": "assets/prompts/pause.md:18",
+          "what": "/dross-pause refuses on an absent or incomplete root and writes nothing; a corrupt root surfaces its own error instead"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/state.go",
+        "internal/state/state.go",
+        "internal/cmd/status_test.go",
+        "internal/cmd/state_test.go"
+      ],
+      "commit": "f69fa6c",
+      "completed_at": "2026-07-29T10:07:35.316078Z",
+      "landmarks": [
+        {
+          "feature": "dross root resolution",
+          "symbol": "Status",
+          "loc": "internal/cmd/status.go:28",
+          "what": "status and state touch exit 0 silently on a non-root while state show stays loud; corrupt state.json is loud everywhere"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/pause.go",
+        "internal/cmd/pause_test.go",
+        "internal/cmd/reentry_test.go"
+      ],
+      "commit": "68774df",
+      "completed_at": "2026-07-29T10:10:17.662556Z",
+      "landmarks": [
+        {
+          "feature": "pause handoff capture",
+          "symbol": "autoSnapshot",
+          "loc": "internal/cmd/pause.go:76",
+          "what": "pause --auto is silent on a non-root but surfaces undecodable project.toml/state.json without writing handoff.md; git failures still degrade"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "1cd3911",
+      "completed_at": "2026-07-29T10:12:34.800157Z",
+      "landmarks": [
+        {
+          "feature": "project health diagnostics",
+          "symbol": "finalizeIncompleteRoot",
+          "loc": "internal/cmd/doctor.go:441",
+          "what": "doctor reports an incomplete .dross/ as a distinct not-a-dross-repo verdict listing exactly the missing root files"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/onboard.go",
+        "internal/cmd/onboard_test.go"
+      ],
+      "commit": "1bbdb6c",
+      "completed_at": "2026-07-29T10:14:34.687428Z",
+      "landmarks": [
+        {
+          "feature": "repo adoption",
+          "symbol": "Onboard",
+          "loc": "internal/cmd/onboard.go:36",
+          "what": "onboard adopts an incomplete .dross in place preserving existing files; --force still wipes and a complete root still refuses"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/rule.go",
+        "internal/cmd/rule_test.go"
+      ],
+      "commit": "d075d9e",
+      "completed_at": "2026-07-29T10:15:47.163274Z",
+      "landmarks": [
+        {
+          "feature": "rules resolution",
+          "symbol": "loadMerged",
+          "loc": "internal/cmd/rule.go:216",
+          "what": "project-rule degradation narrowed to a genuinely absent .dross so rule show stays loud on a broken root"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/telemetry.go",
+        "internal/cmd/verify.go",
+        "internal/telemetry/telemetry.go",
+        "internal/telemetry/telemetry_test.go",
+        "internal/cmd/telemetry_test.go",
+        "README.md"
+      ],
+      "commit": "2c18102",
+      "completed_at": "2026-07-29T10:17:50.104686Z",
+      "landmarks": [
+        {
+          "feature": "telemetry error classification",
+          "symbol": "classRules",
+          "loc": "internal/telemetry/telemetry.go:270",
+          "what": "incomplete_root bucket added above no_root and RepoHash lookups moved to LocateRoot so a half-built repo still attributes its events"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/incompleteroot_test.go"
+      ],
+      "commit": "4b6ba52",
+      "completed_at": "2026-07-29T10:20:19.107631Z",
+      "landmarks": [
+        {
+          "feature": "dross root resolution",
+          "symbol": "TestRootHelperCallersAreAllowlisted",
+          "loc": "internal/cmd/incompleteroot_test.go:156",
+          "what": "source-level allowlist gates which files may swallow ErrNoRoot or call LocateRoot, plus cross-command loud-failure and no-write snapshot guarantees"
+        }
+      ]
+    }
+  }
+}
