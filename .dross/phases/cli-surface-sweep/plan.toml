@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 10
 
 [phase]
   id = "cli-surface-sweep"
@@ -94,4 +94,14 @@ task_seq = 0
   covers = ["c-2"]
   depends_on = ["t-8"]
   test_contract = ["all four of `task done`, `phase create --title`, `task edit --files` and `security run --new` exit non-zero AND print their working invocation — c-2's sentence, executed", "every replacement invocation in the curated table resolves against newRoot(): a hint naming a command path or flag that does not exist fails here, so the table cannot rot into pointing at nothing"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 3
+  title = "Cover the arity guards on `project set`"
+  files = ["internal/cmd/project_test.go"]
+  description = "verify FLAG: internal/cmd/project.go:73-78 — the hand-rolled arity switch on `project set` is unexercised (go-cover shows both case blocks at 0 executions). t-2 loosened Args from cobra ExactArgs(2) to RangeArgs(1,2) and moved arity enforcement into that switch, so `dross project set <path>` with no value now depends entirely on untested code and a regression there indexes args[1] out of range. Both branches were probed by hand and behave correctly today, so this is a missing test, not a live defect. Add TestProjectSetArityGuards with two rows asserting the exact messages and a byte-unchanged project.toml, mirroring TestProjectUnsetUnknownPathLeavesFileUnchanged."
+  covers = ["c-9"]
+  depends_on = ["t-2"]
   status = "done"

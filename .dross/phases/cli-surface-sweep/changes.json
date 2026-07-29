@@ -18,6 +18,21 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/cmd/project_test.go"
+      ],
+      "commit": "a99c952",
+      "completed_at": "2026-07-29T18:17:59.031577Z",
+      "landmarks": [
+        {
+          "feature": "project config editing",
+          "symbol": "TestProjectSetArityGuards",
+          "loc": "internal/cmd/project_test.go:611",
+          "what": "pins both arity guards on `project set` — --unset with a value, and a one-arg set that RangeArgs(1,2) no longer rejects"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/project.go",
