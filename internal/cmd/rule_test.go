@@ -293,3 +293,35 @@ func TestRuleCover_NextIDSkipsCollision(t *testing.T) {
 		t.Errorf("generated id must not be r-02 (would mean the counter decremented):\n%s", body)
 	}
 }
+
+// TestRuleShowLoudOnIncompleteRoot (c-3): loadMerged degrades past a missing
+// project scope, which after the root change would absorb a broken root too
+// and let `rule show` exit 0 on it. Only a genuinely absent `.dross/` degrades.
+func TestRuleShowLoudOnIncompleteRoot(t *testing.T) {
+	ruleCovFakeHome(t)
+	dir := realTempDir(t)
+	mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	err := runCmd(t, Rule(), "show")
+	if err == nil {
+		t.Fatal("rule show should fail on an incomplete root")
+	}
+	for _, want := range []string{filepath.Join(RootDirName, "state.json"), RepairHint} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should contain %q, got %v", want, err)
+		}
+	}
+}
+
+// TestRuleShowDegradesOutsideRepo pins that the change narrows the degradation
+// rather than deleting it: with no `.dross/` at all, rule show still lists the
+// global scope and exits 0.
+func TestRuleShowDegradesOutsideRepo(t *testing.T) {
+	ruleCovFakeHome(t)
+	chdir(t, realTempDir(t))
+
+	if err := runCmd(t, Rule(), "show"); err != nil {
+		t.Fatalf("rule show should exit 0 outside a dross repo, got %v", err)
+	}
+}
