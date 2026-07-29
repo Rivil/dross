@@ -18,6 +18,13 @@ func EnforceSubcommandKnown(root *cobra.Command) {
 	if root == nil {
 		return
 	}
+	// Unknown-flag errors never reach a RunE — cobra fails during parsing —
+	// so they need their own hook. Installed once at the true root: cobra
+	// walks up to the nearest ancestor with a FlagErrorFunc, so one
+	// registration covers the whole tree (D3 — no main.go edit).
+	if root.Parent() == nil {
+		InstallFlagHints(root)
+	}
 	for _, c := range root.Commands() {
 		EnforceSubcommandKnown(c)
 	}
@@ -33,9 +40,23 @@ func EnforceSubcommandKnown(root *cobra.Command) {
 		}
 		typed := args[0]
 		msg := fmt.Sprintf("unknown subcommand %q for %q", typed, cmd.CommandPath())
-		if sug := cmd.SuggestionsFor(typed); len(sug) > 0 {
+		avail := availableSubcommandNames(cmd)
+		hinted := false
+		// The curated table is consulted first: these are semantic remaps, and
+		// a distance match would at best name a different verb with different
+		// arity. Cobra's own suggestions come next, then our wider-distance
+		// fallback for typos cobra gives up on.
+		if hint, ok := CuratedHint(cmd.CommandPath(), typed); ok {
+			msg += "\n\n" + hintLines(hint)
+			hinted = true
+		} else if sug := cmd.SuggestionsFor(typed); len(sug) > 0 {
 			msg += "\n\nDid you mean this?\n\t" + strings.Join(sug, "\n\t")
-		} else if avail := availableSubcommandNames(cmd); len(avail) > 0 {
+			hinted = true
+		} else if near := Nearest(typed, avail); len(near) > 0 {
+			msg += "\n\nDid you mean this?\n\t" + strings.Join(near, "\n\t")
+			hinted = true
+		}
+		if !hinted && len(avail) > 0 {
 			// No close match — show what IS valid so a far-off guess (the
 			// shape that produces most unknown_subcommand telemetry) doesn't
 			// have to round-trip through --help to discover the command set.

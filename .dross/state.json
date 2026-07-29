@@ -1,113 +1,9 @@
 {
-  "version": "1.1.2.0",
+  "version": "1.1.3.0",
   "current_milestone": "v1.1",
-  "last_activity": "2026-07-29T13:47:26.617842Z",
-  "last_action": "completed root-robustness",
+  "last_activity": "2026-07-29T19:34:11.470471Z",
+  "last_action": "completed cli-surface-sweep",
   "history": [
-    {
-      "at": "2026-07-28T19:12:48.537097Z",
-      "action": "set current_phase_status=created"
-    },
-    {
-      "at": "2026-07-28T19:12:48.543759Z",
-      "action": "spec locked: validator-truth"
-    },
-    {
-      "at": "2026-07-29T05:59:01.742399Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-29T05:59:01.749119Z",
-      "action": "plan locked: validator-truth (10 tasks across 3 waves)"
-    },
-    {
-      "at": "2026-07-29T06:34:32.44829Z",
-      "action": "plan reviewed: validator-truth (1 blocking, 6 flags)"
-    },
-    {
-      "at": "2026-07-29T07:06:54.172963Z",
-      "action": "set version=1.1.1.0"
-    },
-    {
-      "at": "2026-07-29T07:10:09.829573Z",
-      "action": "executed t-1 (Add internal/configenum normalising enum sets)"
-    },
-    {
-      "at": "2026-07-29T07:14:38.223092Z",
-      "action": "executed t-2 (Add remote.auth_user and basic auth scheme)"
-    },
-    {
-      "at": "2026-07-29T07:23:01.094582Z",
-      "action": "executed t-3 (Add Bitbucket PR-open backend over Basic auth)"
-    },
-    {
-      "at": "2026-07-29T07:32:14.961192Z",
-      "action": "executed t-6 (Route doctor's enum checks through configenum)"
-    },
-    {
-      "at": "2026-07-29T07:41:44.031453Z",
-      "action": "executed t-7 (Route issue + forge through configenum; forge Basic)"
-    },
-    {
-      "at": "2026-07-29T07:45:10.345378Z",
-      "action": "executed t-8 (Correct provider lists in init/onboard prompts)"
-    },
-    {
-      "at": "2026-07-29T07:50:39.798816Z",
-      "action": "executed t-4 (Bitbucket comment + merge-status backends)"
-    },
-    {
-      "at": "2026-07-29T08:03:04.331434Z",
-      "action": "executed t-9 (doctor cross-field combination warnings)"
-    },
-    {
-      "at": "2026-07-29T08:06:45.100309Z",
-      "action": "executed t-5 (auth_user threaded through ship opt builders)"
-    },
-    {
-      "at": "2026-07-29T08:13:14.248222Z",
-      "action": "executed t-10 (validator/dispatch divergence guard)"
-    },
-    {
-      "at": "2026-07-29T08:13:21.689054Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-29T08:13:21.696134Z",
-      "action": "phase validator-truth executed (10/10 done)"
-    },
-    {
-      "at": "2026-07-29T08:27:14.816663Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-29T08:27:14.823957Z",
-      "action": "verified validator-truth: pass (6/6, mutation 0.95)"
-    },
-    {
-      "at": "2026-07-29T08:37:36.330126Z",
-      "action": "completed validator-truth"
-    },
-    {
-      "at": "2026-07-29T08:38:16.849667Z",
-      "action": "completed validator-truth"
-    },
-    {
-      "at": "2026-07-29T08:52:44.609049Z",
-      "action": "created root-robustness"
-    },
-    {
-      "at": "2026-07-29T09:14:40.662133Z",
-      "action": "set current_phase=root-robustness"
-    },
-    {
-      "at": "2026-07-29T09:14:40.669073Z",
-      "action": "spec locked: root-robustness"
-    },
-    {
-      "at": "2026-07-29T09:35:34.110099Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-07-29T09:35:34.116744Z",
       "action": "plan locked: root-robustness (9 tasks across 3 waves)"
@@ -203,6 +99,110 @@
     {
       "at": "2026-07-29T13:47:26.617842Z",
       "action": "completed root-robustness"
+    },
+    {
+      "at": "2026-07-29T13:53:13.434362Z",
+      "action": "created cli-surface-sweep"
+    },
+    {
+      "at": "2026-07-29T15:14:07.795023Z",
+      "action": "set current_phase=cli-surface-sweep"
+    },
+    {
+      "at": "2026-07-29T15:14:07.802601Z",
+      "action": "spec locked: cli-surface-sweep"
+    },
+    {
+      "at": "2026-07-29T15:55:51.775941Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-29T15:55:51.783903Z",
+      "action": "plan locked: cli-surface-sweep (9 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-07-29T16:45:43.440155Z",
+      "action": "plan reviewed: cli-surface-sweep (0 blocking, 5 flags — all folded in)"
+    },
+    {
+      "at": "2026-07-29T17:04:57.550178Z",
+      "action": "set version=1.1.3.0"
+    },
+    {
+      "at": "2026-07-29T17:07:48.052845Z",
+      "action": "executed t-1 (Add `dross task list` with --json)"
+    },
+    {
+      "at": "2026-07-29T17:10:55.546719Z",
+      "action": "executed t-2 (Complete + reversible project dotted paths)"
+    },
+    {
+      "at": "2026-07-29T17:13:45.922189Z",
+      "action": "executed t-3 (Resolve bare milestone field + validate status enum)"
+    },
+    {
+      "at": "2026-07-29T17:16:33.405681Z",
+      "action": "executed t-4 (Multi-path get renderer + state get + state show --json)"
+    },
+    {
+      "at": "2026-07-29T17:19:25.003379Z",
+      "action": "executed t-5 (Doctor flags unrecognised task statuses)"
+    },
+    {
+      "at": "2026-07-29T17:22:14.255039Z",
+      "action": "executed t-6 (Curated mis-reach table + nearest-match fallback)"
+    },
+    {
+      "at": "2026-07-29T17:24:44.034982Z",
+      "action": "executed t-7 (Adopt multi-path get in project + milestone)"
+    },
+    {
+      "at": "2026-07-29T17:28:58.917132Z",
+      "action": "executed t-8 (Wire hints into subcommand and flag errors)"
+    },
+    {
+      "at": "2026-07-29T17:30:50.892969Z",
+      "action": "executed t-9 (Pin the four mis-reaches against the real tree)"
+    },
+    {
+      "at": "2026-07-29T17:30:59.917946Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-29T17:30:59.926021Z",
+      "action": "phase cli-surface-sweep executed (9/9 done)"
+    },
+    {
+      "at": "2026-07-29T17:47:57.583584Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-29T17:47:57.590958Z",
+      "action": "verified cli-surface-sweep: partial (9/9 covered, mutation 0.96, 1 FLAG)"
+    },
+    {
+      "at": "2026-07-29T18:17:59.046563Z",
+      "action": "executed t-10 (cover the arity guards on `project set`)"
+    },
+    {
+      "at": "2026-07-29T18:18:07.401472Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-29T18:18:07.410076Z",
+      "action": "phase cli-surface-sweep amended (10/10 done — verify FLAG closed)"
+    },
+    {
+      "at": "2026-07-29T18:52:30.290082Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-29T18:52:30.297695Z",
+      "action": "verified cli-surface-sweep: pass (9/9, mutation 0.96)"
+    },
+    {
+      "at": "2026-07-29T19:34:11.470471Z",
+      "action": "completed cli-surface-sweep"
     }
   ]
 }

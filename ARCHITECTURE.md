@@ -48,12 +48,13 @@ _introduced 01-architecture-comprehension-layer · extended architecture-doc-enh
 
 ### Artefact validation
 
-Schema-check every .dross/ TOML/JSON artefact, including that plan `covers` reference real spec criteria.
+Schema-check every .dross/ TOML/JSON artefact, including that plan `covers` reference real spec criteria. The two validators divide the work by blast radius (locked `status_check_home`): `dross validate` stays **structural only** because it runs in every slash command's wrap step and must never newly fail an existing repo, while `dross doctor` is the sole **enum-enforcing** validator. Doctor therefore owns the plan-task status check — a task whose `status` falls outside `pending|in_progress|done|failed` is reported as an exit-code issue naming both phase and task id, closing the hole where a hand-edited plan.toml silently dropped a task out of `NextRunnable`. A phase directory with no plan.toml is skipped in silence (spec'd-but-unplanned is legal); an unparseable one is its own issue rather than a clean verdict.
 
 - `Validate` — `internal/cmd/validate.go:27`
 - `loadIfExists` — `internal/cmd/validate.go:137`
+- `taskStatusIssues` (doctor's plan-task status enum check) — `internal/cmd/doctor.go:430`
 
-_c8b346e_
+_c8b346e · extended cli-surface-sweep · d105fd0_
 
 ### Change tracking & landmarks
 
@@ -73,6 +74,19 @@ Keep `.dross/` bookkeeping from blocking or diverging the git flow. The dirty-tr
 - `pushBaseIfAheadDrossOnly` (safety-net push of .dross-only base chores) — `internal/cmd/basebranch.go:62`
 
 _introduced ship-clean-tree · cfa0023_
+
+### CLI error hints
+
+Make a wrong invocation self-correcting: an unknown subcommand or flag fails non-zero naming the invocation that *does* work, instead of a bare "unknown command". Two mechanisms in a fixed order (locked `hint_mechanism`): a **curated table** of known mis-reaches → their working invocation is consulted first, and Levenshtein `Nearest` over the live Cobra command/flag tree is the fallback when the table has no entry. The table exists because `task done` → `dross task status <phase-id> <task-id> done` is a *semantic remap* edit distance can never find; the fallback exists because it self-corrects plain typos the table never anticipated (`stauts` → `status`, `--titel` → `--title`), including ones cobra's own `SuggestionsMinimumDistance` gives up on. Flag errors are decorated through a root `FlagErrorFunc` walked up from the failing command — flag-parse failures never reach `RunE`, so a hint hung off the command body would never fire — and the decoration *appends* to cobra's message rather than replacing it, preserving the substrings `telemetry.ClassifyError` buckets on so a hinted error still classifies as `unknown_flag` instead of silently demoting to `other`. Two guards keep the layer honest against the tree it describes: every curated key, replacement command path and named flag must resolve in the real assembled `newRoot()`, and a corpus check over `assets/prompts/*.md` fails any prompt that teaches a known-broken invocation.
+
+- `CuratedHint` (curated mis-reach → working-invocation table) — `internal/cmd/hints.go:62`
+- `Nearest` (Levenshtein fallback over the live command/flag tree) — `internal/cmd/hints.go:76`
+- `EnforceSubcommandKnown` (unknown-subcommand guard, non-zero exit) — `internal/cmd/subcommand_guard.go:17`
+- `decorateFlagError` / `InstallFlagHints` (root FlagErrorFunc parent-walk, telemetry-preserving) — `internal/cmd/flag_hint.go:30`
+- `LineTeachesMisreach` (prompt-corpus guard against broken invocations) — `internal/cmd/hints.go:145`
+- `TestMisreachesAreSelfCorrecting` (c-2 executed against the assembled tree) — `cmd/dross/main_test.go:90`
+
+_introduced cli-surface-sweep · ad037f3_
 
 ### Code insight (codex)
 
@@ -101,7 +115,7 @@ _introduced 06-dross-quality · extended 07-stack-profiles · extended 09-marker
 
 ### Configuration
 
-Read/write project settings, global defaults, environment variables, and the GSD-seeded profile. Provider recognition lives here: `gitlab.com` autodetects to the `gitlab` provider (deriving `api_base = …/api/v4`), self-hosted hosts stay manual (Provider left empty to prompt), and the GitLab `remote.auth_scheme` (private-token|bearer|basic) + `remote.project_id` override are dotted-config fields; `basic` pairs with `[remote].auth_user` for Bitbucket-style user:token credentials. Every enumerated config value — board provider, ship provider, `auth_scheme`, `milestone_mode` — has a single home in `configenum`, whose `Set` normalises (trim + lowercase) and carries a per-field empty-value policy; doctor, `dross issue enable`, the forge/ship dispatch and the milestone-mode consumers all resolve through it instead of carrying their own literal lists. `dross doctor` therefore accepts every value the CLI can actually dispatch (jira and github boards included, with `board.base_url` optional for github but still parsed when set), normalises the way the consumer does before validating, and reports runtime-fatal pairings — jira+epic, `basic` without `auth_user`, a remote provider ship cannot dispatch — as advisory warnings on their own counter that leave exit 0. `go/ast` guards fail the build when a dispatch switch, the remote-writer map or a prompt's provider bullet diverges from its `configenum` set.
+Read/write project settings, global defaults, environment variables, and the GSD-seeded profile. Provider recognition lives here: `gitlab.com` autodetects to the `gitlab` provider (deriving `api_base = …/api/v4`), self-hosted hosts stay manual (Provider left empty to prompt), and the GitLab `remote.auth_scheme` (private-token|bearer|basic) + `remote.project_id` override are dotted-config fields; `basic` pairs with `[remote].auth_user` for Bitbucket-style user:token credentials. Every enumerated config value — board provider, ship provider, `auth_scheme`, `milestone_mode` — has a single home in `configenum`, whose `Set` normalises (trim + lowercase) and carries a per-field empty-value policy; doctor, `dross issue enable`, the forge/ship dispatch and the milestone-mode consumers all resolve through it instead of carrying their own literal lists. `dross doctor` therefore accepts every value the CLI can actually dispatch (jira and github boards included, with `board.base_url` optional for github but still parsed when set), normalises the way the consumer does before validating, and reports runtime-fatal pairings — jira+epic, `basic` without `auth_user`, a remote provider ship cannot dispatch — as advisory warnings on their own counter that leave exit 0. `go/ast` guards fail the build when a dispatch switch, the remote-writer map or a prompt's provider bullet diverges from its `configenum` set. Reads and writes are complete and reversible across all three surfaces. **Reads:** `project get`, `milestone get` and `state get` each take one *or more* dotted paths through a shared renderer — a single path prints its bare value byte-identically to before (locked `multi_get_shape`, so no existing prompt or script migrates), two or more emit one keyed JSON object in *argument* order rather than map order, and an unknown path among several writes nothing at all rather than a partial object; `milestone get`'s optional leading version is matched by **shape**, so a typo'd first path is named as an unknown path instead of being swallowed as "no such milestone". **Writes:** every `[board]` field the code reads is settable by dotted path — including `board.github_project` and per-key `board.state_map.<status>` entries, each addressed as its own leaf so a write never clobbers unlisted entries (locked `state_map_write`) — and `project set --unset <path>` clears a scalar or a single map entry without hand-editing TOML. `milestone set` resolves an unambiguous bare field name to its dotted path (ambiguous names are rejected listing every candidate, never resolved by first match) and rejects a status outside `configenum.MilestoneStatuses` *before* Save, leaving the file byte-unchanged.
 
 - `Project` — `internal/cmd/project.go:15`
 - `Defaults` — `internal/cmd/defaults.go:14`
@@ -116,8 +130,12 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `forge.Client.do` (basic scheme + construction-time auth_user check) — `internal/forge/forge.go:617`
 - `providerSwitchIn` (go/ast validator↔dispatch divergence guard) — `internal/cmd/enum_divergence_test.go:59`
 - `TestPromptProviderListsMatchShipProviders` (init/onboard provider bullets pinned to ShipProviders) — `internal/cmd/prompt_provider_list_test.go:73`
+- `renderMultiGet` (shared 1+-path get renderer: bare value or keyed JSON in argument order) — `internal/cmd/dotget.go:24`
+- `looksLikeMilestoneVersion` (shape-matched leading version, so a typo'd path is named) — `internal/cmd/milestone.go:357`
+- `unsetDotted` (`project set --unset`: clear a scalar or one `board.state_map` entry) — `internal/cmd/project.go:454`
+- `resolveBareMilestoneField` (unambiguous bare name → dotted path, ambiguity rejected) — `internal/cmd/milestone.go:489`
 
-_c8b346e · extended gitlab-ship-provider · 0f209c9 · extended validator-truth · 5e73e88_
+_c8b346e · extended gitlab-ship-provider · 0f209c9 · extended validator-truth · 5e73e88 · extended cli-surface-sweep · 1a840f4_
 
 ### Deferred-item routing
 
@@ -420,11 +438,15 @@ Track current milestone/phase/version + activity in state.json; summarise "where
 - `rankAreas` — `internal/cmd/status.go:380`
 - `formatRunSignal` — `internal/cmd/status.go:399`
 - `renderActionAreas` — `internal/cmd/status.go:427`
-- `stateTouch` (silent on a non-root, loud on a corrupt one) — `internal/cmd/state.go:71`
+- `stateTouch` (silent on a non-root, loud on a corrupt one) — `internal/cmd/state.go:118`
+- `stateGet` (1+ dotted paths via the shared `renderMultiGet`) — `internal/cmd/state.go:53`
+- `stateShow` (`--json` accepted; output byte-identical to bare `show`) — `internal/cmd/state.go:27`
 
 As hook targets, `dross status` and `dross state touch` exit 0 with no output in a repo that isn't a dross repo — see [Root resolution](#root-resolution) for what that means. The swallow is scoped to those two entry points, not pushed down into `loadState`: `dross state show` stays loud on a non-root, and a corrupt `state.json` is loud everywhere and names its path.
 
-_c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · extended root-robustness · 6d33d3b_
+State is readable through the same dotted-path grammar as project and milestone config — `dross state get` takes one or more paths through the shared `renderMultiGet`, and `dross state show --json` is accepted (it already emitted JSON, so the flag is a no-op on output rather than a format conversion). See [Configuration](#configuration) for the shared read/write shape.
+
+_c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · extended root-robustness · extended cli-surface-sweep · 891f77d_
 
 ### Status line (native)
 
@@ -442,8 +464,9 @@ _introduced native-statusline · 46e5025_
 
 ### Task lifecycle
 
-Add, remove, edit, and reposition tasks inside a phase's plan.toml through guarded CLI verbs, so the plan is mutated only through dross and never hand-edited. New task ids come from a persisted per-plan high-water counter (Plan.TaskSeq): NextTaskID assigns high_water+1, and RemoveTask backfills the counter before deleting, so a freed id — even the highest — is never reissued; a new task's wave is the explicit --wave or one past its deepest dependency's wave (deriveWave). `add` appends at the tail by default and only positions relative to an anchor (--after/--before) when asked; `remove` is dependency-safe, refusing when another task depends on the target unless --force strips the id from every dependent; `edit` is a partial field update that changes only the flags passed and never status (dross task status stays that owner). `move` repositions a task relative to an `--before`/`--after` anchor: a move that would break dependency order is rejected with plan.toml untouched, a legal move adopts the anchor's wave and reflows transitive pending dependents (history stays frozen), ids stay stable across a move, and `task next` follows the new order because its same-wave tie-break is plan-array position rather than lexicographic id. Every mutation passes through saveIfValid → ValidatePlan (duplicate-id, unknown-depends_on, and covers→criterion parity with dross validate) and is written only if valid, leaving plan.toml byte-unchanged on rejection.
+List, add, remove, edit, and reposition tasks inside a phase's plan.toml through guarded CLI verbs, so the plan is readable and mutable through dross and never hand-edited. `dross task list` renders the plan as an aligned id/wave/status/title table for a human at a terminal or a `--json` array for a script (an empty plan emits `[]`, never `null`), with the phase-id argument optional and defaulting to `state.current_phase` — matching how `phase list` and `deferred list` already behave (locked `task_list_output`). New task ids come from a persisted per-plan high-water counter (Plan.TaskSeq): NextTaskID assigns high_water+1, and RemoveTask backfills the counter before deleting, so a freed id — even the highest — is never reissued; a new task's wave is the explicit --wave or one past its deepest dependency's wave (deriveWave). `add` appends at the tail by default and only positions relative to an anchor (--after/--before) when asked; `remove` is dependency-safe, refusing when another task depends on the target unless --force strips the id from every dependent; `edit` is a partial field update that changes only the flags passed and never status (dross task status stays that owner). `move` repositions a task relative to an `--before`/`--after` anchor: a move that would break dependency order is rejected with plan.toml untouched, a legal move adopts the anchor's wave and reflows transitive pending dependents (history stays frozen), ids stay stable across a move, and `task next` follows the new order because its same-wave tie-break is plan-array position rather than lexicographic id. Every mutation passes through saveIfValid → ValidatePlan (duplicate-id, unknown-depends_on, and covers→criterion parity with dross validate) and is written only if valid, leaving plan.toml byte-unchanged on rejection.
 
+- `taskList` (`dross task list`, table or `--json`, defaults to current_phase) — `internal/cmd/task.go:39`
 - `taskAdd` / `taskRemove` / `taskEdit` (CLI verbs) — `internal/cmd/task.go:121`
 - `taskMove` (`dross task move --before/--after`, resolveAnchor + saveIfValid) — `internal/cmd/task.go:255`
 - `saveIfValid` (validate-then-write guard) — `internal/cmd/task.go:292`
@@ -453,7 +476,7 @@ Add, remove, edit, and reposition tasks inside a phase's plan.toml through guard
 - `Plan.NextTaskID` / `deriveWave` (high-water id + dependency-derived wave) — `internal/phase/plan_edit.go:35`
 - `ValidatePlan` (pre-write integrity guard) — `internal/phase/plan_edit.go:82`
 
-_introduced task-lifecycle-commands · extended task-reordering · db72f34_
+_introduced task-lifecycle-commands · extended task-reordering · extended cli-surface-sweep · 949b375_
 
 ### Tech-debt scan (dross techdebt)
 

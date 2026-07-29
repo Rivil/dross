@@ -26,7 +26,7 @@ type Milestone struct {
 type Meta struct {
 	Version string `toml:"version"` // e.g. "v1.0"
 	Title   string `toml:"title,omitempty"`
-	Status  string `toml:"status,omitempty"` // planning | active | shipped | archived
+	Status  string `toml:"status,omitempty"` // configenum.MilestoneStatuses: planning | active | complete
 	Started string `toml:"started,omitempty"`
 	Shipped string `toml:"shipped,omitempty"`
 }

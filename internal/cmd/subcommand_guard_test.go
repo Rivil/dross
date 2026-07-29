@@ -148,3 +148,76 @@ func TestEnforceSubcommandKnown_ListsAvailableWhenNoSuggestion(t *testing.T) {
 		t.Errorf("far-off guess should not produce a suggestion: %v", err)
 	}
 }
+
+// realTaskTree builds a `dross task {status,show,edit}` tree so the guard is
+// exercised against the real command paths the curated table keys on.
+func realTaskTree() *cobra.Command {
+	root := &cobra.Command{Use: "dross"}
+	root.AddCommand(Task())
+	EnforceSubcommandKnown(root)
+	return root
+}
+
+func TestSubcommandGuardPrefersCuratedHint(t *testing.T) {
+	root := realTaskTree()
+	err := runCmd(t, root, "task", "done", "t-1")
+	if err == nil {
+		t.Fatal("`dross task done t-1` succeeded")
+	}
+	if !strings.Contains(err.Error(), "dross task status") {
+		t.Errorf("error does not carry the curated hint: %v", err)
+	}
+	// The curated entry wins: no competing "Did you mean" list alongside it.
+	if strings.Contains(err.Error(), "Did you mean") {
+		t.Errorf("cobra's suggestion list fired alongside the curated hint: %v", err)
+	}
+}
+
+// TestSubcommandGuardFallbackBeyondCobra pins that the fallback adds reach
+// rather than echoing cobra. `hswoo` is distance 3 from `show` — outside
+// cobra's SuggestionsMinimumDistance of 2 — so cobra finds nothing and only
+// our Nearest can name it.
+func TestSubcommandGuardFallbackBeyondCobra(t *testing.T) {
+	root := &cobra.Command{Use: "dross"}
+	root.AddCommand(State())
+	EnforceSubcommandKnown(root)
+
+	state, _, err := root.Find([]string{"state"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// First prove cobra gives up — otherwise the assertion below proves
+	// nothing about our fallback.
+	if sug := state.SuggestionsFor("hswoo"); len(sug) > 0 {
+		t.Fatalf("cobra already suggests %v for `hswoo`; pick a typo outside its reach", sug)
+	}
+	runErr := runCmd(t, root, "state", "hswoo")
+	if runErr == nil {
+		t.Fatal("`dross state hswoo` succeeded")
+	}
+	if !strings.Contains(runErr.Error(), "show") {
+		t.Errorf("the fallback did not name `show`: %v", runErr)
+	}
+}
+
+func TestSubcommandGuardFarOffGuessStillListsAvailable(t *testing.T) {
+	root := realTaskTree()
+	err := runCmd(t, root, "task", "wibble")
+	if err == nil {
+		t.Fatal("`dross task wibble` succeeded")
+	}
+	if !strings.Contains(err.Error(), "Available subcommands") {
+		t.Errorf("the available-subcommands fallback was replaced, not added to: %v", err)
+	}
+	if !strings.Contains(err.Error(), "status") {
+		t.Errorf("the available list does not name the real subcommands: %v", err)
+	}
+}
+
+func TestSubcommandGuardDoneStillExitsNonZero(t *testing.T) {
+	// The pre-existing exit-0-on-help regression: a parent with an unknown
+	// subcommand must error, not print help and succeed.
+	if err := runCmd(t, realTaskTree(), "task", "done"); err == nil {
+		t.Error("`dross task done` exited 0")
+	}
+}

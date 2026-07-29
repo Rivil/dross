@@ -605,3 +605,242 @@ func TestMilestoneCleanupRefusesUnmerged(t *testing.T) {
 		t.Error("remote milestone branch should NOT be deleted on refusal")
 	}
 }
+
+// scaffoldMilestone inits a repo with one milestone, current by state.
+func scaffoldMilestone(t *testing.T, version string) string {
+	t.Helper()
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "create", version); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "set", "current_milestone", version); err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(".dross", "milestones", version+".toml")
+}
+
+func TestMilestoneSetBareStatus(t *testing.T) {
+	chdir(t, t.TempDir())
+	path := scaffoldMilestone(t, "v0.1")
+
+	// Bare `status` expands to milestone.status. Without expansion this
+	// fails with "unknown or unsettable milestone field: status".
+	if err := runCmd(t, Milestone(), "set", "status", "active"); err != nil {
+		t.Fatalf("milestone set status active: %v", err)
+	}
+	if body := mustRead(t, path); !strings.Contains(body, `status = "active"`) {
+		t.Errorf("milestone.status not written:\n%s", body)
+	}
+
+	// The resolver is additive — the fully dotted path still works.
+	if err := runCmd(t, Milestone(), "set", "milestone.status", "complete"); err != nil {
+		t.Fatalf("milestone set milestone.status complete: %v", err)
+	}
+	if body := mustRead(t, path); !strings.Contains(body, `status = "complete"`) {
+		t.Errorf("dotted set did not write:\n%s", body)
+	}
+
+	// Case/whitespace variation normalises, matching configenum.Normalize.
+	if err := runCmd(t, Milestone(), "set", "status", " Planning "); err != nil {
+		t.Fatalf("milestone set status ' Planning ': %v", err)
+	}
+	if body := mustRead(t, path); !strings.Contains(body, `status = "planning"`) {
+		t.Errorf("status not normalised on write:\n%s", body)
+	}
+}
+
+func TestMilestoneSetStatusRejectsOutOfSet(t *testing.T) {
+	chdir(t, t.TempDir())
+	path := scaffoldMilestone(t, "v0.1")
+
+	for _, bad := range []string{"shipped", "archived", ""} {
+		before := mustRead(t, path)
+		err := runCmd(t, Milestone(), "set", "status", bad)
+		if err == nil {
+			t.Fatalf("milestone set status %q succeeded; want rejection", bad)
+		}
+		if !strings.Contains(err.Error(), "planning | active | complete") {
+			t.Errorf("error for %q = %q, want it to name the accepted set", bad, err)
+		}
+		// Rejection runs before Save.
+		if after := mustRead(t, path); after != before {
+			t.Errorf("milestone toml mutated by a rejected status %q:\n%s", bad, after)
+		}
+	}
+}
+
+func TestMilestoneSetUnknownBareFieldStillErrors(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldMilestone(t, "v0.1")
+
+	err := runCmd(t, Milestone(), "set", "foo", "x")
+	if err == nil {
+		t.Fatal("milestone set foo x succeeded; want unknown-field error")
+	}
+	if !strings.Contains(err.Error(), "foo") {
+		t.Errorf("error = %q, want it to name foo", err)
+	}
+}
+
+func TestResolveBareMilestoneField(t *testing.T) {
+	cases := []struct {
+		name       string
+		candidates []string
+		want       string
+		wantErr    string
+	}{
+		{"status", milestoneSettablePaths, "milestone.status", ""},
+		{"title", milestoneSettablePaths, "milestone.title", ""},
+		{"milestone.status", milestoneSettablePaths, "milestone.status", ""},
+		{"foo", milestoneSettablePaths, "foo", ""},
+		// Ambiguity is rejected with the candidates listed, never resolved
+		// by taking the first match.
+		{"x", []string{"a.x", "b.x"}, "", "ambiguous"},
+	}
+	for _, c := range cases {
+		got, err := resolveBareMilestoneField(c.name, c.candidates)
+		switch {
+		case c.wantErr != "":
+			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+				t.Errorf("resolve(%q) err = %v, want %q", c.name, err, c.wantErr)
+				continue
+			}
+			for _, cand := range c.candidates {
+				if !strings.Contains(err.Error(), cand) {
+					t.Errorf("ambiguity error %q does not list candidate %s", err, cand)
+				}
+			}
+		case err != nil:
+			t.Errorf("resolve(%q) = %v", c.name, err)
+		case got != c.want:
+			t.Errorf("resolve(%q) = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestMilestoneGetVersionShapeVsPath(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldMilestone(t, "v1.1")
+	if err := runCmd(t, Milestone(), "set", "milestone.title", "friction pass"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "set", "status", "active"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Leading version consumed by shape.
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Milestone(), "get", "v1.1", "milestone.title", "milestone.status"); err != nil {
+			t.Errorf("get with version: %v", err)
+		}
+	})
+	var got map[string]string
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("not one JSON object: %v\ngot %q", err, out)
+	}
+	if got["milestone.title"] != "friction pass" || got["milestone.status"] != "active" {
+		t.Errorf("get v1.1 ... = %v", got)
+	}
+
+	// No version: falls back to state.current_milestone. Treating args[0]
+	// as a version unconditionally fails this case.
+	out = captureStdout(t, func() {
+		if err := runCmd(t, Milestone(), "get", "milestone.title", "milestone.status"); err != nil {
+			t.Errorf("get without version: %v", err)
+		}
+	})
+	got = nil
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("not one JSON object: %v\ngot %q", err, out)
+	}
+	if got["milestone.title"] != "friction pass" {
+		t.Errorf("current_milestone fallback = %v", got)
+	}
+}
+
+// TestMilestoneGetTypoInFirstPositionNamesThePath is the row a by-elimination
+// version check fails: `milstone.title` is not a known field, so elimination
+// would swallow it as a version and report "no such milestone".
+func TestMilestoneGetTypoInFirstPositionNamesThePath(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldMilestone(t, "v1.1")
+
+	err := runCmd(t, Milestone(), "get", "milstone.title", "milestone.status")
+	if err == nil {
+		t.Fatal("a typo'd path succeeded")
+	}
+	if !strings.Contains(err.Error(), "milstone.title") {
+		t.Errorf("error = %q, want it to name milstone.title", err)
+	}
+	if strings.Contains(err.Error(), "no such milestone") || strings.Contains(err.Error(), "milestones/milstone.title") {
+		t.Errorf("the typo'd path was swallowed as a version: %q", err)
+	}
+}
+
+func TestMilestoneGetListSingleAndMulti(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldMilestone(t, "v1.1")
+	for _, c := range []string{"first", "second"} {
+		if err := runCmd(t, Milestone(), "add", "scope.success_criteria", c); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Single path: one entry per line, exactly as today.
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Milestone(), "get", "scope.success_criteria"); err != nil {
+			t.Errorf("get list: %v", err)
+		}
+	})
+	if out != "first\nsecond\n" {
+		t.Errorf("single list get = %q, want %q", out, "first\nsecond\n")
+	}
+
+	// Multi path: a JSON array, not CSV or newline-joined.
+	out = captureStdout(t, func() {
+		if err := runCmd(t, Milestone(), "get", "scope.success_criteria", "milestone.version"); err != nil {
+			t.Errorf("multi get: %v", err)
+		}
+	})
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("not one JSON object: %v\ngot %q", err, out)
+	}
+	if string(got["scope.success_criteria"]) != `["first","second"]` {
+		t.Errorf("list in multi mode = %s, want a JSON array", got["scope.success_criteria"])
+	}
+}
+
+func TestMilestoneGetUnknownPathAmongSeveral(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldMilestone(t, "v1.1")
+
+	var err error
+	out := captureStdout(t, func() {
+		err = runCmd(t, Milestone(), "get", "milestone.title", "milestone.nope")
+	})
+	if err == nil {
+		t.Fatal("want an error for an unknown path")
+	}
+	if !strings.Contains(err.Error(), "milestone.nope") {
+		t.Errorf("error = %q, want it to name milestone.nope", err)
+	}
+	if strings.TrimSpace(out) != "" {
+		t.Errorf("a partial object was emitted: %q", out)
+	}
+}
+
+func TestLooksLikeMilestoneVersion(t *testing.T) {
+	for _, s := range []string{"v1.1", "v0.10", "V2.0"} {
+		if !looksLikeMilestoneVersion(s) {
+			t.Errorf("looksLikeMilestoneVersion(%q) = false, want true", s)
+		}
+	}
+	for _, s := range []string{"milestone.title", "milstone.title", "version", "scope.non_goals", "v", ""} {
+		if looksLikeMilestoneVersion(s) {
+			t.Errorf("looksLikeMilestoneVersion(%q) = true, want false", s)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -9,16 +10,94 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/state"
 )
 
-// Task registers `dross task {next,show,status,add,remove,edit,move}`.
+// Task registers `dross task {next,list,show,status,add,remove,edit,move}`.
 func Task() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "task",
 		Short: "Inspect and update tasks within a phase plan",
 	}
-	c.AddCommand(taskNext(), taskShow(), taskStatus(), taskAdd(), taskRemove(), taskEdit(), taskMove())
+	c.AddCommand(taskNext(), taskList(), taskShow(), taskStatus(), taskAdd(), taskRemove(), taskEdit(), taskMove())
 	return c
+}
+
+// taskListRow is the wire shape of `task list --json`: the four columns the
+// table prints, with the same orPending normalisation applied, so the human and
+// machine views can never disagree about a task's status.
+type taskListRow struct {
+	ID     string `json:"id"`
+	Wave   int    `json:"wave"`
+	Status string `json:"status"`
+	Title  string `json:"title"`
+}
+
+// taskList prints every task in a phase plan so the plan is readable without
+// opening plan.toml. The phase-id argument is optional and defaults to
+// state.current_phase (locked task_list_output).
+func taskList() *cobra.Command {
+	var asJSON bool
+	c := &cobra.Command{
+		Use:   "list [phase-id]",
+		Short: "List every task in a phase plan (id, wave, status, title)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			phaseID, err := resolveTaskPhaseID(args)
+			if err != nil {
+				return err
+			}
+			plan, _, err := loadPhasePlan(phaseID)
+			if err != nil {
+				return err
+			}
+			rows := make([]taskListRow, 0, len(plan.Task))
+			for _, t := range plan.Task {
+				rows = append(rows, taskListRow{ID: t.ID, Wave: t.Wave, Status: orPending(t.Status), Title: t.Title})
+			}
+
+			if asJSON {
+				out, err := json.Marshal(rows)
+				if err != nil {
+					return err
+				}
+				Print(string(out))
+				return nil
+			}
+			if len(rows) == 0 {
+				Print("(no tasks)")
+				return nil
+			}
+			Printf("%-8s %4s %-12s %s\n", "ID", "WAVE", "STATUS", "TITLE")
+			for _, r := range rows {
+				Printf("%-8s %4d %-12s %s\n", r.ID, r.Wave, r.Status, r.Title)
+			}
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&asJSON, "json", false, "emit the task array as JSON (for prompt consumption)")
+	return c
+}
+
+// resolveTaskPhaseID resolves an optional phase-id argument against
+// state.current_phase. An empty id is an error, never a path — otherwise the
+// fallback would silently try to load `.dross/phases//plan.toml`.
+func resolveTaskPhaseID(args []string) (string, error) {
+	if len(args) == 1 && strings.TrimSpace(args[0]) != "" {
+		return args[0], nil
+	}
+	root, err := FindRoot()
+	if err != nil {
+		return "", err
+	}
+	s, err := state.Load(filepath.Join(root, state.File))
+	if err != nil {
+		return "", err
+	}
+	if s.CurrentPhase == "" {
+		return "", errors.New("no phase id given and state has no current_phase")
+	}
+	return s.CurrentPhase, nil
 }
 
 // taskNext prints the id of the next runnable task, or nothing.

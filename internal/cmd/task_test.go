@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -599,5 +600,168 @@ covers = ["c-1"]
 	}
 	if err := runCmd(t, Validate()); err != nil {
 		t.Errorf("dross validate after legal cross-wave move: %v", err)
+	}
+}
+
+// listPlan is a 3-task/2-wave plan where t-2 carries no `status` field at all —
+// the fixture that pins both the row count and the orPending rendering rule.
+const listPlan = `[phase]
+id = "01-test"
+[[task]]
+id = "t-1"
+wave = 1
+title = "first"
+files = ["a.go"]
+covers = ["c-1"]
+status = "done"
+[[task]]
+id = "t-2"
+wave = 1
+title = "second"
+files = ["b.go"]
+covers = ["c-1"]
+[[task]]
+id = "t-3"
+wave = 2
+title = "third"
+files = ["c.go"]
+covers = ["c-1"]
+status = "failed"
+`
+
+func TestTaskListTable(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", listPlan)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Task(), "list", "01-test"); err != nil {
+			t.Errorf("list: %v", err)
+		}
+	})
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 4 {
+		t.Fatalf("want header + 3 rows, got %d lines:\n%s", len(lines), out)
+	}
+	for _, col := range []string{"ID", "WAVE", "STATUS", "TITLE"} {
+		if !strings.Contains(lines[0], col) {
+			t.Errorf("header %q missing column %s", lines[0], col)
+		}
+	}
+	// Each row carries id, wave, status and title.
+	want := [][]string{
+		{"t-1", "1", "done", "first"},
+		{"t-2", "1", "pending", "second"}, // status absent in plan.toml → pending
+		{"t-3", "2", "failed", "third"},
+	}
+	for i, w := range want {
+		for _, field := range w {
+			if !strings.Contains(lines[i+1], field) {
+				t.Errorf("row %d = %q, missing %q", i+1, lines[i+1], field)
+			}
+		}
+	}
+	// A blank status column would leave "second" preceded by whitespace only.
+	if strings.Contains(out, "  second") && !strings.Contains(out, "pending") {
+		t.Error("absent status rendered blank instead of pending")
+	}
+}
+
+func TestTaskListJSON(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", listPlan)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Task(), "list", "01-test", "--json"); err != nil {
+			t.Errorf("list --json: %v", err)
+		}
+	})
+	var rows []struct {
+		ID     string `json:"id"`
+		Wave   int    `json:"wave"`
+		Status string `json:"status"`
+		Title  string `json:"title"`
+	}
+	if err := json.Unmarshal([]byte(out), &rows); err != nil {
+		t.Fatalf("--json did not emit a JSON array (table-only regression?): %v\ngot: %q", err, out)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("want 3 rows, got %d", len(rows))
+	}
+	if rows[0].ID != "t-1" || rows[0].Wave != 1 || rows[0].Status != "done" || rows[0].Title != "first" {
+		t.Errorf("row 0 = %+v", rows[0])
+	}
+	if rows[1].Status != "pending" {
+		t.Errorf("absent status in JSON = %q, want pending", rows[1].Status)
+	}
+	if rows[2].Wave != 2 {
+		t.Errorf("row 2 wave = %d, want 2", rows[2].Wave)
+	}
+}
+
+func TestTaskListJSONEmptyPlanIsEmptyArray(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", `[phase]
+id = "01-test"
+`)
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Task(), "list", "01-test", "--json"); err != nil {
+			t.Errorf("list --json on empty plan: %v", err)
+		}
+	})
+	if got := strings.TrimSpace(out); got != "[]" {
+		t.Errorf("empty plan --json = %q, want []", got)
+	}
+}
+
+func TestTaskListDefaultsToCurrentPhase(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", listPlan)
+	if err := runCmd(t, State(), "set", "current_phase", "01-test"); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Task(), "list"); err != nil {
+			t.Errorf("list with no phase-id: %v", err)
+		}
+	})
+	if !strings.Contains(out, "t-1") || !strings.Contains(out, "t-3") {
+		t.Errorf("no-arg list did not list current_phase's tasks:\n%s", out)
+	}
+}
+
+func TestTaskListNoPhaseIDAndNoCurrentPhase(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", listPlan)
+	// current_phase is empty out of `dross init`.
+
+	err := runCmd(t, Task(), "list")
+	if err == nil {
+		t.Fatal("want an error when neither a phase-id nor current_phase is available")
+	}
+	if !strings.Contains(err.Error(), "current_phase") {
+		t.Errorf("error = %q, want it to name current_phase (not a .dross/phases//plan.toml path)", err)
+	}
+	if strings.Contains(err.Error(), "phases//") {
+		t.Errorf("empty id was turned into a path: %q", err)
+	}
+}
+
+func TestTaskListUnknownPhaseErrorsBeforeHeader(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", listPlan)
+
+	var err error
+	out := captureStdout(t, func() {
+		err = runCmd(t, Task(), "list", "99-nope")
+	})
+	if err == nil {
+		t.Fatal("want an error for an unknown phase-id")
+	}
+	if !strings.Contains(err.Error(), "99-nope") {
+		t.Errorf("error = %q, want it to name the missing path", err)
+	}
+	if strings.Contains(out, "ID") || strings.Contains(out, "WAVE") {
+		t.Errorf("table header printed before the load failed:\n%s", out)
 	}
 }
