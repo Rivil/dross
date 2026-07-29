@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 11
 
 [phase]
   id = "root-robustness"
@@ -98,4 +98,24 @@ task_seq = 0
   covers = ["c-1", "c-2", "c-3", "c-4"]
   depends_on = ["t-3", "t-4", "t-5", "t-6", "t-7", "t-8"]
   test_contract = ["table over `state show`, `project show`, `validate`, `task list`, `verify`, `rule show`, `phase list`, `milestone show` against a `.dross/` missing state.json: every row returns a non-nil error containing \".dross/state.json\" AND RepairHint, each command its own subtest so a regression names the command", "no-write snapshot: after running `reentry`, `status`, `state touch x` and `pause --auto` in a dir with an incomplete `.dross/`, a recursive dir snapshot before and after is byte-identical — no handoff.md, no state.json, no new `.dross/`", "the same four commands in a dir with NO `.dross/` at all also create nothing and print nothing — the c-1 indistinguishability assertion", "source scan over non-test internal/cmd/*.go for ErrNoRoot: the file set must be a subset of {root.go, reentry.go, status.go, state.go, pause.go, rule.go}, and the set calling LocateRoot exactly {root.go, doctor.go, ship_recover.go, telemetry.go, verify.go} — a new command copying the silent pattern fails by filename", "onboard.go appears in the MissingRootFiles caller set and NOT in the LocateRoot caller set — the row that fails if onboard is ever given an up-walk (locked walk_stop)"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 3
+  title = "Cover the phase-status suffix in the pause auto-snapshot"
+  files = ["internal/cmd/pause_test.go"]
+  description = "verify FLAG: pause.go:100-101 (the `if st.CurrentPhaseStatus != \"\"` suffix) is never executed — every pause fixture is a fresh `dross init` repo with an empty current_phase, so the outer `if st.CurrentPhase != \"\"` guard is always false. Give one fixture a current_phase + current_phase_status and assert the rendered `- phase: <id> (<status>) · v<version>` line, plus a no-status counterpart so the suffix is pinned as conditional rather than unconditional."
+  covers = ["c-2"]
+  depends_on = ["t-4"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 3
+  title = "Pin telemetry bucketing to a real IncompleteRootError"
+  files = ["internal/cmd/telemetry_test.go"]
+  description = "verify FLAG: internal/telemetry/telemetry_test.go:509 pins the incomplete_root bucket against a hand-copied message literal, so a reword of root.go:40's prefix keeps the test green while real failures fall back into the opaque 'other' bucket. internal/telemetry cannot import internal/cmd, so assert telemetry.ClassifyError on an actual &IncompleteRootError{} value from package cmd instead."
+  covers = ["c-3"]
+  depends_on = ["t-8"]
   status = "done"

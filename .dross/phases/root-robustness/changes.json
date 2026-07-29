@@ -25,6 +25,36 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/cmd/pause_test.go"
+      ],
+      "commit": "7848c89",
+      "completed_at": "2026-07-29T13:20:47.986501Z",
+      "landmarks": [
+        {
+          "feature": "handoff auto-snapshot",
+          "symbol": "TestPauseAutoRendersPhaseStatus",
+          "loc": "internal/cmd/pause_test.go:287",
+          "what": "pins the phase line's nested current_phase/current_phase_status guards, closing the t-4 coverage hole"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/telemetry_test.go"
+      ],
+      "commit": "ebe27f5",
+      "completed_at": "2026-07-29T13:25:59.155231Z",
+      "landmarks": [
+        {
+          "feature": "telemetry error taxonomy",
+          "symbol": "TestClassifyRealIncompleteRootError",
+          "loc": "internal/cmd/telemetry_test.go:280",
+          "what": "classifies real FindRoot errors instead of a copied literal, so a reworded message cannot silently mis-bucket"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "assets/prompts/pause.md",
