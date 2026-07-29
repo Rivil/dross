@@ -606,3 +606,39 @@ func TestProjectGetUnknownPathAmongSeveral(t *testing.T) {
 		t.Errorf("a partial object was emitted: %q", out)
 	}
 }
+
+// TestProjectSetArityGuards covers the hand-rolled switch `set` uses instead of
+// cobra's arity check. `--unset` forced Args from ExactArgs(2) to RangeArgs(1,2),
+// so cobra no longer rejects a one-arg `set` and the guard is the only thing
+// standing between `dross project set <path>` and an args[1] index-out-of-range.
+func TestProjectSetArityGuards(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"unset with a value", []string{"set", "--unset", "board.provider", "jira"}, "--unset takes a path and no value"},
+		// The row cobra used to catch and now does not.
+		{"set with no value", []string{"set", "board.provider"}, "accepts 2 arg(s), received 1"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			chdir(t, t.TempDir())
+			scaffoldProject(t)
+			path := filepath.Join(".dross", "project.toml")
+			before := mustRead(t, path)
+
+			err := runCmd(t, Project(), c.args...)
+			if err == nil {
+				t.Fatalf("`project %s` succeeded; want an arity error", strings.Join(c.args, " "))
+			}
+			if err.Error() != c.want {
+				t.Errorf("error = %q, want %q", err, c.want)
+			}
+			// The guard runs before loadProject, so nothing is written.
+			if after := mustRead(t, path); after != before {
+				t.Errorf("project.toml was rewritten by a rejected set:\n%s", after)
+			}
+		})
+	}
+}
