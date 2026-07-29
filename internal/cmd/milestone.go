@@ -315,37 +315,57 @@ func milestoneShow() *cobra.Command {
 	}
 }
 
-// milestoneGet prints a single dotted-path field
-// (e.g. milestone.title, scope.success_criteria).
-// Lists are printed one entry per line.
+// milestoneGet prints one or more dotted-path fields (e.g. milestone.title,
+// scope.success_criteria). One path prints its bare value — a list one entry
+// per line — while two or more emit a single keyed JSON object
+// (locked multi_get_shape).
 func milestoneGet() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get [version] <dotted.path>",
-		Short: "Read a single milestone field by dotted path (version defaults to state.current_milestone)",
-		Args:  cobra.RangeArgs(1, 2),
+		Use:   "get [version] <dotted.path>...",
+		Short: "Read one or more milestone fields by dotted path (version defaults to state.current_milestone)",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			version, dotted := "", args[0]
-			if len(args) == 2 {
-				version, dotted = args[0], args[1]
+			version, paths := "", args
+			// Recognise a leading version by its SHAPE, never by elimination
+			// against the known-field list: by-elimination reads a typo'd
+			// path as a version and reports "no such milestone" instead of
+			// naming the bad path.
+			if len(args) > 1 && looksLikeMilestoneVersion(args[0]) {
+				version, paths = args[0], args[1:]
 			}
 			m, _, err := loadMilestone(version)
 			if err != nil {
 				return err
 			}
-			val, ok, list := readMilestoneDotted(m, dotted)
-			if !ok {
-				return fmt.Errorf("unknown milestone field: %s", dotted)
-			}
-			if list != nil {
-				for _, v := range list {
-					Print(v)
+			return renderMultiGet(paths, func(path string) (any, error) {
+				val, ok, list := readMilestoneDotted(m, path)
+				if !ok {
+					return nil, fmt.Errorf("unknown milestone field: %s", path)
 				}
-				return nil
-			}
-			Print(val)
-			return nil
+				if isMilestoneListPath(path) {
+					return list, nil
+				}
+				return val, nil
+			})
 		},
 	}
+}
+
+// looksLikeMilestoneVersion reports whether s has the shape of a milestone
+// version — a leading `v` followed by a digit. Every milestone on disk is
+// vN.N, and no dotted path can start that way.
+func looksLikeMilestoneVersion(s string) bool {
+	return len(s) >= 2 && (s[0] == 'v' || s[0] == 'V') && s[1] >= '0' && s[1] <= '9'
+}
+
+// isMilestoneListPath reports whether a path reads a list, so an empty list
+// serialises as [] rather than collapsing into an empty scalar.
+func isMilestoneListPath(path string) bool {
+	switch path {
+	case "scope.success_criteria", "scope.non_goals", "phases":
+		return true
+	}
+	return false
 }
 
 // milestoneSet writes a scalar dotted-path field. Use `add` for list fields.

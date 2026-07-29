@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -547,4 +548,61 @@ func scaffoldProject(t *testing.T) {
 func loadProjectAt(t *testing.T) (*project.Project, string, error) {
 	t.Helper()
 	return loadProject()
+}
+
+func TestProjectGetSinglePathUnchanged(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldProject(t)
+	mustRunSet(t, "project.name", "feast")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Project(), "get", "project.name"); err != nil {
+			t.Errorf("get: %v", err)
+		}
+	})
+	// Byte-identical against a literal — this is the guard that keeps every
+	// existing prompt's orientation step working.
+	if out != "feast\n" {
+		t.Errorf("project get project.name = %q, want %q", out, "feast\n")
+	}
+}
+
+func TestProjectGetMultiPath(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldProject(t)
+	mustRunSet(t, "project.name", "feast")
+	mustRunSet(t, "board.state_map.done", "Closed")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Project(), "get", "project.name", "runtime.mode", "board.state_map.done"); err != nil {
+			t.Errorf("multi get: %v", err)
+		}
+	})
+	var got map[string]string
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("multi-path project get is not one JSON object: %v\ngot %q", err, out)
+	}
+	want := map[string]string{"project.name": "feast", "runtime.mode": "native", "board.state_map.done": "Closed"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("multi get = %v, want %v", got, want)
+	}
+}
+
+func TestProjectGetUnknownPathAmongSeveral(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldProject(t)
+
+	var err error
+	out := captureStdout(t, func() {
+		err = runCmd(t, Project(), "get", "project.name", "project.nope")
+	})
+	if err == nil {
+		t.Fatal("want an error for an unknown path")
+	}
+	if !strings.Contains(err.Error(), "project.nope") {
+		t.Errorf("error = %q, want it to name project.nope", err)
+	}
+	if strings.TrimSpace(out) != "" {
+		t.Errorf("a partial object was emitted: %q", out)
+	}
 }

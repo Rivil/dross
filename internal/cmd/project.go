@@ -36,23 +36,26 @@ func projectShow() *cobra.Command {
 	}
 }
 
-// projectGet prints a single dotted-path field (e.g. project.name, runtime.mode).
+// projectGet prints one or more dotted-path fields (e.g. project.name,
+// runtime.mode). One path prints its bare value exactly as it always has; two
+// or more emit a single keyed JSON object (locked multi_get_shape).
 func projectGet() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <dotted.path>",
-		Short: "Print a single field by dotted path",
-		Args:  cobra.ExactArgs(1),
+		Use:   "get <dotted.path>...",
+		Short: "Print one or more fields by dotted path (multiple emit a keyed JSON object)",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			p, _, err := loadProject()
 			if err != nil {
 				return err
 			}
-			v, ok := readDotted(p, args[0])
-			if !ok {
-				return fmt.Errorf("unknown field: %s", args[0])
-			}
-			Print(v)
-			return nil
+			return renderMultiGet(args, func(path string) (any, error) {
+				v, ok := readDotted(p, path)
+				if !ok {
+					return nil, fmt.Errorf("unknown field: %s", path)
+				}
+				return v, nil
+			})
 		},
 	}
 }
