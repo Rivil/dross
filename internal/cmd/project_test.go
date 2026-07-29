@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -356,4 +357,194 @@ func TestProjectCover_GetPropagatesLoadError(t *testing.T) {
 	if err := runCmd(t, Project(), "get", "project.name"); err == nil {
 		t.Fatal("expected project get to error when no .dross root exists")
 	}
+}
+
+// TestBoardFieldsAllAddressable is the completeness guard behind c-6: every
+// [board] field the code reads must be reachable through both readDotted and
+// writeDotted. Driven by reflection over the toml tags rather than a hand-kept
+// list, so a 10th Board field fails here the day it is added.
+func TestBoardFieldsAllAddressable(t *testing.T) {
+	bt := reflect.TypeOf(project.Board{})
+	for i := 0; i < bt.NumField(); i++ {
+		f := bt.Field(i)
+		tag, _, _ := strings.Cut(f.Tag.Get("toml"), ",")
+		if tag == "" || tag == "-" {
+			t.Fatalf("Board.%s has no toml tag — the dotted path is undefined", f.Name)
+		}
+		path, probe := "board."+tag, "x"
+		switch f.Type.Kind() {
+		case reflect.Map:
+			// Map fields are addressed one entry at a time
+			// (locked state_map_write), so probe a concrete key.
+			path += ".probe"
+		case reflect.Bool:
+			probe = "true"
+		}
+		p := &project.Project{}
+		if err := writeDotted(p, path, probe); err != nil {
+			t.Errorf("Board.%s: writeDotted(%q) = %v — field is not settable", f.Name, path, err)
+			continue
+		}
+		if _, ok := readDotted(p, path); !ok {
+			t.Errorf("Board.%s: readDotted(%q) not ok — field is not readable", f.Name, path)
+		}
+	}
+}
+
+func TestStateMapPerKeyWrite(t *testing.T) {
+	// No [board.state_map] table at all: the first write must create the map,
+	// not panic on a nil map.
+	p := &project.Project{}
+	if err := writeDotted(p, "board.state_map.done", "Closed"); err != nil {
+		t.Fatalf("first state_map write: %v", err)
+	}
+	if got, _ := readDotted(p, "board.state_map.done"); got != "Closed" {
+		t.Errorf("board.state_map.done = %q, want Closed", got)
+	}
+
+	// A second key must not clobber the first — per-key write, never a
+	// whole-map replace.
+	if err := writeDotted(p, "board.state_map.in-progress", "In Review"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := readDotted(p, "board.state_map.done"); got != "Closed" {
+		t.Errorf("after writing a second key, board.state_map.done = %q, want Closed", got)
+	}
+	if got, _ := readDotted(p, "board.state_map.in-progress"); got != "In Review" {
+		t.Errorf("board.state_map.in-progress = %q, want In Review", got)
+	}
+
+	// Bare `board.state_map` is not an addressable leaf.
+	if err := writeDotted(p, "board.state_map", "x"); err == nil {
+		t.Error("bare board.state_map was accepted as a leaf; want unknown-field error")
+	}
+}
+
+func TestProjectUnsetStateMapEntry(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldProject(t)
+	mustRunSet(t, "board.state_map.done", "Closed")
+	mustRunSet(t, "board.state_map.in-progress", "In Review")
+	mustRunSet(t, "board.provider", "jira")
+
+	if err := runCmd(t, Project(), "set", "--unset", "board.state_map.done"); err != nil {
+		t.Fatalf("--unset state_map entry: %v", err)
+	}
+	p, _, err := loadProjectAt(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, present := p.Board.StateMap["done"]; present {
+		t.Error("board.state_map.done survived --unset")
+	}
+	if p.Board.StateMap["in-progress"] != "In Review" {
+		t.Errorf("sibling entry lost: %v", p.Board.StateMap)
+	}
+	if p.Board.Provider != "jira" {
+		t.Errorf("board.provider lost: %q", p.Board.Provider)
+	}
+
+	// Unsetting the last entry drops the table entirely — no empty
+	// [board.state_map] left behind.
+	if err := runCmd(t, Project(), "set", "--unset", "board.state_map.in-progress"); err != nil {
+		t.Fatal(err)
+	}
+	body := mustRead(t, filepath.Join(".dross", "project.toml"))
+	if strings.Contains(body, "state_map") {
+		t.Errorf("empty [board.state_map] table left in project.toml:\n%s", body)
+	}
+}
+
+func TestProjectUnsetScalarAndList(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldProject(t)
+	mustRunSet(t, "repo.squash_merge", "true")
+	mustRunSet(t, "remote.reviewers", "a,b")
+	mustRunSet(t, "remote.url", "https://example.com/x")
+
+	for _, path := range []string{"repo.squash_merge", "remote.reviewers", "remote.url"} {
+		if err := runCmd(t, Project(), "set", "--unset", path); err != nil {
+			t.Fatalf("--unset %s: %v", path, err)
+		}
+	}
+	p, _, err := loadProjectAt(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Repo.SquashMerge {
+		t.Error("--unset repo.squash_merge did not yield false")
+	}
+	if len(p.Remote.Reviewers) != 0 {
+		t.Errorf("--unset remote.reviewers = %v, want absent", p.Remote.Reviewers)
+	}
+	if p.Remote.URL != "" {
+		t.Errorf("--unset remote.url = %q", p.Remote.URL)
+	}
+	body := mustRead(t, filepath.Join(".dross", "project.toml"))
+	if strings.Contains(body, "<nil>") {
+		t.Errorf("unset wrote the literal string <nil>:\n%s", body)
+	}
+	if strings.Contains(body, "reviewers") {
+		t.Errorf("unset list is still present in project.toml:\n%s", body)
+	}
+}
+
+func TestProjectUnsetUnknownPathLeavesFileUnchanged(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldProject(t)
+	path := filepath.Join(".dross", "project.toml")
+	before := mustRead(t, path)
+
+	err := runCmd(t, Project(), "set", "--unset", "board.nope")
+	if err == nil {
+		t.Fatal("--unset on an unknown path succeeded")
+	}
+	// Same message `set` gives for the same path.
+	setErr := runCmd(t, Project(), "set", "board.nope", "x")
+	if setErr == nil || err.Error() != setErr.Error() {
+		t.Errorf("--unset error = %v, want the same as set's %v", err, setErr)
+	}
+	if after := mustRead(t, path); after != before {
+		t.Errorf("project.toml was rewritten by a failed --unset:\n%s", after)
+	}
+}
+
+func TestProjectGitHubProjectRoundTrip(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldProject(t)
+	mustRunSet(t, "board.github_project", "PVT_x")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Project(), "get", "board.github_project"); err != nil {
+			t.Errorf("get: %v", err)
+		}
+	})
+	if strings.TrimSpace(out) != "PVT_x" {
+		t.Errorf("get board.github_project = %q, want PVT_x", strings.TrimSpace(out))
+	}
+	p, _, err := loadProjectAt(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Board.GitHubProject != "PVT_x" {
+		t.Errorf("reloaded Board.GitHubProject = %q — stray top-level key?", p.Board.GitHubProject)
+	}
+}
+
+// scaffoldProject initialises a .dross root with the minimum project.toml the
+// set/get tests need.
+func scaffoldProject(t *testing.T) {
+	t.Helper()
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	mustRunSet(t, "project.name", "x")
+	mustRunSet(t, "runtime.mode", "native")
+}
+
+// loadProjectAt re-reads project.toml from disk so assertions see what was
+// actually persisted, not an in-memory struct.
+func loadProjectAt(t *testing.T) (*project.Project, string, error) {
+	t.Helper()
+	return loadProject()
 }

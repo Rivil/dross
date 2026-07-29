@@ -182,7 +182,7 @@ export PATH="$HOME/.local/bin:$PATH"
 |---|---|:---:|
 | `dross init` | Bootstrap `.dross/` (greenfield) | ✅ |
 | `dross onboard` | Adopt an existing repo (signal scan) | ✅ |
-| `dross project {show,get,set}` | Read/write `project.toml` fields | ✅ |
+| `dross project {show,get,set}` | Read/write `project.toml` fields by dotted path. Every `[board]` field is settable — including `board.github_project` and individual `board.state_map.<status>` entries, addressed one key at a time. `set --unset <path>` clears a field written by mistake (a scalar, or a single `state_map` entry) without hand-editing TOML | ✅ |
 | `dross state {show,set,touch,bump}` | Read/write `state.json` (`bump internal` increments the 4th version segment) | ✅ |
 | `dross rule {add,list,remove,promote,disable,enable,show}` | Two-tier rules system | ✅ |
 | `dross phase {create,list,show,complete,insert,move,rename,number,migrate}` | Phase directories + slug-based lifecycle. `create` auto-checks out a `phase/<id>` branch off the base so phase work never lands on main; `complete` finalizes after squash-merge (ff base, delete local `phase/<id>`); `insert`/`move`/`rename` edit a milestone's phase array and on-disk identity; `number` prints a phase's ordinal; `migrate` converts legacy NN-slug phases to bare slugs | ✅ |

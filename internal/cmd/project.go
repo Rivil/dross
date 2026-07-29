@@ -59,22 +59,39 @@ func projectGet() *cobra.Command {
 
 // projectSet writes a single dotted-path field.
 // String slices accept comma-separated input; bools accept true/false; ints parsed.
+// `--unset <path>` takes no value and clears the field instead.
 func projectSet() *cobra.Command {
-	return &cobra.Command{
+	var unset bool
+	c := &cobra.Command{
 		Use:   "set <dotted.path> <value>",
-		Short: "Write a single field by dotted path",
-		Args:  cobra.ExactArgs(2),
+		Short: "Write a single field by dotted path (--unset clears it)",
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(_ *cobra.Command, args []string) error {
+			switch {
+			case unset && len(args) != 1:
+				return fmt.Errorf("--unset takes a path and no value")
+			case !unset && len(args) != 2:
+				return fmt.Errorf("accepts 2 arg(s), received %d", len(args))
+			}
 			p, path, err := loadProject()
 			if err != nil {
 				return err
 			}
-			if err := writeDotted(p, args[0], args[1]); err != nil {
+			// Resolve before writing: a rejected path errors out here, leaving
+			// project.toml byte-unchanged rather than truncate-then-fail.
+			if unset {
+				err = unsetDotted(p, args[0])
+			} else {
+				err = writeDotted(p, args[0], args[1])
+			}
+			if err != nil {
 				return err
 			}
 			return p.Save(path)
 		},
 	}
+	c.Flags().BoolVar(&unset, "unset", false, "clear the field at <dotted.path> instead of writing a value")
+	return c
 }
 
 func loadProject() (*project.Project, string, error) {
@@ -95,6 +112,12 @@ func loadProject() (*project.Project, string, error) {
 // runtime.services and stack.locked still require direct toml edits;
 // /dross-options surfaces them but doesn't iterate keys.
 func readDotted(p *project.Project, path string) (string, bool) {
+	// board.state_map.<status> addresses one entry at a time (locked
+	// state_map_write). The path is always known; an absent entry reads back
+	// empty, exactly like an unset scalar.
+	if key, ok := stateMapKey(path); ok {
+		return p.Board.StateMap[key], true
+	}
 	switch path {
 	// project
 	case "project.name":
@@ -200,6 +223,8 @@ func readDotted(p *project.Project, path string) (string, bool) {
 		return fmt.Sprintf("%t", p.Board.Enabled), true
 	case "board.milestone_mode":
 		return p.Board.MilestoneMode, true
+	case "board.github_project":
+		return p.Board.GitHubProject, true
 	// paths
 	case "paths.source":
 		return p.Paths.Source, true
@@ -252,6 +277,16 @@ func writeDotted(p *project.Project, path, value string) error {
 			return err
 		}
 		*target = b
+		return nil
+	}
+	// One state_map entry at a time — never a whole-map replace, so the other
+	// entries survive and a project.toml with no [board.state_map] table gets
+	// the map created rather than a nil-map panic.
+	if key, ok := stateMapKey(path); ok {
+		if p.Board.StateMap == nil {
+			p.Board.StateMap = map[string]string{}
+		}
+		p.Board.StateMap[key] = value
 		return nil
 	}
 	switch path {
@@ -359,6 +394,8 @@ func writeDotted(p *project.Project, path, value string) error {
 		return setBool(&p.Board.Enabled)
 	case "board.milestone_mode":
 		p.Board.MilestoneMode = value
+	case "board.github_project":
+		p.Board.GitHubProject = value
 	// paths
 	case "paths.source":
 		p.Paths.Source = value
@@ -394,6 +431,32 @@ func writeDotted(p *project.Project, path, value string) error {
 		return fmt.Errorf("unknown or unsettable field: %s", path)
 	}
 	return nil
+}
+
+// stateMapKey recognises a `board.state_map.<status>` path and returns the
+// entry key. The suffix must be non-empty and single-segment — bare
+// `board.state_map` is not an addressable leaf.
+func stateMapKey(path string) (string, bool) {
+	key, ok := strings.CutPrefix(path, "board.state_map.")
+	if !ok || key == "" || strings.Contains(key, ".") {
+		return "", false
+	}
+	return key, true
+}
+
+// unsetDotted clears a field written by mistake. A scalar is zeroed through
+// writeDotted's own arms — so an unknown path fails with the same message
+// `set` gives, before anything is written — while a state_map entry is deleted
+// outright, and the last one takes the whole table with it.
+func unsetDotted(p *project.Project, path string) error {
+	if key, ok := stateMapKey(path); ok {
+		delete(p.Board.StateMap, key)
+		if len(p.Board.StateMap) == 0 {
+			p.Board.StateMap = nil
+		}
+		return nil
+	}
+	return writeDotted(p, path, "")
 }
 
 func parseBool(v string) (bool, error) {
