@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -155,5 +156,84 @@ func TestStateShowRendersJSON(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("state show missing %q\n--- output ---\n%s", want, out)
 		}
+	}
+}
+
+// TestStateTouchSilentOnNonRoot (c-2) pins `state touch` as a hook target: on
+// an incomplete root it exits 0, prints nothing, and — the real assertion —
+// creates no state.json. A fix that silently scaffolds the file instead of
+// bailing passes the first two checks and fails the third.
+func TestStateTouchSilentOnNonRoot(t *testing.T) {
+	dir := realTempDir(t)
+	root := mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	var err error
+	out := captureStdout(t, func() { err = runCmd(t, State(), "touch", "x") })
+	if err != nil {
+		t.Errorf("state touch should exit 0 outside a dross repo, got %v", err)
+	}
+	if out != "" {
+		t.Errorf("state touch should print nothing outside a dross repo, got:\n%s", out)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, state.File)); !os.IsNotExist(statErr) {
+		t.Errorf("state touch must not create state.json; stat err = %v", statErr)
+	}
+}
+
+// TestStateShowLoudOnNonRoot is the scoping test for t-3: the silence belongs
+// in the two hook handlers, never in loadState(). `state show` is a
+// user-typed read against the same fixture and must stay loud — moving the
+// swallow down into loadState() makes it silent and fails here.
+func TestStateShowLoudOnNonRoot(t *testing.T) {
+	dir := realTempDir(t)
+	mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	err := runCmd(t, State(), "show")
+	if err == nil {
+		t.Fatal("state show should fail on an incomplete root")
+	}
+	if !strings.Contains(err.Error(), filepath.Join(RootDirName, "state.json")) {
+		t.Errorf("error should name .dross/state.json, got %v", err)
+	}
+}
+
+// TestStateTouchLoudOnCorruptState (locked completeness_check): corrupt is
+// loud even in the hook targets. An implementation that swallows every
+// loadState error in the handler — rather than only ErrNoRoot — passes every
+// other row in this phase and dies here.
+func TestStateTouchLoudOnCorruptState(t *testing.T) {
+	dir := realTempDir(t)
+	root := mkRoot(t, dir, "project.toml")
+	if err := os.WriteFile(filepath.Join(root, state.File), []byte("{{{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+
+	err := runCmd(t, State(), "touch", "x")
+	if err == nil {
+		t.Fatal("state touch should fail loudly on a corrupt state.json")
+	}
+	if !strings.Contains(err.Error(), state.File) {
+		t.Errorf("error should name state.json, got %v", err)
+	}
+}
+
+// TestStateLoadNamesPathOnCorrupt pins the unmarshal error wrap in
+// state.Load: without the path in the message, the two corrupt-file rows
+// above have nothing to assert on.
+func TestStateLoadNamesPathOnCorrupt(t *testing.T) {
+	path := filepath.Join(realTempDir(t), state.File)
+	if err := os.WriteFile(path, []byte("{{{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := state.Load(path)
+	if err == nil {
+		t.Fatal("state.Load should reject unparseable JSON")
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("error should contain the file path %q, got %v", path, err)
 	}
 }
