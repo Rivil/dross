@@ -64,10 +64,11 @@ func CuratedHint(cmdPath, token string) (Hint, bool) {
 	return h, ok
 }
 
-// nearestMaxDistance matches cobra's own SuggestionsMinimumDistance (set in
-// EnforceSubcommandKnown), so our fallback and cobra's built-in suggestions
-// agree on what counts as "close".
-const nearestMaxDistance = 2
+// nearestMaxDistance is deliberately one wider than cobra's
+// SuggestionsMinimumDistance (2, set in EnforceSubcommandKnown). At the same
+// threshold this fallback would only ever repeat what cobra already found; the
+// extra step is what makes it reach typos cobra silently gives up on.
+const nearestMaxDistance = 3
 
 // Nearest returns the candidates closest to typed, or nothing when none is
 // within nearestMaxDistance. A far-off typo gets no suggestion rather than a
