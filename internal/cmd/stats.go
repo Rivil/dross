@@ -26,8 +26,70 @@ func Stats() *cobra.Command {
 	return c
 }
 
+// statsSummary is the aggregation both renderings read. The table and the
+// --json payload are two views of this one struct, so the payload cannot
+// silently drop a section the table still prints — c-5's "the same data its
+// default rendering shows", made structural rather than promised.
+//
+// It carries one field per rendered section: header, commands, errors,
+// overrides, outcomes. Where the table truncates (top 10 commands, top 5
+// unclassified shapes) the summary keeps the full ordered list and the
+// renderers cap — JSON is for machines, and a silent cap there would be a
+// second, invisible truncation.
+type statsSummary struct {
+	Path       string         `json:"path"`
+	Events     int            `json:"events"`
+	Span       *statsSpan     `json:"span"` // nil when there are no events
+	Commands   []statsCommand `json:"commands"`
+	Errors     statsErrors    `json:"errors"`
+	ForceFlags int            `json:"force_flag_invocations"`
+	Outcomes   statsOutcomes  `json:"outcomes"`
+}
+
+type statsSpan struct {
+	First string `json:"first"`
+	Last  string `json:"last"`
+	Human string `json:"human"`
+}
+
+type statsCommand struct {
+	Command  string `json:"command"`
+	Calls    int    `json:"calls"`
+	Errors   int    `json:"errors"`
+	MedianMS int64  `json:"median_ms"`
+}
+
+type statsErrorClass struct {
+	Class string `json:"class"`
+	Count int    `json:"count"`
+}
+
+// statsOtherShape is one entry of the graduation queue — an err_detail still
+// landing in the `other` bucket. Carried in the payload as well as the table
+// so a consumer can see what has earned a named bucket.
+type statsOtherShape struct {
+	Detail string `json:"detail"`
+	Count  int    `json:"count"`
+}
+
+type statsErrors struct {
+	Total     int               `json:"total"`
+	Classes   []statsErrorClass `json:"classes"`
+	OtherTail []statsOtherShape `json:"other_tail"`
+}
+
+type statsOutcomes struct {
+	VerifyVerdicts   map[string]int `json:"verify_verdicts"`
+	MutationScoreAvg float64        `json:"mutation_score_avg"`
+	MutationScoreN   int            `json:"mutation_score_n"`
+	ShipResults      map[string]int `json:"ship_results"`
+	DoctorResults    map[string]int `json:"doctor_results"`
+	DoctorIssues     int            `json:"doctor_issues"`
+}
+
 func statsShow() *cobra.Command {
 	var since string
+	var asJSON bool
 	c := &cobra.Command{
 		Use:   "show",
 		Short: "Print aggregate views of recorded events",
@@ -41,20 +103,180 @@ func statsShow() *cobra.Command {
 			if !cutoff.IsZero() {
 				events = filterSince(events, cutoff)
 			}
+			s := summarizeStats(events, path)
+			if asJSON {
+				// An empty log is an empty-but-valid document, not the
+				// "(no telemetry events …)" sentence — a consumer asking for
+				// JSON must always get JSON.
+				return emitJSON(s)
+			}
 			if len(events) == 0 {
 				Printf("(no telemetry events at %s)\n", path)
 				return nil
 			}
-			renderHeader(events, path)
-			renderTopCommands(events)
-			renderErrorBuckets(events)
-			renderForceFlags(events)
-			renderOutcomes(events)
+			renderHeader(s)
+			renderTopCommands(s)
+			renderErrorBuckets(s)
+			renderForceFlags(s)
+			renderOutcomes(s)
 			return nil
 		},
 	}
 	c.Flags().StringVar(&since, "since", "", "filter to events newer than (e.g. 7d, 24h, 2026-05-01)")
+	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
 	return c
+}
+
+// summarizeStats folds the event log into every number the renderings print.
+// Slices and maps are always non-nil so the payload carries `[]` / `{}` rather
+// than `null` for an empty section.
+func summarizeStats(events []telemetry.Event, path string) *statsSummary {
+	s := &statsSummary{
+		Path:     path,
+		Events:   len(events),
+		Commands: []statsCommand{},
+		Errors:   statsErrors{Classes: []statsErrorClass{}, OtherTail: []statsOtherShape{}},
+		Outcomes: statsOutcomes{
+			VerifyVerdicts: map[string]int{},
+			ShipResults:    map[string]int{},
+			DoctorResults:  map[string]int{},
+		},
+	}
+	if len(events) == 0 {
+		return s
+	}
+
+	first, last := events[0].Timestamp, events[len(events)-1].Timestamp
+	s.Span = &statsSpan{
+		First: first.Format("2006-01-02"),
+		Last:  last.Format("2006-01-02"),
+		Human: humanDuration(last.Sub(first)),
+	}
+
+	// --- commands ---
+	type cmdRow struct {
+		cmd    string
+		count  int
+		errors int
+		totMS  int64
+	}
+	by := map[string]*cmdRow{}
+	for _, e := range events {
+		if e.Kind != "cli" || e.Command == "" {
+			continue
+		}
+		r, ok := by[e.Command]
+		if !ok {
+			r = &cmdRow{cmd: e.Command}
+			by[e.Command] = r
+		}
+		r.count++
+		r.totMS += e.DurationMS
+		if e.ExitCode != 0 {
+			r.errors++
+		}
+	}
+	rows := make([]*cmdRow, 0, len(by))
+	for _, r := range by {
+		rows = append(rows, r)
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].count > rows[j].count })
+	for _, r := range rows {
+		median := int64(0)
+		if r.count > 0 {
+			median = r.totMS / int64(r.count) // good enough approximation
+		}
+		s.Commands = append(s.Commands, statsCommand{Command: r.cmd, Calls: r.count, Errors: r.errors, MedianMS: median})
+	}
+
+	// --- errors ---
+	classes := map[string]int{}
+	tail := map[string]int{}
+	for _, e := range events {
+		if e.ErrorClass == "" {
+			continue
+		}
+		// Count the effective class, not the stored one: a bucket added after
+		// an event was written still applies to it. The log is not rewritten.
+		class := telemetry.Reclassify(e)
+		classes[class]++
+		s.Errors.Total++
+		// Whatever is still "other" after re-derivation is genuinely
+		// unclassified — that's the graduation queue.
+		if class == "other" && e.ErrorDetail != "" {
+			tail[e.ErrorDetail]++
+		}
+	}
+	for k, v := range classes {
+		s.Errors.Classes = append(s.Errors.Classes, statsErrorClass{Class: k, Count: v})
+	}
+	sort.Slice(s.Errors.Classes, func(i, j int) bool { return s.Errors.Classes[i].Count > s.Errors.Classes[j].Count })
+	for k, v := range tail {
+		s.Errors.OtherTail = append(s.Errors.OtherTail, statsOtherShape{Detail: k, Count: v})
+	}
+	// Count descending, then shape ascending — map iteration order must not
+	// leak into the output, or equal-count shapes reorder between runs.
+	sort.Slice(s.Errors.OtherTail, func(i, j int) bool {
+		if s.Errors.OtherTail[i].Count != s.Errors.OtherTail[j].Count {
+			return s.Errors.OtherTail[i].Count > s.Errors.OtherTail[j].Count
+		}
+		return s.Errors.OtherTail[i].Detail < s.Errors.OtherTail[j].Detail
+	})
+
+	// --- overrides ---
+	for _, e := range events {
+		if e.Tags["force"] == "true" {
+			s.ForceFlags++
+		}
+	}
+
+	// --- outcomes ---
+	// latestVerifyByPhase tracks the most recent verify verdict per phase
+	// (events arrive timestamp-ordered from Load). "pending" is counted from
+	// here — a phase whose pending event was later closed by a resolved event
+	// (finalize, or a gate's auto-heal) is NOT an unfinalized verify, so raw
+	// pending-event counting would nag forever. Legacy events without a phase
+	// id can't be matched and are excluded from the pending count.
+	latestVerifyByPhase := map[string]string{}
+	mutationScores := []float64{}
+	for _, e := range events {
+		if e.Kind != "outcome" {
+			continue
+		}
+		switch e.Command {
+		case "verify":
+			if v := e.Tags["verdict"]; v != "" {
+				if v != "pending" {
+					s.Outcomes.VerifyVerdicts[v]++
+				}
+				if e.Phase != "" {
+					latestVerifyByPhase[e.RepoHash+"/"+e.Phase] = v
+				}
+			}
+			if score, ok := e.Numbers["mutation_score"]; ok {
+				mutationScores = append(mutationScores, score)
+			}
+		case "ship":
+			if r := e.Tags["result"]; r != "" {
+				s.Outcomes.ShipResults[r]++
+			}
+		case "doctor":
+			if r := e.Tags["result"]; r != "" {
+				s.Outcomes.DoctorResults[r]++
+			}
+			s.Outcomes.DoctorIssues += e.Counts["issues"]
+		}
+	}
+	for _, v := range latestVerifyByPhase {
+		if v == "pending" {
+			s.Outcomes.VerifyVerdicts["pending"]++
+		}
+	}
+	s.Outcomes.MutationScoreN = len(mutationScores)
+	if len(mutationScores) > 0 {
+		s.Outcomes.MutationScoreAvg = avg(mutationScores)
+	}
+	return s
 }
 
 func statsPath() *cobra.Command {
@@ -115,47 +337,15 @@ func setTelemetryEnabled(on bool) error {
 
 // --- aggregations ---
 
-func renderHeader(events []telemetry.Event, path string) {
-	first := events[0].Timestamp
-	last := events[len(events)-1].Timestamp
-	Printf("# dross telemetry — %s\n", path)
-	Printf("  events:  %d\n", len(events))
-	Printf("  span:    %s → %s (%s)\n",
-		first.Format("2006-01-02"),
-		last.Format("2006-01-02"),
-		humanDuration(last.Sub(first)))
+func renderHeader(s *statsSummary) {
+	Printf("# dross telemetry — %s\n", s.Path)
+	Printf("  events:  %d\n", s.Events)
+	Printf("  span:    %s → %s (%s)\n", s.Span.First, s.Span.Last, s.Span.Human)
 	Print("")
 }
 
-func renderTopCommands(events []telemetry.Event) {
-	type row struct {
-		cmd    string
-		count  int
-		errors int
-		totMS  int64
-	}
-	by := map[string]*row{}
-	for _, e := range events {
-		if e.Kind != "cli" || e.Command == "" {
-			continue
-		}
-		r, ok := by[e.Command]
-		if !ok {
-			r = &row{cmd: e.Command}
-			by[e.Command] = r
-		}
-		r.count++
-		r.totMS += e.DurationMS
-		if e.ExitCode != 0 {
-			r.errors++
-		}
-	}
-	rows := make([]*row, 0, len(by))
-	for _, r := range by {
-		rows = append(rows, r)
-	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].count > rows[j].count })
-
+func renderTopCommands(s *statsSummary) {
+	rows := s.Commands
 	Print("## commands (top 10 by count)")
 	Printf("  %-30s %8s %8s %12s\n", "command", "calls", "errors", "median_ms")
 	max := 10
@@ -163,11 +353,7 @@ func renderTopCommands(events []telemetry.Event) {
 		max = len(rows)
 	}
 	for _, r := range rows[:max] {
-		median := int64(0)
-		if r.count > 0 {
-			median = r.totMS / int64(r.count) // good enough approximation
-		}
-		Printf("  %-30s %8d %8d %12d\n", r.cmd, r.count, r.errors, median)
+		Printf("  %-30s %8d %8d %12d\n", r.Command, r.Calls, r.Errors, r.MedianMS)
 	}
 	Print("")
 }
@@ -182,46 +368,18 @@ const tailTopN = 5
 // enough to recognise a shape.
 const tailDetailLen = 100
 
-func renderErrorBuckets(events []telemetry.Event) {
-	by := map[string]int{}
-	tail := map[string]int{}
-	total := 0
-	for _, e := range events {
-		if e.ErrorClass == "" {
-			continue
-		}
-		// Count the effective class, not the stored one: a bucket added after
-		// an event was written still applies to it. The log is not rewritten.
-		class := telemetry.Reclassify(e)
-		by[class]++
-		total++
-		// Whatever is still "other" after re-derivation is genuinely
-		// unclassified — that's the graduation queue.
-		if class == "other" && e.ErrorDetail != "" {
-			tail[e.ErrorDetail]++
-		}
-	}
-	if total == 0 {
+func renderErrorBuckets(s *statsSummary) {
+	if s.Errors.Total == 0 {
 		Print("## errors")
 		Print("  (no failed invocations recorded)")
 		Print("")
 		return
 	}
-	type kv struct {
-		k string
-		v int
-	}
-	rows := make([]kv, 0, len(by))
-	for k, v := range by {
-		rows = append(rows, kv{k, v})
-	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].v > rows[j].v })
-
 	Print("## errors (by class)")
-	for _, r := range rows {
-		Printf("  %-16s %4d\n", r.k, r.v)
+	for _, r := range s.Errors.Classes {
+		Printf("  %-16s %4d\n", r.Class, r.Count)
 	}
-	renderOtherTail(tail)
+	renderOtherTail(s.Errors.OtherTail)
 	Print("")
 }
 
@@ -229,32 +387,18 @@ func renderErrorBuckets(events []telemetry.Event) {
 // under the errors table — the queue of message shapes that have earned a named
 // bucket but not got one yet. Omitted entirely when the tail is empty, so the
 // section costs nothing once the bucket is drained.
-func renderOtherTail(tail map[string]int) {
-	if len(tail) == 0 {
+func renderOtherTail(rows []statsOtherShape) {
+	if len(rows) == 0 {
 		return
 	}
-	type kv struct {
-		k string
-		v int
-	}
-	rows := make([]kv, 0, len(tail))
-	for k, v := range tail {
-		rows = append(rows, kv{k, v})
-	}
-	// Count descending, then shape ascending — map iteration order must not
-	// leak into the output, or equal-count shapes reorder between runs.
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].v != rows[j].v {
-			return rows[i].v > rows[j].v
-		}
-		return rows[i].k < rows[j].k
-	})
+	// Already sorted count-descending then shape-ascending by summarizeStats;
+	// the cap is the renderer's, so the payload keeps the whole queue.
 	if len(rows) > tailTopN {
 		rows = rows[:tailTopN]
 	}
 	Printf("  unclassified `other` shapes (top %d):\n", len(rows))
 	for _, r := range rows {
-		Printf("    %4d  %s\n", r.v, oneLineDetail(r.k))
+		Printf("    %4d  %s\n", r.Count, oneLineDetail(r.Detail))
 	}
 }
 
@@ -270,70 +414,22 @@ func oneLineDetail(detail string) string {
 	return s
 }
 
-func renderForceFlags(events []telemetry.Event) {
+func renderForceFlags(s *statsSummary) {
 	// Surfaces "user reached for an override" patterns. We don't log raw
 	// flag values, but outcome events can tag force=true.
-	count := 0
-	for _, e := range events {
-		if e.Tags["force"] == "true" {
-			count++
-		}
-	}
-	if count == 0 {
+	if s.ForceFlags == 0 {
 		return
 	}
 	Print("## overrides")
-	Printf("  force-flag invocations: %d (signal of friction worth investigating)\n", count)
+	Printf("  force-flag invocations: %d (signal of friction worth investigating)\n", s.ForceFlags)
 	Print("")
 }
 
-func renderOutcomes(events []telemetry.Event) {
-	verifyVerdicts := map[string]int{}
-	// latestVerifyByPhase tracks the most recent verify verdict per
-	// phase (events arrive timestamp-ordered from Load). "pending" is
-	// counted from here — a phase whose pending event was later closed
-	// by a resolved event (finalize, or a gate's auto-heal) is NOT an
-	// unfinalized verify, so raw pending-event counting would nag
-	// forever. Legacy events without a phase id can't be matched and
-	// are excluded from the pending count.
-	latestVerifyByPhase := map[string]string{}
-	mutationScores := []float64{}
-	shipResults := map[string]int{}
-	doctorResults := map[string]int{}
-	doctorIssues := 0
-	for _, e := range events {
-		if e.Kind != "outcome" {
-			continue
-		}
-		switch e.Command {
-		case "verify":
-			if v := e.Tags["verdict"]; v != "" {
-				if v != "pending" {
-					verifyVerdicts[v]++
-				}
-				if e.Phase != "" {
-					latestVerifyByPhase[e.RepoHash+"/"+e.Phase] = v
-				}
-			}
-			if s, ok := e.Numbers["mutation_score"]; ok {
-				mutationScores = append(mutationScores, s)
-			}
-		case "ship":
-			if r := e.Tags["result"]; r != "" {
-				shipResults[r]++
-			}
-		case "doctor":
-			if r := e.Tags["result"]; r != "" {
-				doctorResults[r]++
-			}
-			doctorIssues += e.Counts["issues"]
-		}
-	}
-	for _, v := range latestVerifyByPhase {
-		if v == "pending" {
-			verifyVerdicts["pending"]++
-		}
-	}
+func renderOutcomes(s *statsSummary) {
+	verifyVerdicts := s.Outcomes.VerifyVerdicts
+	shipResults := s.Outcomes.ShipResults
+	doctorResults := s.Outcomes.DoctorResults
+	doctorIssues := s.Outcomes.DoctorIssues
 	if len(verifyVerdicts) == 0 && len(shipResults) == 0 && len(doctorResults) == 0 {
 		return
 	}
@@ -360,8 +456,8 @@ func renderOutcomes(events []telemetry.Event) {
 		if pending := verifyVerdicts["pending"]; pending > 0 {
 			Printf("  (pending verifies have not been finalized — run `dross verify finalize <phase>` after /dross-verify)\n")
 		}
-		if len(mutationScores) > 0 {
-			Printf("  mutation score: avg=%.2f n=%d\n", avg(mutationScores), len(mutationScores))
+		if s.Outcomes.MutationScoreN > 0 {
+			Printf("  mutation score: avg=%.2f n=%d\n", s.Outcomes.MutationScoreAvg, s.Outcomes.MutationScoreN)
 		}
 	}
 	if len(shipResults) > 0 {
