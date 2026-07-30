@@ -1,15 +1,9 @@
 {
   "version": "1.1.4.0",
   "current_milestone": "v1.1",
-  "current_phase": "board-state-map-truth",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-30T12:37:15.89253Z",
-  "last_action": "verified board-state-map-truth: pass (7/7, mutation 0.95)",
+  "last_activity": "2026-07-30T12:48:31.011504Z",
+  "last_action": "completed board-state-map-truth",
   "history": [
-    {
-      "at": "2026-07-29T15:55:51.775941Z",
-      "action": "set current_phase_status=planned"
-    },
     {
       "at": "2026-07-29T15:55:51.783903Z",
       "action": "plan locked: cli-surface-sweep (9 tasks across 3 waves)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-07-30T12:37:15.89253Z",
       "action": "verified board-state-map-truth: pass (7/7, mutation 0.95)"
+    },
+    {
+      "at": "2026-07-30T12:48:31.011504Z",
+      "action": "completed board-state-map-truth"
     }
   ]
 }
