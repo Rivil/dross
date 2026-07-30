@@ -221,41 +221,41 @@ func List(root string) ([]string, error) {
 
 // Spec is the acceptance contract for a phase.
 type Spec struct {
-	Phase     SpecPhase   `toml:"phase"`
-	Criteria  []Criterion `toml:"criteria"`
-	Decisions []Decision  `toml:"decisions,omitempty"`
-	Deferred  []Deferred  `toml:"deferred,omitempty"`
+	Phase     SpecPhase   `toml:"phase" json:"phase"`
+	Criteria  []Criterion `toml:"criteria" json:"criteria"`
+	Decisions []Decision  `toml:"decisions,omitempty" json:"decisions,omitempty"`
+	Deferred  []Deferred  `toml:"deferred,omitempty" json:"deferred,omitempty"`
 }
 
 type SpecPhase struct {
-	ID        string `toml:"id"`
-	Title     string `toml:"title"`
-	Milestone string `toml:"milestone,omitempty"`
+	ID        string `toml:"id" json:"id"`
+	Title     string `toml:"title" json:"title"`
+	Milestone string `toml:"milestone,omitempty" json:"milestone,omitempty"`
 }
 
 type Criterion struct {
-	ID   string `toml:"id"`
-	Text string `toml:"text"`
+	ID   string `toml:"id" json:"id"`
+	Text string `toml:"text" json:"text"`
 }
 
 type Decision struct {
-	Key    string `toml:"key"`
-	Choice string `toml:"choice"`
-	Why    string `toml:"why"`
-	Locked bool   `toml:"locked,omitempty"`
+	Key    string `toml:"key" json:"key"`
+	Choice string `toml:"choice" json:"choice"`
+	Why    string `toml:"why" json:"why"`
+	Locked bool   `toml:"locked,omitempty" json:"locked,omitempty"`
 }
 
 type Deferred struct {
-	Text string `toml:"text"`
-	Why  string `toml:"why,omitempty"`
+	Text string `toml:"text" json:"text"`
+	Why  string `toml:"why,omitempty" json:"why,omitempty"`
 	// Target routes the deferred item to a destination: a phase slug it should
 	// re-surface in. Empty means "someday" — unrouted, awaiting triage.
-	Target string `toml:"target,omitempty"`
+	Target string `toml:"target,omitempty" json:"target,omitempty"`
 	// Dismissed retires the item to a "dismissed" state — triaged as
 	// wontfix/done without a target. It is a third state distinct from
 	// "someday" (no target, not dismissed) and "routed" (target set); dismiss
 	// is someday-only, so a dismissed entry never carries a target.
-	Dismissed bool `toml:"dismissed,omitempty"`
+	Dismissed bool `toml:"dismissed,omitempty" json:"dismissed,omitempty"`
 }
 
 // Plan is the task graph for a phase.
@@ -267,25 +267,25 @@ type Deferred struct {
 // freed by a remove is never handed out again because the counter only ever
 // advances (see NextTaskID / AddTask).
 type Plan struct {
-	TaskSeq int       `toml:"task_seq,omitempty"`
-	Phase   PlanPhase `toml:"phase"`
-	Task    []Task    `toml:"task"` // ordered
+	TaskSeq int       `toml:"task_seq,omitempty" json:"task_seq,omitempty"`
+	Phase   PlanPhase `toml:"phase" json:"phase"`
+	Task    []Task    `toml:"task" json:"task"` // ordered
 }
 
 type PlanPhase struct {
-	ID string `toml:"id"`
+	ID string `toml:"id" json:"id"`
 }
 
 type Task struct {
-	ID           string   `toml:"id"`
-	Wave         int      `toml:"wave"`
-	Title        string   `toml:"title"`
-	Files        []string `toml:"files"`
-	Description  string   `toml:"description,omitempty"`
-	Covers       []string `toml:"covers,omitempty"`     // criterion ids
-	DependsOn    []string `toml:"depends_on,omitempty"` // task ids
-	TestContract []string `toml:"test_contract,omitempty"`
-	Status       string   `toml:"status,omitempty"` // pending | in_progress | done | failed
+	ID           string   `toml:"id" json:"id"`
+	Wave         int      `toml:"wave" json:"wave"`
+	Title        string   `toml:"title" json:"title"`
+	Files        []string `toml:"files" json:"files"`
+	Description  string   `toml:"description,omitempty" json:"description,omitempty"`
+	Covers       []string `toml:"covers,omitempty" json:"covers,omitempty"`         // criterion ids
+	DependsOn    []string `toml:"depends_on,omitempty" json:"depends_on,omitempty"` // task ids
+	TestContract []string `toml:"test_contract,omitempty" json:"test_contract,omitempty"`
+	Status       string   `toml:"status,omitempty" json:"status,omitempty"` // pending | in_progress | done | failed
 }
 
 // Task statuses.
