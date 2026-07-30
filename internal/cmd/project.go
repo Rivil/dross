@@ -23,7 +23,8 @@ func Project() *cobra.Command {
 }
 
 func projectShow() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	c := &cobra.Command{
 		Use:   "show",
 		Short: "Print project.toml",
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -31,10 +32,15 @@ func projectShow() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if asJSON {
+				return emitJSON(p)
+			}
 			Printf("# %s\n", path)
 			return toml.NewEncoder(os.Stdout).Encode(p)
 		},
 	}
+	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
+	return c
 }
 
 // projectGet prints one or more dotted-path fields (e.g. project.name,

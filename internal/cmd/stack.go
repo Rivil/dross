@@ -48,7 +48,8 @@ func stackDetect() *cobra.Command {
 }
 
 func stackShow() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	c := &cobra.Command{
 		Use:   "show <id>",
 		Short: "Print a stack profile by id",
 		Args:  cobra.ExactArgs(1),
@@ -57,15 +58,22 @@ func stackShow() *cobra.Command {
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "dross: warning: %v\n", err)
 			}
+			// The not-found error stays ahead of the --json branch: an unknown
+			// id must fail, not print the JSON literal "null".
 			p := stack.ByID(profiles, args[0])
 			if p == nil {
 				return fmt.Errorf("stack profile %q not found", args[0])
+			}
+			if asJSON {
+				return emitJSON(p)
 			}
 			enc := toml.NewEncoder(os.Stdout)
 			enc.Indent = "  "
 			return enc.Encode(p)
 		},
 	}
+	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
+	return c
 }
 
 func stackList() *cobra.Command {

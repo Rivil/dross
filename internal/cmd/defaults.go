@@ -21,7 +21,8 @@ func Defaults() *cobra.Command {
 }
 
 func defaultsShow() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	c := &cobra.Command{
 		Use:   "show",
 		Short: "Print the global defaults file",
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -33,10 +34,15 @@ func defaultsShow() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if asJSON {
+				return emitJSON(d)
+			}
 			Printf("# %s\n", path)
 			return toml.NewEncoder(os.Stdout).Encode(d)
 		},
 	}
+	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
+	return c
 }
 
 func defaultsSave() *cobra.Command {
