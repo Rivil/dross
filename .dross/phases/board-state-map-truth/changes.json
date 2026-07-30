@@ -1,0 +1,198 @@
+{
+  "phase": "board-state-map-truth",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/configenum/configenum.go",
+        "internal/cmd/issue.go",
+        "internal/forge/jira.go",
+        "internal/forge/youtrack.go",
+        "internal/cmd/issue_test.go",
+        "internal/forge/jira_test.go"
+      ],
+      "commit": "fa53080",
+      "completed_at": "2026-07-30T10:14:15.998149Z",
+      "landmarks": [
+        {
+          "feature": "board sync",
+          "symbol": "LifecycleStatuses",
+          "loc": "internal/configenum/configenum.go:118",
+          "what": "one lifecycle vocabulary for the status label and both forge state maps; producer emits planned, closing the unmapped-transition skip"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/friction_window_test.go"
+      ],
+      "commit": "5454088",
+      "completed_at": "2026-07-30T10:51:54.027118Z",
+      "landmarks": [
+        {
+          "feature": "telemetry \u0026 stats",
+          "symbol": "TestFrictionWindow_IncompleteRoot",
+          "loc": "internal/cmd/friction_window_test.go:29",
+          "what": "one regression pin per friction class from the 2026-07-15..28 telemetry window, asserting the message a user now gets"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "cmd/dross/main_test.go",
+        "README.md"
+      ],
+      "commit": "ce083ba",
+      "completed_at": "2026-07-30T10:55:23.420751Z",
+      "landmarks": [
+        {
+          "feature": "CLI output formats",
+          "symbol": "TestEveryStructuredShowAcceptsJSON",
+          "loc": "cmd/dross/main_test.go:222",
+          "what": "tree walk requiring a json flag on every show outside a two-entry exempt list, plus a wired-not-just-registered invocation check"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/project/project.go",
+        "internal/milestone/milestone.go",
+        "internal/defaults/defaults.go",
+        "internal/profile/profile.go",
+        "internal/stack/profile.go",
+        "internal/phase/phase.go",
+        "internal/cmd/json_tag_parity_test.go"
+      ],
+      "commit": "c2ce735",
+      "completed_at": "2026-07-30T10:17:03.697674Z",
+      "landmarks": [
+        {
+          "feature": "config schema",
+          "symbol": "TestTomlFieldsCarryMatchingJSONTags",
+          "loc": "internal/cmd/json_tag_parity_test.go:46",
+          "what": "every toml-tagged schema field carries an identical json tag, gated by a transitive walk over the eight document roots"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "8218aee",
+      "completed_at": "2026-07-30T10:20:07.524205Z",
+      "landmarks": [
+        {
+          "feature": "board sync",
+          "symbol": "issuePhaseSync",
+          "loc": "internal/cmd/issue.go:409",
+          "what": "--status is validated against LifecycleStatuses ahead of the enabled short-circuit and normalized back before use"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/project.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/project_test.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "6dcba0e",
+      "completed_at": "2026-07-30T10:27:54.642938Z",
+      "landmarks": [
+        {
+          "feature": "configuration",
+          "symbol": "stateMapKey",
+          "loc": "internal/cmd/project.go:445",
+          "what": "state_map keys are gated against the lifecycle set on write and on disk, and normalized so write/read/unset address one entry"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "assets/prompts/ship.md",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "6cd1cb5",
+      "completed_at": "2026-07-30T10:30:15.793686Z",
+      "landmarks": [
+        {
+          "feature": "board sync",
+          "symbol": "TestShipPromptEmitsTerminalBoardStatuses",
+          "loc": "internal/cmd/ship_prompt_test.go:196",
+          "what": "ship emits shipped on merge and complete on finalize, so both terminal state-map keys have real call sites"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/jsonout.go",
+        "internal/cmd/project.go",
+        "internal/cmd/milestone.go",
+        "internal/cmd/defaults.go",
+        "internal/cmd/profile.go",
+        "internal/cmd/stack.go",
+        "internal/cmd/json_show_test.go"
+      ],
+      "commit": "e9fb8ff",
+      "completed_at": "2026-07-30T10:34:07.375732Z",
+      "landmarks": [
+        {
+          "feature": "CLI output formats",
+          "symbol": "emitJSON",
+          "loc": "internal/cmd/jsonout.go:20",
+          "what": "one bare-document JSON emitter behind --json on the five config-document shows, header line dropped"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/stats.go",
+        "internal/cmd/stats_test.go",
+        "internal/cmd/json_show_phase_test.go"
+      ],
+      "commit": "ac48a07",
+      "completed_at": "2026-07-30T10:43:54.209935Z",
+      "landmarks": [
+        {
+          "feature": "CLI output formats",
+          "symbol": "summarizeStats",
+          "loc": "internal/cmd/stats.go:133",
+          "what": "stats aggregation extracted so table and --json read one struct; phase show --json emits spec/plan and an unknown id now errors"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/task.go",
+        "internal/cmd/changes.go",
+        "internal/cmd/json_show_task_test.go"
+      ],
+      "commit": "50ecf6c",
+      "completed_at": "2026-07-30T10:46:16.194989Z",
+      "landmarks": [
+        {
+          "feature": "CLI output formats",
+          "symbol": "taskShow",
+          "loc": "internal/cmd/task.go:125",
+          "what": "task show --json normalizes Status through orPending so the payload and the aligned rendering agree; changes show accepts --json for symmetry"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/board_lifecycle_divergence_test.go"
+      ],
+      "commit": "fbe7f7b",
+      "completed_at": "2026-07-30T10:49:12.590069Z",
+      "landmarks": [
+        {
+          "feature": "board sync",
+          "symbol": "TestStateMapsKeyExactlyTheEmittedStatuses",
+          "loc": "internal/cmd/board_lifecycle_divergence_test.go:242",
+          "what": "bidirectional gate between the statuses dross emits at call sites and the keys each forge state map carries"
+        }
+      ]
+    }
+  }
+}
