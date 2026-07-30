@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 12
 
 [phase]
   id = "board-state-map-truth"
@@ -120,4 +120,13 @@ task_seq = 0
   covers = ["c-5"]
   depends_on = ["t-6", "t-7", "t-8"]
   test_contract = ["the tree walk fails when a `show` subcommand has no `json` flag and is not in the exempt list — deleting the flag registration from stack show fails it by name, and a future `dross findings show` landing without --json fails it too", "the exempt list is asserted to be exactly {rule, interaction}: adding a tenth structured show to the exempt list instead of giving it a flag fails", "for each command the walk finds, invoking it with --json against the fixture repo produces output json.Valid accepts — catching a flag registered but not wired", "no output from those invocations contains a line starting `# ` (locked json_shape: bare document, no envelope)", "each of the nine command-table rows in README.md — project, milestone, phase, task, changes, stats, stack, defaults, profile — mentions `--json`; deleting `--json` from the stack row fails the test naming that row, so the doc claim rots loudly"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 5
+  title = "Make internal/cmd tests hermetic against global defaults"
+  files = ["internal/cmd/hermetic_env_test.go", "internal/cmd/doctor_test.go"]
+  description = "Verify BLOCKING: five internal/cmd tests fail on any host where $BITBUCKET_TOKEN is\nunset, because `dross init` inside every test temp repo overlays the developer's real\n~/.claude/dross/defaults.toml (seedRemote at internal/cmd/init.go:154) while\nscaffoldDoctorRepo exports an unrelated FORGEJO_TOKEN. The suite's verdict therefore\ndepends on the developer's home dir, and the red suite made verify's mutation pass skip\ninternal/cmd entirely while still reporting measured. A package TestMain pins HOME to an\nempty throwaway dir — the same concern chdir already handles for DROSS_NO_TELEMETRY and\nCLAUDE_CONFIG_DIR — and scaffoldDoctorRepo sets remote.auth_env explicitly instead of\ninheriting it."
+  test_contract = ["`env -u BITBUCKET_TOKEN go test -count=1 ./...` is green: the five tests the verify BLOCKING names — TestDoctorFlagsUnrecognisedTaskStatus, TestDoctorAcceptsEveryRunnableTaskStatus, TestDoctorSkipsPhaseDirWithNoPlan, TestDoctorReportsUnparseablePlan, TestValidateIgnoresTaskStatus — no longer depend on an ambient token", "with a hostile ~/.claude/dross/defaults.toml under a temp HOME setting remote_defaults.auth_env to an env var that is not exported, scaffoldDoctorRepo still returns a doctor-clean repo — this is the blocker reproduced deterministically, and it fails if scaffoldDoctorRepo goes back to inheriting auth_env", "the package's HOME differs from the ambient HOME TestMain captured, and GlobalDir() under it holds no defaults.toml — deleting the TestMain isolation fails this by name rather than by a downstream doctor complaint", "scaffoldDoctorRepo's repo has remote.auth_env set to the same env var the helper exports, asserted from the written project.toml, so the helper cannot export one token and configure another"]
   status = "done"

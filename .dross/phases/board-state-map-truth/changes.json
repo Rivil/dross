@@ -52,6 +52,22 @@
         }
       ]
     },
+    "t-12": {
+      "files": [
+        "internal/cmd/hermetic_env_test.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "d4a4ae9",
+      "completed_at": "2026-07-30T12:17:11.75392Z",
+      "landmarks": [
+        {
+          "feature": "test harness hermeticity",
+          "symbol": "TestMain",
+          "loc": "internal/cmd/hermetic_env_test.go:34",
+          "what": "pins HOME to a throwaway dir for the whole package so no test inherits the developer's ~/.claude/dross/defaults.toml"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/project/project.go",

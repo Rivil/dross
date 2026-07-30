@@ -2,22 +2,10 @@
   "version": "1.1.4.0",
   "current_milestone": "v1.1",
   "current_phase": "board-state-map-truth",
-  "current_phase_status": "verified",
-  "last_activity": "2026-07-30T11:44:49.729227Z",
-  "last_action": "verified board-state-map-truth: fail (7/7 covered, mutation 0.95, BLOCKING: internal/cmd suite red on unset $BITBUCKET_TOKEN)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-30T12:17:28.338772Z",
+  "last_action": "phase board-state-map-truth amended (12/12 done — verify BLOCKING closed)",
   "history": [
-    {
-      "at": "2026-07-29T13:38:17.600993Z",
-      "action": "verified root-robustness: pass (5/5 covered, mutation 0.96, both FLAGs closed)"
-    },
-    {
-      "at": "2026-07-29T13:47:26.617842Z",
-      "action": "completed root-robustness"
-    },
-    {
-      "at": "2026-07-29T13:53:13.434362Z",
-      "action": "created cli-surface-sweep"
-    },
     {
       "at": "2026-07-29T15:14:07.795023Z",
       "action": "set current_phase=cli-surface-sweep"
@@ -205,6 +193,18 @@
     {
       "at": "2026-07-30T11:44:49.729227Z",
       "action": "verified board-state-map-truth: fail (7/7 covered, mutation 0.95, BLOCKING: internal/cmd suite red on unset $BITBUCKET_TOKEN)"
+    },
+    {
+      "at": "2026-07-30T12:17:11.769325Z",
+      "action": "executed t-12 (Make internal/cmd tests hermetic against global defaults)"
+    },
+    {
+      "at": "2026-07-30T12:17:28.331058Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-30T12:17:28.338772Z",
+      "action": "phase board-state-map-truth amended (12/12 done — verify BLOCKING closed)"
     }
   ]
 }
