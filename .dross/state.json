@@ -2,18 +2,10 @@
   "version": "1.1.4.0",
   "current_milestone": "v1.1",
   "current_phase": "board-state-map-truth",
-  "current_phase_status": "complete",
-  "last_activity": "2026-07-30T12:17:28.338772Z",
-  "last_action": "phase board-state-map-truth amended (12/12 done — verify BLOCKING closed)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-07-30T12:37:15.89253Z",
+  "last_action": "verified board-state-map-truth: pass (7/7, mutation 0.95)",
   "history": [
-    {
-      "at": "2026-07-29T15:14:07.795023Z",
-      "action": "set current_phase=cli-surface-sweep"
-    },
-    {
-      "at": "2026-07-29T15:14:07.802601Z",
-      "action": "spec locked: cli-surface-sweep"
-    },
     {
       "at": "2026-07-29T15:55:51.775941Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +197,14 @@
     {
       "at": "2026-07-30T12:17:28.338772Z",
       "action": "phase board-state-map-truth amended (12/12 done — verify BLOCKING closed)"
+    },
+    {
+      "at": "2026-07-30T12:37:15.884566Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-07-30T12:37:15.89253Z",
+      "action": "verified board-state-map-truth: pass (7/7, mutation 0.95)"
     }
   ]
 }
