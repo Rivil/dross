@@ -1561,6 +1561,184 @@ func containsStr(hay []string, want string) bool {
 	return false
 }
 
+// TestIssuePhaseSyncValidatesStatusAgainstTheLifecycleSet proves c-3: an
+// out-of-set --status is refused at the CLI with a message naming the valid
+// set, rather than accepted and warned about at sync time on a real board.
+func TestIssuePhaseSyncValidatesStatusAgainstTheLifecycleSet(t *testing.T) {
+	t.Run("out-of-set status is rejected before any board call", func(t *testing.T) {
+		hits := 0
+		srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			hits++
+			t.Errorf("board API called for a rejected --status: %s %s", r.Method, r.URL.Path)
+		}))
+		t.Cleanup(srv.Close)
+
+		dir := boardRepo(t, srv.URL, true)
+		writeSpec(t, dir, "01-auth", "[phase]\nid=\"01-auth\"\ntitle=\"Auth\"\n")
+
+		err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", "planning")
+		if err == nil {
+			t.Fatal(`--status planning must be rejected — it is the pre-rename value and maps to no board state`)
+		}
+		if !strings.Contains(err.Error(), configenum.LifecycleStatuses.List()) {
+			t.Errorf("error %q does not name the valid set %q", err, configenum.LifecycleStatuses.List())
+		}
+		if hits != 0 {
+			t.Errorf("board was called %d times before the rejection — validation must precede openBoard", hits)
+		}
+	})
+
+	t.Run("rejection fires with board sync disabled", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			t.Errorf("board API must not be called: %s %s", r.Method, r.URL.Path)
+		}))
+		t.Cleanup(srv.Close)
+
+		dir := boardRepo(t, srv.URL, false) // disabled
+		writeSpec(t, dir, "01-auth", "[phase]\nid=\"01-auth\"\ntitle=\"Auth\"\n")
+
+		if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", "planning"); err == nil {
+			t.Error("a bad --status exited 0 because board sync is off — the check must run ahead of the enabled short-circuit, or the typo only ever surfaces on a machine that opted in")
+		}
+	})
+
+	t.Run("the two terminal statuses are accepted", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			t.Errorf("board API must not be called: %s %s", r.Method, r.URL.Path)
+		}))
+		t.Cleanup(srv.Close)
+
+		dir := boardRepo(t, srv.URL, false) // disabled: only the validator runs
+		writeSpec(t, dir, "01-auth", "[phase]\nid=\"01-auth\"\ntitle=\"Auth\"\n")
+
+		// ship.md emits these two; rejecting them would break the terminal
+		// board states the moment t-5 lands.
+		for _, s := range []string{"shipped", "complete"} {
+			if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", s); err != nil {
+				t.Errorf("--status %s was rejected: %v", s, err)
+			}
+		}
+	})
+}
+
+// TestIssuePhaseSyncNormalizesStatusBeforeUse pins the reassignment, not just
+// the validation. configenum.Normalize is what makes the check exactly as
+// forgiving as the state-map lookup — so a padded, capitalised value has to
+// reach statusLabel and SetState in its normalized form, or the validator
+// blesses a value the map then misses.
+func TestIssuePhaseSyncNormalizesStatusBeforeUse(t *testing.T) {
+	var createdFields map[string]any
+	var transitionPosts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/rest/api/3/issue" && r.Method == "POST":
+			raw, _ := io.ReadAll(r.Body)
+			var body map[string]any
+			_ = json.Unmarshal(raw, &body)
+			createdFields, _ = body["fields"].(map[string]any)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, `{"id":"1000","key":"PROJ-1"}`)
+		case r.URL.Path == "/rest/api/3/issue/PROJ-1/transitions" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"transitions":[{"id":"21","name":"In Progress","to":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}}]}`)
+		case r.URL.Path == "/rest/api/3/issue/PROJ-1/transitions" && r.Method == "POST":
+			transitionPosts++
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := jiraBoardRepo(t, srv.URL)
+	writeSpec(t, dir, "01-auth", "[phase]\nid=\"01-auth\"\ntitle=\"Auth\"\n")
+
+	stderr := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", " Verifying"); err != nil {
+				t.Fatalf(`--status " Verifying" must be accepted — the map lookup normalizes, so the validator must too: %v`, err)
+			}
+		})
+	})
+
+	if got := labelsOf(createdFields); !containsStr(got, statusLabel(statusVerifying)) {
+		t.Errorf("labels = %v, want %q — the raw flag value reached statusLabel", got, statusLabel(statusVerifying))
+	}
+	if transitionPosts != 1 {
+		t.Errorf("transition POSTs = %d, want 1 — the raw value missed the state map", transitionPosts)
+	}
+	if strings.Contains(stderr, "has no Jira status mapping") {
+		t.Errorf("padded status was validated but not normalized:\n%s", stderr)
+	}
+}
+
+// TestIssuePhaseSyncStillDerivesWithoutTheFlag pins that the validator does not
+// swallow the absent-flag case: with no --status, syncPhase still derives from
+// plan progress. A plan with one task done derives in-progress, which is a
+// different answer from t-1's all-pending fixture — so this fails if the
+// derivation is short-circuited rather than merely reaching a valid value.
+func TestIssuePhaseSyncStillDerivesWithoutTheFlag(t *testing.T) {
+	var createdFields map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/rest/api/3/issue" && r.Method == "POST":
+			raw, _ := io.ReadAll(r.Body)
+			var body map[string]any
+			_ = json.Unmarshal(raw, &body)
+			createdFields, _ = body["fields"].(map[string]any)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, `{"id":"1000","key":"PROJ-1"}`)
+		case r.URL.Path == "/rest/api/3/issue/PROJ-1/transitions" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"transitions":[{"id":"21","name":"In Progress","to":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}}]}`)
+		case r.URL.Path == "/rest/api/3/issue/PROJ-1/transitions" && r.Method == "POST":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := jiraBoardRepo(t, srv.URL)
+	writeSpec(t, dir, "01-auth", "[phase]\nid=\"01-auth\"\ntitle=\"Auth\"\n")
+	writePlan(t, dir, "01-auth", `
+[phase]
+id = "01-auth"
+
+[[task]]
+id = "t1"
+title = "schema"
+wave = 1
+status = "done"
+`)
+
+	_ = captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+				t.Fatalf("phase-sync with no --status: %v", err)
+			}
+		})
+	})
+	if got := labelsOf(createdFields); !containsStr(got, statusLabel(statusInProgress)) {
+		t.Errorf("labels = %v, want %q derived from the plan", got, statusLabel(statusInProgress))
+	}
+}
+
+// TestIssuePhaseSyncStatusFlagHelpNamesTheSet closes the one gap the rename
+// leaves behind everywhere else: the flag's usage string is prose, so nothing
+// that scans prompts or Go values sees it, and a hand-written help still
+// advertising "planning" would document a value the command now rejects.
+func TestIssuePhaseSyncStatusFlagHelpNamesTheSet(t *testing.T) {
+	f := issuePhaseSync().Flags().Lookup("status")
+	if f == nil {
+		t.Fatal("phase-sync has no --status flag")
+	}
+	if !strings.Contains(f.Usage, configenum.LifecycleStatuses.List()) {
+		t.Errorf("--status usage %q does not carry %q verbatim — derive it from the Set, don't retype it", f.Usage, configenum.LifecycleStatuses.List())
+	}
+	if strings.Contains(f.Usage, "planning") {
+		t.Errorf(`--status usage %q still advertises "planning", a value the command now rejects`, f.Usage)
+	}
+}
+
 // TestLifecycleVocabularyIsTheConfigenumSet pins the producer side of the
 // vocabulary to the Set both forge state maps key on.
 //

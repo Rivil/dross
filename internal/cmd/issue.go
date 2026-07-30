@@ -401,6 +401,21 @@ func issuePhaseSync() *cobra.Command {
 		Short: "Create or update the board issue for a phase (idempotent)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			// Validated ahead of openBoard on purpose: the enabled check below
+			// returns nil, so a typo'd --status on a repo that hasn't opted
+			// into board sync would exit 0 as a silent no-op and only surface
+			// on the machine where sync is on.
+			if status != "" {
+				if !configenum.LifecycleStatuses.Has(status) {
+					return fmt.Errorf("unknown --status %q; expected %s", status, configenum.LifecycleStatuses.List())
+				}
+				// Assign the normalized form back. syncPhase passes status raw
+				// to statusLabel and to both SetState lookups, so validating
+				// without reassigning would accept " Verifying", emit the label
+				// "dross/status: Verifying" and then miss the state map — the
+				// exact unmapped-state warning this phase exists to close.
+				status = configenum.Normalize(status)
+			}
 			ctx, enabled, err := openBoard()
 			if err != nil {
 				return err
@@ -411,7 +426,7 @@ func issuePhaseSync() *cobra.Command {
 			return syncPhase(ctx, args[0], status, doClose)
 		},
 	}
-	c.Flags().StringVar(&status, "status", "", "lifecycle status label (planning|in-progress|verifying); derived from the plan if unset")
+	c.Flags().StringVar(&status, "status", "", "lifecycle status label ("+configenum.LifecycleStatuses.List()+"); derived from the plan if unset")
 	c.Flags().BoolVar(&doClose, "close", false, "close the issue (use on ship)")
 	return c
 }
