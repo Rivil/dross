@@ -123,7 +123,8 @@ func taskNext() *cobra.Command {
 }
 
 func taskShow() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	c := &cobra.Command{
 		Use:   "show <phase-id> <task-id>",
 		Short: "Print one task's record from plan.toml",
 		Args:  cobra.ExactArgs(2),
@@ -135,6 +136,15 @@ func taskShow() *cobra.Command {
 			t := plan.FindTask(args[1])
 			if t == nil {
 				return fmt.Errorf("task not found: %s", args[1])
+			}
+			if asJSON {
+				// Marshal a copy with Status normalized the same way the text
+				// path renders it. Status is toml:"status,omitempty", so json
+				// mirrors the omitempty and a bare marshal would drop the very
+				// key the aligned rendering always prints as "pending".
+				rec := *t
+				rec.Status = orPending(rec.Status)
+				return emitJSON(rec)
 			}
 			Printf("id:           %s\n", t.ID)
 			Printf("title:        %s\n", t.Title)
@@ -162,6 +172,8 @@ func taskShow() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
+	return c
 }
 
 func taskStatus() *cobra.Command {
