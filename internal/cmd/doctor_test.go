@@ -193,6 +193,80 @@ func TestDoctorValidatesBoardBlock(t *testing.T) {
 	}
 }
 
+// TestDoctorFlagsUnknownStateMapKey proves c-4's doctor half: a dead
+// [board].state_map key already on disk is reported as an issue counting
+// toward the non-zero exit, not as a warning (locked state_map_key_severity).
+//
+// The fixture is a complete, otherwise-clean [board] block — valid provider,
+// auth_env exported, valid base_url, valid milestone_mode — so the valid-keys
+// run reaches "✓ [board] is well-formed" and returns nil. Without that, the
+// block errors on provider and auth_env whether the keys are good or bad, the
+// negative control proves nothing, and the positive case cannot attribute its
+// non-nil error to the state_map check.
+func TestDoctorFlagsUnknownStateMapKey(t *testing.T) {
+	const tokenEnv = "DROSS_TEST_STATEMAP_TOKEN"
+
+	run := func(t *testing.T, stateMap string) (string, error) {
+		t.Helper()
+		dir := t.TempDir()
+		gitInit(t, dir, "https://gitlab.com/Rivil/dross.git")
+		chdir(t, dir)
+		if err := runCmd(t, Init()); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		for _, kv := range [][2]string{
+			{"remote.auth_env", tokenEnv},
+			{"board.provider", "youtrack"},
+			{"board.base_url", "https://yt.example.com"},
+			{"board.auth_env", tokenEnv},
+			{"board.project", "PROJ"},
+			{"board.enabled", "true"},
+			{"board.milestone_mode", "version"},
+		} {
+			if err := runCmd(t, Project(), "set", kv[0], kv[1]); err != nil {
+				t.Fatalf("project set %s: %v", kv[0], err)
+			}
+		}
+		t.Setenv(tokenEnv, "secret")
+		// Hand-appended: `project set` now refuses to write a bad key, so a
+		// hand edit is the only way one reaches disk — which is also how the
+		// real ones got there, and why doctor has to see them at all.
+		path := filepath.Join(dir, ".dross", "project.toml")
+		mustWrite(t, path, mustRead(t, path)+"\n[board.state_map]\n"+stateMap+"\n")
+		var out string
+		err := runCmdCapturing(t, &out, Doctor())
+		return out, err
+	}
+
+	clean, cleanErr := run(t, `verifying = "In Review"`)
+	if cleanErr != nil {
+		t.Fatalf("a [board] block with only valid state_map keys must pass; out:\n%s", clean)
+	}
+	if !strings.Contains(clean, "[board] is well-formed") {
+		t.Fatalf("control fixture is not clean — the comparison below would be meaningless:\n%s", clean)
+	}
+
+	bad, badErr := run(t, `planning = "To Do"`)
+	if badErr == nil {
+		t.Errorf("a dead state_map key must count toward the non-zero exit; out:\n%s", bad)
+	}
+	if !strings.Contains(bad, "[board].state_map.planning") {
+		t.Errorf("no ✗ line names the offending key (err=%v):\n%s", badErr, bad)
+	}
+	// Naming the fault is not enough — `project set` refuses to write such a
+	// key, so doctor has to name the one call that removes it, or it reports a
+	// fault with no visible repair.
+	if !strings.Contains(bad, "dross project set --unset board.state_map.planning") {
+		t.Errorf("no repair line for the dead key:\n%s", bad)
+	}
+	if got, want := strings.Count(bad, "✗"), strings.Count(clean, "✗")+1; got != want {
+		t.Errorf("✗ lines: %d, want %d — the two runs must differ by exactly the state_map line\nclean:\n%s\nbad:\n%s", got, want, clean, bad)
+	}
+	if got, want := strings.Count(bad, "⚠"), strings.Count(clean, "⚠"); got != want {
+		t.Errorf("warning tally changed (%d vs %d) — a dead key is an issue, not a warning", got, want)
+	}
+}
+
 func TestDoctorFlagsInvalidAuthScheme(t *testing.T) {
 	dir := t.TempDir()
 	gitInit(t, dir, "https://gitlab.com/Rivil/dross.git")
@@ -1198,6 +1272,12 @@ func TestDoctorIncompleteRootBlockMatchesLocateRoot(t *testing.T) {
 	}
 }
 
+// doctorTokenEnv is the token the scaffold both configures and exports. The
+// helper writes remote.auth_env explicitly instead of keeping whatever
+// ~/.claude/dross/defaults.toml suggested — inheriting it is what made these
+// tests red on any host that did not happen to export that particular token.
+const doctorTokenEnv = "DROSS_TEST_DOCTOR_TOKEN"
+
 // scaffoldDoctorRepo builds a git-backed dross repo whose remote matches, so
 // doctor's other sections stay quiet and the task-status verdict is the only
 // thing moving the exit code.
@@ -1210,8 +1290,10 @@ func scaffoldDoctorRepo(t *testing.T) string {
 		t.Fatalf("init: %v", err)
 	}
 	// Silence the unrelated baseline issues so the exit code tracks the
-	// task-status verdict alone.
-	t.Setenv("FORGEJO_TOKEN", "x")
+	// task-status verdict alone. auth_env is set, not inherited: the seeded
+	// value comes from the global defaults, which this suite must not read.
+	t.Setenv(doctorTokenEnv, "x")
+	mustRunSet(t, "remote.auth_env", doctorTokenEnv)
 	mustRunSet(t, "project.name", "x")
 	mustRunSet(t, "runtime.mode", "native")
 	if err := runCmd(t, Doctor()); err != nil {

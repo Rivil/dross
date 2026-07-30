@@ -101,6 +101,22 @@ var AuthSchemes = newSet("private-token", "private-token", "bearer", "basic")
 // and blanking the field through `milestone set` is a mistake, not a default.
 var MilestoneStatuses = newSet("", "planning", "active", "complete")
 
+// LifecycleStatuses is the set of dross phase lifecycle statuses that reach an
+// issue board: the value in the `dross/status:<v>` label, and the key both forge
+// state maps (defaultJiraStateMap, defaultYouTrackStateMap) resolve a board
+// state from.
+//
+// It is the producer side and the map side of one vocabulary, which is exactly
+// where they drifted: issue.go emitted "planning" while both maps keyed
+// "planned", so a phase whose plan was locked but unstarted warned and skipped
+// its transition. internal/cmd/board_lifecycle_divergence_test.go now fails the
+// build when either side leaves the other behind.
+//
+// Empty is rejected: a blank status maps to no board state, and it is never a
+// request to derive one — syncPhase already derives from the plan when
+// --status is absent.
+var LifecycleStatuses = newSet("", "planned", "in-progress", "verifying", "shipped", "complete")
+
 // MilestoneModes is the union of [board].milestone_mode values across the
 // trackers. Empty defaults to version in code. Not every provider accepts every
 // mode — see MilestoneModesFor.

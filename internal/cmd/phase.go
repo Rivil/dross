@@ -586,8 +586,18 @@ func isDir(path string) bool {
 	return err == nil && info.IsDir()
 }
 
+// phaseDocument is the `phase show --json` payload: the phase's two documents
+// under the keys they are named by on disk (locked json_shape). A missing file
+// is JSON null — present and explicitly empty, which is a different statement
+// from an absent key, and the same "(missing)" the toml rendering prints.
+type phaseDocument struct {
+	Spec *phase.Spec `json:"spec"`
+	Plan *phase.Plan `json:"plan"`
+}
+
 func phaseShow() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	c := &cobra.Command{
 		Use:   "show <phase-id>",
 		Short: "Print the spec.toml and plan.toml for a phase",
 		Args:  cobra.ExactArgs(1),
@@ -597,6 +607,26 @@ func phaseShow() *cobra.Command {
 				return err
 			}
 			dir := phase.Dir(root, args[0])
+			// Ahead of both renderings: an unknown id used to exit 0 after
+			// printing two "(missing)" lines, which reads as "this phase has
+			// no spec yet" rather than "there is no such phase".
+			if !isDir(dir) {
+				return fmt.Errorf("unknown phase %q — no directory at %s (run `dross phase list` to see ids)", args[0], dir)
+			}
+			if asJSON {
+				// LoadSpec / LoadPlan rather than the raw bytes: JSON has to be
+				// the decoded document. Anything the structs do not model is
+				// therefore visible in the toml rendering and absent here,
+				// which the round-trip test in json_show_phase_test.go gates.
+				doc := phaseDocument{}
+				if spec, err := phase.LoadSpec(filepath.Join(dir, "spec.toml")); err == nil {
+					doc.Spec = spec
+				}
+				if plan, err := phase.LoadPlan(filepath.Join(dir, "plan.toml")); err == nil {
+					doc.Plan = plan
+				}
+				return emitJSON(doc)
+			}
 			for _, name := range []string{"spec.toml", "plan.toml"} {
 				path := filepath.Join(dir, name)
 				b, err := os.ReadFile(path)
@@ -609,4 +639,6 @@ func phaseShow() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
+	return c
 }

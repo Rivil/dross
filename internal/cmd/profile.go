@@ -22,6 +22,7 @@ func Profile() *cobra.Command {
 
 func profileShow() *cobra.Command {
 	var scope string
+	var asJSON bool
 	c := &cobra.Command{
 		Use:   "show",
 		Short: "Print profile (global | project | merged)",
@@ -45,10 +46,17 @@ func profileShow() *cobra.Command {
 			default:
 				return fmt.Errorf("scope must be global | project | merged")
 			}
+			// --scope resolves first, so the two flags compose: --json emits
+			// whichever profile --scope selected, never the merged one by
+			// default.
+			if asJSON {
+				return emitJSON(out)
+			}
 			return toml.NewEncoder(os.Stdout).Encode(out)
 		},
 	}
 	c.Flags().StringVar(&scope, "scope", "merged", "global | project | merged")
+	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
 	return c
 }
 

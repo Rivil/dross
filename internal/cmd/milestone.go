@@ -282,7 +282,8 @@ func ensureMilestoneBranch(repoDir, mainBranch, version string) (branch string, 
 }
 
 func milestoneShow() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	c := &cobra.Command{
 		Use:   "show [version]",
 		Short: "Print a milestone toml (defaults to state.current_milestone)",
 		Args:  cobra.MaximumNArgs(1),
@@ -309,10 +310,15 @@ func milestoneShow() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if asJSON {
+				return emitJSON(m)
+			}
 			Printf("# %s\n", path)
 			return toml.NewEncoder(os.Stdout).Encode(m)
 		},
 	}
+	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
+	return c
 }
 
 // milestoneGet prints one or more dotted-path fields (e.g. milestone.title,

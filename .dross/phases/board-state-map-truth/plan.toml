@@ -1,0 +1,132 @@
+task_seq = 12
+
+[phase]
+  id = "board-state-map-truth"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Define lifecycle set, rename planning to planned"
+  files = ["internal/configenum/configenum.go", "internal/cmd/issue.go", "internal/forge/jira.go", "internal/forge/youtrack.go", "internal/cmd/issue_test.go", "internal/forge/jira_test.go"]
+  description = "Add configenum.LifecycleStatuses (planned, in-progress, verifying, shipped,\ncomplete) with no default, so the empty string is rejected. statusPlanning's\nvalue becomes \"planned\"; issue.go's constants and both forge default maps key\noff the Set. No statusShipped / statusComplete consts: t-5 emits those two from\nship.md and t-3 validates against the Set, so Go consts would have no call site\nand would widen t-9's emit-set into a tautology (review BLOCKING). Kept whole\nrather than split per the granularity flag — the Set and its three consumers\nmust land in one commit or the forge maps key off a constant that no longer\nexists.\n"
+  covers = ["c-1"]
+  test_contract = ["phase-sync on a phase whose plan.toml has every task status=pending records a POST to /issue/<key>/transitions on the mock Jira server; if derivePhaseStatus emits anything but \"planned\", zero transition requests are recorded and the test fails", "the same run's captured stderr contains no \"has no Jira status mapping\" warning", "the label PUT carries `dross/status:planned`, not `dross/status:planning`", "resolveJiraState(\"planned\", nil) returns (\"To Do\", true) and resolveJiraState(\"planning\", nil) returns ok=false; resolveYouTrackState(\"planned\", nil) returns (\"Open\", true)", "LifecycleStatuses.Has(\"planning\") is false and Has(\"\") is false — newSet's def argument must be empty, or every downstream validator silently accepts a blank status", "every lifecycle literal declared in issue.go is a configenum.LifecycleStatuses member — retyping statusVerifying as \"verify\" fails the membership assertion"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Mirror toml tags as json tags across schemas"
+  files = ["internal/project/project.go", "internal/milestone/milestone.go", "internal/defaults/defaults.go", "internal/profile/profile.go", "internal/stack/profile.go", "internal/phase/phase.go", "internal/cmd/json_tag_parity_test.go"]
+  description = "Every struct field carrying `toml:\"x\"` gains `json:\"x\"` with the same name and\nomitempty. The six files carry ~189 toml tags and zero json tags, so --json\nwithout this emits Go field names where the document says test_contract.\n"
+  covers = ["c-5"]
+  test_contract = ["a reflection walk over project.Project, milestone.Milestone, defaults.Defaults, profile.Profile, stack.Profile, phase.Spec, phase.Plan and phase.Task asserts each toml-tagged field has an identical json tag; adding phase.Task.Retries with only a toml tag fails it, naming the struct and field", "json.Marshal(phase.Task{TestContract: []string{\"x\"}}) contains the key \"test_contract\" and not \"TestContract\"", "a toml:\"x,omitempty\" field left zero is absent from the JSON, and a non-omitempty zero field is present", "a toml:\"-\" field never appears in the JSON output"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Reject out-of-set --status on phase-sync"
+  files = ["internal/cmd/issue.go", "internal/cmd/issue_test.go"]
+  description = "issuePhaseSync validates --status against configenum.LifecycleStatuses in RunE,\nbefore openBoard, and assigns the normalized value back — syncPhase passes\nstatus raw to statusLabel and to both SetState lookups, so validate-without-\nreassign reproduces the unmapped-state warning this phase exists to kill. The\nflag help is derived from the Set.\n"
+  covers = ["c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["`dross issue phase-sync 01-auth --status planning` returns an error whose message contains \"planned | in-progress | verifying | shipped | complete\", and the mock board server records zero HTTP requests", "the same rejection fires with [board].enabled = false: the check runs ahead of the enabled short-circuit, so a bad --status can never exit 0 as a silent no-op", "`--status \" Verifying\"` is accepted and syncs as `verifying` — validation goes through configenum.Normalize, so it is exactly as forgiving as the map lookup", "`--status shipped` and `--status complete` return nil — the two statuses t-5 starts emitting must not be rejected", "omitting `--status` still derives the status from the plan and does not error", "the `--status` flag's usage string contains configenum.LifecycleStatuses.List() verbatim and the literal `planning` appears nowhere in it — the flag help is the one place the stale vocabulary survives the rename, and t-9 scans prompts and Go values, not usage strings"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Gate state_map keys in project set and doctor"
+  files = ["internal/cmd/project.go", "internal/cmd/doctor.go", "internal/cmd/project_test.go", "internal/cmd/doctor_test.go"]
+  description = "writeDotted's state_map branch rejects a key outside LifecycleStatuses, storing\nthe normalized form when it is valid. stateMapKey itself normalizes, so\nwriteDotted, readDotted and unsetDotted all address the same entry — otherwise\n`board.state_map.Planned` writes under `planned` and can never be read or\ndeleted back. doctor's [board] block reports an on-disk bad key as an issue\ncounting toward the non-zero exit, per the locked state_map_key_severity\ndecision.\n"
+  covers = ["c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["`dross project set board.state_map.planning \"To Do\"` errors naming the five valid keys, and project.toml is byte-identical to its pre-call contents — reject before write", "`dross project set board.state_map.verifying \"In Review\"` still writes the entry", "`board.state_map.Planned` stores under the key `planned`, so the sync-time lookup can find it — a near-miss is normalized, not rejected", "`dross project set --unset board.state_map.planning` still deletes an existing bad key, and `dross project get board.state_map.planning` still reads it — otherwise doctor reports a fault the CLI cannot repair", "`dross project get board.state_map.Planned` returns the value written under `planned`, and `dross project set --unset board.state_map.Planned` removes it — read and unset normalize exactly as write does, or the CLI writes entries it cannot address", "doctor over an otherwise-clean [board] block — valid provider, auth_env exported in the test env, valid base_url — carrying `[board.state_map] planning = \"To Do\"` prints a ✗ line naming board.state_map.planning and returns a non-nil error; the warning tally is unchanged; the same fixture with only valid keys reaches \"✓ [board] is well-formed\" and returns nil, so the two runs differ by exactly one ✗ line"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Emit terminal board statuses from ship"
+  files = ["assets/prompts/ship.md", "internal/cmd/ship_prompt_test.go"]
+  description = "ship.md §6 emits `--status shipped` on merge and `--status complete --close`\nafter finalize, replacing the bare `--close`. `dross phase complete` gains no\nboard call (locked terminal_emit_sites). Rule r-01 applies: run `make install`\nbefore relying on the edited prompt. depends_on t-1 is a correctness ordering,\nnot a build dependency — this task only edits markdown, but shipped/complete\nmust not be emitted before the Set accepts them.\n"
+  covers = ["c-6"]
+  depends_on = ["t-1"]
+  test_contract = ["ship.md contains \"phase-sync <phase-id> --status shipped\" at an index after the squash-merge bullet and before \"dross phase complete\"; \"--status complete --close\" appears after \"dross phase complete\" — swapping the two fails the index comparison, not just a substring check", "ship.md contains no `phase-sync <phase-id> --close` occurrence lacking a --status — the pattern that produced the dead terminal map entries", "no line in ship.md pairs `dross phase complete` with a `phase-sync` call"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Add --json helper and config-document shows"
+  files = ["internal/cmd/jsonout.go", "internal/cmd/project.go", "internal/cmd/milestone.go", "internal/cmd/defaults.go", "internal/cmd/profile.go", "internal/cmd/stack.go", "internal/cmd/json_show_test.go"]
+  description = "New emitJSON(v any) helper marshals the bare document. project, milestone,\ndefaults, profile and stack `show` gain --json, which suppresses the\n`# <path>` header line (locked json_shape).\n"
+  covers = ["c-5"]
+  depends_on = ["t-2"]
+  test_contract = ["`dross project show --json` output's first non-space byte is `{`, contains no line starting with `#`, and unmarshals to an object whose repo.git_main_branch equals what the toml encoder printed for the same fixture", "`.runtime.test_command` in the payload equals what `dross project get runtime.test_command` prints", "`dross milestone show v1.1 --json` and `dross defaults show --json` likewise emit no `#` header line", "`milestone show --json` with no argument and no state.current_milestone still fails with the existing \"no version given …\" message, not an empty JSON doc", "`dross profile show --scope global --json` emits the global profile, not the merged one, and `--scope project --json` differs from it — --scope and --json compose", "`dross stack show nope --json` still fails with `stack profile \"nope\" not found` instead of printing \"null\""]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Add --json to phase and stats shows"
+  files = ["internal/cmd/phase.go", "internal/cmd/stats.go", "internal/cmd/json_show_phase_test.go"]
+  description = "phase show --json emits {\"spec\":…,\"plan\":…} via phase.LoadSpec / LoadPlan, null\nfor a missing file, and an unknown phase id now errors in both renderings\ninstead of exiting 0. The text path os.ReadFiles the raw TOML — it shows\neverything on disk — so the structs must model everything on disk or --json\nsilently narrows what show displays; pinned by the round-trip line below. stats\nshow's aggregation moves into a statsSummary struct the renderers read, covering\nall five rendered sections, so --json emits the same numbers the table prints.\nOwn test file so wave 3 is genuinely parallel with t-8.\n"
+  covers = ["c-5"]
+  depends_on = ["t-6"]
+  test_contract = ["`dross phase show 01-auth --json` unmarshals to an object with exactly the keys \"spec\" and \"plan\"; with plan.toml deleted, \"plan\" is JSON null — present, not omitted, not {} — and \"spec\" is still populated", "`dross phase show no-such-phase` and `dross phase show no-such-phase --json` both return a non-nil error naming the unknown id, and neither prints a JSON document or a \"(missing)\" line", "every top-level table and key present in the fixture's spec.toml and plan.toml appears in the corresponding payload — adding an unmodelled key to the fixture spec fails the test rather than silently vanishing from --json while the text rendering still shows it", "`dross stats show --json` carries the same data all five sections statsShow renders — header, top commands, error buckets, force flags, outcomes — compared field by field and bucket by bucket against the parsed table output, including the `other` bucket's err_detail tail strings; dropping any section or bucket from the payload while it still renders fails", "`dross stats show --since 7d --json` omits an event stamped 30 days ago that `--since` filters out of the table", "empty telemetry emits an empty-but-valid JSON document, not the \"(no telemetry events at …)\" sentence"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  title = "Add --json to task and changes shows"
+  files = ["internal/cmd/task.go", "internal/cmd/changes.go", "internal/cmd/json_show_task_test.go"]
+  description = "task show --json marshals the phase.Task record with Status set through orPending\non a copy before marshalling — Status is toml:\"status,omitempty\" so t-2 gives it\njson:\"status,omitempty\", and a bare Marshal would omit the very key the text path\nrenders as \"pending\". changes show accepts --json for symmetry (it already emits\nJSON at internal/cmd/changes.go:93), matching how state show already accepts the\nflag. Own test file so wave 3 is genuinely parallel with t-7.\n"
+  covers = ["c-5"]
+  depends_on = ["t-6"]
+  test_contract = ["`dross task show 01-auth t-1 --json` unmarshals to an object carrying every field the aligned rendering prints — id, title, wave, status, files, covers, depends_on, test_contract, description — each compared against the plan.toml task; a field present in the text rendering and absent from the payload fails", "task show --json on a task with empty status emits \"pending\", matching orPending in the text path rather than \"\"", "`dross task show <phase> t-99 --json` still errors \"task not found: t-99\" and prints no JSON", "`dross changes show 01-auth --json` is byte-identical to `dross changes show 01-auth`", "`changes show --json` on a phase with no changes.json still emits the empty record, not an error"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 3
+  title = "Pin lifecycle/state-map bidirectional divergence"
+  files = ["internal/cmd/board_lifecycle_divergence_test.go"]
+  description = "Test-only. Parses defaultJiraStateMap and defaultYouTrackStateMap out of\ninternal/forge source with go/parser — the pattern\ninternal/cmd/enum_divergence_test.go already uses — rather than exporting them,\nand scans assets/prompts/*.md for `--status <literal>`. \"Emits\" means call sites\nonly: the `--status <literal>` occurrences in assets/prompts/*.md plus the values\nderivePhaseStatus can return. Declared Go constants are deliberately NOT counted\n— counting them would make the emit-set equal LifecycleStatuses by construction\nand turn c-2's central assertion into a tautology. Gates both directions against\nconfigenum.LifecycleStatuses.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1", "t-5"]
+  test_contract = ["the test collects the statuses dross emits — every `--status <literal>` in assets/prompts/*.md plus the values derivePhaseStatus can return, and no other source — and asserts the set equals LifecycleStatuses; adding `--status blocked` to execute.md fails it, naming the prompt file and the literal", "deleting the \"shipped\" key from the Jira map fails with \"a status dross emits has no state-map entry\", and adding a \"paused\" key fails with \"a state map keys on a status nothing emits\"", "the two provider maps are checked independently, so a key present in one and missing from the other is caught rather than averaged away", "reverting t-5's ship.md edit fails this test, because shipped and complete stop being emitted while both maps still key them"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 3
+  title = "Pin the five telemetry friction cases"
+  files = ["internal/cmd/friction_window_test.go"]
+  description = "Test-only. One subtest per friction case recorded in the 2026-07-15..2026-07-28\ntelemetry window, each asserting the message a user now gets.\n"
+  covers = ["c-7"]
+  depends_on = ["t-1", "t-3", "t-4"]
+  test_contract = ["incomplete root: with .dross/state.json removed, `dross task list` fails with a message containing \".dross/state.json\" and cmd.RepairHint, naming `dross init` / `dross onboard` — not a bare stat/parse error", "`dross task list <phase>` on a phase with a plan exits nil and prints the task ids — it must never reach the unknown-subcommand path that produced the telemetry", "`dross task done 01-auth t-1` errors with a message containing \"dross task status <phase-id> <task-id> done\"", "`dross milestone set v1.1 milestone.status active` succeeds and writes status = \"active\"; an invalid value errors naming \"planning | active | complete\" — no unknown_field error", "doctor accepts every member of configenum.BoardProviders as [board].provider without a ✗ line for the provider field, and with auth_env exported and a valid base_url prints \"✓ [board] is well-formed\"", "unmapped board state: phase-sync on a locked-but-unstarted plan against the mock Jira server records a transition request and prints no \"no Jira status mapping\" warning"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 4
+  title = "Gate every structured show for --json"
+  files = ["internal/cmd/json_show_test.go", "README.md"]
+  description = "Walk the built command tree for every `show` subcommand and require a registered\n`json` bool flag, with a documented exempt list. Twelve `show` commands exist\nagainst c-5's nine: state show already carries the flag; rule show and\ninteraction show are the exemptions. README's command-table rows for the nine\nmention --json.\n"
+  covers = ["c-5"]
+  depends_on = ["t-6", "t-7", "t-8"]
+  test_contract = ["the tree walk fails when a `show` subcommand has no `json` flag and is not in the exempt list — deleting the flag registration from stack show fails it by name, and a future `dross findings show` landing without --json fails it too", "the exempt list is asserted to be exactly {rule, interaction}: adding a tenth structured show to the exempt list instead of giving it a flag fails", "for each command the walk finds, invoking it with --json against the fixture repo produces output json.Valid accepts — catching a flag registered but not wired", "no output from those invocations contains a line starting `# ` (locked json_shape: bare document, no envelope)", "each of the nine command-table rows in README.md — project, milestone, phase, task, changes, stats, stack, defaults, profile — mentions `--json`; deleting `--json` from the stack row fails the test naming that row, so the doc claim rots loudly"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 5
+  title = "Make internal/cmd tests hermetic against global defaults"
+  files = ["internal/cmd/hermetic_env_test.go", "internal/cmd/doctor_test.go"]
+  description = "Verify BLOCKING: five internal/cmd tests fail on any host where $BITBUCKET_TOKEN is\nunset, because `dross init` inside every test temp repo overlays the developer's real\n~/.claude/dross/defaults.toml (seedRemote at internal/cmd/init.go:154) while\nscaffoldDoctorRepo exports an unrelated FORGEJO_TOKEN. The suite's verdict therefore\ndepends on the developer's home dir, and the red suite made verify's mutation pass skip\ninternal/cmd entirely while still reporting measured. A package TestMain pins HOME to an\nempty throwaway dir — the same concern chdir already handles for DROSS_NO_TELEMETRY and\nCLAUDE_CONFIG_DIR — and scaffoldDoctorRepo sets remote.auth_env explicitly instead of\ninheriting it."
+  test_contract = ["`env -u BITBUCKET_TOKEN go test -count=1 ./...` is green: the five tests the verify BLOCKING names — TestDoctorFlagsUnrecognisedTaskStatus, TestDoctorAcceptsEveryRunnableTaskStatus, TestDoctorSkipsPhaseDirWithNoPlan, TestDoctorReportsUnparseablePlan, TestValidateIgnoresTaskStatus — no longer depend on an ambient token", "with a hostile ~/.claude/dross/defaults.toml under a temp HOME setting remote_defaults.auth_env to an env var that is not exported, scaffoldDoctorRepo still returns a doctor-clean repo — this is the blocker reproduced deterministically, and it fails if scaffoldDoctorRepo goes back to inheriting auth_env", "the package's HOME differs from the ambient HOME TestMain captured, and GlobalDir() under it holds no defaults.toml — deleting the TestMain isolation fails this by name rather than by a downstream doctor complaint", "scaffoldDoctorRepo's repo has remote.auth_env set to the same env var the helper exports, asserted from the written project.toml, so the helper cannot export one token and configure another"]
+  status = "done"

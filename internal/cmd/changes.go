@@ -76,7 +76,8 @@ func changesRecord() *cobra.Command {
 }
 
 func changesShow() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	c := &cobra.Command{
 		Use:   "show <phase-id>",
 		Short: "Print changes.json (or empty record if none yet)",
 		Args:  cobra.ExactArgs(1),
@@ -86,16 +87,22 @@ func changesShow() *cobra.Command {
 				return err
 			}
 			path := changes.FilePath(root, args[0])
-			c, err := changes.Load(path, args[0])
+			rec, err := changes.Load(path, args[0])
 			if err != nil {
 				return err
 			}
-			b, _ := json.MarshalIndent(c, "", "  ")
+			// This show has always emitted JSON — the record is a .json file,
+			// not a toml document. --json is accepted for symmetry so a caller
+			// can pass it uniformly across every `show`, exactly as `state
+			// show` already does; the output is identical either way.
+			b, _ := json.MarshalIndent(rec, "", "  ")
 			os.Stdout.Write(b)
 			fmt.Println()
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&asJSON, "json", false, "accepted for symmetry; changes show always emits JSON")
+	return c
 }
 
 func splitCSV(s string) []string {
