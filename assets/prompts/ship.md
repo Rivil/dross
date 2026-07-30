@@ -148,8 +148,9 @@ If `merge`:
    - GitHub: `gh pr merge <pr-url> --squash --delete-branch` — also deletes the remote `phase/<id>` branch.
    - Forgejo / Gitea: `POST <api_base>/repos/<owner>/<repo>/pulls/<n>/merge` body `{"Do":"squash"}`, then `DELETE <api_base>/repos/<owner>/<repo>/branches/phase%2F<id>` to remove the remote branch.
    - GitLab: `PUT <api_base>/projects/<id>/merge_requests/<iid>/merge` body `{"squash":true,"should_remove_source_branch":true}` (auth header as in §5) — the squash collapses per-task commits and `should_remove_source_branch` deletes the remote `phase/<id>` branch in one call.
-2. **Finalize locally**: `dross phase complete <phase-id>` — switches to main, fast-forwards from origin (succeeds cleanly because phase work never touched main), deletes local `phase/<id>`, records the merge in state.json with a chore commit.
-3. **Close the board issue** (no-op unless `[remote].board_sync` is on — safe to always run): `dross issue phase-sync <phase-id> --close`.
+2. **Mark the board issue shipped** (no-op unless `[remote].board_sync` is on — safe to always run): `dross issue phase-sync <phase-id> --status shipped`. The PR is merged but the phase isn't finalized yet, so `shipped` is the honest state here — and it's the moment the board should stop showing the phase as in-progress.
+3. **Finalize locally**: `dross phase complete <phase-id>` — switches to main, fast-forwards from origin (succeeds cleanly because phase work never touched main), deletes local `phase/<id>`, records the merge in state.json with a chore commit.
+4. **Close the board issue at its terminal state** (same no-op rule): `dross issue phase-sync <phase-id> --status complete --close`. Closing with a `--status` rather than a bare `--close` is what keeps `shipped` and `complete` statuses dross actually emits — a bare `--close` left both as state-map keys nothing ever resolved.
 
 > **Two merge levels (v0.7 branch topology).** Phase PRs **squash-merge** into
 > their base — `milestone/<version>` when a milestone is active, else `main` —

@@ -180,3 +180,53 @@ func TestShipPromptAutoBackfill(t *testing.T) {
 		}
 	}
 }
+
+// TestShipPromptEmitsTerminalBoardStatuses proves c-6: ship moves the board
+// issue to a terminal lifecycle state rather than just closing it.
+//
+// The bare `phase-sync <phase-id> --close` this replaces is why "shipped" and
+// "complete" sat in both forge state maps as keys nothing ever resolved — dross
+// keyed them but never emitted them. Giving ship the two call sites is what
+// makes the bidirectional divergence gate satisfiable in both directions.
+func TestShipPromptEmitsTerminalBoardStatuses(t *testing.T) {
+	content := shipPromptContent(t)
+
+	marks := []struct {
+		name string
+		at   int
+	}{
+		{"squash-merge bullet", strings.Index(content, "squash-merge via provider")},
+		{"--status shipped call", strings.Index(content, "phase-sync <phase-id> --status shipped")},
+		{"dross phase complete", strings.Index(content, "dross phase complete <phase-id>")},
+		{"--status complete --close call", strings.Index(content, "phase-sync <phase-id> --status complete --close")},
+	}
+	for _, m := range marks {
+		if m.at < 0 {
+			t.Fatalf("ship.md has no %s", m.name)
+		}
+	}
+
+	// Order, not mere presence. Both calls exist in either arrangement, so a
+	// substring check would pass with them swapped — and swapped is wrong:
+	// shipped is the state once the PR merges but before the phase finalizes,
+	// complete is the state after.
+	for i := 1; i < len(marks); i++ {
+		if marks[i].at <= marks[i-1].at {
+			t.Errorf("%s (at %d) must come after %s (at %d)", marks[i].name, marks[i].at, marks[i-1].name, marks[i-1].at)
+		}
+	}
+
+	// The pattern that produced the dead map entries.
+	if strings.Contains(content, "phase-sync <phase-id> --close") {
+		t.Error("ship.md still closes the board issue with a bare --close — that call emits no status, which is what left shipped and complete as state-map keys nothing resolves")
+	}
+
+	// Locked terminal_emit_sites: `dross phase complete` gains no board
+	// coupling. Both board moments are ship's own, so a command with zero board
+	// awareness today stays that way.
+	for i, line := range strings.Split(content, "\n") {
+		if strings.Contains(line, "dross phase complete") && strings.Contains(line, "phase-sync") {
+			t.Errorf("ship.md:%d couples `dross phase complete` with a phase-sync call: %s", i+1, strings.TrimSpace(line))
+		}
+	}
+}
