@@ -1,0 +1,482 @@
+[verify]
+  phase = "board-state-map-truth"
+  generated_at = 2026-07-30T11:15:09.501051Z
+  verdict = "fail"
+  finalized = true
+  finalized_at = 2026-07-30T11:44:45.134811Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9520843315764255
+  mutants_killed = 1987
+  mutants_survived = 100
+  mutants_not_covered = 100
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/issue_test.go:1438:TestIssuePhaseSyncJiraTransitionsALockedButUnstartedPlan", "internal/forge/jira_test.go:367:TestStateMapsResolveTheEmittedLifecycle", "internal/cmd/friction_window_test.go:209:TestFrictionWindow_BoardStateResolves"]
+  notes = "Mock Jira; asserts 1 transition GET + 1 POST on create and a second POST on re-sync, absence of the \"has no Jira status mapping\" warning, dross/status:planned on both the create fields and the label PUT, plus an explicit anti-assertion on the pre-rename dross/status:planning."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/board_lifecycle_divergence_test.go:220:TestEmittedStatusesAreTheLifecycleSet", "internal/cmd/board_lifecycle_divergence_test.go:242:TestStateMapsKeyExactlyTheEmittedStatuses"]
+  notes = "Both directions gated: emit-set (--status literals across assets/prompts/*.md plus AST-resolved derivePhaseStatus returns) versus configenum.LifecycleStatuses, and each forge state map checked independently rather than unioned. Vacuity guards fail the run if no prompt is scanned or no return value resolves; Go constants are deliberately excluded so the assertion cannot become a tautology."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/issue_test.go:1567:TestIssuePhaseSyncValidatesStatusAgainstTheLifecycleSet", "internal/cmd/issue_test.go:1629:TestIssuePhaseSyncNormalizesStatusBeforeUse", "internal/cmd/issue_test.go:1679:TestIssuePhaseSyncStillDerivesWithoutTheFlag", "internal/cmd/issue_test.go:1729:TestIssuePhaseSyncStatusFlagHelpNamesTheSet"]
+  notes = "Rejection message contains LifecycleStatuses.List(); the mock board records zero requests; the check fires ahead of the [board].enabled short-circuit so a bad value can never exit 0 as a silent no-op; shipped/complete are accepted; flag usage carries the set and not the stale \"planning\"."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/project_test.go:428:TestProjectSetGatesStateMapKeys", "internal/cmd/doctor_test.go:206:TestDoctorFlagsUnknownStateMapKey"]
+  notes = "Write surface: refused key leaves project.toml byte-identical, valid key still writes, case near-miss normalizes, and get/--unset address the same normalized entry (so an on-disk bad key stays repairable). Doctor surface: ✗ line naming [board].state_map.planning with the unset fix, non-zero exit, warning tally unchanged, and the clean fixture differing by exactly one ✗ line."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["cmd/dross/main_test.go:227:TestEveryStructuredShowAcceptsJSON", "cmd/dross/main_test.go:261:TestEveryJSONShowEmitsValidJSON", "cmd/dross/main_test.go:326:TestReadmeDocumentsJSONShows", "internal/cmd/json_show_test.go:63,111,156,180,221,240 (project/milestone/defaults/profile/stack)", "internal/cmd/json_show_phase_test.go:75,128,161,205,335,372 (phase/stats)", "internal/cmd/json_show_task_test.go:57,129,161,184,216 (task/changes)", "internal/cmd/json_tag_parity_test.go:48:TestTomlFieldsCarryMatchingJSONTags"]
+  notes = "Completeness comes from the tree walk (every `show` has a json flag or is on an exempt list pinned to exactly {rule, interaction}) plus a real invocation per flagged command checking json.Valid and the absence of a `# ` header, so a registered-but-unwired flag fails. Same-data parity is strongest for phase (every on-disk top-level key round-tripped), stats (section- and bucket-by-bucket against the table), task (field-by-field) and changes (byte-identical); for project/milestone/defaults/profile/stack it rests on the json-tag parity walk plus 1-2 representative fields each — see the FLAG below."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/ship_prompt_test.go:191:TestShipPromptEmitsTerminalBoardStatuses"]
+  notes = "Order-sensitive index comparison (squash-merge bullet → --status shipped → dross phase complete → --status complete --close), a ban on the bare `phase-sync <phase-id> --close` that produced the dead map entries, and a per-line check that `dross phase complete` gains no board coupling (locked terminal_emit_sites). Surface is markdown, so no mutation adapter applies."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/friction_window_test.go:30:TestFrictionWindow_IncompleteRoot", "internal/cmd/friction_window_test.go:60:TestFrictionWindow_TaskListExists", "internal/cmd/friction_window_test.go:100:TestFrictionWindow_TaskDoneHint", "internal/cmd/friction_window_test.go:123:TestFrictionWindow_MilestoneStatusIsSettable", "internal/cmd/friction_window_test.go:162:TestFrictionWindow_DoctorAcceptsWorkingProviders", "internal/cmd/friction_window_test.go:209:TestFrictionWindow_BoardStateResolves"]
+  notes = "One subtest per named friction case, each asserting the message a user now gets rather than just an exit code. The file states honestly that five of the six pin fixes landed by earlier phases (root-robustness, cli-surface-sweep, validator-truth) and only the unmapped board state is this phase's own work."
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:422 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:422 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:424 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:424 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:424 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:452 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:454 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: basebranch.go:104 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:89 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:89 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:91 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:91 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:94 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:94 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:160 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:242 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:245 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:245 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:96 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:52 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:55 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:58 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:60 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: root.go:57 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:494 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:494 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:496 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:496 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:498 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:27 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: project.go:81 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: project.go:83 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:23 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:181 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:184 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:105 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:109 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:114 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:119 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hooks.go:100 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: install.go:65 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: issue.go:156 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:273 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:275 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:508 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:510 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: rule.go:143 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: deferred.go:138 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: defaults.go:41 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: forge.go:626 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: github.go:328 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: github.go:328 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: github.go:334 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: github.go:334 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: jira.go:517 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: jira.go:517 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: jira.go:523 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: jira.go:523 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: youtrack.go:104 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: youtrack.go:110 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: youtrack.go:110 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: youtrack.go:110 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: youtrack.go:121 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: youtrack.go:124 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: youtrack.go:371 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: youtrack.go:451 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: youtrack.go:451 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: youtrack.go:457 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: youtrack.go:457 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:190 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:190 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:190 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:190 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:190 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:190 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:190 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:190 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: profile.go:102 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: profile.go:94 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: detect.go:260 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: detect.go:285 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/ship.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "`go test ./internal/cmd` is red on a host where $BITBUCKET_TOKEN is unset: TestDoctorFlagsUnrecognisedTaskStatus, TestDoctorAcceptsEveryRunnableTaskStatus, TestDoctorSkipsPhaseDirWithNoPlan, TestDoctorReportsUnparseablePlan and TestValidateIgnoresTaskStatus all fail on `baseline repo is not doctor-clean`. Cause: scaffoldDoctorRepo (internal/cmd/doctor_test.go:1288) exports FORGEJO_TOKEN, but `dross init` inside the temp repo inherits the user's global ~/.claude/dross/defaults.toml, which sets remote.auth_env = BITBUCKET_TOKEN — so doctor reports an unset token the helper never exported. The suite is green with BITBUCKET_TOKEN=x. Reproduced at 533b099 (cli-surface-sweep), so it is inherited, not a regression of this phase; the fix is to isolate the helper from the ambient global defaults (set HOME, or set remote.auth_env explicitly the way TestFrictionWindow_DoctorAcceptsWorkingProviders does)."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "Consequence of the red suite for verify's own signal: the first `dross verify` run skipped both ./internal/cmd (\"no report — gremlins gathered no covered mutants\") and ./cmd/dross, which is where the bulk of this phase's implementation lives, and still reported mutation_status = measured with score 0.94 from the other packages. The recorded numbers above come from a re-run with BITBUCKET_TOKEN=x (killed 1987, survived 100, score 0.95). Until the helper is fixed, this repo's own mutation gate silently under-measures its largest package."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-5 same-data narrowness: `phase show --json` has a full every-on-disk-key round-trip test, and stats/task/changes are compared against their text renderings field by field, but project, milestone, defaults, profile and stack rest on the json-tag parity walk plus one or two representative fields. A toml key present on disk but unmodelled in the struct would vanish from --json while the default rendering (which prints the raw file) still shows it, with no test failing."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation cross-check: all 100 surviving mutants are NOT COVERED (zero lived), so efficacy over executed mutants is 1.00 and no criterion downgrades to weak. None of the 100 sits on a line a criterion's covering test exercises: the internal/cmd survivors (doctor.go:89/91/94, project.go:81/83, phase.go:273/275, issue.go:156, ship.go:494-498, hints.go, status.go, phase_lifecycle.go) are switch case-condition lines — the known gremlins go-cover attribution ceiling, e.g. project.go:81/83 is exercised by TestProjectSetArityGuards — and the internal/forge survivors (jira.go:517/523, youtrack.go:104-124/371/451/457, github.go:328/334) are error-snippet truncation, backlog-item and subtask paths untouched by this phase's criteria."
