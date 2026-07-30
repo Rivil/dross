@@ -1272,6 +1272,12 @@ func TestDoctorIncompleteRootBlockMatchesLocateRoot(t *testing.T) {
 	}
 }
 
+// doctorTokenEnv is the token the scaffold both configures and exports. The
+// helper writes remote.auth_env explicitly instead of keeping whatever
+// ~/.claude/dross/defaults.toml suggested — inheriting it is what made these
+// tests red on any host that did not happen to export that particular token.
+const doctorTokenEnv = "DROSS_TEST_DOCTOR_TOKEN"
+
 // scaffoldDoctorRepo builds a git-backed dross repo whose remote matches, so
 // doctor's other sections stay quiet and the task-status verdict is the only
 // thing moving the exit code.
@@ -1284,8 +1290,10 @@ func scaffoldDoctorRepo(t *testing.T) string {
 		t.Fatalf("init: %v", err)
 	}
 	// Silence the unrelated baseline issues so the exit code tracks the
-	// task-status verdict alone.
-	t.Setenv("FORGEJO_TOKEN", "x")
+	// task-status verdict alone. auth_env is set, not inherited: the seeded
+	// value comes from the global defaults, which this suite must not read.
+	t.Setenv(doctorTokenEnv, "x")
+	mustRunSet(t, "remote.auth_env", doctorTokenEnv)
 	mustRunSet(t, "project.name", "x")
 	mustRunSet(t, "runtime.mode", "native")
 	if err := runCmd(t, Doctor()); err != nil {
