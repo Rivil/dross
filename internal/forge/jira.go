@@ -275,6 +275,10 @@ func (c *JiraClient) ensureVersion(name, description string) (string, error) {
 // defaultJiraStateMap maps dross lifecycle states to Jira status names. Status
 // names are workflow-specific, so this is a sensible default for the built-in
 // scheme, overridden per project via [board].state_map.
+//
+// The keys are exactly configenum.LifecycleStatuses — the set dross emits — and
+// internal/cmd/board_lifecycle_divergence_test.go fails the build if a key here
+// stops being emitted or an emitted status stops being keyed here.
 var defaultJiraStateMap = map[string]string{
 	"planned":     "To Do",
 	"in-progress": "In Progress",

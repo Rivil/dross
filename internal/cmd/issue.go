@@ -21,11 +21,18 @@ import (
 // Board label vocabulary. A single marker label identifies dross-managed
 // issues; one status label tracks lifecycle stage. Keeping it to two labels
 // avoids cluttering the board's label list.
+//
+// Every status literal here is a configenum.LifecycleStatuses member — the same
+// set both forge state maps key on. statusPlanned reads "planned", not
+// "planning": the maps have always keyed "planned", it is what state.json's
+// current_phase_status carries once plan.toml locks, and "planning" wrongly
+// implies work in flight. Issues already synced re-label on the next
+// phase-sync, which replaces the label set wholesale.
 const (
 	labelMarker = "dross"
 	labelQuick  = "dross/quick"
 
-	statusPlanning   = "planning"
+	statusPlanned    = "planned"
 	statusInProgress = "in-progress"
 	statusVerifying  = "verifying"
 )
@@ -498,14 +505,16 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 	return nil
 }
 
-// derivePhaseStatus maps plan progress onto a lifecycle label.
+// derivePhaseStatus maps plan progress onto a lifecycle label. Its return
+// values are the emitted half of configenum.LifecycleStatuses — the other half
+// comes from the `--status <literal>` calls in assets/prompts/*.md.
 func derivePhaseStatus(plan *phase.Plan) string {
 	if plan == nil || len(plan.Task) == 0 {
-		return statusPlanning
+		return statusPlanned
 	}
 	_, inProgress, done, failed := plan.Summary()
 	if done == 0 && inProgress == 0 && failed == 0 {
-		return statusPlanning
+		return statusPlanned
 	}
 	return statusInProgress
 }

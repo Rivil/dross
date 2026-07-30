@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 const jiraTokenEnv = "MOCK_JIRA_TOKEN"
@@ -352,6 +354,45 @@ func TestJiraSetStateTransitions(t *testing.T) {
 			t.Error("should not POST when no transition matches the target status")
 		}
 	})
+}
+
+// TestStateMapsResolveTheEmittedLifecycle pins both default maps against the
+// vocabulary dross emits.
+//
+// resolveYouTrackState is asserted here rather than in youtrack_test.go on
+// purpose: the failure this phase exists to close is the two providers
+// answering the same question differently, and a shared table is where a key
+// added to one map and not the other shows up as a diff instead of as a passing
+// test in a file nobody opened.
+func TestStateMapsResolveTheEmittedLifecycle(t *testing.T) {
+	if got, ok := resolveJiraState("planned", nil); !ok || got != "To Do" {
+		t.Errorf(`resolveJiraState("planned", nil) = (%q, %v), want ("To Do", true)`, got, ok)
+	}
+	if got, ok := resolveYouTrackState("planned", nil); !ok || got != "Open" {
+		t.Errorf(`resolveYouTrackState("planned", nil) = (%q, %v), want ("Open", true)`, got, ok)
+	}
+	// "planning" is what issue.go emitted before the rename. It must map to
+	// nothing on both providers — if either map ever grows it back as an alias,
+	// the producer can drift again without anything failing.
+	if v, ok := resolveJiraState("planning", nil); ok {
+		t.Errorf(`resolveJiraState("planning", nil) = (%q, true), want ok=false`, v)
+	}
+	if v, ok := resolveYouTrackState("planning", nil); ok {
+		t.Errorf(`resolveYouTrackState("planning", nil) = (%q, true), want ok=false`, v)
+	}
+
+	// Every status dross can emit resolves on both providers. The reverse
+	// direction — a map key nothing emits — is gated by
+	// internal/cmd/board_lifecycle_divergence_test.go, which can also see the
+	// prompt call sites this package cannot.
+	for _, s := range configenum.LifecycleStatuses.Values() {
+		if _, ok := resolveJiraState(s, nil); !ok {
+			t.Errorf("lifecycle status %q has no defaultJiraStateMap entry", s)
+		}
+		if _, ok := resolveYouTrackState(s, nil); !ok {
+			t.Errorf("lifecycle status %q has no defaultYouTrackStateMap entry", s)
+		}
+	}
 }
 
 func TestJiraBasicAuth(t *testing.T) {

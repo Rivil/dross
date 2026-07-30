@@ -295,6 +295,10 @@ func (c *YouTrackClient) ensureEpic(name, description string) (string, error) {
 // defaultYouTrackStateMap maps dross lifecycle states to YouTrack State values.
 // YouTrack state names are instance-specific, so this is a sensible default
 // overridden per project via [board].state_map.
+//
+// The keys are exactly configenum.LifecycleStatuses — the set dross emits — and
+// internal/cmd/board_lifecycle_divergence_test.go fails the build if a key here
+// stops being emitted or an emitted status stops being keyed here.
 var defaultYouTrackStateMap = map[string]string{
 	"planned":     "Open",
 	"in-progress": "In Progress",
