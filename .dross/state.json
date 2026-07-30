@@ -1,27 +1,11 @@
 {
-  "version": "1.1.3.0",
+  "version": "1.1.4.0",
   "current_milestone": "v1.1",
   "current_phase": "board-state-map-truth",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-30T07:25:45.873023Z",
-  "last_action": "spec locked: board-state-map-truth",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-30T10:05:39.726008Z",
+  "last_action": "set version=1.1.4.0",
   "history": [
-    {
-      "at": "2026-07-29T09:55:18.040289Z",
-      "action": "set version=1.1.2.0"
-    },
-    {
-      "at": "2026-07-29T10:03:09.776629Z",
-      "action": "executed t-1 (LocateRoot + incomplete-root sentinel)"
-    },
-    {
-      "at": "2026-07-29T10:05:23.436268Z",
-      "action": "executed t-2 (pause refuses without an initialised root)"
-    },
-    {
-      "at": "2026-07-29T10:07:35.329034Z",
-      "action": "executed t-3 (status + state touch silent on a non-root)"
-    },
     {
       "at": "2026-07-29T10:10:17.674005Z",
       "action": "executed t-4 (pause --auto silent on non-root, loud on corrupt)"
@@ -205,6 +189,22 @@
     {
       "at": "2026-07-30T07:25:45.873023Z",
       "action": "spec locked: board-state-map-truth"
+    },
+    {
+      "at": "2026-07-30T07:50:36.538785Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-30T07:50:36.547028Z",
+      "action": "plan locked: board-state-map-truth (11 tasks across 4 waves)"
+    },
+    {
+      "at": "2026-07-30T10:05:39.71824Z",
+      "action": "plan reviewed: board-state-map-truth (1 blocking, 9 flags — all folded in)"
+    },
+    {
+      "at": "2026-07-30T10:05:39.726008Z",
+      "action": "set version=1.1.4.0"
     }
   ]
 }
