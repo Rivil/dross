@@ -9,6 +9,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/project"
 )
 
@@ -286,6 +287,14 @@ func writeDotted(p *project.Project, path, value string) error {
 	// entries survive and a project.toml with no [board.state_map] table gets
 	// the map created rather than a nil-map panic.
 	if key, ok := stateMapKey(path); ok {
+		// A key outside the lifecycle set is silently-broken config: the
+		// lookup is keyed by what dross emits, so an override on anything else
+		// never applies. Rejected before the map is touched, so a refused write
+		// leaves project.toml byte-unchanged. A near-miss of case or padding is
+		// normalized by stateMapKey rather than rejected.
+		if !configenum.LifecycleStatuses.Has(key) {
+			return fmt.Errorf("unknown [board].state_map key %q; expected %s", key, configenum.LifecycleStatuses.List())
+		}
 		if p.Board.StateMap == nil {
 			p.Board.StateMap = map[string]string{}
 		}
@@ -439,12 +448,17 @@ func writeDotted(p *project.Project, path, value string) error {
 // stateMapKey recognises a `board.state_map.<status>` path and returns the
 // entry key. The suffix must be non-empty and single-segment — bare
 // `board.state_map` is not an addressable leaf.
+// The key is normalized here rather than at each call site, so write, read and
+// unset all address the same entry. Without it `set board.state_map.Planned`
+// stores under "planned" (where the sync-time lookup can find it) while `get`
+// and `--unset` keep asking for "Planned" — an entry the CLI wrote and cannot
+// address, which is exactly the repair path doctor's new check depends on.
 func stateMapKey(path string) (string, bool) {
 	key, ok := strings.CutPrefix(path, "board.state_map.")
 	if !ok || key == "" || strings.Contains(key, ".") {
 		return "", false
 	}
-	return key, true
+	return configenum.Normalize(key), true
 }
 
 // unsetDotted clears a field written by mistake. A scalar is zeroed through

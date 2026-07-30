@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/project"
 )
 
@@ -377,7 +378,7 @@ func TestBoardFieldsAllAddressable(t *testing.T) {
 		case reflect.Map:
 			// Map fields are addressed one entry at a time
 			// (locked state_map_write), so probe a concrete key.
-			path += ".probe"
+			path += ".planned"
 		case reflect.Bool:
 			probe = "true"
 		}
@@ -396,11 +397,11 @@ func TestStateMapPerKeyWrite(t *testing.T) {
 	// No [board.state_map] table at all: the first write must create the map,
 	// not panic on a nil map.
 	p := &project.Project{}
-	if err := writeDotted(p, "board.state_map.done", "Closed"); err != nil {
+	if err := writeDotted(p, "board.state_map.complete", "Closed"); err != nil {
 		t.Fatalf("first state_map write: %v", err)
 	}
-	if got, _ := readDotted(p, "board.state_map.done"); got != "Closed" {
-		t.Errorf("board.state_map.done = %q, want Closed", got)
+	if got, _ := readDotted(p, "board.state_map.complete"); got != "Closed" {
+		t.Errorf("board.state_map.complete = %q, want Closed", got)
 	}
 
 	// A second key must not clobber the first — per-key write, never a
@@ -408,8 +409,8 @@ func TestStateMapPerKeyWrite(t *testing.T) {
 	if err := writeDotted(p, "board.state_map.in-progress", "In Review"); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := readDotted(p, "board.state_map.done"); got != "Closed" {
-		t.Errorf("after writing a second key, board.state_map.done = %q, want Closed", got)
+	if got, _ := readDotted(p, "board.state_map.complete"); got != "Closed" {
+		t.Errorf("after writing a second key, board.state_map.complete = %q, want Closed", got)
 	}
 	if got, _ := readDotted(p, "board.state_map.in-progress"); got != "In Review" {
 		t.Errorf("board.state_map.in-progress = %q, want In Review", got)
@@ -421,14 +422,122 @@ func TestStateMapPerKeyWrite(t *testing.T) {
 	}
 }
 
+// TestProjectSetGatesStateMapKeys proves c-4's write half: a [board].state_map
+// key outside the lifecycle set is refused, because the sync-time lookup is
+// keyed by what dross emits and an override on anything else can never apply.
+func TestProjectSetGatesStateMapKeys(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	path := filepath.Join(dir, ".dross", "project.toml")
+
+	t.Run("an out-of-set key is refused before anything is written", func(t *testing.T) {
+		before := mustRead(t, path)
+		err := runCmd(t, Project(), "set", "board.state_map.planning", "To Do")
+		if err == nil {
+			t.Fatal(`board.state_map.planning was accepted — it is the pre-rename key and remaps a state dross never emits`)
+		}
+		if !strings.Contains(err.Error(), configenum.LifecycleStatuses.List()) {
+			t.Errorf("error %q does not name the five valid keys", err)
+		}
+		if after := mustRead(t, path); after != before {
+			t.Errorf("project.toml changed on a refused write — the key must be rejected before the map is touched:\n%s", after)
+		}
+	})
+
+	t.Run("a valid key still writes", func(t *testing.T) {
+		if err := runCmd(t, Project(), "set", "board.state_map.verifying", "In Review"); err != nil {
+			t.Fatalf("board.state_map.verifying: %v", err)
+		}
+		if body := mustRead(t, path); !strings.Contains(body, `In Review`) {
+			t.Errorf("entry not written:\n%s", body)
+		}
+	})
+
+	t.Run("a near-miss of case is normalized, not rejected", func(t *testing.T) {
+		if err := runCmd(t, Project(), "set", "board.state_map.Planned", "Backlog"); err != nil {
+			t.Fatalf("board.state_map.Planned should normalize to planned: %v", err)
+		}
+		// Stored under the normalized key, which is the only spelling the
+		// sync-time lookup ever asks for.
+		p, _, err := loadProject()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := p.Board.StateMap["planned"]; got != "Backlog" {
+			t.Errorf(`StateMap["planned"] = %q, want Backlog — stored under the raw key, where nothing will find it`, got)
+		}
+	})
+
+	t.Run("read and unset address the normalized entry too", func(t *testing.T) {
+		// The trap a write-only normalization sets: the CLI writes an entry it
+		// can no longer address, so `get` reads back empty and `--unset`
+		// deletes nothing.
+		out := captureStdout(t, func() {
+			if err := runCmd(t, Project(), "get", "board.state_map.Planned"); err != nil {
+				t.Fatalf("get board.state_map.Planned: %v", err)
+			}
+		})
+		if !strings.Contains(out, "Backlog") {
+			t.Errorf("get board.state_map.Planned = %q, want the value written under planned", out)
+		}
+		if err := runCmd(t, Project(), "set", "--unset", "board.state_map.Planned"); err != nil {
+			t.Fatalf("unset board.state_map.Planned: %v", err)
+		}
+		p, _, err := loadProject()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, still := p.Board.StateMap["planned"]; still {
+			t.Error("--unset board.state_map.Planned deleted nothing — write, read and unset must agree on the key")
+		}
+	})
+
+	t.Run("an existing bad key stays readable and removable", func(t *testing.T) {
+		// doctor reports on-disk bad keys, so the CLI has to be able to repair
+		// one — otherwise it names a fault with no fix.
+		//
+		// Its own repo: the subtests above already wrote a [board.state_map]
+		// table, and a second header for the same table is a TOML decode error
+		// rather than a merge.
+		dir := t.TempDir()
+		chdir(t, dir)
+		if err := runCmd(t, Init()); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		path := filepath.Join(dir, ".dross", "project.toml")
+		mustWrite(t, path, mustRead(t, path)+"\n[board.state_map]\nplanning = \"To Do\"\n")
+		out := captureStdout(t, func() {
+			if err := runCmd(t, Project(), "get", "board.state_map.planning"); err != nil {
+				t.Fatalf("get on an existing bad key: %v", err)
+			}
+		})
+		if !strings.Contains(out, "To Do") {
+			t.Errorf("a bad key on disk is unreadable: %q", out)
+		}
+		if err := runCmd(t, Project(), "set", "--unset", "board.state_map.planning"); err != nil {
+			t.Fatalf("unset an existing bad key: %v", err)
+		}
+		p, _, err := loadProject()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, still := p.Board.StateMap["planning"]; still {
+			t.Error("a bad key survived --unset — doctor would report a fault the CLI cannot repair")
+		}
+	})
+}
+
 func TestProjectUnsetStateMapEntry(t *testing.T) {
 	chdir(t, t.TempDir())
 	scaffoldProject(t)
-	mustRunSet(t, "board.state_map.done", "Closed")
+	mustRunSet(t, "board.state_map.complete", "Closed")
 	mustRunSet(t, "board.state_map.in-progress", "In Review")
 	mustRunSet(t, "board.provider", "jira")
 
-	if err := runCmd(t, Project(), "set", "--unset", "board.state_map.done"); err != nil {
+	if err := runCmd(t, Project(), "set", "--unset", "board.state_map.complete"); err != nil {
 		t.Fatalf("--unset state_map entry: %v", err)
 	}
 	p, _, err := loadProjectAt(t)
@@ -436,7 +545,7 @@ func TestProjectUnsetStateMapEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, present := p.Board.StateMap["done"]; present {
-		t.Error("board.state_map.done survived --unset")
+		t.Error("board.state_map.complete survived --unset")
 	}
 	if p.Board.StateMap["in-progress"] != "In Review" {
 		t.Errorf("sibling entry lost: %v", p.Board.StateMap)
@@ -571,10 +680,10 @@ func TestProjectGetMultiPath(t *testing.T) {
 	chdir(t, t.TempDir())
 	scaffoldProject(t)
 	mustRunSet(t, "project.name", "feast")
-	mustRunSet(t, "board.state_map.done", "Closed")
+	mustRunSet(t, "board.state_map.complete", "Closed")
 
 	out := captureStdout(t, func() {
-		if err := runCmd(t, Project(), "get", "project.name", "runtime.mode", "board.state_map.done"); err != nil {
+		if err := runCmd(t, Project(), "get", "project.name", "runtime.mode", "board.state_map.complete"); err != nil {
 			t.Errorf("multi get: %v", err)
 		}
 	})
@@ -582,7 +691,7 @@ func TestProjectGetMultiPath(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("multi-path project get is not one JSON object: %v\ngot %q", err, out)
 	}
-	want := map[string]string{"project.name": "feast", "runtime.mode": "native", "board.state_map.done": "Closed"}
+	want := map[string]string{"project.name": "feast", "runtime.mode": "native", "board.state_map.complete": "Closed"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("multi get = %v, want %v", got, want)
 	}

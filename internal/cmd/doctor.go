@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -172,6 +173,24 @@ func Doctor() *cobra.Command {
 				if !configenum.MilestoneModes.Has(b.MilestoneMode) {
 					Printf("  ✗ [board].milestone_mode = %q is invalid (expected %s)\n", b.MilestoneMode, configenum.MilestoneModes.List())
 					boardIssues++
+				}
+
+				// A state_map key outside the lifecycle set is a dead override:
+				// the lookup is keyed by what dross emits, so the state it was
+				// meant to remap never applies. That is silently-broken config,
+				// the same severity doctor already gives an invalid provider or
+				// milestone_mode — an issue counting toward the non-zero exit,
+				// not a warning (locked state_map_key_severity).
+				//
+				// `project set` refuses to write one, so a key here arrives by
+				// hand-editing or predates the planned/planning rename;
+				// `dross project set --unset board.state_map.<key>` clears it.
+				for _, k := range sortedStateMapKeys(b.StateMap) {
+					if !configenum.LifecycleStatuses.Has(k) {
+						Printf("  ✗ [board].state_map.%s is not a lifecycle status (expected %s)\n", k, configenum.LifecycleStatuses.List())
+						Printf("    Fix: dross project set --unset board.state_map.%s\n", k)
+						boardIssues++
+					}
 				}
 
 				warnings = append(warnings, boardCombinationWarnings(b.Provider, b.MilestoneMode, b.AuthUser)...)
@@ -356,6 +375,17 @@ func remoteCombinationWarnings(provider, authScheme, authUser string) []string {
 
 // boardCombinationWarnings reports [board] pairings that pass every per-field
 // check and still error at the first board op.
+// sortedStateMapKeys returns the [board].state_map keys in a stable order, so
+// a project.toml with several bad keys reports them the same way every run.
+func sortedStateMapKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func boardCombinationWarnings(provider, milestoneMode, authUser string) []string {
 	var out []string
 	prov := configenum.Normalize(provider)
