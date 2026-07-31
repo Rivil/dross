@@ -3,7 +3,7 @@ phases = ["validator-truth", "root-robustness", "cli-surface-sweep", "board-stat
 [milestone]
   version = "v1.1"
   title = "1.1 friction pass — the logs stop repeating themselves"
-  status = "active"
+  status = "complete"
   started = "2026-07-28"
 
 [scope]
