@@ -144,7 +144,7 @@ func phaseCreate() *cobra.Command {
 				// (milestone/<version> when active, else main). On any
 				// failure roll back the empty dir so a retry doesn't leak
 				// a phase number.
-				branchBase, milestoneActive, err = forkPhaseBranch(repoDir, root, branchName)
+				branchBase, milestoneActive, err = forkPhaseBranch(repoDir, root, id, branchName)
 				if err != nil {
 					_ = os.Remove(dir)
 					return err
@@ -552,7 +552,15 @@ func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconci
 // auto-commit of .dross-only dirt (autoCommitDrossDirt); the caller owns
 // directory creation and rollback. Returns the resolved base and whether a
 // milestone branch was used (so create can tailor the no-milestone nudge).
-func forkPhaseBranch(repoDir, root, branchName string) (base string, milestoneActive bool, err error) {
+//
+// It also records the base it ACTUALLY forked from into the phase's
+// changes.json — the create-time half of the base_write_timing decision, so
+// every phase carries a base immediately, including one that never ships.
+// phaseID is passed in rather than derived by trimming "phase/" off
+// branchName: the id is what the record is keyed by, and reconstructing it
+// from a branch name would silently mis-key any phase whose branch name
+// stopped matching.
+func forkPhaseBranch(repoDir, root, phaseID, branchName string) (base string, milestoneActive bool, err error) {
 	committed, err := autoCommitDrossDirt(repoDir, "starting a phase")
 	if err != nil {
 		return "", false, err
@@ -569,6 +577,13 @@ func forkPhaseBranch(repoDir, root, branchName string) (base string, milestoneAc
 	}
 	if out, e := gitCombined(repoDir, "checkout", "-b", branchName, base); e != nil {
 		return "", false, fmt.Errorf("git checkout -b %s %s: %w\n%s", branchName, base, e, out)
+	}
+	// Only after the fork succeeded: a failed checkout must leave no
+	// changes.json behind, because the caller's rollback is os.Remove(dir),
+	// which only removes an empty directory — a record written up front would
+	// leak the phase id on every retry.
+	if err := changes.SetBase(root, phaseID, base); err != nil {
+		return "", false, fmt.Errorf("record forked-from base for %s: %w", phaseID, err)
 	}
 	return base, milestoneActive, nil
 }

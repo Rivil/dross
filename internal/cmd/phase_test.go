@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
@@ -198,6 +199,11 @@ func TestPhaseCreateSlugIdentity(t *testing.T) {
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "chore: phase 1 bookkeeping")
 	mustGit(t, dir, "checkout", "-q", "main")
+	// Fold phase 1's dir onto main before the second create. Recording the
+	// forked-from base at create time makes .dross/phases/<id>/ tracked
+	// immediately, so checking out main now takes the first phase's dir away
+	// with it — and there'd be no slug collision left to assert.
+	mustGit(t, dir, "merge", "-q", "--ff-only", "phase/my-feature")
 	if err := runCmd(t, Phase(), "create", "My Feature"); err != nil {
 		t.Fatalf("second create: %v", err)
 	}
@@ -1260,6 +1266,92 @@ func TestPhaseCreateRootsOnMilestoneBranch(t *testing.T) {
 	// only ancestry proves phase/auth forked off the milestone branch.
 	if err := gitNoOut(dir, "merge-base", "--is-ancestor", msCommit, "refs/heads/phase/auth"); err != nil {
 		t.Errorf("phase/auth not rooted on milestone/v0.9 (milestone commit not ancestor): %v", err)
+	}
+}
+
+// readRecordedBase reads the forked-from base out of a phase's changes.json.
+func readRecordedBase(t *testing.T, dir, phaseID string) string {
+	t.Helper()
+	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), phaseID), phaseID)
+	if err != nil {
+		t.Fatalf("load changes for %s: %v", phaseID, err)
+	}
+	return ch.Base
+}
+
+// TestPhaseCreateRecordsBaseOnMain is the create-time half of base_write_timing
+// (c-2): every phase carries the branch it actually forked from from the moment
+// it exists, so `dross phase complete` never has to infer one.
+func TestPhaseCreateRecordsBaseOnMain(t *testing.T) {
+	dir := initWithGit(t)
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if got := readRecordedBase(t, dir, "auth"); got != "main" {
+		t.Errorf("recorded base = %q, want %q", got, "main")
+	}
+}
+
+// TestPhaseCreateRecordsMilestoneBase pins that the recorded value is the
+// branch actually forked from, not a re-derivation. Under a milestone the fork
+// roots on milestone/<version>, and that is what completion must reconcile
+// against — recording "main" here is exactly the stale-base bug.
+func TestPhaseCreateRecordsMilestoneBase(t *testing.T) {
+	dir := initWithGit(t)
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.9"); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "scope v0.9")
+	mustGit(t, dir, "branch", "milestone/v0.9")
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if got := readRecordedBase(t, dir, "auth"); got != "milestone/v0.9" {
+		t.Errorf("recorded base = %q, want %q", got, "milestone/v0.9")
+	}
+}
+
+// TestPhaseInsertRecordsBase covers the second call site: an inserted phase is
+// forked the same way as a created one, so it must carry a base too — a
+// base-less phase is un-completable without an explicit --base.
+func TestPhaseInsertRecordsBase(t *testing.T) {
+	dir := initWithGit(t)
+	root := filepath.Join(dir, ".dross")
+	mustWrite(t, filepath.Join(root, "milestones", "v1.toml"),
+		"phases = [\"auth\"]\n\n[milestone]\n  version = \"v1\"\n  title = \"M\"\n")
+	mustWrite(t, filepath.Join(root, "phases", "auth", "spec.toml"),
+		"[phase]\n  id = \"auth\"\n  title = \"auth\"\n\n[[criteria]]\n  id = \"c-1\"\n  text = \"x\"\n")
+	if err := runCmd(t, State(), "set", "current_milestone", "v1"); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "scope v1")
+
+	if err := runCmd(t, Phase(), "insert", "billing", "--after", "auth"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if got := readRecordedBase(t, dir, "billing"); got != "main" {
+		t.Errorf("inserted phase's recorded base = %q, want %q — a base-less phase is un-completable without --base", got, "main")
+	}
+}
+
+// TestPhaseCreateFailedForkLeavesNoRecord pins the write ordering: the base is
+// recorded only after `checkout -b` succeeds. create's rollback is
+// os.Remove(dir), which only removes an EMPTY directory, so a record written
+// before the fork would survive the rollback and leak the phase id — every
+// retry would then land on a suffixed slug.
+func TestPhaseCreateFailedForkLeavesNoRecord(t *testing.T) {
+	dir := initWithGit(t)
+	mustGit(t, dir, "branch", "phase/auth") // the fork will collide with this
+
+	if err := runCmd(t, Phase(), "create", "auth"); err == nil {
+		t.Fatal("expected create to fail when phase/auth already exists")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".dross", "phases", "auth")); !os.IsNotExist(err) {
+		t.Errorf("failed fork leaked .dross/phases/auth (stat err = %v) — the rollback only removes an empty dir", err)
 	}
 }
 
