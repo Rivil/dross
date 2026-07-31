@@ -1,21 +1,11 @@
 {
   "version": "1.2.0.0",
   "current_milestone": "v1.2",
-  "last_activity": "2026-07-31T16:18:11.228166Z",
-  "last_action": "scoped milestone v1.2: 9 criteria, 6 phases",
+  "current_phase": "complete-base-truth",
+  "current_phase_status": "created",
+  "last_activity": "2026-07-31T16:24:32.703418Z",
+  "last_action": "spec locked: complete-base-truth",
   "history": [
-    {
-      "at": "2026-07-29T17:07:48.052845Z",
-      "action": "executed t-1 (Add `dross task list` with --json)"
-    },
-    {
-      "at": "2026-07-29T17:10:55.546719Z",
-      "action": "executed t-2 (Complete + reversible project dotted paths)"
-    },
-    {
-      "at": "2026-07-29T17:13:45.922189Z",
-      "action": "executed t-3 (Resolve bare milestone field + validate status enum)"
-    },
     {
       "at": "2026-07-29T17:16:33.405681Z",
       "action": "executed t-4 (Multi-path get renderer + state get + state show --json)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-07-31T16:18:11.228166Z",
       "action": "scoped milestone v1.2: 9 criteria, 6 phases"
+    },
+    {
+      "at": "2026-07-31T16:18:35.320113Z",
+      "action": "created complete-base-truth"
+    },
+    {
+      "at": "2026-07-31T16:24:32.697404Z",
+      "action": "set current_phase=complete-base-truth"
+    },
+    {
+      "at": "2026-07-31T16:24:32.703418Z",
+      "action": "spec locked: complete-base-truth"
     }
   ]
 }
