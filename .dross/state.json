@@ -2,22 +2,10 @@
   "version": "1.2.0.0",
   "current_milestone": "v1.2",
   "current_phase": "complete-base-truth",
-  "current_phase_status": "created",
-  "last_activity": "2026-07-31T16:24:32.703418Z",
-  "last_action": "spec locked: complete-base-truth",
+  "current_phase_status": "planned",
+  "last_activity": "2026-07-31T16:56:59.188504Z",
+  "last_action": "plan reviewed: complete-base-truth (0 blocking, 8 flags)",
   "history": [
-    {
-      "at": "2026-07-29T17:16:33.405681Z",
-      "action": "executed t-4 (Multi-path get renderer + state get + state show --json)"
-    },
-    {
-      "at": "2026-07-29T17:19:25.003379Z",
-      "action": "executed t-5 (Doctor flags unrecognised task statuses)"
-    },
-    {
-      "at": "2026-07-29T17:22:14.255039Z",
-      "action": "executed t-6 (Curated mis-reach table + nearest-match fallback)"
-    },
     {
       "at": "2026-07-29T17:24:44.034982Z",
       "action": "executed t-7 (Adopt multi-path get in project + milestone)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-07-31T16:24:32.703418Z",
       "action": "spec locked: complete-base-truth"
+    },
+    {
+      "at": "2026-07-31T16:51:22.327323Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-31T16:51:22.335118Z",
+      "action": "plan locked: complete-base-truth (9 tasks across 4 waves)"
+    },
+    {
+      "at": "2026-07-31T16:56:59.188504Z",
+      "action": "plan reviewed: complete-base-truth (0 blocking, 8 flags)"
     }
   ]
 }
