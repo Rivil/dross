@@ -11,6 +11,11 @@ docs/dross.pdf
 # dross handoff — local working memory, not tracked
 .dross/handoff.md
 
+# dross machine-local values (quick_base) — deliberately untracked: state.json
+# rides the squash onto the base, so a value stored there would be dragged
+# forward into every later tree. Staying out of history is the whole point.
+.dross/local.toml
+
 # dross security run artifacts — local audit output; never pre-disclose on a public repo
 .dross/security/
 
