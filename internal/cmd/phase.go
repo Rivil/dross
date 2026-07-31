@@ -221,11 +221,15 @@ func phaseComplete() *cobra.Command {
 		Short: "Finalize a phase after squash-merge: ff the reconcile branch, delete phase/<id>",
 		Long: `Run after the PR for this phase has been squash-merged upstream.
 
-  1. switch to the reconcile branch — milestone/<version> when a milestone
+  1. fetch origin and confirm the phase's merge
+  2. switch to the reconcile branch — milestone/<version> when a milestone
      is active, else the configured main branch
-  2. fetch origin
   3. fast-forward the reconcile branch from origin/<branch>
   4. delete the local phase/<id> branch (and the remote one)
+
+The switch happens only after every check has passed, so a refused
+completion leaves HEAD on phase/<id> with no local ref moved — re-run it
+once the reason for the refusal is fixed.
 
 'dross ship' folds the cleared current_phase + "completed <id>" record
 into the PR squash, so the fast-forward above already brings the
@@ -341,17 +345,6 @@ points at a manual reconcile.`,
 				recordedPR = ch.PR
 			}
 
-			// Switch to the reconcile branch if we aren't already there.
-			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
-			if err != nil {
-				return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
-			}
-			if cur != reconcileBranch {
-				if out, err := gitCombined(repoDir, "checkout", reconcileBranch); err != nil {
-					return fmt.Errorf("git checkout %s: %w\n%s", reconcileBranch, err, out)
-				}
-			}
-
 			if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
 				return fmt.Errorf("git fetch: %w\n%s", err, out)
 			}
@@ -392,6 +385,27 @@ points at a manual reconcile.`,
 			// anything destructive.
 			if err := mergeGate(repoDir, buildOpenOpts(p), phaseID, phaseBranch, reconcileBranch, recordedPR); err != nil {
 				return err
+			}
+
+			// Switch to the reconcile branch only now — every refusal above
+			// (fetch failure, a code-ahead or unpushable base, an unmerged PR)
+			// returns with HEAD still on phase/<id> and no local ref moved, so
+			// a refused completion is a no-op the user can simply re-run.
+			// Nothing above needs HEAD: fetch, pushBaseIfAheadDrossOnly,
+			// originRecordedPR and mergeGate all take branch names. The
+			// ff-only merge below is the first step that does.
+			//
+			// There is deliberately no restore-HEAD-on-error path past this
+			// point: a compensating checkout is itself a branch switch, and one
+			// that fails mid-refusal leaves a worse state than not trying.
+			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			if err != nil {
+				return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
+			}
+			if cur != reconcileBranch {
+				if out, err := gitCombined(repoDir, "checkout", reconcileBranch); err != nil {
+					return fmt.Errorf("git checkout %s: %w\n%s", reconcileBranch, err, out)
+				}
 			}
 
 			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+reconcileBranch); err != nil {

@@ -419,6 +419,93 @@ func TestPhaseCompleteHappyPath(t *testing.T) {
 	}
 }
 
+// assertRefusalTouchedNothing is the shared c-1 assertion: a refused
+// completion must leave HEAD on the phase branch, the phase branch alive, and
+// the base ref exactly where it was. The branch switch sits past every refusal
+// precisely so a refusal is a re-runnable no-op.
+func assertRefusalTouchedNothing(t *testing.T, dir, phaseBranch, base, baseSHABefore string) {
+	t.Helper()
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != phaseBranch {
+		t.Errorf("refusal moved HEAD off %s: now on %q", phaseBranch, cur)
+	}
+	if branches := mustGit(t, dir, "branch", "--list", phaseBranch); !strings.Contains(branches, phaseBranch) {
+		t.Errorf("%s should survive a refused complete, got: %q", phaseBranch, branches)
+	}
+	if got := mustGit(t, dir, "rev-parse", base); got != baseSHABefore {
+		t.Errorf("refusal moved %s: %s -> %s", base, baseSHABefore, got)
+	}
+}
+
+// TestPhaseCompleteMergeGateRefusalLeavesHEADOnPhase pins c-1 for the gate
+// refusal: an unmerged PR must not cost the user their branch position. The
+// checkout used to run before the gate, so a refusal stranded them on the base
+// with the phase branch still holding unmerged work.
+func TestPhaseCompleteMergeGateRefusalLeavesHEADOnPhase(t *testing.T) {
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, false) // provider says PR #42 is NOT merged
+
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+	originBefore := mustGit(t, dir, "rev-parse", "origin/main")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected refusal when the recorded PR is not merged")
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+
+	// The safety-net push must not have fired: local main is behind origin/main
+	// here, with nothing of its own to push.
+	if got := mustGit(t, dir, "rev-parse", "origin/main"); got != originBefore {
+		t.Errorf("safety-net push advanced origin/main on a base with nothing to push: %s -> %s", originBefore, got)
+	}
+}
+
+// TestPhaseCompleteFetchFailureLeavesHEADOnPhase pins c-1 for the earliest
+// refusal — a fetch that can't reach origin. Nothing before the ff-only merge
+// needs HEAD, so an unreachable remote must be a pure no-op.
+func TestPhaseCompleteFetchFailureLeavesHEADOnPhase(t *testing.T) {
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
+
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+	mustGit(t, dir, "remote", "set-url", "origin", filepath.Join(dir, "no-such-remote.git"))
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected refusal when fetch cannot reach origin")
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+}
+
+// TestPhaseCompleteSafetyNetRefusalLeavesHEADOnPhase pins c-1 for the
+// safety-net push refusal: a base carrying unpushed non-.dross work is the
+// user's to reconcile, and refusing to do it for them must not also relocate
+// them onto that very branch.
+func TestPhaseCompleteSafetyNetRefusalLeavesHEADOnPhase(t *testing.T) {
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
+
+	// Put local main purely ahead of origin/main with a code commit — the
+	// shape pushBaseIfAheadDrossOnly refuses on.
+	mustGit(t, dir, "checkout", "-q", "main")
+	mustGit(t, dir, "reset", "-q", "--hard", "origin/main")
+	mustWrite(t, filepath.Join(dir, "src/hotfix.ts"), "x\n")
+	mustGit(t, dir, "add", "src/hotfix.ts")
+	mustGit(t, dir, "commit", "-q", "-m", "fix: hotfix straight on main")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected refusal when the base is ahead with non-.dross commits")
+	}
+	if !strings.Contains(err.Error(), "non-.dross") {
+		t.Errorf("refusal should name the non-.dross commits: %v", err)
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+}
+
 func TestPhaseCompleteRefusesDirtyTree(t *testing.T) {
 	dir, _ := completeFixture(t)
 	mustWrite(t, filepath.Join(dir, "src/dirty.ts"), "x\n")
