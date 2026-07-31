@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -85,9 +86,19 @@ longer holds the pre-merge .dross/ tree:
 				return errors.New("no phase id given and state has no current_phase")
 			}
 
-			mainBranch := p.Repo.GitMainBranch
-			if mainBranch == "" {
-				mainBranch = "main"
+			// The branch to guard on and reset is the one THIS phase was forked
+			// from, not the configured main branch: under a milestone the phase
+			// based on milestone/<version>, and resetting main instead would
+			// hard-reset a branch that has nothing to do with the phase being
+			// recovered. Falls back to git_main_branch when there is no record,
+			// which is the legacy repo this command exists for — those phases
+			// predate the record and did live on main.
+			baseBranch := p.Repo.GitMainBranch
+			if baseBranch == "" {
+				baseBranch = "main"
+			}
+			if ch, cerr := changes.Load(changes.FilePath(root, phaseID), phaseID); cerr == nil && ch.Base != "" {
+				baseBranch = ch.Base
 			}
 
 			// Refuse to run on the wrong branch — reset is destructive.
@@ -95,8 +106,8 @@ longer holds the pre-merge .dross/ tree:
 			if err != nil {
 				return fmt.Errorf("read current branch: %w", err)
 			}
-			if cur != mainBranch {
-				return fmt.Errorf("must be on %s before recovering (currently on %s)", mainBranch, cur)
+			if cur != baseBranch {
+				return fmt.Errorf("must be on %s before recovering (currently on %s)", baseBranch, cur)
 			}
 
 			// Refuse to run on a dirty tree — reset would silently destroy work.
@@ -112,7 +123,7 @@ longer holds the pre-merge .dross/ tree:
 			// shared recovery routine — the same one `dross phase complete
 			// --recover` delegates to, so the heal procedure can't drift
 			// between the two entry points.
-			return runDrossRecovery(repoDir, root, s, phaseID, preMergeSHA, mainBranch)
+			return runDrossRecovery(repoDir, root, s, phaseID, preMergeSHA, baseBranch)
 		},
 	}
 	c.Flags().StringVar(&preMergeSHA, "pre-merge-sha", "",
