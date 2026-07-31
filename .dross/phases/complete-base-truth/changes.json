@@ -1,0 +1,187 @@
+{
+  "phase": "complete-base-truth",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/changes/changes_test.go"
+      ],
+      "commit": "4761080",
+      "completed_at": "2026-07-31T17:23:56.198336Z",
+      "landmarks": [
+        {
+          "feature": "phase base truth",
+          "symbol": "SetBase",
+          "loc": "internal/changes/changes.go:156",
+          "what": "phase-scoped record of the branch a phase forked from, beside pr"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "README.md",
+        "internal/cmd/readme_doc_test.go"
+      ],
+      "commit": "ca3e143",
+      "completed_at": "2026-07-31T17:56:52.823871Z",
+      "landmarks": [
+        {
+          "feature": "readme truth",
+          "symbol": "TestReadmeDocumentsBaseTruthSurfaces",
+          "loc": "internal/cmd/readme_doc_test.go:41",
+          "what": "needle guard pinning dross local, quick_base and complete's --base/--recover in the README"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "1026732",
+      "completed_at": "2026-07-31T17:40:04.211544Z",
+      "landmarks": [
+        {
+          "feature": "phase base truth",
+          "symbol": "Ship",
+          "loc": "internal/cmd/ship.go:358",
+          "what": "ship overwrites the recorded base with what the PR was actually opened against, on the PR-record commit"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "e16a137",
+      "completed_at": "2026-07-31T17:27:56.902972Z",
+      "landmarks": [
+        {
+          "feature": "phase completion",
+          "symbol": "phaseComplete",
+          "loc": "internal/cmd/phase.go:390",
+          "what": "branch switch deferred past every refusal so a refused complete moves no local ref"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/local.go",
+        "internal/cmd/local_test.go",
+        "internal/cmd/quick_prompt_test.go",
+        "assets/prompts/quick.md",
+        ".gitignore",
+        "cmd/dross/main.go"
+      ],
+      "commit": "7b3def0",
+      "completed_at": "2026-07-31T17:32:43.327229Z",
+      "landmarks": [
+        {
+          "feature": "machine-local store",
+          "symbol": "Local",
+          "loc": "internal/cmd/local.go:30",
+          "what": "gitignored .dross/local.toml + dross local get|set, holding quick's forked-from base out of cumulative history"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_lifecycle.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "b518d8f",
+      "completed_at": "2026-07-31T17:37:35.109193Z",
+      "landmarks": [
+        {
+          "feature": "phase base truth",
+          "symbol": "forkPhaseBranch",
+          "loc": "internal/cmd/phase.go:563",
+          "what": "records the branch actually forked from into the phase's changes.json, after checkout -b succeeds"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "5de94da",
+      "completed_at": "2026-07-31T17:46:20.218667Z",
+      "landmarks": [
+        {
+          "feature": "phase base truth",
+          "symbol": "resolveCompleteBase",
+          "loc": "internal/cmd/phase.go:507",
+          "what": "complete reads the recorded base (tree, then phase ref, then --base) and refuses rather than inferring one"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "580ef02",
+      "completed_at": "2026-07-31T17:50:09.055808Z",
+      "landmarks": [
+        {
+          "feature": "phase completion recovery",
+          "symbol": "phaseComplete",
+          "loc": "internal/cmd/phase.go:415",
+          "what": "--recover restores the tree from the phase tip and state.json from the recorded base, resetting only that base"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/basebranch.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/ship.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "844c339",
+      "completed_at": "2026-07-31T17:52:38.394368Z",
+      "landmarks": [
+        {
+          "feature": "machine-local store",
+          "symbol": "pushQuickBaseIfRecorded",
+          "loc": "internal/cmd/basebranch.go:129",
+          "what": "ship and complete push unpushed .dross chores on the recorded quick_base, never on an inferred branch"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/ship_recover_test.go"
+      ],
+      "commit": "4ee5b22",
+      "completed_at": "2026-07-31T17:54:37.867231Z",
+      "landmarks": [
+        {
+          "feature": "phase completion recovery",
+          "symbol": "shipRecover",
+          "loc": "internal/cmd/ship_recover.go:94",
+          "what": "guard and reset follow the phase's recorded base, falling back to git_main_branch for legacy phases"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/phase_base_truth_test.go"
+      ],
+      "commit": "111f3dd",
+      "completed_at": "2026-07-31T17:59:11.058536Z",
+      "landmarks": [
+        {
+          "feature": "phase base truth",
+          "symbol": "staleMilestoneFixture",
+          "loc": "internal/cmd/phase_base_truth_test.go:35",
+          "what": "end-to-end reproduction of the stale-milestone completion incident, success and refusal arms"
+        }
+      ]
+    }
+  }
+}

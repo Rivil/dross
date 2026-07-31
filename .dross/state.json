@@ -1,67 +1,11 @@
 {
-  "version": "1.2.0.0",
+  "version": "1.2.1.0",
   "current_milestone": "v1.2",
   "current_phase": "complete-base-truth",
-  "current_phase_status": "planned",
-  "last_activity": "2026-07-31T16:56:59.188504Z",
-  "last_action": "plan reviewed: complete-base-truth (0 blocking, 8 flags)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-07-31T18:00:12.783091Z",
+  "last_action": "phase complete-base-truth executed (11/11 done)",
   "history": [
-    {
-      "at": "2026-07-29T17:24:44.034982Z",
-      "action": "executed t-7 (Adopt multi-path get in project + milestone)"
-    },
-    {
-      "at": "2026-07-29T17:28:58.917132Z",
-      "action": "executed t-8 (Wire hints into subcommand and flag errors)"
-    },
-    {
-      "at": "2026-07-29T17:30:50.892969Z",
-      "action": "executed t-9 (Pin the four mis-reaches against the real tree)"
-    },
-    {
-      "at": "2026-07-29T17:30:59.917946Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-29T17:30:59.926021Z",
-      "action": "phase cli-surface-sweep executed (9/9 done)"
-    },
-    {
-      "at": "2026-07-29T17:47:57.583584Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-29T17:47:57.590958Z",
-      "action": "verified cli-surface-sweep: partial (9/9 covered, mutation 0.96, 1 FLAG)"
-    },
-    {
-      "at": "2026-07-29T18:17:59.046563Z",
-      "action": "executed t-10 (cover the arity guards on `project set`)"
-    },
-    {
-      "at": "2026-07-29T18:18:07.401472Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-29T18:18:07.410076Z",
-      "action": "phase cli-surface-sweep amended (10/10 done — verify FLAG closed)"
-    },
-    {
-      "at": "2026-07-29T18:52:30.290082Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-29T18:52:30.297695Z",
-      "action": "verified cli-surface-sweep: pass (9/9, mutation 0.96)"
-    },
-    {
-      "at": "2026-07-29T19:34:11.470471Z",
-      "action": "completed cli-surface-sweep"
-    },
-    {
-      "at": "2026-07-30T07:10:48.334603Z",
-      "action": "created board-state-map-truth"
-    },
     {
       "at": "2026-07-30T07:25:45.864992Z",
       "action": "set current_phase=board-state-map-truth"
@@ -205,6 +149,62 @@
     {
       "at": "2026-07-31T16:56:59.188504Z",
       "action": "plan reviewed: complete-base-truth (0 blocking, 8 flags)"
+    },
+    {
+      "at": "2026-07-31T17:22:04.559938Z",
+      "action": "set version=1.2.1.0"
+    },
+    {
+      "at": "2026-07-31T17:23:52.162272Z",
+      "action": "executed t-1 (Add base field and SetBase to changes.json)"
+    },
+    {
+      "at": "2026-07-31T17:27:56.917302Z",
+      "action": "executed t-2 (Move complete's branch switch past all refusals)"
+    },
+    {
+      "at": "2026-07-31T17:32:43.34078Z",
+      "action": "executed t-3 (Record quick's forked-from base in local.toml)"
+    },
+    {
+      "at": "2026-07-31T17:37:35.124001Z",
+      "action": "executed t-4 (Write the phase base at fork)"
+    },
+    {
+      "at": "2026-07-31T17:40:04.224702Z",
+      "action": "executed t-11 (Overwrite the phase base at ship time)"
+    },
+    {
+      "at": "2026-07-31T17:46:20.231848Z",
+      "action": "executed t-5 (Resolve complete's base from the record, add --base)"
+    },
+    {
+      "at": "2026-07-31T17:50:09.069632Z",
+      "action": "executed t-6 (Scope --recover to recorded base and phase tip)"
+    },
+    {
+      "at": "2026-07-31T17:52:38.407951Z",
+      "action": "executed t-7 (Reconcile the recorded quick base in ship and complete)"
+    },
+    {
+      "at": "2026-07-31T17:54:37.881383Z",
+      "action": "executed t-8 (Resolve ship recover's base from the phase record)"
+    },
+    {
+      "at": "2026-07-31T17:56:52.838449Z",
+      "action": "executed t-10 (Sync README for the new surfaces)"
+    },
+    {
+      "at": "2026-07-31T17:59:11.072991Z",
+      "action": "executed t-9 (Reproduce the stale-milestone incident end to end)"
+    },
+    {
+      "at": "2026-07-31T18:00:12.775583Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-31T18:00:12.783091Z",
+      "action": "phase complete-base-truth executed (11/11 done)"
     }
   ]
 }

@@ -1,299 +1,122 @@
+task_seq = 0
+
 [phase]
-id = "complete-base-truth"
+  id = "complete-base-truth"
 
 [[task]]
-id    = "t-1"
-wave  = 1
-title = "Add base field and SetBase to changes.json"
-files = [
-  "internal/changes/changes.go",
-  "internal/changes/changes_test.go",
-]
-description = """
-Add `Base string `json:"base,omitempty"`` to changes.Changes beside PR, and
-SetBase(root, phaseID, branch) mirroring SetPR's load-set-save.
-"""
-covers = ["c-2"]
-test_contract = [
-  "if the base field or its json tag is dropped, Save({phase,pr:42,base:\"main\"}) then Load() no longer returns Base==\"main\" and the round-trip test fails",
-  "if SetBase truncates the record, SetPR(42) then SetBase(\"main\") reloaded no longer has pr==42 and the coexistence test fails",
-  "if SetBase does not create a missing file, calling it on a phase dir with no changes.json fails to produce base==\"milestone/v1.2\"",
-  "if omitempty is dropped, loading a legacy changes.json with no base key and re-saving emits a base key and the legacy round-trip test fails",
-]
-status = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Add base field and SetBase to changes.json"
+  files = ["internal/changes/changes.go", "internal/changes/changes_test.go"]
+  description = "Add `Base string `json:\"base,omitempty\"`` to changes.Changes beside PR, and\nSetBase(root, phaseID, branch) mirroring SetPR's load-set-save.\n"
+  covers = ["c-2"]
+  test_contract = ["if the base field or its json tag is dropped, Save({phase,pr:42,base:\"main\"}) then Load() no longer returns Base==\"main\" and the round-trip test fails", "if SetBase truncates the record, SetPR(42) then SetBase(\"main\") reloaded no longer has pr==42 and the coexistence test fails", "if SetBase does not create a missing file, calling it on a phase dir with no changes.json fails to produce base==\"milestone/v1.2\"", "if omitempty is dropped, loading a legacy changes.json with no base key and re-saving emits a base key and the legacy round-trip test fails"]
+  status = "done"
 
 [[task]]
-id    = "t-2"
-wave  = 1
-title = "Move complete's branch switch past all refusals"
-files = [
-  "internal/cmd/phase.go",
-  "internal/cmd/phase_test.go",
-]
-description = """
-In phaseComplete's RunE, relocate the `git checkout <reconcileBranch>` block from
-above the fetch to immediately before `merge --ff-only`. fetch,
-pushBaseIfAheadDrossOnly and mergeGate all take branch names, not HEAD. Capture
-phase/<id>'s SHA immediately before the checkout and hold it for t-6. Do not add a
-restore-HEAD-on-error path — a compensating checkout is itself a branch switch
-that can fail mid-refusal. Scope note: c-1's "no ref moved" is about local refs.
-pushBaseIfAheadDrossOnly still runs before mergeGate and pushes on its success
-path, so a later mergeGate refusal can follow an already-advanced origin/<base>;
-that push is the chore_push safety net doing its job, not a c-1 violation.
-"""
-covers = ["c-1"]
-test_contract = [
-  "if the checkout moves back above mergeGate, stubPRMerged(t,false) on completeFixture leaves HEAD on the base and the still-on-phase/auth assertion fails",
-  "if the checkout precedes the fetch, rewriting origin to a nonexistent path leaves HEAD off phase/auth and the fetch-failure test fails",
-  "if the checkout precedes the safety-net push, a non-.dross commit on local main triggers the refusal with HEAD moved and rev-parse main changed, failing the untouched-base test",
-  "if any refusal path moves or deletes a ref, the `branch --list phase/auth` non-empty assertion on all three refusal tests fails",
-  "if the reorder changes success behaviour, TestPhaseCompleteHappyPath no longer ends on main with phase/* deleted and a clean tree",
-  "if the safety-net push fires when it should not, the mergeGate-refusal test finds origin/main advanced on a base that had nothing to push",
-]
-status = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Move complete's branch switch past all refusals"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+  description = "In phaseComplete's RunE, relocate the `git checkout <reconcileBranch>` block from\nabove the fetch to immediately before `merge --ff-only`. fetch,\npushBaseIfAheadDrossOnly and mergeGate all take branch names, not HEAD. Capture\nphase/<id>'s SHA immediately before the checkout and hold it for t-6. Do not add a\nrestore-HEAD-on-error path — a compensating checkout is itself a branch switch\nthat can fail mid-refusal. Scope note: c-1's \"no ref moved\" is about local refs.\npushBaseIfAheadDrossOnly still runs before mergeGate and pushes on its success\npath, so a later mergeGate refusal can follow an already-advanced origin/<base>;\nthat push is the chore_push safety net doing its job, not a c-1 violation.\n"
+  covers = ["c-1"]
+  test_contract = ["if the checkout moves back above mergeGate, stubPRMerged(t,false) on completeFixture leaves HEAD on the base and the still-on-phase/auth assertion fails", "if the checkout precedes the fetch, rewriting origin to a nonexistent path leaves HEAD off phase/auth and the fetch-failure test fails", "if the checkout precedes the safety-net push, a non-.dross commit on local main triggers the refusal with HEAD moved and rev-parse main changed, failing the untouched-base test", "if any refusal path moves or deletes a ref, the `branch --list phase/auth` non-empty assertion on all three refusal tests fails", "if the reorder changes success behaviour, TestPhaseCompleteHappyPath no longer ends on main with phase/* deleted and a clean tree", "if the safety-net push fires when it should not, the mergeGate-refusal test finds origin/main advanced on a base that had nothing to push"]
+  status = "done"
 
 [[task]]
-id    = "t-3"
-wave  = 1
-title = "Record quick's forked-from base in local.toml"
-files = [
-  "internal/cmd/local.go",
-  "internal/cmd/local_test.go",
-  "assets/prompts/quick.md",
-  "internal/cmd/quick_prompt_test.go",
-  ".gitignore",
-]
-description = """
-New gitignored `.dross/local.toml` for local-only values that must not ride
-cumulative history, with quick_base as its first key, plus a `dross local get|set`
-command. Deliberately NOT state.json: that file squash-merges onto the base and
-would drag a stale quick_base forward into every later tree. quick.md pre-flight
-section 4's standalone arm records the resolved branch via `dross local set
-quick_base <branch>`; the in-phase arm records nothing (the phase's changes.json
-base already owns that fact). local.go, local_test.go and quick_prompt_test.go are
-new; the prompt test follows the ship_prompt_test.go / inbox_prompt_test.go needle
-idiom.
-"""
-covers = ["c-7"]
-test_contract = [
-  "if the store does not round-trip, `dross local set quick_base main` then `dross local get quick_base` no longer prints \"main\"",
-  "if .gitignore does not cover it, a repo fixture with .dross/local.toml written shows it in `git status --porcelain` and the untracked-store test fails — this is the property that keeps the record out of cumulative history",
-  "if local.toml is not created on demand, `local set` against a root with no local.toml errors instead of writing the file",
-  "if `local get` on an unset key does not exit cleanly with empty output, the unset-key test fails",
-  "if the quick.md call is dropped or leaks into the in-phase arm, quick_prompt_test.go's needle check (standalone step contains \"local set quick_base\", in-phase step does not) fails",
-]
-status = "pending"
+  id = "t-3"
+  wave = 1
+  title = "Record quick's forked-from base in local.toml"
+  files = ["internal/cmd/local.go", "internal/cmd/local_test.go", "assets/prompts/quick.md", "internal/cmd/quick_prompt_test.go", ".gitignore"]
+  description = "New gitignored `.dross/local.toml` for local-only values that must not ride\ncumulative history, with quick_base as its first key, plus a `dross local get|set`\ncommand. Deliberately NOT state.json: that file squash-merges onto the base and\nwould drag a stale quick_base forward into every later tree. quick.md pre-flight\nsection 4's standalone arm records the resolved branch via `dross local set\nquick_base <branch>`; the in-phase arm records nothing (the phase's changes.json\nbase already owns that fact). local.go, local_test.go and quick_prompt_test.go are\nnew; the prompt test follows the ship_prompt_test.go / inbox_prompt_test.go needle\nidiom.\n"
+  covers = ["c-7"]
+  test_contract = ["if the store does not round-trip, `dross local set quick_base main` then `dross local get quick_base` no longer prints \"main\"", "if .gitignore does not cover it, a repo fixture with .dross/local.toml written shows it in `git status --porcelain` and the untracked-store test fails — this is the property that keeps the record out of cumulative history", "if local.toml is not created on demand, `local set` against a root with no local.toml errors instead of writing the file", "if `local get` on an unset key does not exit cleanly with empty output, the unset-key test fails", "if the quick.md call is dropped or leaks into the in-phase arm, quick_prompt_test.go's needle check (standalone step contains \"local set quick_base\", in-phase step does not) fails"]
+  status = "done"
 
 [[task]]
-id         = "t-4"
-wave       = 2
-title      = "Write the phase base at fork and at ship"
-depends_on = ["t-1"]
-files = [
-  "internal/cmd/phase.go",
-  "internal/cmd/phase_lifecycle.go",
-  "internal/cmd/phase_test.go",
-]
-description = """
-forkPhaseBranch takes the phase id as a new parameter (it is
-(repoDir, root, branchName) today) and records the base it actually forked from,
-only after `checkout -b` succeeds — do not derive the id by trimming "phase/" off
-branchName. phaseInsert's call site passes its id. This is the create-time half of
-the locked base_write_timing decision; t-11 owns the ship-time half.
-"""
-covers = ["c-2"]
-test_contract = [
-  "if the create-time write is dropped, `phase create auth` on main no longer leaves base==\"main\" in .dross/phases/auth/changes.json",
-  "if the recorded value is resolveNewWorkBase's answer rather than the branch actually forked from, TestPhaseCreateRootsOnMilestoneBranch's sibling asserting base==\"milestone/<v>\" fails",
-  "if phaseInsert's call site is missed, `phase insert --before/--after` produces a base-less phase and the inserted-phase test fails",
-  "if the write happens before `checkout -b` succeeds, a fork onto an existing branch leaves a changes.json behind — create's rollback os.Remove(dir) only removes an empty dir — and the leaked-phase-id test fails",
-]
-status = "pending"
+  id = "t-4"
+  wave = 2
+  title = "Write the phase base at fork and at ship"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_lifecycle.go", "internal/cmd/phase_test.go"]
+  description = "forkPhaseBranch takes the phase id as a new parameter (it is\n(repoDir, root, branchName) today) and records the base it actually forked from,\nonly after `checkout -b` succeeds — do not derive the id by trimming \"phase/\" off\nbranchName. phaseInsert's call site passes its id. This is the create-time half of\nthe locked base_write_timing decision; t-11 owns the ship-time half.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["if the create-time write is dropped, `phase create auth` on main no longer leaves base==\"main\" in .dross/phases/auth/changes.json", "if the recorded value is resolveNewWorkBase's answer rather than the branch actually forked from, TestPhaseCreateRootsOnMilestoneBranch's sibling asserting base==\"milestone/<v>\" fails", "if phaseInsert's call site is missed, `phase insert --before/--after` produces a base-less phase and the inserted-phase test fails", "if the write happens before `checkout -b` succeeds, a fork onto an existing branch leaves a changes.json behind — create's rollback os.Remove(dir) only removes an empty dir — and the leaked-phase-id test fails"]
+  status = "done"
 
 [[task]]
-id         = "t-11"
-wave       = 2
-title      = "Overwrite the phase base at ship time"
-depends_on = ["t-1"]
-files = [
-  "internal/cmd/ship.go",
-  "internal/cmd/ship_test.go",
-]
-description = """
-In ship.go's post-PR record block, SetBase(baseBranch) alongside SetPR so both ride
-the single `chore(dross): record PR #N` commit that is committed and pushed to
-phase/<id>. This is the authoritative half of base_write_timing: what the PR was
-actually opened against wins over the create-time value if the two diverge.
-"""
-covers = ["c-2"]
-test_contract = [
-  "if ship does not overwrite the base, a shipMockFlow test with activateMilestone still reads the create-time \"main\" instead of \"milestone/<v>\"",
-  "if the base write lands locally but not on the pushed ref, TestShipPushesPRRecordToPhaseBranch's sibling checking `git show origin/phase/x:.dross/phases/x/changes.json` for base fails",
-  "if SetBase runs before the --no-push / --print-body early return, those flags no longer leave the create-time base intact and an extra commit appears",
-]
-status = "pending"
+  id = "t-11"
+  wave = 2
+  title = "Overwrite the phase base at ship time"
+  files = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
+  description = "In ship.go's post-PR record block, SetBase(baseBranch) alongside SetPR so both ride\nthe single `chore(dross): record PR #N` commit that is committed and pushed to\nphase/<id>. This is the authoritative half of base_write_timing: what the PR was\nactually opened against wins over the create-time value if the two diverge.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["if ship does not overwrite the base, a shipMockFlow test with activateMilestone still reads the create-time \"main\" instead of \"milestone/<v>\"", "if the base write lands locally but not on the pushed ref, TestShipPushesPRRecordToPhaseBranch's sibling checking `git show origin/phase/x:.dross/phases/x/changes.json` for base fails", "if SetBase runs before the --no-push / --print-body early return, those flags no longer leave the create-time base intact and an extra commit appears"]
+  status = "done"
 
 [[task]]
-id         = "t-5"
-wave       = 2
-title      = "Resolve complete's base from the record, add --base"
-depends_on = ["t-1", "t-2"]
-files = [
-  "internal/cmd/phase.go",
-  "internal/cmd/phase_test.go",
-]
-description = """
-Replace resolveNewWorkBase in phaseComplete with a resolver reading
-changes.Load(...).Base: working tree first, then `git show
-refs/heads/phase/<id>:.dross/phases/<id>/changes.json`. A `--base <branch>` flag
-overrides. No record and no flag refuses BEFORE any git mutation, naming the phase
-id, the candidate bases and --base; the wording must read sensibly for a
---no-branch phase that was never forked (permanent behaviour for that flag, not a
-migration gap). The resolved base feeds the safety-net push, originRecordedPR,
-mergeGate and the ff-only merge. Must land after t-4: both edit phase.go, and a
-green read test would otherwise hide a writer that never recorded.
-"""
-covers = ["c-2", "c-3"]
-test_contract = [
-  "if complete still infers its base, a phase with base==\"main\" recorded while current_milestone is set and milestone/<v> exists locally no longer lands on main with milestone/<v> unmoved and main == origin/main",
-  "if the no-record path does not refuse, a base-less changes.json returns nil error instead of one naming \"auth\", \"--base\" and both candidate branches with HEAD, main and phase/auth all unmoved",
-  "if --base is not honoured, that same base-less fixture run with `complete --base main` no longer succeeds and deletes phase/auth",
-  "if --base is not validated, `--base does-not-exist` leaks a raw git checkout error instead of a refusal naming that branch",
-  "if the phase-ref fallback is dropped, a working tree missing .dross/phases/auth/changes.json while refs/heads/phase/auth carries it refuses instead of reading the base off the branch ref",
-  "if originRecordedPR is not rebased onto the recorded base, a base==\"main\" phase with a milestone branch present fails to find PR #42 and takes the ancestry fallback",
-]
-status = "pending"
+  id = "t-5"
+  wave = 2
+  title = "Resolve complete's base from the record, add --base"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+  description = "Replace resolveNewWorkBase in phaseComplete with a resolver reading\nchanges.Load(...).Base: working tree first, then `git show\nrefs/heads/phase/<id>:.dross/phases/<id>/changes.json`. A `--base <branch>` flag\noverrides. No record and no flag refuses BEFORE any git mutation, naming the phase\nid, the candidate bases and --base; the wording must read sensibly for a\n--no-branch phase that was never forked (permanent behaviour for that flag, not a\nmigration gap). The resolved base feeds the safety-net push, originRecordedPR,\nmergeGate and the ff-only merge. Must land after t-4: both edit phase.go, and a\ngreen read test would otherwise hide a writer that never recorded.\n"
+  covers = ["c-2", "c-3"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if complete still infers its base, a phase with base==\"main\" recorded while current_milestone is set and milestone/<v> exists locally no longer lands on main with milestone/<v> unmoved and main == origin/main", "if the no-record path does not refuse, a base-less changes.json returns nil error instead of one naming \"auth\", \"--base\" and both candidate branches with HEAD, main and phase/auth all unmoved", "if --base is not honoured, that same base-less fixture run with `complete --base main` no longer succeeds and deletes phase/auth", "if --base is not validated, `--base does-not-exist` leaks a raw git checkout error instead of a refusal naming that branch", "if the phase-ref fallback is dropped, a working tree missing .dross/phases/auth/changes.json while refs/heads/phase/auth carries it refuses instead of reading the base off the branch ref", "if originRecordedPR is not rebased onto the recorded base, a base==\"main\" phase with a milestone branch present fails to find PR #42 and takes the ancestry fallback"]
+  status = "done"
 
 [[task]]
-id         = "t-6"
-wave       = 3
-title      = "Scope --recover to recorded base and phase tip"
-depends_on = ["t-2", "t-5"]
-files = [
-  "internal/cmd/phase.go",
-  "internal/cmd/phase_test.go",
-]
-description = """
-Pass t-2's captured phase-branch SHA into runDrossRecovery as preMergeSHA (it
-passes "" today, so recovery restores the tree of the branch it just checked out)
-and the t-5 base as baseBranch. runDrossRecovery already takes both parameters —
-no signature change, and `dross ship recover`'s legacy HEAD-holds-the-pre-merge-tree
-contract stays untouched. The intended split is tree-from-phase-tip,
-state.json-from-base: `checkout <sha> -- .dross/` takes the phase branch's tree,
-then s.Save(rs) overwrites state.json with the base's copy. Rewrite the phase.go
-comment that currently justifies sourcing the whole tree from the base, and Long's
-final paragraph, which claims --recover is "not yet supported" under a milestone.
-"""
-covers = ["c-4", "c-6"]
-test_contract = [
-  "if recovery still sources HEAD, a phase-only file committed on phase/auth is absent from the post-recovery tree and the phase-tip restore test fails",
-  "if the state.json source flips to the phase tip, the recovered state.json is not the base's copy and the state-source test fails",
-  "if the restore drops the phase record, the recovered .dross/phases/auth/changes.json no longer contains \"pr\":42",
-  "if recovery resets the inferred base, a base==\"main\" phase with a stale milestone/<v> present and main diverged no longer leaves rev-parse milestone/<v> byte-identical across the run",
-  "if the Long text is not rewritten, the help-text test on phaseComplete().Long still finds \"not yet supported\" or fails to find both \"milestone/\" and \"--base\"",
-]
-status = "pending"
+  id = "t-6"
+  wave = 3
+  title = "Scope --recover to recorded base and phase tip"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_test.go"]
+  description = "Pass t-2's captured phase-branch SHA into runDrossRecovery as preMergeSHA (it\npasses \"\" today, so recovery restores the tree of the branch it just checked out)\nand the t-5 base as baseBranch. runDrossRecovery already takes both parameters —\nno signature change, and `dross ship recover`'s legacy HEAD-holds-the-pre-merge-tree\ncontract stays untouched. The intended split is tree-from-phase-tip,\nstate.json-from-base: `checkout <sha> -- .dross/` takes the phase branch's tree,\nthen s.Save(rs) overwrites state.json with the base's copy. Rewrite the phase.go\ncomment that currently justifies sourcing the whole tree from the base, and Long's\nfinal paragraph, which claims --recover is \"not yet supported\" under a milestone.\n"
+  covers = ["c-4", "c-6"]
+  depends_on = ["t-2", "t-5"]
+  test_contract = ["if recovery still sources HEAD, a phase-only file committed on phase/auth is absent from the post-recovery tree and the phase-tip restore test fails", "if the state.json source flips to the phase tip, the recovered state.json is not the base's copy and the state-source test fails", "if the restore drops the phase record, the recovered .dross/phases/auth/changes.json no longer contains \"pr\":42", "if recovery resets the inferred base, a base==\"main\" phase with a stale milestone/<v> present and main diverged no longer leaves rev-parse milestone/<v> byte-identical across the run", "if the Long text is not rewritten, the help-text test on phaseComplete().Long still finds \"not yet supported\" or fails to find both \"milestone/\" and \"--base\""]
+  status = "done"
 
 [[task]]
-id         = "t-7"
-wave       = 3
-title      = "Reconcile the recorded quick base in ship and complete"
-depends_on = ["t-3", "t-5"]
-files = [
-  "internal/cmd/basebranch.go",
-  "internal/cmd/phase.go",
-  "internal/cmd/ship.go",
-  "internal/cmd/phase_test.go",
-]
-description = """
-After the phase base's safety-net push, ship and complete also run
-pushBaseIfAheadDrossOnly against local.toml's quick_base when it is set, differs
-from the resolved phase base, and its local ref exists; a missing ref is a silent
-skip. Refusal text names the quick record as the source. quick_base is not cleared
-on success — the store is untracked, so a stale value is machine-local and
-overwritten by the next standalone quick rather than inherited through history.
-Must land after t-6: both edit phaseComplete's RunE.
-"""
-covers = ["c-7"]
-test_contract = [
-  "if the quick base is not reconciled, quick_base==\"main\" with an unpushed .dross chore on main and a milestone/<v> phase base leaves `rev-list origin/main..main` non-empty after the run",
-  "if the push is driven by inference rather than the record, the same fixture with quick_base unset still touches main instead of leaving it alone",
-  "if a missing local ref is not skipped, quick_base naming a refless branch makes ship and complete error out instead of finishing with nothing extra pushed",
-  "if the refusal text names the phase base, a non-.dross commit on quick_base produces a refusal that does not name quick_base as the branch to reconcile",
-  "if the same-branch guard is dropped, quick_base equal to the resolved phase base produces two pushes of that branch instead of one",
-]
-status = "pending"
+  id = "t-7"
+  wave = 3
+  title = "Reconcile the recorded quick base in ship and complete"
+  files = ["internal/cmd/basebranch.go", "internal/cmd/phase.go", "internal/cmd/ship.go", "internal/cmd/phase_test.go"]
+  description = "After the phase base's safety-net push, ship and complete also run\npushBaseIfAheadDrossOnly against local.toml's quick_base when it is set, differs\nfrom the resolved phase base, and its local ref exists; a missing ref is a silent\nskip. Refusal text names the quick record as the source. quick_base is not cleared\non success — the store is untracked, so a stale value is machine-local and\noverwritten by the next standalone quick rather than inherited through history.\nMust land after t-6: both edit phaseComplete's RunE.\n"
+  covers = ["c-7"]
+  depends_on = ["t-3", "t-5"]
+  test_contract = ["if the quick base is not reconciled, quick_base==\"main\" with an unpushed .dross chore on main and a milestone/<v> phase base leaves `rev-list origin/main..main` non-empty after the run", "if the push is driven by inference rather than the record, the same fixture with quick_base unset still touches main instead of leaving it alone", "if a missing local ref is not skipped, quick_base naming a refless branch makes ship and complete error out instead of finishing with nothing extra pushed", "if the refusal text names the phase base, a non-.dross commit on quick_base produces a refusal that does not name quick_base as the branch to reconcile", "if the same-branch guard is dropped, quick_base equal to the resolved phase base produces two pushes of that branch instead of one"]
+  status = "done"
 
 [[task]]
-id         = "t-8"
-wave       = 3
-title      = "Resolve ship recover's base from the phase record"
-depends_on = ["t-1", "t-4"]
-files = [
-  "internal/cmd/ship_recover.go",
-  "internal/cmd/ship_recover_test.go",
-]
-description = """
-shipRecover resolves its base as the phase's recorded changes.json base, falling
-back to repo.git_main_branch when there is no record; the on-the-wrong-branch guard
-and the runDrossRecovery reset both use it. Today mainBranch is p.Repo.GitMainBranch
-unconditionally, so under a milestone this command resets a branch that is not the
-phase's base. Scope: base resolution only. `ship recover` still sources its restored
-tree from HEAD; its --pre-merge-sha escape hatch already covers that, and changing
-it would rewrite the command's legacy one-shot contract, which this phase does not
-touch.
-"""
-covers = ["c-4"]
-test_contract = [
-  "if the base is still resolved from repo.git_main_branch, `dross ship recover auth` on a phase with base==\"milestone/<v>\" run while HEAD is main is accepted instead of refusing with \"must be on milestone/<v>\"",
-  "if the no-record fallback is dropped, a phase with no changes.json no longer resolves repo.git_main_branch for both the guard and the reset and the legacy one-shot test fails",
-]
-status = "pending"
+  id = "t-8"
+  wave = 3
+  title = "Resolve ship recover's base from the phase record"
+  files = ["internal/cmd/ship_recover.go", "internal/cmd/ship_recover_test.go"]
+  description = "shipRecover resolves its base as the phase's recorded changes.json base, falling\nback to repo.git_main_branch when there is no record; the on-the-wrong-branch guard\nand the runDrossRecovery reset both use it. Today mainBranch is p.Repo.GitMainBranch\nunconditionally, so under a milestone this command resets a branch that is not the\nphase's base. Scope: base resolution only. `ship recover` still sources its restored\ntree from HEAD; its --pre-merge-sha escape hatch already covers that, and changing\nit would rewrite the command's legacy one-shot contract, which this phase does not\ntouch.\n"
+  covers = ["c-4"]
+  depends_on = ["t-1", "t-4"]
+  test_contract = ["if the base is still resolved from repo.git_main_branch, `dross ship recover auth` on a phase with base==\"milestone/<v>\" run while HEAD is main is accepted instead of refusing with \"must be on milestone/<v>\"", "if the no-record fallback is dropped, a phase with no changes.json no longer resolves repo.git_main_branch for both the guard and the reset and the legacy one-shot test fails"]
+  status = "done"
 
 [[task]]
-id         = "t-10"
-wave       = 4
-title      = "Sync README for the new surfaces"
-depends_on = ["t-3", "t-5", "t-6", "t-8"]
-files = [
-  "README.md",
-  "internal/cmd/readme_doc_test.go",
-]
-description = """
-Single README sync once the surfaces are final: the `dross local` row in the
-commands table, `dross phase complete --base` and the changed --recover behaviour,
-the Status line, the quick.md row in the per-command token table (bytes/4, recompute
-after t-3's prompt edit) and the total prompt-surface ratio. The guard extends
-readme_doc_test.go's existing grep-needle idiom rather than adding a new mechanism.
-"""
-covers = ["c-6"]
-test_contract = [
-  "if README never documents the new command, a readme_doc_test.go needle for \"dross local\" fails — the same shape as the existing install/update guard",
-  "if README does not document the new completion flag, a needle for \"--base\" in the phase-complete section fails",
-]
-status = "pending"
+  id = "t-10"
+  wave = 4
+  title = "Sync README for the new surfaces"
+  files = ["README.md", "internal/cmd/readme_doc_test.go"]
+  description = "Single README sync once the surfaces are final: the `dross local` row in the\ncommands table, `dross phase complete --base` and the changed --recover behaviour,\nthe Status line, the quick.md row in the per-command token table (bytes/4, recompute\nafter t-3's prompt edit) and the total prompt-surface ratio. The guard extends\nreadme_doc_test.go's existing grep-needle idiom rather than adding a new mechanism.\n"
+  covers = ["c-6"]
+  depends_on = ["t-3", "t-5", "t-6", "t-8"]
+  test_contract = ["if README never documents the new command, a readme_doc_test.go needle for \"dross local\" fails — the same shape as the existing install/update guard", "if README does not document the new completion flag, a needle for \"--base\" in the phase-complete section fails"]
+  status = "done"
 
 [[task]]
-id         = "t-9"
-wave       = 4
-title      = "Reproduce the stale-milestone incident end to end"
-depends_on = ["t-4", "t-5", "t-6", "t-7", "t-11"]
-files = [
-  "internal/cmd/phase_base_truth_test.go",
-]
-description = """
-New fixture reproducing the incident: phase forked from main (base recorded as
-main), current_milestone set with a stale local milestone/<v> branch present, PR #42
-squash-merged onto origin/main, PRMergedFunc stubbed merged. One test asserts the
-success shape, one asserts the refusal shape (base record stripped); both assert the
-never-touch-the-milestone-branch invariant.
-"""
-covers = ["c-5"]
-test_contract = [
-  "if completion fast-forwards the milestone branch, rev-parse milestone/<v> and origin/milestone/<v> differ across the run in either the success or the refusal case",
-  "if the success path lands on the wrong branch, HEAD is not \"main\", main != origin/main, or phase/auth survives locally or on origin",
-  "if a refusal path deletes the phase branch, `branch --list phase/auth` or `ls-remote --heads origin phase/auth` comes back empty",
-  "if base resolution regresses to resolveNewWorkBase, the run's stdout or error names milestone/<v> as the reconcile target and the needle assertion fires",
-  "if the run ends in a state that is neither clean success nor clean refusal, the test's explicit two-outcome switch has no matching arm and fails",
-]
-status = "pending"
+  id = "t-9"
+  wave = 4
+  title = "Reproduce the stale-milestone incident end to end"
+  files = ["internal/cmd/phase_base_truth_test.go"]
+  description = "New fixture reproducing the incident: phase forked from main (base recorded as\nmain), current_milestone set with a stale local milestone/<v> branch present, PR #42\nsquash-merged onto origin/main, PRMergedFunc stubbed merged. One test asserts the\nsuccess shape, one asserts the refusal shape (base record stripped); both assert the\nnever-touch-the-milestone-branch invariant.\n"
+  covers = ["c-5"]
+  depends_on = ["t-4", "t-5", "t-6", "t-7", "t-11"]
+  test_contract = ["if completion fast-forwards the milestone branch, rev-parse milestone/<v> and origin/milestone/<v> differ across the run in either the success or the refusal case", "if the success path lands on the wrong branch, HEAD is not \"main\", main != origin/main, or phase/auth survives locally or on origin", "if a refusal path deletes the phase branch, `branch --list phase/auth` or `ls-remote --heads origin phase/auth` comes back empty", "if base resolution regresses to resolveNewWorkBase, the run's stdout or error names milestone/<v> as the reconcile target and the needle assertion fires", "if the run ends in a state that is neither clean success nor clean refusal, the test's explicit two-outcome switch has no matching arm and fails"]
+  status = "done"
