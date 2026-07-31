@@ -348,6 +348,16 @@ func Ship() *cobra.Command {
 				if err := changes.SetPR(root, phaseID, res.Number); err != nil {
 					return fmt.Errorf("persist PR number: %w", err)
 				}
+				// The authoritative half of base_write_timing: what the PR was
+				// actually opened against wins over the value create recorded,
+				// if the two ever diverge (a milestone scoped after the fork is
+				// the ordinary way that happens). It rides the same commit and
+				// push as the PR number, so the squash carries base and pr onto
+				// the base branch together and `dross phase complete` reads a
+				// consistent pair.
+				if err := changes.SetBase(root, phaseID, baseBranch); err != nil {
+					return fmt.Errorf("persist PR base branch: %w", err)
+				}
 				changesRel := filepath.Join(".dross", "phases", phaseID, changes.File)
 				if out, err := gitCombined(repoDir, "add", changesRel); err != nil {
 					return fmt.Errorf("git add changes.json: %w\n%s", err, out)
