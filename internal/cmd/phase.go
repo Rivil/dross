@@ -371,6 +371,13 @@ destructive reset of the local base branch; read the abort first.`,
 			if basePushed {
 				Printf("pushed unpushed .dross chores on %s to origin\n", reconcileBranch)
 			}
+			quickPushed, quickBase, err := pushQuickBaseIfRecorded(repoDir, root, reconcileBranch)
+			if err != nil {
+				return err
+			}
+			if quickPushed {
+				Printf("pushed unpushed .dross chores on %s (recorded quick_base) to origin\n", quickBase)
+			}
 
 			// Origin-side fallback for the recorded PR (c-3): post-squash-merge
 			// the local working tree can be stale — ship committed the PR

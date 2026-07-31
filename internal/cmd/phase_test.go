@@ -639,6 +639,138 @@ func TestPhaseCompleteReadsBaseOffPhaseRef(t *testing.T) {
 	}
 }
 
+// quickBaseFixture builds completeFixture (phase base "main") and moves the
+// phase onto a milestone base, so the recorded quick_base and the phase base
+// are genuinely different branches — the shape where a quick task's chores
+// would otherwise be left behind.
+func quickBaseFixture(t *testing.T) string {
+	t.Helper()
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
+	return dir
+}
+
+// TestPhaseCompleteReconcilesRecordedQuickBase (c-7): a standalone quick task
+// left an unpushed .dross chore on main while this phase's base is elsewhere.
+// Completion pushes it, driven by the recorded branch — the chores would
+// otherwise re-seed divergence at the next squash-merge.
+func TestPhaseCompleteReconcilesRecordedQuickBase(t *testing.T) {
+	dir := quickBaseFixture(t)
+
+	// A second branch standing in for a quick task's target, with an unpushed
+	// .dross-only chore on it.
+	mustGit(t, dir, "push", "-q", "origin", "main:quick-target")
+	mustGit(t, dir, "branch", "quick-target", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	mustGit(t, dir, "checkout", "-q", "quick-target")
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# quick chore\n")
+	mustGit(t, dir, "add", ".dross/handoff.md")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): quick task bookkeeping")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+
+	if err := runCmd(t, Local(), "set", "quick_base", "quick-target"); err != nil {
+		t.Fatalf("local set: %v", err)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/quick-target..quick-target"); ahead == "" {
+		t.Fatal("fixture precondition: quick-target should be ahead of origin")
+	}
+
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/quick-target..quick-target"); ahead != "" {
+		t.Errorf("the recorded quick_base was left unpushed: %q", ahead)
+	}
+}
+
+// TestPhaseCompleteLeavesUnrecordedQuickBaseAlone is the same fixture with no
+// record: the push must be driven by the record, never by inference over
+// whatever branches happen to be ahead.
+func TestPhaseCompleteLeavesUnrecordedQuickBaseAlone(t *testing.T) {
+	dir := quickBaseFixture(t)
+
+	mustGit(t, dir, "push", "-q", "origin", "main:quick-target")
+	mustGit(t, dir, "branch", "quick-target", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	mustGit(t, dir, "checkout", "-q", "quick-target")
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# quick chore\n")
+	mustGit(t, dir, "add", ".dross/handoff.md")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): quick task bookkeeping")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/quick-target..quick-target"); ahead == "" {
+		t.Error("with no quick_base recorded, complete must not touch that branch")
+	}
+}
+
+// TestPhaseCompleteSkipsMissingQuickBaseRef: the store is gitignored and
+// machine-local, so a value naming a branch that no longer exists here is
+// expected. It is a silent skip, not an error that blocks completion.
+func TestPhaseCompleteSkipsMissingQuickBaseRef(t *testing.T) {
+	dir := quickBaseFixture(t)
+
+	if err := runCmd(t, Local(), "set", "quick_base", "long-gone"); err != nil {
+		t.Fatalf("local set: %v", err)
+	}
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("a quick_base naming no local ref must be skipped, not fatal: %v", err)
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); b != "" {
+		t.Errorf("complete should have finished and deleted phase/auth, got %q", b)
+	}
+}
+
+// TestPhaseCompleteQuickBaseRefusalNamesTheRecord: a code commit on the quick
+// base is the user's to reconcile, and the refusal must say where that branch
+// name came from — it was never typed on this command line.
+func TestPhaseCompleteQuickBaseRefusalNamesTheRecord(t *testing.T) {
+	dir := quickBaseFixture(t)
+
+	mustGit(t, dir, "push", "-q", "origin", "main:quick-target")
+	mustGit(t, dir, "branch", "quick-target", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	mustGit(t, dir, "checkout", "-q", "quick-target")
+	mustWrite(t, filepath.Join(dir, "src/quick.ts"), "x\n")
+	mustGit(t, dir, "add", "src/quick.ts")
+	mustGit(t, dir, "commit", "-q", "-m", "fix: code straight on the quick base")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+
+	if err := runCmd(t, Local(), "set", "quick_base", "quick-target"); err != nil {
+		t.Fatalf("local set: %v", err)
+	}
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected a refusal for non-.dross commits on the recorded quick base")
+	}
+	for _, needle := range []string{"quick-target", "quick_base", "local.toml"} {
+		if !strings.Contains(err.Error(), needle) {
+			t.Errorf("refusal should name %q so the branch is traceable to the record: %v", needle, err)
+		}
+	}
+}
+
+// TestPhaseCompleteQuickBaseEqualToPhaseBaseIsNoOp: when the quick task landed
+// on this phase's own base, the phase-base net already pushed it. Pushing the
+// same branch twice is pointless work on the network path.
+func TestPhaseCompleteQuickBaseEqualToPhaseBaseIsNoOp(t *testing.T) {
+	dir := quickBaseFixture(t)
+
+	if err := runCmd(t, Local(), "set", "quick_base", "main"); err != nil {
+		t.Fatalf("local set: %v", err)
+	}
+	pushed, branch, err := pushQuickBaseIfRecorded(dir, filepath.Join(dir, ".dross"), "main")
+	if err != nil {
+		t.Fatalf("same-branch case should be a clean no-op: %v", err)
+	}
+	if pushed || branch != "" {
+		t.Errorf("quick_base equal to the phase base must not push again: pushed=%t branch=%q", pushed, branch)
+	}
+}
+
 func TestPhaseCompleteRefusesDirtyTree(t *testing.T) {
 	dir, _ := completeFixture(t)
 	mustWrite(t, filepath.Join(dir, "src/dirty.ts"), "x\n")

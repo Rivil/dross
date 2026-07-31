@@ -275,6 +275,13 @@ func Ship() *cobra.Command {
 			if basePushed {
 				narrate("pushed unpushed .dross chores on %s to origin\n", baseBranch)
 			}
+			quickPushed, quickBase, err := pushQuickBaseIfRecorded(repoDir, root, baseBranch)
+			if err != nil {
+				return err
+			}
+			if quickPushed {
+				narrate("pushed unpushed .dross chores on %s (recorded quick_base) to origin\n", quickBase)
+			}
 
 			// 7) Push phase/<id> directly. The provider's squash-merge will
 			//    collapse the per-task commits into one on the base; no
