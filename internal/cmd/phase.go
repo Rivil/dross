@@ -248,12 +248,17 @@ provider can't answer, complete falls back to a git-ancestry check
 (merge-base --is-ancestor) and refuses-when-inconclusive rather than
 false-completing.
 
-On an already-diverged branch the fast-forward aborts. For main, re-run
-with --recover to reset it to origin and restore the cumulative .dross/
-tree in one shot (the same heal as 'dross ship recover'); --recover is a
-destructive reset of local main. Under a milestone, --recover is not yet
-supported, so a diverged milestone branch aborts non-destructively and
-points at a manual reconcile.`,
+The base is the branch this phase was forked from, read back from the
+record its own changes.json carries — never inferred from the active
+milestone, which picks a stale local branch the phase never forked from.
+A phase with no recorded base refuses; pass --base <branch> to name it.
+
+On an already-diverged base the fast-forward aborts. Re-run with
+--recover to reset that base to origin and restore the cumulative
+.dross/ tree in one shot (the same heal as 'dross ship recover'). It
+works for whichever branch the record names — main or
+milestone/<version> — and resets only that one. --recover is a
+destructive reset of the local base branch; read the abort first.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			root, err := FindRoot()
@@ -403,6 +408,12 @@ points at a manual reconcile.`,
 			// There is deliberately no restore-HEAD-on-error path past this
 			// point: a compensating checkout is itself a branch switch, and one
 			// that fails mid-refusal leaves a worse state than not trying.
+			// Capture the phase branch's tip before leaving it. --recover
+			// restores the .dross/ tree from THIS commit; taking it after the
+			// checkout would source the tree from the branch the command just
+			// moved to, which is the branch being reset.
+			phaseTipSHA, _ := gitTrim(repoDir, "rev-parse", "refs/heads/"+phaseBranch)
+
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
@@ -428,18 +439,31 @@ points at a manual reconcile.`,
 						"(or use `dross ship recover`). Recovery is a destructive reset of local %s — read the abort first.",
 						reconcileBranch, reconcileBranch, out, reconcileBranch, reconcileBranch)
 				}
-				// --recover: reload state from the (now checked-out) base
-				// working tree so the recovery commit carries the base's
-				// .dross/ state, not the phase branch's stale copy loaded at
-				// the top of this RunE. Then delegate to the shared routine —
-				// the same heal `dross ship recover` runs — which resets the
-				// base (main or milestone/<version>, c-5) to origin, restores
-				// the cumulative .dross/ tree, and pushes the restore.
+				// --recover: the heal is a tree-from-phase-tip,
+				// state.json-from-base split.
+				//
+				// state comes from the base: reload it from the (now
+				// checked-out) base working tree so the recovery commit
+				// carries the base's cumulative .dross/ state, not the phase
+				// branch's stale copy loaded at the top of this RunE.
+				// runDrossRecovery's own s.Save(rs) writes that copy last, so
+				// it wins over whatever the tree restore put there.
+				//
+				// The tree comes from the phase tip: passing phaseTipSHA makes
+				// `checkout <sha> -- .dross/` restore the phase branch's
+				// .dross/ — the only place this phase's own records live.
+				// Passing "" would default to HEAD, which is the branch we just
+				// checked out and are about to reset, so the phase's records
+				// would simply be absent from the restore.
+				//
+				// The reset target is the RECORDED base, not an inferred one:
+				// resetting a stale milestone branch a phase never forked from
+				// is the incident this phase exists to prevent.
 				rs, lerr := state.Load(filepath.Join(root, state.File))
 				if lerr != nil {
 					return fmt.Errorf("reload state for recovery: %w", lerr)
 				}
-				if rerr := runDrossRecovery(repoDir, root, rs, phaseID, "", reconcileBranch); rerr != nil {
+				if rerr := runDrossRecovery(repoDir, root, rs, phaseID, phaseTipSHA, reconcileBranch); rerr != nil {
 					return fmt.Errorf("recover diverged %s during complete: %w", reconcileBranch, rerr)
 				}
 				// Healed: base reset to origin with .dross/ restored. Fall

@@ -1120,10 +1120,14 @@ func divergedCompleteFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
 	// Record a PR on phase/auth so the merge gate passes (tests stub
-	// PRMergedFunc=true) and the run reaches the ff-divergence logic under test.
+	// PRMergedFunc=true) and the run reaches the ff-divergence logic under
+	// test. The phase's spec.toml lives here too — on the phase branch, where
+	// /dross-spec writes it — and it's the artefact the origin squash drops
+	// and recovery must restore from the phase tip.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/spec.toml"), `id = "auth"`)
 	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
 		`{"phase":"auth","pr":77,"base":"main","tasks":{}}`)
-	mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
+	mustGit(t, dir, "add", ".dross/phases/auth/")
 	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record PR #77 for auth")
 
 	stPath := filepath.Join(dir, ".dross", "state.json")
@@ -1148,10 +1152,11 @@ func divergedCompleteFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "checkout", "-q", "main")
 	mustGit(t, dir, "branch", "-D", "squash-sim")
 
-	// Local main diverges: same completion record + a phase artefact origin
-	// lost. Built on local main (baseline), so it shares only baseline with
-	// origin/main -> ff-only aborts.
-	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/spec.toml"), `id = "auth"`)
+	// Local main diverges: its own completion record, built on local main
+	// (baseline), so it shares only baseline with origin/main -> ff-only
+	// aborts. The phase artefact is deliberately NOT written here — it lives
+	// on the phase branch, and recovery sourcing it from there is the property
+	// under test.
 	lm, err := state.Load(stPath)
 	if err != nil {
 		t.Fatal(err)
@@ -1230,6 +1235,94 @@ func TestPhaseCompleteRecoverHeals(t *testing.T) {
 	// c-2 tail: the restore commit is pushed, so main doesn't sit ahead again.
 	if ahead := mustGit(t, dir, "rev-list", "origin/main..main"); ahead != "" {
 		t.Errorf("the restore commit must be pushed (origin/main..main empty), got: %q", ahead)
+	}
+}
+
+// TestPhaseCompleteRecoverSourcesTreeFromPhaseTip pins the c-4 split. The
+// restored .dross/ tree comes from the phase branch's tip — the only commit
+// holding this phase's records — while state.json comes from the base, whose
+// cumulative history is the one that must survive. Sourcing the whole tree
+// from HEAD (the branch being reset) restores nothing the phase contributed.
+func TestPhaseCompleteRecoverSourcesTreeFromPhaseTip(t *testing.T) {
+	dir, _, _ := divergedCompleteFixture(t)
+	stubPRMerged(t, true)
+
+	// A file that exists ONLY on the phase tip, and a state.json history entry
+	// that exists ONLY on the base — one probe per side of the split.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/plan.toml"), "phase-only\n")
+	mustGit(t, dir, "add", ".dross/phases/auth/plan.toml")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): phase-only artefact")
+
+	if err := runCmd(t, Phase(), "complete", "--recover"); err != nil {
+		t.Fatalf("complete --recover: %v", err)
+	}
+
+	headTree := mustGit(t, dir, "ls-tree", "-r", "--name-only", "HEAD")
+	if !strings.Contains(headTree, ".dross/phases/auth/plan.toml") {
+		t.Errorf("recovery must restore the phase tip's tree:\n%s", headTree)
+	}
+	// The phase's own record survives the restore — it is the thing a later
+	// re-run of complete would read the PR and base back out of.
+	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), "auth"), "auth")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.PR != 77 {
+		t.Errorf("restored changes.json lost the PR record: %+v", ch)
+	}
+	// state.json is the BASE's copy: it carries the completion record local
+	// main committed, which never existed on the phase branch.
+	s, _ := state.Load(filepath.Join(dir, ".dross", "state.json"))
+	found := false
+	for _, a := range s.History {
+		if strings.Contains(a.Action, "completed auth") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("state.json should be the base's copy, carrying its completion record: %+v", s.History)
+	}
+}
+
+// TestPhaseCompleteRecoverLeavesStaleMilestoneAlone is the destructive half of
+// the incident: --recover is a hard reset, and pointing it at an inferred
+// milestone branch the phase never forked from would reset a branch holding
+// unrelated work. It must reset only the RECORDED base.
+func TestPhaseCompleteRecoverLeavesStaleMilestoneAlone(t *testing.T) {
+	dir, _, _ := divergedCompleteFixture(t) // base recorded as "main"
+	stubPRMerged(t, true)
+
+	// A stale milestone branch with a commit of its own, plus an active
+	// milestone — everything inference needed to target it.
+	mustGit(t, dir, "branch", "milestone/v0.9", "main")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.9"); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	mustGit(t, dir, "add", ".dross/")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): scope v0.9")
+	msBefore := mustGit(t, dir, "rev-parse", "milestone/v0.9")
+
+	if err := runCmd(t, Phase(), "complete", "--recover"); err != nil {
+		t.Fatalf("complete --recover: %v", err)
+	}
+	if got := mustGit(t, dir, "rev-parse", "milestone/v0.9"); got != msBefore {
+		t.Errorf("--recover reset a branch the phase never forked from: %s -> %s", msBefore, got)
+	}
+}
+
+// TestPhaseCompleteHelpDescribesRecoverUnderMilestone (c-6) keeps the help
+// text honest: it claimed --recover was "not yet supported" under a milestone,
+// which stopped being true once the reset started following the recorded base.
+func TestPhaseCompleteHelpDescribesRecoverUnderMilestone(t *testing.T) {
+	long := phaseComplete().Long
+
+	if strings.Contains(long, "not yet supported") {
+		t.Error("--help still claims --recover is unsupported under a milestone")
+	}
+	for _, needle := range []string{"milestone/", "--base", "--recover"} {
+		if !strings.Contains(long, needle) {
+			t.Errorf("--help should mention %q", needle)
+		}
 	}
 }
 
