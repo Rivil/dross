@@ -208,7 +208,7 @@ func TestStatsCover_renderErrorBucketsOrder(t *testing.T) {
 		{ErrorClass: "beta"}, {ErrorClass: "beta"}, {ErrorClass: "beta"},
 		{ErrorClass: "gamma"}, {ErrorClass: "gamma"},
 	}
-	out := captureStdout(t, func() { renderErrorBuckets(events) })
+	out := captureStdout(t, func() { renderErrorBuckets(summarizeStats(events, "")) })
 
 	bi := strings.Index(out, "beta")  // count 3
 	gi := strings.Index(out, "gamma") // count 2
@@ -252,7 +252,7 @@ func TestStatsReclassifiesOtherAtReadTime(t *testing.T) {
 	events := []telemetry.Event{
 		{ErrorClass: "other", ErrorDetail: "unknown flag: --json"},
 	}
-	out := captureStdout(t, func() { renderErrorBuckets(events) })
+	out := captureStdout(t, func() { renderErrorBuckets(summarizeStats(events, "")) })
 
 	if n, ok := bucketCount(t, out, "unknown_flag"); !ok || n != 1 {
 		t.Errorf("want unknown_flag=1 after reclassify, got %d (present=%v):\n%s", n, ok, out)
@@ -269,7 +269,7 @@ func TestStatsReclassifyCountsEachEventOnce(t *testing.T) {
 	events := []telemetry.Event{
 		{ErrorClass: "other", ErrorDetail: "something weird"},
 	}
-	out := captureStdout(t, func() { renderErrorBuckets(events) })
+	out := captureStdout(t, func() { renderErrorBuckets(summarizeStats(events, "")) })
 
 	if n, ok := bucketCount(t, out, "other"); !ok || n != 1 {
 		t.Errorf("want other=1 (counted exactly once), got %d (present=%v):\n%s", n, ok, out)
@@ -290,7 +290,7 @@ func TestStatsTailTopFive(t *testing.T) {
 			})
 		}
 	}
-	out := captureStdout(t, func() { renderErrorBuckets(events) })
+	out := captureStdout(t, func() { renderErrorBuckets(summarizeStats(events, "")) })
 
 	var prev = -1
 	for i, n := range []int{6, 5, 4, 3, 2} {
@@ -317,7 +317,7 @@ func TestStatsTailTieOrderDeterministic(t *testing.T) {
 		{ErrorClass: "other", ErrorDetail: "aaa weird"},
 	}
 	for i := 0; i < 20; i++ {
-		out := captureStdout(t, func() { renderErrorBuckets(events) })
+		out := captureStdout(t, func() { renderErrorBuckets(summarizeStats(events, "")) })
 		ai, bi := strings.Index(out, "aaa weird"), strings.Index(out, "bbb weird")
 		if ai < 0 || bi < 0 {
 			t.Fatalf("tail missing a shape:\n%s", out)
@@ -337,7 +337,7 @@ func TestStatsTailOmittedWhenEmpty(t *testing.T) {
 		// there is no shape to show.
 		{ErrorClass: "other"},
 	}
-	out := captureStdout(t, func() { renderErrorBuckets(events) })
+	out := captureStdout(t, func() { renderErrorBuckets(summarizeStats(events, "")) })
 
 	if strings.Contains(out, "unclassified") {
 		t.Errorf("empty tail should print no heading:\n%s", out)
@@ -357,7 +357,7 @@ func TestStatsTailOneLinePerShape(t *testing.T) {
 		{ErrorClass: "other", ErrorDetail: multiline},
 		{ErrorClass: "other", ErrorDetail: long},
 	}
-	out := captureStdout(t, func() { renderErrorBuckets(events) })
+	out := captureStdout(t, func() { renderErrorBuckets(summarizeStats(events, "")) })
 
 	var tailLines []string
 	for _, l := range strings.Split(out, "\n") {
@@ -432,7 +432,7 @@ func TestStatsCover_renderForceFlagsCount(t *testing.T) {
 		{Tags: map[string]string{"force": "false"}},
 		{Tags: nil},
 	}
-	out := captureStdout(t, func() { renderForceFlags(events) })
+	out := captureStdout(t, func() { renderForceFlags(summarizeStats(events, "")) })
 	if !strings.Contains(out, "force-flag invocations: 2") {
 		t.Errorf("want 'force-flag invocations: 2' (decrement mutant prints -2):\n%s", out)
 	}

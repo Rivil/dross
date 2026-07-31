@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 // YouTrackClient talks to a YouTrack instance's REST API. Unlike the forge
@@ -182,7 +184,7 @@ func (c *YouTrackClient) EnsureMilestone(title, description string) (string, err
 //     warns and skips (no error, "" id) rather than failing the sync.
 //   - epic: a create-or-reuse Epic issue. Returns its idReadable.
 func (c *YouTrackClient) EnsureMilestoneEntity(mode, name, description string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
+	switch configenum.Normalize(mode) {
 	case "", "version":
 		return c.ensureVersion(name)
 	case "agile":
@@ -293,6 +295,10 @@ func (c *YouTrackClient) ensureEpic(name, description string) (string, error) {
 // defaultYouTrackStateMap maps dross lifecycle states to YouTrack State values.
 // YouTrack state names are instance-specific, so this is a sensible default
 // overridden per project via [board].state_map.
+//
+// The keys are exactly configenum.LifecycleStatuses — the set dross emits — and
+// internal/cmd/board_lifecycle_divergence_test.go fails the build if a key here
+// stops being emitted or an emitted status stops being keyed here.
 var defaultYouTrackStateMap = map[string]string{
 	"planned":     "Open",
 	"in-progress": "In Progress",

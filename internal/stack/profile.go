@@ -26,24 +26,24 @@ import (
 // Profile is one stack profile keyed by ID (e.g. "go"). Built-in profiles ship
 // embedded; user profiles override by matching ID.
 type Profile struct {
-	ID       string           `toml:"id"`                // required, non-empty (e.g. "go")
-	Title    string           `toml:"title,omitempty"`   // human label
-	Signals  Signals          `toml:"signals,omitempty"` // how Detect matches this profile
-	Packages []PackageManager `toml:"package_managers,omitempty"`
-	Runtime  RuntimeCommands  `toml:"runtime,omitempty"`
-	Tools    []Tool           `toml:"tools,omitempty"`   // scanner/analyzer loadout
-	Loadout  Loadout          `toml:"loadout,omitempty"` // agent loadout (c-4)
+	ID       string           `toml:"id" json:"id"`                               // required, non-empty (e.g. "go")
+	Title    string           `toml:"title,omitempty" json:"title,omitempty"`     // human label
+	Signals  Signals          `toml:"signals,omitempty" json:"signals,omitempty"` // how Detect matches this profile
+	Packages []PackageManager `toml:"package_managers,omitempty" json:"package_managers,omitempty"`
+	Runtime  RuntimeCommands  `toml:"runtime,omitempty" json:"runtime,omitempty"`
+	Tools    []Tool           `toml:"tools,omitempty" json:"tools,omitempty"`     // scanner/analyzer loadout
+	Loadout  Loadout          `toml:"loadout,omitempty" json:"loadout,omitempty"` // agent loadout (c-4)
 }
 
 // Signals declare the filesystem evidence that selects this profile. Detect (see
 // detect.go) keys off these declared signals rather than a hardcoded language
 // switch, so a new profile is selectable by data alone.
 type Signals struct {
-	Files        []string     `toml:"files,omitempty"`         // exact root filenames, e.g. "go.mod"
-	FilePatterns []string     `toml:"file_patterns,omitempty"` // glob patterns matched case-insensitively against any filename (marker stacks like Docker)
-	Exts         []string     `toml:"exts,omitempty"`          // file extensions, e.g. ".go"
-	Content      ContentMatch `toml:"content,omitempty"`       // optional content confirmation for a glob candidate (marker stacks living in ambiguous *.yaml/*.json)
-	Priority     int          `toml:"priority,omitempty"`
+	Files        []string     `toml:"files,omitempty" json:"files,omitempty"`                 // exact root filenames, e.g. "go.mod"
+	FilePatterns []string     `toml:"file_patterns,omitempty" json:"file_patterns,omitempty"` // glob patterns matched case-insensitively against any filename (marker stacks like Docker)
+	Exts         []string     `toml:"exts,omitempty" json:"exts,omitempty"`                   // file extensions, e.g. ".go"
+	Content      ContentMatch `toml:"content,omitempty" json:"content,omitempty"`             // optional content confirmation for a glob candidate (marker stacks living in ambiguous *.yaml/*.json)
+	Priority     int          `toml:"priority,omitempty" json:"priority,omitempty"`
 }
 
 // ContentMatch is an optional second gate for a marker stack whose files share an
@@ -55,8 +55,8 @@ type Signals struct {
 // not satisfy a CloudFormation `Resources` token. A profile that declares no content
 // keeps the pure-glob fast path (MarkerProfiles never reads its candidates' bodies).
 type ContentMatch struct {
-	All []string `toml:"all,omitempty"` // every token must be present (AND)
-	Any []string `toml:"any,omitempty"` // at least one token must be present (OR)
+	All []string `toml:"all,omitempty" json:"all,omitempty"` // every token must be present (AND)
+	Any []string `toml:"any,omitempty" json:"any,omitempty"` // at least one token must be present (OR)
 }
 
 // IsZero reports whether no content requirements are declared, so callers can keep
@@ -114,17 +114,17 @@ func (s Signals) MatchesFile(name string) bool {
 // pip/poetry/uv, …). A profile lists every variant it can drive; the first whose
 // Bin (or Lockfile) is present is the active one.
 type PackageManager struct {
-	Name     string `toml:"name"`               // e.g. "go", "pnpm"
-	Bin      string `toml:"bin,omitempty"`      // executable; defaults to Name
-	Lockfile string `toml:"lockfile,omitempty"` // e.g. "go.sum", "pnpm-lock.yaml"
+	Name     string `toml:"name" json:"name"`                             // e.g. "go", "pnpm"
+	Bin      string `toml:"bin,omitempty" json:"bin,omitempty"`           // executable; defaults to Name
+	Lockfile string `toml:"lockfile,omitempty" json:"lockfile,omitempty"` // e.g. "go.sum", "pnpm-lock.yaml"
 }
 
 // RuntimeCommands are the command slots dross seeds into project.toml [runtime].
 type RuntimeCommands struct {
-	Test      Command `toml:"test,omitempty"`
-	Typecheck Command `toml:"typecheck,omitempty"`
-	Format    Command `toml:"format,omitempty"`
-	Build     Command `toml:"build,omitempty"`
+	Test      Command `toml:"test,omitempty" json:"test,omitempty"`
+	Typecheck Command `toml:"typecheck,omitempty" json:"typecheck,omitempty"`
+	Format    Command `toml:"format,omitempty" json:"format,omitempty"`
+	Build     Command `toml:"build,omitempty" json:"build,omitempty"`
 }
 
 // Command is a single runtime slot. It supports either a shorthand single command
@@ -132,15 +132,15 @@ type RuntimeCommands struct {
 // resolver picks the first available (see runtime.go). Variants may be gated by an
 // availability Bin and/or restricted to an OS.
 type Command struct {
-	Run      string           `toml:"run,omitempty"`      // shorthand: single command line
-	Variants []CommandVariant `toml:"variants,omitempty"` // ordered alternatives
+	Run      string           `toml:"run,omitempty" json:"run,omitempty"`           // shorthand: single command line
+	Variants []CommandVariant `toml:"variants,omitempty" json:"variants,omitempty"` // ordered alternatives
 }
 
 // CommandVariant is one alternative for a runtime slot.
 type CommandVariant struct {
-	Run string `toml:"run"`           // the command line, e.g. "go test -count=1 ./..."
-	Bin string `toml:"bin,omitempty"` // availability gate: usable only if on PATH
-	OS  string `toml:"os,omitempty"`  // restrict to GOOS, e.g. "darwin"; empty = any
+	Run string `toml:"run" json:"run"`                     // the command line, e.g. "go test -count=1 ./..."
+	Bin string `toml:"bin,omitempty" json:"bin,omitempty"` // availability gate: usable only if on PATH
+	OS  string `toml:"os,omitempty" json:"os,omitempty"`   // restrict to GOOS, e.g. "darwin"; empty = any
 }
 
 // Tool is one scanner or analyzer in the profile's loadout. Kind routes it to the
@@ -149,21 +149,21 @@ type CommandVariant struct {
 // absence warrants a prominent warning). BinByOS overrides the looked-up binary
 // name per GOOS (e.g. a tool packaged under a different name on macOS vs Linux).
 type Tool struct {
-	Name      string            `toml:"name"`
-	Bin       string            `toml:"bin,omitempty"`       // defaults to Name
-	BinByOS   map[string]string `toml:"bin_by_os,omitempty"` // GOOS -> binary name
-	Kind      string            `toml:"kind,omitempty"`      // "scanner" | "analyzer"
-	Dimension string            `toml:"dimension,omitempty"` // for analyzers: the maintainability axis measured
-	Optional  bool              `toml:"optional,omitempty"`
-	Core      bool              `toml:"core,omitempty"`
-	Install   string            `toml:"install,omitempty"`
+	Name      string            `toml:"name" json:"name"`
+	Bin       string            `toml:"bin,omitempty" json:"bin,omitempty"`             // defaults to Name
+	BinByOS   map[string]string `toml:"bin_by_os,omitempty" json:"bin_by_os,omitempty"` // GOOS -> binary name
+	Kind      string            `toml:"kind,omitempty" json:"kind,omitempty"`           // "scanner" | "analyzer"
+	Dimension string            `toml:"dimension,omitempty" json:"dimension,omitempty"` // for analyzers: the maintainability axis measured
+	Optional  bool              `toml:"optional,omitempty" json:"optional,omitempty"`
+	Core      bool              `toml:"core,omitempty" json:"core,omitempty"`
+	Install   string            `toml:"install,omitempty" json:"install,omitempty"`
 }
 
 // Loadout is the agent loadout rendered by `dross stack loadout` (c-4).
 type Loadout struct {
-	MCPTools    []string `toml:"mcp_tools,omitempty"`
-	Guardrails  []string `toml:"guardrails,omitempty"`
-	Conventions []string `toml:"conventions,omitempty"`
+	MCPTools    []string `toml:"mcp_tools,omitempty" json:"mcp_tools,omitempty"`
+	Guardrails  []string `toml:"guardrails,omitempty" json:"guardrails,omitempty"`
+	Conventions []string `toml:"conventions,omitempty" json:"conventions,omitempty"`
 }
 
 // EffectiveBin returns the binary name to look up on PATH for the given GOOS,

@@ -220,10 +220,17 @@ func loadMerged() ([]rules.Resolved, error) {
 	}
 	p, _, err := loadScope("project")
 	if err != nil {
-		// project rules are optional outside a repo
-		if errors.Is(err, ErrNoRoot) {
+		// Project rules are optional outside a repo — but only when there is
+		// genuinely no `.dross/` there. An incomplete one unwraps to ErrNoRoot
+		// too, and degrading past it would let `rule show` exit 0 on a broken
+		// root while every other non-hook command reports it (c-3).
+		var incomplete *IncompleteRootError
+		switch {
+		case errors.As(err, &incomplete):
+			return nil, err
+		case errors.Is(err, ErrNoRoot):
 			p = &rules.Set{}
-		} else {
+		default:
 			return nil, err
 		}
 	}

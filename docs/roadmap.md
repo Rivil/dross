@@ -340,3 +340,23 @@ Two phases:
   is context-free; remediation runs the normal loop.
 - Parallel agents: gather/analyze/verify freely; writing stays gated (or solo).
 - Dogfood dross on dross, selectively (full loop for B/F/E, `dross-quick` for A).
+
+## Parked — deferred from v1.1 (2026-07-28)
+
+### `state.json` on long-lived branches
+
+`.dross/state.json` is tracked on every branch and rewritten constantly, while
+`milestone/*` branches are long-lived. Checking out a stale milestone branch
+therefore clobbers live state — observed in the feastahead repo, where
+`fb1a10fd` (2026-07-08) stopped tracking `state.json` on main but never reached
+`milestone/v2.0`, so that branch still carried a 2026-07-07 copy. The history it
+overwrote was unrecoverable.
+
+Deferred out of v1.1 (a log-driven friction pass) because it's a branch-model
+design question, not a telemetry finding — nothing in the 14-day dross window
+shows it biting this repo. Any fix touches `release.yml`, which reads the version
+from `state.json` in a CI checkout, so the release path is in scope for whoever
+picks this up.
+
+Related pain already recorded: ship squash-merge recovery, and a standalone
+quick on main diverging at merge. Worth its own milestone rather than a phase.

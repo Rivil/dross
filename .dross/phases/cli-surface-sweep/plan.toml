@@ -1,0 +1,107 @@
+task_seq = 10
+
+[phase]
+  id = "cli-surface-sweep"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add `dross task list` with --json"
+  files = ["internal/cmd/task.go", "internal/cmd/task_test.go", "README.md"]
+  description = "New `task list [phase-id]` under Task(). Aligned ID/WAVE/STATUS/TITLE table by default;\n--json emits the task array. The phase-id argument is optional and defaults to\nstate.current_phase (locked task_list_output).\n"
+  covers = ["c-1"]
+  test_contract = ["a 3-task/2-wave plan prints exactly 3 rows, each carrying id, wave, status and title", "a task whose plan.toml `status` is absent renders `pending`, not a blank column — the same orPending rule `task show` uses", "`task list --json` unmarshals into a []struct with id/wave/status/title; a table-only regression fails the json.Unmarshal", "`task list --json` on a zero-task plan emits `[]` and exits 0 — never `null`, never the human \"(no tasks)\" line", "phase-id omitted with state.current_phase set lists that phase; with current_phase empty it errors naming current_phase rather than loading `.dross/phases//plan.toml`", "an unknown phase-id errors with the missing path and prints no table header first", "README.md's `dross task {...}` verb-set gains `list`; TestReadmeAdvertisesOnlyRealCommands (cmd/dross/main_test.go:22) catches only over-claiming, so this edit is gated by that guard — it fails until `list` is actually registered, and nothing catches its absence"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Complete + reversible project dotted paths"
+  files = ["internal/cmd/project.go", "internal/cmd/project_test.go", "README.md"]
+  description = "readDotted/writeDotted gain `board.github_project` and a dynamic `board.state_map.<status>`\narm addressing one entry at a time (locked state_map_write). `project set` gains\n`--unset <path>` clearing a scalar or deleting a single state_map key.\n"
+  covers = ["c-6", "c-9"]
+  test_contract = ["a reflection test over `project.Board`'s toml tags fails naming the field if any Board field lacks BOTH a readDotted and a writeDotted case — the only shape that stays true when a 10th Board field is added", "`project set board.state_map.done Closed` on a project.toml with no [board.state_map] table creates the map instead of panicking on a nil map", "setting one state_map key leaves the other entries intact — per-key write, never a whole-map replace", "`project set --unset board.state_map.done` removes only that key; the other entries and every other [board] field are unchanged", "unsetting the last state_map entry writes project.toml with no [board.state_map] table at all, not an empty one", "`--unset` on an unknown path errors with the same unknown-field message `set` uses, and leaves project.toml byte-unchanged (no truncate-then-fail)", "`--unset repo.squash_merge` yields false and `--unset` on a list field yields an absent list, not the literal string \"<nil>\"", "`project set board.github_project PVT_x` then `project get board.github_project` round-trips, and reloads as Board.GitHubProject, not a stray top-level key", "README.md's `dross project {show,get,set}` row documents `set --unset <path>` and that every [board] field — including board.state_map.<status> — is settable; the row is prose, so the assertion is that it names `--unset` at all"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Resolve bare milestone field + validate status enum"
+  files = ["internal/configenum/configenum.go", "internal/configenum/configenum_test.go", "internal/cmd/milestone.go", "internal/cmd/milestone_test.go", "internal/milestone/milestone.go"]
+  description = "Add MilestoneStatuses to configenum with exactly `planning | active | complete` (D1: matches\nthe on-disk data — 11 milestone tomls carry `complete`, 1 carries `active`). The only code\npaths that write a status are `milestone create` -> \"planning\" (milestone.go:218) and the\ngeneric setter (:455); `milestone complete` writes no status at all, so the enum is pinned by\nthe on-disk corpus, not by a completion path. `milestone set` expands an unambiguous bare\nfield name to its\ndotted path before writeMilestoneDotted and rejects an out-of-set milestone.status before Save.\nReconcile the stale `planning | active | shipped | archived` doc comment on Meta.Status in\ninternal/milestone/milestone.go in the same edit.\n"
+  covers = ["c-5"]
+  test_contract = ["MilestoneStatuses is exactly {planning, active, complete}: `milestone set status complete` succeeds and `milestone set status shipped` is rejected — pins the D1 set against the repo's own history rather than the stale doc comment", "`milestone set status active` writes milestone.status on the current milestone; without bare-name expansion it fails with `unknown or unsettable milestone field: status`", "`milestone set status <not-in-set>` exits non-zero, the message names the accepted set, and the milestone toml is byte-identical afterwards — rejection runs before Save, not after", "`milestone set milestone.status <valid>` (fully dotted) still works unchanged — the resolver is additive", "a bare name matching more than one settable path is rejected as ambiguous, listing the candidates, rather than silently taking the first", "`milestone set foo x` still errors — expansion resolves known bare names only, no nearest-guess fallthrough", "configenum.MilestoneStatuses.Has(\"\") is false, so `milestone set status \"\"` is rejected rather than blanking the field", "a valid status differing only in case/whitespace is accepted, matching configenum.Normalize for every other enum"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Multi-path get renderer + state get + state show --json"
+  files = ["internal/cmd/dotget.go", "internal/cmd/dotget_test.go", "internal/cmd/state.go", "internal/cmd/state_test.go", "README.md"]
+  description = "New renderMultiGet(paths, lookup): one path prints the bare value unchanged, two or more emit\na single keyed JSON object (locked multi_get_shape). Resolves every path before emitting\nanything. New `dross state get <path>...` over state.json. `state show` accepts --json and\nprints what it already prints.\n"
+  covers = ["c-3", "c-4"]
+  test_contract = ["one path in -> the bare value and nothing else: `state get current_phase` prints exactly \"<phase>\\n\" — a golden-string literal, not a value re-derived from the same code, because multi_get_shape locks this byte-identical", "two-plus paths -> stdout parses as one JSON object whose keys are the requested paths verbatim, in argument order, so a script never depends on map iteration", "two paths where the SECOND is unknown errors naming that path and writes nothing to stdout — no partial object", "a path whose lookup yields a list serialises as a JSON array in multi mode, not as a CSV or newline-joined string", "the same path passed twice appears once, not as duplicate JSON keys", "`dross state --help` lists `get`, and `state get version` returns the 4-part version from state.json", "`state show --json` exits 0 and its stdout is byte-identical to bare `state show`; pre-change this failed with `unknown flag: --json`", "`state get` on a path that exists in project.toml but not state.json (e.g. project.name) errors naming the unknown field", "README.md's `dross state {show,set,touch,bump}` verb-set gains `get` and the row notes `show --json`; adding `get` before the subcommand is registered fails TestReadmeAdvertisesOnlyRealCommands, so the doc edit cannot land ahead of the code"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Doctor flags unrecognised task statuses"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_test.go"]
+  description = "Doctor walks .dross/phases/*/plan.toml and reports every task whose status is outside\npending|in_progress|done|failed, naming phase id and task id, counting each as an issue\n(non-zero exit). Lives in doctor, not validate (locked status_check_home).\n"
+  covers = ["c-7"]
+  test_contract = ["a plan.toml carrying a near-miss status (\"Done\" capitalised, \"in-progress\" hyphenated) prints one line containing BOTH the phase id and the task id and doctor exits non-zero — the exact value NextRunnable skips silently today", "each of pending / in_progress / done / failed, plus an omitted status field, produces no line and leaves doctor's exit code unchanged — empty means pending everywhere else in the code", "a phase directory with no plan.toml is skipped silently and doctor still reaches its final verdict rather than erroring out of the section", "an unparseable plan.toml is reported as its own issue naming the phase, not swallowed into a clean \"✓\" line", "one bad status lands in doctor's exit-code issue count, not the advisory warnings block", "`dross validate` on that same repo still exits 0 — pins status_check_home rather than merely respecting it"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 1
+  title = "Curated mis-reach table + nearest-match fallback"
+  files = ["internal/cmd/hints.go", "internal/cmd/hints_test.go", "assets/prompts/secure.md"]
+  description = "Curated map from known mis-reaches to their working invocation, consulted first; string\ndistance over command and flag names as the fallback (locked hint_mechanism). Also fixes\nassets/prompts/secure.md:42, where dross's own prompt teaches `dross security run --new` —\none of the four mis-reaches c-2 names (D4: in scope). r-01 — the prompt edit is not live\nuntil `make install` re-links it.\n"
+  covers = ["c-2", "c-8"]
+  test_contract = ["CuratedHint(\"dross task\", \"done\") returns a string containing `dross task status <phase-id> <task-id> done` — the semantic remap edit distance can never produce", "CuratedHint returns the documented working invocation for each of (\"dross phase create\",\"--title\"), (\"dross task edit\",\"--files\") and (\"dross security run\",\"--new\"); a lookup with no entry returns found=false so the fallback is reachable", "Nearest(\"stauts\", [\"status\",\"show\",\"set\"]) == [\"status\"]; Nearest(\"zzzzzz\", same) is empty — a far-off typo gets no fabricated suggestion", "lookup is normalised, so `dross Task Done` hits the same entry", "no assets/prompts/*.md contains an invocation the table classifies as broken — a grep test over the prompt corpus, which fails today on assets/prompts/secure.md:42 (`dross security run --new`)"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 2
+  title = "Adopt multi-path get in project + milestone"
+  files = ["internal/cmd/project.go", "internal/cmd/project_test.go", "internal/cmd/milestone.go", "internal/cmd/milestone_test.go"]
+  description = "`project get` and `milestone get` take 1+ dotted paths and render through renderMultiGet.\n`milestone get` keeps its optional leading version by matching args[0] against the version\nSHAPE (leading `v` + digit — every milestone on disk is vN.N), not by elimination against the\nknown-field list. By-elimination silently reads a typo'd path as a version and reports \"no such\nmilestone\" instead of naming the bad path. Exercises only the version ambiguity — the bare-name\nresolver is t-3's and is not re-litigated here (D5).\n"
+  covers = ["c-4"]
+  depends_on = ["t-2", "t-3", "t-4"]
+  test_contract = ["`project get project.name` prints the bare name byte-identically to today, asserted against a literal — the guard that keeps every existing prompt working", "`project get project.name runtime.mode board.state_map.<k>` emits one JSON object with those three keys, including the state_map path t-2 added", "`milestone get v1.1 milestone.title milestone.status` resolves v1.1 as the version while `milestone get milestone.title milestone.status` falls back to state.current_milestone — treating args[0] as a version unconditionally fails the second case", "`milestone get scope.success_criteria` alone still prints one entry per line exactly as today, while in multi-path form it serialises as a JSON array", "an unknown path among several errors naming that path rather than emitting an object with only the good keys", "a typo'd path in FIRST position — `milestone get milstone.title milestone.status` — errors naming `milstone.title` as an unknown path, NOT `no such milestone: milstone.title`; this is the row a by-elimination version check fails, since args[0] there is not a known field and would be swallowed as a version"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 2
+  title = "Wire hints into subcommand and flag errors"
+  files = ["internal/cmd/subcommand_guard.go", "internal/cmd/subcommand_guard_test.go", "internal/cmd/flag_hint.go", "internal/cmd/flag_hint_test.go"]
+  description = "EnforceSubcommandKnown consults the t-6 resolver in its unknown-subcommand path, and installs\na root FlagErrorFunc (cobra inherits it down the tree) so unknown-flag errors — which never\nreach RunE — get the same curated-then-distance treatment. The FlagErrorFunc must APPEND the\nhint to cobra's original message, preserving its literal \"unknown flag\" / \"unknown shorthand\nflag\" prefix — telemetry.go:351 buckets the event by that substring, so replacing the message\nsilently demotes it to `other`. No cmd/dross/main.go edit: main.go already calls\nEnforceSubcommandKnown on root inside newRoot() (D3).\n"
+  covers = ["c-2", "c-8"]
+  depends_on = ["t-6"]
+  test_contract = ["`dross task done t-1` errors with a message containing `dross task status`, and the curated entry wins over cobra's own suggestion list when both would fire", "a subcommand typo BEYOND cobra's own reach is still named by the t-6 fallback: the test must first assert cmd.SuggestionsFor(typo) is empty (cobra sets SuggestionsMinimumDistance=2 at subcommand_guard.go:27, so `shwo` -> `show` already works today and proves nothing), then assert our error names `show` anyway", "`dross task wibble` (no entry, no near match) still prints the available-subcommands list and exits non-zero — the hint path adds to the existing fallback, it does not replace it", "an unknown flag with a curated entry produces that working invocation instead of cobra's bare `unknown flag: --title`", "an unknown flag with NO curated entry names the nearest flag actually declared on that command (`--titel` -> `--title`), and names none when nothing is within distance", "the hook reaches a depth-3 command (`dross task edit --files a.go`), proving cobra's FlagErrorFunc parent-walk rather than assuming it", "a KNOWN flag still parses and a valid subcommand still runs its RunE and returns nil — installing the hooks changes nothing else", "`dross task done` still exits non-zero, so the pre-existing exit-0-on-help regression does not return", "a hinted flag error still classifies as `unknown_flag`, asserted through telemetry's own classifier rather than by eyeballing the string: the message must still contain the literal substring \"unknown flag\" that telemetry.go:351 matches, so a replace-the-message implementation drops it to `other` and fails here"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 3
+  title = "Pin the four mis-reaches against the real tree"
+  files = ["cmd/dross/main_test.go"]
+  description = "Table test over the assembled newRoot() tree. This is the only place c-2's acceptance sentence\nis executable and the only package that can see the real tree rather than a hand-built one\n(D2: kept as its own task so it can fail without reopening the wiring commit).\n"
+  covers = ["c-2"]
+  depends_on = ["t-8"]
+  test_contract = ["all four of `task done`, `phase create --title`, `task edit --files` and `security run --new` exit non-zero AND print their working invocation — c-2's sentence, executed", "every replacement invocation in the curated table resolves against newRoot(): a hint naming a command path or flag that does not exist fails here, so the table cannot rot into pointing at nothing"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 3
+  title = "Cover the arity guards on `project set`"
+  files = ["internal/cmd/project_test.go"]
+  description = "verify FLAG: internal/cmd/project.go:73-78 — the hand-rolled arity switch on `project set` is unexercised (go-cover shows both case blocks at 0 executions). t-2 loosened Args from cobra ExactArgs(2) to RangeArgs(1,2) and moved arity enforcement into that switch, so `dross project set <path>` with no value now depends entirely on untested code and a regression there indexes args[1] out of range. Both branches were probed by hand and behave correctly today, so this is a missing test, not a live defect. Add TestProjectSetArityGuards with two rows asserting the exact messages and a byte-unchanged project.toml, mirroring TestProjectUnsetUnknownPathLeavesFileUnchanged."
+  covers = ["c-9"]
+  depends_on = ["t-2"]
+  status = "done"

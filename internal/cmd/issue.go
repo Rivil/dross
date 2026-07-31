@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
@@ -20,11 +21,18 @@ import (
 // Board label vocabulary. A single marker label identifies dross-managed
 // issues; one status label tracks lifecycle stage. Keeping it to two labels
 // avoids cluttering the board's label list.
+//
+// Every status literal here is a configenum.LifecycleStatuses member — the same
+// set both forge state maps key on. statusPlanned reads "planned", not
+// "planning": the maps have always keyed "planned", it is what state.json's
+// current_phase_status carries once plan.toml locks, and "planning" wrongly
+// implies work in flight. Issues already synced re-label on the next
+// phase-sync, which replaces the label set wholesale.
 const (
 	labelMarker = "dross"
 	labelQuick  = "dross/quick"
 
-	statusPlanning   = "planning"
+	statusPlanned    = "planned"
 	statusInProgress = "in-progress"
 	statusVerifying  = "verifying"
 )
@@ -111,7 +119,7 @@ func boardConfig(b project.Board) forge.Config {
 		BoardID:  b.GitHubProject,
 		URL:      "https://board.local/" + b.Project,
 	}
-	if strings.ToLower(b.Provider) == "gitlab" {
+	if configenum.Normalize(b.Provider) == "gitlab" {
 		cfg.ProjectID = b.Project
 	}
 	return cfg
@@ -142,14 +150,17 @@ func issueEnable() *cobra.Command {
 				return err
 			}
 			Print("board sync enabled")
-			switch strings.ToLower(p.Board.Provider) {
-			case "forgejo", "gitea", "gitlab", "youtrack", "jira", "github":
-			case "":
-				Print("note: [board].provider is unset — set it to forgejo/gitea/gitlab/youtrack/jira/github")
+			switch {
+			case configenum.BoardProviders.Has(p.Board.Provider):
+				// recognised
+			case configenum.Normalize(p.Board.Provider) == "":
+				Printf("note: [board].provider is unset — set it to %s\n", configenum.BoardProviders.List())
 			default:
-				Printf("note: provider %q has no board backend (forgejo/gitea/gitlab/youtrack/jira/github)\n", p.Board.Provider)
+				Printf("note: provider %q has no board backend (%s)\n", p.Board.Provider, configenum.BoardProviders.List())
 			}
-			if p.Board.BaseURL == "" {
+			// Only nag about base_url where the backend has no default address
+			// — a github board resolves to api.github.com on its own.
+			if p.Board.BaseURL == "" && configenum.BoardRequiresBaseURL(p.Board.Provider) {
 				Print("note: [board].base_url is unset — needed for the board API")
 			}
 			if p.Board.AuthEnv == "" {
@@ -304,7 +315,10 @@ func syncBacklog(ctx *boardCtx, version string) error {
 	// sets the item's Fix versions to the bundle value; epic mode links it as a
 	// subtask of the Epic; agile boards are query/project-based, so an item
 	// created in the project already appears on the board (no per-item call).
-	mode := strings.ToLower(ctx.proj.Board.MilestoneMode)
+	// Normalize, not a bare ToLower: doctor accepts a padded " version" now, and
+	// an untrimmed read here would silently skip the fixVersion branch for a
+	// value the validator just blessed.
+	mode := configenum.Normalize(ctx.proj.Board.MilestoneMode)
 	fixVersion := ""
 	if mode == "" || mode == "version" {
 		fixVersion = entityID
@@ -387,6 +401,21 @@ func issuePhaseSync() *cobra.Command {
 		Short: "Create or update the board issue for a phase (idempotent)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			// Validated ahead of openBoard on purpose: the enabled check below
+			// returns nil, so a typo'd --status on a repo that hasn't opted
+			// into board sync would exit 0 as a silent no-op and only surface
+			// on the machine where sync is on.
+			if status != "" {
+				if !configenum.LifecycleStatuses.Has(status) {
+					return fmt.Errorf("unknown --status %q; expected %s", status, configenum.LifecycleStatuses.List())
+				}
+				// Assign the normalized form back. syncPhase passes status raw
+				// to statusLabel and to both SetState lookups, so validating
+				// without reassigning would accept " Verifying", emit the label
+				// "dross/status: Verifying" and then miss the state map — the
+				// exact unmapped-state warning this phase exists to close.
+				status = configenum.Normalize(status)
+			}
 			ctx, enabled, err := openBoard()
 			if err != nil {
 				return err
@@ -397,7 +426,7 @@ func issuePhaseSync() *cobra.Command {
 			return syncPhase(ctx, args[0], status, doClose)
 		},
 	}
-	c.Flags().StringVar(&status, "status", "", "lifecycle status label (planning|in-progress|verifying); derived from the plan if unset")
+	c.Flags().StringVar(&status, "status", "", "lifecycle status label ("+configenum.LifecycleStatuses.List()+"); derived from the plan if unset")
 	c.Flags().BoolVar(&doClose, "close", false, "close the issue (use on ship)")
 	return c
 }
@@ -491,14 +520,16 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 	return nil
 }
 
-// derivePhaseStatus maps plan progress onto a lifecycle label.
+// derivePhaseStatus maps plan progress onto a lifecycle label. Its return
+// values are the emitted half of configenum.LifecycleStatuses — the other half
+// comes from the `--status <literal>` calls in assets/prompts/*.md.
 func derivePhaseStatus(plan *phase.Plan) string {
 	if plan == nil || len(plan.Task) == 0 {
-		return statusPlanning
+		return statusPlanned
 	}
 	_, inProgress, done, failed := plan.Summary()
 	if done == 0 && inProgress == 0 && failed == 0 {
-		return statusPlanning
+		return statusPlanned
 	}
 	return statusInProgress
 }

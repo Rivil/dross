@@ -267,7 +267,12 @@ type classRule struct {
 // messages; TestNoTokenShadowing enforces that an earlier token never
 // makes a later rule unreachable.
 var classRules = []classRule{
-	// Root / scaffold state.
+	// Root / scaffold state. incomplete_root sits above no_root: a `.dross/`
+	// that exists but is missing a required file is a different kind of
+	// friction from never having run init — the fix is `dross onboard` on a
+	// directory the user thinks is already set up, and folding it into
+	// no_root would hide that.
+	{"incomplete_root", [][]string{{"not a dross repo"}}},
 	{"no_root", [][]string{{"no .dross"}}},
 
 	// Phase / plan / spec state — the user is somewhere the workflow

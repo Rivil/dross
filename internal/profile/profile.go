@@ -29,16 +29,16 @@ const (
 )
 
 type Dimension struct {
-	Rating     string     `toml:"rating"`
-	Confidence Confidence `toml:"confidence"`
-	Directive  string     `toml:"directive"`
+	Rating     string     `toml:"rating" json:"rating"`
+	Confidence Confidence `toml:"confidence" json:"confidence"`
+	Directive  string     `toml:"directive" json:"directive"`
 }
 
 type Profile struct {
-	Generated     string               `toml:"generated,omitempty"`
-	Source        string               `toml:"source,omitempty"`
-	Dimensions    map[string]Dimension `toml:"dimensions"`
-	UserOverrides map[string]string    `toml:"user_overrides,omitempty"` // arbitrary k/v
+	Generated     string               `toml:"generated,omitempty" json:"generated,omitempty"`
+	Source        string               `toml:"source,omitempty" json:"source,omitempty"`
+	Dimensions    map[string]Dimension `toml:"dimensions" json:"dimensions"`
+	UserOverrides map[string]string    `toml:"user_overrides,omitempty" json:"user_overrides,omitempty"` // arbitrary k/v
 }
 
 func LoadFile(path string) (*Profile, error) {

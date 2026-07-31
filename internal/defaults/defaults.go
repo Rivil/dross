@@ -22,8 +22,8 @@ const File = "defaults.toml"
 // cross-project pre-fills (remote_defaults) and global runtime
 // toggles (telemetry).
 type Defaults struct {
-	Remote    RemoteDefaults    `toml:"remote_defaults,omitempty"`
-	Telemetry TelemetryDefaults `toml:"telemetry,omitempty"`
+	Remote    RemoteDefaults    `toml:"remote_defaults,omitempty" json:"remote_defaults,omitempty"`
+	Telemetry TelemetryDefaults `toml:"telemetry,omitempty" json:"telemetry,omitempty"`
 }
 
 // TelemetryDefaults controls the local-only event recorder. Default ON;
@@ -32,8 +32,8 @@ type Defaults struct {
 // (true), "user said no" (false), and "never asked" (nil — treated as
 // enabled per default-ON policy, but init/onboard should still ask).
 type TelemetryDefaults struct {
-	Enabled *bool  `toml:"enabled,omitempty"`
-	AskedAt string `toml:"asked_at,omitempty"` // ISO date the user was prompted
+	Enabled *bool  `toml:"enabled,omitempty" json:"enabled,omitempty"`
+	AskedAt string `toml:"asked_at,omitempty" json:"asked_at,omitempty"` // ISO date the user was prompted
 }
 
 // TelemetryEnabled returns the effective on/off bit. Unset = on.
@@ -47,11 +47,11 @@ func (t TelemetryDefaults) TelemetryEnabled() bool {
 // RemoteDefaults seeds project.Remote at init/onboard time. Each field is
 // the value to pre-fill the prompt with — the user always confirms.
 type RemoteDefaults struct {
-	Provider  string   `toml:"provider,omitempty"`
-	APIBase   string   `toml:"api_base,omitempty"`
-	LogAPI    bool     `toml:"log_api,omitempty"`
-	AuthEnv   string   `toml:"auth_env,omitempty"`
-	Reviewers []string `toml:"reviewers,omitempty"`
+	Provider  string   `toml:"provider,omitempty" json:"provider,omitempty"`
+	APIBase   string   `toml:"api_base,omitempty" json:"api_base,omitempty"`
+	LogAPI    bool     `toml:"log_api,omitempty" json:"log_api,omitempty"`
+	AuthEnv   string   `toml:"auth_env,omitempty" json:"auth_env,omitempty"`
+	Reviewers []string `toml:"reviewers,omitempty" json:"reviewers,omitempty"`
 }
 
 // Apply seeds the non-empty fields of d.Remote into r, overwriting r's

@@ -1,13 +1,18 @@
 package forge
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 const tokenEnv = "MOCK_FORGE_TOKEN"
@@ -510,5 +515,141 @@ func TestGitLabBearerAuthHeader(t *testing.T) {
 	}
 	if gotPriv != "" {
 		t.Errorf("bearer scheme: PRIVATE-TOKEN should be empty, got %q", gotPriv)
+	}
+}
+
+// --- configenum-backed dispatch + basic auth (phase validator-truth) ---
+
+// forgeSourcePath locates a file in this package for the source-scan guards.
+func forgeSourcePath(t *testing.T, name string) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(dir, name)
+}
+
+// Bitbucket Cloud's credential — and any future Basic-auth forge — is
+// user:token. It must be the only header sent: a PRIVATE-TOKEN riding alongside
+// would present two credentials on one request.
+func TestClientDoSendsBasicAuth(t *testing.T) {
+	t.Setenv(tokenEnv, "secret")
+	var gotAuth, gotPrivate string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotPrivate = r.Header.Get("PRIVATE-TOKEN")
+		_, _ = w.Write([]byte(`{"number":1}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	for _, scheme := range []string{"basic", " Basic ", "BASIC"} {
+		c, err := New(Config{
+			Provider: "gitlab", URL: "https://forge.example/me/proj", APIBase: srv.URL,
+			AuthEnv: tokenEnv, AuthScheme: scheme, AuthUser: "someone@example.com",
+		})
+		if err != nil {
+			t.Fatalf("New(scheme=%q): %v", scheme, err)
+		}
+		if _, err := c.GetIssue("1"); err != nil {
+			t.Fatalf("GetIssue: %v", err)
+		}
+		want := "Basic " + base64.StdEncoding.EncodeToString([]byte("someone@example.com:secret"))
+		if gotAuth != want {
+			t.Errorf("scheme %q: Authorization = %q, want %q", scheme, gotAuth, want)
+		}
+		if gotPrivate != "" {
+			t.Errorf("scheme %q: PRIVATE-TOKEN sent alongside Basic: %q", scheme, gotPrivate)
+		}
+	}
+}
+
+// basic without a username is half a credential. Sending Basic base64(:token)
+// would 401 with nothing actionable in the message.
+func TestNewRejectsBasicWithoutAuthUser(t *testing.T) {
+	t.Setenv(tokenEnv, "secret")
+	_, err := New(Config{
+		Provider: "gitlab", URL: "https://forge.example/me/proj", APIBase: "https://x",
+		AuthEnv: tokenEnv, AuthScheme: "basic", // AuthUser deliberately empty
+	})
+	if err == nil {
+		t.Fatal("expected a construction error for basic with no auth_user")
+	}
+	if !strings.Contains(err.Error(), "auth_user") {
+		t.Errorf("error must name the missing setting, got: %v", err)
+	}
+}
+
+// A provider doctor accepts must dispatch. NewBoard has no default arm — it
+// falls through to New — so a padded value that fails to match reaches New and
+// errors there instead of building the right backend.
+func TestNewBoardNormalisesProvider(t *testing.T) {
+	t.Setenv(tokenEnv, "secret")
+	for _, provider := range []string{" jira", "Jira", "JIRA\t"} {
+		c, err := NewBoard(Config{
+			Provider: provider, URL: "https://board.local/PROJ", APIBase: "https://jira.example",
+			AuthEnv: tokenEnv, AuthUser: "me@example.com", Project: "PROJ",
+		})
+		if err != nil {
+			t.Fatalf("NewBoard(%q): %v", provider, err)
+		}
+		if _, ok := c.(*JiraClient); !ok {
+			t.Errorf("NewBoard(%q) built %T, want *JiraClient — the padded value fell through to New", provider, c)
+		}
+	}
+	for _, provider := range []string{" youtrack", "YouTrack"} {
+		c, err := NewBoard(Config{
+			Provider: provider, URL: "https://board.local/PROJ", APIBase: "https://yt.example",
+			AuthEnv: tokenEnv, Project: "PROJ",
+		})
+		if err != nil {
+			t.Fatalf("NewBoard(%q): %v", provider, err)
+		}
+		if _, ok := c.(*YouTrackClient); !ok {
+			t.Errorf("NewBoard(%q) built %T, want *YouTrackClient", provider, c)
+		}
+	}
+}
+
+func TestNewMessageListsForgeRESTProviders(t *testing.T) {
+	_, err := New(Config{Provider: "perforce", URL: "https://x/y/z"})
+	if err == nil {
+		t.Fatal("expected error for an unsupported provider")
+	}
+	if !strings.Contains(err.Error(), configenum.ForgeRESTProviders.List()) {
+		t.Errorf("message must derive from ForgeRESTProviders, got: %v", err)
+	}
+}
+
+// milestone_mode is the one enum with a consumer in each of two files. If
+// either keeps its own ToLower(TrimSpace(...)), the normalisation can drift
+// away from what doctor validates.
+func TestMilestoneModeConsumersUseConfigenum(t *testing.T) {
+	for _, name := range []string{"jira.go", "youtrack.go"} {
+		raw, err := os.ReadFile(forgeSourcePath(t, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(raw)
+		if strings.Contains(src, "strings.ToLower(strings.TrimSpace(mode))") {
+			t.Errorf("%s hand-rolls the milestone_mode normalisation; use configenum.Normalize", name)
+		}
+		if !strings.Contains(src, "configenum.Normalize(mode)") {
+			t.Errorf("%s does not normalise milestone_mode through configenum", name)
+		}
+	}
+}
+
+// The behaviour behind the source scan: a padded mode must reach the same arm
+// as the bare one.
+func TestEnsureMilestoneEntityNormalisesMode(t *testing.T) {
+	jira := &JiraClient{}
+	if _, err := jira.EnsureMilestoneEntity(" EPIC ", "v1", ""); err == nil {
+		t.Error("jira must reject epic in any casing")
+	}
+	yt := &YouTrackClient{}
+	// " Bogus " must land in the default arm, naming the mode set.
+	if _, err := yt.EnsureMilestoneEntity(" bogus ", "v1", ""); err == nil {
+		t.Error("youtrack must reject an unknown mode")
 	}
 }

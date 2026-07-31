@@ -308,7 +308,7 @@ func recordVerifyPhaseOutcome(phaseID string, counts map[string]int, numbers map
 		return
 	}
 	repoHash := ""
-	if root, err := FindRoot(); err == nil {
+	if root, _, err := LocateRoot(); err == nil {
 		repoHash = telemetry.HashRepo(filepath.Dir(root))
 	}
 	_ = telemetry.Append(telemetryPath(), telemetry.Event{

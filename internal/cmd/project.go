@@ -9,6 +9,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/project"
 )
 
@@ -22,7 +23,8 @@ func Project() *cobra.Command {
 }
 
 func projectShow() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	c := &cobra.Command{
 		Use:   "show",
 		Short: "Print project.toml",
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -30,51 +32,76 @@ func projectShow() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if asJSON {
+				return emitJSON(p)
+			}
 			Printf("# %s\n", path)
 			return toml.NewEncoder(os.Stdout).Encode(p)
 		},
 	}
+	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
+	return c
 }
 
-// projectGet prints a single dotted-path field (e.g. project.name, runtime.mode).
+// projectGet prints one or more dotted-path fields (e.g. project.name,
+// runtime.mode). One path prints its bare value exactly as it always has; two
+// or more emit a single keyed JSON object (locked multi_get_shape).
 func projectGet() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <dotted.path>",
-		Short: "Print a single field by dotted path",
-		Args:  cobra.ExactArgs(1),
+		Use:   "get <dotted.path>...",
+		Short: "Print one or more fields by dotted path (multiple emit a keyed JSON object)",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			p, _, err := loadProject()
 			if err != nil {
 				return err
 			}
-			v, ok := readDotted(p, args[0])
-			if !ok {
-				return fmt.Errorf("unknown field: %s", args[0])
-			}
-			Print(v)
-			return nil
+			return renderMultiGet(args, func(path string) (any, error) {
+				v, ok := readDotted(p, path)
+				if !ok {
+					return nil, fmt.Errorf("unknown field: %s", path)
+				}
+				return v, nil
+			})
 		},
 	}
 }
 
 // projectSet writes a single dotted-path field.
 // String slices accept comma-separated input; bools accept true/false; ints parsed.
+// `--unset <path>` takes no value and clears the field instead.
 func projectSet() *cobra.Command {
-	return &cobra.Command{
+	var unset bool
+	c := &cobra.Command{
 		Use:   "set <dotted.path> <value>",
-		Short: "Write a single field by dotted path",
-		Args:  cobra.ExactArgs(2),
+		Short: "Write a single field by dotted path (--unset clears it)",
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(_ *cobra.Command, args []string) error {
+			switch {
+			case unset && len(args) != 1:
+				return fmt.Errorf("--unset takes a path and no value")
+			case !unset && len(args) != 2:
+				return fmt.Errorf("accepts 2 arg(s), received %d", len(args))
+			}
 			p, path, err := loadProject()
 			if err != nil {
 				return err
 			}
-			if err := writeDotted(p, args[0], args[1]); err != nil {
+			// Resolve before writing: a rejected path errors out here, leaving
+			// project.toml byte-unchanged rather than truncate-then-fail.
+			if unset {
+				err = unsetDotted(p, args[0])
+			} else {
+				err = writeDotted(p, args[0], args[1])
+			}
+			if err != nil {
 				return err
 			}
 			return p.Save(path)
 		},
 	}
+	c.Flags().BoolVar(&unset, "unset", false, "clear the field at <dotted.path> instead of writing a value")
+	return c
 }
 
 func loadProject() (*project.Project, string, error) {
@@ -95,6 +122,12 @@ func loadProject() (*project.Project, string, error) {
 // runtime.services and stack.locked still require direct toml edits;
 // /dross-options surfaces them but doesn't iterate keys.
 func readDotted(p *project.Project, path string) (string, bool) {
+	// board.state_map.<status> addresses one entry at a time (locked
+	// state_map_write). The path is always known; an absent entry reads back
+	// empty, exactly like an unset scalar.
+	if key, ok := stateMapKey(path); ok {
+		return p.Board.StateMap[key], true
+	}
 	switch path {
 	// project
 	case "project.name":
@@ -177,6 +210,8 @@ func readDotted(p *project.Project, path string) (string, bool) {
 		return fmt.Sprintf("%t", p.Remote.LogAPI), true
 	case "remote.auth_env":
 		return p.Remote.AuthEnv, true
+	case "remote.auth_user":
+		return p.Remote.AuthUser, true
 	case "remote.auth_scheme":
 		return p.Remote.AuthScheme, true
 	case "remote.project_id":
@@ -198,6 +233,8 @@ func readDotted(p *project.Project, path string) (string, bool) {
 		return fmt.Sprintf("%t", p.Board.Enabled), true
 	case "board.milestone_mode":
 		return p.Board.MilestoneMode, true
+	case "board.github_project":
+		return p.Board.GitHubProject, true
 	// paths
 	case "paths.source":
 		return p.Paths.Source, true
@@ -250,6 +287,24 @@ func writeDotted(p *project.Project, path, value string) error {
 			return err
 		}
 		*target = b
+		return nil
+	}
+	// One state_map entry at a time — never a whole-map replace, so the other
+	// entries survive and a project.toml with no [board.state_map] table gets
+	// the map created rather than a nil-map panic.
+	if key, ok := stateMapKey(path); ok {
+		// A key outside the lifecycle set is silently-broken config: the
+		// lookup is keyed by what dross emits, so an override on anything else
+		// never applies. Rejected before the map is touched, so a refused write
+		// leaves project.toml byte-unchanged. A near-miss of case or padding is
+		// normalized by stateMapKey rather than rejected.
+		if !configenum.LifecycleStatuses.Has(key) {
+			return fmt.Errorf("unknown [board].state_map key %q; expected %s", key, configenum.LifecycleStatuses.List())
+		}
+		if p.Board.StateMap == nil {
+			p.Board.StateMap = map[string]string{}
+		}
+		p.Board.StateMap[key] = value
 		return nil
 	}
 	switch path {
@@ -334,6 +389,8 @@ func writeDotted(p *project.Project, path, value string) error {
 		return setBool(&p.Remote.LogAPI)
 	case "remote.auth_env":
 		p.Remote.AuthEnv = value
+	case "remote.auth_user":
+		p.Remote.AuthUser = value
 	case "remote.auth_scheme":
 		p.Remote.AuthScheme = value
 	case "remote.project_id":
@@ -355,6 +412,8 @@ func writeDotted(p *project.Project, path, value string) error {
 		return setBool(&p.Board.Enabled)
 	case "board.milestone_mode":
 		p.Board.MilestoneMode = value
+	case "board.github_project":
+		p.Board.GitHubProject = value
 	// paths
 	case "paths.source":
 		p.Paths.Source = value
@@ -390,6 +449,37 @@ func writeDotted(p *project.Project, path, value string) error {
 		return fmt.Errorf("unknown or unsettable field: %s", path)
 	}
 	return nil
+}
+
+// stateMapKey recognises a `board.state_map.<status>` path and returns the
+// entry key. The suffix must be non-empty and single-segment — bare
+// `board.state_map` is not an addressable leaf.
+// The key is normalized here rather than at each call site, so write, read and
+// unset all address the same entry. Without it `set board.state_map.Planned`
+// stores under "planned" (where the sync-time lookup can find it) while `get`
+// and `--unset` keep asking for "Planned" — an entry the CLI wrote and cannot
+// address, which is exactly the repair path doctor's new check depends on.
+func stateMapKey(path string) (string, bool) {
+	key, ok := strings.CutPrefix(path, "board.state_map.")
+	if !ok || key == "" || strings.Contains(key, ".") {
+		return "", false
+	}
+	return configenum.Normalize(key), true
+}
+
+// unsetDotted clears a field written by mistake. A scalar is zeroed through
+// writeDotted's own arms — so an unknown path fails with the same message
+// `set` gives, before anything is written — while a state_map entry is deleted
+// outright, and the last one takes the whole table with it.
+func unsetDotted(p *project.Project, path string) error {
+	if key, ok := stateMapKey(path); ok {
+		delete(p.Board.StateMap, key)
+		if len(p.Board.StateMap) == 0 {
+			p.Board.StateMap = nil
+		}
+		return nil
+	}
+	return writeDotted(p, path, "")
 }
 
 func parseBool(v string) (bool, error) {

@@ -8,11 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/architecture"
+	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/phase"
 )
 
 // Doctor checks project-level health for the current dross repo.
@@ -27,12 +30,22 @@ func Doctor() *cobra.Command {
 		Use:   "doctor",
 		Short: "Check project-level health (.dross/project.toml vs reality)",
 		RunE: func(c *cobra.Command, _ []string) error {
-			root, err := FindRoot()
+			// LocateRoot, not FindRoot: an incomplete `.dross/` is doctor's
+			// diagnosis to make, so it has to reach the foundational-files
+			// block below rather than being turned away as not-a-dross-repo.
+			root, rootMissing, err := LocateRoot()
 			if err != nil {
 				return err
 			}
 			repoDir := filepath.Dir(root) // root is .dross; parent is repo cwd
 			issues := 0
+
+			// Cross-field warnings are a second, softer class: each field is
+			// individually legal but the *combination* fails at runtime. They
+			// are reported and never added to issues — doctor's exit code gates
+			// CI and pre-push hooks, and this class exists to stop doctor lying,
+			// not to start breaking repos that work today.
+			var warnings []string
 
 			// --- Foundational files ---
 			//
@@ -44,11 +57,21 @@ func Doctor() *cobra.Command {
 			missing := checkFoundationalFiles(root)
 			if len(missing) > 0 {
 				for _, m := range missing {
-					Printf("  ✗ %s — missing. If a recent squash-merge wiped .dross/, run `dross ship recover` to restore from the pre-merge HEAD.\n", m)
+					Printf("  ✗ %s — missing. If a recent squash-merge wiped .dross/, run `dross ship recover` to restore from the pre-merge HEAD. Otherwise %s.\n", m, RepairHint)
 					issues++
 				}
 				Print("")
-				return finalizeDoctor(issues)
+				// Two different diagnoses share this block. A missing
+				// rules.toml is an ordinary repairable issue — the trio is
+				// doctor's own, wider notion of "foundational". A missing
+				// project.toml or state.json means the root isn't a dross repo
+				// at all, which every other command now reports as such, so
+				// doctor names it separately rather than collapsing the two.
+				if len(rootMissing) > 0 {
+					printIncompleteRoot(rootMissing)
+					return finalizeIncompleteRoot(rootMissing, issues, len(warnings))
+				}
+				return finalizeDoctor(issues, len(warnings))
 			}
 			Print("  ✓ project.toml, rules.toml, state.json present")
 			Print("")
@@ -89,13 +112,15 @@ func Doctor() *cobra.Command {
 				}
 			}
 
-			// auth_scheme is the GitLab credential selector: empty defaults to
-			// private-token in code, so only a non-empty, non-recognised value
-			// is a misconfiguration worth flagging.
-			if scheme := strings.ToLower(p.Remote.AuthScheme); scheme != "" && scheme != "private-token" && scheme != "bearer" {
-				Printf("  ✗ [remote].auth_scheme = %q is invalid (expected private-token | bearer)\n", p.Remote.AuthScheme)
+			// auth_scheme selects the credential header. The empty case is the
+			// Set's own business — it carries private-token as the code default,
+			// so Has("") is true here and false for [board].provider below.
+			if !configenum.AuthSchemes.Has(p.Remote.AuthScheme) {
+				Printf("  ✗ [remote].auth_scheme = %q is invalid (expected %s)\n", p.Remote.AuthScheme, configenum.AuthSchemes.List())
 				issues++
 			}
+
+			warnings = append(warnings, remoteCombinationWarnings(p.Remote.Provider, p.Remote.AuthScheme, p.Remote.AuthUser)...)
 
 			Print("")
 
@@ -110,11 +135,12 @@ func Doctor() *cobra.Command {
 				Print("Board:")
 				boardIssues := 0
 
-				switch strings.ToLower(b.Provider) {
-				case "forgejo", "gitea", "gitlab", "youtrack":
-					// recognised
-				default:
-					Printf("  ✗ [board].provider = %q is invalid (expected forgejo | gitea | gitlab | youtrack)\n", b.Provider)
+				// The accept-set is configenum's, not a copy of it: doctor used
+				// to reject jira and github boards the CLI dispatches happily,
+				// which is the divergence this whole indirection exists to kill.
+				// An empty provider stays invalid — BoardProviders has no default.
+				if !configenum.BoardProviders.Has(b.Provider) {
+					Printf("  ✗ [board].provider = %q is invalid (expected %s)\n", b.Provider, configenum.BoardProviders.List())
 					boardIssues++
 				}
 
@@ -126,23 +152,55 @@ func Doctor() *cobra.Command {
 					boardIssues++
 				}
 
-				if !looksLikeBoardURL(b.BaseURL) {
+				// base_url is optional only where the backend has an address to
+				// fall back on (github → https://api.github.com). Optional is
+				// not unvalidated: a value that *is* set is still parsed, so a
+				// malformed github base_url fails rather than being ignored.
+				switch {
+				case b.BaseURL == "":
+					if configenum.BoardRequiresBaseURL(b.Provider) {
+						Printf("  ✗ [board].base_url is not set (the %s backend has no default API address)\n", b.Provider)
+						boardIssues++
+					}
+				case !looksLikeBoardURL(b.BaseURL):
 					Printf("  ✗ [board].base_url = %q is not a valid URL (expected http(s)://host)\n", b.BaseURL)
 					boardIssues++
 				}
 
-				// Empty milestone_mode defaults to "version" in code, so only a
-				// non-empty, unrecognised value is a misconfiguration.
-				switch b.MilestoneMode {
-				case "", "version", "agile", "epic":
-					// recognised (empty = version default)
-				default:
-					Printf("  ✗ [board].milestone_mode = %q is invalid (expected version | agile | epic)\n", b.MilestoneMode)
+				// Empty milestone_mode defaults to version in code; the Set
+				// carries that default, and Has normalises exactly as the
+				// consumers in forge do.
+				if !configenum.MilestoneModes.Has(b.MilestoneMode) {
+					Printf("  ✗ [board].milestone_mode = %q is invalid (expected %s)\n", b.MilestoneMode, configenum.MilestoneModes.List())
 					boardIssues++
 				}
 
+				// A state_map key outside the lifecycle set is a dead override:
+				// the lookup is keyed by what dross emits, so the state it was
+				// meant to remap never applies. That is silently-broken config,
+				// the same severity doctor already gives an invalid provider or
+				// milestone_mode — an issue counting toward the non-zero exit,
+				// not a warning (locked state_map_key_severity).
+				//
+				// `project set` refuses to write one, so a key here arrives by
+				// hand-editing or predates the planned/planning rename;
+				// `dross project set --unset board.state_map.<key>` clears it.
+				for _, k := range sortedStateMapKeys(b.StateMap) {
+					if !configenum.LifecycleStatuses.Has(k) {
+						Printf("  ✗ [board].state_map.%s is not a lifecycle status (expected %s)\n", k, configenum.LifecycleStatuses.List())
+						Printf("    Fix: dross project set --unset board.state_map.%s\n", k)
+						boardIssues++
+					}
+				}
+
+				warnings = append(warnings, boardCombinationWarnings(b.Provider, b.MilestoneMode, b.AuthUser)...)
+
 				if boardIssues == 0 {
-					Printf("  ✓ [board] is well-formed (%s @ %s)\n", b.Provider, b.BaseURL)
+					if b.BaseURL == "" {
+						Printf("  ✓ [board] is well-formed (%s)\n", b.Provider)
+					} else {
+						Printf("  ✓ [board] is well-formed (%s @ %s)\n", b.Provider, b.BaseURL)
+					}
 				}
 				issues += boardIssues
 				Print("")
@@ -198,6 +256,27 @@ func Doctor() *cobra.Command {
 			}
 			Print("")
 
+			// --- Task statuses ---
+			//
+			// NextRunnable only ever advances a task whose status is one of
+			// pending|in_progress|done|failed (empty meaning pending), so a
+			// hand-edited "Done" or "in-progress" drops that task out of the
+			// loop in total silence. Report it here rather than in `dross
+			// validate`: validate is structural-only and runs in every slash
+			// command's wrap step, where a newly-failing enum check would
+			// break existing repos (locked status_check_home).
+			Print("Task statuses:")
+			if bad := taskStatusIssues(root); len(bad) == 0 {
+				Print("  ✓ every task status is one of pending|in_progress|done|failed")
+			} else {
+				for _, b := range bad {
+					Printf("  ✗ %s\n", b)
+					issues++
+				}
+				Print("    Fix: `dross task status <phase-id> <task-id> <pending|in_progress|done|failed>`.")
+			}
+			Print("")
+
 			// --- Architecture links ---
 			//
 			// ARCHITECTURE.md's `Symbol — file:line` bullets go stale as code
@@ -242,9 +321,90 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues)
+			// --- Cross-field combinations ---
+			//
+			// Collected above, reported here as one advisory block. Each value
+			// involved is individually valid, so none of these touch `issues`;
+			// what they catch is a pairing that only fails once a command runs.
+			if len(warnings) > 0 {
+				Print("Combinations:")
+				for _, w := range warnings {
+					Printf("  ⚠ %s\n", w)
+				}
+				Print("    Advisory only — these never change doctor's exit code.")
+				Print("")
+			}
+
+			return finalizeDoctor(issues, len(warnings))
 		},
 	}
+}
+
+// remoteCombinationWarnings reports [remote] pairings that are individually
+// valid but fail once ship runs. Empty and "none" providers stay silent: they
+// mean "this repo has no remote", not a misconfigured one.
+func remoteCombinationWarnings(provider, authScheme, authUser string) []string {
+	var out []string
+	prov := configenum.Normalize(provider)
+	scheme := configenum.Normalize(authScheme)
+	if prov == "" || prov == "none" {
+		return nil
+	}
+
+	// A provider the tooling happily writes but ship cannot dispatch: the PR
+	// step is the first thing to say so, at the end of a phase.
+	if !configenum.ShipProviders.Has(prov) {
+		out = append(out, fmt.Sprintf("[remote].provider = %q — ship cannot open a PR for it (expected %s); /dross-ship will fail at the PR step", provider, configenum.ShipProviders.List()))
+	}
+
+	// Basic auth is user:token on the wire, so a missing user sends
+	// base64(:token) and 401s on every call — a guaranteed ship failure that
+	// nothing else surfaces until the token looks to blame.
+	if (prov == "bitbucket" || scheme == "basic") && strings.TrimSpace(authUser) == "" {
+		out = append(out, "[remote].auth_user is not set but the credential is HTTP Basic user:token — every ship call will 401")
+	}
+
+	// Only bitbucket dispatches Basic: gitlab falls through to PRIVATE-TOKEN
+	// and github ignores the scheme entirely, so setting it elsewhere is a
+	// silent no-op that reads as configured.
+	if scheme == "basic" && prov != "bitbucket" {
+		out = append(out, fmt.Sprintf("[remote].auth_scheme = basic but the %s backend sends no Basic credential — the setting has no effect", prov))
+	}
+	return out
+}
+
+// boardCombinationWarnings reports [board] pairings that pass every per-field
+// check and still error at the first board op.
+// sortedStateMapKeys returns the [board].state_map keys in a stable order, so
+// a project.toml with several bad keys reports them the same way every run.
+func sortedStateMapKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func boardCombinationWarnings(provider, milestoneMode, authUser string) []string {
+	var out []string
+	prov := configenum.Normalize(provider)
+
+	// A mode outside the provider's own accept-set. Skipped when the mode is
+	// globally invalid (already a hard failure above) or when the provider maps
+	// milestones by some other means and never reads the field at all.
+	if configenum.MilestoneModes.Has(milestoneMode) {
+		if modes := configenum.MilestoneModesFor(prov); modes != nil && !modes.Has(milestoneMode) {
+			out = append(out, fmt.Sprintf("[board].milestone_mode = %q is not supported by the %s backend (expected %s) — milestone sync will error", milestoneMode, prov, modes.List()))
+		}
+	}
+
+	// Jira's REST credential is Basic email:token; auth_env alone authenticates
+	// nothing.
+	if prov == "jira" && strings.TrimSpace(authUser) == "" {
+		out = append(out, "[board].auth_user is not set but Jira authenticates as Basic email:token — board ops will 401")
+	}
+	return out
 }
 
 // architectureLinkWarnings resolves every symbol link in ARCHITECTURE.md against
@@ -289,6 +449,41 @@ func interactionCoverageWarnings(repoDir string) (warnings []string, present boo
 	return warnings, true
 }
 
+// taskStatusIssues walks every phase's plan.toml and returns one line per task
+// whose status is outside the runnable set, each naming both the phase and the
+// task so the offender is addressable without opening the file.
+//
+// A phase directory with no plan.toml is skipped silently — a spec'd but
+// unplanned phase is normal. An unparseable plan.toml is its own issue: it
+// would otherwise be swallowed into a clean ✓, which is the same silence the
+// check exists to remove.
+func taskStatusIssues(root string) []string {
+	ids, err := phase.List(root)
+	if err != nil {
+		return []string{fmt.Sprintf("couldn't list phases: %v", err)}
+	}
+	var out []string
+	for _, id := range ids {
+		planPath := filepath.Join(phase.Dir(root, id), "plan.toml")
+		if _, err := os.Stat(planPath); err != nil {
+			continue
+		}
+		plan, err := phase.LoadPlan(planPath)
+		if err != nil {
+			out = append(out, fmt.Sprintf("phase %s — plan.toml is unreadable: %v", id, err))
+			continue
+		}
+		for _, t := range plan.Task {
+			switch t.Status {
+			case "", phase.StatusPending, phase.StatusInProgress, phase.StatusDone, phase.StatusFailed:
+			default:
+				out = append(out, fmt.Sprintf("phase %s, task %s — unrecognised status %q (want pending|in_progress|done|failed); NextRunnable skips it silently", id, t.ID, t.Status))
+			}
+		}
+	}
+	return out
+}
+
 // looksLikeBoardURL reports whether s is a plausible instance base URL: an
 // absolute http(s) URL with a host. Shape-only — it doesn't dial the host.
 func looksLikeBoardURL(s string) bool {
@@ -300,13 +495,16 @@ func looksLikeBoardURL(s string) bool {
 // appropriate error (or nil) for the issue count. Shared between the
 // foundational-files short-circuit path and the full-check path so the
 // telemetry shape stays consistent.
-func finalizeDoctor(issues int) error {
+//
+// warnings is reported alongside issues and deliberately never folded into it:
+// the exit code answers "is anything invalid", not "is anything suspicious".
+func finalizeDoctor(issues, warnings int) error {
 	result := "passed"
 	if issues > 0 {
 		result = "issues_found"
 	}
 	RecordOutcomeEvent("doctor",
-		map[string]int{"issues": issues},
+		map[string]int{"issues": issues, "warnings": warnings},
 		nil,
 		map[string]string{"result": result},
 	)
@@ -315,6 +513,34 @@ func finalizeDoctor(issues int) error {
 		return nil
 	}
 	return fmt.Errorf("%d project-level issue(s) found", issues)
+}
+
+// incompleteRootHeading opens doctor's incomplete-root block. The block runs
+// from this line to the next blank line and lists exactly LocateRoot's Missing
+// slice — never doctor's wider foundational trio, which also covers rules.toml.
+const incompleteRootHeading = "Not a dross repo — .dross/ is incomplete:"
+
+func printIncompleteRoot(rootMissing []string) {
+	Print(incompleteRootHeading)
+	for _, m := range rootMissing {
+		Printf("  ✗ %s — missing\n", m)
+	}
+	Printf("  → %s\n", RepairHint)
+	Print("")
+}
+
+// finalizeIncompleteRoot is the incomplete-root verdict — deliberately not
+// finalizeDoctor's. A repo missing only rules.toml is repairable in place; one
+// missing project.toml or state.json is not a dross repo, and the two must not
+// read as the same outcome to a human or to telemetry.
+func finalizeIncompleteRoot(rootMissing []string, issues, warnings int) error {
+	RecordOutcomeEvent("doctor",
+		map[string]int{"issues": issues, "warnings": warnings},
+		nil,
+		map[string]string{"result": "incomplete_root"},
+	)
+	return fmt.Errorf("not a dross repo — .dross/ is incomplete, missing %s (%d project-level issue(s) found)",
+		strings.Join(rootMissing, ", "), issues)
 }
 
 // checkFoundationalFiles returns the list of missing foundational files

@@ -1,0 +1,42 @@
+[phase]
+id        = "root-robustness"
+title     = "root-robustness"
+milestone = "v1.1"
+
+[[criteria]]
+id   = "c-1"
+text = "A `.dross/` directory missing project.toml or state.json is reported as 'not a dross repo' — indistinguishable from no `.dross/` at all to callers."
+
+[[criteria]]
+id   = "c-2"
+text = "`dross reentry`, `dross status`, `dross state touch` and `dross pause --auto` exit 0 with no output and no error when run in a repo whose `.dross/` is incomplete."
+
+[[criteria]]
+id   = "c-3"
+text = "A non-hook command run against an incomplete `.dross/` fails with a non-zero exit and a message naming the missing file and the repair command — silent exit 0 is scoped to the hook targets only."
+
+[[criteria]]
+id   = "c-4"
+text = "`/dross-pause` in a repo with no initialised root writes nothing and says so — it does not create `.dross/` or `.dross/handoff.md`."
+
+[[criteria]]
+id   = "c-5"
+text = "`dross doctor` reports an incomplete `.dross/` as a named diagnosis listing which required file is missing, rather than failing to load."
+
+[[decisions]]
+key    = "walk_stop"
+choice = "The up-walk stops at the first `.dross/` directory it finds, complete or not; an incomplete one resolves to not-a-dross-repo rather than continuing to climb."
+why    = "Deterministic, and a stray `.dross/` in a nested repo can never silently bind writes to an ancestor project's real root. FindRoot has no home boundary, so continuing the walk would be unbounded."
+locked = true
+
+[[decisions]]
+key    = "completeness_check"
+choice = "Completeness is an existence check on project.toml and state.json only. A file that exists but fails to parse is a real error, reported loudly everywhere — including in the hook targets."
+why    = "A corrupt file is a broken state, not an uninitialised one. Hiding a truncated state.json behind silent exit 0 would make dross look uninstalled while real work is lost invisibly."
+locked = true
+
+[[decisions]]
+key    = "pause_refusal"
+choice = "`/dross-pause` refuses on both an absent and an incomplete root, using the same not-a-dross-repo signal as c-1. It prints one line naming why and pointing at `dross onboard`, and does not run onboard itself."
+why    = "One concept, not two — the prompt and `dross pause --auto` must agree on what counts as a repo. Naming the repair keeps the refusal actionable without taking an unrequested action."
+locked = true

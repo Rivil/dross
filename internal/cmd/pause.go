@@ -51,19 +51,32 @@ func pauseAuto(now time.Time) error {
 		return err
 	}
 
+	// Render before touching the file: a broken `.dross/` must fail without
+	// leaving a half-written handoff behind, and must leave an existing one
+	// byte-identical.
+	section, err := autoSnapshot(root, now)
+	if err != nil {
+		return err
+	}
+
 	path := filepath.Join(root, "handoff.md")
 	existing, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	merged := mergeAutoSnapshot(existing, autoSnapshot(root, now))
+	merged := mergeAutoSnapshot(existing, section)
 	return os.WriteFile(path, merged, 0o644)
 }
 
 // autoSnapshot renders the full auto-owned section, trailing newline included.
-// Every line degrades gracefully — a missing git repo or unparseable state
-// must never make the PreCompact hook fail a compaction.
-func autoSnapshot(root string, now time.Time) string {
+//
+// Two classes of failure, deliberately handled differently. A missing git repo
+// is an environment fact — every git line degrades to "(no git)" and the hook
+// still writes. A project.toml or state.json that won't decode is *broken
+// state* (locked completeness_check): degrading past it would make the
+// PreCompact hook quietly emit a snapshot with the phase line missing, so it
+// is returned as an error instead.
+func autoSnapshot(root string, now time.Time) (string, error) {
 	repoDir := filepath.Dir(root)
 
 	var b strings.Builder
@@ -77,21 +90,25 @@ func autoSnapshot(root string, now time.Time) string {
 	fmt.Fprintf(&b, "- branch: %s\n", branch)
 	fmt.Fprintf(&b, "- dirty: %s\n", dirtySummary(repoDir))
 
-	st, stErr := state.Load(filepath.Join(root, state.File))
-	if stErr == nil {
-		phase := "(none)"
-		if st.CurrentPhase != "" {
-			phase = st.CurrentPhase
-			if st.CurrentPhaseStatus != "" {
-				phase += " (" + st.CurrentPhaseStatus + ")"
-			}
+	st, err := state.Load(filepath.Join(root, state.File))
+	if err != nil {
+		return "", err
+	}
+	phase := "(none)"
+	if st.CurrentPhase != "" {
+		phase = st.CurrentPhase
+		if st.CurrentPhaseStatus != "" {
+			phase += " (" + st.CurrentPhaseStatus + ")"
 		}
-		fmt.Fprintf(&b, "- phase: %s · v%s\n", phase, st.Version)
 	}
-	if proj, err := project.Load(filepath.Join(root, project.File)); err == nil && stErr == nil {
-		fmt.Fprintf(&b, "- next: %s\n", suggestNext(root, proj, st))
+	fmt.Fprintf(&b, "- phase: %s · v%s\n", phase, st.Version)
+
+	proj, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		return "", err
 	}
-	return b.String()
+	fmt.Fprintf(&b, "- next: %s\n", suggestNext(root, proj, st))
+	return b.String(), nil
 }
 
 // dirtySummary renders `git status --porcelain` as one line: "clean", or a

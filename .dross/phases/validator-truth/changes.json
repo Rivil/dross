@@ -1,0 +1,173 @@
+{
+  "phase": "validator-truth",
+  "pr": 65,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/configenum/configenum.go",
+        "internal/configenum/configenum_test.go"
+      ],
+      "commit": "8a545c1",
+      "completed_at": "2026-07-29T07:10:09.810987Z",
+      "landmarks": [
+        {
+          "feature": "config enum truth",
+          "symbol": "Set",
+          "loc": "internal/configenum/configenum.go:36",
+          "what": "one normalising home for board/ship/auth/milestone enums; Has keys empty-value policy off a per-field default"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/enum_divergence_test.go"
+      ],
+      "commit": "7d668d1",
+      "completed_at": "2026-07-29T08:13:14.234103Z",
+      "landmarks": [
+        {
+          "feature": "config validation",
+          "symbol": "providerSwitchIn",
+          "loc": "internal/cmd/enum_divergence_test.go:59",
+          "what": "go/ast guard failing the build when a dispatch switch, the remote writer map or a milestone_mode consumer diverges from its configenum set"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/project/project.go",
+        "internal/cmd/project.go",
+        "internal/cmd/project_test.go"
+      ],
+      "commit": "b8259d8",
+      "completed_at": "2026-07-29T07:14:38.208165Z",
+      "landmarks": [
+        {
+          "feature": "remote auth config",
+          "symbol": "Remote.AuthUser",
+          "loc": "internal/project/project.go:103",
+          "what": "[remote].auth_user schema field + dotted read/write arms for Basic-auth forges"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/ship/bitbucket.go",
+        "internal/ship/open.go",
+        "internal/ship/bitbucket_test.go"
+      ],
+      "commit": "bd813e5",
+      "completed_at": "2026-07-29T07:23:01.080424Z",
+      "landmarks": [
+        {
+          "feature": "bitbucket ship provider",
+          "symbol": "openBitbucketPR",
+          "loc": "internal/ship/bitbucket.go:122",
+          "what": "Bitbucket Cloud PR creation over HTTP Basic user:token with nested branch payload and links.html.href result"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/ship/comment.go",
+        "internal/ship/merged.go",
+        "internal/ship/bitbucket_comment_test.go"
+      ],
+      "commit": "3736fb5",
+      "completed_at": "2026-07-29T07:50:39.786111Z",
+      "landmarks": [
+        {
+          "feature": "bitbucket ship provider",
+          "symbol": "bitbucketPRMerged",
+          "loc": "internal/ship/merged.go:69",
+          "what": "PR comment (content.raw) and authoritative merged-status (state == MERGED) over Basic auth; both switches normalise via configenum"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "1fe7812",
+      "completed_at": "2026-07-29T08:06:45.086516Z",
+      "landmarks": [
+        {
+          "feature": "bitbucket ship provider",
+          "symbol": "buildOpenOpts",
+          "loc": "internal/cmd/ship.go:27",
+          "what": "remote.auth_user reaches OpenOpts/CommentOpts so Bitbucket's Basic credential is complete at the config-reading layer"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "5e73e88",
+      "completed_at": "2026-07-29T07:32:14.946918Z",
+      "landmarks": [
+        {
+          "feature": "config enum truth",
+          "symbol": "Doctor",
+          "loc": "internal/cmd/doctor.go:117",
+          "what": "doctor validates board/auth/milestone values via configenum Sets instead of inline literals; board base_url optional for github but still parsed when set"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/issue.go",
+        "internal/forge/forge.go",
+        "internal/forge/jira.go",
+        "internal/forge/youtrack.go",
+        "internal/cmd/issue_test.go",
+        "internal/forge/forge_test.go"
+      ],
+      "commit": "26428cb",
+      "completed_at": "2026-07-29T07:41:44.015205Z",
+      "landmarks": [
+        {
+          "feature": "config enum truth",
+          "symbol": "Client.do",
+          "loc": "internal/forge/forge.go:617",
+          "what": "forge/issue dispatch normalises via configenum and Client.do gains the basic scheme with a construction-time auth_user check"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "assets/prompts/init.md",
+        "assets/prompts/onboard.md",
+        "internal/cmd/prompt_provider_list_test.go"
+      ],
+      "commit": "0dc3cc9",
+      "completed_at": "2026-07-29T07:45:10.330815Z",
+      "landmarks": [
+        {
+          "feature": "remote provider detection",
+          "symbol": "TestPromptProviderListsMatchShipProviders",
+          "loc": "internal/cmd/prompt_provider_list_test.go:73",
+          "what": "init/onboard provider bullets pinned to ShipProviders so the writer side cannot drift from dispatch"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "bfe8e8b",
+      "completed_at": "2026-07-29T08:03:04.318641Z",
+      "landmarks": [
+        {
+          "feature": "config validation",
+          "symbol": "remoteCombinationWarnings",
+          "loc": "internal/cmd/doctor.go:288",
+          "what": "doctor reports five runtime-fatal provider/mode/auth pairings as advisory warnings on their own counter, exit code unchanged"
+        }
+      ]
+    }
+  }
+}

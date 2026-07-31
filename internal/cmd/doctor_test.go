@@ -3,10 +3,13 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 func TestSameRemoteURL(t *testing.T) {
@@ -187,6 +190,80 @@ func TestDoctorValidatesBoardBlock(t *testing.T) {
 				t.Errorf("expected ✗ %s line, got:\n%s", tc.want, out)
 			}
 		})
+	}
+}
+
+// TestDoctorFlagsUnknownStateMapKey proves c-4's doctor half: a dead
+// [board].state_map key already on disk is reported as an issue counting
+// toward the non-zero exit, not as a warning (locked state_map_key_severity).
+//
+// The fixture is a complete, otherwise-clean [board] block — valid provider,
+// auth_env exported, valid base_url, valid milestone_mode — so the valid-keys
+// run reaches "✓ [board] is well-formed" and returns nil. Without that, the
+// block errors on provider and auth_env whether the keys are good or bad, the
+// negative control proves nothing, and the positive case cannot attribute its
+// non-nil error to the state_map check.
+func TestDoctorFlagsUnknownStateMapKey(t *testing.T) {
+	const tokenEnv = "DROSS_TEST_STATEMAP_TOKEN"
+
+	run := func(t *testing.T, stateMap string) (string, error) {
+		t.Helper()
+		dir := t.TempDir()
+		gitInit(t, dir, "https://gitlab.com/Rivil/dross.git")
+		chdir(t, dir)
+		if err := runCmd(t, Init()); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		for _, kv := range [][2]string{
+			{"remote.auth_env", tokenEnv},
+			{"board.provider", "youtrack"},
+			{"board.base_url", "https://yt.example.com"},
+			{"board.auth_env", tokenEnv},
+			{"board.project", "PROJ"},
+			{"board.enabled", "true"},
+			{"board.milestone_mode", "version"},
+		} {
+			if err := runCmd(t, Project(), "set", kv[0], kv[1]); err != nil {
+				t.Fatalf("project set %s: %v", kv[0], err)
+			}
+		}
+		t.Setenv(tokenEnv, "secret")
+		// Hand-appended: `project set` now refuses to write a bad key, so a
+		// hand edit is the only way one reaches disk — which is also how the
+		// real ones got there, and why doctor has to see them at all.
+		path := filepath.Join(dir, ".dross", "project.toml")
+		mustWrite(t, path, mustRead(t, path)+"\n[board.state_map]\n"+stateMap+"\n")
+		var out string
+		err := runCmdCapturing(t, &out, Doctor())
+		return out, err
+	}
+
+	clean, cleanErr := run(t, `verifying = "In Review"`)
+	if cleanErr != nil {
+		t.Fatalf("a [board] block with only valid state_map keys must pass; out:\n%s", clean)
+	}
+	if !strings.Contains(clean, "[board] is well-formed") {
+		t.Fatalf("control fixture is not clean — the comparison below would be meaningless:\n%s", clean)
+	}
+
+	bad, badErr := run(t, `planning = "To Do"`)
+	if badErr == nil {
+		t.Errorf("a dead state_map key must count toward the non-zero exit; out:\n%s", bad)
+	}
+	if !strings.Contains(bad, "[board].state_map.planning") {
+		t.Errorf("no ✗ line names the offending key (err=%v):\n%s", badErr, bad)
+	}
+	// Naming the fault is not enough — `project set` refuses to write such a
+	// key, so doctor has to name the one call that removes it, or it reports a
+	// fault with no visible repair.
+	if !strings.Contains(bad, "dross project set --unset board.state_map.planning") {
+		t.Errorf("no repair line for the dead key:\n%s", bad)
+	}
+	if got, want := strings.Count(bad, "✗"), strings.Count(clean, "✗")+1; got != want {
+		t.Errorf("✗ lines: %d, want %d — the two runs must differ by exactly the state_map line\nclean:\n%s\nbad:\n%s", got, want, clean, bad)
+	}
+	if got, want := strings.Count(bad, "⚠"), strings.Count(clean, "⚠"); got != want {
+		t.Errorf("warning tally changed (%d vs %d) — a dead key is an issue, not a warning", got, want)
 	}
 }
 
@@ -683,4 +760,680 @@ func TestDoctorCover_PhaseHygieneBranches(t *testing.T) {
 			t.Errorf("the phase-hygiene error path is advisory and must not add an issue; got err=%v\n%s", err, out)
 		}
 	})
+}
+
+// --- configenum-backed enum checks (phase validator-truth) ---
+
+// runDoctorEnum inits a repo with a well-formed youtrack [board] baseline,
+// applies overrides, and runs doctor. An override with an empty value means
+// "leave this field unset" rather than "set it to the empty string", so the
+// optional-base_url cases can be expressed.
+func runDoctorEnum(t *testing.T, overrides map[string]string) (string, error) {
+	t.Helper()
+	const tokenEnv = "DROSS_TEST_ENUM_TOKEN"
+	dir := t.TempDir()
+	gitInit(t, dir, "https://gitlab.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	fields := map[string]string{
+		"remote.auth_env":      tokenEnv,
+		"board.provider":       "youtrack",
+		"board.base_url":       "https://yt.example.com",
+		"board.auth_env":       tokenEnv,
+		"board.project":        "PROJ",
+		"board.enabled":        "true",
+		"board.milestone_mode": "version",
+	}
+	for k, v := range overrides {
+		if v == "" {
+			delete(fields, k)
+			continue
+		}
+		fields[k] = v
+	}
+	for k, v := range fields {
+		if err := runCmd(t, Project(), "set", k, v); err != nil {
+			t.Fatalf("project set %s: %v", k, err)
+		}
+	}
+	t.Setenv(tokenEnv, "secret")
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	return out, err
+}
+
+// The c-1 regression: doctor rejected jira and github outright, so a board the
+// CLI dispatches happily could not pass its own validator. Driving the loop off
+// BoardProviders means a seventh backend added without teaching doctor fails
+// here rather than in the user's terminal.
+func TestDoctorAcceptsEveryDispatchableBoardProvider(t *testing.T) {
+	for _, provider := range configenum.BoardProviders.Values() {
+		t.Run(provider, func(t *testing.T) {
+			out, err := runDoctorEnum(t, map[string]string{"board.provider": provider})
+			if err != nil {
+				t.Errorf("doctor rejects a dispatchable board provider %q:\n%s", provider, out)
+			}
+			if strings.Contains(out, "provider = ") && strings.Contains(out, "is invalid") {
+				t.Errorf("provider %q reported invalid:\n%s", provider, out)
+			}
+		})
+	}
+}
+
+func TestDoctorBoardBaseURLOptionalForGitHub(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"board.provider": "github",
+		"board.base_url": "", // unset
+	})
+	if err != nil {
+		t.Errorf("a github board needs no base_url (the backend defaults to api.github.com):\n%s", out)
+	}
+
+	// The relaxation must not leak: every other backend is self-hosted or
+	// per-tenant and has no address to guess.
+	out, err = runDoctorEnum(t, map[string]string{
+		"board.provider": "youtrack",
+		"board.base_url": "", // unset
+	})
+	if err == nil {
+		t.Errorf("a youtrack board with no base_url must still fail:\n%s", out)
+	}
+	if !strings.Contains(out, "base_url") {
+		t.Errorf("expected a base_url line:\n%s", out)
+	}
+}
+
+// Optional is not unvalidated. Implementing the github relaxation by skipping
+// the whole URL branch would silently accept a malformed value.
+func TestDoctorGitHubMalformedBaseURLStillFails(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"board.provider": "github",
+		"board.base_url": "not-a-url",
+	})
+	if err == nil {
+		t.Errorf("a set-but-malformed github base_url must fail:\n%s", out)
+	}
+	if !strings.Contains(out, "base_url") {
+		t.Errorf("expected a base_url line:\n%s", out)
+	}
+}
+
+// BoardProviders carries no default, so Set.Has("") is false for it — the guard
+// against a uniformly-true empty policy leaking in from AuthSchemes.
+func TestDoctorRejectsEmptyBoardProvider(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{"board.provider": ""})
+	if err == nil {
+		t.Errorf("an unset [board].provider dispatches nowhere and must fail:\n%s", out)
+	}
+	if !strings.Contains(out, "provider") || !strings.Contains(out, "invalid") {
+		t.Errorf("expected an invalid-provider line:\n%s", out)
+	}
+}
+
+// doctor must be exactly as forgiving as the consumers: forge lowercases and
+// trims before matching, so a capitalised or padded mode is legal downstream.
+func TestDoctorNormalisesMilestoneMode(t *testing.T) {
+	for _, mode := range []string{"version", "Version", " version", "EPIC", "\tagile "} {
+		out, err := runDoctorEnum(t, map[string]string{
+			"board.milestone_mode": mode,
+			// epic/agile are youtrack modes; the baseline provider is youtrack.
+		})
+		if err != nil {
+			t.Errorf("milestone_mode %q rejected but accepted by the consumer:\n%s", mode, out)
+		}
+	}
+	out, err := runDoctorEnum(t, map[string]string{"board.milestone_mode": "bogus"})
+	if err == nil {
+		t.Errorf("a genuinely unknown milestone_mode must still fail:\n%s", out)
+	}
+	if !strings.Contains(out, configenum.MilestoneModes.List()) {
+		t.Errorf("message must be derived from MilestoneModes:\n%s", out)
+	}
+}
+
+func TestDoctorNormalisesAuthScheme(t *testing.T) {
+	for _, scheme := range []string{"private-token", "bearer", "basic", " Basic", "BEARER\t"} {
+		out, err := runDoctorEnum(t, map[string]string{"remote.auth_scheme": scheme})
+		if err != nil {
+			t.Errorf("auth_scheme %q rejected:\n%s", scheme, out)
+		}
+	}
+	out, err := runDoctorEnum(t, map[string]string{"remote.auth_scheme": "token"})
+	if err == nil {
+		t.Errorf("an unknown auth_scheme must still fail:\n%s", out)
+	}
+	if !strings.Contains(out, configenum.AuthSchemes.List()) {
+		t.Errorf("message must list %q, got:\n%s", configenum.AuthSchemes.List(), out)
+	}
+}
+
+// A partial migration — one switch left behind while the message is already
+// derived — is the failure this pins. It forbids accept-set literals (the
+// pipe-joined message strings and multi-provider case lines), not every mention
+// of a provider name: single-provider cross-field checks are legitimate.
+func TestDoctorCarriesNoProviderLiterals(t *testing.T) {
+	path := filepath.Join(repoRootFromTest(t), "internal", "cmd", "doctor.go")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(raw)
+
+	if !strings.Contains(src, "configenum.") {
+		t.Fatal("doctor.go does not reference configenum at all")
+	}
+	for _, set := range []configenum.Set{
+		configenum.BoardProviders,
+		configenum.ShipProviders,
+		configenum.AuthSchemes,
+		configenum.MilestoneModes,
+	} {
+		if strings.Contains(src, set.List()) {
+			t.Errorf("doctor.go hand-types the accept-set %q; derive it from configenum", set.List())
+		}
+	}
+	// The switch shape the migration replaced.
+	for _, lit := range []string{`case "forgejo"`, `case "youtrack"`, `case "", "version"`} {
+		if strings.Contains(src, lit) {
+			t.Errorf("doctor.go still carries a literal enum switch: %s", lit)
+		}
+	}
+}
+
+// --- cross-field combination warnings (phase validator-truth, c-5 + c-6) ---
+
+// jira maps a milestone to a fixVersion and errors on anything else, so
+// milestone_mode = epic is a guaranteed runtime failure that every per-field
+// check passes: epic is a real mode, jira is a real provider.
+func TestDoctorWarnsJiraEpicCombination(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"board.provider":       "jira",
+		"board.auth_user":      "me@example.com",
+		"board.milestone_mode": "epic",
+	})
+	if err != nil {
+		t.Errorf("a combination warning must not change the exit code:\n%s", out)
+	}
+	if !strings.Contains(out, "milestone_mode") || !strings.Contains(out, "⚠") {
+		t.Errorf("expected a milestone_mode combination warning:\n%s", out)
+	}
+
+	// youtrack accepts every mode, so the same value there is not a warning.
+	// Warning on it would train the user to ignore the section.
+	out, err = runDoctorEnum(t, map[string]string{
+		"board.provider":       "youtrack",
+		"board.milestone_mode": "epic",
+	})
+	if err != nil {
+		t.Fatalf("youtrack + epic is a valid combination:\n%s", out)
+	}
+	if strings.Contains(out, "Combinations:") {
+		t.Errorf("youtrack accepts epic — no warning expected:\n%s", out)
+	}
+}
+
+// The regression guard for the locked new_check_severity decision. doctor's
+// exit code gates CI and pre-push hooks; an `issues++` here would start
+// breaking repos that work today.
+func TestDoctorCombinationWarningKeepsExitZero(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"board.provider":       "jira",
+		"board.milestone_mode": "epic",
+	})
+	if err != nil {
+		t.Fatalf("combination warnings must keep exit 0, got err=%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Combinations:") {
+		t.Fatalf("the warning did not fire, so this proves nothing:\n%s", out)
+	}
+	if !strings.Contains(out, "All project-level checks passed.") {
+		t.Errorf("a warnings-only run must still report as passed:\n%s", out)
+	}
+}
+
+// Jira authenticates as Basic email:token — auth_env alone authenticates
+// nothing, and the 401 that follows reads as a bad token.
+func TestDoctorWarnsJiraMissingAuthUser(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{"board.provider": "jira"})
+	if err != nil {
+		t.Errorf("a missing board.auth_user is a warning, not a failure:\n%s", out)
+	}
+	if !strings.Contains(out, "[board].auth_user") {
+		t.Errorf("expected a board.auth_user warning:\n%s", out)
+	}
+
+	out, _ = runDoctorEnum(t, map[string]string{
+		"board.provider":  "jira",
+		"board.auth_user": "me@example.com",
+	})
+	if strings.Contains(out, "[board].auth_user") {
+		t.Errorf("a configured auth_user must silence the warning:\n%s", out)
+	}
+}
+
+// c-6's writer side: the tooling writes [remote].provider from the git origin,
+// so a host ship cannot dispatch is written happily and only surfaces at the
+// PR step, at the end of a phase.
+func TestDoctorWarnsUnshippableRemoteProvider(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{"remote.provider": "sourcehut"})
+	if err != nil {
+		t.Errorf("an unshippable provider is a warning, not a failure:\n%s", out)
+	}
+	if !strings.Contains(out, "cannot open a PR") {
+		t.Errorf("expected an unshippable-provider warning:\n%s", out)
+	}
+
+	// bitbucket is dispatchable now — warning on it would be the exact lie
+	// this phase exists to remove.
+	out, _ = runDoctorEnum(t, map[string]string{"remote.provider": "bitbucket"})
+	if strings.Contains(out, "cannot open a PR") {
+		t.Errorf("bitbucket is a dispatchable provider:\n%s", out)
+	}
+
+	// "none" is the no-remote sentinel, not a broken backend.
+	out, _ = runDoctorEnum(t, map[string]string{"remote.provider": "none"})
+	if strings.Contains(out, "Combinations:") {
+		t.Errorf("the none sentinel must stay silent:\n%s", out)
+	}
+
+	// An unset provider likewise. runDoctorEnum cannot express "set to empty",
+	// so the empty case is asserted against the check directly.
+	if w := remoteCombinationWarnings("", "", ""); len(w) != 0 {
+		t.Errorf("an unset remote provider must stay silent, got: %v", w)
+	}
+}
+
+// Basic auth is user:token on the wire. Without the user half it sends
+// base64(:token) and 401s on every ship — guaranteed, not merely suspicious.
+func TestDoctorWarnsBasicAuthMissingAuthUser(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{"remote.provider": "bitbucket"})
+	if err != nil {
+		t.Errorf("a missing remote.auth_user is a warning, not a failure:\n%s", out)
+	}
+	if !strings.Contains(out, "[remote].auth_user") {
+		t.Errorf("bitbucket with no auth_user must warn:\n%s", out)
+	}
+
+	// The scheme reaches the same conclusion independently of the provider.
+	out, _ = runDoctorEnum(t, map[string]string{"remote.auth_scheme": "basic"})
+	if !strings.Contains(out, "[remote].auth_user") {
+		t.Errorf("auth_scheme = basic with no auth_user must warn:\n%s", out)
+	}
+
+	out, _ = runDoctorEnum(t, map[string]string{
+		"remote.provider":  "bitbucket",
+		"remote.auth_user": "wsuser",
+	})
+	if strings.Contains(out, "[remote].auth_user") {
+		t.Errorf("a configured auth_user must silence the warning:\n%s", out)
+	}
+}
+
+// Only bitbucket dispatches Basic — gitlab falls through to PRIVATE-TOKEN and
+// github ignores the scheme entirely. Today this pairing passes doctor clean
+// and 401s on every ship.
+func TestDoctorWarnsBasicOnNonBitbucketRemote(t *testing.T) {
+	out, err := runDoctorEnum(t, map[string]string{
+		"remote.auth_scheme": "basic",
+		"remote.auth_user":   "someone", // isolate the scheme/provider pairing
+	})
+	if err != nil {
+		t.Errorf("a no-op auth_scheme is a warning, not a failure:\n%s", out)
+	}
+	if !strings.Contains(out, "no Basic credential") {
+		t.Errorf("basic on a gitlab remote must warn:\n%s", out)
+	}
+
+	out, _ = runDoctorEnum(t, map[string]string{
+		"remote.provider":    "bitbucket",
+		"remote.auth_scheme": "basic",
+		"remote.auth_user":   "wsuser",
+	})
+	if strings.Contains(out, "no Basic credential") {
+		t.Errorf("bitbucket is exactly where basic belongs:\n%s", out)
+	}
+}
+
+// The soft class must not soften the hard one: a value no consumer can
+// dispatch at all still exits non-zero, so CI and pre-push hooks keep working.
+func TestDoctorHardFailureStillNonZero(t *testing.T) {
+	cases := map[string]map[string]string{
+		"invalid milestone_mode": {"board.milestone_mode": "bogus"},
+		"invalid auth_scheme":    {"remote.auth_scheme": "token"},
+		"invalid board provider": {"board.provider": "trello"},
+	}
+	for name, overrides := range cases {
+		t.Run(name, func(t *testing.T) {
+			out, err := runDoctorEnum(t, overrides)
+			if err == nil {
+				t.Errorf("a genuinely invalid value must exit non-zero:\n%s", out)
+			}
+			if !strings.Contains(out, "✗") {
+				t.Errorf("expected a hard-failure line:\n%s", out)
+			}
+		})
+	}
+}
+
+// incompleteRootBlock extracts doctor's incomplete-root block — the lines from
+// its heading to the next blank line — and returns the file paths it lists.
+// Scoping to the block matters: on a project.toml-only fixture the wider
+// foundational-trio block also names rules.toml, which is deliberately not
+// part of root completeness.
+func incompleteRootBlock(t *testing.T, out string) []string {
+	t.Helper()
+	idx := strings.Index(out, incompleteRootHeading)
+	if idx < 0 {
+		t.Fatalf("doctor output has no incomplete-root block:\n%s", out)
+	}
+	var files []string
+	for _, line := range strings.Split(out[idx:], "\n")[1:] {
+		if strings.TrimSpace(line) == "" {
+			break
+		}
+		if !strings.HasPrefix(line, "  ✗ ") {
+			continue
+		}
+		files = append(files, strings.TrimSuffix(strings.TrimPrefix(line, "  ✗ "), " — missing"))
+	}
+	return files
+}
+
+// TestDoctorDiagnosesIncompleteRoot (c-5): an incomplete `.dross/` reaches the
+// diagnosis instead of dying at root resolution. Leaving doctor on FindRoot
+// prints nothing and fails both halves.
+func TestDoctorDiagnosesIncompleteRoot(t *testing.T) {
+	dir := realTempDir(t)
+	mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err == nil {
+		t.Fatal("doctor should report an issue on an incomplete root")
+	}
+	if !strings.Contains(out, "✗ .dross/state.json — missing") {
+		t.Errorf("output should name the missing file:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "project-level issue") {
+		t.Errorf("verdict should name a project-level issue, got %v", err)
+	}
+}
+
+// TestDoctorNamesEveryRootMiss: a short-circuit after the first miss fails the
+// second needle.
+func TestDoctorNamesEveryRootMiss(t *testing.T) {
+	dir := realTempDir(t)
+	root := mkRoot(t, dir)
+	if err := os.WriteFile(filepath.Join(root, "rules.toml"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Fatal("doctor should report issues when both root files are missing")
+	}
+	for _, want := range []string{".dross/project.toml", ".dross/state.json"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output should name %s:\n%s", want, out)
+		}
+	}
+}
+
+// TestDoctorIncompleteRootVerdictIsDistinct: an ordinary repairable issue (a
+// missing rules.toml) and an incomplete root must not collapse into the same
+// verdict — the first is fixable in place, the second means this isn't a dross
+// repo at all.
+func TestDoctorIncompleteRootVerdictIsDistinct(t *testing.T) {
+	repairable := realTempDir(t)
+	chdir(t, repairable)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(repairable, ".dross", "rules.toml")); err != nil {
+		t.Fatal(err)
+	}
+	var repairableOut string
+	repairableErr := runCmdCapturing(t, &repairableOut, Doctor())
+	if repairableErr == nil {
+		t.Fatal("doctor should report the missing rules.toml")
+	}
+	if strings.Contains(repairableOut, incompleteRootHeading) {
+		t.Errorf("a missing rules.toml is not an incomplete root:\n%s", repairableOut)
+	}
+
+	incomplete := realTempDir(t)
+	mkRoot(t, incomplete, "project.toml")
+	chdir(t, incomplete)
+	incompleteErr := runCmdCapturing(t, new(string), Doctor())
+	if incompleteErr == nil {
+		t.Fatal("doctor should report the incomplete root")
+	}
+
+	if repairableErr.Error() == incompleteErr.Error() {
+		t.Errorf("both verdicts read identically: %q", repairableErr)
+	}
+}
+
+// TestDoctorMissingFileLineCarriesBothHints: doctor and root.go must not drift
+// to two repair strings, and the pre-existing `dross ship recover` sentence has
+// to survive alongside RepairHint on the same line — replacing rather than
+// appending fails this.
+func TestDoctorMissingFileLineCarriesBothHints(t *testing.T) {
+	dir := realTempDir(t)
+	mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Fatal("doctor should report an issue on an incomplete root")
+	}
+	if !strings.Contains(out, RepairHint) {
+		t.Errorf("output should contain RepairHint verbatim:\n%s", out)
+	}
+	var found bool
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "dross ship recover") && strings.Contains(line, RepairHint) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no missing-file line carries both the recover sentence and RepairHint:\n%s", out)
+	}
+}
+
+// TestDoctorIncompleteRootBlockMatchesLocateRoot: the block lists exactly
+// LocateRoot's Missing slice. The fixture is chosen so the two differ — the
+// foundational trio also flags rules.toml — which is what makes the equality
+// meaningful rather than accidental.
+func TestDoctorIncompleteRootBlockMatchesLocateRoot(t *testing.T) {
+	dir := realTempDir(t)
+	mkRoot(t, dir, "project.toml")
+	chdir(t, dir)
+
+	_, want, err := LocateRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Fatal("doctor should report an issue on an incomplete root")
+	}
+	got := incompleteRootBlock(t, out)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("incomplete-root block lists %v, LocateRoot reports %v", got, want)
+	}
+	if strings.Contains(strings.Join(got, ","), "rules.toml") {
+		t.Errorf("rules.toml is doctor's trio, not root completeness: %v", got)
+	}
+}
+
+// doctorTokenEnv is the token the scaffold both configures and exports. The
+// helper writes remote.auth_env explicitly instead of keeping whatever
+// ~/.claude/dross/defaults.toml suggested — inheriting it is what made these
+// tests red on any host that did not happen to export that particular token.
+const doctorTokenEnv = "DROSS_TEST_DOCTOR_TOKEN"
+
+// scaffoldDoctorRepo builds a git-backed dross repo whose remote matches, so
+// doctor's other sections stay quiet and the task-status verdict is the only
+// thing moving the exit code.
+func scaffoldDoctorRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	// Silence the unrelated baseline issues so the exit code tracks the
+	// task-status verdict alone. auth_env is set, not inherited: the seeded
+	// value comes from the global defaults, which this suite must not read.
+	t.Setenv(doctorTokenEnv, "x")
+	mustRunSet(t, "remote.auth_env", doctorTokenEnv)
+	mustRunSet(t, "project.name", "x")
+	mustRunSet(t, "runtime.mode", "native")
+	if err := runCmd(t, Doctor()); err != nil {
+		t.Fatalf("baseline repo is not doctor-clean: %v", err)
+	}
+	return dir
+}
+
+// writePlan drops a plan.toml (and the spec.toml beside it) into a phase dir.
+func writeStatusPlan(t *testing.T, phaseID, body string) {
+	t.Helper()
+	dir := filepath.Join(".dross", "phases", phaseID)
+	mustWrite(t, filepath.Join(dir, "spec.toml"), `[phase]
+id = "`+phaseID+`"
+title = "test"
+[[criteria]]
+id = "c-1"
+text = "x"
+`)
+	mustWrite(t, filepath.Join(dir, "plan.toml"), body)
+}
+
+func planWithStatus(phaseID, status string) string {
+	body := `[phase]
+id = "` + phaseID + `"
+[[task]]
+id = "t-1"
+wave = 1
+title = "x"
+files = ["a.go"]
+covers = ["c-1"]
+`
+	if status != "" {
+		body += "status = \"" + status + "\"\n"
+	}
+	return body
+}
+
+func TestDoctorFlagsUnrecognisedTaskStatus(t *testing.T) {
+	// "Done" and "in-progress" are exactly the near-misses NextRunnable
+	// skips in silence today.
+	for _, bad := range []string{"Done", "in-progress"} {
+		t.Run(bad, func(t *testing.T) {
+			scaffoldDoctorRepo(t)
+			writeStatusPlan(t, "01-test", planWithStatus("01-test", bad))
+
+			var out string
+			err := runCmdCapturing(t, &out, Doctor())
+			if err == nil {
+				t.Fatalf("doctor exited 0 with task status %q", bad)
+			}
+			var line string
+			for _, l := range strings.Split(out, "\n") {
+				if strings.Contains(l, bad) {
+					line = l
+					break
+				}
+			}
+			if line == "" {
+				t.Fatalf("no line mentions status %q:\n%s", bad, out)
+			}
+			if !strings.Contains(line, "01-test") || !strings.Contains(line, "t-1") {
+				t.Errorf("line %q must name both the phase and the task id", line)
+			}
+			// The issue must gate the exit code, not sit in the advisory
+			// warnings block.
+			if !strings.Contains(err.Error(), "issue(s) found") {
+				t.Errorf("error = %v, want it counted as a project-level issue", err)
+			}
+		})
+	}
+}
+
+func TestDoctorAcceptsEveryRunnableTaskStatus(t *testing.T) {
+	// "" means the status field is omitted — pending everywhere else in the
+	// code, so it must not be reported here either.
+	for _, ok := range []string{"", "pending", "in_progress", "done", "failed"} {
+		t.Run("status="+ok, func(t *testing.T) {
+			scaffoldDoctorRepo(t)
+			writeStatusPlan(t, "01-test", planWithStatus("01-test", ok))
+
+			var out string
+			err := runCmdCapturing(t, &out, Doctor())
+			if err != nil {
+				t.Errorf("doctor errored on a valid status %q: %v\n%s", ok, err, out)
+			}
+			if !strings.Contains(out, "✓ every task status is") {
+				t.Errorf("status %q did not get a clean verdict:\n%s", ok, out)
+			}
+		})
+	}
+}
+
+func TestDoctorSkipsPhaseDirWithNoPlan(t *testing.T) {
+	scaffoldDoctorRepo(t)
+	// Spec'd but not yet planned — normal, and must not derail the section.
+	mustWrite(t, filepath.Join(".dross", "phases", "01-unplanned", "spec.toml"), `[phase]
+id = "01-unplanned"
+title = "t"
+[[criteria]]
+id = "c-1"
+text = "x"
+`)
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+		t.Errorf("doctor errored on a phase with no plan.toml: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "✓ every task status is") {
+		t.Errorf("doctor did not reach the task-status verdict:\n%s", out)
+	}
+}
+
+func TestDoctorReportsUnparseablePlan(t *testing.T) {
+	scaffoldDoctorRepo(t)
+	writeStatusPlan(t, "01-test", "[phase\nthis is not toml\n")
+
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err == nil {
+		t.Fatal("doctor exited 0 on an unparseable plan.toml")
+	}
+	if strings.Contains(out, "✓ every task status is") {
+		t.Errorf("unparseable plan was swallowed into a clean verdict:\n%s", out)
+	}
+	if !strings.Contains(out, "01-test") {
+		t.Errorf("the report does not name the phase:\n%s", out)
+	}
+}
+
+// TestValidateIgnoresTaskStatus pins status_check_home: the enum check is
+// doctor's, and validate — which runs in every slash command's wrap step —
+// must stay structural-only.
+func TestValidateIgnoresTaskStatus(t *testing.T) {
+	scaffoldDoctorRepo(t)
+	writeStatusPlan(t, "01-test", planWithStatus("01-test", "Done"))
+
+	if err := runCmd(t, Validate()); err != nil {
+		t.Errorf("dross validate rejected an unrecognised task status: %v", err)
+	}
+	if err := runCmd(t, Doctor()); err == nil {
+		t.Error("doctor accepted it too — the check landed nowhere")
+	}
 }

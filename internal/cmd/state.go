@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -18,12 +20,13 @@ func State() *cobra.Command {
 		Use:   "state",
 		Short: "Read and edit .dross/state.json",
 	}
-	c.AddCommand(stateShow(), stateSet(), stateTouch(), stateBump())
+	c.AddCommand(stateShow(), stateGet(), stateSet(), stateTouch(), stateBump())
 	return c
 }
 
 func stateShow() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	c := &cobra.Command{
 		Use:   "show",
 		Short: "Print state.json",
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -37,6 +40,51 @@ func stateShow() *cobra.Command {
 			return nil
 		},
 	}
+	// state.json is already what this prints, so --json is accepted and
+	// changes nothing. It exists because callers reach for it by analogy with
+	// every other --json in the tree, and an unknown-flag error there is pure
+	// friction.
+	c.Flags().BoolVar(&asJSON, "json", false, "accepted for symmetry; state show always emits JSON")
+	return c
+}
+
+// stateGet reads one or more fields out of state.json. One path prints its
+// bare value; two or more emit a keyed JSON object (locked multi_get_shape).
+func stateGet() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <field>...",
+		Short: "Print one or more state fields (multiple emit a keyed JSON object)",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			s, _, err := loadState()
+			if err != nil {
+				return err
+			}
+			return renderMultiGet(args, func(path string) (any, error) {
+				return readStateDotted(s, path)
+			})
+		},
+	}
+}
+
+// readStateDotted covers every readable field in state.json. The paths are
+// bare, matching `state set <field>` — state.json has no nested tables.
+func readStateDotted(s *state.State, path string) (any, error) {
+	switch path {
+	case "version":
+		return s.Version, nil
+	case "current_milestone":
+		return s.CurrentMilestone, nil
+	case "current_phase":
+		return s.CurrentPhase, nil
+	case "current_phase_status":
+		return s.CurrentPhaseStatus, nil
+	case "last_action":
+		return s.LastAction, nil
+	case "last_activity":
+		return s.LastActivity.Format(time.RFC3339Nano), nil
+	}
+	return nil, fmt.Errorf("unknown field: %s", path)
 }
 
 func stateSet() *cobra.Command {
@@ -75,6 +123,15 @@ func stateTouch() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			s, path, err := loadState()
 			if err != nil {
+				// Hook target (c-2): slash commands stamp activity from
+				// wherever they run, so "not a dross repo" is a silent exit 0
+				// and writes nothing. Scoped to this handler on purpose —
+				// putting it in loadState() would silence `state show` / `set`
+				// / `bump` too, and a corrupt state.json (not ErrNoRoot) stays
+				// loud here as well (locked completeness_check).
+				if errors.Is(err, ErrNoRoot) {
+					return nil
+				}
 				return err
 			}
 			s.Touch(args[0])

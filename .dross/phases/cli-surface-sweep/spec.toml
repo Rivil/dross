@@ -1,0 +1,75 @@
+[phase]
+  id = "cli-surface-sweep"
+  title = "cli-surface-sweep"
+  milestone = "v1.1"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross task list` prints every task in a phase plan — id, wave, status and title — so the plan is readable without opening plan.toml, by a human at a terminal and by a script."
+
+[[criteria]]
+  id = "c-2"
+  text = "A subcommand or flag that does not exist fails with an error naming the working invocation — covering `task done`, `phase create --title`, `task edit --files` and `security run --new`."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross state show --json` is accepted and prints state.json, instead of failing with an unknown-flag error."
+
+[[criteria]]
+  id = "c-4"
+  text = "`dross project get`, `dross milestone get` and `dross state get` each read several dotted paths in one call and return them as a single keyed object; a one-path call still prints its bare value unchanged."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross milestone set status <value>` resolves an unambiguous bare field name to its full dotted path, and a milestone status outside the known set is rejected rather than written."
+
+[[criteria]]
+  id = "c-6"
+  text = "Every `[board]` field the code reads is settable through `dross project set` — including `board.github_project` and individual `board.state_map.<status>` entries."
+
+[[criteria]]
+  id = "c-7"
+  text = "`dross doctor` reports a task whose status is not one of pending|in_progress|done|failed, naming the phase and task id, so a hand-edited plan.toml cannot silently drop a task out of NextRunnable."
+
+[[criteria]]
+  id = "c-8"
+  text = "An unknown subcommand or flag with no curated hint still names the nearest existing one, so a plain typo is self-correcting."
+
+[[criteria]]
+  id = "c-9"
+  text = "A field written by mistake is removable through the CLI — `dross project set --unset <path>` clears a scalar or a single `board.state_map` entry without hand-editing TOML."
+
+[[decisions]]
+  key = "hint_mechanism"
+  choice = "A curated table of known mis-reaches to their working invocation is consulted first; string-distance matching over the Cobra command and flag tree is the fallback when the table has no entry."
+  why = "`task done` -> `task status <id> done` is a semantic remap that string distance can never find, but a fallback still self-corrects plain typos the table does not anticipate."
+  locked = true
+
+[[decisions]]
+  key = "multi_get_shape"
+  choice = "A single dotted path prints its bare value exactly as today; two or more paths emit one keyed JSON object. Applies to project, milestone and state get."
+  why = "Every existing caller and prompt passes one path, so keeping that shape byte-identical means no migration and no broken orientation step."
+  locked = true
+
+[[decisions]]
+  key = "task_list_output"
+  choice = "Aligned human-readable table by default with a `--json` flag for machines; the phase-id argument is optional and defaults to state.current_phase."
+  why = "Matches how `phase list` and `deferred list` already behave, and the phase-id is redundant while a phase is in progress."
+  locked = true
+
+[[decisions]]
+  key = "state_map_write"
+  choice = "Each `board.state_map` entry is addressed as its own dotted path — `board.state_map.<status>` — rather than a whole-map assignment or new flags."
+  why = "Fits the existing `project set <path> <value>` grammar unchanged, reads back symmetrically through `project get`, and never clobbers unlisted entries."
+  locked = true
+
+[[decisions]]
+  key = "status_check_home"
+  choice = "The unrecognised-task-status check lives in `dross doctor`, not `dross validate`."
+  why = "validator-truth locked doctor as the only enum-enforcing validator and validate as structural-only, because validate runs in every slash command's wrap step and must not newly fail existing repos."
+  locked = true
+
+[[deferred]]
+  text = "Apply `--json` uniformly to every `dross ... show` command (project, milestone and phase emit TOML today, so it is an output-format conversion rather than a flag)"
+  why = "c-3 only needs `state show --json`, which already emits JSON; converting the TOML-emitting show commands is a materially larger change"
+  target = "board-state-map-truth"

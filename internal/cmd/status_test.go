@@ -15,15 +15,54 @@ import (
 // pins the next: suggestion logic at one stage so the heuristic in
 // suggestNext doesn't drift silently.
 
-func TestStatusFreshDirSuggestsInit(t *testing.T) {
-	chdir(t, t.TempDir())
-	out := captureStdout(t, func() {
-		err := runCmd(t, Status())
-		if err == nil {
-			t.Error("expected ErrNoRoot for bare dir")
-		}
-	})
-	_ = out // FindRoot fails before any output; main thing is the error
+// TestStatusSilentOnNonRoot (c-2) pins status as a hook target: in a directory
+// that isn't a dross repo it exits 0 and prints nothing. Absent and incomplete
+// are one signal, so both rows must behave identically — a fix that prints a
+// header before bailing fails on the empty-stdout half.
+func TestStatusSilentOnNonRoot(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, dir string)
+	}{
+		{"bare dir", func(*testing.T, string) {}},
+		{"incomplete .dross", func(t *testing.T, dir string) { mkRoot(t, dir, "project.toml") }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := realTempDir(t)
+			tc.setup(t, dir)
+			chdir(t, dir)
+
+			var err error
+			out := captureStdout(t, func() { err = runCmd(t, Status()) })
+			if err != nil {
+				t.Errorf("status should exit 0 outside a dross repo, got %v", err)
+			}
+			if out != "" {
+				t.Errorf("status should print nothing outside a dross repo, got:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestStatusLoudOnCorruptState (locked completeness_check): a present but
+// unparseable state.json is broken state, not an uninitialised repo — status
+// must say so. A swallow-everything fix passes every row above and dies here.
+func TestStatusLoudOnCorruptState(t *testing.T) {
+	dir := realTempDir(t)
+	root := mkRoot(t, dir, "project.toml")
+	if err := os.WriteFile(filepath.Join(root, "state.json"), []byte("{{{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+
+	err := runCmd(t, Status())
+	if err == nil {
+		t.Fatal("status should fail loudly on a corrupt state.json")
+	}
+	if !strings.Contains(err.Error(), "state.json") {
+		t.Errorf("error should name state.json, got %v", err)
+	}
 }
 
 func TestStatusAfterInitSuggestsCompleteProject(t *testing.T) {

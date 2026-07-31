@@ -18,22 +18,22 @@ import (
 )
 
 type Milestone struct {
-	Milestone Meta     `toml:"milestone"`
-	Scope     Scope    `toml:"scope"`
-	Phases    []string `toml:"phases"` // phase ids in delivery order
+	Milestone Meta     `toml:"milestone" json:"milestone"`
+	Scope     Scope    `toml:"scope" json:"scope"`
+	Phases    []string `toml:"phases" json:"phases"` // phase ids in delivery order
 }
 
 type Meta struct {
-	Version string `toml:"version"` // e.g. "v1.0"
-	Title   string `toml:"title,omitempty"`
-	Status  string `toml:"status,omitempty"` // planning | active | shipped | archived
-	Started string `toml:"started,omitempty"`
-	Shipped string `toml:"shipped,omitempty"`
+	Version string `toml:"version" json:"version"` // e.g. "v1.0"
+	Title   string `toml:"title,omitempty" json:"title,omitempty"`
+	Status  string `toml:"status,omitempty" json:"status,omitempty"` // configenum.MilestoneStatuses: planning | active | complete
+	Started string `toml:"started,omitempty" json:"started,omitempty"`
+	Shipped string `toml:"shipped,omitempty" json:"shipped,omitempty"`
 }
 
 type Scope struct {
-	SuccessCriteria []string `toml:"success_criteria,omitempty"`
-	NonGoals        []string `toml:"non_goals,omitempty"`
+	SuccessCriteria []string `toml:"success_criteria,omitempty" json:"success_criteria,omitempty"`
+	NonGoals        []string `toml:"non_goals,omitempty" json:"non_goals,omitempty"`
 }
 
 // FilePath returns the canonical milestone toml path.

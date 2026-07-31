@@ -1,0 +1,178 @@
+{
+  "phase": "cli-surface-sweep",
+  "pr": 67,
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/task.go",
+        "internal/cmd/task_test.go",
+        "README.md"
+      ],
+      "commit": "949b375",
+      "completed_at": "2026-07-29T17:07:48.035994Z",
+      "landmarks": [
+        {
+          "feature": "task inspection",
+          "symbol": "taskList",
+          "loc": "internal/cmd/task.go:39",
+          "what": "lists a phase plan's tasks as an aligned id/wave/status/title table or --json array, defaulting to state.current_phase"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/project_test.go"
+      ],
+      "commit": "a99c952",
+      "completed_at": "2026-07-29T18:17:59.031577Z",
+      "landmarks": [
+        {
+          "feature": "project config editing",
+          "symbol": "TestProjectSetArityGuards",
+          "loc": "internal/cmd/project_test.go:611",
+          "what": "pins both arity guards on `project set` — --unset with a value, and a one-arg set that RangeArgs(1,2) no longer rejects"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/project.go",
+        "internal/cmd/project_test.go",
+        "README.md"
+      ],
+      "commit": "57cb8b7",
+      "completed_at": "2026-07-29T17:10:55.531373Z",
+      "landmarks": [
+        {
+          "feature": "project config editing",
+          "symbol": "unsetDotted",
+          "loc": "internal/cmd/project.go:451",
+          "what": "every [board] field settable by dotted path incl. per-key board.state_map.\u003cstatus\u003e, plus project set --unset to clear a scalar or one map entry"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/configenum/configenum.go",
+        "internal/configenum/configenum_test.go",
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_test.go",
+        "internal/milestone/milestone.go"
+      ],
+      "commit": "c0715e4",
+      "completed_at": "2026-07-29T17:13:45.908448Z",
+      "landmarks": [
+        {
+          "feature": "milestone config editing",
+          "symbol": "resolveBareMilestoneField",
+          "loc": "internal/cmd/milestone.go:469",
+          "what": "milestone set resolves an unambiguous bare field name to its dotted path and rejects a status outside configenum.MilestoneStatuses before Save"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/dotget.go",
+        "internal/cmd/dotget_test.go",
+        "internal/cmd/state.go",
+        "internal/cmd/state_test.go",
+        "README.md"
+      ],
+      "commit": "891f77d",
+      "completed_at": "2026-07-29T17:16:33.39093Z",
+      "landmarks": [
+        {
+          "feature": "config field reads",
+          "symbol": "renderMultiGet",
+          "loc": "internal/cmd/dotget.go:24",
+          "what": "shared get renderer — one path prints bare, two or more emit one keyed JSON object in argument order; state gains get and show --json"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "d105fd0",
+      "completed_at": "2026-07-29T17:19:24.988539Z",
+      "landmarks": [
+        {
+          "feature": "project health checks",
+          "symbol": "taskStatusIssues",
+          "loc": "internal/cmd/doctor.go:430",
+          "what": "doctor reports any plan.toml task whose status falls outside pending|in_progress|done|failed, naming phase and task, as an exit-code issue"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/hints.go",
+        "internal/cmd/hints_test.go",
+        "assets/prompts/secure.md"
+      ],
+      "commit": "fd85e89",
+      "completed_at": "2026-07-29T17:22:14.239712Z",
+      "landmarks": [
+        {
+          "feature": "CLI error hints",
+          "symbol": "CuratedHint",
+          "loc": "internal/cmd/hints.go:62",
+          "what": "curated mis-reach to working-invocation table consulted before a Levenshtein Nearest fallback, plus a corpus guard that fails any prompt teaching a known-broken invocation"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/project.go",
+        "internal/cmd/project_test.go",
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_test.go"
+      ],
+      "commit": "1a840f4",
+      "completed_at": "2026-07-29T17:24:44.020246Z",
+      "landmarks": [
+        {
+          "feature": "config field reads",
+          "symbol": "looksLikeMilestoneVersion",
+          "loc": "internal/cmd/milestone.go:357",
+          "what": "project get and milestone get take 1+ paths through renderMultiGet; milestone's optional leading version is matched by shape so a typo'd path is named rather than read as a version"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/subcommand_guard.go",
+        "internal/cmd/subcommand_guard_test.go",
+        "internal/cmd/flag_hint.go",
+        "internal/cmd/flag_hint_test.go",
+        "internal/cmd/hints.go"
+      ],
+      "commit": "ad037f3",
+      "completed_at": "2026-07-29T17:28:58.902806Z",
+      "landmarks": [
+        {
+          "feature": "CLI error hints",
+          "symbol": "decorateFlagError",
+          "loc": "internal/cmd/flag_hint.go:30",
+          "what": "a root FlagErrorFunc appends the curated-then-nearest hint to cobra's unknown-flag message while preserving the substring telemetry buckets on"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "cmd/dross/main_test.go"
+      ],
+      "commit": "ca7bcbf",
+      "completed_at": "2026-07-29T17:30:50.878705Z",
+      "landmarks": [
+        {
+          "feature": "CLI error hints",
+          "symbol": "TestMisreachesAreSelfCorrecting",
+          "loc": "cmd/dross/main_test.go:90",
+          "what": "executes c-2's sentence against the assembled tree and proves every curated command path and flag still resolves"
+        }
+      ]
+    }
+  }
+}

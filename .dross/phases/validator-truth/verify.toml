@@ -1,0 +1,64 @@
+[verify]
+  phase = "validator-truth"
+  generated_at = 2026-07-29T08:14:37.162082Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-07-29T08:27:12.000833Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9545929018789144
+  mutants_killed = 1829
+  mutants_survived = 87
+  mutants_not_covered = 87
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/doctor_test.go:TestDoctorAcceptsEveryDispatchableBoardProvider", "internal/cmd/doctor_test.go:TestDoctorBoardBaseURLOptionalForGitHub", "internal/cmd/doctor_test.go:TestDoctorGitHubMalformedBaseURLStillFails", "internal/cmd/doctor_test.go:TestDoctorRejectsEmptyBoardProvider"]
+  notes = "The accept test loops configenum.BoardProviders.Values() rather than a hand-typed list, so jira/github cannot silently drop back out. The base_url relaxation is pinned on both sides — github with no base_url passes, youtrack with none still fails, and a set-but-malformed github value still fails (optional is not unvalidated). Empty provider stays a hard failure."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/configenum/configenum_test.go:TestEmptyValuePoliciesDiffer", "internal/cmd/doctor_test.go:TestDoctorCarriesNoProviderLiterals", "internal/cmd/issue_test.go:TestIssueEnableNoteListsConfigenumSet", "internal/forge/forge_test.go:TestNewMessageListsForgeRESTProviders", "internal/ship/bitbucket_comment_test.go:TestShipMessagesListShipProviders", "internal/forge/forge_test.go:TestMilestoneModeConsumersUseConfigenum"]
+  notes = "Each consumer is pinned twice: behaviourally (its expected-set message must contain Set.List()) and structurally (a source scan forbidding the literal switch shape the migration replaced). A partial migration — message derived, switch left behind — fails TestDoctorCarriesNoProviderLiterals and TestMilestoneModeConsumersUseConfigenum."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/enum_divergence_test.go:TestShipDispatchMatchesShipProviders", "internal/cmd/enum_divergence_test.go:TestBoardDispatchMatchesBoardProviders", "internal/cmd/enum_divergence_test.go:TestRemoteAPIBaseMatchesShipProviders", "internal/cmd/enum_divergence_test.go:TestRemoteWriterSubsetOfShipProviders", "internal/cmd/enum_divergence_test.go:TestMilestoneModeDispatchMatchesConfigenum", "internal/cmd/enum_divergence_test.go:TestGuardsSeeNonEmptySets"]
+  notes = "go/ast set-equality guards over every dispatch switch; adding an arm without teaching configenum (or the reverse) fails the build. The anti-vacuity risk is itself guarded: TestGuardsSeeNonEmptySets asserts a per-site minimum case count, and the two walkers are self-tested against in-test fixtures (TestProviderCasesInParsesFixture / TestMapValuesInParsesFixture) including the missing-function and non-map error paths."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/doctor_test.go:TestDoctorNormalisesMilestoneMode", "internal/cmd/doctor_test.go:TestDoctorNormalisesAuthScheme", "internal/cmd/enum_divergence_test.go:TestDispatchUsesConfigenumNormalize", "internal/cmd/issue_test.go:TestMilestoneSyncTrimsMilestoneMode", "internal/forge/forge_test.go:TestEnsureMilestoneEntityNormalisesMode", "internal/forge/forge_test.go:TestNewBoardNormalisesProvider"]
+  notes = "The exact spec case is asserted (\"Version\", \" version\", plus \"EPIC\" and \"\\tagile \"), and \"bogus\" still fails, so the normalisation is not blanket leniency. The mirror-image bug is guarded too: TestDispatchUsesConfigenumNormalize fails any dispatch site switching on bare strings.ToLower, which would reject the padded value doctor just blessed."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/doctor_test.go:TestDoctorWarnsJiraEpicCombination", "internal/cmd/doctor_test.go:TestDoctorCombinationWarningKeepsExitZero", "internal/cmd/doctor_test.go:TestDoctorWarnsJiraMissingAuthUser", "internal/cmd/doctor_test.go:TestDoctorWarnsBasicAuthMissingAuthUser", "internal/cmd/doctor_test.go:TestDoctorWarnsBasicOnNonBitbucketRemote", "internal/cmd/doctor_test.go:TestDoctorHardFailureStillNonZero"]
+  notes = "The spec's exact combination (jira + epic) is asserted, each warning carries a negative case so it cannot become an always-on nag (youtrack + epic silent, configured auth_user silences), and the locked new_check_severity decision is pinned from both ends — warnings keep exit 0 and still report 'All project-level checks passed', while genuinely invalid values still exit non-zero."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/ship/bitbucket_test.go:TestOpenBitbucketPRHappyPath", "internal/ship/bitbucket_comment_test.go:TestPostBitbucketCommentHappyPath", "internal/ship/bitbucket_comment_test.go:TestPRMergedBitbucket", "internal/cmd/ship_test.go:TestBuildOpenOptsCarriesAuthUser", "internal/cmd/ship_test.go:TestBuildCommentOptsCarriesAuthUser", "internal/cmd/doctor_test.go:TestDoctorWarnsUnshippableRemoteProvider", "internal/cmd/prompt_provider_list_test.go:TestPromptProviderListsMatchShipProviders"]
+  notes = "All three ship operations are exercised against httptest servers asserting the wire shape, not just a 2xx: Basic user:token with no stray PRIVATE-TOKEN, the nested source/destination branch payload, links.html.href for the URL, content.raw for the comment, and state == MERGED (with DECLINED/SUPERSEDED asserted false, so a '!= OPEN' implementation could not pass). The project.toml join point is covered separately because ship-package tests construct OpenOpts directly and would all pass with auth_user dropped in buildOpenOpts. doctor's warning side is pinned with bitbucket as a negative case, and the prompt bullets are set-compared against ShipProviders."
+
+[[finding]]
+  severity = "NOTE"
+  text = "87/1916 mutants not-covered, 0 genuinely survived — efficacy excluding not-covered = 1.00. This is the documented gremlins switch-case/const attribution ceiling (calibration locked 2026-07-01). Cross-check performed: only three not-covered mutants sit in criterion-relevant code — doctor.go:145 (base_url case, both branches asserted by TestDoctorBoardBaseURLOptionalForGitHub), issue.go:149 (unset-provider case, asserted by TestIssueEnableNoteListsConfigenumSet) and forge.go:626 (basic-scheme case, asserted by TestClientDoSendsBasicAuth). All three are switch-case conditions, so no covered->weak downgrade applies. The remainder are in code this phase did not touch: youtrack.go/jira.go HTTP error-hint paths, ship.go shipResultTag, open.go/comment.go gh shell-out, and unrelated cmd files."
+
+[[finding]]
+  severity = "NOTE"
+  text = "assets/prompts/init.md and onboard.md were skipped by mutation (no adapter for .md). Their change is covered structurally instead: prompt_provider_list_test.go parses the provider bullet out of each prompt and set-compares it against configenum.ShipProviders plus the none sentinel, with TestPromptProviderBulletFound failing if the bullet label is renamed so the parity test cannot go vacuous."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The five [[deferred]] items in spec.toml remain open by design (board-state-map-truth, cli-surface-sweep x2, runtime.mode = hybrid, [mutation].adapters typo). None is a criterion of this phase; they are recorded targets, not gaps in this verdict."

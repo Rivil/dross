@@ -1,0 +1,112 @@
+task_seq = 0
+
+[phase]
+  id = "validator-truth"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add internal/configenum normalising enum sets"
+  files = ["internal/configenum/configenum.go", "internal/configenum/configenum_test.go"]
+  description = "New leaf package, zero internal imports. Exports Set (Values, Normalize, Has, List)\nplus BoardProviders, MilestoneModes, AuthSchemes (incl. basic), ShipProviders (incl.\nbitbucket), ForgeRESTProviders {forgejo, gitea, gitlab} for forge.New's message, and\nthe derived helpers MilestoneModesFor(provider) and BoardRequiresBaseURL(provider).\nMilestoneModesFor returns nil for forge/github. The three empty-value policies differ\nand must stay distinct: empty auth_scheme defaults to private-token (accept), empty\nmilestone_mode defaults to version (accept), empty [board].provider stays invalid\n(reject) — Set.Has(\"\") must NOT be uniformly true.\nNormalize (trim + lowercase) is the single normalisation for this repo — validators\nAND dispatch call it, so no site can be more or less forgiving than another.\nShipProviders is the five dispatchable backends; \"none\" is a sentinel meaning \"no\nremote\", handled at the call sites and deliberately NOT a member of the set.\n"
+  covers = ["c-2", "c-4"]
+  test_contract = ["if Normalize stops trimming or lowercasing, TestSetNormalizeTrimsAndLowercases fails", "if Set.Has(\"\") becomes uniformly true, empty [board].provider silently stops being rejected — TestEmptyValuePoliciesDiffer fails (empty auth_scheme -> private-token, empty milestone_mode -> version, empty board provider -> still invalid)", "if ForgeRESTProviders isn't exported, t-7 has to re-derive {forgejo, gitea, gitlab} as a second hand-maintained list — TestForgeRESTProvidersIsSubsetOfBoardProviders fails", "if basic is missing from AuthSchemes or bitbucket from ShipProviders, TestAuthSchemesIncludeBasic / TestShipProvidersIncludeBitbucket fail", "if MilestoneModesFor returns a non-nil set for gitlab, or anything but [version] for jira, TestMilestoneModesForProvider fails", "if BoardRequiresBaseURL returns false for any provider other than github, TestBoardRequiresBaseURL fails", "if List() stops rendering the pipe-joined literal that doctor/issue/forge messages interpolate, TestSetListRendersPipeJoined fails"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Add remote.auth_user and basic auth scheme"
+  files = ["internal/project/project.go", "internal/cmd/project.go", "internal/cmd/project_test.go"]
+  description = "Add AuthUser to project.Remote, mirroring the existing Board.AuthUser, plus\nremote.auth_user arms in readDotted/writeDotted beside the existing board.auth_user\narms. Update the Remote.Provider / Remote.AuthScheme doc comments to the real sets.\n"
+  covers = ["c-2"]
+  test_contract = ["if remote.auth_user isn't persisted through a set/read cycle, TestRemoteAuthUserRoundTrip fails", "if the new arm is implemented as a catch-all, TestUnknownRemoteDottedKeyStillRejected fails (remote.auth_users typo must still error)"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Add Bitbucket PR-open backend over Basic auth"
+  files = ["internal/ship/bitbucket.go", "internal/ship/open.go", "internal/ship/bitbucket_test.go"]
+  description = "New bitbucket.go transport: bbBasicAuth, bbRepoRef(url) -> workspace/slug, bbRequest,\nopenBitbucketPR. open.go gains AuthUser on OpenOpts, a case \"bitbucket\" arm, and\nbitbucket in its default-branch message. Endpoints are relative to api_base, which\nremote.go already autodetects as https://api.bitbucket.org/2.0. open.go's provider\nswitch (:43) and auth-scheme check (:229) drop bare strings.ToLower for\nconfigenum.Normalize, so dispatch is exactly as forgiving as doctor. Its hand-typed\n\"expected github | forgejo | gitea | gitlab\" error (:51) is derived from\nShipProviders.List(), since adding the bitbucket arm makes that literal false.\n"
+  covers = ["c-6"]
+  depends_on = ["t-1"]
+  test_contract = ["if the payload uses GitHub-style flat head/base instead of nested source.branch.name / destination.branch.name, TestOpenBitbucketPRHappyPath fails", "if the result URL is read from html_url rather than links.html.href, TestOpenBitbucketPRHappyPath fails", "if the Authorization header isn't Basic base64(user:token) — or a PRIVATE-TOKEN / Authorization: token header is sent alongside — TestOpenBitbucketPRHappyPath fails", "if a missing auth_user doesn't error before any HTTP request is made, TestOpenBitbucketPRMissingAuthUser fails (it asserts zero requests)", "if a reviewer-assignment 4xx returns a nil *OpenResult instead of both a result and an error, the reviewer case fails — an already-open PR must not be lost", "if bbRepoRef mis-splits a bitbucket.org URL into workspace/slug, TestBBRepoRef fails", "if OpenPR still uses bare ToLower, provider = \" bitbucket\" dispatches nowhere while doctor passes it — TestOpenPRNormalisesProvider fails", "if OpenPR's unsupported-provider message stays hand-typed, it omits bitbucket the moment the arm lands — TestOpenPRMessageListsShipProviders fails"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 3
+  title = "Add Bitbucket comment and merge-status backends"
+  files = ["internal/ship/comment.go", "internal/ship/merged.go", "internal/ship/bitbucket_comment_test.go"]
+  description = "postBitbucketComment and bitbucketPRMerged reuse t-3's bbRequest/bbBasicAuth.\nCommentOpts gains AuthUser, mirroring t-3's addition to OpenOpts. merged.go answers\nauthoritatively for bitbucket — it does not join the ErrMergeStatusUnsupported arm.\ncomment.go's (:36) and merged.go's (:24) provider switches adopt configenum.Normalize,\nmatching t-3's change to open.go, and their hand-typed \"expected github | forgejo |\ngitea | gitlab\" errors (:44, :30) are derived from ShipProviders.List() for the same\nreason as t-3's.\n"
+  covers = ["c-6"]
+  depends_on = ["t-3"]
+  test_contract = ["if the comment payload is flat {body:...} rather than {content:{raw:...}}, or posts to a Forgejo-shaped /issues/{n}/comments path, TestPostBitbucketCommentHappyPath fails", "if merged-state is implemented as != OPEN, TestPRMergedBitbucket fails — true only for MERGED, false for OPEN, DECLINED and SUPERSEDED", "if bitbucket is left in the unsupported-provider table, TestPRMergedUnsupportedProvider fails", "if a missing auth_user isn't caught before the request, TestPostBitbucketCommentMissingAuthUser fails", "if PostComment or PRMerged still uses bare ToLower, a leading-space provider that doctor accepts dispatches nowhere — TestCommentAndMergedNormaliseProvider fails", "if either unsupported-provider message stays hand-typed, it omits bitbucket once the arms land — TestShipMessagesListShipProviders fails"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 4
+  title = "Thread auth_user through ship opt builders"
+  files = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
+  description = "buildOpenOpts / buildCommentOpts copy p.Remote.AuthUser onto OpenOpts.AuthUser and\nCommentOpts.AuthUser, beside the existing AuthScheme/ProjectID wiring. This is the\njoin point for the AuthUser fields added by t-2 (schema), t-3 (OpenOpts) and t-4\n(CommentOpts) — it cannot land before all three.\n"
+  covers = ["c-6"]
+  depends_on = ["t-2", "t-3", "t-4"]
+  test_contract = ["if buildOpenOpts drops Remote.AuthUser, TestBuildOpenOptsCarriesAuthUser fails — without it every ship-package test passes and every real Bitbucket ship 401s", "if buildCommentOpts drops it, TestBuildCommentOptsCarriesAuthUser fails"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Route doctor's enum checks through configenum"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_test.go"]
+  description = "Replace the three inline literal switches (auth_scheme, board provider,\nmilestone_mode) with configenum Set.Has after Normalize, and the hand-typed\n\"(expected a | b)\" strings with Set.List(). base_url is required only when\nBoardRequiresBaseURL(provider).\n"
+  covers = ["c-1", "c-2", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if doctor rejects any provider in BoardProviders, TestDoctorAcceptsEveryDispatchableBoardProvider fails — it fails today for jira and github, and would fail for a seventh backend added without teaching doctor", "if the base_url relaxation leaks beyond github, TestDoctorBoardBaseURLOptionalForGitHub fails (github empty -> exit 0; youtrack empty -> still non-zero)", "if an empty [board].provider starts passing because Set.Has(\"\") is true, TestDoctorRejectsEmptyBoardProvider fails", "if the relaxation is implemented by skipping the whole looksLikeBoardURL branch, github + base_url = \"not-a-url\" is silently accepted — TestDoctorGitHubMalformedBaseURLStillFails fails (optional, not unvalidated)", "if milestone_mode = \"Version\" or \" version\" is rejected, TestDoctorNormalisesMilestoneMode fails", "if auth_scheme = basic is rejected, or the message stops listing private-token | bearer | basic, TestDoctorNormalisesAuthScheme fails", "if a partial migration leaves one literal switch behind while the message is already derived, TestDoctorCarriesNoProviderLiterals fails"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 2
+  title = "Route issue + forge through configenum; forge Basic"
+  files = ["internal/cmd/issue.go", "internal/forge/forge.go", "internal/forge/jira.go", "internal/forge/youtrack.go", "internal/cmd/issue_test.go", "internal/forge/forge_test.go"]
+  description = "issue.go's recognition list and its two hard-coded note strings become\nBoardProviders.Has / .List(). issue.go's milestone_mode read (currently ToLower only,\nno TrimSpace) also routes through configenum.Normalize, so doctor's relaxed check in\nt-6 cannot bless a value this branch then silently skips. Same for the provider\nreads at issue.go:114 and :145 and the two forge dispatch switches (forge.go:70 in\nNew, :140 in NewBoard) plus its auth-scheme check (:612) — all drop bare ToLower for\nconfigenum.Normalize. forge.New's expected-provider message is generated from\nForgeRESTProviders (exported by t-1, not re-derived here). The two\nmilestone_mode consumers — jira.go:227 and youtrack.go:185 — are one-line\nsubstitutions of ToLower(TrimSpace(mode)) for configenum.Normalize, so every\nmilestone_mode site shares the single normalisation. The unconditional base_url note at issue.go:155 becomes\nconditional on BoardRequiresBaseURL, so a correctly-configured github board stops\nbeing told to set one. forge Client.do learns the basic scheme per the locked\nbitbucket_auth decision.\n"
+  covers = ["c-2", "c-6"]
+  depends_on = ["t-1"]
+  test_contract = ["if issue enable rejects any provider in BoardProviders, TestIssueEnableAcceptsEveryBoardProvider fails", "if the enable note is hand-typed rather than derived, TestIssueEnableNoteListsConfigenumSet fails", "if issue.go's milestone_mode read isn't trimmed, milestone_mode = \" version\" skips the fixVersion branch while doctor now passes it — TestMilestoneSyncTrimsMilestoneMode fails", "if bitbucket is mistakenly added to BoardProviders, TestIssueEnableRejectsBitbucket fails — forge_test.go cannot catch this, since NewBoard has no default arm and falls through to New, erroring identically either way", "if Client.do doesn't send Authorization: Basic base64(AuthUser:token) when the scheme normalises to basic — or still sends PRIVATE-TOKEN — the forge basic-auth test fails", "if basic with an empty AuthUser silently sends Basic base64(:token) instead of a construction error naming auth_user, that test fails", "if NewBoard or New still uses bare ToLower, board.provider = \" jira\" passes doctor and then fails every board op — TestNewBoardNormalisesProvider fails", "if issue enable still nags about base_url on a github board, TestIssueEnableSkipsBaseURLNoteForGitHub fails; a youtrack board with no base_url must still be nagged", "if jira.go or youtrack.go keeps its own ToLower(TrimSpace(mode)) instead of configenum.Normalize, TestMilestoneModeConsumersUseConfigenum fails — leaving milestone_mode the one enum free to drift"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 2
+  title = "Correct provider lists in init/onboard prompts"
+  files = ["assets/prompts/init.md", "assets/prompts/onboard.md", "internal/cmd/prompt_provider_list_test.go"]
+  description = "Both prompt bullets read \"github / forgejo / gitea / bitbucket / none\" — gitlab\nmissing, bitbucket present. Add gitlab (bitbucket retained, now implemented) plus the\ngitlab.com autodetect hint. README.md is deliberately NOT in scope: its current-state\nprose carries no provider list, and the bitbucket/gitlab mentions at :256 and :312 are\nhistorical roadmap checkboxes that accurately record what those milestones shipped.\nassets/prompts/ship.md is likewise out of scope: its per-provider CI-watch (:119-131)\nand squash-merge (:147-149) arms gain no bitbucket case here, because c-6 names only\nPR open, comment and merge status — all delivered by t-3/t-4. Left for a later phase.\nRule r-01: make install after asset edits.\n"
+  covers = ["c-6"]
+  depends_on = ["t-1"]
+  test_contract = ["if a prompt's provider bullet doesn't set-equal ShipProviders plus the none sentinel, TestPromptProviderListsMatchShipProviders fails — it fails today", "if a prompt heading is renamed so the bullet isn't found, TestPromptProviderBulletFound fails rather than passing on zero tokens"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 3
+  title = "Add doctor cross-field combination warnings"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_test.go"]
+  description = "A warnings counter reported but never added to issues, so exit stays 0 per locked\nnew_check_severity. Four checks: milestone_mode outside MilestoneModesFor(provider);\nprovider=jira with board.auth_user empty; [remote].provider set but outside\nShipProviders; and remote provider bitbucket (or auth_scheme basic) with remote.auth_user\nempty, which t-3/t-4/t-7 make a guaranteed ship failure; and auth_scheme = basic on a\nremote provider with no Basic dispatch (only bitbucket implements it — gitlab falls\nthrough to PRIVATE-TOKEN, github ignores the scheme entirely). Empty and \"none\" remote\nproviders stay silent.\n"
+  covers = ["c-5", "c-6"]
+  depends_on = ["t-1", "t-2", "t-6"]
+  test_contract = ["if jira + epic doesn't emit a warning, or emits an error instead, TestDoctorWarnsJiraEpicCombination fails; youtrack + epic must emit nothing", "if the implementation does issues++ instead of warnings++, TestDoctorCombinationWarningKeepsExitZero fails — the regression guard for the locked severity", "if provider=jira with an empty board.auth_user isn't warned, TestDoctorWarnsJiraMissingAuthUser fails", "if an unshippable remote provider (sourcehut) isn't warned, or bitbucket/none/empty is warned, TestDoctorWarnsUnshippableRemoteProvider fails", "if remote.provider = bitbucket or auth_scheme = basic with an empty remote.auth_user isn't warned, TestDoctorWarnsBasicAuthMissingAuthUser fails — that pairing 401s on every ship", "if auth_scheme = basic on a gitlab remote isn't warned, TestDoctorWarnsBasicOnNonBitbucketRemote fails — it passes doctor clean today and 401s on every ship", "if a genuinely invalid value stops exiting non-zero, TestDoctorHardFailureStillNonZero fails"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 4
+  title = "Add validator/dispatch divergence guard"
+  files = ["internal/cmd/enum_divergence_test.go"]
+  description = "A go/ast walker providerCasesIn(file, funcName) collects the string literals of a\nnamed function's provider switch; the test compares those sets against configenum.\nScans the dispatch side — internal/ship/{open,comment,merged}.go,\ninternal/forge/forge.go, and the milestone_mode switches in internal/forge/jira.go and\nyoutrack.go — and the writer side, internal/project/remote.go. The writer\nside needs a SECOND extraction shape: KnownHostProviders is a package-level map var,\nnot a function, so it takes a composite-literal walk, while DetectRemote's api-base\nswitch uses providerCasesIn. Their semantics differ too — the host map has 4 provider\nvalues (no gitea host exists) so it is asserted as a SUBSET of ShipProviders, while the\napi-base switch is set-equality. Walker lives in the _test.go file (repo precedent:\nrepoRootFromTest in commands_parity_test.go), not a production file.\n"
+  covers = ["c-3"]
+  depends_on = ["t-1", "t-3", "t-4", "t-7"]
+  test_contract = ["if bitbucket is implemented in OpenPR but forgotten in PostComment, TestShipDispatchMatchesShipProviders fails naming the function", "if the board guard compares only NewBoard's cases, TestBoardDispatchMatchesBoardProviders fails — NewBoard has no default arm and falls through to New, so the union is what must match", "if the ast walker silently extracts nothing, TestProviderCasesInParsesFixture fails on an in-test source string — without it both guards could pass vacuously", "if a host mapping is added to remote.go without teaching ship, TestRemoteWriterSubsetOfShipProviders fails — the writer side is where the original bitbucket divergence came from", "if the api-base switch and ShipProviders diverge, TestRemoteAPIBaseMatchesShipProviders fails; asserting equality against the 4-value host map instead would fail on day one", "if a mode is added to MilestoneModes without teaching jira.go/youtrack.go, TestMilestoneModeDispatchMatchesConfigenum fails — jira's set is [version] only, so it is a subset assertion, youtrack's is equality", "if a scanned function yields fewer than 3 literals (e.g. dispatch refactored to a map), TestGuardsSeeNonEmptySets fails loudly instead of passing empty", "if any scanned dispatch site normalises with bare strings.ToLower instead of configenum.Normalize, TestDispatchUsesConfigenumNormalize fails — this is what keeps validator and consumer leniency identical by construction"]
+  status = "done"

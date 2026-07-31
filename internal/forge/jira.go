@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 // JiraClient talks to a Jira Cloud instance's REST API v3. Like the
@@ -224,7 +226,7 @@ func (c *JiraClient) EnsureMilestone(title, description string) (string, error) 
 // milestone to a project version, so mode is accepted for signature symmetry
 // but only "version" (or empty) is meaningful.
 func (c *JiraClient) EnsureMilestoneEntity(mode, name, description string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
+	switch configenum.Normalize(mode) {
 	case "", "version":
 		return c.ensureVersion(name, description)
 	default:
@@ -273,6 +275,10 @@ func (c *JiraClient) ensureVersion(name, description string) (string, error) {
 // defaultJiraStateMap maps dross lifecycle states to Jira status names. Status
 // names are workflow-specific, so this is a sensible default for the built-in
 // scheme, overridden per project via [board].state_map.
+//
+// The keys are exactly configenum.LifecycleStatuses — the set dross emits — and
+// internal/cmd/board_lifecycle_divergence_test.go fails the build if a key here
+// stops being emitted or an emitted status stops being keyed here.
 var defaultJiraStateMap = map[string]string{
 	"planned":     "To Do",
 	"in-progress": "In Progress",

@@ -1,0 +1,67 @@
+[phase]
+  id = "board-state-map-truth"
+  title = "board-state-map-truth"
+  milestone = "v1.1"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross issue phase-sync <id>` on a phase whose plan is locked but unstarted sets the tracker state, instead of emitting the no-mapping warning and skipping."
+
+[[criteria]]
+  id = "c-2"
+  text = "The board lifecycle statuses have a single definition, and a test fails when a status dross emits has no state-map entry, or a state map keys on a status nothing emits."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross issue phase-sync <id> --status <value>` rejects a value outside the lifecycle set with a message naming the valid set, instead of accepting it and warning at sync time."
+
+[[criteria]]
+  id = "c-4"
+  text = "A `[board].state_map` key that is not a lifecycle status is caught on both surfaces: `dross project set board.state_map.<bad>` refuses to write it, and `dross doctor` reports one already on disk."
+
+[[criteria]]
+  id = "c-5"
+  text = "Every structured `show` command — project, milestone, phase, task, changes, stats, stack, defaults, profile — accepts `--json` and emits the same data its default rendering shows."
+
+[[criteria]]
+  id = "c-6"
+  text = "Shipping a phase sets its tracker to a terminal lifecycle state, not just closed, so `shipped` and `complete` are statuses dross actually emits and their map entries resolve."
+
+[[criteria]]
+  id = "c-7"
+  text = "Each friction case recorded in the 2026-07-15 to 2026-07-28 telemetry window — incomplete-root errors, unknown_subcommand for `task list` and `task done`, unknown_field for `milestone.status`, doctor rejecting a working provider, and the unmapped board state — now succeeds or fails with a message naming the right alternative, pinned by a test per case."
+
+[[decisions]]
+  key = "lifecycle_vocabulary"
+  choice = "The producer is renamed: `statusPlanning` emits `planned`, matching the state-map keys."
+  why = "`planned` is what state.json's current_phase_status already carries once plan.toml locks, and `planning` wrongly implies work in flight. Issues already synced re-label on the next phase-sync, which replaces the label set wholesale."
+  locked = true
+
+[[decisions]]
+  key = "dead_map_keys"
+  choice = "All five state-map keys stay — planned, in-progress, verifying, shipped, complete — with `shipped` and `complete` becoming emitted statuses rather than dead entries."
+  why = "c-6 gives them real call sites, so the bidirectional divergence test in c-2 is satisfiable without shrinking the map."
+  locked = true
+
+[[decisions]]
+  key = "terminal_emit_sites"
+  choice = "`dross ship` emits both terminal statuses in order: `--status shipped` when the PR merges, then `--status complete --close` at finalize. `dross phase complete` gains no board coupling."
+  why = "Those are two board moments ship already has, so no new command hook is needed and a command with zero board awareness today stays that way."
+  locked = true
+
+[[decisions]]
+  key = "json_shape"
+  choice = "`--json` emits the bare document with no envelope; the `# <path>` header line is dropped. `phase show --json` emits a `spec` and a `plan` key, null for a missing file."
+  why = "No second schema to keep in sync with the structs, and prompt consumers read the payload directly instead of unwrapping it."
+  locked = true
+
+[[decisions]]
+  key = "state_map_key_severity"
+  choice = "`dross doctor` reports an unrecognised `[board].state_map` key as an issue, counting toward the non-zero exit, not as a warning."
+  why = "A dead override key is silently-broken config — the state it was meant to remap never applies — which is the same severity doctor already gives an invalid provider or milestone_mode."
+  locked = true
+
+[[deferred]]
+  text = "A deferred item pulled into a phase has no absorbed or closed state — `dross deferred dismiss` is someday-only, so an item routed to a phase and then adopted as a criterion stays listed as routed-and-open forever"
+  why = "Deferred-lifecycle plumbing, not board-state-map truth"
+  target = "deferred-triage-gaps"

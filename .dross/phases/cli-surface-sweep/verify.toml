@@ -1,0 +1,94 @@
+[verify]
+  phase = "cli-surface-sweep"
+  generated_at = 2026-07-29T18:39:46.535178Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-07-29T18:52:26.70086Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9554973821989529
+  mutants_killed = 1460
+  mutants_survived = 68
+  mutants_not_covered = 68
+  criteria_total = 9
+  criteria_covered = 9
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/task_test.go:TestTaskListTable — header + exactly 3 rows, each asserted to carry id, wave, status and title", "internal/cmd/task_test.go:TestTaskListTable — an absent plan.toml `status` renders `pending`, not a blank column", "internal/cmd/task_test.go:TestTaskListJSON — stdout unmarshals into []struct{id,wave,status,title}; a table-only regression fails json.Unmarshal", "internal/cmd/task_test.go:TestTaskListJSONEmptyPlanIsEmptyArray — zero-task plan emits `[]`, never `null`", "internal/cmd/task_test.go:TestTaskListDefaultsToCurrentPhase / TestTaskListNoPhaseIDAndNoCurrentPhase — the error names current_phase and never builds `.dross/phases//plan.toml`", "internal/cmd/task_test.go:TestTaskListUnknownPhaseErrorsBeforeHeader — no table header printed before the load fails", "cmd/dross/main_test.go:TestReadmeAdvertisesOnlyRealCommands — gates the README verb-set edit against the real tree"]
+  notes = "Both halves of the criterion sentence are pinned separately: the human table by column assertions, the script path by a typed json.Unmarshal. The empty-plan and no-current_phase rows cover the two ways the command can silently do the wrong thing."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["cmd/dross/main_test.go:TestMisreachesAreSelfCorrecting — all four of `task done`, `phase create --title`, `task edit --files`, `security run --new` exit non-zero AND print their working invocation, against the assembled newRoot() tree", "cmd/dross/main_test.go:TestCuratedHintsResolveAgainstTheTree — every curated key, replacement command path and named flag must resolve in the real tree, so the table cannot rot into pointing at nothing", "internal/cmd/hints_test.go:TestCuratedHintCoversTheFourMisreaches — the semantic remap `dross task status <phase-id> <task-id> done` edit distance can never produce", "internal/cmd/subcommand_guard_test.go:TestSubcommandGuardPrefersCuratedHint — curated entry wins, with no competing 'Did you mean' list alongside it", "internal/cmd/subcommand_guard_test.go:TestSubcommandGuardDoneStillExitsNonZero — the exit-0-on-help regression stays closed", "internal/cmd/flag_hint_test.go:TestFlagHintUsesCuratedEntry / TestFlagHintReachesDepthThree — flag-parse failures never reach RunE, so the FlagErrorFunc parent-walk is proved rather than assumed", "internal/cmd/flag_hint_test.go:TestHintedFlagErrorStillClassifiesAsUnknownFlag — asserted through telemetry.ClassifyError, so a replace-the-message implementation that demotes the event to `other` fails here", "internal/cmd/hints_test.go:TestPromptsTeachNoBrokenInvocation — corpus guard over assets/prompts/*.md, non-vacuous (fails if it scans zero files)"]
+  notes = "c-2's acceptance sentence is executable in exactly one place — cmd/dross, the only package that sees the real tree — and TestMisreachesAreSelfCorrecting is it. The telemetry-classifier assertion is the strongest row here: it catches the one implementation that would look right and silently break bucketing."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/state_test.go:TestStateShowAcceptsJSONFlag — `state show --json` exits 0 and its stdout is byte-identical to bare `state show`; pre-change this failed with `unknown flag: --json`"]
+  notes = "Single test, but it carries its own non-vacuity guard: it fails if `state show` printed nothing, so the byte-equality assertion cannot pass by comparing two empty strings."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/dotget_test.go:TestRenderMultiGetSinglePathIsBare — asserted against the literal \"cli-surface-sweep\\n\", not a value re-derived from the same code", "internal/cmd/dotget_test.go:TestRenderMultiGetKeyedObjectInArgumentOrder — one JSON object, keys verbatim, argument order not map order; a list serialises as a JSON array", "internal/cmd/dotget_test.go:TestRenderMultiGetUnknownSecondPathWritesNothing — no partial object on stdout", "internal/cmd/dotget_test.go:TestRenderMultiGetDedupsRepeatedPath / TestRenderMultiGetEmptyListIsArrayNotNull", "internal/cmd/state_test.go:TestStateGetSinglePathIsBare / TestStateGetVersionAndMultiPath / TestStateGetUnknownFieldNamesIt / TestStateGetIsRegistered", "internal/cmd/project_test.go:TestProjectGetSinglePathUnchanged / TestProjectGetMultiPath / TestProjectGetUnknownPathAmongSeveral", "internal/cmd/milestone_test.go:TestMilestoneGetVersionShapeVsPath — `get v1.1 <paths>` and `get <paths>` both resolve; treating args[0] as a version unconditionally fails the second", "internal/cmd/milestone_test.go:TestMilestoneGetTypoInFirstPositionNamesThePath — `milstone.title` is named as an unknown path, NOT swallowed as `no such milestone`; this is the row a by-elimination version check fails", "internal/cmd/milestone_test.go:TestMilestoneGetListSingleAndMulti / TestMilestoneGetUnknownPathAmongSeveral / TestLooksLikeMilestoneVersion"]
+  notes = "The locked multi_get_shape is pinned at both ends: the single-path form against a golden literal (so no existing prompt can break), and the multi-path form as parsed JSON with an argument-order assertion (so no script can come to depend on map iteration). All three surfaces — project, milestone, state — are exercised through their own commands, not only through the shared renderer."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/milestone_test.go:TestMilestoneSetBareStatus — bare `status` expands to milestone.status; the fully dotted path still works (resolver is additive); case/whitespace normalises", "internal/cmd/milestone_test.go:TestMilestoneSetStatusRejectsOutOfSet — `shipped`, `archived` and \"\" are all rejected, the message names `planning | active | complete`, and the milestone toml is byte-identical afterwards (rejection runs before Save)", "internal/cmd/milestone_test.go:TestResolveBareMilestoneField — an ambiguous bare name is rejected with every candidate listed, never resolved by taking the first match", "internal/cmd/milestone_test.go:TestMilestoneSetUnknownBareFieldStillErrors — no nearest-guess fallthrough on the write path", "internal/configenum/configenum_test.go:TestMilestoneStatusesMatchesDisk — pins the enum against the repo's own milestone corpus rather than the previously stale doc comment"]
+  notes = "The byte-identical-file assertion after a rejected status is what makes this a real gate rather than a message check — it proves validation precedes Save. TestMilestoneStatusesMatchesDisk pins the set to on-disk truth, which is what caught the stale `shipped | archived` doc comment reconciled in t-3."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/project_test.go:TestBoardFieldsAllAddressable — reflection over project.Board's toml tags; fails naming the field if any Board field lacks BOTH a readDotted and a writeDotted case", "internal/cmd/project_test.go:TestStateMapPerKeyWrite — first write creates a nil map rather than panicking; a second key does not clobber the first; bare `board.state_map` is not an addressable leaf", "internal/cmd/project_test.go:TestProjectGitHubProjectRoundTrip — set/get round-trips and reloads as Board.GitHubProject, not a stray top-level key", "internal/cmd/project_test.go:TestBoardDottedArmsRoundTrip"]
+  notes = "The reflection guard is the right shape for a completeness criterion: it stays true when a 10th Board field is added, which a hand-kept list would not. Verified non-vacuous — it t.Fatals on a Board field with no toml tag."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/doctor_test.go:TestDoctorFlagsUnrecognisedTaskStatus — \"Done\" and \"in-progress\" (the exact near-misses NextRunnable skips silently) each produce one line naming BOTH phase and task id, and doctor exits non-zero", "internal/cmd/doctor_test.go:TestDoctorFlagsUnrecognisedTaskStatus — asserts `issue(s) found`, so the finding gates the exit code rather than sitting in the advisory warnings block", "internal/cmd/doctor_test.go:TestDoctorAcceptsEveryRunnableTaskStatus — all four valid statuses plus an omitted field produce a clean verdict", "internal/cmd/doctor_test.go:TestDoctorSkipsPhaseDirWithNoPlan / TestDoctorReportsUnparseablePlan — a spec'd-but-unplanned phase is skipped silently; a broken plan.toml is its own issue, not swallowed into a ✓", "internal/cmd/doctor_test.go:TestValidateIgnoresTaskStatus — pins locked status_check_home by asserting BOTH that validate stays green and that doctor does not, so the check cannot land nowhere"]
+  notes = "TestValidateIgnoresTaskStatus is the strongest row: a one-sided assertion would pass if the check were dropped entirely, and it asserts both sides."
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/subcommand_guard_test.go:TestSubcommandGuardFallbackBeyondCobra — first asserts cmd.SuggestionsFor(\"hswoo\") is empty (so cobra's own SuggestionsMinimumDistance=2 proves nothing), then asserts our fallback names `show` anyway", "internal/cmd/hints_test.go:TestNearest — `stauts` → [status]; `zzzzzz` and \"\" get no fabricated suggestion; `Shwo` → [show] (case-insensitive)", "internal/cmd/subcommand_guard_test.go:TestSubcommandGuardFarOffGuessStillListsAvailable — the hint path adds to the available-subcommands fallback rather than replacing it", "internal/cmd/flag_hint_test.go:TestFlagHintFallsBackToNearestDeclaredFlag — `--titel` → `--title`, from flags actually declared on that command", "internal/cmd/flag_hint_test.go:TestFlagHintNamesNothingWhenNothingIsClose — no suggestion fabricated for a far-off flag", "internal/cmd/flag_hint_test.go:TestFlagHintLeavesWorkingInvocationsAlone — a known flag still parses and RunE still runs; installing the hooks changes nothing else"]
+  notes = "TestSubcommandGuardFallbackBeyondCobra earns its keep by proving cobra gives up first — without that precondition the test would pass on cobra's built-in suggestions and say nothing about the new fallback. Both halves of c-8 (subcommand and flag) have a names-it row and a names-nothing row."
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/project_test.go:TestProjectUnsetStateMapEntry — removes only the named key; the sibling entry and board.provider survive; unsetting the last entry leaves no empty [board.state_map] table", "internal/cmd/project_test.go:TestProjectUnsetScalarAndList — a bool yields false, a list becomes absent, and the literal string \"<nil>\" is never written", "internal/cmd/project_test.go:TestProjectUnsetUnknownPathLeavesFileUnchanged — same message `set` gives for the same path, and project.toml is byte-unchanged (no truncate-then-fail)", "internal/cmd/project_test.go:TestProjectSetArityGuards — both arms of the hand-rolled arity switch `--unset` forced in (project.go:73-78): `--unset` with a value, and the one-arg `set` that RangeArgs(1,2) no longer rejects; each asserts the exact message and that project.toml is byte-unchanged"]
+  notes = "TestProjectSetArityGuards (t-10) closes the FLAG the previous verify raised. The guard is what stands between `dross project set <path>` and an args[1] index-out-of-range now that Args was loosened from ExactArgs(2); go-cover run against that test alone shows both case blocks at count 1, where the previous run showed 0."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The previous verify's only FLAG — the unexercised arity switch at internal/cmd/project.go:73-78 — is closed by TestProjectSetArityGuards (commit a99c952, t-10). Re-confirmed by go-cover rather than by gremlins: `go test -run TestProjectSetArityGuards -coverprofile` reports project.go:74.33,75.59 and 76.34,77.66 at count 1 each. gremlins still lists project.go:74:28 and 76:29 as NOT COVERED because the mutated positions are the switch-case *conditions*, which sit before the covered block boundaries at columns 33/34 — the documented go-cover attribution ceiling for `switch {}` case-conditions, not a test gap. Status is NOT COVERED, never LIVED."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation cross-check: gremlins reports Lived: 0 across all 22 files — survived (68) equals not_covered (68) exactly, so no mutant the tests actually reach survived, and efficacy on reached mutants is 1.00. The 0.9555 score is the not-covered population, not a test-quality signal. Full `go test ./...` observed green (exit 0) in this session."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The 68 not-covered sites seeded as FLAG by the mechanical pass were reclassified FLAG → NOTE, matching the precedent recorded in root-robustness/verify.toml and in this phase's previous verify. All but five fall outside this phase's diff entirely (status.go, ship.go, watch.go, update.go, statusline.go, env.go, phase.go, phase_lifecycle.go, footer_coverage.go, rule.go, validate.go, install.go, basebranch.go, hooks.go, issue.go, deferred.go, root.go, and the pre-existing regions of doctor.go and milestone.go). The reclassification is recorded rather than silent: leaving them FLAG would force `partial` on every Go phase in this repo regardless of test quality."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Of the not-covered sites landing in code this phase wrote, each was read back and classified against go-cover rather than gremlins' attribution. hints.go:86/88 are `switch {}` case-conditions inside Nearest, which gremlins marks NOT COVERED even when exercised (same attribution ceiling as project.go above); TestNearest reaches both the d>max and d<best branches. The genuinely unexercised remainder is defensive or cosmetic: hints.go:90 (the equal-distance tie branch of Nearest), hints.go:133 (the sort.Slice second-level tiebreak, unreachable while all four curated keys have distinct command paths), dotget.go:58-59 (the `%v` fallback for a non-string non-list value) and its two json.Marshal error paths, and flag_hint.go's nil-root / nil-err / hidden-flag guards."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/secure.md: no mutation adapter for .md"
