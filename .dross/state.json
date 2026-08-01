@@ -2,22 +2,10 @@
   "version": "1.2.1.0",
   "current_milestone": "v1.2",
   "current_phase": "complete-base-truth",
-  "current_phase_status": "verified",
-  "last_activity": "2026-08-01T06:23:17.655405Z",
-  "last_action": "verified complete-base-truth: partial (6/7 covered, c-7 weak, mutation 0.96 with 0 lived)",
+  "current_phase_status": "complete",
+  "last_activity": "2026-08-01T06:30:51.591874Z",
+  "last_action": "phase complete-base-truth amended (12/12 done; c-7 gap closed)",
   "history": [
-    {
-      "at": "2026-07-30T10:05:39.71824Z",
-      "action": "plan reviewed: board-state-map-truth (1 blocking, 9 flags — all folded in)"
-    },
-    {
-      "at": "2026-07-30T10:05:39.726008Z",
-      "action": "set version=1.1.4.0"
-    },
-    {
-      "at": "2026-07-30T10:14:16.014399Z",
-      "action": "executed t-1 (Define lifecycle set, rename planning to planned)"
-    },
     {
       "at": "2026-07-30T10:17:03.713885Z",
       "action": "executed t-2 (Mirror toml tags as json tags across schemas)"
@@ -205,6 +193,18 @@
     {
       "at": "2026-08-01T06:23:17.655405Z",
       "action": "verified complete-base-truth: partial (6/7 covered, c-7 weak, mutation 0.96 with 0 lived)"
+    },
+    {
+      "at": "2026-08-01T06:30:41.662829Z",
+      "action": "executed t-12 (Cover the ship-side quick-base reconcile)"
+    },
+    {
+      "at": "2026-08-01T06:30:51.585104Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-08-01T06:30:51.591874Z",
+      "action": "phase complete-base-truth amended (12/12 done; c-7 gap closed)"
     }
   ]
 }

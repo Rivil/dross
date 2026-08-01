@@ -49,6 +49,21 @@
         }
       ]
     },
+    "t-12": {
+      "files": [
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "e1f72be",
+      "completed_at": "2026-08-01T06:30:41.650354Z",
+      "landmarks": [
+        {
+          "feature": "quick-base reconcile",
+          "symbol": "TestShipReconcilesRecordedQuickBase",
+          "loc": "internal/cmd/ship_test.go:1017",
+          "what": "pins ship's pushQuickBaseIfRecorded call site so the recorded quick base cannot be left unpushed"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/phase.go",

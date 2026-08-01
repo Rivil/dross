@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 12
 
 [phase]
   id = "complete-base-truth"
@@ -119,4 +119,15 @@ task_seq = 0
   covers = ["c-5"]
   depends_on = ["t-4", "t-5", "t-6", "t-7", "t-11"]
   test_contract = ["if completion fast-forwards the milestone branch, rev-parse milestone/<v> and origin/milestone/<v> differ across the run in either the success or the refusal case", "if the success path lands on the wrong branch, HEAD is not \"main\", main != origin/main, or phase/auth survives locally or on origin", "if a refusal path deletes the phase branch, `branch --list phase/auth` or `ls-remote --heads origin phase/auth` comes back empty", "if base resolution regresses to resolveNewWorkBase, the run's stdout or error names milestone/<v> as the reconcile target and the needle assertion fires", "if the run ends in a state that is neither clean success nor clean refusal, the test's explicit two-outcome switch has no matching arm and fails"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 5
+  title = "Cover the ship-side quick-base reconcile"
+  files = ["internal/cmd/ship_test.go"]
+  description = "verify found c-7 weak: pushQuickBaseIfRecorded has two call sites (internal/cmd/phase.go:374 and internal/cmd/ship.go:278) and only the phase-complete one is exercised, so deleting the ship.go call leaves the suite green. Add one test that mirrors TestPhaseCompleteReconcilesRecordedQuickBase through Ship(): a quick-target branch carrying an unpushed .dross-only chore, quick_base recorded in local.toml, and an assertion that ship left it pushed.\n"
+  covers = ["c-7"]
+  depends_on = ["t-9"]
+  test_contract = ["if the pushQuickBaseIfRecorded call in ship.go is deleted, the recorded quick base is left ahead of origin after a ship run and the rev-list assertion fires", "if the fixture's quick base is not actually ahead of origin before the run, the precondition assertion fails rather than passing vacuously"]
   status = "done"
