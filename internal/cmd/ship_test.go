@@ -1008,6 +1008,43 @@ func TestShipEarlyReturnsLeaveBaseIntact(t *testing.T) {
 	}
 }
 
+// TestShipReconcilesRecordedQuickBase (c-7) is the ship-side twin of
+// TestPhaseCompleteReconcilesRecordedQuickBase. pushQuickBaseIfRecorded has two
+// call sites — phase complete's and ship's — and the criterion says "any
+// command that later reconciles it", so both need a failing test behind them:
+// with only the complete-side test, deleting ship's call leaves the suite green
+// while a standalone quick task's chores sit unpushed through the whole ship.
+func TestShipReconcilesRecordedQuickBase(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+
+	// A branch standing in for a standalone quick task's target, carrying an
+	// unpushed .dross-only chore. It is not this phase's base (that is main),
+	// which is exactly the case the record exists for.
+	mustGit(t, dir, "push", "-q", "origin", "main:quick-target")
+	mustGit(t, dir, "branch", "quick-target", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	mustGit(t, dir, "checkout", "-q", "quick-target")
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# quick chore\n")
+	mustGit(t, dir, "add", ".dross/handoff.md")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): quick task bookkeeping")
+	mustGit(t, dir, "checkout", "-q", "phase/x")
+
+	if err := runCmd(t, Local(), "set", "quick_base", "quick-target"); err != nil {
+		t.Fatalf("local set: %v", err)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/quick-target..quick-target"); ahead == "" {
+		t.Fatal("fixture precondition: quick-target should be ahead of origin")
+	}
+
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/quick-target..quick-target"); ahead != "" {
+		t.Errorf("ship left the recorded quick_base unpushed: %q", ahead)
+	}
+}
+
 func TestShipTargetsMainNoMilestone(t *testing.T) {
 	dir := shipFixture(t, "https://forge.example/me/p.git")
 	cap := shipMockFlow(t, dir)
