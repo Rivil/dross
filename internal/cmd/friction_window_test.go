@@ -25,32 +25,63 @@ import (
 // that they were made here.
 
 // TestFrictionWindow_IncompleteRoot: `dross task list` in a directory whose
-// .dross/ exists but is missing state.json used to fail with a bare stat/parse
-// error, which reads as a broken tool rather than an unfinished setup.
+// .dross/ exists but is missing project.toml used to fail with a bare
+// stat/parse error, which reads as a broken tool rather than an unfinished
+// setup.
+//
+// project.toml is the whole of the required set now. A missing state.json is
+// the fresh-clone shape, not an unfinished setup — it is machine-local and
+// gitignored (locked state_tracking), so the run must materialize it and carry
+// on rather than turning the user away.
 func TestFrictionWindow_IncompleteRoot(t *testing.T) {
-	dir := t.TempDir()
-	chdir(t, dir)
-	if err := runCmd(t, Init()); err != nil {
-		t.Fatalf("init: %v", err)
-	}
-	if err := os.Remove(filepath.Join(dir, ".dross", "state.json")); err != nil {
-		t.Fatal(err)
-	}
+	t.Run("missing project.toml is an incomplete root", func(t *testing.T) {
+		dir := t.TempDir()
+		chdir(t, dir)
+		if err := runCmd(t, Init()); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		if err := os.Remove(filepath.Join(dir, ".dross", "project.toml")); err != nil {
+			t.Fatal(err)
+		}
 
-	err := runCmd(t, Task(), "list")
-	if err == nil {
-		t.Fatal("task list on an incomplete root must fail")
-	}
-	msg := err.Error()
-	if !strings.Contains(msg, ".dross/state.json") && !strings.Contains(msg, "state.json") {
-		t.Errorf("error %q does not name the missing file", msg)
-	}
-	if !strings.Contains(msg, RepairHint) {
-		t.Errorf("error %q carries no repair hint (want %q)", msg, RepairHint)
-	}
-	if !strings.Contains(msg, "dross onboard") {
-		t.Errorf("error %q does not name the command that repairs it", msg)
-	}
+		err := runCmd(t, Task(), "list")
+		if err == nil {
+			t.Fatal("task list on an incomplete root must fail")
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "project.toml") {
+			t.Errorf("error %q does not name the missing file", msg)
+		}
+		if !strings.Contains(msg, RepairHint) {
+			t.Errorf("error %q carries no repair hint (want %q)", msg, RepairHint)
+		}
+		if !strings.Contains(msg, "dross onboard") {
+			t.Errorf("error %q does not name the command that repairs it", msg)
+		}
+	})
+
+	t.Run("missing state.json is materialized, not refused", func(t *testing.T) {
+		dir := t.TempDir()
+		chdir(t, dir)
+		if err := runCmd(t, Init()); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		stPath := filepath.Join(dir, ".dross", "state.json")
+		if err := os.Remove(stPath); err != nil {
+			t.Fatal(err)
+		}
+
+		// It still fails — there is no phase to list tasks for — but on its own
+		// terms, never as a not-a-dross-repo. The RepairHint is the whole
+		// discriminator: a root that still demands state.json carries it here.
+		err := runCmd(t, Task(), "list")
+		if err != nil && strings.Contains(err.Error(), RepairHint) {
+			t.Errorf("a state-less root must not read as an unfinished setup, got: %v", err)
+		}
+		if _, err := os.Stat(stPath); err != nil {
+			t.Errorf("state.json should have been materialized: %v", err)
+		}
+	})
 }
 
 // TestFrictionWindow_TaskListExists: `dross task list` was reached for

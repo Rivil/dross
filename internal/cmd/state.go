@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -195,6 +197,35 @@ func bumpInternal(v string) (string, error) {
 	last, _ := strconv.Atoi(parts[3])
 	parts[3] = strconv.Itoa(last + 1)
 	return strings.Join(parts, "."), nil
+}
+
+// ensureState materializes .dross/state.json when it is absent, so a fresh
+// clone — where the file is machine-local and gitignored rather than committed
+// (locked decision: state_tracking) — resolves as a working root instead of a
+// broken one. Version is seeded from project.toml's [project].version, the
+// release-facing home of the number, and History starts empty: the durable
+// record is the git log plus the tracked phase artefacts, not a mirrored
+// activity log (locked decision: history_durability).
+//
+// It is strictly non-destructive. A file already on disk is left exactly as it
+// is, malformed or not — parsing it belongs to whoever loads it, and replacing
+// a corrupt state.json here would destroy the history it may still hold.
+func ensureState(root string) error {
+	path := filepath.Join(root, state.File)
+	switch _, err := os.Stat(path); {
+	case err == nil:
+		return nil
+	case !errors.Is(err, fs.ErrNotExist):
+		return err
+	}
+	s := state.New()
+	// An unparseable project.toml, or one carrying no version, is not this
+	// function's to report — every command that loads it says so loudly. Seed
+	// the default rather than turning it into a root-resolution failure.
+	if p, err := project.Load(filepath.Join(root, project.File)); err == nil && p.Project.Version != "" {
+		s.Version = p.Project.Version
+	}
+	return s.Save(path)
 }
 
 func loadState() (*state.State, string, error) {

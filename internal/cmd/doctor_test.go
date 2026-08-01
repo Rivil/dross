@@ -1251,7 +1251,7 @@ func TestDoctorMissingFileLineCarriesBothHints(t *testing.T) {
 // meaningful rather than accidental.
 func TestDoctorIncompleteRootBlockMatchesLocateRoot(t *testing.T) {
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir, "state.json")
 	chdir(t, dir)
 
 	_, want, err := LocateRoot()

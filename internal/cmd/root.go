@@ -24,7 +24,11 @@ const RepairHint = "run `dross onboard` to adopt this directory into dross"
 // counts as an initialised root. Existence only — a file that exists but fails
 // to parse is a real error reported by whoever loads it, not an uninitialised
 // root (locked decision: completeness_check).
-var RequiredRootFiles = []string{"project.toml", "state.json"}
+//
+// state.json is deliberately absent: it is machine-local and gitignored (locked
+// decision: state_tracking), so a fresh clone has none and demanding one would
+// make every clone read as a broken repo. FindRoot materializes it instead.
+var RequiredRootFiles = []string{"project.toml"}
 
 // IncompleteRootError reports a .dross directory that exists but is missing at
 // least one required file. It unwraps to ErrNoRoot so the hook targets, which
@@ -99,6 +103,12 @@ func LocateRoot() (string, []string, error) {
 // FindRoot resolves the .dross root, treating an incomplete one as no root at
 // all (c-1): callers get an error that errors.Is(err, ErrNoRoot) matches, so
 // the absent and half-built cases are indistinguishable to them.
+//
+// A complete root is also guaranteed to hold a state.json by the time it is
+// returned: the file is machine-local, so a fresh clone arrives without one and
+// every command that resolves a root — validate and the PreCompact pause hook
+// included — inherits the materialization from here rather than each repeating
+// it. The write only ever happens for an absent file (see ensureState).
 func FindRoot() (string, error) {
 	root, missing, err := LocateRoot()
 	if err != nil {
@@ -106,6 +116,9 @@ func FindRoot() (string, error) {
 	}
 	if len(missing) > 0 {
 		return "", &IncompleteRootError{Root: root, Missing: missing}
+	}
+	if err := ensureState(root); err != nil {
+		return "", err
 	}
 	return root, nil
 }

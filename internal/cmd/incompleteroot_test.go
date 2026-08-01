@@ -49,14 +49,14 @@ func TestIncompleteRootIsLoudEverywhere(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ruleCovFakeHome(t) // `rule show` must not read the developer's global scope
 			dir := realTempDir(t)
-			mkRoot(t, dir, "project.toml") // incomplete: no state.json
+			mkRoot(t, dir) // incomplete: no project.toml
 			chdir(t, dir)
 
 			err := runCmd(t, tc.cmd(), tc.args...)
 			if err == nil {
 				t.Fatalf("%s should fail on an incomplete root", tc.name)
 			}
-			for _, want := range []string{filepath.Join(RootDirName, "state.json"), RepairHint} {
+			for _, want := range []string{filepath.Join(RootDirName, "project.toml"), RepairHint} {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("%s error should contain %q, got: %v", tc.name, want, err)
 				}
@@ -77,7 +77,7 @@ func TestHookTargetsWriteNothing(t *testing.T) {
 		name  string
 		setup func(t *testing.T, dir string)
 	}{
-		{"incomplete .dross", func(t *testing.T, dir string) { mkRoot(t, dir, "project.toml") }},
+		{"incomplete .dross", func(t *testing.T, dir string) { mkRoot(t, dir) }},
 		{"no .dross at all", func(*testing.T, string) {}},
 	}
 	for _, tc := range cases {

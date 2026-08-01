@@ -25,7 +25,7 @@ func TestStatusSilentOnNonRoot(t *testing.T) {
 		setup func(t *testing.T, dir string)
 	}{
 		{"bare dir", func(*testing.T, string) {}},
-		{"incomplete .dross", func(t *testing.T, dir string) { mkRoot(t, dir, "project.toml") }},
+		{"incomplete .dross", func(t *testing.T, dir string) { mkRoot(t, dir) }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

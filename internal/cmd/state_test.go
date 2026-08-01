@@ -166,7 +166,7 @@ func TestStateShowRendersJSON(t *testing.T) {
 // bailing passes the first two checks and fails the third.
 func TestStateTouchSilentOnNonRoot(t *testing.T) {
 	dir := realTempDir(t)
-	root := mkRoot(t, dir, "project.toml")
+	root := mkRoot(t, dir) // incomplete: no project.toml
 	chdir(t, dir)
 
 	var err error
@@ -188,15 +188,15 @@ func TestStateTouchSilentOnNonRoot(t *testing.T) {
 // swallow down into loadState() makes it silent and fails here.
 func TestStateShowLoudOnNonRoot(t *testing.T) {
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir) // incomplete: no project.toml
 	chdir(t, dir)
 
 	err := runCmd(t, State(), "show")
 	if err == nil {
 		t.Fatal("state show should fail on an incomplete root")
 	}
-	if !strings.Contains(err.Error(), filepath.Join(RootDirName, "state.json")) {
-		t.Errorf("error should name .dross/state.json, got %v", err)
+	if !strings.Contains(err.Error(), filepath.Join(RootDirName, "project.toml")) {
+		t.Errorf("error should name .dross/project.toml, got %v", err)
 	}
 }
 
