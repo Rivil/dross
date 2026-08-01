@@ -1,5 +1,252 @@
 {
   "phase": "state-json-branch-safety",
   "base": "milestone/v1.2",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        ".gitignore",
+        "internal/cmd/gitignore.go",
+        "internal/cmd/gitignore_test.go",
+        "internal/cmd/init.go",
+        "internal/cmd/onboard.go"
+      ],
+      "commit": "2259179",
+      "completed_at": "2026-08-01T10:39:28.758688Z",
+      "landmarks": [
+        {
+          "feature": "state file tracking",
+          "symbol": "ensureDrossGitignore",
+          "loc": "internal/cmd/gitignore.go:40",
+          "what": "state.json is gitignored by init and onboard and removed from this repo's index, so no checkout can replace the live copy"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_prune_test.go"
+      ],
+      "commit": "0f48967",
+      "completed_at": "2026-08-01T10:48:19.034524Z",
+      "landmarks": [
+        {
+          "feature": "stale branch detection",
+          "symbol": "milestonePrune",
+          "loc": "internal/cmd/milestone.go:38",
+          "what": "explicit command deleting detector-named stale milestone branches local and on origin, refusing on dirty tree or current HEAD"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/state_history_test.go",
+        "internal/cmd/switchbranch.go",
+        "internal/cmd/switchbranch_test.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/milestone.go",
+        "internal/cmd/ship_recover.go"
+      ],
+      "commit": "3f2e5a0",
+      "completed_at": "2026-08-01T11:29:30.661397Z",
+      "landmarks": [
+        {
+          "feature": "branch switching",
+          "symbol": "guardedFF",
+          "loc": "internal/cmd/switchbranch.go:64",
+          "what": "fast-forward and hard-reset join checkout behind the live-state guard, so no branch switch can drop accumulated history"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/state_clobber_regression_test.go"
+      ],
+      "commit": "6b8c34e",
+      "completed_at": "2026-08-01T11:32:40.104236Z",
+      "landmarks": [
+        {
+          "feature": "state file tracking",
+          "symbol": "TestStaleBranchCheckoutCannotClobberLiveState",
+          "loc": "internal/cmd/state_clobber_regression_test.go:75",
+          "what": "end-to-end regression reproducing the 12-to-2 history clobber, verified to fail against reverted code"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "README.md",
+        "docs/dross.1",
+        "assets/prompts/init.md",
+        "internal/cmd/local.go",
+        "internal/cmd/gitignore.go",
+        ".gitignore"
+      ],
+      "commit": "9eacb52",
+      "completed_at": "2026-08-01T11:35:25.538363Z",
+      "landmarks": [
+        {
+          "feature": "state file tracking",
+          "symbol": "TestDocsDoNotClaimStateIsTracked",
+          "loc": "internal/cmd/gitignore_test.go:189",
+          "what": "docs, prompts and rationale comments describe state.json as machine-local, pinned by a scan over README, man page, prompts and .gitignore"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/cmd/phase_test.go",
+        "internal/cmd/phase_base_truth_test.go"
+      ],
+      "commit": "47f383b",
+      "completed_at": "2026-08-01T10:07:12.547154Z",
+      "landmarks": [
+        {
+          "feature": "squash-merge test fixtures",
+          "symbol": "snapshotLiveState",
+          "loc": "internal/cmd/phase_test.go:42",
+          "what": "fixtures force-stage state.json and restore the live copy across branch switches, so they hold once the file is gitignored"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/root.go",
+        "internal/cmd/root_test.go",
+        "internal/cmd/state.go",
+        "internal/cmd/incompleteroot_test.go",
+        "internal/cmd/friction_window_test.go"
+      ],
+      "commit": "93b072a",
+      "completed_at": "2026-08-01T10:19:05.582183Z",
+      "landmarks": [
+        {
+          "feature": "dross root resolution",
+          "symbol": "ensureState",
+          "loc": "internal/cmd/state.go:200",
+          "what": "state.json drops out of the required root set and is materialized on demand from project.toml's version with empty history"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/state.go",
+        "internal/cmd/state_test.go",
+        "internal/cmd/project.go",
+        "internal/cmd/project_test.go",
+        ".dross/project.toml"
+      ],
+      "commit": "3f12d7e",
+      "completed_at": "2026-08-01T10:45:51.462726Z",
+      "landmarks": [
+        {
+          "feature": "project versioning",
+          "symbol": "writeVersion",
+          "loc": "internal/cmd/state.go:243",
+          "what": "one validated writer sets both state.json's version and project.toml's [project].version, tracked copy first"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "scripts/release-version.sh",
+        ".github/workflows/release.yml",
+        ".github/workflows/ci.yml",
+        "internal/cmd/release_version_test.go"
+      ],
+      "commit": "e3674ba",
+      "completed_at": "2026-08-01T10:22:33.624456Z",
+      "landmarks": [
+        {
+          "feature": "release tagging",
+          "symbol": "release-version.sh",
+          "loc": "scripts/release-version.sh:15",
+          "what": "release tag resolves from tracked project.toml [project].version with no dross binary or jq"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/milestone_stale.go",
+        "internal/cmd/milestone_stale_test.go"
+      ],
+      "commit": "a81e2e8",
+      "completed_at": "2026-08-01T10:28:16.689094Z",
+      "landmarks": [
+        {
+          "feature": "stale branch detection",
+          "symbol": "staleMilestoneBranches",
+          "loc": "internal/cmd/milestone_stale.go:59",
+          "what": "milestone branches marked stale by ancestry then by squash-commit resolution against the candidate's own first parent"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/ship_recover_test.go",
+        "internal/cmd/ship_test.go",
+        "assets/prompts/verify.md"
+      ],
+      "commit": "90dbedb",
+      "completed_at": "2026-08-01T10:54:22.573509Z",
+      "landmarks": [
+        {
+          "feature": "squash-merge recovery",
+          "symbol": "runDrossRecovery",
+          "loc": "internal/cmd/ship_recover.go:177",
+          "what": "recovery restores the phase tree from a pre-merge commit while excluding state.json, so the live machine-local history survives"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go"
+      ],
+      "commit": "5bf1207",
+      "completed_at": "2026-08-01T10:57:50.549046Z",
+      "landmarks": [
+        {
+          "feature": "status stale-phase warning",
+          "symbol": "staleCompletedState",
+          "loc": "internal/cmd/status.go:490",
+          "what": "shipped-but-unmerged is decided from changes.json plus a local ancestry/squash ref comparison instead of an origin state.json read"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/switchbranch.go",
+        "internal/cmd/switchbranch_test.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/milestone.go"
+      ],
+      "commit": "46f8ce3",
+      "completed_at": "2026-08-01T11:14:43.939264Z",
+      "landmarks": [
+        {
+          "feature": "branch switching",
+          "symbol": "guardLiveState",
+          "loc": "internal/cmd/switchbranch.go:64",
+          "what": "dross refuses a switch to any ref that tracks state.json before git can silently overwrite the live ignored copy"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "9100c42",
+      "completed_at": "2026-08-01T11:20:00.479819Z",
+      "landmarks": [
+        {
+          "feature": "project health diagnostics",
+          "symbol": "Doctor",
+          "loc": "internal/cmd/doctor.go:324",
+          "what": "doctor reports a tracked state.json, project.toml/state.json version drift, and stale milestone branches with the literal fix command"
+        }
+      ]
+    }
+  }
 }
