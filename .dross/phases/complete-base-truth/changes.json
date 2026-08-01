@@ -1,5 +1,7 @@
 {
   "phase": "complete-base-truth",
+  "pr": 70,
+  "base": "milestone/v1.2",
   "tasks": {
     "t-1": {
       "files": [
