@@ -5,7 +5,7 @@
 
 [[criteria]]
   id = "c-1"
-  text = "A branch carrying a stale .dross/state.json cannot silently replace the live one on checkout — the live state either survives the switch untouched or git refuses the checkout outright."
+  text = "A branch carrying a stale .dross/state.json cannot silently replace the live one on a switch dross performs — the live state either survives the switch untouched or the switch is refused outright, naming the file and the fix."
 
 [[criteria]]
   id = "c-2"
@@ -34,7 +34,7 @@
 [[decisions]]
   key = "state_tracking"
   choice = ".dross/state.json is removed from the index (git rm --cached) and gitignored, mirroring .dross/local.toml. Live state becomes machine-local working state."
-  why = "No checkout can overwrite a file git does not track, which is the only mechanism that also covers a manual `git checkout` — a dross-side snapshot/restore guard would only protect dross's own switches. On branches that still track it, git refuses the checkout instead of clobbering, which c-1 accepts as the safe outcome."
+  why = "Untracking removes the file from every future commit, so no ordinary checkout has a copy to replay. AMENDED during execution (t-8): the original rationale claimed git would refuse the checkout on branches that still track it. That is false for an IGNORED path — git declines to overwrite an untracked working-tree file only when it is not ignored, and overwrites an ignored one silently (pinned by TestGitDoesNotRefuseIgnoredClobber). The residual legacy-branch case is therefore closed by a dross-side pre-check in checkoutBranch, which refuses and names the fix. A bare `git checkout` of a legacy branch remains a silent clobber; doctor reports branches that still track the file."
   locked = true
 
 [[decisions]]

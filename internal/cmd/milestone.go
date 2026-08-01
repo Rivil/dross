@@ -224,8 +224,8 @@ func milestoneFinalize(repoDir, mainBranch, msBranch, version string) error {
 		return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 	}
 	if cur != mainBranch {
-		if out, err := gitCombined(repoDir, "checkout", mainBranch); err != nil {
-			return fmt.Errorf("git checkout %s: %w\n%s", mainBranch, err, out)
+		if err := checkoutBranch(repoDir, mainBranch); err != nil {
+			return err
 		}
 	}
 	if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+mainBranch); err != nil {

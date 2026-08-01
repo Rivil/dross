@@ -65,18 +65,26 @@ func snapshotLiveState(t *testing.T, dir string) func() {
 // tracked state.json is exactly the stale copy the incident turns on.
 func foldCompletion(t *testing.T, dir, phaseID string) {
 	t.Helper()
+	writeCompletion(t, dir, phaseID)
+	mustGit(t, dir, "add", "-f", filepath.Join(".dross", "state.json"))
+}
+
+// writeCompletion is the local half: it writes the completion record to the
+// live state.json and stages nothing. That is what `dross ship` does now — the
+// file is machine-local, so the record never reaches a commit.
+func writeCompletion(t *testing.T, dir, phaseID string) {
+	t.Helper()
 	stPath := filepath.Join(dir, ".dross", "state.json")
 	sq, err := state.Load(stPath)
 	if err != nil {
-		t.Fatalf("load state for squash sim: %v", err)
+		t.Fatalf("load state for completion write: %v", err)
 	}
 	sq.CurrentPhase = ""
 	sq.CurrentPhaseStatus = ""
 	sq.Touch("completed " + phaseID)
 	if err := sq.Save(stPath); err != nil {
-		t.Fatalf("save squash state: %v", err)
+		t.Fatalf("save completion state: %v", err)
 	}
-	mustGit(t, dir, "add", "-f", filepath.Join(".dross", "state.json"))
 }
 
 // gitAllowFail runs git and reports whether it succeeded. For probes and
@@ -1341,8 +1349,12 @@ func divergedCompleteFixture(t *testing.T) (string, string, string) {
 	// aborts. The phase artefact is deliberately NOT written here — it lives
 	// on the phase branch, and recovery sourcing it from there is the property
 	// under test.
-	foldCompletion(t, dir, "auth")
-	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): complete auth")
+	// The record itself is a local write — state.json is machine-local — so the
+	// divergence is carried by an empty commit standing in for the chore commit
+	// the pre-untrack world wrote here. Leaving state.json TRACKED on main would
+	// make completion's switch-to-base refuse, which is a different test.
+	writeCompletion(t, dir, "auth")
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "chore(dross): complete auth")
 	mainSHA := mustGit(t, dir, "rev-parse", "main")
 	mustGit(t, dir, "fetch", "-q", "origin")
 
