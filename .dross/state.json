@@ -3,13 +3,9 @@
   "current_milestone": "v1.2",
   "current_phase": "complete-base-truth",
   "current_phase_status": "complete",
-  "last_activity": "2026-07-31T18:01:59.879086Z",
-  "last_action": "paused — complete-base-truth executed 11/11, ready for /dross-verify",
+  "last_activity": "2026-08-01T06:07:36.246271Z",
+  "last_action": "resumed — 2 loops left, next /dross-verify complete-base-truth",
   "history": [
-    {
-      "at": "2026-07-30T07:25:45.873023Z",
-      "action": "spec locked: board-state-map-truth"
-    },
     {
       "at": "2026-07-30T07:50:36.538785Z",
       "action": "set current_phase_status=planned"
@@ -205,6 +201,10 @@
     {
       "at": "2026-07-31T18:01:59.879086Z",
       "action": "paused — complete-base-truth executed 11/11, ready for /dross-verify"
+    },
+    {
+      "at": "2026-08-01T06:07:36.246271Z",
+      "action": "resumed — 2 loops left, next /dross-verify complete-base-truth"
     }
   ]
 }
