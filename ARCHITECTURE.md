@@ -238,6 +238,16 @@ Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue 
 _a073ab7 · extended gitlab-ship-provider · 27e1a4f · extended youtrack-board-integration · extended prove-or-demote-board-sync · 50290f0_
 _extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2 · extended board-state-map-truth · 3272339_
 
+### Machine-local store
+
+A gitignored `.dross/local.toml` for facts that are true of *this* clone and must never ride cumulative history, read and written through `dross local get|set`. Its first tenant is `quick_base` — the branch a standalone quick task forked from. Ship and `phase complete` push a recorded quick base's unpushed `.dross/` chores on *that* branch rather than on an inferred one, closing the divergence where a quick committed to main mid-phase left local main unpushed and the next phase squash-merge could not fast-forward it. An unrecorded quick base, or one whose ref is gone, is left alone rather than guessed at, and a base equal to the phase's own base is a no-op.
+
+- `Local` (`dross local get|set`, gitignored `.dross/local.toml`) — `internal/cmd/local.go:30`
+- `pushQuickBaseIfRecorded` (ship + complete push chores on the recorded quick base, never an inferred one) — `internal/cmd/basebranch.go:129`
+- `TestShipReconcilesRecordedQuickBase` (pins ship's call site so a recorded quick base can't be left unpushed) — `internal/cmd/ship_test.go:1017`
+
+_introduced complete-base-truth · e1f72be_
+
 ### Milestone branch model
 
 Milestone work rides a `milestone/<version>` integration branch: scoping a milestone cuts+pushes the branch from main, new phases and quicks fork from it (via one existence-aware base resolver, falling back to main with a nudge when no milestone is active), ship targets phase PRs at it, `phase complete` fast-forwards it, and `dross milestone complete` opens the single milestone→main PR (merge-commit; `--finalize` fast-forwards main and deletes the branch).
@@ -273,15 +283,27 @@ Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Sve
 
 _introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076_
 
+### Phase base truth
+
+The branch a phase forked from is a recorded fact, not an inference. `forkPhaseBranch` writes the resolved base into the phase-scoped `changes.json` (`changes.SetBase`, beside the existing `pr` field) as soon as `checkout -b` succeeds, and ship overwrites it with the base the PR was actually opened against, riding the same commit and push as the PR record — so a phase that never ships still has a base, and the PR's real target wins if the two ever diverge (locked `base_write_timing`). `phase complete` reads it back — working tree, then the phase ref, then an explicit `--base` — and **refuses** when nothing is recorded, naming the phase and both candidate branches, instead of falling back to a base derived from `current_milestone`. That inference is what fast-forwarded a stale `milestone/<version>` for a phase actually forked from main; the locked `legacy_escape` keeps pre-record phases completable by having the user *type* the branch, a conscious act rather than a guess. The incident is pinned end to end by a fixture staging the exact trap — phase forked from main, stale milestone branch present locally, PR merged to main — asserting completion either lands on main or refuses, never fast-forwarding the milestone branch and never deleting the phase branch. Side effect worth knowing: recording the base at create time makes `.dross/phases/<id>/` tracked immediately, so checking out another branch now removes a fresh phase's directory.
+
+- `changes.SetBase` (phase-scoped forked-from record, beside `pr`) — `internal/changes/changes.go:156`
+- `forkPhaseBranch` (create-time write, after `checkout -b` succeeds) — `internal/cmd/phase.go:670`
+- ship-time base overwrite (what the PR was actually opened against, on the PR-record commit) — `internal/cmd/ship.go:358`
+- `resolveCompleteBase` (tree → phase ref → `--base`; refuses rather than inferring) — `internal/cmd/phase.go:539`
+- `staleMilestoneFixture` (end-to-end incident reproduction, success and refusal arms) — `internal/cmd/phase_base_truth_test.go:31`
+
+_introduced complete-base-truth · e1f72be_
+
 ### Phase lifecycle
 
-Create, list, number, migrate, complete, and reorder/insert/rename phases on dedicated phase/<id> git branches. Phase identity is the bare slug and order lives solely in the milestone `phases` array (phase.Ordered), so create makes bare-slug dirs and appends to the array, while `phase number` / status / the version patch digit all read the 1-based array position (DisplayNumber) and `phase migrate` converts a legacy NN-slug repo idempotently — skipping the in-flight phase and disambiguating colliding slugs — with phase.Dir resolving old NN-slug ids for permanent back-compat. complete is fast-forward + branch-delete only (no commit to main), gated by an **authoritative merge check** (`mergeGate`): it reads the phase's recorded PR number from changes.json — resolving it from origin/<base>'s fetched changes.json (`originRecordedPR`) when the stale post-squash-merge working tree lacks it — and requires the provider (`ship.PRMergedFunc`) to report that PR merged, falling back to a `git merge-base --is-ancestor` check that **refuses-when-inconclusive** (a missing/squash-deleted ref or a non-ancestor both refuse) — replacing the old cumulative `completed <id>` breadcrumb, which a later merged phase could drag onto the base and thereby false-complete an unmerged phase; only on a confirmed merge does it delete both the local and the remote phase branch idempotently. The lifecycle verbs `insert` / `move` / `rename` edit a phase's array slot and identity through pure splice helpers (InsertRelative / MoveRelative / RenameInArray) and shared plumbing (exactly-one-anchor validation, no-op-before-collision, ship-guard via the origin branch); insert scaffolds with a strict slug (no auto-suffix) and rename moves dir + spec id + array entry + deferred targets + local branch atomically — all leaving every other phase byte-for-byte untouched.
+Create, list, number, migrate, complete, and reorder/insert/rename phases on dedicated phase/<id> git branches. Phase identity is the bare slug and order lives solely in the milestone `phases` array (phase.Ordered), so create makes bare-slug dirs and appends to the array, while `phase number` / status / the version patch digit all read the 1-based array position (DisplayNumber) and `phase migrate` converts a legacy NN-slug repo idempotently — skipping the in-flight phase and disambiguating colliding slugs — with phase.Dir resolving old NN-slug ids for permanent back-compat. complete is fast-forward + branch-delete only (no commit to main), gated by an **authoritative merge check** (`mergeGate`): it reads the phase's recorded PR number from changes.json — resolving it from origin/<base>'s fetched changes.json (`originRecordedPR`) when the stale post-squash-merge working tree lacks it — and requires the provider (`ship.PRMergedFunc`) to report that PR merged, falling back to a `git merge-base --is-ancestor` check that **refuses-when-inconclusive** (a missing/squash-deleted ref or a non-ancestor both refuse) — replacing the old cumulative `completed <id>` breadcrumb, which a later merged phase could drag onto the base and thereby false-complete an unmerged phase; only on a confirmed merge does it delete both the local and the remote phase branch idempotently. The lifecycle verbs `insert` / `move` / `rename` edit a phase's array slot and identity through pure splice helpers (InsertRelative / MoveRelative / RenameInArray) and shared plumbing (exactly-one-anchor validation, no-op-before-collision, ship-guard via the origin branch); insert scaffolds with a strict slug (no auto-suffix) and rename moves dir + spec id + array entry + deferred targets + local branch atomically — all leaving every other phase byte-for-byte untouched. Completion's branch switch is deferred past *every* refusal — the merge gate, the fetch, and the safety-net push all decide while HEAD is still on `phase/<id>` — so a refused complete moves no local ref and needs no compensating checkout, which would itself be a branch switch that can fail mid-refusal and leave a worse state than not trying.
 
 - `Phase` (CLI) — `internal/cmd/phase.go:22`
 - `phaseCreate` — `internal/cmd/phase.go:116`
 - `phaseNumber` — `internal/cmd/phase.go:37`
 - `phaseMigrate` — `internal/cmd/migrate.go:31`
-- `phaseComplete` — `internal/cmd/phase.go:217`
+- `phaseComplete` (branch switch deferred past every refusal path) — `internal/cmd/phase.go:218`
 - `mergeGate` (authoritative completion gate: recorded-PR merge status + ancestry refuse-when-inconclusive fallback) — `internal/cmd/phase.go:503`
 - `originRecordedPR` (post-fetch recorded-PR resolution from origin/<base>'s changes.json) — `internal/cmd/phase.go:480`
 - `ship.PRMergedFunc` / `ship.PRMerged` (provider PR-merged lookup, GitHub via gh, unsupported-provider sentinel, exported overridable seam) — `internal/ship/merged.go:38`
@@ -290,7 +312,7 @@ Create, list, number, migrate, complete, and reorder/insert/rename phases on ded
 - slug identity helpers (`Dir`, `Ordered`, `DisplayNumber`, `UniqueSlug`) — `internal/phase/phase.go:34`
 - complete-path verify heal (records a resolved-but-unfinalized verdict before the branch switch; never invents a verdict) — `internal/cmd/phase.go:296`
 
-_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · extended verify-auto-finalize · df239d8_
+_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · extended verify-auto-finalize · extended complete-base-truth · e1f72be_
 
 ### Plan persistence
 
@@ -303,13 +325,14 @@ _introduced task-lifecycle-commands · 367c723_
 
 ### README accuracy guard
 
-Keeps the README's command table from lying about the CLI: `newRoot` is extracted from `main` so a test can inspect the real assembled command tree, and a parity test asserts every `` `dross <cmd>` `` the README advertises is a real top-level command (the over-claim failure mode) plus that the status line isn't a stale `v0.x`. Under-claiming (an internal command the table omits) is allowed.
+Keeps the README's command table from lying about the CLI: `newRoot` is extracted from `main` so a test can inspect the real assembled command tree, and a parity test asserts every `` `dross <cmd>` `` the README advertises is a real top-level command (the over-claim failure mode) plus that the status line isn't a stale `v0.x`. Under-claiming (an internal command the table omits) is allowed. A companion needle guard pins the surfaces a user has to *know about* to recover a phase — `dross local`, `quick_base`, and complete's `--base` / `--recover` — so shipping the behaviour without documenting it fails the suite.
 
 - `newRoot` (testable command-tree assembly) — `cmd/dross/main.go:13`
 - `TestReadmeAdvertisesOnlyRealCommands` (over-claim guard) — `cmd/dross/main_test.go:20`
 - `TestReadmeStatusNotStale` (stale-version guard) — `cmd/dross/main_test.go:57`
+- `TestReadmeDocumentsBaseTruthSurfaces` (needle guard: `dross local`, `quick_base`, `--base`/`--recover`) — `internal/cmd/readme_doc_test.go:41`
 
-_introduced readme-truth-pass · 6fc4186_
+_introduced readme-truth-pass · extended complete-base-truth · e1f72be_
 
 ### Repo onboarding
 
@@ -402,13 +425,14 @@ _introduced context-hygiene · extended root-robustness · 6d33d3b_
 
 ### Ship recovery
 
-Heal local-vs-origin base divergence after a squash-merge — a shared, delta-gated routine parameterized by the base branch (main or a `milestone/<version>` reconcile branch, no longer aborting on the latter), reused by two entry points and documented as a three-state cookbook. `dross ship recover` is the standalone legacy-repo healer; `dross phase complete --recover` performs its reset/heal *before* re-evaluating the merge gate, so the flag works in exactly the diverged/stale state its own error recommends it for — while merge verification still precedes the destructive reset (an unmerged PR refuses with the local base byte-unchanged) — and refuses with a pointer when the flag is absent. The shared `runDrossRecovery` resets the base to origin, restores the full cumulative `.dross/` tree (every phase's artefacts, not just the current one), commits only on a real delta — so an in-sync repo is a clean no-op with no phantom commit — and pushes the restore commit via the clean-tree safety-net policy so the heal doesn't itself re-seed divergence. The `ship.md` `## Recovery` section maps the three mid-merge failure states (ff-abort / diverged main / dirty post-push tree) each to a one-command fix, with no manual `.dross/` surgery (guarded by a prompt-presence test).
+Heal local-vs-origin base divergence after a squash-merge — a shared, delta-gated routine parameterized by the base branch (main or a `milestone/<version>` reconcile branch, no longer aborting on the latter), reused by two entry points and documented as a three-state cookbook. `dross ship recover` is the standalone legacy-repo healer; `dross phase complete --recover` performs its reset/heal *before* re-evaluating the merge gate, so the flag works in exactly the diverged/stale state its own error recommends it for — while merge verification still precedes the destructive reset (an unmerged PR refuses with the local base byte-unchanged) — and refuses with a pointer when the flag is absent. The shared `runDrossRecovery` resets the base to origin, restores the full cumulative `.dross/` tree (every phase's artefacts, not just the current one), commits only on a real delta — so an in-sync repo is a clean no-op with no phantom commit — and pushes the restore commit via the clean-tree safety-net policy so the heal doesn't itself re-seed divergence. The `ship.md` `## Recovery` section maps the three mid-merge failure states (ff-abort / diverged main / dirty post-push tree) each to a one-command fix, with no manual `.dross/` surgery (guarded by a prompt-presence test). Both entry points now aim at the phase's **recorded** base rather than an inferred one: `--recover` resets only that branch — a stale `milestone/<version>` sitting locally is left byte-unchanged — and sources the restored `.dross/` tree from the phase tip captured *before* the checkout, so the restore can never come from the branch the command just switched to; `ship recover` guards and resets the same recorded base, falling back to `git_main_branch` for the legacy phases that predate the record and did live on main.
 
-- `runDrossRecovery` (shared delta-gated reset+restore+commit+push, base-branch parameterized) — `internal/cmd/ship_recover.go:133`
-- `shipRecover` (standalone CLI entry, delegates to the shared routine) — `internal/cmd/ship_recover.go:30`
-- `phaseComplete` `--recover` (in-loop heal-before-gate) — `internal/cmd/phase.go:216`
+- `runDrossRecovery` (shared delta-gated reset+restore+commit+push, base-branch parameterized) — `internal/cmd/ship_recover.go:148`
+- `shipRecover` (standalone CLI entry, delegates to the shared routine) — `internal/cmd/ship_recover.go:32`
+- `ship recover` recorded-base resolution (recorded base, else `git_main_branch` for legacy phases) — `internal/cmd/ship_recover.go:94`
+- `phaseComplete` `--recover` (in-loop heal-before-gate; tree from the phase tip, reset scoped to the recorded base) — `internal/cmd/phase.go:218`
 
-_52f6c75 · extended ship-complete-recovery-hardening · extended ship-clean-tree · df17d75_
+_52f6c75 · extended ship-complete-recovery-hardening · extended ship-clean-tree · extended complete-base-truth · e1f72be_
 
 ### Shipping / pull requests
 

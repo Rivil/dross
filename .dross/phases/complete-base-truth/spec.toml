@@ -1,0 +1,65 @@
+[phase]
+  id = "complete-base-truth"
+  title = "complete-base-truth"
+  milestone = "v1.2"
+
+[[criteria]]
+  id = "c-1"
+  text = "dross phase complete performs no branch switch on any refusal path: a failed merge gate, a failed fetch, or a refused safety-net push all leave HEAD on phase/<id> with no ref moved."
+
+[[criteria]]
+  id = "c-2"
+  text = "The base branch a phase was forked from is persisted in the phase-scoped record and read back by dross phase complete, which reconciles against that recorded base rather than one derived from current_milestone."
+
+[[criteria]]
+  id = "c-3"
+  text = "When no base is recorded (a phase created before this change), dross phase complete refuses with guidance naming the phase and the candidate bases, rather than silently falling back to the milestone-inferred base."
+
+[[criteria]]
+  id = "c-4"
+  text = "--recover resets only the phase's recorded base, and sources the restored .dross/ tree from a commit holding this phase's work — never from a branch the command checked out during the same run."
+
+[[criteria]]
+  id = "c-5"
+  text = "A regression test reproduces the incident end to end — phase forked from main, a stale milestone branch present locally, PR merged to main — and asserts that completion either succeeds against main or refuses, but never fast-forwards the milestone branch and never deletes the phase branch."
+
+[[criteria]]
+  id = "c-6"
+  text = "dross phase complete --help accurately describes --recover's behaviour under a milestone (the Long text currently claims it is unsupported there, which the c-5 change made false)."
+
+[[criteria]]
+  id = "c-7"
+  text = "A quick task records the branch it forked from, and any command that later reconciles it uses that record rather than an inferred base."
+
+[[decisions]]
+  key = "base_storage"
+  choice = "The forked-from base is stored as a new `base` field on the phase-scoped changes.json, beside the existing `pr` field."
+  why = "Mirrors the locked pr_persistence decision — a phase-scoped record cannot be dragged forward by cumulative history — and complete already loads changes.json before the branch switch, so the base is in hand exactly when the gate needs it. No second file to keep in sync through ship's squash."
+  locked = true
+
+[[decisions]]
+  key = "base_write_timing"
+  choice = "Written twice: forkPhaseBranch records the base it actually forked from at create time, and ship overwrites it with the base the PR was opened against."
+  why = "The create-time write means every phase has a base immediately, including one that never ships; the ship-time write is authoritative for what the PR actually targeted if the two ever diverge. Each writer already knows its value, so neither write needs to infer."
+  locked = true
+
+[[decisions]]
+  key = "legacy_escape"
+  choice = "A phase with no recorded base refuses, and the refusal names a --base <branch> override the user can pass explicitly."
+  why = "Refusal alone would make every phase currently in flight un-completable without a re-ship. A branch name typed by the user is a conscious act rather than an inference, which keeps the milestone's premise intact — unlike a backfill command, which would have to infer the base and would infer it wrongly in exactly the stale-branch case that caused the bug."
+  locked = true
+
+[[deferred]]
+  text = "Auto-heal an already-diverged base inside dross phase complete (reset to origin + restore .dross/) rather than only making --recover safe."
+  why = "c-4 makes recovery safe but not automatic; three deferred items already target ship-complete-recovery-hardening for this."
+  target = "ship-complete-recovery-hardening"
+
+[[deferred]]
+  text = "Detect that a PR's base was retargeted on the forge after open, so the ship-time base record cannot go stale unnoticed."
+  why = "Needs provider plumbing beyond this phase; provider-merge-parity later in v1.2 is the natural home."
+  target = "provider-merge-parity"
+
+[[deferred]]
+  text = "Resuming work on a shipped-but-unmerged phase branch whose branch-local state.json already reads 'completed'."
+  why = "Adjacent to base truth but a different failure mode; belongs with the recovery-hardening work."
+  target = "ship-complete-recovery-hardening"

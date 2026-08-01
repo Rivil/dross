@@ -174,8 +174,12 @@ text = "Tags can be added"
 `)
 	gitCommit(t, dir, "feat(tag): add tagging")
 	commitSHA := gitOutT(t, dir, "rev-parse", "HEAD")
+	// Rewritten wholesale, so it must carry the base `phase create` recorded
+	// at fork time — otherwise the fixture silently models a phase that never
+	// recorded one, and ship's overwrite would look like a first write.
 	mustWrite(t, filepath.Join(phaseDir, "changes.json"), `{
   "phase": "x",
+  "base": "main",
   "tasks": {
     "t1": {"files": ["src/tag.ts"], "commit": "`+commitSHA+`", "completed_at": "2026-05-02T10:00:00Z"}
   }
@@ -417,6 +421,12 @@ func TestShipPushesPRRecordToPhaseBranch(t *testing.T) {
 	}
 	if pushed.PR != 99 {
 		t.Errorf("pushed changes.json should carry PR 99, got %d (record left local-only)", pushed.PR)
+	}
+	// The base rides the same commit and push as the PR number, so the squash
+	// carries a consistent (base, pr) pair onto the base branch — that pair is
+	// what `dross phase complete` reconciles against.
+	if pushed.Base != "main" {
+		t.Errorf("pushed changes.json should carry base \"main\", got %q (base write left local-only)", pushed.Base)
 	}
 
 	// And the pushed tip must be the record commit itself.
@@ -932,6 +942,106 @@ func TestShipTargetsMilestoneBranch(t *testing.T) {
 	}
 	if cap.openedBase != "milestone/v0.9" || cap.openedHead != "phase/x" {
 		t.Errorf("PR base/head = %q/%q; want milestone/v0.9 / phase/x", cap.openedBase, cap.openedHead)
+	}
+}
+
+// readShippedBase reads a phase's recorded forked-from base from the working
+// tree.
+func readShippedBase(t *testing.T, dir, phaseID string) string {
+	t.Helper()
+	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), phaseID), phaseID)
+	if err != nil {
+		t.Fatalf("load changes for %s: %v", phaseID, err)
+	}
+	return ch.Base
+}
+
+// TestShipOverwritesRecordedBase is the authoritative half of
+// base_write_timing (c-2): create recorded "main", but the PR was opened
+// against milestone/v0.9, and completion must reconcile against what the PR
+// actually targeted. A milestone scoped after the fork is the ordinary way the
+// two diverge.
+func TestShipOverwritesRecordedBase(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	cap := shipMockFlow(t, dir)
+
+	if got := readShippedBase(t, dir, "x"); got != "main" {
+		t.Fatalf("fixture precondition: create-time base = %q, want %q", got, "main")
+	}
+
+	activateMilestone(t, dir, "v0.9")
+	mustGit(t, dir, "push", "origin", "milestone/v0.9")
+
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	if cap.openedBase != "milestone/v0.9" {
+		t.Fatalf("fixture precondition: PR opened against %q, want milestone/v0.9", cap.openedBase)
+	}
+	if got := readShippedBase(t, dir, "x"); got != "milestone/v0.9" {
+		t.Errorf("recorded base = %q, want %q — ship must overwrite the create-time value", got, "milestone/v0.9")
+	}
+}
+
+// TestShipEarlyReturnsLeaveBaseIntact pins that the base write sits with the
+// PR record, past --no-push and --print-body: those flags open no PR, so
+// there is no authoritative base to record and no commit to make.
+func TestShipEarlyReturnsLeaveBaseIntact(t *testing.T) {
+	for _, flag := range []string{"--no-push", "--print-body"} {
+		t.Run(flag, func(t *testing.T) {
+			dir := shipFixture(t, "https://forge.example/me/p.git")
+			remoteDir := t.TempDir()
+			mustGit(t, remoteDir, "init", "-q", "--bare")
+			mustGit(t, dir, "remote", "set-url", "origin", remoteDir)
+
+			headBefore := mustGit(t, dir, "rev-parse", "HEAD")
+			if err := runCmd(t, Ship(), flag); err != nil {
+				t.Fatalf("ship %s: %v", flag, err)
+			}
+			if got := readShippedBase(t, dir, "x"); got != "main" {
+				t.Errorf("%s changed the recorded base to %q, want the create-time %q", flag, got, "main")
+			}
+			if got := mustGit(t, dir, "rev-parse", "HEAD"); got != headBefore {
+				t.Errorf("%s produced an extra commit: HEAD %s -> %s", flag, headBefore, got)
+			}
+		})
+	}
+}
+
+// TestShipReconcilesRecordedQuickBase (c-7) is the ship-side twin of
+// TestPhaseCompleteReconcilesRecordedQuickBase. pushQuickBaseIfRecorded has two
+// call sites — phase complete's and ship's — and the criterion says "any
+// command that later reconciles it", so both need a failing test behind them:
+// with only the complete-side test, deleting ship's call leaves the suite green
+// while a standalone quick task's chores sit unpushed through the whole ship.
+func TestShipReconcilesRecordedQuickBase(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+
+	// A branch standing in for a standalone quick task's target, carrying an
+	// unpushed .dross-only chore. It is not this phase's base (that is main),
+	// which is exactly the case the record exists for.
+	mustGit(t, dir, "push", "-q", "origin", "main:quick-target")
+	mustGit(t, dir, "branch", "quick-target", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	mustGit(t, dir, "checkout", "-q", "quick-target")
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# quick chore\n")
+	mustGit(t, dir, "add", ".dross/handoff.md")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): quick task bookkeeping")
+	mustGit(t, dir, "checkout", "-q", "phase/x")
+
+	if err := runCmd(t, Local(), "set", "quick_base", "quick-target"); err != nil {
+		t.Fatalf("local set: %v", err)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/quick-target..quick-target"); ahead == "" {
+		t.Fatal("fixture precondition: quick-target should be ahead of origin")
+	}
+
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/quick-target..quick-target"); ahead != "" {
+		t.Errorf("ship left the recorded quick_base unpushed: %q", ahead)
 	}
 }
 

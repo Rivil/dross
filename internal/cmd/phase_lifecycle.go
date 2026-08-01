@@ -185,7 +185,7 @@ func phaseInsert() *cobra.Command {
 			}
 			var branchBase string
 			if hasGit {
-				branchBase, _, err = forkPhaseBranch(repoDir, root, branchName)
+				branchBase, _, err = forkPhaseBranch(repoDir, root, id, branchName)
 				if err != nil {
 					_ = os.Remove(dir)
 					return err

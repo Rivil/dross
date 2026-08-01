@@ -35,3 +35,39 @@ func TestReadmeDocumentsInstallAndUpdate(t *testing.T) {
 		t.Error("README does not document `dross update`")
 	}
 }
+
+// TestReadmeDocumentsBaseTruthSurfaces (c-6) is the same grep-needle guard for
+// the surfaces this milestone's base-truth work added: the machine-local store
+// and completion's explicit base. Both change how a user recovers from a
+// refusal, so an undocumented one is a support burden, not a cosmetic gap.
+func TestReadmeDocumentsBaseTruthSurfaces(t *testing.T) {
+	root := repoRootFromTest(t)
+	b, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := string(b)
+
+	if !strings.Contains(readme, "dross local") {
+		t.Error("README does not document `dross local` (the machine-local store)")
+	}
+	if !strings.Contains(readme, "quick_base") {
+		t.Error("README does not name `quick_base`, the store's first key")
+	}
+	// The completion flag, in the phase row that describes `complete`.
+	phaseRow := ""
+	for _, line := range strings.Split(readme, "\n") {
+		if strings.HasPrefix(line, "| `dross phase {") {
+			phaseRow = line
+		}
+	}
+	if phaseRow == "" {
+		t.Fatal("README no longer has a `dross phase {...}` command row to check")
+	}
+	if !strings.Contains(phaseRow, "--base") {
+		t.Errorf("the phase row must document complete's --base escape hatch: %s", phaseRow)
+	}
+	if !strings.Contains(phaseRow, "--recover") {
+		t.Errorf("the phase row must document complete's --recover behaviour: %s", phaseRow)
+	}
+}

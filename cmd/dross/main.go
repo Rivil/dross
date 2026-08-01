@@ -28,6 +28,7 @@ func newRoot() *cobra.Command {
 		cmd.Onboard(),
 		cmd.Project(),
 		cmd.State(),
+		cmd.Local(),
 		cmd.Rule(),
 		cmd.Interaction(),
 		cmd.Validate(),

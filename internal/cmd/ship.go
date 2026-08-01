@@ -275,6 +275,13 @@ func Ship() *cobra.Command {
 			if basePushed {
 				narrate("pushed unpushed .dross chores on %s to origin\n", baseBranch)
 			}
+			quickPushed, quickBase, err := pushQuickBaseIfRecorded(repoDir, root, baseBranch)
+			if err != nil {
+				return err
+			}
+			if quickPushed {
+				narrate("pushed unpushed .dross chores on %s (recorded quick_base) to origin\n", quickBase)
+			}
 
 			// 7) Push phase/<id> directly. The provider's squash-merge will
 			//    collapse the per-task commits into one on the base; no
@@ -347,6 +354,16 @@ func Ship() *cobra.Command {
 			if res != nil && res.Number > 0 {
 				if err := changes.SetPR(root, phaseID, res.Number); err != nil {
 					return fmt.Errorf("persist PR number: %w", err)
+				}
+				// The authoritative half of base_write_timing: what the PR was
+				// actually opened against wins over the value create recorded,
+				// if the two ever diverge (a milestone scoped after the fork is
+				// the ordinary way that happens). It rides the same commit and
+				// push as the PR number, so the squash carries base and pr onto
+				// the base branch together and `dross phase complete` reads a
+				// consistent pair.
+				if err := changes.SetBase(root, phaseID, baseBranch); err != nil {
+					return fmt.Errorf("persist PR base branch: %w", err)
 				}
 				changesRel := filepath.Join(".dross", "phases", phaseID, changes.File)
 				if out, err := gitCombined(repoDir, "add", changesRel); err != nil {

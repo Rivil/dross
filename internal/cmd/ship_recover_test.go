@@ -161,6 +161,53 @@ func TestShipRecoverRefusesWrongBranch(t *testing.T) {
 	}
 }
 
+// TestShipRecoverGuardsTheRecordedBase (c-4): recover resets a branch, so it
+// must guard and reset the branch THIS phase was forked from. Resolving
+// repo.git_main_branch unconditionally meant that under a milestone the
+// command accepted being on main and hard-reset it — a branch with nothing to
+// do with the phase being recovered.
+func TestShipRecoverGuardsTheRecordedBase(t *testing.T) {
+	dir, _ := recoverFixture(t)
+
+	mustWrite(t, filepath.Join(dir, ".dross/phases/01-x/changes.json"),
+		`{"phase":"01-x","base":"milestone/v0.9"}`)
+	mustGit(t, dir, "add", ".dross/phases/01-x/changes.json")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record milestone base")
+
+	// On main — which is NOT this phase's base.
+	err := runCmd(t, Ship(), "recover")
+	if err == nil {
+		t.Fatal("expected a refusal: main is not the recorded base")
+	}
+	if !strings.Contains(err.Error(), "must be on milestone/v0.9") {
+		t.Errorf("guard should name the recorded base: %v", err)
+	}
+}
+
+// TestShipRecoverFallsBackToMainWithNoRecord keeps the legacy one-shot working:
+// the repos this command exists for predate the base record, and their phase
+// work really did live on main.
+func TestShipRecoverFallsBackToMainWithNoRecord(t *testing.T) {
+	dir, _ := recoverFixture(t)
+
+	if err := os.Remove(filepath.Join(dir, ".dross/phases/01-x/changes.json")); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, dir, "add", "-A")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: drop the record")
+
+	// The guard resolves main (we're on it) and the reset follows suit.
+	if err := runCmd(t, Ship(), "recover"); err != nil {
+		t.Fatalf("no-record recovery should fall back to git_main_branch: %v", err)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "main" {
+		t.Errorf("HEAD = %q, want main", cur)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/main..main"); ahead != "" {
+		t.Errorf("the restore commit should be pushed, got ahead: %q", ahead)
+	}
+}
+
 func TestShipRecoverRefusesSHAWithoutDross(t *testing.T) {
 	dir, _ := recoverFixture(t)
 

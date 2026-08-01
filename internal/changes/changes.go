@@ -24,8 +24,13 @@ func FilePath(root, phaseID string) string {
 }
 
 type Changes struct {
-	Phase string                `json:"phase"`
-	PR    int                   `json:"pr,omitempty"`
+	Phase string `json:"phase"`
+	PR    int    `json:"pr,omitempty"`
+	// Base is the branch this phase was forked from — the truth `dross phase
+	// complete` reconciles against, instead of re-deriving a base from
+	// current_milestone (which goes wrong the moment a stale milestone branch
+	// is sitting in the local repo). Phase-scoped for the same reason PR is.
+	Base  string                `json:"base,omitempty"`
 	Tasks map[string]TaskRecord `json:"tasks"`
 }
 
@@ -140,6 +145,21 @@ func SetPR(root, phaseID string, pr int) error {
 		return err
 	}
 	c.PR = pr
+	return c.Save(path)
+}
+
+// SetBase records the branch a phase was forked from, mirroring SetPR's
+// load-set-save so the two coexist in one phase-scoped record. Written at fork
+// time by `dross phase create` and overwritten at ship time with the base the
+// PR was actually opened against; read back by `dross phase complete` so it
+// reconciles against the real base rather than an inferred one.
+func SetBase(root, phaseID, branch string) error {
+	path := FilePath(root, phaseID)
+	c, err := Load(path, phaseID)
+	if err != nil {
+		return err
+	}
+	c.Base = branch
 	return c.Save(path)
 }
 

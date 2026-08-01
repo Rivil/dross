@@ -1,129 +1,9 @@
 {
-  "version": "1.2.0.0",
+  "version": "1.2.1.0",
   "current_milestone": "v1.2",
-  "last_activity": "2026-07-31T16:18:11.228166Z",
-  "last_action": "scoped milestone v1.2: 9 criteria, 6 phases",
+  "last_activity": "2026-08-01T07:14:10.676041Z",
+  "last_action": "completed complete-base-truth",
   "history": [
-    {
-      "at": "2026-07-29T17:07:48.052845Z",
-      "action": "executed t-1 (Add `dross task list` with --json)"
-    },
-    {
-      "at": "2026-07-29T17:10:55.546719Z",
-      "action": "executed t-2 (Complete + reversible project dotted paths)"
-    },
-    {
-      "at": "2026-07-29T17:13:45.922189Z",
-      "action": "executed t-3 (Resolve bare milestone field + validate status enum)"
-    },
-    {
-      "at": "2026-07-29T17:16:33.405681Z",
-      "action": "executed t-4 (Multi-path get renderer + state get + state show --json)"
-    },
-    {
-      "at": "2026-07-29T17:19:25.003379Z",
-      "action": "executed t-5 (Doctor flags unrecognised task statuses)"
-    },
-    {
-      "at": "2026-07-29T17:22:14.255039Z",
-      "action": "executed t-6 (Curated mis-reach table + nearest-match fallback)"
-    },
-    {
-      "at": "2026-07-29T17:24:44.034982Z",
-      "action": "executed t-7 (Adopt multi-path get in project + milestone)"
-    },
-    {
-      "at": "2026-07-29T17:28:58.917132Z",
-      "action": "executed t-8 (Wire hints into subcommand and flag errors)"
-    },
-    {
-      "at": "2026-07-29T17:30:50.892969Z",
-      "action": "executed t-9 (Pin the four mis-reaches against the real tree)"
-    },
-    {
-      "at": "2026-07-29T17:30:59.917946Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-29T17:30:59.926021Z",
-      "action": "phase cli-surface-sweep executed (9/9 done)"
-    },
-    {
-      "at": "2026-07-29T17:47:57.583584Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-29T17:47:57.590958Z",
-      "action": "verified cli-surface-sweep: partial (9/9 covered, mutation 0.96, 1 FLAG)"
-    },
-    {
-      "at": "2026-07-29T18:17:59.046563Z",
-      "action": "executed t-10 (cover the arity guards on `project set`)"
-    },
-    {
-      "at": "2026-07-29T18:18:07.401472Z",
-      "action": "set current_phase_status=complete"
-    },
-    {
-      "at": "2026-07-29T18:18:07.410076Z",
-      "action": "phase cli-surface-sweep amended (10/10 done — verify FLAG closed)"
-    },
-    {
-      "at": "2026-07-29T18:52:30.290082Z",
-      "action": "set current_phase_status=verified"
-    },
-    {
-      "at": "2026-07-29T18:52:30.297695Z",
-      "action": "verified cli-surface-sweep: pass (9/9, mutation 0.96)"
-    },
-    {
-      "at": "2026-07-29T19:34:11.470471Z",
-      "action": "completed cli-surface-sweep"
-    },
-    {
-      "at": "2026-07-30T07:10:48.334603Z",
-      "action": "created board-state-map-truth"
-    },
-    {
-      "at": "2026-07-30T07:25:45.864992Z",
-      "action": "set current_phase=board-state-map-truth"
-    },
-    {
-      "at": "2026-07-30T07:25:45.873023Z",
-      "action": "spec locked: board-state-map-truth"
-    },
-    {
-      "at": "2026-07-30T07:50:36.538785Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-30T07:50:36.547028Z",
-      "action": "plan locked: board-state-map-truth (11 tasks across 4 waves)"
-    },
-    {
-      "at": "2026-07-30T10:05:39.71824Z",
-      "action": "plan reviewed: board-state-map-truth (1 blocking, 9 flags — all folded in)"
-    },
-    {
-      "at": "2026-07-30T10:05:39.726008Z",
-      "action": "set version=1.1.4.0"
-    },
-    {
-      "at": "2026-07-30T10:14:16.014399Z",
-      "action": "executed t-1 (Define lifecycle set, rename planning to planned)"
-    },
-    {
-      "at": "2026-07-30T10:17:03.713885Z",
-      "action": "executed t-2 (Mirror toml tags as json tags across schemas)"
-    },
-    {
-      "at": "2026-07-30T10:20:07.536236Z",
-      "action": "executed t-3 (Reject out-of-set --status on phase-sync)"
-    },
-    {
-      "at": "2026-07-30T10:27:54.657253Z",
-      "action": "executed t-4 (Gate state_map keys in project set and doctor)"
-    },
     {
       "at": "2026-07-30T10:30:15.80922Z",
       "action": "executed t-5 (Emit terminal board statuses from ship)"
@@ -203,6 +83,126 @@
     {
       "at": "2026-07-31T16:18:11.228166Z",
       "action": "scoped milestone v1.2: 9 criteria, 6 phases"
+    },
+    {
+      "at": "2026-07-31T16:18:35.320113Z",
+      "action": "created complete-base-truth"
+    },
+    {
+      "at": "2026-07-31T16:24:32.697404Z",
+      "action": "set current_phase=complete-base-truth"
+    },
+    {
+      "at": "2026-07-31T16:24:32.703418Z",
+      "action": "spec locked: complete-base-truth"
+    },
+    {
+      "at": "2026-07-31T16:51:22.327323Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-07-31T16:51:22.335118Z",
+      "action": "plan locked: complete-base-truth (9 tasks across 4 waves)"
+    },
+    {
+      "at": "2026-07-31T16:56:59.188504Z",
+      "action": "plan reviewed: complete-base-truth (0 blocking, 8 flags)"
+    },
+    {
+      "at": "2026-07-31T17:22:04.559938Z",
+      "action": "set version=1.2.1.0"
+    },
+    {
+      "at": "2026-07-31T17:23:52.162272Z",
+      "action": "executed t-1 (Add base field and SetBase to changes.json)"
+    },
+    {
+      "at": "2026-07-31T17:27:56.917302Z",
+      "action": "executed t-2 (Move complete's branch switch past all refusals)"
+    },
+    {
+      "at": "2026-07-31T17:32:43.34078Z",
+      "action": "executed t-3 (Record quick's forked-from base in local.toml)"
+    },
+    {
+      "at": "2026-07-31T17:37:35.124001Z",
+      "action": "executed t-4 (Write the phase base at fork)"
+    },
+    {
+      "at": "2026-07-31T17:40:04.224702Z",
+      "action": "executed t-11 (Overwrite the phase base at ship time)"
+    },
+    {
+      "at": "2026-07-31T17:46:20.231848Z",
+      "action": "executed t-5 (Resolve complete's base from the record, add --base)"
+    },
+    {
+      "at": "2026-07-31T17:50:09.069632Z",
+      "action": "executed t-6 (Scope --recover to recorded base and phase tip)"
+    },
+    {
+      "at": "2026-07-31T17:52:38.407951Z",
+      "action": "executed t-7 (Reconcile the recorded quick base in ship and complete)"
+    },
+    {
+      "at": "2026-07-31T17:54:37.881383Z",
+      "action": "executed t-8 (Resolve ship recover's base from the phase record)"
+    },
+    {
+      "at": "2026-07-31T17:56:52.838449Z",
+      "action": "executed t-10 (Sync README for the new surfaces)"
+    },
+    {
+      "at": "2026-07-31T17:59:11.072991Z",
+      "action": "executed t-9 (Reproduce the stale-milestone incident end to end)"
+    },
+    {
+      "at": "2026-07-31T18:00:12.775583Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-07-31T18:00:12.783091Z",
+      "action": "phase complete-base-truth executed (11/11 done)"
+    },
+    {
+      "at": "2026-07-31T18:01:59.879086Z",
+      "action": "paused — complete-base-truth executed 11/11, ready for /dross-verify"
+    },
+    {
+      "at": "2026-08-01T06:07:36.246271Z",
+      "action": "resumed — 2 loops left, next /dross-verify complete-base-truth"
+    },
+    {
+      "at": "2026-08-01T06:23:17.647176Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-08-01T06:23:17.655405Z",
+      "action": "verified complete-base-truth: partial (6/7 covered, c-7 weak, mutation 0.96 with 0 lived)"
+    },
+    {
+      "at": "2026-08-01T06:30:41.662829Z",
+      "action": "executed t-12 (Cover the ship-side quick-base reconcile)"
+    },
+    {
+      "at": "2026-08-01T06:30:51.585104Z",
+      "action": "set current_phase_status=complete"
+    },
+    {
+      "at": "2026-08-01T06:30:51.591874Z",
+      "action": "phase complete-base-truth amended (12/12 done; c-7 gap closed)"
+    },
+    {
+      "at": "2026-08-01T06:51:35.99414Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-08-01T06:51:36.000209Z",
+      "action": "verified complete-base-truth: pass (7/7 covered, mutation 0.958)"
+    },
+    {
+      "at": "2026-08-01T07:14:10.676041Z",
+      "action": "completed complete-base-truth"
     }
   ]
 }

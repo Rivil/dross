@@ -14,6 +14,7 @@ import (
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/verify"
@@ -144,7 +145,7 @@ func phaseCreate() *cobra.Command {
 				// (milestone/<version> when active, else main). On any
 				// failure roll back the empty dir so a retry doesn't leak
 				// a phase number.
-				branchBase, milestoneActive, err = forkPhaseBranch(repoDir, root, branchName)
+				branchBase, milestoneActive, err = forkPhaseBranch(repoDir, root, id, branchName)
 				if err != nil {
 					_ = os.Remove(dir)
 					return err
@@ -216,16 +217,21 @@ func phaseCreate() *cobra.Command {
 // together they keep phase work fully off main.
 func phaseComplete() *cobra.Command {
 	var recoverFlag bool
+	var baseFlag string
 	c := &cobra.Command{
 		Use:   "complete [phase-id]",
 		Short: "Finalize a phase after squash-merge: ff the reconcile branch, delete phase/<id>",
 		Long: `Run after the PR for this phase has been squash-merged upstream.
 
-  1. switch to the reconcile branch — milestone/<version> when a milestone
+  1. fetch origin and confirm the phase's merge
+  2. switch to the reconcile branch — milestone/<version> when a milestone
      is active, else the configured main branch
-  2. fetch origin
   3. fast-forward the reconcile branch from origin/<branch>
   4. delete the local phase/<id> branch (and the remote one)
+
+The switch happens only after every check has passed, so a refused
+completion leaves HEAD on phase/<id> with no local ref moved — re-run it
+once the reason for the refusal is fixed.
 
 'dross ship' folds the cleared current_phase + "completed <id>" record
 into the PR squash, so the fast-forward above already brings the
@@ -242,12 +248,17 @@ provider can't answer, complete falls back to a git-ancestry check
 (merge-base --is-ancestor) and refuses-when-inconclusive rather than
 false-completing.
 
-On an already-diverged branch the fast-forward aborts. For main, re-run
-with --recover to reset it to origin and restore the cumulative .dross/
-tree in one shot (the same heal as 'dross ship recover'); --recover is a
-destructive reset of local main. Under a milestone, --recover is not yet
-supported, so a diverged milestone branch aborts non-destructively and
-points at a manual reconcile.`,
+The base is the branch this phase was forked from, read back from the
+record its own changes.json carries — never inferred from the active
+milestone, which picks a stale local branch the phase never forked from.
+A phase with no recorded base refuses; pass --base <branch> to name it.
+
+On an already-diverged base the fast-forward aborts. Re-run with
+--recover to reset that base to origin and restore the cumulative
+.dross/ tree in one shot (the same heal as 'dross ship recover'). It
+works for whichever branch the record names — main or
+milestone/<version> — and resets only that one. --recover is a
+destructive reset of the local base branch; read the abort first.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			root, err := FindRoot()
@@ -285,11 +296,14 @@ points at a manual reconcile.`,
 				return errors.New("no phase id given, state has no current_phase, and not on a phase/<id> branch")
 			}
 
-			// Reconcile against the active milestone's integration branch
-			// (milestone/<version>) when one exists, else main — the same base
-			// resolver create/ship use. Under a milestone, complete ff's the
-			// milestone branch so main only advances at the milestone boundary.
-			reconcileBranch, _, err := resolveNewWorkBase(repoDir, root)
+			// Reconcile against the branch this phase was actually forked
+			// from, read back from its phase-scoped record. Deriving it from
+			// current_milestone instead — as this used to — silently picks a
+			// stale milestone branch whenever one is sitting in the local repo,
+			// and then fast-forwards it with work that was never merged there.
+			// Resolved BEFORE anything mutating (the verify heal, the .dross
+			// auto-commit, the fetch), so a refusal here changes nothing.
+			reconcileBranch, err := resolveCompleteBase(repoDir, root, p, s, phaseID, baseFlag)
 			if err != nil {
 				return err
 			}
@@ -341,17 +355,6 @@ points at a manual reconcile.`,
 				recordedPR = ch.PR
 			}
 
-			// Switch to the reconcile branch if we aren't already there.
-			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
-			if err != nil {
-				return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
-			}
-			if cur != reconcileBranch {
-				if out, err := gitCombined(repoDir, "checkout", reconcileBranch); err != nil {
-					return fmt.Errorf("git checkout %s: %w\n%s", reconcileBranch, err, out)
-				}
-			}
-
 			if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
 				return fmt.Errorf("git fetch: %w\n%s", err, out)
 			}
@@ -367,6 +370,13 @@ points at a manual reconcile.`,
 			}
 			if basePushed {
 				Printf("pushed unpushed .dross chores on %s to origin\n", reconcileBranch)
+			}
+			quickPushed, quickBase, err := pushQuickBaseIfRecorded(repoDir, root, reconcileBranch)
+			if err != nil {
+				return err
+			}
+			if quickPushed {
+				Printf("pushed unpushed .dross chores on %s (recorded quick_base) to origin\n", quickBase)
 			}
 
 			// Origin-side fallback for the recorded PR (c-3): post-squash-merge
@@ -394,6 +404,33 @@ points at a manual reconcile.`,
 				return err
 			}
 
+			// Switch to the reconcile branch only now — every refusal above
+			// (fetch failure, a code-ahead or unpushable base, an unmerged PR)
+			// returns with HEAD still on phase/<id> and no local ref moved, so
+			// a refused completion is a no-op the user can simply re-run.
+			// Nothing above needs HEAD: fetch, pushBaseIfAheadDrossOnly,
+			// originRecordedPR and mergeGate all take branch names. The
+			// ff-only merge below is the first step that does.
+			//
+			// There is deliberately no restore-HEAD-on-error path past this
+			// point: a compensating checkout is itself a branch switch, and one
+			// that fails mid-refusal leaves a worse state than not trying.
+			// Capture the phase branch's tip before leaving it. --recover
+			// restores the .dross/ tree from THIS commit; taking it after the
+			// checkout would source the tree from the branch the command just
+			// moved to, which is the branch being reset.
+			phaseTipSHA, _ := gitTrim(repoDir, "rev-parse", "refs/heads/"+phaseBranch)
+
+			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			if err != nil {
+				return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
+			}
+			if cur != reconcileBranch {
+				if out, err := gitCombined(repoDir, "checkout", reconcileBranch); err != nil {
+					return fmt.Errorf("git checkout %s: %w\n%s", reconcileBranch, err, out)
+				}
+			}
+
 			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+reconcileBranch); err != nil {
 				// The ff abort IS the divergence signal: local <branch> holds
 				// commits origin/<branch> doesn't. The clean-tree guard above
@@ -409,18 +446,31 @@ points at a manual reconcile.`,
 						"(or use `dross ship recover`). Recovery is a destructive reset of local %s — read the abort first.",
 						reconcileBranch, reconcileBranch, out, reconcileBranch, reconcileBranch)
 				}
-				// --recover: reload state from the (now checked-out) base
-				// working tree so the recovery commit carries the base's
-				// .dross/ state, not the phase branch's stale copy loaded at
-				// the top of this RunE. Then delegate to the shared routine —
-				// the same heal `dross ship recover` runs — which resets the
-				// base (main or milestone/<version>, c-5) to origin, restores
-				// the cumulative .dross/ tree, and pushes the restore.
+				// --recover: the heal is a tree-from-phase-tip,
+				// state.json-from-base split.
+				//
+				// state comes from the base: reload it from the (now
+				// checked-out) base working tree so the recovery commit
+				// carries the base's cumulative .dross/ state, not the phase
+				// branch's stale copy loaded at the top of this RunE.
+				// runDrossRecovery's own s.Save(rs) writes that copy last, so
+				// it wins over whatever the tree restore put there.
+				//
+				// The tree comes from the phase tip: passing phaseTipSHA makes
+				// `checkout <sha> -- .dross/` restore the phase branch's
+				// .dross/ — the only place this phase's own records live.
+				// Passing "" would default to HEAD, which is the branch we just
+				// checked out and are about to reset, so the phase's records
+				// would simply be absent from the restore.
+				//
+				// The reset target is the RECORDED base, not an inferred one:
+				// resetting a stale milestone branch a phase never forked from
+				// is the incident this phase exists to prevent.
 				rs, lerr := state.Load(filepath.Join(root, state.File))
 				if lerr != nil {
 					return fmt.Errorf("reload state for recovery: %w", lerr)
 				}
-				if rerr := runDrossRecovery(repoDir, root, rs, phaseID, "", reconcileBranch); rerr != nil {
+				if rerr := runDrossRecovery(repoDir, root, rs, phaseID, phaseTipSHA, reconcileBranch); rerr != nil {
 					return fmt.Errorf("recover diverged %s during complete: %w", reconcileBranch, rerr)
 				}
 				// Healed: base reset to origin with .dross/ restored. Fall
@@ -467,7 +517,78 @@ points at a manual reconcile.`,
 	}
 	c.Flags().BoolVar(&recoverFlag, "recover", false,
 		"on a diverged base (main or milestone/<version>), reset to origin and restore .dross/ in one shot instead of aborting")
+	c.Flags().StringVar(&baseFlag, "base", "",
+		"the branch this phase was forked from, when no base is recorded (a pre-check phase, or one created with --no-branch)")
 	return c
+}
+
+// resolveCompleteBase answers "which branch was this phase forked from?" for
+// `dross phase complete`, in priority order:
+//
+//  1. an explicit --base, validated against the local refs;
+//  2. the base recorded in the phase's changes.json in the working tree;
+//  3. the same record read off refs/heads/phase/<id>, for the post-squash
+//     state where the working tree predates the record;
+//  4. a refusal.
+//
+// There is deliberately no inference step. The milestone-derived base that
+// used to sit here is exactly what made a stale local milestone/<version>
+// branch the reconcile target for a phase forked off main — so when there is
+// no record, the answer is a refusal naming --base, not a guess. A branch the
+// user types is a conscious act; an inferred one is the bug.
+func resolveCompleteBase(repoDir, root string, p *project.Project, s *state.State, phaseID, baseFlag string) (string, error) {
+	if baseFlag != "" {
+		if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+baseFlag); err != nil {
+			return "", fmt.Errorf("--base %s: no such local branch", baseFlag)
+		}
+		return baseFlag, nil
+	}
+	if ch, err := changes.Load(changes.FilePath(root, phaseID), phaseID); err == nil && ch.Base != "" {
+		return ch.Base, nil
+	}
+	if base := phaseRefRecordedBase(repoDir, phaseID); base != "" {
+		return base, nil
+	}
+	return "", fmt.Errorf("phase %q has no recorded forked-from base — refusing to guess one.\n"+
+		"Completion reconciles against the branch the phase was forked from; inferring it from the "+
+		"active milestone is what lets a stale local branch become the target.\n"+
+		"Candidates here: %s.\n"+
+		"Re-run naming the branch this phase was forked from, e.g. `dross phase complete %s --base %s`.\n"+
+		"(Phases created before this check, and phases created with --no-branch, carry no record — "+
+		"--base is the permanent answer for them.)",
+		phaseID, strings.Join(completeBaseCandidates(repoDir, p, s), ", "), phaseID, p.Repo.GitMainBranch)
+}
+
+// phaseRefRecordedBase reads the recorded base off refs/heads/phase/<id>'s
+// committed tree. It covers the post-squash-merge state where the local
+// working tree predates ship's record commit but the phase branch carries it.
+// Best-effort: any git or parse failure yields "" and the caller refuses.
+func phaseRefRecordedBase(repoDir, phaseID string) string {
+	ref := "refs/heads/phase/" + phaseID + ":.dross/phases/" + phaseID + "/" + changes.File
+	out, err := exec.Command("git", "-C", repoDir, "show", ref).Output()
+	if err != nil {
+		return ""
+	}
+	var ch changes.Changes
+	if err := json.Unmarshal(out, &ch); err != nil {
+		return ""
+	}
+	return ch.Base
+}
+
+// completeBaseCandidates lists the branches a base-less phase plausibly forked
+// from — the configured main branch, plus the active milestone's integration
+// branch when its ref exists. Naming them turns the refusal into something the
+// user can act on without going and reading the reflog.
+func completeBaseCandidates(repoDir string, p *project.Project, s *state.State) []string {
+	cands := []string{p.Repo.GitMainBranch}
+	if s.CurrentMilestone != "" {
+		ms := "milestone/" + s.CurrentMilestone
+		if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+ms) == nil {
+			cands = append(cands, ms)
+		}
+	}
+	return cands
 }
 
 // originRecordedPR reads the phase's recorded PR number out of
@@ -538,7 +659,15 @@ func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconci
 // auto-commit of .dross-only dirt (autoCommitDrossDirt); the caller owns
 // directory creation and rollback. Returns the resolved base and whether a
 // milestone branch was used (so create can tailor the no-milestone nudge).
-func forkPhaseBranch(repoDir, root, branchName string) (base string, milestoneActive bool, err error) {
+//
+// It also records the base it ACTUALLY forked from into the phase's
+// changes.json — the create-time half of the base_write_timing decision, so
+// every phase carries a base immediately, including one that never ships.
+// phaseID is passed in rather than derived by trimming "phase/" off
+// branchName: the id is what the record is keyed by, and reconstructing it
+// from a branch name would silently mis-key any phase whose branch name
+// stopped matching.
+func forkPhaseBranch(repoDir, root, phaseID, branchName string) (base string, milestoneActive bool, err error) {
 	committed, err := autoCommitDrossDirt(repoDir, "starting a phase")
 	if err != nil {
 		return "", false, err
@@ -555,6 +684,13 @@ func forkPhaseBranch(repoDir, root, branchName string) (base string, milestoneAc
 	}
 	if out, e := gitCombined(repoDir, "checkout", "-b", branchName, base); e != nil {
 		return "", false, fmt.Errorf("git checkout -b %s %s: %w\n%s", branchName, base, e, out)
+	}
+	// Only after the fork succeeded: a failed checkout must leave no
+	// changes.json behind, because the caller's rollback is os.Remove(dir),
+	// which only removes an empty directory — a record written up front would
+	// leak the phase id on every retry.
+	if err := changes.SetBase(root, phaseID, base); err != nil {
+		return "", false, fmt.Errorf("record forked-from base for %s: %w", phaseID, err)
 	}
 	return base, milestoneActive, nil
 }

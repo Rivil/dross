@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/ship"
 	"github.com/Rivil/dross/internal/state"
@@ -198,6 +199,11 @@ func TestPhaseCreateSlugIdentity(t *testing.T) {
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "chore: phase 1 bookkeeping")
 	mustGit(t, dir, "checkout", "-q", "main")
+	// Fold phase 1's dir onto main before the second create. Recording the
+	// forked-from base at create time makes .dross/phases/<id>/ tracked
+	// immediately, so checking out main now takes the first phase's dir away
+	// with it — and there'd be no slug collision left to assert.
+	mustGit(t, dir, "merge", "-q", "--ff-only", "phase/my-feature")
 	if err := runCmd(t, Phase(), "create", "My Feature"); err != nil {
 		t.Fatalf("second create: %v", err)
 	}
@@ -346,9 +352,12 @@ func completeFixture(t *testing.T) (string, string) {
 
 	// Record a PR number on phase/auth (as ship does post-push), so complete's
 	// merge gate has THIS phase's PR to look up. Committed on the phase branch
-	// only — it never reaches origin/main, matching production.
+	// only — it never reaches origin/main, matching production. It carries the
+	// base too: `phase create` records the forked-from branch and ship
+	// overwrites it, and complete reconciles against that rather than
+	// inferring one.
 	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
-		`{"phase":"auth","pr":42,"tasks":{}}`)
+		`{"phase":"auth","pr":42,"base":"main","tasks":{}}`)
 	mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
 	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record PR #42 for auth")
 
@@ -416,6 +425,349 @@ func TestPhaseCompleteHappyPath(t *testing.T) {
 	status := mustGit(t, dir, "status", "--porcelain")
 	if status != "" {
 		t.Errorf("working tree should be clean after complete, got: %q", status)
+	}
+}
+
+// assertRefusalTouchedNothing is the shared c-1 assertion: a refused
+// completion must leave HEAD on the phase branch, the phase branch alive, and
+// the base ref exactly where it was. The branch switch sits past every refusal
+// precisely so a refusal is a re-runnable no-op.
+func assertRefusalTouchedNothing(t *testing.T, dir, phaseBranch, base, baseSHABefore string) {
+	t.Helper()
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != phaseBranch {
+		t.Errorf("refusal moved HEAD off %s: now on %q", phaseBranch, cur)
+	}
+	if branches := mustGit(t, dir, "branch", "--list", phaseBranch); !strings.Contains(branches, phaseBranch) {
+		t.Errorf("%s should survive a refused complete, got: %q", phaseBranch, branches)
+	}
+	if got := mustGit(t, dir, "rev-parse", base); got != baseSHABefore {
+		t.Errorf("refusal moved %s: %s -> %s", base, baseSHABefore, got)
+	}
+}
+
+// TestPhaseCompleteMergeGateRefusalLeavesHEADOnPhase pins c-1 for the gate
+// refusal: an unmerged PR must not cost the user their branch position. The
+// checkout used to run before the gate, so a refusal stranded them on the base
+// with the phase branch still holding unmerged work.
+func TestPhaseCompleteMergeGateRefusalLeavesHEADOnPhase(t *testing.T) {
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, false) // provider says PR #42 is NOT merged
+
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+	originBefore := mustGit(t, dir, "rev-parse", "origin/main")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected refusal when the recorded PR is not merged")
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+
+	// The safety-net push must not have fired: local main is behind origin/main
+	// here, with nothing of its own to push.
+	if got := mustGit(t, dir, "rev-parse", "origin/main"); got != originBefore {
+		t.Errorf("safety-net push advanced origin/main on a base with nothing to push: %s -> %s", originBefore, got)
+	}
+}
+
+// TestPhaseCompleteFetchFailureLeavesHEADOnPhase pins c-1 for the earliest
+// refusal — a fetch that can't reach origin. Nothing before the ff-only merge
+// needs HEAD, so an unreachable remote must be a pure no-op.
+func TestPhaseCompleteFetchFailureLeavesHEADOnPhase(t *testing.T) {
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
+
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+	mustGit(t, dir, "remote", "set-url", "origin", filepath.Join(dir, "no-such-remote.git"))
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected refusal when fetch cannot reach origin")
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+}
+
+// TestPhaseCompleteSafetyNetRefusalLeavesHEADOnPhase pins c-1 for the
+// safety-net push refusal: a base carrying unpushed non-.dross work is the
+// user's to reconcile, and refusing to do it for them must not also relocate
+// them onto that very branch.
+func TestPhaseCompleteSafetyNetRefusalLeavesHEADOnPhase(t *testing.T) {
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
+
+	// Put local main purely ahead of origin/main with a code commit — the
+	// shape pushBaseIfAheadDrossOnly refuses on.
+	mustGit(t, dir, "checkout", "-q", "main")
+	mustGit(t, dir, "reset", "-q", "--hard", "origin/main")
+	mustWrite(t, filepath.Join(dir, "src/hotfix.ts"), "x\n")
+	mustGit(t, dir, "add", "src/hotfix.ts")
+	mustGit(t, dir, "commit", "-q", "-m", "fix: hotfix straight on main")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected refusal when the base is ahead with non-.dross commits")
+	}
+	if !strings.Contains(err.Error(), "non-.dross") {
+		t.Errorf("refusal should name the non-.dross commits: %v", err)
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+}
+
+// TestPhaseCompleteReconcilesRecordedBaseNotMilestone is the c-2 regression in
+// miniature: the phase recorded main, a stale milestone/<v> branch is sitting
+// in the local repo, and current_milestone points at it. Inference picks the
+// milestone branch and fast-forwards it with work that never merged there;
+// the record picks main.
+func TestPhaseCompleteReconcilesRecordedBaseNotMilestone(t *testing.T) {
+	dir, _ := completeFixture(t) // records base "main"
+	stubPRMerged(t, true)
+
+	// A stale milestone branch + an active milestone: everything the old
+	// inference needed to pick the wrong target.
+	mustGit(t, dir, "branch", "milestone/v0.9", "main")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.9"); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	msBefore := mustGit(t, dir, "rev-parse", "milestone/v0.9")
+
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "main" {
+		t.Errorf("HEAD = %q, want main (the RECORDED base)", cur)
+	}
+	if got, want := mustGit(t, dir, "rev-parse", "main"), mustGit(t, dir, "rev-parse", "origin/main"); got != want {
+		t.Errorf("main not ff'd to origin: %s != %s", got, want)
+	}
+	if got := mustGit(t, dir, "rev-parse", "milestone/v0.9"); got != msBefore {
+		t.Errorf("the stale milestone branch was moved: %s -> %s", msBefore, got)
+	}
+}
+
+// TestPhaseCompleteRefusesWithNoRecordedBase pins c-3: no record and no flag
+// is a refusal naming the phase, the candidates and --base — never a silent
+// fallback to the milestone-inferred base. It must fire before anything
+// mutating, so HEAD, the base and the phase branch are all untouched.
+func TestPhaseCompleteRefusesWithNoRecordedBase(t *testing.T) {
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
+
+	// Strip the base from the record, on the phase branch where complete
+	// reads it — the shape of a phase created before this check existed.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
+		`{"phase":"auth","pr":42,"tasks":{}}`)
+	mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): drop the base record")
+	mustGit(t, dir, "branch", "milestone/v0.9", "main")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.9"); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected a refusal when no base is recorded")
+	}
+	for _, needle := range []string{"auth", "--base", "main", "milestone/v0.9"} {
+		if !strings.Contains(err.Error(), needle) {
+			t.Errorf("refusal should name %q: %v", needle, err)
+		}
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+}
+
+// TestPhaseCompleteBaseFlagOverridesMissingRecord is the legacy_escape decision
+// (c-3): a branch the user types carries a base-less phase through to
+// completion, so a phase in flight when this landed is not stranded.
+func TestPhaseCompleteBaseFlagOverridesMissingRecord(t *testing.T) {
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
+
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
+		`{"phase":"auth","pr":42,"tasks":{}}`)
+	mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): drop the base record")
+
+	if err := runCmd(t, Phase(), "complete", "--base", "main"); err != nil {
+		t.Fatalf("complete --base main: %v", err)
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); b != "" {
+		t.Errorf("phase/auth should be deleted after a successful complete, got %q", b)
+	}
+}
+
+// TestPhaseCompleteBaseFlagValidated keeps a typo'd branch name from leaking
+// out as a raw git checkout failure halfway through the run.
+func TestPhaseCompleteBaseFlagValidated(t *testing.T) {
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+
+	err := runCmd(t, Phase(), "complete", "--base", "does-not-exist")
+	if err == nil {
+		t.Fatal("expected a refusal for a --base naming no local branch")
+	}
+	if !strings.Contains(err.Error(), "does-not-exist") {
+		t.Errorf("refusal should name the branch: %v", err)
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+}
+
+// TestPhaseCompleteReadsBaseOffPhaseRef covers the post-squash stale-tree
+// state: the working tree predates ship's record commit, but refs/heads/
+// phase/<id> carries it. Without this fallback such a phase would refuse even
+// though its base is recorded one ref away.
+func TestPhaseCompleteReadsBaseOffPhaseRef(t *testing.T) {
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
+
+	// Strip the base from the working-tree copy only, leaving the PR number
+	// so the merge gate is unaffected — refs/heads/phase/auth still carries
+	// the base from the fixture's commit.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
+		`{"phase":"auth","pr":42,"tasks":{}}`)
+	if base := phaseRefRecordedBase(dir, "auth"); base != "main" {
+		t.Fatalf("fixture precondition: phase ref carries base %q, want main", base)
+	}
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete should read the base off the phase ref: %v", err)
+	}
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "main" {
+		t.Errorf("HEAD = %q, want main", cur)
+	}
+}
+
+// quickBaseFixture builds completeFixture (phase base "main") and moves the
+// phase onto a milestone base, so the recorded quick_base and the phase base
+// are genuinely different branches — the shape where a quick task's chores
+// would otherwise be left behind.
+func quickBaseFixture(t *testing.T) string {
+	t.Helper()
+	dir, _ := completeFixture(t)
+	stubPRMerged(t, true)
+	return dir
+}
+
+// TestPhaseCompleteReconcilesRecordedQuickBase (c-7): a standalone quick task
+// left an unpushed .dross chore on main while this phase's base is elsewhere.
+// Completion pushes it, driven by the recorded branch — the chores would
+// otherwise re-seed divergence at the next squash-merge.
+func TestPhaseCompleteReconcilesRecordedQuickBase(t *testing.T) {
+	dir := quickBaseFixture(t)
+
+	// A second branch standing in for a quick task's target, with an unpushed
+	// .dross-only chore on it.
+	mustGit(t, dir, "push", "-q", "origin", "main:quick-target")
+	mustGit(t, dir, "branch", "quick-target", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	mustGit(t, dir, "checkout", "-q", "quick-target")
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# quick chore\n")
+	mustGit(t, dir, "add", ".dross/handoff.md")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): quick task bookkeeping")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+
+	if err := runCmd(t, Local(), "set", "quick_base", "quick-target"); err != nil {
+		t.Fatalf("local set: %v", err)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/quick-target..quick-target"); ahead == "" {
+		t.Fatal("fixture precondition: quick-target should be ahead of origin")
+	}
+
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/quick-target..quick-target"); ahead != "" {
+		t.Errorf("the recorded quick_base was left unpushed: %q", ahead)
+	}
+}
+
+// TestPhaseCompleteLeavesUnrecordedQuickBaseAlone is the same fixture with no
+// record: the push must be driven by the record, never by inference over
+// whatever branches happen to be ahead.
+func TestPhaseCompleteLeavesUnrecordedQuickBaseAlone(t *testing.T) {
+	dir := quickBaseFixture(t)
+
+	mustGit(t, dir, "push", "-q", "origin", "main:quick-target")
+	mustGit(t, dir, "branch", "quick-target", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	mustGit(t, dir, "checkout", "-q", "quick-target")
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# quick chore\n")
+	mustGit(t, dir, "add", ".dross/handoff.md")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): quick task bookkeeping")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if ahead := mustGit(t, dir, "rev-list", "origin/quick-target..quick-target"); ahead == "" {
+		t.Error("with no quick_base recorded, complete must not touch that branch")
+	}
+}
+
+// TestPhaseCompleteSkipsMissingQuickBaseRef: the store is gitignored and
+// machine-local, so a value naming a branch that no longer exists here is
+// expected. It is a silent skip, not an error that blocks completion.
+func TestPhaseCompleteSkipsMissingQuickBaseRef(t *testing.T) {
+	dir := quickBaseFixture(t)
+
+	if err := runCmd(t, Local(), "set", "quick_base", "long-gone"); err != nil {
+		t.Fatalf("local set: %v", err)
+	}
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("a quick_base naming no local ref must be skipped, not fatal: %v", err)
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); b != "" {
+		t.Errorf("complete should have finished and deleted phase/auth, got %q", b)
+	}
+}
+
+// TestPhaseCompleteQuickBaseRefusalNamesTheRecord: a code commit on the quick
+// base is the user's to reconcile, and the refusal must say where that branch
+// name came from — it was never typed on this command line.
+func TestPhaseCompleteQuickBaseRefusalNamesTheRecord(t *testing.T) {
+	dir := quickBaseFixture(t)
+
+	mustGit(t, dir, "push", "-q", "origin", "main:quick-target")
+	mustGit(t, dir, "branch", "quick-target", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	mustGit(t, dir, "checkout", "-q", "quick-target")
+	mustWrite(t, filepath.Join(dir, "src/quick.ts"), "x\n")
+	mustGit(t, dir, "add", "src/quick.ts")
+	mustGit(t, dir, "commit", "-q", "-m", "fix: code straight on the quick base")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+
+	if err := runCmd(t, Local(), "set", "quick_base", "quick-target"); err != nil {
+		t.Fatalf("local set: %v", err)
+	}
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected a refusal for non-.dross commits on the recorded quick base")
+	}
+	for _, needle := range []string{"quick-target", "quick_base", "local.toml"} {
+		if !strings.Contains(err.Error(), needle) {
+			t.Errorf("refusal should name %q so the branch is traceable to the record: %v", needle, err)
+		}
+	}
+}
+
+// TestPhaseCompleteQuickBaseEqualToPhaseBaseIsNoOp: when the quick task landed
+// on this phase's own base, the phase-base net already pushed it. Pushing the
+// same branch twice is pointless work on the network path.
+func TestPhaseCompleteQuickBaseEqualToPhaseBaseIsNoOp(t *testing.T) {
+	dir := quickBaseFixture(t)
+
+	if err := runCmd(t, Local(), "set", "quick_base", "main"); err != nil {
+		t.Fatalf("local set: %v", err)
+	}
+	pushed, branch, err := pushQuickBaseIfRecorded(dir, filepath.Join(dir, ".dross"), "main")
+	if err != nil {
+		t.Fatalf("same-branch case should be a clean no-op: %v", err)
+	}
+	if pushed || branch != "" {
+		t.Errorf("quick_base equal to the phase base must not push again: pushed=%t branch=%q", pushed, branch)
 	}
 }
 
@@ -514,9 +866,11 @@ func TestPhaseCompleteRefusesUnmergedNoLocalBranch(t *testing.T) {
 	originMain := mustGit(t, dir, "rev-parse", "main")
 
 	// Name the phase explicitly: neither current_phase nor a phase branch
-	// can supply it now.
+	// can supply it now — and for the same reason neither can supply the
+	// recorded base (the record lived on the deleted branch), so --base is
+	// what carries the run through to the merge gate under test.
 	stubPRMerged(t, false)
-	err := runCmd(t, Phase(), "complete", "auth")
+	err := runCmd(t, Phase(), "complete", "auth", "--base", "main")
 	if err == nil {
 		t.Fatal("expected refusal when local branch is gone AND origin lacks the completion record")
 	}
@@ -578,7 +932,7 @@ func TestPhaseCompleteRefusesWhenMergeInconclusive(t *testing.T) {
 	// [remote] provider configured the real PRMergedFunc can't answer either,
 	// so the run reaches the ancestry fallback (no stub).
 	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
-		`{"phase":"auth","tasks":{}}`)
+		`{"phase":"auth","base":"main","tasks":{}}`)
 	mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
 	mustGit(t, dir, "commit", "-q", "-m", "chore: drop PR record")
 
@@ -898,10 +1252,14 @@ func divergedCompleteFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
 	// Record a PR on phase/auth so the merge gate passes (tests stub
-	// PRMergedFunc=true) and the run reaches the ff-divergence logic under test.
+	// PRMergedFunc=true) and the run reaches the ff-divergence logic under
+	// test. The phase's spec.toml lives here too — on the phase branch, where
+	// /dross-spec writes it — and it's the artefact the origin squash drops
+	// and recovery must restore from the phase tip.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/spec.toml"), `id = "auth"`)
 	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
-		`{"phase":"auth","pr":77,"tasks":{}}`)
-	mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
+		`{"phase":"auth","pr":77,"base":"main","tasks":{}}`)
+	mustGit(t, dir, "add", ".dross/phases/auth/")
 	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record PR #77 for auth")
 
 	stPath := filepath.Join(dir, ".dross", "state.json")
@@ -926,10 +1284,11 @@ func divergedCompleteFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "checkout", "-q", "main")
 	mustGit(t, dir, "branch", "-D", "squash-sim")
 
-	// Local main diverges: same completion record + a phase artefact origin
-	// lost. Built on local main (baseline), so it shares only baseline with
-	// origin/main -> ff-only aborts.
-	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/spec.toml"), `id = "auth"`)
+	// Local main diverges: its own completion record, built on local main
+	// (baseline), so it shares only baseline with origin/main -> ff-only
+	// aborts. The phase artefact is deliberately NOT written here — it lives
+	// on the phase branch, and recovery sourcing it from there is the property
+	// under test.
 	lm, err := state.Load(stPath)
 	if err != nil {
 		t.Fatal(err)
@@ -1011,6 +1370,94 @@ func TestPhaseCompleteRecoverHeals(t *testing.T) {
 	}
 }
 
+// TestPhaseCompleteRecoverSourcesTreeFromPhaseTip pins the c-4 split. The
+// restored .dross/ tree comes from the phase branch's tip — the only commit
+// holding this phase's records — while state.json comes from the base, whose
+// cumulative history is the one that must survive. Sourcing the whole tree
+// from HEAD (the branch being reset) restores nothing the phase contributed.
+func TestPhaseCompleteRecoverSourcesTreeFromPhaseTip(t *testing.T) {
+	dir, _, _ := divergedCompleteFixture(t)
+	stubPRMerged(t, true)
+
+	// A file that exists ONLY on the phase tip, and a state.json history entry
+	// that exists ONLY on the base — one probe per side of the split.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/plan.toml"), "phase-only\n")
+	mustGit(t, dir, "add", ".dross/phases/auth/plan.toml")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): phase-only artefact")
+
+	if err := runCmd(t, Phase(), "complete", "--recover"); err != nil {
+		t.Fatalf("complete --recover: %v", err)
+	}
+
+	headTree := mustGit(t, dir, "ls-tree", "-r", "--name-only", "HEAD")
+	if !strings.Contains(headTree, ".dross/phases/auth/plan.toml") {
+		t.Errorf("recovery must restore the phase tip's tree:\n%s", headTree)
+	}
+	// The phase's own record survives the restore — it is the thing a later
+	// re-run of complete would read the PR and base back out of.
+	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), "auth"), "auth")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.PR != 77 {
+		t.Errorf("restored changes.json lost the PR record: %+v", ch)
+	}
+	// state.json is the BASE's copy: it carries the completion record local
+	// main committed, which never existed on the phase branch.
+	s, _ := state.Load(filepath.Join(dir, ".dross", "state.json"))
+	found := false
+	for _, a := range s.History {
+		if strings.Contains(a.Action, "completed auth") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("state.json should be the base's copy, carrying its completion record: %+v", s.History)
+	}
+}
+
+// TestPhaseCompleteRecoverLeavesStaleMilestoneAlone is the destructive half of
+// the incident: --recover is a hard reset, and pointing it at an inferred
+// milestone branch the phase never forked from would reset a branch holding
+// unrelated work. It must reset only the RECORDED base.
+func TestPhaseCompleteRecoverLeavesStaleMilestoneAlone(t *testing.T) {
+	dir, _, _ := divergedCompleteFixture(t) // base recorded as "main"
+	stubPRMerged(t, true)
+
+	// A stale milestone branch with a commit of its own, plus an active
+	// milestone — everything inference needed to target it.
+	mustGit(t, dir, "branch", "milestone/v0.9", "main")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.9"); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	mustGit(t, dir, "add", ".dross/")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): scope v0.9")
+	msBefore := mustGit(t, dir, "rev-parse", "milestone/v0.9")
+
+	if err := runCmd(t, Phase(), "complete", "--recover"); err != nil {
+		t.Fatalf("complete --recover: %v", err)
+	}
+	if got := mustGit(t, dir, "rev-parse", "milestone/v0.9"); got != msBefore {
+		t.Errorf("--recover reset a branch the phase never forked from: %s -> %s", msBefore, got)
+	}
+}
+
+// TestPhaseCompleteHelpDescribesRecoverUnderMilestone (c-6) keeps the help
+// text honest: it claimed --recover was "not yet supported" under a milestone,
+// which stopped being true once the reset started following the recorded base.
+func TestPhaseCompleteHelpDescribesRecoverUnderMilestone(t *testing.T) {
+	long := phaseComplete().Long
+
+	if strings.Contains(long, "not yet supported") {
+		t.Error("--help still claims --recover is unsupported under a milestone")
+	}
+	for _, needle := range []string{"milestone/", "--base", "--recover"} {
+		if !strings.Contains(long, needle) {
+			t.Errorf("--help should mention %q", needle)
+		}
+	}
+}
+
 // c-4 verify-before-reset: --recover with an UNMERGED recorded PR refuses at
 // the merge gate BEFORE any git reset --hard — local main is byte-for-byte
 // unchanged after the refusal.
@@ -1051,10 +1498,10 @@ func TestPhaseCompleteRecoverRefusesDirty(t *testing.T) {
 
 // TestPhaseCover_CompleteArgResolvesPhaseID exercises the `len(args) == 1`
 // switch arm (phase.go:255). With an explicit id AND an empty current_phase,
-// resolution must take args[0] (non-empty), so the run advances to the
-// dirty-tree guard. Negating the arm would drop through to the branch fallback
-// on `main`, yield an empty id, and fail with "no phase id given" instead —
-// the two errors distinguish the mutant.
+// resolution must take args[0] (non-empty), so the run advances to base
+// resolution and refuses by NAME. Negating the arm would drop through to the
+// branch fallback on `main`, yield an empty id, and fail with "no phase id
+// given" instead — the two errors distinguish the mutant.
 func TestPhaseCover_CompleteArgResolvesPhaseID(t *testing.T) {
 	dir := t.TempDir()
 	gitInit(t, dir, "")
@@ -1068,10 +1515,10 @@ func TestPhaseCover_CompleteArgResolvesPhaseID(t *testing.T) {
 
 	err := runCmd(t, Phase(), "complete", "explicit-phase")
 	if err == nil {
-		t.Fatal("expected dirty-tree error once the id resolves from args[0]")
+		t.Fatal("expected an error once the id resolves from args[0]")
 	}
-	if !strings.Contains(err.Error(), "working tree is dirty") {
-		t.Errorf("args[0] should resolve the id and reach the dirty guard; got: %v", err)
+	if !strings.Contains(err.Error(), "explicit-phase") {
+		t.Errorf("args[0] should resolve the id and be named in the refusal; got: %v", err)
 	}
 	if strings.Contains(err.Error(), "no phase id given") {
 		t.Errorf("args[0] arm must supply the id, not fall through to the empty-id error: %v", err)
@@ -1080,8 +1527,8 @@ func TestPhaseCover_CompleteArgResolvesPhaseID(t *testing.T) {
 
 // TestPhaseCover_CompleteStateResolvesPhaseID exercises the
 // `s.CurrentPhase != ""` switch arm (phase.go:257). With NO args but a set
-// current_phase, resolution must take state (non-empty) and reach the
-// dirty-tree guard. Negating the arm to `== ""` would skip it, fall through to
+// current_phase, resolution must take state (non-empty) and refuse by NAME at
+// base resolution. Negating the arm to `== ""` would skip it, fall through to
 // the branch fallback on `main`, yield an empty id, and fail with "no phase id
 // given".
 func TestPhaseCover_CompleteStateResolvesPhaseID(t *testing.T) {
@@ -1098,10 +1545,10 @@ func TestPhaseCover_CompleteStateResolvesPhaseID(t *testing.T) {
 
 	err := runCmd(t, Phase(), "complete")
 	if err == nil {
-		t.Fatal("expected dirty-tree error once the id resolves from current_phase")
+		t.Fatal("expected an error once the id resolves from current_phase")
 	}
-	if !strings.Contains(err.Error(), "working tree is dirty") {
-		t.Errorf("current_phase should resolve the id and reach the dirty guard; got: %v", err)
+	if !strings.Contains(err.Error(), "state-phase") {
+		t.Errorf("current_phase should resolve the id and be named in the refusal; got: %v", err)
 	}
 	if strings.Contains(err.Error(), "no phase id given") {
 		t.Errorf("current_phase arm must supply the id: %v", err)
@@ -1176,6 +1623,92 @@ func TestPhaseCreateRootsOnMilestoneBranch(t *testing.T) {
 	}
 }
 
+// readRecordedBase reads the forked-from base out of a phase's changes.json.
+func readRecordedBase(t *testing.T, dir, phaseID string) string {
+	t.Helper()
+	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), phaseID), phaseID)
+	if err != nil {
+		t.Fatalf("load changes for %s: %v", phaseID, err)
+	}
+	return ch.Base
+}
+
+// TestPhaseCreateRecordsBaseOnMain is the create-time half of base_write_timing
+// (c-2): every phase carries the branch it actually forked from from the moment
+// it exists, so `dross phase complete` never has to infer one.
+func TestPhaseCreateRecordsBaseOnMain(t *testing.T) {
+	dir := initWithGit(t)
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if got := readRecordedBase(t, dir, "auth"); got != "main" {
+		t.Errorf("recorded base = %q, want %q", got, "main")
+	}
+}
+
+// TestPhaseCreateRecordsMilestoneBase pins that the recorded value is the
+// branch actually forked from, not a re-derivation. Under a milestone the fork
+// roots on milestone/<version>, and that is what completion must reconcile
+// against — recording "main" here is exactly the stale-base bug.
+func TestPhaseCreateRecordsMilestoneBase(t *testing.T) {
+	dir := initWithGit(t)
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.9"); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "scope v0.9")
+	mustGit(t, dir, "branch", "milestone/v0.9")
+
+	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if got := readRecordedBase(t, dir, "auth"); got != "milestone/v0.9" {
+		t.Errorf("recorded base = %q, want %q", got, "milestone/v0.9")
+	}
+}
+
+// TestPhaseInsertRecordsBase covers the second call site: an inserted phase is
+// forked the same way as a created one, so it must carry a base too — a
+// base-less phase is un-completable without an explicit --base.
+func TestPhaseInsertRecordsBase(t *testing.T) {
+	dir := initWithGit(t)
+	root := filepath.Join(dir, ".dross")
+	mustWrite(t, filepath.Join(root, "milestones", "v1.toml"),
+		"phases = [\"auth\"]\n\n[milestone]\n  version = \"v1\"\n  title = \"M\"\n")
+	mustWrite(t, filepath.Join(root, "phases", "auth", "spec.toml"),
+		"[phase]\n  id = \"auth\"\n  title = \"auth\"\n\n[[criteria]]\n  id = \"c-1\"\n  text = \"x\"\n")
+	if err := runCmd(t, State(), "set", "current_milestone", "v1"); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "scope v1")
+
+	if err := runCmd(t, Phase(), "insert", "billing", "--after", "auth"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if got := readRecordedBase(t, dir, "billing"); got != "main" {
+		t.Errorf("inserted phase's recorded base = %q, want %q — a base-less phase is un-completable without --base", got, "main")
+	}
+}
+
+// TestPhaseCreateFailedForkLeavesNoRecord pins the write ordering: the base is
+// recorded only after `checkout -b` succeeds. create's rollback is
+// os.Remove(dir), which only removes an EMPTY directory, so a record written
+// before the fork would survive the rollback and leak the phase id — every
+// retry would then land on a suffixed slug.
+func TestPhaseCreateFailedForkLeavesNoRecord(t *testing.T) {
+	dir := initWithGit(t)
+	mustGit(t, dir, "branch", "phase/auth") // the fork will collide with this
+
+	if err := runCmd(t, Phase(), "create", "auth"); err == nil {
+		t.Fatal("expected create to fail when phase/auth already exists")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".dross", "phases", "auth")); !os.IsNotExist(err) {
+		t.Errorf("failed fork leaked .dross/phases/auth (stat err = %v) — the rollback only removes an empty dir", err)
+	}
+}
+
 func TestPhaseCreateRootsOnMainNoMilestone(t *testing.T) {
 	dir := initWithGit(t)
 	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
@@ -1238,9 +1771,11 @@ func completeMilestoneFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
 	// Record a PR number on phase/auth so complete's merge gate has a PR to
-	// look up (tests stub PRMergedFunc for the answer).
+	// look up (tests stub PRMergedFunc for the answer), plus the base the PR
+	// was opened against — the milestone branch, which is what completion must
+	// reconcile.
 	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
-		`{"phase":"auth","pr":42,"tasks":{}}`)
+		fmt.Sprintf(`{"phase":"auth","pr":42,"base":"milestone/%s","tasks":{}}`, version))
 	mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
 	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record PR #42 for auth")
 
@@ -1398,7 +1933,9 @@ func TestPhaseCompleteAutoCommitsDrossDirt(t *testing.T) {
 	dir := initWithGit(t)
 	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# handoff\n")
 
-	err := runCmd(t, Phase(), "complete", "x")
+	// --base: phase "x" has no record to read one from, and the base refusal
+	// fires before the dirty gate this test is about.
+	err := runCmd(t, Phase(), "complete", "x", "--base", "main")
 	if err == nil {
 		t.Fatal("expected complete to fail later (empty origin), just not on the dirty gate")
 	}
@@ -1422,7 +1959,7 @@ func TestPhaseCompleteMixedDirtStillRefuses(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, "src.go"), "package src\n")
 	before := mustGit(t, dir, "rev-list", "--count", "HEAD")
 
-	err := runCmd(t, Phase(), "complete", "x")
+	err := runCmd(t, Phase(), "complete", "x", "--base", "main")
 	if err == nil || !strings.Contains(err.Error(), "working tree is dirty") {
 		t.Fatalf("mixed dirt must still hit the dirty-tree refusal: %v", err)
 	}
@@ -1469,7 +2006,7 @@ func completeFixtureOriginPR(t *testing.T, originPR int) (string, string) {
 	mustGit(t, dir, "add", "src/")
 	if originPR > 0 {
 		mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
-			fmt.Sprintf(`{"phase":"auth","pr":%d,"tasks":{}}`, originPR))
+			fmt.Sprintf(`{"phase":"auth","pr":%d,"base":"main","tasks":{}}`, originPR))
 		mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
 	}
 	stPath := filepath.Join(dir, ".dross", "state.json")
