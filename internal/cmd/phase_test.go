@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -76,6 +77,14 @@ func foldCompletion(t *testing.T, dir, phaseID string) {
 		t.Fatalf("save squash state: %v", err)
 	}
 	mustGit(t, dir, "add", "-f", filepath.Join(".dross", "state.json"))
+}
+
+// gitAllowFail runs git and reports whether it succeeded. For probes and
+// best-effort cleanups where a non-zero exit is a legitimate answer rather than
+// a test failure.
+func gitAllowFail(dir string, args ...string) bool {
+	full := append([]string{"-C", dir}, args...)
+	return exec.Command("git", full...).Run() == nil
 }
 
 // initWithGit sets up a dross-onboarded git repo at dir with a single
@@ -1177,6 +1186,11 @@ func TestConsecutivePhasesNoDivergence(t *testing.T) {
 		}
 		mustGit(t, dir, "fetch", "-q", "origin")
 		restoreState := snapshotLiveState(t, dir)
+		// From the second cycle on, the previous squash left state.json tracked
+		// on main, so the live copy's edits would block the switch. Drop them —
+		// the squash below writes the record it needs from scratch, and
+		// restoreState puts the live bytes back where git deletes the file.
+		gitAllowFail(dir, "checkout", "-q", "--", ".dross/state.json")
 		mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
 		// The squash carries the phase's src/, the folded state.json, and
 		// project.toml (config lands on main via the squash in production
@@ -1461,7 +1475,7 @@ func TestPhaseCompleteRecoverLeavesStaleMilestoneAlone(t *testing.T) {
 		t.Fatalf("state set: %v", err)
 	}
 	mustGit(t, dir, "add", ".dross/")
-	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): scope v0.9")
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "chore(dross): scope v0.9")
 	msBefore := mustGit(t, dir, "rev-parse", "milestone/v0.9")
 
 	if err := runCmd(t, Phase(), "complete", "--recover"); err != nil {
@@ -1632,7 +1646,7 @@ func TestPhaseCreateRootsOnMilestoneBranch(t *testing.T) {
 		t.Fatalf("state set: %v", err)
 	}
 	mustGit(t, dir, "add", ".")
-	mustGit(t, dir, "commit", "-q", "-m", "scope v0.9")
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "scope v0.9")
 
 	// A milestone branch carrying a commit that is NOT on main.
 	mustGit(t, dir, "branch", "milestone/v0.9")
@@ -1687,7 +1701,7 @@ func TestPhaseCreateRecordsMilestoneBase(t *testing.T) {
 		t.Fatalf("state set: %v", err)
 	}
 	mustGit(t, dir, "add", ".")
-	mustGit(t, dir, "commit", "-q", "-m", "scope v0.9")
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "scope v0.9")
 	mustGit(t, dir, "branch", "milestone/v0.9")
 
 	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
@@ -1787,7 +1801,7 @@ func completeMilestoneFixture(t *testing.T) (string, string, string) {
 		t.Fatalf("state set: %v", err)
 	}
 	mustGit(t, dir, "add", ".")
-	mustGit(t, dir, "commit", "-q", "-m", "chore: scope "+version)
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "chore: scope "+version)
 	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
 	mustGit(t, dir, "branch", "milestone/"+version)
 	mustGit(t, dir, "push", "-q", "-u", "origin", "milestone/"+version)

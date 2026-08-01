@@ -188,10 +188,14 @@ text = "Tags can be added"
 	return dir
 }
 
+// gitCommit stages everything and commits. --allow-empty because the thing
+// being committed is often a state.json write, which is gitignored — the point
+// of the call is to leave a clean tree and advance the branch, and an empty
+// commit does both.
 func gitCommit(t *testing.T, dir, msg string) {
 	t.Helper()
 	mustGit(t, dir, "add", "-A")
-	mustGit(t, dir, "commit", "-q", "-m", msg)
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", msg)
 }
 
 func gitOutT(t *testing.T, dir string, args ...string) string {
@@ -325,18 +329,19 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 		t.Errorf("expected phase/x on remote, got: %q", remoteRefs)
 	}
 
-	// The completion record must live in the PUSHED ref, not a local-only
-	// post-push commit. Read state.json at the pushed branch tip in the bare
-	// remote and assert current_phase is cleared there. If the commit landed
-	// after the push (the old behaviour), the pushed tree still carries
-	// current_phase and this fails.
-	pushedState := mustGit(t, remoteDir, "show", "phase/x:.dross/state.json")
-	var pushed state.State
-	if err := json.Unmarshal([]byte(pushedState), &pushed); err != nil {
-		t.Fatalf("parse pushed state.json: %v", err)
+	// The completion record is written locally and stays there: state.json is
+	// gitignored (locked state_tracking), so the pushed ref must carry no copy
+	// of it at all. Re-staging it would put the clobber back.
+	if gitAllowFail(remoteDir, "cat-file", "-e", "phase/x:.dross/state.json") {
+		t.Error("the pushed ref carries .dross/state.json — it must stay machine-local")
 	}
-	if pushed.CurrentPhase != "" {
-		t.Errorf("pushed ref should carry cleared current_phase, got %q", pushed.CurrentPhase)
+	var local state.State
+	localBytes := mustRead(t, filepath.Join(dir, ".dross", state.File))
+	if err := json.Unmarshal([]byte(localBytes), &local); err != nil {
+		t.Fatalf("parse local state.json: %v", err)
+	}
+	if local.CurrentPhase != "" {
+		t.Errorf("ship should clear current_phase locally, got %q", local.CurrentPhase)
 	}
 
 	// Ship must return on a clean working tree: both the completion write and
@@ -348,7 +353,7 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	// t-1: the opened PR number (99 from the mock) is persisted into the
 	// phase's changes.json and committed post-push, so `dross phase complete`
 	// can look up THIS phase's authoritative merge status. That record commit
-	// is HEAD; the `chore(dross): ship x` state commit is its parent.
+	// is HEAD.
 	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), "x"), "x")
 	if err != nil {
 		t.Fatalf("load changes.json: %v", err)
@@ -359,8 +364,10 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	if msg := mustGit(t, dir, "log", "-1", "--pretty=%s"); msg != "chore(dross): record PR #99 for x" {
 		t.Errorf("HEAD should be the PR-record commit, got: %q", msg)
 	}
-	if msg := mustGit(t, dir, "log", "-1", "--skip=1", "--pretty=%s"); msg != "chore(dross): ship x" {
-		t.Errorf("ship-state commit should be HEAD~1, got: %q", msg)
+	// There is no `chore(dross): ship x` commit any more: state.json was the
+	// only thing it ever carried, and that write is machine-local now.
+	if log := mustGit(t, dir, "log", "--pretty=%s"); strings.Contains(log, "chore(dross): ship x") {
+		t.Errorf("ship should no longer commit a state fold:\n%s", log)
 	}
 }
 

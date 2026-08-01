@@ -769,9 +769,13 @@ func staleBranchFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 
-	// Baseline on main with no completion record, pushed to origin.
+	// Baseline on main with no completion record, pushed to origin. state.json
+	// is force-staged: today's staleCompletedState reads it off origin/<main>,
+	// and that read is only possible in the pre-untrack world this fixture
+	// reproduces. t-7 re-sources the signal and rewrites these tests.
 	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
 	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "add", "-f", ".dross/state.json")
 	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
 	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
 	mustGit(t, dir, "fetch", "-q", "origin")

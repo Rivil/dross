@@ -95,6 +95,13 @@ fill it in conversationally. For adopting an existing repo, use ` + "`dross onbo
 				return fmt.Errorf("write .gitattributes: %w", err)
 			}
 
+			// Keep state.json out of the index: it is machine-local, and a
+			// tracked copy on any branch can replace the live one on checkout
+			// (locked state_tracking).
+			if err := ensureDrossGitignore(cwd); err != nil {
+				return fmt.Errorf("write .gitignore: %w", err)
+			}
+
 			// Seed a feature-organized ARCHITECTURE.md skeleton at repo root
 			// (greenfield, c-3). First-creation only — never clobber an existing
 			// doc; idempotent refresh is deferred.

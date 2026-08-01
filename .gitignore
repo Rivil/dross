@@ -16,6 +16,11 @@ docs/dross.pdf
 # forward into every later tree. Staying out of history is the whole point.
 .dross/local.toml
 
+# dross machine-local position + version state — deliberately untracked: a
+# checkout of a branch carrying a stale copy would otherwise replace the live
+# one, and git cannot overwrite what it does not track (locked state_tracking)
+.dross/state.json
+
 # dross security run artifacts — local audit output; never pre-disclose on a public repo
 .dross/security/
 
