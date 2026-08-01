@@ -1,21 +1,11 @@
 {
   "version": "1.2.1.0",
   "current_milestone": "v1.2",
-  "last_activity": "2026-08-01T07:14:10.676041Z",
-  "last_action": "completed complete-base-truth",
+  "current_phase": "state-json-branch-safety",
+  "current_phase_status": "created",
+  "last_activity": "2026-08-01T08:17:32.623696Z",
+  "last_action": "spec locked: state-json-branch-safety",
   "history": [
-    {
-      "at": "2026-07-30T10:30:15.80922Z",
-      "action": "executed t-5 (Emit terminal board statuses from ship)"
-    },
-    {
-      "at": "2026-07-30T10:34:07.389076Z",
-      "action": "executed t-6 (Add --json helper and config-document shows)"
-    },
-    {
-      "at": "2026-07-30T10:43:54.224566Z",
-      "action": "executed t-7 (Add --json to phase and stats shows)"
-    },
     {
       "at": "2026-07-30T10:46:16.209581Z",
       "action": "executed t-8 (Add --json to task and changes shows)"
@@ -203,6 +193,18 @@
     {
       "at": "2026-08-01T07:14:10.676041Z",
       "action": "completed complete-base-truth"
+    },
+    {
+      "at": "2026-08-01T08:06:39.594022Z",
+      "action": "created state-json-branch-safety"
+    },
+    {
+      "at": "2026-08-01T08:17:32.618596Z",
+      "action": "set current_phase=state-json-branch-safety"
+    },
+    {
+      "at": "2026-08-01T08:17:32.623696Z",
+      "action": "spec locked: state-json-branch-safety"
     }
   ]
 }
