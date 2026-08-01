@@ -83,6 +83,21 @@ func projectSet() *cobra.Command {
 			case !unset && len(args) != 2:
 				return fmt.Errorf("accepts 2 arg(s), received %d", len(args))
 			}
+			// project.version is not an ordinary field: it has a second home in
+			// state.json, and one writer owns both so the release-facing value
+			// and the one dross bumps cannot diverge (c-4). --unset still takes
+			// the generic path — clearing the field is doctor's problem, not a
+			// version write.
+			if !unset && args[0] == "project.version" {
+				s, statePath, err := loadState()
+				if err != nil {
+					return err
+				}
+				if err := writeVersion(filepath.Dir(statePath), s, args[1]); err != nil {
+					return err
+				}
+				return s.Save(statePath)
+			}
 			p, path, err := loadProject()
 			if err != nil {
 				return err

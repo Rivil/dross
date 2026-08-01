@@ -101,7 +101,10 @@ func stateSet() *cobra.Command {
 			}
 			switch args[0] {
 			case "version":
-				s.Version = args[1]
+				// Both homes, one writer (c-4) — see writeVersion.
+				if err := writeVersion(filepath.Dir(path), s, args[1]); err != nil {
+					return err
+				}
 			case "current_milestone":
 				s.CurrentMilestone = args[1]
 			case "current_phase":
@@ -170,7 +173,11 @@ func stateBump() *cobra.Command {
 				return err
 			}
 			prev := s.Version
-			s.Version = next
+			// Both homes, one writer (c-4): a bump that only moved state.json
+			// would leave the release tag pinned at the previous value.
+			if err := writeVersion(filepath.Dir(path), s, next); err != nil {
+				return err
+			}
 			s.Touch(fmt.Sprintf("bump internal %s → %s", prev, next))
 			if err := s.Save(path); err != nil {
 				return err
@@ -185,18 +192,61 @@ func stateBump() *cobra.Command {
 // Rejects anything that doesn't match major.minor.patch.internal with
 // non-negative integer segments.
 func bumpInternal(v string) (string, error) {
+	if err := validateVersion(v); err != nil {
+		return "", err
+	}
 	parts := strings.Split(v, ".")
-	if len(parts) != 4 {
-		return "", fmt.Errorf("version %q is not 4-part (major.minor.patch.internal)", v)
-	}
-	for _, p := range parts {
-		if _, err := strconv.Atoi(p); err != nil {
-			return "", fmt.Errorf("version %q has non-integer segment %q", v, p)
-		}
-	}
 	last, _ := strconv.Atoi(parts[3])
 	parts[3] = strconv.Itoa(last + 1)
 	return strings.Join(parts, "."), nil
+}
+
+// validateVersion checks the 4-part major.minor.patch.internal form with
+// non-negative integer segments. Shared so the writer and the bumper cannot
+// disagree about what a version is.
+func validateVersion(v string) error {
+	parts := strings.Split(v, ".")
+	if len(parts) != 4 {
+		return fmt.Errorf("version %q is not 4-part (major.minor.patch.internal)", v)
+	}
+	for _, p := range parts {
+		if n, err := strconv.Atoi(p); err != nil || n < 0 {
+			return fmt.Errorf("version %q has non-integer segment %q", v, p)
+		}
+	}
+	return nil
+}
+
+// writeVersion is the single writer for the project version, which lives in two
+// places: state.json, the machine-local position dross reads, and
+// project.toml's [project].version, the tracked value release.yml tags from
+// (locked version_home). One call writes both, so the release-facing number and
+// the number dross bumps cannot drift apart (c-4).
+//
+// Order and sequencing are the contract:
+//
+//   - Validation runs before either write, so a rejected version leaves both
+//     files byte-unchanged rather than truncating one and failing on the other.
+//   - project.toml is written first and its failure returns immediately, naming
+//     the path. A half-write that left state.json ahead of the tracked copy is
+//     exactly the divergence this function exists to prevent.
+//   - s is mutated but not saved: the caller usually has a Touch to append and
+//     owns the save. By then the tracked copy is already on disk.
+func writeVersion(root string, s *state.State, v string) error {
+	if err := validateVersion(v); err != nil {
+		return err
+	}
+	projPath := filepath.Join(root, project.File)
+	p, err := project.Load(projPath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", projPath, err)
+	}
+	p.Project.Version = v
+	if err := p.Save(projPath); err != nil {
+		return fmt.Errorf("write %s: %w", projPath, err)
+	}
+	s.Version = v
+	return nil
 }
 
 // ensureState materializes .dross/state.json when it is absent, so a fresh
