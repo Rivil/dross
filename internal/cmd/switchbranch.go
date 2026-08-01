@@ -56,6 +56,30 @@ func checkoutBranchNew(repoDir, branch, base string) error {
 	return nil
 }
 
+// guardedFF is `git merge --ff-only <ref>` behind the same pre-check. A
+// fast-forward materializes the target's tree exactly like a checkout does, so
+// an origin ref that still tracks state.json clobbers the live file just as
+// surely — the branch name simply does not change on the way.
+//
+// Returns git's own output alongside the error so callers that read the merge
+// output (the ff-divergence signal `phase complete --recover` keys off) keep it.
+func guardedFF(repoDir, ref string) (string, error) {
+	if err := guardLiveState(repoDir, ref); err != nil {
+		return "", err
+	}
+	return gitCombined(repoDir, "merge", "--ff-only", ref)
+}
+
+// guardedResetHard is `git reset --hard <ref>` behind the same pre-check, for
+// the one caller that has one: `ship recover`'s heal. Same reasoning — the
+// working tree is replaced from the target's tree either way.
+func guardedResetHard(repoDir, ref string) (string, error) {
+	if err := guardLiveState(repoDir, ref); err != nil {
+		return "", err
+	}
+	return gitCombined(repoDir, "reset", "--hard", ref)
+}
+
 // guardLiveState returns a named error when switching to ref would overwrite the
 // live .dross/state.json with a tracked copy carried by that ref. It answers nil
 // whenever there is nothing to protect: no live file, or a ref that carries no

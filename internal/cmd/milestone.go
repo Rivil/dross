@@ -228,7 +228,7 @@ func milestoneFinalize(repoDir, mainBranch, msBranch, version string) error {
 			return err
 		}
 	}
-	if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+mainBranch); err != nil {
+	if out, err := guardedFF(repoDir, "origin/"+mainBranch); err != nil {
 		return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged:\n%s", mainBranch, mainBranch, out)
 	}
 

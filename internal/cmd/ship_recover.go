@@ -171,7 +171,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
 		return fmt.Errorf("git fetch: %w\n%s", err, out)
 	}
-	if out, err := gitCombined(repoDir, "reset", "--hard", "origin/"+baseBranch); err != nil {
+	if out, err := guardedResetHard(repoDir, "origin/"+baseBranch); err != nil {
 		return fmt.Errorf("git reset --hard origin/%s: %w\n%s", baseBranch, err, out)
 	}
 	// Exclude state.json from the restore. A pre-untrack commit still carries a

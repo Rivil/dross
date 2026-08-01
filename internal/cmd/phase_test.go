@@ -63,7 +63,25 @@ func snapshotLiveState(t *testing.T, dir string) func() {
 // the working tree's state.json and force-stages it. The force is what keeps
 // the fixture working once state.json is gitignored: the squash carrying a
 // tracked state.json is exactly the stale copy the incident turns on.
+// foldCompletion writes the completion record the way `dross ship` does: to the
+// live state.json, staging nothing. The file is machine-local, so no squash
+// carries it — which is why the callers below all stage src/ (or project.toml)
+// for their commit's content.
+//
+// It used to force-stage the file, modelling the pre-untrack world. That shape
+// now makes `phase complete` refuse: the guard in switchbranch.go stops a
+// fast-forward from an origin ref that would replay a tracked copy over the
+// live one. trackCompletion is the opt-in for the one fixture that still needs
+// the old shape.
 func foldCompletion(t *testing.T, dir, phaseID string) {
+	t.Helper()
+	writeCompletion(t, dir, phaseID)
+}
+
+// trackCompletion is foldCompletion plus the force-stage — the pre-untrack
+// shape, kept for the dragged-breadcrumb regression whose whole premise is a
+// state.json that rode the squash onto the base.
+func trackCompletion(t *testing.T, dir, phaseID string) {
 	t.Helper()
 	writeCompletion(t, dir, phaseID)
 	mustGit(t, dir, "add", "-f", filepath.Join(".dross", "state.json"))
@@ -951,8 +969,22 @@ func TestPhaseCompleteRefusesUnmergedNoLocalBranch(t *testing.T) {
 // authoritative gate (recorded PR + provider merged-status) must refuse — no
 // ff, no branch deletion — so the unmerged phase branch isn't lost.
 func TestPhaseCompleteRefusesDraggedBreadcrumb(t *testing.T) {
-	dir, _ := completeFixture(t) // origin/main carries `completed auth`; PR 42 recorded
+	dir, _ := completeFixture(t) // PR 42 recorded on phase/auth
 	stubPRMerged(t, false)       // …but PR #42 is NOT actually merged
+
+	// Drag the breadcrumb onto the base. Built here, not in the shared fixture:
+	// a tracked state.json on origin/main is this test's own premise (the
+	// pre-untrack world), and every other fixture models the world after it,
+	// where nothing on the base carries a copy.
+	restoreState := snapshotLiveState(t, dir)
+	mustGit(t, dir, "checkout", "-q", "-b", "drag-sim", "origin/main")
+	trackCompletion(t, dir, "auth")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): dragged breadcrumb")
+	mustGit(t, dir, "push", "-q", "--force", "origin", "drag-sim:main")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	restoreState()
+	mustGit(t, dir, "branch", "-D", "drag-sim")
+	mustGit(t, dir, "fetch", "-q", "origin")
 
 	// Precondition: the breadcrumb really is dragged onto the base.
 	originState := mustGit(t, dir, "show", "origin/main:.dross/state.json")

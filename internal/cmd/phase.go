@@ -431,7 +431,7 @@ destructive reset of the local base branch; read the abort first.`,
 				}
 			}
 
-			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+reconcileBranch); err != nil {
+			if out, err := guardedFF(repoDir, "origin/"+reconcileBranch); err != nil {
 				// The ff abort IS the divergence signal: local <branch> holds
 				// commits origin/<branch> doesn't. The clean-tree guard above
 				// already ran, so no uncommitted work is at risk. The merge

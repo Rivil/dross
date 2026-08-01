@@ -205,3 +205,53 @@ func TestPhaseCompleteSurfacesCheckoutRefusal(t *testing.T) {
 		t.Errorf("the live state must survive: %v / %+v", lerr, s)
 	}
 }
+
+// TestGuardedFFAndResetRefuseTrackedState: a fast-forward and a hard reset
+// replace the working tree from the target's tree exactly as a checkout does,
+// so both need the same pre-check. `phase complete` fast-forwards from
+// origin/<base> and `ship recover` resets to it — an origin that still tracks
+// state.json would clobber the live copy through either.
+func TestGuardedFFAndResetRefuseTrackedState(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		run  func(dir, ref string) (string, error)
+	}{
+		{"merge --ff-only", guardedFF},
+		{"reset --hard", guardedResetHard},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, legacy := legacyStateBranchFixture(t)
+
+			_, err := tc.run(dir, legacy)
+			if err == nil {
+				t.Fatalf("%s from a ref that tracks state.json must refuse", tc.name)
+			}
+			if !strings.Contains(err.Error(), ".dross/state.json") {
+				t.Errorf("the refusal should name the file: %v", err)
+			}
+			s, lerr := state.Load(filepath.Join(dir, ".dross", state.File))
+			if lerr != nil || len(s.History) != 12 {
+				t.Errorf("the live state must survive a refused %s: %v / %+v", tc.name, lerr, s)
+			}
+		})
+	}
+}
+
+// TestGuardedOpsRunWhenTargetHasNoCopy: the guard is a pre-check, not a veto.
+// Against a ref carrying no state.json — every ref cut after the migration —
+// both operations proceed normally.
+func TestGuardedOpsRunWhenTargetHasNoCopy(t *testing.T) {
+	dir, _ := legacyStateBranchFixture(t)
+	mustGit(t, dir, "checkout", "-q", "-b", "clean-branch", "main")
+	mustWrite(t, filepath.Join(dir, "work.txt"), "w\n")
+	mustGit(t, dir, "add", "work.txt")
+	mustGit(t, dir, "commit", "-q", "-m", "feat: work")
+	mustGit(t, dir, "checkout", "-q", "main")
+
+	if out, err := guardedFF(dir, "clean-branch"); err != nil {
+		t.Fatalf("a ref with no state.json copy must fast-forward normally: %v\n%s", err, out)
+	}
+	if s, lerr := state.Load(filepath.Join(dir, ".dross", state.File)); lerr != nil || len(s.History) != 12 {
+		t.Errorf("the live state should be untouched by an ordinary ff: %v / %+v", lerr, s)
+	}
+}
