@@ -1,15 +1,9 @@
 {
   "version": "1.2.1.0",
   "current_milestone": "v1.2",
-  "current_phase": "complete-base-truth",
-  "current_phase_status": "verified",
-  "last_activity": "2026-08-01T06:51:36.000209Z",
-  "last_action": "verified complete-base-truth: pass (7/7 covered, mutation 0.958)",
+  "last_activity": "2026-08-01T07:14:10.676041Z",
+  "last_action": "completed complete-base-truth",
   "history": [
-    {
-      "at": "2026-07-30T10:27:54.657253Z",
-      "action": "executed t-4 (Gate state_map keys in project set and doctor)"
-    },
     {
       "at": "2026-07-30T10:30:15.80922Z",
       "action": "executed t-5 (Emit terminal board statuses from ship)"
@@ -205,6 +199,10 @@
     {
       "at": "2026-08-01T06:51:36.000209Z",
       "action": "verified complete-base-truth: pass (7/7 covered, mutation 0.958)"
+    },
+    {
+      "at": "2026-08-01T07:14:10.676041Z",
+      "action": "completed complete-base-truth"
     }
   ]
 }
