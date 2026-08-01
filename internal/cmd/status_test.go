@@ -769,20 +769,24 @@ func staleBranchFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 
-	// Baseline on main with no completion record, pushed to origin. state.json
-	// is force-staged: today's staleCompletedState reads it off origin/<main>,
-	// and that read is only possible in the pre-untrack world this fixture
-	// reproduces. t-7 re-sources the signal and rewrites these tests.
+	// Baseline on main, pushed to origin. The phase branch's work is the thing
+	// that must be absent from origin/<main> — the check is a local ref
+	// comparison now, not a read of a state.json that no commit carries.
 	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
 	mustGit(t, dir, "add", ".")
-	mustGit(t, dir, "add", "-f", ".dross/state.json")
 	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
 	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
 	mustGit(t, dir, "fetch", "-q", "origin")
 
-	// Onto the phase branch; fold a `completed x` record into branch-local
-	// state and clear current_phase, mirroring what `dross ship` writes.
+	// Onto the phase branch: one commit of real work, the PR record `dross
+	// ship` writes, and the `completed x` fold into machine-local state.
 	mustGit(t, dir, "checkout", "-q", "-b", "phase/x")
+	mustWrite(t, filepath.Join(dir, "src/x.ts"), "export const x = 1\n")
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
+		`{"phase":"x","pr":42,"base":"main","tasks":{}}`)
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat(x): work + PR record")
+
 	root := filepath.Join(dir, ".dross")
 	st, _ := state.Load(filepath.Join(root, state.File))
 	st.CurrentPhase = ""
@@ -812,30 +816,63 @@ func TestStatusSurfacesStaleCompletedState(t *testing.T) {
 	}
 }
 
-// TestStatusNoStaleOnMain (false-positive control): the warning is absent both
-// on main (not a phase branch) and when origin/main genuinely carries the
-// completion. A detector keying only off local state without checking origin
-// would warn in the second case.
+// TestStatusNoStaleOnMain (false-positive control): the warning is absent on
+// main (not a phase branch), when the branch is plainly merged, and — the case
+// ancestry alone cannot see — when it was SQUASH-merged onto origin/<main>. A
+// check that only asks "is the branch an ancestor" warns on every squash-merged
+// phase, which is every phase this repo ships.
 func TestStatusNoStaleOnMain(t *testing.T) {
+	t.Run("on main", func(t *testing.T) {
+		dir := staleBranchFixture(t)
+		mustGit(t, dir, "checkout", "-q", "main")
+		out := captureStdout(t, func() { runCmd(t, Status()) })
+		if strings.Contains(out, "stale:") {
+			t.Errorf("no stale warning expected on main:\n%s", out)
+		}
+	})
+
+	t.Run("branch merged onto origin", func(t *testing.T) {
+		dir := staleBranchFixture(t)
+		mustGit(t, dir, "push", "-q", "origin", "phase/x:main")
+		mustGit(t, dir, "fetch", "-q", "origin")
+		out := captureStdout(t, func() { runCmd(t, Status()) })
+		if strings.Contains(out, "stale:") {
+			t.Errorf("no stale warning when origin/main carries the branch:\n%s", out)
+		}
+	})
+
+	t.Run("branch squash-merged onto origin", func(t *testing.T) {
+		dir := staleBranchFixture(t)
+		mustGit(t, dir, "checkout", "-q", "main")
+		mustGit(t, dir, "merge", "-q", "--squash", "phase/x")
+		mustGit(t, dir, "commit", "-q", "-m", "feat(squash): x")
+		mustGit(t, dir, "push", "-q", "origin", "main")
+		mustGit(t, dir, "fetch", "-q", "origin")
+		mustGit(t, dir, "checkout", "-q", "phase/x")
+
+		out := captureStdout(t, func() { runCmd(t, Status()) })
+		if strings.Contains(out, "stale:") {
+			t.Errorf("a squash-merged branch is merged, not stale:\n%s", out)
+		}
+	})
+}
+
+// TestStatusStaleCheckStaysOffline: `dross status` answers from local refs. With
+// no origin configured at all it must stay silent rather than block on the
+// network or print a warning it cannot justify.
+func TestStatusStaleCheckStaysOffline(t *testing.T) {
 	dir := staleBranchFixture(t)
+	mustGit(t, dir, "remote", "remove", "origin")
+	mustGit(t, dir, "update-ref", "-d", "refs/remotes/origin/main")
+	t.Setenv("GITHUB_TOKEN", "")
 
-	// Case 1: on main — not a phase branch.
-	mustGit(t, dir, "checkout", "-q", "main")
-	out := captureStdout(t, func() { runCmd(t, Status()) })
-	if strings.Contains(out, "stale:") {
-		t.Errorf("no stale warning expected on main:\n%s", out)
+	var err error
+	out := captureStdout(t, func() { err = runCmd(t, Status()) })
+	if err != nil {
+		t.Fatalf("status with no origin should still succeed: %v", err)
 	}
-
-	// Case 2: back on phase/x, but origin/main now carries `completed x`
-	// (genuinely merged). The origin check must suppress the warning.
-	mustGit(t, dir, "checkout", "-q", "phase/x")
-	mustGit(t, dir, "add", ".")
-	mustGit(t, dir, "commit", "-q", "-m", "chore: completed x")
-	mustGit(t, dir, "push", "-q", "origin", "phase/x:main")
-	mustGit(t, dir, "fetch", "-q", "origin")
-	out = captureStdout(t, func() { runCmd(t, Status()) })
 	if strings.Contains(out, "stale:") {
-		t.Errorf("no stale warning when origin/main carries the completion:\n%s", out)
+		t.Errorf("with no origin there is no base to compare against — stay silent:\n%s", out)
 	}
 }
 
