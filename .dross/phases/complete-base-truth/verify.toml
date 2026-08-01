@@ -1,0 +1,354 @@
+[verify]
+  phase = "complete-base-truth"
+  generated_at = 2026-08-01T06:10:59.650634Z
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-08-01T06:23:14.223227Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9580200501253133
+  mutants_killed = 1529
+  mutants_survived = 67
+  mutants_not_covered = 67
+  criteria_total = 7
+  criteria_covered = 6
+  criteria_uncovered = 1
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestPhaseCompleteMergeGateRefusalLeavesHEADOnPhase", "internal/cmd/phase_test.go:TestPhaseCompleteFetchFailureLeavesHEADOnPhase", "internal/cmd/phase_test.go:TestPhaseCompleteSafetyNetRefusalLeavesHEADOnPhase", "internal/cmd/phase_test.go:assertRefusalTouchedNothing"]
+  notes = "All three refusal paths named in the criterion have a test, and each ends in the shared assertRefusalTouchedNothing helper, which pins HEAD still on phase/<id>, the phase branch still listed, and the base SHA byte-identical. The mergeGate arm additionally pins origin/<base> unmoved, so the safety-net push is checked not to fire on a base with nothing to push."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/changes/changes_test.go:TestBaseFieldRoundTrips", "internal/changes/changes_test.go:TestSetBaseCoexistsWithSetPR", "internal/changes/changes_test.go:TestSetBaseCreatesMissingFile", "internal/changes/changes_test.go:TestBaseEmptyOmitted", "internal/cmd/phase_test.go:TestPhaseCreateRecordsBaseOnMain", "internal/cmd/phase_test.go:TestPhaseCreateRecordsMilestoneBase", "internal/cmd/phase_test.go:TestPhaseInsertRecordsBase", "internal/cmd/phase_test.go:TestPhaseCreateFailedForkLeavesNoRecord", "internal/cmd/ship_test.go:TestShipOverwritesRecordedBase", "internal/cmd/ship_test.go:TestShipEarlyReturnsLeaveBaseIntact", "internal/cmd/ship_test.go:TestShipPushesPRRecordToPhaseBranch", "internal/cmd/phase_test.go:TestPhaseCompleteReconcilesRecordedBaseNotMilestone"]
+  notes = "Both halves of the locked base_write_timing decision are pinned independently: create-time (main, milestone, insert, and the post-checkout-b ordering) and ship-time (the overwrite, its absence behind --no-push/--print-body, and that the value rides the pushed ref, not just the local tree). The read-back half is pinned by TestPhaseCompleteReconcilesRecordedBaseNotMilestone, which stages the exact inference trap — a stale milestone/<v> present with current_milestone set — and asserts completion lands on the recorded base instead."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestPhaseCompleteRefusesWithNoRecordedBase", "internal/cmd/phase_test.go:TestPhaseCompleteBaseFlagOverridesMissingRecord", "internal/cmd/phase_test.go:TestPhaseCompleteBaseFlagValidated", "internal/cmd/phase_test.go:TestPhaseCompleteReadsBaseOffPhaseRef"]
+  notes = "The refusal test asserts the guidance content by needle — the phase id, --base, and BOTH candidate branches (main and milestone/v0.9) — rather than merely asserting a non-nil error, so a refusal that dropped the guidance would fail. It also runs assertRefusalTouchedNothing, pinning that the refusal precedes every git mutation. The escape hatch is covered in both directions (honoured, and validated against a nonexistent branch)."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestPhaseCompleteRecoverSourcesTreeFromPhaseTip", "internal/cmd/phase_test.go:TestPhaseCompleteRecoverLeavesStaleMilestoneAlone", "internal/cmd/ship_recover_test.go:TestShipRecoverGuardsTheRecordedBase", "internal/cmd/ship_recover_test.go:TestShipRecoverFallsBackToMainWithNoRecord"]
+  notes = "The tree-source half uses one probe per side of the split: a file committed only on the phase tip must survive the restore, and a state.json history entry existing only on the base must be the one that lands — so sourcing the whole tree from either side alone fails. The reset-scope half plants a stale milestone/v0.9 with a commit of its own plus an active milestone and asserts its SHA is unchanged across a --recover run. ship recover's base resolution is covered on both the recorded and the legacy-fallback path."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/phase_base_truth_test.go:TestStaleMilestoneIncidentCompletesAgainstRecordedBase", "internal/cmd/phase_base_truth_test.go:TestStaleMilestoneIncidentRefusesWithoutRecord"]
+  notes = "The fixture reproduces the incident shape exactly — phase forked from main, PR #42 squash-merged onto origin/main, current_milestone set with a stale milestone/v9.9 present locally AND on origin. Both arms share assertMilestoneUntouched, which checks the milestone branch on both sides, and both assert the phase branch's fate (deleted only on genuine success; surviving locally and on origin after a refusal). The success arm also greps stdout to catch the milestone branch merely being NAMED as a reconcile target. The plan's single two-outcome switch was split into two tests; the invariant coverage is equivalent."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestPhaseCompleteHelpDescribesRecoverUnderMilestone", "internal/cmd/readme_doc_test.go:TestReadmeDocumentsBaseTruthSurfaces"]
+  notes = "The help test carries a negative needle on the now-false 'not yet supported' claim plus positive needles on milestone/, --base and --recover, so both the removal and the replacement are pinned. The README guard scopes its --base/--recover check to the `dross phase {...}` row rather than the whole file, so the needle cannot be satisfied by an unrelated mention elsewhere."
+
+[[criterion]]
+  id = "c-7"
+  status = "weak"
+  tests = ["internal/cmd/local_test.go:TestLocalSetGetRoundTrips", "internal/cmd/local_test.go:TestLocalStoreIsUntracked", "internal/cmd/local_test.go:TestLocalSetCreatesStoreOnDemand", "internal/cmd/local_test.go:TestLocalGetUnsetKeyIsEmptyAndClean", "internal/cmd/quick_prompt_test.go:TestQuickPromptRecordsStandaloneBase", "internal/cmd/phase_test.go:TestPhaseCompleteReconcilesRecordedQuickBase", "internal/cmd/phase_test.go:TestPhaseCompleteLeavesUnrecordedQuickBaseAlone", "internal/cmd/phase_test.go:TestPhaseCompleteSkipsMissingQuickBaseRef", "internal/cmd/phase_test.go:TestPhaseCompleteQuickBaseRefusalNamesTheRecord", "internal/cmd/phase_test.go:TestPhaseCompleteQuickBaseEqualToPhaseBaseIsNoOp"]
+  notes = "The recording half and the `dross phase complete` consumer are both covered thoroughly, including the record-not-inference contrast pair. The criterion says 'any command that later reconciles it', and pushQuickBaseIfRecorded has TWO call sites — internal/cmd/phase.go:374 and internal/cmd/ship.go:278. Only the complete one is exercised: no test sets quick_base and runs ship, so deleting the ship.go call site would leave the whole suite green. Half the criterion's surface has no failing test behind it."
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:105 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:109 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:114 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:119 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hooks.go:100 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: root.go:57 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:181 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:184 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: deferred.go:138 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: install.go:65 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:27 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: basebranch.go:104 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:422 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:422 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:424 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:424 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:424 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:452 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:454 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: issue.go:156 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:284 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:286 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:629 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:631 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:89 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:89 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:91 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:91 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:94 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:94 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:160 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:242 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:245 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:245 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: project.go:81 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: project.go:83 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: rule.go:143 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:511 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:511 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:513 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:513 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:515 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:23 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:96 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:52 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:55 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:58 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:60 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .gitignore: no mutation adapter for .gitignore"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/quick.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "FLAG"
+  text = "criterion c-7 is weak: pushQuickBaseIfRecorded has two call sites (internal/cmd/phase.go:374 and internal/cmd/ship.go:278) and only the `phase complete` one is exercised. No test sets quick_base and runs ship, so deleting the ship.go call site leaves the suite green. Fix is one test: the TestPhaseCompleteReconcilesRecordedQuickBase fixture, run through Ship() instead."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The 67 FLAG findings above are labelled 'survived' by the skeleton, but gremlins reported Lived: 0 — all 67 are NOT COVERED, i.e. tests never executed the mutated line. Test efficacy over executed mutants is 100.00%; the 0.958 score is the not-covered set alone."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Every not-covered mutant in a file this phase touched is a switch{} case-condition — phase_lifecycle.go:23/25/27 (resolveAnchor), phase.go:284/286 (phase-id resolution), phase.go:629/631 (mergeGate), ship.go:511/513/515 (shipResultTag). All are exercised by tests; go-cover does not attribute coverage to case-conditions, so gremlins cannot see it. Known ceiling, not a test gap. The one exception is basebranch.go:104 (ARITHMETIC_BASE), the safety-net push-FAILURE error format — genuinely unexercised, and not criterion-bearing."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Behavioural side effect worth carrying into ship notes: recording the base at create time makes .dross/phases/<id>/ tracked immediately, so checking out another branch now removes a fresh phase's directory. Two fixtures encoded the old 'untracked empty dir survives' assumption and were corrected during execution."

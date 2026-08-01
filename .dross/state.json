@@ -2,18 +2,10 @@
   "version": "1.2.1.0",
   "current_milestone": "v1.2",
   "current_phase": "complete-base-truth",
-  "current_phase_status": "complete",
-  "last_activity": "2026-08-01T06:07:36.246271Z",
-  "last_action": "resumed — 2 loops left, next /dross-verify complete-base-truth",
+  "current_phase_status": "verified",
+  "last_activity": "2026-08-01T06:23:17.655405Z",
+  "last_action": "verified complete-base-truth: partial (6/7 covered, c-7 weak, mutation 0.96 with 0 lived)",
   "history": [
-    {
-      "at": "2026-07-30T07:50:36.538785Z",
-      "action": "set current_phase_status=planned"
-    },
-    {
-      "at": "2026-07-30T07:50:36.547028Z",
-      "action": "plan locked: board-state-map-truth (11 tasks across 4 waves)"
-    },
     {
       "at": "2026-07-30T10:05:39.71824Z",
       "action": "plan reviewed: board-state-map-truth (1 blocking, 9 flags — all folded in)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-08-01T06:07:36.246271Z",
       "action": "resumed — 2 loops left, next /dross-verify complete-base-truth"
+    },
+    {
+      "at": "2026-08-01T06:23:17.647176Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-08-01T06:23:17.655405Z",
+      "action": "verified complete-base-truth: partial (6/7 covered, c-7 weak, mutation 0.96 with 0 lived)"
     }
   ]
 }
