@@ -2,18 +2,10 @@
   "version": "1.2.1.0",
   "current_milestone": "v1.2",
   "current_phase": "complete-base-truth",
-  "current_phase_status": "complete",
-  "last_activity": "2026-08-01T06:30:51.591874Z",
-  "last_action": "phase complete-base-truth amended (12/12 done; c-7 gap closed)",
+  "current_phase_status": "verified",
+  "last_activity": "2026-08-01T06:51:36.000209Z",
+  "last_action": "verified complete-base-truth: pass (7/7 covered, mutation 0.958)",
   "history": [
-    {
-      "at": "2026-07-30T10:17:03.713885Z",
-      "action": "executed t-2 (Mirror toml tags as json tags across schemas)"
-    },
-    {
-      "at": "2026-07-30T10:20:07.536236Z",
-      "action": "executed t-3 (Reject out-of-set --status on phase-sync)"
-    },
     {
       "at": "2026-07-30T10:27:54.657253Z",
       "action": "executed t-4 (Gate state_map keys in project set and doctor)"
@@ -205,6 +197,14 @@
     {
       "at": "2026-08-01T06:30:51.591874Z",
       "action": "phase complete-base-truth amended (12/12 done; c-7 gap closed)"
+    },
+    {
+      "at": "2026-08-01T06:51:35.99414Z",
+      "action": "set current_phase_status=verified"
+    },
+    {
+      "at": "2026-08-01T06:51:36.000209Z",
+      "action": "verified complete-base-truth: pass (7/7 covered, mutation 0.958)"
     }
   ]
 }
