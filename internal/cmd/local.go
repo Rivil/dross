@@ -16,14 +16,18 @@ import (
 // Local manages .dross/local.toml — machine-local values that must NOT ride
 // cumulative history.
 //
-// It exists because state.json does ride it. state.json is committed, and
-// every phase squash-merges it onto the base, so a value written there is
+// It exists because state.json USED to ride it: state.json was committed and
+// every phase squash-merged it onto the base, so a value written there was
 // inherited by every later tree on that branch. For a "which branch did this
-// work fork from?" record that is exactly wrong: a stale answer from one
+// work fork from?" record that is exactly wrong — a stale answer from one
 // machine's standalone quick task would be dragged forward and later
-// reconciled against, which is the class of bug this milestone exists to
-// remove. local.toml is gitignored, so a stale value stays machine-local and
-// is simply overwritten by the next writer.
+// reconciled against.
+//
+// state.json is gitignored now too (locked state_tracking), for the same
+// reason plus a worse one: a checkout could replay a branch's stale copy over
+// the live file. The two stores stay separate anyway — local.toml is typed,
+// hand-editable config for machine-local values, state.json is position data
+// dross owns.
 //
 // Phase work does not use this store — a phase's forked-from base lives in its
 // phase-scoped changes.json, which cannot be dragged forward either.

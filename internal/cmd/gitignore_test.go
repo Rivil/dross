@@ -181,3 +181,67 @@ func readIfExists(t *testing.T, path string) string {
 	}
 	return string(b)
 }
+
+// TestDocsDoNotClaimStateIsTracked (c-1): a doc that still says state.json is
+// committed sends the reader looking for a file no commit has, and a prompt
+// that does hard-fails the slash command it belongs to. Scanned rather than
+// eyeballed so the claim cannot creep back in a later edit.
+func TestDocsDoNotClaimStateIsTracked(t *testing.T) {
+	root := repoRootFromTest(t)
+	// Phrases that assert the file rides history. Matched case-insensitively on
+	// lines that also mention state.json, so unrelated prose is untouched.
+	claims := []string{
+		"state.json is committed",
+		"state.json is tracked",
+		"state.json rides",
+		"state.json does ride",
+		"commits state.json",
+	}
+	for _, rel := range []string{
+		"README.md",
+		"docs/dross.1",
+		"assets/prompts/init.md",
+		"assets/prompts/pause.md",
+		"internal/cmd/local.go",
+		".gitignore",
+	} {
+		b, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		lower := strings.ToLower(string(b))
+		for _, claim := range claims {
+			if strings.Contains(lower, claim) {
+				t.Errorf("%s still asserts %q — state.json is machine-local and gitignored", rel, claim)
+			}
+		}
+	}
+}
+
+// TestDoctorFoundationalDocMatchesBehaviour (c-1/c-6): README's doctor row lists
+// doctor's foundational files. It listed state.json, which t-9 removed from the
+// set — a doc that contradicts the command it documents is worse than none.
+func TestDoctorFoundationalDocMatchesBehaviour(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row string
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.Contains(line, "`dross doctor`") && strings.Contains(line, "foundational files") {
+			row = line
+		}
+	}
+	if row == "" {
+		t.Fatal("README has no `dross doctor` row naming its foundational files")
+	}
+	head, _, _ := strings.Cut(row, "`[remote]`")
+	if strings.Contains(head, "state.json`)") {
+		t.Errorf("README lists state.json among doctor's foundational files:\n%s", row)
+	}
+	for _, want := range []string{"`project.toml`", "`rules.toml`"} {
+		if !strings.Contains(head, want) {
+			t.Errorf("README's foundational list should still name %s:\n%s", want, row)
+		}
+	}
+}

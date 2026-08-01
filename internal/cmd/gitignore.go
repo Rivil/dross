@@ -19,13 +19,17 @@ const drossStateIgnorePath = ".dross/state.json"
 // history. Tracking it means a checkout can replace the live file with whatever
 // copy the branch being checked out happens to carry — which is exactly how a
 // long-lived branch wound up clobbering a 40-entry history with a 2-entry one.
-// Untracking is the only fix that also covers a plain `git checkout`, because
-// git cannot overwrite a file it does not track (locked decision:
-// state_tracking). On branches that still carry a copy, git refuses the checkout
-// rather than clobbering, which is the safe outcome.
-const drossGitignoreBlock = "# dross machine-local position + version state — deliberately untracked: a\n" +
-	"# checkout of a branch carrying a stale copy would otherwise replace the live\n" +
-	"# one, and git cannot overwrite what it does not track (locked state_tracking)\n" +
+// Untracking removes the copy from every future commit, so there is nothing
+// left to replay (locked decision: state_tracking).
+//
+// It does NOT make git refuse: git declines to overwrite an untracked
+// working-tree file only when that file is not ignored, and overwrites an
+// ignored one silently. Refs cut before this line landed still carry a copy, and
+// the guard in switchbranch.go is what stops dross replaying it.
+const drossGitignoreBlock = "# dross machine-local position + version state — deliberately untracked: no\n" +
+	"# ordinary commit carries a copy, so nothing can replay one over the live file.\n" +
+	"# (On refs cut before this line landed, dross itself refuses the switch — git\n" +
+	"# overwrites an *ignored* file without complaint.) Locked state_tracking.\n" +
 	drossStateIgnorePath
 
 // ensureDrossGitignore writes <repoDir>/.gitignore (or appends to it) so

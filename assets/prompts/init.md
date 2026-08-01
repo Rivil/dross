@@ -8,7 +8,7 @@ Bootstrap dross in a **greenfield** repo. Walk the user through vision → marke
 
 1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
 2. Confirm cwd is the intended project root. If `.dross/` already exists, stop and tell the user to use `/dross-onboard` or `dross init --force`.
-3. Run `dross init`. It creates `.dross/`, the empty `project.toml`, `state.json`, `rules.toml`, and seeds `profile.toml` from GSD if available.
+3. Run `dross init`. It creates `.dross/`, the empty `project.toml`, `rules.toml` and a machine-local `state.json` (gitignored, never committed), and seeds `profile.toml` from GSD if available.
 
 ## 1. Vision
 
