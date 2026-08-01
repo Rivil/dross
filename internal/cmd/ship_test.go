@@ -1217,3 +1217,64 @@ func TestShipHealRecordsPartialThenRefuses(t *testing.T) {
 		t.Errorf("partial verdict should be recorded before the refusal:\n%s", telemBody)
 	}
 }
+
+// TestShipKeepsLocalCompletionRecord (c-3): dropping the `git add` must not
+// drop the write. Ship still clears current_phase and appends `completed <id>`
+// to the on-disk history — it just stays machine-local, so no commit carries it.
+func TestShipKeepsLocalCompletionRecord(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+
+	if err := runCmd(t, Ship()); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+
+	s, err := state.Load(filepath.Join(dir, ".dross", state.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, a := range s.History {
+		if strings.Contains(a.Action, "completed x") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("ship should record the completion locally: %+v", s.History)
+	}
+	if s.CurrentPhase != "" {
+		t.Errorf("ship should clear current_phase, got %q", s.CurrentPhase)
+	}
+	// …and nothing on HEAD carries it.
+	if gitAllowFail(dir, "cat-file", "-e", "HEAD:.dross/"+state.File) {
+		t.Error("HEAD carries .dross/state.json — the record must stay machine-local")
+	}
+	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
+		t.Errorf("ship should leave a clean tree, got: %q", st)
+	}
+}
+
+// TestPromptsNeverStageStateJSONByPath (c-3): an explicit `git add
+// .dross/state.json` in a shipped prompt hard-fails every run of that slash
+// command once the file is gitignored. The directory form is the only safe one.
+func TestPromptsNeverStageStateJSONByPath(t *testing.T) {
+	dir := filepath.Join(repoRootFromTest(t), "assets", "prompts")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if strings.Contains(line, "git add") && strings.Contains(line, state.File) {
+				t.Errorf("%s:%d stages state.json by explicit path: %s", e.Name(), i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+}

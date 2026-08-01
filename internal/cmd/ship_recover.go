@@ -49,8 +49,8 @@ The recovery is the same in both cases:
 
   1. fetch origin
   2. reset --hard origin/<main>
-  3. checkout <pre-merge-sha> -- .dross/   (default: current HEAD)
-  4. update state.json (records the merge)
+  3. checkout <pre-merge-sha> -- .dross/, minus state.json   (default: current HEAD)
+  4. update state.json locally (records the merge; the file is machine-local)
   5. one atomic commit with the restored .dross/ tree
 
 Pass --pre-merge-sha if you've already manually reset main and HEAD no
@@ -174,15 +174,28 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	if out, err := gitCombined(repoDir, "reset", "--hard", "origin/"+baseBranch); err != nil {
 		return fmt.Errorf("git reset --hard origin/%s: %w\n%s", baseBranch, err, out)
 	}
-	if out, err := gitCombined(repoDir, "checkout", sha, "--", ".dross/"); err != nil {
+	// Exclude state.json from the restore. A pre-untrack commit still carries a
+	// copy, and restoring it would overwrite the live machine-local file with
+	// whatever history that commit happened to hold — the very clobber this
+	// milestone exists to end (locked state_tracking).
+	if out, err := gitCombined(repoDir, "checkout", sha, "--", ".dross/", ":(exclude).dross/"+state.File); err != nil {
 		return fmt.Errorf("git checkout %s -- .dross/: %w\n%s", short(sha), err, out)
 	}
 
 	// Delta gate. Stage the restored .dross/ and check whether it actually
 	// differs from origin/main (which we just reset to). If nothing staged,
-	// main already carries the full tree — a clean no-op, no commit. Checked
-	// *before* state.Touch, because touching state.json would always
-	// manufacture a delta and make this no-op unreachable.
+	// main already carries the full tree — a clean no-op, no commit.
+	//
+	// The directory form, deliberately: `git add` over a directory silently
+	// skips ignored paths, while an explicit `:(exclude).dross/state.json`
+	// counts as naming an ignored file and makes the whole command exit 1
+	// ("paths are ignored by one of your .gitignore files"). The checkout above
+	// is where the exclusion has to live — nothing re-enters the index here as
+	// long as nothing was restored into the tree.
+	//
+	// This gate used to be correct only because it ran before state.Touch, which
+	// always manufactured a delta. With state.json out of the tree the no-op is
+	// genuinely reachable, and it must exit 0 having written nothing.
 	if out, err := gitCombined(repoDir, "add", ".dross/"); err != nil {
 		return fmt.Errorf("git add: %w\n%s", err, out)
 	}
@@ -200,9 +213,8 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 		return nil
 	}
 
-	// Real delta: record the merge in state history and commit the restored
-	// tree in one atomic commit. state.json is inside .dross/, so the same
-	// `git add .dross/` stages the touch.
+	// Real delta: record the merge in state history — a local write, since
+	// state.json is machine-local — and commit the restored tree.
 	s.Touch(fmt.Sprintf("merged %s", phaseID))
 	if err := s.Save(filepath.Join(root, state.File)); err != nil {
 		return fmt.Errorf("save state: %w", err)
