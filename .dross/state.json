@@ -2,26 +2,10 @@
   "version": "1.2.1.0",
   "current_milestone": "v1.2",
   "current_phase": "state-json-branch-safety",
-  "current_phase_status": "created",
-  "last_activity": "2026-08-01T08:17:32.623696Z",
-  "last_action": "spec locked: state-json-branch-safety",
+  "current_phase_status": "planned",
+  "last_activity": "2026-08-01T09:58:39.343209Z",
+  "last_action": "plan amended: state-json-branch-safety (14 tasks across 4 waves; 3 blocking resolved)",
   "history": [
-    {
-      "at": "2026-07-30T10:46:16.209581Z",
-      "action": "executed t-8 (Add --json to task and changes shows)"
-    },
-    {
-      "at": "2026-07-30T10:49:12.603695Z",
-      "action": "executed t-9 (Pin lifecycle/state-map bidirectional divergence)"
-    },
-    {
-      "at": "2026-07-30T10:51:54.041536Z",
-      "action": "executed t-10 (Pin the five telemetry friction cases)"
-    },
-    {
-      "at": "2026-07-30T10:55:23.433233Z",
-      "action": "executed t-11 (Gate every structured show for --json)"
-    },
     {
       "at": "2026-07-30T10:55:39.775857Z",
       "action": "set current_phase_status=complete"
@@ -205,6 +189,22 @@
     {
       "at": "2026-08-01T08:17:32.623696Z",
       "action": "spec locked: state-json-branch-safety"
+    },
+    {
+      "at": "2026-08-01T09:26:06.297372Z",
+      "action": "set current_phase_status=planned"
+    },
+    {
+      "at": "2026-08-01T09:26:06.304283Z",
+      "action": "plan locked: state-json-branch-safety (12 tasks across 3 waves)"
+    },
+    {
+      "at": "2026-08-01T09:48:38.277894Z",
+      "action": "plan reviewed: state-json-branch-safety (round 2 — 3 blocking, 8 flags)"
+    },
+    {
+      "at": "2026-08-01T09:58:39.343209Z",
+      "action": "plan amended: state-json-branch-safety (14 tasks across 4 waves; 3 blocking resolved)"
     }
   ]
 }
