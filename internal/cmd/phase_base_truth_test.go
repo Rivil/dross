@@ -48,7 +48,10 @@ func staleMilestoneFixture(t *testing.T) (string, string) {
 	if err := runCmd(t, State(), "set", "current_milestone", version); err != nil {
 		t.Fatalf("state set current_milestone: %v", err)
 	}
-	mustGit(t, dir, "add", ".dross/state.json")
+	// Force-staged: the tracked copy of state.json is the pre-untrack shape this
+	// incident fixture depends on, and the file is gitignored once dross scaffolds
+	// it — the directory form would stage nothing and the commit would fail.
+	mustGit(t, dir, "add", "-f", ".dross/state.json")
 	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): scope "+version)
 
 	return dir, version
