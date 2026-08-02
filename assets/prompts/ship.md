@@ -16,7 +16,7 @@ Open a PR for a verified phase. Pushes the `phase/<id>` branch to the provider (
    - phase commits leaked onto local main (legacy state — heal with `dross ship recover` first)
    If anything's off, stop and have the user fix before continuing.
 4. Read `.dross/phases/<phase-id>/verify.toml` — `[verify].verdict` must be `pass`. If not, stop. Override only if the user explicitly accepts the risk: `dross ship --force-unverified`.
-5. **Verify HEAD is on `phase/<id>`** with `git symbolic-ref --short HEAD`. `dross ship` requires this — the phase branch is what gets pushed. If not on it: `git checkout phase/<id>` (it should exist from `dross phase create`).
+5. **Verify HEAD is on `phase/<id>`** with `git symbolic-ref --short HEAD`. `dross ship` requires this — the phase branch is what gets pushed. If not on it: `dross phase checkout <phase-id>` (it should exist from `dross phase create`). Use the dross verb, never raw git — it switches through the guard that refuses a branch whose tracked `.dross/state.json` would overwrite your live machine-local one.
 6. `git status --porcelain` — must be empty. If dirty, ask user to commit or stash first.
 
 ## 0.5 Non-interactive fast-path (`--auto`)
@@ -144,12 +144,14 @@ If `hold`: skip to §7 with status `awaiting-merge`.
 
 If `merge`:
 
-1. **Squash-merge via provider:**
-   - GitHub: `gh pr merge <pr-url> --squash --delete-branch` — also deletes the remote `phase/<id>` branch.
-   - Forgejo / Gitea: `POST <api_base>/repos/<owner>/<repo>/pulls/<n>/merge` body `{"Do":"squash"}`, then `DELETE <api_base>/repos/<owner>/<repo>/branches/phase%2F<id>` to remove the remote branch.
-   - GitLab: `PUT <api_base>/projects/<id>/merge_requests/<iid>/merge` body `{"squash":true,"should_remove_source_branch":true}` (auth header as in §5) — the squash collapses per-task commits and `should_remove_source_branch` deletes the remote `phase/<id>` branch in one call.
+1. **Squash-merge via provider — merge only, no branch teardown:**
+   - GitHub: `gh pr merge <pr-url> --squash`
+   - Forgejo / Gitea: `POST <api_base>/repos/<owner>/<repo>/pulls/<n>/merge` body `{"Do":"squash"}`
+   - GitLab: `PUT <api_base>/projects/<id>/merge_requests/<iid>/merge` body `{"squash":true}` (auth header as in §5) — the squash collapses per-task commits.
+
+   **`dross phase complete` performs the local AND remote `phase/<id>` deletion, on every provider.** Never ask the provider to delete the branch as part of the merge — the merge call above is the whole step; no delete flag, no remove-source-branch field, no branch-removal API call. GitHub's delete-on-merge flag does its own raw checkout of the base branch, a branch switch outside dross's guard, and that is what destroyed a live `state.json` on a previous ship. Forgejo and GitLab merge over REST and never switch branches, so dropping provider-side teardown everywhere gives dross one teardown owner instead of a per-provider split.
 2. **Mark the board issue shipped** (no-op unless `[remote].board_sync` is on — safe to always run): `dross issue phase-sync <phase-id> --status shipped`. The PR is merged but the phase isn't finalized yet, so `shipped` is the honest state here — and it's the moment the board should stop showing the phase as in-progress.
-3. **Finalize locally**: `dross phase complete <phase-id>` — switches to main, fast-forwards from origin (succeeds cleanly because phase work never touched main), deletes local `phase/<id>`, records the merge in state.json with a chore commit.
+3. **Finalize locally**: `dross phase complete <phase-id>` — switches to the base this phase was forked from (read from the phase's own record, never inferred), fast-forwards it from origin, writes the completion record into the machine-local `.dross/state.json`, then deletes `phase/<id>` locally and on origin. It commits nothing: `state.json` is gitignored, so the record rides no commit anywhere.
 4. **Close the board issue at its terminal state** (same no-op rule): `dross issue phase-sync <phase-id> --status complete --close`. Closing with a `--status` rather than a bare `--close` is what keeps `shipped` and `complete` statuses dross actually emits — a bare `--close` left both as state-map keys nothing ever resolved.
 
 > **Two merge levels (v0.7 branch topology).** Phase PRs **squash-merge** into
@@ -182,13 +184,13 @@ If the PR opened but reviewer-request failed, surface that — it's non-fatal bu
 
 ## Recovery
 
-Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-forwards local main from origin and tears down the branch. When the merge step goes sideways, recover with a dross command — **never hand-edit `.dross/` or re-commit it by hand.** That manual surgery is exactly what drifted in the past; a dross command owns the restore and the commit. The three mid-merge failure states and their one-command fixes:
+Most ships finish clean: §6's squash-merge plus `dross phase complete` fast-forwards the phase's recorded base from origin and tears down the branch. When the merge step goes sideways, recover with a dross command — **never hand-edit `.dross/` or re-commit it by hand.** That manual surgery is exactly what drifted in the past; a dross command owns the restore and the commit. The three mid-merge failure states and their one-command fixes:
 
 1. **Fast-forward abort.** `dross phase complete` stops with a "fast-forward … failed" error — local main has diverged from origin/main (a stray commit on main, or a legacy completion chore). Fix: **`dross phase complete --recover`** — it resets main to origin and restores the cumulative `.dross/` tree in one shot, then finishes the completion. Pass `--recover` only after reading the abort: it is a destructive reset of local main.
 
 2. **Diverged main (legacy / strip-filter era).** Local main carries phase commits that origin/main lost to an old `.dross/`-stripping squash, so main holds a parallel history. Fix: **`dross ship recover`** — the standalone healer. Same reset-and-restore as `--recover`, usable outside the merge loop.
 
-3. **Dirty tree after push.** `dross ship` returned but `git status` is not clean — an older ship left its post-push state write uncommitted, which then blocks the provider's `--delete-branch` and `dross phase complete`. Fix: re-run **`dross ship`** — it is idempotent and commits its own post-push `.dross/` state, leaving a clean tree. You stage nothing yourself.
+3. **Dirty tree after push.** `dross ship` returned but `git status` is not clean — an older ship left its post-push `.dross/` write uncommitted, and `dross phase complete` refuses on a dirty tree. Fix: re-run **`dross ship`** — it is idempotent and commits its own post-push `.dross/` records, leaving a clean tree. You stage nothing yourself.
 
 If you find yourself reaching for git plumbing against `.dross/`, stop — one of the three commands above already covers it.
 

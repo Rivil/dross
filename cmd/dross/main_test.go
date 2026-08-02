@@ -57,6 +57,68 @@ func TestReadmeAdvertisesOnlyRealCommands(t *testing.T) {
 	}
 }
 
+// promptCmdRef matches a `dross <verb>` (optionally `dross <verb> <sub>`)
+// invocation inside a backtick code span. The optional second word only
+// matches a bare lowercase word, so flags (`--auto`) and placeholders
+// (`<phase-id>`) fall out and leave just the top-level verb to check.
+var promptCmdRef = regexp.MustCompile("`dross ([a-z][a-z0-9-]*)(?: ([a-z][a-z0-9-]*))?")
+
+// TestShipPromptCommandsExist is the parity guard for ship.md, the sibling of
+// TestReadmeAdvertisesOnlyRealCommands above: every `dross …` invocation the
+// prompt tells the model to run must resolve against the assembled cobra tree.
+// It lives here rather than in internal/cmd because the tree is assembled by
+// newRoot, which is in package main and cannot be imported from internal/cmd.
+//
+// This is what stops a prompt advertising a command before it exists — the
+// failure mode where a prompt edit lands ahead of the CLI verb it depends on
+// and every run of the slash command hits "unknown command".
+func TestShipPromptCommandsExist(t *testing.T) {
+	root := newRoot()
+	top := map[string]*cobra.Command{}
+	for _, c := range root.Commands() {
+		top[c.Name()] = c
+		for _, a := range c.Aliases {
+			top[a] = c
+		}
+	}
+
+	b, err := os.ReadFile(filepath.Join("..", "..", "assets", "prompts", "ship.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	matches := promptCmdRef.FindAllStringSubmatch(string(b), -1)
+	if len(matches) == 0 {
+		t.Fatal("parsed zero `dross <cmd>` references from ship.md — the regex or path is wrong")
+	}
+	for _, m := range matches {
+		parent, ok := top[m[1]]
+		if !ok {
+			t.Errorf("ship.md runs `dross %s` but no such command exists in the cobra tree", m[1])
+			continue
+		}
+		sub := m[2]
+		if sub == "" || !parent.HasSubCommands() {
+			continue
+		}
+		found := false
+		for _, c := range parent.Commands() {
+			if c.Name() == sub {
+				found = true
+				break
+			}
+			for _, a := range c.Aliases {
+				if a == sub {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Errorf("ship.md runs `dross %s %s` but %q has no such subcommand", m[1], sub, m[1])
+		}
+	}
+}
+
 // TestReadmeStatusNotStale pins the version framing: once the repo is at
 // v1.0 the status line must not still advertise a v0.x milestone series.
 func TestReadmeStatusNotStale(t *testing.T) {

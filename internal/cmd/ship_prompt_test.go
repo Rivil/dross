@@ -141,13 +141,67 @@ func TestShipPromptGitLabSections(t *testing.T) {
 		t.Error("ship.md §5 missing the no-pipeline (empty pipelines array) surface-and-ask path")
 	}
 
-	// §6 GitLab squash-merge + remote-branch removal (underscore-stripped forms).
-	for _, needle := range []string{
-		"mergerequests",            // merge_requests
+	// §6 GitLab squash-merge endpoint (underscore-stripped form).
+	if !strings.Contains(content, "mergerequests") {
+		t.Errorf("ship.md §6 missing GitLab squash-merge endpoint token %q", "mergerequests")
+	}
+	// The remote-branch removal flag is deliberately GONE. gitlab-ship-provider
+	// pinned `should_remove_source_branch` as part of the locked merge mapping;
+	// completion-state-truth supersedes that, because provider-side teardown is
+	// now dross's job on every provider (see TestShipPromptNoUnguardedSwitch).
+	if strings.Contains(content, "shouldremovesourcebranch") {
+		t.Error("ship.md §6 must not ask GitLab to remove the source branch — `dross phase complete` owns the teardown")
+	}
+}
+
+// TestShipPromptNoUnguardedSwitch (c-1) is the executable guard on the hole
+// this phase closes: no step of /dross-ship may switch branches outside dross's
+// guarded primitives. `gh pr merge --delete-branch` does its own raw checkout of
+// the base branch — that is what destroyed a live state.json on the
+// state-json-branch-safety ship — and a raw `git checkout` in the prompt is the
+// same hole with the user's hands on it.
+//
+// The whole file is scanned, not just §4-to-EOF: §0's pre-flight step 5 has a
+// guarded replacement now (`dross phase checkout`), so there is nowhere left
+// that legitimately types one.
+func TestShipPromptNoUnguardedSwitch(t *testing.T) {
+	content := shipPromptContent(t)
+
+	for _, forbidden := range []string{
+		"--delete-branch",
 		"shouldremovesourcebranch", // should_remove_source_branch
+		"deletesourcebranch",       // delete_source_branch
+		"git checkout",
+		"git switch",
+	} {
+		if strings.Contains(content, forbidden) {
+			t.Errorf("ship.md must not contain %q — every branch switch and branch deletion goes through dross", forbidden)
+		}
+	}
+}
+
+// TestShipPromptNamesCompleteAsTeardownOwner (c-1, c-3): with the provider's
+// delete flags gone, the prompt has to say who does the deletion instead — and
+// §6.3's description of `dross phase complete` has to stop describing the old
+// behaviour (a switch to main, and a chore commit carrying the record).
+func TestShipPromptNamesCompleteAsTeardownOwner(t *testing.T) {
+	// Collapse whitespace so multi-word needles match across line wraps.
+	content := strings.Join(strings.Fields(shipPromptContent(t)), " ")
+
+	for _, needle := range []string{
+		"dross phase complete performs the local and remote",
+		"on every provider",
 	} {
 		if !strings.Contains(content, needle) {
-			t.Errorf("ship.md §6 missing GitLab squash-merge token %q", needle)
+			t.Errorf("ship.md §6 must name `dross phase complete` as the teardown owner: missing %q", needle)
+		}
+	}
+	for _, stale := range []string{
+		"switches to main",
+		"chore commit",
+	} {
+		if strings.Contains(content, stale) {
+			t.Errorf("ship.md §6.3 still describes the retired completion behaviour: %q", stale)
 		}
 	}
 }
