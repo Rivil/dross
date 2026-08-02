@@ -1,0 +1,305 @@
+[phase]
+id = "completion-state-truth"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Move the completion write to phase complete"
+files         = [
+  "internal/cmd/ship.go",
+  "internal/cmd/phase.go",
+  "internal/cmd/ship_test.go",
+  "internal/cmd/phase_test.go",
+]
+description   = """
+ship.go step 5: replace the current_phase/current_phase_status clears and the
+`completed <id>` touch with current_phase_status = "shipped", current_phase left
+set, and a `shipped <id>` touch — history-scan-guarded, exactly like the
+`completed <id>` write, so a re-ship does not append a second entry. Replace the
+post-PR narration with a line naming `dross phase complete` as the writer.
+
+phase.go: replace the "No state write here" block with the real write — after the
+fast-forward succeeds and BEFORE the local and remote branch deletions — clearing
+current_phase/current_phase_status only when current_phase equals the phase being
+completed, appending one `completed <id>` guarded by a history scan, then Save.
+No `git add`, no commit (state.json is gitignored).
+
+CRITICAL — state provenance: the write must NOT use the `s` loaded at the top of
+RunE (phase.go:273). That copy predates autoCommitDrossDirt, the checkout, the
+fast-forward and runDrossRecovery. On the `--recover` path, recovery reloads state
+into `rs` and does its own `Touch("merged <id>")` + `Save` (ship_recover.go:218);
+saving the stale `s` over that drops `merged <id>` and every entry written since
+line 273 — the same live-history truncation this phase exists to close. The hazard
+is already documented in prose at phase.go:451-456. Re-load state from disk
+immediately before writing, or reuse `rs` when recovery ran.
+
+Blast radius is wider than the two write sites: the premise "ship writes the
+completion record" is baked into existing assertions and comment blocks in
+ship_test.go (~:305, :330, :676, :723) and into foldCompletion/writeCompletion
+fixture comments throughout phase_test.go — grep for those two helpers rather than
+trusting line numbers, which drift. The ship_test.go comment blocks must be
+rewritten too: t-8's grep guard scans internal/cmd/*.go, test files included, and
+"folds the completion" / "folded into the squash" both hit that file today.
+phase_test.go's writeCompletion/foldCompletion fixtures stop clearing
+current_phase — they modelled ship's old write.
+"""
+covers        = ["c-2", "c-3"]
+test_contract = [
+  "TestShipRecordsShippedNotCompleted: after `dross ship`, state.json reads current_phase = \"<id>\", current_phase_status = \"shipped\", and history carries NO `completed <id>`. Restoring either clear fails it.",
+  "TestShipNarratesCompleteOwnsRecord: ship's stdout contains no \"Completion record folded\" / \"squash-merge will land it\" and names `dross phase complete`.",
+  "TestShipJSONEmitsSingleObjectAndSuppressesNarration keeps its teeth: its needle loop (ship_test.go:676) asserts \"Completion record folded\" is ABSENT under --json, so it goes vacuous rather than red once ship stops emitting the string. Swap that needle for the new narration string — a --json run that leaks the new line must fail it.",
+  "TestShipIsReShippable: a second `dross ship` exits 0 and leaves current_phase_status = \"shipped\" with one `shipped <id>` entry, not two.",
+  "TestPhaseCompleteWritesCompletionRecord: after a confirmed-merge complete, state.json reads current_phase = \"\", current_phase_status = \"\" and exactly one `completed <id>` entry. Deleting complete's write leaves zero and fails — today the same assertion only passes because ship wrote it.",
+  "TestPhaseCompleteIsIdempotent: `dross phase complete <id>` twice (PR-merged stub, phase branch already gone) exits 0 both times and the entry count stays 1. An unconditional append or a second-run error fails it.",
+  "TestCompleteOtherPhaseKeepsCurrent: completing phase A while current_phase is B appends `completed A` and leaves current_phase = B.",
+  "TestCompleteRecordsBeforeTeardown: with the bare origin carrying an `update` hook rejecting deletion of `phase/<id>`, complete exits non-zero AND state.json already carries `completed <id>`. Moving the write below the teardown fails this. (No git-hook precedent exists in the suite — if the hook fights back, any forced teardown failure serves.)",
+  "TestCompleteRecoverKeepsMergedEntry: `dross phase complete --recover` on a diverged base leaves BOTH `merged <id>` and `completed <id>` in live history, with every pre-existing entry intact. Writing the top-of-RunE `s` instead of a re-loaded copy drops `merged <id>` and fails it.",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 1
+title         = "Branch-topology helper"
+files         = [
+  "internal/cmd/topology.go",
+  "internal/cmd/topology_test.go",
+]
+description   = """
+New `branchTopology(repoDir, root, workOverride)` returning {Head, Work, Main,
+AheadOfMain, OnMain}. When workOverride is non-empty it is used verbatim — that is
+how t-5 passes the authoritative `reconcileBranch` in rather than letting the
+helper guess; only when it is empty does Work fall back to `resolveNewWorkBase`
+(basebranch.go), which is inference and is acceptable for status's standing line
+but never for a completion statement. AheadOfMain from
+`git rev-list --count <main>..<work>`.
+
+Plus a one-line renderer shared by status and complete. The "not yet on main"
+clause is emitted on exactly one condition, used identically by both callers:
+AheadOfMain > 0. Pure read, no network; degrades to a partial answer (Work=main,
+AheadOfMain=0, nil error) on any git failure, missing milestone branch, missing
+origin or detached HEAD — status must never break on it.
+"""
+covers        = ["c-5"]
+test_contract = [
+  "TestBranchTopologyCountsAheadOfMain: on a fixture where milestone/v1.2 carries 3 commits main lacks, returns Work=\"milestone/v1.2\", AheadOfMain=3, OnMain=false. Counting `<work>..<main>` yields 0 and fails it.",
+  "TestBranchTopologyWorkOverrideWins: with workOverride set to a branch resolveNewWorkBase would NOT infer, the returned Work is the override and AheadOfMain is counted against it. A helper that ignores the override and re-infers fails it.",
+  "TestBranchTopologyNoMilestoneNoRemote: a repo with no milestone branch and no origin returns Work=\"main\", AheadOfMain=0 and a nil error. A helper that errors on a missing ref fails it.",
+  "TestRenderTopologyLine: table over 0 / 3 commits — the renderer emits the branch name always and the \"not yet on main\" clause only when AheadOfMain > 0. A hardcoded clause fails the 0 case.",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 1
+title         = "Guarded `dross phase checkout`"
+files         = [
+  "internal/cmd/phase_checkout.go",
+  "internal/cmd/phase_checkout_test.go",
+  "internal/cmd/phase.go",
+]
+description   = """
+New subcommand `dross phase checkout <phase-id>` resolving `phase/<id>` and
+switching through `checkoutBranch` (so `guardLiveState` runs), refusing when the
+local ref is absent rather than creating it. Registered in phase.go's AddCommand
+list — the only line this task touches in phase.go, so it does not collide with
+t-1's edits to the same file.
+"""
+covers        = ["c-1"]
+test_contract = [
+  "TestPhaseCheckoutRefusesClobber: against a `phase/<id>` that tracks `.dross/state.json`, exits non-zero with guardLiveState's \"refusing to switch\" and the live 12-entry history is intact. Swapping `checkoutBranch` for a raw `git checkout` fails it.",
+  "TestPhaseCheckoutMissingBranch: `dross phase checkout nope` exits non-zero naming `phase/nope`, and `git branch --list phase/nope` stays empty — it must never fall through to `checkout -b`.",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-4"
+wave          = 2
+depends_on    = ["t-3"]
+title         = "Ship prompt performs no branch switch"
+files         = [
+  "assets/prompts/ship.md",
+  "internal/cmd/ship_prompt_test.go",
+  "cmd/dross/main_test.go",
+]
+description   = """
+§6.1 GitHub becomes `gh pr merge <pr-url> --squash` with `--delete-branch`
+dropped. The Forgejo and GitLab merge steps likewise drop their remote-deletion
+flags (`should_remove_source_branch`, the branch DELETE call), and a line states
+dross owns every branch deletion on every provider. This deliberately supersedes
+gitlab-ship-provider's c-4 pin: ship_prompt_test.go's `TestShipPromptGitLabSections`
+currently asserts `should_remove_source_branch` as part of the locked merge
+mapping, and that needle is inverted here — chosen for one teardown owner across
+all providers, wider than teardown_owner's GitHub-only text.
+
+§6.3's description of `dross phase complete` is corrected: it switches to the
+recorded base, not main, and writes the completion record itself — no chore
+commit. ship.md's only raw `git checkout` is §0 pre-flight step 5 (line 19); that
+becomes `dross phase checkout <id>`. The Recovery section has no checkout, but its
+item 3 says a dirty tree "blocks the provider's `--delete-branch`" — that sentence
+goes stale here and is rewritten. Run `make install` after editing (rule r-01).
+"""
+covers        = ["c-1", "c-3"]
+test_contract = [
+  "TestShipPromptNoUnguardedSwitch: ship.md contains no `--delete-branch`, no `should_remove_source_branch`, no `delete_source_branch`, no `git checkout` and no `git switch` outside fenced examples of other tools — the whole file, not just §4-to-EOF, since t-3 gives §0 step 5 a guarded replacement. Re-adding `--delete-branch` to the gh line fails it.",
+  "TestShipPromptNamesCompleteAsTeardownOwner: §6 names `dross phase complete` as performing the local AND remote phase-branch deletion for every provider, and §6.3 contains neither \"switches to main\" nor \"chore commit\".",
+  "TestShipPromptCommandsExist (in cmd/dross/main_test.go, not internal/cmd): every `dross <verb> …` invocation in ship.md resolves against the assembled cobra tree from `newRoot` — which lives in package main and cannot be imported by internal/cmd. Sits beside the existing TestReadmeAdvertisesOnlyRealCommands, which does the same job for README. The prompt cannot advertise `dross phase checkout` before t-3 lands it.",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-5"
+wave          = 2
+depends_on    = ["t-1", "t-2"]
+title         = "Complete states the resulting topology"
+files         = [
+  "internal/cmd/phase.go",
+  "internal/cmd/phase_test.go",
+]
+description   = """
+Replace phaseComplete's final Printf with a statement built from t-2's renderer,
+passing the already-resolved `reconcileBranch` from `resolveCompleteBase` in as
+workOverride. The helper must not re-infer: resolveCompleteBase's doc comment
+records that milestone-derived inference is exactly what made a stale local
+milestone/<version> branch the reconcile target, and a completion statement that
+names an inferred branch would re-tell the lie the previous phase removed.
+
+The statement names the branch HEAD now sits on, `deleted phase/<id> (local +
+origin)` — or "already gone" when the remote ref was absent — and the "not yet on
+main" clause on t-2's single condition (AheadOfMain > 0).
+"""
+covers        = ["c-5"]
+test_contract = [
+  "TestPhaseCompletePrintsTopologyStatement: stdout names all three — the branch HEAD ends on, the deleted local `phase/<id>` AND the deleted remote ref, and the \"<n> commit(s) on <base>, not yet on main\" clause. Each substring asserted separately, so dropping any one clause fails.",
+  "TestPhaseCompleteNamesRecordedBaseNotInferred: on a phase whose changes.json records a base that differs from the milestone-derived one, the statement names the recorded base. Letting branchTopology infer Work names the milestone branch and fails it.",
+  "Sub-test \"remote branch already deleted\": the statement says so rather than claiming a deletion that did not happen (reuses TestPhaseCompleteRemoteDeleteIdempotent's fixture shape).",
+  "Sub-test \"base is main\": names main as the landing branch and emits NO \"not yet on main\" clause. A hardcoded clause fails here.",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-6"
+wave          = 2
+depends_on    = ["t-1", "t-2"]
+title         = "Status and watch report shipped, not stale"
+files         = [
+  "internal/cmd/status.go",
+  "internal/cmd/status_test.go",
+  "internal/watch/drift.go",
+  "internal/watch/drift_test.go",
+]
+description   = """
+status.go: delete the `stale:` block and `stateRecordsCompleted`. Its trigger is
+`stateRecordsCompleted(...) || phaseRecordsPR(...)` — the completed-breadcrumb arm
+becomes unreachable once complete is the sole writer, while the PR arm survives as
+`shippedUnmergedPhase`'s fallback. `staleCompletedState` becomes
+`shippedUnmergedPhase`, keyed on current_phase_status == "shipped" with the
+recorded PR number as fallback, rendering a `shipped:` line naming the PR and the
+base it waits on. `staleCompletedState`'s merged-check is RETAINED — the ancestry
+check plus the squash-aware `resolveSquashCommit` content check. Without it the
+post-merge/pre-complete window, which this phase deliberately makes reachable and
+longer-lived, prints a `shipped:` line saying a PR that already landed is still
+waiting. Add the standing `branch:` line from t-2's renderer, printed on every
+run — unconditional, not gated on an active phase.
+
+`suggestNext` must learn the new state: with current_phase left set after ship, it
+reaches the verdict-pass + recorded-changes branch and advises `/dross-ship` on an
+already-shipped phase, directly under the `shipped:` line naming the open PR.
+Route current_phase_status == "shipped" to a merge/complete hint before the verdict
+switch. `spineIdle` (status.go:275-306) already returns true for a shipped phase
+with a finalized pass verdict and no runnable task, so it likely needs no change —
+verify rather than edit blind.
+
+internal/watch/drift.go: `classifyPhase` must not return DriftVerifiedUnshipped
+for a phase reading shipped with a recorded PR. Fix DriftVerifiedUnshipped's own
+doc comment (drift.go:25) in the same edit — it says "no `completed <slug>` folded
+into state history by ship", which is the claim c-3 retires.
+"""
+covers        = ["c-5", "c-6"]
+test_contract = [
+  "TestStatusReportsShippedNotStale: on phase/<id> with current_phase_status = shipped and PR #7 recorded but unmerged on origin, status prints `phase: <id> (shipped)` plus a `shipped:` line naming #7, and no `stale:` line. Restoring the completed-breadcrumb warning fails it.",
+  "Sub-test \"merged on origin, complete not yet run\": same fixture but the phase branch is an ancestor of the base (or its squash commit matches), and status does NOT claim the PR is still waiting. Dropping staleCompletedState's merged-check fails it.",
+  "TestStatusNextStepAfterShip: same fixture — the Next line names `dross phase complete` (or the merge) and never `/dross-ship`. Leaving suggestNext's verdict switch untouched prints the re-ship advice and fails it.",
+  "TestStatusSilentAfterCompletion: after a completed phase (current_phase empty, `completed <id>` in history) status prints neither `shipped:` nor `stale:`. Keeping the old history-keyed warning fires it and fails.",
+  "TestStatusTopologyLineAlways: status prints the `branch:` line in three fixtures — on phase/<id> mid-milestone (naming milestone/v1.2 and its commit count), on milestone/<v> between phases, and in a repo with no origin — exiting 0 in all three. Gating the line behind \"only when a phase is active\" fails the between-phases case.",
+  "TestDriftShippedPhaseNotUnshipped: a verify-pass phase with current_phase_status = shipped and a recorded PR yields no `verified_unshipped` entry; the same phase without either still does.",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-7"
+wave          = 2
+depends_on    = ["t-1"]
+title         = "Reproduce the incident end to end"
+files         = [
+  "internal/cmd/completion_state_truth_test.go",
+]
+description   = """
+One regression test over the whole ship→merge→complete flow, in a new file that
+builds its own fixture with `gitInit` + `mustGit` — the existing `incidentRepo`
+(state_clobber_regression_test.go:28) has no remote, no phase branch and no
+recorded PR, so it cannot be reused as-is; only `hasAction`, `stubPRMerged` and
+`incidentLiveEntries` carry over. Fixture: a base branch whose tree still tracks a
+2-entry .dross/state.json, a live untracked copy with incidentLiveEntries at
+version 9.9.9.9, a phase branch with a recorded PR, a stubbed merged PR. Drives
+`dross ship`, simulates the provider squash-merge on the bare origin, then
+`dross phase complete`.
+
+Scope honesty: no Go test can run `gh pr merge --delete-branch`, so this test's
+main assertion fails against pre-phase code because complete writes no
+`completed <id>` (t-1), not because the live copy was truncated. The executable
+guard against reintroducing the clobber is t-4's prompt grep; this test's control
+sub-test is what demonstrates the clobber is real. Depends on t-1 only — it drives
+the commands in-process and never executes ship.md.
+"""
+covers        = ["c-4"]
+test_contract = [
+  "TestShipToCompleteKeepsLiveState: after the flow the live copy still parses, holds >= incidentLiveEntries history entries, contains the first live action, reads version 9.9.9.9, and carries `completed <id>`. It fails against pre-phase code because complete writes no `completed <id>`. A non-zero exit from complete is an allowed outcome — refusing IS survival, per the existing switchbranch guard; a truncated 2-entry state.json is not.",
+  "Mandatory control sub-test \"raw checkout still clobbers\": performs the unguarded `git checkout <base>` that `gh pr merge --delete-branch` performs and asserts the live copy IS truncated to 2 entries. Without a demonstrated clobber the assertions above are vacuous on a fixture that never had one. Mirrors the existing TestStaleBranchCheckoutCannotClobberLiveState idiom.",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-8"
+wave          = 3
+depends_on    = ["t-1", "t-4", "t-5", "t-6"]
+title         = "Retire the rides-the-squash claim everywhere"
+files         = [
+  "internal/cmd/phase.go",
+  "internal/cmd/ship.go",
+  "internal/cmd/status.go",
+  "assets/prompts/ship.md",
+  "assets/prompts/quick.md",
+  "internal/telemetry/telemetry.go",
+  "ARCHITECTURE.md",
+  "internal/cmd/squash_claim_guard_test.go",
+]
+description   = """
+Rewrite every surface claiming the completion record rides the squash:
+phaseComplete's `Long`, the phase.go comments at the merge-confirm and state-write
+sites, ship.go's step-5 comment block, status.go's stale-guard comment, ship.md §4
+step 5, and ARCHITECTURE.md's phase-lifecycle + ship paragraphs (the ship section
+currently reads "folds the completed-state transition … so the squash-merge
+carries the completion record to main"). Each becomes: ship marks the phase
+shipped and leaves current_phase set; `dross phase complete` writes the cleared
+state and the `completed <id>` entry into the machine-local, gitignored state.json
+after the merge is confirmed. telemetry.go:294 also needs the edit: it says the
+shipped-but-unmerged window is where "branch-local state records `completed <id>`",
+which after t-1 records `shipped <id>` — a false claim about which command writes
+what, squarely c-3's second clause. (changes.go:138 is in the same position but its
+claim stays true, so it is scan-only.)
+
+Also add the shipped-status exception to quick.md:19, whose in-phase rule ("branch
+must be `phase/<current_phase>`") would otherwise route a quick fix onto a branch
+whose PR is already merged and which complete is about to delete — a window that
+only becomes reachable because ship now leaves current_phase set.
+
+A new grep-guard test locks it. Run `make install` after the prompt edits (r-01).
+"""
+covers        = ["c-3"]
+test_contract = [
+  "TestNoSurfaceClaimsCompletionRidesTheSquash: scans a fixed path list — internal/cmd/*.go, internal/watch/*.go, internal/changes/changes.go, internal/telemetry/telemetry.go, assets/prompts/*.md, ARCHITECTURE.md — for the phrase family \"folds the completion\", \"folded into the squash\", \"folded into state history by ship\", \"folded the cleared current_phase\", \"squash-merge will land it\", \"carries the completion record to main\", \"records the merge in state.json with a chore commit\", \"branch-local state records completed\", and fails on any hit. Whitespace is collapsed before scanning (the strings.Fields idiom at ship_prompt_test.go:161) — without it the two wrapped comment blocks at phase.go:507-511 and status.go:70-71 match no needle and could be re-added verbatim. Re-adding ship.md's old §6.3 sentence fails it, as does restoring drift.go:25's old doc comment or telemetry.go:294's.",
+  "TestQuickPromptHandlesShippedWindow: quick.md's in-phase routing names the shipped state and does not send work to `phase/<current_phase>` unconditionally. Reverting to the bare branch rule fails it.",
+  "TestCompleteHelpNamesRecordOwner: `dross phase complete --help` contains \"writes the completed-state transition\" and the word \"machine-local\", and does not contain \"'dross ship' folds\". Deleting that sentence fails it, so the positive claim cannot rot the way the old one did.",
+]
+status        = "pending"
