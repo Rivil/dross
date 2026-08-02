@@ -200,17 +200,17 @@
     },
     "t-7": {
       "files": [
-        "internal/cmd/status.go",
-        "internal/cmd/status_test.go"
+        "internal/cmd/status_test.go",
+        "internal/cmd/gitignore_test.go"
       ],
-      "commit": "5bf1207",
-      "completed_at": "2026-08-01T10:57:50.549046Z",
+      "commit": "15e7595",
+      "completed_at": "2026-08-02T06:40:34.21311Z",
       "landmarks": [
         {
           "feature": "status stale-phase warning",
-          "symbol": "staleCompletedState",
-          "loc": "internal/cmd/status.go:490",
-          "what": "shipped-but-unmerged is decided from changes.json plus a local ancestry/squash ref comparison instead of an origin state.json read"
+          "symbol": "TestStatusStaleFromPRRecordAlone",
+          "loc": "internal/cmd/status_test.go:891",
+          "what": "the changes.json PR fallback is exercised with the state.json breadcrumb absent, the shape every machine but the shipping one has"
         }
       ]
     },
