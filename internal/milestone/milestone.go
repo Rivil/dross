@@ -29,6 +29,11 @@ type Meta struct {
 	Status  string `toml:"status,omitempty" json:"status,omitempty"` // configenum.MilestoneStatuses: planning | active | complete
 	Started string `toml:"started,omitempty" json:"started,omitempty"`
 	Shipped string `toml:"shipped,omitempty" json:"shipped,omitempty"`
+	// Base is the branch milestone/<version> was cut from, recorded at create
+	// time and read back verbatim — never re-inferred from git topology or
+	// state.current_milestone. Empty on every milestone created before v1.2,
+	// which reads as the repo's main branch (see BaseOr).
+	Base string `toml:"base,omitempty" json:"base,omitempty"`
 }
 
 type Scope struct {
@@ -62,6 +67,39 @@ func (m *Milestone) Save(path string) error {
 	enc := toml.NewEncoder(f)
 	enc.Indent = "  "
 	return enc.Encode(m)
+}
+
+// BaseOr returns the recorded cut branch, falling back to mainBranch when the
+// milestone records none. mainBranch is passed in rather than hardcoded so a
+// repo on `master` reads correctly without this package importing project
+// config.
+func (m *Milestone) BaseOr(mainBranch string) string {
+	if m.Milestone.Base == "" {
+		return mainBranch
+	}
+	return m.Milestone.Base
+}
+
+// LoadAll loads every milestone under .dross/milestones/, keyed by version.
+//
+// It fails closed: a malformed or unreadable toml returns an error naming that
+// file rather than a short map. Callers use the result to decide whether a
+// branch delete is safe, and a silently-skipped file is indistinguishable from
+// "no dependents" — with an irreversible remote delete as the consequence.
+func LoadAll(root string) (map[string]*Milestone, error) {
+	versions, err := List(root)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]*Milestone, len(versions))
+	for _, v := range versions {
+		m, err := Load(FilePath(root, v))
+		if err != nil {
+			return nil, err
+		}
+		out[v] = m
+	}
+	return out, nil
 }
 
 // List returns milestone versions discovered under .dross/milestones/, sorted.

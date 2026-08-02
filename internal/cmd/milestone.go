@@ -428,6 +428,10 @@ func milestoneGet() *cobra.Command {
 				return err
 			}
 			return renderMultiGet(paths, func(path string) (any, error) {
+				path, err := resolveBareMilestoneField(path, milestoneReadablePaths)
+				if err != nil {
+					return nil, err
+				}
 				val, ok, list := readMilestoneDotted(m, path)
 				if !ok {
 					return nil, fmt.Errorf("unknown milestone field: %s", path)
@@ -550,6 +554,8 @@ func readMilestoneDotted(m *milestone.Milestone, path string) (string, bool, []s
 		return m.Milestone.Started, true, nil
 	case "milestone.shipped":
 		return m.Milestone.Shipped, true, nil
+	case "milestone.base":
+		return m.Milestone.Base, true, nil
 	case "scope.success_criteria":
 		return "", true, m.Scope.SuccessCriteria
 	case "scope.non_goals":
@@ -558,6 +564,21 @@ func readMilestoneDotted(m *milestone.Milestone, path string) (string, bool, []s
 		return "", true, m.Phases
 	}
 	return "", false, nil
+}
+
+// milestoneReadablePaths is the dotted surface readMilestoneDotted answers —
+// the candidate list the bare-name resolver expands against on the read side.
+// It is deliberately wider than milestoneSettablePaths: `milestone.base` is
+// readable but not settable, because `milestone create` is its sole writer.
+var milestoneReadablePaths = []string{
+	"milestone.version",
+	"milestone.title",
+	"milestone.status",
+	"milestone.started",
+	"milestone.shipped",
+	"milestone.base",
+	"scope.success_criteria",
+	"scope.non_goals",
 }
 
 // milestoneSettablePaths is the scalar surface writeMilestoneDotted accepts —
