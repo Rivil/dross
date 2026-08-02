@@ -56,6 +56,25 @@
         }
       ]
     },
+    "t-12": {
+      "files": [
+        "internal/cmd/milestone.go",
+        "internal/cmd/phase_checkout.go",
+        "internal/cmd/milestone_test.go",
+        "internal/cmd/phase_checkout_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "349cbfe",
+      "completed_at": "2026-08-02T14:27:33.777735Z",
+      "landmarks": [
+        {
+          "feature": "guarded branch switching",
+          "symbol": "Checkout",
+          "loc": "internal/cmd/phase_checkout.go:66",
+          "what": "top-level dross checkout \u003cbranch\u003e extends guardLiveState to non-phase targets so milestone prune's refusal stops handing over raw git checkout"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/topology.go",
