@@ -219,16 +219,24 @@
         "internal/cmd/switchbranch.go",
         "internal/cmd/switchbranch_test.go",
         "internal/cmd/phase.go",
-        "internal/cmd/milestone.go"
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_test.go"
       ],
-      "commit": "46f8ce3",
-      "completed_at": "2026-08-01T11:14:43.939264Z",
+      "commit": "541f866",
+      "completed_at": "2026-08-02T07:10:38.491015Z",
+      "notes": "Two commits: 46f8ce3 built the guard, 541f866 covered milestone finalize's call site (verify c-1 FLAG).",
       "landmarks": [
         {
           "feature": "branch switching",
           "symbol": "guardLiveState",
           "loc": "internal/cmd/switchbranch.go:64",
           "what": "dross refuses a switch to any ref that tracks state.json before git can silently overwrite the live ignored copy"
+        },
+        {
+          "feature": "branch switching",
+          "symbol": "milestoneFinalize",
+          "loc": "internal/cmd/milestone.go:227",
+          "what": "milestone complete --finalize's switch back to main runs through that guard, exercised from the milestone branch itself"
         }
       ]
     },
