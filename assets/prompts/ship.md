@@ -156,12 +156,17 @@ If `merge`:
 
 > **Two merge levels (v0.7 branch topology).** Phase PRs **squash-merge** into
 > their base — `milestone/<version>` when a milestone is active, else `main` —
-> collapsing per-task commits into one per phase. The milestone itself lands in
-> `main` separately via `dross milestone complete` (opens one `milestone/<version>
-> → main` PR); that integration PR must be merged as a **merge commit, not a
-> squash**, so `main` keeps the per-phase history — do this even if
+> collapsing per-task commits into one per phase. The milestone itself lands
+> separately via `dross milestone complete`, which opens **one integration PR
+> against the branch that milestone was cut from** — the recorded parent
+> `milestone/<version>` while that parent is still unmerged, `main` once it has
+> merged or is gone (v1.2 `milestone-stacking`; read the command's output rather
+> than assuming `main`). That integration PR must be merged as a **merge commit,
+> not a squash**, so the target keeps the per-phase history — do this even if
 > `repo.squash_merge` is set. After it merges, run `dross milestone complete
-> <version> --finalize` to fast-forward `main` and delete the milestone branch.
+> <version> --finalize`, which fast-forwards `main` only when the merge actually
+> landed there, and deletes the milestone branch — refusing while an unmerged
+> stacked milestone or an open PR still depends on it.
 
 ## 7. Wrap
 
