@@ -56,6 +56,18 @@ Schema-check every .dross/ TOML/JSON artefact, including that plan `covers` refe
 
 _c8b346e · extended cli-surface-sweep · d105fd0_
 
+### Branch-switch safety
+
+Every branch switch dross performs runs behind one guard: `guardLiveState` refuses the operation when the target ref *tracks* `.dross/state.json`, naming the file and the literal recovery command, before git can silently overwrite the live machine-local copy. All the primitives sit behind it — `checkoutBranch`, `checkoutBranchNew`, `guardedFF`, `guardedResetHard` — so `phase create`, `phase complete`, `complete --recover`, `ship recover` and `milestone complete --finalize` each leave the accumulated history intact instead of reverting it to whatever a stale branch happened to carry. The guard is dross-side because git does not help here: it declines to overwrite an untracked working-tree file only when that file is *not* ignored, and clobbers an ignored one silently — the exact shape that reverted a 12-entry history to 2. A bare `git checkout` of a legacy branch remains a silent clobber, which is why `dross doctor` reports branches that still track the file (see [Machine-local store](#machine-local-store)).
+
+- `guardLiveState` (refuses a switch to any ref tracking state.json, names the fix) — `internal/cmd/switchbranch.go:88`
+- `checkoutBranch` / `checkoutBranchNew` (guarded checkout primitives) — `internal/cmd/switchbranch.go:36`
+- `guardedFF` / `guardedResetHard` (guarded fast-forward + hard reset) — `internal/cmd/switchbranch.go:66`
+- `milestoneFinalize` (guarded switch back to main, exercised from the milestone branch itself) — `internal/cmd/milestone.go:203`
+- `TestHistorySurvivesEveryBranchSwitch` (history intact across every guarded op) — `internal/cmd/state_history_test.go:91`
+
+_introduced state-json-branch-safety · 3f2e5a0_
+
 ### Change tracking & landmarks
 
 Append-only per-task record of files touched, plus a typed `--landmark` record (feature/symbol/loc/what) parsed into a structured `Landmarks` array — replacing the old landmark-carried-in-`--notes` convention. Values may contain commas: a comma opens a new pair only at a recognised `key=` boundary (duplicate keys error loudly), and the `--landmark` help text documents the rule.
@@ -147,8 +159,12 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `resolveBareMilestoneField` (unambiguous bare name → dotted path, ambiguity rejected) — `internal/cmd/milestone.go:489`
 - `stateMapKey` (`board.state_map` keys gated + normalised on write; doctor reports one on disk as an issue) — `internal/cmd/project.go:445`
 - `TestTomlFieldsCarryMatchingJSONTags` (toml↔json tag parity, transitive walk over the eight document roots) — `internal/cmd/json_tag_parity_test.go:46`
+- `writeVersion` (one validated writer for both version homes, tracked copy first) — `internal/cmd/state.go:235`
+- doctor version-drift check (project.toml vs state.json, skipped on a fresh clone) — `internal/cmd/doctor.go:349`
 
-_c8b346e · extended gitlab-ship-provider · 0f209c9 · extended validator-truth · 5e73e88 · extended cli-surface-sweep · 1a840f4 · extended board-state-map-truth · 3272339_
+The project version has two homes and one writer. The release-facing copy lives in the tracked `.dross/project.toml` `[project].version`; `state.json` carries the copy dross bumps. `writeVersion` validates once and writes both — tracked file first — so they cannot diverge silently, and `dross doctor` reports drift (or a missing `[project].version`) as an exit-code issue naming the fix. A fresh clone with no state.json is skipped rather than flagged.
+
+_c8b346e · extended gitlab-ship-provider · 0f209c9 · extended validator-truth · 5e73e88 · extended cli-surface-sweep · 1a840f4 · extended board-state-map-truth · 3272339 · extended state-json-branch-safety · 3f12d7e_
 
 ### Deferred-item routing
 
@@ -240,13 +256,18 @@ _extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2 · exten
 
 ### Machine-local store
 
-A gitignored `.dross/local.toml` for facts that are true of *this* clone and must never ride cumulative history, read and written through `dross local get|set`. Its first tenant is `quick_base` — the branch a standalone quick task forked from. Ship and `phase complete` push a recorded quick base's unpushed `.dross/` chores on *that* branch rather than on an inferred one, closing the divergence where a quick committed to main mid-phase left local main unpushed and the next phase squash-merge could not fast-forward it. An unrecorded quick base, or one whose ref is gone, is left alone rather than guessed at, and a base equal to the phase's own base is a no-op.
+Facts that are true of *this* clone and must never ride cumulative history live in gitignored files, not in the tracked tree. `.dross/state.json` is the second and larger tenant: it is removed from the index and gitignored (scaffolded that way by `init` and `onboard` via `ensureDrossGitignore`), so no checkout carries a copy that could replace the live one and its `history[]` is machine-local by design. Migration is untrack-going-forward only — no history rewrite — so old branches and tags keep their copies; `dross doctor` reports a still-tracked state.json with the literal fix, and [Branch-switch safety](#branch-switch-safety) covers the dross-side switches. The incident this closes (a stale long-lived branch checked out over live state, 12 history entries down to 2) is reproduced end to end by a regression test verified to fail against the reverted code, and a docs scan pins README, the man page, the prompts and `.gitignore` to describe the file as machine-local.
+
+The first tenant is `.dross/local.toml`, read and written through `dross local get|set`, whose own first tenant is `quick_base` — the branch a standalone quick task forked from. Ship and `phase complete` push a recorded quick base's unpushed `.dross/` chores on *that* branch rather than on an inferred one, closing the divergence where a quick committed to main mid-phase left local main unpushed and the next phase squash-merge could not fast-forward it. An unrecorded quick base, or one whose ref is gone, is left alone rather than guessed at, and a base equal to the phase's own base is a no-op.
 
 - `Local` (`dross local get|set`, gitignored `.dross/local.toml`) — `internal/cmd/local.go:30`
 - `pushQuickBaseIfRecorded` (ship + complete push chores on the recorded quick base, never an inferred one) — `internal/cmd/basebranch.go:129`
 - `TestShipReconcilesRecordedQuickBase` (pins ship's call site so a recorded quick base can't be left unpushed) — `internal/cmd/ship_test.go:1017`
+- `ensureDrossGitignore` (state.json gitignored by init + onboard, out of this repo's index) — `internal/cmd/gitignore.go:43`
+- `TestStaleBranchCheckoutCannotClobberLiveState` (end-to-end incident reproduction) — `internal/cmd/state_clobber_regression_test.go:77`
+- `TestDocsDoNotClaimStateIsTracked` (docs/prompts/.gitignore scan) — `internal/cmd/gitignore_test.go:228`
 
-_introduced complete-base-truth · e1f72be_
+_introduced complete-base-truth · extended state-json-branch-safety · 2259179_
 
 ### Milestone branch model
 
@@ -258,8 +279,13 @@ Milestone work rides a `milestone/<version>` integration branch: scoping a miles
 - `BaseBranch` (`dross base-branch`: resolved base on stdout, no-milestone nudge on stderr) — `internal/cmd/basebranch.go:20`
 - ship PR-base resolution + missing-remote-base guard — `internal/cmd/ship.go:222`
 - `milestoneComplete` (one milestone→main PR; `--finalize` ff + branch delete) — `internal/cmd/milestone.go:41`
+- `staleMilestoneBranches` (ancestry, then squash-commit resolution against the candidate's own first parent) — `internal/cmd/milestone_stale.go:58`
+- `milestonePrune` (`dross milestone prune`: deletes stale branches local + on origin) — `internal/cmd/milestone.go:49`
+- doctor stale-milestone-branch report (read-only) — `internal/cmd/doctor.go:376`
 
-_introduced milestone-branch-model · 403d647_
+A milestone branch whose work already landed on main is detected and removable. Ancestry catches the merge-commit case; the squash-merged case that `git branch --merged` is blind to is resolved by matching the branch's diff patch-id against main's commits, deterministically when several are ambiguous. The surfaces are split on purpose (locked `prune_surface`): `dross doctor` *reports* a stale branch read-only, and the explicit `dross milestone prune` performs the local+remote deletion, refusing on a dirty tree or when the branch is the current HEAD.
+
+_introduced milestone-branch-model · extended state-json-branch-safety · a81e2e8_
 
 ### Milestone scoping
 
@@ -346,7 +372,7 @@ _c8b346e · extended 07-stack-profiles · eb602f1_
 
 ### Root resolution
 
-Decide what counts as a dross repo, and say so the same way everywhere. A `.dross/` that exists but is missing `project.toml` or `state.json` resolves to *not a dross repo* — indistinguishable from no `.dross/` at all to callers — so a half-built directory can never be mistaken for an initialised one. The up-walk stops at the first `.dross/` it finds, complete or not (locked `walk_stop`), so a stray directory in a nested repo can never silently bind writes to an ancestor project's real root. Completeness is an *existence* check only (locked `completeness_check`): a file that exists but fails to parse is a broken state, not an uninitialised one, and stays loud everywhere — including in the hook targets. `LocateRoot` reports the misses without erroring, which is the seam doctor and `ship recover` read; `FindRoot` mints the `IncompleteRootError` that carries them, every message naming the missing file plus the single shared `RepairHint`. Silent exit 0 is scoped to the four hook targets alone — every other command fails loudly against an incomplete root, and a `go/ast` allowlist gates which files may swallow `ErrNoRoot` or call `LocateRoot`, so a future command can't quietly join the silent set. `dross doctor` projects the same misses as a distinct not-a-dross-repo verdict (its block is pinned equal to `LocateRoot`'s slice), and `dross onboard` adopts an incomplete `.dross/` in place, preserving what's already there.
+Decide what counts as a dross repo, and say so the same way everywhere. `state.json` is deliberately *not* in the required set — it is machine-local and gitignored, so a fresh clone legitimately has none; `ensureState` materializes it on demand from `project.toml`'s `[project].version` with empty history rather than failing the root. A `.dross/` that exists but is missing `project.toml` resolves to *not a dross repo* — indistinguishable from no `.dross/` at all to callers — so a half-built directory can never be mistaken for an initialised one. The up-walk stops at the first `.dross/` it finds, complete or not (locked `walk_stop`), so a stray directory in a nested repo can never silently bind writes to an ancestor project's real root. Completeness is an *existence* check only (locked `completeness_check`): a file that exists but fails to parse is a broken state, not an uninitialised one, and stays loud everywhere — including in the hook targets. `LocateRoot` reports the misses without erroring, which is the seam doctor and `ship recover` read; `FindRoot` mints the `IncompleteRootError` that carries them, every message naming the missing file plus the single shared `RepairHint`. Silent exit 0 is scoped to the four hook targets alone — every other command fails loudly against an incomplete root, and a `go/ast` allowlist gates which files may swallow `ErrNoRoot` or call `LocateRoot`, so a future command can't quietly join the silent set. `dross doctor` projects the same misses as a distinct not-a-dross-repo verdict (its block is pinned equal to `LocateRoot`'s slice), and `dross onboard` adopts an incomplete `.dross/` in place, preserving what's already there.
 
 - `FindRoot` / `ErrNoRoot` / `RequiredRootFiles` / `RepairHint` — `internal/cmd/root.go:17`
 - `IncompleteRootError` — `internal/cmd/root.go:32`
@@ -355,8 +381,9 @@ Decide what counts as a dross repo, and say so the same way everywhere. A `.dros
 - `finalizeIncompleteRoot` (doctor's distinct verdict) / `incompleteRootHeading` — `internal/cmd/doctor.go:449`
 - `Onboard` (adopts an incomplete root in place) — `internal/cmd/onboard.go:36`
 - `TestRootHelperCallersAreAllowlisted` (AST allowlist over the swallow set) — `internal/cmd/incompleteroot_test.go:166`
+- `ensureState` (materializes a missing state.json from project.toml's version) — `internal/cmd/state.go:263`
 
-_introduced root-robustness · 6d33d3b_
+_introduced root-robustness · extended state-json-branch-safety · 93b072a_
 
 ### Rules system
 
@@ -398,12 +425,14 @@ Ship dross as a single self-contained binary that carries its own assets and upd
 - `Update` signature gate (verify `checksums.txt.minisig` before checksum/extract/swap) — `internal/cmd/update.go:145`
 - `extractBinaryZip` (windows .zip extraction; tar.gz vs zip dispatch on asset suffix) — `internal/cmd/update.go:235`
 - release signing + build matrix (`signs:` minisign, windows build, `brews:` tap) — `.goreleaser.yaml` / `.github/workflows/release.yml`
+- `release-version.sh` (tag resolved from tracked `project.toml` `[project].version` with grep/sed — no dross binary, no jq) — `scripts/release-version.sh:16`
 - `install.sh` (curl|sh bootstrap) / `install.ps1` (Windows PowerShell bootstrap, verify-before-place) — `install.sh` / `install.ps1`
 - `make install` delegation + shellcheck CI gate — `Makefile` / `.github/workflows/ci.yml`
 
 _introduced self-update-and-distribution · 0ccce6a_
 _extended release-trust-and-distribution (minisign signing + verify-before-swap) · 46c091a_
 _extended homebrew-and-windows-distribution (windows zip self-update + Homebrew tap + install.ps1) · 0007570_
+_extended state-json-branch-safety (release tag from tracked project.toml, no state.json read in CI) · e3674ba_
 
 ### Session continuity & context hygiene
 
@@ -432,7 +461,9 @@ Heal local-vs-origin base divergence after a squash-merge — a shared, delta-ga
 - `ship recover` recorded-base resolution (recorded base, else `git_main_branch` for legacy phases) — `internal/cmd/ship_recover.go:94`
 - `phaseComplete` `--recover` (in-loop heal-before-gate; tree from the phase tip, reset scoped to the recorded base) — `internal/cmd/phase.go:218`
 
-_52f6c75 · extended ship-complete-recovery-hardening · extended ship-clean-tree · extended complete-base-truth · e1f72be_
+The restore explicitly **excludes** `.dross/state.json`: a pre-untrack commit still carries a copy, and replaying it would undo the live machine-local history the recovery is meant to preserve. The reset itself runs through the guarded primitives, so a base ref that still tracks the file refuses rather than clobbers — see [Branch-switch safety](#branch-switch-safety).
+
+_52f6c75 · extended ship-complete-recovery-hardening · extended ship-clean-tree · extended complete-base-truth · extended state-json-branch-safety · 90dbedb_
 
 ### Shipping / pull requests
 
@@ -482,12 +513,13 @@ Track current milestone/phase/version + activity in state.json; summarise "where
 - `stateTouch` (silent on a non-root, loud on a corrupt one) — `internal/cmd/state.go:118`
 - `stateGet` (1+ dotted paths via the shared `renderMultiGet`) — `internal/cmd/state.go:53`
 - `stateShow` (`--json` accepted; output byte-identical to bare `show`) — `internal/cmd/state.go:27`
+- `TestStatusStaleFromPRRecordAlone` (the changes.json PR fallback with the state.json breadcrumb absent — the shape every machine but the shipping one has) — `internal/cmd/status_test.go:896`
 
 As hook targets, `dross status` and `dross state touch` exit 0 with no output in a repo that isn't a dross repo — see [Root resolution](#root-resolution) for what that means. The swallow is scoped to those two entry points, not pushed down into `loadState`: `dross state show` stays loud on a non-root, and a corrupt `state.json` is loud everywhere and names its path.
 
 State is readable through the same dotted-path grammar as project and milestone config — `dross state get` takes one or more paths through the shared `renderMultiGet`, and `dross state show --json` is accepted (it already emitted JSON, so the flag is a no-op on output rather than a format conversion). See [Configuration](#configuration) for the shared read/write shape.
 
-_c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · extended root-robustness · extended cli-surface-sweep · 891f77d_
+_c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · extended root-robustness · extended cli-surface-sweep · extended state-json-branch-safety · 15e7595_
 
 ### Status line (native)
 
@@ -564,8 +596,9 @@ Keep the repo's own test runs independent of the developer's machine, so a green
 
 - `TestMain` (package-wide HOME pin) — `internal/cmd/hermetic_env_test.go:35`
 - `TestHermeticHome_HostileGlobalDefaultsDoNotRedden` (deterministic repro of the host-leak failure) — `internal/cmd/hermetic_env_test.go:78`
+- `snapshotLiveState` (force-stages state.json and restores the live copy across a fixture's branch switches, so squash-merge fixtures hold once the file is gitignored) — `internal/cmd/phase_test.go:43`
 
-_introduced board-state-map-truth · 3272339_
+_introduced board-state-map-truth · extended state-json-branch-safety · 47f383b_
 
 ### Verification
 
