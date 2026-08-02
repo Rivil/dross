@@ -1,0 +1,255 @@
+task_seq = 9
+
+[phase]
+  id = "milestone-stacking"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Record the cut base in milestone toml"
+  files = ["internal/milestone/milestone.go", "internal/milestone/milestone_test.go", "internal/cmd/milestone.go"]
+  description = """
+Add `Base string `toml:"base,omitempty" json:"base,omitempty"`` to the milestone
+meta struct, plus `(*Milestone) BaseOr(mainBranch string) string` returning
+mainBranch when Base is empty (locked absent_base_reads_main). BaseOr takes the
+main branch as an argument rather than hardcoding "main" so a repo whose
+git_main_branch is `master` reads correctly without the schema layer importing
+project config.
+
+Add `LoadAll(root) (map[string]*Milestone, error)` that errors — never silently
+short-maps — on an unreadable toml. t-6's delete gate depends on that
+fail-closed behaviour: an unreadable toml is indistinguishable from "no
+dependents", and the consequence of guessing wrong is an irreversible remote
+branch delete under someone's open PR.
+
+Also add `milestone.base` to `readMilestoneDotted`'s switch
+(internal/cmd/milestone.go:541) so `dross milestone get base` resolves —
+assets/prompts/milestone.md:108 tells agents never to read the toml directly,
+so without it `show --json` is the only route to the one fact this milestone
+exists to store. Deliberately NOT added to `milestoneSettablePaths` (:566): the
+locked base_override decision makes `create` the sole writer, and a settable
+path would reintroduce the hand-reconstruction this milestone kills.
+"""
+  covers = ["c-2"]
+  test_contract = [
+    "Save/Load round-trips Base = \"milestone/v1.1\"; dropping the toml tag makes the round-trip read back \"\".",
+    "BaseOr(\"main\") on a meta with no base returns \"main\"; removing the empty guard returns \"\" and every consumer targets nothing.",
+    "BaseOr(\"master\") on a meta with no base returns \"master\" — a hardcoded \"main\" fallback fails this.",
+    "A pre-v1.2 fixture toml (version/title/status/started/scope/phases, no `base` key) decodes without error — making the field required breaks every milestone shipped before v1.2.",
+    "LoadAll over a directory holding one syntactically broken toml returns an error naming that file rather than a short map; a silent skip fails the fail-closed test.",
+    "The existing schema-wide parity gate TestTomlFieldsCarryMatchingJSONTags (internal/cmd/json_tag_parity_test.go — milestone.Milestone is already a schemaRoot) fails if Base carries a toml tag and no matching json tag. No new test needed; do not break it.",
+    "`dross milestone get base` on a toml recording base=\"milestone/v1.1\" prints that branch; omitting the readMilestoneDotted case returns unknown-field. `dross milestone set base X` still fails as an unsettable path — adding it to milestoneSettablePaths fails this line.",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Merged-status probe with offline fallback"
+  files = ["internal/cmd/milestone_merged.go", "internal/cmd/milestone_merged_test.go"]
+  description = """
+`milestoneMergedIntoMain(repoDir, branch, mainBranch) (merged, localOnly bool,
+err error)` — best-effort `fetch origin`, then merge-base ancestry of
+origin/<branch> against origin/<main> (locked unmerged_test), falling back to
+refs/heads when the fetch or the remote refs are unavailable. Returns localOnly
+so callers narrate the offline caveat rather than hiding it.
+
+internal/cmd/milestone_stale.go already has `isAncestor(repoDir, ref, other)` —
+reuse it rather than re-shelling merge-base.
+"""
+  covers = ["c-1", "c-3"]
+  test_contract = [
+    "Against milestoneFinalizeFixture(t, true) the probe returns merged=true; the (t, false) shape returns false. Swapping the is-ancestor argument order flips both.",
+    "With origin's URL rewritten to a nonexistent path the probe still answers from refs/heads and returns localOnly=true; deleting the fallback returns an error, which makes create/complete/prune unusable offline.",
+    "A branch origin has never seen is answered from local refs with localOnly=true, not an \"unknown revision\" error.",
+    "A branch that exists NOWHERE — neither origin nor refs/heads, the normal state after `complete --finalize` deleted it — returns merged=true (treat a vanished parent as no longer stackable), never an error. An implementation that errors here makes every `milestone create` fail after a finalize until the user hand-clears current_milestone.",
+    "A probe keyed on milestone.status instead of git ancestry passes the unmerged case and fails the merged-but-still-active case (status=\"active\" on a milestone whose PR already merged).",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "ship.OpenPRsTargeting provider query"
+  files = ["internal/ship/basepr.go", "internal/ship/basepr_test.go"]
+  description = """
+`OpenPRsTargeting(opts OpenOpts, base string) ([]BasePR, error)` mirroring
+PRMerged's shape: github via the unexported ghCommand seam (`gh pr list --base
+<b> --state open --json number,title,url,headRefName`),
+ErrBasePRLookupUnsupported for the unwired providers, a plain error for an
+unknown one. Plus the exported `OpenPRsTargetingFunc` override seam package cmd
+needs for t-7.
+
+github only, following PRMerged's precedent (github + bitbucket implemented,
+gitlab/forgejo/gitea unsupported). The locked dependent_detection decision makes
+the announced skip a first-class outcome, so an unwired backend is supported
+rather than a gap.
+"""
+  covers = ["c-6"]
+  test_contract = [
+    "github: ghCommand stubbed to emit one PR yields one BasePR carrying that number and URL.",
+    "A stub exiting non-zero returns an error, never an empty slice — an empty slice reads as \"no dependents\" and authorizes a delete.",
+    "Malformed JSON on stdout returns a parse error, not zero PRs.",
+    "An unwired provider returns ErrBasePRLookupUnsupported (errors.Is) without shelling out — the test fails if any exec happens.",
+    "OpenPRsTargetingFunc is a non-nil var defaulting to OpenPRsTargeting.",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  depends_on = ["t-1", "t-2"]
+  title = "Cut from the recorded parent and record it"
+  files = ["internal/cmd/milestone.go", "internal/cmd/milestone_stacking_test.go"]
+  description = """
+milestoneCreate resolves the cut point from state.current_milestone via t-2's
+probe (unmerged parent -> milestone/<cur>, else main), passes it to
+ensureMilestoneBranch (which currently hardcodes mainBranch,
+internal/cmd/milestone.go:342), writes it to the new milestone's `base` before
+the push, and prints which branch it cut from plus the offline caveat when the
+answer came from local refs.
+
+Adds `--base <branch>` (validated against local refs) to force the cut point
+(locked base_override); the forced branch is recorded like any automatic one.
+current_milestone is read before any state write, and is ignored when it names
+the version being created.
+"""
+  covers = ["c-1", "c-2", "c-5"]
+  test_contract = [
+    "current_milestone=v1.1 with milestone/v1.1 unmerged: `milestone create v1.2` leaves rev-parse milestone/v1.2 == rev-parse milestone/v1.1 AND writes base = \"milestone/v1.1\" into v1.2.toml — recording without cutting, or cutting without recording, fails.",
+    "After the v1.1->main merge is simulated on origin, the same create cuts at main and records \"main\". A create keyed on milestone.status passes the first case and fails this one.",
+    "current_milestone unset while an unmerged milestone/v1.1 exists: cut point and recorded base are both \"main\" (locked stacking_parent) — a ref-scanning implementation fails here.",
+    "`--base milestone/v0.9` wins over the resolver and is recorded verbatim.",
+    "`--base nope` fails with \"no such local branch\" leaving neither a toml nor a branch behind (atomicity).",
+    "The printed line names the branch actually cut from; a hardcoded \"from main\" string fails the stacked case.",
+    "current_milestone=v1.1 but milestone/v1.1 exists nowhere (post-finalize): the cut point and recorded base are both \"main\" and the command exits 0 — an implementation that errors on the dead ref fails here.",
+    "In the offline shape (origin unreachable, answer from local refs) create's STDOUT carries the local-refs caveat. A localOnly the caller silently drops satisfies t-2's tests and fails this one.",
+    "Non-git dir: create still writes the toml, records nothing, and exits 0 — TestMilestoneCreateNoGitSkips keeps passing.",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  depends_on = ["t-1", "t-2"]
+  title = "Target the recorded parent in the milestone PR"
+  files = ["internal/cmd/milestone.go", "internal/cmd/milestone_pr_base_test.go"]
+  description = """
+milestoneComplete's open mode reads BaseOr and sets opts.BaseBranch to it
+(replacing `opts.BaseBranch = mainBranch`, internal/cmd/milestone.go:173) while
+t-2's probe says that parent is unmerged, falling back to main once it has
+merged or its origin ref is gone.
+
+Scope note: this task touches milestoneComplete's OPEN mode only.
+milestoneFinalize's ancestry guard is retargeted in t-6, which already owns that
+function — keeping both edits in one task avoids a certain same-function
+conflict in wave 2.
+"""
+  covers = ["c-3"]
+  test_contract = [
+    "v1.2.toml with base=\"milestone/v1.1\", v1.1 unmerged: the milestoneOpenFixture mock's first POST /pulls body carries base=\"milestone/v1.1\", head=\"milestone/v1.2\" — so the diff is v1.2's own commits, not v1.1's.",
+    "Same toml once origin/main contains milestone/v1.1: the POST body carries base=\"main\" — never a branch --finalize is about to delete.",
+    "With origin/milestone/v1.1 deleted outright it targets main rather than erroring on a dead ref.",
+    "v1.2.toml with no `base` key: POST body base=\"main\" (locked absent_base_reads_main) — TestMilestoneCompleteOpensSinglePRToMain still passes unchanged.",
+    "The already-exists (409) idempotent path reports the resolved base, not main.",
+    "A milestone recording its own branch as base is refused rather than opening a self-targeted PR.",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  depends_on = ["t-1", "t-2"]
+  title = "Gate deletes and retarget the finalize guard"
+  files = ["internal/cmd/milestone_dependents.go", "internal/cmd/milestone.go", "internal/cmd/milestone_dependents_test.go"]
+  description = """
+`dependentMilestones(root, repoDir, branch, mainBranch)` uses t-1's LoadAll to
+scan .dross/milestones/*.toml for milestones whose BaseOr equals branch and
+which t-2's probe reports unmerged. milestonePrune and milestoneFinalize call it
+before any branch delete and refuse, naming the dependent version.
+
+Fail closed: an unreadable toml makes the gate refuse rather than delete on a
+short scan.
+
+This task owns milestoneFinalize outright (moved here from t-5 to avoid a
+same-function conflict in wave 2): its ancestry guard (internal/cmd/
+milestone.go:222) checks the resolved BaseOr target instead of a hardcoded
+origin/<main>, otherwise a stacked child merged into its parent but not yet into
+main can never be finalized and the stacking model's second half deadlocks. The
+rest of the function assumes the merge landed on main — it fast-forwards local
+main from origin/main (:236) and prints "<main> is at origin, <msBranch>
+deleted". In the merged-into-parent case main has NOT advanced, so the
+fast-forward and that narration must both be conditioned on the resolved target.
+"""
+  covers = ["c-3", "c-4"]
+  test_contract = [
+    "v1.3.toml records base=\"milestone/v1.2\" and v1.3 is unmerged: `milestone prune` (with milestone/v1.2 squash-merged so the stale detector names it) exits non-zero with \"v1.3\" in the message, and refs/heads/milestone/v1.2 plus origin/milestone/v1.2 both still exist afterwards.",
+    "`milestone complete v1.2 --finalize` under the same shape refuses naming v1.3, deletes neither ref, and leaves local main un-fast-forwarded.",
+    "Once v1.3 is merged into origin/main, prune deletes milestone/v1.2 — a gate keyed on \"a dependent record exists\" rather than \"an *unmerged* dependent exists\" wedges the repo permanently.",
+    "A milestone toml with no `base` key is never a dependent of anything, so TestPruneDeletesOnlyStaleBranches keeps passing.",
+    "A milestone naming itself as base does not self-block.",
+    "An unreadable milestone toml makes the gate refuse (fail closed) rather than delete on a short scan.",
+    "`complete v1.2 --finalize` after v1.2 merged into milestone/v1.1 but not yet main passes its ancestry guard — a guard still fixed on origin/main refuses forever.",
+    "In that same merged-into-parent shape, finalize does NOT fast-forward local main (rev-parse main is unchanged) and its printed line names milestone/v1.1 as the branch that received the merge. The current unconditional \"<main> is at origin\" string claims main advanced when it did not, and fails this assertion.",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  depends_on = ["t-3", "t-6"]
+  title = "Provider open-PR gate with announced skip"
+  files = ["internal/cmd/milestone_dependents.go", "internal/cmd/milestone_provider_gate_test.go"]
+  description = """
+After the toml scan, when [remote].provider/.url are configured, call
+ship.OpenPRsTargetingFunc for the branch about to be deleted and refuse naming
+any open PR. An unconfigured provider or a lookup error prints an explicit skip
+line and proceeds on the toml scan alone (locked dependent_detection).
+"""
+  covers = ["c-6"]
+  test_contract = [
+    "Seam stubbed to return PR #7 based on milestone/v1.2: prune refuses with \"#7\" in the message and deletes nothing, even though the toml scan found no dependent.",
+    "The same stub applied to `milestone complete v1.2 --finalize`: it refuses naming #7 and deletes neither the local nor the origin ref. c-6 names both commands, and wiring the provider gate into prune only leaves the destructive finalize path unguarded.",
+    "Seam stubbed to return an error: the command prints a skip line naming the reason, then applies the toml scan — a clean scan deletes and exits 0. A silent swallow fails the output assertion; a hard error fails the exit-0 assertion.",
+    "No [remote].provider configured: same skip line, and the stub records zero invocations.",
+    "The recorded stub argument is the branch being deleted (milestone/v1.2), not main and not the milestone version.",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  depends_on = ["t-4"]
+  title = "Rewrite cut and PR-target narration in docs"
+  files = ["assets/prompts/milestone.md", "assets/prompts/ship.md", "README.md", "docs/roadmap.md", "internal/cmd/milestone_narration_test.go"]
+  description = """
+Replace the unconditional claim in assets/prompts/milestone.md:14 ("cuts +
+pushes the `milestone/<version>` integration branch from main") with the
+conditional rule plus `--base`; extend README's `dross milestone {…}` row
+(README.md:190) with the conditional cut, the recorded base and `--base`; state
+the rule in docs/roadmap.md's `milestone-branch-model` entry (line 310). A grep
+test pins all three.
+
+Also fix the PR-TARGET claims t-5/t-6 falsify, which the cut-narration pass
+alone leaves stale (rule r-02 — don't leave a known-false claim for the next
+run): README.md:190 "opens the milestone→main PR", README.md:5 "the milestone
+lands in `main` as a merge commit", and assets/prompts/ship.md:160 "opens one
+`milestone/<version>` → `main` PR". Each becomes conditionally false once the PR
+targets an unmerged recorded parent.
+
+Verified: the literal unconditional phrase exists only in
+assets/prompts/milestone.md — README and docs/roadmap.md make no cut-point claim
+today, so their edits are additive and a presence-then-absence assertion would
+be vacuous there. Assert the new rule's presence in all three instead.
+
+Rule r-01: run `make install` after the prompt edit.
+"""
+  covers = ["c-5"]
+  test_contract = [
+    "The test fails while assets/prompts/milestone.md still contains the literal \"integration branch from main\".",
+    "Each of the three files must name both arms — the current milestone's branch when unmerged, main otherwise — so deleting the old claim without stating the new rule still fails.",
+    "The README milestone row must mention `--base`; dropping the flag from the docs while it exists in the CLI fails the row grep.",
+    "The failure message names the file that still carries the unconditional claim (or lacks the new rule), so a partial doc pass is not green.",
+    "The test fails while assets/prompts/ship.md still claims milestone complete opens a `milestone/<version>` → `main` PR unconditionally; both README PR-target sentences must likewise name the recorded-parent arm.",
+  ]
+  status = "pending"
