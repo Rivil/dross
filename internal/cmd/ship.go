@@ -162,13 +162,20 @@ func Ship() *cobra.Command {
 
 			// Must be on the phase branch. Pushing from anywhere else is
 			// almost certainly a mistake — phase work belongs on phase/<id>.
+			//
+			// The suggestion names the guarded verb, not `git checkout`: a raw
+			// checkout of a branch that still tracks .dross/state.json replays
+			// it over the live machine-local copy without complaint, which is
+			// what destroyed a live history on the state-json-branch-safety
+			// ship. A refusal that hands the user the unguarded form reopens
+			// that hole by hand, one obedient copy-paste at a time.
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("read current branch: %w", err)
 			}
 			if cur != phaseBranch {
-				return fmt.Errorf("must be on %s to ship (currently on %s); switch with `git checkout %s`",
-					phaseBranch, cur, phaseBranch)
+				return fmt.Errorf("must be on %s to ship (currently on %s); switch with `dross phase checkout %s`",
+					phaseBranch, cur, phaseID)
 			}
 
 			// 4) Title + body.

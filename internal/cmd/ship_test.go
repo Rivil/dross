@@ -224,6 +224,41 @@ func TestShipNoPushSkipsPushAndPR(t *testing.T) {
 	}
 }
 
+// TestShipWrongBranchRefusalNamesGuardedCheckout (c-1): the off-branch refusal
+// has to point at `dross phase checkout`, not `git checkout`. This phase
+// removed every raw switch from ship.md, but a refusal that hands the user the
+// unguarded verb reopens the same hole by hand — and the prompt guard greps
+// ship.md only, so nothing covered the CLI's own narration.
+//
+// The fixture branches off the phase tip rather than checking out main: the
+// branch check sits behind the spec + verify gates, so a working tree without
+// .dross/phases/x would fail at "load spec" and never reach the line under
+// test.
+func TestShipWrongBranchRefusalNamesGuardedCheckout(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	mustGit(t, dir, "checkout", "-q", "-b", "sidequest")
+
+	err := runCmd(t, Ship(), "--no-push")
+	if err == nil {
+		t.Fatal("expected ship to refuse off the phase branch")
+	}
+	msg := err.Error()
+
+	if !strings.Contains(msg, "dross phase checkout x") {
+		t.Errorf("refusal should name the guarded verb with the phase id; got: %s", msg)
+	}
+	if strings.Contains(msg, "git checkout") {
+		t.Errorf("refusal must not hand the user a raw checkout; got: %s", msg)
+	}
+	// Both branches still named, so the verb assertion cannot be satisfied by
+	// a refusal that dropped the diagnostic detail.
+	for _, needle := range []string{"phase/x", "sidequest"} {
+		if !strings.Contains(msg, needle) {
+			t.Errorf("refusal should name %q; got: %s", needle, msg)
+		}
+	}
+}
+
 func TestShipRefusesUnverified(t *testing.T) {
 	dir := shipFixture(t, "https://forge.example/me/p.git")
 
