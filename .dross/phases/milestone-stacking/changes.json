@@ -1,5 +1,140 @@
 {
   "phase": "milestone-stacking",
   "base": "milestone/v1.2",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/milestone/milestone.go",
+        "internal/milestone/milestone_test.go",
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_test.go"
+      ],
+      "commit": "7b309b4",
+      "completed_at": "2026-08-02T17:24:54.359897Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch model",
+          "symbol": "Milestone.BaseOr",
+          "loc": "internal/milestone/milestone.go:76",
+          "what": "milestone toml records the branch it was cut from; empty reads as the repo main branch"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/milestone_merged.go",
+        "internal/cmd/milestone_merged_test.go"
+      ],
+      "commit": "1d133b0",
+      "completed_at": "2026-08-02T17:28:39.235868Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch model",
+          "symbol": "milestoneMergedIntoMain",
+          "loc": "internal/cmd/milestone_merged.go:32",
+          "what": "git-ancestry merge probe preferring origin, falling back to refs/heads with a local-only flag"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/ship/basepr.go",
+        "internal/ship/basepr_test.go"
+      ],
+      "commit": "f0b53dd",
+      "completed_at": "2026-08-02T17:31:06.838554Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch model",
+          "symbol": "OpenPRsTargeting",
+          "loc": "internal/ship/basepr.go:35",
+          "what": "lists open PRs based on a branch so a delete gate can refuse rather than orphan a review"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_stacking_test.go"
+      ],
+      "commit": "d1faa9a",
+      "completed_at": "2026-08-02T17:35:27.881104Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch model",
+          "symbol": "resolveMilestoneCutPoint",
+          "loc": "internal/cmd/milestone.go:377",
+          "what": "milestone create stacks on the current milestone's unmerged branch and records the cut point; --base forces it"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_pr_base_test.go"
+      ],
+      "commit": "3004ad3",
+      "completed_at": "2026-08-02T17:38:52.764668Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch model",
+          "symbol": "milestonePRBase",
+          "loc": "internal/cmd/milestone.go:219",
+          "what": "milestone PR targets the recorded parent while unmerged and present on origin, main otherwise"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/milestone_dependents.go",
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_dependents_test.go"
+      ],
+      "commit": "d2fd9dd",
+      "completed_at": "2026-08-02T17:44:30.486717Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch model",
+          "symbol": "dependentMilestones",
+          "loc": "internal/cmd/milestone_dependents.go:29",
+          "what": "prune and finalize refuse to delete a branch an unmerged stacked milestone still records as its base"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/milestone_dependents.go",
+        "internal/cmd/milestone_provider_gate_test.go"
+      ],
+      "commit": "cbad9c9",
+      "completed_at": "2026-08-02T17:47:43.558838Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch model",
+          "symbol": "guardOpenPRsTargeting",
+          "loc": "internal/cmd/milestone_dependents.go:85",
+          "what": "forge open-PR check layered over the record scan; an unavailable provider announces its skip instead of passing silently"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "assets/prompts/milestone.md",
+        "assets/prompts/ship.md",
+        "README.md",
+        "docs/roadmap.md",
+        "internal/cmd/milestone_narration_test.go"
+      ],
+      "commit": "813a32b",
+      "completed_at": "2026-08-02T17:51:15.000007Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch model",
+          "symbol": "TestMilestoneCutNarrationStatesBothArms",
+          "loc": "internal/cmd/milestone_narration_test.go:36",
+          "what": "docs state the conditional cut rule and recorded-parent PR target, pinned by a grep test that names the offending file"
+        }
+      ]
+    }
+  }
 }
