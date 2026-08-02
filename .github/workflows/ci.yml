@@ -41,5 +41,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       # shellcheck is preinstalled on ubuntu-latest runners — no third-party action.
-      - name: shellcheck install.sh
-        run: shellcheck install.sh
+      # Every shipped shell script is linted, not just the installer: release.yml
+      # shells out to scripts/release-version.sh to compute the release tag.
+      - name: shellcheck
+        run: shellcheck install.sh scripts/*.sh

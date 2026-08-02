@@ -30,8 +30,87 @@ func Milestone() *cobra.Command {
 		milestoneSet(),
 		milestoneAdd(),
 		milestoneComplete(),
+		milestonePrune(),
 	)
 	return c
+}
+
+// milestonePrune deletes milestone/* branches whose work is already on the main
+// branch — local, and on origin where origin still has them.
+//
+// It is a separate, explicitly-typed command rather than a `doctor --fix` or a
+// step inside `milestone complete` (locked prune_surface). Deleting a remote
+// branch should be a conscious act, doctor stays a pure diagnostic, and folding
+// the sweep into completion would never fire for a milestone that was
+// interrupted — which is precisely how the stale branches accumulate.
+//
+// It never decides for itself what is stale: the set comes from
+// staleMilestoneBranches, and a branch that detector did not name is not touched.
+func milestonePrune() *cobra.Command {
+	return &cobra.Command{
+		Use:   "prune",
+		Short: "Delete milestone/* branches whose work is already on the main branch",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			repoDir := filepath.Dir(root)
+			p, _, err := loadProject()
+			if err != nil {
+				return err
+			}
+			mainBranch := p.Repo.GitMainBranch
+			if mainBranch == "" {
+				mainBranch = "main"
+			}
+
+			// Refuse on real dirt before deleting anything: a branch delete is
+			// irreversible from the user's side, and losing track of uncommitted
+			// work while refs disappear is the worst possible pairing.
+			if _, err := autoCommitDrossDirt(repoDir, "pruning milestone branches"); err != nil {
+				return err
+			}
+
+			stale, err := staleMilestoneBranches(repoDir, mainBranch)
+			if err != nil {
+				return err
+			}
+			if len(stale) == 0 {
+				Print("no stale milestone branches — nothing to prune")
+				return nil
+			}
+
+			// The current branch cannot be deleted, and silently skipping it
+			// would report a prune that did not happen. Refuse by name instead.
+			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			if err != nil {
+				cur = ""
+			}
+			for _, b := range stale {
+				if b.Name == cur {
+					return fmt.Errorf("HEAD is on %s, which is stale and would be deleted — switch to %s first (`git checkout %s`)",
+						b.Name, mainBranch, mainBranch)
+				}
+			}
+
+			for _, b := range stale {
+				if out, err := gitCombined(repoDir, "branch", "-D", b.Name); err != nil {
+					return fmt.Errorf("delete local %s: %w\n%s", b.Name, err, out)
+				}
+				where := "local"
+				if b.HasRemote {
+					if out, err := gitCombined(repoDir, "push", "origin", "--delete", b.Name); err != nil {
+						return fmt.Errorf("delete origin/%s: %w\n%s", b.Name, err, out)
+					}
+					where = "local + origin"
+				}
+				Printf("pruned %s (%s) — %s\n", b.Name, b.Reason, where)
+			}
+			return nil
+		},
+	}
 }
 
 // milestoneComplete closes out a milestone in two steps. Without --finalize it
@@ -145,11 +224,11 @@ func milestoneFinalize(repoDir, mainBranch, msBranch, version string) error {
 		return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 	}
 	if cur != mainBranch {
-		if out, err := gitCombined(repoDir, "checkout", mainBranch); err != nil {
-			return fmt.Errorf("git checkout %s: %w\n%s", mainBranch, err, out)
+		if err := checkoutBranch(repoDir, mainBranch); err != nil {
+			return err
 		}
 	}
-	if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+mainBranch); err != nil {
+	if out, err := guardedFF(repoDir, "origin/"+mainBranch); err != nil {
 		return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged:\n%s", mainBranch, mainBranch, out)
 	}
 

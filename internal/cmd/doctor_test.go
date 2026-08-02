@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/state"
 )
 
 func TestSameRemoteURL(t *testing.T) {
@@ -1146,7 +1148,7 @@ func incompleteRootBlock(t *testing.T, out string) []string {
 // prints nothing and fails both halves.
 func TestDoctorDiagnosesIncompleteRoot(t *testing.T) {
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir, "state.json")
 	chdir(t, dir)
 
 	var out string
@@ -1154,7 +1156,7 @@ func TestDoctorDiagnosesIncompleteRoot(t *testing.T) {
 	if err == nil {
 		t.Fatal("doctor should report an issue on an incomplete root")
 	}
-	if !strings.Contains(out, "✗ .dross/state.json — missing") {
+	if !strings.Contains(out, "✗ .dross/project.toml — missing") {
 		t.Errorf("output should name the missing file:\n%s", out)
 	}
 	if !strings.Contains(err.Error(), "project-level issue") {
@@ -1166,17 +1168,14 @@ func TestDoctorDiagnosesIncompleteRoot(t *testing.T) {
 // second needle.
 func TestDoctorNamesEveryRootMiss(t *testing.T) {
 	dir := realTempDir(t)
-	root := mkRoot(t, dir)
-	if err := os.WriteFile(filepath.Join(root, "rules.toml"), []byte(""), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	mkRoot(t, dir)
 	chdir(t, dir)
 
 	var out string
 	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
-		t.Fatal("doctor should report issues when both root files are missing")
+		t.Fatal("doctor should report issues when both foundational files are missing")
 	}
-	for _, want := range []string{".dross/project.toml", ".dross/state.json"} {
+	for _, want := range []string{".dross/project.toml", ".dross/rules.toml"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output should name %s:\n%s", want, out)
 		}
@@ -1206,7 +1205,7 @@ func TestDoctorIncompleteRootVerdictIsDistinct(t *testing.T) {
 	}
 
 	incomplete := realTempDir(t)
-	mkRoot(t, incomplete, "project.toml")
+	mkRoot(t, incomplete, "state.json")
 	chdir(t, incomplete)
 	incompleteErr := runCmdCapturing(t, new(string), Doctor())
 	if incompleteErr == nil {
@@ -1251,7 +1250,7 @@ func TestDoctorMissingFileLineCarriesBothHints(t *testing.T) {
 // meaningful rather than accidental.
 func TestDoctorIncompleteRootBlockMatchesLocateRoot(t *testing.T) {
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir, "state.json")
 	chdir(t, dir)
 
 	_, want, err := LocateRoot()
@@ -1435,5 +1434,166 @@ func TestValidateIgnoresTaskStatus(t *testing.T) {
 	}
 	if err := runCmd(t, Doctor()); err == nil {
 		t.Error("doctor accepted it too — the check landed nowhere")
+	}
+}
+
+// doctorRepo is an initialised dross repo with a git origin, on main, with a
+// clean tree — the baseline the three checks below perturb one at a time.
+func doctorRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remote)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	for _, set := range [][]string{
+		{"set", "project.name", "p"},
+		{"set", "project.version", "1.0.0.0"},
+		{"set", "runtime.mode", "native"},
+		{"set", "repo.git_main_branch", "main"},
+		{"set", "remote.url", remote},
+	} {
+		if err := runCmd(t, Project(), set...); err != nil {
+			t.Fatalf("project %v: %v", set, err)
+		}
+	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+	return dir
+}
+
+// TestDoctorReportsTrackedStateJSON (c-6): a repo that still has state.json in
+// the index is one squash away from the clobber. Doctor names it and prints the
+// literal command, not a description of one.
+func TestDoctorReportsTrackedStateJSON(t *testing.T) {
+	dir := doctorRepo(t)
+	mustGit(t, dir, "add", "-f", ".dross/"+state.File)
+	mustGit(t, dir, "commit", "-q", "-m", "chore: track state.json")
+
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err == nil {
+		t.Fatal("a tracked state.json is an issue, not a clean bill of health")
+	}
+	if !strings.Contains(out, "git rm --cached .dross/state.json") {
+		t.Errorf("doctor should print the literal fix command:\n%s", out)
+	}
+}
+
+// TestDoctorCleanRepoPassesNewSections: with versions in parity, state
+// untracked and no stale branch, none of the three sections may fire. An
+// over-firing check makes doctor exit non-zero on a healthy repo forever.
+func TestDoctorCleanRepoPassesNewSections(t *testing.T) {
+	dir := doctorRepo(t)
+	_ = dir
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+		t.Fatalf("a clean repo should pass: %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		"✓ .dross/state.json is not tracked",
+		"✓ project.toml and state.json agree on 1.0.0.0",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "Stale milestone branches:") {
+		t.Errorf("no milestone branches exist — the section must stay silent:\n%s", out)
+	}
+}
+
+// TestDoctorReportsVersionDrift (c-6): the two homes must agree. The message
+// carries both values on one line so the direction of the drift is readable.
+func TestDoctorReportsVersionDrift(t *testing.T) {
+	dir := doctorRepo(t)
+	// Write project.toml behind state.json's back — the shape writeVersion
+	// exists to prevent, and the one doctor has to catch when it happens anyway.
+	p, err := project.Load(filepath.Join(dir, ".dross", project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Project.Version = "1.1.0.0"
+	if err := p.Save(filepath.Join(dir, ".dross", project.File)); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Fatal("version drift is an issue")
+	}
+	for _, want := range []string{"1.1.0.0", "1.0.0.0", "version drift"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("drift line should contain %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestDoctorReportsMissingProjectVersion (c-6): an absent version is its own
+// issue naming project.toml, not an empty-string drift message.
+func TestDoctorReportsMissingProjectVersion(t *testing.T) {
+	dir := doctorRepo(t)
+	mustWrite(t, filepath.Join(dir, ".dross", project.File),
+		"[project]\n  name = \"p\"\n\n[runtime]\n  mode = \"native\"\n\n[repo]\n  git_main_branch = \"main\"\n")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Fatal("a missing [project].version is an issue")
+	}
+	if !strings.Contains(out, "no [project].version") {
+		t.Errorf("should report the absent version distinctly:\n%s", out)
+	}
+	if strings.Contains(out, "version drift") {
+		t.Errorf("an absent version is not a drift:\n%s", out)
+	}
+}
+
+// TestDoctorSkipsDriftOnFreshClone (c-6): a checkout with project.toml and no
+// state.json is the fresh-clone shape. Comparing against a value that would be
+// seeded FROM project.toml is tautological, so the check must skip.
+func TestDoctorSkipsDriftOnFreshClone(t *testing.T) {
+	dir := doctorRepo(t)
+	if err := os.Remove(filepath.Join(dir, ".dross", state.File)); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if strings.Contains(out, "version drift") {
+		t.Errorf("a fresh clone has no state.json to drift from:\n%s", out)
+	}
+	if err != nil && strings.Contains(err.Error(), "state.json") {
+		t.Errorf("a missing state.json is not a doctor issue: %v", err)
+	}
+	if strings.Contains(out, "✗ .dross/state.json — missing") {
+		t.Errorf("state.json is not a foundational file any more:\n%s", out)
+	}
+}
+
+// TestDoctorReportsStaleMilestoneBranchReadOnly (c-7, prune_surface): doctor
+// names the branch and points at `dross milestone prune`. It must not delete
+// anything itself, and a stale branch must move the exit code.
+func TestDoctorReportsStaleMilestoneBranchReadOnly(t *testing.T) {
+	dir := doctorRepo(t)
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
+	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
+	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err == nil {
+		t.Fatal("a stale milestone branch must move the exit code, not just advise")
+	}
+	if !strings.Contains(out, "milestone/v1.0") || !strings.Contains(out, "dross milestone prune") {
+		t.Errorf("doctor should name the branch and the prune command:\n%s", out)
+	}
+	if !gitAllowFail(dir, "rev-parse", "--verify", "--quiet", "refs/heads/milestone/v1.0") {
+		t.Error("doctor deleted the branch — it is a diagnostic, prune is the actor")
 	}
 }

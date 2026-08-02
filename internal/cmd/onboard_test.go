@@ -103,8 +103,11 @@ func TestOnboardEnsuresSameHooks(t *testing.T) {
 func TestOnboardAdoptsIncompleteRoot(t *testing.T) {
 	dir := realTempDir(t)
 	root := mkRoot(t, dir)
-	const existing = "[project]\n  name = \"kept\"\n"
-	if err := os.WriteFile(filepath.Join(root, "project.toml"), []byte(existing), 0o644); err != nil {
+	// project.toml is the whole of the required set, so an incomplete root is
+	// one without it. The pre-existing file is state.json — adoption must fill
+	// the gap without touching what is already there.
+	const existing = "{\n  \"version\": \"9.9.9.9\"\n}\n"
+	if err := os.WriteFile(filepath.Join(root, "state.json"), []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	chdir(t, dir)
@@ -112,15 +115,15 @@ func TestOnboardAdoptsIncompleteRoot(t *testing.T) {
 	if err := runCmd(t, Onboard()); err != nil {
 		t.Fatalf("onboard should adopt an incomplete root, got %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "state.json")); err != nil {
-		t.Errorf("onboard should have created state.json: %v", err)
+	if _, err := os.Stat(filepath.Join(root, "project.toml")); err != nil {
+		t.Errorf("onboard should have created project.toml: %v", err)
 	}
-	got, err := os.ReadFile(filepath.Join(root, "project.toml"))
+	got, err := os.ReadFile(filepath.Join(root, "state.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(got) != existing {
-		t.Errorf("existing project.toml was overwritten:\n%s", got)
+		t.Errorf("existing state.json was overwritten:\n%s", got)
 	}
 }
 
@@ -145,7 +148,7 @@ func TestOnboardStillRefusesCompleteRoot(t *testing.T) {
 // silently as a non-root.
 func TestOnboardAdoptRoundTrip(t *testing.T) {
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir) // incomplete: no project.toml
 	chdir(t, dir)
 
 	if err := runCmd(t, Onboard()); err != nil {

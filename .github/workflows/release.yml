@@ -1,9 +1,11 @@
 name: release
 
 # Automatic releasing: every merge to main reads the project version from
-# .dross/state.json and projects it to a 3-part semver tag (0.6.13.0 → v0.6.13 —
-# valid semver for `dross update`, dropping the dev-only .internal part). If that
-# tag does not already exist it tags the commit and goreleaser publishes the
+# .dross/project.toml (via scripts/release-version.sh) and projects it to a
+# 3-part semver tag (0.6.13.0 → v0.6.13 — valid semver for `dross update`,
+# dropping the dev-only .internal part). project.toml is the tracked home of the
+# version, so a clean CI checkout of main carries the value dross last bumped. If
+# that tag does not already exist it tags the commit and goreleaser publishes the
 # per-platform archives + checksums.txt that install.sh and `dross update` consume.
 # A phase ship bumps the patch (phase ordinal) so it cuts a release; a quick task
 # only bumps .internal, leaving the 3-part tag unchanged, so it cuts none.
@@ -46,21 +48,16 @@ jobs:
             echo "new_tag=$input" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          proj="$(jq -r '.version // empty' .dross/state.json)"
-          if [ -z "$proj" ]; then
-            echo "No project version in .dross/state.json; nothing to release." >&2
-            exit 1
-          fi
-          # Project version is 4-part major.minor.patch.internal; release tags use
-          # the first 3 parts (valid semver, drops the dev-only .internal counter).
-          mmp="$(printf '%s' "$proj" | cut -d. -f1-3)"
-          new="v${mmp}"
+          # Resolves [project].version from the tracked .dross/project.toml and
+          # projects it to the 3-part tag, using nothing but a POSIX shell and
+          # coreutils — this runs before setup-go, on a bare runner.
+          new="$(sh scripts/release-version.sh)"
           if git rev-parse -q --verify "refs/tags/$new" >/dev/null; then
-            echo "Tag $new already exists (project version $proj unchanged on this merge); nothing to release."
+            echo "Tag $new already exists (project version unchanged on this merge); nothing to release."
             echo "new_tag=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "Release tag from project version $proj → $new"
+          echo "Release tag from project version → $new"
           echo "new_tag=$new" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag

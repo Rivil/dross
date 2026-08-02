@@ -751,3 +751,35 @@ func TestProjectSetArityGuards(t *testing.T) {
 		})
 	}
 }
+
+// TestProjectSetVersionMirrorsToState (c-4): the other entry point mirrors the
+// other way. Leaving `project set project.version` on the generic dotted-path
+// writer strands state.json at the old value.
+func TestProjectSetVersionMirrorsToState(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Project(), "set", "project.version", "1.3.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	assertVersionParity(t, dir, "1.3.0.0")
+}
+
+// TestRepoProjectVersionIsLive (c-4): this repo's own [project].version was the
+// dead 0.2.0.0 scaffold value while the real number lived only in state.json —
+// which is exactly how the release tag came to be computed from an untracked
+// file. release.yml reads this field now, so it has to be the live one.
+func TestRepoProjectVersionIsLive(t *testing.T) {
+	p, err := project.Load(filepath.Join(repoRootFromTest(t), ".dross", project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateVersion(p.Project.Version); err != nil {
+		t.Fatalf("this repo's [project].version is unusable as a release tag: %v", err)
+	}
+	if p.Project.Version == "0.2.0.0" {
+		t.Error("[project].version is still the dead scaffold value 0.2.0.0")
+	}
+}

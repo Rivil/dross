@@ -300,14 +300,14 @@ func TestRuleCover_NextIDSkipsCollision(t *testing.T) {
 func TestRuleShowLoudOnIncompleteRoot(t *testing.T) {
 	ruleCovFakeHome(t)
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir) // incomplete: no project.toml
 	chdir(t, dir)
 
 	err := runCmd(t, Rule(), "show")
 	if err == nil {
 		t.Fatal("rule show should fail on an incomplete root")
 	}
-	for _, want := range []string{filepath.Join(RootDirName, "state.json"), RepairHint} {
+	for _, want := range []string{filepath.Join(RootDirName, "project.toml"), RepairHint} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should contain %q, got %v", want, err)
 		}

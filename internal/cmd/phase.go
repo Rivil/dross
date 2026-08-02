@@ -426,12 +426,12 @@ destructive reset of the local base branch; read the abort first.`,
 				return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 			}
 			if cur != reconcileBranch {
-				if out, err := gitCombined(repoDir, "checkout", reconcileBranch); err != nil {
-					return fmt.Errorf("git checkout %s: %w\n%s", reconcileBranch, err, out)
+				if err := checkoutBranch(repoDir, reconcileBranch); err != nil {
+					return err
 				}
 			}
 
-			if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+reconcileBranch); err != nil {
+			if out, err := guardedFF(repoDir, "origin/"+reconcileBranch); err != nil {
 				// The ff abort IS the divergence signal: local <branch> holds
 				// commits origin/<branch> doesn't. The clean-tree guard above
 				// already ran, so no uncommitted work is at risk. The merge
@@ -446,15 +446,19 @@ destructive reset of the local base branch; read the abort first.`,
 						"(or use `dross ship recover`). Recovery is a destructive reset of local %s — read the abort first.",
 						reconcileBranch, reconcileBranch, out, reconcileBranch, reconcileBranch)
 				}
-				// --recover: the heal is a tree-from-phase-tip,
-				// state.json-from-base split.
+				// --recover: the heal restores the tree from the phase tip and
+				// leaves state.json alone.
 				//
-				// state comes from the base: reload it from the (now
-				// checked-out) base working tree so the recovery commit
-				// carries the base's cumulative .dross/ state, not the phase
-				// branch's stale copy loaded at the top of this RunE.
-				// runDrossRecovery's own s.Save(rs) writes that copy last, so
-				// it wins over whatever the tree restore put there.
+				// state is reloaded from disk here because the copy loaded at
+				// the top of this RunE predates the checkout and the reset, and
+				// a stale in-memory State would have its history written back
+				// over the live file by runDrossRecovery's own s.Save.
+				//
+				// It is NOT sourced from the base working tree, and s.Save no
+				// longer "wins over the tree restore": state.json is
+				// machine-local and gitignored, so the base has no copy to
+				// supply and the restore excludes the path entirely (t-6). The
+				// live file simply persists across the whole operation.
 				//
 				// The tree comes from the phase tip: passing phaseTipSHA makes
 				// `checkout <sha> -- .dross/` restore the phase branch's
@@ -682,8 +686,8 @@ func forkPhaseBranch(repoDir, root, phaseID, branchName string) (base string, mi
 	if err != nil {
 		return "", false, err
 	}
-	if out, e := gitCombined(repoDir, "checkout", "-b", branchName, base); e != nil {
-		return "", false, fmt.Errorf("git checkout -b %s %s: %w\n%s", branchName, base, e, out)
+	if e := checkoutBranchNew(repoDir, branchName, base); e != nil {
+		return "", false, e
 	}
 	// Only after the fork succeeded: a failed checkout must leave no
 	// changes.json behind, because the caller's rollback is os.Remove(dir),

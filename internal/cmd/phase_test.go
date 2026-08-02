@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -26,6 +27,90 @@ func stubPRMerged(t *testing.T, merged bool) {
 	prev := ship.PRMergedFunc
 	ship.PRMergedFunc = func(ship.OpenOpts) (bool, error) { return merged, nil }
 	t.Cleanup(func() { ship.PRMergedFunc = prev })
+}
+
+// snapshotLiveState captures .dross/state.json and returns a restore func that
+// rewrites it only when it has gone missing.
+//
+// The squash-simulation fixtures below deliberately commit a copy of
+// state.json on a throwaway branch (`git add -f`) — that tracked stale copy IS
+// the incident being reproduced. Switching off that branch afterwards makes git
+// delete the file from the working tree, because the branch being switched to
+// carries no copy of a file that is gitignored. state.json is machine-local and
+// must survive that switch, so the fixture puts the live bytes back. While the
+// file is still tracked everywhere, git restores it itself and the func is a
+// strict no-op.
+func snapshotLiveState(t *testing.T, dir string) func() {
+	t.Helper()
+	p := filepath.Join(dir, ".dross", "state.json")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("snapshot %s: %v", p, err)
+	}
+	return func() {
+		t.Helper()
+		if _, err := os.Stat(p); err == nil {
+			return
+		}
+		if err := os.WriteFile(p, b, 0o644); err != nil {
+			t.Fatalf("restore %s: %v", p, err)
+		}
+	}
+}
+
+// foldCompletion writes the completion record `dross ship` folds into the
+// squash — cleared current_phase plus a `completed <id>` history entry — into
+// the working tree's state.json and force-stages it. The force is what keeps
+// the fixture working once state.json is gitignored: the squash carrying a
+// tracked state.json is exactly the stale copy the incident turns on.
+// foldCompletion writes the completion record the way `dross ship` does: to the
+// live state.json, staging nothing. The file is machine-local, so no squash
+// carries it — which is why the callers below all stage src/ (or project.toml)
+// for their commit's content.
+//
+// It used to force-stage the file, modelling the pre-untrack world. That shape
+// now makes `phase complete` refuse: the guard in switchbranch.go stops a
+// fast-forward from an origin ref that would replay a tracked copy over the
+// live one. trackCompletion is the opt-in for the one fixture that still needs
+// the old shape.
+func foldCompletion(t *testing.T, dir, phaseID string) {
+	t.Helper()
+	writeCompletion(t, dir, phaseID)
+}
+
+// trackCompletion is foldCompletion plus the force-stage — the pre-untrack
+// shape, kept for the dragged-breadcrumb regression whose whole premise is a
+// state.json that rode the squash onto the base.
+func trackCompletion(t *testing.T, dir, phaseID string) {
+	t.Helper()
+	writeCompletion(t, dir, phaseID)
+	mustGit(t, dir, "add", "-f", filepath.Join(".dross", "state.json"))
+}
+
+// writeCompletion is the local half: it writes the completion record to the
+// live state.json and stages nothing. That is what `dross ship` does now — the
+// file is machine-local, so the record never reaches a commit.
+func writeCompletion(t *testing.T, dir, phaseID string) {
+	t.Helper()
+	stPath := filepath.Join(dir, ".dross", "state.json")
+	sq, err := state.Load(stPath)
+	if err != nil {
+		t.Fatalf("load state for completion write: %v", err)
+	}
+	sq.CurrentPhase = ""
+	sq.CurrentPhaseStatus = ""
+	sq.Touch("completed " + phaseID)
+	if err := sq.Save(stPath); err != nil {
+		t.Fatalf("save completion state: %v", err)
+	}
+}
+
+// gitAllowFail runs git and reports whether it succeeded. For probes and
+// best-effort cleanups where a non-zero exit is a legitimate answer rather than
+// a test failure.
+func gitAllowFail(dir string, args ...string) bool {
+	full := append([]string{"-C", dir}, args...)
+	return exec.Command("git", full...).Run() == nil
 }
 
 // initWithGit sets up a dross-onboarded git repo at dir with a single
@@ -366,24 +451,15 @@ func completeFixture(t *testing.T) (string, string) {
 	// record `dross ship` folds in (current_phase cleared + `completed
 	// auth` history) — phase complete reads that off origin/main as its
 	// merge guard, so without it complete would refuse.
+	restoreState := snapshotLiveState(t, dir)
 	mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
 	mustGit(t, dir, "checkout", "phase/auth", "--", "src/")
 	mustGit(t, dir, "add", "src/")
-	stPath := filepath.Join(dir, ".dross", "state.json")
-	sqState, err := state.Load(stPath)
-	if err != nil {
-		t.Fatalf("load state for squash sim: %v", err)
-	}
-	sqState.CurrentPhase = ""
-	sqState.CurrentPhaseStatus = ""
-	sqState.Touch("completed auth")
-	if err := sqState.Save(stPath); err != nil {
-		t.Fatalf("save squash state: %v", err)
-	}
-	mustGit(t, dir, "add", filepath.Join(".dross", "state.json"))
+	foldCompletion(t, dir, "auth")
 	mustGit(t, dir, "commit", "-q", "-m", "feat(squash): auth")
 	mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
 	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	restoreState()
 	mustGit(t, dir, "branch", "-D", "squash-sim")
 	mustGit(t, dir, "fetch", "-q", "origin")
 
@@ -893,8 +969,22 @@ func TestPhaseCompleteRefusesUnmergedNoLocalBranch(t *testing.T) {
 // authoritative gate (recorded PR + provider merged-status) must refuse — no
 // ff, no branch deletion — so the unmerged phase branch isn't lost.
 func TestPhaseCompleteRefusesDraggedBreadcrumb(t *testing.T) {
-	dir, _ := completeFixture(t) // origin/main carries `completed auth`; PR 42 recorded
+	dir, _ := completeFixture(t) // PR 42 recorded on phase/auth
 	stubPRMerged(t, false)       // …but PR #42 is NOT actually merged
+
+	// Drag the breadcrumb onto the base. Built here, not in the shared fixture:
+	// a tracked state.json on origin/main is this test's own premise (the
+	// pre-untrack world), and every other fixture models the world after it,
+	// where nothing on the base carries a copy.
+	restoreState := snapshotLiveState(t, dir)
+	mustGit(t, dir, "checkout", "-q", "-b", "drag-sim", "origin/main")
+	trackCompletion(t, dir, "auth")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): dragged breadcrumb")
+	mustGit(t, dir, "push", "-q", "--force", "origin", "drag-sim:main")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	restoreState()
+	mustGit(t, dir, "branch", "-D", "drag-sim")
+	mustGit(t, dir, "fetch", "-q", "origin")
 
 	// Precondition: the breadcrumb really is dragged onto the base.
 	originState := mustGit(t, dir, "show", "origin/main:.dross/state.json")
@@ -1047,17 +1137,20 @@ func TestShipToCompleteLeavesZeroManualGit(t *testing.T) {
 			}
 
 			// 2) Simulate the upstream squash-merge onto origin/main. The
-			//    squash carries phase/x's src/ AND its .dross/state.json —
-			//    ship (t-1) folded the cleared current_phase + `completed
-			//    x` record into that state.json, and complete reads it off
-			//    origin/main as its merge guard.
+			//    squash carries phase/x's src/ AND a .dross/state.json
+			//    holding the cleared current_phase + `completed x` record
+			//    ship folds in — complete reads it off origin/main as its
+			//    merge guard.
 			mustGit(t, dir, "fetch", "-q", "origin")
+			restoreState := snapshotLiveState(t, dir)
 			mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
-			mustGit(t, dir, "checkout", "phase/x", "--", "src/", ".dross/state.json")
-			mustGit(t, dir, "add", "src/", ".dross/state.json")
+			mustGit(t, dir, "checkout", "phase/x", "--", "src/")
+			mustGit(t, dir, "add", "src/")
+			foldCompletion(t, dir, "x")
 			mustGit(t, dir, "commit", "-q", "-m", "feat(squash): tagging")
 			mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
 			mustGit(t, dir, "checkout", "-q", "phase/x")
+			restoreState()
 			mustGit(t, dir, "branch", "-D", "squash-sim")
 			mustGit(t, dir, "fetch", "-q", "origin")
 
@@ -1132,15 +1225,23 @@ func TestConsecutivePhasesNoDivergence(t *testing.T) {
 			t.Fatalf("ship %s: %v", phaseID, err)
 		}
 		mustGit(t, dir, "fetch", "-q", "origin")
+		restoreState := snapshotLiveState(t, dir)
+		// From the second cycle on, the previous squash left state.json tracked
+		// on main, so the live copy's edits would block the switch. Drop them —
+		// the squash below writes the record it needs from scratch, and
+		// restoreState puts the live bytes back where git deletes the file.
+		gitAllowFail(dir, "checkout", "-q", "--", ".dross/state.json")
 		mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
-		// The squash carries the phase's src/, its folded state.json, and
+		// The squash carries the phase's src/, the folded state.json, and
 		// project.toml (config lands on main via the squash in production
 		// too — without it the mock api_base wouldn't reach the next phase).
-		mustGit(t, dir, "checkout", branch, "--", "src/", ".dross/state.json", ".dross/project.toml")
-		mustGit(t, dir, "add", "src/", ".dross/state.json", ".dross/project.toml")
+		mustGit(t, dir, "checkout", branch, "--", "src/", ".dross/project.toml")
+		mustGit(t, dir, "add", "src/", ".dross/project.toml")
+		foldCompletion(t, dir, phaseID)
 		mustGit(t, dir, "commit", "-q", "-m", "feat(squash): "+phaseID)
 		mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
 		mustGit(t, dir, "checkout", "-q", branch)
+		restoreState()
 		mustGit(t, dir, "branch", "-D", "squash-sim")
 		mustGit(t, dir, "fetch", "-q", "origin")
 
@@ -1262,26 +1363,17 @@ func divergedCompleteFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "add", ".dross/phases/auth/")
 	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record PR #77 for auth")
 
-	stPath := filepath.Join(dir, ".dross", "state.json")
+	restoreState := snapshotLiveState(t, dir)
 
 	// Origin squash: src/ + completion record, but no phase .dross/ artefacts.
 	mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
 	mustGit(t, dir, "checkout", "phase/auth", "--", "src/")
 	mustGit(t, dir, "add", "src/")
-	sq, err := state.Load(stPath)
-	if err != nil {
-		t.Fatalf("load squash state: %v", err)
-	}
-	sq.CurrentPhase = ""
-	sq.CurrentPhaseStatus = ""
-	sq.Touch("completed auth")
-	if err := sq.Save(stPath); err != nil {
-		t.Fatal(err)
-	}
-	mustGit(t, dir, "add", filepath.Join(".dross", "state.json"))
+	foldCompletion(t, dir, "auth")
 	mustGit(t, dir, "commit", "-q", "-m", "feat(squash): auth")
 	mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
 	mustGit(t, dir, "checkout", "-q", "main")
+	restoreState()
 	mustGit(t, dir, "branch", "-D", "squash-sim")
 
 	// Local main diverges: its own completion record, built on local main
@@ -1289,22 +1381,18 @@ func divergedCompleteFixture(t *testing.T) (string, string, string) {
 	// aborts. The phase artefact is deliberately NOT written here — it lives
 	// on the phase branch, and recovery sourcing it from there is the property
 	// under test.
-	lm, err := state.Load(stPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lm.CurrentPhase = ""
-	lm.CurrentPhaseStatus = ""
-	lm.Touch("completed auth")
-	if err := lm.Save(stPath); err != nil {
-		t.Fatal(err)
-	}
-	mustGit(t, dir, "add", ".dross/")
-	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): complete auth")
+	// The record itself is a local write — state.json is machine-local — so the
+	// divergence is carried by an empty commit standing in for the chore commit
+	// the pre-untrack world wrote here. Leaving state.json TRACKED on main would
+	// make completion's switch-to-base refuse, which is a different test.
+	writeCompletion(t, dir, "auth")
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "chore(dross): complete auth")
 	mainSHA := mustGit(t, dir, "rev-parse", "main")
 	mustGit(t, dir, "fetch", "-q", "origin")
 
+	restoreState = snapshotLiveState(t, dir)
 	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	restoreState()
 	return dir, "auth", mainSHA
 }
 
@@ -1431,7 +1519,7 @@ func TestPhaseCompleteRecoverLeavesStaleMilestoneAlone(t *testing.T) {
 		t.Fatalf("state set: %v", err)
 	}
 	mustGit(t, dir, "add", ".dross/")
-	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): scope v0.9")
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "chore(dross): scope v0.9")
 	msBefore := mustGit(t, dir, "rev-parse", "milestone/v0.9")
 
 	if err := runCmd(t, Phase(), "complete", "--recover"); err != nil {
@@ -1602,7 +1690,7 @@ func TestPhaseCreateRootsOnMilestoneBranch(t *testing.T) {
 		t.Fatalf("state set: %v", err)
 	}
 	mustGit(t, dir, "add", ".")
-	mustGit(t, dir, "commit", "-q", "-m", "scope v0.9")
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "scope v0.9")
 
 	// A milestone branch carrying a commit that is NOT on main.
 	mustGit(t, dir, "branch", "milestone/v0.9")
@@ -1657,7 +1745,7 @@ func TestPhaseCreateRecordsMilestoneBase(t *testing.T) {
 		t.Fatalf("state set: %v", err)
 	}
 	mustGit(t, dir, "add", ".")
-	mustGit(t, dir, "commit", "-q", "-m", "scope v0.9")
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "scope v0.9")
 	mustGit(t, dir, "branch", "milestone/v0.9")
 
 	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
@@ -1757,7 +1845,7 @@ func completeMilestoneFixture(t *testing.T) (string, string, string) {
 		t.Fatalf("state set: %v", err)
 	}
 	mustGit(t, dir, "add", ".")
-	mustGit(t, dir, "commit", "-q", "-m", "chore: scope "+version)
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "chore: scope "+version)
 	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
 	mustGit(t, dir, "branch", "milestone/"+version)
 	mustGit(t, dir, "push", "-q", "-u", "origin", "milestone/"+version)
@@ -1782,24 +1870,15 @@ func completeMilestoneFixture(t *testing.T) (string, string, string) {
 	// Simulate the upstream squash-merge onto the MILESTONE branch: a synthetic
 	// squash on top of origin/milestone/<v> carrying the completion record that
 	// complete reads as its merge guard.
+	restoreState := snapshotLiveState(t, dir)
 	mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/milestone/"+version)
 	mustGit(t, dir, "checkout", "phase/auth", "--", "src/")
 	mustGit(t, dir, "add", "src/")
-	stPath := filepath.Join(dir, ".dross", "state.json")
-	sq, err := state.Load(stPath)
-	if err != nil {
-		t.Fatalf("load squash state: %v", err)
-	}
-	sq.CurrentPhase = ""
-	sq.CurrentPhaseStatus = ""
-	sq.Touch("completed auth")
-	if err := sq.Save(stPath); err != nil {
-		t.Fatal(err)
-	}
-	mustGit(t, dir, "add", filepath.Join(".dross", "state.json"))
+	foldCompletion(t, dir, "auth")
 	mustGit(t, dir, "commit", "-q", "-m", "feat(squash): auth")
 	mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:milestone/"+version)
 	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	restoreState()
 	mustGit(t, dir, "branch", "-D", "squash-sim")
 	mustGit(t, dir, "fetch", "-q", "origin")
 	return dir, "auth", version
@@ -2001,6 +2080,7 @@ func completeFixtureOriginPR(t *testing.T, originPR int) (string, string) {
 	// Simulate the upstream squash-merge, carrying the completion record —
 	// and, when originPR > 0, the phase's changes.json with the PR number
 	// (as ship's post-push record commit does before the squash collapses it).
+	restoreState := snapshotLiveState(t, dir)
 	mustGit(t, dir, "checkout", "-q", "-b", "squash-sim", "origin/main")
 	mustGit(t, dir, "checkout", "phase/auth", "--", "src/")
 	mustGit(t, dir, "add", "src/")
@@ -2009,21 +2089,11 @@ func completeFixtureOriginPR(t *testing.T, originPR int) (string, string) {
 			fmt.Sprintf(`{"phase":"auth","pr":%d,"base":"main","tasks":{}}`, originPR))
 		mustGit(t, dir, "add", ".dross/phases/auth/changes.json")
 	}
-	stPath := filepath.Join(dir, ".dross", "state.json")
-	sqState, err := state.Load(stPath)
-	if err != nil {
-		t.Fatalf("load state for squash sim: %v", err)
-	}
-	sqState.CurrentPhase = ""
-	sqState.CurrentPhaseStatus = ""
-	sqState.Touch("completed auth")
-	if err := sqState.Save(stPath); err != nil {
-		t.Fatalf("save squash state: %v", err)
-	}
-	mustGit(t, dir, "add", filepath.Join(".dross", "state.json"))
+	foldCompletion(t, dir, "auth")
 	mustGit(t, dir, "commit", "-q", "-m", "feat(squash): auth")
 	mustGit(t, dir, "push", "-q", "--force", "origin", "squash-sim:main")
 	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	restoreState()
 	mustGit(t, dir, "branch", "-D", "squash-sim")
 	// Deliberately NO local record of the PR and NO fetch — complete itself
 	// fetches; the working tree is the stale pre-record checkout.

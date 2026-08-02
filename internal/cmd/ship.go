@@ -228,9 +228,11 @@ func Ship() *cobra.Command {
 			if err := s.Save(filepath.Join(root, state.File)); err != nil {
 				return fmt.Errorf("save state: %w", err)
 			}
-			if out, err := gitCombined(repoDir, "add", filepath.Join(".dross", state.File)); err != nil {
-				return fmt.Errorf("git add state.json: %w\n%s", err, out)
-			}
+			// The write stays local: state.json is gitignored (locked
+			// state_tracking), so there is nothing to stage — an explicit
+			// `git add .dross/state.json` here hard-fails on "paths are
+			// ignored by one of your .gitignore files". Anything else the
+			// auto-commit above left staged still gets its commit.
 			if err := gitNoOut(repoDir, "diff", "--cached", "--quiet"); err != nil {
 				// Non-nil err means there IS a staged change to commit.
 				shipMsg := fmt.Sprintf("chore(dross): ship %s", phaseID)

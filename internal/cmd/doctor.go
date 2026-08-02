@@ -16,6 +16,7 @@ import (
 	"github.com/Rivil/dross/internal/architecture"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/state"
 )
 
 // Doctor checks project-level health for the current dross repo.
@@ -49,7 +50,7 @@ func Doctor() *cobra.Command {
 
 			// --- Foundational files ---
 			//
-			// project.toml + rules.toml + state.json must exist before
+			// project.toml + rules.toml must exist before
 			// loadProject can succeed. Surface their absence with a
 			// remediation hint — most common cause is a botched recovery
 			// after a legacy .dross/-stripping ship.
@@ -64,7 +65,7 @@ func Doctor() *cobra.Command {
 				// Two different diagnoses share this block. A missing
 				// rules.toml is an ordinary repairable issue — the trio is
 				// doctor's own, wider notion of "foundational". A missing
-				// project.toml or state.json means the root isn't a dross repo
+				// project.toml means the root isn't a dross repo
 				// at all, which every other command now reports as such, so
 				// doctor names it separately rather than collapsing the two.
 				if len(rootMissing) > 0 {
@@ -73,7 +74,7 @@ func Doctor() *cobra.Command {
 				}
 				return finalizeDoctor(issues, len(warnings))
 			}
-			Print("  ✓ project.toml, rules.toml, state.json present")
+			Print("  ✓ project.toml, rules.toml present")
 			Print("")
 
 			p, _, err := loadProject()
@@ -321,6 +322,71 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
+			// --- state.json tracking ---
+			//
+			// The file is machine-local (locked state_tracking). A repo that
+			// still has it in the index is one squash-merge away from a
+			// checkout replacing the live copy — the incident this milestone
+			// closed. The fix is one command, so print the command.
+			Print("State file:")
+			if gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", RootDirName+"/"+state.File) == nil {
+				Printf("  ✗ %s/%s is tracked — a branch carrying a stale copy can replace the live one. Fix: `git rm --cached %s/%s` (it is already gitignored)\n",
+					RootDirName, state.File, RootDirName, state.File)
+				issues++
+			} else {
+				Printf("  ✓ %s/%s is not tracked\n", RootDirName, state.File)
+			}
+			Print("")
+
+			// --- Version parity ---
+			//
+			// project.toml's [project].version is what release.yml tags from
+			// and state.json's is what dross bumps; writeVersion writes both,
+			// so a difference means something wrote one behind the other's back.
+			// Skipped where there is no state.json — a fresh clone has none,
+			// and comparing against a value seeded FROM project.toml would be
+			// tautological anyway.
+			Print("Version:")
+			switch {
+			case p.Project.Version == "":
+				Printf("  ✗ .dross/project.toml has no [project].version — release.yml resolves the release tag from it. Fix: `dross project set project.version <major.minor.patch.internal>`\n")
+				issues++
+			default:
+				if st, err := state.Load(filepath.Join(root, state.File)); err != nil {
+					Printf("  ✓ [project].version = %s (no state.json to compare — fresh clone)\n", p.Project.Version)
+				} else if st.Version != p.Project.Version {
+					Printf("  ✗ version drift: project.toml = %s, state.json = %s. Fix: `dross state set version <value>` writes both\n",
+						p.Project.Version, st.Version)
+					issues++
+				} else {
+					Printf("  ✓ project.toml and state.json agree on %s\n", p.Project.Version)
+				}
+			}
+			Print("")
+
+			// --- Stale milestone branches ---
+			//
+			// Read-only, always: doctor names them and `dross milestone prune`
+			// deletes them (locked prune_surface). Deleting a remote branch as
+			// a diagnostic side effect is exactly what that decision rules out.
+			mainForStale := p.Repo.GitMainBranch
+			if mainForStale == "" {
+				mainForStale = "main"
+			}
+			if stale, err := staleMilestoneBranches(repoDir, mainForStale); err == nil && len(stale) > 0 {
+				Print("Stale milestone branches:")
+				for _, b := range stale {
+					where := "local"
+					if b.HasRemote {
+						where = "local + origin"
+					}
+					Printf("  ✗ %s (%s, %s) — its work is already on %s. Fix: `dross milestone prune`\n",
+						b.Name, b.Reason, where, mainForStale)
+					issues++
+				}
+				Print("")
+			}
+
 			// --- Cross-field combinations ---
 			//
 			// Collected above, reported here as one advisory block. Each value
@@ -545,10 +611,15 @@ func finalizeIncompleteRoot(rootMissing []string, issues, warnings int) error {
 
 // checkFoundationalFiles returns the list of missing foundational files
 // (relative paths) that loadProject would otherwise crash on. Empty
-// slice means the trio is intact.
+// slice means the pair is intact.
+//
+// state.json is deliberately not in the set: it is machine-local and gitignored
+// (locked state_tracking), so a fresh clone legitimately has none, and root
+// resolution materializes one on demand. Reporting its absence would make every
+// clone read as broken.
 func checkFoundationalFiles(root string) []string {
 	var missing []string
-	for _, rel := range []string{"project.toml", "rules.toml", "state.json"} {
+	for _, rel := range []string{"project.toml", "rules.toml"} {
 		if _, err := os.Stat(filepath.Join(root, rel)); errors.Is(err, fs.ErrNotExist) {
 			missing = append(missing, ".dross/"+rel)
 		}

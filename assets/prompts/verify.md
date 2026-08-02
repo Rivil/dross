@@ -159,7 +159,7 @@ dross state touch "verified <phase-id>: <verdict> (<criteria-covered>/<total>, m
 
 Commit the verify artefacts so `.dross/` doesn't sit dirty (CLI writes the files but doesn't auto-commit):
 ```
-git add .dross/state.json .dross/phases/<phase-id>/verify.toml .dross/phases/<phase-id>/tests.json
+git add .dross/phases/<phase-id>/verify.toml .dross/phases/<phase-id>/tests.json
 git commit -m "chore(dross): record verify for <phase-id> (<verdict>)"
 ```
 Use `repo.commit_convention` from project.toml. Skip `tests.json` from the `add` if mutation was skipped (`--skip-mutation`) and the file wasn't written.

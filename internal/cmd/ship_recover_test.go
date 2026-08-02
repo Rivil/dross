@@ -375,3 +375,124 @@ func TestRecoverRestoresAllPhases(t *testing.T) {
 		}
 	}
 }
+
+// The three tests below pin the state.json exclusions (c-3). Recovery restores
+// a .dross/ tree from a pre-merge commit, and before the untrack that commit
+// carried a copy of state.json — so the restore would overwrite the live,
+// machine-local file with whatever history that commit held, and the `git add`
+// that follows would put the file back in the index.
+
+// stateExclusionFixture is recoverFixture plus the pre-untrack shape: the base
+// commit on origin/main force-tracks a 2-entry state.json, and the live working
+// copy holds N entries. Returns the repo dir and the live entry count.
+func stateExclusionFixture(t *testing.T) (string, int) {
+	t.Helper()
+	dir, _ := recoverFixture(t)
+
+	// The stale, TRACKED copy lives on a side branch so local main never tracks
+	// state.json — recovery's `reset --hard origin/main` would otherwise delete
+	// the live file before the restore step even runs. origin/main stays as
+	// recoverFixture left it (the squash, missing the phase artefacts), so the
+	// run has a real delta rather than hitting the in-sync early return.
+	stPath := filepath.Join(dir, ".dross", state.File)
+	mustGit(t, dir, "checkout", "-q", "-b", "pre-untrack")
+	stale := state.New()
+	stale.Touch("ancient one")
+	stale.Touch("ancient two")
+	if err := stale.Save(stPath); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, dir, "add", "-f", ".dross/"+state.File)
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): pre-untrack state copy")
+	preSHA := mustGit(t, dir, "rev-parse", "HEAD")
+
+	// Back on main, where git has just removed the file it does not track. The
+	// live copy is everything the machine accumulated since.
+	mustGit(t, dir, "checkout", "-q", "main")
+	live := state.New()
+	live.CurrentPhase = "01-x"
+	for i := 0; i < 40; i++ {
+		live.Touch("live entry")
+	}
+	if err := live.Save(stPath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Point recovery at the pre-untrack SHA: that commit is the one carrying
+	// the stale copy, and restoring from it is the case under test.
+	t.Setenv("DROSS_TEST_PRE_MERGE_SHA", preSHA)
+	return dir, len(live.History)
+}
+
+// TestRecoveryDoesNotRestoreStateJSON is deliberately run against the IN-SYNC
+// path. On the delta path recovery reloads and re-saves state after the
+// restore, which would paper over a clobber; the early return writes nothing,
+// so the file on disk is exactly what the checkout left. That is also the path
+// that got materially more reachable once state.json stopped guaranteeing a
+// delta.
+func TestRecoveryDoesNotRestoreStateJSON(t *testing.T) {
+	dir, want := stateExclusionFixture(t)
+	sha := os.Getenv("DROSS_TEST_PRE_MERGE_SHA")
+
+	// Give origin/main the full .dross/ tree so there is nothing to restore.
+	mustGit(t, dir, "push", "-q", "--force", "origin", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	headBefore := mustGit(t, dir, "rev-parse", "HEAD")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Ship(), "recover", "--pre-merge-sha", sha); err != nil {
+		t.Fatalf("recover: %v", err)
+	}
+	if !strings.Contains(out, "already in sync") {
+		t.Fatalf("precondition: this run should hit the in-sync early return:\n%s", out)
+	}
+	if now := mustGit(t, dir, "rev-parse", "HEAD"); now != headBefore {
+		t.Errorf("a no-op recovery wrote a commit: %s -> %s", headBefore, now)
+	}
+
+	s, err := state.Load(filepath.Join(dir, ".dross", state.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.History) != want {
+		t.Errorf("the live state was overwritten: history is %d entries, live had %d", len(s.History), want)
+	}
+	for _, a := range s.History {
+		if strings.HasPrefix(a.Action, "ancient") {
+			t.Fatalf("the stale copy from %s was restored over the live file: %+v", short(sha), s.History)
+		}
+	}
+}
+
+func TestRecoveryDoesNotRetrackStateJSON(t *testing.T) {
+	dir, _ := stateExclusionFixture(t)
+	sha := os.Getenv("DROSS_TEST_PRE_MERGE_SHA")
+
+	if err := runCmd(t, Ship(), "recover", "--pre-merge-sha", sha); err != nil {
+		t.Fatalf("recover: %v", err)
+	}
+
+	if tracked := mustGit(t, dir, "ls-files", ".dross/"+state.File); tracked != "" {
+		t.Errorf("recovery re-tracked state.json: %q", tracked)
+	}
+	if names := mustGit(t, dir, "show", "--name-only", "--format=", "HEAD"); strings.Contains(names, state.File) {
+		t.Errorf("the recovery commit lists state.json:\n%s", names)
+	}
+}
+
+func TestRecoveryStillRestoresPhaseArtifacts(t *testing.T) {
+	dir, _ := stateExclusionFixture(t)
+	sha := os.Getenv("DROSS_TEST_PRE_MERGE_SHA")
+
+	if err := runCmd(t, Ship(), "recover", "--pre-merge-sha", sha); err != nil {
+		t.Fatalf("recover: %v", err)
+	}
+
+	// The exclusion must be exactly one path wide.
+	headTree := mustGit(t, dir, "ls-tree", "-r", "--name-only", "HEAD")
+	for _, want := range []string{".dross/phases/01-x/spec.toml", ".dross/phases/01-x/changes.json"} {
+		if !strings.Contains(headTree, want) {
+			t.Errorf("the exclusion is scoped too widely — HEAD tree missing %s:\n%s", want, headTree)
+		}
+	}
+}

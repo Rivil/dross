@@ -322,6 +322,10 @@ Stack, paths, runtime mode and test command, [remote] provider config.
 .TP
 .I .dross/state.json
 4-part version, current milestone/phase/status, activity log.
+Machine-local and gitignored: it is never committed, so a checkout cannot
+replace it and a fresh clone starts without one (dross materializes it,
+seeding the version from
+.IR .dross/project.toml ).
 .TP
 .I .dross/rules.toml
 Project-tier rules.
