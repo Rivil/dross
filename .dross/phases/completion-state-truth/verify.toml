@@ -1,14 +1,14 @@
 [verify]
   phase = "completion-state-truth"
-  generated_at = 2026-08-02T13:56:24.254457Z
+  generated_at = 2026-08-02T14:33:03.307607Z
   verdict = "fail"
   finalized = true
-  finalized_at = 2026-08-02T14:15:43.391027Z
+  finalized_at = 2026-08-02T14:55:24.803114Z
 
 [summary]
   mutation_status = "measured"
-  mutation_score = 0.9582405345211581
-  mutants_killed = 1721
+  mutation_score = 0.9583564686285397
+  mutants_killed = 1726
   mutants_survived = 75
   mutants_not_covered = 75
   criteria_total = 6
@@ -18,14 +18,14 @@
 [[criterion]]
   id = "c-1"
   status = "covered"
-  tests = ["internal/cmd/ship_prompt_test.go:TestShipPromptNoUnguardedSwitch", "internal/cmd/ship_prompt_test.go:TestNoPromptPerformsRawBranchSwitch", "internal/cmd/ship_prompt_test.go:TestShipPromptNamesCompleteAsTeardownOwner", "internal/cmd/ship_test.go:TestShipWrongBranchRefusalNamesGuardedCheckout", "internal/cmd/phase_checkout_test.go:TestPhaseCheckoutRefusesClobber", "internal/cmd/phase_checkout_test.go:TestPhaseCheckoutSwitchesOnTheOrdinaryPath", "cmd/dross/main_test.go:TestShipPromptCommandsExist"]
-  notes = "Three layers now: ship.md is scanned for --delete-branch, the GitLab/Forgejo remove-source-branch fields and raw checkout/switch; the guard was widened this run to walk EVERY prompt (t-11), asserting a non-zero scan count so a mis-rooted walk fails rather than reporting clean; and ship's own off-branch refusal is covered behaviourally (t-10) rather than by grep, since phase_checkout.go's doc comment legitimately spells the raw verb. The guarded replacement is proven to refuse a clobbering switch and to switch on the ordinary path. Both FLAGs the previous run raised against this criterion are closed."
+  tests = ["internal/cmd/ship_prompt_test.go:TestShipPromptNoUnguardedSwitch", "internal/cmd/ship_prompt_test.go:TestNoPromptPerformsRawBranchSwitch", "internal/cmd/ship_prompt_test.go:TestShipPromptNamesCompleteAsTeardownOwner", "internal/cmd/ship_test.go:TestShipWrongBranchRefusalNamesGuardedCheckout", "internal/cmd/phase_checkout_test.go:TestPhaseCheckoutRefusesClobber", "internal/cmd/phase_checkout_test.go:TestPhaseCheckoutSwitchesOnTheOrdinaryPath", "internal/cmd/phase_checkout_test.go:TestCheckoutRefusesClobberOnNonPhaseBranch", "internal/cmd/phase_checkout_test.go:TestCheckoutSwitchesOnTheOrdinaryPath", "internal/cmd/phase_checkout_test.go:TestCheckoutMissingBranch", "internal/cmd/milestone_test.go:TestPruneRefusalNamesGuardedCheckout", "cmd/dross/main_test.go:TestShipPromptCommandsExist"]
+  notes = "The criterion's own surface — /dross-ship's steps — is covered three ways: ship.md is scanned for --delete-branch, the GitLab/Forgejo remove-source-branch fields and raw checkout/switch; the guard walks EVERY prompt with a non-zero scan-count assertion so a mis-rooted walk fails rather than reporting clean; and ship's off-branch refusal is covered behaviourally. t-12 extends the guarded surface past ship to `dross milestone prune`'s refusal: the new top-level `dross checkout <branch>` is proven to refuse a clobbering switch, to switch on the ordinary path, and to refuse rather than create a missing ref, and the refusal is proven to name it while containing no `git checkout` and still naming both the stale branch and the target. All three of t-12's test-contract items are met. Held at covered rather than downgraded because the criterion is scoped to /dross-ship steps and every one of those holds; the reachability hole t-12 opened is carried as the BLOCKING finding below (routed to t-13) rather than as a coverage claim against this criterion."
 
 [[criterion]]
   id = "c-2"
   status = "covered"
   tests = ["internal/cmd/phase_test.go:TestPhaseCompleteWritesCompletionRecord", "internal/cmd/phase_test.go:TestPhaseCompleteIsIdempotent", "internal/cmd/phase_test.go:TestCompleteOtherPhaseKeepsCurrent", "internal/cmd/completion_state_truth_test.go:TestShipToCompleteKeepsLiveState"]
-  notes = "The write test pre-seeds no record, so deleting complete's write leaves zero entries and fails; the idempotence test asserts the breadcrumb count stays at exactly one over a re-run; the ship-side half asserts ship must NOT write it and leaves x/shipped."
+  notes = "The write test pre-seeds no record, so deleting complete's write leaves zero entries and fails; the idempotence test asserts the breadcrumb count stays at exactly one over a re-run; the ship-side half asserts ship must NOT write it and leaves x/shipped. Unchanged since the previous run — no task after t-8 touched this surface — and re-confirmed green."
 
 [[criterion]]
   id = "c-3"
@@ -43,29 +43,37 @@
   id = "c-5"
   status = "covered"
   tests = ["internal/cmd/phase_test.go:TestPhaseCompletePrintsTopologyStatement", "internal/cmd/phase_test.go:TestPhaseCompleteRemoteOnlyTeardown", "internal/cmd/phase_test.go:TestPhaseCompleteNamesRecordedBaseNotInferred", "internal/cmd/topology_test.go:TestBranchTopologyCountsAheadOfMain", "internal/cmd/topology_test.go:TestBranchTopologyWorkOverrideWins", "internal/cmd/topology_test.go:TestRenderTopologyLine", "internal/cmd/status_test.go:TestStatusTopologyLineAlways"]
-  notes = "Upgraded from weak (previous run). Each clause of the completion statement is asserted separately, the recorded base beats an inferable milestone branch, the not-yet-on-main clause is pinned to AheadOfMain>0 in six render cases, and the status line is proven unconditional (mid-phase, between phases, no origin). The gap that forced the earlier downgrade — describeTeardown's fourth arm (origin still carries the branch, local ref already gone) was never executed, leaving two ARITHMETIC_BASE mutants alive at phase.go:625 — is closed by TestPhaseCompleteRemoteOnlyTeardown, which reaches that arm by recreating the origin ref from the retained tip SHA after the first complete. Both mutants are killed this run and its negative assertion excludes all three neighbouring arms, so collapsing this one into any of them fails rather than passing on a near-miss."
+  notes = "Each clause of the completion statement is asserted separately, the recorded base beats an inferable milestone branch, the not-yet-on-main clause is pinned to AheadOfMain>0 in six render cases, and the status line is proven unconditional (mid-phase, between phases, no origin). The phase.go:625 teardown-arm gap that forced the earlier weak downgrade stays closed: both ARITHMETIC_BASE mutants are killed again this run, and topology.go carries zero survivors."
 
 [[criterion]]
   id = "c-6"
   status = "covered"
   tests = ["internal/cmd/status_test.go:TestStatusReportsShippedNotStale", "internal/cmd/status_test.go:TestStatusShippedFromPRRecordAlone", "internal/cmd/status_test.go:TestStatusNoShippedWithoutEitherSignal", "internal/cmd/status_test.go:TestStatusSilentAfterCompletion", "internal/cmd/status_test.go:TestStatusNextStepAfterShip", "internal/watch/drift_test.go:TestDriftShippedPhaseNotUnshipped"]
-  notes = "Positive (shipped: names branch, PR #42 and the base it waits on; phase line reads shipped) plus four false-positive controls (merged, squash-merged, on main, neither signal) and the post-completion silence case. The PR-record-alone case defeats Go's short-circuit so the tracked half is really executed. Drift carries the same rule with two controls."
+  notes = "Positive (shipped: names branch, PR #42 and the base it waits on; phase line reads shipped) plus four false-positive controls (merged, squash-merged, on main, neither signal) and the post-completion silence case. The PR-record-alone case defeats Go's short-circuit so the tracked half is really executed. Drift carries the same rule with two controls; drift.go has zero survivors."
 
 [[finding]]
   severity = "BLOCKING"
-  text = "t-12 added to this phase's scope during this verify run (user decision): internal/cmd/milestone.go:93 — `dross milestone prune`'s stale-HEAD refusal — still narrates \"switch to <main> first (`git checkout <main>`)\", the same unguarded verb t-10 removed from ship and t-11 removed from the prompts. It cannot reuse `dross phase checkout`, which is phase-branch-only (prefixes \"phase/\", refuses a missing local ref), so closing it needs a widened or sibling guarded verb. Unimplemented and untested: no criterion is uncovered by it (c-1 is scoped to /dross-ship steps and its own tests hold), but the phase cannot ship with agreed scope outstanding. Route: /dross-execute completion-state-truth --from t-12, then re-verify."
+  text = "t-13 added to this phase's scope during this verify run (user decision, routed per project/hard/r-02 because the hole is in-diff). In-diff reachability hole opened by t-12: cmd/dross/main.go:36 registers `cmd.Checkout()`, and internal/cmd/milestone.go:98 tells the user to run `dross checkout <main>` — but nothing asserts the registration survives. Demonstrated this run by deleting line 36: `go test ./cmd/dross/...` and the targeted internal/cmd guards (Checkout|Prune|Guarded|RawBranchSwitch) both stay green. With the line gone the prune refusal names a command that does not resolve, the user hits \"unknown command\" and falls back to `git checkout <main>` — the exact raw switch this phase exists to retire. Three parity guards already exist for this class (TestReadmeAdvertisesOnlyRealCommands for README.md, TestShipPromptCommandsExist for ship.md, TestCuratedHintsResolveAgainstTheTree for the hint table) but none covers a `dross <cmd>` reference emitted from a Go error string. Mutation cannot catch it either: gremlins skips ./cmd/dross as a zero-covered-mutant blind spot. Routed to t-13 (wave 6, covers c-1, cmd/dross/main_test.go): add the fourth parity guard, scanning Go string literals for `dross <cmd>` forms and resolving each against newRoot()'s tree. Unimplemented and untested, so the phase cannot ship with agreed scope outstanding. Next: /dross-execute completion-state-truth --from t-13, then re-verify. No criterion is downgraded by it — c-1 is scoped to /dross-ship steps and all of those hold."
 
 [[finding]]
   severity = "NOTE"
-  text = "Zero surviving mutants inside this phase's diff. All 75 survivors are NOT-COVERED (never executed) rather than survived-despite-coverage, so efficacy over executed mutants is 1.00. Each was checked against the phase's diff hunks and falls outside them: phase.go 307/309/735/737, ship.go 246/520/522/524 (the previous run's 239/513/515/517, shifted +7 by t-10's edit), status.go 442/444/472/474, telemetry.go:46, and the rest. The new files topology.go and phase_checkout.go have zero survivors, and drift.go — also touched — has none."
+  text = "Zero surviving mutants inside this phase's diff, computed mechanically this run: every one of the 75 survivor line numbers was tested against the phase diff's changed-line ranges (merge-base 1d422dd9..HEAD over 22 changed .go files) and none falls inside a hunk. The files this phase created — topology.go, phase_checkout.go — have zero survivors, as do drift.go and milestone.go. All 75 survivors are NOT-COVERED (never executed) rather than survived-despite-coverage, so efficacy over executed mutants is 1.00."
 
 [[finding]]
   severity = "NOTE"
-  text = "The 75 pre-existing survivors are recorded as ROUTED, not re-listed as FLAGs (project/hard/r-02; user-confirmed this run). Their destinations are the two deferred entries already on this phase's spec.toml: promote r-02 to a builtin rule and give verify a survivor lifecycle (in-diff / routed / accepted-with-reason), and drain the standing pre-existing survivor set. The count fell 77 -> 75 this run because the only two in-diff survivors, phase.go:625, were killed by t-9."
+  text = "The 75 pre-existing survivors are recorded as ROUTED, not re-listed as FLAGs, per project/hard/r-02 and the routing already recorded on this phase's spec.toml. Their destinations are its two deferred entries: promote r-02 to a builtin rule and give verify a survivor lifecycle (in-diff / routed / accepted-with-reason), and drain the standing pre-existing survivor set (doctor.go 11, hints.go 8, status.go 7, ship.go 6, env.go 5, phase_lifecycle.go 5, footer_coverage.go 4, gitignore.go 4, phase.go 4 and the rest). The count is unchanged at 75 from the previous run: t-12 added no survivors."
 
 [[finding]]
   severity = "NOTE"
-  text = "Both FLAGs from the previous (partial) verify are closed and verified this run: c-5's phase.go:625 teardown-arm gap (t-9, mutants now killed) and ship.go:170's raw `git checkout` narration (t-10, now `dross phase checkout` with a behavioural test). Full suite green: go test ./... ok across all packages."
+  text = "The BLOCKING finding from the previous (fail) run is closed: t-12 landed as 349cbfe, so the phase is 12/12 with no agreed scope outstanding. Tree-wide re-grep confirms the only remaining raw `git checkout`/`git switch` strings in Go source are comments, error wrappers naming the failed git command, and switchbranch.go:111/116 — the guard's own escape hatch, printed only after guardLiveState has refused and deliberately excluded by t-12's plan. The prompts carry none: pause.md forbids the verb and quick.md uses the file-restore form, not a branch switch."
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins skipped ./cmd/dross (zero covered mutants — coverage blind spot), the package t-12 edited. This is why the registration hole above had to be established by hand-mutation rather than by the mutation run."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Full suite observed green this run: go test ./... ok across all 29 packages (internal/cmd 86.969s)."
 
 [[finding]]
   severity = "NOTE"

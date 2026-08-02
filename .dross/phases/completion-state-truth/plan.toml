@@ -1,4 +1,4 @@
-task_seq = 11
+task_seq = 13
 
 [phase]
   id = "completion-state-truth"
@@ -127,3 +127,14 @@ task_seq = 11
   covers = ["c-1"]
   test_contract = ["a test drives `dross milestone prune` with HEAD on a stale milestone branch and asserts the refusal names the guarded verb and does NOT contain \"git checkout\"; restoring the raw suggestion fails it", "the refusal is asserted to still name both the stale branch and the target, so the verb assertion cannot be satisfied by a message that dropped the diagnostic detail", "the widened guarded verb is proven to refuse a switch onto a branch carrying a tracked .dross/state.json and to switch on the ordinary path, matching TestPhaseCheckoutRefusesClobber's shape for the non-phase target"]
   status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 6
+  title = "Assert narrated dross commands resolve against the tree"
+  files = ["cmd/dross/main_test.go"]
+  description = "t-12 pointed `dross milestone prune`'s stale-HEAD refusal at the new top-level `dross checkout <branch>` and registered it at cmd/dross/main.go:36. Nothing asserts that registration survives. Verified by hand-mutation this run: deleting line 36 leaves `go test ./cmd/dross/...` and the targeted internal/cmd guards (Checkout|Prune|Guarded|RawBranchSwitch) fully green, while the prune refusal now names a command that does not resolve — the user hits \"unknown command\" and falls back to `git checkout <main>`, the exact raw switch this phase exists to retire. gremlins cannot catch it either: it skips ./cmd/dross as a zero-covered-mutant blind spot. Three parity guards already exist for this class — TestReadmeAdvertisesOnlyRealCommands (README.md), TestShipPromptCommandsExist (ship.md) and TestCuratedHintsResolveAgainstTheTree (the hint table) — but none covers a `dross <cmd>` reference emitted from a Go string literal. Add the fourth sibling: scan the Go sources under internal/cmd for backticked `dross <verb> [<sub>]` forms inside string literals and resolve each against newRoot()'s assembled tree, reusing promptCmdRef and the same top/sub walk. It belongs in cmd/dross/main_test.go for the same reason its siblings do — the tree is assembled by newRoot in package main and cannot be imported from internal/cmd. Expect to need a small ignore-set for placeholder forms (the sibling README guard already carries one for \"phase-id\"); keep it explicit and named, not a broad regex loosening."
+  covers = ["c-1"]
+  depends_on = ["t-12"]
+  test_contract = ["deleting `cmd.Checkout()` from cmd/dross/main.go fails the new guard, naming both the unresolvable command and the file that narrates it — this is the exact mutation that stayed green this run", "the guard asserts it parsed a non-zero number of `dross <cmd>` references from the Go sources, so an empty or mis-rooted walk fails instead of passing vacuously", "a narration naming a subcommand that does not exist under a real parent (e.g. `dross phase nope`) fails too, so the guard is not satisfied by top-level resolution alone", "the ignore-set for placeholder forms is asserted to be non-empty only if used, and every entry in it is a form the guard would otherwise reject — a stale entry must not silently mask a real command"]
+  status = "pending"
