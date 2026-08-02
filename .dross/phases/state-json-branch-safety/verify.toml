@@ -1,43 +1,43 @@
 [verify]
   phase = "state-json-branch-safety"
-  generated_at = 2026-08-02T06:42:15.676755Z
-  verdict = "partial"
+  generated_at = 2026-08-02T07:12:16.401343Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-08-02T07:01:45.913605Z
+  finalized_at = 2026-08-02T07:28:55.037754Z
 
 [summary]
   mutation_status = "measured"
-  mutation_score = 0.9559261465157832
-  mutants_killed = 1605
-  mutants_survived = 74
-  mutants_not_covered = 74
+  mutation_score = 0.9565217391304348
+  mutants_killed = 1606
+  mutants_survived = 73
+  mutants_not_covered = 73
   criteria_total = 7
-  criteria_covered = 6
-  criteria_uncovered = 1
+  criteria_covered = 7
+  criteria_uncovered = 0
 
 [[criterion]]
   id = "c-1"
-  status = "weak"
-  tests = ["internal/cmd/switchbranch_test.go:TestCheckoutRefusalNamesStateJSON", "internal/cmd/switchbranch_test.go:TestCheckoutRefusalIsNonDestructive", "internal/cmd/switchbranch_test.go:TestPhaseCreateSurfacesCheckoutRefusal", "internal/cmd/switchbranch_test.go:TestPhaseCompleteSurfacesCheckoutRefusal", "internal/cmd/switchbranch_test.go:TestGuardedFFAndResetRefuseTrackedState", "internal/cmd/switchbranch_test.go:TestGuardedOpsRunWhenTargetHasNoCopy", "internal/cmd/gitignore_test.go:TestStateJSONNotTracked", "internal/cmd/gitignore_test.go:TestInitScaffoldsStateIgnore", "internal/cmd/gitignore_test.go:TestOnboardScaffoldsStateIgnore"]
-  notes = "DOWNGRADED from covered this pass. The guard itself is thoroughly pinned: the switch is refused naming .dross/state.json and the literal `cp` recovery command, the live 12-entry file and HEAD are unchanged after the refusal, TestGitDoesNotRefuseIgnoredClobber pins the precondition the guard exists for, and TestCheckoutRefusalPassesThroughOtherErrors stops it swallowing unrelated git failures. Zero mutants survive in switchbranch.go. What is NOT pinned is the criterion's word `every`: checkoutBranch has two call sites and only phase.go:429's is exercised. milestone.go:227 -- rewritten by this phase's t-8 to route milestoneFinalize through the guard -- is never executed by any test (go-cover: blocks 226.23,227.61 and 227.61,229.4 both count 0, because milestoneFinalizeFixture always leaves HEAD on main). Revert that line to a raw `git checkout` and `dross milestone complete --finalize` run from the milestone branch silently clobbers live state again, with the whole suite still green."
+  status = "covered"
+  tests = ["internal/cmd/switchbranch_test.go:TestCheckoutRefusalNamesStateJSON", "internal/cmd/switchbranch_test.go:TestCheckoutRefusalIsNonDestructive", "internal/cmd/switchbranch_test.go:TestPhaseCreateSurfacesCheckoutRefusal", "internal/cmd/switchbranch_test.go:TestPhaseCompleteSurfacesCheckoutRefusal", "internal/cmd/switchbranch_test.go:TestGuardedFFAndResetRefuseTrackedState", "internal/cmd/switchbranch_test.go:TestGuardedOpsRunWhenTargetHasNoCopy", "internal/cmd/milestone_test.go:TestMilestoneFinalizeFromMilestoneBranch", "internal/cmd/milestone_test.go:TestMilestoneFinalizeSurfacesCheckoutRefusal", "internal/cmd/gitignore_test.go:TestStateJSONNotTracked", "internal/cmd/gitignore_test.go:TestInitScaffoldsStateIgnore", "internal/cmd/gitignore_test.go:TestOnboardScaffoldsStateIgnore"]
+  notes = "UPGRADED from weak (the previous pass's only open FLAG is closed). The guard itself was already thoroughly pinned: the switch is refused naming .dross/state.json and the literal `cp` recovery command, the live 12-entry file and HEAD are unchanged after the refusal, TestGitDoesNotRefuseIgnoredClobber pins the precondition the guard exists for, and TestCheckoutRefusalPassesThroughOtherErrors stops it swallowing unrelated git failures. What was missing was the criterion's word `every`: checkoutBranch's second call site, milestone.go:227, was executed by no test. t-8's amend adds TestMilestoneFinalizeFromMilestoneBranch (runs `milestone complete --finalize` from milestone/<version>, the only shape where `cur != mainBranch`) and TestMilestoneFinalizeSurfacesCheckoutRefusal (main carries the pre-untrack tracked copy; the switch is refused by name and neither branch is deleted). Verified independently this pass, not taken from the commit message: go-cover blocks 226.23,227.61 and 227.61,229.4 both now count 1, and the milestone.go:227 mutant is gone from the survivor list (73 vs 74). All six guarded call sites — checkoutBranch at phase.go:429 and milestone.go:227, guardedFF at phase.go:434 and milestone.go:231, checkoutBranchNew at phase.go:689, guardedResetHard at ship_recover.go:174 — now have a test behind them. Zero mutants survive in switchbranch.go."
 
 [[criterion]]
   id = "c-2"
   status = "covered"
   tests = ["internal/cmd/release_version_test.go:TestReleaseVersionScriptResolvesTag", "internal/cmd/release_version_test.go:TestReleaseVersionScriptRejectsMissingVersion", "internal/cmd/release_version_test.go:TestReleaseVersionScriptIgnoresOtherTables", "internal/cmd/release_version_test.go:TestReleaseVersionScriptRejectsMissingFile", "internal/cmd/release_version_test.go:TestReleaseWorkflowHasNoStateJSONRead", "internal/cmd/project_test.go:TestRepoProjectVersionIsLive"]
-  notes = "Unchanged from the previous pass and re-confirmed. The script runs under PATH=/usr/bin:/bin so no locally-installed jq or dross can satisfy a dependency CI lacks -- that is the `clean CI checkout with no dross binary` half. The `value it reads is the one dross bumped` half is TestRepoProjectVersionIsLive (this repo's [project].version parses as a 4-part version and is no longer the dead 0.2.0.0 scaffold) plus release.yml's ban on state.json/jq. release-version.sh is a .sh file with no mutation adapter, so it is covered by assertion only, not by mutation."
+  notes = "Unchanged across all three passes and re-confirmed. The script runs under PATH=/usr/bin:/bin so no locally-installed jq or dross can satisfy a dependency CI lacks -- that is the `clean CI checkout with no dross binary` half. The `value it reads is the one dross bumped` half is TestRepoProjectVersionIsLive (this repo's [project].version parses as a 4-part version and is no longer the dead 0.2.0.0 scaffold) plus release.yml's ban on state.json/jq. release-version.sh is a .sh file with no mutation adapter, so it is covered by assertion only, not by mutation."
 
 [[criterion]]
   id = "c-3"
   status = "covered"
-  tests = ["internal/cmd/state_history_test.go:TestHistorySurvivesEveryBranchSwitch", "internal/cmd/state_history_test.go:TestShipRecoverInSyncAppendsNothing", "internal/cmd/state_history_test.go:TestRecoverKeepsHistoryAcrossHardReset", "internal/cmd/state_clobber_regression_test.go:TestIncidentRecoverKeepsLiveHistory", "internal/cmd/status_test.go:TestStatusStaleFromPRRecordAlone", "internal/cmd/status_test.go:TestStatusNoStaleWithoutEitherSignal"]
-  notes = "The table covers all four named commands (phase complete, phase complete --recover, ship recover, milestone complete --finalize) with 12 distinct seeded entries checked for presence AND relative order, so a reorder fails as loudly as a drop. The own-entry assertion is applied only to the two commands that actually record one, justified in-file rather than skipped silently. Zero mutants survive in ship_recover.go. The previous pass's FLAG on status.go:539 is CLOSED: t-7 added TestStatusStaleFromPRRecordAlone, which strips the history half so only changes.json's PR record can answer, plus a paired no-signal control -- go-cover now shows phaseRecordsPR's blocks (537.48,540.2 and 544.66-548.4) at count 1. Note the milestone-complete row is proven on the fast-forward path only; the checkout path is the c-1 FLAG below."
+  tests = ["internal/cmd/state_history_test.go:TestHistorySurvivesEveryBranchSwitch", "internal/cmd/state_history_test.go:TestShipRecoverInSyncAppendsNothing", "internal/cmd/state_history_test.go:TestRecoverKeepsHistoryAcrossHardReset", "internal/cmd/state_clobber_regression_test.go:TestIncidentRecoverKeepsLiveHistory", "internal/cmd/milestone_test.go:TestMilestoneFinalizeFromMilestoneBranch", "internal/cmd/status_test.go:TestStatusStaleFromPRRecordAlone", "internal/cmd/status_test.go:TestStatusNoStaleWithoutEitherSignal"]
+  notes = "The table covers all four named commands (phase complete, phase complete --recover, ship recover, milestone complete --finalize) with 12 distinct seeded entries checked for presence AND relative order, so a reorder fails as loudly as a drop. The own-entry assertion is applied only to the two commands that actually record one, justified in-file rather than skipped silently. Zero mutants survive in ship_recover.go. The previous pass's caveat that milestone complete was proven on the fast-forward path only is now CLOSED: TestMilestoneFinalizeFromMilestoneBranch runs finalize from the milestone branch and calls assertHistorySurvives on the 12 seeded entries after the checkout, so the checkout path carries the same history assertion the ff path did. status.go:539 (phaseRecordsPR) stays closed from the previous pass."
 
 [[criterion]]
   id = "c-4"
   status = "covered"
   tests = ["internal/cmd/state_test.go:TestBumpInternalWritesBothFiles", "internal/cmd/state_test.go:TestWriteVersionRejectsBeforeWriting", "internal/cmd/state_test.go:TestWriteVersionFailureNamesBothPaths", "internal/cmd/project_test.go:TestProjectSetVersionMirrorsToState", "internal/cmd/doctor_test.go:TestDoctorReportsVersionDrift"]
-  notes = "Unchanged from the previous pass and re-confirmed. `One bump writes both` is asserted from both entry points (`state bump/set` and `project set project.version`) via assertVersionParity re-reading both files from disk. `A stale copy is a detectable error` is TestDoctorReportsVersionDrift. The failure ordering is pinned too: project.toml is written first and TestWriteVersionFailureNamesBothPaths proves state.json is never left ahead of the tracked copy when that write fails."
+  notes = "Unchanged across all three passes and re-confirmed. `One bump writes both` is asserted from both entry points (`state bump/set` and `project set project.version`) via assertVersionParity re-reading both files from disk. `A stale copy is a detectable error` is TestDoctorReportsVersionDrift. The failure ordering is pinned too: project.toml is written first and TestWriteVersionFailureNamesBothPaths proves state.json is never left ahead of the tracked copy when that write fails."
 
 [[criterion]]
   id = "c-5"
@@ -49,325 +49,33 @@
   id = "c-6"
   status = "covered"
   tests = ["internal/cmd/doctor_test.go:TestDoctorReportsTrackedStateJSON", "internal/cmd/doctor_test.go:TestDoctorReportsVersionDrift", "internal/cmd/doctor_test.go:TestDoctorReportsMissingProjectVersion", "internal/cmd/doctor_test.go:TestDoctorSkipsDriftOnFreshClone", "internal/cmd/doctor_test.go:TestDoctorCleanRepoPassesNewSections"]
-  notes = "Unchanged from the previous pass and re-confirmed. All three detections are asserted, each with the literal fix string rather than a paraphrase (`git rm --cached .dross/state.json`, `dross project set project.version ...`). Both false-positive controls are present: a clean repo must still exit zero, and a fresh clone with no state.json must not report drift. The not-covered mutants at doctor.go:351 are the switch-case-condition attribution ceiling -- TestDoctorReportsMissingProjectVersion exercises that exact arm."
+  notes = "Unchanged across all three passes and re-confirmed. All three detections are asserted, each with the literal fix string rather than a paraphrase (`git rm --cached .dross/state.json`, `dross project set project.version ...`). Both false-positive controls are present: a clean repo must still exit zero, and a fresh clone with no state.json must not report drift. The not-covered mutants at doctor.go:351 are the switch-case-condition attribution ceiling -- TestDoctorReportsMissingProjectVersion exercises that exact arm."
 
 [[criterion]]
   id = "c-7"
   status = "covered"
   tests = ["internal/cmd/milestone_stale_test.go:TestStaleDetectsSquashMergedBranch", "internal/cmd/milestone_stale_test.go:TestStaleSquashWithMainAdvancing", "internal/cmd/milestone_stale_test.go:TestStaleAmbiguousSquashIsDeterministic", "internal/cmd/milestone_stale_test.go:TestStaleUnmergedBranchIsNotReported", "internal/cmd/milestone_stale_test.go:TestStaleIsReadOnly", "internal/cmd/milestone_prune_test.go:TestPruneDeletesOnlyStaleBranches", "internal/cmd/milestone_prune_test.go:TestPruneRefusesOnCurrentHEAD", "internal/cmd/milestone_prune_test.go:TestPruneRefusesDirtyTree", "internal/cmd/doctor_test.go:TestDoctorReportsStaleMilestoneBranchReadOnly"]
-  notes = "Unchanged from the previous pass and re-confirmed. The squash-merge case git branch --merged cannot see is asserted directly, with that blindness pinned as an explicit precondition so the test would fail if it were ever detecting only ancestry. Local+remote deletion is asserted along with the negative (a branch the detector did not name survives both locally and on origin). Zero mutants survive in milestone_stale.go."
+  notes = "Unchanged across all three passes and re-confirmed. The squash-merge case git branch --merged cannot see is asserted directly, with that blindness pinned as an explicit precondition so the test would fail if it were ever detecting only ancestry. Local+remote deletion is asserted along with the negative (a branch the detector did not name survives both locally and on origin). Zero mutants survive in milestone_stale.go."
 
 [[finding]]
-  severity = "FLAG"
-  text = "milestone.go:227 -- milestoneFinalize's `checkoutBranch(repoDir, mainBranch)` is never executed by any test (1 not-covered mutant). This phase's t-8 rewrote that line specifically to route milestone complete's checkout through the new live-state guard, but milestoneFinalizeFixture ends on main in both its merged and unmerged forms, so `if cur != mainBranch` is always false and the call site never runs (go-cover blocks 226.23,227.61 and 227.61,229.4 both count 0). Running `dross milestone complete --finalize` from the milestone branch -- the natural place to be -- is therefore the one guarded switch with no test behind it, and reverting the line to a raw `git checkout` leaves the suite fully green. NOTE: the previous pass mis-filed this mutant in the switch-case-ceiling bucket; it is an ordinary `if err != nil`, not a case condition. Fix: a milestoneFinalizeFixture variant that leaves HEAD on milestone/<version>, asserting both that the finalize succeeds from there and that it refuses when the target branch carries a tracked state.json."
-
-[[finding]]
-  severity = "NOTE"
-  text = "PREVIOUS FLAG CLOSED -- status.go:539 (phaseRecordsPR). t-7 added TestStatusStaleFromPRRecordAlone, which strips the `completed <id>` history entry so changes.json's pr=42 is the only shipped signal left and the short-circuit can no longer skip the fallback, plus TestStatusNoStaleWithoutEitherSignal as the false-positive control. Confirmed executed by go-cover (blocks 537.48,540.2 / 544.66,545.31 / 545.31,546.55 / 546.55,548.4 all count 1); the 3 mutants that survived there last pass are gone from the survivor list."
-
-[[finding]]
-  severity = "NOTE"
-  text = "PREVIOUS FLAG CLOSED -- gitignore.go:57 (blank-tail append arm). t-7 added TestEnsureDrossGitignoreSpacingOnBlankTail covering both shapes that reach it (empty file; file already ending in a blank line) and asserting no `\\n\\n\\n` run and no leading blank on an empty file. Confirmed executed by go-cover (block 56.71,58.3 count 1); the surviving mutant there is gone."
-
-[[finding]]
-  severity = "NOTE"
-  text = "Mutation cross-check: 0 mutants LIVED (efficacy 100.00%, score 0.96); all 74 survivors are NOT_COVERED, down from 78 last pass -- exactly the 4 mutants at status.go:539 (x3) and gitignore.go:57 (x1) that the previous FLAGs named. A full diff of the two survivor sets shows nothing newly surviving. Of the remaining 74, one is the milestone.go:227 FLAG above; every other one was inspected and sits on a `switch {` case-condition line or a const string-concatenation initializer -- the known go-cover attribution ceiling for gremlins on this repo, not a test gap (verified again this pass at phase.go:284/286/633/635, doctor.go:90/92/95/161/243/246/351, root.go:61, state.go:266, project.go:81/83, ship.go:513/515/517, status.go:423/425/453/455, and gitignore.go:29-32 which is the drossGitignoreBlock const). Those 73 are seeded as FLAG by `dross verify` and demoted to NOTE on that basis. No mutant survives in switchbranch.go, milestone_stale.go or ship_recover.go -- the three files carrying this phase's core new behaviour."
-
-[[finding]]
-  severity = "NOTE"
-  text = "Full `go test ./...` observed green in this session before the verdict was written; the three t-7 tests were run individually and pass."
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: phase.go:284 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: phase.go:286 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: phase.go:633 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: phase.go:635 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: root.go:61 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: rule.go:143 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: statusline.go:23 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: validate.go:92 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: validate.go:96 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: project.go:81 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: project.go:83 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: update.go:181 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: update.go:184 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: gitignore.go:32 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: gitignore.go:31 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: gitignore.go:30 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: gitignore.go:29 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: env.go:105 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: env.go:109 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: env.go:114 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: env.go:119 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: env.go:148 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: footer_coverage.go:52 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: footer_coverage.go:55 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: footer_coverage.go:58 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: footer_coverage.go:60 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: issue.go:156 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: deferred.go:138 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: doctor.go:90 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: doctor.go:90 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: doctor.go:92 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: doctor.go:92 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: doctor.go:95 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: doctor.go:95 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: doctor.go:161 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: doctor.go:243 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: doctor.go:246 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: doctor.go:246 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: doctor.go:351 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: hooks.go:100 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: basebranch.go:104 (ARITHMETIC_BASE)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: install.go:65 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: ship.go:239 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: ship.go:513 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: ship.go:513 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: ship.go:515 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: ship.go:515 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: ship.go:517 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: state.go:266 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: phase_lifecycle.go:27 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: status.go:423 (CONDITIONALS_BOUNDARY)"
-
-[[finding]]
-  severity = "NOTE"
-  text = "gremlins mutant survived: status.go:423 (CONDITIONALS_NEGATION)"
-
-[[finding]]
   severity = "NOTE"
-  text = "gremlins mutant survived: status.go:425 (CONDITIONALS_BOUNDARY)"
+  text = "PREVIOUS FLAG CLOSED -- milestone.go:227 (milestoneFinalize's guarded switch to main). t-8's amend adds two tests that reach the call site from the milestone branch: TestMilestoneFinalizeFromMilestoneBranch (positive -- finalize succeeds from milestone/<version>, HEAD lands on main, both branch copies are deleted, the 12-entry live history survives) and TestMilestoneFinalizeSurfacesCheckoutRefusal (guard -- main carries a pre-untrack tracked state.json, the switch is refused naming the file, neither the local nor the remote milestone branch is deleted, and the live 12 entries are intact). Confirmed independently in this pass rather than inherited from the commit message: go-cover blocks 226.23,227.61 and 227.61,229.4 both count 1 under those two tests alone, and the milestone.go:227 mutant no longer appears in the survivor list."
 
 [[finding]]
   severity = "NOTE"
-  text = "gremlins mutant survived: status.go:425 (CONDITIONALS_NEGATION)"
+  text = "Mutation cross-check: 0 mutants LIVED (efficacy 100.00%, score 0.9565); all 73 survivors are NOT_COVERED, down from 74 last pass. A full set-difference of the two survivor lists shows exactly one removal -- milestone.go:227, the mutant the previous FLAG named -- and nothing newly surviving; killed rose 1605 -> 1606 to match. Every remaining survivor was inspected and sits on a `switch {` case-condition line or a const string-concatenation initializer, the known go-cover attribution ceiling for gremlins on this repo, not a test gap. Spot-re-verified this pass at gitignore.go:29-32 (the drossGitignoreBlock const), project.go:81/83, state.go:266 and status.go:423/425; the rest (doctor.go, phase.go, ship.go, hints.go, env.go, footer_coverage.go, phase_lifecycle.go, statusline.go, validate.go, watch.go, root.go, rule.go, hooks.go, install.go, issue.go, deferred.go, basebranch.go, update.go) are unchanged from the previous pass's inspection. No mutant survives in switchbranch.go, milestone.go, milestone_stale.go or ship_recover.go -- the files carrying this phase's core new behaviour."
 
 [[finding]]
   severity = "NOTE"
-  text = "gremlins mutant survived: status.go:425 (ARITHMETIC_BASE)"
+  text = "Full `go test ./...` observed green in this session before the verdict was written: all 25 packages ok, internal/cmd 81.5s. The two new finalize tests were also run individually with -count=1 under a coverage profile."
 
 [[finding]]
   severity = "NOTE"
-  text = "gremlins mutant survived: status.go:453 (CONDITIONALS_NEGATION)"
+  text = "PREVIOUS FLAGS CLOSED IN THE EARLIER PASS, still closed here -- status.go:539 (phaseRecordsPR, closed by TestStatusStaleFromPRRecordAlone plus its no-signal control) and gitignore.go:57 (blank-tail append arm, closed by TestEnsureDrossGitignoreSpacingOnBlankTail). Neither line appears in this pass's survivor list."
 
 [[finding]]
   severity = "NOTE"
-  text = "gremlins mutant survived: status.go:455 (CONDITIONALS_NEGATION)"
+  text = "Standing scope note carried from previous passes: scripts/release-version.sh, release.yml, .gitignore and the docs touched by t-13 have no mutation adapter, so c-2's script behaviour is pinned by assertion only. See the skipped list below."
 
 [[finding]]
   severity = "NOTE"
