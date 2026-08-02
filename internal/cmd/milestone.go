@@ -168,20 +168,25 @@ func milestoneComplete() *cobra.Command {
 			if p.Remote.URL == "" || p.Remote.Provider == "" {
 				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
 			}
+			target, err := milestonePRBase(root, repoDir, mainBranch, version, msBranch)
+			if err != nil {
+				return err
+			}
+
 			opts := buildOpenOpts(p)
 			opts.HeadBranch = msBranch
-			opts.BaseBranch = mainBranch
+			opts.BaseBranch = target
 			opts.Title = fmt.Sprintf("milestone %s", version)
 			opts.Body = fmt.Sprintf("Integration PR for milestone %s.\n\n"+
 				"Merge as a **merge commit** (not squash) to preserve per-phase history on %s.",
-				version, mainBranch)
+				version, target)
 
 			res, err := ship.OpenPR(opts)
 			if err != nil {
 				// Idempotent: a duplicate PR (provider rejects a second open
 				// for the same head->base) is a no-op, not a failure.
 				if strings.Contains(strings.ToLower(err.Error()), "already exists") {
-					Printf("milestone %s PR already open (%s -> %s) — nothing to do\n", version, msBranch, mainBranch)
+					Printf("milestone %s PR already open (%s -> %s) — nothing to do\n", version, msBranch, target)
 					return nil
 				}
 				return fmt.Errorf("open milestone PR: %w", err)
@@ -190,7 +195,7 @@ func milestoneComplete() *cobra.Command {
 			// milestone_main_merge: the milestone PR must land as a merge commit,
 			// never a squash — and dross doesn't drive the merge, so surface the
 			// requirement regardless of repo.squash_merge.
-			Printf("Merge it as a MERGE COMMIT (not squash) to keep per-phase history on %s — do not squash even if repo.squash_merge is set.\n", mainBranch)
+			Printf("Merge it as a MERGE COMMIT (not squash) to keep per-phase history on %s — do not squash even if repo.squash_merge is set.\n", target)
 			Printf("After it merges: `dross milestone complete %s --finalize`\n", version)
 			return nil
 		},
@@ -198,6 +203,42 @@ func milestoneComplete() *cobra.Command {
 	c.Flags().BoolVar(&finalize, "finalize", false,
 		"after the milestone PR merges: ff main from origin and delete milestone/<version> local+remote")
 	return c
+}
+
+// milestonePRBase resolves which branch the milestone's integration PR targets.
+//
+// It is the recorded cut base (c-2) while that parent is still unmerged and
+// still on origin, so a stacked milestone's PR shows its own commits rather
+// than re-listing its parent's. Once the parent has merged — or its branch is
+// gone from origin, where a PR base has to exist — the target is the main
+// branch, never a branch `--finalize` is about to delete.
+//
+// A milestone with no toml, or no recorded base, targets the main branch:
+// that is every milestone shipped before v1.2 and today's behaviour, so
+// back-compat needs no migration (locked absent_base_reads_main).
+func milestonePRBase(root, repoDir, mainBranch, version, msBranch string) (string, error) {
+	m, err := milestone.Load(milestone.FilePath(root, version))
+	if err != nil {
+		return mainBranch, nil
+	}
+	recorded := m.BaseOr(mainBranch)
+	if recorded == msBranch {
+		return "", fmt.Errorf("milestone %s records its own branch (%s) as its base — a PR cannot target itself; fix `base` in %s",
+			version, msBranch, milestone.FilePath(root, version))
+	}
+	if recorded == mainBranch {
+		return mainBranch, nil
+	}
+	merged, _, err := milestoneMergedIntoMain(repoDir, recorded, mainBranch)
+	if err != nil {
+		return "", fmt.Errorf("resolve PR base for %s: %w", version, err)
+	}
+	// A base branch has to exist on the forge. A parent deleted on origin is
+	// not something to target, whatever ancestry says about it.
+	if merged || !gitRefExists(repoDir, "refs/remotes/origin/"+recorded) {
+		return mainBranch, nil
+	}
+	return recorded, nil
 }
 
 // milestoneFinalize is the post-merge counterpart to opening the milestone PR:
