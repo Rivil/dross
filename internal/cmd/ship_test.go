@@ -304,22 +304,28 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 		t.Errorf("PR title should reference phase id, got: %q", openedTitle)
 	}
 
-	// Ship folds the completion record into the branch: state.json now
-	// clears current_phase and records `completed x`, written and
-	// committed BEFORE the push so the provider's squash-merge carries it
-	// to main (c-4). The PR URL is printed, not persisted.
+	// Ship marks the phase shipped and stops there: current_phase stays set
+	// and history records `shipped x`. The completed-state transition belongs
+	// to `dross phase complete`, behind the merge gate. The PR URL is printed,
+	// not persisted.
 	st, _ := state.Load(filepath.Join(dir, ".dross", "state.json"))
-	if st.CurrentPhase != "" {
-		t.Errorf("ship should clear current_phase, got %q", st.CurrentPhase)
+	if st.CurrentPhase != "x" {
+		t.Errorf("ship should leave current_phase set to the shipped phase, got %q", st.CurrentPhase)
 	}
-	foundCompleted := false
+	if st.CurrentPhaseStatus != "shipped" {
+		t.Errorf("ship should set current_phase_status to shipped, got %q", st.CurrentPhaseStatus)
+	}
+	foundShipped := false
 	for _, a := range st.History {
 		if strings.Contains(a.Action, "completed x") {
-			foundCompleted = true
+			t.Errorf("ship must not record `completed x` — that is phase complete's write: %+v", st.History)
+		}
+		if strings.Contains(a.Action, "shipped x") {
+			foundShipped = true
 		}
 	}
-	if !foundCompleted {
-		t.Errorf("state history should record `completed x`; history: %+v", st.History)
+	if !foundShipped {
+		t.Errorf("state history should record `shipped x`; history: %+v", st.History)
 	}
 
 	// Remote should have received phase/x directly (no synthetic
@@ -329,7 +335,7 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 		t.Errorf("expected phase/x on remote, got: %q", remoteRefs)
 	}
 
-	// The completion record is written locally and stays there: state.json is
+	// The shipped record is written locally and stays there: state.json is
 	// gitignored (locked state_tracking), so the pushed ref must carry no copy
 	// of it at all. Re-staging it would put the clobber back.
 	if gitAllowFail(remoteDir, "cat-file", "-e", "phase/x:.dross/state.json") {
@@ -340,13 +346,13 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	if err := json.Unmarshal([]byte(localBytes), &local); err != nil {
 		t.Fatalf("parse local state.json: %v", err)
 	}
-	if local.CurrentPhase != "" {
-		t.Errorf("ship should clear current_phase locally, got %q", local.CurrentPhase)
+	if local.CurrentPhaseStatus != "shipped" {
+		t.Errorf("ship should mark the phase shipped locally, got %q", local.CurrentPhaseStatus)
 	}
 
-	// Ship must return on a clean working tree: both the completion write and
-	// the PR-number record are committed as part of ship, not left
-	// uncommitted. If either commit step is dropped, the tree is dirty here.
+	// Ship must return on a clean working tree: the PR-number record is
+	// committed as part of ship, not left uncommitted. If that commit step is
+	// dropped, the tree is dirty here.
 	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
 		t.Errorf("working tree should be clean after ship, got: %q", st)
 	}
@@ -664,8 +670,10 @@ func TestShipJSONEmitsSingleObjectAndSuppressesNarration(t *testing.T) {
 		}
 	})
 
-	// No human narration leaked onto stdout.
-	for _, line := range []string{"Pushed", "PR opened", "Completion record folded"} {
+	// No human narration leaked onto stdout. The last needle is ship's
+	// post-PR line naming the completion-record owner — it moved with the
+	// write, so the needle moves with it rather than going vacuous.
+	for _, line := range []string{"Pushed", "PR opened", "dross phase complete"} {
 		if strings.Contains(out, line) {
 			t.Errorf("--json must suppress the %q narration line, got:\n%s", line, out)
 		}
@@ -719,12 +727,12 @@ func TestShipAutoJSONComposable(t *testing.T) {
 	}
 }
 
-// TestShipReshipIsIdempotent ships the same phase twice. Because the first
-// ship clears current_phase (folded into the squash), the re-ship must name
-// the phase explicitly — and must not error on the second commit/push. A
-// re-ship after review edits has to re-write the same completed state safely
-// and return on a clean tree, never bail on "nothing to commit".
-func TestShipReshipIsIdempotent(t *testing.T) {
+// TestShipIsReShippable ships the same phase twice. A re-ship after review
+// edits must exit 0, leave the phase reading `shipped`, and append exactly one
+// `shipped <id>` entry — the breadcrumb is history-scan-guarded, so a second
+// run re-asserts the status without doubling the row. It must also return on a
+// clean tree, never bail on "nothing to commit".
+func TestShipIsReShippable(t *testing.T) {
 	dir := shipFixture(t, "https://forge.example/me/p.git")
 
 	remoteDir := t.TempDir()
@@ -751,7 +759,7 @@ func TestShipReshipIsIdempotent(t *testing.T) {
 	}
 	gitCommit(t, dir, "test: point api_base at mock")
 
-	// First ship — resolves the phase from current_phase, then clears it.
+	// First ship — resolves the phase from current_phase and leaves it set.
 	if err := runCmd(t, Ship()); err != nil {
 		t.Fatalf("first ship: %v", err)
 	}
@@ -759,13 +767,30 @@ func TestShipReshipIsIdempotent(t *testing.T) {
 		t.Fatalf("tree dirty after first ship: %q", st)
 	}
 
-	// Second ship — current_phase is now cleared, so name the phase. It must
-	// succeed and leave a clean tree (re-writes the same completed state).
-	if err := runCmd(t, Ship(), "x"); err != nil {
+	// Second ship — current_phase is still set, so no argument is needed. It
+	// must succeed and leave a clean tree (re-writes the same shipped status).
+	if err := runCmd(t, Ship()); err != nil {
 		t.Fatalf("re-ship should be idempotent, got: %v", err)
 	}
 	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
 		t.Errorf("tree should be clean after re-ship, got: %q", st)
+	}
+
+	s, err := state.Load(filepath.Join(dir, ".dross", state.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.CurrentPhaseStatus != "shipped" {
+		t.Errorf("re-ship should leave current_phase_status shipped, got %q", s.CurrentPhaseStatus)
+	}
+	shipped := 0
+	for _, a := range s.History {
+		if strings.Contains(a.Action, "shipped x") {
+			shipped++
+		}
+	}
+	if shipped != 1 {
+		t.Errorf("re-ship should not double the `shipped x` entry, got %d: %+v", shipped, s.History)
 	}
 }
 
@@ -1218,10 +1243,12 @@ func TestShipHealRecordsPartialThenRefuses(t *testing.T) {
 	}
 }
 
-// TestShipKeepsLocalCompletionRecord (c-3): dropping the `git add` must not
-// drop the write. Ship still clears current_phase and appends `completed <id>`
-// to the on-disk history — it just stays machine-local, so no commit carries it.
-func TestShipKeepsLocalCompletionRecord(t *testing.T) {
+// TestShipRecordsShippedNotCompleted (c-2): ship records the intermediate
+// truth and nothing more. A phase is not complete until its PR is merged, and
+// ship runs before that is known — so it marks the phase `shipped`, leaves
+// current_phase set, and writes no `completed <id>` breadcrumb. Restoring
+// either clear fails this. The record stays machine-local, as before.
+func TestShipRecordsShippedNotCompleted(t *testing.T) {
 	dir := shipFixture(t, "https://forge.example/me/p.git")
 	shipMockFlow(t, dir)
 
@@ -1233,17 +1260,23 @@ func TestShipKeepsLocalCompletionRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
+	if s.CurrentPhase != "x" {
+		t.Errorf("ship must leave current_phase set — only a confirmed merge clears it; got %q", s.CurrentPhase)
+	}
+	if s.CurrentPhaseStatus != "shipped" {
+		t.Errorf("ship should set current_phase_status to shipped, got %q", s.CurrentPhaseStatus)
+	}
+	shipped := false
 	for _, a := range s.History {
 		if strings.Contains(a.Action, "completed x") {
-			found = true
+			t.Errorf("ship must not write the completion record — that is phase complete's: %+v", s.History)
+		}
+		if strings.Contains(a.Action, "shipped x") {
+			shipped = true
 		}
 	}
-	if !found {
-		t.Errorf("ship should record the completion locally: %+v", s.History)
-	}
-	if s.CurrentPhase != "" {
-		t.Errorf("ship should clear current_phase, got %q", s.CurrentPhase)
+	if !shipped {
+		t.Errorf("ship should record `shipped x` locally: %+v", s.History)
 	}
 	// …and nothing on HEAD carries it.
 	if gitAllowFail(dir, "cat-file", "-e", "HEAD:.dross/"+state.File) {
@@ -1251,6 +1284,30 @@ func TestShipKeepsLocalCompletionRecord(t *testing.T) {
 	}
 	if st := mustGit(t, dir, "status", "--porcelain"); st != "" {
 		t.Errorf("ship should leave a clean tree, got: %q", st)
+	}
+}
+
+// TestShipNarratesCompleteOwnsRecord (c-3): the post-PR narration must not
+// claim the completion record rides the squash — it doesn't any more. It has
+// to name the command that actually writes it, so the user knows the run isn't
+// finished at ship time.
+func TestShipNarratesCompleteOwnsRecord(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Ship()); err != nil {
+			t.Fatalf("ship: %v", err)
+		}
+	})
+
+	for _, stale := range []string{"Completion record folded", "squash-merge will land it"} {
+		if strings.Contains(out, stale) {
+			t.Errorf("ship still narrates the retired claim %q:\n%s", stale, out)
+		}
+	}
+	if !strings.Contains(out, "dross phase complete") {
+		t.Errorf("ship should name `dross phase complete` as the completion-record writer:\n%s", out)
 	}
 }
 

@@ -98,18 +98,25 @@ func TestHistorySurvivesEveryBranchSwitch(t *testing.T) {
 		ownEntry string
 	}{
 		{
-			// No own entry by construction: `phase complete` never loads or
-			// saves state — it is ff + branch-delete only. The `completed <id>`
-			// record is written by `dross ship`, before completion runs.
+			// `phase complete` is the sole writer of the completion record:
+			// `dross ship` only marks the phase shipped, because a phase is
+			// not complete until its PR is merged. So the run appends
+			// `completed <id>` last, on top of every seeded entry.
 			name: "phase complete",
 			setup: func(t *testing.T) string {
 				dir, _ := completeFixture(t)
 				stubPRMerged(t, true)
 				return dir
 			},
-			run: func(t *testing.T, _ string) error { return runCmd(t, Phase(), "complete") },
+			run:      func(t *testing.T, _ string) error { return runCmd(t, Phase(), "complete") },
+			ownEntry: "completed auth",
 		},
 		{
+			// The recover path appends two: recovery's own `merged auth`, then
+			// the completion record on top — so `completed auth` is last here
+			// too. That `merged auth` survives the completion write (i.e. that
+			// the write re-loads state rather than saving a stale copy) is
+			// pinned separately by TestCompleteRecoverKeepsMergedEntry.
 			name: "phase complete --recover",
 			setup: func(t *testing.T) string {
 				dir, _, _ := divergedCompleteFixture(t)
@@ -117,7 +124,7 @@ func TestHistorySurvivesEveryBranchSwitch(t *testing.T) {
 				return dir
 			},
 			run:      func(t *testing.T, _ string) error { return runCmd(t, Phase(), "complete", "--recover") },
-			ownEntry: "merged auth",
+			ownEntry: "completed auth",
 		},
 		{
 			name: "ship recover",

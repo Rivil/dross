@@ -29,6 +29,21 @@ func Phase() *cobra.Command {
 	return c
 }
 
+// historyHasAction reports whether state history already carries an entry
+// containing action. Both lifecycle breadcrumbs — ship's `shipped <id>` and
+// complete's `completed <id>` — are guarded by it, so re-running either
+// command over the same phase re-asserts the state without appending a second
+// row. History is cumulative and capped at 50 entries; a doubled breadcrumb
+// costs a real one.
+func historyHasAction(s *state.State, action string) bool {
+	for _, a := range s.History {
+		if strings.Contains(a.Action, action) {
+			return true
+		}
+	}
+	return false
+}
+
 // phaseNumber prints the 1-based position of a phase within the current
 // milestone's phases array — the single source of truth for phase ordinals.
 // This is the ordinal slash-command prompts use for the version patch digit,
@@ -275,10 +290,11 @@ destructive reset of the local base branch; read the abort first.`,
 				return err
 			}
 
-			// Resolve the phase id. `dross ship` now folds the completion
-			// record into the squash and clears current_phase, so the
-			// post-ship state can't supply it — fall back to the phase
-			// branch we're sitting on.
+			// Resolve the phase id. `dross ship` leaves current_phase set
+			// (it only marks the phase shipped), so state normally supplies
+			// it — but a phase completed from a fresh clone, or after the
+			// state was cleared by hand, still resolves off the phase branch
+			// we're sitting on.
 			phaseID := ""
 			switch {
 			case len(args) == 1:
@@ -481,6 +497,53 @@ destructive reset of the local base branch; read the abort first.`,
 				// through to the branch teardown below.
 			}
 
+			// Write the completion record: clear current_phase/status and
+			// append one `completed <id>` history entry. This command is its
+			// sole writer — `dross ship` only marks the phase shipped, because
+			// a phase is not complete until its PR is merged and only this run
+			// sits behind that gate.
+			//
+			// Written BEFORE the branch teardown, deliberately: the record
+			// describes the confirmed merge, not the cleanup, so a teardown
+			// that fails (a protected ref, a network drop on the remote
+			// delete) must still leave the merge recorded rather than
+			// discarding a fact that was already true.
+			//
+			// Re-loaded from disk rather than reusing the `s` from the top of
+			// this RunE: that copy predates autoCommitDrossDirt, the checkout,
+			// the fast-forward and runDrossRecovery — whose own Save appends
+			// `merged <id>`. Saving the stale copy over it would truncate live
+			// history, the exact clobber this command exists to avoid.
+			//
+			// No `git add`, no commit: state.json is machine-local and
+			// gitignored, so the record rides no commit anywhere.
+			cs, err := state.Load(filepath.Join(root, state.File))
+			if err != nil {
+				// The live file is gone: switching off a branch that tracked
+				// it — the pre-untrack shape some repos still carry — takes it
+				// with the checkout. Fall back to the copy loaded at the top of
+				// this run. It is the last known-good history, so writing it
+				// back restores the file git removed rather than leaving the
+				// machine with no state at all. The reload still wins whenever
+				// it succeeds: on the --recover path it is the only copy
+				// carrying recovery's `merged <id>`.
+				cs = s
+			}
+			// Only clear when THIS phase is the current one: completing an
+			// older phase must not blank a different phase already in flight.
+			if cs.CurrentPhase == phaseID {
+				cs.CurrentPhase = ""
+				cs.CurrentPhaseStatus = ""
+			}
+			// Idempotent: a re-run over an already-recorded phase appends
+			// nothing, so the breadcrumb count stays at one.
+			if !historyHasAction(cs, "completed "+phaseID) {
+				cs.Touch(fmt.Sprintf("completed %s", phaseID))
+			}
+			if err := cs.Save(filepath.Join(root, state.File)); err != nil {
+				return fmt.Errorf("save completion record: %w", err)
+			}
+
 			// Delete the local phase branch (best-effort: only if it exists).
 			if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+phaseBranch); err == nil {
 				if out, err := gitCombined(repoDir, "branch", "-D", phaseBranch); err != nil {
@@ -503,12 +566,6 @@ destructive reset of the local base branch; read the abort first.`,
 					return fmt.Errorf("git push origin --delete %s: %w\n%s", phaseBranch, err, out)
 				}
 			}
-
-			// No state write here: `dross ship` already folded the cleared
-			// current_phase + "completed <id>" record into the squash, and
-			// the ff above brought it onto local main. Writing (and
-			// committing) it again is exactly the standalone unpushed commit
-			// that used to re-seed main divergence on every completion.
 
 			RecordOutcomeEvent("phase_complete",
 				map[string]int{},
