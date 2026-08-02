@@ -75,6 +75,21 @@
         }
       ]
     },
+    "t-13": {
+      "files": [
+        "cmd/dross/main_test.go"
+      ],
+      "commit": "7bc81a2",
+      "completed_at": "2026-08-02T15:21:11.533504Z",
+      "landmarks": [
+        {
+          "feature": "command-reference parity guards",
+          "symbol": "TestNarratedCommandsResolveAgainstTheTree",
+          "loc": "cmd/dross/main_test.go:215",
+          "what": "resolves every `dross \u003ccmd\u003e` narrated from a Go string literal in internal/cmd against the assembled cobra tree, closing the gap the README/ship.md/hint guards left"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/topology.go",

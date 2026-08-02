@@ -137,4 +137,4 @@ task_seq = 13
   covers = ["c-1"]
   depends_on = ["t-12"]
   test_contract = ["deleting `cmd.Checkout()` from cmd/dross/main.go fails the new guard, naming both the unresolvable command and the file that narrates it — this is the exact mutation that stayed green this run", "the guard asserts it parsed a non-zero number of `dross <cmd>` references from the Go sources, so an empty or mis-rooted walk fails instead of passing vacuously", "a narration naming a subcommand that does not exist under a real parent (e.g. `dross phase nope`) fails too, so the guard is not satisfied by top-level resolution alone", "the ignore-set for placeholder forms is asserted to be non-empty only if used, and every entry in it is a form the guard would otherwise reject — a stale entry must not silently mask a real command"]
-  status = "pending"
+  status = "done"
