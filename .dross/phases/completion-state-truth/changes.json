@@ -1,5 +1,147 @@
 {
   "phase": "completion-state-truth",
   "base": "milestone/v1.2",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/ship_test.go",
+        "internal/cmd/phase_test.go",
+        "internal/cmd/state_history_test.go"
+      ],
+      "commit": "c80994c",
+      "completed_at": "2026-08-02T09:35:58.405054Z",
+      "landmarks": [
+        {
+          "feature": "phase completion record",
+          "symbol": "phaseComplete",
+          "loc": "internal/cmd/phase.go:507",
+          "what": "complete writes the cleared current_phase + completed \u003cid\u003e entry itself behind the merge gate; ship only marks the phase shipped"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/topology.go",
+        "internal/cmd/topology_test.go"
+      ],
+      "commit": "42f064b",
+      "completed_at": "2026-08-02T09:39:48.309207Z",
+      "landmarks": [
+        {
+          "feature": "branch topology reporting",
+          "symbol": "branchTopology",
+          "loc": "internal/cmd/topology.go:46",
+          "what": "reads HEAD/work/main + commits-ahead-of-main with an authoritative work override, plus the shared one-line renderer"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase_checkout.go",
+        "internal/cmd/phase_checkout_test.go",
+        "internal/cmd/phase.go"
+      ],
+      "commit": "dc9bd3d",
+      "completed_at": "2026-08-02T09:42:54.368947Z",
+      "landmarks": [
+        {
+          "feature": "guarded branch switching",
+          "symbol": "phaseCheckout",
+          "loc": "internal/cmd/phase_checkout.go:24",
+          "what": "dross phase checkout \u003cid\u003e switches through guardLiveState and refuses a missing ref instead of creating it"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "assets/prompts/ship.md",
+        "internal/cmd/ship_prompt_test.go",
+        "cmd/dross/main_test.go"
+      ],
+      "commit": "2bcc0e4",
+      "completed_at": "2026-08-02T09:46:56.7861Z",
+      "landmarks": [
+        {
+          "feature": "ship prompt teardown ownership",
+          "symbol": "TestShipPromptNoUnguardedSwitch",
+          "loc": "internal/cmd/ship_prompt_test.go:167",
+          "what": "ship.md merges only; dross phase complete owns every branch deletion and the prompt contains no raw checkout"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "fa0b5b1",
+      "completed_at": "2026-08-02T09:52:28.920768Z",
+      "landmarks": [
+        {
+          "feature": "branch topology reporting",
+          "symbol": "describeTeardown",
+          "loc": "internal/cmd/phase.go:600",
+          "what": "complete states the landing branch, the per-side teardown and the commits-not-yet-on-main clause from the recorded base"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go",
+        "internal/watch/drift.go",
+        "internal/watch/drift_test.go"
+      ],
+      "commit": "0a1f72d",
+      "completed_at": "2026-08-02T10:02:03.099447Z",
+      "landmarks": [
+        {
+          "feature": "shipped-phase status reporting",
+          "symbol": "shippedUnmergedPhase",
+          "loc": "internal/cmd/status.go:492",
+          "what": "status names the open PR and the base it waits on instead of a stale warning, plus a standing branch-topology line on every run"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/completion_state_truth_test.go"
+      ],
+      "commit": "81ab0e9",
+      "completed_at": "2026-08-02T10:07:20.00092Z",
+      "landmarks": [
+        {
+          "feature": "live state clobber regression",
+          "symbol": "TestShipToCompleteKeepsLiveState",
+          "loc": "internal/cmd/completion_state_truth_test.go:100",
+          "what": "ship-to-complete flow leaves the live machine-local state.json whole, with a control proving the raw checkout truncates it"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/telemetry/telemetry.go",
+        "assets/prompts/quick.md",
+        "ARCHITECTURE.md",
+        "README.md",
+        "internal/cmd/squash_claim_guard_test.go",
+        "internal/cmd/state_history_test.go",
+        "internal/cmd/ship_test.go",
+        "internal/cmd/quick_prompt_test.go"
+      ],
+      "commit": "06a85f5",
+      "completed_at": "2026-08-02T10:14:58.259818Z",
+      "landmarks": [
+        {
+          "feature": "phase completion record",
+          "symbol": "TestNoSurfaceClaimsCompletionRidesTheSquash",
+          "loc": "internal/cmd/squash_claim_guard_test.go:69",
+          "what": "every code/CLI/prompt/doc surface describes complete as the record's writer, locked by a whitespace-collapsing grep guard"
+        }
+      ]
+    }
+  }
 }
