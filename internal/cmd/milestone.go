@@ -100,6 +100,15 @@ func milestonePrune() *cobra.Command {
 				}
 			}
 
+			// Checked for every candidate before the first delete, so a blocked
+			// branch stops the whole sweep rather than being discovered halfway
+			// through an irreversible one.
+			for _, b := range stale {
+				if err := guardMilestoneBranchDelete(root, repoDir, b.Name, mainBranch); err != nil {
+					return err
+				}
+			}
+
 			for _, b := range stale {
 				if out, err := gitCombined(repoDir, "branch", "-D", b.Name); err != nil {
 					return fmt.Errorf("delete local %s: %w\n%s", b.Name, err, out)
@@ -161,7 +170,7 @@ func milestoneComplete() *cobra.Command {
 			msBranch := "milestone/" + version
 
 			if finalize {
-				return milestoneFinalize(repoDir, mainBranch, msBranch, version)
+				return milestoneFinalize(root, repoDir, mainBranch, msBranch, version)
 			}
 
 			// Open mode: one PR of the milestone branch into main.
@@ -243,10 +252,14 @@ func milestonePRBase(root, repoDir, mainBranch, version, msBranch string) (strin
 
 // milestoneFinalize is the post-merge counterpart to opening the milestone PR:
 // it fast-forwards local main from origin and deletes milestone/<version> local
-// + remote. It refuses unless origin/milestone/<version> is already an ancestor
-// of origin/<main> (i.e. the PR actually merged), so unmerged integration work
-// is never destroyed.
-func milestoneFinalize(repoDir, mainBranch, msBranch, version string) error {
+// + remote. It refuses unless origin/milestone/<version> has actually merged, so
+// unmerged integration work is never destroyed.
+//
+// "Merged" means merged into the branch this milestone was stacked on — its
+// recorded base — or into the main branch. A guard fixed on origin/<main> would
+// refuse forever for a child merged into its parent but not yet into main,
+// deadlocking the stacking model's second half.
+func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) error {
 	status, err := gitTrim(repoDir, "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("git status: %w", err)
@@ -259,23 +272,52 @@ func milestoneFinalize(repoDir, mainBranch, msBranch, version string) error {
 		return fmt.Errorf("git fetch: %w\n%s", err, out)
 	}
 
-	// Merge guard: refuse until origin/<main> actually contains the milestone.
-	if err := gitNoOut(repoDir, "merge-base", "--is-ancestor", "origin/"+msBranch, "origin/"+mainBranch); err != nil {
-		return fmt.Errorf("origin/%s is not merged into origin/%s yet — has the milestone PR merged? Refusing so the milestone branch isn't lost",
-			msBranch, mainBranch)
+	// The branch this milestone was stacked on, when it is still a live target
+	// on origin. Everything else resolves to the main branch.
+	target := mainBranch
+	if m, err := milestone.Load(milestone.FilePath(root, version)); err == nil {
+		if b := m.BaseOr(mainBranch); b != mainBranch && b != msBranch && gitRefExists(repoDir, "refs/remotes/origin/"+b) {
+			target = b
+		}
 	}
 
+	// Merge guard: refuse until origin actually contains the milestone —
+	// on main, or on the parent it was stacked on.
+	mergedIntoMain := gitNoOut(repoDir, "merge-base", "--is-ancestor", "origin/"+msBranch, "origin/"+mainBranch) == nil
+	mergedIntoTarget := mergedIntoMain
+	if !mergedIntoMain && target != mainBranch {
+		mergedIntoTarget = gitNoOut(repoDir, "merge-base", "--is-ancestor", "origin/"+msBranch, "origin/"+target) == nil
+	}
+	if !mergedIntoTarget {
+		return fmt.Errorf("origin/%s is not merged into origin/%s yet — has the milestone PR merged? Refusing so the milestone branch isn't lost",
+			msBranch, target)
+	}
+
+	// A stacked child that still depends on this branch outranks the cleanup:
+	// deleting out from under its open PR is irreversible from its side.
+	if err := guardMilestoneBranchDelete(root, repoDir, msBranch, mainBranch); err != nil {
+		return err
+	}
+
+	// Where HEAD lands. Only the merge-into-main case advances local main; a
+	// child merged into its parent leaves main exactly where it was.
+	landing := mainBranch
+	if !mergedIntoMain && gitRefExists(repoDir, "refs/heads/"+target) {
+		landing = target
+	}
 	cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 	}
-	if cur != mainBranch {
-		if err := checkoutBranch(repoDir, mainBranch); err != nil {
+	if cur != landing {
+		if err := checkoutBranch(repoDir, landing); err != nil {
 			return err
 		}
 	}
-	if out, err := guardedFF(repoDir, "origin/"+mainBranch); err != nil {
-		return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged:\n%s", mainBranch, mainBranch, out)
+	if mergedIntoMain {
+		if out, err := guardedFF(repoDir, "origin/"+mainBranch); err != nil {
+			return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged:\n%s", mainBranch, mainBranch, out)
+		}
 	}
 
 	// Delete the local milestone branch (only if it exists).
@@ -295,7 +337,13 @@ func milestoneFinalize(repoDir, mainBranch, msBranch, version string) error {
 		}
 	}
 
-	Printf("milestone %s finalized — %s is at origin, %s deleted\n", version, mainBranch, msBranch)
+	if mergedIntoMain {
+		Printf("milestone %s finalized — %s is at origin, %s deleted\n", version, mainBranch, msBranch)
+	} else {
+		// Claiming main advanced when it did not is exactly the false
+		// completion state this milestone exists to stop.
+		Printf("milestone %s finalized — merged into %s (%s not advanced), %s deleted\n", version, target, mainBranch, msBranch)
+	}
 	return nil
 }
 
