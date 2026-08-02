@@ -11,7 +11,7 @@ Run a phase plan to completion. **Pair-mode by default**: propose, pause, steer,
 3. Read `.dross/phases/<id>/spec.toml` and `plan.toml`. If `plan.toml` is missing, route the user to `/dross-plan` and stop.
 4. Read `.dross/project.toml` — specifically `runtime.*` (test/typecheck/lint commands), `paths.*`, `repo.commit_convention`, `repo.git_main_branch`, `stack.locked`.
 5. **Verify current branch is `phase/<id>`** with `git symbolic-ref --short HEAD`. Phase work must never land on the main branch — that's the divergence pattern the phase-branch model is designed to prevent. If on a wrong branch:
-   - If `phase/<id>` exists locally: `git checkout phase/<id>` and proceed.
+   - Switch with `dross phase checkout <id>` and proceed. It goes through dross's guarded checkout, and refuses rather than creating the branch if it doesn't exist locally.
    - Otherwise: stop. The phase wasn't created with `dross phase create` (which auto-checks out). Have the user run `dross phase create` or migrate existing work to a branch before executing.
 6. Check git state with `git status --porcelain`. If working tree is dirty:
    - Surface the diff to the user

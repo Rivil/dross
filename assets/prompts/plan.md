@@ -10,7 +10,7 @@ Decompose a phase's `spec.toml` into a task graph with waves, dependencies, and 
 2. Parse flags from `$ARGUMENTS`: `--panel` switches decomposition to panel mode (see §2P); `--no-review` skips the automatic plan review in §6. Strip both before resolving the phase id.
 3. Resolve target phase: remaining `$ARGUMENTS` if provided, else `state.json`'s `current_phase`. If unset, list phases via `dross phase list` and ask.
 4. Read `.dross/phases/<id>/spec.toml`. If missing, route the user to `/dross-spec` first and stop.
-5. **Verify current branch is `phase/<id>`** (`git symbolic-ref --short HEAD`). On resume, switch with `git checkout phase/<id>` if it exists locally. If the phase branch is missing, stop — phase work belongs off main and `dross phase create` would have set this up.
+5. **Verify current branch is `phase/<id>`** (`git symbolic-ref --short HEAD`). On resume, switch with `dross phase checkout <id>` — the guarded checkout, which refuses rather than creating a branch that isn't there. If the phase branch is missing, stop — phase work belongs off main and `dross phase create` would have set this up.
 6. Read `.dross/phases/<id>/plan.toml` if present — **resume mode**. Surface existing tasks, ask whether to extend or rewrite.
 
 ## 1. Read context (don't summarise back unless asked)

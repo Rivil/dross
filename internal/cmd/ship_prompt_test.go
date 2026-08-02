@@ -3,22 +3,30 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
 
-// shipPromptContent loads assets/prompts/ship.md and normalises it —
+// promptContent loads one prompt out of assets/prompts/ and normalises it —
 // lowercased, with markdown emphasis and backticks stripped — so assertions
 // test the presence of a rule, not its exact formatting.
-func shipPromptContent(t *testing.T) string {
+func promptContent(t *testing.T, name string) string {
 	t.Helper()
 	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "ship.md"))
+	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", name))
 	if err != nil {
-		t.Fatalf("read ship.md: %v", err)
+		t.Fatalf("read %s: %v", name, err)
 	}
 	s := strings.ToLower(string(b))
 	return strings.NewReplacer("`", "", "*", "", "_", "").Replace(s)
+}
+
+// shipPromptContent is promptContent pinned to ship.md, the prompt most of this
+// file's assertions are about.
+func shipPromptContent(t *testing.T) string {
+	t.Helper()
+	return promptContent(t, "ship.md")
 }
 
 // TestShipPromptRecoverySection (c-5) gates the recovery cookbook: all three
@@ -176,6 +184,57 @@ func TestShipPromptNoUnguardedSwitch(t *testing.T) {
 	} {
 		if strings.Contains(content, forbidden) {
 			t.Errorf("ship.md must not contain %q — every branch switch and branch deletion goes through dross", forbidden)
+		}
+	}
+}
+
+// rawPhaseSwitch matches an instruction to switch onto a phase branch with git
+// rather than `dross phase checkout`. Deliberately narrower than "mentions git
+// checkout": `git checkout -- <files>` (quick.md's abort path) restores files
+// and switches nothing, and pause.md's hard rules *forbid* checkout by naming
+// it. What is banned is the branch-switching form aimed at phase/<id> — the one
+// that replays a tracked .dross/state.json over the live machine-local copy.
+// `git switch` has no path-restore form at all, so any use of it is a switch.
+var rawPhaseSwitch = regexp.MustCompile(`git\s+checkout[^\n]*phase/|git\s+switch\b`)
+
+// TestNoPromptPerformsRawBranchSwitch (c-1) generalises the ship.md guard to
+// every prompt. ship.md was fixed first and covered by
+// TestShipPromptNoUnguardedSwitch, while execute.md, plan.md, spec.md and
+// resume.md kept telling the user to type `git checkout phase/<id>` — the same
+// hole, four more doors, none of them scanned. A guard bound to one file only
+// proves that file is clean.
+func TestNoPromptPerformsRawBranchSwitch(t *testing.T) {
+	root := repoRootFromTest(t)
+	dir := filepath.Join(root, "assets", "prompts")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+
+	scanned := 0
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		scanned++
+		content := promptContent(t, e.Name())
+		for i, line := range strings.Split(content, "\n") {
+			if rawPhaseSwitch.MatchString(line) {
+				t.Errorf("%s:%d instructs a raw branch switch — use `dross phase checkout <id>`, which guards the live state.json:\n  %s",
+					e.Name(), i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+	// A mis-rooted walk finds nothing and would otherwise report success.
+	if scanned == 0 {
+		t.Fatalf("scanned no prompts under %s — the guard proved nothing", dir)
+	}
+
+	// The negative alone is satisfied by deleting the instruction. Each prompt
+	// that needs to get the user onto the phase branch must still say how.
+	for _, name := range []string{"execute.md", "plan.md", "spec.md", "resume.md"} {
+		if !strings.Contains(promptContent(t, name), "dross phase checkout") {
+			t.Errorf("%s must name `dross phase checkout` as the way onto the phase branch", name)
 		}
 	}
 }
