@@ -1,0 +1,388 @@
+[verify]
+  phase = "completion-state-truth"
+  generated_at = 2026-08-02T10:20:33.996281Z
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-08-02T10:38:10.195768Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9571269487750557
+  mutants_killed = 1719
+  mutants_survived = 77
+  mutants_not_covered = 77
+  criteria_total = 6
+  criteria_covered = 5
+  criteria_uncovered = 1
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/ship_prompt_test.go:TestShipPromptNoUnguardedSwitch", "internal/cmd/ship_prompt_test.go:TestShipPromptNamesCompleteAsTeardownOwner", "internal/cmd/phase_checkout_test.go:TestPhaseCheckoutRefusesClobber", "internal/cmd/phase_checkout_test.go:TestPhaseCheckoutSwitchesOnTheOrdinaryPath", "cmd/dross/main_test.go:TestShipPromptCommandsExist"]
+  notes = "ship.md is scanned for --delete-branch, the GitLab/Forgejo remove-source-branch fields and raw git checkout/switch; the guarded replacement verb is proven to refuse a clobbering switch and to switch on the ordinary path. Provider delete flags are gone from the whole tree (grep-confirmed outside tests)."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestPhaseCompleteWritesCompletionRecord", "internal/cmd/phase_test.go:TestPhaseCompleteIsIdempotent", "internal/cmd/phase_test.go:TestCompleteOtherPhaseKeepsCurrent", "internal/cmd/completion_state_truth_test.go:TestShipToCompleteKeepsLiveState"]
+  notes = "The write test pre-seeds no record, so deleting complete's write leaves zero entries and fails; the idempotence test asserts the breadcrumb count stays at exactly one over a re-run; the ship-side half asserts ship must NOT write it and leaves x/shipped."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/squash_claim_guard_test.go:TestNoSurfaceClaimsCompletionRidesTheSquash", "internal/cmd/squash_claim_guard_test.go:TestCompleteHelpNamesRecordOwner", "internal/cmd/squash_claim_guard_test.go:TestQuickPromptHandlesShippedWindow", "internal/cmd/ship_test.go:TestShipNarratesCompleteOwnsRecord"]
+  notes = "Whitespace-collapsed scan of an explicit file list (internal/cmd, internal/watch, prompts, changes.go, telemetry.go, ARCHITECTURE.md, README.md) over an 11-phrase family, plus a positive assertion that the help text names the owner and the location — so the surface cannot go silent instead of lying."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/completion_state_truth_test.go:TestShipToCompleteKeepsLiveState", "internal/cmd/completion_state_truth_test.go:TestRawCheckoutStillClobbersLiveState"]
+  notes = "Full ship -> simulated squash-merge on the bare origin -> complete, against a live state.json seeded with a long history at a distinct version, asserting entry count, first action and version all survive. The control proves the raw checkout DOES truncate that fixture, so the survival assertions are not vacuous, and that dross's guarded checkout refuses it."
+
+[[criterion]]
+  id = "c-5"
+  status = "weak"
+  tests = ["internal/cmd/phase_test.go:TestPhaseCompletePrintsTopologyStatement", "internal/cmd/phase_test.go:TestPhaseCompleteNamesRecordedBaseNotInferred", "internal/cmd/topology_test.go:TestBranchTopologyCountsAheadOfMain", "internal/cmd/topology_test.go:TestBranchTopologyWorkOverrideWins", "internal/cmd/topology_test.go:TestRenderTopologyLine", "internal/cmd/status_test.go:TestStatusTopologyLineAlways"]
+  notes = "Coverage is strong: each clause of the completion statement is asserted separately, the recorded base beats an inferable milestone branch, the not-yet-on-main clause is pinned to AheadOfMain>0 in six render cases, and the status line is proven unconditional (mid-phase, between phases, no origin). Downgraded to weak by the mutation cross-check: two ARITHMETIC_BASE mutants survive at phase.go:625, inside describeTeardown -- this criterion's own landmark symbol. Three of its four teardown phrasings are asserted; the remote-deleted/local-already-gone branch is never executed, so that rendering could be arbitrarily wrong and no test would fail."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/status_test.go:TestStatusReportsShippedNotStale", "internal/cmd/status_test.go:TestStatusShippedFromPRRecordAlone", "internal/cmd/status_test.go:TestStatusNoShippedWithoutEitherSignal", "internal/cmd/status_test.go:TestStatusSilentAfterCompletion", "internal/cmd/status_test.go:TestStatusNextStepAfterShip", "internal/watch/drift_test.go:TestDriftShippedPhaseNotUnshipped"]
+  notes = "Positive (shipped: names branch, PR #42 and the base it waits on; phase line reads shipped) plus four false-positive controls (merged, squash-merged, on main, neither signal) and the post-completion silence case. The PR-record-alone case defeats Go's short-circuit so the tracked half is really executed. Drift carries the same rule with two controls."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-5 weak: phase.go:625 (describeTeardown, case remote) is never executed by any test -- two ARITHMETIC_BASE mutants survive there. The remote-deleted/local-already-gone teardown phrasing is unasserted; the other three branches are pinned in TestPhaseCompletePrintsTopologyStatement."
+
+[[finding]]
+  severity = "FLAG"
+  text = "ship.go:170 still narrates `git checkout phase/<id>` in its must-be-on-the-phase-branch refusal -- the raw form this phase replaced with `dross phase checkout` in ship.md. TestShipPromptNoUnguardedSwitch greps the prompt only, so no test covers CLI narration pointing around the guard."
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 77 surviving mutants are NOT-COVERED (never executed), not survived-despite-coverage: efficacy over executed mutants is 1.00. Only phase.go:625 falls inside code this phase added; every other survivor (status.go 442/444/472/474, phase.go 307/309/735/737, ship.go 239/513-517, telemetry.go:46 and the rest) sits outside the phase's diff hunks and is pre-existing. topology.go and phase_checkout.go -- both new files -- have zero survivors."
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: issue.go:156 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:307 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:309 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:625 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:625 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:735 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:737 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:27 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: state.go:266 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:442 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:442 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:444 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:444 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:444 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:472 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:474 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:32 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:31 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:30 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:29 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: root.go:61 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: install.go:65 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:239 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:513 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:513 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:515 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:515 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:517 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:23 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:181 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:184 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:96 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:52 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:55 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:58 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:60 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: basebranch.go:104 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:105 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:109 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:114 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:119 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: rule.go:143 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:90 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:90 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:95 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:95 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:161 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:243 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:246 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:246 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:351 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hooks.go:100 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: project.go:81 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: project.go:83 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: deferred.go:138 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: telemetry.go:46 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: telemetry.go:46 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped ARCHITECTURE.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/quick.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/ship.md: no mutation adapter for .md"
