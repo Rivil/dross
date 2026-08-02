@@ -750,11 +750,12 @@ func scaffoldPhaseWithSpecAndPlan(t *testing.T, phaseID, planTOML string) {
 	mustWrite(t, ".dross/phases/"+phaseID+"/plan.toml", planTOML)
 }
 
-// staleBranchFixture builds a shipped-but-unmerged phase branch: origin/main
-// is a baseline with no completion record, while local HEAD sits on phase/x
-// whose branch-local state already carries `completed x` (the record `dross
-// ship` folds in pre-merge). Leaves the working copy on phase/x.
-func staleBranchFixture(t *testing.T) string {
+// shippedBranchFixture builds the shipped-but-unmerged window: origin/main is a
+// baseline, local HEAD sits on phase/x carrying real work plus the PR record
+// `dross ship` writes, and machine-local state reads current_phase=x /
+// current_phase_status=shipped — exactly what ship leaves behind now that it no
+// longer claims completion. Leaves the working copy on phase/x.
+func shippedBranchFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	remoteDir := t.TempDir()
@@ -770,16 +771,14 @@ func staleBranchFixture(t *testing.T) string {
 	}
 
 	// Baseline on main, pushed to origin. The phase branch's work is the thing
-	// that must be absent from origin/<main> — the check is a local ref
-	// comparison now, not a read of a state.json that no commit carries.
+	// that must be absent from origin/<base> — the check is a local ref
+	// comparison, not a read of a state.json that no commit carries.
 	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
 	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
 	mustGit(t, dir, "fetch", "-q", "origin")
 
-	// Onto the phase branch: one commit of real work, the PR record `dross
-	// ship` writes, and the `completed x` fold into machine-local state.
 	mustGit(t, dir, "checkout", "-q", "-b", "phase/x")
 	mustWrite(t, filepath.Join(dir, "src/x.ts"), "export const x = 1\n")
 	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
@@ -789,60 +788,51 @@ func staleBranchFixture(t *testing.T) string {
 
 	root := filepath.Join(dir, ".dross")
 	st, _ := state.Load(filepath.Join(root, state.File))
-	st.CurrentPhase = ""
-	st.Touch("completed x")
+	st.CurrentPhase = "x"
+	st.CurrentPhaseStatus = "shipped"
+	st.Touch("shipped x")
 	if err := st.Save(filepath.Join(root, state.File)); err != nil {
 		t.Fatal(err)
 	}
 	return dir
 }
 
-// TestStatusSurfacesStaleCompletedState: on phase/x with `completed x` in
-// branch-local state but origin/main lacking it, status must warn (and not
-// present the phase as done).
-func TestStatusSurfacesStaleCompletedState(t *testing.T) {
-	staleBranchFixture(t)
+// TestStatusReportsShippedNotStale (c-6): a shipped-but-unmerged phase is a
+// correct, deliberate state now — ship leaves current_phase set and only a
+// confirmed merge clears it — so status names the open PR instead of warning
+// that the state is stale. The `stale:` line's completed-breadcrumb trigger is
+// unreachable once complete is the sole writer of that record; restoring it
+// would fire the old warning here.
+func TestStatusReportsShippedNotStale(t *testing.T) {
+	shippedBranchFixture(t)
 
 	out := captureStdout(t, func() { runCmd(t, Status()) })
 
-	if !strings.Contains(out, "stale:") {
-		t.Errorf("expected stale warning on shipped-but-unmerged phase branch:\n%s", out)
+	if !strings.Contains(out, "shipped:") {
+		t.Errorf("expected a shipped: line on a shipped-but-unmerged phase branch:\n%s", out)
 	}
 	if !strings.Contains(out, "phase/x") {
-		t.Errorf("stale warning should name the branch:\n%s", out)
+		t.Errorf("the shipped line should name the branch:\n%s", out)
 	}
-	if !strings.Contains(out, "reconcile") {
-		t.Errorf("stale warning should carry a reconcile pointer:\n%s", out)
+	if !strings.Contains(out, "#42") {
+		t.Errorf("the shipped line should name the open PR:\n%s", out)
 	}
-}
+	if !strings.Contains(out, "origin/main") {
+		t.Errorf("the shipped line should name the base it waits on:\n%s", out)
+	}
+	if strings.Contains(out, "stale:") {
+		t.Errorf("a shipped phase is not stale:\n%s", out)
+	}
+	// The phase block itself reads shipped, not done.
+	if !strings.Contains(out, "phase:     x (shipped)") {
+		t.Errorf("the phase line should carry the shipped status:\n%s", out)
+	}
 
-// TestStatusNoStaleOnMain (false-positive control): the warning is absent on
-// main (not a phase branch), when the branch is plainly merged, and — the case
-// ancestry alone cannot see — when it was SQUASH-merged onto origin/<main>. A
-// check that only asks "is the branch an ancestor" warns on every squash-merged
-// phase, which is every phase this repo ships.
-func TestStatusNoStaleOnMain(t *testing.T) {
-	t.Run("on main", func(t *testing.T) {
-		dir := staleBranchFixture(t)
-		mustGit(t, dir, "checkout", "-q", "main")
-		out := captureStdout(t, func() { runCmd(t, Status()) })
-		if strings.Contains(out, "stale:") {
-			t.Errorf("no stale warning expected on main:\n%s", out)
-		}
-	})
-
-	t.Run("branch merged onto origin", func(t *testing.T) {
-		dir := staleBranchFixture(t)
-		mustGit(t, dir, "push", "-q", "origin", "phase/x:main")
-		mustGit(t, dir, "fetch", "-q", "origin")
-		out := captureStdout(t, func() { runCmd(t, Status()) })
-		if strings.Contains(out, "stale:") {
-			t.Errorf("no stale warning when origin/main carries the branch:\n%s", out)
-		}
-	})
-
-	t.Run("branch squash-merged onto origin", func(t *testing.T) {
-		dir := staleBranchFixture(t)
+	t.Run("merged on origin, complete not yet run", func(t *testing.T) {
+		// The post-merge/pre-complete window this phase deliberately makes
+		// reachable and long-lived. Dropping the merged-check would print a
+		// shipped: line saying a PR that already landed is still waiting.
+		dir := shippedBranchFixture(t)
 		mustGit(t, dir, "checkout", "-q", "main")
 		mustGit(t, dir, "merge", "-q", "--squash", "phase/x")
 		mustGit(t, dir, "commit", "-q", "-m", "feat(squash): x")
@@ -851,73 +841,80 @@ func TestStatusNoStaleOnMain(t *testing.T) {
 		mustGit(t, dir, "checkout", "-q", "phase/x")
 
 		out := captureStdout(t, func() { runCmd(t, Status()) })
-		if strings.Contains(out, "stale:") {
-			t.Errorf("a squash-merged branch is merged, not stale:\n%s", out)
+		if strings.Contains(out, "shipped:") {
+			t.Errorf("a squash-merged PR has landed — status must not say it is still waiting:\n%s", out)
+		}
+	})
+
+	t.Run("plainly merged onto origin", func(t *testing.T) {
+		dir := shippedBranchFixture(t)
+		mustGit(t, dir, "push", "-q", "origin", "phase/x:main")
+		mustGit(t, dir, "fetch", "-q", "origin")
+		out := captureStdout(t, func() { runCmd(t, Status()) })
+		if strings.Contains(out, "shipped:") {
+			t.Errorf("no waiting-on-merge line when origin/main carries the branch:\n%s", out)
+		}
+	})
+
+	t.Run("on main", func(t *testing.T) {
+		dir := shippedBranchFixture(t)
+		mustGit(t, dir, "checkout", "-q", "main")
+		out := captureStdout(t, func() { runCmd(t, Status()) })
+		if strings.Contains(out, "shipped:") {
+			t.Errorf("the line is scoped to a phase branch, not main:\n%s", out)
 		}
 	})
 }
 
-// stripCompletedHistory removes the `completed <id>` record from machine-local
-// state, leaving changes.json's PR number as the only shipped signal. Asserts
-// the removal took, so a fixture change that renames the action can't quietly
-// turn the tests below back into the both-signals case they exist to escape.
-func stripCompletedHistory(t *testing.T, root, phaseID string) {
+// clearShippedStatus drops the shipped status from machine-local state, leaving
+// changes.json's PR number as the only signal. Asserts the removal took, so a
+// fixture change can't quietly turn the test below back into the both-signals
+// case it exists to escape.
+func clearShippedStatus(t *testing.T, root string) {
 	t.Helper()
 	path := filepath.Join(root, state.File)
 	st, err := state.Load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var kept []state.Activity
-	for _, a := range st.History {
-		if !strings.Contains(a.Action, "completed "+phaseID) {
-			kept = append(kept, a)
-		}
-	}
-	st.History = kept
+	st.CurrentPhaseStatus = ""
 	if err := st.Save(path); err != nil {
 		t.Fatal(err)
 	}
-	if stateRecordsCompleted(st, phaseID) {
-		t.Fatal("precondition: the completion record should be gone from history")
+	if st.CurrentPhaseStatus == "shipped" {
+		t.Fatal("precondition: the shipped status should be gone")
 	}
 }
 
-// TestStatusStaleFromPRRecordAlone: changes.json's PR number is the TRACKED
-// half of the shipped signal — it rides on the phase branch, where the
-// machine-local state.json breadcrumb no longer can. Any machine that did not
-// run the ship itself (a fresh clone, a second workstation) has exactly this
-// shape: a PR record and no history.
-//
-// staleBranchFixture seeds both signals, which lets Go short-circuit the
-// `!stateRecordsCompleted(...) && !phaseRecordsPR(...)` guard on its first term
-// and leave phaseRecordsPR unexecuted — so the post-untrack path went untested.
-// Dropping the history half is what forces it to answer.
-func TestStatusStaleFromPRRecordAlone(t *testing.T) {
-	dir := staleBranchFixture(t)
-	stripCompletedHistory(t, filepath.Join(dir, ".dross"), "x")
+// TestStatusShippedFromPRRecordAlone: changes.json's PR number is the TRACKED
+// half of the signal — it rides on the phase branch, where the machine-local
+// status field cannot. Any machine that did not run the ship itself (a fresh
+// clone, a second workstation) has exactly this shape: a PR record and no
+// status. Seeding both lets Go short-circuit the guard's first term and leave
+// the record path unexecuted, so dropping the status half is what forces it to
+// answer.
+func TestStatusShippedFromPRRecordAlone(t *testing.T) {
+	dir := shippedBranchFixture(t)
+	clearShippedStatus(t, filepath.Join(dir, ".dross"))
 
 	out := captureStdout(t, func() { runCmd(t, Status()) })
 
-	if !strings.Contains(out, "stale:") {
-		t.Errorf("changes.json pr=42 alone must raise the warning:\n%s", out)
+	if !strings.Contains(out, "shipped:") {
+		t.Errorf("changes.json pr=42 alone must raise the line:\n%s", out)
 	}
-	if !strings.Contains(out, "phase/x") {
-		t.Errorf("stale warning should name the branch:\n%s", out)
-	}
-	if !strings.Contains(out, "reconcile") {
-		t.Errorf("stale warning should carry a reconcile pointer:\n%s", out)
+	if !strings.Contains(out, "#42") {
+		t.Errorf("the shipped line should name the open PR:\n%s", out)
 	}
 }
 
-// TestStatusNoStaleWithoutEitherSignal (false-positive control): with neither
-// the history entry nor a PR number the branch was never shipped — it is
+// TestStatusNoShippedWithoutEitherSignal (false-positive control): with neither
+// the shipped status nor a PR number the branch was never shipped — it is
 // ordinary mid-phase work — so status must stay silent. Without this the test
 // above would pass just as well for a fallback that returned true regardless of
 // what changes.json holds.
-func TestStatusNoStaleWithoutEitherSignal(t *testing.T) {
-	dir := staleBranchFixture(t)
-	stripCompletedHistory(t, filepath.Join(dir, ".dross"), "x")
+func TestStatusNoShippedWithoutEitherSignal(t *testing.T) {
+	dir := shippedBranchFixture(t)
+	clearShippedStatus(t, filepath.Join(dir, ".dross"))
 	// A changes.json with no PR number is the mid-work shape `dross execute`
 	// writes; `dross ship` is what folds the number in.
 	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
@@ -925,28 +922,163 @@ func TestStatusNoStaleWithoutEitherSignal(t *testing.T) {
 
 	out := captureStdout(t, func() { runCmd(t, Status()) })
 
-	if strings.Contains(out, "stale:") {
-		t.Errorf("an unshipped phase branch must not warn:\n%s", out)
+	if strings.Contains(out, "shipped:") {
+		t.Errorf("an unshipped phase branch must not raise the line:\n%s", out)
 	}
 }
 
-// TestStatusStaleCheckStaysOffline: `dross status` answers from local refs. With
-// no origin configured at all it must stay silent rather than block on the
-// network or print a warning it cannot justify.
-func TestStatusStaleCheckStaysOffline(t *testing.T) {
-	dir := staleBranchFixture(t)
-	mustGit(t, dir, "remote", "remove", "origin")
-	mustGit(t, dir, "update-ref", "-d", "refs/remotes/origin/main")
-	t.Setenv("GITHUB_TOKEN", "")
-
-	var err error
-	out := captureStdout(t, func() { err = runCmd(t, Status()) })
+// TestStatusSilentAfterCompletion (c-6): once complete has run — current_phase
+// cleared, `completed <id>` in history — status says nothing about shipping or
+// staleness. The old warning keyed on that very breadcrumb, so keeping it fires
+// here on a phase that is finished.
+func TestStatusSilentAfterCompletion(t *testing.T) {
+	dir := shippedBranchFixture(t)
+	path := filepath.Join(dir, ".dross", state.File)
+	st, err := state.Load(path)
 	if err != nil {
-		t.Fatalf("status with no origin should still succeed: %v", err)
+		t.Fatal(err)
+	}
+	st.CurrentPhase = ""
+	st.CurrentPhaseStatus = ""
+	st.Touch("completed x")
+	if err := st.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+
+	if strings.Contains(out, "shipped:") {
+		t.Errorf("a completed phase is not waiting on a merge:\n%s", out)
 	}
 	if strings.Contains(out, "stale:") {
-		t.Errorf("with no origin there is no base to compare against — stay silent:\n%s", out)
+		t.Errorf("a completed phase is not stale:\n%s", out)
 	}
+}
+
+// TestStatusNextStepAfterShip (c-6): with current_phase left set after ship, the
+// verdict-pass + recorded-changes branch of suggestNext advises `/dross-ship` on
+// a phase whose PR is already open — printed directly under the shipped: line
+// naming it. The shipped status has to route past that branch.
+func TestStatusNextStepAfterShip(t *testing.T) {
+	dir := shippedBranchFixture(t)
+	mustRunSet(t, "project.name", "x")
+	mustRunSet(t, "runtime.mode", "native")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.1"); err != nil {
+		t.Fatal(err)
+	}
+	// The exact shape suggestNext's verdict-pass branch reads: spec + plan with
+	// nothing runnable, a pass verdict, and recorded changes.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/spec.toml"), `[phase]
+id = "x"
+title = "x"
+[[criteria]]
+id = "c-1"
+text = "x"
+`)
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/plan.toml"), `[phase]
+id = "x"
+[[task]]
+id = "t-1"
+wave = 1
+title = "done"
+status = "done"
+`)
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/verify.toml"), `[verify]
+verdict = "pass"
+`)
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
+		`{"phase":"x","pr":42,"base":"main","tasks":{"t-1":{"files":["src/x.ts"]}}}`)
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+
+	if strings.Contains(out, "/dross-ship") {
+		t.Errorf("must not advise re-shipping a phase whose PR is already open:\n%s", out)
+	}
+	if !strings.Contains(out, "dross phase complete") {
+		t.Errorf("the next step is the merge, then complete:\n%s", out)
+	}
+}
+
+// TestStatusTopologyLineAlways (c-5): the branch line is a STANDING answer, not
+// a completion-time message that scrolls away. The doubt it settles — is this
+// milestone branch correct-by-design or stuck? — is felt at any point in a
+// session, so the line is unconditional: mid-phase, between phases, and in a
+// repo with no origin at all.
+func TestStatusTopologyLineAlways(t *testing.T) {
+	t.Run("on a phase branch mid-milestone", func(t *testing.T) {
+		dir := shippedBranchFixture(t)
+		if err := runCmd(t, State(), "set", "current_milestone", "v1.2"); err != nil {
+			t.Fatal(err)
+		}
+		// A milestone branch two commits ahead of main.
+		mustGit(t, dir, "branch", "milestone/v1.2", "main")
+		mustGit(t, dir, "checkout", "-q", "milestone/v1.2")
+		for _, n := range []string{"a", "b"} {
+			mustWrite(t, filepath.Join(dir, "ms-"+n+".txt"), n+"\n")
+			mustGit(t, dir, "add", ".")
+			mustGit(t, dir, "commit", "-q", "-m", "feat: milestone work "+n)
+		}
+		mustGit(t, dir, "checkout", "-q", "phase/x")
+
+		out := captureStdout(t, func() { runCmd(t, Status()) })
+		if !strings.Contains(out, "branch:") {
+			t.Fatalf("expected the standing branch line:\n%s", out)
+		}
+		if !strings.Contains(out, "milestone/v1.2") {
+			t.Errorf("the branch line should name the work branch:\n%s", out)
+		}
+		if !strings.Contains(out, "2 commits on milestone/v1.2, not yet on main") {
+			t.Errorf("the branch line should carry the commit count and the not-yet-on-main clause:\n%s", out)
+		}
+	})
+
+	t.Run("between phases on the milestone branch", func(t *testing.T) {
+		dir := shippedBranchFixture(t)
+		if err := runCmd(t, State(), "set", "current_milestone", "v1.2"); err != nil {
+			t.Fatal(err)
+		}
+		if err := runCmd(t, State(), "set", "current_phase", ""); err != nil {
+			t.Fatal(err)
+		}
+		mustGit(t, dir, "branch", "milestone/v1.2", "main")
+		mustGit(t, dir, "checkout", "-q", "milestone/v1.2")
+		mustWrite(t, filepath.Join(dir, "ms.txt"), "x\n")
+		mustGit(t, dir, "add", ".")
+		mustGit(t, dir, "commit", "-q", "-m", "feat: milestone work")
+
+		var err error
+		out := captureStdout(t, func() { err = runCmd(t, Status()) })
+		if err != nil {
+			t.Fatalf("status between phases should succeed: %v", err)
+		}
+		// Gating the line behind "only when a phase is active" fails here.
+		if !strings.Contains(out, "branch:") {
+			t.Errorf("the branch line must print between phases too:\n%s", out)
+		}
+		if !strings.Contains(out, "milestone/v1.2") {
+			t.Errorf("the branch line should name the milestone branch:\n%s", out)
+		}
+	})
+
+	t.Run("no origin", func(t *testing.T) {
+		dir := shippedBranchFixture(t)
+		mustGit(t, dir, "remote", "remove", "origin")
+		mustGit(t, dir, "update-ref", "-d", "refs/remotes/origin/main")
+		t.Setenv("GITHUB_TOKEN", "")
+
+		var err error
+		out := captureStdout(t, func() { err = runCmd(t, Status()) })
+		if err != nil {
+			t.Fatalf("status with no origin should still succeed: %v", err)
+		}
+		if !strings.Contains(out, "branch:") {
+			t.Errorf("the branch line must degrade, not disappear, with no origin:\n%s", out)
+		}
+		// …and with no base to compare against, no merge claim is made.
+		if strings.Contains(out, "shipped:") {
+			t.Errorf("with no origin there is no base to compare against — stay silent:\n%s", out)
+		}
+	})
 }
 
 // TestStatusCover_HumanizeAgeBuckets pins humanizeAge across its three buckets
