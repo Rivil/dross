@@ -857,6 +857,79 @@ func TestStatusNoStaleOnMain(t *testing.T) {
 	})
 }
 
+// stripCompletedHistory removes the `completed <id>` record from machine-local
+// state, leaving changes.json's PR number as the only shipped signal. Asserts
+// the removal took, so a fixture change that renames the action can't quietly
+// turn the tests below back into the both-signals case they exist to escape.
+func stripCompletedHistory(t *testing.T, root, phaseID string) {
+	t.Helper()
+	path := filepath.Join(root, state.File)
+	st, err := state.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kept []state.Activity
+	for _, a := range st.History {
+		if !strings.Contains(a.Action, "completed "+phaseID) {
+			kept = append(kept, a)
+		}
+	}
+	st.History = kept
+	if err := st.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	if stateRecordsCompleted(st, phaseID) {
+		t.Fatal("precondition: the completion record should be gone from history")
+	}
+}
+
+// TestStatusStaleFromPRRecordAlone: changes.json's PR number is the TRACKED
+// half of the shipped signal — it rides on the phase branch, where the
+// machine-local state.json breadcrumb no longer can. Any machine that did not
+// run the ship itself (a fresh clone, a second workstation) has exactly this
+// shape: a PR record and no history.
+//
+// staleBranchFixture seeds both signals, which lets Go short-circuit the
+// `!stateRecordsCompleted(...) && !phaseRecordsPR(...)` guard on its first term
+// and leave phaseRecordsPR unexecuted — so the post-untrack path went untested.
+// Dropping the history half is what forces it to answer.
+func TestStatusStaleFromPRRecordAlone(t *testing.T) {
+	dir := staleBranchFixture(t)
+	stripCompletedHistory(t, filepath.Join(dir, ".dross"), "x")
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+
+	if !strings.Contains(out, "stale:") {
+		t.Errorf("changes.json pr=42 alone must raise the warning:\n%s", out)
+	}
+	if !strings.Contains(out, "phase/x") {
+		t.Errorf("stale warning should name the branch:\n%s", out)
+	}
+	if !strings.Contains(out, "reconcile") {
+		t.Errorf("stale warning should carry a reconcile pointer:\n%s", out)
+	}
+}
+
+// TestStatusNoStaleWithoutEitherSignal (false-positive control): with neither
+// the history entry nor a PR number the branch was never shipped — it is
+// ordinary mid-phase work — so status must stay silent. Without this the test
+// above would pass just as well for a fallback that returned true regardless of
+// what changes.json holds.
+func TestStatusNoStaleWithoutEitherSignal(t *testing.T) {
+	dir := staleBranchFixture(t)
+	stripCompletedHistory(t, filepath.Join(dir, ".dross"), "x")
+	// A changes.json with no PR number is the mid-work shape `dross execute`
+	// writes; `dross ship` is what folds the number in.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
+		`{"phase":"x","base":"main","tasks":{}}`)
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+
+	if strings.Contains(out, "stale:") {
+		t.Errorf("an unshipped phase branch must not warn:\n%s", out)
+	}
+}
+
 // TestStatusStaleCheckStaysOffline: `dross status` answers from local refs. With
 // no origin configured at all it must stay silent rather than block on the
 // network or print a warning it cannot justify.

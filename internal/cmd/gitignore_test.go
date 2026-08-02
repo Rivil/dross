@@ -172,6 +172,45 @@ func TestEnsureDrossGitignoreAppendsToExisting(t *testing.T) {
 	}
 }
 
+// TestEnsureDrossGitignoreSpacingOnBlankTail covers the append arm that fires
+// only when an existing .gitignore is empty or already ends in a blank line —
+// both ordinary shapes (a touched-but-unused file; an author's trailing blank).
+// The append test above uses a file ending in a single newline, so it takes the
+// other arm and leaves this one unexecuted.
+func TestEnsureDrossGitignoreSpacingOnBlankTail(t *testing.T) {
+	for _, tc := range []struct{ name, existing string }{
+		{"empty file", ""},
+		{"already ends in a blank line", "node_modules/\n\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, ".gitignore")
+			if err := os.WriteFile(path, []byte(tc.existing), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := ensureDrossGitignore(dir); err != nil {
+				t.Fatal(err)
+			}
+			body := readIfExists(t, path)
+
+			if !strings.HasPrefix(body, tc.existing) {
+				t.Errorf("existing content was not preserved:\ngot %q", body)
+			}
+			if !strings.Contains(body, drossStateIgnorePath+"\n") {
+				t.Errorf("the block was not appended:\n%s", body)
+			}
+			// The arm's whole job: the separating newline is already there, so
+			// adding another would leave a run of three.
+			if strings.Contains(body, "\n\n\n") {
+				t.Errorf("a redundant blank line was added:\ngot %q", body)
+			}
+			if tc.existing == "" && strings.HasPrefix(body, "\n") {
+				t.Errorf("an empty .gitignore must not gain a leading blank line:\ngot %q", body)
+			}
+		})
+	}
+}
+
 // readIfExists returns a file's contents, or "" when it is absent.
 func readIfExists(t *testing.T, path string) string {
 	t.Helper()
