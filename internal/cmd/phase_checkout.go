@@ -51,3 +51,48 @@ Refuses when phase/<id> does not exist locally; it never creates the branch.`,
 		},
 	}
 }
+
+// Checkout is the general-purpose sibling of phaseCheckout: the same guarded
+// switch for a branch that is not a phase branch. `dross phase checkout` cannot
+// serve those callers — it prefixes "phase/" — and every narration that had to
+// name a non-phase target was therefore still handing the user the raw verb.
+// `dross milestone prune`'s refusal ("switch to main first") was the last one,
+// and a refusal that hands over `git checkout` reopens by hand the hole the
+// guard exists to close.
+//
+// It refuses a missing local ref for the same reason phaseCheckout does: git
+// would happily resolve `main` to `origin/main` and create a local branch, which
+// is a different thing from switching to the branch the user named.
+func Checkout() *cobra.Command {
+	return &cobra.Command{
+		Use:   "checkout <branch>",
+		Short: "Switch to a branch, guarding the live state.json",
+		Long: `Switch to any local branch through dross's guarded checkout.
+
+Identical to 'git checkout <branch>' except that it refuses when the target
+branch carries a tracked copy of .dross/state.json that would overwrite the
+live machine-local one — a branch cut before that file was untracked.
+
+Refuses when the branch does not exist locally; it never creates one. Use
+'dross phase checkout <id>' for phase branches, which takes the phase id.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			repoDir := filepath.Dir(root)
+			branch := args[0]
+
+			if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch) != nil {
+				return fmt.Errorf("no local branch %s — `dross checkout` never creates one.\n"+
+					"Check the name (`git branch --list`), or create it with git first", branch)
+			}
+			if err := checkoutBranch(repoDir, branch); err != nil {
+				return err
+			}
+			Printf("checked out %s\n", branch)
+			return nil
+		},
+	}
+}

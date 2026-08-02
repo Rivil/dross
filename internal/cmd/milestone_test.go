@@ -908,6 +908,45 @@ func TestMilestoneGetUnknownPathAmongSeveral(t *testing.T) {
 	}
 }
 
+// TestPruneRefusalNamesGuardedCheckout (c-1): the refusal is the last narration
+// in the tree that handed the user a raw `git checkout`. The branch it tells
+// them to leave is stale by definition — precisely the vintage that may still
+// track .dross/state.json — so the suggested switch off it is the one most
+// likely to replay that copy over the live machine-local one.
+func TestPruneRefusalNamesGuardedCheckout(t *testing.T) {
+	dir := pruneFixture(t)
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
+	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
+	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	mustGit(t, dir, "checkout", "-q", "milestone/v1.0")
+
+	// Precondition: HEAD really is on the stale branch, so the refusal under
+	// test is the current-HEAD one and not some earlier gate.
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "milestone/v1.0" {
+		t.Fatalf("precondition: HEAD = %q, want milestone/v1.0", cur)
+	}
+
+	err := runCmd(t, Milestone(), "prune")
+	if err == nil {
+		t.Fatal("prune must refuse while HEAD is on a branch it would delete")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "dross checkout main") {
+		t.Errorf("the refusal should hand over the guarded verb, got: %v", err)
+	}
+	if strings.Contains(msg, "git checkout") {
+		t.Errorf("the refusal must not suggest a raw checkout, got: %v", err)
+	}
+	// The verb swap must not cost the diagnostic detail: which branch is
+	// stale, and where to go instead.
+	if !strings.Contains(msg, "milestone/v1.0") {
+		t.Errorf("the refusal should name the stale branch: %v", err)
+	}
+	if !strings.Contains(msg, "main") {
+		t.Errorf("the refusal should name the target branch: %v", err)
+	}
+}
+
 func TestLooksLikeMilestoneVersion(t *testing.T) {
 	for _, s := range []string{"v1.1", "v0.10", "V2.0"} {
 		if !looksLikeMilestoneVersion(s) {
