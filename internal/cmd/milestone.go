@@ -284,7 +284,8 @@ func milestoneList() *cobra.Command {
 }
 
 func milestoneCreate() *cobra.Command {
-	return &cobra.Command{
+	var baseFlag string
+	c := &cobra.Command{
 		Use:   "create <version>",
 		Short: "Create a new milestone (e.g. v0.1)",
 		Args:  cobra.ExactArgs(1),
@@ -297,11 +298,27 @@ func milestoneCreate() *cobra.Command {
 			if _, err := os.Stat(path); err == nil {
 				return fmt.Errorf("%s already exists", path)
 			}
+
+			mainBranch := "main"
+			if p, _, err := loadProject(); err == nil && p.Repo.GitMainBranch != "" {
+				mainBranch = p.Repo.GitMainBranch
+			}
+			// Resolved before anything is written, so a bad --base leaves
+			// neither a toml nor a branch behind.
+			repoDir := filepath.Dir(root)
+			cutFrom, localOnly, err := resolveMilestoneCutPoint(root, repoDir, mainBranch, args[0], baseFlag)
+			if err != nil {
+				return err
+			}
+
 			m := &milestone.Milestone{
 				Milestone: milestone.Meta{
 					Version: args[0],
 					Status:  "planning",
 					Started: time.Now().UTC().Format("2006-01-02"),
+					// Recorded now and read back verbatim ever after — the
+					// stacking parent is a stored fact, never re-inferred.
+					Base: cutFrom,
 				},
 			}
 			if err := m.Save(path); err != nil {
@@ -313,16 +330,22 @@ func milestoneCreate() *cobra.Command {
 			// unconditional side effect of scoping (the v0.7 branch
 			// topology). Skips silently in a non-git dir so `dross init`
 			// flows and non-git usage keep working.
-			mainBranch := "main"
-			if p, _, err := loadProject(); err == nil && p.Repo.GitMainBranch != "" {
-				mainBranch = p.Repo.GitMainBranch
+			base := cutFrom
+			if base == "" {
+				base = mainBranch
 			}
-			branch, created, pushed, err := ensureMilestoneBranch(filepath.Dir(root), mainBranch, args[0])
+			// Narrated before the cut, not after: the caveat is about the
+			// resolution, which is already settled, and the eager push to an
+			// unreachable origin is exactly the step that fails here.
+			if localOnly {
+				Printf("origin unreachable — cut point resolved from local refs; origin may have moved on\n")
+			}
+			branch, created, pushed, err := ensureMilestoneBranch(repoDir, base, args[0])
 			if err != nil {
 				return err
 			}
 			if created {
-				Printf("cut %s from %s\n", branch, mainBranch)
+				Printf("cut %s from %s\n", branch, base)
 			}
 			if pushed {
 				Printf("pushed %s to origin\n", branch)
@@ -330,28 +353,81 @@ func milestoneCreate() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().StringVar(&baseFlag, "base", "",
+		"force the branch to cut from (default: the current milestone's branch while unmerged, else the main branch)")
+	return c
 }
 
-// ensureMilestoneBranch cuts milestone/<version> from the main branch (without
+// resolveMilestoneCutPoint answers which branch milestone/<version> should be
+// cut from, and whether that answer came from local refs alone.
+//
+// A new milestone stacks on the current one while its integration branch is
+// still unmerged, so its PR shows its own commits rather than inheriting the
+// parent's. Once the parent has merged — or its branch is gone entirely, the
+// ordinary state after `milestone complete --finalize` — the cut goes back to
+// the main branch.
+//
+// The parent is whatever state.current_milestone names (locked
+// stacking_parent): one authority, no scanning refs for the newest unmerged
+// branch, which would reintroduce exactly the topology-guessing v1.2 exists to
+// kill. `forced` (--base) wins over all of it, per locked base_override.
+//
+// An empty return means there is nothing to cut from — no git dir, or no main
+// ref yet — and the caller records no base.
+func resolveMilestoneCutPoint(root, repoDir, mainBranch, version, forced string) (cutFrom string, localOnly bool, err error) {
+	if !isDir(filepath.Join(repoDir, ".git")) {
+		return "", false, nil
+	}
+	if forced != "" {
+		if !gitRefExists(repoDir, "refs/heads/"+forced) {
+			return "", false, fmt.Errorf("--base %s: no such local branch", forced)
+		}
+		return forced, false, nil
+	}
+	// A repo with no commits has no main ref, so there is nothing to cut.
+	if !gitRefExists(repoDir, "refs/heads/"+mainBranch) {
+		return "", false, nil
+	}
+	s, err := state.Load(filepath.Join(root, state.File))
+	if err != nil {
+		// No readable state means no current milestone to stack on.
+		return mainBranch, false, nil
+	}
+	cur := s.CurrentMilestone
+	if cur == "" || cur == version {
+		return mainBranch, false, nil
+	}
+	parent := "milestone/" + cur
+	merged, localOnly, err := milestoneMergedIntoMain(repoDir, parent, mainBranch)
+	if err != nil {
+		return "", false, fmt.Errorf("resolve cut point for %s: %w", parent, err)
+	}
+	if merged {
+		return mainBranch, localOnly, nil
+	}
+	return parent, localOnly, nil
+}
+
+// ensureMilestoneBranch cuts milestone/<version> from baseBranch (without
 // checking it out — HEAD stays put) and pushes it to origin, so the integration
 // branch exists as an unconditional side effect of scoping. Idempotent: an
 // existing local ref is left as-is (re-scope no-ops rather than erroring) and
 // the push is a no-op when origin already carries the ref at the same commit.
-// Skips silently when the repo has no git, no main ref to cut from yet, or no
+// Skips silently when the repo has no git, no base ref to cut from yet, or no
 // origin remote — scoping must still succeed in those cases.
-func ensureMilestoneBranch(repoDir, mainBranch, version string) (branch string, created, pushed bool, err error) {
+func ensureMilestoneBranch(repoDir, baseBranch, version string) (branch string, created, pushed bool, err error) {
 	branch = "milestone/" + version
 	if !isDir(filepath.Join(repoDir, ".git")) {
 		return branch, false, false, nil
 	}
-	// Need a main ref to cut from; a repo with no commits has none.
-	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+mainBranch) != nil {
+	// Need a base ref to cut from; a repo with no commits has none.
+	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+baseBranch) != nil {
 		return branch, false, false, nil
 	}
 	// Idempotent create: only when the local ref is absent.
 	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch) != nil {
-		if out, e := gitCombined(repoDir, "branch", branch, mainBranch); e != nil {
-			return branch, false, false, fmt.Errorf("git branch %s %s: %w\n%s", branch, mainBranch, e, out)
+		if out, e := gitCombined(repoDir, "branch", branch, baseBranch); e != nil {
+			return branch, false, false, fmt.Errorf("git branch %s %s: %w\n%s", branch, baseBranch, e, out)
 		}
 		created = true
 	}
