@@ -291,10 +291,10 @@ var classRules = []classRule{
 	// The ff-only shapes above are joined by the explicit refusals: phase
 	// complete and milestone complete both refuse to advance while the PR is
 	// still open, and `dross status` reports the shipped-but-unmerged window
-	// where branch-local state records `completed <id>` but origin/<main>
-	// doesn't. All four are the same friction — waiting on an upstream merge —
-	// so they share a bucket. Detail-free: the messages embed phase ids and
-	// branch names (locked: detail_allowlist).
+	// where machine-local state records `shipped <id>` (written by ship) but
+	// the PR hasn't landed on the base yet. All four are the same friction —
+	// waiting on an upstream merge — so they share a bucket. Detail-free: the
+	// messages embed phase ids and branch names (locked: detail_allowlist).
 	{"merge_pending", [][]string{
 		{"hasn't advanced past"},
 		{"has the pr actually merged"},

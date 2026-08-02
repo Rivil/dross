@@ -242,16 +242,23 @@ func phaseComplete() *cobra.Command {
   2. switch to the reconcile branch — milestone/<version> when a milestone
      is active, else the configured main branch
   3. fast-forward the reconcile branch from origin/<branch>
-  4. delete the local phase/<id> branch (and the remote one)
+  4. write the completed-state transition
+  5. delete the phase/<id> branch, locally and on origin
 
 The switch happens only after every check has passed, so a refused
 completion leaves HEAD on phase/<id> with no local ref moved — re-run it
 once the reason for the refusal is fixed.
 
-'dross ship' folds the cleared current_phase + "completed <id>" record
-into the PR squash, so the fast-forward above already brings the
-completion onto the reconcile branch — complete writes no commit of its
-own. This is what eliminates the completion-chore divergence.
+This command writes the completed-state transition — the cleared
+current_phase plus a "completed <id>" history entry — into the
+machine-local, gitignored .dross/state.json, and it is the sole writer of
+it. 'dross ship' only marks the phase shipped and leaves current_phase
+set: a phase is not complete until its PR is merged, and only this run
+sits behind that gate. The write is machine-local, so it rides no commit
+and no squash anywhere; complete creates no commit of its own, which is
+what eliminates the completion-chore divergence. It lands before the
+branch teardown, so a failed deletion still leaves the confirmed merge
+recorded, and it is idempotent on a re-run.
 
 Refuses on a dirty tree, or unless the phase's merge is authoritatively
 confirmed. The gate is the provider's "is PR #N merged?" status, looked

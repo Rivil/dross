@@ -1301,8 +1301,13 @@ func TestShipNarratesCompleteOwnsRecord(t *testing.T) {
 		}
 	})
 
-	for _, stale := range []string{"Completion record folded", "squash-merge will land it"} {
-		if strings.Contains(out, stale) {
+	// The retired phrases come from retiredSquashClaims (squash_claim_guard_test.go)
+	// rather than being spelled out here: that file is the only one the
+	// repo-wide scan skips, so naming a forbidden phrase anywhere else would
+	// trip the scan with the very assertion that forbids it.
+	lower := strings.ToLower(out)
+	for _, stale := range retiredSquashClaims {
+		if strings.Contains(lower, stale) {
 			t.Errorf("ship still narrates the retired claim %q:\n%s", stale, out)
 		}
 	}

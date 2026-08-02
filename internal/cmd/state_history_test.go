@@ -13,12 +13,12 @@ import (
 // it had before the switch, in order.
 //
 // The survival assertion applies to all four commands. The appended-own-entry
-// assertion applies only where a command actually records one, which is fewer
-// than the plan assumed: `ship recover` does (after its delta gate), and
-// `phase complete --recover` does through the recovery routine it delegates
-// to. Plain `phase complete` and `milestone complete --finalize` never load or
-// save state at all — asserting an entry for either would be wrong by
-// construction, not stricter.
+// assertion applies only where a command actually records one: `ship recover`
+// does (after its delta gate), and both `phase complete` forms do — plain
+// complete writes the completion record itself, and the --recover form appends
+// recovery's `merged <id>` first, so `completed <id>` is last in both. Only
+// `milestone complete --finalize` never loads or saves state at all; asserting
+// an entry for it would be wrong by construction, not stricter.
 
 // seedHistory writes N distinct, ordered actions into the live state.json and
 // returns them. Distinct strings so a reorder is as visible as a drop.
