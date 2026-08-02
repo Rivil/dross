@@ -90,6 +90,51 @@ func TestClassifyDrift(t *testing.T) {
 	}
 }
 
+// TestDriftShippedPhaseNotUnshipped: `dross ship` leaves current_phase set and
+// marks it shipped; only a confirmed merge clears it. So a verify-pass phase
+// with an open PR is waiting on a merge, not drifting — calling it
+// "verified but unshipped" names the one thing that already happened. Without
+// both signals it is genuinely unshipped and still drifts.
+func TestDriftShippedPhaseNotUnshipped(t *testing.T) {
+	root := t.TempDir()
+	writePhase(t, root, "auth", planDone, "verdict = \"pass\"\n")
+	if err := os.WriteFile(filepath.Join(root, "phases", "auth", "changes.json"),
+		[]byte(`{"phase":"auth","pr":42,"base":"main","tasks":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	shipped := &state.State{CurrentPhase: "auth", CurrentPhaseStatus: "shipped"}
+	ds, err := ClassifyDrift(root, shipped)
+	if err != nil {
+		t.Fatalf("ClassifyDrift: %v", err)
+	}
+	if kind, ok := driftKind(ds, "auth"); ok {
+		t.Errorf("a shipped phase with an open PR is awaiting merge, not drift; got %s", kind)
+	}
+
+	// Control 1: the same phase with no shipped status still drifts.
+	ds, err = ClassifyDrift(root, &state.State{})
+	if err != nil {
+		t.Fatalf("ClassifyDrift: %v", err)
+	}
+	if kind, ok := driftKind(ds, "auth"); !ok || kind != DriftVerifiedUnshipped {
+		t.Errorf("without the shipped status the phase should still drift, got %q ok=%v", kind, ok)
+	}
+
+	// Control 2: shipped status but no recorded PR — nothing to wait on, so
+	// the status field alone must not suppress the drift.
+	if err := os.Remove(filepath.Join(root, "phases", "auth", "changes.json")); err != nil {
+		t.Fatal(err)
+	}
+	ds, err = ClassifyDrift(root, shipped)
+	if err != nil {
+		t.Fatalf("ClassifyDrift: %v", err)
+	}
+	if kind, ok := driftKind(ds, "auth"); !ok || kind != DriftVerifiedUnshipped {
+		t.Errorf("a shipped status with no PR to point at should still drift, got %q ok=%v", kind, ok)
+	}
+}
+
 func TestClassifyDriftNoBoard(t *testing.T) {
 	// The classifier takes no board client — it reads only phase files + state.
 	root := t.TempDir()

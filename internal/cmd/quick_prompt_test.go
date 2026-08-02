@@ -50,9 +50,12 @@ func TestQuickPromptRecordsStandaloneBase(t *testing.T) {
 	var standalone, inPhase string
 	for _, line := range strings.Split(preflight, "\n") {
 		switch {
-		case strings.Contains(line, "standalone (no current_phase)"):
+		// Prefix match, not the whole parenthetical: both arms carry
+		// qualifiers now (the in-phase arm excludes a shipped phase, the
+		// standalone arm absorbs it) and those will keep evolving.
+		case strings.Contains(line, "standalone (no current_phase"):
 			standalone = line
-		case strings.Contains(line, "in-phase (current_phase set)"):
+		case strings.Contains(line, "in-phase (current_phase set"):
 			inPhase = line
 		}
 	}

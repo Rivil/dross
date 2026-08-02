@@ -162,13 +162,20 @@ func Ship() *cobra.Command {
 
 			// Must be on the phase branch. Pushing from anywhere else is
 			// almost certainly a mistake — phase work belongs on phase/<id>.
+			//
+			// The suggestion names the guarded verb, not `git checkout`: a raw
+			// checkout of a branch that still tracks .dross/state.json replays
+			// it over the live machine-local copy without complaint, which is
+			// what destroyed a live history on the state-json-branch-safety
+			// ship. A refusal that hands the user the unguarded form reopens
+			// that hole by hand, one obedient copy-paste at a time.
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("read current branch: %w", err)
 			}
 			if cur != phaseBranch {
-				return fmt.Errorf("must be on %s to ship (currently on %s); switch with `git checkout %s`",
-					phaseBranch, cur, phaseBranch)
+				return fmt.Errorf("must be on %s to ship (currently on %s); switch with `dross phase checkout %s`",
+					phaseBranch, cur, phaseID)
 			}
 
 			// 4) Title + body.
@@ -208,23 +215,23 @@ func Ship() *cobra.Command {
 				narrate("auto-committed .dross-only bookkeeping\n")
 			}
 
-			// 5) Fold the completion record into the squash. Write the
-			//    completed-state transition (clear current_phase + status,
-			//    append a `completed <id>` history entry) and commit it
-			//    *before* the push, so the pushed ref carries it and the
-			//    provider's squash-merge lands it on main. This is what
-			//    eliminates the completion-chore divergence: phase complete
-			//    no longer writes a standalone post-merge commit to local
-			//    main (it becomes ff + branch-delete only — see t-2). The PR
-			//    URL is known only post-push, so it drops out of the commit
-			//    and is printed instead.
+			// 5) Mark the phase shipped. Ship deliberately does NOT write
+			//    the completed-state transition: a phase is not complete
+			//    until its PR is merged, and ship runs before that is known.
+			//    `dross phase complete` is the sole writer of the completion
+			//    record, behind its merge gate. What ship records is the
+			//    intermediate truth — current_phase stays set, status becomes
+			//    "shipped" — so status surfaces can name the open PR instead
+			//    of claiming a completion nothing confirmed.
 			//
-			//    Idempotent: re-shipping after review edits re-writes the
-			//    same state and only commits when something actually staged,
-			//    so a no-op re-ship doesn't error on "nothing to commit".
-			s.CurrentPhase = ""
-			s.CurrentPhaseStatus = ""
-			s.Touch(fmt.Sprintf("completed %s", phaseID))
+			//    Idempotent: a re-ship after review edits re-writes the same
+			//    status, the `shipped <id>` entry is history-scan-guarded so
+			//    it never doubles up, and the commit below only runs when
+			//    something actually staged.
+			s.CurrentPhaseStatus = "shipped"
+			if !historyHasAction(s, "shipped "+phaseID) {
+				s.Touch(fmt.Sprintf("shipped %s", phaseID))
+			}
 			if err := s.Save(filepath.Join(root, state.File)); err != nil {
 				return fmt.Errorf("save state: %w", err)
 			}
@@ -336,7 +343,7 @@ func Ship() *cobra.Command {
 				// Non-fatal post-PR errors (e.g. reviewer add failed).
 				narrate("Warning: %v\n", err)
 			}
-			narrate("Completion record folded into %s — squash-merge will land it on %s\n", phaseBranch, baseBranch)
+			narrate("Marked %s shipped — once the PR merges, `dross phase complete %s` writes the completion record\n", phaseID, phaseID)
 
 			// Persist the opened PR number into the phase-scoped changes.json
 			// so `dross phase complete` can gate on THIS phase's authoritative

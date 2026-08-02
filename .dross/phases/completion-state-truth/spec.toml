@@ -1,0 +1,58 @@
+[phase]
+  id = "completion-state-truth"
+  title = "completion-state-truth"
+  milestone = "v1.2"
+
+[[criteria]]
+  id = "c-1"
+  text = "No step of /dross-ship performs a branch switch outside dross's guarded primitives: HEAD stays on phase/<id> through the provider merge, and every checkout, fast-forward and branch deletion — local and remote — is performed by dross phase complete."
+
+[[criteria]]
+  id = "c-2"
+  text = "dross phase complete records the completed-state transition itself — cleared current_phase/status plus a `completed <id>` history entry — rather than relying on an earlier command's write having survived, and is idempotent when re-run."
+
+[[criteria]]
+  id = "c-3"
+  text = "No code comment, CLI narration or prompt still claims the completion record rides the squash-merge onto the base branch; every surface describes where the record actually lives and which command writes it."
+
+[[criteria]]
+  id = "c-4"
+  text = "A regression test reproduces this incident end to end — live state.json with N history entries, a raw non-dross checkout of a base branch that still tracks the file — asserting the ship-to-complete flow leaves the live copy intact, and failing against the current code."
+
+[[criteria]]
+  id = "c-5"
+  text = "After a phase completes, dross states the resulting branch topology: which branch HEAD is on, which branches were deleted, and that the phase's work is on milestone/<version> and not yet on main — and dross status carries the same truth as a standing line, so a correct mid-milestone state is distinguishable from a stuck one at any point in a session."
+
+[[criteria]]
+  id = "c-6"
+  text = "No status surface warns about a shipped-but-unmerged phase whose state reads `completed` — that state is unreachable once ship leaves current_phase set; a shipped-but-unmerged phase reads `shipped` and status reports it as such."
+
+[[decisions]]
+  key = "record_owner"
+  choice = "dross phase complete is the sole writer of the completion transition. dross ship sets current_phase_status = shipped and leaves current_phase set; only a confirmed merge clears it."
+  why = "A phase is not complete until its PR is merged, so clearing at ship time asserts something unverified. The shipped-then-complete pair already exists on the board sync, so the two surfaces now agree. Moving the write behind the merge gate also gives it a single owner instead of a local-only write nothing re-asserts."
+  locked = true
+
+[[decisions]]
+  key = "topology_surface"
+  choice = "Branch topology is reported twice: once by phase complete as a statement of where the run landed, and as a standing line in dross status naming the work branch and its commit distance from main."
+  why = "A completion-time message scrolls away. The doubt this closes — is the milestone branch correct-by-design or stuck? — is felt later in a session, so the answer has to be available whenever it is asked, not only at the moment it happened."
+  locked = true
+
+[[decisions]]
+  key = "teardown_owner"
+  choice = "The GitHub merge step drops --delete-branch from gh pr merge; dross phase complete performs both the local and the remote phase-branch deletion it already implements."
+  why = "gh pr merge --delete-branch does its own raw checkout of the base branch, which is a branch switch outside guardLiveState — the exact hole that destroyed live state.json on the state-json-branch-safety ship. Forgejo/GitLab/Bitbucket merge over REST and never switch branches, so this restores one behaviour across every provider."
+  locked = true
+
+[[deferred]]
+  text = "Make dross itself drain pre-existing faults: promote project/hard/r-02 to a builtin rule, and give verify a survivor lifecycle — classify each mutant/finding as in-diff, routed, or accepted-with-reason, and stop re-emitting inert FLAGs run over run."
+  why = "This phase's verify carried 77 survivors, 75 of them pre-existing and outside its diff, re-listed unchanged from earlier phases. r-02 (added this run) states the policy for this repo; the enforcement is a code change to the builtin rule catalog and verify's finding lifecycle, unrelated to completion-state truth."
+
+[[deferred]]
+  text = "Drain the standing 75 pre-existing mutation survivors (status.go, phase.go 307/309/735/737, ship.go, doctor.go, hints.go, env.go, gitignore.go, footer_coverage.go and the rest) accumulated before this phase."
+  why = "Routed rather than fixed here: they sit outside completion-state-truth's diff and its six criteria. Held with the r-02 enforcement work so the rule and the first drain land together."
+
+[[deferred]]
+  text = "Widen the narrated-command parity guard past backticked forms. TestNarratedCommandsResolveAgainstTheTree lifts `dross <verb> [<sub>]` only from backticked spans inside string literals, so an unbackticked narrated invocation escapes it — doctor.go:192 (\"    Fix: dross project set --unset board.state_map.%s\") and hooks.go:57-58 (\"dross pause --auto\", \"dross reentry\") are live examples today. A concatenation-split form (\"…`dross \" + \"checkout`…\") escapes it for the same reason, since each literal is inspected separately."
+  why = "Routed, not fixed here: the backtick scope is exactly what t-13's task description and test contract specified, and all four contract items are met. The narrations c-1 actually depends on — milestone.go:98 and phase_checkout.go:88 — are backticked and covered, so no criterion is affected. The residual is about unrelated commands (project set, pause, reentry) and belongs with the command-reference parity work rather than as a fourth verify-driven scope addition to this phase."

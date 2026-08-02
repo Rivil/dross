@@ -84,13 +84,18 @@ func milestonePrune() *cobra.Command {
 
 			// The current branch cannot be deleted, and silently skipping it
 			// would report a prune that did not happen. Refuse by name instead.
+			//
+			// The suggestion names the guarded verb, not `git checkout`: the
+			// branch being left is stale by definition, so it is exactly the
+			// vintage that may still track .dross/state.json, and a raw switch
+			// off it replays that copy over the live machine-local one.
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				cur = ""
 			}
 			for _, b := range stale {
 				if b.Name == cur {
-					return fmt.Errorf("HEAD is on %s, which is stale and would be deleted — switch to %s first (`git checkout %s`)",
+					return fmt.Errorf("HEAD is on %s, which is stale and would be deleted — switch to %s first (`dross checkout %s`)",
 						b.Name, mainBranch, mainBranch)
 				}
 			}
