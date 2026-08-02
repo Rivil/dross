@@ -1641,6 +1641,64 @@ func TestPhaseCompletePrintsTopologyStatement(t *testing.T) {
 	})
 }
 
+// TestPhaseCompleteRemoteOnlyTeardown (c-5): the fourth arm of the completion
+// statement — origin still carried the phase branch, the local ref was already
+// gone. It is the shape an interrupted teardown leaves behind: the local delete
+// landed, the `push --delete` did not, and the user re-runs. Without this the
+// arm is never executed, so its rendering could be arbitrarily wrong and the
+// re-run would report a teardown that did not match what happened.
+func TestPhaseCompleteRemoteOnlyTeardown(t *testing.T) {
+	dir, _ := completeFixture(t) // records base "main"; origin has no phase branch
+	stubPRMerged(t, true)
+
+	// Keep the tip: the first complete deletes the local ref, and the origin
+	// ref is recreated from this SHA afterwards. Pushing a SHA rather than a
+	// branch is the point — it makes origin carry phase/auth with no local
+	// counterpart, which no fixture otherwise produces.
+	phaseTip := mustGit(t, dir, "rev-parse", "refs/heads/phase/auth")
+
+	if err := runCmd(t, Phase(), "complete", "auth"); err != nil {
+		t.Fatalf("first complete: %v", err)
+	}
+	mustGit(t, dir, "push", "-q", "origin", phaseTip+":refs/heads/phase/auth")
+
+	// Same restore as TestPhaseCompleteIsIdempotent: changes.json lived on the
+	// deleted phase branch, so the checkout to main took it out of the working
+	// tree, and complete reads its base and PR number from it.
+	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
+		`{"phase":"auth","pr":42,"base":"main","tasks":{}}`)
+
+	// Preconditions, so the assertions below cannot pass against the wrong
+	// fixture shape — the local-only arm would satisfy a weaker test.
+	if r := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/auth"); r == "" {
+		t.Fatal("precondition: origin should carry phase/auth")
+	}
+	if b := mustGit(t, dir, "branch", "--list", "phase/auth"); b != "" {
+		t.Fatalf("precondition: local phase/auth should be gone, got %q", b)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Phase(), "complete", "auth"); err != nil {
+		t.Fatalf("second complete: %v", err)
+	}
+
+	if !strings.Contains(out, "(origin; local branch already gone)") {
+		t.Errorf("should report an origin-only teardown; got:\n%s", out)
+	}
+	// Excludes all three neighbouring arms: "(local + origin)" is both the
+	// both-deleted and the both-already-gone rendering, "already gone on
+	// origin" is the local-only one. Collapsing this arm into any of them
+	// fails here rather than passing on a near-miss.
+	for _, wrong := range []string{"(local + origin)", "already gone on origin"} {
+		if strings.Contains(out, wrong) {
+			t.Errorf("must not claim a local deletion that never happened: found %q in:\n%s", wrong, out)
+		}
+	}
+	if r := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/auth"); r != "" {
+		t.Errorf("the remote phase branch should have been deleted, got %q", r)
+	}
+}
+
 // TestPhaseCompleteNamesRecordedBaseNotInferred (c-5): the statement names the
 // base the phase actually forked from, read from its own record. Letting the
 // topology helper infer the work branch would name the active milestone's
