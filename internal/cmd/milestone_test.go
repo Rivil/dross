@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/state"
 )
 
 func TestMilestoneCreateAndList(t *testing.T) {
@@ -603,6 +605,80 @@ func TestMilestoneCleanupRefusesUnmerged(t *testing.T) {
 	}
 	if r := mustGit(t, dir, "ls-remote", "--heads", "origin", "milestone/"+version); r == "" {
 		t.Error("remote milestone branch should NOT be deleted on refusal")
+	}
+}
+
+// TestMilestoneFinalizeFromMilestoneBranch runs finalize from the branch it is
+// finalizing — the natural place to be, and the only shape that reaches
+// milestoneFinalize's `if cur != mainBranch` switch. Both existing finalize
+// tests start on main, so that branch-switch call site never runs under them.
+func TestMilestoneFinalizeFromMilestoneBranch(t *testing.T) {
+	dir, version := milestoneFinalizeFixture(t, true)
+	seeded := seedHistory(t, dir, 12)
+	mustGit(t, dir, "checkout", "-q", "milestone/"+version)
+
+	if err := runCmd(t, Milestone(), "complete", version, "--finalize"); err != nil {
+		t.Fatalf("finalize from the milestone branch: %v", err)
+	}
+
+	// The switch happened, and it landed on main rather than leaving HEAD on a
+	// branch the same command then deletes.
+	if head := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); head != "main" {
+		t.Errorf("finalize should leave HEAD on main, got %q", head)
+	}
+	if l, o := mustGit(t, dir, "rev-parse", "main"), mustGit(t, dir, "rev-parse", "origin/main"); l != o {
+		t.Errorf("main not ff'd to origin: local %s != origin %s", l, o)
+	}
+	if b := mustGit(t, dir, "branch", "--list", "milestone/"+version); b != "" {
+		t.Errorf("local milestone branch not deleted: %q", b)
+	}
+	if r := mustGit(t, dir, "ls-remote", "--heads", "origin", "milestone/"+version); r != "" {
+		t.Errorf("remote milestone branch not deleted: %q", r)
+	}
+	// The switch off the milestone branch is a checkout like any other, so the
+	// live history has to come through it intact.
+	assertHistorySurvives(t, dir, seeded)
+}
+
+// TestMilestoneFinalizeSurfacesCheckoutRefusal is the guard half of the same
+// call site: finalize's switch to main must go through checkoutBranch, so a
+// main that still carries a pre-untrack tracked state.json is refused by name
+// instead of silently replaying its copy over the live one. Reverting that line
+// to a raw `git checkout` passes the test above and fails this one.
+func TestMilestoneFinalizeSurfacesCheckoutRefusal(t *testing.T) {
+	dir, version := milestoneFinalizeFixture(t, true)
+
+	// Give main the pre-untrack shape. Committing it here also removes the file
+	// from the working tree on the way back to the milestone branch, which is
+	// why the live copy is written after the switch, not before.
+	mustGit(t, dir, "add", "-f", ".dross/"+state.File)
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): pre-untrack state copy")
+	mustGit(t, dir, "checkout", "-q", "milestone/"+version)
+	stPath := filepath.Join(dir, ".dross", state.File)
+	live := state.New()
+	for i := 0; i < 12; i++ {
+		live.Touch("live entry")
+	}
+	if err := live.Save(stPath); err != nil {
+		t.Fatal(err)
+	}
+
+	err := runCmd(t, Milestone(), "complete", version, "--finalize")
+	if err == nil {
+		t.Fatal("finalize must not exit zero when the switch to main was refused")
+	}
+	if !strings.Contains(err.Error(), ".dross/"+state.File) {
+		t.Errorf("the failure should name the blocking file: %v", err)
+	}
+	// A refused switch deletes nothing, on either side.
+	if b := mustGit(t, dir, "branch", "--list", "milestone/"+version); b == "" {
+		t.Error("a refused switch must not delete the local milestone branch")
+	}
+	if r := mustGit(t, dir, "ls-remote", "--heads", "origin", "milestone/"+version); r == "" {
+		t.Error("a refused switch must not delete the remote milestone branch")
+	}
+	if s, lerr := state.Load(stPath); lerr != nil || len(s.History) != 12 {
+		t.Errorf("the live state must survive the refusal: %v / %+v", lerr, s)
 	}
 }
 
