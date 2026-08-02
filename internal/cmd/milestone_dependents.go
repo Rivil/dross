@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/ship"
 )
 
 // This file answers one question and deletes nothing: is anything still
@@ -57,9 +58,14 @@ func dependentMilestones(root, repoDir, branch, mainBranch string) ([]string, er
 	return deps, nil
 }
 
-// guardMilestoneBranchDelete refuses to delete a milestone branch that an
-// unmerged stacked child still depends on, naming the dependent. Callers run it
-// before touching any ref.
+// guardMilestoneBranchDelete refuses to delete a milestone branch that anything
+// still depends on, naming the dependent. Callers run it before touching any ref.
+//
+// Two layers, in order of authority. The record scan is offline, provider-
+// agnostic and reads a fact dross itself wrote, so protection never depends on
+// the network. The forge query on top of it catches PRs dross did not record —
+// and when it cannot run, it says so out loud rather than passing silently for
+// a clean scan (locked dependent_detection).
 func guardMilestoneBranchDelete(root, repoDir, branch, mainBranch string) error {
 	deps, err := dependentMilestones(root, repoDir, branch, mainBranch)
 	if err != nil {
@@ -69,7 +75,54 @@ func guardMilestoneBranchDelete(root, repoDir, branch, mainBranch string) error 
 		return fmt.Errorf("refusing to delete %s: milestone %s %s stacked on it and not merged yet — finalize or retarget %s first",
 			branch, joinVersions(deps), plural(len(deps), "is", "are"), joinVersions(deps))
 	}
+	return guardOpenPRsTargeting(branch)
+}
+
+// guardOpenPRsTargeting refuses when the forge still has an open PR based on
+// branch. A provider that is unconfigured, unwired or unreachable is announced
+// as a skip and the caller proceeds on the record scan alone — an unannounced
+// skip would read exactly like "the forge confirmed nothing depends on this".
+func guardOpenPRsTargeting(branch string) error {
+	p, _, err := loadProject()
+	if err != nil {
+		printOpenPRSkip(err.Error())
+		return nil
+	}
+	if p.Remote.Provider == "" || p.Remote.URL == "" {
+		printOpenPRSkip("no [remote].provider/.url configured")
+		return nil
+	}
+	prs, err := ship.OpenPRsTargetingFunc(buildOpenOpts(p), branch)
+	if err != nil {
+		printOpenPRSkip(err.Error())
+		return nil
+	}
+	if len(prs) > 0 {
+		return fmt.Errorf("refusing to delete %s: %s still open against it — retarget or close it first",
+			branch, describePRs(prs))
+	}
 	return nil
+}
+
+func printOpenPRSkip(reason string) {
+	Printf("open-PR check skipped (%s) — relying on the milestone records alone\n", reason)
+}
+
+func describePRs(prs []ship.BasePR) string {
+	out := ""
+	for i, pr := range prs {
+		if i > 0 {
+			out += ", "
+		}
+		out += fmt.Sprintf("#%d", pr.Number)
+		if pr.URL != "" {
+			out += " (" + pr.URL + ")"
+		}
+	}
+	if len(prs) == 1 {
+		return "PR " + out
+	}
+	return "PRs " + out
 }
 
 func joinVersions(vs []string) string {
