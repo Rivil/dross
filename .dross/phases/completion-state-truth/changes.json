@@ -21,6 +21,41 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/ship_test.go"
+      ],
+      "commit": "cbe0ed3",
+      "completed_at": "2026-08-02T13:48:39.688726Z",
+      "landmarks": [
+        {
+          "feature": "guarded branch switching",
+          "symbol": "TestShipWrongBranchRefusalNamesGuardedCheckout",
+          "loc": "internal/cmd/ship_test.go:227",
+          "what": "ship's off-branch refusal names dross phase checkout, covered behaviourally rather than by prompt grep"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "assets/prompts/execute.md",
+        "assets/prompts/plan.md",
+        "assets/prompts/spec.md",
+        "assets/prompts/resume.md",
+        "internal/cmd/ship_prompt_test.go"
+      ],
+      "commit": "c531189",
+      "completed_at": "2026-08-02T13:53:48.191607Z",
+      "landmarks": [
+        {
+          "feature": "guarded branch switching",
+          "symbol": "TestNoPromptPerformsRawBranchSwitch",
+          "loc": "internal/cmd/ship_prompt_test.go:214",
+          "what": "every prompt scanned for raw phase-branch switches, not just ship.md"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/topology.go",
@@ -140,6 +175,21 @@
           "symbol": "TestNoSurfaceClaimsCompletionRidesTheSquash",
           "loc": "internal/cmd/squash_claim_guard_test.go:69",
           "what": "every code/CLI/prompt/doc surface describes complete as the record's writer, locked by a whitespace-collapsing grep guard"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "870f5a0",
+      "completed_at": "2026-08-02T13:27:58.717321Z",
+      "landmarks": [
+        {
+          "feature": "phase completion reporting",
+          "symbol": "TestPhaseCompleteRemoteOnlyTeardown",
+          "loc": "internal/cmd/phase_test.go:1651",
+          "what": "pins the origin-only teardown phrasing an interrupted delete leaves behind"
         }
       ]
     }

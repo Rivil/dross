@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 11
 
 [phase]
   id = "completion-state-truth"
@@ -86,4 +86,34 @@ task_seq = 0
   covers = ["c-3"]
   depends_on = ["t-1", "t-4", "t-5", "t-6"]
   test_contract = ["TestNoSurfaceClaimsCompletionRidesTheSquash: scans a fixed path list — internal/cmd/*.go, internal/watch/*.go, internal/changes/changes.go, internal/telemetry/telemetry.go, assets/prompts/*.md, ARCHITECTURE.md — for the phrase family \"folds the completion\", \"folded into the squash\", \"folded into state history by ship\", \"folded the cleared current_phase\", \"squash-merge will land it\", \"carries the completion record to main\", \"records the merge in state.json with a chore commit\", \"branch-local state records completed\", and fails on any hit. Whitespace is collapsed before scanning (the strings.Fields idiom at ship_prompt_test.go:161) — without it the two wrapped comment blocks at phase.go:507-511 and status.go:70-71 match no needle and could be re-added verbatim. Re-adding ship.md's old §6.3 sentence fails it, as does restoring drift.go:25's old doc comment or telemetry.go:294's.", "TestQuickPromptHandlesShippedWindow: quick.md's in-phase routing names the shipped state and does not send work to `phase/<current_phase>` unconditionally. Reverting to the bare branch rule fails it.", "TestCompleteHelpNamesRecordOwner: `dross phase complete --help` contains \"writes the completed-state transition\" and the word \"machine-local\", and does not contain \"'dross ship' folds\". Deleting that sentence fails it, so the positive claim cannot rot the way the old one did."]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 4
+  title = "Cover the remote-only teardown phrasing"
+  files = ["internal/cmd/phase_test.go"]
+  description = "verify found c-5 weak: describeTeardown's `case remote` (internal/cmd/phase.go:625 — \"deleted phase/<id> (origin; local branch already gone)\") is never executed by any test, so two ARITHMETIC_BASE mutants survive there and that rendering could be arbitrarily wrong. The other three branches are pinned by TestPhaseCompletePrintsTopologyStatement. Add a sub-test in the same table that pushes phase/auth to origin and then deletes the LOCAL ref before running complete — the shape a re-run after a partial teardown (or a complete run from another machine) produces — asserting the origin-only phrasing and that it does not claim a local deletion that never happened."
+  covers = ["c-5"]
+  test_contract = ["the new sub-test asserts \"(origin; local branch already gone)\" in complete's output; rewriting that arm of describeTeardown to any other string fails it", "it asserts the statement does NOT contain \"(local + origin)\" or \"already gone on origin\", so collapsing the remote arm into either neighbouring case fails rather than passing on a near-miss", "a precondition check proves origin really carries phase/auth and the local ref is really absent before the run, so the assertion cannot pass vacuously against the wrong fixture shape"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 4
+  title = "Point ship's wrong-branch refusal at the guarded checkout"
+  files = ["internal/cmd/ship.go", "internal/cmd/ship_test.go"]
+  description = "verify FLAG: internal/cmd/ship.go:170 still narrates \"switch with `git checkout phase/<id>`\" in its must-be-on-the-phase-branch refusal — the raw form this phase replaced with `dross phase checkout` in ship.md. A refusal that hands the user the unguarded verb reopens the hole by hand, and TestShipPromptNoUnguardedSwitch greps the prompt only, so nothing covers CLI narration. Swap the suggestion for `dross phase checkout <id>` and add a behavioural test on the refusal message itself (run Ship() from a non-phase branch) rather than a source grep — phase_checkout.go's own doc comment legitimately spells the raw form."
+  covers = ["c-1"]
+  test_contract = ["the new test runs Ship() from a branch that is not phase/<id>, asserts the refusal names `dross phase checkout` and does NOT contain \"git checkout\"; restoring the raw suggestion fails it", "it asserts the refusal still names both the required branch and the current one, so the fix cannot drop the diagnostic detail while satisfying the verb assertion", "the fixture's ship run reaches the branch check (verify passes, PR gate stubbed), so a refusal from an earlier gate cannot satisfy the assertions"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 4
+  title = "Retire the raw phase checkout from every prompt"
+  files = ["assets/prompts/execute.md", "assets/prompts/plan.md", "assets/prompts/spec.md", "assets/prompts/resume.md", "internal/cmd/ship_prompt_test.go"]
+  description = "t-10 found the same hole c-1 closes in ship.md still open in four other prompts: execute.md:14, plan.md:13, spec.md:26 and resume.md:31 each instruct a raw `git checkout phase/<id>`, which replays a tracked .dross/state.json over the live machine-local copy. Swap each for `dross phase checkout <id>` (note: the guarded verb takes the phase id, not the branch name), preserving each site's surrounding condition — all four already gate on the local branch existing, which is exactly what the guarded verb refuses on, so the prose around them should defer to its refusal rather than duplicate the check. Then widen the prompt guard: TestShipPromptNoUnguardedSwitch scans ship.md alone, so generalize it to walk every file in assets/prompts/ for the raw verbs. Prompt edits are not live until `make install` re-links them (r-01)."
+  covers = ["c-1"]
+  test_contract = ["the widened guard walks every file under assets/prompts/ for \"git checkout\" and \"git switch\"; restoring the raw verb in any one of the four prompts fails it, naming the offending file", "the guard asserts it actually scanned a non-zero number of prompt files, so an empty or mis-rooted walk fails instead of passing vacuously", "each of the four prompts is asserted to name `dross phase checkout`, so a fix that deletes the instruction rather than replacing it fails"]
   status = "done"

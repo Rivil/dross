@@ -44,3 +44,11 @@
   choice = "The GitHub merge step drops --delete-branch from gh pr merge; dross phase complete performs both the local and the remote phase-branch deletion it already implements."
   why = "gh pr merge --delete-branch does its own raw checkout of the base branch, which is a branch switch outside guardLiveState — the exact hole that destroyed live state.json on the state-json-branch-safety ship. Forgejo/GitLab/Bitbucket merge over REST and never switch branches, so this restores one behaviour across every provider."
   locked = true
+
+[[deferred]]
+  text = "Make dross itself drain pre-existing faults: promote project/hard/r-02 to a builtin rule, and give verify a survivor lifecycle — classify each mutant/finding as in-diff, routed, or accepted-with-reason, and stop re-emitting inert FLAGs run over run."
+  why = "This phase's verify carried 77 survivors, 75 of them pre-existing and outside its diff, re-listed unchanged from earlier phases. r-02 (added this run) states the policy for this repo; the enforcement is a code change to the builtin rule catalog and verify's finding lifecycle, unrelated to completion-state truth."
+
+[[deferred]]
+  text = "Drain the standing 75 pre-existing mutation survivors (status.go, phase.go 307/309/735/737, ship.go, doctor.go, hints.go, env.go, gitignore.go, footer_coverage.go and the rest) accumulated before this phase."
+  why = "Routed rather than fixed here: they sit outside completion-state-truth's diff and its six criteria. Held with the r-02 enforcement work so the rule and the first drain land together."
