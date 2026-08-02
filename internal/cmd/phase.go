@@ -545,15 +545,17 @@ destructive reset of the local base branch; read the abort first.`,
 			}
 
 			// Delete the local phase branch (best-effort: only if it exists).
+			localDeleted := false
 			if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+phaseBranch); err == nil {
 				if out, err := gitCombined(repoDir, "branch", "-D", phaseBranch); err != nil {
 					return fmt.Errorf("git branch -D %s: %w\n%s", phaseBranch, err, out)
 				}
+				localDeleted = true
 			}
 
 			// Delete the remote phase branch too, so completing a phase
-			// leaves nothing behind on origin. Idempotent: the provider's
-			// PR --delete-branch may have already removed it (or it was
+			// leaves nothing behind on origin. Idempotent: the branch may
+			// already be gone (a provider that deleted it, or one that was
 			// never pushed), so we only push --delete when the ref still
 			// exists. ls-remote queries origin directly rather than trusting
 			// possibly-stale remote-tracking refs left by the earlier fetch.
@@ -572,7 +574,27 @@ destructive reset of the local base branch; read the abort first.`,
 				nil,
 				map[string]string{"result": "completed"},
 			)
-			Printf("completed %s — %s is at origin, phase/%s deleted\n", phaseID, reconcileBranch, phaseID)
+
+			// State the resulting topology rather than a bare "done". Under
+			// the milestone-branch model a correct mid-milestone state — the
+			// phase merged into milestone/<version>, nothing on main yet —
+			// looks exactly like a stuck one unless the run says so out loud.
+			//
+			// The work branch is the reconcile branch this run actually used,
+			// passed in as the authoritative override. branchTopology must not
+			// re-infer it: resolveCompleteBase's doc comment records that
+			// milestone-derived inference is what made a stale local
+			// milestone/<version> the reconcile target, and a completion
+			// statement naming an inferred branch would retell the lie the
+			// previous phase removed.
+			top, terr := branchTopology(repoDir, root, reconcileBranch)
+			Printf("completed %s — %s\n", phaseID, describeTeardown(phaseBranch, localDeleted, remoteRef != ""))
+			if terr == nil {
+				// Same renderer, same "not yet on main" condition, as `dross
+				// status` — one truth stated in two places rather than two
+				// half-truths that drift.
+				Printf("branch: %s\n", renderTopologyLine(top))
+			}
 			return nil
 		},
 	}
@@ -581,6 +603,22 @@ destructive reset of the local base branch; read the abort first.`,
 	c.Flags().StringVar(&baseFlag, "base", "",
 		"the branch this phase was forked from, when no base is recorded (a pre-check phase, or one created with --no-branch)")
 	return c
+}
+
+// describeTeardown states what completion actually removed, per side. Claiming
+// a deletion that did not happen is worse than saying nothing: the user reads
+// it as "origin is clean" and stops looking.
+func describeTeardown(phaseBranch string, local, remote bool) string {
+	switch {
+	case local && remote:
+		return "deleted " + phaseBranch + " (local + origin)"
+	case local:
+		return "deleted " + phaseBranch + " (local; already gone on origin)"
+	case remote:
+		return "deleted " + phaseBranch + " (origin; local branch already gone)"
+	default:
+		return phaseBranch + " was already gone (local + origin)"
+	}
 }
 
 // resolveCompleteBase answers "which branch was this phase forked from?" for

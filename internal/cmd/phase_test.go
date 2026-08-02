@@ -1566,6 +1566,115 @@ func TestPhaseCompleteDivergedNoFlagStops(t *testing.T) {
 	}
 }
 
+// TestPhaseCompletePrintsTopologyStatement (c-5): completion states where the
+// run landed. Under the milestone-branch model a correct mid-milestone state —
+// phase merged into milestone/<version>, nothing on main yet — is
+// indistinguishable from a stuck one unless the run says so, which is the doubt
+// that made a working topology look broken.
+func TestPhaseCompletePrintsTopologyStatement(t *testing.T) {
+	dir, _, version := completeMilestoneFixture(t)
+	stubPRMerged(t, true)
+	mustGit(t, dir, "push", "-q", "origin", "phase/auth") // so the remote delete really happens
+
+	var out string
+	if err := runCmdCapturing(t, &out, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+
+	// Each clause asserted separately, so dropping any one of them fails.
+	for _, needle := range []string{
+		"milestone/" + version, // the branch HEAD ends on
+		"deleted phase/auth",   // the local teardown
+		"(local + origin)",     // …and the remote one
+		"not yet on main",      // the standing-work clause
+	} {
+		if !strings.Contains(out, needle) {
+			t.Errorf("completion statement missing %q; got:\n%s", needle, out)
+		}
+	}
+	// The count is real, not a placeholder: the phase commit plus the PR-record
+	// commit are on the milestone branch and not on main.
+	if !strings.Contains(out, "commits on milestone/"+version) &&
+		!strings.Contains(out, "commit on milestone/"+version) {
+		t.Errorf("completion statement should count the commits on the base; got:\n%s", out)
+	}
+
+	t.Run("remote branch already deleted", func(t *testing.T) {
+		dir, _, version := completeMilestoneFixture(t)
+		stubPRMerged(t, true)
+		// completeMilestoneFixture never pushes phase/auth — the
+		// provider-already-deleted shape.
+		if r := mustGit(t, dir, "ls-remote", "--heads", "origin", "phase/auth"); r != "" {
+			t.Fatalf("precondition: origin should have no phase branch, got %q", r)
+		}
+
+		var out string
+		if err := runCmdCapturing(t, &out, Phase(), "complete"); err != nil {
+			t.Fatalf("complete: %v", err)
+		}
+		if strings.Contains(out, "(local + origin)") {
+			t.Errorf("must not claim a remote deletion that never happened; got:\n%s", out)
+		}
+		if !strings.Contains(out, "already gone on origin") {
+			t.Errorf("should say the remote ref was already gone; got:\n%s", out)
+		}
+		if !strings.Contains(out, "milestone/"+version) {
+			t.Errorf("statement should still name the landing branch; got:\n%s", out)
+		}
+	})
+
+	t.Run("base is main", func(t *testing.T) {
+		dir, _ := completeFixture(t) // records base "main"
+		stubPRMerged(t, true)
+
+		var out string
+		if err := runCmdCapturing(t, &out, Phase(), "complete"); err != nil {
+			t.Fatalf("complete: %v", err)
+		}
+		if !strings.Contains(out, "main") {
+			t.Errorf("statement should name main as the landing branch; got:\n%s", out)
+		}
+		if strings.Contains(out, "not yet on main") {
+			t.Errorf("landing on main must emit no standing-work clause; got:\n%s", out)
+		}
+		_ = dir
+	})
+}
+
+// TestPhaseCompleteNamesRecordedBaseNotInferred (c-5): the statement names the
+// base the phase actually forked from, read from its own record. Letting the
+// topology helper infer the work branch would name the active milestone's
+// branch — the stale-milestone lie the previous phase removed, retold in the
+// line the user reads to confirm the run was correct.
+func TestPhaseCompleteNamesRecordedBaseNotInferred(t *testing.T) {
+	dir, _ := completeFixture(t) // records base "main"
+	stubPRMerged(t, true)
+
+	// Everything inference needs to pick the wrong branch: an active milestone
+	// with a local branch, carrying a commit main does not have (so an inferred
+	// answer would also produce a non-zero, plausible-looking count).
+	mustGit(t, dir, "branch", "milestone/v0.9", "main")
+	mustGit(t, dir, "checkout", "-q", "milestone/v0.9")
+	mustWrite(t, filepath.Join(dir, "ms.txt"), "x\n")
+	mustGit(t, dir, "add", "ms.txt")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: milestone-only work")
+	mustGit(t, dir, "checkout", "-q", "phase/auth")
+	if err := runCmd(t, State(), "set", "current_milestone", "v0.9"); err != nil {
+		t.Fatalf("state set: %v", err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if strings.Contains(out, "milestone/v0.9") {
+		t.Errorf("the statement named the INFERRED milestone branch, not the recorded base; got:\n%s", out)
+	}
+	if !strings.Contains(out, "main") {
+		t.Errorf("the statement should name the recorded base main; got:\n%s", out)
+	}
+}
+
 // TestCompleteRecoverKeepsMergedEntry (c-2) pins the provenance of complete's
 // state write on the --recover path. Recovery reloads state and appends
 // `merged <id>` with its own Save; if the completion write then saved the copy
