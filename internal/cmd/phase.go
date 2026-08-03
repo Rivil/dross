@@ -720,8 +720,10 @@ func originRecordedPR(repoDir, base, phaseID string) int {
 // mergeGate is the authoritative completion gate for `dross phase complete`.
 // Primary signal: the provider's "is PR #N merged?" status, looked up via the
 // phase-recorded PR number (opts carries the provider/url wiring). When a PR
-// number is recorded and the provider answers, that answer is decisive —
-// merged proceeds, unmerged refuses. When there is no recorded PR, or the
+// number is recorded and the provider answers, its BaseRef is checked against
+// reconcileBranch before anything else — a retargeted base refuses completion
+// even when the PR is merged (see checkBaseRetarget). Absent a retarget,
+// merged proceeds and unmerged refuses. When there is no recorded PR, or the
 // provider can't answer (ErrMergeStatusUnsupported) or errors, it falls back to
 // `git merge-base --is-ancestor origin/phase/<id> origin/<base>`: a git error
 // (ref missing — squash-deleted) AND a false ancestry result BOTH map to the
@@ -733,9 +735,13 @@ func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconci
 		opts.BaseBranch = reconcileBranch
 		prStatus, err := ship.PRStatusFunc(opts)
 		switch {
-		case err == nil && prStatus.Merged:
-			return nil // authoritatively merged — proceed
-		case err == nil && !prStatus.Merged:
+		case err == nil:
+			if retargetErr := checkBaseRetarget(prStatus.BaseRef, reconcileBranch, phaseID); retargetErr != nil {
+				return retargetErr
+			}
+			if prStatus.Merged {
+				return nil // authoritatively merged, base unchanged — proceed
+			}
 			return fmt.Errorf("PR #%d for %s is not merged upstream — refusing to complete so the phase branch isn't lost.\n"+
 				"Merge the PR first and re-run; or if it really merged, use `dross phase complete --recover` / verify the merge manually.",
 				recordedPR, phaseID)
@@ -759,6 +765,33 @@ func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconci
 			phaseID, reconcileBranch, phaseBranch, reconcileBranch)
 	}
 	return nil
+}
+
+// checkBaseRetarget compares the provider's reported base (baseRef) against
+// reconcileBranch — mergeGate's own parameter, already the fully-resolved
+// recorded base per resolveCompleteBase's order (--base flag → changes.Base →
+// phaseRefRecordedBase). No separate re-read of changes.Base: reconcileBranch
+// already carries that resolution, and re-reading changes.Base would bypass
+// --base and drop the phaseRefRecordedBase stale-tree tier.
+//
+// An empty baseRef — a 2xx PRStatus response whose payload omitted the base
+// field — announces a skipped check and proceeds: a false retarget alarm
+// would block every completion on that provider, which is worse than the gap
+// this check targets. Ref names are normalized (a leading refs/heads/
+// stripped) before an exact, case-sensitive compare.
+func checkBaseRetarget(baseRef, reconcileBranch, phaseID string) error {
+	if baseRef == "" {
+		Printf("base-retarget check skipped (provider reported no base ref) — proceeding\n")
+		return nil
+	}
+	got := strings.TrimPrefix(baseRef, "refs/heads/")
+	want := strings.TrimPrefix(reconcileBranch, "refs/heads/")
+	if got == want {
+		return nil
+	}
+	return fmt.Errorf("PR for %s was opened against %q but the forge now reports its base as %q — refusing to complete against a stale base.\n"+
+		"Re-point the PR on the forge to %q, or re-run `dross ship` so the record is rewritten (--recover does not bypass this check).",
+		phaseID, want, got, want)
 }
 
 // forkPhaseBranch creates and checks out branchName rooted on the base returned

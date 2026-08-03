@@ -642,6 +642,117 @@ func TestPhaseCompleteMergeGateRefusalLeavesHEADOnPhase(t *testing.T) {
 	}
 }
 
+// TestPhaseCompleteRefusesRetargetedBase proves mergeGate refuses completion
+// when the provider reports a base different from reconcileBranch — the PR
+// was re-pointed on the forge since it was recorded, and completing against
+// it would land the phase on a base nobody signed off on.
+func TestPhaseCompleteRefusesRetargetedBase(t *testing.T) {
+	dir, _ := completeFixture(t)
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{Merged: false, BaseRef: "other"}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected a retarget refusal")
+	}
+	if !strings.Contains(err.Error(), "main") || !strings.Contains(err.Error(), "other") {
+		t.Errorf("error must name both branches, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "dross ship") || !strings.Contains(err.Error(), "Re-point the PR") {
+		t.Errorf("error must offer a concrete remedy, got: %v", err)
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+}
+
+// TestPhaseCompleteRefusesRetargetedBaseEvenWhenMerged proves the retarget
+// refusal wins even when the PR reports merged — an impl that places the
+// compare after the merged short-circuit would pass the previous test and
+// fail this one.
+func TestPhaseCompleteRefusesRetargetedBaseEvenWhenMerged(t *testing.T) {
+	dir, _ := completeFixture(t)
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{Merged: true, BaseRef: "other"}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected a retarget refusal even though the PR reports merged")
+	}
+	if !strings.Contains(err.Error(), "main") || !strings.Contains(err.Error(), "other") {
+		t.Errorf("error must name both branches, got: %v", err)
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+}
+
+// TestMergeGateEmptyBaseRefAnnouncesSkip proves a 2xx PRStatus response whose
+// payload omits the base field yields BaseRef:"" and mergeGate proceeds,
+// announcing a skipped retarget check rather than refusing — a false
+// retarget alarm would block every completion on that provider, worse than
+// the gap the retarget check targets.
+func TestMergeGateEmptyBaseRefAnnouncesSkip(t *testing.T) {
+	dir := t.TempDir()
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{Merged: true, BaseRef: ""}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		if err := mergeGate(dir, ship.OpenOpts{Provider: "github"}, "auth", "phase/auth", "main", 7); err != nil {
+			t.Fatalf("mergeGate: %v", err)
+		}
+	})
+	if !strings.Contains(out, "base-retarget check skipped") {
+		t.Errorf("expected a base-retarget-check-skipped announce, got: %q", out)
+	}
+}
+
+// TestRetargetNormalizesRefsHeads proves refs/heads/main vs main is not a
+// retarget in either direction.
+func TestRetargetNormalizesRefsHeads(t *testing.T) {
+	if err := checkBaseRetarget("refs/heads/main", "main", "auth"); err != nil {
+		t.Errorf("refs/heads/main vs main should not be a retarget, got: %v", err)
+	}
+	if err := checkBaseRetarget("main", "refs/heads/main", "auth"); err != nil {
+		t.Errorf("main vs refs/heads/main should not be a retarget, got: %v", err)
+	}
+}
+
+// TestMergeGateRetargetSkipsOnProviderError proves a provider error never
+// reaches the base compare — it takes t-6a's announced ancestry fallback
+// instead, never a retarget refusal.
+func TestMergeGateRetargetSkipsOnProviderError(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://example.test/o/r.git")
+
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{}, errors.New("network blip")
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		if err := mergeGate(dir, ship.OpenOpts{Provider: "github"}, "auth", "phase/auth", "main", 7); err == nil {
+			t.Fatal("expected the ancestry fallback to refuse (no real refs exist)")
+		}
+	})
+	if strings.Contains(out, "retarget") {
+		t.Errorf("a provider error must never reach the retarget compare, got: %q", out)
+	}
+	if !strings.Contains(out, "network blip") {
+		t.Errorf("expected t-6a's announced provider-error fallback, got: %q", out)
+	}
+}
+
 // TestPhaseCompleteFetchFailureLeavesHEADOnPhase pins c-1 for the earliest
 // refusal — a fetch that can't reach origin. Nothing before the ff-only merge
 // needs HEAD, so an unreachable remote must be a pure no-op.
