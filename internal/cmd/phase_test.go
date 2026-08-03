@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -32,6 +33,102 @@ func stubPRMerged(t *testing.T, merged bool) {
 		return ship.PRStatus{Merged: merged, BaseRef: opts.BaseBranch}, nil
 	}
 	t.Cleanup(func() { ship.PRStatusFunc = prev })
+}
+
+// TestMergeGateAnnouncesUnsupportedProvider proves the forward-seam fallback
+// (kept wired for a future provider without a PRStatus implementation yet)
+// announces the degrade instead of swallowing it silently. No real provider
+// reaches this path after t-4/t-5 wire all five ship providers authoritatively,
+// so the seam is exercised directly via a stub.
+func TestMergeGateAnnouncesUnsupportedProvider(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://example.test/o/r.git")
+
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{}, ship.ErrMergeStatusUnsupported
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		_ = mergeGate(dir, ship.OpenOpts{Provider: "futureprovider"}, "auth", "phase/auth", "main", 7)
+	})
+	if !strings.Contains(out, "futureprovider") {
+		t.Errorf("announce must name the provider, got: %q", out)
+	}
+	if !strings.Contains(out, "ancestry") {
+		t.Errorf("announce must mention the git-ancestry fallback, got: %q", out)
+	}
+}
+
+// TestMergeGateAnnouncesProviderError proves a network/API error's own text
+// surfaces in the announce line, so a generic "check skipped" that swallows
+// the cause would fail this substring assert.
+func TestMergeGateAnnouncesProviderError(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://example.test/o/r.git")
+
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{}, errors.New("connection reset by peer")
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		_ = mergeGate(dir, ship.OpenOpts{Provider: "github"}, "auth", "phase/auth", "main", 7)
+	})
+	if !strings.Contains(out, "connection reset by peer") {
+		t.Errorf("announce must contain the error text, got: %q", out)
+	}
+}
+
+// TestMergeGateHappyPathIsSilent proves a successful authoritative merge
+// check prints nothing — the announce must not become noise on every
+// successful completion.
+func TestMergeGateHappyPathIsSilent(t *testing.T) {
+	dir := t.TempDir()
+
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{Merged: true, BaseRef: "main"}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		if err := mergeGate(dir, ship.OpenOpts{Provider: "github"}, "auth", "phase/auth", "main", 7); err != nil {
+			t.Fatalf("mergeGate: %v", err)
+		}
+	})
+	if out != "" {
+		t.Errorf("happy path must print nothing, got: %q", out)
+	}
+}
+
+// TestMergeGateNoRecordedPRStillFallsBack proves recordedPR == 0 takes the
+// ancestry path directly with no provider call and no announce — this is not
+// a provider-caused fallback, so it must stay silent, preserving
+// TestPhaseCompleteRefusesUnmergedNoLocalBranch.
+func TestMergeGateNoRecordedPRStillFallsBack(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://example.test/o/r.git")
+
+	called := false
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		called = true
+		return ship.PRStatus{}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		_ = mergeGate(dir, ship.OpenOpts{Provider: "github"}, "auth", "phase/auth", "main", 0)
+	})
+	if called {
+		t.Error("provider must not be queried when no PR is recorded")
+	}
+	if out != "" {
+		t.Errorf("no-recorded-PR fallback must not announce, got: %q", out)
+	}
 }
 
 // snapshotLiveState captures .dross/state.json and returns a restore func that

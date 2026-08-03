@@ -740,9 +740,13 @@ func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconci
 				"Merge the PR first and re-run; or if it really merged, use `dross phase complete --recover` / verify the merge manually.",
 				recordedPR, phaseID)
 		case errors.Is(err, ship.ErrMergeStatusUnsupported):
-			// Provider can't answer yet — fall through to the ancestry fallback.
+			// Provider can't answer yet — announce and fall through to the
+			// ancestry fallback rather than swallow the degrade silently.
+			Printf("merge-status check skipped (%s can't answer authoritatively) — falling back to git ancestry\n", opts.Provider)
 		default:
-			// Network/API error — fall through rather than block on a transient failure.
+			// Network/API error — announce and fall through rather than block
+			// on a transient failure.
+			Printf("merge-status check skipped (%s) — falling back to git ancestry\n", err)
 		}
 	}
 	// Fallback: git ancestry. A missing origin/phase/<id> ref (squash-deleted)
