@@ -292,21 +292,26 @@ _introduced complete-base-truth · extended state-json-branch-safety · extended
 
 ### Milestone branch model
 
-Milestone work rides a `milestone/<version>` integration branch: scoping a milestone cuts+pushes the branch from main, new phases and quicks fork from it (via one existence-aware base resolver, falling back to main with a nudge when no milestone is active), ship targets phase PRs at it, `phase complete` fast-forwards it, and `dross milestone complete` opens the single milestone→main PR (merge-commit; `--finalize` fast-forwards main and deletes the branch).
+Milestone work rides a `milestone/<version>` integration branch: scoping a milestone stacks it on the current milestone's still-unmerged branch tip when one exists — else cuts from main, or from an explicit `--base` override — and records the cut point as a stored fact. New phases and quicks fork from the resolved base (falling back to main with a nudge when no milestone is active). Phase PRs target it and `phase complete` fast-forwards it. `dross milestone complete` opens the milestone's integration PR against its recorded parent while that parent is unmerged, retargeting main once the parent has merged or vanished (merge-commit; `--finalize` fast-forwards main and deletes the branch — refusing while an unmerged stacked dependent, or an open forge PR, still targets it).
 
-- `ensureMilestoneBranch` (create cuts+pushes at scope time) — `internal/cmd/milestone.go:342`
+- `resolveMilestoneCutPoint` (create stacks on the current milestone's unmerged branch tip; `--base` forces it; the cut point is recorded, never re-inferred) — `internal/cmd/milestone.go:377`
+- `Milestone.BaseOr` (recorded cut-point branch; empty reads as main) — `internal/milestone/milestone.go:76`
+- `milestoneMergedIntoMain` (git-ancestry merge probe, origin-preferred with local fallback) — `internal/cmd/milestone_merged.go:32`
+- `milestonePRBase` (milestone-complete PR targets the recorded parent while unmerged and present on origin, else main) — `internal/cmd/milestone.go:219`
 - `resolveNewWorkBase` (existence-aware base resolver: milestone branch when its ref exists, else main) — `internal/cmd/basebranch.go:159`
 - `forkPhaseBranch` (phase create/insert fork off the resolved base) — `internal/cmd/phase.go:776`
 - `BaseBranch` (`dross base-branch`: resolved base on stdout, no-milestone nudge on stderr) — `internal/cmd/basebranch.go:20`
-- ship PR-base resolution + missing-remote-base guard — `internal/cmd/ship.go:222`
-- `milestoneComplete` (one milestone→main PR; `--finalize` ff + branch delete) — `internal/cmd/milestone.go:126`
+- `ensureMilestoneBranch` (create cuts+pushes at scope time) — `internal/cmd/milestone.go:342`
+- `dependentMilestones` (prune/finalize refuse to delete a branch an unmerged stacked milestone still records as its base) — `internal/cmd/milestone_dependents.go:29`
+- `OpenPRsTargeting` / `guardOpenPRsTargeting` (forge open-PR check layered over the record scan; an unavailable provider announces its skip rather than passing silently) — `internal/ship/basepr.go:35`, `internal/cmd/milestone_dependents.go:85`
+- `milestoneComplete` (opens the milestone's integration PR; `--finalize` ff + branch delete) — `internal/cmd/milestone.go:126`
 - `staleMilestoneBranches` (ancestry, then squash-commit resolution against the candidate's own first parent) — `internal/cmd/milestone_stale.go:58`
 - `milestonePrune` (`dross milestone prune`: deletes stale branches local + on origin) — `internal/cmd/milestone.go:49`
 - doctor stale-milestone-branch report (read-only) — `internal/cmd/doctor.go:376`
 
-A milestone branch whose work already landed on main is detected and removable. Ancestry catches the merge-commit case; the squash-merged case that `git branch --merged` is blind to is resolved by matching the branch's diff patch-id against main's commits, deterministically when several are ambiguous. The surfaces are split on purpose (locked `prune_surface`): `dross doctor` *reports* a stale branch read-only, and the explicit `dross milestone prune` performs the local+remote deletion, refusing on a dirty tree or when the branch is the current HEAD.
+A milestone branch whose work already landed on main is detected and removable. Ancestry catches the merge-commit case; the squash-merged case that `git branch --merged` is blind to is resolved by matching the branch's diff patch-id against main's commits, deterministically when several are ambiguous. The surfaces are split on purpose (locked `prune_surface`): `dross doctor` *reports* a stale branch read-only, and the explicit `dross milestone prune` performs the local+remote deletion, refusing on a dirty tree, when the branch is the current HEAD, or when an unmerged stacked dependent or open forge PR still targets it.
 
-_introduced milestone-branch-model · extended state-json-branch-safety · a81e2e8_
+_introduced milestone-branch-model · extended state-json-branch-safety · extended milestone-stacking · cbad9c9_
 
 ### Milestone scoping
 
