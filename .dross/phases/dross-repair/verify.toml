@@ -1,0 +1,96 @@
+[verify]
+  phase = "dross-repair"
+  generated_at = 2026-08-03T16:14:58.529107Z
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-08-03T16:38:40.922952Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9514824797843666
+  mutants_killed = 1765
+  mutants_survived = 90
+  mutants_not_covered = 90
+  criteria_total = 6
+  criteria_covered = 4
+  criteria_uncovered = 2
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/repair_test.go:TestRepairDryRunReportsButDoesNotRestore", "internal/cmd/repair_files_test.go (detectModifiedOrMissingTracked)", "internal/cmd/repair_phasedirs_test.go (detectMissingPhaseDirs)"]
+  notes = "No surviving mutants in repair_files.go or repair_phasedirs.go."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/repair_test.go:TestRepairApplyRestoresAndCommits"]
+  notes = "Restores a clobbered file and a missing phase dir in one --apply call, no SHA/phase id picked by hand. No surviving mutants in the restore path."
+
+[[criterion]]
+  id = "c-3"
+  status = "weak"
+  tests = ["internal/cmd/repair_state_test.go:TestReconstructStateBuildsHistoryFromPhaseCommits", "internal/cmd/repair_state_test.go:TestReconstructStateSetsCurrentPhaseFromBranch", "internal/cmd/repair_state_test.go:TestReconstructStateSkipsNonMatchingCommits"]
+  notes = "reconstructState() itself is well tested, but no repair_test.go test ever drives a stale state.json through the `dross repair` command — checkStaleState() and the --apply save-reconstructed-state path (repair.go:85,121-144) have zero coverage, confirmed by 4 not-covered mutants there. The history-cap branch (repair_state.go:50, maxReconstructedHistory truncation) is also not-covered — no test builds >max history entries."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/repair_test.go:TestRepairApplyRestoresAndCommits", "internal/cmd/repair_phasedirs_test.go"]
+  notes = "No surviving mutants in the phase-dir detect/restore path."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/repair_test.go:TestRepairNoFindingsReportsNothingToRepair"]
+  notes = "No surviving mutants around the no-findings check."
+
+[[criterion]]
+  id = "c-6"
+  status = "weak"
+  tests = ["internal/cmd/doctor_test.go:TestDoctorFlagsClobberedFile", "internal/cmd/doctor_test.go:TestDoctorClobberSectionCleanIsNotAnIssue"]
+  notes = "Only the clobbered-file half of doctor's new section is exercised. The missing-phase-dir half (t-3's detector, wired into the same section) is never driven through doctor — confirmed by a not-covered issues++ mutant at doctor.go:370. The two scan-error branches (clobberErr/missingDirsErr != nil, doctor.go:353/355) are also untested."
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (uncovered): repair.go:85 (CONDITIONALS_NEGATION) — reconstructed.Save(statePath) err check, no test drives --apply on a stale state.json"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (uncovered): repair.go:131 (CONDITIONALS_NEGATION) — checkStaleState loadErr!=nil case, untested"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (uncovered): repair.go:133 (CONDITIONALS_NEGATION x2) — checkStaleState branchPhase-mismatch case, untested"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (uncovered): repair.go:140 (CONDITIONALS_NEGATION) — reconstructState error path in checkStaleState, untested"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (uncovered): repair.go:161 (ARITHMETIC_BASE x2) — stale-state report line, untested"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (uncovered): repair_state.go:50 (INVERT_NEGATIVES, ARITHMETIC_BASE) — maxReconstructedHistory truncation branch, no test builds >max history entries"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (uncovered): doctor.go:353 (CONDITIONALS_NEGATION) — clobberErr!=nil scan-error branch, untested"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (uncovered): doctor.go:355 (CONDITIONALS_NEGATION) — missingDirsErr!=nil scan-error branch, untested"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (uncovered): doctor.go:357 (CONDITIONALS_NEGATION x2) — clean-vs-findings switch condition, only the clobbered-file half is exercised by any test"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived (uncovered): doctor.go:370 (INCREMENT_DECREMENT) — issues++ in the missingDirs loop; no doctor test ever populates a missing phase dir"
+
+[[finding]]
+  severity = "NOTE"
+  text = "76 pre-existing mutation survivors across 23 unrelated internal/cmd files (outside this phase's diff) were routed to a deferred entry in spec.toml (target unset — someday) per r-02, not left in this findings list. See spec.toml [[deferred]]."

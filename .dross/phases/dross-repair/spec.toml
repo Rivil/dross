@@ -50,3 +50,8 @@ key    = "clobber_detection_scope"
 choice = "Tree-diff only: repair restores files missing/differing from their last git-tracked version; semantic/schema inconsistencies stay dross validate's job"
 why    = "Keeps repair's contract narrow and predictable (a restorer, not a semantic fixer); avoids overlapping responsibility with dross validate."
 locked = true
+
+[[deferred]]
+text = "76 pre-existing mutation survivors across 23 internal/cmd files (doctor.go older sections, hints.go, status.go, ship.go, phase_lifecycle.go, env.go, footer_coverage.go, gitignore.go, milestone_dependents.go, statusline.go, phase.go, watch.go, validate.go, update.go, project.go, install.go, state.go, basebranch.go, rule.go, hooks.go, issue.go, root.go) — surfaced by dross-repair's package-wide gremlins run, not caused by it."
+why = "r-02: pre-existing findings outside the phase diff must be routed, not left inert."
+target = ""
