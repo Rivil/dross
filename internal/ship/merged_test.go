@@ -58,7 +58,7 @@ func TestPRStatusGitHubClosedIsNotMerged(t *testing.T) {
 // return the sentinel (not a silent merged=true), so callers fall back to
 // git ancestry rather than false-completing.
 func TestPRStatusUnsupportedProvider(t *testing.T) {
-	for _, prov := range []string{"forgejo", "gitea", "gitlab", "Forgejo"} {
+	for _, prov := range []string{"forgejo", "gitea", "Forgejo"} {
 		status, err := GetPRStatus(OpenOpts{Provider: prov, PRNumber: 1})
 		if !errors.Is(err, ErrMergeStatusUnsupported) {
 			t.Errorf("provider %q: err=%v want ErrMergeStatusUnsupported", prov, err)

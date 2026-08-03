@@ -37,7 +37,9 @@ func GetPRStatus(opts OpenOpts) (PRStatus, error) {
 		return gitHubPRStatus(opts)
 	case "bitbucket":
 		return bitbucketPRStatus(opts)
-	case "forgejo", "gitea", "gitlab":
+	case "gitlab":
+		return gitlabPRStatus(opts)
+	case "forgejo", "gitea":
 		return PRStatus{}, ErrMergeStatusUnsupported
 	default:
 		return PRStatus{}, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())

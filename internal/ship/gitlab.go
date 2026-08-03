@@ -93,6 +93,37 @@ func openGitLabPR(opts OpenOpts) (*OpenResult, error) {
 	return result, nil
 }
 
+// gitlabPRStatus asks GET /projects/{ref}/merge_requests/{iid} and reports
+// merged == (state == "merged") plus the MR's current target_branch. GitLab's
+// other closed states — "closed" (declined without landing) and "locked" —
+// both report Merged false, never true, so a discarded MR never
+// false-completes the phase whose work it carried.
+func gitlabPRStatus(opts OpenOpts) (PRStatus, error) {
+	if opts.PRNumber <= 0 {
+		return PRStatus{}, errors.New("gitlab merged-status lookup needs a PR number")
+	}
+	ref, token, err := gitlabTarget(opts)
+	if err != nil {
+		return PRStatus{}, err
+	}
+	endpoint := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf("/projects/%s/merge_requests/%d", ref, opts.PRNumber)
+	respBody, status, err := gitlabReq("GET", endpoint, opts.AuthScheme, token, nil)
+	if err != nil {
+		return PRStatus{}, fmt.Errorf("get MR !%d: %w", opts.PRNumber, err)
+	}
+	if status >= 300 {
+		return PRStatus{}, fmt.Errorf("get MR !%d: HTTP %d: %s", opts.PRNumber, status, string(respBody))
+	}
+	var mr struct {
+		State        string `json:"state"`
+		TargetBranch string `json:"target_branch"`
+	}
+	if err := json.Unmarshal(respBody, &mr); err != nil {
+		return PRStatus{}, fmt.Errorf("parse MR !%d: %w", opts.PRNumber, err)
+	}
+	return PRStatus{Merged: strings.EqualFold(mr.State, "merged"), BaseRef: mr.TargetBranch}, nil
+}
+
 // gitlabOpenMRsTargeting lists the open Merge Requests whose target_branch is
 // base, paginating through every page — GitLab defaults to 20 results per
 // page, so a first-page-only read would let `milestone prune` delete a branch

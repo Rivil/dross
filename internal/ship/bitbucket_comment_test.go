@@ -240,11 +240,11 @@ func TestCommentAndMergedNormaliseProvider(t *testing.T) {
 	}
 
 	// The same normalisation reaches the providers that are still unsupported,
-	// so a padded gitlab keeps returning the fall-back sentinel rather than a
+	// so a padded forgejo keeps returning the fall-back sentinel rather than a
 	// hard misconfiguration error.
-	if _, err := GetPRStatus(OpenOpts{Provider: " GitLab ", PRNumber: 1}); err == nil ||
+	if _, err := GetPRStatus(OpenOpts{Provider: " forgejo ", PRNumber: 1}); err == nil ||
 		!strings.Contains(err.Error(), "not supported") {
-		t.Errorf("padded gitlab should still reach the unsupported arm, got: %v", err)
+		t.Errorf("padded forgejo should still reach the unsupported arm, got: %v", err)
 	}
 }
 

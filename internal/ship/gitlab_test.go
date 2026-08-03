@@ -2,11 +2,210 @@ package ship
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+// TestGitLabPRStatusMerged proves a merged MR reports Merged true and its
+// target_branch as BaseRef, replacing today's sentinel.
+func TestGitLabPRStatusMerged(t *testing.T) {
+	t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"merged","target_branch":"main"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	status, err := GetPRStatus(OpenOpts{
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
+	})
+	if err != nil {
+		t.Fatalf("GetPRStatus: %v", err)
+	}
+	if !status.Merged || status.BaseRef != "main" {
+		t.Errorf("got %+v, want {Merged:true BaseRef:main}", status)
+	}
+}
+
+// TestGitLabPRStatusClosedIsNotMerged proves both "closed" (declined without
+// landing) and "locked" report Merged false with no error. A `state !=
+// "opened"` impl would pass the "opened" test but this one catches it.
+func TestGitLabPRStatusClosedIsNotMerged(t *testing.T) {
+	for _, state := range []string{"closed", "locked"} {
+		t.Run(state, func(t *testing.T) {
+			t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(fmt.Sprintf(`{"state":%q,"target_branch":"main"}`, state)))
+			}))
+			t.Cleanup(server.Close)
+
+			status, err := GetPRStatus(OpenOpts{
+				Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+				AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
+			})
+			if err != nil {
+				t.Fatalf("GetPRStatus: %v", err)
+			}
+			if status.Merged {
+				t.Errorf("state %q must report Merged false", state)
+			}
+		})
+	}
+}
+
+// TestGitLabPRStatusOpenedIsNotMerged proves an open MR reports Merged false.
+func TestGitLabPRStatusOpenedIsNotMerged(t *testing.T) {
+	t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"opened","target_branch":"main"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	status, err := GetPRStatus(OpenOpts{
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
+	})
+	if err != nil {
+		t.Fatalf("GetPRStatus: %v", err)
+	}
+	if status.Merged {
+		t.Error("an opened MR must not report Merged true")
+	}
+}
+
+// TestGitLabPRStatusReportsTargetBranch proves BaseRef comes straight from
+// target_branch — this is the exact field a later retarget check consumes.
+func TestGitLabPRStatusReportsTargetBranch(t *testing.T) {
+	t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"opened","target_branch":"milestone/v1.2"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	status, err := GetPRStatus(OpenOpts{
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
+	})
+	if err != nil {
+		t.Fatalf("GetPRStatus: %v", err)
+	}
+	if status.BaseRef != "milestone/v1.2" {
+		t.Errorf("BaseRef = %q, want milestone/v1.2", status.BaseRef)
+	}
+}
+
+// TestGitLabPRStatusEndpoint asserts the request path, both by derived
+// owner/repo and by a numeric ProjectID override.
+func TestGitLabPRStatusEndpoint(t *testing.T) {
+	t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.EscapedPath()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"opened","target_branch":"main"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	if _, err := GetPRStatus(OpenOpts{
+		Provider: "gitlab", URL: "https://gitlab.example/owner/repo", APIBase: server.URL,
+		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
+	}); err != nil {
+		t.Fatalf("GetPRStatus: %v", err)
+	}
+	if want := "/projects/owner%2Frepo/merge_requests/5"; gotPath != want {
+		t.Errorf("path = %q, want %q", gotPath, want)
+	}
+
+	if _, err := GetPRStatus(OpenOpts{
+		Provider: "gitlab", URL: "https://gitlab.example/owner/repo", APIBase: server.URL,
+		AuthEnv: "MOCK_GITLAB_TOKEN", ProjectID: "123", PRNumber: 5,
+	}); err != nil {
+		t.Fatalf("GetPRStatus (ProjectID): %v", err)
+	}
+	if want := "/projects/123/merge_requests/5"; gotPath != want {
+		t.Errorf("path = %q, want %q", gotPath, want)
+	}
+}
+
+// TestGitLabPRStatusAuthHeader proves PRIVATE-TOKEN by default and Bearer
+// when AuthScheme is "bearer".
+func TestGitLabPRStatusAuthHeader(t *testing.T) {
+	t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+	var gotAuth, gotPrivate string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotPrivate = r.Header.Get("PRIVATE-TOKEN")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"opened","target_branch":"main"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	if _, err := GetPRStatus(OpenOpts{
+		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL,
+		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
+	}); err != nil {
+		t.Fatalf("GetPRStatus: %v", err)
+	}
+	if gotPrivate != "secret" || gotAuth != "" {
+		t.Errorf("default scheme: PRIVATE-TOKEN=%q Authorization=%q", gotPrivate, gotAuth)
+	}
+
+	if _, err := GetPRStatus(OpenOpts{
+		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL,
+		AuthEnv: "MOCK_GITLAB_TOKEN", AuthScheme: "bearer", PRNumber: 5,
+	}); err != nil {
+		t.Fatalf("GetPRStatus (bearer): %v", err)
+	}
+	if gotAuth != "Bearer secret" || gotPrivate != "" {
+		t.Errorf("bearer scheme: Authorization=%q PRIVATE-TOKEN=%q", gotAuth, gotPrivate)
+	}
+}
+
+// TestGitLabPRStatusHTTP404IsError proves a 404 yields an error rather than
+// (false, nil) — mergeGate must announce and fall back, not read a lookup
+// failure as "not merged".
+func TestGitLabPRStatusHTTP404IsError(t *testing.T) {
+	t.Setenv("MOCK_GITLAB_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	t.Cleanup(server.Close)
+
+	status, err := GetPRStatus(OpenOpts{
+		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL,
+		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
+	})
+	if err == nil {
+		t.Fatalf("expected an error for a 404, got %+v", status)
+	}
+}
+
+// TestGitLabPRStatusNeedsPRNumber proves a missing PR number is an error
+// before any request is made.
+func TestGitLabPRStatusNeedsPRNumber(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+	}))
+	t.Cleanup(server.Close)
+
+	if _, err := GetPRStatus(OpenOpts{
+		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL,
+		AuthEnv: "MOCK_GITLAB_TOKEN",
+	}); err == nil {
+		t.Error("expected an error when PRNumber is unset")
+	}
+	if requests != 0 {
+		t.Errorf("%d request(s) made before the PR-number check", requests)
+	}
+}
 
 // TestGitLabOpenPRsTargetingUsesIID proves BasePR.Number comes from iid, not
 // GitLab's internal numeric id — reading "id" would point completion-time
