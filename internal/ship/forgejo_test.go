@@ -8,6 +8,152 @@ import (
 	"testing"
 )
 
+// TestForgejoPRStatusUsesMergedFlag proves merged comes from the "merged"
+// boolean, never derived from state — Gitea reports a merged PR as state
+// "closed", so an impl reading state alone would call a landed PR unmerged.
+func TestForgejoPRStatusUsesMergedFlag(t *testing.T) {
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"merged":true,"state":"closed","base":{"ref":"main"}}`))
+	}))
+	t.Cleanup(server.Close)
+
+	status, err := GetPRStatus(OpenOpts{
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
+	})
+	if err != nil {
+		t.Fatalf("GetPRStatus: %v", err)
+	}
+	if !status.Merged || status.BaseRef != "main" {
+		t.Errorf("got %+v, want {Merged:true BaseRef:main}", status)
+	}
+}
+
+// TestForgejoPRStatusClosedUnmergedIsNotMerged proves a declined PR
+// (merged=false, state=closed) reports Merged false, so completion refuses
+// rather than false-completing discarded work.
+func TestForgejoPRStatusClosedUnmergedIsNotMerged(t *testing.T) {
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"merged":false,"state":"closed","base":{"ref":"main"}}`))
+	}))
+	t.Cleanup(server.Close)
+
+	status, err := GetPRStatus(OpenOpts{
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
+	})
+	if err != nil {
+		t.Fatalf("GetPRStatus: %v", err)
+	}
+	if status.Merged {
+		t.Error("a declined PR must not report Merged true")
+	}
+}
+
+// TestForgejoPRStatusOpenPopulatesBaseRef proves an open PR reports Merged
+// false with BaseRef still read from base.ref — this is what makes the
+// retarget check work on an unmerged PR.
+func TestForgejoPRStatusOpenPopulatesBaseRef(t *testing.T) {
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"merged":false,"state":"open","base":{"ref":"milestone/v1.2"}}`))
+	}))
+	t.Cleanup(server.Close)
+
+	status, err := GetPRStatus(OpenOpts{
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
+	})
+	if err != nil {
+		t.Fatalf("GetPRStatus: %v", err)
+	}
+	if status.Merged {
+		t.Error("an open PR must not report Merged true")
+	}
+	if status.BaseRef != "milestone/v1.2" {
+		t.Errorf("BaseRef = %q, want milestone/v1.2", status.BaseRef)
+	}
+}
+
+// TestForgejoPRStatusGiteaAlias proves "gitea" and "Gitea" reach the same
+// implementation.
+func TestForgejoPRStatusGiteaAlias(t *testing.T) {
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"merged":true,"state":"closed","base":{"ref":"main"}}`))
+	}))
+	t.Cleanup(server.Close)
+
+	for _, prov := range []string{"gitea", "Gitea"} {
+		status, err := GetPRStatus(OpenOpts{
+			Provider: prov, URL: "https://forge.example/me/p", APIBase: server.URL,
+			AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
+		})
+		if err != nil {
+			t.Fatalf("provider %q: GetPRStatus: %v", prov, err)
+		}
+		if !status.Merged {
+			t.Errorf("provider %q: expected Merged true", prov)
+		}
+	}
+	if calls != 2 {
+		t.Errorf("got %d handler calls, want 2 (gitea + Gitea)", calls)
+	}
+}
+
+// TestForgejoPRStatusEndpointAndAuth asserts the request path and the
+// Authorization: token header.
+func TestForgejoPRStatusEndpointAndAuth(t *testing.T) {
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+	var gotPath, gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"merged":true,"state":"closed","base":{"ref":"main"}}`))
+	}))
+	t.Cleanup(server.Close)
+
+	if _, err := GetPRStatus(OpenOpts{
+		Provider: "forgejo", URL: "https://forge.example/owner/repo", APIBase: server.URL,
+		AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
+	}); err != nil {
+		t.Fatalf("GetPRStatus: %v", err)
+	}
+	if want := "/repos/owner/repo/pulls/5"; gotPath != want {
+		t.Errorf("path = %q, want %q", gotPath, want)
+	}
+	if gotAuth != "token secret" {
+		t.Errorf("Authorization = %q, want %q", gotAuth, "token secret")
+	}
+}
+
+// TestForgejoPRStatusHTTP500IsError proves a non-2xx response yields an
+// error, not (false, nil).
+func TestForgejoPRStatusHTTP500IsError(t *testing.T) {
+	t.Setenv("MOCK_FORGEJO_TOKEN", "secret")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+
+	status, err := GetPRStatus(OpenOpts{
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
+	})
+	if err == nil {
+		t.Fatalf("expected an error for a 500, got %+v", status)
+	}
+}
+
 // TestForgejoOpenPRsTargetingFiltersByBaseRef proves only the PRs whose
 // base.ref matches survive — Gitea's list-pulls endpoint has no base filter,
 // so an impl trusting a `base=` query param would return the "dev" PR too.

@@ -78,6 +78,38 @@ func openForgejoPR(opts OpenOpts) (*OpenResult, error) {
 	return &OpenResult{Number: int(num), URL: htmlURL}, nil
 }
 
+// forgejoPRStatus asks GET /repos/{owner}/{repo}/pulls/{index} and reports
+// the "merged" boolean plus base.ref. Gitea reports a merged PR as
+// state "closed" — reading state alone would call a landed PR unmerged — so
+// merged comes from the "merged" field, never derived from state.
+func forgejoPRStatus(opts OpenOpts) (PRStatus, error) {
+	if opts.PRNumber <= 0 {
+		return PRStatus{}, errors.New("forgejo merged-status lookup needs a PR number")
+	}
+	owner, repo, token, err := forgejoTarget(opts)
+	if err != nil {
+		return PRStatus{}, err
+	}
+	endpoint := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf("/repos/%s/%s/pulls/%d", owner, repo, opts.PRNumber)
+	respBody, status, err := jsonGet(endpoint, token)
+	if err != nil {
+		return PRStatus{}, fmt.Errorf("get PR #%d: %w", opts.PRNumber, err)
+	}
+	if status >= 300 {
+		return PRStatus{}, fmt.Errorf("get PR #%d: HTTP %d: %s", opts.PRNumber, status, string(respBody))
+	}
+	var pr struct {
+		Merged bool `json:"merged"`
+		Base   struct {
+			Ref string `json:"ref"`
+		} `json:"base"`
+	}
+	if err := json.Unmarshal(respBody, &pr); err != nil {
+		return PRStatus{}, fmt.Errorf("parse PR #%d: %w", opts.PRNumber, err)
+	}
+	return PRStatus{Merged: pr.Merged, BaseRef: pr.Base.Ref}, nil
+}
+
 // forgejoOpenPRsTargeting lists the open PRs whose base.ref is base,
 // paginating through Gitea/Forgejo's list-pulls endpoint (default 30/page)
 // and filtering client-side: the endpoint has no base= query parameter, so a

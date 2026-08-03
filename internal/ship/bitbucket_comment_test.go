@@ -238,14 +238,6 @@ func TestCommentAndMergedNormaliseProvider(t *testing.T) {
 			t.Errorf("GetPRStatus %q dispatched nowhere: %v", p, err)
 		}
 	}
-
-	// The same normalisation reaches the providers that are still unsupported,
-	// so a padded forgejo keeps returning the fall-back sentinel rather than a
-	// hard misconfiguration error.
-	if _, err := GetPRStatus(OpenOpts{Provider: " forgejo ", PRNumber: 1}); err == nil ||
-		!strings.Contains(err.Error(), "not supported") {
-		t.Errorf("padded forgejo should still reach the unsupported arm, got: %v", err)
-	}
 }
 
 // TestShipMessagesListShipProviders keeps both unsupported-provider messages

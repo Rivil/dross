@@ -54,21 +54,6 @@ func TestPRStatusGitHubClosedIsNotMerged(t *testing.T) {
 	}
 }
 
-// TestPRStatusUnsupportedProvider proves the not-yet-implemented providers
-// return the sentinel (not a silent merged=true), so callers fall back to
-// git ancestry rather than false-completing.
-func TestPRStatusUnsupportedProvider(t *testing.T) {
-	for _, prov := range []string{"forgejo", "gitea", "Forgejo"} {
-		status, err := GetPRStatus(OpenOpts{Provider: prov, PRNumber: 1})
-		if !errors.Is(err, ErrMergeStatusUnsupported) {
-			t.Errorf("provider %q: err=%v want ErrMergeStatusUnsupported", prov, err)
-		}
-		if status.Merged {
-			t.Errorf("provider %q: merged must be false when unsupported", prov)
-		}
-	}
-}
-
 // TestPRStatusUnknownProvider returns a plain error (not the unsupported
 // sentinel) so an outright misconfiguration is still distinguishable.
 func TestPRStatusUnknownProvider(t *testing.T) {
@@ -83,15 +68,15 @@ func TestPRStatusUnknownProvider(t *testing.T) {
 
 // TestPRStatusFuncDefaultsToPRStatus proves the exported seam is a non-nil
 // var defaulting to the real implementation, so production wiring works and
-// cmd-package tests have something to override. It keys off an unsupported,
-// not-yet-wired provider rather than "gitlab" — t-4 makes gitlab a supported
-// PRStatus provider, which would otherwise break this assertion silently two
-// tasks later.
+// cmd-package tests have something to override. It keys off an outright
+// unknown provider rather than any real one — by the end of this phase every
+// provider in configenum.ShipProviders answers PRStatus authoritatively, so
+// any real-provider exemplar would eventually break this assertion silently.
 func TestPRStatusFuncDefaultsToPRStatus(t *testing.T) {
 	if PRStatusFunc == nil {
 		t.Fatal("PRStatusFunc must be a non-nil overridable var")
 	}
-	if _, err := PRStatusFunc(OpenOpts{Provider: "forgejo", PRNumber: 1}); !errors.Is(err, ErrMergeStatusUnsupported) {
-		t.Errorf("PRStatusFunc should delegate to GetPRStatus, got: %v", err)
+	if _, err := PRStatusFunc(OpenOpts{Provider: "perforce", PRNumber: 1}); err == nil {
+		t.Error("PRStatusFunc should delegate to GetPRStatus and return its unknown-provider error")
 	}
 }
