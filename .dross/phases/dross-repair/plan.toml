@@ -1,99 +1,57 @@
+task_seq = 0
+
 [phase]
-id = "dross-repair"
+  id = "dross-repair"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Detect + restore uncommitted-clobbered files"
-files         = ["internal/cmd/repair_files.go", "internal/cmd/repair_files_test.go"]
-description   = """
-Detect tracked .dross/ files (project.toml, rules.toml, milestone tomls, phase
-spec.toml/plan.toml) that are missing or have uncommitted diffs relative to
-their last git-tracked version. Provide a shared restore primitive that
-checks out a specific path from a given ref, reused by t-3.
-"""
-covers        = ["c-1", "c-2", "c-5"]
-test_contract = [
-  "if a tracked phase spec.toml is deleted from the working tree, detectModifiedOrMissingTracked reports it as missing",
-  "if a tracked project.toml has uncommitted content changes, it's reported as clobbered with its path",
-  "restorePathFromRef checks out the exact HEAD blob for a reported path, and git status --porcelain shows no diff afterward",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Detect + restore uncommitted-clobbered files"
+  files = ["internal/cmd/repair_files.go", "internal/cmd/repair_files_test.go"]
+  description = "Detect tracked .dross/ files (project.toml, rules.toml, milestone tomls, phase\nspec.toml/plan.toml) that are missing or have uncommitted diffs relative to\ntheir last git-tracked version. Provide a shared restore primitive that\nchecks out a specific path from a given ref, reused by t-3.\n"
+  covers = ["c-1", "c-2", "c-5"]
+  test_contract = ["if a tracked phase spec.toml is deleted from the working tree, detectModifiedOrMissingTracked reports it as missing", "if a tracked project.toml has uncommitted content changes, it's reported as clobbered with its path", "restorePathFromRef checks out the exact HEAD blob for a reported path, and git status --porcelain shows no diff afterward"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "Reconstruct state.json from git history"
-files         = ["internal/cmd/repair_state.go", "internal/cmd/repair_state_test.go"]
-description   = """
-Detect a missing or clearly stale state.json and reconstruct a plausible
-State: History from phase-completion commit markers (`phase %s: %s`) parsed
-from the main branch's commit log, CurrentPhase/CurrentMilestone inferred
-from the checked-out phase/<id> branch.
-"""
-covers        = ["c-3"]
-test_contract = [
-  "reconstructState rebuilds History in commit order from phase-completion commit messages on the main branch",
-  "reconstructState sets CurrentPhase from the checked-out phase/<id> branch name even when no commit marker references it yet",
-  "a commit message not matching the phase %s: %s pattern is skipped, not added to History as a garbage entry",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Reconstruct state.json from git history"
+  files = ["internal/cmd/repair_state.go", "internal/cmd/repair_state_test.go"]
+  description = "Detect a missing or clearly stale state.json and reconstruct a plausible\nState: History from phase-completion commit markers (`phase %s: %s`) parsed\nfrom the main branch's commit log, CurrentPhase/CurrentMilestone inferred\nfrom the checked-out phase/<id> branch.\n"
+  covers = ["c-3"]
+  test_contract = ["reconstructState rebuilds History in commit order from phase-completion commit messages on the main branch", "reconstructState sets CurrentPhase from the checked-out phase/<id> branch name even when no commit marker references it yet", "a commit message not matching the phase %s: %s pattern is skipped, not added to History as a garbage entry"]
+  status = "done"
 
 [[task]]
-id         = "t-3"
-wave       = 2
-depends_on = ["t-1"]
-title      = "Detect + restore phase dirs wiped by checkout"
-files      = ["internal/cmd/repair_phasedirs.go", "internal/cmd/repair_phasedirs_test.go"]
-description = """
-Detect phase directories that exist in git history (e.g. on
-origin/<mainBranch>) but are absent from the current working tree, and
-restore them using t-1's restorePathFromRef. Closes the gap guardLiveState
-(switchbranch.go) leaves open for phase dirs other than state.json.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "a phase dir present on origin/<mainBranch> but absent from the current working tree is flagged as a missing-known phase directory",
-  "restoring a detected missing phase dir via restorePathFromRef repopulates its spec.toml/plan.toml to match the source ref's blobs",
-  "a phase dir that never existed on any ref is not falsely flagged",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Detect + restore phase dirs wiped by checkout"
+  files = ["internal/cmd/repair_phasedirs.go", "internal/cmd/repair_phasedirs_test.go"]
+  description = "Detect phase directories that exist in git history (e.g. on\norigin/<mainBranch>) but are absent from the current working tree, and\nrestore them using t-1's restorePathFromRef. Closes the gap guardLiveState\n(switchbranch.go) leaves open for phase dirs other than state.json.\n"
+  covers = ["c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["a phase dir present on origin/<mainBranch> but absent from the current working tree is flagged as a missing-known phase directory", "restoring a detected missing phase dir via restorePathFromRef repopulates its spec.toml/plan.toml to match the source ref's blobs", "a phase dir that never existed on any ref is not falsely flagged"]
+  status = "done"
 
 [[task]]
-id         = "t-4"
-wave       = 3
-depends_on = ["t-1", "t-2", "t-3"]
-title      = "dross repair command: dry-run default, --apply, report"
-files      = ["internal/cmd/repair.go", "internal/cmd/repair_test.go", "cmd/dross/main.go"]
-description = """
-New top-level `dross repair` cobra command wiring t-1/t-2/t-3's detectors
-together. Dry-run by default (report only); --apply writes restores and
-commits per dross-commit-hygiene. No findings prints "nothing to repair"
-and writes nothing. Register in cmd/dross/main.go's root.AddCommand.
-"""
-covers        = ["c-1", "c-2", "c-3", "c-4", "c-5"]
-test_contract = [
-  "running dross repair with no --apply and no findings prints \"nothing to repair\", exits 0, and writes no file",
-  "running dross repair (dry-run) with a clobbered file present prints the finding but leaves the file un-restored on disk",
-  "running dross repair --apply with a clobbered file present restores it and commits the .dross/ change",
-  "repair_test.go asserts Repair() is registered in cmd/dross/main.go's root.AddCommand list",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 3
+  title = "dross repair command: dry-run default, --apply, report"
+  files = ["internal/cmd/repair.go", "internal/cmd/repair_test.go", "cmd/dross/main.go"]
+  description = "New top-level `dross repair` cobra command wiring t-1/t-2/t-3's detectors\ntogether. Dry-run by default (report only); --apply writes restores and\ncommits per dross-commit-hygiene. No findings prints \"nothing to repair\"\nand writes nothing. Register in cmd/dross/main.go's root.AddCommand.\n"
+  covers = ["c-1", "c-2", "c-3", "c-4", "c-5"]
+  depends_on = ["t-1", "t-2", "t-3"]
+  test_contract = ["running dross repair with no --apply and no findings prints \"nothing to repair\", exits 0, and writes no file", "running dross repair (dry-run) with a clobbered file present prints the finding but leaves the file un-restored on disk", "running dross repair --apply with a clobbered file present restores it and commits the .dross/ change", "repair_test.go asserts Repair() is registered in cmd/dross/main.go's root.AddCommand list"]
+  status = "done"
 
 [[task]]
-id         = "t-5"
-wave       = 3
-depends_on = ["t-1", "t-3"]
-title      = "dross doctor clobber section pointing at repair"
-files      = ["internal/cmd/doctor.go"]
-description = """
-New doctor section calling t-1's and t-3's detectors read-only. A finding
-prints a ✗ line and increments issues, with a fix hint naming `dross repair`,
-matching doctor's existing remediation-hint pattern.
-"""
-covers        = ["c-6"]
-test_contract = [
-  "a finding from detectModifiedOrMissingTracked or the phase-dir scan prints a ✗ line and increments issues, with a fix hint referencing dross repair",
-  "no findings from either detector leaves doctor's existing issue count unaffected",
-]
-status        = "pending"
+  id = "t-5"
+  wave = 3
+  title = "dross doctor clobber section pointing at repair"
+  files = ["internal/cmd/doctor.go"]
+  description = "New doctor section calling t-1's and t-3's detectors read-only. A finding\nprints a ✗ line and increments issues, with a fix hint naming `dross repair`,\nmatching doctor's existing remediation-hint pattern.\n"
+  covers = ["c-6"]
+  depends_on = ["t-1", "t-3"]
+  test_contract = ["a finding from detectModifiedOrMissingTracked or the phase-dir scan prints a ✗ line and increments issues, with a fix hint referencing dross repair", "no findings from either detector leaves doctor's existing issue count unaffected"]
+  status = "done"

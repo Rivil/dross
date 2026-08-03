@@ -1,5 +1,88 @@
 {
   "phase": "dross-repair",
   "base": "milestone/v1.2",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/repair_files.go",
+        "internal/cmd/repair_files_test.go"
+      ],
+      "commit": "94e0244",
+      "completed_at": "2026-08-03T15:33:07.588431Z",
+      "landmarks": [
+        {
+          "feature": "repair clobber detection",
+          "symbol": "detectModifiedOrMissingTracked",
+          "loc": "internal/cmd/repair_files.go:29",
+          "what": "detects+restores tracked .dross/ files missing or diverged from HEAD"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/repair_state.go",
+        "internal/cmd/repair_state_test.go"
+      ],
+      "commit": "b7d8b58",
+      "completed_at": "2026-08-03T15:36:35.55411Z",
+      "landmarks": [
+        {
+          "feature": "repair state reconstruction",
+          "symbol": "reconstructState",
+          "loc": "internal/cmd/repair_state.go:40",
+          "what": "rebuilds a plausible state.json from phase-completion commit markers + checked-out phase branch"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/repair_phasedirs.go",
+        "internal/cmd/repair_phasedirs_test.go"
+      ],
+      "commit": "2dbde0a",
+      "completed_at": "2026-08-03T15:39:17.854821Z",
+      "landmarks": [
+        {
+          "feature": "repair phase-dir detection",
+          "symbol": "detectMissingPhaseDirs",
+          "loc": "internal/cmd/repair_phasedirs.go:14",
+          "what": "flags+restores phase dirs origin knows about but a checkout wiped locally"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/repair.go",
+        "internal/cmd/repair_test.go",
+        "cmd/dross/main.go",
+        "internal/cmd/incompleteroot_test.go"
+      ],
+      "commit": "a85d29c",
+      "completed_at": "2026-08-03T15:52:49.671686Z",
+      "landmarks": [
+        {
+          "feature": "dross repair command",
+          "symbol": "Repair",
+          "loc": "internal/cmd/repair.go:19",
+          "what": "dry-run-by-default clobber/state repair command with --apply commit step"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "0f1fa4d",
+      "completed_at": "2026-08-03T15:56:11.175097Z",
+      "landmarks": [
+        {
+          "feature": "doctor clobber detection",
+          "symbol": "Doctor",
+          "loc": "internal/cmd/doctor.go:341",
+          "what": "doctor surfaces detectModifiedOrMissingTracked+detectMissingPhaseDirs findings pointing at dross repair"
+        }
+      ]
+    }
+  }
 }
