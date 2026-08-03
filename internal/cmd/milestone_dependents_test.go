@@ -208,6 +208,63 @@ func mergedIntoParentFixture(t *testing.T) string {
 	return dir
 }
 
+// threeDependentsFixture stacks three sibling milestones (v1.3, v1.4, v1.5)
+// directly on milestone/v1.2 — each on its own branch, so none reads as
+// "vanished" — then squash-merges v1.2 onto main the way stackedDeleteFixture
+// does, so the stale detector names v1.2 and prune attempts to delete it.
+// Three simultaneous dependents exercise joinVersions' first, middle and last
+// branches in one refusal, which a single- or double-dependent fixture cannot.
+func threeDependentsFixture(t *testing.T) string {
+	t.Helper()
+	dir := pruneFixture(t)
+	writeMilestoneWithBase(t, dir, "v1.2", "main")
+	writeMilestoneWithBase(t, dir, "v1.3", "milestone/v1.2")
+	writeMilestoneWithBase(t, dir, "v1.4", "milestone/v1.2")
+	writeMilestoneWithBase(t, dir, "v1.5", "milestone/v1.2")
+	mustGit(t, dir, "add", "-A")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: milestone records")
+	mustGit(t, dir, "push", "-q", "origin", "main")
+
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.2", "main")
+	commitOn(t, dir, "milestone/v1.2", "v12.txt", "v12\n", "feat: v1.2 work")
+	mustGit(t, dir, "push", "-q", "origin", "milestone/v1.2")
+
+	for _, v := range []string{"v1.3", "v1.4", "v1.5"} {
+		branch := "milestone/" + v
+		mustGit(t, dir, "checkout", "-q", "-b", branch, "milestone/v1.2")
+		commitOn(t, dir, branch, v+".txt", v+"\n", "feat: "+v+" work")
+		mustGit(t, dir, "push", "-q", "origin", branch)
+	}
+
+	squashOnto(t, dir, "milestone/v1.2", "feat(squash): v1.2")
+	mustGit(t, dir, "push", "-q", "origin", "main")
+
+	mustGit(t, dir, "checkout", "-q", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+	return dir
+}
+
+// A single- or double-dependent fixture never reaches joinVersions' middle
+// (i != 0 && i != len(vs)-1) branch — only three or more simultaneous
+// dependents do.
+func TestPruneRefusesNamingAllStackedDependents(t *testing.T) {
+	dir := threeDependentsFixture(t)
+
+	err := runCmd(t, Milestone(), "prune")
+	if err == nil {
+		t.Fatal("prune deleted a branch with three unmerged milestones stacked on it")
+	}
+	if !strings.Contains(err.Error(), "v1.3, v1.4 and v1.5") {
+		t.Errorf("the refusal must name all three dependents, comma-then-and joined: %v", err)
+	}
+	if !branchExists(t, dir, "milestone/v1.2") {
+		t.Error("local milestone/v1.2 was deleted despite the refusal")
+	}
+	if !remoteHas(t, dir, "milestone/v1.2") {
+		t.Error("origin/milestone/v1.2 was deleted despite the refusal")
+	}
+}
+
 func TestFinalizeAcceptsMergeIntoRecordedParent(t *testing.T) {
 	dir := mergedIntoParentFixture(t)
 	mainBefore := mustGit(t, dir, "rev-parse", "main")
