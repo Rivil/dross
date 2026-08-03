@@ -25,8 +25,8 @@ text = "Base-retargeting is detected across all 4 providers at completion time â
 
 [[decisions]]
 key    = "retarget_scope"
-choice = "Base-retarget detection (c-5) applies to all 4 providers (github, gitlab, forgejo, gitea), not just the 3 parity providers"
-why    = "GitHub already has authoritative PR lookup so adding a base-ref check is nearly free, and it closes the gap everywhere at once rather than leaving GitHub exposed"
+choice = "Base-retarget detection (c-5) applies to all 5 providers (github, gitlab, forgejo, gitea, bitbucket), not just the 3 parity providers"
+why    = "GitHub already has authoritative PR lookup so adding a base-ref check is nearly free, and it closes the gap everywhere at once rather than leaving GitHub exposed. Bitbucket is in active use and treated as a first-class provider, not an afterthought â€” its base-ref is cheap to populate once the PRStatus struct exists (t-1), so excluding it would leave a real, actively-used provider exposed for no savings."
 locked = true
 
 [[decisions]]
