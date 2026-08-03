@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -222,6 +223,59 @@ func TestMilestoneSetRejectsListPaths(t *testing.T) {
 	err := runCmd(t, Milestone(), "set", "v0.1", "scope.success_criteria", "x")
 	if err == nil || !strings.Contains(err.Error(), "use `dross milestone add`") {
 		t.Errorf("expected helpful error pointing at add, got: %v", err)
+	}
+}
+
+// The recorded cut branch is readable through the CLI — assets/prompts/
+// milestone.md forbids reading the toml directly, so `get` is the only
+// sanctioned route to the one fact this milestone exists to store. It is not
+// writable: `milestone create` is the sole writer of the base.
+func TestMilestoneGetBaseReadableNotSettable(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "create", "v1.2"); err != nil {
+		t.Fatal(err)
+	}
+	path := milestone.FilePath(".dross", "v1.2")
+	m, err := milestone.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Milestone.Base = "milestone/v1.1"
+	if err := m.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, field := range []string{"milestone.base", "base"} {
+		out := captureStdout(t, func() {
+			if err := runCmd(t, Milestone(), "get", "v1.2", field); err != nil {
+				t.Errorf("get %s: %v", field, err)
+			}
+		})
+		if !strings.Contains(out, "milestone/v1.1") {
+			t.Errorf("get %s returned %q, want the recorded base", field, out)
+		}
+	}
+
+	// Settable would reintroduce the hand-edited base this milestone kills.
+	for _, field := range []string{"milestone.base", "base"} {
+		err := runCmd(t, Milestone(), "set", "v1.2", field, "milestone/v0.9")
+		if err == nil {
+			t.Fatalf("set %s succeeded; base must not be settable", field)
+		}
+		if !strings.Contains(err.Error(), "unsettable") {
+			t.Errorf("set %s error = %v, want an unsettable-field refusal", field, err)
+		}
+	}
+	// The refused writes left the recorded base untouched.
+	after, err := milestone.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Milestone.Base != "milestone/v1.1" {
+		t.Errorf("base is now %q — a refused set still wrote", after.Milestone.Base)
 	}
 }
 

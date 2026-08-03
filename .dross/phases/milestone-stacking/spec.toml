@@ -1,0 +1,67 @@
+[phase]
+  id = "milestone-stacking"
+  title = "milestone-stacking"
+  milestone = "v1.2"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross milestone create <new>` cuts `milestone/<new>` from the current milestone's integration branch tip when that milestone is not yet merged into main, and from main when it is merged, absent, or there is no current milestone. The command states which branch it cut from."
+
+[[criteria]]
+  id = "c-2"
+  text = "The branch a milestone was cut from is recorded in `.dross/milestones/<version>.toml` at create time and read back later — the stacking parent is a stored fact, never re-inferred from git topology or `current_milestone` at use time."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross milestone complete` opens its integration PR against the recorded parent while that parent is still unmerged, and against main once the parent has merged — so a stacked milestone's PR never shows the parent's commits as its own diff, and never targets a branch that is about to be deleted."
+
+[[criteria]]
+  id = "c-4"
+  text = "No command deletes a milestone branch that an unmerged stacked child still depends on: `milestone prune` and `milestone complete --finalize` refuse (naming the dependent milestone) rather than removing a branch that is an open PR's base."
+
+[[criteria]]
+  id = "c-5"
+  text = "Every narration of the milestone branch cut states the conditional rule — `dross milestone create`'s output, `assets/prompts/milestone.md`, README and docs/roadmap.md — with no surviving claim that the branch is cut from main unconditionally."
+
+[[criteria]]
+  id = "c-6"
+  text = "When a provider is configured and reachable, `prune` / `--finalize` also refuse to delete a branch that is the base of an open PR on the forge — naming that PR. When no provider is configured or the call fails, the command says the check was skipped and falls back to the toml scan rather than proceeding silently."
+
+[[decisions]]
+  key = "unmerged_test"
+  choice = "Merge status comes from git ancestry — `merge-base --is-ancestor origin/milestone/<cur> origin/<main>` after a best-effort fetch, falling back to local refs when offline and saying so."
+  why = "Git is authoritative; `milestone.status` is user-editable metadata that can lie (a milestone left at status=\"active\" after its PR merged would stack the next one on a dead branch). Matches this milestone's the-base-is-a-fact ethos."
+  locked = true
+
+[[decisions]]
+  key = "stacking_parent"
+  choice = "The parent is whatever `state.current_milestone` names at create time. If it is unset, cut from main — even if unmerged `milestone/*` branches exist."
+  why = "One authority, no topology guessing; consistent with how every other dross command resolves \"current\". Scanning refs for the newest unmerged branch would re-introduce exactly the inference v1.2 exists to kill."
+  locked = true
+
+[[decisions]]
+  key = "dependent_detection"
+  choice = "The gate is a scan of `.dross/milestones/*.toml` for any milestone whose recorded base (c-2) is this branch and which is not itself merged. On top of that, when a provider is configured and reachable, query it for open PRs targeting the branch (c-6)."
+  why = "The toml scan is offline, provider-agnostic and uses the fact c-2 already stores, so protection never depends on network or provider parity. The provider check adds coverage for PRs dross did not record, and its skip is announced rather than silent."
+  locked = true
+
+[[decisions]]
+  key = "base_override"
+  choice = "`dross milestone create` takes a `--base <branch>` flag that forces the cut point; the forced branch is recorded as the milestone's base like any automatic one."
+  why = "The automatic rule will sometimes be wrong (an abandoned milestone you do not want to inherit), and without a flag the fix is `git branch -f` plus a hand-edited toml — the hand-reconstruction this milestone is trying to eliminate. `milestone create` is already the only writer of that record."
+  locked = true
+
+[[decisions]]
+  key = "absent_base_reads_main"
+  choice = "A milestone toml with no recorded base reads as `main` wherever the base is consumed."
+  why = "That is v1.2 and every milestone before it, and main is exactly today's unconditional behaviour — so back-compat needs no migration step. Settled without asking; recorded so it is not relitigated at plan time."
+  locked = true
+
+[[deferred]]
+  text = "Auto-retarget instead of refuse: when a parent milestone branch is deleted, repoint the dependent child's open PR and its recorded base to main so the child heals itself, rather than refusing the delete."
+  why = "c-4/c-6 make deletion safe by refusing; automatic repair is a different capability, and this milestone's pattern has been prevent-first, auto-heal later."
+  target = "ship-complete-recovery-hardening"
+
+[[deferred]]
+  text = "`dross verify`'s gremlins mutation pass runs at Go package scope, not diff scope: mutating internal/cmd for this phase (only milestone.go/milestone_dependents.go/milestone_merged.go touched) also mutated ~25 unrelated sibling files and surfaced ~80 pre-existing NOT-COVERED survivors (issue.go, ship.go, doctor.go, hints.go, etc.) as this phase's findings. Scope mutation runs to the files a phase's changes.json actually touched, or at minimum filter tests.json/verify.toml findings to those files, so unrelated pre-existing gaps stop polluting every phase that happens to share a package."
+  why = "Surfaced verifying milestone-stacking (2026-08-03): 87 of 1977 mutants survived, but only 7 (all in milestone_dependents.go's joinVersions/describePRs) were in files this phase touched — the other ~80 were noise from files nobody on this phase edited. Rule r-02 requires routing pre-existing out-of-scope findings rather than re-listing them; without a tooling fix, every future phase touching internal/cmd re-inherits the same pile."
