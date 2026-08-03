@@ -25,6 +25,7 @@ func topologyFixture(t *testing.T, version string, commits int, withOrigin bool)
 			{"config", "user.email", "test@example.com"},
 			{"config", "user.name", "Test"},
 			{"config", "commit.gpgsign", "false"},
+			{"config", "gc.auto", "0"},
 		} {
 			c := exec.Command("git", append([]string{"-C", dir}, args...)...)
 			if out, err := c.CombinedOutput(); err != nil {

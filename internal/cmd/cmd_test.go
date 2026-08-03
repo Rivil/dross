@@ -141,6 +141,10 @@ func gitInit(t *testing.T, dir, originURL string) {
 		{"git", "config", "user.email", "test@example.com"},
 		{"git", "config", "user.name", "Test"},
 		{"git", "config", "commit.gpgsign", "false"},
+		// gc.auto forks a detached `git gc --auto` after enough loose objects
+		// pile up, which can still be writing .git/objects when t.TempDir()
+		// cleanup runs — races RemoveAll into "directory not empty" (ENOTEMPTY).
+		{"git", "config", "gc.auto", "0"},
 		{"git", "remote", "add", "origin", originURL},
 	} {
 		c := exec.Command(cmd[0], cmd[1:]...)

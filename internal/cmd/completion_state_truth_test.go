@@ -51,6 +51,7 @@ func simulateSquashMerge(t *testing.T, dir, phaseBranch, base string) {
 		{"config", "user.email", "test@example.com"},
 		{"config", "user.name", "Test"},
 		{"config", "commit.gpgsign", "false"},
+		{"config", "gc.auto", "0"},
 	} {
 		mustGit(t, sim, args...)
 	}
