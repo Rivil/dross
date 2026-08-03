@@ -453,6 +453,72 @@ func TestDoctorClobberSectionCleanIsNotAnIssue(t *testing.T) {
 	}
 }
 
+// TestDoctorFlagsMissingPhaseDir proves the other half of the clobber
+// section (c-6): a phase dir origin/<mainBranch> knows about but the current
+// working tree lacks is surfaced as a ✗ line and counted as an issue,
+// exercising the missing-dir issues++ increment (doctor.go:370) and the
+// missing-dir arm of the clean-vs-findings switch (doctor.go:357).
+func TestDoctorFlagsMissingPhaseDir(t *testing.T) {
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+
+	dir := t.TempDir()
+	gitInit(t, dir, remoteDir)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	// y is pushed to origin/main from a second clone, so the working tree
+	// here never had it — a phase dir known to origin but absent locally.
+	otherDir := t.TempDir()
+	mustGit(t, otherDir, "clone", "-q", remoteDir, ".")
+	mustWrite(t, filepath.Join(otherDir, ".dross", "phases", "y", "spec.toml"), "[phase]\nid = \"y\"\n")
+	mustGit(t, otherDir, "add", ".")
+	mustGit(t, otherDir, "commit", "-q", "-m", "chore: scaffold y")
+	mustGit(t, otherDir, "push", "-q", "origin", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+
+	out := captureStdout(t, func() {
+		_ = runCmd(t, Doctor())
+	})
+	if !strings.Contains(out, ".dross/phases/y") || !strings.Contains(out, "phase dir known to origin but absent") {
+		t.Errorf("expected a missing-phase-dir finding for y, got:\n%s", out)
+	}
+	if !strings.Contains(out, "dross repair") {
+		t.Errorf("expected a fix hint naming dross repair, got:\n%s", out)
+	}
+}
+
+// TestDoctorClobberScanErrorIsAdvisory covers doctor.go:353 — when
+// detectModifiedOrMissingTracked itself can't run (here, .git is removed
+// after init so `git ls-files` fails), the section prints an advisory ⚠
+// scan-error line instead of silently reporting a clean or wrong result.
+func TestDoctorClobberScanErrorIsAdvisory(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	if err := os.RemoveAll(filepath.Join(dir, ".git")); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStdout(t, func() {
+		_ = runCmd(t, Doctor())
+	})
+	if !strings.Contains(out, "couldn't scan tracked .dross/ files") {
+		t.Errorf("expected the clobber-scan-error ⚠ line, got:\n%s", out)
+	}
+}
+
 // TestArchitectureLinkWarnings (c-3) proves the resolver-backed detection: only
 // Moved and Unresolved bullets warn — an OK link, a Skipped (unindexable) link,
 // and a no-line link stay silent — and a repo with no ARCHITECTURE.md yields no
