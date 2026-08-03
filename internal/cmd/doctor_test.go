@@ -399,6 +399,60 @@ func TestDoctorFlagsMissingGitattributes(t *testing.T) {
 	}
 }
 
+// TestDoctorFlagsClobberedFile proves doctor's clobber section (c-6) surfaces
+// a t-1 finding — an uncommitted content change to a tracked .dross/ file —
+// as a ✗ line with a fix hint naming `dross repair`, and counts it as an issue.
+func TestDoctorFlagsClobberedFile(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	projPath := filepath.Join(dir, ".dross", "project.toml")
+	// Append rather than replace: valid TOML that still parses, but whose
+	// content diverges from HEAD's tracked blob (a clobbered file, not a
+	// corrupt one — doctor's other sections still need to load project.toml).
+	body := mustRead(t, projPath)
+	mustWrite(t, projPath, body+"\n# clobbered\n")
+
+	out := captureStdout(t, func() {
+		_ = runCmd(t, Doctor())
+	})
+	if !strings.Contains(out, ".dross/project.toml") || !strings.Contains(out, "diverged from HEAD") {
+		t.Errorf("expected a clobbered-file finding for project.toml, got:\n%s", out)
+	}
+	if !strings.Contains(out, "dross repair") {
+		t.Errorf("expected a fix hint naming dross repair, got:\n%s", out)
+	}
+}
+
+// TestDoctorClobberSectionCleanIsNotAnIssue proves the negative half of the
+// contract: a healthy tree gets a ✓ line and doctor's existing issue count is
+// unaffected (Doctor still exits 0 here, matching the other all-clean checks).
+func TestDoctorClobberSectionCleanIsNotAnIssue(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Doctor()); err != nil {
+			t.Fatalf("doctor should exit clean on a healthy tree: %v", err)
+		}
+	})
+	if !strings.Contains(out, "no clobbered or missing tracked .dross/ files") {
+		t.Errorf("expected the clean-clobber ✓ line, got:\n%s", out)
+	}
+}
+
 // TestArchitectureLinkWarnings (c-3) proves the resolver-backed detection: only
 // Moved and Unresolved bullets warn — an OK link, a Skipped (unindexable) link,
 // and a no-line link stay silent — and a repo with no ARCHITECTURE.md yields no
