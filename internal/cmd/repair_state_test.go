@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 )
@@ -78,6 +79,42 @@ func TestReconstructStateSetsCurrentPhaseFromBranch(t *testing.T) {
 	}
 	if s.CurrentMilestone != "v2.0" {
 		t.Errorf("CurrentMilestone = %q, want v2.0 (from gamma's spec.toml)", s.CurrentMilestone)
+	}
+}
+
+// TestReconstructStateCapsHistoryAtMax builds more phase-completion commits
+// than maxReconstructedHistory allows and asserts reconstructState keeps only
+// the most recent maxReconstructedHistory entries, oldest-first.
+func TestReconstructStateCapsHistoryAtMax(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	const total = maxReconstructedHistory + 5
+	for i := 1; i <= total; i++ {
+		mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", fmt.Sprintf("phase p%d: Phase %d", i, i))
+	}
+
+	root := filepath.Join(dir, ".dross")
+	s, err := reconstructState(dir, root, "main")
+	if err != nil {
+		t.Fatalf("reconstructState: %v", err)
+	}
+	if len(s.History) != maxReconstructedHistory {
+		t.Fatalf("History len = %d, want %d (capped)", len(s.History), maxReconstructedHistory)
+	}
+	// The oldest 5 phase commits (p1..p5) must be dropped — only the most
+	// recent maxReconstructedHistory entries survive, oldest-first.
+	wantFirst := fmt.Sprintf("phase p%d shipped: Phase %d", total-maxReconstructedHistory+1, total-maxReconstructedHistory+1)
+	if s.History[0].Action != wantFirst {
+		t.Errorf("History[0] = %q, want %q (oldest truncated entries dropped)", s.History[0].Action, wantFirst)
+	}
+	wantLast := fmt.Sprintf("phase p%d shipped: Phase %d", total, total)
+	if last := s.History[len(s.History)-1]; last.Action != wantLast {
+		t.Errorf("History[last] = %q, want %q", last.Action, wantLast)
 	}
 }
 
