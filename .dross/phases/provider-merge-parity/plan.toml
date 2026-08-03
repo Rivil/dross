@@ -18,17 +18,30 @@ Replace PRMerged/PRMergedFunc with PRStatus(opts) (PRStatus, error) / PRStatusFu
 PRStatus = {Merged bool; BaseRef string}. GitHub adds baseRefName to its
 `gh pr view --json` list. Bitbucket populates BaseRef from destination.branch.name
 (bitbucket is a first-class provider under the widened retarget_scope, not carried
-along with an empty ref). mergeGate and stubPRMerged move onto the new seam in the
-same commit.
+along with an empty ref). mergeGate moves onto the new seam in the same commit, and
+— this is the mechanism that makes the stub's BaseRef default possible — mergeGate
+sets opts.BaseBranch = reconcileBranch before calling PRStatusFunc, so the fixture's
+own recorded base flows into the call the stub receives.
+
+stubPRMerged(t *testing.T, merged bool) — internal/cmd/phase_test.go:20-29 — keeps
+its name and exact signature; its body moves onto PRStatusFunc and its default
+BaseRef echoes back opts.BaseBranch (the mechanism above), so it needs no new
+parameter to stay in sync with each fixture's recorded base. This keeps all 46
+existing call sites (38 in phase_test.go, 8 across completion_state_truth_test.go,
+state_history_test.go, switchbranch_test.go, phase_base_truth_test.go,
+state_clobber_regression_test.go) compiling and green, since each already runs
+against its own recorded base via opts.BaseBranch rather than a hardcoded value.
 """
 covers        = ["c-5"]
 test_contract = [
   "TestPRStatusGitHubReturnsBaseRef: canned ghCommand output {\"state\":\"MERGED\",\"mergedAt\":\"…\",\"baseRefName\":\"main\"} yields {Merged:true, BaseRef:\"main\"}, and the recorded ghCommand args contain \"state,mergedAt,baseRefName\"; dropping the field fails it.",
   "TestPRStatusGitHubClosedIsNotMerged: \"CLOSED\" yields Merged false; a `state != \"OPEN\"` impl passes today's tests and fails this one.",
   "TestPRStatusBitbucketPopulatesBaseRef: a MERGED payload with destination.branch.name \"main\" yields {Merged:true, BaseRef:\"main\"} — not an empty BaseRef.",
-  "TestPRStatusFuncDefaultsToPRStatus: the exported var is non-nil and delegates to PRStatus.",
+  "TestPRStatusFuncDefaultsToPRStatus: the exported var is non-nil and delegates to PRStatus; this test re-keys off an unknown provider (or OpenOpts{}) rather than \"gitlab\" — today's TestPRMergedFuncDefaultsToPRMerged uses gitlab as its unsupported exemplar, but t-4 makes gitlab a supported PRStatus provider, so keying on it here would break silently two tasks later.",
   "TestPRStatusUnsupportedProvider: gitlab/forgejo/gitea still return ErrMergeStatusUnsupported at this point; the table only shrinks in t-4/t-5.",
-  "TestPhaseCompleteRefusesUnmergedUpstream and TestPhaseCompleteMergeGateRefusalLeavesHEADOnPhase keep passing through the renamed stub; a missed call site fails `go build ./internal/cmd`.",
+  "TestPhaseCompleteRefusesUnmergedUpstream and TestPhaseCompleteMergeGateRefusalLeavesHEADOnPhase keep passing through stubPRMerged (name unchanged, body retargeted onto PRStatusFunc); a missed call site fails `go build ./internal/cmd`.",
+  "stubPRMerged retains its existing name and signature; all 46 existing call sites across all six cmd-test files keep compiling and passing unchanged, each exercising its own recorded base via opts.BaseBranch rather than a hardcoded value.",
+  "The stale sentinel doc comments in internal/ship/merged.go (lines ~13-24: \"for providers whose ... lookup isn't wired yet (forgejo/gitea/gitlab)\", \"GitHub is the only authoritative provider today\") are rewritten to describe ErrMergeStatusUnsupported's forward-seam role rather than naming providers this phase wires up.",
 ]
 depends_on    = []
 status        = "pending"
@@ -42,12 +55,21 @@ files         = [
   "internal/ship/gitlab_test.go",
   "internal/ship/basepr.go",
   "internal/ship/basepr_test.go",
+  "internal/ship/open.go",
 ]
 description   = """
 New gitlab.go holding gitlabTarget(opts) — the APIBase/AuthEnv/token/
 splitOwnerRepo/gitlabProjectRef preamble currently inlined in openGitLabPR — and
 gitlabOpenMRsTargeting via GET /projects/{ref}/merge_requests?state=opened&target_branch={base},
-with explicit per_page/page looping. OpenPRsTargeting dispatches gitlab.
+with explicit per_page/page looping. OpenPRsTargeting dispatches gitlab. The
+preamble (openGitLabPR at open.go:155, gitlabReq at :243, splitOwnerRepo at :302,
+gitlabProjectRef at :220) is extracted out of open.go into gitlab.go, so open.go
+itself changes too — its call sites keep working unchanged against the extracted
+helpers.
+
+Collides with t-3 on internal/ship/basepr.go and basepr_test.go (same dispatch
+switch, same unsupported-provider table) — both wave-1; serialize the two edits
+rather than running them fully in parallel.
 """
 covers        = ["c-4"]
 test_contract = [
@@ -58,6 +80,9 @@ test_contract = [
   "TestGitLabOpenPRsTargetingHTTP500IsError: a 500 (including on page 2) yields a non-nil error and a nil slice, never an empty or partial slice; an empty slice reads as \"no dependents\" and authorizes an irreversible branch delete.",
   "TestGitLabOpenPRsTargetingMissingToken: with $AuthEnv unset the error mentions `dross env set` and the httptest server records zero requests.",
   "basepr_test's unsupported-provider table no longer lists \"gitlab\"; bitbucket still yields ErrBasePRLookupUnsupported.",
+  "TestOpenPRsTargetingFuncDefaultsToOpenPRsTargeting re-keys its delegation assertion off an unknown provider rather than \"gitlab\", since this task makes gitlab a supported OpenPRsTargeting provider in the same commit that would otherwise break it.",
+  "existing open_test.go GitLab OpenPR tests keep passing after the preamble extraction; a missed call site fails `go build ./internal/ship`.",
+  "The stale sentinel doc comments in internal/ship/basepr.go naming gitlab as an unwired provider are rewritten to reflect gitlab now being supported.",
 ]
 depends_on    = []
 status        = "pending"
@@ -71,13 +96,20 @@ files         = [
   "internal/ship/forgejo_test.go",
   "internal/ship/basepr.go",
   "internal/ship/basepr_test.go",
+  "internal/ship/open.go",
 ]
 description   = """
 New forgejo.go holding a jsonGet helper (Authorization: token, 30s client, status
 check — only jsonPost exists today), forgejoTarget(opts), and
 forgejoOpenPRsTargeting via GET /repos/{owner}/{repo}/pulls?state=open with
 page/limit looping and client-side base.ref filtering. Dispatch routes both
-forgejo and gitea.
+forgejo and gitea. forgejoTarget is extracted out of openForgejoPR (open.go:99), so
+open.go changes too — its call sites keep working unchanged against the extracted
+helper.
+
+Collides with t-2 on internal/ship/basepr.go and basepr_test.go (same dispatch
+switch, same unsupported-provider table) — both wave-1; serialize the two edits
+rather than running them fully in parallel.
 """
 covers        = ["c-4"]
 test_contract = [
@@ -87,7 +119,9 @@ test_contract = [
   "TestForgejoOpenPRsPaginates: full page then short page; both pages' PRs must appear. Gitea defaults to 30/page.",
   "TestForgejoOpenPRsErrorNeverEmptySlice: a 404/500, including mid-listing, yields an error and a nil slice, never a partial result.",
   "TestForgejoOpenPRsTargetingGiteaAlias: Provider \"gitea\" and \"Gitea\" reach the same handler, exercising the configenum.Normalize path rather than the \"forgejo\" literal.",
-  "basepr_test's unsupported-provider table no longer lists forgejo/gitea.",
+  "basepr_test's unsupported-provider table drops forgejo/gitea/Forgejo; bitbucket still yields ErrBasePRLookupUnsupported.",
+  "existing open_test.go Forgejo OpenPR tests keep passing after the extraction; a missed call site fails `go build ./internal/ship`.",
+  "The stale sentinel doc comments in internal/ship/basepr.go naming forgejo/gitea as unwired providers are rewritten to reflect them now being supported.",
 ]
 depends_on    = []
 status        = "pending"
@@ -106,17 +140,21 @@ description   = """
 gitlabPRStatus does GET /projects/{ref}/merge_requests/{iid} through gitlabTarget +
 gitlabReq, mapping state == "merged" to Merged and target_branch to BaseRef.
 PRStatus dispatch routes gitlab.
+
+Collides with t-5 on internal/ship/merged.go and merged_test.go (same dispatch
+switch, same unsupported-provider table) — both wave-2; serialize the two edits
+rather than running them fully in parallel.
 """
 covers        = ["c-1", "c-5"]
 test_contract = [
   "TestGitLabPRStatusMerged: {\"state\":\"merged\",\"target_branch\":\"main\"} yields {Merged:true, BaseRef:\"main\"}, replacing today's sentinel.",
   "TestGitLabPRStatusClosedIsNotMerged: {\"state\":\"closed\"} AND {\"state\":\"locked\"} both yield Merged false, err nil. A `state != \"opened\"` impl completes a phase whose MR was closed without landing.",
   "TestGitLabPRStatusOpenedIsNotMerged: {\"state\":\"opened\"} yields false.",
-  "TestGitLabPRStatusReportsTargetBranch: {\"target_branch\":\"milestone/v1.2\"} yields that BaseRef; this is the exact field t-6 consumes.",
+  "TestGitLabPRStatusReportsTargetBranch: {\"target_branch\":\"milestone/v1.2\"} yields that BaseRef; this is the exact field t-6b consumes.",
   "TestGitLabPRStatusEndpoint: handler asserts the path is /projects/owner%2Frepo/merge_requests/<PRNumber>; a ProjectID sub-case asserts the numeric ref instead.",
   "TestGitLabPRStatusAuthHeader: PRIVATE-TOKEN by default, Bearer when AuthScheme is \"bearer\".",
   "TestGitLabPRStatusHTTP404IsError and TestGitLabPRStatusNeedsPRNumber: both yield errors rather than (false, nil), so mergeGate announces and falls back instead of reading a lookup failure as \"not merged\". A 401 collapsed to false produces a hard refusal blaming the user.",
-  "merged_test's TestPRStatusUnsupportedProvider table drops \"gitlab\".",
+  "merged_test's TestPRStatusUnsupportedProvider table drops \"gitlab\"; TestPRStatusFuncDefaultsToPRStatus (re-keyed in t-1 off a non-gitlab exemplar) stays green with no further change here.",
 ]
 depends_on    = ["t-1", "t-2"]
 status        = "pending"
@@ -135,6 +173,10 @@ description   = """
 forgejoPRStatus does GET /repos/{owner}/{repo}/pulls/{index} through forgejoTarget +
 jsonGet, mapping the "merged" boolean to Merged and base.ref to BaseRef. PRStatus
 dispatch routes forgejo and gitea.
+
+Collides with t-4 on internal/ship/merged.go and merged_test.go (same dispatch
+switch, same unsupported-provider table) — both wave-2; serialize the two edits
+rather than running them fully in parallel.
 """
 covers        = ["c-2", "c-5"]
 test_contract = [
@@ -144,15 +186,15 @@ test_contract = [
   "TestForgejoPRStatusGiteaAlias: \"gitea\" and \"Gitea\" reach the same impl.",
   "TestForgejoPRStatusEndpointAndAuth: handler asserts /repos/{owner}/{repo}/pulls/<PRNumber> and Authorization: token.",
   "TestForgejoPRStatusHTTP500IsError: non-2xx yields an error, not (false, nil).",
-  "merged_test's unsupported table drops forgejo/gitea/Forgejo, leaving it asserting only genuinely unknown providers.",
+  "merged_test's TestPRStatusUnsupportedProvider is deleted once t-4 (gitlab) and this task (forgejo/gitea/Forgejo) empty its table — bitbucket was never a sentinel-returning case, so nothing would remain to assert. The sentinel's reachability moves to t-6a's stub-driven forward-seam test, which exercises ErrMergeStatusUnsupported directly rather than through a real dispatch case.",
 ]
 depends_on    = ["t-1", "t-3"]
 status        = "pending"
 
 [[task]]
-id            = "t-6"
+id            = "t-6a"
 wave          = 2
-title         = "mergeGate announces fallback, refuses retargeted base"
+title         = "mergeGate announces provider-fallback (unsupported/error)"
 files         = [
   "internal/cmd/phase.go",
   "internal/cmd/phase_test.go",
@@ -160,36 +202,69 @@ files         = [
 ]
 description   = """
 mergeGate prints a reason line on both fall-through paths (ErrMergeStatusUnsupported
-at phase.go:741, generic error at :743) in printOpenPRSkip's shape, and — before the
-merged short-circuit at :733 — compares PRStatus.BaseRef against the RECORDED base
-(changes.Base, falling back to reconcileBranch when empty), refusing completion when
-they differ. Normalization (strip refs/heads/, exact case-sensitive compare) lives
-here, in one place. An empty BaseRef announces a skipped retarget check and
-proceeds. recordedPR == 0 takes the ancestry path with no provider call and no
-announce (not a provider-caused fallback). ARCHITECTURE.md's stale provider index
-lines (306 OpenPRsTargeting, 361 ship.PRMergedFunc) are corrected in the same
-commit.
+at phase.go:741, generic error at :743) in printOpenPRSkip's shape — "print, then
+continue", not "swallow and continue".
+
+ErrMergeStatusUnsupported becomes unreachable for any of the five
+configenum.ShipProviders once t-4/t-5 land (all five answer PRStatus
+authoritatively). It is kept intentionally as a forward seam for a future
+provider added without a PRStatus implementation yet — not deleted — so the
+announce branch stays wired and its test exercises the seam directly via a stub
+rather than a reachable real-provider path.
+
+ARCHITECTURE.md's stale provider index lines (306 OpenPRsTargeting, 361
+ship.PRMergedFunc, 502 "`bitbucketPRMerged` reports the authoritative merged
+status" — now true of all five providers, not just bitbucket, and 508
+"bitbucketPRMerged (authoritative state == MERGED) — internal/ship/merged.go:71" —
+invalidated by t-1's PRMerged→PRStatus rename) are corrected in the same commit.
 """
-covers        = ["c-3", "c-5"]
+covers        = ["c-3"]
 test_contract = [
-  "TestMergeGateAnnouncesUnsupportedProvider: stub PRStatusFunc to return ErrMergeStatusUnsupported; captureStdout contains a line naming the provider and the git-ancestry fallback.",
+  "TestMergeGateAnnouncesUnsupportedProvider: stub PRStatusFunc to return ErrMergeStatusUnsupported; captureStdout contains a line naming the provider and the git-ancestry fallback. This exercises the forward-seam path directly, since no real provider reaches it after t-4/t-5.",
   "TestMergeGateAnnouncesProviderError: stub a network error; the printed line contains that error's text, so a generic \"check skipped\" that swallows the cause fails the substring assert.",
-  "TestMergeGateHappyPathIsSilent: {Merged:true, BaseRef:\"main\"} against a recorded base of \"main\" returns nil and prints nothing, so the announce doesn't become noise on every successful completion.",
-  "TestPhaseCompleteRefusesRetargetedBase: stub {Merged:false, BaseRef:\"other\"} against recorded base \"main\"; complete exits non-zero, the error names both branches, and HEAD is still on phase/<id>.",
-  "TestPhaseCompleteRefusesRetargetedBaseEvenWhenMerged: {Merged:true, BaseRef:\"other\"} still refuses. An impl that puts the comparison after the `merged → return nil` short-circuit passes the previous test and fails this one.",
-  "TestMergeGateEmptyBaseRefAnnouncesSkip: {Merged:true, BaseRef:\"\"} (a provider that errored) proceeds and prints a \"base-retarget check skipped\" line. A false retarget alarm would block every completion on that provider.",
-  "TestRetargetNormalizesRefsHeads: refs/heads/main vs main is not a retarget.",
-  "TestMergeGateRetargetSkipsOnProviderError: a provider error produces the announced ancestry fallback, never a retarget refusal.",
-  "TestRetargetSkipsWhenBaseUnrecorded: an empty recorded base falls back to reconcileBranch rather than refusing.",
-  "TestMergeGateNoRecordedPRStillFallsBack: recordedPR == 0 takes the ancestry path with no provider call and no announce, preserving TestPhaseCompleteRefusesUnmergedNoLocalBranch.",
-  "The refusal message must name a concrete remedy (re-point the PR on the forge, or re-run `dross ship` so the record is rewritten) — --recover does not bypass mergeGate today, so without a named remedy a deliberate retarget has no path forward.",
+  "TestMergeGateHappyPathIsSilent: {Merged:true, BaseRef:\"main\"} returns nil and prints nothing, so the announce doesn't become noise on every successful completion.",
+  "TestMergeGateNoRecordedPRStillFallsBack: recordedPR == 0 takes the ancestry path with no provider call and no announce (not a provider-caused fallback), preserving TestPhaseCompleteRefusesUnmergedNoLocalBranch.",
 ]
 depends_on    = ["t-1"]
 status        = "pending"
 
 [[task]]
-id            = "t-7"
+id            = "t-6b"
 wave          = 3
+title         = "mergeGate refuses on retargeted base"
+files         = [
+  "internal/cmd/phase.go",
+  "internal/cmd/phase_test.go",
+]
+description   = """
+Before the merged short-circuit (phase.go:735-736), mergeGate compares
+PRStatus.BaseRef against reconcileBranch — mergeGate's own parameter, already the
+fully-resolved recorded base per resolveCompleteBase's order (--base flag →
+changes.Base → phaseRefRecordedBase, phase.go:645-666) — refusing completion when
+they differ. No separate re-read of changes.Base: reconcileBranch already carries
+that resolution, and re-reading changes.Base would bypass --base and drop the
+phaseRefRecordedBase stale-tree tier.
+
+Normalization (strip refs/heads/, exact case-sensitive compare) lives here, in one
+place. An empty BaseRef — a 2xx PRStatus response whose payload omits the base
+field (baseRefName/target_branch/base.ref/destination.branch.name) — announces a
+skipped retarget check and proceeds; this is distinct from a provider error, which
+takes t-6a's announced ancestry fallback and never reaches this compare at all.
+"""
+covers        = ["c-5"]
+test_contract = [
+  "TestPhaseCompleteRefusesRetargetedBase: stub {Merged:false, BaseRef:\"other\"} against a reconcileBranch of \"main\"; complete exits non-zero, the error names both branches and a concrete remedy (re-point the PR on the forge, or re-run `dross ship` so the record is rewritten — --recover does not bypass mergeGate today), and HEAD is still on phase/<id>.",
+  "TestPhaseCompleteRefusesRetargetedBaseEvenWhenMerged: {Merged:true, BaseRef:\"other\"} still refuses. An impl that puts the comparison after the `merged → return nil` short-circuit passes the previous test and fails this one.",
+  "TestMergeGateEmptyBaseRefAnnouncesSkip: a 2xx PRStatus response whose payload omits the base field yields BaseRef:\"\" with err == nil; mergeGate proceeds and prints a \"base-retarget check skipped\" line. A false retarget alarm would block every completion on that provider — worse than the gap c-5 targets.",
+  "TestRetargetNormalizesRefsHeads: refs/heads/main vs main is not a retarget.",
+  "TestMergeGateRetargetSkipsOnProviderError: a provider error (err != nil) never reaches the base compare — it takes t-6a's announced ancestry fallback instead, never a retarget refusal.",
+]
+depends_on    = ["t-6a"]
+status        = "pending"
+
+[[task]]
+id            = "t-7"
+wave          = 4
 title         = "Cross-provider retarget matrix test"
 files         = [
   "internal/ship/retarget_matrix_test.go",
@@ -207,5 +282,5 @@ test_contract = [
   "TestPRStatusBaseRefAcrossProviders: the table feeds baseRefName (github), target_branch (gitlab), base.ref (forgejo and gitea), destination.branch.name (bitbucket) and expects BaseRef == \"release/x\" from each; a misnamed or dropped field fails.",
   "TestRetargetRefusesForEveryProvider: all five providers, the same retargeted fixture, all five refuse completion. A provider wired for merged-status but not base-ref fails only here.",
 ]
-depends_on    = ["t-4", "t-5", "t-6"]
+depends_on    = ["t-4", "t-5", "t-6b"]
 status        = "pending"
