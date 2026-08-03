@@ -1,96 +1,392 @@
 [verify]
   phase = "dross-repair"
-  generated_at = 2026-08-03T16:14:58.529107Z
-  verdict = "partial"
+  generated_at = 2026-08-03T17:43:04.408193Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-08-03T16:38:40.922952Z
+  finalized_at = 2026-08-03T18:01:29.923894Z
 
 [summary]
   mutation_status = "measured"
-  mutation_score = 0.9514824797843666
-  mutants_killed = 1765
-  mutants_survived = 90
-  mutants_not_covered = 90
+  mutation_score = 0.955256064690027
+  mutants_killed = 1772
+  mutants_survived = 83
+  mutants_not_covered = 83
   criteria_total = 6
-  criteria_covered = 4
-  criteria_uncovered = 2
+  criteria_covered = 6
+  criteria_uncovered = 0
 
 [[criterion]]
   id = "c-1"
   status = "covered"
-  tests = ["internal/cmd/repair_test.go:TestRepairDryRunReportsButDoesNotRestore", "internal/cmd/repair_files_test.go (detectModifiedOrMissingTracked)", "internal/cmd/repair_phasedirs_test.go (detectMissingPhaseDirs)"]
-  notes = "No surviving mutants in repair_files.go or repair_phasedirs.go."
+  tests = ["internal/cmd/repair_files_test.go:TestDetectModifiedOrMissingTrackedReportsDeletedFile", "internal/cmd/repair_files_test.go:TestDetectModifiedOrMissingTrackedReportsClobberedContent", "internal/cmd/repair_files_test.go:TestDetectModifiedOrMissingTrackedHealthyIsEmpty", "internal/cmd/repair_test.go:TestRepairDryRunReportsButDoesNotRestore"]
 
 [[criterion]]
   id = "c-2"
   status = "covered"
-  tests = ["internal/cmd/repair_test.go:TestRepairApplyRestoresAndCommits"]
-  notes = "Restores a clobbered file and a missing phase dir in one --apply call, no SHA/phase id picked by hand. No surviving mutants in the restore path."
+  tests = ["internal/cmd/repair_files_test.go:TestRestorePathFromRefRestoresExactBlob", "internal/cmd/repair_files_test.go:TestRestorePathFromRefRecreatesMissingFile", "internal/cmd/repair_test.go:TestRepairApplyRestoresAndCommits"]
 
 [[criterion]]
   id = "c-3"
-  status = "weak"
-  tests = ["internal/cmd/repair_state_test.go:TestReconstructStateBuildsHistoryFromPhaseCommits", "internal/cmd/repair_state_test.go:TestReconstructStateSetsCurrentPhaseFromBranch", "internal/cmd/repair_state_test.go:TestReconstructStateSkipsNonMatchingCommits"]
-  notes = "reconstructState() itself is well tested, but no repair_test.go test ever drives a stale state.json through the `dross repair` command — checkStaleState() and the --apply save-reconstructed-state path (repair.go:85,121-144) have zero coverage, confirmed by 4 not-covered mutants there. The history-cap branch (repair_state.go:50, maxReconstructedHistory truncation) is also not-covered — no test builds >max history entries."
+  status = "covered"
+  tests = ["internal/cmd/repair_state_test.go:TestReconstructStateBuildsHistoryFromPhaseCommits", "internal/cmd/repair_state_test.go:TestReconstructStateSetsCurrentPhaseFromBranch", "internal/cmd/repair_state_test.go:TestReconstructStateCapsHistoryAtMax", "internal/cmd/repair_state_test.go:TestReconstructStateSkipsNonMatchingCommits", "internal/cmd/repair_test.go:TestCheckStaleStateMissingIsStale", "internal/cmd/repair_test.go:TestCheckStaleStateBranchMismatchIsStale", "internal/cmd/repair_test.go:TestCheckStaleStateNoBranchPhaseNotStale", "internal/cmd/repair_test.go:TestCheckStaleStateReconstructErrorPropagates", "internal/cmd/repair_test.go:TestRepairDryRunReportsStaleState", "internal/cmd/repair_test.go:TestRepairApplyReconstructsStaleState"]
+  notes = "repair.go:131/133 show as surviving mutants but are directly exercised by TestCheckStaleStateMissingIsStale/TestCheckStaleStateBranchMismatchIsStale — go-cover switch-case attribution ceiling, not a real gap (see finding note below)."
 
 [[criterion]]
   id = "c-4"
   status = "covered"
-  tests = ["internal/cmd/repair_test.go:TestRepairApplyRestoresAndCommits", "internal/cmd/repair_phasedirs_test.go"]
-  notes = "No surviving mutants in the phase-dir detect/restore path."
+  tests = ["internal/cmd/repair_phasedirs_test.go:TestDetectMissingPhaseDirsFlagsWipedDir", "internal/cmd/repair_phasedirs_test.go:TestRestorePathFromRefRepopulatesPhaseDir", "internal/cmd/repair_phasedirs_test.go:TestDetectMissingPhaseDirsIgnoresUnknownDirs"]
 
 [[criterion]]
   id = "c-5"
   status = "covered"
   tests = ["internal/cmd/repair_test.go:TestRepairNoFindingsReportsNothingToRepair"]
-  notes = "No surviving mutants around the no-findings check."
 
 [[criterion]]
   id = "c-6"
-  status = "weak"
-  tests = ["internal/cmd/doctor_test.go:TestDoctorFlagsClobberedFile", "internal/cmd/doctor_test.go:TestDoctorClobberSectionCleanIsNotAnIssue"]
-  notes = "Only the clobbered-file half of doctor's new section is exercised. The missing-phase-dir half (t-3's detector, wired into the same section) is never driven through doctor — confirmed by a not-covered issues++ mutant at doctor.go:370. The two scan-error branches (clobberErr/missingDirsErr != nil, doctor.go:353/355) are also untested."
+  status = "covered"
+  tests = ["internal/cmd/doctor_test.go:TestDoctorFlagsClobberedFile", "internal/cmd/doctor_test.go:TestDoctorClobberSectionCleanIsNotAnIssue", "internal/cmd/doctor_test.go:TestDoctorFlagsMissingPhaseDir", "internal/cmd/doctor_test.go:TestDoctorClobberScanErrorIsAdvisory"]
+  notes = "doctor.go:353/357 show as surviving mutants but are directly exercised (switch-case attribution ceiling, see finding note). doctor.go:355 (missingDirsErr!=nil) is unreachable dead code, not a coverage gap — see finding note."
 
 [[finding]]
   severity = "FLAG"
-  text = "gremlins mutant survived (uncovered): repair.go:85 (CONDITIONALS_NEGATION) — reconstructed.Save(statePath) err check, no test drives --apply on a stale state.json"
+  text = "gremlins mutant survived: footer_coverage.go:52 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "FLAG"
-  text = "gremlins mutant survived (uncovered): repair.go:131 (CONDITIONALS_NEGATION) — checkStaleState loadErr!=nil case, untested"
+  text = "gremlins mutant survived: footer_coverage.go:55 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "FLAG"
-  text = "gremlins mutant survived (uncovered): repair.go:133 (CONDITIONALS_NEGATION x2) — checkStaleState branchPhase-mismatch case, untested"
+  text = "gremlins mutant survived: footer_coverage.go:58 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "FLAG"
-  text = "gremlins mutant survived (uncovered): repair.go:140 (CONDITIONALS_NEGATION) — reconstructState error path in checkStaleState, untested"
+  text = "gremlins mutant survived: footer_coverage.go:60 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "FLAG"
-  text = "gremlins mutant survived (uncovered): repair.go:161 (ARITHMETIC_BASE x2) — stale-state report line, untested"
+  text = "gremlins mutant survived: install.go:65 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "FLAG"
-  text = "gremlins mutant survived (uncovered): repair_state.go:50 (INVERT_NEGATIVES, ARITHMETIC_BASE) — maxReconstructedHistory truncation branch, no test builds >max history entries"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "FLAG"
-  text = "gremlins mutant survived (uncovered): doctor.go:353 (CONDITIONALS_NEGATION) — clobberErr!=nil scan-error branch, untested"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "FLAG"
-  text = "gremlins mutant survived (uncovered): doctor.go:355 (CONDITIONALS_NEGATION) — missingDirsErr!=nil scan-error branch, untested"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "FLAG"
-  text = "gremlins mutant survived (uncovered): doctor.go:357 (CONDITIONALS_NEGATION x2) — clean-vs-findings switch condition, only the clobbered-file half is exercised by any test"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "FLAG"
-  text = "gremlins mutant survived (uncovered): doctor.go:370 (INCREMENT_DECREMENT) — issues++ in the missingDirs loop; no doctor test ever populates a missing phase dir"
+  text = "gremlins mutant survived: phase_lifecycle.go:27 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hooks.go:100 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:23 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone_dependents.go:132 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone_dependents.go:134 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone_dependents.go:134 (INVERT_NEGATIVES)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone_dependents.go:134 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:307 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:309 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:738 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: project.go:81 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: project.go:83 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: repair.go:131 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: repair.go:133 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: repair.go:133 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:181 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:184 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: basebranch.go:104 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: state.go:266 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: deferred.go:138 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: root.go:61 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: rule.go:143 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:32 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:31 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:30 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:29 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:246 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:520 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:520 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:522 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:522 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:524 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: issue.go:156 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:105 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:109 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:114 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:119 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:96 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:442 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:442 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:444 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:444 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:444 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:472 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:474 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:90 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:90 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:95 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:95 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:161 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:243 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:246 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:246 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:353 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:355 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:357 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:357 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:386 (CONDITIONALS_NEGATION)"
 
 [[finding]]
   severity = "NOTE"
-  text = "76 pre-existing mutation survivors across 23 unrelated internal/cmd files (outside this phase's diff) were routed to a deferred entry in spec.toml (target unset — someday) per r-02, not left in this findings list. See spec.toml [[deferred]]."
+  text = "repair.go:131/133 and doctor.go:353/357 survived mutants are switch-case coverage-attribution ceiling (go-cover can't attribute execution to switch-case conditions), not real test gaps — confirmed directly exercised by TestCheckStaleStateMissingIsStale, TestCheckStaleStateBranchMismatchIsStale, TestDoctorClobberScanErrorIsAdvisory, TestDoctorClobberSectionCleanIsNotAnIssue/TestDoctorFlagsMissingPhaseDir. Matches the proven gremlins switch-case ceiling (2026-07-01) — accepted, not chased."
+
+[[finding]]
+  severity = "FLAG"
+  text = "doctor.go:355 (missingDirsErr != nil case) is unreachable dead code: detectMissingPhaseDirs (repair_phasedirs.go:18-41) never returns a non-nil error — gitRefExists=false and gitTrim errors both fall through to (nil, nil). The defensive branch can't be exercised by any test; consider removing it or documenting it as intentional belt-and-suspenders."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Remaining ~76 survived mutants (footer_coverage.go, install.go, phase_lifecycle.go, hooks.go, statusline.go, milestone_dependents.go, phase.go, project.go, update.go, basebranch.go, state.go, deferred.go, root.go, rule.go, gitignore.go, ship.go, hints.go, issue.go, env.go, validate.go, watch.go, status.go, doctor.go older sections) are pre-existing and outside this phase's diff — already routed via spec.toml's [[deferred]] entry per r-02, not re-litigated here."
