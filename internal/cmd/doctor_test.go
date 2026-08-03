@@ -476,6 +476,8 @@ func TestDoctorFlagsMissingPhaseDir(t *testing.T) {
 	// here never had it — a phase dir known to origin but absent locally.
 	otherDir := t.TempDir()
 	mustGit(t, otherDir, "clone", "-q", remoteDir, ".")
+	mustGit(t, otherDir, "config", "user.email", "test@example.com")
+	mustGit(t, otherDir, "config", "user.name", "Test")
 	mustWrite(t, filepath.Join(otherDir, ".dross", "phases", "y", "spec.toml"), "[phase]\nid = \"y\"\n")
 	mustGit(t, otherDir, "add", ".")
 	mustGit(t, otherDir, "commit", "-q", "-m", "chore: scaffold y")
