@@ -83,6 +83,37 @@
           "what": "doctor surfaces detectModifiedOrMissingTracked+detectMissingPhaseDirs findings pointing at dross repair"
         }
       ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/repair_test.go",
+        "internal/cmd/repair_state_test.go"
+      ],
+      "commit": "7723b90",
+      "completed_at": "2026-08-03T16:54:16.801572Z",
+      "landmarks": [
+        {
+          "feature": "dross repair",
+          "symbol": "checkStaleState",
+          "loc": "internal/cmd/repair.go:121",
+          "what": "stale-state detect/reconstruct/apply path now under test"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "5b5c628",
+      "completed_at": "2026-08-03T17:42:09.340219Z",
+      "landmarks": [
+        {
+          "feature": "dross doctor",
+          "symbol": "TestDoctorFlagsMissingPhaseDir",
+          "loc": "internal/cmd/doctor_test.go:456",
+          "what": "doctor's clobber section missing-phase-dir + scan-error branches now under test"
+        }
+      ]
     }
   }
 }

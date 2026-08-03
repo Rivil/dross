@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 7
 
 [phase]
   id = "dross-repair"
@@ -54,4 +54,24 @@ task_seq = 0
   covers = ["c-6"]
   depends_on = ["t-1", "t-3"]
   test_contract = ["a finding from detectModifiedOrMissingTracked or the phase-dir scan prints a ✗ line and increments issues, with a fix hint referencing dross repair", "no findings from either detector leaves doctor's existing issue count unaffected"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 4
+  title = "Cover stale-state reconstruct + apply path in dross repair"
+  files = ["internal/cmd/repair_test.go", "internal/cmd/repair_state_test.go"]
+  description = "Drive a stale/missing state.json through the dross repair command itself: checkStaleState()'s loadErr!=nil and branchPhase-mismatch cases (repair.go:131,133,140), the --apply save-reconstructed-state path (repair.go:85,121-144), and the stale-state report line (repair.go:161). Also cover reconstructState's maxReconstructedHistory truncation branch (repair_state.go:50) with a history >max entries."
+  covers = ["c-3"]
+  depends_on = ["t-4", "t-2"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 4
+  title = "Cover missing-phase-dir + scan-error branches in dross doctor clobber section"
+  files = ["internal/cmd/doctor_test.go"]
+  description = "Drive doctor's missing-phase-dir half (t-3's detector) through a doctor test so the issues++ increment (doctor.go:370) is covered. Also cover the two scan-error branches (clobberErr!=nil at doctor.go:353, missingDirsErr!=nil at doctor.go:355) and the clean-vs-findings switch condition (doctor.go:357) for the missing-dir case."
+  covers = ["c-6"]
+  depends_on = ["t-5"]
   status = "done"
