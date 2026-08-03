@@ -1,0 +1,62 @@
+[verify]
+  phase = "provider-merge-parity"
+  generated_at = 2026-08-03T11:17:10.34915Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-03T11:48:55.511489Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9587680079483358
+  mutants_killed = 1930
+  mutants_survived = 83
+  mutants_not_covered = 83
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/ship/gitlab_test.go:TestGitLabPRStatusMerged", "internal/ship/gitlab_test.go:TestGitLabPRStatusClosedIsNotMerged", "internal/ship/gitlab_test.go:TestGitLabPRStatusOpenedIsNotMerged", "internal/ship/gitlab_test.go:TestGitLabPRStatusEndpoint", "internal/ship/gitlab_test.go:TestGitLabPRStatusAuthHeader", "internal/ship/gitlab_test.go:TestGitLabPRStatusHTTP404IsError", "internal/ship/gitlab_test.go:TestGitLabPRStatusNeedsPRNumber"]
+  notes = "GitLab GetPRStatus dispatch: merged/closed/locked/opened states, endpoint, auth scheme, error paths all directly asserted."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/ship/forgejo_test.go:TestForgejoPRStatusUsesMergedFlag", "internal/ship/forgejo_test.go:TestForgejoPRStatusClosedUnmergedIsNotMerged", "internal/ship/forgejo_test.go:TestForgejoPRStatusGiteaAlias", "internal/ship/forgejo_test.go:TestForgejoPRStatusEndpointAndAuth", "internal/ship/forgejo_test.go:TestForgejoPRStatusHTTP500IsError"]
+  notes = "Forgejo/Gitea GetPRStatus dispatch: merged boolean (not state, which Gitea reports misleadingly), gitea alias, endpoint/auth, error path all directly asserted."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestMergeGateAnnouncesUnsupportedProvider", "internal/cmd/phase_test.go:TestMergeGateAnnouncesProviderError", "internal/cmd/phase_test.go:TestMergeGateHappyPathIsSilent", "internal/cmd/phase_test.go:TestMergeGateNoRecordedPRStillFallsBack"]
+  notes = "Announce-on-fallback proven for both ErrMergeStatusUnsupported and generic provider errors; happy path and no-recorded-PR path proven silent, so the announce can't become noise."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/ship/gitlab_test.go:TestGitLabOpenPRsTargetingUsesIID", "internal/ship/gitlab_test.go:TestGitLabOpenPRsTargetingFieldMapping", "internal/ship/gitlab_test.go:TestGitLabOpenPRsTargetingQueryAndAuth", "internal/ship/gitlab_test.go:TestGitLabOpenMRsPaginates", "internal/ship/gitlab_test.go:TestGitLabOpenPRsTargetingHTTP500IsError", "internal/ship/gitlab_test.go:TestGitLabOpenPRsTargetingMissingToken", "internal/ship/forgejo_test.go:TestForgejoOpenPRsTargetingFiltersByBaseRef", "internal/ship/forgejo_test.go:TestForgejoOpenPRsTargetingFieldMapping", "internal/ship/forgejo_test.go:TestForgejoOpenPRsTargetingAuthHeader", "internal/ship/forgejo_test.go:TestForgejoOpenPRsPaginates", "internal/ship/forgejo_test.go:TestForgejoOpenPRsErrorNeverEmptySlice", "internal/ship/forgejo_test.go:TestForgejoOpenPRsTargetingGiteaAlias"]
+  notes = "Both providers' open-PRs-by-base proven for field mapping, pagination (full+short page), auth, and fail-closed on error (never an empty/partial slice, which would wrongly authorize a branch delete)."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/ship/merged_test.go:TestPRStatusGitHubReturnsBaseRef", "internal/ship/gitlab_test.go:TestGitLabPRStatusReportsTargetBranch", "internal/ship/forgejo_test.go:TestForgejoPRStatusOpenPopulatesBaseRef", "internal/cmd/phase_test.go:TestPhaseCompleteRefusesRetargetedBase", "internal/cmd/phase_test.go:TestPhaseCompleteRefusesRetargetedBaseEvenWhenMerged", "internal/cmd/phase_test.go:TestMergeGateEmptyBaseRefAnnouncesSkip", "internal/cmd/phase_test.go:TestRetargetNormalizesRefsHeads", "internal/cmd/phase_test.go:TestMergeGateRetargetSkipsOnProviderError", "internal/ship/retarget_matrix_test.go:TestPRStatusBaseRefAcrossProviders", "internal/cmd/phase_retarget_matrix_test.go:TestRetargetRefusesForEveryProvider"]
+  notes = "BaseRef plumbing proven per-provider (baseRefName/target_branch/base.ref/destination.branch.name -> PRStatus.BaseRef) and the refusal proven uniform across all 5 providers, including the merged-but-retargeted case and the empty-BaseRef skip-not-alarm case."
+
+[[finding]]
+  severity = "NOTE"
+  text = "83 gremlins-reported survivors are NOT_COVERED, not LIVED (mutation efficacy on reached mutants = 100%, Lived: 0 project-wide). The overwhelming majority — including phase.go:738 (mergeGate's err==nil switch case, added by t-6a/t-6b) and every other survivor sampled outside this phase's diff (state.go:266, status.go:442/444, hints.go:86, milestone_dependents.go:132, footer_coverage.go:52, doctor.go:243, watch.go:130, phase_lifecycle.go:23, deferred.go:138, root.go:61, statusline.go:23 const, gitignore.go:29-32 const) — match the documented gremlins switch-case/const-initializer attribution ceiling (see project memory dross_gremlins_switchcase_ceiling, proven 2026-07-01): gremlins cannot attribute coverage to a switch-case condition or const initializer even when a test exercises both branches, which TestMergeGateHappyPathIsSilent/TestMergeGateAnnouncesProviderError directly do for phase.go:738. Accepted; not re-flagged."
+
+[[finding]]
+  severity = "FLAG"
+  text = "internal/ship/open.go:63-86 (openGitHubPR) has zero test coverage — pre-existing (added in fead2c6, long before this phase), untouched by any provider-merge-parity task, and unrelated to c-1..c-5 (PR creation, not PR status/merge lookup). Routed per r-02: user selected 'open a quick task now' during this verify run — /dross-quick to add coverage, tracked separately from this phase's verdict."
+
+[[finding]]
+  severity = "FLAG"
+  text = "internal/cmd/basebranch.go:104 (safety-net push failure error path) has zero test coverage — pre-existing, untouched by this phase, unrelated to c-1..c-5. Routed per r-02: user selected 'open a quick task now' during this verify run — /dross-quick to add coverage, tracked separately from this phase's verdict."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped ARCHITECTURE.md: no mutation adapter for .md"

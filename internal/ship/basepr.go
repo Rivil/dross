@@ -25,10 +25,11 @@ type BasePR struct {
 }
 
 // OpenPRsTargeting lists the open PRs whose base is `base`. It mirrors
-// PRMerged's provider dispatch: GitHub answers via the overridable ghCommand
-// seam, the unwired providers return ErrBasePRLookupUnsupported, and an
-// outright unknown provider returns a plain error so a misconfiguration stays
-// distinguishable from a missing backend.
+// GetPRStatus's provider dispatch: GitHub answers via the overridable
+// ghCommand seam, GitLab and Forgejo/Gitea answer via their REST APIs,
+// Bitbucket returns ErrBasePRLookupUnsupported, and an outright unknown
+// provider returns a plain error so a misconfiguration stays distinguishable
+// from a missing backend.
 //
 // A lookup failure is always an error, never an empty slice: an empty slice
 // reads as "no dependents" and authorizes an irreversible branch delete.
@@ -36,7 +37,11 @@ func OpenPRsTargeting(opts OpenOpts, base string) ([]BasePR, error) {
 	switch configenum.Normalize(opts.Provider) {
 	case "github":
 		return gitHubOpenPRsTargeting(base)
-	case "bitbucket", "forgejo", "gitea", "gitlab":
+	case "gitlab":
+		return gitlabOpenMRsTargeting(opts, base)
+	case "forgejo", "gitea":
+		return forgejoOpenPRsTargeting(opts, base)
+	case "bitbucket":
 		return nil, ErrBasePRLookupUnsupported
 	default:
 		return nil, fmt.Errorf("unsupported provider %q (expected %s)", opts.Provider, configenum.ShipProviders.List())

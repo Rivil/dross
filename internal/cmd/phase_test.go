@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,16 +18,117 @@ import (
 	"github.com/Rivil/dross/internal/state"
 )
 
-// stubPRMerged overrides the exported ship.PRMergedFunc seam so `dross phase
+// stubPRMerged overrides the exported ship.PRStatusFunc seam so `dross phase
 // complete`'s merge gate gets a deterministic answer without a `gh` binary or
 // network, restoring the real func when the test ends. The happy-path fixtures
 // record a PR number, so with merged=true the gate takes the authoritative
-// path; merged=false simulates an unmerged PR.
+// path; merged=false simulates an unmerged PR. BaseRef echoes back
+// opts.BaseBranch — mergeGate sets that to the fixture's own recorded base
+// before calling PRStatusFunc, so every existing call site keeps exercising
+// its own recorded base rather than a hardcoded one.
 func stubPRMerged(t *testing.T, merged bool) {
 	t.Helper()
-	prev := ship.PRMergedFunc
-	ship.PRMergedFunc = func(ship.OpenOpts) (bool, error) { return merged, nil }
-	t.Cleanup(func() { ship.PRMergedFunc = prev })
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(opts ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{Merged: merged, BaseRef: opts.BaseBranch}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+}
+
+// TestMergeGateAnnouncesUnsupportedProvider proves the forward-seam fallback
+// (kept wired for a future provider without a PRStatus implementation yet)
+// announces the degrade instead of swallowing it silently. No real provider
+// reaches this path after t-4/t-5 wire all five ship providers authoritatively,
+// so the seam is exercised directly via a stub.
+func TestMergeGateAnnouncesUnsupportedProvider(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://example.test/o/r.git")
+
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{}, ship.ErrMergeStatusUnsupported
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		_ = mergeGate(dir, ship.OpenOpts{Provider: "futureprovider"}, "auth", "phase/auth", "main", 7)
+	})
+	if !strings.Contains(out, "futureprovider") {
+		t.Errorf("announce must name the provider, got: %q", out)
+	}
+	if !strings.Contains(out, "ancestry") {
+		t.Errorf("announce must mention the git-ancestry fallback, got: %q", out)
+	}
+}
+
+// TestMergeGateAnnouncesProviderError proves a network/API error's own text
+// surfaces in the announce line, so a generic "check skipped" that swallows
+// the cause would fail this substring assert.
+func TestMergeGateAnnouncesProviderError(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://example.test/o/r.git")
+
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{}, errors.New("connection reset by peer")
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		_ = mergeGate(dir, ship.OpenOpts{Provider: "github"}, "auth", "phase/auth", "main", 7)
+	})
+	if !strings.Contains(out, "connection reset by peer") {
+		t.Errorf("announce must contain the error text, got: %q", out)
+	}
+}
+
+// TestMergeGateHappyPathIsSilent proves a successful authoritative merge
+// check prints nothing — the announce must not become noise on every
+// successful completion.
+func TestMergeGateHappyPathIsSilent(t *testing.T) {
+	dir := t.TempDir()
+
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{Merged: true, BaseRef: "main"}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		if err := mergeGate(dir, ship.OpenOpts{Provider: "github"}, "auth", "phase/auth", "main", 7); err != nil {
+			t.Fatalf("mergeGate: %v", err)
+		}
+	})
+	if out != "" {
+		t.Errorf("happy path must print nothing, got: %q", out)
+	}
+}
+
+// TestMergeGateNoRecordedPRStillFallsBack proves recordedPR == 0 takes the
+// ancestry path directly with no provider call and no announce — this is not
+// a provider-caused fallback, so it must stay silent, preserving
+// TestPhaseCompleteRefusesUnmergedNoLocalBranch.
+func TestMergeGateNoRecordedPRStillFallsBack(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://example.test/o/r.git")
+
+	called := false
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		called = true
+		return ship.PRStatus{}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		_ = mergeGate(dir, ship.OpenOpts{Provider: "github"}, "auth", "phase/auth", "main", 0)
+	})
+	if called {
+		t.Error("provider must not be queried when no PR is recorded")
+	}
+	if out != "" {
+		t.Errorf("no-recorded-PR fallback must not announce, got: %q", out)
+	}
 }
 
 // snapshotLiveState captures .dross/state.json and returns a restore func that
@@ -540,6 +642,117 @@ func TestPhaseCompleteMergeGateRefusalLeavesHEADOnPhase(t *testing.T) {
 	}
 }
 
+// TestPhaseCompleteRefusesRetargetedBase proves mergeGate refuses completion
+// when the provider reports a base different from reconcileBranch — the PR
+// was re-pointed on the forge since it was recorded, and completing against
+// it would land the phase on a base nobody signed off on.
+func TestPhaseCompleteRefusesRetargetedBase(t *testing.T) {
+	dir, _ := completeFixture(t)
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{Merged: false, BaseRef: "other"}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected a retarget refusal")
+	}
+	if !strings.Contains(err.Error(), "main") || !strings.Contains(err.Error(), "other") {
+		t.Errorf("error must name both branches, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "dross ship") || !strings.Contains(err.Error(), "Re-point the PR") {
+		t.Errorf("error must offer a concrete remedy, got: %v", err)
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+}
+
+// TestPhaseCompleteRefusesRetargetedBaseEvenWhenMerged proves the retarget
+// refusal wins even when the PR reports merged — an impl that places the
+// compare after the merged short-circuit would pass the previous test and
+// fail this one.
+func TestPhaseCompleteRefusesRetargetedBaseEvenWhenMerged(t *testing.T) {
+	dir, _ := completeFixture(t)
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{Merged: true, BaseRef: "other"}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	mainBefore := mustGit(t, dir, "rev-parse", "main")
+
+	err := runCmd(t, Phase(), "complete")
+	if err == nil {
+		t.Fatal("expected a retarget refusal even though the PR reports merged")
+	}
+	if !strings.Contains(err.Error(), "main") || !strings.Contains(err.Error(), "other") {
+		t.Errorf("error must name both branches, got: %v", err)
+	}
+	assertRefusalTouchedNothing(t, dir, "phase/auth", "main", mainBefore)
+}
+
+// TestMergeGateEmptyBaseRefAnnouncesSkip proves a 2xx PRStatus response whose
+// payload omits the base field yields BaseRef:"" and mergeGate proceeds,
+// announcing a skipped retarget check rather than refusing — a false
+// retarget alarm would block every completion on that provider, worse than
+// the gap the retarget check targets.
+func TestMergeGateEmptyBaseRefAnnouncesSkip(t *testing.T) {
+	dir := t.TempDir()
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{Merged: true, BaseRef: ""}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		if err := mergeGate(dir, ship.OpenOpts{Provider: "github"}, "auth", "phase/auth", "main", 7); err != nil {
+			t.Fatalf("mergeGate: %v", err)
+		}
+	})
+	if !strings.Contains(out, "base-retarget check skipped") {
+		t.Errorf("expected a base-retarget-check-skipped announce, got: %q", out)
+	}
+}
+
+// TestRetargetNormalizesRefsHeads proves refs/heads/main vs main is not a
+// retarget in either direction.
+func TestRetargetNormalizesRefsHeads(t *testing.T) {
+	if err := checkBaseRetarget("refs/heads/main", "main", "auth"); err != nil {
+		t.Errorf("refs/heads/main vs main should not be a retarget, got: %v", err)
+	}
+	if err := checkBaseRetarget("main", "refs/heads/main", "auth"); err != nil {
+		t.Errorf("main vs refs/heads/main should not be a retarget, got: %v", err)
+	}
+}
+
+// TestMergeGateRetargetSkipsOnProviderError proves a provider error never
+// reaches the base compare — it takes t-6a's announced ancestry fallback
+// instead, never a retarget refusal.
+func TestMergeGateRetargetSkipsOnProviderError(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://example.test/o/r.git")
+
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{}, errors.New("network blip")
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
+
+	out := captureStdout(t, func() {
+		if err := mergeGate(dir, ship.OpenOpts{Provider: "github"}, "auth", "phase/auth", "main", 7); err == nil {
+			t.Fatal("expected the ancestry fallback to refuse (no real refs exist)")
+		}
+	})
+	if strings.Contains(out, "retarget") {
+		t.Errorf("a provider error must never reach the retarget compare, got: %q", out)
+	}
+	if !strings.Contains(out, "network blip") {
+		t.Errorf("expected t-6a's announced provider-error fallback, got: %q", out)
+	}
+}
+
 // TestPhaseCompleteFetchFailureLeavesHEADOnPhase pins c-1 for the earliest
 // refusal — a fetch that can't reach origin. Nothing before the ff-only merge
 // needs HEAD, so an unreachable remote must be a pure no-op.
@@ -1014,7 +1227,7 @@ func TestPhaseCompleteRefusesWhenMergeInconclusive(t *testing.T) {
 	dir, _ := completeFixture(t)
 
 	// Strip the recorded PR so the gate has no authoritative signal; with no
-	// [remote] provider configured the real PRMergedFunc can't answer either,
+	// [remote] provider configured the real PRStatusFunc can't answer either,
 	// so the run reaches the ancestry fallback (no stub).
 	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
 		`{"phase":"auth","base":"main","tasks":{}}`)
@@ -1505,7 +1718,7 @@ func divergedCompleteFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
 	// Record a PR on phase/auth so the merge gate passes (tests stub
-	// PRMergedFunc=true) and the run reaches the ff-divergence logic under
+	// PRStatusFunc merged=true) and the run reaches the ff-divergence logic under
 	// test. The phase's spec.toml lives here too — on the phase branch, where
 	// /dross-spec writes it — and it's the artefact the origin squash drops
 	// and recovery must restore from the phase tip.
@@ -2216,7 +2429,7 @@ func completeMilestoneFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
 	// Record a PR number on phase/auth so complete's merge gate has a PR to
-	// look up (tests stub PRMergedFunc for the answer), plus the base the PR
+	// look up (tests stub PRStatusFunc for the answer), plus the base the PR
 	// was opened against — the milestone branch, which is what completion must
 	// reconcile.
 	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
@@ -2464,12 +2677,12 @@ func completeFixtureOriginPR(t *testing.T, originPR int) (string, string) {
 func TestPhaseCompleteResolvesRecordedPRFromOrigin(t *testing.T) {
 	dir, _ := completeFixtureOriginPR(t, 7)
 	gotPR := 0
-	prev := ship.PRMergedFunc
-	ship.PRMergedFunc = func(o ship.OpenOpts) (bool, error) {
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(o ship.OpenOpts) (ship.PRStatus, error) {
 		gotPR = o.PRNumber
-		return true, nil
+		return ship.PRStatus{Merged: true, BaseRef: o.BaseBranch}, nil
 	}
-	t.Cleanup(func() { ship.PRMergedFunc = prev })
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
 
 	if err := runCmd(t, Phase(), "complete"); err != nil {
 		t.Fatalf("complete should succeed via the origin-resolved PR: %v", err)
@@ -2486,12 +2699,12 @@ func TestPhaseCompleteResolvesRecordedPRFromOrigin(t *testing.T) {
 // the provider is never queried, and the ancestry fallback refuses unchanged.
 func TestPhaseCompleteNoPRAnywhereTakesAncestryFallback(t *testing.T) {
 	_, _ = completeFixtureOriginPR(t, 0)
-	prev := ship.PRMergedFunc
-	ship.PRMergedFunc = func(ship.OpenOpts) (bool, error) {
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
 		t.Error("provider must not be queried when no PR is recorded anywhere")
-		return false, nil
+		return ship.PRStatus{}, nil
 	}
-	t.Cleanup(func() { ship.PRMergedFunc = prev })
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
 
 	err := runCmd(t, Phase(), "complete")
 	if err == nil {
