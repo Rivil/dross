@@ -74,6 +74,33 @@ func TestPruneRefusesOnOpenProviderPR(t *testing.T) {
 	}
 }
 
+// A single stubbed PR never reaches describePRs' plural path — the i>0
+// comma-join inside the loop and the len(prs)!=1 -> "PRs " prefix both need
+// two or more results to fire.
+func TestPruneRefusesNamingAllOpenProviderPRs(t *testing.T) {
+	dir := stackedDeleteFixture(t, true)
+	writeMilestoneWithBase(t, dir, "v1.3", "main")
+	configureRemoteAndCommit(t, dir)
+	stubOpenPRs(t, []ship.BasePR{
+		{Number: 7, URL: "https://github.com/me/p/pull/7"},
+		{Number: 9, URL: "https://github.com/me/p/pull/9"},
+	}, nil)
+
+	err := runCmd(t, Milestone(), "prune")
+	if err == nil {
+		t.Fatal("prune deleted a branch with two open PRs still based on it")
+	}
+	if !strings.Contains(err.Error(), "PRs #7 (https://github.com/me/p/pull/7), #9 (https://github.com/me/p/pull/9)") {
+		t.Errorf("the refusal must name every open PR, comma-joined, plural prefix: %v", err)
+	}
+	if !branchExists(t, dir, "milestone/v1.2") {
+		t.Error("local milestone/v1.2 was deleted despite the refusal")
+	}
+	if !remoteHas(t, dir, "milestone/v1.2") {
+		t.Error("origin/milestone/v1.2 was deleted despite the refusal")
+	}
+}
+
 // c-6 names both commands: wiring the gate into prune alone would leave the
 // destructive finalize path unguarded.
 func TestFinalizeRefusesOnOpenProviderPR(t *testing.T) {
