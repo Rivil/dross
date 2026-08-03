@@ -96,6 +96,48 @@ func bbCredentials(apiBase, authEnv, authUser string) (user, token string, err e
 	return strings.TrimSpace(authUser), token, nil
 }
 
+// bitbucketPRStatus reads the PR's authoritative state and destination branch
+// from Bitbucket Cloud.
+//
+// The state is one of OPEN, MERGED, DECLINED or SUPERSEDED — so merged is
+// state == MERGED, never state != OPEN. A declined or superseded PR is closed
+// without ever having landed, and reporting it merged would false-complete a
+// phase whose work was thrown away.
+func bitbucketPRStatus(opts OpenOpts) (PRStatus, error) {
+	if opts.PRNumber <= 0 {
+		return PRStatus{}, errors.New("bitbucket merged-status lookup needs a PR number")
+	}
+	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser)
+	if err != nil {
+		return PRStatus{}, err
+	}
+	workspace, slug, err := bbRepoRef(opts.URL)
+	if err != nil {
+		return PRStatus{}, err
+	}
+	endpoint := strings.TrimRight(opts.APIBase, "/") +
+		fmt.Sprintf("/repositories/%s/%s/pullrequests/%d", workspace, slug, opts.PRNumber)
+	rb, status, err := bbRequest("GET", endpoint, user, token, nil)
+	if err != nil {
+		return PRStatus{}, fmt.Errorf("get PR #%d: %w", opts.PRNumber, err)
+	}
+	if status >= 300 {
+		return PRStatus{}, fmt.Errorf("get PR #%d: HTTP %d: %s", opts.PRNumber, status, string(rb))
+	}
+	var pr struct {
+		State       string `json:"state"`
+		Destination struct {
+			Branch struct {
+				Name string `json:"name"`
+			} `json:"branch"`
+		} `json:"destination"`
+	}
+	if err := json.Unmarshal(rb, &pr); err != nil {
+		return PRStatus{}, fmt.Errorf("parse bitbucket PR #%d: %w", opts.PRNumber, err)
+	}
+	return PRStatus{Merged: strings.EqualFold(pr.State, "MERGED"), BaseRef: pr.Destination.Branch.Name}, nil
+}
+
 // bbReviewerRefs maps configured reviewer strings to Bitbucket user objects.
 // Bitbucket dropped username-based references, so a reviewer is identified by
 // its UUID (the "{...}" form) or its account id; the shape is chosen per entry

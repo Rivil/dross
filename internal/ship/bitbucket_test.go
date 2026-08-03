@@ -47,6 +47,39 @@ func TestBBRepoRef(t *testing.T) {
 	}
 }
 
+// TestPRStatusBitbucketPopulatesBaseRef proves a MERGED payload reports its
+// destination.branch.name as BaseRef, not an empty string — Bitbucket nests
+// the branch name where GitHub/Forgejo keep it flat.
+func TestPRStatusBitbucketPopulatesBaseRef(t *testing.T) {
+	t.Setenv("MOCK_BB_TOKEN", "secret")
+
+	var gotPath, gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"MERGED","destination":{"branch":{"name":"main"}}}`))
+	}))
+	t.Cleanup(server.Close)
+
+	status, err := bitbucketPRStatus(OpenOpts{
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser", PRNumber: 42,
+	})
+	if err != nil {
+		t.Fatalf("bitbucketPRStatus: %v", err)
+	}
+	if !status.Merged || status.BaseRef != "main" {
+		t.Errorf("got %+v, want {Merged:true BaseRef:main}", status)
+	}
+	if want := "/repositories/acme/widget/pullrequests/42"; gotPath != want {
+		t.Errorf("path = %q, want %q", gotPath, want)
+	}
+	if want := wantBasic("wsuser", "secret"); gotAuth != want {
+		t.Errorf("Authorization = %q, want %q", gotAuth, want)
+	}
+}
+
 func TestOpenBitbucketPRHappyPath(t *testing.T) {
 	t.Setenv("MOCK_BB_TOKEN", "secret")
 

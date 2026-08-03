@@ -121,10 +121,10 @@ func TestPostBitbucketCommentNon2xx(t *testing.T) {
 	}
 }
 
-// TestPRMergedBitbucket pins merged to state == MERGED. Bitbucket closes a PR
+// TestPRStatusBitbucket pins merged to state == MERGED. Bitbucket closes a PR
 // as DECLINED or SUPERSEDED without ever landing it, so a `!= OPEN` test would
 // report those as merged and false-complete a phase whose work was discarded.
-func TestPRMergedBitbucket(t *testing.T) {
+func TestPRStatusBitbucket(t *testing.T) {
 	tests := []struct {
 		state string
 		want  bool
@@ -146,15 +146,15 @@ func TestPRMergedBitbucket(t *testing.T) {
 			}))
 			t.Cleanup(server.Close)
 
-			merged, err := PRMerged(OpenOpts{
+			status, err := GetPRStatus(OpenOpts{
 				Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
 				AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser", PRNumber: 42,
 			})
 			if err != nil {
-				t.Fatalf("PRMerged: %v", err)
+				t.Fatalf("GetPRStatus: %v", err)
 			}
-			if merged != tc.want {
-				t.Errorf("state %q: merged = %v, want %v", tc.state, merged, tc.want)
+			if status.Merged != tc.want {
+				t.Errorf("state %q: merged = %v, want %v", tc.state, status.Merged, tc.want)
 			}
 			if want := "/repositories/acme/widget/pullrequests/42"; gotPath != want {
 				t.Errorf("path = %q, want %q", gotPath, want)
@@ -169,10 +169,10 @@ func TestPRMergedBitbucket(t *testing.T) {
 	}
 }
 
-// TestPRMergedBitbucketIsAuthoritative proves bitbucket left the unsupported
+// TestPRStatusBitbucketIsAuthoritative proves bitbucket left the unsupported
 // table. If it rejoined it, ship would fall back to a git-ancestry guess on a
 // provider that can answer for itself.
-func TestPRMergedBitbucketIsAuthoritative(t *testing.T) {
+func TestPRStatusBitbucketIsAuthoritative(t *testing.T) {
 	t.Setenv("MOCK_BB_TOKEN", "secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -180,19 +180,19 @@ func TestPRMergedBitbucketIsAuthoritative(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	merged, err := PRMerged(OpenOpts{
+	status, err := GetPRStatus(OpenOpts{
 		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
 		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser", PRNumber: 1,
 	})
 	if err != nil {
 		t.Fatalf("bitbucket must answer authoritatively: %v", err)
 	}
-	if !merged {
+	if !status.Merged {
 		t.Error("a MERGED PR reported as not merged")
 	}
 }
 
-func TestPRMergedBitbucketMissingAuthUser(t *testing.T) {
+func TestPRStatusBitbucketMissingAuthUser(t *testing.T) {
 	t.Setenv("MOCK_BB_TOKEN", "secret")
 
 	requests := 0
@@ -202,7 +202,7 @@ func TestPRMergedBitbucketMissingAuthUser(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	if _, err := PRMerged(OpenOpts{
+	if _, err := GetPRStatus(OpenOpts{
 		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
 		AuthEnv: "MOCK_BB_TOKEN", PRNumber: 1, // AuthUser deliberately empty
 	}); err == nil || !strings.Contains(err.Error(), "auth_user") {
@@ -228,21 +228,21 @@ func TestCommentAndMergedNormaliseProvider(t *testing.T) {
 			t.Errorf("PostComment %q dispatched nowhere: %v", p, err)
 		}
 
-		_, err = PRMerged(OpenOpts{
+		_, err = GetPRStatus(OpenOpts{
 			Provider: p, URL: "https://bitbucket.org/acme/widget", PRNumber: 1,
 		})
 		if err == nil {
-			t.Fatalf("PRMerged %q: expected the backend's own credential error", p)
+			t.Fatalf("GetPRStatus %q: expected the backend's own credential error", p)
 		}
 		if strings.Contains(err.Error(), "unsupported provider") {
-			t.Errorf("PRMerged %q dispatched nowhere: %v", p, err)
+			t.Errorf("GetPRStatus %q dispatched nowhere: %v", p, err)
 		}
 	}
 
 	// The same normalisation reaches the providers that are still unsupported,
 	// so a padded gitlab keeps returning the fall-back sentinel rather than a
 	// hard misconfiguration error.
-	if _, err := PRMerged(OpenOpts{Provider: " GitLab ", PRNumber: 1}); err == nil ||
+	if _, err := GetPRStatus(OpenOpts{Provider: " GitLab ", PRNumber: 1}); err == nil ||
 		!strings.Contains(err.Error(), "not supported") {
 		t.Errorf("padded gitlab should still reach the unsupported arm, got: %v", err)
 	}
@@ -256,12 +256,12 @@ func TestShipMessagesListShipProviders(t *testing.T) {
 	if commentErr == nil {
 		t.Fatal("expected error for unknown provider")
 	}
-	_, mergedErr := PRMerged(OpenOpts{Provider: "perforce", PRNumber: 1})
+	_, mergedErr := GetPRStatus(OpenOpts{Provider: "perforce", PRNumber: 1})
 	if mergedErr == nil {
 		t.Fatal("expected error for unknown provider")
 	}
 
-	for name, err := range map[string]error{"PostComment": commentErr, "PRMerged": mergedErr} {
+	for name, err := range map[string]error{"PostComment": commentErr, "GetPRStatus": mergedErr} {
 		if !strings.Contains(err.Error(), configenum.ShipProviders.List()) {
 			t.Errorf("%s message must be derived from ShipProviders, got: %v", name, err)
 		}

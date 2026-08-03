@@ -730,11 +730,12 @@ func originRecordedPR(repoDir, base, phaseID string) int {
 func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconcileBranch string, recordedPR int) error {
 	if recordedPR > 0 {
 		opts.PRNumber = recordedPR
-		merged, err := ship.PRMergedFunc(opts)
+		opts.BaseBranch = reconcileBranch
+		prStatus, err := ship.PRStatusFunc(opts)
 		switch {
-		case err == nil && merged:
+		case err == nil && prStatus.Merged:
 			return nil // authoritatively merged — proceed
-		case err == nil && !merged:
+		case err == nil && !prStatus.Merged:
 			return fmt.Errorf("PR #%d for %s is not merged upstream — refusing to complete so the phase branch isn't lost.\n"+
 				"Merge the PR first and re-run; or if it really merged, use `dross phase complete --recover` / verify the merge manually.",
 				recordedPR, phaseID)

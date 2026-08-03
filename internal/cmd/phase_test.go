@@ -17,16 +17,21 @@ import (
 	"github.com/Rivil/dross/internal/state"
 )
 
-// stubPRMerged overrides the exported ship.PRMergedFunc seam so `dross phase
+// stubPRMerged overrides the exported ship.PRStatusFunc seam so `dross phase
 // complete`'s merge gate gets a deterministic answer without a `gh` binary or
 // network, restoring the real func when the test ends. The happy-path fixtures
 // record a PR number, so with merged=true the gate takes the authoritative
-// path; merged=false simulates an unmerged PR.
+// path; merged=false simulates an unmerged PR. BaseRef echoes back
+// opts.BaseBranch — mergeGate sets that to the fixture's own recorded base
+// before calling PRStatusFunc, so every existing call site keeps exercising
+// its own recorded base rather than a hardcoded one.
 func stubPRMerged(t *testing.T, merged bool) {
 	t.Helper()
-	prev := ship.PRMergedFunc
-	ship.PRMergedFunc = func(ship.OpenOpts) (bool, error) { return merged, nil }
-	t.Cleanup(func() { ship.PRMergedFunc = prev })
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(opts ship.OpenOpts) (ship.PRStatus, error) {
+		return ship.PRStatus{Merged: merged, BaseRef: opts.BaseBranch}, nil
+	}
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
 }
 
 // snapshotLiveState captures .dross/state.json and returns a restore func that
@@ -1014,7 +1019,7 @@ func TestPhaseCompleteRefusesWhenMergeInconclusive(t *testing.T) {
 	dir, _ := completeFixture(t)
 
 	// Strip the recorded PR so the gate has no authoritative signal; with no
-	// [remote] provider configured the real PRMergedFunc can't answer either,
+	// [remote] provider configured the real PRStatusFunc can't answer either,
 	// so the run reaches the ancestry fallback (no stub).
 	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
 		`{"phase":"auth","base":"main","tasks":{}}`)
@@ -1505,7 +1510,7 @@ func divergedCompleteFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
 	// Record a PR on phase/auth so the merge gate passes (tests stub
-	// PRMergedFunc=true) and the run reaches the ff-divergence logic under
+	// PRStatusFunc merged=true) and the run reaches the ff-divergence logic under
 	// test. The phase's spec.toml lives here too — on the phase branch, where
 	// /dross-spec writes it — and it's the artefact the origin squash drops
 	// and recovery must restore from the phase tip.
@@ -2216,7 +2221,7 @@ func completeMilestoneFixture(t *testing.T) (string, string, string) {
 	mustGit(t, dir, "commit", "-q", "-m", "feat(auth): scaffold")
 
 	// Record a PR number on phase/auth so complete's merge gate has a PR to
-	// look up (tests stub PRMergedFunc for the answer), plus the base the PR
+	// look up (tests stub PRStatusFunc for the answer), plus the base the PR
 	// was opened against — the milestone branch, which is what completion must
 	// reconcile.
 	mustWrite(t, filepath.Join(dir, ".dross/phases/auth/changes.json"),
@@ -2464,12 +2469,12 @@ func completeFixtureOriginPR(t *testing.T, originPR int) (string, string) {
 func TestPhaseCompleteResolvesRecordedPRFromOrigin(t *testing.T) {
 	dir, _ := completeFixtureOriginPR(t, 7)
 	gotPR := 0
-	prev := ship.PRMergedFunc
-	ship.PRMergedFunc = func(o ship.OpenOpts) (bool, error) {
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(o ship.OpenOpts) (ship.PRStatus, error) {
 		gotPR = o.PRNumber
-		return true, nil
+		return ship.PRStatus{Merged: true, BaseRef: o.BaseBranch}, nil
 	}
-	t.Cleanup(func() { ship.PRMergedFunc = prev })
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
 
 	if err := runCmd(t, Phase(), "complete"); err != nil {
 		t.Fatalf("complete should succeed via the origin-resolved PR: %v", err)
@@ -2486,12 +2491,12 @@ func TestPhaseCompleteResolvesRecordedPRFromOrigin(t *testing.T) {
 // the provider is never queried, and the ancestry fallback refuses unchanged.
 func TestPhaseCompleteNoPRAnywhereTakesAncestryFallback(t *testing.T) {
 	_, _ = completeFixtureOriginPR(t, 0)
-	prev := ship.PRMergedFunc
-	ship.PRMergedFunc = func(ship.OpenOpts) (bool, error) {
+	prev := ship.PRStatusFunc
+	ship.PRStatusFunc = func(ship.OpenOpts) (ship.PRStatus, error) {
 		t.Error("provider must not be queried when no PR is recorded anywhere")
-		return false, nil
+		return ship.PRStatus{}, nil
 	}
-	t.Cleanup(func() { ship.PRMergedFunc = prev })
+	t.Cleanup(func() { ship.PRStatusFunc = prev })
 
 	err := runCmd(t, Phase(), "complete")
 	if err == nil {
