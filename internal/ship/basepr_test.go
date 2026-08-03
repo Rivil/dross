@@ -117,7 +117,7 @@ func TestOpenPRsTargetingUnsupportedProvider(t *testing.T) {
 	}
 	defer func() { ghCommand = prev }()
 
-	for _, prov := range []string{"bitbucket", "forgejo", "gitea", "gitlab", "Forgejo"} {
+	for _, prov := range []string{"bitbucket", "forgejo", "gitea", "Forgejo"} {
 		prs, err := OpenPRsTargeting(OpenOpts{Provider: prov}, "milestone/v1.2")
 		if !errors.Is(err, ErrBasePRLookupUnsupported) {
 			t.Errorf("provider %q: err=%v want ErrBasePRLookupUnsupported", prov, err)
@@ -144,7 +144,7 @@ func TestOpenPRsTargetingFuncDefaultsToOpenPRsTargeting(t *testing.T) {
 	if OpenPRsTargetingFunc == nil {
 		t.Fatal("OpenPRsTargetingFunc must be a non-nil overridable var")
 	}
-	if _, err := OpenPRsTargetingFunc(OpenOpts{Provider: "gitlab"}, "milestone/v1.2"); !errors.Is(err, ErrBasePRLookupUnsupported) {
+	if _, err := OpenPRsTargetingFunc(OpenOpts{Provider: "forgejo"}, "milestone/v1.2"); !errors.Is(err, ErrBasePRLookupUnsupported) {
 		t.Errorf("OpenPRsTargetingFunc should delegate to OpenPRsTargeting, got: %v", err)
 	}
 }
