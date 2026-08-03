@@ -1,0 +1,80 @@
+[verify]
+  phase = "milestone-stacking"
+  generated_at = 2026-08-03T05:31:33.676998Z
+  verdict = "partial"
+  finalized = true
+  finalized_at = 2026-08-03T05:54:37.730833Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9559939301972686
+  mutants_killed = 1890
+  mutants_survived = 87
+  mutants_not_covered = 87
+  criteria_total = 6
+  criteria_covered = 4
+  criteria_uncovered = 2
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/milestone_merged_test.go:TestMilestoneMergedIntoMainReadsAncestry", "internal/cmd/milestone_merged_test.go:TestMilestoneMergedIgnoresMilestoneStatus", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateStacksOnUnmergedParent", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateFallsBackToMainOnceParentMerged", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateWithoutCurrentMilestoneCutsFromMain", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateWithVanishedParent", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateNarratesOfflineCutPoint"]
+  notes = "No surviving mutants in milestone_merged.go or the create cut-point path of milestone.go."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/milestone/milestone_test.go:TestRoundTrip", "internal/milestone/milestone_test.go:TestBaseOr", "internal/milestone/milestone_test.go:TestLoadPreV12TomlWithoutBase", "internal/milestone/milestone_test.go:TestLoadAll", "internal/milestone/milestone_test.go:TestLoadAllFailsClosedOnBrokenToml", "internal/cmd/milestone_test.go:TestMilestoneGetBaseReadableNotSettable", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateStacksOnUnmergedParent"]
+  notes = "No surviving mutants in internal/milestone/milestone.go."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteTargetsUnmergedParent", "internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteRetargetsMainOnceParentMerged", "internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteTargetsMainWhenParentDeletedOnOrigin", "internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteNoRecordedBaseTargetsMain", "internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteIdempotentPathReportsResolvedBase", "internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteRefusesSelfTargetedBase", "internal/cmd/milestone_dependents_test.go:TestFinalizeAcceptsMergeIntoRecordedParent"]
+  notes = "No surviving mutants in the PR-base resolution path of milestone.go."
+
+[[criterion]]
+  id = "c-4"
+  status = "weak"
+  tests = ["internal/cmd/milestone_dependents_test.go:TestPruneRefusesBranchWithUnmergedDependent", "internal/cmd/milestone_dependents_test.go:TestFinalizeRefusesBranchWithUnmergedDependent", "internal/cmd/milestone_dependents_test.go:TestPruneDeletesOnceDependentHasMerged", "internal/cmd/milestone_dependents_test.go:TestNoRecordedBaseIsNeverADependent", "internal/cmd/milestone_dependents_test.go:TestSelfBaseDoesNotSelfBlock", "internal/cmd/milestone_dependents_test.go:TestPruneRefusesOnUnreadableMilestoneToml"]
+  notes = "Single-dependent refusal (naming the one blocking milestone) is covered. joinVersions' 2+-element branches (\"and\"-join, comma-join in milestone_dependents.go:134-137) are never exercised — every fixture stacks exactly one dependent milestone on the parent. A bug in the multi-dependent list formatting would ship undetected."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/milestone_narration_test.go:TestMilestonePromptDropsUnconditionalCutClaim", "internal/cmd/milestone_narration_test.go:TestMilestoneCutNarrationStatesBothArms", "internal/cmd/milestone_narration_test.go:TestReadmeMilestoneRowDocumentsBaseFlag", "internal/cmd/milestone_narration_test.go:TestPRTargetNarrationNamesRecordedParent", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateNarratesOfflineCutPoint"]
+  notes = "Grep-pinned across assets/prompts/milestone.md, assets/prompts/ship.md, README.md, docs/roadmap.md; .md files have no mutation adapter (see NOTE finding)."
+
+[[criterion]]
+  id = "c-6"
+  status = "weak"
+  tests = ["internal/ship/basepr_test.go:TestOpenPRsTargetingGitHub", "internal/ship/basepr_test.go:TestOpenPRsTargetingGitHubNoResults", "internal/ship/basepr_test.go:TestOpenPRsTargetingGitHubFailureIsAnError", "internal/ship/basepr_test.go:TestOpenPRsTargetingGitHubMalformedJSON", "internal/ship/basepr_test.go:TestOpenPRsTargetingUnsupportedProvider", "internal/ship/basepr_test.go:TestOpenPRsTargetingUnknownProvider", "internal/ship/basepr_test.go:TestOpenPRsTargetingFuncDefaultsToOpenPRsTargeting", "internal/cmd/milestone_provider_gate_test.go:TestPruneRefusesOnOpenProviderPR", "internal/cmd/milestone_provider_gate_test.go:TestFinalizeRefusesOnOpenProviderPR", "internal/cmd/milestone_provider_gate_test.go:TestPruneAnnouncesProviderLookupSkip", "internal/cmd/milestone_provider_gate_test.go:TestPruneAnnouncesSkipWithNoProvider"]
+  notes = "Single-PR refusal (naming that PR) is covered. describePRs' plural branch (\"PRs \" + out, milestone_dependents.go:125) is never exercised — every fixture stubs exactly one open PR. A bug in the multi-PR plural formatting would ship undetected."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-4: joinVersions' multi-element branches (milestone_dependents.go:132,134,135,137) are NOT COVERED — no fixture stacks 2+ dependent milestones on the same parent."
+
+[[finding]]
+  severity = "FLAG"
+  text = "c-6: describePRs' plural branch (milestone_dependents.go:125) is NOT COVERED — no fixture stubs 2+ open PRs against the same base."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Gremlins mutated the entire internal/cmd package (14 phase files live there), which also swept ~25 unrelated sibling files never touched by this phase and surfaced ~80 pre-existing NOT-COVERED survivors (issue.go, ship.go, doctor.go, hints.go, status.go, and others). None of those lines belong to milestone-stacking's diff, so they are excluded from this phase's criterion mapping and verdict. Routed as a deferred spec.toml entry (target=someday) proposing dross verify scope mutation to diff-touched files rather than whole packages, per rule r-02."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/milestone.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/ship.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/roadmap.md: no mutation adapter for .md"
