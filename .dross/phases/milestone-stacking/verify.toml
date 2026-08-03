@@ -1,67 +1,399 @@
 [verify]
   phase = "milestone-stacking"
-  generated_at = 2026-08-03T05:31:33.676998Z
-  verdict = "partial"
+  generated_at = 2026-08-03T06:22:07.930388Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-08-03T05:54:37.730833Z
+  finalized_at = 2026-08-03T06:38:17.681329Z
 
 [summary]
   mutation_status = "measured"
-  mutation_score = 0.9559939301972686
-  mutants_killed = 1890
-  mutants_survived = 87
-  mutants_not_covered = 87
+  mutation_score = 0.9570055639858371
+  mutants_killed = 1892
+  mutants_survived = 84
+  mutants_not_covered = 84
   criteria_total = 6
-  criteria_covered = 4
-  criteria_uncovered = 2
+  criteria_covered = 6
+  criteria_uncovered = 0
 
 [[criterion]]
   id = "c-1"
   status = "covered"
   tests = ["internal/cmd/milestone_merged_test.go:TestMilestoneMergedIntoMainReadsAncestry", "internal/cmd/milestone_merged_test.go:TestMilestoneMergedIgnoresMilestoneStatus", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateStacksOnUnmergedParent", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateFallsBackToMainOnceParentMerged", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateWithoutCurrentMilestoneCutsFromMain", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateWithVanishedParent", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateNarratesOfflineCutPoint"]
-  notes = "No surviving mutants in milestone_merged.go or the create cut-point path of milestone.go."
+  notes = "Unchanged since last verify. No surviving mutants in milestone_merged.go or the create cut-point path of milestone.go."
 
 [[criterion]]
   id = "c-2"
   status = "covered"
   tests = ["internal/milestone/milestone_test.go:TestRoundTrip", "internal/milestone/milestone_test.go:TestBaseOr", "internal/milestone/milestone_test.go:TestLoadPreV12TomlWithoutBase", "internal/milestone/milestone_test.go:TestLoadAll", "internal/milestone/milestone_test.go:TestLoadAllFailsClosedOnBrokenToml", "internal/cmd/milestone_test.go:TestMilestoneGetBaseReadableNotSettable", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateStacksOnUnmergedParent"]
-  notes = "No surviving mutants in internal/milestone/milestone.go."
+  notes = "Unchanged since last verify. No surviving mutants in internal/milestone/milestone.go."
 
 [[criterion]]
   id = "c-3"
   status = "covered"
   tests = ["internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteTargetsUnmergedParent", "internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteRetargetsMainOnceParentMerged", "internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteTargetsMainWhenParentDeletedOnOrigin", "internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteNoRecordedBaseTargetsMain", "internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteIdempotentPathReportsResolvedBase", "internal/cmd/milestone_pr_base_test.go:TestMilestoneCompleteRefusesSelfTargetedBase", "internal/cmd/milestone_dependents_test.go:TestFinalizeAcceptsMergeIntoRecordedParent"]
-  notes = "No surviving mutants in the PR-base resolution path of milestone.go."
+  notes = "Unchanged since last verify. No surviving mutants in the PR-base resolution path of milestone.go."
 
 [[criterion]]
   id = "c-4"
-  status = "weak"
-  tests = ["internal/cmd/milestone_dependents_test.go:TestPruneRefusesBranchWithUnmergedDependent", "internal/cmd/milestone_dependents_test.go:TestFinalizeRefusesBranchWithUnmergedDependent", "internal/cmd/milestone_dependents_test.go:TestPruneDeletesOnceDependentHasMerged", "internal/cmd/milestone_dependents_test.go:TestNoRecordedBaseIsNeverADependent", "internal/cmd/milestone_dependents_test.go:TestSelfBaseDoesNotSelfBlock", "internal/cmd/milestone_dependents_test.go:TestPruneRefusesOnUnreadableMilestoneToml"]
-  notes = "Single-dependent refusal (naming the one blocking milestone) is covered. joinVersions' 2+-element branches (\"and\"-join, comma-join in milestone_dependents.go:134-137) are never exercised — every fixture stacks exactly one dependent milestone on the parent. A bug in the multi-dependent list formatting would ship undetected."
+  status = "covered"
+  tests = ["internal/cmd/milestone_dependents_test.go:TestPruneRefusesBranchWithUnmergedDependent", "internal/cmd/milestone_dependents_test.go:TestFinalizeRefusesBranchWithUnmergedDependent", "internal/cmd/milestone_dependents_test.go:TestPruneDeletesOnceDependentHasMerged", "internal/cmd/milestone_dependents_test.go:TestNoRecordedBaseIsNeverADependent", "internal/cmd/milestone_dependents_test.go:TestSelfBaseDoesNotSelfBlock", "internal/cmd/milestone_dependents_test.go:TestPruneRefusesOnUnreadableMilestoneToml", "internal/cmd/milestone_dependents_test.go:TestPruneRefusesNamingAllStackedDependents"]
+  notes = "Upgraded from weak: t-10 added a 3-dependent fixture (v1.3, v1.4, v1.5 all stacked on the same parent) asserting the refusal names all three, comma-then-and joined (\"v1.3, v1.4 and v1.5\") — this exercises joinVersions' middle-element branch that every prior fixture skipped. Two mutants still show NOT COVERED at milestone_dependents.go:132/134 (the switch-case conditions themselves, CONDITIONALS_NEGATION/INVERT_NEGATIVES/ARITHMETIC_BASE) — this is the known gremlins/go-cover attribution ceiling for `switch{}` case-conditions (dross_gremlins_switchcase_ceiling memory, proven 2026-07-01): go-cover instruments the case body, not the case expression, so a genuinely-tested branch still reports not-covered. The test above proves all three branches run correctly; not chasing these per that precedent."
 
 [[criterion]]
   id = "c-5"
   status = "covered"
   tests = ["internal/cmd/milestone_narration_test.go:TestMilestonePromptDropsUnconditionalCutClaim", "internal/cmd/milestone_narration_test.go:TestMilestoneCutNarrationStatesBothArms", "internal/cmd/milestone_narration_test.go:TestReadmeMilestoneRowDocumentsBaseFlag", "internal/cmd/milestone_narration_test.go:TestPRTargetNarrationNamesRecordedParent", "internal/cmd/milestone_stacking_test.go:TestMilestoneCreateNarratesOfflineCutPoint"]
-  notes = "Grep-pinned across assets/prompts/milestone.md, assets/prompts/ship.md, README.md, docs/roadmap.md; .md files have no mutation adapter (see NOTE finding)."
+  notes = "Unchanged since last verify. Grep-pinned across assets/prompts/milestone.md, assets/prompts/ship.md, README.md, docs/roadmap.md; .md files have no mutation adapter (see NOTE finding)."
 
 [[criterion]]
   id = "c-6"
-  status = "weak"
-  tests = ["internal/ship/basepr_test.go:TestOpenPRsTargetingGitHub", "internal/ship/basepr_test.go:TestOpenPRsTargetingGitHubNoResults", "internal/ship/basepr_test.go:TestOpenPRsTargetingGitHubFailureIsAnError", "internal/ship/basepr_test.go:TestOpenPRsTargetingGitHubMalformedJSON", "internal/ship/basepr_test.go:TestOpenPRsTargetingUnsupportedProvider", "internal/ship/basepr_test.go:TestOpenPRsTargetingUnknownProvider", "internal/ship/basepr_test.go:TestOpenPRsTargetingFuncDefaultsToOpenPRsTargeting", "internal/cmd/milestone_provider_gate_test.go:TestPruneRefusesOnOpenProviderPR", "internal/cmd/milestone_provider_gate_test.go:TestFinalizeRefusesOnOpenProviderPR", "internal/cmd/milestone_provider_gate_test.go:TestPruneAnnouncesProviderLookupSkip", "internal/cmd/milestone_provider_gate_test.go:TestPruneAnnouncesSkipWithNoProvider"]
-  notes = "Single-PR refusal (naming that PR) is covered. describePRs' plural branch (\"PRs \" + out, milestone_dependents.go:125) is never exercised — every fixture stubs exactly one open PR. A bug in the multi-PR plural formatting would ship undetected."
+  status = "covered"
+  tests = ["internal/ship/basepr_test.go:TestOpenPRsTargetingGitHub", "internal/ship/basepr_test.go:TestOpenPRsTargetingGitHubNoResults", "internal/ship/basepr_test.go:TestOpenPRsTargetingGitHubFailureIsAnError", "internal/ship/basepr_test.go:TestOpenPRsTargetingGitHubMalformedJSON", "internal/ship/basepr_test.go:TestOpenPRsTargetingUnsupportedProvider", "internal/ship/basepr_test.go:TestOpenPRsTargetingUnknownProvider", "internal/ship/basepr_test.go:TestOpenPRsTargetingFuncDefaultsToOpenPRsTargeting", "internal/cmd/milestone_provider_gate_test.go:TestPruneRefusesOnOpenProviderPR", "internal/cmd/milestone_provider_gate_test.go:TestFinalizeRefusesOnOpenProviderPR", "internal/cmd/milestone_provider_gate_test.go:TestPruneAnnouncesProviderLookupSkip", "internal/cmd/milestone_provider_gate_test.go:TestPruneAnnouncesSkipWithNoProvider", "internal/cmd/milestone_provider_gate_test.go:TestPruneRefusesNamingAllOpenProviderPRs"]
+  notes = "Upgraded from weak: t-11 added a 2-PR fixture (#7, #9) asserting the refusal reads \"PRs #7 (<url>), #9 (<url>)\" — comma-joined, plural prefix. describePRs' plural branch (milestone_dependents.go:125) no longer survives; killed in this run."
 
 [[finding]]
   severity = "FLAG"
-  text = "c-4: joinVersions' multi-element branches (milestone_dependents.go:132,134,135,137) are NOT COVERED — no fixture stacks 2+ dependent milestones on the same parent."
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_BOUNDARY)"
 
 [[finding]]
   severity = "FLAG"
-  text = "c-6: describePRs' plural branch (milestone_dependents.go:125) is NOT COVERED — no fixture stubs 2+ open PRs against the same base."
+  text = "gremlins mutant survived: watch.go:130 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: basebranch.go:104 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:307 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:309 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:735 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase.go:737 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: phase_lifecycle.go:27 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: state.go:266 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:442 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:442 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:444 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:444 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:444 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:472 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: status.go:474 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:105 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:109 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:114 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:119 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: env.go:148 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone_dependents.go:132 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone_dependents.go:134 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone_dependents.go:134 (INVERT_NEGATIVES)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: milestone_dependents.go:134 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: root.go:61 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:23 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: statusline.go:189 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:52 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:55 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:58 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: footer_coverage.go:60 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hooks.go:100 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: install.go:65 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: validate.go:96 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: deferred.go:138 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:181 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: update.go:184 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:32 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:31 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:30 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: gitignore.go:29 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:86 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:88 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: hints.go:133 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: issue.go:156 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: project.go:81 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: project.go:83 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:246 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:520 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:520 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:522 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:522 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: ship.go:524 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:90 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:90 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:92 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:95 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:95 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:161 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:243 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:246 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:246 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: doctor.go:351 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: rule.go:143 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: comment.go:60 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: open.go:66 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: open.go:83 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: open.go:88 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: open.go:88 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: open.go:89 (INVERT_NEGATIVES)"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: open.go:89 (ARITHMETIC_BASE)"
 
 [[finding]]
   severity = "NOTE"
-  text = "Gremlins mutated the entire internal/cmd package (14 phase files live there), which also swept ~25 unrelated sibling files never touched by this phase and surfaced ~80 pre-existing NOT-COVERED survivors (issue.go, ship.go, doctor.go, hints.go, status.go, and others). None of those lines belong to milestone-stacking's diff, so they are excluded from this phase's criterion mapping and verdict. Routed as a deferred spec.toml entry (target=someday) proposing dross verify scope mutation to diff-touched files rather than whole packages, per rule r-02."
+  text = "Gremlins mutated the entire internal/cmd package (14 phase files live there), which also swept ~25 unrelated sibling files never touched by this phase and surfaced ~80 pre-existing NOT-COVERED survivors (issue.go, ship.go, doctor.go, hints.go, status.go, and others). None of those lines belong to milestone-stacking's diff, so they are excluded from this phase's criterion mapping and verdict. Already routed via a deferred spec.toml entry (target=someday) proposing dross verify scope mutation to diff-touched files rather than whole packages, per rule r-02 — carried forward from the prior verify run, not re-raised as new."
+
+[[finding]]
+  severity = "NOTE"
+  text = "milestone_dependents.go:132 and :134 (joinVersions' switch-case conditions) remain NOT COVERED despite TestPruneRefusesNamingAllStackedDependents genuinely exercising all three branches (i==0, i==len-1, default) — a known gremlins/go-cover attribution ceiling for `switch{}` case-conditions, not a real gap. See dross_gremlins_switchcase_ceiling memory (proven 2026-07-01)."
 
 [[finding]]
   severity = "NOTE"
