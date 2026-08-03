@@ -403,6 +403,18 @@ Scan an existing repo's signal files (Dockerfile, package.json, go.mod, …) int
 
 _c8b346e · extended 07-stack-profiles · eb602f1_
 
+### Repository repair
+
+Detect and fix a `.dross/` clobbered by a bad checkout or an accidental hand-edit. `dross repair` diffs the working tree against git history: tracked files that are missing or diverged from their last committed blob are restored via a shared checkout primitive, phase directories a checkout wiped but `origin/<mainBranch>` still knows about are repopulated the same way, and a missing or clearly stale `state.json` (its `current_phase` disagreeing with the checked-out `phase/<id>` branch) is reconstructed from phase-completion commit markers plus the checked-out branch name. Dry-run by default — `--apply` writes the restores and commits them — so a lossy state reconstruction is shown before it becomes the new truth. `dross doctor` read-only-reuses the same detectors to surface a clobber and point at `dross repair` as the fix, matching doctor's existing remediation-hint pattern.
+
+- `detectModifiedOrMissingTracked` / `restorePathFromRef` — `internal/cmd/repair_files.go:29`
+- `reconstructState` — `internal/cmd/repair_state.go:40`
+- `detectMissingPhaseDirs` — `internal/cmd/repair_phasedirs.go:14`
+- `Repair` / `checkStaleState` — `internal/cmd/repair.go:19`
+- doctor's clobber section (`detectModifiedOrMissingTracked` + `detectMissingPhaseDirs` findings) — `internal/cmd/doctor.go:341`
+
+_introduced dross-repair · a85d29c_
+
 ### Root resolution
 
 Decide what counts as a dross repo, and say so the same way everywhere. `state.json` is deliberately *not* in the required set — it is machine-local and gitignored, so a fresh clone legitimately has none; `ensureState` materializes it on demand from `project.toml`'s `[project].version` with empty history rather than failing the root. A `.dross/` that exists but is missing `project.toml` resolves to *not a dross repo* — indistinguishable from no `.dross/` at all to callers — so a half-built directory can never be mistaken for an initialised one. The up-walk stops at the first `.dross/` it finds, complete or not (locked `walk_stop`), so a stray directory in a nested repo can never silently bind writes to an ancestor project's real root. Completeness is an *existence* check only (locked `completeness_check`): a file that exists but fails to parse is a broken state, not an uninitialised one, and stays loud everywhere — including in the hook targets. `LocateRoot` reports the misses without erroring, which is the seam doctor and `ship recover` read; `FindRoot` mints the `IncompleteRootError` that carries them, every message naming the missing file plus the single shared `RepairHint`. Silent exit 0 is scoped to the four hook targets alone — every other command fails loudly against an incomplete root, and a `go/ast` allowlist gates which files may swallow `ErrNoRoot` or call `LocateRoot`, so a future command can't quietly join the silent set. `dross doctor` projects the same misses as a distinct not-a-dross-repo verdict (its block is pinned equal to `LocateRoot`'s slice), and `dross onboard` adopts an incomplete `.dross/` in place, preserving what's already there.
