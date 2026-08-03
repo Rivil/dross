@@ -338,6 +338,41 @@ func Doctor() *cobra.Command {
 			}
 			Print("")
 
+			// --- Clobbered / missing tracked .dross/ files ---
+			//
+			// Read-only reuse of `dross repair`'s own detectors (t-1, t-3): a
+			// working-tree edit that never got committed, or a checkout that
+			// wiped a phase dir origin still knows about, both leave this
+			// project-level check silently wrong until someone notices by
+			// hand. Fixing is `dross repair`'s job, not doctor's — this only
+			// surfaces the finding.
+			Print("Clobbered/missing .dross/ files:")
+			clobbered, clobberErr := detectModifiedOrMissingTracked(repoDir)
+			missingDirs, missingDirsErr := detectMissingPhaseDirs(repoDir, root, mainBranch)
+			switch {
+			case clobberErr != nil:
+				Printf("  ⚠ couldn't scan tracked .dross/ files: %v\n", clobberErr)
+			case missingDirsErr != nil:
+				Printf("  ⚠ couldn't scan for missing phase dirs: %v\n", missingDirsErr)
+			case len(clobbered) == 0 && len(missingDirs) == 0:
+				Print("  ✓ no clobbered or missing tracked .dross/ files")
+			default:
+				for _, f := range clobbered {
+					if f.Missing {
+						Printf("  ✗ %s — missing\n", f.Path)
+					} else {
+						Printf("  ✗ %s — diverged from HEAD\n", f.Path)
+					}
+					issues++
+				}
+				for _, id := range missingDirs {
+					Printf("  ✗ %s/phases/%s — phase dir known to origin but absent from working tree\n", RootDirName, id)
+					issues++
+				}
+				Print("    Fix: `dross repair` (add --apply to write the restores).")
+			}
+			Print("")
+
 			// --- Version parity ---
 			//
 			// project.toml's [project].version is what release.yml tags from

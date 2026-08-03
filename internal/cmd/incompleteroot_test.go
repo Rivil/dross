@@ -183,7 +183,7 @@ func TestRootHelperCallersAreAllowlisted(t *testing.T) {
 
 	// Equality here: LocateRoot deliberately tolerates an incomplete root, so
 	// every caller is a considered exception and the set is closed.
-	wantLocate := []string{"doctor.go", "root.go", "ship_recover.go", "telemetry.go", "verify.go"}
+	wantLocate := []string{"doctor.go", "repair.go", "root.go", "ship_recover.go", "telemetry.go", "verify.go"}
 	if strings.Join(locateRootUsers, ",") != strings.Join(wantLocate, ",") {
 		t.Errorf("LocateRoot callers = %v, want %v", locateRootUsers, wantLocate)
 	}
