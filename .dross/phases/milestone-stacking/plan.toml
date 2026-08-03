@@ -1,4 +1,4 @@
-task_seq = 9
+task_seq = 11
 
 [phase]
   id = "milestone-stacking"
@@ -86,4 +86,22 @@ task_seq = 9
   covers = ["c-5"]
   depends_on = ["t-4"]
   test_contract = ["The test fails while assets/prompts/milestone.md still contains the literal \"integration branch from main\".", "Each of the three files must name both arms — the current milestone's branch when unmerged, main otherwise — so deleting the old claim without stating the new rule still fails.", "The README milestone row must mention `--base`; dropping the flag from the docs while it exists in the CLI fails the row grep.", "The failure message names the file that still carries the unconditional claim (or lacks the new rule), so a partial doc pass is not green.", "The test fails while assets/prompts/ship.md still claims milestone complete opens a `milestone/<version>` → `main` PR unconditionally; both README PR-target sentences must likewise name the recorded-parent arm."]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 4
+  title = "Cover joinVersions' multi-dependent formatting"
+  files = ["internal/cmd/milestone_dependents_test.go"]
+  description = "verify.toml FLAG (c-4): every dependent-milestone fixture stacks exactly one\nchild on the parent branch, so joinVersions' (milestone_dependents.go:132-138)\nmiddle-element comma-join branch (case i!=0 && i!=len(vs)-1) is NOT-COVERED —\nonly the i==0 and i==len(vs)-1 arms are exercised by the existing 2-branch\ntests.\n\nAdd a fixture stacking three milestones (v1.3, v1.4, v1.5) all recording\nbase=\"milestone/v1.2\" and all unmerged, then assert prune's/guardMilestoneBranchDelete's\nrefusal message names all three, in sorted order, joined as \"v1.3, v1.4 and\nv1.5\" (comma between the first two, \" and \" before the last). A version list\ntruncated to only the first and last dependent, or joined without the Oxford\ncomma-then-and shape, must fail this assertion — that is exactly what the\nmissing middle branch would produce if it silently fell through to the wrong\ncase."
+  covers = ["c-4"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 4
+  title = "Cover describePRs' plural PR formatting"
+  files = ["internal/cmd/milestone_provider_gate_test.go"]
+  description = "verify.toml FLAG (c-6): every provider-gate fixture stubs exactly one open PR,\nso describePRs' (milestone_dependents.go:120-129) plural path — the i>0 comma-\njoin inside the loop and the len(prs)!=1 -> \"PRs \" prefix — is NOT-COVERED;\nonly the singular \"PR #7\" shape is exercised.\n\nStub ship.OpenPRsTargetingFunc (via stubOpenPRs) to return two BasePRs (e.g.\n#7 and #9, both with URLs) against milestone/v1.2, then assert prune's refusal\nmessage contains \"PRs #7 (<url>), #9 (<url>)\" — comma-separated, plural\nprefix. A refusal that only names the first PR, or keeps the singular \"PR\"\nprefix with two results, must fail this assertion."
+  covers = ["c-6"]
   status = "done"

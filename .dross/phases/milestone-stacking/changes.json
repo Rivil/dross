@@ -20,6 +20,36 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/cmd/milestone_dependents_test.go"
+      ],
+      "commit": "8dc8511",
+      "completed_at": "2026-08-03T06:06:34.429856Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch dependency guard",
+          "symbol": "TestPruneRefusesNamingAllStackedDependents",
+          "loc": "internal/cmd/milestone_dependents_test.go",
+          "what": "exercises joinVersions' 3+ dependent comma-then-and formatting"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/milestone_provider_gate_test.go"
+      ],
+      "commit": "8f10e13",
+      "completed_at": "2026-08-03T06:07:12.952716Z",
+      "landmarks": [
+        {
+          "feature": "open-PR delete gate",
+          "symbol": "TestPruneRefusesNamingAllOpenProviderPRs",
+          "loc": "internal/cmd/milestone_provider_gate_test.go",
+          "what": "exercises describePRs' plural PR listing with comma-joined multiple PRs"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/milestone_merged.go",
