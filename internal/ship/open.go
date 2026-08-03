@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -90,62 +89,6 @@ func openGitHubPR(opts OpenOpts) (*OpenResult, error) {
 		Number: parsePRNumber(prURL),
 		URL:    prURL,
 	}, nil
-}
-
-// --- Forgejo / Gitea via REST ---
-
-func openForgejoPR(opts OpenOpts) (*OpenResult, error) {
-	if opts.APIBase == "" {
-		return nil, errors.New("forgejo backend needs APIBase (set [remote].api_base)")
-	}
-	if opts.AuthEnv == "" {
-		return nil, errors.New("forgejo backend needs AuthEnv (set [remote].auth_env)")
-	}
-	token := os.Getenv(opts.AuthEnv)
-	if token == "" {
-		return nil, fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", opts.AuthEnv, opts.AuthEnv)
-	}
-	owner, repo, err := splitOwnerRepo(opts.URL)
-	if err != nil {
-		return nil, err
-	}
-
-	body := map[string]any{
-		"title": opts.Title,
-		"body":  opts.Body,
-		"head":  opts.HeadBranch,
-		"base":  opts.BaseBranch,
-	}
-	if opts.Draft {
-		// Forgejo / Gitea support draft via the title prefix convention.
-		// REST API doesn't accept a "draft" boolean; titles starting with
-		// "WIP:" or "Draft:" are treated as drafts in the UI.
-		body["title"] = "Draft: " + opts.Title
-	}
-
-	endpoint := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf("/repos/%s/%s/pulls", owner, repo)
-	resp, err := jsonPost(endpoint, token, body)
-	if err != nil {
-		return nil, fmt.Errorf("create PR: %w", err)
-	}
-	num, _ := resp["number"].(float64)
-	htmlURL, _ := resp["html_url"].(string)
-	if num == 0 {
-		return nil, fmt.Errorf("forgejo response missing number: %v", resp)
-	}
-
-	if len(opts.Reviewers) > 0 {
-		revEndpoint := strings.TrimRight(opts.APIBase, "/") +
-			fmt.Sprintf("/repos/%s/%s/pulls/%d/requested_reviewers", owner, repo, int(num))
-		if _, err := jsonPost(revEndpoint, token, map[string]any{
-			"reviewers": opts.Reviewers,
-		}); err != nil {
-			// Don't fail the whole ship for reviewer-assignment trouble — the PR is open.
-			return &OpenResult{Number: int(num), URL: htmlURL}, fmt.Errorf("PR opened (#%d) but reviewer request failed: %w", int(num), err)
-		}
-	}
-
-	return &OpenResult{Number: int(num), URL: htmlURL}, nil
 }
 
 // --- helpers ---
