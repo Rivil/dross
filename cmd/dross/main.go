@@ -44,6 +44,7 @@ func newRoot() *cobra.Command {
 		cmd.Profile(),
 		cmd.VersionCmd(),
 		cmd.Doctor(),
+		cmd.Repair(),
 		cmd.Defaults(),
 		cmd.Env(),
 		cmd.Ship(),
