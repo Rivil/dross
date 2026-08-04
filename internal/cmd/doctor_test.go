@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1895,5 +1896,116 @@ func TestDoctorCleanConfigHasNoNewFindings(t *testing.T) {
 		if strings.Contains(out, unwanted) {
 			t.Errorf("clean config produced a false finding %q:\n%s", unwanted, out)
 		}
+	}
+}
+
+// --- config-trust arms routed back from /dross-verify (2026-08-04) ---
+
+// TestDoctorReportsTrackedLocalToml drives checkConfigTrust's readAllowHosts
+// error branch. A tracked local.toml is the one input that makes the allowlist
+// self-authorizing — a cloned repo would carry its own permission slip — so the
+// refusal has to count as an issue here, not just print. Doctor is also the only
+// command a user runs *looking* for this, which is what makes the exit code the
+// assertion that matters.
+func TestDoctorReportsTrackedLocalToml(t *testing.T) {
+	dir := doctorRepo(t)
+	// -f because init already gitignored it; tracking it takes deliberate effort,
+	// which is exactly the state doctor exists to catch.
+	mustWrite(t, filepath.Join(dir, ".dross", LocalFile), "allow_hosts = \"attacker.example\"\n")
+	mustGit(t, dir, "add", "-f", drossLocalIgnorePath)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Error("a tracked local.toml must move doctor's exit code, not just print")
+	}
+	for _, want := range []string{"refusing to read " + drossLocalIgnorePath, "tracked", "git rm --cached " + drossLocalIgnorePath} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor output does not carry %q:\n%s", want, out)
+		}
+	}
+	// The refusal must not be laundered into the clean line — a repo in this
+	// state has an unknown allowlist, not a verified one.
+	if strings.Contains(out, "✓ configured API hosts are within the allowlist") {
+		t.Errorf("doctor claimed the hosts were checked despite refusing to read the store:\n%s", out)
+	}
+}
+
+// TestDoctorWarnsOnUnreadableGitignore separates "cannot tell" from "proven
+// missing". An unreadable .gitignore is the first; reporting it as the second
+// would send the user to add a line to a file they cannot write, and reporting
+// nothing would hide a broken repo. A directory named .gitignore makes
+// os.ReadFile return EISDIR rather than fs.ErrNotExist, so no new seam is needed.
+func TestDoctorWarnsOnUnreadableGitignore(t *testing.T) {
+	dir := doctorRepo(t)
+	gi := filepath.Join(dir, ".gitignore")
+	if err := os.Remove(gi); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(gi, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	_ = runCmdCapturing(t, &out, Doctor())
+
+	if !strings.Contains(out, "couldn't read .gitignore") {
+		t.Errorf("doctor did not warn about the unreadable .gitignore:\n%s", out)
+	}
+	// The two arms are mutually exclusive: an unreadable file must not be
+	// reported as a missing ignore line.
+	if strings.Contains(out, "is not gitignored") {
+		t.Errorf("an unreadable .gitignore was reported as a missing ignore line:\n%s", out)
+	}
+}
+
+// TestDoctorWarnsOnGitVersionError covers the failure twin of
+// TestDoctorReportsOldGit. An unreadable version is not an old one: claiming
+// "older than git 2.24" when `git --version` failed would send the user to
+// upgrade a git that may be perfectly current, and is how a version check earns
+// enough distrust to get deleted.
+func TestDoctorWarnsOnGitVersionError(t *testing.T) {
+	doctorRepo(t)
+	prev := gitVersionOutput
+	t.Cleanup(func() { gitVersionOutput = prev })
+	gitVersionOutput = func() (string, error) { return "", errors.New("exec: \"git\": executable file not found in $PATH") }
+
+	var out string
+	_ = runCmdCapturing(t, &out, Doctor())
+
+	if !strings.Contains(out, "couldn't read `git --version`") {
+		t.Errorf("doctor did not warn that the git version was unreadable:\n%s", out)
+	}
+	if !strings.Contains(out, "executable file not found") {
+		t.Errorf("doctor swallowed the underlying error:\n%s", out)
+	}
+	if strings.Contains(out, "is older than git") {
+		t.Errorf("an unreadable git version was reported as an old one:\n%s", out)
+	}
+}
+
+// TestDoctorEscapeHatchCarriesPort pins hostOf's host:port arm at the doctor
+// layer. The hint is only useful if it is copy-pasteable: the allowlist compares
+// ports explicitly, so a hint that dropped :8443 would name a host the
+// comparison never matches — the user would run it, see the same refusal, and
+// conclude the guard is broken rather than their config.
+func TestDoctorEscapeHatchCarriesPort(t *testing.T) {
+	dir := doctorRepo(t)
+	ppath := filepath.Join(dir, ".dross", project.File)
+	p, err := project.Load(ppath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Remote.URL = "https://github.com/Rivil/dross"
+	p.Remote.APIBase = "https://odd.example:8443"
+	if err := p.Save(ppath); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Error("an off-allowlist ported api_base must move doctor's exit code")
+	}
+	if !strings.Contains(out, "dross local set allow_hosts odd.example:8443") {
+		t.Errorf("escape-hatch hint dropped the port:\n%s", out)
 	}
 }
