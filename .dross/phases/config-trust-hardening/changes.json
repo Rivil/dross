@@ -142,6 +142,51 @@
         }
       ]
     },
+    "t-16": {
+      "files": [
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "e276fdc",
+      "completed_at": "2026-08-04T15:25:58.185798Z",
+      "landmarks": [
+        {
+          "feature": "config trust diagnostics",
+          "symbol": "TestDoctorReportsTrackedLocalToml",
+          "loc": "internal/cmd/doctor_test.go:1911",
+          "what": "doctor's four config-trust arms (tracked local.toml, unreadable .gitignore, unreadable git version, ported escape-hatch hint) are each driven and boundary-pinned"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "internal/cmd/hostpolicy_test.go"
+      ],
+      "commit": "b9bde04",
+      "completed_at": "2026-08-04T15:28:52.151371Z",
+      "landmarks": [
+        {
+          "feature": "host allowlist enforcement",
+          "symbol": "TestDependentsCheckDegradesOnTransientError",
+          "loc": "internal/cmd/hostpolicy_test.go:202",
+          "what": "the dependents open-PR check's degrade arm is asserted alongside its refusal twin, keeping the ErrRefused case narrow"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/hostallow/hostallow_test.go"
+      ],
+      "commit": "5e2c5df",
+      "completed_at": "2026-08-04T15:32:05.934779Z",
+      "landmarks": [
+        {
+          "feature": "host allowlist enforcement",
+          "symbol": "TestHTTPDefaultsToPort80",
+          "loc": "internal/hostallow/hostallow_test.go:182",
+          "what": "port normalization is pinned in both directions so an http-derived entry cannot authorize its https twin"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/refguard.go",

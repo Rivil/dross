@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 18
 
 [phase]
   id = "config-trust-hardening"
@@ -160,4 +160,34 @@ task_seq = 0
   covers = ["c-5"]
   depends_on = ["t-7", "t-8", "t-9", "t-10", "t-11", "t-12", "t-13", "t-14"]
   test_contract = ["if any guard's error text drifts from its pinned line, TestHostileConfigVectors fails — it is table-driven off expected-refusals.txt and asserts the refusal matches per vector", "if a subtest is deleted to green the suite, TestEveryVectorHasASubtest fails — the subtest-name set must equal the vector-id set", "if the refusals move but an exec still happens, TestHostileConfigNoPwnSentinel fails — $TMPDIR/dross-pwned must not exist after the whole run", "if a refused request still reaches the network or leaks the token, the per-vector side-effect assertions fail — no request to the fake host, no token substring in any error string", "if RUN.md's replay is not reproducible, TestRedProofPinsBaseCommit fails — RUN.md must name a base commit SHA that exists and list one failing test per vector id"]
+  status = "done"
+
+[[task]]
+  id = "t-16"
+  wave = 6
+  title = "Cover doctor's four uncovered config-trust arms"
+  files = ["internal/cmd/doctor_test.go"]
+  description = "Verify FLAG routing (2026-08-04): four in-diff arms of checkConfigTrust are never\ndriven. (1) doctor.go:876 — the readAllowHosts-error branch's issues++, reached by a\ngit-tracked .dross/local.toml; no doctor test presents one. (2) doctor.go:913 — the\nunreadable-.gitignore warning arm of the machine-local-store check, reachable without\na new seam by making .gitignore a directory so os.ReadFile returns EISDIR rather than\nfs.ErrNotExist. (3) doctor.go:929 — the `git --version` failed warning arm;\nTestDoctorReportsOldGit stubs gitVersionOutput with versions but never an error, so\nthe stub seam already exists and only needs an error row. (4) doctor.go:951 — hostOf's\nhost:port return, leaving the escape-hatch hint for a ported host unasserted at the\ndoctor layer. Tests only; no production change."
+  covers = ["c-6", "c-7"]
+  test_contract = ["if the tracked-local.toml arm stops counting an issue, TestDoctorReportsTrackedLocalToml fails — doctor's exit code must move and the output must name the file as tracked, since a config-trust finding printed without moving the counter is one nobody acts on", "if the unreadable-.gitignore arm collapses into the fs.ErrNotExist arm, TestDoctorWarnsOnUnreadableGitignore fails — a .gitignore that is a directory must produce the ⚠ read error, NOT the `is not gitignored` ✗, and must not move the exit code (an unreadable file is unknown, not proven-missing)", "if the `git --version` failure arm stops warning, TestDoctorWarnsOnGitVersionError fails — a gitVersionOutput stub returning an error must produce the ⚠ line and must not produce the `is older than git` finding, so an unreadable version is never mistaken for an old one", "if hostOf drops the port, TestDoctorEscapeHatchCarriesPort fails — an off-allowlist api_base of https://odd.example:8443 must yield the hint `dross local set allow_hosts odd.example:8443` verbatim; a portless hint would name a host the allowlist comparison never matches, so the escape hatch would not work"]
+  status = "done"
+
+[[task]]
+  id = "t-17"
+  wave = 6
+  title = "Assert the dependents open-PR check still degrades on a transient error"
+  files = ["internal/cmd/hostpolicy_test.go"]
+  description = "Verify FLAG routing (2026-08-04): milestone_dependents.go:118's `case err != nil`\nDEGRADE arm is never driven. Its refusal twin at :111 is covered and mutation-killed by\nTestDependentsCheckDoesNotDegradeOnHostRefusal, so the locked refusal_behaviour half\nholds — but the complementary assertion that a NON-sentinel error still degrades has no\ndependents equivalent, while mergeGate already has one (hostpolicy_test.go:145). Without\nit, a mutant that widened the ErrRefused case into a catch-all re-raise would survive:\nevery error would become fatal and no test would notice. Stub ship.OpenPRsTargetingFunc\nwith a plain transient error and assert the skip line prints and the check returns nil.\nTests only; no production change."
+  covers = ["c-4"]
+  test_contract = ["if the ErrRefused case widens into a catch-all re-raise, TestDependentsCheckDegradesOnTransientError fails — a plain non-sentinel error must return nil and print the `open-PR check skipped` line, which is the assertion that keeps the refusal case narrow rather than making every forge hiccup fatal", "if the skip path stops naming the reason, the same test fails on the substring — a skip that does not say why is indistinguishable from the check having passed", "the degrade and refusal assertions stay separate test functions, so collapsing either arm fails exactly one of them"]
+  status = "done"
+
+[[task]]
+  id = "t-18"
+  wave = 6
+  title = "Cover withDefaultPort's plain-http default port"
+  files = ["internal/hostallow/hostallow_test.go"]
+  description = "Verify FLAG routing (2026-08-04): hostallow.go:234's `scheme == \"http\"` -> :80 branch\nis never driven — no test uses a plain-http URL on either side of the comparison.\nTestCheckRefusesSchemeAndPort refuses http:// on an allowed host, but that refusal is\nreached via the scheme check, not via port normalization, so the :80 arm stays dark and a\nmutant collapsing it into :443 survives. Drive it directly: an allow_hosts entry written\nas an http:// URL must normalize to host:80 and match an http:// api_base on the same\nhost, while the same entry must NOT match that host over https (which normalizes to :443)\n— the port-explicit comparison is what keeps a trusted http endpoint from silently\nauthorizing its https twin. Tests only; no production change."
+  covers = ["c-4"]
+  test_contract = ["if withDefaultPort's http arm collapses to :443, TestHTTPDefaultsToPort80 fails — an http:// allow_hosts entry must match an http:// URL on the same host, which it can only do if both sides normalize to :80", "if the http and https ports are conflated in either direction, the same test fails on its second half — an http:// entry must NOT authorize https:// on that host, and an https:// entry must NOT authorize http://", "the assertion is driven through Policy.Check rather than withDefaultPort directly, so the branch is proven reachable from the public API and not merely exercised in isolation"]
   status = "done"
