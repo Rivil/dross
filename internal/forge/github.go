@@ -50,13 +50,19 @@ func NewGitHubProjects(cfg Config) (*GitHubClient, error) {
 	if !ok || owner == "" || repo == "" {
 		return nil, fmt.Errorf("github [board].project %q is not \"owner/repo\"", cfg.Project)
 	}
-	token := os.Getenv(cfg.AuthEnv)
-	if token == "" {
-		return nil, fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", cfg.AuthEnv, cfg.AuthEnv)
-	}
+	// Resolved before the check, not after: the built-in default is what most
+	// repos actually use, so leaving it unchecked would exempt the common path
+	// from the guard entirely.
 	apiBase := strings.TrimRight(cfg.APIBase, "/")
 	if apiBase == "" {
 		apiBase = "https://api.github.com"
+	}
+	if err := cfg.Hosts.Check("[board].base_url", apiBase); err != nil {
+		return nil, err
+	}
+	token := os.Getenv(cfg.AuthEnv)
+	if token == "" {
+		return nil, fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", cfg.AuthEnv, cfg.AuthEnv)
 	}
 	return &GitHubClient{
 		owner:     owner,

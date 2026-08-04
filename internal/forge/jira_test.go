@@ -20,7 +20,7 @@ func newTestJiraClient(t *testing.T, h http.HandlerFunc) (*JiraClient, *httptest
 	t.Setenv(jiraTokenEnv, "secret")
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	c, err := NewJira(Config{APIBase: srv.URL, AuthEnv: jiraTokenEnv, Project: "PROJ", AuthUser: "me@example.com"})
+	c, err := NewJira(Config{APIBase: srv.URL, AuthEnv: jiraTokenEnv, Project: "PROJ", AuthUser: "me@example.com", Hosts: allowingSelf(srv.URL)})
 	if err != nil {
 		t.Fatalf("NewJira: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestNewAcceptsJira(t *testing.T) {
 		{"missing authenv", Config{APIBase: "https://x", Project: "PROJ", AuthUser: "me@example.com"}, "needs AuthEnv"},
 		{"missing project", Config{APIBase: "https://x", AuthEnv: jiraTokenEnv, AuthUser: "me@example.com"}, "needs Project"},
 		{"missing authuser", Config{APIBase: "https://x", AuthEnv: jiraTokenEnv, Project: "PROJ"}, "needs AuthUser"},
-		{"unset token", Config{APIBase: "https://x", AuthEnv: "DROSS_DEFINITELY_UNSET", Project: "PROJ", AuthUser: "me@example.com"}, "is not set"},
+		{"unset token", Config{APIBase: "https://x", AuthEnv: "DROSS_DEFINITELY_UNSET", Project: "PROJ", AuthUser: "me@example.com", Hosts: allowingSelf("https://x")}, "is not set"},
 	}
 	for _, tc := range bad {
 		t.Run(tc.name, func(t *testing.T) {

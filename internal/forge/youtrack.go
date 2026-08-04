@@ -55,6 +55,9 @@ func NewYouTrack(cfg Config) (*YouTrackClient, error) {
 	if cfg.Project == "" {
 		return nil, fmt.Errorf("youtrack backend needs Project (set [board].project)")
 	}
+	if err := cfg.Hosts.Check("[board].base_url", cfg.APIBase); err != nil {
+		return nil, err
+	}
 	token := os.Getenv(cfg.AuthEnv)
 	if token == "" {
 		return nil, fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", cfg.AuthEnv, cfg.AuthEnv)
