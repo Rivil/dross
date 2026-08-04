@@ -327,6 +327,22 @@ replace it and a fresh clone starts without one (dross materializes it,
 seeding the version from
 .IR .dross/project.toml ).
 .TP
+.I .dross/local.toml
+Machine-local, gitignored config:
+.B quick_base
+(the branch a standalone quick task committed to) and
+.B allow_hosts
+(comma-separated additions to the API host allowlist derived from
+.BR [remote].url ).
+.B allow_hosts
+lives here rather than in
+.I .dross/project.toml
+because a committed allowlist would let a cloned repo authorize the very host it
+redirects your token to; dross refuses to read this file if git reports it
+tracked, and names
+.B git rm --cached
+as the fix.
+.TP
 .I .dross/rules.toml
 Project-tier rules.
 .TP
