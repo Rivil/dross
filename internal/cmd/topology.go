@@ -77,7 +77,7 @@ func branchTopology(repoDir, root, workOverride string) (topology, error) {
 	// far Work is behind, which is a different question and always 0 for a
 	// freshly-merged milestone branch.
 	if !t.OnMain {
-		if out, err := gitTrim(repoDir, "rev-list", "--count", t.Main+".."+t.Work); err == nil {
+		if out, err := gitTrim(repoDir, gitRefArgs("rev-list", []string{"--count"}, t.Main+".."+t.Work)...); err == nil {
 			if n, err := strconv.Atoi(strings.TrimSpace(out)); err == nil {
 				t.AheadOfMain = n
 			}

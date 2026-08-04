@@ -32,7 +32,7 @@ func autoCommitDrossDirt(repoDir, action string) (committed bool, err error) {
 			}
 		}
 	}
-	if out, err := gitCombined(repoDir, "add", ".dross"); err != nil {
+	if out, err := gitCombined(repoDir, gitPathArgs("add", nil, ".dross")...); err != nil {
 		return false, fmt.Errorf("git add .dross: %w\n%s", err, out)
 	}
 	// Empty-commit guard: a status entry can stage to nothing (e.g. a change

@@ -110,12 +110,12 @@ func milestonePrune() *cobra.Command {
 			}
 
 			for _, b := range stale {
-				if out, err := gitCombined(repoDir, "branch", "-D", b.Name); err != nil {
+				if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, b.Name)...); err != nil {
 					return fmt.Errorf("delete local %s: %w\n%s", b.Name, err, out)
 				}
 				where := "local"
 				if b.HasRemote {
-					if out, err := gitCombined(repoDir, "push", "origin", "--delete", b.Name); err != nil {
+					if out, err := gitCombined(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", b.Name)...); err != nil {
 						return fmt.Errorf("delete origin/%s: %w\n%s", b.Name, err, out)
 					}
 					where = "local + origin"
@@ -326,17 +326,17 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 
 	// Delete the local milestone branch (only if it exists).
 	if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+msBranch); err == nil {
-		if out, err := gitCombined(repoDir, "branch", "-D", msBranch); err != nil {
+		if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, msBranch)...); err != nil {
 			return fmt.Errorf("git branch -D %s: %w\n%s", msBranch, err, out)
 		}
 	}
 	// Delete the remote milestone branch (idempotent — only if origin has it).
-	remoteRef, err := gitTrim(repoDir, "ls-remote", "--heads", "origin", msBranch)
+	remoteRef, err := gitTrim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", msBranch)...)
 	if err != nil {
 		return fmt.Errorf("git ls-remote origin %s: %w", msBranch, err)
 	}
 	if remoteRef != "" {
-		if out, err := gitCombined(repoDir, "push", "origin", "--delete", msBranch); err != nil {
+		if out, err := gitCombined(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", msBranch)...); err != nil {
 			return fmt.Errorf("git push origin --delete %s: %w\n%s", msBranch, err, out)
 		}
 	}
@@ -534,14 +534,14 @@ func ensureMilestoneBranch(repoDir, baseBranch, version string) (branch string, 
 	}
 	// Idempotent create: only when the local ref is absent.
 	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch) != nil {
-		if out, e := gitCombined(repoDir, "branch", branch, baseBranch); e != nil {
+		if out, e := gitCombined(repoDir, gitRefArgs("branch", nil, branch, baseBranch)...); e != nil {
 			return branch, false, false, fmt.Errorf("git branch %s %s: %w\n%s", branch, baseBranch, e, out)
 		}
 		created = true
 	}
 	// Push only when an origin remote exists.
 	if gitNoOut(repoDir, "remote", "get-url", "origin") == nil {
-		if out, e := gitCombined(repoDir, "push", "origin", branch); e != nil {
+		if out, e := gitCombined(repoDir, gitRefArgs("push", nil, "origin", branch)...); e != nil {
 			return branch, created, false, fmt.Errorf("git push origin %s: %w\n%s", branch, e, out)
 		}
 		pushed = true

@@ -718,8 +718,8 @@ func phaseCommitsOnMain(root, repoDir, mainBranch string) ([]leakedPhaseCommit, 
 	}
 
 	// List commits on local main not in origin/main.
-	out, err := exec.Command("git", "-C", repoDir,
-		"rev-list", "origin/"+mainBranch+".."+mainBranch).Output()
+	out, err := exec.Command("git", append([]string{"-C", repoDir},
+		gitRefArgs("rev-list", nil, "origin/"+mainBranch+".."+mainBranch)...)...).Output()
 	if err != nil {
 		return nil, err
 	}

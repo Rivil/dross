@@ -172,8 +172,8 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 
 	// Pre-check: SHA must actually contain a .dross/ tree, or the checkout
 	// step would fail with an unhelpful pathspec error.
-	if err := exec.Command("git", "-C", repoDir, "rev-parse", "--verify",
-		sha+":.dross").Run(); err != nil {
+	if err := exec.Command("git", append([]string{"-C", repoDir},
+		gitRefArgs("rev-parse", []string{"--verify"}, sha+":.dross")...)...).Run(); err != nil {
 		return fmt.Errorf("commit %s has no .dross/ tree — nothing to restore. "+
 			"If you've already reset main, pass "+
 			"--pre-merge-sha=$(git rev-parse HEAD@{1})", short(sha))
@@ -189,7 +189,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	// copy, and restoring it would overwrite the live machine-local file with
 	// whatever history that commit happened to hold — the very clobber this
 	// milestone exists to end (locked state_tracking).
-	if out, err := gitCombined(repoDir, "checkout", sha, "--", ".dross/", ":(exclude).dross/"+state.File); err != nil {
+	if out, err := gitCombined(repoDir, gitRefPathArgs("checkout", nil, []string{sha}, ".dross/", ":(exclude).dross/"+state.File)...); err != nil {
 		return fmt.Errorf("git checkout %s -- .dross/: %w\n%s", short(sha), err, out)
 	}
 

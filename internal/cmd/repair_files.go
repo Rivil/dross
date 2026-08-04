@@ -44,7 +44,7 @@ func detectModifiedOrMissingTracked(repoDir string) ([]ClobberedFile, error) {
 		}
 		// git diff --quiet exits 1 when HEAD's tracked blob differs from the
 		// working-tree copy; exit 0 means they match.
-		if diffErr := gitNoOut(repoDir, "diff", "--quiet", "HEAD", "--", rel); diffErr != nil {
+		if diffErr := gitNoOut(repoDir, gitRefPathArgs("diff", []string{"--quiet"}, []string{"HEAD"}, rel)...); diffErr != nil {
 			found = append(found, ClobberedFile{Path: rel})
 		}
 	}
@@ -57,7 +57,12 @@ func detectModifiedOrMissingTracked(repoDir string) ([]ClobberedFile, error) {
 // tracked files and t-3's checkout-wiped phase dirs both restore through
 // this one primitive.
 func restorePathFromRef(repoDir, ref, path string) error {
-	if out, err := gitCombined(repoDir, "checkout", ref, "--", path); err != nil {
+	// Both halves are caller-derived and each needs its own separator: the ref
+	// must not be read as a flag, and must not be demoted to a pathspec either.
+	if err := validateGitRef("restore ref", ref); err != nil {
+		return err
+	}
+	if out, err := gitCombined(repoDir, gitRefPathArgs("checkout", nil, []string{ref}, path)...); err != nil {
 		return fmt.Errorf("git checkout %s -- %s: %w\n%s", ref, path, err, out)
 	}
 	return nil

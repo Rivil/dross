@@ -279,7 +279,7 @@ func Ship() *cobra.Command {
 			// incomplete — refuse rather than open a PR against a base the
 			// provider can't see. main is the always-present default.
 			if milestoneActive {
-				if err := gitNoOut(repoDir, "ls-remote", "--exit-code", "--heads", "origin", baseBranch); err != nil {
+				if err := gitNoOut(repoDir, gitRefArgs("ls-remote", []string{"--exit-code", "--heads"}, "origin", baseBranch)...); err != nil {
 					return fmt.Errorf("base branch %q is not on origin — it is pushed when the milestone is scoped; re-scope or push it before shipping", baseBranch)
 				}
 			}
@@ -313,12 +313,12 @@ func Ship() *cobra.Command {
 			// 7) Push phase/<id> directly. The provider's squash-merge will
 			//    collapse the per-task commits into one on the base; no
 			//    client-side synthetic branch needed.
-			pushArgs := []string{"push", "-u", "origin", phaseBranch}
+			pushArgs := gitRefArgs("push", []string{"-u"}, "origin", phaseBranch)
 			if forcePush {
 				// --force-with-lease guards against clobbering a concurrent
 				// push from another machine without requiring the user to
 				// know the remote SHA.
-				pushArgs = []string{"push", "-u", "--force-with-lease", "origin", phaseBranch}
+				pushArgs = gitRefArgs("push", []string{"-u", "--force-with-lease"}, "origin", phaseBranch)
 			}
 			pushOut, perr := gitCombined(repoDir, pushArgs...)
 			if perr != nil {
@@ -397,7 +397,7 @@ func Ship() *cobra.Command {
 					return fmt.Errorf("persist PR base branch: %w", err)
 				}
 				changesRel := filepath.Join(".dross", "phases", phaseID, changes.File)
-				if out, err := gitCombined(repoDir, "add", changesRel); err != nil {
+				if out, err := gitCombined(repoDir, gitPathArgs("add", nil, changesRel)...); err != nil {
 					return fmt.Errorf("git add changes.json: %w\n%s", err, out)
 				}
 				// Only commit + push when the add actually staged a change, so a
@@ -411,9 +411,9 @@ func Ship() *cobra.Command {
 					// Push the record onto the phase branch so it reaches the
 					// open PR / squash / base. Mirror the initial push's
 					// force-with-lease handling under --force.
-					recordPushArgs := []string{"push", "origin", phaseBranch}
+					recordPushArgs := gitRefArgs("push", nil, "origin", phaseBranch)
 					if forcePush {
-						recordPushArgs = []string{"push", "--force-with-lease", "origin", phaseBranch}
+						recordPushArgs = gitRefArgs("push", []string{"--force-with-lease"}, "origin", phaseBranch)
 					}
 					if out, err := gitCombined(repoDir, recordPushArgs...); err != nil {
 						return fmt.Errorf("git push PR record: %w\n%s", err, out)
