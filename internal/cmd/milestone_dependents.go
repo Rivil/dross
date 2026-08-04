@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	"github.com/Rivil/dross/internal/milestone"
@@ -92,7 +93,18 @@ func guardOpenPRsTargeting(branch string) error {
 		printOpenPRSkip("no [remote].provider/.url configured")
 		return nil
 	}
-	prs, err := ship.OpenPRsTargetingFunc(buildOpenOpts(p), branch)
+	root, rerr := FindRoot()
+	if rerr != nil {
+		printOpenPRSkip(rerr.Error())
+		return nil
+	}
+	hosts, herr := remotePolicy(root, filepath.Dir(root), p)
+	if herr != nil {
+		// A tracked local.toml is a refusal, not a transient failure — it must
+		// not be swallowed into the skip path the way a network error is.
+		return herr
+	}
+	prs, err := ship.OpenPRsTargetingFunc(buildOpenOpts(p, hosts), branch)
 	if err != nil {
 		printOpenPRSkip(err.Error())
 		return nil

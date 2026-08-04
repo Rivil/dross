@@ -1,6 +1,7 @@
 package ship
 
 import (
+	"github.com/Rivil/dross/internal/hostallow"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
@@ -39,7 +40,7 @@ func TestPRStatusBaseRefAcrossProviders(t *testing.T) {
 		t.Cleanup(server.Close)
 
 		status, err := GetPRStatus(OpenOpts{
-			Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+			Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 			AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 7,
 		})
 		if err != nil {
@@ -60,7 +61,7 @@ func TestPRStatusBaseRefAcrossProviders(t *testing.T) {
 			t.Cleanup(server.Close)
 
 			status, err := GetPRStatus(OpenOpts{
-				Provider: prov, URL: "https://forge.example/me/p", APIBase: server.URL,
+				Provider: prov, URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 				AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 7,
 			})
 			if err != nil {
@@ -81,7 +82,7 @@ func TestPRStatusBaseRefAcrossProviders(t *testing.T) {
 		t.Cleanup(server.Close)
 
 		status, err := GetPRStatus(OpenOpts{
-			Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+			Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 			AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser", PRNumber: 7,
 		})
 		if err != nil {

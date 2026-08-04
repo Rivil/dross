@@ -3,6 +3,7 @@ package ship
 import (
 	"encoding/base64"
 	"encoding/json"
+	"github.com/Rivil/dross/internal/hostallow"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -63,7 +64,7 @@ func TestPRStatusBitbucketPopulatesBaseRef(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	status, err := bitbucketPRStatus(OpenOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser", PRNumber: 42,
 	})
 	if err != nil {
@@ -111,7 +112,7 @@ func TestOpenBitbucketPRHappyPath(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	res, err := OpenPR(OpenOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser",
 		HeadBranch: "phase/x", BaseBranch: "main",
 		Title: "My Title", Body: "the body",
@@ -173,7 +174,7 @@ func TestOpenBitbucketPRDraftIsABoolean(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	if _, err := OpenPR(OpenOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser",
 		HeadBranch: "h", BaseBranch: "main", Title: "My Title", Draft: true,
 	}); err != nil {
@@ -201,7 +202,7 @@ func TestOpenBitbucketPRMissingAuthUser(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	_, err := OpenPR(OpenOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv:    "MOCK_BB_TOKEN", // AuthUser deliberately empty
 		HeadBranch: "h", BaseBranch: "main", Title: "x",
 	})
@@ -235,7 +236,7 @@ func TestOpenBitbucketPRReviewerFailureNonFatal(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	res, err := OpenPR(OpenOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser",
 		HeadBranch: "h", BaseBranch: "main", Title: "x",
 		Reviewers: []string{"{504c3b62-8120-4f0c-a7bc-87800b9d6f70}", "557058:abc"},

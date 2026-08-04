@@ -423,7 +423,11 @@ destructive reset of the local base branch; read the abort first.`,
 			// error), fall back to a git-ancestry check and
 			// refuse-when-inconclusive rather than false-complete. Runs before
 			// anything destructive.
-			if err := mergeGate(repoDir, buildOpenOpts(p), phaseID, phaseBranch, reconcileBranch, recordedPR); err != nil {
+			hosts, herr := remotePolicy(root, repoDir, p)
+			if herr != nil {
+				return herr
+			}
+			if err := mergeGate(repoDir, buildOpenOpts(p, hosts), phaseID, phaseBranch, reconcileBranch, recordedPR); err != nil {
 				return err
 			}
 

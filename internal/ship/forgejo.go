@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
@@ -23,9 +22,9 @@ func forgejoTarget(opts OpenOpts) (owner, repo, token string, err error) {
 	if opts.AuthEnv == "" {
 		return "", "", "", errors.New("forgejo backend needs AuthEnv (set [remote].auth_env)")
 	}
-	token = os.Getenv(opts.AuthEnv)
-	if token == "" {
-		return "", "", "", fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", opts.AuthEnv, opts.AuthEnv)
+	token, err = resolveToken(opts.APIBase, opts.AuthEnv, opts.Hosts)
+	if err != nil {
+		return "", "", "", err
 	}
 	owner, repo, err = splitOwnerRepo(opts.URL)
 	if err != nil {

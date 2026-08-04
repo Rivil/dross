@@ -2,6 +2,7 @@ package ship
 
 import (
 	"encoding/json"
+	"github.com/Rivil/dross/internal/hostallow"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -37,7 +38,7 @@ func TestPostBitbucketCommentHappyPath(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	err := PostComment(CommentOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser",
 		PRNumber: 42, Body: "panel findings",
 	})
@@ -83,7 +84,7 @@ func TestPostBitbucketCommentMissingAuthUser(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	err := PostComment(CommentOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv:  "MOCK_BB_TOKEN", // AuthUser deliberately empty
 		PRNumber: 1, Body: "x",
 	})
@@ -110,7 +111,7 @@ func TestPostBitbucketCommentNon2xx(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	err := PostComment(CommentOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser", PRNumber: 1, Body: "x",
 	})
 	if err == nil {
@@ -147,7 +148,7 @@ func TestPRStatusBitbucket(t *testing.T) {
 			t.Cleanup(server.Close)
 
 			status, err := GetPRStatus(OpenOpts{
-				Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+				Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 				AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser", PRNumber: 42,
 			})
 			if err != nil {
@@ -181,7 +182,7 @@ func TestPRStatusBitbucketIsAuthoritative(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	status, err := GetPRStatus(OpenOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser", PRNumber: 1,
 	})
 	if err != nil {
@@ -203,7 +204,7 @@ func TestPRStatusBitbucketMissingAuthUser(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	if _, err := GetPRStatus(OpenOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_BB_TOKEN", PRNumber: 1, // AuthUser deliberately empty
 	}); err == nil || !strings.Contains(err.Error(), "auth_user") {
 		t.Fatalf("expected an auth_user error, got: %v", err)

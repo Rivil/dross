@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"github.com/Rivil/dross/internal/hostallow"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -32,7 +33,7 @@ func TestBuildOpenOptsMapsGitLabFields(t *testing.T) {
 		ProjectID:  "42",
 		Reviewers:  []string{"alice"},
 	}}
-	got := buildOpenOpts(p)
+	got := buildOpenOpts(p, hostallow.Policy{})
 	if got.Provider != "gitlab" || got.URL != p.Remote.URL || got.APIBase != p.Remote.APIBase || got.AuthEnv != "GL_TOKEN" {
 		t.Errorf("base remote fields not copied: %+v", got)
 	}
@@ -58,7 +59,7 @@ func TestBuildCommentOptsMapsGitLabFields(t *testing.T) {
 		AuthScheme: "bearer",
 		ProjectID:  "42",
 	}}
-	got := buildCommentOpts(p)
+	got := buildCommentOpts(p, hostallow.Policy{})
 	if got.Provider != "gitlab" || got.AuthEnv != "GL_TOKEN" || got.AuthScheme != "bearer" || got.ProjectID != "42" {
 		t.Errorf("comment opts dropped a field: %+v", got)
 	}
@@ -82,7 +83,7 @@ func bitbucketRemote() *project.Project {
 // no ship-package test can see: those construct OpenOpts directly, so every one
 // of them passes while a real Bitbucket ship 401s on base64(:token).
 func TestBuildOpenOptsCarriesAuthUser(t *testing.T) {
-	got := buildOpenOpts(bitbucketRemote())
+	got := buildOpenOpts(bitbucketRemote(), hostallow.Policy{})
 	if got.AuthUser != "wsuser" {
 		t.Errorf("auth_user not copied onto OpenOpts: %q", got.AuthUser)
 	}
@@ -94,7 +95,7 @@ func TestBuildOpenOptsCarriesAuthUser(t *testing.T) {
 }
 
 func TestBuildCommentOptsCarriesAuthUser(t *testing.T) {
-	got := buildCommentOpts(bitbucketRemote())
+	got := buildCommentOpts(bitbucketRemote(), hostallow.Policy{})
 	if got.AuthUser != "wsuser" {
 		t.Errorf("auth_user not copied onto CommentOpts: %q", got.AuthUser)
 	}
@@ -326,6 +327,12 @@ func TestShipFullFlowAgainstMockProvider(t *testing.T) {
 	// Point project.toml at the mock server. project set runs from main
 	// (we're on phase/x and it writes to .dross/project.toml), so
 	// commit on the phase branch before shipping (clean tree required).
+	// The API lives on a different host from [remote].url here, which is the
+	// case the machine-local escape hatch exists for: authorize it by hand on
+	// this machine, never through committed config.
+	if err := runCmd(t, Local(), "set", "allow_hosts", server.Listener.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
 	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
 		t.Fatal(err)
 	}
@@ -441,6 +448,12 @@ func TestShipPushesPRRecordToPhaseBranch(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
+	// The API lives on a different host from [remote].url here, which is the
+	// case the machine-local escape hatch exists for: authorize it by hand on
+	// this machine, never through committed config.
+	if err := runCmd(t, Local(), "set", "allow_hosts", server.Listener.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
 	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
 		t.Fatal(err)
 	}
@@ -525,6 +538,12 @@ func TestShipDoesNotPersistPRWhenOpenFails(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
+	// The API lives on a different host from [remote].url here, which is the
+	// case the machine-local escape hatch exists for: authorize it by hand on
+	// this machine, never through committed config.
+	if err := runCmd(t, Local(), "set", "allow_hosts", server.Listener.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
 	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
 		t.Fatal(err)
 	}
@@ -590,6 +609,12 @@ func shipMockFlow(t *testing.T, dir string) *shipCapture {
 	}))
 	t.Cleanup(server.Close)
 
+	// The API lives on a different host from [remote].url here, which is the
+	// case the machine-local escape hatch exists for: authorize it by hand on
+	// this machine, never through committed config.
+	if err := runCmd(t, Local(), "set", "allow_hosts", server.Listener.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
 	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
 		t.Fatal(err)
 	}
@@ -789,6 +814,12 @@ func TestShipIsReShippable(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
+	// The API lives on a different host from [remote].url here, which is the
+	// case the machine-local escape hatch exists for: authorize it by hand on
+	// this machine, never through committed config.
+	if err := runCmd(t, Local(), "set", "allow_hosts", server.Listener.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
 	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
 		t.Fatal(err)
 	}

@@ -182,7 +182,11 @@ func milestoneComplete() *cobra.Command {
 				return err
 			}
 
-			opts := buildOpenOpts(p)
+			hosts, herr := remotePolicy(root, repoDir, p)
+			if herr != nil {
+				return herr
+			}
+			opts := buildOpenOpts(p, hosts)
 			opts.HeadBranch = msBranch
 			opts.BaseBranch = target
 			opts.Title = fmt.Sprintf("milestone %s", version)

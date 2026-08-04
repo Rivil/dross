@@ -3,12 +3,12 @@ package ship
 import (
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/hostallow"
 )
 
 // CommentOpts is the input shape for posting a comment to an open PR.
@@ -24,6 +24,10 @@ type CommentOpts struct {
 	ProjectID  string // gitlab: numeric project-id override; empty = derive from URL
 	PRNumber   int    // PR / MR / issue number to comment on (gitlab: MR iid)
 	Body       string // comment body, markdown
+
+	// Hosts is the API host allowlist APIBase is checked against before the
+	// token is read. Zero value = SaaS defaults, never unrestricted.
+	Hosts hostallow.Policy
 }
 
 // PostComment dispatches to the right provider and posts a single
@@ -72,9 +76,9 @@ func postForgejoComment(opts CommentOpts) error {
 	if opts.AuthEnv == "" {
 		return errors.New("forgejo backend needs AuthEnv (set [remote].auth_env)")
 	}
-	token := os.Getenv(opts.AuthEnv)
-	if token == "" {
-		return fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", opts.AuthEnv, opts.AuthEnv)
+	token, err := resolveToken(opts.APIBase, opts.AuthEnv, opts.Hosts)
+	if err != nil {
+		return err
 	}
 	owner, repo, err := splitOwnerRepo(opts.URL)
 	if err != nil {
@@ -99,9 +103,9 @@ func postGitLabComment(opts CommentOpts) error {
 	if opts.AuthEnv == "" {
 		return errors.New("gitlab backend needs AuthEnv (set [remote].auth_env)")
 	}
-	token := os.Getenv(opts.AuthEnv)
-	if token == "" {
-		return fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", opts.AuthEnv, opts.AuthEnv)
+	token, err := resolveToken(opts.APIBase, opts.AuthEnv, opts.Hosts)
+	if err != nil {
+		return err
 	}
 	owner, repo, err := splitOwnerRepo(opts.URL)
 	if err != nil {
@@ -129,7 +133,7 @@ func postGitLabComment(opts CommentOpts) error {
 // pullrequests endpoint — Bitbucket has no shared issue/PR number space to
 // reuse the way Forgejo does.
 func postBitbucketComment(opts CommentOpts) error {
-	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser)
+	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser, opts.Hosts)
 	if err != nil {
 		return err
 	}

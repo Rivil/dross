@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/ship"
@@ -18,14 +19,30 @@ import (
 	"github.com/Rivil/dross/internal/verify"
 )
 
+// remotePolicy derives the API host allowlist for [remote] calls: the host of
+// [remote].url, the built-in SaaS defaults, and the machine-local additions
+// from .dross/local.toml.
+//
+// It returns an error — rather than an empty extras list — when git reports
+// local.toml tracked, because a committed local.toml is a repo authorizing its
+// own exfiltration host through the one input the derivation trusts.
+func remotePolicy(root, repoDir string, p *project.Project) (hostallow.Policy, error) {
+	extra, err := readAllowHosts(root, repoDir)
+	if err != nil {
+		return hostallow.Policy{}, err
+	}
+	return hostallow.Derive(p.Remote.URL, extra), nil
+}
+
 // buildOpenOpts maps a project's [remote] config onto ship.OpenOpts. Extracted
 // from the inline ship literal so the provider / auth_user / auth_scheme /
 // project_id wiring is unit-testable — a dropped field (e.g. GitLab silently
 // using default auth or a derived project id even when the user overrode them,
 // or Bitbucket losing the user half of its Basic credential and 401ing on every
 // ship) is caught by ship_test.go.
-func buildOpenOpts(p *project.Project) ship.OpenOpts {
+func buildOpenOpts(p *project.Project, hosts hostallow.Policy) ship.OpenOpts {
 	return ship.OpenOpts{
+		Hosts:      hosts,
 		Provider:   p.Remote.Provider,
 		URL:        p.Remote.URL,
 		APIBase:    p.Remote.APIBase,
@@ -39,8 +56,9 @@ func buildOpenOpts(p *project.Project) ship.OpenOpts {
 
 // buildCommentOpts maps a project's [remote] config onto ship.CommentOpts,
 // carrying the same provider / auth / project fields as buildOpenOpts.
-func buildCommentOpts(p *project.Project) ship.CommentOpts {
+func buildCommentOpts(p *project.Project, hosts hostallow.Policy) ship.CommentOpts {
 	return ship.CommentOpts{
+		Hosts:      hosts,
 		Provider:   p.Remote.Provider,
 		URL:        p.Remote.URL,
 		APIBase:    p.Remote.APIBase,
@@ -309,7 +327,11 @@ func Ship() *cobra.Command {
 			narrate("Pushed %s to origin\n", phaseBranch)
 
 			// 8) Open the PR via the provider (base resolved in step 6).
-			opts := buildOpenOpts(p)
+			hosts, herr := remotePolicy(root, repoDir, p)
+			if herr != nil {
+				return herr
+			}
+			opts := buildOpenOpts(p, hosts)
 			opts.HeadBranch = phaseBranch
 			opts.BaseBranch = baseBranch
 			opts.Title = title
@@ -497,7 +519,15 @@ func shipComment() *cobra.Command {
 			if p.Remote.URL == "" || p.Remote.Provider == "" {
 				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
 			}
-			co := buildCommentOpts(p)
+			root, rerr := FindRoot()
+			if rerr != nil {
+				return rerr
+			}
+			hosts, herr := remotePolicy(root, filepath.Dir(root), p)
+			if herr != nil {
+				return herr
+			}
+			co := buildCommentOpts(p, hosts)
 			co.PRNumber = prNumber
 			co.Body = body
 			if err := ship.PostComment(co); err != nil {
