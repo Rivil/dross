@@ -175,3 +175,54 @@ func TestExtraWidensTheSet(t *testing.T) {
 		t.Error("a port-pinned Extra entry must not authorize the default port")
 	}
 }
+
+// TestHTTPDefaultsToPort80 drives withDefaultPort's http arm, which the rest of
+// the suite never reaches: Check refuses non-https before normalizing, so the
+// only live route to it is the loopback exception and an allowlist entry written
+// as an http:// URL. Left dark, a mutant collapsing that arm into :443 survives —
+// and the damage is not theoretical. Both sides normalize, so an entry meaning
+// "the local instance on :80" would start comparing equal to :443 and quietly
+// authorize an endpoint the user never named.
+//
+// Everything here goes through the public Check/Allowed rather than
+// withDefaultPort directly, so the branch is proven reachable from the API
+// callers actually use.
+func TestHTTPDefaultsToPort80(t *testing.T) {
+	// An http remote must normalize port-explicitly to :80, not :443.
+	p := Derive("http://localhost/team/app", nil)
+	found := false
+	for _, a := range p.Allowed() {
+		if a == "localhost:80" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("an http remote did not normalize to localhost:80: %v", p.Allowed())
+	}
+	if err := p.Check("[remote].api_base", "http://localhost/api/v1"); err != nil {
+		t.Errorf("an http loopback API base on the http remote's own host must be allowed: %v", err)
+	}
+	// The half that makes the arm load-bearing: :80 and :443 are different
+	// endpoints, so trusting one must not carry over to the other. Without the
+	// distinct default the https twin would ride in on the http entry.
+	if err := p.Check("[remote].api_base", "https://localhost/api/v1"); err == nil {
+		t.Error("an http-derived entry authorized its https twin — the default ports collapsed")
+	}
+
+	// And the reverse direction, so a mutant that flipped the arm the other way
+	// (defaulting https to :80) is caught too.
+	s := Derive("https://localhost/team/app", nil)
+	if err := s.Check("[remote].api_base", "http://localhost/api/v1"); err == nil {
+		t.Error("an https-derived entry authorized its http twin — the default ports collapsed")
+	}
+
+	// An http:// entry supplied through the machine-local escape hatch takes the
+	// same arm via normalizeEntry, which is the other live route to it.
+	e := Derive(remote, []string{"http://127.0.0.1"})
+	if err := e.Check("[remote].api_base", "http://127.0.0.1/api/v1"); err != nil {
+		t.Errorf("an http:// allow_hosts entry did not authorize its own endpoint: %v", err)
+	}
+	if err := e.Check("[remote].api_base", "http://127.0.0.1:8080/api/v1"); err == nil {
+		t.Error("an unported http entry authorized an explicit odd port")
+	}
+}
