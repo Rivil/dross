@@ -48,21 +48,28 @@ reach git, that file exists afterwards.
 
 ## Vectors
 
-Eleven rows in `expected-refusals.txt`, driven one subtest each by the suite:
+Twelve rows in `expected-refusals.txt`, driven one subtest each by the suite:
 
 | id | command | what fails open without the guard |
 | --- | --- | --- |
 | `phase-complete` | `dross phase complete` | ref positional read as a flag |
 | `phase-checkout` | `dross phase checkout -- <payload>` | user-derived ref read as a flag |
-| `phase-create` | `dross phase create` | `branch_pattern` renders a `-`-leading branch |
+| `phase-create` | `dross phase create` | resolved base reaches `checkout -b` as a flag |
 | `milestone-create` | `dross milestone create` | ref positional read as a flag |
-| `ship-recover` | `dross ship --recover` | ref positional read as a flag |
+| `ship-recover` | `dross ship recover` | ref positional read as a flag |
 | `repair-state` | `dross repair` | **arbitrary file write** via `git log --output=` |
 | `board-client` | board client construction | board PAT sent to `attacker.example` |
 | `ship-open` | `dross ship` (PR open) | `$GITHUB_TOKEN` sent to `attacker.example` |
 | `tracked-local` | `readAllowHosts` | hostile repo self-authorizes its own host |
 | `doctor-branch` | `dross doctor` | broken/hostile ref undiagnosable until a command dies |
+| `doctor-branch-pattern` | `dross doctor` | a `branch_pattern` git would reject goes unreported |
 | `doctor-host` | `dross doctor` | off-allowlist host undiagnosable until a command dies |
+
+`repo.branch_pattern` is deliberately a **doctor finding, not a refusal**: it is
+a config key `dross project get/set` reads and nothing else consumes — phase
+branch names are built as `"phase/"+id` — so its leading dash never reaches git
+today. Reporting it is the honest treatment: the config is broken, and would
+become a live vector the day something starts honouring it.
 
 ## Reproduce (green — the shipped code refuses)
 

@@ -40,10 +40,22 @@
 # All five refuse before the first exec. "unsafe git ref" is the pinned prefix
 # for validateGitRef; the key name and the offending value must both appear so
 # the message points at the line to fix.
+#
+# phase-create is the exception on the key-name substring. Its ref reaches git
+# through `git checkout -b <branch> <base>`, where the base is resolved several
+# frames from the config that produced it, so the guard names the position
+# ("base") rather than the key. The payload is still named, which is what the
+# user needs to recognise it.
+#
+# NOTE: repo.branch_pattern is NOT a c-1 vector. It is a config key `dross
+# project get/set` reads and nothing else consumes — phase branch names are
+# built as "phase/"+id, so its leading dash never reaches git. It is covered
+# instead by doctor-branch-pattern below, as a c-6 finding: config that would
+# break if it were ever honoured, reported before it bites.
 
 phase-complete   | repo.git_main_branch | -x                              | unsafe git ref;;repo.git_main_branch;;-x
 phase-checkout   | argv[0]              | --upload-pack=touch __SENTINEL__ | unsafe git ref;;--upload-pack=touch
-phase-create     | repo.branch_pattern  | -                               | unsafe git ref;;branch_pattern;;-p/
+phase-create     | repo.git_main_branch | -x                              | unsafe git ref;;-x
 milestone-create | repo.git_main_branch | -x                              | unsafe git ref;;repo.git_main_branch;;-x
 ship-recover     | repo.git_main_branch | -                               | unsafe git ref;;repo.git_main_branch;;--output=
 
@@ -83,4 +95,5 @@ tracked-local    | .dross/local.toml    | -                               | refu
 # forward is where a legitimate self-hosted user gets stuck.
 
 doctor-branch    | repo.git_main_branch | -                               | --output=;;git_main_branch
+doctor-branch-pattern | repo.branch_pattern | -                          | -p/;;branch_pattern
 doctor-host      | remote.api_base      | -                               | attacker.example;;dross local set allow_hosts
