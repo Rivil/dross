@@ -909,15 +909,18 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 	// never gain the ignore line at all.
 	Print("Machine-local store:")
 	body, rerr := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
-	switch {
-	case rerr != nil && !errors.Is(rerr, fs.ErrNotExist):
+	// if/else-if rather than a tagless switch: go-cover attributes a switch
+	// case-condition to no basic block, so a mutant sitting on one is reported
+	// NOT-COVERED even when a test drives the arm. An `else if` condition does
+	// get a block, so the existing tests can kill it.
+	if rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
 		Printf("  ⚠ couldn't read .gitignore: %v\n", rerr)
-	case !ignoresPath(string(body), drossLocalIgnorePath):
+	} else if !ignoresPath(string(body), drossLocalIgnorePath) {
 		Printf("  ✗ %s is not gitignored — a committed copy would let a cloned repo authorize its own API host.\n", drossLocalIgnorePath)
 		Printf("    Fix: add `%s` to .gitignore (and `git rm --cached %s` if it is already tracked).\n",
 			drossLocalIgnorePath, drossLocalIgnorePath)
 		issues++
-	default:
+	} else {
 		Printf("  ✓ %s is gitignored\n", drossLocalIgnorePath)
 	}
 	Print("")
@@ -925,12 +928,12 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 	// 4. git too old for --end-of-options.
 	Print("git version:")
 	raw, gerr := gitVersionOutput()
-	switch {
-	case gerr != nil:
+	// if/else-if for the same coverage-attribution reason as the block above.
+	if gerr != nil {
 		Printf("  ⚠ couldn't read `git --version`: %v\n", gerr)
-	case gitVersionAtLeast(raw, endOfOptionsMinGit):
+	} else if gitVersionAtLeast(raw, endOfOptionsMinGit) {
 		Printf("  ✓ %s supports --end-of-options\n", strings.TrimSpace(raw))
-	default:
+	} else {
 		Printf("  ✗ %s is older than git %s, which introduced --end-of-options.\n", strings.TrimSpace(raw), endOfOptionsMinGit)
 		Printf("    dross places that separator before every config-derived ref, so git will reject those commands. Fix: upgrade git.\n")
 		issues++
