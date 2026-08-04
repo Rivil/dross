@@ -1,0 +1,71 @@
+[phase]
+id        = "config-trust-hardening"
+title     = "config-trust-hardening"
+milestone = "v1.2"
+
+[[criteria]]
+id   = "c-1"
+text = "A config-derived branch name beginning with `-` is rejected with a named error before any git process starts; `dross phase complete`, `dross phase checkout`, `dross milestone create` and `dross ship recover` all refuse rather than passing it through."
+
+[[criteria]]
+id   = "c-2"
+text = "Every git invocation that passes a config- or user-derived value as a positional path or ref places it after a `--` separator, so no such value can be reinterpreted as a flag."
+
+[[criteria]]
+id   = "c-3"
+text = "The Stryker mutation adapter invokes an exact pinned version of `@stryker-mutator/core` rather than resolving whatever the registry currently serves as latest."
+
+[[criteria]]
+id   = "c-4"
+text = "The secret named by `[remote].auth_env` is attached only to requests whose host passes the allowlist check; a committed `api_base` pointing at an unapproved host gets a refusal, not the token."
+
+[[criteria]]
+id   = "c-5"
+text = "A hostile-config regression fixture — a `.dross/project.toml` carrying a leading-dash branch name and an attacker-controlled `api_base` — reproduces each attack, and every test in it fails against the pre-phase code."
+
+[[criteria]]
+id   = "c-6"
+text = "`dross doctor` reports a config-derived branch name git would reject, and an `api_base` host outside the allowlist, as named findings — so hostile or broken config is diagnosable before a command refuses mid-run."
+
+[[criteria]]
+id   = "c-7"
+text = "`dross init` and `dross onboard` seed a gitignore entry for `.dross/local.toml`, and the host-allowlist read refuses a `local.toml` that git reports as tracked rather than trusting its contents."
+
+[[decisions]]
+key    = "allowlist_source"
+choice = "Derive the allowed-host set from the host of [remote].url plus built-in known-SaaS defaults (api.github.com, gitlab.com, *.atlassian.net, *.youtrack.cloud, …); no committed config key grants hosts"
+why    = "A config key gating a config-derived value is self-authorizing — hostile .dross/ would simply set both. Derivation costs honest repos nothing: self-hosted forges share a host between remote and api_base, and the SaaS defaults cover the github.com/api.github.com split."
+locked = true
+
+[[decisions]]
+key    = "refusal_behaviour"
+choice = "An off-allowlist host aborts the command with a named error naming the mismatch; it never degrades to the offline/ancestry fallback"
+why    = "Silently falling back would turn an active attack into an invisible capability downgrade — precisely what v1.2's provider-parity criterion forbids. No --allow-host override: one fewer way to say yes to the wrong thing."
+locked = true
+
+[[decisions]]
+key    = "client_scope"
+choice = "The allowlist check covers all four HTTP clients — forge.go, github.go, jira.go, youtrack.go — with board SaaS hosts in the derived defaults; board behaviour itself is untouched"
+why    = "Board tokens are the most valuable secrets dross holds, so excluding them would gut c-4. The v1.2 non-goal bars board/tracker feature work, not a header-attachment guard applied uniformly across clients."
+locked = true
+
+[[decisions]]
+key    = "escape_hatch"
+choice = "A host the derivation can't reach is added via the gitignored machine-local store (.dross/local.toml); doctor's c-6 finding names the exact command"
+why    = "local.toml is machine-authored and never cloned, so a hostile repo cannot authorize its own host through it — the guarantee survives while a genuinely odd self-hosted setup still has a door. Depends on c-7 keeping local.toml untracked."
+locked = true
+
+[[deferred]]
+text = "A consent prompt before running a `runtime.test_command` from a repo whose `.dross/` was not authored locally — the inj-1 half of the exec-injection trust boundary."
+why = "Executing a config-named test command is inherent to the build-tool category (same as make or npm test), so it has no fix inside criterion 9's flag-parsing framing; a consent gate is a new interaction surface of its own."
+target = "exec-trust-followups"
+
+[[deferred]]
+text = "Extend the `--`-separator and leading-dash discipline to the non-git subprocesses: gremlins, stryker, ast-grep, semgrep, and the techdebt/quality/security runners."
+why = "c-2 deliberately scopes to git, where config-derived refs and paths actually flow today; the analyzer runners take mostly tool-owned arguments and warrant their own pass."
+target = "exec-trust-followups"
+
+[[deferred]]
+text = "Guarantee a refused or failed forge request never echoes the token into an error message, log entry, or telemetry event."
+why = "Adjacent to c-4 but a distinct concern — c-4 governs where the secret is sent, not where it is printed. [remote].log_api makes this worth its own treatment."
+target = "exec-trust-followups"

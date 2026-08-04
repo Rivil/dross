@@ -1,4 +1,4 @@
-phases = ["complete-base-truth", "state-json-branch-safety", "completion-state-truth", "milestone-stacking", "provider-merge-parity", "dross-repair", "config-trust-hardening"]
+phases = ["complete-base-truth", "state-json-branch-safety", "completion-state-truth", "milestone-stacking", "provider-merge-parity", "dross-repair", "config-trust-hardening", "exec-trust-followups"]
 
 [milestone]
   version = "v1.2"
