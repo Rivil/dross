@@ -446,7 +446,12 @@ destructive reset of the local base branch; read the abort first.`,
 			// restores the .dross/ tree from THIS commit; taking it after the
 			// checkout would source the tree from the branch the command just
 			// moved to, which is the branch being reset.
-			phaseTipSHA, _ := gitTrim(repoDir, "rev-parse", "refs/heads/"+phaseBranch)
+			// --verify is not decoration here: bare `git rev-parse` ECHOES any
+			// argument it does not recognise, so it prints "--end-of-options"
+			// on its own line ahead of the sha and the caller reads the
+			// separator as the answer. --verify makes it resolve-or-fail, which
+			// is what this read wanted anyway.
+			phaseTipSHA, _ := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+phaseBranch)...)
 
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
@@ -557,8 +562,8 @@ destructive reset of the local base branch; read the abort first.`,
 
 			// Delete the local phase branch (best-effort: only if it exists).
 			localDeleted := false
-			if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+phaseBranch); err == nil {
-				if out, err := gitCombined(repoDir, "branch", "-D", phaseBranch); err != nil {
+			if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+phaseBranch)...); err == nil {
+				if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, phaseBranch)...); err != nil {
 					return fmt.Errorf("git branch -D %s: %w\n%s", phaseBranch, err, out)
 				}
 				localDeleted = true
@@ -570,12 +575,14 @@ destructive reset of the local base branch; read the abort first.`,
 			// never pushed), so we only push --delete when the ref still
 			// exists. ls-remote queries origin directly rather than trusting
 			// possibly-stale remote-tracking refs left by the earlier fetch.
-			remoteRef, err := gitTrim(repoDir, "ls-remote", "--heads", "origin", phaseBranch)
+			remoteRef, err := gitTrim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", phaseBranch)...)
 			if err != nil {
 				return fmt.Errorf("git ls-remote origin %s: %w", phaseBranch, err)
 			}
 			if remoteRef != "" {
-				if out, err := gitCombined(repoDir, "push", "origin", "--delete", phaseBranch); err != nil {
+				// --delete moves ahead of the separator so the remote and the branch are
+				// both plain positionals behind it; git accepts either ordering.
+				if out, err := gitCombined(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", phaseBranch)...); err != nil {
 					return fmt.Errorf("git push origin --delete %s: %w\n%s", phaseBranch, err, out)
 				}
 			}
@@ -660,7 +667,7 @@ func resolveCompleteBase(repoDir, root string, p *project.Project, s *state.Stat
 		if err := validateGitRef("--base", baseFlag); err != nil {
 			return "", err
 		}
-		if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+baseFlag); err != nil {
+		if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+baseFlag)...); err != nil {
 			return "", fmt.Errorf("--base %s: no such local branch", baseFlag)
 		}
 		return baseFlag, nil
@@ -712,7 +719,7 @@ func completeBaseCandidates(repoDir string, p *project.Project, s *state.State) 
 	cands := []string{p.Repo.GitMainBranch}
 	if s.CurrentMilestone != "" {
 		ms := "milestone/" + s.CurrentMilestone
-		if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+ms) == nil {
+		if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+ms)...) == nil {
 			cands = append(cands, ms)
 		}
 	}
@@ -780,7 +787,7 @@ func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconci
 	// Fallback: git ancestry. A missing origin/phase/<id> ref (squash-deleted)
 	// OR a non-ancestor result both mean "can't confirm the merge" — refuse
 	// with guidance rather than trust the breadcrumb or false-complete.
-	if err := gitNoOut(repoDir, "merge-base", "--is-ancestor", "origin/"+phaseBranch, "origin/"+reconcileBranch); err != nil {
+	if err := gitNoOut(repoDir, gitRefArgs("merge-base", []string{"--is-ancestor"}, "origin/"+phaseBranch, "origin/"+reconcileBranch)...); err != nil {
 		return fmt.Errorf("cannot confirm %s has merged into %s — no merged-PR status was available and origin/%s is not an ancestor of origin/%s "+
 			"(the phase branch may have been squash-deleted, or the PR isn't merged yet).\n"+
 			"Refusing so the phase branch isn't lost. If the PR really merged, use `dross phase complete --recover` or verify the merge manually.",
@@ -841,7 +848,7 @@ func forkPhaseBranch(repoDir, root, phaseID, branchName string) (base string, mi
 	if committed {
 		Printf("auto-committed .dross-only bookkeeping\n")
 	}
-	if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branchName); err == nil {
+	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branchName)...); err == nil {
 		return "", false, fmt.Errorf("branch %s already exists locally; delete it first or pass --no-branch", branchName)
 	}
 	base, milestoneActive, err = resolveNewWorkBase(repoDir, root)
@@ -878,8 +885,26 @@ func dirtyTreeError(action, status string) error {
 // gitNoOut runs git silently, discarding output. Used when only the
 // exit status matters (e.g. ref-exists probes).
 func gitNoOut(repoDir string, args ...string) error {
+	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
 	return exec.Command("git", full...).Run()
+}
+
+// gitArgvTap records every argv dross hands to git. It is nil in production and
+// costs one nil check; tests install a recorder and assert on ORDERING —
+// specifically that a config-derived positional never precedes its separator.
+//
+// This is the only way to test the property that matters. Asserting on the
+// builders in gitargs.go proves the builders work; it says nothing about a call
+// site that quietly went back to a bare literal list, which is the regression
+// this phase exists to prevent. All three exec helpers feed it, so a new call
+// site is visible whichever one it picks.
+var gitArgvRecorder func([]string)
+
+func gitArgvTap(args []string) {
+	if gitArgvRecorder != nil {
+		gitArgvRecorder(args)
+	}
 }
 
 // isDir reports whether path exists and is a directory.

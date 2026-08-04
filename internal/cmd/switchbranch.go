@@ -40,7 +40,7 @@ func checkoutBranch(repoDir, branch string) error {
 	if err := guardLiveState(repoDir, branch); err != nil {
 		return err
 	}
-	if out, err := gitCombined(repoDir, "checkout", branch); err != nil {
+	if out, err := gitCombined(repoDir, gitRefArgs("checkout", nil, branch)...); err != nil {
 		return fmt.Errorf("git checkout %s: %w\n%s", branch, err, out)
 	}
 	return nil
@@ -61,7 +61,11 @@ func checkoutBranchNew(repoDir, branch, base string) error {
 	if err := guardLiveState(repoDir, base); err != nil {
 		return err
 	}
-	if out, err := gitCombined(repoDir, "checkout", "-b", branch, base); err != nil {
+	// branch rides in the opts half because it is `-b`'s ARGUMENT, not a
+	// positional — a separator in front of it would become the branch name.
+	// git refuses an option-shaped value there on its own, and validateGitRef
+	// above refuses it earlier; the separator's job is the base positional.
+	if out, err := gitCombined(repoDir, gitRefArgs("checkout", []string{"-b", branch}, base)...); err != nil {
 		return fmt.Errorf("git checkout -b %s %s: %w\n%s", branch, base, err, out)
 	}
 	return nil
@@ -81,7 +85,7 @@ func guardedFF(repoDir, ref string) (string, error) {
 	if err := guardLiveState(repoDir, ref); err != nil {
 		return "", err
 	}
-	return gitCombined(repoDir, "merge", "--ff-only", ref)
+	return gitCombined(repoDir, gitRefArgs("merge", []string{"--ff-only"}, ref)...)
 }
 
 // guardedResetHard is `git reset --hard <ref>` behind the same pre-check, for
@@ -94,7 +98,7 @@ func guardedResetHard(repoDir, ref string) (string, error) {
 	if err := guardLiveState(repoDir, ref); err != nil {
 		return "", err
 	}
-	return gitCombined(repoDir, "reset", "--hard", ref)
+	return gitCombined(repoDir, gitRefArgs("reset", []string{"--hard"}, ref)...)
 }
 
 // guardLiveState returns a named error when switching to ref would overwrite the
@@ -108,10 +112,13 @@ func guardLiveState(repoDir, ref string) error {
 	if _, err := os.Stat(live); err != nil {
 		return nil // nothing live to lose
 	}
-	if gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", rel) == nil {
+	if gitNoOut(repoDir, gitPathArgs("ls-files", []string{"--error-unmatch"}, rel)...) == nil {
 		return nil // still tracked here: git is managing it, not us
 	}
-	if gitNoOut(repoDir, "cat-file", "-e", ref+":"+rel) != nil {
+	// The whole "<ref>:<path>" object name is one positional, so it goes
+	// behind the ref separator — a caller-derived ref is still a flag to git
+	// even when a ":path" is glued to it.
+	if gitNoOut(repoDir, gitRefArgs("cat-file", []string{"-e"}, ref+":"+rel)...) != nil {
 		return nil // the target carries no copy — the ordinary case
 	}
 	return fmt.Errorf(`refusing to switch to %s: it would overwrite your live %s.

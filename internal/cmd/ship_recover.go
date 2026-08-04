@@ -260,6 +260,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 }
 
 func gitTrim(repoDir string, args ...string) (string, error) {
+	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
 	out, err := exec.Command("git", full...).Output()
 	if err != nil {
@@ -269,6 +270,7 @@ func gitTrim(repoDir string, args ...string) (string, error) {
 }
 
 func gitCombined(repoDir string, args ...string) (string, error) {
+	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
 	out, err := exec.Command("git", full...).CombinedOutput()
 	return string(out), err
