@@ -187,6 +187,22 @@
         }
       ]
     },
+    "t-19": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/milestone_dependents.go"
+      ],
+      "commit": "d94ade6",
+      "completed_at": "2026-08-04T17:37:56.745822Z",
+      "landmarks": [
+        {
+          "feature": "config trust diagnostics",
+          "symbol": "checkConfigTrust",
+          "loc": "internal/cmd/doctor.go:916",
+          "what": "tagless-switch arms rewritten as if/else chains so go-cover attributes their conditions and mutation testing can reach them"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/refguard.go",

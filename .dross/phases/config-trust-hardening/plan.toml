@@ -1,4 +1,4 @@
-task_seq = 18
+task_seq = 19
 
 [phase]
   id = "config-trust-hardening"
@@ -190,4 +190,14 @@ task_seq = 18
   description = "Verify FLAG routing (2026-08-04): hostallow.go:234's `scheme == \"http\"` -> :80 branch\nis never driven — no test uses a plain-http URL on either side of the comparison.\nTestCheckRefusesSchemeAndPort refuses http:// on an allowed host, but that refusal is\nreached via the scheme check, not via port normalization, so the :80 arm stays dark and a\nmutant collapsing it into :443 survives. Drive it directly: an allow_hosts entry written\nas an http:// URL must normalize to host:80 and match an http:// api_base on the same\nhost, while the same entry must NOT match that host over https (which normalizes to :443)\n— the port-explicit comparison is what keeps a trusted http endpoint from silently\nauthorizing its https twin. Tests only; no production change."
   covers = ["c-4"]
   test_contract = ["if withDefaultPort's http arm collapses to :443, TestHTTPDefaultsToPort80 fails — an http:// allow_hosts entry must match an http:// URL on the same host, which it can only do if both sides normalize to :80", "if the http and https ports are conflated in either direction, the same test fails on its second half — an http:// entry must NOT authorize https:// on that host, and an https:// entry must NOT authorize http://", "the assertion is driven through Policy.Check rather than withDefaultPort directly, so the branch is proven reachable from the public API and not merely exercised in isolation"]
+  status = "done"
+
+[[task]]
+  id = "t-19"
+  wave = 7
+  title = "Rewrite three tagless switches as if/else-if chains"
+  files = ["internal/cmd/doctor.go", "internal/cmd/milestone_dependents.go"]
+  description = "Verify FLAG routing (2026-08-04, second re-run): three in-diff mutants stay NOT-COVERED\nbecause they sit on the case-conditions of a tagless `switch { case ... }` — doctor.go:913\n(`rerr != nil && !errors.Is(rerr, fs.ErrNotExist)`), doctor.go:929 (`gerr != nil`) and\nmilestone_dependents.go:118 (`err != nil`, the transient-error DEGRADE arm). Each arm IS\ndriven by an existing test and the coverage profile records the arm's body at count 1, but\ngo-cover attributes a tagless case-condition to no basic block, so gremlins never runs a\ntest against the mutant. cmd/cover DOES instrument an `else if` condition (it synthesises a\nhidden block for exactly this reason), so rewriting each switch as an if/else-if chain puts\nthe condition inside a covered block and the already-existing tests kill the mutants. Pure\nbehaviour-preserving refactor: same arms, same order, same output, no new tests."
+  covers = ["c-4", "c-6", "c-7"]
+  test_contract = ["if doctor's .gitignore arms change order or wording, TestDoctorWarnsOnUnreadableGitignore fails — it asserts the ⚠ unreadable line and the absence of the ✗ not-gitignored line, which is exactly the arm ordering the rewrite must preserve", "if doctor's git-version arms change behaviour, TestDoctorWarnsOnGitVersionError (unreadable is warned, never reported as old) and TestDoctorReportsOldGit (an old git moves the exit code) fail", "if the dependents chain reorders so a host refusal falls into the degrade arm, TestDependentsCheckDoesNotDegradeOnHostRefusal fails; if the transient arm stops degrading, TestDependentsCheckDegradesOnTransientError fails — the two halves pin the rewrite from both sides", "the attribution claim itself is checked, not assumed: a `go test -coverprofile` run over the existing tests must yield a block whose span contains each rewritten condition's file:line.col, which the tagless-switch form did not — this is a profile assertion made during execution, not a Go test"]
   status = "done"
