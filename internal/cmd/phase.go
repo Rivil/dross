@@ -643,16 +643,34 @@ func describeTeardown(phaseBranch string, local, remote bool) string {
 // no record, the answer is a refusal naming --base, not a guess. A branch the
 // user types is a conscious act; an inferred one is the bug.
 func resolveCompleteBase(repoDir, root string, p *project.Project, s *state.State, phaseID, baseFlag string) (string, error) {
+	// Checked up front, ahead of every arm: git_main_branch reaches git through
+	// completeBaseCandidates below and through the refusal message, and both are
+	// on the path a hostile config takes. Every source of a ref here is
+	// validated — the flag the user typed, the record in the working tree, and
+	// the record read off the phase ref — because "committed data" and "typed
+	// by the user" are the same thing to git's argument parser.
+	if err := validateGitRef("repo.git_main_branch", p.Repo.GitMainBranch); err != nil {
+		return "", err
+	}
 	if baseFlag != "" {
+		if err := validateGitRef("--base", baseFlag); err != nil {
+			return "", err
+		}
 		if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+baseFlag); err != nil {
 			return "", fmt.Errorf("--base %s: no such local branch", baseFlag)
 		}
 		return baseFlag, nil
 	}
 	if ch, err := changes.Load(changes.FilePath(root, phaseID), phaseID); err == nil && ch.Base != "" {
+		if err := validateGitRef("recorded base in changes.json", ch.Base); err != nil {
+			return "", err
+		}
 		return ch.Base, nil
 	}
 	if base := phaseRefRecordedBase(repoDir, phaseID); base != "" {
+		if err := validateGitRef("recorded base on refs/heads/phase/"+phaseID, base); err != nil {
+			return "", err
+		}
 		return base, nil
 	}
 	return "", fmt.Errorf("phase %q has no recorded forked-from base — refusing to guess one.\n"+

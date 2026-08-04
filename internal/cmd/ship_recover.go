@@ -100,6 +100,17 @@ longer holds the pre-merge .dross/ tree:
 			if ch, cerr := changes.Load(changes.FilePath(root, phaseID), phaseID); cerr == nil && ch.Base != "" {
 				baseBranch = ch.Base
 			}
+			// Validated after the record has had its say, so the kind names the
+			// source that actually won, and before the first git call — this
+			// command's whole job is a `reset --hard`, so a refusal that lands
+			// after the branch check has already let a payload reach git.
+			kind := "repo.git_main_branch"
+			if baseBranch != p.Repo.GitMainBranch {
+				kind = "recorded base in changes.json"
+			}
+			if err := validateGitRef(kind, baseBranch); err != nil {
+				return err
+			}
 
 			// Refuse to run on the wrong branch — reset is destructive.
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")

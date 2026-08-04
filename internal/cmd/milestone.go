@@ -467,7 +467,16 @@ func resolveMilestoneCutPoint(root, repoDir, mainBranch, version, forced string)
 	if !isDir(filepath.Join(repoDir, ".git")) {
 		return "", false, nil
 	}
+	// Both sources of the cut point, before the first ref probe: mainBranch is
+	// [repo].git_main_branch straight out of committed config, and forced is
+	// --base.
+	if err := validateGitRef("repo.git_main_branch", mainBranch); err != nil {
+		return "", false, err
+	}
 	if forced != "" {
+		if err := validateGitRef("--base", forced); err != nil {
+			return "", false, err
+		}
 		if !gitRefExists(repoDir, "refs/heads/"+forced) {
 			return "", false, fmt.Errorf("--base %s: no such local branch", forced)
 		}
@@ -508,6 +517,12 @@ func ensureMilestoneBranch(repoDir, baseBranch, version string) (branch string, 
 	branch = "milestone/" + version
 	if !isDir(filepath.Join(repoDir, ".git")) {
 		return branch, false, false, nil
+	}
+	// baseBranch lands as a bare positional in `git branch <new> <base>` below,
+	// which is one of the two sites where a leading dash stops being a name and
+	// becomes an option.
+	if err := validateGitRef("milestone base branch", baseBranch); err != nil {
+		return branch, false, false, err
 	}
 	// Need a base ref to cut from; a repo with no commits has none.
 	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+baseBranch) != nil {
