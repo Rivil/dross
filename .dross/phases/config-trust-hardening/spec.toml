@@ -9,7 +9,7 @@ text = "A config-derived branch name beginning with `-` is rejected with a named
 
 [[criteria]]
 id   = "c-2"
-text = "Every git invocation that passes a config- or user-derived value as a positional path or ref places it after a `--` separator, so no such value can be reinterpreted as a flag."
+text = "Every git invocation that passes a config- or user-derived value as a positional path or ref places it after an argument separator appropriate to that position — `--` for pathspecs, `--end-of-options` for refs — so no such value can be reinterpreted as a flag."
 
 [[criteria]]
 id   = "c-3"
@@ -30,6 +30,12 @@ text = "`dross doctor` reports a config-derived branch name git would reject, an
 [[criteria]]
 id   = "c-7"
 text = "`dross init` and `dross onboard` seed a gitignore entry for `.dross/local.toml`, and the host-allowlist read refuses a `local.toml` that git reports as tracked rather than trusting its contents."
+
+[[decisions]]
+key    = "ref_separator_token"
+choice = "Refs use `--end-of-options`; only pathspecs use `--`"
+why    = "`--` in a ref position makes git reinterpret the branch as a pathspec — a different bug, not a fix. c-2's original text said `--` literally; amended so a verifier reading the criterion cold cannot fail a correct implementation. Requires git >= 2.24."
+locked = true
 
 [[decisions]]
 key    = "allowlist_source"

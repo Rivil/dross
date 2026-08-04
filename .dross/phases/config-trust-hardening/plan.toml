@@ -1,0 +1,432 @@
+[phase]
+id = "config-trust-hardening"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Author hostile-config fixture and refusal contract"
+files         = [
+  "fixtures/hostile-config-c5/project.toml",
+  "fixtures/hostile-config-c5/local-tracked.toml",
+  "fixtures/hostile-config-c5/RUN.md",
+  "fixtures/hostile-config-c5/expected-refusals.txt",
+]
+description   = """
+Inert fixture data only, matching the RUN.md + expected-*.txt shape of the existing
+fixtures/terraform-c3 and fixtures/iac-multi-c5. project.toml carries a
+sentinel-writing git_main_branch payload (both the `--upload-pack=touch` and
+`--output=` shapes, the latter driving the `dross repair` vector), a leading-dash
+branch_pattern, and an attacker-controlled api_base; expected-refusals.txt pins one
+error prefix per vector
+so implementers match strings they did not choose. No Go test lands here — t-14 is
+its gate.
+"""
+covers        = ["c-5"]
+test_contract = [
+  "if the fixture's project.toml stops carrying the --upload-pack sentinel payload, t-14's TestHostileConfigNoPwnSentinel becomes vacuous and its own must-fail replay in RUN.md no longer reproduces",
+  "if expected-refusals.txt loses a vector line, t-14's TestEveryVectorHasASubtest fails because the subtest-name set no longer equals the vector-id set",
+]
+depends_on    = []
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 1
+title         = "Add ref-name guard to guarded switch helpers"
+files         = [
+  "internal/cmd/refguard.go",
+  "internal/cmd/refguard_test.go",
+  "internal/cmd/switchbranch.go",
+]
+description   = """
+New validateGitRef(kind, name) rejecting leading "-", empty, and names git
+check-ref-format rejects (space, "..", control chars, ".lock" suffix). Called at the
+top of checkoutBranch, checkoutBranchNew (branch AND base), guardedFF and
+guardedResetHard — before guardLiveState and before any exec.
+"""
+covers        = ["c-1"]
+test_contract = [
+  "if validateGitRef stops rejecting a leading dash, TestGuardedHelpersRefuseLeadingDash fails on the named error assertion",
+  "if the guard is moved after the first exec, TestGuardedHelpersRefuseLeadingDash fails because the returned error contains git's own \"not a git repository\" text — the helper is pointed at a temp dir that is not a repo, so any error mentioning it proves git ran",
+  "if the reject table is over-tightened, TestValidateGitRefAccepts fails on \"main\", \"milestone/v1.2\", \"phase/config-trust-hardening\" or \"release-1.0\"",
+  "if the guard is dropped from any one of the four helper call sites, that helper's subtest in TestGuardedHelpersRefuseLeadingDash fails independently",
+]
+depends_on    = []
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 1
+title         = "Add git separator argument builders"
+files         = [
+  "internal/cmd/gitargs.go",
+  "internal/cmd/gitargs_test.go",
+]
+description   = """
+gitRefArgs(sub, opts, refs...) emits "--end-of-options" before refs; gitPathArgs
+emits "--" before pathspecs; gitRefPathArgs covers mixed shapes (checkout <sha> --
+<paths>). Token choice per the locked ref_separator_token decision in spec.toml.
+Requires git >= 2.24; t-10's doctor reports a version below that.
+"""
+covers        = ["c-2"]
+test_contract = [
+  "if gitRefArgs emits the separator conditionally, TestGitRefArgsSeparator fails — it asserts the separator is present even when the ref looks benign, because a conditional separator is absent exactly when it matters",
+  "if gitRefArgs(\"checkout\", nil, \"-x\") stops yielding exactly [\"checkout\",\"--end-of-options\",\"-x\"], TestGitRefArgsSeparator fails on the argv comparison",
+  "if gitPathArgs places opts after the separator, TestGitPathArgsSeparator fails because \"--porcelain\" is demoted to a pathspec",
+]
+depends_on    = []
+status        = "pending"
+
+[[task]]
+id            = "t-4"
+wave          = 1
+title         = "Pin stryker core to an exact version"
+files         = [
+  "internal/mutation/stryker.go",
+  "internal/mutation/stryker_test.go",
+]
+description   = """
+A const strykerPin replaces the bare "@stryker-mutator/core" in both the npx
+invocation and the install hint.
+"""
+covers        = ["c-3"]
+test_contract = [
+  "if the argv element after \"--yes\" stops matching ^@stryker-mutator/core@\\d+\\.\\d+\\.\\d+$, TestStrykerRunArgsPinned fails — a bare name, an \"@latest\", and a \"^9.0.0\" range each fail the regex",
+  "if the pin drifts between the invocation and the install advice, TestStrykerHintUsesSamePin fails because the forced-failure error text no longer contains strykerPin",
+]
+depends_on    = []
+status        = "pending"
+
+[[task]]
+id            = "t-5"
+wave          = 1
+title         = "Add host-allowlist derivation package"
+files         = [
+  "internal/hostallow/hostallow.go",
+  "internal/hostallow/hostallow_test.go",
+]
+description   = """
+New standalone package (imported by both internal/forge and internal/ship, which
+must stay decoupled). Policy{RemoteURL, Extra} with Derive(remoteURL, extra) and
+(Policy) Check(kind, rawURL) error. Allowed = host of [remote].url + built-in SaaS
+defaults + Extra. No allow-all, no user wildcard, no fallback return path. Exports a
+sentinel ErrRefused, wrapped by every Check refusal, so callers can distinguish a
+policy refusal from a transient network error (t-14 depends on this).
+"""
+covers        = ["c-4"]
+test_contract = [
+  "if Check stops refusing an off-allowlist host, TestCheckRefusesOffAllowlistHost fails — it asserts the error names \"attacker.example\". The `dross local set allow_hosts` hint is asserted at the CLI boundary by t-10, not here, so this package stays CLI-agnostic",
+  "if suffix matching degrades to strings.HasSuffix, TestSuffixWildcardIsNotSubstring fails: \"*.atlassian.net\" must allow acme.atlassian.net but refuse evil-atlassian.net and atlassian.net.attacker.example",
+  "if derivation stops covering the remote's own host, TestCheckAllowsRemoteHost fails on the self-hosted pair (remote and api_base both git.corp.internal, empty Extra)",
+  "if scheme or port are ignored, TestCheckRefusesSchemeAndPort fails — http:// on an allowed host and api.github.com:8443 must both be refused",
+  "if a zero Policy is treated as unrestricted, TestDeriveEmptyIsNotAllowAll fails: Derive(\"\", nil) must return the SaaS defaults only, so a caller that forgets the field fails closed",
+  "if a refusal stops wrapping the sentinel, TestCheckRefusalIsErrRefused fails — errors.Is(err, hostallow.ErrRefused) must hold for every refusal path, which is what lets t-14 keep a refusal out of the degrade arms",
+]
+depends_on    = []
+status        = "pending"
+
+[[task]]
+id            = "t-6"
+wave          = 1
+title         = "Gitignore local.toml and refuse a tracked one"
+files         = [
+  "internal/cmd/gitignore.go",
+  "internal/cmd/local.go",
+  "internal/cmd/gitignore_test.go",
+  "internal/cmd/local_test.go",
+  "README.md",
+  "docs/dross.1",
+]
+description   = """
+Generalize drossGitignoreBlock / ignoresDrossState over a path list so the seeded
+block covers .dross/state.json AND .dross/local.toml — init.go and onboard.go already
+call ensureDrossGitignore, so neither is edited. Add allow_hosts to the closed
+localKeys set (comma-separated string) plus readAllowHosts(root, repoDir), which runs
+`git ls-files --error-unmatch -- .dross/local.toml` and errors when git reports the
+file tracked rather than parsing it. README.md:187's "First key: `quick_base`" line
+goes stale on this edit and is updated here; docs/dross.1 has no local-store section
+at all, so its FILES section gains a new `.dross/local.toml` entry rather than an
+update.
+Note for existing repos: init/onboard never run again, so an already-onboarded repo
+gains the ignore line only via t-10's doctor finding — the tracked-file refusal is
+what actually holds the c-7 guarantee there.
+"""
+covers        = ["c-7"]
+test_contract = [
+  "if the seeded block stops covering local.toml, TestEnsureGitignoreCoversLocalToml fails — a repo with no .gitignore must end matching both paths, and a second call must leave the file byte-identical",
+  "if broader-pattern detection regresses, TestIgnoresLocalTomlViaBroaderPattern fails: an existing \".dross/*.toml\" line must suppress the local.toml append but not state.json",
+  "if the docs go stale, TestDocsCoverAllowHosts fails — README's local-key line and docs/dross.1's FILES section must each name allow_hosts and .dross/local.toml; it is the only gate on the doc half of this task",
+  "if readAllowHosts parses a tracked local.toml instead of refusing it, TestReadAllowHostsRefusesTrackedLocal fails — with the file git-added and naming attacker.example it must return an error naming the file as tracked, name the `git rm --cached` fix, and return a nil slice",
+]
+depends_on    = []
+status        = "pending"
+
+[[task]]
+id            = "t-7"
+wave          = 2
+title         = "Validate config-derived branch names at four commands"
+files         = [
+  "internal/cmd/phase.go",
+  "internal/cmd/phase_checkout.go",
+  "internal/cmd/milestone.go",
+  "internal/cmd/ship_recover.go",
+]
+description   = """
+Call validateGitRef wherever a ref is produced from config or argv, before the first
+git call: resolveCompleteBase (baseFlag, changes.Base, and the recorded base read from
+committed changes.json), completeBaseCandidates, phaseCheckout/Checkout on args[0],
+resolveMilestoneCutPoint and ensureMilestoneBranch, and ship_recover's
+baseBranch := p.Repo.GitMainBranch.
+"""
+covers        = ["c-1"]
+test_contract = [
+  "if the guard is removed from phase complete, TestPhaseCompleteRefusesDashMainBranch fails — it asserts the named error, that HEAD is unchanged and that no branch was deleted, so the refusal must precede any mutation",
+  "if the guard is removed from phase checkout, TestPhaseCheckoutRefusesDashArg fails — reaching the \"no local branch\" message would prove git already ran",
+  "if the guard is removed from milestone create, TestMilestoneCreateRefusesDashMainBranch fails: `git branch --list` shows a new ref",
+  "if the guard is removed from ship recover, TestShipRecoverRefusesDashMainBranch fails — `--recover` against the hostile project.toml must return the guard error, not today's \"no branch\" message",
+  "the four are separate test functions, not one table over the helper, so dropping the guard at any single entry point fails exactly its own test",
+]
+depends_on    = ["t-2"]
+status        = "pending"
+
+[[task]]
+id            = "t-8"
+wave          = 2
+title         = "Enforce host allowlist in the four forge clients"
+files         = [
+  "internal/forge/forge.go",
+  "internal/forge/github.go",
+  "internal/forge/jira.go",
+  "internal/forge/youtrack.go",
+]
+description   = """
+forge.Config gains Hosts hostallow.Policy. New, NewGitHubProjects, NewJira and
+NewYouTrack each Check the resolved APIBase after the presence checks and before
+os.Getenv(cfg.AuthEnv). github.go's "https://api.github.com" default is checked too;
+a zero Policy means SaaS defaults only, never unrestricted.
+"""
+covers        = ["c-4"]
+test_contract = [
+  "if any one constructor stops checking, its own test fails — one per constructor, each with the auth env set to a sentinel and api_base https://attacker.example, asserting the hostallow error, a nil client, and that the error text does not contain the sentinel",
+  "if the Check and the Getenv are swapped, TestRefusedHostNeverReadsToken fails — with the host off-allowlist AND the env var unset, the error must be the host refusal, not \"$X is not set\"",
+  "if the guard over-refuses, TestForgeNewAllowsDerivedHost fails — github.com/api.github.com must still construct",
+]
+depends_on    = ["t-5"]
+status        = "pending"
+
+[[task]]
+id            = "t-9"
+wave          = 2
+title         = "Enforce host allowlist in the ship backends"
+files         = [
+  "internal/ship/hostguard.go",
+  "internal/ship/open.go",
+  "internal/ship/forgejo.go",
+  "internal/ship/gitlab.go",
+  "internal/ship/bitbucket.go",
+  "internal/ship/comment.go",
+]
+description   = """
+This is where [remote].auth_env's token is actually read — five os.Getenv(opts.AuthEnv)
+sites across forgejo, gitlab, bitbucket and both comment paths. New hostguard.go
+exports resolveToken(apiBase, authEnv, policy) doing the Check then the Getenv;
+OpenOpts and CommentOpts gain Hosts hostallow.Policy.
+"""
+covers        = ["c-4"]
+test_contract = [
+  "if any backend skips the guard, TestShipRefusesOffAllowlistAPIBase fails for that row — table-driven over forgejo/gitlab/bitbucket open plus both comment paths, asserting the hostallow error, an empty token, an auth-env sentinel absent from the error, and an httptest server registered as the fake host recording zero requests",
+  "if a later backend reintroduces a direct token read, TestNoGetenvOutsideHostguard fails by file:line — it greps internal/ship non-test sources for the bare `os.Getenv(` call, NOT for the literal `opts.AuthEnv`, since bitbucket.go reads through a local variable and a narrower pattern would miss it; hostguard.go itself is the one exempted file, since it is where the guarded read lives",
+  "if the guard over-refuses, TestShipAllowsDerivedSelfHostedHost fails — an honest self-hosted forgejo/gitlab install must keep working",
+]
+depends_on    = ["t-5"]
+status        = "pending"
+
+[[task]]
+id            = "t-10"
+wave          = 2
+title         = "Report hostile config as named doctor findings"
+files         = [
+  "internal/cmd/doctor.go",
+  "internal/cmd/doctor_test.go",
+]
+description   = """
+Two new doctor sections. "Branch names:" runs validateGitRef over p.Repo.GitMainBranch
+and over branch_pattern rendered with the current phase id. "API host:" derives the
+policy from [remote].url + readAllowHosts and Checks [remote].api_base and
+[board].base_url. Each failure counts as an issue, not a warning. A third check
+reports a missing .dross/local.toml gitignore entry — doctor is the only command that
+runs against already-onboarded repos, which never re-run init/onboard. A fourth
+reports a git older than 2.24, which the locked ref_separator_token decision requires
+and nothing else in the phase enforces.
+"""
+covers        = ["c-6", "c-7"]
+test_contract = [
+  "if a dash branch name stops being reported, TestDoctorReportsDashBranchName fails — output must name the offending value and doctor's exit code must be non-zero, since a finding printed without moving the counter is a finding nobody acts on",
+  "if the escape-hatch hint is dropped, TestDoctorReportsOffAllowlistAPIBase fails — it asserts both the refused host and the literal `dross local set allow_hosts <host>` text required by the locked escape_hatch decision",
+  "if the checks are satisfied by always reporting, TestDoctorCleanConfigHasNoNewFindings fails — this repo's own project.toml (github.com / api.github.com / \"main\") must produce the ✓ lines and add zero issues",
+  "if the git version floor goes unenforced, TestDoctorReportsOldGit fails — a stubbed `git --version` of 2.23.0 must produce a finding naming --end-of-options, and 2.24.0 must not",
+  "if an already-onboarded repo's missing local.toml ignore line goes unreported, TestDoctorReportsUnignoredLocalToml fails — a repo whose .gitignore covers .dross/state.json but not .dross/local.toml must produce a finding naming the missing path",
+]
+depends_on    = ["t-2", "t-5", "t-6"]
+status        = "pending"
+
+[[task]]
+id            = "t-11"
+wave          = 3
+title         = "Route phase and switch git calls through separators"
+files         = [
+  "internal/cmd/phase.go",
+  "internal/cmd/switchbranch.go",
+]
+description   = """
+Rewrite the config/user-derived positionals in phase.go (show <ref>, rev-parse,
+branch -D, ls-remote, push origin --delete, merge-base --is-ancestor) and
+switchbranch.go (checkout, checkout -b, merge --ff-only, reset --hard, cat-file -e,
+ls-files) to build argv via t-3's builders. Sequenced after t-7 so the sweep does not
+race the guard wiring over the same files.
+"""
+covers        = ["c-2"]
+test_contract = [
+  "if any phase-derived ref is emitted before its separator, TestPhaseCompleteArgvCarriesSeparator fails — it records invocations over the exec seam and asserts the ref's argv index exceeds the index of \"--end-of-options\" (or \"--\" for pathspec calls), printing the offending argv",
+  "if the cat-file probe stops routing its ref:path through the separator, TestGuardLiveStateRefPathSeparator fails on the argv ordering for \"<ref>:.dross/state.json\"",
+]
+depends_on    = ["t-3", "t-7"]
+status        = "pending"
+
+[[task]]
+id            = "t-12"
+wave          = 3
+title         = "Route remaining git calls through separators"
+files         = [
+  "internal/cmd/milestone.go",
+  "internal/cmd/ship_recover.go",
+  "internal/cmd/milestone_stale.go",
+  "internal/cmd/doctor.go",
+  "internal/cmd/techdebt.go",
+  "internal/cmd/cleantree.go",
+  "internal/cmd/repair_files.go",
+  "internal/cmd/basebranch.go",
+  "internal/cmd/ship.go",
+  "internal/cmd/phase_lifecycle.go",
+  "internal/cmd/repair_state.go",
+  "internal/cmd/topology.go",
+  "internal/codex/git.go",
+]
+description   = """
+Same separator rewrite across the remaining sites — milestone, ship_recover,
+milestone_stale's diff <from> <to>, doctor, techdebt, cleantree, repair_files,
+basebranch's `push origin <base>`, ship's two `push [-u] origin <phaseBranch>` calls,
+phase_lifecycle's `branch -m <old> <new>`, and internal/codex/git.go. Two sites carry
+live payloads, not theoretical ones: repair_state.go's `log <mainBranch>` accepts
+`--output=<path>` and gives `dross repair` an arbitrary-file-write from a committed
+[repo].git_main_branch, and topology.go's `rev-list --count <Main>..<Work>` is reached
+by `dross status` and `dross phase complete`. repair_files' `checkout <ref> -- <path>`
+also routes its ref through validateGitRef.
+Re-derive the `gitCombined|gitNoOut|gitTrim|exec.Command("git"` inventory over
+internal/ before starting. Two review passes each found sites this list had missed —
+treat it as a starting point that must be re-verified, never as complete.
+"""
+covers        = ["c-2"]
+test_contract = [
+  "if repair_files stops guarding its ref, TestRepairFilesRefusesDashRef fails — `checkout -x -- .dross/` must be refused before exec",
+  "if any rewritten call site emits a config-derived positional before its separator, that site's argv assertion in TestRemainingGitCallsCarrySeparator fails, printing the offending argv",
+  "if the branch-rename path regresses, TestPhaseRenameArgvCarriesSeparator fails — `branch -m <old> <new>` must place both slug-derived names after --end-of-options",
+  "if repair_state's `log <mainBranch>` loses its separator, TestRepairStateRefusesOutputInjection fails — a git_main_branch of `--output=<tmp>/pwned` must leave no file at that path after `dross repair`",
+  "if topology's rev-list range stops being separated, TestTopologyArgvCarriesSeparator fails — `<Main>..<Work>` must follow --end-of-options",
+]
+depends_on    = ["t-3", "t-7", "t-10"]
+status        = "pending"
+
+[[task]]
+id            = "t-13"
+wave          = 4
+title         = "Add repo-wide unseparated-positional audit gate"
+files         = [
+  "internal/cmd/gitargs_audit_test.go",
+  "internal/cmd/testdata/gitargs_audit/snippets.txt",
+]
+description   = """
+go/ast audit over internal/ and cmd/. The rule: flag a git positional that is neither
+a string literal nor provably prefix-constant. A concatenation with a constant prefix
+("refs/heads/"+branch, "origin/"+base) is not flagged — the prefix already makes a
+leading dash unreachable. This wording is deliberate: the six prefix-guarded sites
+(phase_checkout.go:42/87, status.go:563/575, repair_phasedirs.go:23,
+milestone_merged.go:78, repair.go:104) are not injection vectors and must not be
+rewritten just to satisfy a stricter rule.
+statusline.go:275 passes a spread slice the AST cannot resolve; it is recorded as
+accepted-with-reason in the task's own doc comment (its argv is fully internally
+constructed), per r-02 — not carried in a file:line exception list. Split from the
+sweep so a false positive in the heuristic cannot hold the sweep's commit hostage.
+"""
+covers        = ["c-2"]
+test_contract = [
+  "if a new unseparated positional is added anywhere (e.g. gitCombined(repoDir, \"branch\", \"-D\", someVar)), TestNoUnseparatedGitPositional fails and names the offending file:line",
+  "if the audit degrades into a check that trivially returns clean, TestAuditFlagsItsOwnSnippets fails — it runs the audit over a table of synthetic source snippets, half of which it must flag and half it must pass",
+  "if the audit's scan root narrows to internal/cmd, TestAuditScansCodexPackage fails — internal/codex/git.go must be within scope",
+  "if the prefix-constant carve-out widens into a general escape, TestAuditFlagsBarePrefixlessVar fails — \"refs/heads/\"+branch must pass while a bare branch must still be flagged",
+]
+depends_on    = ["t-3", "t-11", "t-12"]
+status        = "pending"
+
+[[task]]
+id            = "t-14"
+wave          = 4
+title         = "Populate policy and make refusals non-degradable"
+files         = [
+  "internal/cmd/issue.go",
+  "internal/cmd/ship.go",
+  "internal/cmd/milestone.go",
+  "internal/cmd/milestone_dependents.go",
+  "internal/cmd/phase.go",
+]
+description   = """
+boardConfig and buildOpenOpts/buildCommentOpts set Hosts =
+hostallow.Derive(p.Remote.URL, readAllowHosts(root, repoDir)); both signatures change
+to take root/repoDir and return an error, rippling to callers in milestone.go,
+milestone_dependents.go and phase.go's mergeGate. boardConfig's synthetic
+"https://board.local/<project>" URL is NOT the derivation source — the real
+[remote].url is, per the locked allowlist_source decision. mergeGate's default: arm
+and milestone_dependents' open-PR check re-raise on errors.Is(err, hostallow.ErrRefused)
+instead of announcing a degrade, per the locked refusal_behaviour decision.
+"""
+covers        = ["c-4", "c-7"]
+test_contract = [
+  "if the policy is derived from boardConfig's synthetic URL, TestBoardConfigDerivesFromRemoteURL fails — the policy must contain the [remote].url host and must NOT contain \"board.local\"",
+  "if ship stops carrying the policy, TestBuildOpenOptsCarriesPolicy fails — an off-allowlist api_base must abort `dross ship` before any network call, with a fake transport seeing zero requests",
+  "if a tracked local.toml's hosts are silently swallowed into an empty extras list, TestTrackedLocalTomlBlocksBoardConfig fails — with local.toml tracked and naming attacker.example, a board client for https://attacker.example must still be refused",
+  "if mergeGate classifies a host refusal as a transient forge error, TestMergeGateDoesNotDegradeOnHostRefusal fails — the \"falling back to git ancestry\" path must not run and the refusal text must surface; a genuine network error must still degrade, so the test also asserts the fallback DOES run for a non-sentinel error",
+  "if milestone_dependents swallows a refusal, TestDependentsCheckDoesNotDegradeOnHostRefusal fails — the open-PR check must not return nil and the branch delete must not proceed",
+]
+depends_on    = ["t-6", "t-8", "t-9", "t-11", "t-12"]
+status        = "pending"
+
+[[task]]
+id            = "t-15"
+wave          = 5
+title         = "Land hostile-config regression suite and red proof"
+files         = [
+  "internal/cmd/hostile_config_test.go",
+  "internal/forge/hostile_config_test.go",
+  "fixtures/hostile-config-c5/RUN.md",
+]
+description   = """
+One suite copying the t-1 fixture into a temp repo's .dross/ and driving every vector:
+phase complete, phase checkout, milestone create, ship recover, board client
+construction, a ship PR open, doctor, and `dross repair` — the repair vector drives
+repair_state's `log <mainBranch>` with an `--output=` payload, so the suite covers the
+arbitrary-file-write directly. RUN.md records an observed replay of the
+suite against the phase's base commit in a git worktree — written only after that run
+is seen, per the execution-safety rule that a result must be observed before claimed.
+It must pin the base commit SHA and paste the verbatim `go test` failure output per
+vector, so verify can re-run the replay rather than trust prose.
+"""
+covers        = ["c-5"]
+test_contract = [
+  "if any guard's error text drifts from its pinned line, TestHostileConfigVectors fails — it is table-driven off expected-refusals.txt and asserts the refusal matches per vector",
+  "if a subtest is deleted to green the suite, TestEveryVectorHasASubtest fails — the subtest-name set must equal the vector-id set",
+  "if the refusals move but an exec still happens, TestHostileConfigNoPwnSentinel fails — $TMPDIR/dross-pwned must not exist after the whole run",
+  "if a refused request still reaches the network or leaks the token, the per-vector side-effect assertions fail — no request to the fake host, no token substring in any error string",
+  "if RUN.md's replay is not reproducible, TestRedProofPinsBaseCommit fails — RUN.md must name a base commit SHA that exists and list one failing test per vector id",
+]
+depends_on    = ["t-7", "t-8", "t-9", "t-10", "t-11", "t-12", "t-13", "t-14"]
+status        = "pending"
