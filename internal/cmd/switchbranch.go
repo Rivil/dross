@@ -34,6 +34,9 @@ import (
 // is the user's call: dross relocating machine-local position data on their
 // behalf is how a "helpful" tool loses the history it was protecting.
 func checkoutBranch(repoDir, branch string) error {
+	if err := validateGitRef("branch", branch); err != nil {
+		return err
+	}
 	if err := guardLiveState(repoDir, branch); err != nil {
 		return err
 	}
@@ -47,6 +50,14 @@ func checkoutBranch(repoDir, branch string) error {
 // <base>`. The clobber fires here too — on every base ref that still tracks the
 // file — and this is the call site a user hits first, at `dross phase create`.
 func checkoutBranchNew(repoDir, branch, base string) error {
+	// Both, not just the base: the new branch name is the one rendered from
+	// [repo].branch_pattern, so it is config-derived too.
+	if err := validateGitRef("branch", branch); err != nil {
+		return err
+	}
+	if err := validateGitRef("base", base); err != nil {
+		return err
+	}
 	if err := guardLiveState(repoDir, base); err != nil {
 		return err
 	}
@@ -64,6 +75,9 @@ func checkoutBranchNew(repoDir, branch, base string) error {
 // Returns git's own output alongside the error so callers that read the merge
 // output (the ff-divergence signal `phase complete --recover` keys off) keep it.
 func guardedFF(repoDir, ref string) (string, error) {
+	if err := validateGitRef("merge ref", ref); err != nil {
+		return "", err
+	}
 	if err := guardLiveState(repoDir, ref); err != nil {
 		return "", err
 	}
@@ -74,6 +88,9 @@ func guardedFF(repoDir, ref string) (string, error) {
 // the one caller that has one: `ship recover`'s heal. Same reasoning — the
 // working tree is replaced from the target's tree either way.
 func guardedResetHard(repoDir, ref string) (string, error) {
+	if err := validateGitRef("reset ref", ref); err != nil {
+		return "", err
+	}
 	if err := guardLiveState(repoDir, ref); err != nil {
 		return "", err
 	}
