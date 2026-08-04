@@ -560,7 +560,7 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 
 	// No origin ref, no answer. Never a claim taken on a missing base.
 	baseRef := "origin/" + sh.base
-	if gitNoOut(repoDir, "rev-parse", "--verify", "--quiet", baseRef) != nil {
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
 		return none, false
 	}
 	merged, err := isAncestor(repoDir, cur, baseRef)
@@ -572,7 +572,9 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 	}
 	// Squash-merged counts as merged: the content is on the base under a commit
 	// the base's history doesn't descend from, which ancestry cannot see.
-	count, err := gitTrim(repoDir, "rev-list", "--count", baseRef, "--not", cur)
+	// "^cur" rather than "--not cur": --not is an option and would be read as
+	// a revision behind the separator. The caret form is equivalent.
+	count, err := gitTrim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+cur)...)
 	if err != nil {
 		return none, false
 	}

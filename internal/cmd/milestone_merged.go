@@ -75,5 +75,5 @@ func milestoneMergedIntoMain(repoDir, branch, mainBranch string) (merged, localO
 
 // gitRefExists reports whether a fully-qualified ref resolves in repoDir.
 func gitRefExists(repoDir, ref string) bool {
-	return gitNoOut(repoDir, "rev-parse", "--verify", "--quiet", ref) == nil
+	return gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, ref)...) == nil
 }

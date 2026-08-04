@@ -80,7 +80,7 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 		entry := staleBranch{
 			Name:      name,
 			Version:   strings.TrimPrefix(name, "milestone/"),
-			HasRemote: gitNoOut(repoDir, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+name) == nil,
+			HasRemote: gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+name)...) == nil,
 		}
 
 		merged, err := isAncestor(repoDir, name, mainBranch)

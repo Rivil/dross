@@ -700,7 +700,7 @@ func resolveCompleteBase(repoDir, root string, p *project.Project, s *state.Stat
 // Best-effort: any git or parse failure yields "" and the caller refuses.
 func phaseRefRecordedBase(repoDir, phaseID string) string {
 	ref := "refs/heads/phase/" + phaseID + ":.dross/phases/" + phaseID + "/" + changes.File
-	out, err := exec.Command("git", "-C", repoDir, "show", ref).Output()
+	out, err := exec.Command("git", append([]string{"-C", repoDir}, gitRefArgs("show", nil, ref)...)...).Output()
 	if err != nil {
 		return ""
 	}
@@ -735,7 +735,7 @@ func completeBaseCandidates(repoDir string, p *project.Project, s *state.State) 
 // 0 and the caller's ancestry fallback stands.
 func originRecordedPR(repoDir, base, phaseID string) int {
 	ref := "origin/" + base + ":" + ".dross/phases/" + phaseID + "/changes.json"
-	out, err := exec.Command("git", "-C", repoDir, "show", ref).Output()
+	out, err := exec.Command("git", append([]string{"-C", repoDir}, gitRefArgs("show", nil, ref)...)...).Output()
 	if err != nil {
 		return 0
 	}

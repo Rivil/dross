@@ -1,0 +1,48 @@
+# Snippets the audit must classify. Half FLAG, half PASS — a checker that
+# degraded into "return nothing" passes the real gate forever and reads as
+# coverage, so it is made to prove it can still see.
+#
+# Each block is:
+#   FLAG <name>   — the audit MUST report at least one finding
+#   PASS <name>   — the audit MUST report none
+# followed by one or more lines of Go, wrapped by the test into
+#   func snippet(repoDir, branch, base, ref, path, msg string) { … }
+
+FLAG bare-var-positional
+	gitCombined(repoDir, "branch", "-D", branch)
+
+FLAG bare-var-after-subcommand
+	gitNoOut(repoDir, "rev-parse", branch)
+
+FLAG const-suffix-is-not-a-prefix
+	gitTrim(repoDir, "ls-tree", ref+":.dross/phases")
+
+FLAG exec-command-direct
+	exec.Command("git", "-C", repoDir, "log", branch)
+
+FLAG separator-after-the-value
+	gitNoOut(repoDir, "rev-parse", branch, "--end-of-options")
+
+FLAG path-without-separator
+	gitCombined(repoDir, "add", path)
+
+PASS all-literals
+	gitCombined(repoDir, "fetch", "origin")
+
+PASS const-prefix-concat
+	gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch)
+
+PASS ref-separator-then-value
+	gitCombined(repoDir, "checkout", "--end-of-options", branch)
+
+PASS path-separator-then-value
+	gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", path)
+
+PASS option-argument-not-positional
+	gitCombined(repoDir, "commit", "-m", msg)
+
+PASS mixed-ref-and-path-separators
+	gitCombined(repoDir, "checkout", "--end-of-options", ref, "--", path)
+
+PASS not-a-git-call
+	exec.Command("gh", "pr", "view", branch)

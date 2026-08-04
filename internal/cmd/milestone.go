@@ -325,7 +325,7 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 	}
 
 	// Delete the local milestone branch (only if it exists).
-	if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+msBranch); err == nil {
+	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+msBranch)...); err == nil {
 		if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, msBranch)...); err != nil {
 			return fmt.Errorf("git branch -D %s: %w\n%s", msBranch, err, out)
 		}
@@ -529,11 +529,11 @@ func ensureMilestoneBranch(repoDir, baseBranch, version string) (branch string, 
 		return branch, false, false, err
 	}
 	// Need a base ref to cut from; a repo with no commits has none.
-	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+baseBranch) != nil {
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+baseBranch)...) != nil {
 		return branch, false, false, nil
 	}
 	// Idempotent create: only when the local ref is absent.
-	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch) != nil {
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
 		if out, e := gitCombined(repoDir, gitRefArgs("branch", nil, branch, baseBranch)...); e != nil {
 			return branch, false, false, fmt.Errorf("git branch %s %s: %w\n%s", branch, baseBranch, e, out)
 		}
