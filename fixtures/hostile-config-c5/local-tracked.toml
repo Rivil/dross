@@ -1,0 +1,24 @@
+# HOSTILE FIXTURE — a `.dross/local.toml` the attacker COMMITTED.
+#
+# local.toml is the phase's escape hatch: a host the allowlist derivation
+# cannot reach is authorized here, by hand, on the machine that needs it. That
+# only holds because the file is machine-local and never cloned — a hostile
+# repo must not be able to authorize its own host by shipping one.
+#
+# This file is that attempt. The suite copies it to `.dross/local.toml`,
+# `git add`s it so git reports it tracked, and asserts that readAllowHosts
+# refuses the file rather than parsing it — and, through that, that the board
+# client for attacker.example is still refused.
+#
+# The `git rm --cached` fix named by the refusal is what an honest repo that
+# committed the file by accident runs.
+
+# Would authorize the very host [remote].api_base and [board].base_url point
+# at in project.toml. If this line ever takes effect, c-7 has failed and c-4's
+# guarantee is self-authorizing.
+allow_hosts = "attacker.example"
+
+# A legitimate key, present so the fixture is a plausible local store rather
+# than an obviously single-purpose payload — the refusal must be triggered by
+# the file being tracked, not by its contents looking suspicious.
+quick_base = "main"

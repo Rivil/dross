@@ -1,0 +1,86 @@
+# c-5 refusal contract — one row per attack vector in the hostile-config fixture.
+#
+# This file is the phase's string contract, and it is deliberately written
+# BEFORE the guards exist. Every guard author matches a refusal string they did
+# not choose, so "the test passes" cannot be reached by quietly rewording the
+# assertion to fit whatever the code happened to print.
+#
+# internal/cmd/hostile_config_test.go and internal/forge/hostile_config_test.go
+# parse this file and drive one subtest per row. TestEveryVectorHasASubtest
+# asserts the subtest-name set equals the id set below — a row deleted to green
+# the suite fails that test, and a row added here without a subtest fails it too.
+#
+# GRAMMAR
+#   Blank lines and lines starting with '#' are ignored.
+#   Every other line is exactly four '|'-separated fields:
+#
+#     id | key | payload | expect
+#
+#   id       stable vector name; also the subtest name.
+#   key      the config key (or argv position) that carries the payload.
+#   payload  the value written into `key` before the vector runs.
+#            '-' means "use the value already committed in project.toml" —
+#            the vector reproduces from the fixture as-is, unmodified.
+#   expect   ';;'-separated substrings that must ALL appear in the refusal.
+#            A refusal must name what it refused, not just that it refused:
+#            a bare "invalid input" tells the user nothing about which
+#            committed key to go and fix.
+#
+#   __SENTINEL__ in a payload is rewritten by the harness to a path inside the
+#   test's temp dir. No guard may let that path come into existence.
+#
+# WHAT A ROW ASSERTS
+#   The refusal is returned, its text matches, and — per row — the side effect
+#   did not happen: no branch created or deleted, HEAD unmoved, no request to
+#   the fake host, no sentinel file, and no occurrence of $DROSS_FIXTURE_TOKEN's
+#   value in any error string.
+
+# --- c-1: a config- or user-derived ref that git would read as a flag ---------
+#
+# All five refuse before the first exec. "unsafe git ref" is the pinned prefix
+# for validateGitRef; the key name and the offending value must both appear so
+# the message points at the line to fix.
+
+phase-complete   | repo.git_main_branch | -x                              | unsafe git ref;;repo.git_main_branch;;-x
+phase-checkout   | argv[0]              | --upload-pack=touch __SENTINEL__ | unsafe git ref;;--upload-pack=touch
+phase-create     | repo.branch_pattern  | -                               | unsafe git ref;;branch_pattern;;-p/
+milestone-create | repo.git_main_branch | -x                              | unsafe git ref;;repo.git_main_branch;;-x
+ship-recover     | repo.git_main_branch | -                               | unsafe git ref;;repo.git_main_branch;;--output=
+
+# repair-state is the live one, not a theoretical shape: `dross repair` runs
+# `git log <mainBranch> --reverse --pretty=...`, and git's diff options accept
+# --output=<file>. Committed config alone is an arbitrary-file write. The row's
+# side-effect assertion (no file at __SENTINEL__) is the real gate here; the
+# string match is secondary.
+
+repair-state     | repo.git_main_branch | --output=__SENTINEL__           | unsafe git ref;;repo.git_main_branch;;--output=
+
+# --- c-4: a committed api_base that redirects the token ----------------------
+#
+# "refusing to contact host" is the pinned prefix for a hostallow policy
+# refusal. The message names the refused host and the derivation source, so it
+# is distinguishable from a network failure both by a human and — via
+# hostallow.ErrRefused — by mergeGate, which must not degrade on it.
+
+board-client     | board.base_url       | -                               | refusing to contact host;;attacker.example
+ship-open        | remote.api_base      | -                               | refusing to contact host;;attacker.example
+
+# --- c-7: a local.toml the repo committed ------------------------------------
+#
+# The escape hatch only holds while local.toml is machine-local. A tracked one
+# is refused unread — parsing it and then ignoring its hosts would still let a
+# hostile repo set quick_base. The refusal names the `git rm --cached` fix
+# because an honest repo that committed the file by accident hits this too.
+
+tracked-local    | .dross/local.toml    | -                               | refusing to read;;.dross/local.toml;;tracked;;git rm --cached
+
+# --- c-6: diagnosable before a command refuses mid-run -----------------------
+#
+# Doctor reports both classes as findings against the same fixture, each moving
+# the issue counter (a finding printed without a non-zero exit is a finding
+# nobody acts on). The host finding must carry the escape-hatch command
+# verbatim, per the locked escape_hatch decision — a refusal with no named way
+# forward is where a legitimate self-hosted user gets stuck.
+
+doctor-branch    | repo.git_main_branch | -                               | --output=;;git_main_branch
+doctor-host      | remote.api_base      | -                               | attacker.example;;dross local set allow_hosts
