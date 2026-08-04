@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
 
+	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/ship"
 )
@@ -105,7 +107,15 @@ func guardOpenPRsTargeting(branch string) error {
 		return herr
 	}
 	prs, err := ship.OpenPRsTargetingFunc(buildOpenOpts(p, hosts), branch)
-	if err != nil {
+	switch {
+	case errors.Is(err, hostallow.ErrRefused):
+		// This check gates an irreversible branch delete, and its skip path is
+		// designed to be permissive about transient forge trouble. A host
+		// refusal is not that: it means the committed api_base points at a host
+		// the derivation never authorized, and skipping would let the delete
+		// proceed on the strength of an answer nobody got.
+		return err
+	case err != nil:
 		printOpenPRSkip(err.Error())
 		return nil
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
@@ -774,6 +775,15 @@ func mergeGate(repoDir string, opts ship.OpenOpts, phaseID, phaseBranch, reconci
 			return fmt.Errorf("PR #%d for %s is not merged upstream — refusing to complete so the phase branch isn't lost.\n"+
 				"Merge the PR first and re-run; or if it really merged, use `dross phase complete --recover` / verify the merge manually.",
 				recordedPR, phaseID)
+		case errors.Is(err, hostallow.ErrRefused):
+			// NOT a degrade. Every other arm here treats "couldn't ask the
+			// provider" as a transient fact of life and falls through to git
+			// ancestry — which is right for a flaky network and exactly wrong
+			// for this: a host refusal means the repo's committed api_base
+			// points somewhere the user never authorized. Falling back would
+			// turn an active attack into an invisible capability downgrade,
+			// which is what the locked refusal_behaviour decision forbids.
+			return err
 		case errors.Is(err, ship.ErrMergeStatusUnsupported):
 			// Provider can't answer yet — announce and fall through to the
 			// ancestry fallback rather than swallow the degrade silently.
