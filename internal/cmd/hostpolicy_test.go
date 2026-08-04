@@ -198,6 +198,54 @@ func TestDependentsCheckDoesNotDegradeOnHostRefusal(t *testing.T) {
 	}
 }
 
+// TestDependentsCheckDegradesOnTransientError is the twin of the test above,
+// and the half that keeps the refusal case NARROW. Without it, widening
+// `errors.Is(err, hostallow.ErrRefused)` into a catch-all re-raise passes every
+// existing assertion: the refusal still surfaces, and nothing notices that a
+// flaky forge now blocks a legitimate prune outright. The two cases are asserted
+// in separate functions so collapsing either one fails exactly its own test.
+func TestDependentsCheckDegradesOnTransientError(t *testing.T) {
+	dir := hostileRepo(t, "main")
+	ppath := filepath.Join(dir, ".dross", project.File)
+	p, err := project.Load(ppath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Honest config throughout — the only thing wrong here is the network.
+	p.Remote.Provider = "forgejo"
+	p.Remote.URL = "https://github.com/Rivil/dross"
+	p.Remote.APIBase = "https://api.github.com"
+	if err := p.Save(ppath); err != nil {
+		t.Fatal(err)
+	}
+
+	prev := ship.OpenPRsTargetingFunc
+	t.Cleanup(func() { ship.OpenPRsTargetingFunc = prev })
+	ship.OpenPRsTargetingFunc = func(ship.OpenOpts, string) ([]ship.BasePR, error) {
+		return nil, errors.New("dial tcp: i/o timeout")
+	}
+
+	var out string
+	gerr := captureInto(t, &out, func() error {
+		return guardOpenPRsTargeting("milestone/v9.9")
+	})
+	if gerr != nil {
+		t.Fatalf("a transient forge error must degrade, not block the prune: %v", gerr)
+	}
+	if !strings.Contains(out, "open-PR check skipped") {
+		t.Errorf("the degrade path ran silently — an unannounced skip reads exactly like %q:\n%s",
+			"the forge confirmed nothing depends on this", out)
+	}
+	// The reason has to travel with the skip: "skipped" alone gives the user
+	// nothing to act on and no way to tell a timeout from a misconfiguration.
+	if !strings.Contains(out, "i/o timeout") {
+		t.Errorf("the skip did not name the reason:\n%s", out)
+	}
+	if errors.Is(gerr, hostallow.ErrRefused) {
+		t.Error("a plain network error was classified as a policy refusal")
+	}
+}
+
 // captureInto runs fn with stdout captured, so a test can assert on what was
 // PRINTED as well as what was returned. The degrade paths announce themselves
 // and return nil, so the printed text is the only evidence they ran.
