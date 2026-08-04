@@ -137,7 +137,7 @@ func TestDoctorValidatesBoardBlock(t *testing.T) {
 			// stays clean and only the [board] block decides the verdict.
 			"remote.auth_env":      tokenEnv,
 			"board.provider":       "youtrack",
-			"board.base_url":       "https://yt.example.com",
+			"board.base_url":       "https://acme.youtrack.cloud",
 			"board.auth_env":       tokenEnv,
 			"board.project":        "PROJ",
 			"board.enabled":        "true",
@@ -219,7 +219,7 @@ func TestDoctorFlagsUnknownStateMapKey(t *testing.T) {
 		for _, kv := range [][2]string{
 			{"remote.auth_env", tokenEnv},
 			{"board.provider", "youtrack"},
-			{"board.base_url", "https://yt.example.com"},
+			{"board.base_url", "https://acme.youtrack.cloud"},
 			{"board.auth_env", tokenEnv},
 			{"board.project", "PROJ"},
 			{"board.enabled", "true"},
@@ -789,7 +789,7 @@ func TestDoctorCover_BoardAuthEnvUnset(t *testing.T) {
 	}
 	for k, v := range map[string]string{
 		"board.provider":       "youtrack",
-		"board.base_url":       "https://yt.example.com",
+		"board.base_url":       "https://acme.youtrack.cloud",
 		"board.milestone_mode": "version",
 		// board.auth_env deliberately left empty → line 122/123
 	} {
@@ -904,7 +904,7 @@ func runDoctorEnum(t *testing.T, overrides map[string]string) (string, error) {
 	fields := map[string]string{
 		"remote.auth_env":      tokenEnv,
 		"board.provider":       "youtrack",
-		"board.base_url":       "https://yt.example.com",
+		"board.base_url":       "https://acme.youtrack.cloud",
 		"board.auth_env":       tokenEnv,
 		"board.project":        "PROJ",
 		"board.enabled":        "true",
@@ -1717,5 +1717,183 @@ func TestDoctorReportsStaleMilestoneBranchReadOnly(t *testing.T) {
 	}
 	if !gitAllowFail(dir, "rev-parse", "--verify", "--quiet", "refs/heads/milestone/v1.0") {
 		t.Error("doctor deleted the branch — it is a diagnostic, prune is the actor")
+	}
+}
+
+// --- config-trust findings (c-6, c-7) ---
+
+// TestDoctorReportsDashBranchName: a finding printed without moving the exit
+// code is a finding nobody acts on — doctor's exit gates CI and pre-push hooks,
+// and this class of config kills a command mid-branch-operation.
+func TestDoctorReportsDashBranchName(t *testing.T) {
+	dir := doctorRepo(t)
+	ppath := filepath.Join(dir, ".dross", project.File)
+	p, err := project.Load(ppath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Repo.GitMainBranch = "--output=/tmp/dross-pwned-doctor"
+	if err := p.Save(ppath); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	err = runCmdCapturing(t, &out, Doctor())
+	if err == nil {
+		t.Error("a hostile git_main_branch must move doctor's exit code, not just print")
+	}
+	for _, want := range []string{"--output=/tmp/dross-pwned-doctor", "git_main_branch"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor output does not name %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestDoctorReportsDashBranchPattern: branch_pattern is not a live vector today
+// — nothing renders branch names from it — which is exactly why it needs
+// reporting rather than refusing. It is broken config that becomes a vector the
+// day something starts honouring it.
+func TestDoctorReportsDashBranchPattern(t *testing.T) {
+	dir := doctorRepo(t)
+	ppath := filepath.Join(dir, ".dross", project.File)
+	p, err := project.Load(ppath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Repo.BranchPattern = "-p/<id>"
+	if err := p.Save(ppath); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Error("a leading-dash branch_pattern must move doctor's exit code")
+	}
+	for _, want := range []string{"branch_pattern", "-p/"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor output does not name %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestDoctorReportsOffAllowlistAPIBase asserts the escape hatch is named. A
+// refusal with no way forward is where a legitimate self-hosted user gets stuck
+// and starts editing the guard out — so the locked escape_hatch decision
+// requires the literal command, not a description of one.
+func TestDoctorReportsOffAllowlistAPIBase(t *testing.T) {
+	dir := doctorRepo(t)
+	ppath := filepath.Join(dir, ".dross", project.File)
+	p, err := project.Load(ppath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Remote.URL = "https://github.com/Rivil/dross"
+	p.Remote.APIBase = "https://attacker.example"
+	if err := p.Save(ppath); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Error("an off-allowlist api_base must move doctor's exit code")
+	}
+	if !strings.Contains(out, "attacker.example") {
+		t.Errorf("doctor output does not name the refused host:\n%s", out)
+	}
+	if !strings.Contains(out, "dross local set allow_hosts attacker.example") {
+		t.Errorf("doctor output does not carry the escape-hatch command verbatim:\n%s", out)
+	}
+}
+
+// TestDoctorReportsUnignoredLocalToml: doctor is the ONLY command that runs
+// against already-onboarded repos, which never re-run init or onboard. Without
+// this finding those repos never gain the ignore line at all.
+func TestDoctorReportsUnignoredLocalToml(t *testing.T) {
+	dir := doctorRepo(t)
+	// A .gitignore covering state.json but NOT local.toml — the exact shape a
+	// repo onboarded before this phase has.
+	mustWrite(t, filepath.Join(dir, ".gitignore"), drossStateIgnorePath+"\n")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Error("an unignored local.toml must move doctor's exit code")
+	}
+	if !strings.Contains(out, drossLocalIgnorePath) {
+		t.Errorf("doctor output does not name the missing path:\n%s", out)
+	}
+}
+
+// TestDoctorReportsOldGit exercises the version floor through the stub seam.
+// CI's git is always new enough, so without the seam this check would only ever
+// be observed passing — which is indistinguishable from it not working.
+func TestDoctorReportsOldGit(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		version string
+		wantHit bool
+	}{
+		{"below the floor", "git version 2.23.0\n", true},
+		{"at the floor", "git version 2.24.0\n", false},
+		{"well above", "git version 2.51.0 (Apple Git-999)\n", false},
+		{"platform suffix below", "git version 2.23.1.windows.1\n", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doctorRepo(t)
+			prev := gitVersionOutput
+			t.Cleanup(func() { gitVersionOutput = prev })
+			gitVersionOutput = func() (string, error) { return tc.version, nil }
+
+			var out string
+			err := runCmdCapturing(t, &out, Doctor())
+			// The ✓ line names --end-of-options too, so match the finding's own
+			// wording rather than the flag name.
+			hit := strings.Contains(out, "is older than git")
+			if hit != tc.wantHit {
+				t.Errorf("finding present = %v, want %v, for %q:\n%s", hit, tc.wantHit, tc.version, out)
+			}
+			if tc.wantHit && err == nil {
+				t.Error("an unusable git must move doctor's exit code")
+			}
+		})
+	}
+}
+
+// TestDoctorCleanConfigHasNoNewFindings is the false-positive gate. A check
+// satisfied by always reporting is worse than no check: it trains the user to
+// ignore doctor's output. This repo's own shape — github.com / api.github.com /
+// "main" — must produce the ✓ lines and add zero issues.
+func TestDoctorCleanConfigHasNoNewFindings(t *testing.T) {
+	dir := doctorRepo(t)
+	ppath := filepath.Join(dir, ".dross", project.File)
+	p, err := project.Load(ppath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Remote.URL = "https://github.com/Rivil/dross"
+	p.Remote.APIBase = "https://api.github.com"
+	p.Repo.GitMainBranch = "main"
+	p.Repo.BranchPattern = "phase/<id>"
+	if err := p.Save(ppath); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	_ = runCmdCapturing(t, &out, Doctor())
+
+	for _, want := range []string{
+		"✓ configured branch names are valid git refs",
+		"✓ configured API hosts are within the allowlist derived from [remote].url",
+		"✓ " + drossLocalIgnorePath + " is gitignored",
+		"supports --end-of-options",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("clean config did not produce %q:\n%s", want, out)
+		}
+	}
+	// And no config-trust finding fired.
+	for _, unwanted := range []string{"unsafe git ref", "refusing to contact host", "is not gitignored"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("clean config produced a false finding %q:\n%s", unwanted, out)
+		}
 	}
 }

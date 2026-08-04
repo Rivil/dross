@@ -9,13 +9,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/architecture"
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -225,6 +228,8 @@ func Doctor() *cobra.Command {
 				Print("  ✓ .dross/ is marked linguist-generated")
 			}
 			Print("")
+
+			issues += checkConfigTrust(root, repoDir, p)
 
 			// --- Phase work on main ---
 			//
@@ -804,4 +809,178 @@ func parseGitForCompare(raw string) (host, path string) {
 		return rest[:slash], rest[slash+1:]
 	}
 	return "", ""
+}
+
+// --- config-trust checks (c-6, c-7) ---
+
+// gitVersionOutput is the seam TestDoctorReportsOldGit stubs. The version floor
+// cannot be exercised any other way: CI's git is new enough, so without a seam
+// the check would only ever be observed passing.
+var gitVersionOutput = func() (string, error) {
+	out, err := exec.Command("git", "--version").Output()
+	return string(out), err
+}
+
+// endOfOptionsMinGit is the git version that introduced --end-of-options, which
+// every rewritten call site now emits. Below it, those argv are unparseable —
+// so this is not advice, it is the floor the locked ref_separator_token decision
+// depends on and nothing else in the phase enforces.
+const endOfOptionsMinGit = "2.24"
+
+// checkConfigTrust reports hostile-or-broken config BEFORE a command refuses
+// mid-run, and returns the number of issues found.
+//
+// Every finding here counts as an issue, not a warning. A finding printed
+// without moving doctor's exit code is a finding nobody acts on — and for two
+// of these the alternative to acting is a command dying halfway through a
+// branch operation, or a token going somewhere the user never chose.
+func checkConfigTrust(root, repoDir string, p *project.Project) int {
+	issues := 0
+
+	// 1. Branch names git would reject.
+	Print("Branch names:")
+	branchChecks := []struct{ kind, value string }{
+		{"repo.git_main_branch", p.Repo.GitMainBranch},
+	}
+	// branch_pattern is rendered with a placeholder id rather than read raw:
+	// the pattern itself is not a ref, the thing it produces is. Nothing
+	// consumes it today (branch names are built as "phase/"+id), which is
+	// exactly why it needs reporting — it is broken config that becomes a live
+	// vector the day something starts honouring it.
+	if bp := p.Repo.BranchPattern; bp != "" {
+		rendered := strings.ReplaceAll(bp, "<id>", "example-phase")
+		branchChecks = append(branchChecks, struct{ kind, value string }{"repo.branch_pattern", rendered})
+	}
+	clean := true
+	for _, bc := range branchChecks {
+		if bc.value == "" {
+			continue
+		}
+		if err := validateGitRef(bc.kind, bc.value); err != nil {
+			Printf("  ✗ %v\n", err)
+			Printf("    Fix: `dross project set %s <name>` — git reads a leading dash as an option, not a branch.\n", bc.kind)
+			issues++
+			clean = false
+		}
+	}
+	if clean {
+		Printf("  ✓ configured branch names are valid git refs\n")
+	}
+	Print("")
+
+	// 2. API hosts outside the derived allowlist.
+	Print("API host:")
+	extra, hostErr := readAllowHosts(root, repoDir)
+	if hostErr != nil {
+		Printf("  ✗ %v\n", hostErr)
+		issues++
+	}
+	policy := hostallow.Derive(p.Remote.URL, extra)
+	hostChecks := []struct{ kind, value string }{
+		{"[remote].api_base", p.Remote.APIBase},
+		{"[board].base_url", p.Board.BaseURL},
+	}
+	clean = true
+	for _, hc := range hostChecks {
+		if hc.value == "" {
+			continue
+		}
+		if err := policy.Check(hc.kind, hc.value); err != nil {
+			Printf("  ✗ %v\n", err)
+			// The escape hatch is named here and nowhere else in the runtime
+			// paths: a refusal with no way forward is where a legitimate
+			// self-hosted user gets stuck and starts editing the guard out.
+			if h := hostOf(hc.value); h != "" {
+				Printf("    Fix (only if you trust this host): `dross local set allow_hosts %s`\n", h)
+			}
+			issues++
+			clean = false
+		}
+	}
+	if clean && hostErr == nil {
+		Printf("  ✓ configured API hosts are within the allowlist derived from [remote].url\n")
+	}
+	Print("")
+
+	// 3. local.toml not gitignored.
+	//
+	// Doctor is the ONLY command that runs against already-onboarded repos,
+	// which never re-run init or onboard. Without this, those repos would
+	// never gain the ignore line at all.
+	Print("Machine-local store:")
+	body, rerr := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
+	switch {
+	case rerr != nil && !errors.Is(rerr, fs.ErrNotExist):
+		Printf("  ⚠ couldn't read .gitignore: %v\n", rerr)
+	case !ignoresPath(string(body), drossLocalIgnorePath):
+		Printf("  ✗ %s is not gitignored — a committed copy would let a cloned repo authorize its own API host.\n", drossLocalIgnorePath)
+		Printf("    Fix: add `%s` to .gitignore (and `git rm --cached %s` if it is already tracked).\n",
+			drossLocalIgnorePath, drossLocalIgnorePath)
+		issues++
+	default:
+		Printf("  ✓ %s is gitignored\n", drossLocalIgnorePath)
+	}
+	Print("")
+
+	// 4. git too old for --end-of-options.
+	Print("git version:")
+	raw, gerr := gitVersionOutput()
+	switch {
+	case gerr != nil:
+		Printf("  ⚠ couldn't read `git --version`: %v\n", gerr)
+	case gitVersionAtLeast(raw, endOfOptionsMinGit):
+		Printf("  ✓ %s supports --end-of-options\n", strings.TrimSpace(raw))
+	default:
+		Printf("  ✗ %s is older than git %s, which introduced --end-of-options.\n", strings.TrimSpace(raw), endOfOptionsMinGit)
+		Printf("    dross places that separator before every config-derived ref, so git will reject those commands. Fix: upgrade git.\n")
+		issues++
+	}
+	Print("")
+
+	return issues
+}
+
+// hostOf extracts a bare host from a URL for the allow_hosts hint. Returns ""
+// when there is nothing quotable — a hint naming garbage is worse than none.
+func hostOf(rawURL string) string {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Hostname() == "" {
+		return ""
+	}
+	if port := u.Port(); port != "" {
+		return u.Hostname() + ":" + port
+	}
+	return u.Hostname()
+}
+
+// gitVersionAtLeast compares `git --version` output against a "MAJOR.MINOR"
+// floor. It parses only the two leading components: git's suffixes vary by
+// platform ("2.39.5 (Apple Git-154)", "2.44.0.windows.1"), and a stricter
+// parser would report a false finding on a perfectly capable git — which is how
+// a version check gets deleted.
+func gitVersionAtLeast(raw, floor string) bool {
+	nums := func(s string) (int, int, bool) {
+		fields := strings.Fields(s)
+		for _, f := range fields {
+			parts := strings.SplitN(f, ".", 3)
+			if len(parts) < 2 {
+				continue
+			}
+			maj, err1 := strconv.Atoi(parts[0])
+			min, err2 := strconv.Atoi(parts[1])
+			if err1 == nil && err2 == nil {
+				return maj, min, true
+			}
+		}
+		return 0, 0, false
+	}
+	fMaj, fMin, ok := nums(floor)
+	if !ok {
+		return true // an unparseable floor must not fail every repo
+	}
+	gMaj, gMin, ok := nums(raw)
+	if !ok {
+		return true // an unreadable version is a warning above, not a finding
+	}
+	return gMaj > fMaj || (gMaj == fMaj && gMin >= fMin)
 }
