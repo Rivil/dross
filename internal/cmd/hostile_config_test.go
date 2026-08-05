@@ -391,7 +391,14 @@ func TestRedProofPinsBaseCommit(t *testing.T) {
 	if sha == "" {
 		t.Fatal("RUN.md does not pin a base commit SHA (expected a `base commit: <sha>` line)")
 	}
-	if err := gitNoOut(root, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, sha+"^{commit}")...); err != nil {
+	// A shallow clone genuinely does not carry the pinned commit — that is an
+	// absence of history, not a dishonest RUN.md, so reddening on it would be a
+	// false red. ci.yml fetches full history for exactly this assertion, so the
+	// log line below is a signal that some *other* environment truncated the
+	// clone, never a silently-disabled check in ours.
+	if shallow, shErr := gitTrim(root, "rev-parse", "--is-shallow-repository"); shErr == nil && shallow == "true" {
+		t.Logf("shallow clone — cannot verify pinned base commit %s (ci.yml fetches full history so this check still runs in CI)", sha)
+	} else if err := gitNoOut(root, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, sha+"^{commit}")...); err != nil {
 		t.Errorf("RUN.md pins base commit %s, which does not exist in this repo", sha)
 	}
 
