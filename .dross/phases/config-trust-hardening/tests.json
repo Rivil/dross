@@ -1,6 +1,6 @@
 {
   "phase": "config-trust-hardening",
-  "generated_at": "2026-08-04T15:33:53.592376Z",
+  "generated_at": "2026-08-05T06:40:08.370072Z",
   "languages": [
     {
       "name": "go",
@@ -62,12 +62,48 @@
       ],
       "mutation": {
         "Tool": "gremlins",
-        "Killed": 2529,
-        "Survived": 139,
+        "Killed": 2532,
+        "Survived": 136,
         "Timeout": 0,
         "Errors": 0,
-        "Score": 0.9479010494752623,
+        "Score": 0.9490254872563718,
         "Surviving": [
+          {
+            "File": "issue.go",
+            "Line": 171,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "repair.go",
+            "Line": 131,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "repair.go",
+            "Line": 133,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "repair.go",
+            "Line": 133,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "validate.go",
+            "Line": 92,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "validate.go",
+            "Line": 96,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
           {
             "File": "phase.go",
             "Line": 308,
@@ -87,141 +123,93 @@
             "Snippet": ""
           },
           {
-            "File": "issue.go",
-            "Line": 171,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "update.go",
-            "Line": 181,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "update.go",
-            "Line": 184,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "hints.go",
-            "Line": 86,
-            "Op": "CONDITIONALS_BOUNDARY",
-            "Snippet": ""
-          },
-          {
-            "File": "hints.go",
-            "Line": 86,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "hints.go",
-            "Line": 86,
-            "Op": "CONDITIONALS_BOUNDARY",
-            "Snippet": ""
-          },
-          {
-            "File": "hints.go",
-            "Line": 86,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "hints.go",
-            "Line": 88,
-            "Op": "CONDITIONALS_BOUNDARY",
-            "Snippet": ""
-          },
-          {
-            "File": "hints.go",
-            "Line": 88,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "hints.go",
-            "Line": 133,
-            "Op": "CONDITIONALS_BOUNDARY",
-            "Snippet": ""
-          },
-          {
-            "File": "hints.go",
-            "Line": 133,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "phase_lifecycle.go",
+            "File": "statusline.go",
             "Line": 23,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "phase_lifecycle.go",
-            "Line": 23,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "phase_lifecycle.go",
-            "Line": 25,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "phase_lifecycle.go",
-            "Line": 25,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "phase_lifecycle.go",
-            "Line": 27,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "root.go",
-            "Line": 61,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "watch.go",
-            "Line": 130,
-            "Op": "CONDITIONALS_BOUNDARY",
-            "Snippet": ""
-          },
-          {
-            "File": "watch.go",
-            "Line": 130,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "rule.go",
-            "Line": 143,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "validate.go",
-            "Line": 92,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "validate.go",
-            "Line": 96,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "basebranch.go",
-            "Line": 104,
             "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          },
+          {
+            "File": "statusline.go",
+            "Line": 189,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "statusline.go",
+            "Line": 189,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "milestone_dependents.go",
+            "Line": 158,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "milestone_dependents.go",
+            "Line": 160,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "milestone_dependents.go",
+            "Line": 160,
+            "Op": "INVERT_NEGATIVES",
+            "Snippet": ""
+          },
+          {
+            "File": "milestone_dependents.go",
+            "Line": 160,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 442,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 442,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 444,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 444,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 444,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 472,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "status.go",
+            "Line": 474,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "deferred.go",
+            "Line": 138,
+            "Op": "CONDITIONALS_NEGATION",
             "Snippet": ""
           },
           {
@@ -249,50 +237,14 @@
             "Snippet": ""
           },
           {
-            "File": "milestone_dependents.go",
-            "Line": 118,
+            "File": "rule.go",
+            "Line": 143,
             "Op": "CONDITIONALS_NEGATION",
             "Snippet": ""
           },
           {
-            "File": "milestone_dependents.go",
-            "Line": 154,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "milestone_dependents.go",
-            "Line": 156,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "milestone_dependents.go",
-            "Line": 156,
-            "Op": "INVERT_NEGATIVES",
-            "Snippet": ""
-          },
-          {
-            "File": "milestone_dependents.go",
-            "Line": 156,
-            "Op": "ARITHMETIC_BASE",
-            "Snippet": ""
-          },
-          {
-            "File": "statusline.go",
-            "Line": 23,
-            "Op": "ARITHMETIC_BASE",
-            "Snippet": ""
-          },
-          {
-            "File": "statusline.go",
-            "Line": 189,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "statusline.go",
-            "Line": 189,
+            "File": "state.go",
+            "Line": 266,
             "Op": "CONDITIONALS_NEGATION",
             "Snippet": ""
           },
@@ -387,14 +339,92 @@
             "Snippet": ""
           },
           {
-            "File": "doctor.go",
-            "Line": 913,
+            "File": "hints.go",
+            "Line": 86,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "hints.go",
+            "Line": 86,
             "Op": "CONDITIONALS_NEGATION",
             "Snippet": ""
           },
           {
-            "File": "doctor.go",
-            "Line": 929,
+            "File": "hints.go",
+            "Line": 86,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "hints.go",
+            "Line": 86,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "hints.go",
+            "Line": 88,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "hints.go",
+            "Line": 88,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "hints.go",
+            "Line": 133,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "hints.go",
+            "Line": 133,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "update.go",
+            "Line": 181,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "update.go",
+            "Line": 184,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "env.go",
+            "Line": 105,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "env.go",
+            "Line": 109,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "env.go",
+            "Line": 114,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "env.go",
+            "Line": 119,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "env.go",
+            "Line": 148,
             "Op": "CONDITIONALS_NEGATION",
             "Snippet": ""
           },
@@ -441,8 +471,56 @@
             "Snippet": ""
           },
           {
+            "File": "watch.go",
+            "Line": 130,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "watch.go",
+            "Line": 130,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "basebranch.go",
+            "Line": 104,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          },
+          {
             "File": "hooks.go",
             "Line": 100,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase_lifecycle.go",
+            "Line": 23,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase_lifecycle.go",
+            "Line": 23,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase_lifecycle.go",
+            "Line": 25,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase_lifecycle.go",
+            "Line": 25,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "phase_lifecycle.go",
+            "Line": 27,
             "Op": "CONDITIONALS_NEGATION",
             "Snippet": ""
           },
@@ -483,38 +561,14 @@
             "Snippet": ""
           },
           {
-            "File": "env.go",
-            "Line": 105,
+            "File": "install.go",
+            "Line": 65,
             "Op": "CONDITIONALS_NEGATION",
             "Snippet": ""
           },
           {
-            "File": "env.go",
-            "Line": 109,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "env.go",
-            "Line": 114,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "env.go",
-            "Line": 119,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "env.go",
-            "Line": 148,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "deferred.go",
-            "Line": 138,
+            "File": "root.go",
+            "Line": 61,
             "Op": "CONDITIONALS_NEGATION",
             "Snippet": ""
           },
@@ -527,78 +581,6 @@
           {
             "File": "project.go",
             "Line": 83,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "repair.go",
-            "Line": 131,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "repair.go",
-            "Line": 133,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "repair.go",
-            "Line": 133,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "status.go",
-            "Line": 442,
-            "Op": "CONDITIONALS_BOUNDARY",
-            "Snippet": ""
-          },
-          {
-            "File": "status.go",
-            "Line": 442,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "status.go",
-            "Line": 444,
-            "Op": "CONDITIONALS_BOUNDARY",
-            "Snippet": ""
-          },
-          {
-            "File": "status.go",
-            "Line": 444,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "status.go",
-            "Line": 444,
-            "Op": "ARITHMETIC_BASE",
-            "Snippet": ""
-          },
-          {
-            "File": "status.go",
-            "Line": 472,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "status.go",
-            "Line": 474,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "install.go",
-            "Line": 65,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "state.go",
-            "Line": 266,
             "Op": "CONDITIONALS_NEGATION",
             "Snippet": ""
           },
@@ -660,6 +642,36 @@
             "File": "codex.go",
             "Line": 82,
             "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "forge.go",
+            "Line": 642,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "github.go",
+            "Line": 334,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": ""
+          },
+          {
+            "File": "github.go",
+            "Line": 334,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
+          },
+          {
+            "File": "github.go",
+            "Line": 340,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": ""
+          },
+          {
+            "File": "github.go",
+            "Line": 340,
+            "Op": "ARITHMETIC_BASE",
             "Snippet": ""
           },
           {
@@ -753,36 +765,6 @@
             "Snippet": ""
           },
           {
-            "File": "forge.go",
-            "Line": 642,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "github.go",
-            "Line": 334,
-            "Op": "CONDITIONALS_BOUNDARY",
-            "Snippet": ""
-          },
-          {
-            "File": "github.go",
-            "Line": 334,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
-            "File": "github.go",
-            "Line": 340,
-            "Op": "ARITHMETIC_BASE",
-            "Snippet": ""
-          },
-          {
-            "File": "github.go",
-            "Line": 340,
-            "Op": "ARITHMETIC_BASE",
-            "Snippet": ""
-          },
-          {
             "File": "gremlins.go",
             "Line": 136,
             "Op": "CONDITIONALS_NEGATION",
@@ -861,12 +843,6 @@
             "Snippet": ""
           },
           {
-            "File": "comment.go",
-            "Line": 64,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": ""
-          },
-          {
             "File": "open.go",
             "Line": 69,
             "Op": "CONDITIONALS_NEGATION",
@@ -901,9 +877,15 @@
             "Line": 92,
             "Op": "ARITHMETIC_BASE",
             "Snippet": ""
+          },
+          {
+            "File": "comment.go",
+            "Line": 64,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": ""
           }
         ],
-        "NotCovered": 139
+        "NotCovered": 136
       }
     }
   ],
