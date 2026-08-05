@@ -19,7 +19,7 @@ func newTestGitHubClient(t *testing.T, boardID string, h http.HandlerFunc) (*Git
 	t.Setenv(ghTokenEnv, "secret")
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	c, err := NewGitHubProjects(Config{APIBase: srv.URL, AuthEnv: ghTokenEnv, Project: "octo/repo", BoardID: boardID})
+	c, err := NewGitHubProjects(Config{APIBase: srv.URL, AuthEnv: ghTokenEnv, Project: "octo/repo", BoardID: boardID, Hosts: allowingSelf(srv.URL)})
 	if err != nil {
 		t.Fatalf("NewGitHubProjects: %v", err)
 	}

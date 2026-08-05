@@ -20,7 +20,7 @@ func detectMissingPhaseDirs(repoDir, root, mainBranch string) ([]string, error) 
 	if !gitRefExists(repoDir, ref) {
 		return nil, nil
 	}
-	out, err := gitTrim(repoDir, "ls-tree", "--name-only", "-d", ref+":.dross/phases")
+	out, err := gitTrim(repoDir, gitRefArgs("ls-tree", []string{"--name-only", "-d"}, ref+":.dross/phases")...)
 	if err != nil {
 		// The ref exists but carries no .dross/phases tree — nothing known.
 		return nil, nil

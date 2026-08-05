@@ -76,7 +76,15 @@ func reconstructState(repoDir, root, mainBranch string) (*state.State, error) {
 // state.Activity. Non-matching commits (ordinary feature/fix/chore work) are
 // skipped rather than recorded as garbage history entries.
 func historyFromPhaseCommits(repoDir, mainBranch string) ([]state.Activity, error) {
-	out, err := gitTrim(repoDir, "log", mainBranch, "--reverse", "--pretty=format:%at\x1f%s")
+	// The live arbitrary-file-write vector: git's diff options accept
+	// --output=<file> on `log`, so a committed [repo].git_main_branch of that
+	// shape made `dross repair` write wherever it was pointed. Guarded, then
+	// fenced behind the separator — either alone would have closed it, and
+	// neither alone is enough for the next call site someone adds here.
+	if err := validateGitRef("repo.git_main_branch", mainBranch); err != nil {
+		return nil, err
+	}
+	out, err := gitTrim(repoDir, gitRefArgs("log", []string{"--reverse", "--pretty=format:%at\x1f%s"}, mainBranch)...)
 	if err != nil {
 		return nil, fmt.Errorf("git log %s: %w", mainBranch, err)
 	}

@@ -3,6 +3,7 @@ package ship
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Rivil/dross/internal/hostallow"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,7 +21,7 @@ func TestGitLabPRStatusMerged(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	status, err := GetPRStatus(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
 	})
 	if err != nil {
@@ -45,7 +46,7 @@ func TestGitLabPRStatusClosedIsNotMerged(t *testing.T) {
 			t.Cleanup(server.Close)
 
 			status, err := GetPRStatus(OpenOpts{
-				Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+				Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 				AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
 			})
 			if err != nil {
@@ -68,7 +69,7 @@ func TestGitLabPRStatusOpenedIsNotMerged(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	status, err := GetPRStatus(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
 	})
 	if err != nil {
@@ -90,7 +91,7 @@ func TestGitLabPRStatusReportsTargetBranch(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	status, err := GetPRStatus(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
 	})
 	if err != nil {
@@ -114,7 +115,7 @@ func TestGitLabPRStatusEndpoint(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	if _, err := GetPRStatus(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/owner/repo", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/owner/repo", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
 	}); err != nil {
 		t.Fatalf("GetPRStatus: %v", err)
@@ -124,7 +125,7 @@ func TestGitLabPRStatusEndpoint(t *testing.T) {
 	}
 
 	if _, err := GetPRStatus(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/owner/repo", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/owner/repo", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN", ProjectID: "123", PRNumber: 5,
 	}); err != nil {
 		t.Fatalf("GetPRStatus (ProjectID): %v", err)
@@ -148,7 +149,7 @@ func TestGitLabPRStatusAuthHeader(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	if _, err := GetPRStatus(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
 	}); err != nil {
 		t.Fatalf("GetPRStatus: %v", err)
@@ -158,7 +159,7 @@ func TestGitLabPRStatusAuthHeader(t *testing.T) {
 	}
 
 	if _, err := GetPRStatus(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN", AuthScheme: "bearer", PRNumber: 5,
 	}); err != nil {
 		t.Fatalf("GetPRStatus (bearer): %v", err)
@@ -179,7 +180,7 @@ func TestGitLabPRStatusHTTP404IsError(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	status, err := GetPRStatus(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN", PRNumber: 5,
 	})
 	if err == nil {
@@ -197,7 +198,7 @@ func TestGitLabPRStatusNeedsPRNumber(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	if _, err := GetPRStatus(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/o/r", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN",
 	}); err == nil {
 		t.Error("expected an error when PRNumber is unset")
@@ -219,7 +220,7 @@ func TestGitLabOpenPRsTargetingUsesIID(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	prs, err := OpenPRsTargeting(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN",
 	}, "main")
 	if err != nil {
@@ -241,7 +242,7 @@ func TestGitLabOpenPRsTargetingFieldMapping(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	prs, err := OpenPRsTargeting(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN",
 	}, "main")
 	if err != nil {
@@ -274,7 +275,7 @@ func TestGitLabOpenPRsTargetingQueryAndAuth(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	if _, err := OpenPRsTargeting(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN",
 	}, "milestone/v1.2"); err != nil {
 		t.Fatalf("OpenPRsTargeting: %v", err)
@@ -294,7 +295,7 @@ func TestGitLabOpenPRsTargetingQueryAndAuth(t *testing.T) {
 
 	// Bearer sub-case: Authorization: Bearer, no PRIVATE-TOKEN.
 	if _, err := OpenPRsTargeting(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN", AuthScheme: "bearer",
 	}, "milestone/v1.2"); err != nil {
 		t.Fatalf("OpenPRsTargeting (bearer): %v", err)
@@ -337,7 +338,7 @@ func TestGitLabOpenMRsPaginates(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	prs, err := OpenPRsTargeting(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN",
 	}, "main")
 	if err != nil {
@@ -374,7 +375,7 @@ func TestGitLabOpenPRsTargetingHTTP500IsError(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	prs, err := OpenPRsTargeting(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN",
 	}, "main")
 	if err == nil {
@@ -396,7 +397,7 @@ func TestGitLabOpenPRsTargetingMissingToken(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	_, err := OpenPRsTargeting(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN_UNSET",
 	}, "main")
 	if err == nil || !strings.Contains(err.Error(), "dross env set") {

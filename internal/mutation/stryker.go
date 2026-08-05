@@ -58,7 +58,7 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		// failure. We still try to read the report.
 		var exitErr *exec.ExitError
 		if !errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("stryker invocation failed: %w (is stryker installed in the project? `npm i -D @stryker-mutator/core` or equivalent)", err)
+			return nil, fmt.Errorf("stryker invocation failed: %w (is stryker installed in the project? `npm i -D %s` or equivalent)", err, strykerPin)
 		}
 	}
 
@@ -78,6 +78,21 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 	return report, nil
 }
 
+// strykerPin is the exact @stryker-mutator/core version dross invokes.
+//
+// `npx --yes @stryker-mutator/core` with no version is a supply-chain hole, not
+// a convenience: --yes suppresses the install prompt, so an unpinned spec means
+// dross silently downloads and executes whatever the registry serves as latest
+// at that moment — on a developer machine, inside the repo, with the repo's own
+// test command wired in. That is the shape the 2025–2026 npm registry
+// compromises took. A pinned version narrows it to one artifact that can be
+// reviewed before it changes, and bumping it becomes a visible diff.
+//
+// Bump deliberately: read the release notes, then update this one constant.
+// Both the invocation and the install hint read it, and TestStrykerHintUsesSamePin
+// fails if they ever drift apart.
+const strykerPin = "@stryker-mutator/core@9.6.1"
+
 // runArgs builds the stryker invocation. The scoped package name matters:
 // bare "stryker" on the npm registry is the ancient pre-scoped package and
 // crashes on modern Node (MODULE_NOT_FOUND); npx resolves a project-local
@@ -91,7 +106,7 @@ func (s *Stryker) runArgs(files []string) []string {
 		}
 		mutate = append(mutate, f)
 	}
-	return []string{"npx", "--yes", "@stryker-mutator/core", "run",
+	return []string{"npx", "--yes", strykerPin, "run",
 		"--mutate", strings.Join(mutate, ","),
 		"--reporters", "json"}
 }

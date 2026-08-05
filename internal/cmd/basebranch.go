@@ -63,17 +63,17 @@ func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
 	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
 		return false, fmt.Errorf("git fetch: %w\n%s", err, out)
 	}
-	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/remotes/origin/"+base) != nil {
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/remotes/origin/"+base)...) != nil {
 		return false, nil // no origin/<base> to be ahead of
 	}
-	ahead, err := gitTrim(repoDir, "rev-list", "origin/"+base+".."+base)
+	ahead, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, "origin/"+base+".."+base)...)
 	if err != nil {
 		return false, fmt.Errorf("git rev-list origin/%s..%s: %w", base, base, err)
 	}
 	if ahead == "" {
 		return false, nil
 	}
-	behind, err := gitTrim(repoDir, "rev-list", base+"..origin/"+base)
+	behind, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, base+"..origin/"+base)...)
 	if err != nil {
 		return false, fmt.Errorf("git rev-list %s..origin/%s: %w", base, base, err)
 	}
@@ -85,7 +85,7 @@ func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
 		return false, nil
 	}
 	for _, sha := range strings.Fields(ahead) {
-		files, err := gitTrim(repoDir, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", sha)
+		files, err := gitTrim(repoDir, gitRefArgs("diff-tree", []string{"--no-commit-id", "--name-only", "-r", "--root"}, sha)...)
 		if err != nil {
 			return false, fmt.Errorf("git diff-tree %s: %w", sha, err)
 		}
@@ -100,7 +100,7 @@ func pushBaseIfAheadDrossOnly(repoDir, base string) (pushed bool, err error) {
 			}
 		}
 	}
-	if out, err := gitCombined(repoDir, "push", "origin", base); err != nil {
+	if out, err := gitCombined(repoDir, gitRefArgs("push", nil, "origin", base)...); err != nil {
 		return false, fmt.Errorf("safety-net push of .dross chores on %s failed: %w\n%s\n"+
 			"Refusing to continue — proceeding would leave %s diverged from origin again.",
 			base, err, out, base)
@@ -131,7 +131,7 @@ func pushQuickBaseIfRecorded(repoDir, root, phaseBase string) (pushed bool, bran
 	if qb == "" || qb == phaseBase {
 		return false, "", nil
 	}
-	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+qb) != nil {
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+qb)...) != nil {
 		return false, "", nil
 	}
 	pushed, err = pushBaseIfAheadDrossOnly(repoDir, qb)
@@ -177,7 +177,7 @@ func resolveNewWorkBase(repoDir, root string) (base string, milestoneActive bool
 	branch := "milestone/" + s.CurrentMilestone
 	// The ref-existence probe is the cutover mechanism: a pre-cutover
 	// milestone (or a non-git dir) has no such ref, so we fall back to main.
-	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch) != nil {
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
 		return main, false, nil
 	}
 	return branch, true, nil

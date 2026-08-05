@@ -61,7 +61,7 @@ func refuseIfShipped(repoDir, slug string) error {
 		return nil
 	}
 	branch := "phase/" + slug
-	out, err := gitTrim(repoDir, "ls-remote", "--heads", "origin", branch)
+	out, err := gitTrim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", branch)...)
 	if err != nil {
 		return nil // no origin / unreachable — can't prove it's shipped, don't block
 	}
@@ -288,7 +288,7 @@ func phaseRename() *cobra.Command {
 			branchOld, branchNew := "phase/"+oldSlug, "phase/"+newSlug
 			if isDir(filepath.Join(repoDir, ".git")) {
 				if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branchOld); err == nil {
-					if out, err := gitCombined(repoDir, "branch", "-m", branchOld, branchNew); err != nil {
+					if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-m"}, branchOld, branchNew)...); err != nil {
 						return fmt.Errorf("git branch -m %s %s: %w\n%s", branchOld, branchNew, err, out)
 					}
 				}

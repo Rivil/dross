@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 
+	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/ship"
 )
@@ -92,7 +95,30 @@ func guardOpenPRsTargeting(branch string) error {
 		printOpenPRSkip("no [remote].provider/.url configured")
 		return nil
 	}
-	prs, err := ship.OpenPRsTargetingFunc(buildOpenOpts(p), branch)
+	root, rerr := FindRoot()
+	if rerr != nil {
+		printOpenPRSkip(rerr.Error())
+		return nil
+	}
+	hosts, herr := remotePolicy(root, filepath.Dir(root), p)
+	if herr != nil {
+		// A tracked local.toml is a refusal, not a transient failure — it must
+		// not be swallowed into the skip path the way a network error is.
+		return herr
+	}
+	prs, err := ship.OpenPRsTargetingFunc(buildOpenOpts(p, hosts), branch)
+	// Guard clauses rather than a tagless switch: go-cover attributes a switch
+	// case-condition to no basic block, so a mutant on the degrade arm's
+	// condition is reported NOT-COVERED even though a test drives it. Order
+	// still matters — the refusal must be checked before the catch-all.
+	if errors.Is(err, hostallow.ErrRefused) {
+		// This check gates an irreversible branch delete, and its skip path is
+		// designed to be permissive about transient forge trouble. A host
+		// refusal is not that: it means the committed api_base points at a host
+		// the derivation never authorized, and skipping would let the delete
+		// proceed on the strength of an answer nobody got.
+		return err
+	}
 	if err != nil {
 		printOpenPRSkip(err.Error())
 		return nil

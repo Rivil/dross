@@ -2,6 +2,7 @@ package ship
 
 import (
 	"encoding/json"
+	"github.com/Rivil/dross/internal/hostallow"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -56,6 +57,7 @@ func TestPostForgejoCommentHappyPath(t *testing.T) {
 		Provider: "forgejo",
 		URL:      "https://forge.example.com/me/proj",
 		APIBase:  srv.URL,
+		Hosts:    hostallow.Derive(srv.URL, nil),
 		AuthEnv:  "FAKE_TOKEN",
 		PRNumber: 7,
 		Body:     "subagent panel findings",
@@ -82,6 +84,7 @@ func TestPostForgejoCommentMissingTokenSurfacesEnvVar(t *testing.T) {
 		Provider: "forgejo",
 		URL:      "https://x.example/o/r",
 		APIBase:  "https://api.example",
+		Hosts:    hostallow.Derive("https://api.example", nil),
 		AuthEnv:  "DROSS_TEST_NO_SUCH_VAR",
 		PRNumber: 1,
 		Body:     "x",
@@ -147,6 +150,7 @@ func TestPostGitLabCommentHappyPath(t *testing.T) {
 		Provider: "gitlab",
 		URL:      "https://gitlab.example/me/proj",
 		APIBase:  srv.URL,
+		Hosts:    hostallow.Derive(srv.URL, nil),
 		AuthEnv:  "FAKE_GL_TOKEN",
 		PRNumber: 7,
 		Body:     "panel findings",
@@ -183,6 +187,7 @@ func TestPostGitLabCommentBearerScheme(t *testing.T) {
 		Provider:   "gitlab",
 		URL:        "https://gitlab.example/me/proj",
 		APIBase:    srv.URL,
+		Hosts:      hostallow.Derive(srv.URL, nil),
 		AuthEnv:    "FAKE_GL_TOKEN",
 		AuthScheme: "bearer",
 		PRNumber:   7,

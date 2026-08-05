@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Rivil/dross/internal/hostallow"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
@@ -79,7 +79,7 @@ func bbRequest(method, endpoint, user, token string, body any) ([]byte, int, err
 // before any request is made when a piece is missing. auth_user is checked here
 // rather than at the transport: sending Basic base64(:token) would 401 with a
 // message that names nothing the user can act on.
-func bbCredentials(apiBase, authEnv, authUser string) (user, token string, err error) {
+func bbCredentials(apiBase, authEnv, authUser string, policy hostallow.Policy) (user, token string, err error) {
 	if apiBase == "" {
 		return "", "", errors.New("bitbucket backend needs APIBase (set [remote].api_base)")
 	}
@@ -89,9 +89,9 @@ func bbCredentials(apiBase, authEnv, authUser string) (user, token string, err e
 	if strings.TrimSpace(authUser) == "" {
 		return "", "", errors.New("bitbucket backend needs AuthUser (set [remote].auth_user) — its credential is HTTP Basic user:token")
 	}
-	token = os.Getenv(authEnv)
-	if token == "" {
-		return "", "", fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", authEnv, authEnv)
+	token, err = resolveToken(apiBase, authEnv, policy)
+	if err != nil {
+		return "", "", err
 	}
 	return strings.TrimSpace(authUser), token, nil
 }
@@ -107,7 +107,7 @@ func bitbucketPRStatus(opts OpenOpts) (PRStatus, error) {
 	if opts.PRNumber <= 0 {
 		return PRStatus{}, errors.New("bitbucket merged-status lookup needs a PR number")
 	}
-	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser)
+	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser, opts.Hosts)
 	if err != nil {
 		return PRStatus{}, err
 	}
@@ -163,7 +163,7 @@ func bbReviewerRefs(reviewers []string) []map[string]any {
 // Unlike Forgejo and GitLab, draft is a real boolean on this API — there is no
 // "Draft:" title-prefix convention to imitate here.
 func openBitbucketPR(opts OpenOpts) (*OpenResult, error) {
-	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser)
+	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser, opts.Hosts)
 	if err != nil {
 		return nil, err
 	}

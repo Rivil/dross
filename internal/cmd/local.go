@@ -51,6 +51,18 @@ type localStore struct {
 	// committed to. ship and complete reconcile it alongside the phase base so
 	// an unpushed .dross chore left on it can't re-seed divergence.
 	QuickBase string `toml:"quick_base,omitempty"`
+
+	// AllowHosts is the comma-separated escape hatch for the API host
+	// allowlist (internal/hostallow): hosts the derivation from [remote].url
+	// plus the built-in SaaS defaults cannot reach.
+	//
+	// It lives HERE, and only here, on purpose. A committed `allowed_hosts`
+	// key in project.toml would be self-authorizing — a hostile .dross/ would
+	// set both the api_base and the key permitting it, and the check would be
+	// gating config on config. local.toml is authored on one machine and never
+	// cloned, so a repo cannot ship its own authorization. readAllowHosts
+	// protects exactly that property.
+	AllowHosts string `toml:"allow_hosts,omitempty"`
 }
 
 // localKeys maps each key to its accessors, keeping `local get` and
@@ -63,6 +75,49 @@ var localKeys = map[string]struct {
 		get: func(l *localStore) string { return l.QuickBase },
 		set: func(l *localStore, v string) { l.QuickBase = v },
 	},
+	"allow_hosts": {
+		get: func(l *localStore) string { return l.AllowHosts },
+		set: func(l *localStore, v string) { l.AllowHosts = v },
+	},
+}
+
+// readAllowHosts returns the machine-local host allowlist additions, or an
+// error if .dross/local.toml is tracked by git.
+//
+// The refusal is the point, and it is deliberately not a "parse it but ignore
+// allow_hosts" softening. A tracked local.toml is either an accident an honest
+// repo wants to know about, or a hostile repo trying to authorize its own
+// exfiltration host through the one input the derived allowlist trusts. Reading
+// it in either case is wrong, and reading it selectively would still let a
+// cloned quick_base ride history — the thing this store was created to stop.
+//
+// It answers (nil, nil) for a missing or unreadable file: local.toml is
+// optional, and a fresh clone legitimately has none. Only "git says this is
+// tracked" is an error.
+func readAllowHosts(root, repoDir string) ([]string, error) {
+	rel := RootDirName + "/" + LocalFile
+	if gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", rel) == nil {
+		return nil, fmt.Errorf(
+			"refusing to read %s: git reports it tracked.\n\n"+
+				"%s is machine-local by design — it is where a host is added to the API\n"+
+				"allowlist, so a committed copy would let this repo authorize its own API\n"+
+				"host. dross will not read a tracked one.\n\n"+
+				"To fix, untrack it and keep the local copy:\n\n"+
+				"    git rm --cached %s\n"+
+				"    git commit -m \"chore: untrack dross local store\"",
+			rel, rel, rel)
+	}
+	l, err := loadLocal(localPath(root))
+	if err != nil {
+		return nil, nil
+	}
+	var hosts []string
+	for _, h := range strings.Split(l.AllowHosts, ",") {
+		if h = strings.TrimSpace(h); h != "" {
+			hosts = append(hosts, h)
+		}
+	}
+	return hosts, nil
 }
 
 func localKeyNames() string {

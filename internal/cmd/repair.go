@@ -87,7 +87,7 @@ to write the restores and commit the result.`,
 				}
 			}
 
-			if out, err := gitCombined(repoDir, "add", RootDirName); err != nil {
+			if out, err := gitCombined(repoDir, gitPathArgs("add", nil, RootDirName)...); err != nil {
 				return fmt.Errorf("git add %s: %w\n%s", RootDirName, err, out)
 			}
 			// Empty-commit guard. Restoring a clobbered tracked file to HEAD's

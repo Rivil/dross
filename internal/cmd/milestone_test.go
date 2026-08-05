@@ -559,6 +559,12 @@ func milestoneOpenFixture(t *testing.T) (string, *msPRCapture) {
 		t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 	}))
 	t.Cleanup(server.Close)
+	// The API lives on a different host from [remote].url here, which is the
+	// case the machine-local escape hatch exists for: authorize it by hand on
+	// this machine, never through committed config.
+	if err := runCmd(t, Local(), "set", "allow_hosts", server.Listener.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
 	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
 		t.Fatal(err)
 	}

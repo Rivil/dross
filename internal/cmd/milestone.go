@@ -110,12 +110,12 @@ func milestonePrune() *cobra.Command {
 			}
 
 			for _, b := range stale {
-				if out, err := gitCombined(repoDir, "branch", "-D", b.Name); err != nil {
+				if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, b.Name)...); err != nil {
 					return fmt.Errorf("delete local %s: %w\n%s", b.Name, err, out)
 				}
 				where := "local"
 				if b.HasRemote {
-					if out, err := gitCombined(repoDir, "push", "origin", "--delete", b.Name); err != nil {
+					if out, err := gitCombined(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", b.Name)...); err != nil {
 						return fmt.Errorf("delete origin/%s: %w\n%s", b.Name, err, out)
 					}
 					where = "local + origin"
@@ -182,7 +182,11 @@ func milestoneComplete() *cobra.Command {
 				return err
 			}
 
-			opts := buildOpenOpts(p)
+			hosts, herr := remotePolicy(root, repoDir, p)
+			if herr != nil {
+				return herr
+			}
+			opts := buildOpenOpts(p, hosts)
 			opts.HeadBranch = msBranch
 			opts.BaseBranch = target
 			opts.Title = fmt.Sprintf("milestone %s", version)
@@ -321,18 +325,18 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 	}
 
 	// Delete the local milestone branch (only if it exists).
-	if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+msBranch); err == nil {
-		if out, err := gitCombined(repoDir, "branch", "-D", msBranch); err != nil {
+	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+msBranch)...); err == nil {
+		if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, msBranch)...); err != nil {
 			return fmt.Errorf("git branch -D %s: %w\n%s", msBranch, err, out)
 		}
 	}
 	// Delete the remote milestone branch (idempotent — only if origin has it).
-	remoteRef, err := gitTrim(repoDir, "ls-remote", "--heads", "origin", msBranch)
+	remoteRef, err := gitTrim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", msBranch)...)
 	if err != nil {
 		return fmt.Errorf("git ls-remote origin %s: %w", msBranch, err)
 	}
 	if remoteRef != "" {
-		if out, err := gitCombined(repoDir, "push", "origin", "--delete", msBranch); err != nil {
+		if out, err := gitCombined(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", msBranch)...); err != nil {
 			return fmt.Errorf("git push origin --delete %s: %w\n%s", msBranch, err, out)
 		}
 	}
@@ -467,7 +471,16 @@ func resolveMilestoneCutPoint(root, repoDir, mainBranch, version, forced string)
 	if !isDir(filepath.Join(repoDir, ".git")) {
 		return "", false, nil
 	}
+	// Both sources of the cut point, before the first ref probe: mainBranch is
+	// [repo].git_main_branch straight out of committed config, and forced is
+	// --base.
+	if err := validateGitRef("repo.git_main_branch", mainBranch); err != nil {
+		return "", false, err
+	}
 	if forced != "" {
+		if err := validateGitRef("--base", forced); err != nil {
+			return "", false, err
+		}
 		if !gitRefExists(repoDir, "refs/heads/"+forced) {
 			return "", false, fmt.Errorf("--base %s: no such local branch", forced)
 		}
@@ -509,20 +522,26 @@ func ensureMilestoneBranch(repoDir, baseBranch, version string) (branch string, 
 	if !isDir(filepath.Join(repoDir, ".git")) {
 		return branch, false, false, nil
 	}
+	// baseBranch lands as a bare positional in `git branch <new> <base>` below,
+	// which is one of the two sites where a leading dash stops being a name and
+	// becomes an option.
+	if err := validateGitRef("milestone base branch", baseBranch); err != nil {
+		return branch, false, false, err
+	}
 	// Need a base ref to cut from; a repo with no commits has none.
-	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+baseBranch) != nil {
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+baseBranch)...) != nil {
 		return branch, false, false, nil
 	}
 	// Idempotent create: only when the local ref is absent.
-	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch) != nil {
-		if out, e := gitCombined(repoDir, "branch", branch, baseBranch); e != nil {
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
+		if out, e := gitCombined(repoDir, gitRefArgs("branch", nil, branch, baseBranch)...); e != nil {
 			return branch, false, false, fmt.Errorf("git branch %s %s: %w\n%s", branch, baseBranch, e, out)
 		}
 		created = true
 	}
 	// Push only when an origin remote exists.
 	if gitNoOut(repoDir, "remote", "get-url", "origin") == nil {
-		if out, e := gitCombined(repoDir, "push", "origin", branch); e != nil {
+		if out, e := gitCombined(repoDir, gitRefArgs("push", nil, "origin", branch)...); e != nil {
 			return branch, created, false, fmt.Errorf("git push origin %s: %w\n%s", branch, e, out)
 		}
 		pushed = true

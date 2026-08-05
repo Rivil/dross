@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/hostallow"
 )
 
 // ErrNotImplemented is returned by every Client method when the configured
@@ -65,6 +66,14 @@ type Config struct {
 	Project    string // youtrack: project short-name (e.g. "PROJ"); jira: project key; github: "owner/repo"; ignored by forge backends
 	AuthUser   string // jira: account email for HTTP Basic auth (email:token)
 	BoardID    string // github: Projects v2 board node id to add created issues to (empty = repo issues only)
+
+	// Hosts is the API host allowlist every constructor checks APIBase
+	// against before it reads the token out of the environment.
+	//
+	// The zero value is NOT unrestricted — it resolves to hostallow's built-in
+	// SaaS defaults — so a caller that forgets to populate this field fails
+	// closed rather than silently reopening the hole. See internal/hostallow.
+	Hosts hostallow.Policy
 }
 
 // New validates config, resolves the token from the environment, and returns
@@ -97,6 +106,13 @@ func New(cfg Config) (*Client, error) {
 	// here and name the setting instead.
 	if configenum.Normalize(cfg.AuthScheme) == "basic" && strings.TrimSpace(cfg.AuthUser) == "" {
 		return nil, fmt.Errorf("%s backend: auth_scheme = basic needs an auth_user (set [board].auth_user or [remote].auth_user)", backendName)
+	}
+	// Before the Getenv, not after. The ordering is the guarantee: a token that
+	// has been read is a token that exists in this process, and every later
+	// error path is one wrapping mistake away from printing it. Checking first
+	// means a refused host never causes the secret to be touched at all.
+	if err := cfg.Hosts.Check("[remote].api_base", cfg.APIBase); err != nil {
+		return nil, err
 	}
 	token := os.Getenv(cfg.AuthEnv)
 	if token == "" {

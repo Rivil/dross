@@ -12,12 +12,17 @@ import (
 // in this neighbourhood lately"). Best-effort — returns empty on any
 // git failure (no repo, network drive, permissions).
 func recentLog(dir string) ([]string, error) {
+	// dir is caller-derived, so it goes behind "--" as a pathspec — git reads a
+	// leading dash as an option wherever it appears, not only in ref position.
+	// The token is spelled out here rather than imported: internal/codex must
+	// not depend on internal/cmd, and one shared constant is not worth
+	// inverting that dependency.
 	cmd := exec.Command("git", "-C", dir,
 		"log",
 		"--max-count=5",
 		"--no-merges",
 		"--pretty=format:%h %s",
-		"--",
+		"--", // end of options; everything after is a pathspec
 		dir,
 	)
 	out, err := cmd.Output()

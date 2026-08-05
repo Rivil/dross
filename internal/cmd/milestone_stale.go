@@ -59,7 +59,7 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 	if mainBranch == "" {
 		return nil, errors.New("stale milestone scan: no main branch given")
 	}
-	if err := gitNoOut(repoDir, "rev-parse", "--verify", "--quiet", mainBranch); err != nil {
+	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, mainBranch)...); err != nil {
 		return nil, fmt.Errorf("stale milestone scan: no such branch %q", mainBranch)
 	}
 
@@ -80,7 +80,7 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 		entry := staleBranch{
 			Name:      name,
 			Version:   strings.TrimPrefix(name, "milestone/"),
-			HasRemote: gitNoOut(repoDir, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+name) == nil,
+			HasRemote: gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+name)...) == nil,
 		}
 
 		merged, err := isAncestor(repoDir, name, mainBranch)
@@ -111,7 +111,7 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 // branch's whole contribution collapsed into one commit, or "" when there is no
 // such commit. Errors are reserved for a broken repo, never for "no answer".
 func resolveSquashCommit(repoDir, branch, mainBranch string) (string, error) {
-	base, err := gitTrim(repoDir, "merge-base", mainBranch, branch)
+	base, err := gitTrim(repoDir, gitRefArgs("merge-base", nil, mainBranch, branch)...)
 	if err != nil {
 		// Unrelated histories: nothing to compare, so nothing is stale.
 		return "", nil
@@ -126,7 +126,10 @@ func resolveSquashCommit(repoDir, branch, mainBranch string) (string, error) {
 		return "", nil
 	}
 
-	listed, err := gitTrim(repoDir, "rev-list", mainBranch, "--not", branch)
+	// "^<branch>" rather than "--not <branch>": --not is an OPTION, so behind
+	// the separator git would read it as a revision. The caret form is exactly
+	// equivalent and survives the fence.
+	listed, err := gitTrim(repoDir, gitRefArgs("rev-list", nil, mainBranch, "^"+branch)...)
 	if err != nil {
 		return "", fmt.Errorf("walk %s: %w", mainBranch, err)
 	}
@@ -143,7 +146,7 @@ func resolveSquashCommit(repoDir, branch, mainBranch string) (string, error) {
 		if sha == "" {
 			continue
 		}
-		parent, err := gitTrim(repoDir, "rev-parse", "--verify", "--quiet", sha+"^")
+		parent, err := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, sha+"^")...)
 		if err != nil {
 			continue // a root commit has no first parent to diff against
 		}
@@ -166,7 +169,7 @@ func resolveSquashCommit(repoDir, branch, mainBranch string) (string, error) {
 // git happens to emit the files in.
 func patchIDOfDiff(repoDir, from, to string) (string, error) {
 	var diff bytes.Buffer
-	d := exec.Command("git", "-C", repoDir, "diff", from, to)
+	d := exec.Command("git", append([]string{"-C", repoDir}, gitRefArgs("diff", nil, from, to)...)...)
 	d.Stdout = &diff
 	if err := d.Run(); err != nil {
 		return "", fmt.Errorf("diff %s..%s: %w", from, to, err)
@@ -191,7 +194,7 @@ func patchIDOfDiff(repoDir, from, to string) (string, error) {
 // --is-ancestor` answers with its exit code — 0 yes, 1 no — so only anything
 // else is a real failure worth propagating.
 func isAncestor(repoDir, ref, other string) (bool, error) {
-	err := gitNoOut(repoDir, "merge-base", "--is-ancestor", ref, other)
+	err := gitNoOut(repoDir, gitRefArgs("merge-base", []string{"--is-ancestor"}, ref, other)...)
 	if err == nil {
 		return true, nil
 	}

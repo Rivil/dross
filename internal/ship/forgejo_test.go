@@ -2,6 +2,7 @@ package ship
 
 import (
 	"encoding/json"
+	"github.com/Rivil/dross/internal/hostallow"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,7 +21,7 @@ func TestForgejoPRStatusUsesMergedFlag(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	status, err := GetPRStatus(OpenOpts{
-		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
 	})
 	if err != nil {
@@ -43,7 +44,7 @@ func TestForgejoPRStatusClosedUnmergedIsNotMerged(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	status, err := GetPRStatus(OpenOpts{
-		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
 	})
 	if err != nil {
@@ -66,7 +67,7 @@ func TestForgejoPRStatusOpenPopulatesBaseRef(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	status, err := GetPRStatus(OpenOpts{
-		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
 	})
 	if err != nil {
@@ -94,7 +95,7 @@ func TestForgejoPRStatusGiteaAlias(t *testing.T) {
 
 	for _, prov := range []string{"gitea", "Gitea"} {
 		status, err := GetPRStatus(OpenOpts{
-			Provider: prov, URL: "https://forge.example/me/p", APIBase: server.URL,
+			Provider: prov, URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 			AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
 		})
 		if err != nil {
@@ -123,7 +124,7 @@ func TestForgejoPRStatusEndpointAndAuth(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	if _, err := GetPRStatus(OpenOpts{
-		Provider: "forgejo", URL: "https://forge.example/owner/repo", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://forge.example/owner/repo", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
 	}); err != nil {
 		t.Fatalf("GetPRStatus: %v", err)
@@ -146,7 +147,7 @@ func TestForgejoPRStatusHTTP500IsError(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	status, err := GetPRStatus(OpenOpts{
-		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN", PRNumber: 5,
 	})
 	if err == nil {
@@ -170,7 +171,7 @@ func TestForgejoOpenPRsTargetingFiltersByBaseRef(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	prs, err := OpenPRsTargeting(OpenOpts{
-		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN",
 	}, "main")
 	if err != nil {
@@ -198,7 +199,7 @@ func TestForgejoOpenPRsTargetingFieldMapping(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	prs, err := OpenPRsTargeting(OpenOpts{
-		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN",
 	}, "main")
 	if err != nil {
@@ -232,7 +233,7 @@ func TestForgejoOpenPRsTargetingAuthHeader(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	if _, err := OpenPRsTargeting(OpenOpts{
-		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN",
 	}, "main"); err != nil {
 		t.Fatalf("OpenPRsTargeting: %v", err)
@@ -273,7 +274,7 @@ func TestForgejoOpenPRsPaginates(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	prs, err := OpenPRsTargeting(OpenOpts{
-		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN",
 	}, "main")
 	if err != nil {
@@ -312,7 +313,7 @@ func TestForgejoOpenPRsErrorNeverEmptySlice(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	prs, err := OpenPRsTargeting(OpenOpts{
-		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN",
 	}, "main")
 	if err == nil {
@@ -338,7 +339,7 @@ func TestForgejoOpenPRsTargetingGiteaAlias(t *testing.T) {
 
 	for _, prov := range []string{"gitea", "Gitea"} {
 		if _, err := OpenPRsTargeting(OpenOpts{
-			Provider: prov, URL: "https://forge.example/me/p", APIBase: server.URL,
+			Provider: prov, URL: "https://forge.example/me/p", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 			AuthEnv: "MOCK_FORGEJO_TOKEN",
 		}, "main"); err != nil {
 			t.Fatalf("provider %q: OpenPRsTargeting: %v", prov, err)

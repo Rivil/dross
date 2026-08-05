@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/hostallow"
 )
 
 // OpenOpts is everything OpenPR needs across providers.
@@ -30,6 +31,11 @@ type OpenOpts struct {
 	Reviewers  []string
 	Draft      bool
 	PRNumber   int // GetPRStatus: the PR/MR number whose merged status to look up
+
+	// Hosts is the API host allowlist APIBase is checked against before the
+	// token is read. The zero value is not unrestricted — it resolves to
+	// hostallow's SaaS defaults — so a caller that forgets it fails closed.
+	Hosts hostallow.Policy
 }
 
 // OpenResult is the minimal successful response shape.

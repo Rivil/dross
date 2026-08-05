@@ -37,9 +37,16 @@ Refuses when phase/<id> does not exist locally; it never creates the branch.`,
 				return err
 			}
 			repoDir := filepath.Dir(root)
+			// Validated as the argument the user passed, not as the prefixed
+			// branch: "phase/" already makes a leading dash unreachable, so a
+			// check on the composed name would silently pass a payload through
+			// and report it as a missing branch several git calls later.
+			if err := validateGitRef("phase id argument", args[0]); err != nil {
+				return err
+			}
 			branch := "phase/" + args[0]
 
-			if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch) != nil {
+			if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
 				return fmt.Errorf("no local branch %s — `dross phase checkout` never creates one.\n"+
 					"Check the phase id (`dross phase list`), or run `dross phase create` if the phase is new", branch)
 			}
@@ -83,8 +90,12 @@ Refuses when the branch does not exist locally; it never creates one. Use
 			}
 			repoDir := filepath.Dir(root)
 			branch := args[0]
+			// Unprefixed here, so the argument reaches git as a bare ref.
+			if err := validateGitRef("branch argument", branch); err != nil {
+				return err
+			}
 
-			if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch) != nil {
+			if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
 				return fmt.Errorf("no local branch %s — `dross checkout` never creates one.\n"+
 					"Check the name (`git branch --list`), or create it with git first", branch)
 			}

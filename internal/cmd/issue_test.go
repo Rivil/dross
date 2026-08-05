@@ -28,6 +28,12 @@ func boardRepo(t *testing.T, apiBase string, enabled bool) string {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatalf("init: %v", err)
 	}
+	// The API host allowlist derives from [remote].url, so the fixture is an
+	// honest self-hosted shape: tracker and remote on the same host. A repo
+	// whose board really does live elsewhere adds it via `dross local set
+	// allow_hosts` — the machine-local escape hatch — never via committed
+	// config, which would be self-authorizing.
+	mustRunSet(t, "remote.url", apiBase)
 	mustRunSet(t, "board.provider", "forgejo")
 	mustRunSet(t, "board.base_url", apiBase)
 	mustRunSet(t, "board.auth_env", "MOCK_TOKEN")
@@ -96,6 +102,13 @@ func TestOpenBoardResolvesFromBoardBlock(t *testing.T) {
 	mustRunSet(t, "board.auth_env", "MOCK_TOKEN")
 	mustRunSet(t, "board.project", "me/proj")
 	mustRunSet(t, "board.enabled", "true")
+	// Board and remote are deliberately on DIFFERENT hosts here, which is the
+	// case the machine-local escape hatch exists for: the allowlist derives
+	// from [remote].url, so the tracker host is authorized by hand, on this
+	// machine, never by committed config.
+	if err := runCmd(t, Local(), "set", "allow_hosts", srv.Listener.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := runCmd(t, Issue(), "pull", "--json"); err != nil {
 		t.Fatalf("pull (board enabled): %v", err)
@@ -299,6 +312,7 @@ func youtrackBoardRepo(t *testing.T, apiBase string) string {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatalf("init: %v", err)
 	}
+	mustRunSet(t, "remote.url", apiBase) // allowlist derives from [remote].url
 	mustRunSet(t, "board.provider", "youtrack")
 	mustRunSet(t, "board.base_url", apiBase)
 	mustRunSet(t, "board.auth_env", "MOCK_TOKEN")
@@ -1415,6 +1429,7 @@ func jiraBoardRepo(t *testing.T, apiBase string) string {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatalf("init: %v", err)
 	}
+	mustRunSet(t, "remote.url", apiBase) // allowlist derives from [remote].url
 	mustRunSet(t, "board.provider", "jira")
 	mustRunSet(t, "board.base_url", apiBase)
 	mustRunSet(t, "board.auth_env", "MOCK_TOKEN")

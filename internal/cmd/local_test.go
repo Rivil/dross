@@ -120,3 +120,154 @@ func TestReadLocalKeyIsBestEffort(t *testing.T) {
 		t.Errorf("unknown key should read empty, got %q", got)
 	}
 }
+
+// TestReadAllowHostsRefusesTrackedLocal is the half of c-7 that holds for
+// repos already onboarded. init and onboard never run again, so an existing
+// repo gains the .gitignore line only when someone acts on doctor's finding —
+// which means the seeded ignore rule cannot be what carries the guarantee.
+//
+// This is what carries it: local.toml is the one input the derived host
+// allowlist trusts, precisely because it is machine-local and never cloned. A
+// tracked copy breaks that assumption, so it is refused UNREAD. Parsing it and
+// dropping only allow_hosts would still let a cloned quick_base ride history —
+// the thing this store was created to stop.
+func TestReadAllowHostsRefusesTrackedLocal(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	root := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeCompleteRoot(t, root)
+
+	// The hostile shape: a committed local.toml naming the very host the repo's
+	// api_base points at.
+	local := filepath.Join(root, LocalFile)
+	if err := os.WriteFile(local, []byte("allow_hosts = \"attacker.example\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, dir, "add", "-f", ".dross/"+LocalFile)
+
+	hosts, err := readAllowHosts(root, dir)
+	if err == nil {
+		t.Fatal("a tracked local.toml was read rather than refused")
+	}
+	if hosts != nil {
+		t.Errorf("hosts must be nil on refusal, got %v", hosts)
+	}
+	msg := err.Error()
+	for _, want := range []string{"refusing to read", ".dross/" + LocalFile, "tracked", "git rm --cached"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("refusal does not mention %q: %v", want, err)
+		}
+	}
+	if strings.Contains(msg, "attacker.example") {
+		t.Errorf("the refusal echoed the file's contents — it must not be parsed: %v", err)
+	}
+
+	// Untracked, the same file is honoured: the refusal is about provenance,
+	// not about the value.
+	mustGit(t, dir, "rm", "--cached", "-q", ".dross/"+LocalFile)
+	hosts, err = readAllowHosts(root, dir)
+	if err != nil {
+		t.Fatalf("an untracked local.toml must be readable: %v", err)
+	}
+	if len(hosts) != 1 || hosts[0] != "attacker.example" {
+		t.Errorf("allow_hosts did not parse: %v", hosts)
+	}
+}
+
+// TestReadAllowHostsMissingFileIsEmpty: the store is optional. A fresh clone
+// has none, and that must read as "no additions", not as an error that blocks
+// every forge call.
+func TestReadAllowHostsMissingFileIsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	root := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeCompleteRoot(t, root)
+
+	hosts, err := readAllowHosts(root, dir)
+	if err != nil {
+		t.Fatalf("a missing local.toml must not error: %v", err)
+	}
+	if len(hosts) != 0 {
+		t.Errorf("want no hosts, got %v", hosts)
+	}
+}
+
+// TestAllowHostsSplitsAndTrims covers the comma-separated form `dross local set
+// allow_hosts` writes — doctor names that exact command, so a value with the
+// spaces a human would type must work.
+func TestAllowHostsSplitsAndTrims(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	root := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeCompleteRoot(t, root)
+	chdir(t, dir)
+
+	if err := runCmd(t, Local(), "set", "allow_hosts", " git.corp.internal , odd.example:8443 ,"); err != nil {
+		t.Fatalf("local set allow_hosts: %v", err)
+	}
+	hosts, err := readAllowHosts(root, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"git.corp.internal", "odd.example:8443"}
+	if len(hosts) != len(want) {
+		t.Fatalf("hosts = %v, want %v", hosts, want)
+	}
+	for i := range want {
+		if hosts[i] != want[i] {
+			t.Errorf("hosts[%d] = %q, want %q", i, hosts[i], want[i])
+		}
+	}
+}
+
+// TestDocsCoverAllowHosts is the only gate on the documentation half of this
+// change. A machine-local escape hatch nobody can find is not an escape hatch —
+// the refusal path assumes the user can look up what allow_hosts is and where
+// it lives, and neither README nor the man page said so before.
+func TestDocsCoverAllowHosts(t *testing.T) {
+	root := repoRootForDocs(t)
+	for _, tc := range []struct {
+		file string
+		want []string
+	}{
+		{"README.md", []string{"allow_hosts", ".dross/local.toml"}},
+		{"docs/dross.1", []string{"allow_hosts", ".dross/local.toml"}},
+	} {
+		b, err := os.ReadFile(filepath.Join(root, tc.file))
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.file, err)
+		}
+		for _, want := range tc.want {
+			if !strings.Contains(string(b), want) {
+				t.Errorf("%s does not mention %q", tc.file, want)
+			}
+		}
+	}
+}
+
+// repoRootForDocs walks up from the package dir to the module root, so the doc
+// assertions do not depend on the test's working directory.
+func repoRootForDocs(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 6; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		dir = filepath.Dir(dir)
+	}
+	t.Fatal("could not locate the module root from the test working directory")
+	return ""
+}

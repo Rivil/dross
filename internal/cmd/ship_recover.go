@@ -100,6 +100,17 @@ longer holds the pre-merge .dross/ tree:
 			if ch, cerr := changes.Load(changes.FilePath(root, phaseID), phaseID); cerr == nil && ch.Base != "" {
 				baseBranch = ch.Base
 			}
+			// Validated after the record has had its say, so the kind names the
+			// source that actually won, and before the first git call — this
+			// command's whole job is a `reset --hard`, so a refusal that lands
+			// after the branch check has already let a payload reach git.
+			kind := "repo.git_main_branch"
+			if baseBranch != p.Repo.GitMainBranch {
+				kind = "recorded base in changes.json"
+			}
+			if err := validateGitRef(kind, baseBranch); err != nil {
+				return err
+			}
 
 			// Refuse to run on the wrong branch — reset is destructive.
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
@@ -161,8 +172,8 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 
 	// Pre-check: SHA must actually contain a .dross/ tree, or the checkout
 	// step would fail with an unhelpful pathspec error.
-	if err := exec.Command("git", "-C", repoDir, "rev-parse", "--verify",
-		sha+":.dross").Run(); err != nil {
+	if err := exec.Command("git", append([]string{"-C", repoDir},
+		gitRefArgs("rev-parse", []string{"--verify"}, sha+":.dross")...)...).Run(); err != nil {
 		return fmt.Errorf("commit %s has no .dross/ tree — nothing to restore. "+
 			"If you've already reset main, pass "+
 			"--pre-merge-sha=$(git rev-parse HEAD@{1})", short(sha))
@@ -178,7 +189,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	// copy, and restoring it would overwrite the live machine-local file with
 	// whatever history that commit happened to hold — the very clobber this
 	// milestone exists to end (locked state_tracking).
-	if out, err := gitCombined(repoDir, "checkout", sha, "--", ".dross/", ":(exclude).dross/"+state.File); err != nil {
+	if out, err := gitCombined(repoDir, gitRefPathArgs("checkout", nil, []string{sha}, ".dross/", ":(exclude).dross/"+state.File)...); err != nil {
 		return fmt.Errorf("git checkout %s -- .dross/: %w\n%s", short(sha), err, out)
 	}
 
@@ -249,6 +260,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 }
 
 func gitTrim(repoDir string, args ...string) (string, error) {
+	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
 	out, err := exec.Command("git", full...).Output()
 	if err != nil {
@@ -258,6 +270,7 @@ func gitTrim(repoDir string, args ...string) (string, error) {
 }
 
 func gitCombined(repoDir string, args ...string) (string, error) {
+	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
 	out, err := exec.Command("git", full...).CombinedOutput()
 	return string(out), err

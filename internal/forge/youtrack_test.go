@@ -19,7 +19,7 @@ func newTestYTClient(t *testing.T, h http.HandlerFunc) (*YouTrackClient, *httpte
 	t.Setenv(ytTokenEnv, "secret")
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	c, err := NewYouTrack(Config{APIBase: srv.URL, AuthEnv: ytTokenEnv, Project: "PROJ"})
+	c, err := NewYouTrack(Config{APIBase: srv.URL, AuthEnv: ytTokenEnv, Project: "PROJ", Hosts: allowingSelf(srv.URL)})
 	if err != nil {
 		t.Fatalf("NewYouTrack: %v", err)
 	}
@@ -32,7 +32,7 @@ func newTestYTClient(t *testing.T, h http.HandlerFunc) (*YouTrackClient, *httpte
 // this backend lands in the string-id migration (plan t-5).
 func TestNewAcceptsYouTrack(t *testing.T) {
 	t.Setenv(ytTokenEnv, "secret")
-	good := Config{APIBase: "https://yt.example.com", AuthEnv: ytTokenEnv, Project: "PROJ"}
+	good := Config{APIBase: "https://yt.example.com", AuthEnv: ytTokenEnv, Project: "PROJ", Hosts: allowingSelf("https://yt.example.com")}
 	c, err := NewYouTrack(good)
 	if err != nil {
 		t.Fatalf("NewYouTrack(good): %v", err)
@@ -49,7 +49,7 @@ func TestNewAcceptsYouTrack(t *testing.T) {
 		{"missing base", Config{AuthEnv: ytTokenEnv, Project: "PROJ"}, "needs APIBase"},
 		{"missing authenv", Config{APIBase: "https://x", Project: "PROJ"}, "needs AuthEnv"},
 		{"missing project", Config{APIBase: "https://x", AuthEnv: ytTokenEnv}, "needs Project"},
-		{"unset token", Config{APIBase: "https://x", AuthEnv: "DROSS_DEFINITELY_UNSET", Project: "PROJ"}, "is not set"},
+		{"unset token", Config{APIBase: "https://x", AuthEnv: "DROSS_DEFINITELY_UNSET", Project: "PROJ", Hosts: allowingSelf("https://x")}, "is not set"},
 	}
 	for _, tc := range bad {
 		t.Run(tc.name, func(t *testing.T) {

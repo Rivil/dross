@@ -115,14 +115,18 @@ func TestEnsureDrossGitignoreIsIdempotent(t *testing.T) {
 }
 
 // TestEnsureDrossGitignoreRespectsBroaderPattern: a repo that already ignores
-// the file some other way is left byte-for-byte alone. Appending anyway is
-// harmless to git and noisy to the human reading the diff.
+// BOTH seeded paths some other way is left byte-for-byte alone. Appending anyway
+// is harmless to git and noisy to the human reading the diff.
+//
+// Coverage is judged per path, not for the block as a whole — see
+// TestIgnoresLocalTomlViaBroaderPattern for the partial case, where a pattern
+// covering one path must not suppress the other.
 func TestEnsureDrossGitignoreRespectsBroaderPattern(t *testing.T) {
 	for _, existing := range []string{
-		".dross/*.json\n",
 		".dross/\n",
-		"# comment\n/.dross/state.json\n",
-		"node_modules/\n.dross/state.json\n",
+		"# comment\n/.dross/state.json\n/.dross/local.toml\n",
+		"node_modules/\n.dross/state.json\n.dross/local.toml\n",
+		".dross/*.json\n.dross/*.toml\n",
 	} {
 		t.Run(strings.TrimSpace(strings.ReplaceAll(existing, "\n", " ")), func(t *testing.T) {
 			dir := t.TempDir()
@@ -137,6 +141,58 @@ func TestEnsureDrossGitignoreRespectsBroaderPattern(t *testing.T) {
 				t.Errorf("an already-covering .gitignore was rewritten:\nwant %q\ngot  %q", existing, got)
 			}
 		})
+	}
+}
+
+// TestEnsureGitignoreCoversLocalToml is the c-7 seeding half: a repo with no
+// .gitignore at all must end up ignoring the machine-local store as well as
+// state.json, and a second call must change nothing.
+//
+// local.toml is where a host is added to the API allowlist. Tracking it would
+// let a cloned repo authorize its own API host — the self-authorizing loop the
+// derived allowlist exists to avoid — so the ignore line is not housekeeping,
+// it is half the guarantee. (readAllowHosts is the other half, and the only one
+// that helps a repo onboarded before this landed.)
+func TestEnsureGitignoreCoversLocalToml(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".gitignore")
+	if err := ensureDrossGitignore(dir); err != nil {
+		t.Fatal(err)
+	}
+	first := readIfExists(t, path)
+	for _, want := range []string{drossStateIgnorePath, drossLocalIgnorePath} {
+		if !strings.Contains(first, want+"\n") {
+			t.Errorf("seeded .gitignore does not cover %s:\n%s", want, first)
+		}
+	}
+	if err := ensureDrossGitignore(dir); err != nil {
+		t.Fatal(err)
+	}
+	if second := readIfExists(t, path); second != first {
+		t.Errorf("a second call rewrote the file:\nwant %q\ngot  %q", first, second)
+	}
+}
+
+// TestIgnoresLocalTomlViaBroaderPattern is the partial-coverage case, and the
+// reason coverage is judged per path. `.dross/*.toml` covers local.toml and says
+// nothing about state.json; a block-level check would read that as "already
+// handled" and leave state.json tracked.
+func TestIgnoresLocalTomlViaBroaderPattern(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".gitignore")
+	const existing = ".dross/*.toml\n"
+	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureDrossGitignore(dir); err != nil {
+		t.Fatal(err)
+	}
+	body := readIfExists(t, path)
+	if strings.Contains(body, drossLocalIgnorePath+"\n") {
+		t.Errorf("local.toml was appended despite an existing covering pattern:\n%s", body)
+	}
+	if !strings.Contains(body, drossStateIgnorePath+"\n") {
+		t.Errorf("state.json was suppressed by a pattern that does not cover it:\n%s", body)
 	}
 }
 
