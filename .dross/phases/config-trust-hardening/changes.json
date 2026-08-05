@@ -1,5 +1,6 @@
 {
   "phase": "config-trust-hardening",
+  "pr": 76,
   "base": "milestone/v1.2",
   "tasks": {
     "t-1": {
