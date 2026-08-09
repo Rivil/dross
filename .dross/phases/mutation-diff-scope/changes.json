@@ -88,17 +88,16 @@
     },
     "t-6": {
       "files": [
-        "internal/cmd/verify.go",
         "internal/cmd/verify_test.go"
       ],
-      "commit": "cd0b5f6",
-      "completed_at": "2026-08-09T14:35:21.482677Z",
+      "commit": "39aebaa",
+      "completed_at": "2026-08-09T16:32:56.798301Z",
       "landmarks": [
         {
           "feature": "mutation diff scoping",
-          "symbol": "printScopeSummary",
-          "loc": "internal/cmd/verify.go:465",
-          "what": "dross verify builds the scope, feeds the union to the adapters, reports what it scoped to and filtered, and tags telemetry"
+          "symbol": "TestVerifyCover_ScopeFileListTruncation",
+          "loc": "internal/cmd/verify_test.go:475",
+          "what": "pins the exact (+N more) overflow count and the at-cap boundary of printScopeSummary's file list"
         }
       ]
     },
