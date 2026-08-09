@@ -67,6 +67,11 @@
   target = "survivor-lifecycle"
 
 [[deferred]]
+  text = "Cover the mutation adapters' error and process-seam paths: internal/mutation/gremlins.go:155 and :166 (unreadable-report and zero-coverage message construction), stryker.go:73 and :80 (report-read and parse error branches), stryker.go:263 (the future-status default arm), stryker_net.go:221 (buildCmd's prefix seam)."
+  why = "Nine survivors this phase's verify run surfaced as `inherited` — same file, untouched lines. They are pre-existing adapter I/O plumbing the phase inherited responsibility for by editing around it, not scoping logic, and none participates in any acceptance criterion. Routed rather than re-listed per rule r-02; recorded as accepted-for-now in verify.toml so the next verify does not re-report them."
+  target = "survivor-lifecycle"
+
+[[deferred]]
   text = "Gate the verdict on an absolute count of unclassified in-scope survivors instead of a ratio."
   why = "Changes the verdict contract for every phase and depends on 'unclassified' being a real survivor state — which survivor-lifecycle builds."
   target = "survivor-lifecycle"
