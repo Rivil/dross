@@ -69,6 +69,13 @@ func openGitHubPR(opts OpenOpts) (*OpenResult, error) {
 	if _, err := exec.LookPath("gh"); err != nil {
 		return nil, errors.New("github backend needs the `gh` CLI on PATH (https://cli.github.com)")
 	}
+	// Every derived value here sits in the VALUE SLOT of its own flag, which is
+	// the other way to fence one: pflag consumes the argument after a string
+	// flag verbatim, so a --title of "--json" is a title, not a flag. There is
+	// no positional in this argv at all, which is why it carries no `--` — a
+	// separator would have nothing to protect and would demote the flags dross
+	// chose into positionals. The property that has to hold is that no value
+	// ever escapes its slot; TestOpenPRArgvWalk asserts it by index.
 	args := []string{
 		"pr", "create",
 		"--title", opts.Title,

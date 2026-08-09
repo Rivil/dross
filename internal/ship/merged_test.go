@@ -25,7 +25,9 @@ func TestPRStatusGitHubReturnsBaseRef(t *testing.T) {
 	if !status.Merged || status.BaseRef != "main" {
 		t.Errorf("got %+v, want {Merged:true BaseRef:main}", status)
 	}
-	want := []string{"pr", "view", "7", "--json", "state,mergedAt,baseRefName"}
+	// The number is fenced behind `--`, with --json ahead of it. See
+	// gharg_test.go for why the ordering is load-bearing rather than cosmetic.
+	want := []string{"pr", "view", "--json", "state,mergedAt,baseRefName", "--", "7"}
 	if len(gotArgs) != len(want) {
 		t.Fatalf("gh args: got %v want %v", gotArgs, want)
 	}
