@@ -42,9 +42,76 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "hermetic HOME: setenv: %v\n", err)
 		os.Exit(1)
 	}
+	if err := pinGitConfig(home); err != nil {
+		fmt.Fprintf(os.Stderr, "hermetic git config: %v\n", err)
+		os.Exit(1)
+	}
 	code := m.Run()
 	_ = os.RemoveAll(home)
 	os.Exit(code)
+}
+
+// pinGitConfig points GIT_CONFIG_GLOBAL at a throwaway config that switches off
+// git's background maintenance for every git process this package spawns.
+//
+// The race it closes: git forks a detached auto-maintenance process after enough
+// loose objects pile up, and that process can still be writing inside .git when
+// t.TempDir() cleanup runs — RemoveAll then fails with ENOTEMPTY and testing
+// reports the test as failed even though every assertion passed. It reddened
+// TestShipAutoRequestsZeroReviewers (run 30791024530) and, after the first fix,
+// TestShipAutoJSONComposable (run 31310028319).
+//
+// That first fix set gc.auto=0 per fixture. It was too narrow twice over: only
+// three fixture helpers got it, out of ~75 git-init sites in the suite, and
+// gc.auto disables the *gc task* while modern git triggers `git maintenance run
+// --auto` where it used to trigger `git gc --auto`. Pinning the config for the
+// whole process covers every fixture, including ones not written yet.
+//
+// GIT_CONFIG_SYSTEM is deliberately left alone: neutralising it would drop the
+// runner's ownership settings too, and this is a targeted fix for background
+// writers, not a full hermetic-git change. safe.directory is carried for the
+// same reason — the tests that shell out to git against the real repo checkout
+// must keep working under a replaced global config.
+func pinGitConfig(home string) error {
+	path := filepath.Join(home, "gitconfig")
+	body := "[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n[safe]\n\tdirectory = *\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := os.Setenv("GIT_CONFIG_GLOBAL", path); err != nil {
+		return fmt.Errorf("setenv GIT_CONFIG_GLOBAL: %w", err)
+	}
+	return nil
+}
+
+// TestHermeticGitConfig_DisablesBackgroundMaintenance pins the TestMain git
+// hardening, so deleting it fails here by name instead of resurfacing months
+// later as an intermittent ENOTEMPTY in an unrelated test.
+//
+// The repo is created with a bare `git init` rather than through gitInit on
+// purpose: gitInit writes gc.auto=0 into the repo's own config, which would
+// satisfy the gc.auto row no matter what the global config said. Reading both
+// keys out of a fixture nobody configured locally is what proves the *global*
+// mechanism is the one answering.
+func TestHermeticGitConfig_DisablesBackgroundMaintenance(t *testing.T) {
+	if os.Getenv("GIT_CONFIG_GLOBAL") == "" {
+		t.Fatal("GIT_CONFIG_GLOBAL is unset — TestMain should have pinned it to a throwaway config")
+	}
+
+	dir := t.TempDir()
+	mustGit(t, dir, "init", "-q")
+
+	// --default keeps an absent key readable: without it a missing setting exits
+	// 1 and mustGit turns that into an opaque fatal, which also stops the second
+	// row from being checked at all.
+	for _, tc := range []struct{ key, want string }{
+		{"gc.auto", "0"},
+		{"maintenance.auto", "false"},
+	} {
+		if got := mustGit(t, dir, "config", "--default", "<unset>", "--get", tc.key); got != tc.want {
+			t.Errorf("%s = %q, want %q — background maintenance can still race TempDir cleanup", tc.key, got, tc.want)
+		}
+	}
 }
 
 // TestHermeticHome_IsIsolated pins the TestMain isolation itself, so removing
