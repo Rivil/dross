@@ -75,3 +75,8 @@
   text = "Gate the verdict on an absolute count of unclassified in-scope survivors instead of a ratio."
   why = "Changes the verdict contract for every phase and depends on 'unclassified' being a real survivor state — which survivor-lifecycle builds."
   target = "survivor-lifecycle"
+
+[[deferred]]
+  text = "Fix doctor's stale-milestone-branch check: it told a v1.3 ship to `dross milestone prune` the branch that was the open PR's own base. Two independent faults — it never consults [milestone].status, so an active milestone with 10 unrun phases is reported prunable; and it measures merged-ness against LOCAL main, so a local main sitting unpushed-ahead of origin (here 3 chore commits) makes a freshly-cut milestone branch look identical to main and therefore merged. Gate on status != active, and compare against origin/<base> rather than the local ref."
+  why = "Found during this phase's own ship, outside its diff: doctor exited 1 and the documented §0.3 exit-0 gate had to be overridden by hand to open the PR. Following the advice would have deleted the PR's base branch. Belongs with milestone-lifecycle-close, whose criterion already owns distinguishing a missing branch ref from an unmerged one."
+  target = "milestone-lifecycle-close"
