@@ -1,0 +1,131 @@
+task_seq = 12
+
+[phase]
+  id = "exec-trust-followups"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add argfence policy table and rejection"
+  files = ["internal/argfence/argfence.go", "internal/argfence/policy.go", "internal/argfence/argfence_test.go"]
+  description = "New shared package holding the per-tool argv policy the locked analyzer_arg_policy\ndecision describes: Separator for the tools that honour an end-of-options token,\nReject for the tools that have none. Policy() exports the table so both the runtime\ncall sites (t-4, t-5) and the audit gate (t-8) read one map rather than two that\ndrift. Fence() returns a nil argv alongside any rejection error.\n"
+  covers = ["c-2", "c-5"]
+  test_contract = ["if ast-grep's policy stops being Separator, TestPolicyFor fails on PolicyFor(\"ast-grep\")", "if gremlins, npx or dotnet stops being Reject, TestPolicyFor fails on that tool's row", "if an unknown binary starts resolving, TestPolicyFor fails: PolicyFor(\"cargo\") must return ok=false so an unlisted tool can never be treated as fenced", "if an entry is deleted from the table, TestPolicyCoversEveryKnownBinary fails — it asserts the key set is exactly {git, gh, gremlins, npx, dotnet, ast-grep, semgrep}", "if RejectLeadingDash stops wrapping ErrLeadingDash or stops naming both tool and value, TestRejectLeadingDash fails on RejectLeadingDash(\"gremlins\",\"package\",\"-rf\")", "if RejectLeadingDash over-rejects, TestRejectLeadingDash fails: (...,\"./internal/cmd\") and (...,\"\") must both return nil — empty is not a flag", "if Fence returns a best-effort argv alongside a rejection error, TestFenceReturnsNilArgvOnError fails — a caller that drops the error must not be handed something runnable", "if Fence on a tool with no policy entry returns the value unfenced instead of erroring, TestFenceUnknownToolFailsClosed fails — the runtime boundary fails closed, not only PolicyFor", "if a tool is present in the runtime table but absent from the exported Policy() map or vice versa, TestPolicyTableIsSingleSource fails", "if a tool named in internal/security/catalog.go gains no argfence policy, TestEveryCatalogToolHasAnArgvPolicy fails — it lives here because argfence owns the table; this carries c-2's semgrep leg, which has no Go call site today (catalog.go:55 is a LookPath entry only)"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Add exec-consent store and command fingerprint"
+  files = ["internal/cmd/trust.go", "internal/cmd/local.go", "internal/cmd/trust_test.go"]
+  description = "Consent store per the locked exec_consent_gate and consent_binding decisions: a\nclosed trusted_test_command key in the gitignored .dross/local.toml holding\nsha256(runtime.test_command). Check distinguishes never-trusted from stale.\nReuses readAllowHosts' tracked-file refusal (internal/cmd/local.go:97) in place\nrather than reimplementing it. No normalizer — a normalizer is a classifier.\n"
+  covers = ["c-1"]
+  test_contract = ["if Fingerprint normalizes its input, TestFingerprint fails: Fingerprint(\"go test ./...\") must differ from Fingerprint(\"go test ./... \") — one byte of drift revokes consent", "if Fingerprint stops being stable across calls, TestFingerprint fails on the repeat-call comparison", "if the stored value becomes the command itself rather than its hash, TestGrantStoresHashNotCommand fails", "if Check stops returning ErrNoConsent on a tree with no .dross/local.toml, TestConsentStates fails on that case", "if Check stops distinguishing stale from never-trusted, TestConsentStates fails — a store holding a different command's hash must return ErrStaleConsent, a sentinel distinct from ErrNoConsent", "if any one refusal path starts masking another, TestConsentStates fails: the four untrusted cases (no local.toml, local.toml without the key, key holding a different hash, tracked local.toml) are pinned as separate subtests", "if the tracked-file refusal is dropped, TestConsentRefusesTrackedLocalToml fails — with .dross/local.toml reported tracked by `git ls-files --error-unmatch`, Check must return an error naming the tracked file and must not return nil", "if trusted_test_command is added to localKeys, TestLocalSetCannotGrantConsent fails — `dross local set trusted_test_command <x>` must be rejected as an unknown key so consent is grantable only through the trust command", "if the empty-test_command case regresses, TestConsentNotApplicable fails: an empty runtime.test_command yields state not-applicable, and setting it non-empty flips the same repo back to absent"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Add redact package and scrub all four forge clients"
+  files = ["internal/redact/redact.go", "internal/redact/redact_test.go", "internal/forge/forge.go", "internal/forge/github.go", "internal/forge/jira.go", "internal/forge/youtrack.go"]
+  description = "New redact package plus every consumer in internal/forge. All four `do` implementations\n— Client (forge.go:621), GitHubClient (github.go:305), JiraClient (jira.go:493) and\nYouTrackClient (youtrack.go:426) — set an Authorization header from a token and echo a\n500-char upstream body snippet into their error. Same one-line Scrub wrap at the same\nsite in each. Scrub strips the raw token and the base64(user:token) / base64(email:token)\nBasic forms. The marker names the env var so a redacted message still says which\ncredential failed.\n"
+  covers = ["c-3"]
+  test_contract = ["if forge.Client.do stops scrubbing, TestForgeErrorsCarryNoToken fails — against an httptest server returning 401 with the seeded canary echoed in its JSON body, the error's .Error() must contain neither the canary nor its base64 form", "if any one of the four clients stops scrubbing, exactly that client's row in TestEveryForgeClientRedacts fails and no other — one row each for Client (token/Bearer/Basic schemes), GitHubClient (Bearer), JiraClient (Basic base64(email:token)) and YouTrackClient (Bearer)", "if a new `do` implementation is added to internal/forge without a Scrub call, TestEveryForgeDoRedacts fails — it enumerates the package's do methods so a fifth client cannot join unscrubbed", "if scrubbing is applied to only one status path, TestForgeErrorsCarryNoToken fails on the 403, 404, 500 or hard-transport-failure row", "if Scrub stops replacing the raw token, TestScrub fails: Scrub(\"Authorization: token abc\",\"abc\") must not contain \"abc\"", "if Scrub stops guarding the empty token, TestScrubEmptyToken fails — Scrub(s,\"\") must return s unchanged rather than turning every string into a redaction marker", "if the base64 leg is dropped, TestScrubBase64 fails — the base64(user:token) credential must not survive in an echoed body", "if the marker degrades to a bare \"[redacted]\", TestScrubMarkerNamesEnvVar fails — it must read \"[redacted $GITHUB_TOKEN]\"", "if the short-token floor is removed, TestScrubShortTokenNotGlobal fails — a one-character env value must not blank every message into unreadability"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Fence the Reject-policy mutation runners"
+  files = ["internal/mutation/gremlins.go", "internal/mutation/stryker.go", "internal/mutation/stryker_net.go", "internal/mutation/argv_test.go"]
+  description = "Apply t-1's Reject policy at the three mutation call sites — gremlins, stryker (npx)\nand stryker (.NET) — none of which honours an end-of-options token, so a leading-dash\nderived value is refused before exec. Every rejection names the tool and the offending\nvalue so the user can fix the config line, and yields a nil report alongside its error.\nThe Separator-policy half lives in t-11.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["if Gremlins.Run stops rejecting a package beginning with \"-\", TestGremlinsRejectsDashPackage fails: the error must wrap argfence.ErrLeadingDash and buildCmd must never be reached, asserted by a buildCmd seam that t.Fatal()s if called", "if buildUnleashArgs stops rejecting a reportRel beginning with \"-\", TestUnleashArgsRejectsDashReport fails on the path reachable through sanitizePkg", "if Stryker.runArgs stops rejecting a --mutate entry beginning with \"-\" after the Workdir prefix is trimmed, or stops rejecting a dash Workdir, TestStrykerRejectsDashEntries fails; \"src/a.ts\" must still pass", "if StrykerNet.Run stops rejecting an OutputDir beginning with \"-\" before exec.Command is built, TestStrykerNetRejectsDashOutputDir fails", "if a rejection stops naming the tool and the value, TestRejectionNamesToolAndValue fails on the string match", "if a rejection returns an empty-but-successful report, TestRejectionYieldsNilReport fails — an empty report would read as \"no surviving mutants\" and pass verify"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 2
+  title = "Fence ast-grep behind a separator and validate lang"
+  files = ["internal/codex/ast_grep.go", "internal/codex/argv_test.go"]
+  description = "The Separator half of t-1's policy, split from t-4 because runAstGrepFn is unexported\nin package codex — its by-index argv assertions cannot live in internal/mutation. Puts\nthe file operand behind an end-of-options token and checks lang against the known set\nrather than passing it through.\n"
+  covers = ["c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["if the \"--\" is dropped from runAstGrepFn's argv or moved off the slot immediately before the file operand, TestAstGrepArgvSeparator fails by index, not by substring search — the captured argv must be [ast-grep run --lang L --pattern P --json=compact -- FILE]", "if the separator stops protecting the operand, TestAstGrepArgvSeparator fails — a file literally named \"-rf\" must still land after it", "if ast-grep's lang stops being checked against the known set, TestAstGrepRejectsUnknownLang fails — a lang of \"--config=/tmp/x\" must be rejected with no process spawned", "if a rejection stops naming the tool and the value, TestAstGrepRejectionNamesToolAndValue fails on the string match"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Fence gh argv in ship"
+  files = ["internal/ship/open.go", "internal/ship/comment.go", "internal/ship/merged.go", "internal/ship/basepr.go", "internal/ship/gharg_test.go"]
+  description = "Give the four gh call sites the same discipline git already has: derived values sit\nbehind a separator or in the value slot of their own flag, never as a bare\npositional. Wave 1: every contract row is literal separator placement or flag/value\nindex walking, none of which needs t-1's table. Lands before t-8's gate so the gate is\nobserved red-then-green.\n"
+  covers = ["c-4"]
+  test_contract = ["if gitHubPRStatus stops fencing the PR number, TestPRStatusArgv fails — the captured argv must be [pr view --json state,mergedAt,baseRefName -- 12]. Flags come BEFORE the separator: in cobra `--` ends flag parsing entirely rather than fencing only the next token, so [pr view -- 12 --json …] makes --json and its value the 2nd and 3rd positionals and `gh pr view` (max 1 positional) exits with \"accepts at most 1 arg(s), received 3\" — verified against the real gh. Because ghCommand is a test double, the wrong order would pass its test while dross ship's merge-status path is dead at runtime", "if gitHubPRStatus stops rejecting a negative number, TestPRStatusRejectsBadNumber fails: with PRNumber = -3 it must error before ghCommand is called, asserted by a double that fails the test on invocation", "if postGitHubComment stops fencing fmt.Sprint(opts.PRNumber) or stops refusing PRNumber <= 0 before exec, TestPostCommentArgv fails", "if openGitHubPR lets a derived value escape its flag's value slot, TestOpenPRArgvWalk fails — with Title=\"--json\", Body=\"-x\", BaseBranch=\"--repo evil/x\" and Reviewers=[\"--json\"] the walk asserts index of value == index of its flag + 1 and that no new leading-dash positional appeared", "if listBasePRs stops fencing base, TestListBasePRsArgv fails — a base of \"--state\" must not become a second --state flag", "if PostComment's --body is demoted past the separator, TestPostCommentBodyBeforeSeparator fails — the argv must be exactly [pr comment --body <body> -- <number>]; a demoted --body posts as a positional, a silent wrong-content bug rather than a crash"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Wire `dross trust` and gate the loop commands"
+  files = ["internal/cmd/trust.go", "internal/cmd/verify.go", "internal/cmd/task.go", "internal/cmd/state.go", "internal/cmd/changes.go", "cmd/dross/main.go"]
+  description = "The `dross trust` command plus the refusal at the loop commands that spawn\nruntime.test_command. Gated set is {verify, task next, task status(in_progress),\nstate bump, changes record} and is pinned explicitly — read-only and post-hoc\ncommands must keep working under absent consent. `dross trust --check` is the\nsilent exit-code form prompts can pre-flight.\n"
+  covers = ["c-1"]
+  depends_on = ["t-2"]
+  test_contract = ["if `dross verify <phase>` stops refusing without consent, TestVerifyRefusesWithoutConsent fails — it must exit non-zero, print the `dross trust` remedy, and never call configuredAdapters, asserted with a package-level adapter seam that t.Fatal()s if reached so a refusal that still shells gremlins fails", "if any of `dross task status <p> <t> in_progress`, `dross task next` or `dross state bump internal` stops refusing, that command's subtest in TestGatedCommandsRefuse fails", "if the gate spreads to read-only or post-hoc commands, TestGateDoesNotBrickReadOnly fails — `dross task status <p> <t> done` and `dross status` must still work", "if a command silently joins or leaves the gated set, TestExecGatedSetIsExplicit fails — it asserts the set is exactly {verify, task next, task status(in_progress), state bump, changes record}", "if `dross trust` stops printing the command it is about to trust or stops writing the fingerprint, TestTrustGrants fails — a second `dross verify` must then proceed", "if stale consent stops being distinguished at the CLI, TestTrustStaleMessage fails — editing runtime.test_command after trusting must make verify refuse with the STALE message, not the never-trusted one", "if `dross trust --check` stops exiting 0 when trusted and 1 when not, or starts printing on success, TestTrustCheckExitCodes fails", "if the refusal does I/O before refusing, TestRefusalWritesNothing fails on the filesystem assertion — neither tests.json nor verify.toml may be written", "if `dross doctor` stops working under absent consent, TestDoctorWorksWithoutConsent fails", "if the not-applicable state becomes a bypass, TestEmptyTestCommandDoesNotBypassGate fails — with runtime.test_command empty (t-2's not-applicable state) `dross verify` must still refuse rather than falling through to configuredAdapters (verify.go:67, :178) and spawning gremlins, which would run the untrusted repo's Go tests. That is the code execution the gate exists to prevent, reachable by a hostile .dross/ that simply leaves test_command blank. It sits outside c-1's literal wording, so the row pins the chosen behaviour explicitly rather than leaving the executor to infer it"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 2
+  title = "Redact token from ship backend errors"
+  files = ["internal/ship/forgejo.go", "internal/ship/gitlab.go", "internal/ship/bitbucket.go", "internal/ship/comment.go", "internal/ship/open.go", "internal/ship/redact_test.go"]
+  description = "Apply t-3's Scrub at the ship error sites that echo an upstream body — the three\nnon-gh backends, the comment note path, and jsonPost (open.go:144), the only bare\n`HTTP %d: %s` in ship and the one that mirrors back an Authorization header it set\nitself at open.go:132. One table row per backend so each call site is independently\nfailable. Depends on t-5 as well as t-3: both touch comment.go and open.go, so they\nmust not run in parallel.\n"
+  covers = ["c-3"]
+  depends_on = ["t-3", "t-5"]
+  test_contract = ["if the redact call is removed from any single helper, exactly that helper's row in TestBackendErrorsRedacted fails and no other — the table drives forgejo, gitlab, bitbucket and the comment note path against an httptest server returning 403 with the seeded canary in the body", "if a backend stops redacting, its row asserts OpenPR / PostComment / GetPRStatus return an error containing \"[redacted $\" and never the canary", "if ship's `HTTP %d: %s` body snippet stops being scrubbed, TestHTTPSnippetRedacted fails — the server mirrors the Authorization header into its 400 body", "if ANY body interpolation in internal/ship skips Scrub, TestEveryShipBodyInterpolationRedacts fails by file:line — it enumerates rather than samples, walking every string(respBody) / string(rb) / string(body) interpolation in the package (14 today across bitbucket.go, comment.go, forgejo.go, gitlab.go and open.go) and asserting each passes through redact. The per-backend table above proves one site per file; the three backends funnel through a shared request helper (bitbucket.go:75, forgejo.go:182, gitlab.go:220) that returns the raw body, so Scrub must land at each Errorf — without this row, sites like gitlab.go:73 (\"response missing iid\") and the two reviewer-assignment paths leak with the table green. This is the t-7 counterpart of t-3's TestEveryForgeDoRedacts"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  title = "Generalise the audit gate to every subprocess"
+  files = ["internal/cmd/subprocargs_audit_test.go", "internal/cmd/testdata/subprocargs_audit/snippets.txt", "internal/cmd/gitargs_audit_test.go", "internal/cmd/testdata/gitargs_audit/snippets.txt", "ARCHITECTURE.md"]
+  description = "Grow gitargs_audit_test.go into the every-subprocess gate the locked\naudit_gate_breadth decision describes, renaming it to subprocargs_audit_test.go. It\nresolves each spawn site to a binary and looks the binary up in t-1's exported table;\naccepted cases are named with their reason in the file header, the r-02 shape the git\ngate already uses. Pays the ARCHITECTURE.md:181-182 landmark update. The two\ngitargs_audit paths are listed because this task deletes them — it is a rename, not an\naddition.\n"
+  covers = ["c-2", "c-4", "c-5"]
+  depends_on = ["t-1", "t-4", "t-5", "t-11"]
+  test_contract = ["if a new caller passes an unfenced caller-derived positional to any spawned binary, TestNoUnseparatedPositional reports it by file:line — the walk covers internal/ and cmd/, resolving exec.Command, exec.CommandContext, ghCommand and gitCombined|gitNoOut|gitTrim sites", "if a literal binary appears in no table entry, TestUnknownBinaryFailsClosed fails — feeding exec.Command(\"cargo\",\"test\",pkg) must produce a finding (\"binary %q has no argv policy\"); the default is flag, not pass", "if the per-binary FLAG/PASS pairs are weakened, the snippets.txt rows fail: ast-grep bare file vs \"--\" before it; gremlins bare pkg (Reject tools flag ANY non-literal positional — no separator can rescue them) vs a const-prefixed \"./\"+pkg; ghCommand(\"pr\",\"view\",num) vs (\"pr\",\"view\",\"--json\",fields,\"--\",num) — the PASS exemplar puts flags BEFORE the separator, because cobra's `--` ends flag parsing rather than fencing one token; a (\"pr\",\"view\",\"--\",num,\"--json\",fields) exemplar would bless an argv gh rejects. The gate distinguishes \"separator present\" from \"separator present and no flag follows it\", so a flag demoted past `--` is itself a finding", "if the option-argument carve-out regresses, snippets.txt fails — exec.Command(\"dotnet\",\"stryker\",\"--output\",dir) must NOT be flagged while (\"dotnet\",\"stryker\",dir) must be", "if the checker degrades to \"return no findings\", the snippet floor fails it — the floor is DERIVED from the table at run time (checked must equal the number of FLAG/PASS rows parsed from snippets.txt), not a number chosen in advance, so it cannot drift below the real count and no row can be deleted without failing. It replaces the existing gate's slack `checked < 6` (13 rows today, ~10 added here); if it scans zero files it fails rather than passing vacuously", "if the generalisation weakens the guarantee it grew from, the four git-specific tests fail — TestNoUnseparatedGitPositional, TestAuditFlagsItsOwnSnippets, TestAuditFlagsBarePrefixlessVar and TestAuditScansCodexPackage must survive the rename unchanged", "if ARCHITECTURE.md's auditFile and gate-test landmark lines are not updated from gitargs_audit_test.go to the new path, architecture_test.go's landmark check fails", "if a non-literal binary site is neither resolved to its builder function nor named in the accepted-with-reason header, it is a FLAG with its own snippet row — the exec.Command(args[0], args[1:]...) shape is real at internal/mutation/gremlins.go:224, stryker.go:144 and stryker_net.go:105", "internal/cmd/update.go:197 — exec.Command(newBinary, \"install\") — is named in the accepted-with-reason header with its reason (self-exec of the just-verified downloaded binary, argv all-literal), so the executor does not improvise the exception mid-task; if the header entry is removed the gate flags it under its own fail-closed rule. internal/cmd/statusline.go:275 passes a `full...` slice to git and needs the same treatment if the generalised walk stops recognising it", "if internal/mutation or internal/ship silently drops out of the walk, TestAuditScansMutationAndShip fails, the way internal/codex is already asserted"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 3
+  title = "Prove the token reaches no emitted surface"
+  files = ["internal/cmd/token_leak_test.go"]
+  description = "c-3's seeded-canary proof over emitted surfaces, owned separately: t-3 and t-7 can\nboth be correct while a fourth code path prints the token. Drives the forge, board and\nship failure paths through the cobra commands with a stub transport. Seeds BOTH\ncredentials — remote.auth_env (ship/forge) and board.auth_env (Jira, YouTrack) —\nbecause a canary in only remote.auth_env never drives the board clients and the proof\nwould pass while they leak.\n"
+  covers = ["c-3"]
+  depends_on = ["t-3", "t-7"]
+  test_contract = ["if any code path emits the token, TestTokenReachesNoEmittedSurface fails — with a distinct canary seeded into each of remote.auth_env and board.auth_env, and the forge, board and ship failure paths driven through the cobra commands, neither canary may appear in stdout, stderr, the returned error, or the telemetry JSONL written during the run", "if the board leg is dropped, TestTokenReachesNoEmittedSurface fails on its board.auth_env subtest — the Jira and YouTrack clients read board.auth_env, so a remote-only seeding cannot observe them", "if the test stops exercising the path, it fails rather than passing by silence — it also asserts the \"[redacted $\" marker IS present, so reverting t-3's redaction fails it"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 3
+  title = "Surface consent state in doctor and prompts"
+  files = ["internal/cmd/doctor.go", "assets/prompts/execute.md", "assets/prompts/quick.md", "assets/prompts/verify.md"]
+  description = "The half the locked exec_consent_gate decision admits the CLI cannot enforce: make\nconsent state visible in doctor, and add the `dross trust --check` pre-flight t-6\nbuilt to the three loop prompts. The grep-based prompt-content tests are what keep\nthe prompts from drifting back to a raw <runtime.test_command> instruction. r-01\napplies — these prompt edits are not live until `make install` re-links assets/.\n"
+  covers = ["c-1"]
+  depends_on = ["t-6"]
+  test_contract = ["if doctor stops reporting stale consent, TestDoctorReportsStaleConsent fails — the output must contain \"stale\" and the `dross trust` command line", "if doctor offers a remedy when consent is granted, TestDoctorReportsGrantedConsent fails — it must say granted and offer none", "if a prompt tells the agent to run <runtime.test_command> without a preceding consent check, TestExecutePromptChecksConsent fails — it greps the prompt bodies, the same shape as the existing prompt-content tests", "if the literal `dross trust --check` line is dropped from either quick.md or verify.md, TestQuickPromptHasTrustPreflight fails"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 4
+  title = "Fence semgrep's path operand in secure.md"
+  files = ["assets/prompts/secure.md", "internal/cmd/secure_prompt_test.go"]
+  description = "c-2's semgrep leg, closed on the surface where semgrep actually runs.\ndross spawns semgrep nowhere in Go, so argfence's table entry is forward-looking;\nthe real invocation is agent-driven from secure.md section 2. Adds end-of-options\nguidance beside the existing --metrics=off line and a prompt-content test in the\nshape of TestSecurePromptMandatedSections. r-01: the prompt edit is not live for\nthe installed binary until `make install`, but the test reads the source file.\n"
+  covers = ["c-2"]
+  test_contract = ["if secure.md loses the semgrep end-of-options guidance, TestSecurePromptFencesScannerOperands fails on the \"end-of-options\" needle", "if the guidance drifts away from semgrep, the test fails: semgrep must be named within the 200 chars preceding \"end-of-options\". A window rather than a line because the prompt wraps; a whole-document substring would let the rule drift into an unrelated section, and a bare \"--\" needle in a document full of --flags proves nothing", "if the guidance stops saying WHERE the separator goes, the test fails on the \"before the path operand\" needle", "if the exemplar's ORDER regresses — a separator ahead of the flags, which demotes the ruleset into a scan path and is silently wrong rather than loudly broken — the test fails on the index comparison between \"--config\" and \" -- \", asserted independently of the exemplar needle", "if the existing no-egress row regresses, TestSecurePromptMandatedSections still fails independently — the new test does not subsume it"]
+  status = "done"

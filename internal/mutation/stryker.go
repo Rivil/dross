@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/Rivil/dross/internal/argfence"
 )
 
 // Stryker adapter for TS/JS/Svelte mutation testing via stryker-mutator.
@@ -48,7 +50,11 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		return &Report{Tool: s.Name()}, nil
 	}
 
-	cmd := s.buildCmd(s.runArgs(files))
+	args, err := s.runArgs(files)
+	if err != nil {
+		return nil, err
+	}
+	cmd := strykerBuildCmd(s, args)
 	cmd.Dir = s.workDir()
 	cmd.Stdout = os.Stderr // streamed to user, not captured
 	cmd.Stderr = os.Stderr
@@ -98,7 +104,16 @@ const strykerPin = "@stryker-mutator/core@9.6.1"
 // crashes on modern Node (MODULE_NOT_FOUND); npx resolves a project-local
 // @stryker-mutator/core first and --yes fetches the right fallback.
 // --mutate paths are workdir-relative because stryker runs in Workdir.
-func (s *Stryker) runArgs(files []string) []string {
+//
+// npx has no end-of-options token — it consumes leading-dash arguments itself
+// before the wrapped binary ever sees them — so a derived value beginning with
+// a dash is refused rather than fenced. Both derived inputs are checked: the
+// Workdir, which comes straight from project.toml, and each --mutate entry
+// AFTER the prefix trim, because it is the trimmed form that lands in the argv.
+func (s *Stryker) runArgs(files []string) ([]string, error) {
+	if _, err := argfence.Fence("npx", "workdir", s.Workdir); err != nil {
+		return nil, err
+	}
 	mutate := make([]string, 0, len(files))
 	for _, f := range files {
 		if s.Workdir != "" {
@@ -106,10 +121,16 @@ func (s *Stryker) runArgs(files []string) []string {
 		}
 		mutate = append(mutate, f)
 	}
+	if _, err := argfence.Fence("npx", "mutate path", mutate...); err != nil {
+		return nil, err
+	}
 	return []string{"npx", "--yes", strykerPin, "run",
 		"--mutate", strings.Join(mutate, ","),
-		"--reporters", "json"}
+		"--reporters", "json"}, nil
 }
+
+// strykerBuildCmd is the process-construction seam — see gremlinsBuildCmd.
+var strykerBuildCmd = (*Stryker).buildCmd
 
 // workDir is the directory stryker runs in — ProjectRoot, or the monorepo
 // package under it.

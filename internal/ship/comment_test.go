@@ -114,7 +114,9 @@ func TestPostGitHubCommentInvokesGh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PostComment github: %v", err)
 	}
-	want := []string{"pr", "comment", "42", "--body", "hello"}
+	// The number is fenced behind `--`, with --body ahead of it. See
+	// gharg_test.go for why the ordering is load-bearing rather than cosmetic.
+	want := []string{"pr", "comment", "--body", "hello", "--", "42"}
 	if len(capturedArgs) != len(want) {
 		t.Fatalf("arg count: got %d want %d (%v)", len(capturedArgs), len(want), capturedArgs)
 	}

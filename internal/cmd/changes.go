@@ -29,6 +29,10 @@ func changesRecord() *cobra.Command {
 		Short: "Record files (and optionally commit, notes, landmarks) for a task",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
+			// A loop-step boundary — see execGatedCommands.
+			if err := requireExecConsent(); err != nil {
+				return err
+			}
 			files := splitCSV(filesCSV)
 			if len(files) == 0 {
 				return fmt.Errorf("at least one --files entry is required")

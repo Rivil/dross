@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/redact"
 )
 
 // --- Forgejo / Gitea via REST ---
@@ -53,7 +55,7 @@ func openForgejoPR(opts OpenOpts) (*OpenResult, error) {
 	}
 
 	endpoint := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf("/repos/%s/%s/pulls", owner, repo)
-	resp, err := jsonPost(endpoint, token, body)
+	resp, err := jsonPost(endpoint, opts.AuthEnv, token, body)
 	if err != nil {
 		return nil, fmt.Errorf("create PR: %w", err)
 	}
@@ -66,7 +68,7 @@ func openForgejoPR(opts OpenOpts) (*OpenResult, error) {
 	if len(opts.Reviewers) > 0 {
 		revEndpoint := strings.TrimRight(opts.APIBase, "/") +
 			fmt.Sprintf("/repos/%s/%s/pulls/%d/requested_reviewers", owner, repo, int(num))
-		if _, err := jsonPost(revEndpoint, token, map[string]any{
+		if _, err := jsonPost(revEndpoint, opts.AuthEnv, token, map[string]any{
 			"reviewers": opts.Reviewers,
 		}); err != nil {
 			// Don't fail the whole ship for reviewer-assignment trouble — the PR is open.
@@ -90,7 +92,7 @@ func forgejoPRStatus(opts OpenOpts) (PRStatus, error) {
 		return PRStatus{}, err
 	}
 	endpoint := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf("/repos/%s/%s/pulls/%d", owner, repo, opts.PRNumber)
-	respBody, status, err := jsonGet(endpoint, token)
+	respBody, status, err := jsonGet(endpoint, opts.AuthEnv, token)
 	if err != nil {
 		return PRStatus{}, fmt.Errorf("get PR #%d: %w", opts.PRNumber, err)
 	}
@@ -128,7 +130,7 @@ func forgejoOpenPRsTargeting(opts OpenOpts, base string) ([]BasePR, error) {
 	for page := 1; ; page++ {
 		endpoint := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf(
 			"/repos/%s/%s/pulls?state=open&page=%d&limit=%d", owner, repo, page, limit)
-		respBody, status, err := jsonGet(endpoint, token)
+		respBody, status, err := jsonGet(endpoint, opts.AuthEnv, token)
 		if err != nil {
 			return nil, fmt.Errorf("list open PRs targeting %s: %w", base, err)
 		}
@@ -164,7 +166,7 @@ func forgejoOpenPRsTargeting(opts OpenOpts, base string) ([]BasePR, error) {
 // jsonGet performs an authenticated GET against a Forgejo/Gitea REST endpoint,
 // returning the raw body and status — unlike jsonPost, the caller may need to
 // unmarshal into a slice (a list-pulls response) rather than a single object.
-func jsonGet(endpoint, token string) ([]byte, int, error) {
+func jsonGet(endpoint, authEnv, token string) ([]byte, int, error) {
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, 0, err
@@ -179,5 +181,10 @@ func jsonGet(endpoint, token string) ([]byte, int, error) {
 	}
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(resp.Body)
+	// Scrubbed HERE, at the one place the body enters the package, rather than at
+	// each Errorf that interpolates it. Every caller's `string(respBody)` is then
+	// safe by construction — including the ones that are not about HTTP status at
+	// all ("response missing iid"), which a per-error-site scrub would miss.
+	respBody = []byte(redact.Scrub(string(respBody), authEnv, token))
 	return respBody, resp.StatusCode, nil
 }

@@ -89,18 +89,31 @@ fixture through the real CLI — which is how a user meets a cloned repo anyway.
 See the recorded replay below for the exact recipe and the observed output.
 
 ```
-BASE=d62be4144c50fac1ba47fab681f46f57da579e6a
+BASE=a6ef7295996db1d737be2ae2183f45e376ba3c19
 git worktree add --detach /tmp/dross-redproof "$BASE"
 cd /tmp/dross-redproof && go build -o /tmp/dross-base ./cmd/dross
 ```
 
 ## Recorded red replay
 
-**base commit: `d62be4144c50fac1ba47fab681f46f57da579e6a`** (`chore(dross): plan
-config-trust-hardening`) — the last commit before any of this phase's work.
+**base commit: `a6ef7295996db1d737be2ae2183f45e376ba3c19`** (`phase dross-repair:
+dross-repair (#75)`) — the last commit before any of this phase's work.
 
 Recorded 2026-08-04. Everything below was observed in this session; nothing is
 reconstructed from expectation.
+
+> **Repointed by exec-trust-followups.** The replay was originally run at
+> `d62be4144c50fac1ba47fab681f46f57da579e6a` (`chore(dross): plan
+> config-trust-hardening`), a commit on the `phase/config-trust-hardening`
+> branch. PR #76's squash-merge collapsed that branch, so the SHA is reachable
+> from no branch and a fresh clone cannot resolve it —
+> `TestRedProofPinsBaseCommit` reddened in CI while still passing on the machine
+> that still held the loose object. The pin now names the squash's parent on
+> `milestone/v1.2`, which is an ancestor of the original and **byte-identical to
+> it outside `.dross/`**: the same code the replay built, on a commit that
+> survives. Nothing about the observed output below changed. A red proof pinned
+> to a phase-branch commit rots at its own squash-merge — pin the base the phase
+> forked from.
 
 ### Why the replay drives the BINARY, not the suite
 
@@ -127,7 +140,7 @@ the real CLI, which is exactly how a user meets this repo. That reproduces each
 vector as behaviour rather than as a compile error.
 
 ```
-git worktree add --detach <wt> d62be4144c50fac1ba47fab681f46f57da579e6a
+git worktree add --detach <wt> a6ef7295996db1d737be2ae2183f45e376ba3c19
 cd <wt> && go build -o /tmp/dross-base ./cmd/dross
 # hostile repo: fixture project.toml with __SENTINEL__ substituted, plus a
 # rules.toml and a state.json; HEAD on phase/other so repair judges state stale

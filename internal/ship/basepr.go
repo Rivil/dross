@@ -58,6 +58,9 @@ func gitHubOpenPRsTargeting(base string) ([]BasePR, error) {
 	if base == "" {
 		return nil, errors.New("github open-PR lookup needs a base branch")
 	}
+	// base rides the value slot of its own flag — see openGitHubPR. A base of
+	// "--state" is then a base, not a second --state flag silently overriding
+	// the "open" filter and returning closed PRs as live dependents.
 	out, err := ghCommand("pr", "list", "--base", base, "--state", "open", "--json", "number,title,url,headRefName").CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("gh pr list --base %s: %w\n%s", base, err, string(out))

@@ -78,6 +78,16 @@ The contract is **informed, not silent, and not brittle**:
      `--config auto` — the latter logs the project URL to semgrep.dev. Registry rules
      are convenient but leak project metadata; default to no-leak unless the repo is
      public.
+   - **Fence the path operand.** For **semgrep**, put every scan path behind the
+     `--` end-of-options token, with the flags before it and the paths after:
+     `semgrep --metrics=off --config <ruleset> -- <path>`. The separator goes
+     immediately before the path operand, never earlier — semgrep reads its flags
+     ahead of `--`, so a separator placed before `--config` demotes the ruleset into
+     a scan path. This matters because the paths you pass are derived — from the
+     detect step, from a phase diff, from whatever the repo's layout hands you — and
+     a path that begins with a dash is read as an option otherwise. dross applies the
+     same policy to the scanners it spawns itself (`internal/argfence`); semgrep is
+     agent-driven, so the discipline has to live here.
 
 ## 3. Fan-out manual audit — cold, parallel subagents
 

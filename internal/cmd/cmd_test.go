@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/project"
 )
 
 // chdir changes cwd for the duration of the test.
@@ -481,5 +483,37 @@ func mustRunSet(t *testing.T, field, value string) {
 	t.Helper()
 	if err := runCmd(t, Project(), "set", field, value); err != nil {
 		t.Fatalf("project set %s=%s: %v", field, value, err)
+	}
+}
+
+// trustFixture makes the fixture at the cwd a tree this machine has consented
+// to: it sets a runtime.test_command and records consent for that exact
+// command.
+//
+// Every fixture that drives a command in execGatedCommands needs it — the gate
+// is real behaviour, not test scaffolding, and an unconsented fixture now
+// refuses exactly as a fresh clone would. Fixtures that exercise the REFUSAL
+// must not call it.
+// A fixture that has already configured its own runtime.test_command keeps it —
+// overwriting would silently undo what the test was asserting. Call this AFTER
+// the last edit to that field: consent binds to the command, so an earlier
+// grant goes stale.
+func trustFixture(t *testing.T) {
+	t.Helper()
+	root, err := FindRoot()
+	if err != nil {
+		t.Fatalf("trustFixture: %v", err)
+	}
+	proj, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		t.Fatalf("trustFixture: %v", err)
+	}
+	testCmd := proj.Runtime.TestCommand
+	if testCmd == "" {
+		testCmd = "go test ./..."
+		mustRunSet(t, "runtime.test_command", testCmd)
+	}
+	if err := GrantConsent(root, testCmd); err != nil {
+		t.Fatalf("trustFixture: %v", err)
 	}
 }

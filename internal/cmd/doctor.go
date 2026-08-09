@@ -940,6 +940,40 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 	}
 	Print("")
 
+	// 5. exec consent for runtime.test_command.
+	//
+	// The half the locked exec_consent_gate decision admits the CLI cannot
+	// enforce on its own: the gate refuses at the moment of use, but nothing
+	// tells the user what state they are in until something has already
+	// refused. Doctor is where that becomes visible before it bites.
+	//
+	// Severity is split deliberately. ABSENT is the honest state of every fresh
+	// clone and is reported as an advisory with the remedy — failing doctor on
+	// it would make a clean checkout look broken. STALE is an exit-code issue:
+	// something WAS trusted here and the command has since changed, which is
+	// precisely the signature the consent binding exists to catch.
+	Print("Exec consent:")
+	switch state, cerr := CheckConsent(root, repoDir, p.Runtime.TestCommand); state {
+	case ConsentGranted:
+		Printf("  ✓ this machine has trusted the configured test command\n")
+	case ConsentStale:
+		Printf("  ✗ consent is stale — the test command has CHANGED since it was trusted here:\n")
+		Printf("      %s\n", p.Runtime.TestCommand)
+		Printf("    Fix (only after reading that line): `dross trust`\n")
+		issues++
+	case ConsentRefused:
+		Printf("  ✗ %v\n", cerr)
+		issues++
+	case ConsentNotApplicable:
+		Printf("  ⚠ no runtime.test_command is configured, so the loop commands refuse.\n")
+		Printf("    Fix: `dross project set runtime.test_command \"<cmd>\"`, then `dross trust`.\n")
+	default:
+		Printf("  ⚠ this machine has not trusted the configured test command:\n")
+		Printf("      %s\n", p.Runtime.TestCommand)
+		Printf("    Fix (only after reading that line): `dross trust`\n")
+	}
+	Print("")
+
 	return issues
 }
 

@@ -22,6 +22,7 @@ func TestVerifyEmptyChangesIsNoop(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	mustRunSet(t, "project.name", "x")
 	mustRunSet(t, "runtime.mode", "native")
 	if err := runCmd(t, Phase(), "create", "tags"); err != nil {
@@ -54,6 +55,7 @@ func TestVerifyWritesSkeletonWithSkipMutation(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	mustRunSet(t, "project.name", "x")
 	mustRunSet(t, "runtime.mode", "native")
 	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
@@ -122,6 +124,7 @@ func TestVerifyMissingSpecErrors(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	mustRunSet(t, "project.name", "x")
 	mustRunSet(t, "runtime.mode", "native")
 	// phase dir without spec.toml
@@ -157,6 +160,7 @@ func TestVerifyFinalizeRecordsResolvedVerdict(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	mustRunSet(t, "project.name", "x")
 	mustRunSet(t, "runtime.mode", "native")
 	if err := runCmd(t, Phase(), "create", "auth"); err != nil {
@@ -569,6 +573,7 @@ func TestVerifyFinalizeIdempotentAndStampsPhase(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	mustRunSet(t, "project.name", "x")
 	mustRunSet(t, "runtime.mode", "native")
 	if err := runCmd(t, Phase(), "create", "auth"); err != nil {

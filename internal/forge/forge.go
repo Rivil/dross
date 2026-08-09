@@ -24,6 +24,7 @@ import (
 
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/hostallow"
+	"github.com/Rivil/dross/internal/redact"
 )
 
 // ErrNotImplemented is returned by every Client method when the configured
@@ -615,10 +616,21 @@ func (c *Client) projectRef() string {
 	return url.PathEscape(c.owner + "/" + c.repo)
 }
 
-// do performs a token-authenticated JSON request. If out is non-nil and the
-// response has a body, it's decoded into out. Non-2xx responses become errors
-// carrying the status and (truncated) body.
+// do performs a token-authenticated JSON request, with the credential removed
+// from whatever error comes back.
+//
+// The wrap sits HERE, around the whole request, rather than at each Errorf
+// inside doRaw. Every error this method can produce is downstream of a request
+// that carried the token: the body snippet on a non-2xx (the obvious one), the
+// transport failure, and the JSON decode error, which interpolates response
+// bytes of its own. One wrap covers all three and cannot be forgotten at a
+// return added later.
 func (c *Client) do(method, endpoint string, body any, out any) error {
+	return redact.Err(c.doRaw(method, endpoint, body, out), c.authEnv, c.token)
+}
+
+// doRaw is the unredacted request. Nothing outside do may call it.
+func (c *Client) doRaw(method, endpoint string, body any, out any) error {
 	var rdr io.Reader
 	if body != nil {
 		buf := new(bytes.Buffer)

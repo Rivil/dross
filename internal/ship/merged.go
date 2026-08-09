@@ -60,7 +60,16 @@ func gitHubPRStatus(opts OpenOpts) (PRStatus, error) {
 	if opts.PRNumber <= 0 {
 		return PRStatus{}, errors.New("github merged-status lookup needs a PR number")
 	}
-	out, err := ghCommand("pr", "view", strconv.Itoa(opts.PRNumber), "--json", "state,mergedAt,baseRefName").CombinedOutput()
+	// The PR number goes behind `--`, and the flags stay AHEAD of it.
+	//
+	// Both halves matter and the second is the counter-intuitive one: gh is
+	// cobra, and cobra's `--` ends flag parsing entirely rather than fencing
+	// only the token after it. `pr view -- 12 --json state` would make --json
+	// and its value the 2nd and 3rd positionals, and `gh pr view` takes at most
+	// one — so it exits "accepts at most 1 arg(s), received 3". Because
+	// ghCommand is a test double, that shape passes its unit test while ship's
+	// merge-status path is dead against the real binary.
+	out, err := ghCommand("pr", "view", "--json", "state,mergedAt,baseRefName", "--", strconv.Itoa(opts.PRNumber)).CombinedOutput()
 	if err != nil {
 		return PRStatus{}, fmt.Errorf("gh pr view #%d: %w\n%s", opts.PRNumber, err, string(out))
 	}
