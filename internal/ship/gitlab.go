@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/redact"
 )
 
 // --- GitLab via REST ---
@@ -57,7 +58,7 @@ func openGitLabPR(opts OpenOpts) (*OpenResult, error) {
 		"description":   opts.Body,
 	}
 	endpoint := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf("/projects/%s/merge_requests", ref)
-	respBody, status, err := gitlabReq("POST", endpoint, opts.AuthScheme, token, body)
+	respBody, status, err := gitlabReq("POST", endpoint, opts.AuthEnv, opts.AuthScheme, token, body)
 	if err != nil {
 		return nil, fmt.Errorf("create MR: %w", err)
 	}
@@ -75,7 +76,7 @@ func openGitLabPR(opts OpenOpts) (*OpenResult, error) {
 	result := &OpenResult{Number: mr.IID, URL: mr.WebURL}
 
 	if len(opts.Reviewers) > 0 {
-		ids, err := gitlabReviewerIDs(opts.APIBase, opts.AuthScheme, token, opts.Reviewers)
+		ids, err := gitlabReviewerIDs(opts.APIBase, opts.AuthEnv, opts.AuthScheme, token, opts.Reviewers)
 		if err != nil {
 			// Non-fatal: the MR is open. Surface the reviewer trouble as a warning.
 			return result, fmt.Errorf("MR opened (!%d) but reviewer lookup failed: %w", mr.IID, err)
@@ -83,7 +84,7 @@ func openGitLabPR(opts OpenOpts) (*OpenResult, error) {
 		if len(ids) > 0 {
 			updEndpoint := strings.TrimRight(opts.APIBase, "/") +
 				fmt.Sprintf("/projects/%s/merge_requests/%d", ref, mr.IID)
-			rb, st, err := gitlabReq("PUT", updEndpoint, opts.AuthScheme, token, map[string]any{"reviewer_ids": ids})
+			rb, st, err := gitlabReq("PUT", updEndpoint, opts.AuthEnv, opts.AuthScheme, token, map[string]any{"reviewer_ids": ids})
 			if err != nil || st >= 300 {
 				return result, fmt.Errorf("MR opened (!%d) but reviewer assignment failed (HTTP %d): %v %s", mr.IID, st, err, string(rb))
 			}
@@ -106,7 +107,7 @@ func gitlabPRStatus(opts OpenOpts) (PRStatus, error) {
 		return PRStatus{}, err
 	}
 	endpoint := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf("/projects/%s/merge_requests/%d", ref, opts.PRNumber)
-	respBody, status, err := gitlabReq("GET", endpoint, opts.AuthScheme, token, nil)
+	respBody, status, err := gitlabReq("GET", endpoint, opts.AuthEnv, opts.AuthScheme, token, nil)
 	if err != nil {
 		return PRStatus{}, fmt.Errorf("get MR !%d: %w", opts.PRNumber, err)
 	}
@@ -143,7 +144,7 @@ func gitlabOpenMRsTargeting(opts OpenOpts, base string) ([]BasePR, error) {
 		endpoint := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf(
 			"/projects/%s/merge_requests?state=opened&target_branch=%s&per_page=%d&page=%d",
 			ref, url.QueryEscape(base), perPage, page)
-		respBody, status, err := gitlabReq("GET", endpoint, opts.AuthScheme, token, nil)
+		respBody, status, err := gitlabReq("GET", endpoint, opts.AuthEnv, opts.AuthScheme, token, nil)
 		if err != nil {
 			return nil, fmt.Errorf("list open MRs targeting %s: %w", base, err)
 		}
@@ -191,7 +192,7 @@ func gitlabAuthHeader(req *http.Request, scheme, token string) {
 
 // gitlabReq performs a GitLab REST request with the scheme-appropriate auth
 // header, returning the raw body and status. body is JSON-encoded when non-nil.
-func gitlabReq(method, endpoint, scheme, token string, body any) ([]byte, int, error) {
+func gitlabReq(method, endpoint, authEnv, scheme, token string, body any) ([]byte, int, error) {
 	var buf io.Reader
 	if body != nil {
 		b := new(bytes.Buffer)
@@ -217,17 +218,22 @@ func gitlabReq(method, endpoint, scheme, token string, body any) ([]byte, int, e
 	}
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(resp.Body)
+	// Scrubbed HERE, at the one place the body enters the package, rather than at
+	// each Errorf that interpolates it. Every caller's `string(respBody)` is then
+	// safe by construction — including the ones that are not about HTTP status at
+	// all ("response missing iid"), which a per-error-site scrub would miss.
+	respBody = []byte(redact.Scrub(string(respBody), authEnv, token))
 	return respBody, resp.StatusCode, nil
 }
 
 // gitlabReviewerIDs resolves usernames to numeric GitLab user ids via
 // GET /users?username=. An unresolved username is skipped; a transport or
 // HTTP error is returned so the caller can warn (reviewer failure is non-fatal).
-func gitlabReviewerIDs(apiBase, scheme, token string, usernames []string) ([]int, error) {
+func gitlabReviewerIDs(apiBase, authEnv, scheme, token string, usernames []string) ([]int, error) {
 	var ids []int
 	for _, name := range usernames {
 		endpoint := strings.TrimRight(apiBase, "/") + "/users?username=" + url.QueryEscape(name)
-		respBody, status, err := gitlabReq("GET", endpoint, scheme, token, nil)
+		respBody, status, err := gitlabReq("GET", endpoint, authEnv, scheme, token, nil)
 		if err != nil {
 			return ids, err
 		}

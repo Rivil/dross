@@ -97,7 +97,7 @@ func postForgejoComment(opts CommentOpts) error {
 	// number space for issues and PRs is shared.
 	endpoint := strings.TrimRight(opts.APIBase, "/") +
 		fmt.Sprintf("/repos/%s/%s/issues/%d/comments", owner, repo, opts.PRNumber)
-	if _, err := jsonPost(endpoint, token, map[string]any{
+	if _, err := jsonPost(endpoint, opts.AuthEnv, token, map[string]any{
 		"body": opts.Body,
 	}); err != nil {
 		return fmt.Errorf("post comment: %w", err)
@@ -125,7 +125,7 @@ func postGitLabComment(opts CommentOpts) error {
 	// GitLab MR comments are "notes" on the merge request; PRNumber is the iid.
 	endpoint := strings.TrimRight(opts.APIBase, "/") +
 		fmt.Sprintf("/projects/%s/merge_requests/%d/notes", ref, opts.PRNumber)
-	rb, status, err := gitlabReq("POST", endpoint, opts.AuthScheme, token, map[string]any{"body": opts.Body})
+	rb, status, err := gitlabReq("POST", endpoint, opts.AuthEnv, opts.AuthScheme, token, map[string]any{"body": opts.Body})
 	if err != nil {
 		return fmt.Errorf("post note: %w", err)
 	}
@@ -152,7 +152,7 @@ func postBitbucketComment(opts CommentOpts) error {
 	}
 	endpoint := strings.TrimRight(opts.APIBase, "/") +
 		fmt.Sprintf("/repositories/%s/%s/pullrequests/%d/comments", workspace, slug, opts.PRNumber)
-	rb, status, err := bbRequest("POST", endpoint, user, token, map[string]any{
+	rb, status, err := bbRequest("POST", endpoint, opts.AuthEnv, user, token, map[string]any{
 		"content": map[string]any{"raw": opts.Body},
 	})
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/hostallow"
+	"github.com/Rivil/dross/internal/redact"
 )
 
 // OpenOpts is everything OpenPR needs across providers.
@@ -126,7 +127,7 @@ func parsePRNumber(url string) int {
 
 // jsonPost POSTs JSON with a token auth header. Returns parsed
 // response body (or the raw bytes via "_raw") on success.
-func jsonPost(endpoint, token string, body any) (map[string]any, error) {
+func jsonPost(endpoint, authEnv, token string, body any) (map[string]any, error) {
 	buf := new(bytes.Buffer)
 	if err := json.NewEncoder(buf).Encode(body); err != nil {
 		return nil, err
@@ -147,7 +148,14 @@ func jsonPost(endpoint, token string, body any) (map[string]any, error) {
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
+	// Scrubbed HERE, at the one place the body enters the package, rather than at
+	// each Errorf that interpolates it. Every caller's `string(respBody)` is then
+	// safe by construction — including the ones that are not about HTTP status at
+	// all ("response missing iid"), which a per-error-site scrub would miss.
+	respBody = []byte(redact.Scrub(string(respBody), authEnv, token))
 	if resp.StatusCode >= 300 {
+		// The one bare `HTTP %d: %s` in ship, and the one that mirrors back an
+		// Authorization header this function set itself a few lines above.
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
 	out := map[string]any{}
