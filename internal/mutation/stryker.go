@@ -147,7 +147,10 @@ func (s *Stryker) reportPath() string {
 }
 
 // rePrefixFiles restores repo-relative paths in a report parsed from a
-// workdir run, so tests.json speaks the same paths as changes.json.
+// workdir run, so tests.json speaks the same paths as changes.json — and so
+// diff scoping matches the same paths in the per-file rows it scores from.
+// Both surfaces must move together: a Surviving entry the scope matches whose
+// row key it doesn't would score the mutant out while still reporting it.
 func (s *Stryker) rePrefixFiles(r *Report) {
 	if s.Workdir == "" {
 		return
@@ -155,6 +158,15 @@ func (s *Stryker) rePrefixFiles(r *Report) {
 	for i := range r.Surviving {
 		r.Surviving[i].File = s.Workdir + "/" + r.Surviving[i].File
 	}
+	if len(r.Files) == 0 {
+		return
+	}
+	files := make(map[string]FileStat, len(r.Files))
+	for name, st := range r.Files {
+		k := s.Workdir + "/" + name
+		files[k] = files[k].plus(st)
+	}
+	r.Files = files
 }
 
 // buildCmd returns an exec.Cmd that respects s.Prefix.
@@ -228,8 +240,10 @@ func ParseStrykerJSON(data []byte) (*Report, error) {
 			switch m.Status {
 			case "Killed":
 				r.Killed++
+				r.addFile(path, FileStat{Killed: 1})
 			case "Survived", "NoCoverage":
 				r.Survived++
+				r.addFile(path, FileStat{Survived: 1})
 				r.Surviving = append(r.Surviving, Mutant{
 					File:    path,
 					Line:    m.Location.Start.Line,
@@ -238,13 +252,16 @@ func ParseStrykerJSON(data []byte) (*Report, error) {
 				})
 			case "Timeout":
 				r.Timeout++
+				r.addFile(path, FileStat{Timeout: 1})
 			case "RuntimeError", "CompileError":
 				r.Errors++
+				r.addFile(path, FileStat{Errors: 1})
 			case "Pending", "Ignored", "":
 				// not counted
 			default:
 				// future statuses — count as errors so they're visible
 				r.Errors++
+				r.addFile(path, FileStat{Errors: 1})
 			}
 		}
 	}

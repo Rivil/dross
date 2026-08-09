@@ -3,6 +3,7 @@ package mutation
 import (
 	"math"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -144,6 +145,70 @@ func TestParseStrykerJSONErrorClassification(t *testing.T) {
 	// Score is 0/0 → guarded to remain 0
 	if r.Score != 0 {
 		t.Errorf("score with no scoring mutants should be 0; got %v", r.Score)
+	}
+}
+
+// TestParseStrykerJSONPerFileAttribution pins the same per-file contract the
+// gremlins parser owes, on the file-granular adapter: every status lands in a
+// row keyed by the report's own path, and the aggregates are untouched.
+func TestParseStrykerJSONPerFileAttribution(t *testing.T) {
+	r, err := ParseStrykerJSON([]byte(fixtureSimple))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]FileStat{"src/api/tags.ts": {Killed: 3, Survived: 1, Timeout: 1}}
+	if !reflect.DeepEqual(r.Files, want) {
+		t.Errorf("per-file rows:\n got %+v\nwant %+v", r.Files, want)
+	}
+	if r.Killed != 3 || r.Survived != 1 || r.Timeout != 1 {
+		t.Errorf("aggregates changed: killed=%d survived=%d timeout=%d", r.Killed, r.Survived, r.Timeout)
+	}
+	assertPerFileMatchesAggregate(t, r)
+}
+
+// TestParseStrykerJSONPerFileNoDrift runs the drift invariant over the other
+// fixtures — NoCoverage (survived) and the error/ignored classification,
+// where Ignored and Pending must contribute to neither a total nor a row.
+func TestParseStrykerJSONPerFileNoDrift(t *testing.T) {
+	for name, payload := range map[string]string{
+		"no coverage":        fixtureNoCoverage,
+		"errors and ignored": fixtureErrorsAndIgnored,
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, err := ParseStrykerJSON([]byte(payload))
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertPerFileMatchesAggregate(t, r)
+		})
+	}
+}
+
+// TestStrykerRePrefixMovesPerFileKeys: the workdir prefix must be applied to
+// the per-file rows as well as to Surviving. If the two disagree, diff scoping
+// scores a mutant out (row key unmatched) while still reporting it as a
+// survivor (Surviving path matched) — worse than either error alone.
+func TestStrykerRePrefixMovesPerFileKeys(t *testing.T) {
+	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
+	r := &Report{
+		Surviving: []Mutant{{File: "src/a.ts", Line: 3}},
+		Files:     map[string]FileStat{"src/a.ts": {Survived: 1}},
+	}
+	s.rePrefixFiles(r)
+	if r.Surviving[0].File != "web/src/a.ts" {
+		t.Errorf("surviving path: %q want web/src/a.ts", r.Surviving[0].File)
+	}
+	want := map[string]FileStat{"web/src/a.ts": {Survived: 1}}
+	if !reflect.DeepEqual(r.Files, want) {
+		t.Errorf("per-file key must track Surviving:\n got %+v\nwant %+v", r.Files, want)
+	}
+
+	// Workdir unset: rows pass through untouched.
+	bare := &Stryker{ProjectRoot: "/repo"}
+	r2 := &Report{Files: map[string]FileStat{"src/a.ts": {Killed: 1}}}
+	bare.rePrefixFiles(r2)
+	if _, ok := r2.Files["src/a.ts"]; !ok || len(r2.Files) != 1 {
+		t.Errorf("no-workdir rePrefix must be a no-op: %+v", r2.Files)
 	}
 }
 
