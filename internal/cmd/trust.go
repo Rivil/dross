@@ -34,6 +34,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
+
+	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/project"
 )
 
 // ConsentState is what the store says about the currently configured
@@ -141,4 +146,153 @@ func GrantConsent(root, testCmd string) error {
 	}
 	l.TrustedTestCommand = Fingerprint(testCmd)
 	return l.save(path)
+}
+
+// --- the gate ---
+
+// execGatedCommands is the CLOSED set of commands the consent gate covers,
+// declared here rather than inferred from which call sites happen to call
+// requireExecConsent. TestExecGatedSetIsExplicit asserts the two agree, so a
+// command cannot silently join or leave the set.
+//
+// The set is the loop's chokepoints, not "everything that touches a phase".
+// Two boundaries are deliberate:
+//
+//   - Read-only and post-hoc commands stay out. `dross status`, `dross doctor`
+//     and `task status … done` must keep working in an untrusted tree, or the
+//     gate bricks the very commands a user reaches for to understand why dross
+//     is refusing. A gate that makes diagnosis impossible gets disabled.
+//
+//   - `verify` is in it because it is the one command that spawns the suite
+//     itself. The other four are in it because they are the loop's step
+//     boundaries: refusing there stops an execute run before it reaches the
+//     step that runs tests. The locked exec_consent_gate decision admits what
+//     this cannot do — nothing stops an agent typing `go test` directly. The
+//     CLI covers the CLI.
+var execGatedCommands = []string{
+	"changes record",
+	"state bump",
+	"task next",
+	"task status in_progress",
+	"verify",
+}
+
+// requireExecConsent is the refusal a gated command runs FIRST, before any I/O.
+//
+// Ordering is the guarantee, not a nicety: a refusal that had already written
+// tests.json or verify.toml would have done the work it was refusing to
+// authorize. Every gated call site puts this at the top of its RunE.
+func requireExecConsent() error {
+	root, err := FindRoot()
+	if err != nil {
+		return err
+	}
+	proj, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		return err
+	}
+	testCmd := proj.Runtime.TestCommand
+	state, cerr := CheckConsent(root, filepath.Dir(root), testCmd)
+	if cerr == nil {
+		return nil
+	}
+	return consentRefusal(state, cerr, testCmd)
+}
+
+// consentRefusal turns a consent state into the message the user acts on. The
+// states are kept distinct all the way to the text because "you have never
+// trusted anything here" and "what you trusted has since changed" call for very
+// different reactions — the second is the attack the binding exists for, and
+// collapsing it into the first would report it as a routine first run.
+func consentRefusal(state ConsentState, cerr error, testCmd string) error {
+	switch state {
+	case ConsentRefused:
+		return cerr
+	case ConsentNotApplicable:
+		return fmt.Errorf(
+			"refusing to run: no runtime.test_command is configured.\n\n"+
+				"This is not a free pass — mutation adapters still shell out and run this\n"+
+				"repo's tests, so a blank command would be a way around the consent gate\n"+
+				"rather than a reason to skip it.\n\n"+
+				"Set one with `dross project set runtime.test_command \"<cmd>\"`, then run:\n\n"+
+				"    dross trust\n\n%w", cerr)
+	case ConsentStale:
+		return fmt.Errorf(
+			"refusing to run: this repo's test command has CHANGED since you trusted it —\n"+
+				"the recorded consent is stale.\n\n"+
+				"    %s\n\n"+
+				"That is the case this gate exists for: a repo trusted once, whose\n"+
+				"test_command a later pull rewrote. Read the line above; if it is what you\n"+
+				"meant to run, re-consent:\n\n"+
+				"    dross trust\n\n%w", testCmd, cerr)
+	default:
+		return fmt.Errorf(
+			"refusing to run: this repo's test command has not been trusted on this machine.\n\n"+
+				"    %s\n\n"+
+				"dross runs that command (and the mutation tools that wrap it) as you, in\n"+
+				"this checkout. It comes from the repo's tracked project.toml, so a clone\n"+
+				"carries whatever its author wrote. Read the line above, then:\n\n"+
+				"    dross trust\n\n%w", testCmd, cerr)
+	}
+}
+
+// --- the command ---
+
+// Trust registers `dross trust`.
+func Trust() *cobra.Command {
+	var check bool
+	c := &cobra.Command{
+		Use:   "trust",
+		Short: "Consent to dross running this repo's runtime.test_command on this machine",
+		Long: "Records consent for this repo's runtime.test_command in the gitignored\n" +
+			".dross/local.toml, as a hash of the command. A clone carries no consent, and\n" +
+			"editing the command revokes it — see `dross doctor` for the current state.",
+		Args: cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			proj, err := project.Load(filepath.Join(root, project.File))
+			if err != nil {
+				return err
+			}
+			testCmd := proj.Runtime.TestCommand
+			repoDir := filepath.Dir(root)
+
+			if check {
+				// The silent form prompts pre-flight with. Success prints
+				// NOTHING — a prompt that had to parse output around it would
+				// find a way not to run it.
+				state, cerr := CheckConsent(root, repoDir, testCmd)
+				if cerr == nil {
+					return nil
+				}
+				return consentRefusal(state, cerr, testCmd)
+			}
+
+			if err := refuseTrackedLocal(repoDir); err != nil {
+				return err
+			}
+			if testCmd == "" {
+				return fmt.Errorf(
+					"nothing to trust: runtime.test_command is not set.\n\n" +
+						"Set it first with `dross project set runtime.test_command \"<cmd>\"`,\n" +
+						"then run `dross trust` again — consent is bound to the command, so\n" +
+						"there is nothing to bind to yet")
+			}
+			// Printed BEFORE the write, and printed in full. The command is the
+			// thing being consented to; a grant that did not show it would be a
+			// rubber stamp on a line nobody read.
+			Printf("trusting this repo's test command on this machine:\n\n    %s\n\n", testCmd)
+			if err := GrantConsent(root, testCmd); err != nil {
+				return err
+			}
+			Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+			Print("Editing runtime.test_command revokes this; dross will ask again.")
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&check, "check", false, "exit 0 if consent is current, non-zero otherwise; prints nothing on success")
+	return c
 }

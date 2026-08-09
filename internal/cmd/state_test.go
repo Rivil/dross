@@ -93,6 +93,7 @@ func TestStateBumpInternalIncrementsLastSegment(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	if err := runCmd(t, State(), "set", "version", "1.2.3.4"); err != nil {
 		t.Fatal(err)
 	}
@@ -131,6 +132,7 @@ func TestStateBumpRejectsMalformedVersion(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	// `state set version` rejects a 3-part value outright now — one writer owns
 	// both homes and validates before touching either (c-4).
 	if err := runCmd(t, State(), "set", "version", "1.2.3"); err == nil {
@@ -167,6 +169,7 @@ func TestBumpInternalWritesBothFiles(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	if err := runCmd(t, State(), "set", "version", "1.2.1.0"); err != nil {
 		t.Fatal(err)
 	}

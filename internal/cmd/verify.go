@@ -33,6 +33,13 @@ func Verify() *cobra.Command {
 		Short: "Run mutation testing per language and write tests.json + verify.toml skeleton",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			// First, before any I/O. verify is the command that actually spawns
+			// the suite (configuredAdapters -> gremlins -> the repo's go test), so
+			// a refusal that had already written tests.json would have done the
+			// work it was declining to authorize.
+			if err := requireExecConsent(); err != nil {
+				return err
+			}
 			phaseID := args[0]
 			root, err := FindRoot()
 			if err != nil {
@@ -64,7 +71,7 @@ func Verify() *cobra.Command {
 				return nil
 			}
 
-			adapters := configuredAdapters(proj, root, skipMutation)
+			adapters := configuredAdaptersFn(proj, root, skipMutation)
 			t, err := verify.Run(phaseID, files, adapters)
 			if err != nil {
 				return err
@@ -172,6 +179,12 @@ func finalizeVerify(root, phaseID string) (recorded bool, verdict string, err er
 	}
 	return true, v.Verify.Verdict, nil
 }
+
+// configuredAdaptersFn is the seam a refusal test substitutes to prove verify
+// did not shell out. It is what makes "refused" different from "refused after
+// spawning gremlins" — and gremlins runs the untrusted repo's Go tests, which is
+// the code execution the consent gate exists to prevent.
+var configuredAdaptersFn = configuredAdapters
 
 // configuredAdapters returns the list of mutation adapters appropriate
 // for the project, with runtime prefixes applied (docker compose exec ...).

@@ -13,6 +13,7 @@ func TestChangesRecordRoundTripsViaShow(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 
 	// First record
 	if err := runCmd(t, Changes(),
@@ -75,6 +76,7 @@ func TestChangesRecordEmptyFilesValueIsRejected(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	// --files set to whitespace/empty entries should be rejected (the splitter
 	// drops empties; record then sees zero entries)
 	err := runCmd(t, Changes(), "record", "01-test", "t-1", "--files", "  ,  ,")
@@ -96,6 +98,7 @@ func TestChangesCover_ValidLandmarkRecorded(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	if err := runCmd(t, Changes(),
 		"record", "01-lm", "t-1",
 		"--files", "a.ts",
@@ -123,6 +126,7 @@ func TestChangesCover_InvalidLandmarkErrors(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	err := runCmd(t, Changes(),
 		"record", "01-lm", "t-1",
 		"--files", "a.ts",
@@ -145,6 +149,7 @@ func TestChangesRecordCommaInLandmarkValue(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	if err := runCmd(t, Changes(),
 		"record", "01-lm", "t-1",
 		"--files", "a.go",
@@ -196,6 +201,7 @@ func TestChangesRecordOverwritesOnRerun(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	if err := runCmd(t, Changes(), "record", "01-x", "t-1", "--files", "a.ts", "--commit", "old"); err != nil {
 		t.Fatal(err)
 	}

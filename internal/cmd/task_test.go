@@ -83,6 +83,7 @@ id = "c-1"
 text = "x"
 `)
 	mustWrite(t, filepath.Join(dir, "plan.toml"), planTOML)
+	trustFixture(t)
 }
 
 func TestTaskNextEmpty(t *testing.T) {

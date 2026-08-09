@@ -164,6 +164,10 @@ func stateBump() *cobra.Command {
 			if args[0] != "internal" {
 				return fmt.Errorf("unsupported segment %q (only `internal` is bumpable)", args[0])
 			}
+			// A loop-step boundary — see execGatedCommands.
+			if err := requireExecConsent(); err != nil {
+				return err
+			}
 			s, path, err := loadState()
 			if err != nil {
 				return err
