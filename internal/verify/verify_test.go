@@ -1,6 +1,7 @@
 package verify
 
 import (
+	"errors"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -394,5 +395,343 @@ func TestVerifyRoundTrip(t *testing.T) {
 	}
 	if len(got.Criteria) != 2 || got.Criteria[0].Status != "covered" {
 		t.Errorf("criteria drift: %+v", got.Criteria)
+	}
+}
+
+// --- diff scoping -----------------------------------------------------------
+
+// errAdapterBoom stands in for any adapter failure.
+var errAdapterBoom = errors.New("adapter exploded")
+
+// scopeOf is shorthand for a scope over an explicit file list.
+func scopeOf(files ...string) *Scope {
+	return NewScope(ScopeInput{Git: files})
+}
+
+// reportOf builds a Report whose aggregates and per-file rows agree, the shape
+// every adapter is required to produce (see mutation's drift assertions).
+func reportOf(tool string, rows map[string]mutation.FileStat, surviving ...mutation.Mutant) *mutation.Report {
+	r := &mutation.Report{Tool: tool, Files: rows, Surviving: surviving}
+	for _, st := range rows {
+		r.Killed += st.Killed
+		r.Survived += st.Survived
+		r.Timeout += st.Timeout
+		r.Errors += st.Errors
+		r.NotCovered += st.NotCovered
+	}
+	if denom := r.Killed + r.Survived + r.Timeout; denom > 0 {
+		r.Score = float64(r.Killed) / float64(denom)
+	}
+	return r
+}
+
+// TestFilterReportDropsUntouchedSibling is the phase's whole point: two
+// survivors in the same package, one in a file the phase edited and one in a
+// file it never opened. Only the first is this phase's problem.
+func TestFilterReportDropsUntouchedSibling(t *testing.T) {
+	r := reportOf("gremlins",
+		map[string]mutation.FileStat{
+			"pkg/touched.go":   {Survived: 1},
+			"pkg/untouched.go": {Survived: 1},
+		},
+		mutation.Mutant{File: "pkg/touched.go", Line: 4, Op: "CONDITIONALS_NEGATION"},
+		mutation.Mutant{File: "pkg/untouched.go", Line: 9, Op: "ARITHMETIC_BASE"},
+	)
+
+	kept, dropped := FilterReport(r, scopeOf("pkg/touched.go"), "go")
+
+	if len(kept.Surviving) != 1 || kept.Surviving[0].File != "pkg/touched.go" {
+		t.Errorf("kept survivors: %+v", kept.Surviving)
+	}
+	if len(dropped) != 1 || dropped[0].File != "pkg/untouched.go" {
+		t.Errorf("dropped survivors: %+v", dropped)
+	}
+}
+
+// TestFilterReportCounterImmunity: a mutant in an untouched file must move
+// NEITHER half of the fraction. Both directions are asserted because pruning
+// only the Surviving slice passes the survivor half while leaving a
+// neighbour's kills inflating the numerator.
+func TestFilterReportCounterImmunity(t *testing.T) {
+	base := reportOf("gremlins", map[string]mutation.FileStat{
+		"a.go": {Killed: 1, Survived: 1},
+	}, mutation.Mutant{File: "a.go", Line: 2})
+	want, _ := FilterReport(base, scopeOf("a.go"), "go")
+
+	plusKill := reportOf("gremlins", map[string]mutation.FileStat{
+		"a.go": {Killed: 1, Survived: 1},
+		"b.go": {Killed: 1},
+	}, mutation.Mutant{File: "a.go", Line: 2})
+	gotKill, _ := FilterReport(plusKill, scopeOf("a.go"), "go")
+	if gotKill.Killed != want.Killed || gotKill.Score != want.Score {
+		t.Errorf("numerator moved: killed=%d score=%v want killed=%d score=%v",
+			gotKill.Killed, gotKill.Score, want.Killed, want.Score)
+	}
+
+	plusSurvivor := reportOf("gremlins", map[string]mutation.FileStat{
+		"a.go": {Killed: 1, Survived: 1},
+		"b.go": {Survived: 1},
+	},
+		mutation.Mutant{File: "a.go", Line: 2},
+		mutation.Mutant{File: "b.go", Line: 7},
+	)
+	gotSurv, dropped := FilterReport(plusSurvivor, scopeOf("a.go"), "go")
+	if gotSurv.Survived != want.Survived || gotSurv.Score != want.Score {
+		t.Errorf("denominator moved: survived=%d score=%v want survived=%d score=%v",
+			gotSurv.Survived, gotSurv.Score, want.Survived, want.Score)
+	}
+	if len(dropped) != 1 {
+		t.Errorf("dropped: %+v", dropped)
+	}
+}
+
+// TestFilterReportConcreteArithmetic pins actual numbers rather than a
+// relation: the unfiltered report scores 0.91 over 11 mutants, the phase's own
+// slice scores 0.50 over 2. Those are the two numbers a reader can check.
+func TestFilterReportConcreteArithmetic(t *testing.T) {
+	r := reportOf("gremlins", map[string]mutation.FileStat{
+		"touched.go":   {Killed: 1, Survived: 1},
+		"untouched.go": {Killed: 9},
+	}, mutation.Mutant{File: "touched.go", Line: 1})
+
+	kept, _ := FilterReport(r, scopeOf("touched.go"), "go")
+	if kept.Killed != 1 || kept.Survived != 1 {
+		t.Errorf("counts: killed=%d survived=%d want 1/1", kept.Killed, kept.Survived)
+	}
+	if kept.Score != 0.5 {
+		t.Errorf("score = %v want 0.50 (not 0.91)", kept.Score)
+	}
+}
+
+// TestFilterReportTimeoutInDenominator pins the denominator convention against
+// the live one, killed/(killed+survived+timeout). adapter.go's Score doc
+// claims killed/(killed+survived); a recomputation written from that comment
+// scores this report 1.00.
+func TestFilterReportTimeoutInDenominator(t *testing.T) {
+	r := reportOf("gremlins", map[string]mutation.FileStat{
+		"a.go": {Killed: 1, Timeout: 1},
+	})
+	kept, _ := FilterReport(r, scopeOf("a.go"), "go")
+	if kept.Score != 0.5 {
+		t.Errorf("score = %v want 0.50 — timeouts belong in the denominator", kept.Score)
+	}
+	if kept.Timeout != 1 {
+		t.Errorf("timeout count lost: %d", kept.Timeout)
+	}
+}
+
+// TestFilterReportTagsEveryKeptSurvivor: no kept survivor may leave the filter
+// untagged, and the tag must distinguish a line the phase changed from one it
+// merely edited around. Both stay in the denominator — the tag weights
+// evidence, it does not gate.
+func TestFilterReportTagsEveryKeptSurvivor(t *testing.T) {
+	s := NewScope(ScopeInput{
+		Git:   []string{"a.go"},
+		Hunks: map[string][]Range{"a.go": {{Start: 10, End: 12}}},
+	})
+	r := reportOf("gremlins", map[string]mutation.FileStat{"a.go": {Survived: 2}},
+		mutation.Mutant{File: "a.go", Line: 11},
+		mutation.Mutant{File: "a.go", Line: 40},
+	)
+
+	kept, _ := FilterReport(r, s, "go")
+	if len(kept.Surviving) != 2 {
+		t.Fatalf("both survivors stay in scope: %+v", kept.Surviving)
+	}
+	byLine := map[int]string{}
+	for _, m := range kept.Surviving {
+		if m.Origin == "" {
+			t.Errorf("untagged survivor: %+v", m)
+		}
+		byLine[m.Line] = m.Origin
+	}
+	if byLine[11] != mutation.OriginInHunk {
+		t.Errorf("line 11 origin = %q want %q", byLine[11], mutation.OriginInHunk)
+	}
+	if byLine[40] != mutation.OriginInherited {
+		t.Errorf("line 40 origin = %q want %q", byLine[40], mutation.OriginInherited)
+	}
+	if kept.Survived != 2 {
+		t.Errorf("an inherited survivor must stay in the denominator: survived=%d", kept.Survived)
+	}
+}
+
+// TestFilterReportDroppedListIsComplete: filtered survivors are preserved in
+// full, not counted and discarded. An implementation that returns only a count
+// fails the field assertions.
+func TestFilterReportDroppedListIsComplete(t *testing.T) {
+	r := reportOf("stryker", map[string]mutation.FileStat{"src/b.ts": {Survived: 2}},
+		mutation.Mutant{File: "src/b.ts", Line: 3, Op: "ConditionalExpression"},
+		mutation.Mutant{File: "src/b.ts", Line: 8, Op: "ArithmeticOperator"},
+	)
+
+	kept, dropped := FilterReport(r, scopeOf("src/a.ts"), "typescript")
+	if len(kept.Surviving) != 0 {
+		t.Errorf("nothing was in scope: %+v", kept.Surviving)
+	}
+	want := []OutOfScopeMutant{
+		{File: "src/b.ts", Line: 3, Op: "ConditionalExpression", Language: "typescript"},
+		{File: "src/b.ts", Line: 8, Op: "ArithmeticOperator", Language: "typescript"},
+	}
+	if !reflect.DeepEqual(dropped, want) {
+		t.Errorf("dropped:\n got %+v\nwant %+v", dropped, want)
+	}
+}
+
+// TestFilterReportDegenerateInputs: an in-scope file the tool never mutated
+// invents no row, and an empty scope keeps nothing at all.
+func TestFilterReportDegenerateInputs(t *testing.T) {
+	r := reportOf("gremlins", map[string]mutation.FileStat{"a.go": {Killed: 1}})
+
+	kept, _ := FilterReport(r, scopeOf("a.go", "never-mutated.go"), "go")
+	if len(kept.Files) != 1 {
+		t.Errorf("a file with no mutants must not invent a row: %+v", kept.Files)
+	}
+
+	empty, dropped := FilterReport(
+		reportOf("gremlins", map[string]mutation.FileStat{"a.go": {Killed: 1, Survived: 1}},
+			mutation.Mutant{File: "a.go", Line: 1}),
+		NewScope(ScopeInput{}), "go")
+	if empty.Killed != 0 || empty.Survived != 0 || empty.Score != 0 {
+		t.Errorf("empty scope must keep nothing: %+v", empty)
+	}
+	if len(dropped) != 1 {
+		t.Errorf("everything is dropped under an empty scope: %+v", dropped)
+	}
+
+	// A nil scope is "not configured", not "nothing in scope": pass-through.
+	same, none := FilterReport(r, nil, "go")
+	if same != r || none != nil {
+		t.Errorf("nil scope must be a pass-through, got %+v / %+v", same, none)
+	}
+	if got, _ := FilterReport(nil, scopeOf("a.go"), "go"); got != nil {
+		t.Errorf("nil report must not be invented: %+v", got)
+	}
+}
+
+// gremlinsPayload / strykerPayload express the SAME logical mutant set in the
+// two tools' own report formats: one kill and one survivor in a file the phase
+// touched, one kill and one survivor in a file it didn't.
+const gremlinsPayload = `{
+  "go_module": "example.com/m",
+  "files": [
+    {"file_name": "pkg/touched.go", "mutations": [
+      {"line":10,"column":1,"type":"CONDITIONALS_NEGATION","status":"KILLED"},
+      {"line":20,"column":1,"type":"ARITHMETIC_BASE","status":"LIVED"}
+    ]},
+    {"file_name": "pkg/untouched.go", "mutations": [
+      {"line":10,"column":1,"type":"CONDITIONALS_NEGATION","status":"KILLED"},
+      {"line":30,"column":1,"type":"ARITHMETIC_BASE","status":"LIVED"}
+    ]}
+  ]
+}`
+
+const strykerPayload = `{
+  "schemaVersion": "1",
+  "files": {
+    "src/touched.ts": {"language":"typescript","source":"...","mutants":[
+      {"id":"1","mutatorName":"ConditionalExpression","replacement":"true","status":"Killed",
+       "location":{"start":{"line":10,"column":1},"end":{"line":10,"column":2}}},
+      {"id":"2","mutatorName":"ArithmeticOperator","replacement":"-","status":"Survived",
+       "location":{"start":{"line":20,"column":1},"end":{"line":20,"column":2}}}
+    ]},
+    "src/untouched.ts": {"language":"typescript","source":"...","mutants":[
+      {"id":"3","mutatorName":"ConditionalExpression","replacement":"true","status":"Killed",
+       "location":{"start":{"line":10,"column":1},"end":{"line":10,"column":2}}},
+      {"id":"4","mutatorName":"ArithmeticOperator","replacement":"-","status":"Survived",
+       "location":{"start":{"line":30,"column":1},"end":{"line":30,"column":2}}}
+    ]}
+  }
+}`
+
+// TestFilterReportIsAdapterAgnostic runs the same logical mutant set through
+// both real parsers — a package-granular tool and a file-granular one — and
+// requires identical attribution. A filter that special-cases one tool's path
+// shape produces different kept or dropped counts here.
+func TestFilterReportIsAdapterAgnostic(t *testing.T) {
+	gr, err := mutation.ParseGremlinsJSON([]byte(gremlinsPayload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := mutation.ParseStrykerJSON([]byte(strykerPayload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope := scopeOf("pkg/touched.go", "src/touched.ts")
+
+	keptGo, dropGo := FilterReport(gr, scope, "go")
+	keptTS, dropTS := FilterReport(st, scope, "typescript")
+
+	for _, tc := range []struct {
+		lang    string
+		kept    *mutation.Report
+		dropped []OutOfScopeMutant
+	}{
+		{"go", keptGo, dropGo},
+		{"typescript", keptTS, dropTS},
+	} {
+		if tc.kept.Killed != 1 || tc.kept.Survived != 1 || tc.kept.Score != 0.5 {
+			t.Errorf("%s kept: killed=%d survived=%d score=%v want 1/1/0.50",
+				tc.lang, tc.kept.Killed, tc.kept.Survived, tc.kept.Score)
+		}
+		if len(tc.dropped) != 1 {
+			t.Errorf("%s dropped %d want 1: %+v", tc.lang, len(tc.dropped), tc.dropped)
+		}
+	}
+
+	// The same set, this time through a multi-leg RunScoped, proving the
+	// file-granular leg takes the same path when it runs alongside another.
+	tests, err := RunScoped("p", []string{"pkg/touched.go", "src/touched.ts"},
+		[]mutation.Adapter{
+			&fakeAdapter{name: "gremlins", supportsExt: []string{".go"}, report: gr},
+			&fakeAdapter{name: "stryker", supportsExt: []string{".ts"}, report: st},
+		}, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tests.Languages) != 2 {
+		t.Fatalf("expected two legs: %+v", tests.Languages)
+	}
+	for _, lr := range tests.Languages {
+		if lr.Mutation.Killed != 1 || lr.Mutation.Survived != 1 {
+			t.Errorf("%s leg: killed=%d survived=%d want 1/1",
+				lr.Tool, lr.Mutation.Killed, lr.Mutation.Survived)
+		}
+	}
+	if len(tests.OutOfScope) != 2 {
+		t.Errorf("both legs' dropped survivors collect at top level: %+v", tests.OutOfScope)
+	}
+	langs := map[string]bool{}
+	for _, d := range tests.OutOfScope {
+		langs[d.Language] = true
+	}
+	if !langs["go"] || !langs["typescript"] {
+		t.Errorf("dropped survivors lost their language: %+v", tests.OutOfScope)
+	}
+}
+
+// TestRunScopedFailedLegSurvivesFiltering: a leg whose adapter errored has no
+// report at all. It must still be recorded — the record-and-continue contract
+// — and must not nil-panic the filter on the way through.
+func TestRunScopedFailedLegSurvivesFiltering(t *testing.T) {
+	broken := &fakeAdapter{name: "stryker", supportsExt: []string{".ts"}, err: errAdapterBoom}
+	ok := &fakeAdapter{name: "gremlins", supportsExt: []string{".go"},
+		report: reportOf("gremlins", map[string]mutation.FileStat{"a.go": {Killed: 1}})}
+
+	tests, err := RunScoped("p", []string{"a.ts", "a.go"},
+		[]mutation.Adapter{broken, ok}, scopeOf("a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tests.Languages) != 2 {
+		t.Fatalf("a failed leg must still be recorded: %+v", tests.Languages)
+	}
+	for _, lr := range tests.Languages {
+		if lr.Tool == "stryker" && lr.Error == "" {
+			t.Error("failed leg lost its error")
+		}
+		if lr.Tool == "gremlins" && lr.Mutation.Killed != 1 {
+			t.Errorf("healthy leg was discarded: %+v", lr.Mutation)
+		}
 	}
 }

@@ -49,6 +49,12 @@ type Tests struct {
 	GeneratedAt time.Time     `json:"generated_at"`
 	Languages   []LanguageRun `json:"languages"`
 	Skipped     []SkippedFile `json:"skipped,omitempty"`
+
+	// OutOfScope collects every survivor filtered out for landing in a file
+	// this phase never touched, across all legs. Top-level rather than
+	// per-language because it is read as one list; each entry carries its own
+	// language so a merged read still says which adapter produced it.
+	OutOfScope []OutOfScopeMutant `json:"out_of_scope,omitempty"`
 }
 
 type LanguageRun struct {
@@ -66,6 +72,88 @@ type LanguageRun struct {
 type SkippedFile struct {
 	File   string `json:"file"`
 	Reason string `json:"reason"` // why no adapter ran on it
+}
+
+// OutOfScopeMutant is a survivor the tool found in a file this phase never
+// touched. It is filtered out of the score and out of the phase's findings —
+// but kept, in full, so the filtering is auditable and a later survivor-
+// lifecycle pass can route it somewhere. Discarding them would trade one
+// silent mis-attribution for another.
+type OutOfScopeMutant struct {
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+	Op       string `json:"op,omitempty"`
+	Language string `json:"language,omitempty"`
+}
+
+// FilterReport splits a mutation report against the phase's scope: the mutants
+// in files the phase touched, and the survivors in files it didn't.
+//
+// The counts and the score are recomputed from the in-scope per-file rows
+// alone. Pruning only the Surviving slice would look right in the findings and
+// still leave a neighbour's kills inflating the numerator — the failure mode
+// where a phase passes on code it never wrote.
+//
+// Score follows mutation.Report's live convention, killed/(killed+survived+
+// timeout). The struct doc at adapter.go's Score field claims
+// killed/(killed+survived) and is simply wrong; a recomputation written from
+// that comment scores a timeout-carrying report too high.
+//
+// A nil scope means scoping is not configured and the report passes through
+// untouched — the seam that lets this land before its call site is wired up.
+// Scoping being unconditional is enforced where verify is invoked, not here.
+//
+// r is never mutated; the kept report is a new value.
+func FilterReport(r *mutation.Report, s *Scope, language string) (*mutation.Report, []OutOfScopeMutant) {
+	if r == nil || s == nil {
+		return r, nil
+	}
+
+	kept := &mutation.Report{Tool: r.Tool}
+	// Counts come from the per-file table, not the aggregates: it is the only
+	// view that can be split by file. An adapter that populates aggregates but
+	// no rows therefore contributes nothing to the score — visibly zero rather
+	// than silently whole-package. mutation's drift tests keep adapters honest.
+	for file, st := range r.Files {
+		if !s.Contains(file) {
+			continue
+		}
+		kept.Killed += st.Killed
+		kept.Survived += st.Survived
+		kept.Timeout += st.Timeout
+		kept.Errors += st.Errors
+		kept.NotCovered += st.NotCovered
+		if kept.Files == nil {
+			kept.Files = map[string]mutation.FileStat{}
+		}
+		// Keys are already unique in the source map, so this copies rather
+		// than accumulates — and it keeps the tool's own spelling of the path
+		// rather than the scope's normalised form, so the kept report still
+		// reads as the tool wrote it.
+		kept.Files[file] = st
+	}
+	if denom := kept.Killed + kept.Survived + kept.Timeout; denom > 0 {
+		kept.Score = float64(kept.Killed) / float64(denom)
+	}
+
+	var dropped []OutOfScopeMutant
+	for _, m := range r.Surviving {
+		if !s.Contains(m.File) {
+			dropped = append(dropped, OutOfScopeMutant{
+				File:     m.File,
+				Line:     m.Line,
+				Op:       m.Op,
+				Language: language,
+			})
+			continue
+		}
+		// Every kept survivor carries how it relates to the diff. Both tags
+		// stay in the denominator and in Surviving — the tag weights the
+		// evidence, it does not gate (the scope_granularity lock).
+		m.Origin = s.Origin(m.File, m.Line)
+		kept.Surviving = append(kept.Surviving, m)
+	}
+	return kept, dropped
 }
 
 // Verify is the human-readable + LLM-mappable verdict.
@@ -135,6 +223,17 @@ func FilePaths(root, phaseID string) (tests, verify string) {
 // matching adapter (by Supports()) is used for each file. Files with
 // no matching adapter end up in Skipped.
 func Run(phaseID string, files []string, adapters []mutation.Adapter) (*Tests, error) {
+	return RunScoped(phaseID, files, adapters, nil)
+}
+
+// RunScoped is Run with diff scoping applied to each leg's report. A nil scope
+// is the unscoped behaviour, which is what Run passes.
+//
+// Filtering happens AFTER each adapter returns. What the adapter was
+// dispatched to mutate is not narrowed here — narrowing the dispatch would
+// change which mutants exist, and this is only about which of them this phase
+// is answerable for.
+func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scope *Scope) (*Tests, error) {
 	t := &Tests{
 		Phase:       phaseID,
 		GeneratedAt: time.Now().UTC(),
@@ -178,11 +277,14 @@ func Run(phaseID string, files []string, adapters []mutation.Adapter) (*Tests, e
 			})
 			continue
 		}
+		language := adapterLanguage(name)
+		kept, dropped := FilterReport(report, scope, language)
+		t.OutOfScope = append(t.OutOfScope, dropped...)
 		t.Languages = append(t.Languages, LanguageRun{
-			Name:     adapterLanguage(name),
+			Name:     language,
 			Tool:     name,
 			Files:    byAdapter[name],
-			Mutation: report,
+			Mutation: kept,
 		})
 	}
 
