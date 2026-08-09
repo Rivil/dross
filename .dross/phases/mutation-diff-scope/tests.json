@@ -1,6 +1,6 @@
 {
   "phase": "mutation-diff-scope",
-  "generated_at": "2026-08-09T14:51:09.806304Z",
+  "generated_at": "2026-08-09T17:09:19.417143Z",
   "languages": [
     {
       "name": "go",
@@ -26,26 +26,12 @@
       ],
       "mutation": {
         "Tool": "gremlins",
-        "Killed": 262,
-        "Survived": 21,
+        "Killed": 264,
+        "Survived": 19,
         "Timeout": 0,
         "Errors": 0,
-        "Score": 0.9257950530035336,
+        "Score": 0.9328621908127208,
         "Surviving": [
-          {
-            "File": "internal/cmd/verify.go",
-            "Line": 472,
-            "Op": "INVERT_NEGATIVES",
-            "Snippet": "",
-            "Origin": "in-hunk"
-          },
-          {
-            "File": "internal/cmd/verify.go",
-            "Line": 472,
-            "Op": "ARITHMETIC_BASE",
-            "Snippet": "",
-            "Origin": "in-hunk"
-          },
           {
             "File": "internal/mutation/gremlins.go",
             "Line": 155,
@@ -104,22 +90,29 @@
           },
           {
             "File": "internal/verify/scope.go",
+            "Line": 151,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": "",
+            "Origin": "in-hunk"
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 151,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": "",
+            "Origin": "in-hunk"
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 151,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "in-hunk"
+          },
+          {
+            "File": "internal/verify/scope.go",
             "Line": 147,
-            "Op": "CONDITIONALS_BOUNDARY",
-            "Snippet": "",
-            "Origin": "in-hunk"
-          },
-          {
-            "File": "internal/verify/scope.go",
-            "Line": 151,
-            "Op": "CONDITIONALS_BOUNDARY",
-            "Snippet": "",
-            "Origin": "in-hunk"
-          },
-          {
-            "File": "internal/verify/scope.go",
-            "Line": 151,
-            "Op": "CONDITIONALS_BOUNDARY",
+            "Op": "CONDITIONALS_NEGATION",
             "Snippet": "",
             "Origin": "in-hunk"
           },
@@ -146,7 +139,14 @@
           },
           {
             "File": "internal/verify/scope.go",
-            "Line": 151,
+            "Line": 155,
+            "Op": "CONDITIONALS_BOUNDARY",
+            "Snippet": "",
+            "Origin": "in-hunk"
+          },
+          {
+            "File": "internal/verify/scope.go",
+            "Line": 155,
             "Op": "CONDITIONALS_NEGATION",
             "Snippet": "",
             "Origin": "in-hunk"
@@ -154,20 +154,6 @@
           {
             "File": "internal/verify/scope.go",
             "Line": 147,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": "",
-            "Origin": "in-hunk"
-          },
-          {
-            "File": "internal/verify/scope.go",
-            "Line": 155,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": "",
-            "Origin": "in-hunk"
-          },
-          {
-            "File": "internal/verify/scope.go",
-            "Line": 155,
             "Op": "CONDITIONALS_BOUNDARY",
             "Snippet": "",
             "Origin": "in-hunk"
@@ -180,7 +166,7 @@
             "Origin": "in-hunk"
           }
         ],
-        "NotCovered": 21
+        "NotCovered": 19
       }
     }
   ],
@@ -204,56 +190,8 @@
   ],
   "out_of_scope": [
     {
-      "file": "internal/cmd/phase_lifecycle.go",
-      "line": 23,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/phase_lifecycle.go",
-      "line": 23,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/phase_lifecycle.go",
-      "line": 25,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/phase_lifecycle.go",
-      "line": 25,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/phase_lifecycle.go",
-      "line": 27,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/rule.go",
-      "line": 143,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/update.go",
-      "line": 181,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/update.go",
-      "line": 184,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/deferred.go",
-      "line": 138,
+      "file": "internal/cmd/state.go",
+      "line": 270,
       "op": "CONDITIONALS_NEGATION",
       "language": "go"
     },
@@ -348,242 +286,26 @@
       "language": "go"
     },
     {
-      "file": "internal/cmd/env.go",
-      "line": 105,
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 52,
       "op": "CONDITIONALS_NEGATION",
       "language": "go"
     },
     {
-      "file": "internal/cmd/env.go",
-      "line": 109,
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 55,
       "op": "CONDITIONALS_NEGATION",
       "language": "go"
     },
     {
-      "file": "internal/cmd/env.go",
-      "line": 114,
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 58,
       "op": "CONDITIONALS_NEGATION",
       "language": "go"
     },
     {
-      "file": "internal/cmd/env.go",
-      "line": 119,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/env.go",
-      "line": 148,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/install.go",
-      "line": 65,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/state.go",
-      "line": 270,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/validate.go",
-      "line": 92,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/validate.go",
-      "line": 96,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/phase.go",
-      "line": 308,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/phase.go",
-      "line": 310,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/phase.go",
-      "line": 768,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/watch.go",
-      "line": 130,
-      "op": "CONDITIONALS_BOUNDARY",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/watch.go",
-      "line": 130,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/milestone_dependents.go",
-      "line": 158,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/milestone_dependents.go",
-      "line": 160,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/milestone_dependents.go",
-      "line": 160,
-      "op": "INVERT_NEGATIVES",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/milestone_dependents.go",
-      "line": 160,
-      "op": "ARITHMETIC_BASE",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/trust.go",
-      "line": 281,
-      "op": "ARITHMETIC_BASE",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/trust.go",
-      "line": 280,
-      "op": "ARITHMETIC_BASE",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/trust.go",
-      "line": 279,
-      "op": "ARITHMETIC_BASE",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/hints.go",
-      "line": 86,
-      "op": "CONDITIONALS_BOUNDARY",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/hints.go",
-      "line": 86,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/hints.go",
-      "line": 86,
-      "op": "CONDITIONALS_BOUNDARY",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/hints.go",
-      "line": 86,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/hints.go",
-      "line": 88,
-      "op": "CONDITIONALS_BOUNDARY",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/hints.go",
-      "line": 88,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/hints.go",
-      "line": 133,
-      "op": "CONDITIONALS_BOUNDARY",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/hints.go",
-      "line": 133,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/project.go",
-      "line": 81,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/project.go",
-      "line": 83,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/hooks.go",
-      "line": 100,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/root.go",
-      "line": 61,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/basebranch.go",
-      "line": 104,
-      "op": "ARITHMETIC_BASE",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/repair.go",
-      "line": 131,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/repair.go",
-      "line": 133,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/repair.go",
-      "line": 133,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/statusline.go",
-      "line": 23,
-      "op": "ARITHMETIC_BASE",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/statusline.go",
-      "line": 189,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/statusline.go",
-      "line": 189,
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 60,
       "op": "CONDITIONALS_NEGATION",
       "language": "go"
     },
@@ -630,38 +352,20 @@
       "language": "go"
     },
     {
-      "file": "internal/cmd/ship.go",
-      "line": 264,
+      "file": "internal/cmd/statusline.go",
+      "line": 23,
+      "op": "ARITHMETIC_BASE",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/statusline.go",
+      "line": 189,
       "op": "CONDITIONALS_NEGATION",
       "language": "go"
     },
     {
-      "file": "internal/cmd/ship.go",
-      "line": 550,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/ship.go",
-      "line": 550,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/ship.go",
-      "line": 552,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/ship.go",
-      "line": 552,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/ship.go",
-      "line": 554,
+      "file": "internal/cmd/statusline.go",
+      "line": 189,
       "op": "CONDITIONALS_NEGATION",
       "language": "go"
     },
@@ -708,32 +412,314 @@
       "language": "go"
     },
     {
-      "file": "internal/cmd/footer_coverage.go",
-      "line": 52,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/footer_coverage.go",
-      "line": 55,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/footer_coverage.go",
-      "line": 58,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
-      "file": "internal/cmd/footer_coverage.go",
-      "line": 60,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go"
-    },
-    {
       "file": "internal/cmd/issue.go",
       "line": 171,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 105,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 109,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 114,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 119,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 148,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 86,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 86,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 86,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 86,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 88,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 88,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 133,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/hints.go",
+      "line": 133,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/hooks.go",
+      "line": 100,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/trust.go",
+      "line": 281,
+      "op": "ARITHMETIC_BASE",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/trust.go",
+      "line": 280,
+      "op": "ARITHMETIC_BASE",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/trust.go",
+      "line": 279,
+      "op": "ARITHMETIC_BASE",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/basebranch.go",
+      "line": 104,
+      "op": "ARITHMETIC_BASE",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/project.go",
+      "line": 81,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/project.go",
+      "line": 83,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/update.go",
+      "line": 181,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/update.go",
+      "line": 184,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/phase.go",
+      "line": 308,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/phase.go",
+      "line": 310,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/phase.go",
+      "line": 768,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/repair.go",
+      "line": 131,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/repair.go",
+      "line": 133,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/repair.go",
+      "line": 133,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/root.go",
+      "line": 61,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 158,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 160,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 160,
+      "op": "INVERT_NEGATIVES",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 160,
+      "op": "ARITHMETIC_BASE",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/deferred.go",
+      "line": 138,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 264,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 550,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 550,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 552,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 552,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/ship.go",
+      "line": 554,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/install.go",
+      "line": 65,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 23,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 23,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 25,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 25,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 27,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 92,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 96,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/watch.go",
+      "line": 130,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/watch.go",
+      "line": 130,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go"
+    },
+    {
+      "file": "internal/cmd/rule.go",
+      "line": 143,
       "op": "CONDITIONALS_NEGATION",
       "language": "go"
     }
@@ -748,6 +734,8 @@
       ".dross/phases/mutation-diff-scope/panel/verification.md",
       ".dross/phases/mutation-diff-scope/plan.toml",
       ".dross/phases/mutation-diff-scope/spec.toml",
+      ".dross/phases/mutation-diff-scope/tests.json",
+      ".dross/phases/mutation-diff-scope/verify.toml",
       ".dross/project.toml",
       "README.md",
       "assets/prompts/verify.md",
@@ -781,7 +769,7 @@
       ".dross/phases/mutation-diff-scope/changes.json": [
         {
           "start": 1,
-          "end": 155
+          "end": 154
         }
       ],
       ".dross/phases/mutation-diff-scope/panel/mvp.md": [
@@ -817,7 +805,19 @@
       ".dross/phases/mutation-diff-scope/spec.toml": [
         {
           "start": 1,
-          "end": 72
+          "end": 77
+        }
+      ],
+      ".dross/phases/mutation-diff-scope/tests.json": [
+        {
+          "start": 1,
+          "end": 1167
+        }
+      ],
+      ".dross/phases/mutation-diff-scope/verify.toml": [
+        {
+          "start": 1,
+          "end": 99
         }
       ],
       ".dross/project.toml": [
@@ -918,16 +918,24 @@
       ],
       "internal/cmd/verify_test.go": [
         {
-          "start": 9,
-          "end": 9
+          "start": 4,
+          "end": 4
         },
         {
-          "start": 12,
-          "end": 12
+          "start": 10,
+          "end": 10
         },
         {
-          "start": 655,
-          "end": 1139
+          "start": 13,
+          "end": 13
+        },
+        {
+          "start": 441,
+          "end": 518
+        },
+        {
+          "start": 734,
+          "end": 1218
         }
       ],
       "internal/cmd/verifyscope.go": [

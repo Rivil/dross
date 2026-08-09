@@ -1,16 +1,16 @@
 [verify]
   phase = "mutation-diff-scope"
-  generated_at = 2026-08-09T14:51:09.806304Z
-  verdict = "partial"
+  generated_at = 2026-08-09T17:09:19.417143Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-08-09T15:41:08.572766Z
+  finalized_at = 2026-08-09T17:30:46.820225Z
 
 [summary]
   mutation_status = "measured"
-  mutation_score = 0.9257950530035336
-  mutants_killed = 262
-  mutants_survived = 21
-  mutants_not_covered = 21
+  mutation_score = 0.9328621908127208
+  mutants_killed = 264
+  mutants_survived = 19
+  mutants_not_covered = 19
   mutants_in_scope = 283
   criteria_total = 7
   criteria_covered = 7
@@ -32,43 +32,35 @@
   id = "c-3"
   status = "covered"
   tests = ["internal/verify/verify_test.go:TestRunScopedPersistsOutOfScopeSurvivors", "internal/verify/verify_test.go:TestSkeletonOneNoteNoFlagFlood", "internal/verify/verify_test.go:TestRunScopedKeepsLanguageOnDroppedSurvivors", "internal/cmd/verify_test.go:TestVerifyPrintsOutOfScopeStatusAndSampleSize"]
-  notes = "Presence in out_of_scope and absence from the per-language lists are both asserted; the NOTE/FLAG counts are asserted as counts, so a per-survivor loop over the unfiltered set fails."
+  notes = "Presence in out_of_scope and absence from the per-language lists are both asserted; the NOTE/FLAG counts are asserted as counts, so a per-survivor loop over the unfiltered set fails. This run exercised the path for real: 89 out-of-scope survivors persisted, one count NOTE emitted."
 
 [[criterion]]
   id = "c-4"
   status = "covered"
   tests = ["internal/verify/verify_test.go:TestFilterReportIsAdapterAgnostic", "internal/mutation/stryker_net_test.go:TestStrykerNetRePrefixParityWithStryker", "internal/mutation/gremlins_test.go:TestGremlinsRunRePrefixesPackagePaths", "internal/mutation/stryker_test.go:TestStrykerRePrefixMovesPerFileKeys"]
-  notes = "One logical mutant set through a gremlins-parsed and a stryker-parsed report yields identical kept and dropped counts, and the same table runs inside a two-leg RunScoped. The four inherited survivors in stryker.go/stryker_net.go are pre-existing adapter I/O paths, not the path-shape normalisation this criterion rests on."
+  notes = "One logical mutant set through a gremlins-parsed and a stryker-parsed report yields identical kept and dropped counts, and the same table runs inside a two-leg RunScoped. The inherited survivors in stryker.go/stryker_net.go are pre-existing adapter I/O paths, not the path-shape normalisation this criterion rests on."
 
 [[criterion]]
   id = "c-5"
   status = "covered"
   tests = ["internal/verify/verify_test.go:TestSkeletonOutOfScopeStatus", "internal/cmd/verify_scoping_test.go:TestScopingVacuousPassIsNotReachable", "internal/cmd/verify_test.go:TestVerifyPrintsOutOfScopeStatusAndSampleSize"]
-  notes = "The status is asserted against all three wrong answers (measured, unmeasurable, bare 0.00), and a genuinely clean run over the same phase is proved to read as measured — so the signal distinguishes."
+  notes = "The status is asserted against all three wrong answers (measured, unmeasurable, bare 0.00), and a genuinely clean run over the same phase is proved to read as measured — so the signal distinguishes. This run's own status is measured over 283 in-scope mutants, the non-vacuous side."
 
 [[criterion]]
   id = "c-6"
   status = "covered"
-  tests = ["internal/verify/verify_test.go:TestTestsScopeRoundTrip", "internal/verify/verify_test.go:TestTestsDegradedScopeIsReadableAfterTheFact", "internal/cmd/verifyscope_test.go:TestPhaseScopeRecordsResolvedSha", "internal/cmd/verifyscope_test.go:TestPhaseScopeSourceProvenance", "internal/cmd/verifyscope_test.go:TestPhaseScopeFencesBaseRef"]
-  notes = "The round-trip asserts the reload, not just the write, so a missing json tag fails; the base is pinned as the resolved sha rather than the ref. The recording surface (tests.json) is fully covered — the one FLAG below is the CLI's display truncation, which cannot make a mis-scoped run undiagnosable because the full file set is in tests.json."
+  tests = ["internal/verify/verify_test.go:TestTestsScopeRoundTrip", "internal/verify/verify_test.go:TestTestsDegradedScopeIsReadableAfterTheFact", "internal/cmd/verifyscope_test.go:TestPhaseScopeRecordsResolvedSha", "internal/cmd/verifyscope_test.go:TestPhaseScopeSourceProvenance", "internal/cmd/verifyscope_test.go:TestPhaseScopeFencesBaseRef", "internal/cmd/verify_test.go:TestVerifyCover_ScopeFileListTruncation", "internal/cmd/verify_test.go:TestVerifyCover_ScopeFileListAtCapIsNotTruncated"]
+  notes = "The round-trip asserts the reload, not just the write, so a missing json tag fails; the base is pinned as the resolved sha (c434f37) rather than the ref. t-6 closed the last gap: the CLI's display truncation now has both the over-cap overflow count and the at-cap boundary pinned, and both mutants that survived the previous run on that branch are killed here."
 
 [[criterion]]
   id = "c-7"
   status = "covered"
   tests = ["internal/verify/verify_test.go:TestFilterReportTagsEveryKeptSurvivor", "internal/verify/scope_test.go:TestScopeOriginDefaultsToProximity", "internal/verify/scope_test.go:TestParseHunksArithmetic", "internal/cmd/verifyscope_test.go:TestPhaseScopeCollectsHunks"]
-  notes = "An empty origin tag fails the test outright; in-hunk and inherited are distinguished and both are asserted to stay in the denominator. The classifier defaults to inherited, so a hunk-less degraded run cannot promote survivors to the strongest tier."
-
-[[finding]]
-  severity = "FLAG"
-  text = "gremlins mutant survived: internal/cmd/verify.go:472 (INVERT_NEGATIVES) — in-hunk. printScopeSummary's `(+%d more)` truncation branch (>12 scoped files) has no test; this very run printed `(+18 more)` unexercised. Routed: amend t-6 with a truncation test via /dross-execute, then re-verify."
-
-[[finding]]
-  severity = "FLAG"
-  text = "gremlins mutant survived: internal/cmd/verify.go:472 (ARITHMETIC_BASE) — in-hunk, same untested truncation arithmetic `len(names)-scopeFileListCap`. Same routing as above."
+  notes = "An empty origin tag fails the test outright; in-hunk and inherited are distinguished and both are asserted to stay in the denominator. The classifier defaults to inherited, so a hunk-less degraded run cannot promote survivors to the strongest tier. All 19 of this run's in-scope survivors carry a tag (11 in-hunk, 8 inherited)."
 
 [[finding]]
   severity = "NOTE"
-  text = "accepted (unkillable — gremlins attribution ceiling): 8 in-hunk survivors on `switch { case ... }` conditions in internal/verify/scope.go:151, :153, :155 (the Source provenance switch) and :260 (the deleted-file-side case). All 8 are reported NOT COVERED, never LIVED — gremlins' go-cover attribution marks switch-case conditions uncovered even when exercised. TestNewScopeSourceProvenance asserts all three Source values plus the degraded reason, TestPhaseScopeSourceProvenance asserts both one-sided outcomes, and TestParseHunksIgnoresDeletedFileSide asserts the /dev/null case. Behaviourally covered; stop reporting."
+  text = "accepted (unkillable — gremlins attribution ceiling): 9 in-hunk survivors on `switch { case ... }` conditions in internal/verify/scope.go:151, :153, :155 (the Source provenance switch) and :260 (the deleted-file-side case). All 9 are reported NOT COVERED, never LIVED — gremlins' go-cover attribution marks switch-case conditions uncovered even when exercised. TestNewScopeSourceProvenance asserts all three Source values plus the degraded reason, TestPhaseScopeSourceProvenance asserts both one-sided outcomes, and TestParseHunksIgnoresDeletedFileSide asserts the /dev/null case. Behaviourally covered; stop reporting."
 
 [[finding]]
   severity = "NOTE"
@@ -76,7 +68,11 @@
 
 [[finding]]
   severity = "NOTE"
-  text = "deferred to survivor-lifecycle (r-02 routing): 9 inherited survivors on lines this phase did not change, in files it edited around — internal/mutation/gremlins.go:155 (x3), :166 (error-message string concatenation on the unreadable-report and zero-coverage paths), internal/mutation/stryker.go:73, :80 (report-read and parse error branches), :263 (the future-status default arm), internal/mutation/stryker_net.go:221 (the buildCmd process seam, stubbed out in unit tests). All are pre-existing adapter I/O and error plumbing, all reported NOT COVERED, and none participate in any criterion's covering test. Recorded here as accepted-for-now with a named destination; not to be re-reported by the next verify."
+  text = "deferred to survivor-lifecycle (r-02 routing): 8 inherited survivors on lines this phase did not change, in files it edited around — internal/mutation/gremlins.go:155 (x3) and :166 (error-message string concatenation on the unreadable-report and zero-coverage paths), internal/mutation/stryker.go:73, :80 (report-read and parse error branches) and :263 (the future-status default arm), internal/mutation/stryker_net.go:221 (the buildCmd process seam, stubbed out in unit tests). All are pre-existing adapter I/O and error plumbing, all reported NOT COVERED, and none participates in any criterion's covering test. Recorded here as accepted-for-now with a named destination; not to be re-reported by the next verify. (The spec's matching [[deferred]] entry says nine; the ground-truth count in tests.json is eight — same line list.)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "closed since the previous run: the two in-hunk survivors on internal/cmd/verify.go:472 (INVERT_NEGATIVES, ARITHMETIC_BASE) — printScopeSummary's `(+N more)` truncation branch — are killed. t-6 added TestVerifyCover_ScopeFileListTruncation and TestVerifyCover_ScopeFileListAtCapIsNotTruncated; the survivor set is otherwise identical to the partial run, so the delta is attributable to those two tests alone."
 
 [[finding]]
   severity = "NOTE"
