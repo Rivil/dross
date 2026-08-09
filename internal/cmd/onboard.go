@@ -113,6 +113,13 @@ func Onboard() *cobra.Command {
 				return fmt.Errorf("write .gitattributes: %w", err)
 			}
 
+			// Adopting a repo has to untrack-going-forward too: without the
+			// ignore, the very first ship folds state.json back into the tree
+			// (locked state_tracking).
+			if err := ensureDrossGitignore(cwd); err != nil {
+				return fmt.Errorf("write .gitignore: %w", err)
+			}
+
 			_ = profile.SeedFromGSD(filepath.Join(root, profile.File))
 
 			Printf("dross onboarded at %s\n", root)

@@ -1,0 +1,10 @@
+{
+  "milestones": {
+    "v1.2": "DRO-1"
+  },
+  "phases": {
+    "exec-trust-followups": "DRO-2"
+  },
+  "quicks": {},
+  "last_pull": "0001-01-01T00:00:00Z"
+}

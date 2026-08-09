@@ -29,6 +29,7 @@ func newTestClient(t *testing.T, h http.HandlerFunc) (*Client, *httptest.Server)
 		URL:      "https://forge.example/me/proj",
 		APIBase:  srv.URL,
 		AuthEnv:  tokenEnv,
+		Hosts:    allowingSelf(srv.URL),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -48,8 +49,8 @@ func TestNewValidation(t *testing.T) {
 		{"unsupported provider", Config{Provider: "bitbucket", URL: "https://x/o/r", APIBase: "x", AuthEnv: tokenEnv}, "unsupported provider", false},
 		{"missing apibase", Config{Provider: "forgejo", URL: "https://x/o/r", AuthEnv: tokenEnv}, "needs APIBase", false},
 		{"missing authenv", Config{Provider: "forgejo", URL: "https://x/o/r", APIBase: "x"}, "needs AuthEnv", false},
-		{"unset token", Config{Provider: "forgejo", URL: "https://x/o/r", APIBase: "x", AuthEnv: "DROSS_DEFINITELY_UNSET"}, "is not set", false},
-		{"bad url", Config{Provider: "forgejo", URL: "not-a-url", APIBase: "x", AuthEnv: tokenEnv}, "bad repo URL", false},
+		{"unset token", Config{Provider: "forgejo", URL: "https://x/o/r", APIBase: "https://x", AuthEnv: "DROSS_DEFINITELY_UNSET", Hosts: allowingSelf("https://x")}, "is not set", false},
+		{"bad url", Config{Provider: "forgejo", URL: "not-a-url", APIBase: "https://x", AuthEnv: tokenEnv, Hosts: allowingSelf("https://x")}, "bad repo URL", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -335,6 +336,7 @@ func newGitLabTestClient(t *testing.T, h http.HandlerFunc) *Client {
 		URL:      "https://gitlab.example/me/proj",
 		APIBase:  srv.URL,
 		AuthEnv:  gitlabTokenEnv,
+		Hosts:    allowingSelf(srv.URL),
 	})
 	if err != nil {
 		t.Fatalf("New gitlab: %v", err)
@@ -351,6 +353,7 @@ func TestNewAcceptsGitLab(t *testing.T) {
 		URL:      "https://gitlab.example/me/proj",
 		APIBase:  "https://gitlab.example/api/v4",
 		AuthEnv:  gitlabTokenEnv,
+		Hosts:    allowingSelf("https://gitlab.example"),
 	})
 	if err != nil {
 		t.Fatalf("gitlab should construct a backend, got %v", err)
@@ -503,6 +506,7 @@ func TestGitLabBearerAuthHeader(t *testing.T) {
 		APIBase:    srv.URL,
 		AuthEnv:    gitlabTokenEnv,
 		AuthScheme: "bearer",
+		Hosts:      allowingSelf(srv.URL),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -547,6 +551,7 @@ func TestClientDoSendsBasicAuth(t *testing.T) {
 		c, err := New(Config{
 			Provider: "gitlab", URL: "https://forge.example/me/proj", APIBase: srv.URL,
 			AuthEnv: tokenEnv, AuthScheme: scheme, AuthUser: "someone@example.com",
+			Hosts: allowingSelf(srv.URL),
 		})
 		if err != nil {
 			t.Fatalf("New(scheme=%q): %v", scheme, err)
@@ -589,6 +594,7 @@ func TestNewBoardNormalisesProvider(t *testing.T) {
 		c, err := NewBoard(Config{
 			Provider: provider, URL: "https://board.local/PROJ", APIBase: "https://jira.example",
 			AuthEnv: tokenEnv, AuthUser: "me@example.com", Project: "PROJ",
+			Hosts: allowingSelf("https://jira.example"),
 		})
 		if err != nil {
 			t.Fatalf("NewBoard(%q): %v", provider, err)
@@ -601,6 +607,7 @@ func TestNewBoardNormalisesProvider(t *testing.T) {
 		c, err := NewBoard(Config{
 			Provider: provider, URL: "https://board.local/PROJ", APIBase: "https://yt.example",
 			AuthEnv: tokenEnv, Project: "PROJ",
+			Hosts: allowingSelf("https://yt.example"),
 		})
 		if err != nil {
 			t.Fatalf("NewBoard(%q): %v", provider, err)

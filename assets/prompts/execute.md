@@ -11,7 +11,7 @@ Run a phase plan to completion. **Pair-mode by default**: propose, pause, steer,
 3. Read `.dross/phases/<id>/spec.toml` and `plan.toml`. If `plan.toml` is missing, route the user to `/dross-plan` and stop.
 4. Read `.dross/project.toml` — specifically `runtime.*` (test/typecheck/lint commands), `paths.*`, `repo.commit_convention`, `repo.git_main_branch`, `stack.locked`.
 5. **Verify current branch is `phase/<id>`** with `git symbolic-ref --short HEAD`. Phase work must never land on the main branch — that's the divergence pattern the phase-branch model is designed to prevent. If on a wrong branch:
-   - If `phase/<id>` exists locally: `git checkout phase/<id>` and proceed.
+   - Switch with `dross phase checkout <id>` and proceed. It goes through dross's guarded checkout, and refuses rather than creating the branch if it doesn't exist locally.
    - Otherwise: stop. The phase wasn't created with `dross phase create` (which auto-checks out). Have the user run `dross phase create` or migrate existing work to a branch before executing.
 6. Check git state with `git status --porcelain`. If working tree is dirty:
    - Surface the diff to the user
@@ -123,6 +123,17 @@ Write tests too — per the `test_contract` field. A task isn't complete until t
 Show `git diff` (filtered to `task.files` if helpful). Run `dross validate` to ensure no schema drift in dross artefacts.
 
 If the touched files include `.svelte` and `mcp__svelte__svelte-autofixer` is available, run it on each touched component before the test gate and re-apply fixes until clean. The autofixer catches Svelte 4 → Svelte 5 syntax drift (runes, `onclick` vs `on:click`, snippets vs slots, deprecated APIs) that training data otherwise keeps reaching for. Same pattern for any future language-specific MCP autofixer.
+
+Before running it, check consent — dross will not run a repo's test command
+until this machine has explicitly trusted it, and the loop commands below refuse
+without it:
+```
+dross trust --check
+```
+Exit 0 means trusted; run the command. Non-zero means it is untrusted or stale —
+**stop and show the user the exact `runtime.test_command` line**, then let them
+run `dross trust`. Never run `dross trust` on their behalf: the whole point of
+the gate is that a human reads the line the repo supplied.
 
 Run the test command:
 ```

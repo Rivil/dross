@@ -3,6 +3,7 @@ package ship
 import (
 	"encoding/base64"
 	"encoding/json"
+	"github.com/Rivil/dross/internal/hostallow"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -47,6 +48,39 @@ func TestBBRepoRef(t *testing.T) {
 	}
 }
 
+// TestPRStatusBitbucketPopulatesBaseRef proves a MERGED payload reports its
+// destination.branch.name as BaseRef, not an empty string — Bitbucket nests
+// the branch name where GitHub/Forgejo keep it flat.
+func TestPRStatusBitbucketPopulatesBaseRef(t *testing.T) {
+	t.Setenv("MOCK_BB_TOKEN", "secret")
+
+	var gotPath, gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"MERGED","destination":{"branch":{"name":"main"}}}`))
+	}))
+	t.Cleanup(server.Close)
+
+	status, err := bitbucketPRStatus(OpenOpts{
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
+		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser", PRNumber: 42,
+	})
+	if err != nil {
+		t.Fatalf("bitbucketPRStatus: %v", err)
+	}
+	if !status.Merged || status.BaseRef != "main" {
+		t.Errorf("got %+v, want {Merged:true BaseRef:main}", status)
+	}
+	if want := "/repositories/acme/widget/pullrequests/42"; gotPath != want {
+		t.Errorf("path = %q, want %q", gotPath, want)
+	}
+	if want := wantBasic("wsuser", "secret"); gotAuth != want {
+		t.Errorf("Authorization = %q, want %q", gotAuth, want)
+	}
+}
+
 func TestOpenBitbucketPRHappyPath(t *testing.T) {
 	t.Setenv("MOCK_BB_TOKEN", "secret")
 
@@ -78,7 +112,7 @@ func TestOpenBitbucketPRHappyPath(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	res, err := OpenPR(OpenOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser",
 		HeadBranch: "phase/x", BaseBranch: "main",
 		Title: "My Title", Body: "the body",
@@ -140,7 +174,7 @@ func TestOpenBitbucketPRDraftIsABoolean(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	if _, err := OpenPR(OpenOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser",
 		HeadBranch: "h", BaseBranch: "main", Title: "My Title", Draft: true,
 	}); err != nil {
@@ -168,7 +202,7 @@ func TestOpenBitbucketPRMissingAuthUser(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	_, err := OpenPR(OpenOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv:    "MOCK_BB_TOKEN", // AuthUser deliberately empty
 		HeadBranch: "h", BaseBranch: "main", Title: "x",
 	})
@@ -202,7 +236,7 @@ func TestOpenBitbucketPRReviewerFailureNonFatal(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	res, err := OpenPR(OpenOpts{
-		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL,
+		Provider: "bitbucket", URL: "https://bitbucket.org/acme/widget", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_BB_TOKEN", AuthUser: "wsuser",
 		HeadBranch: "h", BaseBranch: "main", Title: "x",
 		Reviewers: []string{"{504c3b62-8120-4f0c-a7bc-87800b9d6f70}", "557058:abc"},

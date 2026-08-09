@@ -1,0 +1,154 @@
+task_seq = 0
+
+[phase]
+  id = "state-json-branch-safety"
+
+[[task]]
+  id = "t-14"
+  wave = 1
+  title = "Make test fixtures ignore-agnostic"
+  files = ["internal/cmd/phase_test.go", "internal/cmd/phase_base_truth_test.go"]
+  description = "completeFixture and the squash-simulation fixtures build their repo via Init()\nand then stage .dross/state.json by explicit path (phase_test.go:383, :1057,\n:1140, :1799, :2023; phase_base_truth_test.go:51), and read it back with\n`git show origin/main:.dross/state.json` (phase_test.go:900) and\n`git checkout <branch> -- .dross/state.json` (:1056, :1139). Every explicit path\nhard-fails once Init() gitignores the file. Rewrite them so they pass both before\nand after t-1: use `git add -f` where a fixture genuinely needs a tracked stale\ncopy (that is the incident being simulated), and the directory form elsewhere.\n"
+  covers = ["c-1"]
+  test_contract = ["all `dross ...` invocations in these contracts run in-process via the cobra root, never as a subprocess — a subprocess resolves the installed binary, which rule r-01 flags as routinely stale", "if a fixture still stages .dross/state.json by bare explicit path, the fixture-scan test fails: grepping internal/cmd/*_test.go finds a `git add` naming .dross/state.json without -f, which errors \"paths are ignored by one of your .gitignore files\" once t-1 lands", "if the migration is done by deleting the squash simulation rather than forcing it, the base-truth tests fail: phase_base_truth_test.go no longer reproduces a squash whose .dross/state.json rode onto origin/main, which is the precondition its assertions exist to test", "if the rewrite changes behaviour rather than staging mechanics, the whole of phase_test.go and phase_base_truth_test.go must still be green on the current tree, before t-1 lands — that is the gate on this task"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Materialize a missing state.json locally"
+  files = ["internal/cmd/root.go", "internal/cmd/root_test.go", "internal/cmd/state.go", "internal/cmd/incompleteroot_test.go", "internal/cmd/friction_window_test.go"]
+  description = "state.json leaves RequiredRootFiles. A shared ensureState(root) creates it on\ndemand, seeding Version from project.toml [project].version and an empty History\n(history_durability). Never overwrites an existing file. validate.go and the\nPreCompact pause hook inherit it via root resolution.\nTestFrictionWindow_IncompleteRoot currently asserts the opposite — that removing\nstate.json makes `dross task list` fail with a RepairHint — and is rewritten to\ncover a missing project.toml only.\n"
+  covers = ["c-1"]
+  test_contract = ["all `dross ...` invocations in these contracts run in-process via the cobra root, never as a subprocess — a subprocess resolves the installed binary, which rule r-01 flags as routinely stale", "if the auto-materialize is removed, the fresh-clone test fails: in a .dross/ holding project.toml + rules.toml and no state.json, `dross status` returns IncompleteRootError instead of exiting 0 and creating state.json with version == project.toml's [project].version and len(History) == 0", "if state.json is left in RequiredRootFiles, the missing-project.toml test fails: the error's Missing list names .dross/state.json alongside .dross/project.toml", "if the friction window still treats a missing state.json as an incomplete root, the rewritten TestFrictionWindow_IncompleteRoot fails: removing state.json after Init() makes `dross task list` error with a RepairHint instead of succeeding, while removing project.toml must still produce that error", "if ensureState stops being non-destructive, the idempotence test fails: run twice against a 4-entry state.json, the history is no longer 4 entries", "if ensureState swallows decode errors, the corrupt-state test fails: a present-but-malformed state.json is silently replaced by a fresh one instead of failing with an unmarshal error", "if ensureState does not fire before validate.go's state.Load, the validate test fails: `dross validate` against a .dross/ with no state.json reports a state.json problem instead of exiting clean", "if ensureState does not fire before the PreCompact pause hook, the pause test fails: `dross pause` against a .dross/ with no state.json errors as broken state instead of materializing and proceeding"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Read the release version from project.toml"
+  files = ["scripts/release-version.sh", ".github/workflows/release.yml", ".github/workflows/ci.yml", "internal/cmd/release_version_test.go"]
+  description = "POSIX sh script resolving [project].version from .dross/project.toml with\ngrep/sed — no jq, no dross binary. release.yml's \"Determine release tag\" step\ncalls it; the `jq -r '.version // empty' .dross/state.json` read and the now-stale\nheader comment go with it. ci.yml's shellcheck job is extended to scripts/*.sh so\nthe new script is linted. Both workflow edits are audited against\n~/.claude/memory/reference_ci_supply_chain_hardening.md in the same edit, per the\nglobal CI hygiene rule.\n"
+  covers = ["c-2"]
+  test_contract = ["if the script gains a dross- or jq-dependency, TestReleaseVersionScriptResolvesTag fails: run in a temp dir with no state.json and no dross binary against a fixture project.toml at version \"1.2.3.4\", it no longer prints v1.2.3", "if the missing-version path stops erroring, TestReleaseVersionScriptRejectsMissingVersion fails: a [project] table with no version line exits 0 or prints a partial tag on stdout instead of naming .dross/project.toml on stderr", "if the grep is not anchored to [project], TestReleaseVersionScriptIgnoresOtherTables fails: a project.toml whose [stack] table also carries version = \"9.9.9.9\" yields v9.9.9 instead of v1.2.3", "if release.yml keeps reading state.json, TestReleaseWorkflowHasNoStateJSONRead fails: the release job still contains \"state.json\" or \"jq\" (jq appears exactly once today, at the line being removed, so there is no false positive)", "if the shellcheck job is not extended, the lint test fails: ci.yml's shellcheck invocation still names install.sh only, leaving scripts/release-version.sh unlinted"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Detect stale milestone branches, squash-aware"
+  files = ["internal/cmd/milestone_stale.go", "internal/cmd/milestone_stale_test.go"]
+  description = "staleMilestoneBranches(repoDir, mainBranch) lists refs/heads/milestone/*, marking\na branch stale via ancestry first (reason \"merged\"), then a squash-aware content\ncheck. The squash check has two steps: first RESOLVE the candidate squash commit\n— walk main's commits not on the branch and patch-id each against the branch\nsynthesized as one commit — then compare against that commit's own first parent,\nNOT the fork-point merge-base. Reports HasRemote per branch. Read-only: no ref is\nwritten or deleted.\n"
+  covers = ["c-7"]
+  test_contract = ["if the detector only uses ancestry, the squash fixture fails: milestone/v1.0 whose 3 commits were squash-merged into main is absent from the result, even though `git branch --merged main` also omits it", "if the synthetic squash is diffed against the fork-point merge-base instead of the resolved squash commit's first parent, the main-advances fixture fails: with 1 commit landing on main between fork and merge and 2 more after it, the branch is not reported stale (this is the shape that misses this repo's own a8d6a5c)", "if the resolution step returns on the first match without checking for others, the ambiguous fixture fails: two commits on main with the same patch-id must yield a deterministic result, not a coin-flip — the branch is reported stale once, naming one of them", "if the no-candidate case is not handled, the unresolvable fixture fails: a branch whose squash commit was subsequently amended (no patch-id match on main) errors instead of being left out of the result", "if the two reasons collapse, the fast-forward case fails: a fast-forwarded milestone/v1.1 is reported as \"squash-merged\" rather than \"merged\"", "if the content check over-fires, the unmerged case fails: milestone/v1.2 with one commit absent from main in any form appears in the result", "if HasRemote is not resolved per branch, the remote-detection case fails: a pushed branch reports false or a local-only branch reports true", "if the ref glob is too broad, the phase-branch case fails: a stale phase/foo branch appears in the result set", "if the empty case is not handled, the no-milestone-refs test fails: a repo with no milestone/* refs errors instead of returning an empty slice and nil"]
+  status = "done"
+
+[[task]]
+  id = "t-1"
+  wave = 2
+  title = "Untrack state.json and gitignore it"
+  files = [".gitignore", "internal/cmd/gitignore.go", "internal/cmd/gitignore_test.go", "internal/cmd/init.go", "internal/cmd/onboard.go"]
+  description = "New ensureDrossGitignore(repoDir) mirroring ensureDrossGitattributes, called from\ninit and onboard beside the existing ensureDrossGitattributes calls. This repo's\n.gitignore gains the line next to the .dross/local.toml block, and\n`git rm --cached .dross/state.json` takes it out of the index. Lands after t-14\nbecause every fixture built through Init() would otherwise fail its explicit-path\nstaging and this task could not commit green.\n"
+  covers = ["c-1"]
+  depends_on = ["t-14"]
+  test_contract = ["if the untrack is reverted, TestStateJSONNotTracked fails: `git ls-files .dross/state.json` at the repo root prints a path instead of being empty", "if init or onboard stops writing the ignore line, TestInitScaffoldsStateIgnore / TestOnboardScaffoldsStateIgnore fail: `git check-ignore .dross/state.json` exits non-zero after scaffolding", "if ensureDrossGitignore stops being idempotent, TestEnsureDrossGitignoreIsIdempotent fails: two calls leave the line twice (grep count != 1)", "if the helper stops detecting a broader existing pattern, the `.dross/*.json` case fails: an already-matching .gitignore is no longer left byte-for-byte unchanged", "if the ignore pattern is anchored wrong (`.dross/state.json` vs `/.dross/state.json`), the porcelain assertion fails: `git status --porcelain` reports .dross/state.json as untracked", "if the ignore stops taking effect on staging, TestGitignoredStateSurvivesAdd fails: `git add .dross` leaves .dross/state.json in `git diff --cached --name-only`", "if t-14's fixture migration was incomplete, this task's commit cannot be green: the full `go test ./internal/cmd/...` suite must pass with the ignore in place"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "One writer for both version homes"
+  files = ["internal/cmd/state.go", "internal/cmd/state_test.go", "internal/cmd/project.go", "internal/cmd/project_test.go", ".dross/project.toml"]
+  description = "writeVersion(root, v) validates the 4-part form, then writes BOTH state.json's\nversion and project.toml's [project].version. `state set version`, `state bump\ninternal` and `project set project.version` all route through it. Also corrects\n.dross/project.toml's dead 0.2.0.0 to the live value. Sequenced after t-2 because\nensureState seeds Version from project.toml — the invariant writeVersion owns —\nand both tasks edit internal/cmd/state.go.\n"
+  covers = ["c-4"]
+  depends_on = ["t-2"]
+  test_contract = ["if the project.toml write is dropped, TestBumpInternalWritesBothFiles fails: from 1.2.1.0 a `state bump internal` leaves state.json at 1.2.1.1 while project.toml re-read from disk still says 1.2.1.0", "if `project set project.version` stops routing through writeVersion, TestProjectSetVersionMirrorsToState fails: setting 1.3.0.0 leaves state.json behind at the old value", "if validation moves after the first write, TestWriteVersionRejectsBeforeWriting fails: a 3-part \"1.2.3\" exits non-zero but one of the two files has already changed", "if the write is not fail-fast, TestWriteVersionFailureNamesBothPaths fails: with project.toml chmod 0444 the command errors without naming project.toml, or leaves state.json ahead of it", "the parity check is fixture-level, never a cross-file assertion against the repo root: in a temp repo where writeVersion is called, BOTH files are re-read from disk and must match. A root-level parity assertion is invalid after t-1 — CI checks out a tree with no state.json, and where t-2 materializes one it seeds the version from project.toml, making the comparison tautological", "if the dead in-repo value is left uncorrected, the repo-root check fails: .dross/project.toml must parse and carry a 4-part version that is not 0.2.0.0"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 2
+  title = "Add `dross milestone prune`"
+  files = ["internal/cmd/milestone.go", "internal/cmd/milestone_prune_test.go"]
+  description = "Explicit subcommand deleting stale milestone/* branches local and (when\nHasRemote) remote, via t-5's detector. Never touches a branch the detector did\nnot mark stale. Refuses on a dirty tree and when the branch is current HEAD.\nHeld in wave 2, ahead of t-8, so the two tasks do not contend on milestone.go.\n"
+  covers = ["c-7"]
+  depends_on = ["t-5"]
+  test_contract = ["if prune deletes beyond the detector's result, the mixed fixture fails: with a squash-merged milestone/v1.0 (local + pushed) and an unmerged milestone/v1.2, either milestone/v1.2 ref is gone after the run", "if prune does not act on a stale branch, the same fixture fails: `git rev-parse --verify refs/heads/milestone/v1.0` still succeeds, or `git ls-remote --heads origin milestone/v1.0` is non-empty", "if the current-HEAD guard is missing, the HEAD test fails: pruning while HEAD is on a stale milestone branch exits zero or deletes refs instead of refusing by name", "if the remote delete is unconditional, the local-only test fails: a stale local-only branch triggers a `push --delete` and the command exits non-zero with no origin configured", "if the nothing-stale path is not a clean no-op, the idempotence test fails: prune with nothing stale exits non-zero, or a second run behaves differently from the first"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  title = "Stop staging and restoring state.json"
+  files = ["internal/cmd/ship.go", "internal/cmd/ship_test.go", "internal/cmd/ship_recover.go", "internal/cmd/ship_recover_test.go", "assets/prompts/verify.md"]
+  description = "ship.go drops the `git add .dross/state.json` fold and keeps the local Touch.\nrunDrossRecovery's `git checkout <sha> -- .dross/` and the `git add .dross/` that\nfollows gain `:(exclude).dross/state.json`, so restoring from a pre-untrack commit\nneither overwrites the live file nor re-stages it. Two now-false comment blocks\nare corrected: ship_recover.go:183-185 (state.json guarantees a delta) and\nship_recover.go:203-205 (\"state.json is inside .dross/, so the same `git add\n.dross/` stages the touch\"). assets/prompts/verify.md's explicit-path\n`git add .dross/state.json ...` drops that path for the same reason — it is the\nonly prompt naming the file explicitly; quick.md and execute.md use the directory\nform, which skips ignored paths. Per rule r-01 the prompt edit needs\n`make install`.\n"
+  covers = ["c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["all `dross ...` invocations in these contracts run in-process via the cobra root, never as a subprocess — a subprocess resolves the installed binary, which rule r-01 flags as routinely stale", "if the `git add .dross/state.json` fold is left in place, the ship test fails: `dross ship` in a repo where .dross/state.json is gitignored exits non-zero with \"paths are ignored by one of your .gitignore files\"", "if verify.md keeps naming the path, the prompt-scan test fails: grepping assets/prompts/ finds a `git add` line naming .dross/state.json by explicit path, which would hard-fail every /dross-verify run", "if the local Touch is dropped along with the add, the history test fails: `dross ship` no longer records \"completed <id>\" in the on-disk history (while `git show HEAD:.dross/state.json` must still fail)", "if the restore exclusion is missing, TestRecoveryDoesNotRestoreStateJSON fails: a pre-merge SHA carrying a 2-entry state.json overwrites a working tree holding 40 entries", "if the `git add` exclusion is missing, TestRecoveryDoesNotRetrackStateJSON fails: `git ls-files .dross/state.json` is non-empty, or the recovery commit's `git show --name-only` lists it", "if the exclusion is scoped too widely, TestRecoveryStillRestoresPhaseArtifacts fails: the same run no longer restores .dross/phases/<id>/spec.toml", "if the exclude pathspec manufactures a phantom delta, the delta-gate test fails: a base already carrying the full .dross/ tree produces a commit instead of a clean no-op", "the in-sync early return becomes materially more reachable once state.json no longer guarantees a delta — the no-op case must exit 0 having written nothing, and t-11's contract accounts for it recording no history entry"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Re-source status's stale-completion warning"
+  files = ["internal/cmd/status.go", "internal/cmd/status_test.go"]
+  description = "staleCompletedState reads `git show origin/<main>:.dross/state.json`, which is\npermanently unreadable once the file is untracked. Re-source the\n\"shipped but unmerged\" signal from the phase's changes.json PR record combined\nwith a LOCAL merge check — t-5's ancestry/patch-id detector applied to the phase\nbranch — not a provider API call. `dross status` stays network-free, which is why\ntoday's check is a local `git show` in the first place.\n"
+  covers = ["c-3"]
+  depends_on = ["t-1", "t-5"]
+  test_contract = ["all `dross ...` invocations in these contracts run in-process via the cobra root, never as a subprocess — a subprocess resolves the installed binary, which rule r-01 flags as routinely stale", "if the origin-state read is left in place, the shipped-but-unmerged test fails: on a phase branch whose local state records \"completed <id>\" and whose work is absent from origin/<main>, `dross status` prints no warning because the git show errors and the path returns (\"\", false)", "if the replacement always warns, the false-positive test fails: a phase branch whose work IS on origin/<main> — including via squash — still prints the shipped-but-unmerged warning", "if the check reaches the network, the offline test fails: with a provider token absent and no reachable remote, `dross status` blocks or errors instead of answering from local refs alone", "if the no-remote path is not handled, the no-origin test fails: with no origin configured `dross status` exits non-zero or prints a spurious warning instead of staying silent"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 3
+  title = "Diagnose a checkout blocked by live state.json"
+  files = ["internal/cmd/switchbranch.go", "internal/cmd/switchbranch_test.go", "internal/cmd/phase.go", "internal/cmd/milestone.go"]
+  description = "New checkoutBranch(repoDir, branch) used by phase.go and milestone.go, plus the\nphase-start `git checkout -b <branch> <base>` call site — the refusal fires there\ntoo, on every base ref that still tracks the file, and it is the site users hit\nfirst. When git refuses because an untracked .dross/state.json would be\noverwritten, return a dross error naming the file and the back-up/restore commands\ninstead of a raw pathspec dump. Never moves or deletes the live file. Also\ncorrects phase.go:450-462's --recover rationale, which asserts state comes from\nthe base working tree and that s.Save wins over the tree restore — both false once\nt-6 excludes state.json from the restore.\n"
+  covers = ["c-1", "c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["all `dross ...` invocations in these contracts run in-process via the cobra root, never as a subprocess — a subprocess resolves the installed binary, which rule r-01 flags as routinely stale", "if the refusal is not classified, TestCheckoutRefusalNamesStateJSON fails: switching to a branch that still tracks .dross/state.json while an untracked live copy exists returns git's raw pathspec dump, without \".dross/state.json\" and \"cp .dross/state.json\" in the message", "if the `checkout -b <branch> <base>` call site is left unwrapped, TestPhaseCreateSurfacesCheckoutRefusal fails: starting a phase off a base ref that still tracks .dross/state.json dumps git's raw pathspec text instead of the named fix", "if the classifier is too broad, TestCheckoutRefusalPassesThroughOtherErrors fails: a checkout blocked by an unrelated untracked README.md is rewritten into the state.json message instead of passing git's own text through", "if the guard mutates state to get past the refusal, the same test fails: the live file no longer holds its N entries, or HEAD has moved", "if phase complete does not route through checkoutBranch, TestPhaseCompleteSurfacesCheckoutRefusal fails: it exits zero, or deletes the local or remote phase branch despite the failed switch"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 3
+  title = "Add doctor checks for state, version, stale branches"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_test.go"]
+  description = "Three new doctor sections: .dross/state.json still in the index; project.toml\n[project].version missing or diverged from state.json; stale milestone/* branches\nreported read-only via t-5's detector. Each prints the exact fix command and\ncounts as an issue. Also drops state.json from the foundational-files trio.\n"
+  covers = ["c-6", "c-7"]
+  depends_on = ["t-1", "t-2", "t-3", "t-5"]
+  test_contract = ["if the tracked-state check is missing or prints a description instead of the command, the tracked-state test fails: with `git ls-files .dross/state.json` non-empty, doctor exits zero or its output lacks the literal `git rm --cached .dross/state.json`", "if the drift check only compares one side, the drift test fails: project.toml at 1.1.0.0 against state.json at 1.2.1.0 exits zero, or does not print both values on one line", "if a missing [project].version is folded into the drift message, the missing-version test fails: it reports an empty-string drift or nil-derefs instead of exiting non-zero as a distinct issue naming project.toml", "if the drift check fires where no state.json exists, the fresh-clone test fails: a checkout with project.toml but no state.json reports drift instead of skipping the comparison", "if any of the three sections over-fires, the clean-repo test fails: with versions equal, state untracked and no stale branch, a section prints an issue instead of ✓ and contributes to a non-zero count", "if doctor deletes rather than reports, the prune_surface test fails: a squash-merged milestone/v1.0 is listed with the `dross milestone prune v1.0` fix but the branch no longer exists after doctor returns", "if the stale-branch section is advisory only, the exit-code test fails: a stale milestone branch leaves doctor exiting zero", "if state.json stays in the foundational trio, the optional-state test fails: a repo with no .dross/state.json still reports it as a missing foundational file"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 4
+  title = "Assert history survives every branch switch"
+  files = ["internal/cmd/state_history_test.go"]
+  description = "One table-driven test over the four branch-switching commands, each fixture\nseeded with N history entries, asserting every pre-switch entry is still present\nin order afterwards. The survival assertion applies to all four; the\nappended-own-entry assertion applies only to the commands that actually record\none — milestoneFinalize does no state load or Touch at all, and ship recover's\nTouch sits after the delta gate's early return.\n"
+  covers = ["c-3"]
+  depends_on = ["t-6", "t-8"]
+  test_contract = ["all `dross ...` invocations in these contracts run in-process via the cobra root, never as a subprocess — a subprocess resolves the installed binary, which rule r-01 flags as routinely stale", "if any of `phase complete`, `phase complete --recover`, `ship recover`, `milestone complete --finalize` drops history, its table case fails: state.json seeded with 12 distinct actions no longer holds all 12 in the original order", "if a command that does record an entry stops appending it, its case fails: `phase complete` and `ship recover` with a real delta must leave their own entry last, after the 12", "if the in-sync `ship recover` case is asserted to append an entry, that case is wrong by construction — the delta gate returns before the Touch, so the correct assertion is 12 entries unchanged and no new entry", "if `milestone complete --finalize` is asserted to append an entry, that case is wrong by construction — milestoneFinalize performs the checkout, ff-merge and branch deletes without loading state at all; the correct assertion is 12 entries unchanged", "if a switch resets the version alongside the history, the version assertion fails: state.json's version field differs before and after the command", "if the recovery reset or tree restore reintroduces the clobber, the --recover case fails specifically: entries are lost across `git reset --hard origin/<base>` plus the tree restore"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 4
+  title = "Reproduce the incident end to end"
+  files = ["internal/cmd/state_clobber_regression_test.go"]
+  description = "TestStaleBranchCheckoutCannotClobberLiveState: build the repo through `dross init`\n(not by hand-writing .gitignore), accumulate N history entries, check out a\nlong-lived branch created before untracking that still tracks a 2-entry\nstate.json, assert the live state survives.\n"
+  covers = ["c-5"]
+  depends_on = ["t-1", "t-6", "t-8"]
+  test_contract = ["all `dross ...` invocations in these contracts run in-process via the cobra root, never as a subprocess — `dross init` in particular must exercise the in-package command, not whatever `make install` last linked, or the shipped-scaffold claim is unproven", "if the fix is reverted, TestStaleBranchCheckoutCannotClobberLiveState fails against pre-milestone code: the checkout succeeds and state.json drops from 12 entries to 2 (assertion is history length >= 12 AND the first seeded action still present, with a non-zero checkout exit allowed)", "if the assertion passes for an unrelated reason, the sibling sub-test fails: with state.json deliberately re-added via `git add -f`, the same checkout must still clobber it", "if the fixture hand-writes .gitignore instead of running `dross init`, the test stops proving the shipped scaffold works and the init path regresses undetected", "if recovery reintroduces the stale copy, TestIncidentRecoverKeepsLiveHistory fails: `phase complete --recover` against a pre-merge SHA carrying the 2-entry copy ends with the stale entries on disk, or state.json in the resulting commit", "if the version is taken from the stale branch, the version assertion fails: after the surviving checkout `dross state get version` prints the stale branch's value", "if the file re-enters the index at any step, TestIncidentStateNeverEntersIndex fails: `git ls-files .dross/state.json` is non-empty"]
+  status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 4
+  title = "Purge tracked-state claims from docs and prompts"
+  files = ["README.md", "docs/dross.1", "assets/prompts/init.md", "assets/prompts/pause.md", "internal/cmd/local.go", ".gitignore"]
+  description = "Correct every doc, prompt and comment that still asserts .dross/state.json is\ntracked: README's tracked-tree listing and its doctor foundational-files line,\nthe man page, the two prompts, local.go's comment (\"state.json is committed\"),\nand the .dross/local.toml block in .gitignore whose rationale says state.json\nrides the squash. Per rule r-01 the prompt edits need `make install`.\n"
+  covers = ["c-1"]
+  depends_on = ["t-1", "t-2", "t-9"]
+  test_contract = ["if any doc still claims the file is tracked, the doc-scan test fails: grepping README.md and docs/dross.1 finds state.json listed among tracked/committed .dross/ files or among doctor's foundational files, contradicting t-9's behaviour", "if the prompts are left stale, the prompt-scan test fails: assets/prompts/init.md or pause.md still describes state.json as committed to the repo", "if the two rationale comments are left inverted, review of local.go and .gitignore finds text asserting the opposite of the shipped behaviour — local.go's \"It exists because state.json does ride it\" is false once state.json is ignored alongside local.toml"]
+  status = "done"

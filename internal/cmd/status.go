@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -65,19 +66,29 @@ func Status() *cobra.Command {
 				Print("phase:     (none — try `/dross-spec --new \"<title>\"`)")
 			}
 
-			// Stale-completion guard. On a shipped-but-unmerged phase branch,
-			// `dross ship` has already folded the `completed <id>` record into
-			// branch-local state, but origin/<main> hasn't received the squash
-			// yet — so the phase reads "done" while its PR is still open. Warn
-			// only; never mutate (the user reconciles from origin or abandons
-			// the branch).
 			mainBranch := proj.Repo.GitMainBranch
 			if mainBranch == "" {
 				mainBranch = "main"
 			}
-			if pid, ok := staleCompletedState(filepath.Dir(root), st, mainBranch); ok {
-				Printf("stale:     on phase/%s but state reads completed — PR not merged on origin/%s\n", pid, mainBranch)
-				Printf("           reconcile: re-sync from origin/%s or abandon the branch (status never auto-mutates)\n", mainBranch)
+
+			// Standing branch-topology line, printed on every run — not gated
+			// on an active phase. The doubt it answers ("is this milestone
+			// branch correct-by-design, or stuck?") is felt later in a session
+			// than the moment it was created, so the answer has to be available
+			// whenever it is asked. Same renderer, same condition, as the
+			// statement `dross phase complete` prints.
+			if top, err := branchTopology(filepath.Dir(root), root, ""); err == nil {
+				Printf("branch:    %s\n", renderTopologyLine(top))
+			}
+
+			// Shipped-but-unmerged window. Ship leaves current_phase set and
+			// marks it `shipped`; only a confirmed merge clears it. That window
+			// is now reachable and long-lived by design, so status names the
+			// open PR and the base it waits on rather than warning about it.
+			// Read-only; status never mutates.
+			if sh, ok := shippedUnmergedPhase(root, st, mainBranch); ok {
+				Printf("shipped:   phase/%s — PR #%d not merged on origin/%s yet\n", sh.phaseID, sh.pr, sh.base)
+				Printf("           merge it, then `dross phase complete %s` writes the completion record\n", sh.phaseID)
 			}
 
 			// Last activity
@@ -249,6 +260,15 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	}
 	if !hasVerify {
 		return "/dross-verify — check criterion coverage and test efficacy"
+	}
+	// A shipped phase is waiting on a merge, not on another ship. Routed
+	// BEFORE the verdict switch below: that branch sees a pass verdict plus
+	// recorded changes and would advise `/dross-ship` on a phase whose PR is
+	// already open — advice printed directly under the `shipped:` line naming
+	// that PR. Ship leaves current_phase set now, so this state is reachable
+	// on every phase between the push and the merge.
+	if st.CurrentPhaseStatus == "shipped" {
+		return "merge the open PR, then `dross phase complete " + st.CurrentPhase + "` — it writes the completion record"
 	}
 	// Read verify verdict to refine the hint.
 	if verdict := readVerifyVerdict(filepath.Join(dir, "verify.toml")); verdict != "" {
@@ -461,48 +481,112 @@ func renderActionAreas(sigs []areaSignal, now time.Time) []string {
 	return lines
 }
 
-// staleCompletedState reports whether the working copy is sitting on a
-// shipped-but-unmerged phase branch: HEAD is phase/<id>, branch-local state
-// already records `completed <id>` (folded in by `dross ship` pre-merge), yet
-// origin/<main> carries no such record (the PR hasn't merged). In that window
-// the phase reads "done" locally while it isn't actually merged — status warns
-// so the stale state isn't silently trusted. Read-only: it shells out to git
-// but never mutates. Returns ("", false) on any uncertainty (not a phase
-// branch, no completion record, unreadable origin, or genuinely merged) so a
-// repo without a remote never produces a false warning.
-func staleCompletedState(repoDir string, st *state.State, mainBranch string) (string, bool) {
+// staleSquashScanLimit bounds the squash resolution below. `dross status` runs
+// on every session start, and resolving a squash patch-ids one candidate commit
+// at a time. When the base has run far ahead of the fork, the honest answer is
+// silence rather than either a slow status or a warning taken on a guess.
+const staleSquashScanLimit = 40
+
+// shippedPhase is the answer shippedUnmergedPhase reports: which phase, which
+// PR, and which base that PR is waiting to land on.
+type shippedPhase struct {
+	phaseID string
+	pr      int
+	base    string
+}
+
+// shippedUnmergedPhase reports whether the working copy is sitting on a phase
+// branch whose PR is open but not yet merged: HEAD is phase/<id>, the phase
+// reads `shipped`, yet its work is nowhere on origin/<base>.
+//
+// This window used to be a warning — the phase read "completed" locally while
+// its PR was still open, and status flagged the state as stale. It is not stale
+// any more, and it is not reachable in that form: `dross ship` marks the phase
+// `shipped` and leaves current_phase set, so nothing claims completion until
+// `dross phase complete` confirms the merge. The window is now deliberate and
+// long-lived, and status simply names it.
+//
+// The shipped signal is current_phase_status, with the phase's recorded PR
+// number as the fallback for a state that lost the status (a fresh clone, a
+// hand-edited state.json) but still carries the tracked record.
+//
+// The merged-check is retained and is the reason this is not a bare status
+// read: the post-merge/pre-complete window is exactly what this phase makes
+// reachable, and without the check status would report a PR that already landed
+// as still waiting. The answer is a LOCAL ref comparison — ancestry first, then
+// the same squash-aware content check `dross milestone prune` uses, so a
+// squash-merged branch reads as merged.
+//
+// Read-only and deliberately network-free: `dross status` answers from local
+// refs alone. Returns ok=false on any uncertainty — not a phase branch, not
+// shipped, no origin, or genuinely merged.
+func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (shippedPhase, bool) {
+	var none shippedPhase
+	repoDir := filepath.Dir(root)
 	cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
-		return "", false
+		return none, false
 	}
 	phaseID, ok := strings.CutPrefix(cur, "phase/")
 	if !ok || phaseID == "" {
-		return "", false
+		return none, false
 	}
-	if !stateRecordsCompleted(st, phaseID) {
-		return "", false
-	}
-	// origin/<main> must lack the completion. If reading it fails we can't
-	// confirm the divergence, so stay silent rather than warn on a guess.
-	originState, err := gitTrim(repoDir, "show", "origin/"+mainBranch+":.dross/"+state.File)
-	if err != nil {
-		return "", false
-	}
-	if strings.Contains(originState, "completed "+phaseID) {
-		return "", false // genuinely merged — not stale
-	}
-	return phaseID, true
-}
 
-// stateRecordsCompleted reports whether state history carries a `completed
-// <id>` action — the record `dross ship` folds in when finalizing a phase.
-func stateRecordsCompleted(st *state.State, phaseID string) bool {
-	for _, a := range st.History {
-		if strings.Contains(a.Action, "completed "+phaseID) {
-			return true
+	sh := shippedPhase{phaseID: phaseID, base: mainBranch}
+	if ch, err := changes.Load(changes.FilePath(root, phaseID), phaseID); err == nil {
+		sh.pr = ch.PR
+		// The base the PR actually targets — under a milestone that is
+		// milestone/<version>, not main. Checking the merge against main would
+		// report every mid-milestone phase as unmerged forever.
+		if ch.Base != "" {
+			sh.base = ch.Base
 		}
 	}
-	return false
+	shippedStatus := st.CurrentPhase == phaseID && st.CurrentPhaseStatus == "shipped"
+	if !shippedStatus && sh.pr == 0 {
+		return none, false
+	}
+	// A recorded `completed <id>` closes the question: complete confirmed the
+	// merge and wrote it. The PR record above outlives that — it stays on the
+	// phase branch — so without this a completed phase visited from its old
+	// branch would still read as waiting. The breadcrumb is only a SUPPRESSOR
+	// here, never a trigger: as a trigger it was the unreachable arm this
+	// phase removed.
+	for _, a := range st.History {
+		if strings.Contains(a.Action, "completed "+phaseID) {
+			return none, false
+		}
+	}
+
+	// No origin ref, no answer. Never a claim taken on a missing base.
+	baseRef := "origin/" + sh.base
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
+		return none, false
+	}
+	merged, err := isAncestor(repoDir, cur, baseRef)
+	if err != nil {
+		return none, false
+	}
+	if merged {
+		return none, false
+	}
+	// Squash-merged counts as merged: the content is on the base under a commit
+	// the base's history doesn't descend from, which ancestry cannot see.
+	// "^cur" rather than "--not cur": --not is an option and would be read as
+	// a revision behind the separator. The caret form is equivalent.
+	count, err := gitTrim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+cur)...)
+	if err != nil {
+		return none, false
+	}
+	n, convErr := strconv.Atoi(count)
+	if convErr != nil || n > staleSquashScanLimit {
+		return none, false
+	}
+	squash, err := resolveSquashCommit(repoDir, cur, baseRef)
+	if err != nil || squash != "" {
+		return none, false
+	}
+	return sh, true
 }
 
 func progressBar(done, total, width int) string {

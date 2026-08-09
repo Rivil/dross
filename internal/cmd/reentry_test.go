@@ -174,7 +174,7 @@ func TestStatusEndsWithReentryLine(t *testing.T) {
 // silent-case assertion.
 func TestReentrySilentOnIncompleteRoot(t *testing.T) {
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir) // incomplete: no project.toml
 	chdir(t, dir)
 
 	var err error

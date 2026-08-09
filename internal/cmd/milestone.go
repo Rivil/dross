@@ -30,8 +30,101 @@ func Milestone() *cobra.Command {
 		milestoneSet(),
 		milestoneAdd(),
 		milestoneComplete(),
+		milestonePrune(),
 	)
 	return c
+}
+
+// milestonePrune deletes milestone/* branches whose work is already on the main
+// branch — local, and on origin where origin still has them.
+//
+// It is a separate, explicitly-typed command rather than a `doctor --fix` or a
+// step inside `milestone complete` (locked prune_surface). Deleting a remote
+// branch should be a conscious act, doctor stays a pure diagnostic, and folding
+// the sweep into completion would never fire for a milestone that was
+// interrupted — which is precisely how the stale branches accumulate.
+//
+// It never decides for itself what is stale: the set comes from
+// staleMilestoneBranches, and a branch that detector did not name is not touched.
+func milestonePrune() *cobra.Command {
+	return &cobra.Command{
+		Use:   "prune",
+		Short: "Delete milestone/* branches whose work is already on the main branch",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			repoDir := filepath.Dir(root)
+			p, _, err := loadProject()
+			if err != nil {
+				return err
+			}
+			mainBranch := p.Repo.GitMainBranch
+			if mainBranch == "" {
+				mainBranch = "main"
+			}
+
+			// Refuse on real dirt before deleting anything: a branch delete is
+			// irreversible from the user's side, and losing track of uncommitted
+			// work while refs disappear is the worst possible pairing.
+			if _, err := autoCommitDrossDirt(repoDir, "pruning milestone branches"); err != nil {
+				return err
+			}
+
+			stale, err := staleMilestoneBranches(repoDir, mainBranch)
+			if err != nil {
+				return err
+			}
+			if len(stale) == 0 {
+				Print("no stale milestone branches — nothing to prune")
+				return nil
+			}
+
+			// The current branch cannot be deleted, and silently skipping it
+			// would report a prune that did not happen. Refuse by name instead.
+			//
+			// The suggestion names the guarded verb, not `git checkout`: the
+			// branch being left is stale by definition, so it is exactly the
+			// vintage that may still track .dross/state.json, and a raw switch
+			// off it replays that copy over the live machine-local one.
+			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
+			if err != nil {
+				cur = ""
+			}
+			for _, b := range stale {
+				if b.Name == cur {
+					return fmt.Errorf("HEAD is on %s, which is stale and would be deleted — switch to %s first (`dross checkout %s`)",
+						b.Name, mainBranch, mainBranch)
+				}
+			}
+
+			// Checked for every candidate before the first delete, so a blocked
+			// branch stops the whole sweep rather than being discovered halfway
+			// through an irreversible one.
+			for _, b := range stale {
+				if err := guardMilestoneBranchDelete(root, repoDir, b.Name, mainBranch); err != nil {
+					return err
+				}
+			}
+
+			for _, b := range stale {
+				if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, b.Name)...); err != nil {
+					return fmt.Errorf("delete local %s: %w\n%s", b.Name, err, out)
+				}
+				where := "local"
+				if b.HasRemote {
+					if out, err := gitCombined(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", b.Name)...); err != nil {
+						return fmt.Errorf("delete origin/%s: %w\n%s", b.Name, err, out)
+					}
+					where = "local + origin"
+				}
+				Printf("pruned %s (%s) — %s\n", b.Name, b.Reason, where)
+			}
+			return nil
+		},
+	}
 }
 
 // milestoneComplete closes out a milestone in two steps. Without --finalize it
@@ -77,27 +170,36 @@ func milestoneComplete() *cobra.Command {
 			msBranch := "milestone/" + version
 
 			if finalize {
-				return milestoneFinalize(repoDir, mainBranch, msBranch, version)
+				return milestoneFinalize(root, repoDir, mainBranch, msBranch, version)
 			}
 
 			// Open mode: one PR of the milestone branch into main.
 			if p.Remote.URL == "" || p.Remote.Provider == "" {
 				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
 			}
-			opts := buildOpenOpts(p)
+			target, err := milestonePRBase(root, repoDir, mainBranch, version, msBranch)
+			if err != nil {
+				return err
+			}
+
+			hosts, herr := remotePolicy(root, repoDir, p)
+			if herr != nil {
+				return herr
+			}
+			opts := buildOpenOpts(p, hosts)
 			opts.HeadBranch = msBranch
-			opts.BaseBranch = mainBranch
+			opts.BaseBranch = target
 			opts.Title = fmt.Sprintf("milestone %s", version)
 			opts.Body = fmt.Sprintf("Integration PR for milestone %s.\n\n"+
 				"Merge as a **merge commit** (not squash) to preserve per-phase history on %s.",
-				version, mainBranch)
+				version, target)
 
 			res, err := ship.OpenPR(opts)
 			if err != nil {
 				// Idempotent: a duplicate PR (provider rejects a second open
 				// for the same head->base) is a no-op, not a failure.
 				if strings.Contains(strings.ToLower(err.Error()), "already exists") {
-					Printf("milestone %s PR already open (%s -> %s) — nothing to do\n", version, msBranch, mainBranch)
+					Printf("milestone %s PR already open (%s -> %s) — nothing to do\n", version, msBranch, target)
 					return nil
 				}
 				return fmt.Errorf("open milestone PR: %w", err)
@@ -106,7 +208,7 @@ func milestoneComplete() *cobra.Command {
 			// milestone_main_merge: the milestone PR must land as a merge commit,
 			// never a squash — and dross doesn't drive the merge, so surface the
 			// requirement regardless of repo.squash_merge.
-			Printf("Merge it as a MERGE COMMIT (not squash) to keep per-phase history on %s — do not squash even if repo.squash_merge is set.\n", mainBranch)
+			Printf("Merge it as a MERGE COMMIT (not squash) to keep per-phase history on %s — do not squash even if repo.squash_merge is set.\n", target)
 			Printf("After it merges: `dross milestone complete %s --finalize`\n", version)
 			return nil
 		},
@@ -116,12 +218,52 @@ func milestoneComplete() *cobra.Command {
 	return c
 }
 
+// milestonePRBase resolves which branch the milestone's integration PR targets.
+//
+// It is the recorded cut base (c-2) while that parent is still unmerged and
+// still on origin, so a stacked milestone's PR shows its own commits rather
+// than re-listing its parent's. Once the parent has merged — or its branch is
+// gone from origin, where a PR base has to exist — the target is the main
+// branch, never a branch `--finalize` is about to delete.
+//
+// A milestone with no toml, or no recorded base, targets the main branch:
+// that is every milestone shipped before v1.2 and today's behaviour, so
+// back-compat needs no migration (locked absent_base_reads_main).
+func milestonePRBase(root, repoDir, mainBranch, version, msBranch string) (string, error) {
+	m, err := milestone.Load(milestone.FilePath(root, version))
+	if err != nil {
+		return mainBranch, nil
+	}
+	recorded := m.BaseOr(mainBranch)
+	if recorded == msBranch {
+		return "", fmt.Errorf("milestone %s records its own branch (%s) as its base — a PR cannot target itself; fix `base` in %s",
+			version, msBranch, milestone.FilePath(root, version))
+	}
+	if recorded == mainBranch {
+		return mainBranch, nil
+	}
+	merged, _, err := milestoneMergedIntoMain(repoDir, recorded, mainBranch)
+	if err != nil {
+		return "", fmt.Errorf("resolve PR base for %s: %w", version, err)
+	}
+	// A base branch has to exist on the forge. A parent deleted on origin is
+	// not something to target, whatever ancestry says about it.
+	if merged || !gitRefExists(repoDir, "refs/remotes/origin/"+recorded) {
+		return mainBranch, nil
+	}
+	return recorded, nil
+}
+
 // milestoneFinalize is the post-merge counterpart to opening the milestone PR:
 // it fast-forwards local main from origin and deletes milestone/<version> local
-// + remote. It refuses unless origin/milestone/<version> is already an ancestor
-// of origin/<main> (i.e. the PR actually merged), so unmerged integration work
-// is never destroyed.
-func milestoneFinalize(repoDir, mainBranch, msBranch, version string) error {
+// + remote. It refuses unless origin/milestone/<version> has actually merged, so
+// unmerged integration work is never destroyed.
+//
+// "Merged" means merged into the branch this milestone was stacked on — its
+// recorded base — or into the main branch. A guard fixed on origin/<main> would
+// refuse forever for a child merged into its parent but not yet into main,
+// deadlocking the stacking model's second half.
+func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) error {
 	status, err := gitTrim(repoDir, "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("git status: %w", err)
@@ -134,43 +276,78 @@ func milestoneFinalize(repoDir, mainBranch, msBranch, version string) error {
 		return fmt.Errorf("git fetch: %w\n%s", err, out)
 	}
 
-	// Merge guard: refuse until origin/<main> actually contains the milestone.
-	if err := gitNoOut(repoDir, "merge-base", "--is-ancestor", "origin/"+msBranch, "origin/"+mainBranch); err != nil {
-		return fmt.Errorf("origin/%s is not merged into origin/%s yet — has the milestone PR merged? Refusing so the milestone branch isn't lost",
-			msBranch, mainBranch)
+	// The branch this milestone was stacked on, when it is still a live target
+	// on origin. Everything else resolves to the main branch.
+	target := mainBranch
+	if m, err := milestone.Load(milestone.FilePath(root, version)); err == nil {
+		if b := m.BaseOr(mainBranch); b != mainBranch && b != msBranch && gitRefExists(repoDir, "refs/remotes/origin/"+b) {
+			target = b
+		}
 	}
 
+	// Merge guard: refuse until origin actually contains the milestone —
+	// on main, or on the parent it was stacked on.
+	mergedIntoMain := gitNoOut(repoDir, "merge-base", "--is-ancestor", "origin/"+msBranch, "origin/"+mainBranch) == nil
+	mergedIntoTarget := mergedIntoMain
+	if !mergedIntoMain && target != mainBranch {
+		mergedIntoTarget = gitNoOut(repoDir, "merge-base", "--is-ancestor", "origin/"+msBranch, "origin/"+target) == nil
+	}
+	if !mergedIntoTarget {
+		return fmt.Errorf("origin/%s is not merged into origin/%s yet — has the milestone PR merged? Refusing so the milestone branch isn't lost",
+			msBranch, target)
+	}
+
+	// A stacked child that still depends on this branch outranks the cleanup:
+	// deleting out from under its open PR is irreversible from its side.
+	if err := guardMilestoneBranchDelete(root, repoDir, msBranch, mainBranch); err != nil {
+		return err
+	}
+
+	// Where HEAD lands. Only the merge-into-main case advances local main; a
+	// child merged into its parent leaves main exactly where it was.
+	landing := mainBranch
+	if !mergedIntoMain && gitRefExists(repoDir, "refs/heads/"+target) {
+		landing = target
+	}
 	cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return fmt.Errorf("git symbolic-ref failed (read current branch): %w", err)
 	}
-	if cur != mainBranch {
-		if out, err := gitCombined(repoDir, "checkout", mainBranch); err != nil {
-			return fmt.Errorf("git checkout %s: %w\n%s", mainBranch, err, out)
+	if cur != landing {
+		if err := checkoutBranch(repoDir, landing); err != nil {
+			return err
 		}
 	}
-	if out, err := gitCombined(repoDir, "merge", "--ff-only", "origin/"+mainBranch); err != nil {
-		return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged:\n%s", mainBranch, mainBranch, out)
+	if mergedIntoMain {
+		if out, err := guardedFF(repoDir, "origin/"+mainBranch); err != nil {
+			return fmt.Errorf("fast-forward of %s from origin failed — local %s has diverged:\n%s", mainBranch, mainBranch, out)
+		}
 	}
 
 	// Delete the local milestone branch (only if it exists).
-	if err := gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+msBranch); err == nil {
-		if out, err := gitCombined(repoDir, "branch", "-D", msBranch); err != nil {
+	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+msBranch)...); err == nil {
+		if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, msBranch)...); err != nil {
 			return fmt.Errorf("git branch -D %s: %w\n%s", msBranch, err, out)
 		}
 	}
 	// Delete the remote milestone branch (idempotent — only if origin has it).
-	remoteRef, err := gitTrim(repoDir, "ls-remote", "--heads", "origin", msBranch)
+	remoteRef, err := gitTrim(repoDir, gitRefArgs("ls-remote", []string{"--heads"}, "origin", msBranch)...)
 	if err != nil {
 		return fmt.Errorf("git ls-remote origin %s: %w", msBranch, err)
 	}
 	if remoteRef != "" {
-		if out, err := gitCombined(repoDir, "push", "origin", "--delete", msBranch); err != nil {
+		if out, err := gitCombined(repoDir, gitRefArgs("push", []string{"--delete"}, "origin", msBranch)...); err != nil {
 			return fmt.Errorf("git push origin --delete %s: %w\n%s", msBranch, err, out)
 		}
 	}
 
-	Printf("milestone %s finalized — %s is at origin, %s deleted\n", version, mainBranch, msBranch)
+	if mergedIntoMain {
+		Printf("milestone %s finalized — %s is at origin, %s deleted\n", version, mainBranch, msBranch)
+	} else {
+		// Claiming main advanced when it did not is exactly the false
+		// completion state this milestone exists to stop.
+		Printf("milestone %s finalized — merged into %s (%s not advanced), %s deleted\n", version, target, mainBranch, msBranch)
+	}
 	return nil
 }
 
@@ -200,7 +377,8 @@ func milestoneList() *cobra.Command {
 }
 
 func milestoneCreate() *cobra.Command {
-	return &cobra.Command{
+	var baseFlag string
+	c := &cobra.Command{
 		Use:   "create <version>",
 		Short: "Create a new milestone (e.g. v0.1)",
 		Args:  cobra.ExactArgs(1),
@@ -213,11 +391,27 @@ func milestoneCreate() *cobra.Command {
 			if _, err := os.Stat(path); err == nil {
 				return fmt.Errorf("%s already exists", path)
 			}
+
+			mainBranch := "main"
+			if p, _, err := loadProject(); err == nil && p.Repo.GitMainBranch != "" {
+				mainBranch = p.Repo.GitMainBranch
+			}
+			// Resolved before anything is written, so a bad --base leaves
+			// neither a toml nor a branch behind.
+			repoDir := filepath.Dir(root)
+			cutFrom, localOnly, err := resolveMilestoneCutPoint(root, repoDir, mainBranch, args[0], baseFlag)
+			if err != nil {
+				return err
+			}
+
 			m := &milestone.Milestone{
 				Milestone: milestone.Meta{
 					Version: args[0],
 					Status:  "planning",
 					Started: time.Now().UTC().Format("2006-01-02"),
+					// Recorded now and read back verbatim ever after — the
+					// stacking parent is a stored fact, never re-inferred.
+					Base: cutFrom,
 				},
 			}
 			if err := m.Save(path); err != nil {
@@ -229,16 +423,22 @@ func milestoneCreate() *cobra.Command {
 			// unconditional side effect of scoping (the v0.7 branch
 			// topology). Skips silently in a non-git dir so `dross init`
 			// flows and non-git usage keep working.
-			mainBranch := "main"
-			if p, _, err := loadProject(); err == nil && p.Repo.GitMainBranch != "" {
-				mainBranch = p.Repo.GitMainBranch
+			base := cutFrom
+			if base == "" {
+				base = mainBranch
 			}
-			branch, created, pushed, err := ensureMilestoneBranch(filepath.Dir(root), mainBranch, args[0])
+			// Narrated before the cut, not after: the caveat is about the
+			// resolution, which is already settled, and the eager push to an
+			// unreachable origin is exactly the step that fails here.
+			if localOnly {
+				Printf("origin unreachable — cut point resolved from local refs; origin may have moved on\n")
+			}
+			branch, created, pushed, err := ensureMilestoneBranch(repoDir, base, args[0])
 			if err != nil {
 				return err
 			}
 			if created {
-				Printf("cut %s from %s\n", branch, mainBranch)
+				Printf("cut %s from %s\n", branch, base)
 			}
 			if pushed {
 				Printf("pushed %s to origin\n", branch)
@@ -246,34 +446,102 @@ func milestoneCreate() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().StringVar(&baseFlag, "base", "",
+		"force the branch to cut from (default: the current milestone's branch while unmerged, else the main branch)")
+	return c
 }
 
-// ensureMilestoneBranch cuts milestone/<version> from the main branch (without
+// resolveMilestoneCutPoint answers which branch milestone/<version> should be
+// cut from, and whether that answer came from local refs alone.
+//
+// A new milestone stacks on the current one while its integration branch is
+// still unmerged, so its PR shows its own commits rather than inheriting the
+// parent's. Once the parent has merged — or its branch is gone entirely, the
+// ordinary state after `milestone complete --finalize` — the cut goes back to
+// the main branch.
+//
+// The parent is whatever state.current_milestone names (locked
+// stacking_parent): one authority, no scanning refs for the newest unmerged
+// branch, which would reintroduce exactly the topology-guessing v1.2 exists to
+// kill. `forced` (--base) wins over all of it, per locked base_override.
+//
+// An empty return means there is nothing to cut from — no git dir, or no main
+// ref yet — and the caller records no base.
+func resolveMilestoneCutPoint(root, repoDir, mainBranch, version, forced string) (cutFrom string, localOnly bool, err error) {
+	if !isDir(filepath.Join(repoDir, ".git")) {
+		return "", false, nil
+	}
+	// Both sources of the cut point, before the first ref probe: mainBranch is
+	// [repo].git_main_branch straight out of committed config, and forced is
+	// --base.
+	if err := validateGitRef("repo.git_main_branch", mainBranch); err != nil {
+		return "", false, err
+	}
+	if forced != "" {
+		if err := validateGitRef("--base", forced); err != nil {
+			return "", false, err
+		}
+		if !gitRefExists(repoDir, "refs/heads/"+forced) {
+			return "", false, fmt.Errorf("--base %s: no such local branch", forced)
+		}
+		return forced, false, nil
+	}
+	// A repo with no commits has no main ref, so there is nothing to cut.
+	if !gitRefExists(repoDir, "refs/heads/"+mainBranch) {
+		return "", false, nil
+	}
+	s, err := state.Load(filepath.Join(root, state.File))
+	if err != nil {
+		// No readable state means no current milestone to stack on.
+		return mainBranch, false, nil
+	}
+	cur := s.CurrentMilestone
+	if cur == "" || cur == version {
+		return mainBranch, false, nil
+	}
+	parent := "milestone/" + cur
+	merged, localOnly, err := milestoneMergedIntoMain(repoDir, parent, mainBranch)
+	if err != nil {
+		return "", false, fmt.Errorf("resolve cut point for %s: %w", parent, err)
+	}
+	if merged {
+		return mainBranch, localOnly, nil
+	}
+	return parent, localOnly, nil
+}
+
+// ensureMilestoneBranch cuts milestone/<version> from baseBranch (without
 // checking it out — HEAD stays put) and pushes it to origin, so the integration
 // branch exists as an unconditional side effect of scoping. Idempotent: an
 // existing local ref is left as-is (re-scope no-ops rather than erroring) and
 // the push is a no-op when origin already carries the ref at the same commit.
-// Skips silently when the repo has no git, no main ref to cut from yet, or no
+// Skips silently when the repo has no git, no base ref to cut from yet, or no
 // origin remote — scoping must still succeed in those cases.
-func ensureMilestoneBranch(repoDir, mainBranch, version string) (branch string, created, pushed bool, err error) {
+func ensureMilestoneBranch(repoDir, baseBranch, version string) (branch string, created, pushed bool, err error) {
 	branch = "milestone/" + version
 	if !isDir(filepath.Join(repoDir, ".git")) {
 		return branch, false, false, nil
 	}
-	// Need a main ref to cut from; a repo with no commits has none.
-	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+mainBranch) != nil {
+	// baseBranch lands as a bare positional in `git branch <new> <base>` below,
+	// which is one of the two sites where a leading dash stops being a name and
+	// becomes an option.
+	if err := validateGitRef("milestone base branch", baseBranch); err != nil {
+		return branch, false, false, err
+	}
+	// Need a base ref to cut from; a repo with no commits has none.
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+baseBranch)...) != nil {
 		return branch, false, false, nil
 	}
 	// Idempotent create: only when the local ref is absent.
-	if gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch) != nil {
-		if out, e := gitCombined(repoDir, "branch", branch, mainBranch); e != nil {
-			return branch, false, false, fmt.Errorf("git branch %s %s: %w\n%s", branch, mainBranch, e, out)
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) != nil {
+		if out, e := gitCombined(repoDir, gitRefArgs("branch", nil, branch, baseBranch)...); e != nil {
+			return branch, false, false, fmt.Errorf("git branch %s %s: %w\n%s", branch, baseBranch, e, out)
 		}
 		created = true
 	}
 	// Push only when an origin remote exists.
 	if gitNoOut(repoDir, "remote", "get-url", "origin") == nil {
-		if out, e := gitCombined(repoDir, "push", "origin", branch); e != nil {
+		if out, e := gitCombined(repoDir, gitRefArgs("push", nil, "origin", branch)...); e != nil {
 			return branch, created, false, fmt.Errorf("git push origin %s: %w\n%s", branch, e, out)
 		}
 		pushed = true
@@ -344,6 +612,10 @@ func milestoneGet() *cobra.Command {
 				return err
 			}
 			return renderMultiGet(paths, func(path string) (any, error) {
+				path, err := resolveBareMilestoneField(path, milestoneReadablePaths)
+				if err != nil {
+					return nil, err
+				}
 				val, ok, list := readMilestoneDotted(m, path)
 				if !ok {
 					return nil, fmt.Errorf("unknown milestone field: %s", path)
@@ -466,6 +738,8 @@ func readMilestoneDotted(m *milestone.Milestone, path string) (string, bool, []s
 		return m.Milestone.Started, true, nil
 	case "milestone.shipped":
 		return m.Milestone.Shipped, true, nil
+	case "milestone.base":
+		return m.Milestone.Base, true, nil
 	case "scope.success_criteria":
 		return "", true, m.Scope.SuccessCriteria
 	case "scope.non_goals":
@@ -474,6 +748,21 @@ func readMilestoneDotted(m *milestone.Milestone, path string) (string, bool, []s
 		return "", true, m.Phases
 	}
 	return "", false, nil
+}
+
+// milestoneReadablePaths is the dotted surface readMilestoneDotted answers —
+// the candidate list the bare-name resolver expands against on the read side.
+// It is deliberately wider than milestoneSettablePaths: `milestone.base` is
+// readable but not settable, because `milestone create` is its sole writer.
+var milestoneReadablePaths = []string{
+	"milestone.version",
+	"milestone.title",
+	"milestone.status",
+	"milestone.started",
+	"milestone.shipped",
+	"milestone.base",
+	"scope.success_criteria",
+	"scope.non_goals",
 }
 
 // milestoneSettablePaths is the scalar surface writeMilestoneDotted accepts —

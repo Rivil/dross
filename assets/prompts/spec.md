@@ -23,7 +23,7 @@ Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
    - If milestone is unset, roadmap is empty, or all roadmap entries are already scaffolded, fall back to the freeform title prompt directly.
 
    In every case: capture the new id (`NN-slug`) and proceed. Do NOT tell the user to run `dross phase create` manually — this command runs it. `dross phase create` also checks out the `phase/<id>` branch.
-3. **Verify current branch is `phase/<id>`** for the resolved phase (`git symbolic-ref --short HEAD`). For a freshly-created phase this is already true. On resume, if you're not on the phase branch: `git checkout phase/<id>` if it exists, otherwise stop and surface the situation to the user (phase work belongs off main).
+3. **Verify current branch is `phase/<id>`** for the resolved phase (`git symbolic-ref --short HEAD`). For a freshly-created phase this is already true. On resume, if you're not on the phase branch: `dross phase checkout <id>` — the guarded checkout. If it refuses because the branch doesn't exist locally, stop and surface the situation to the user (phase work belongs off main).
 4. Read `.dross/phases/<id>/spec.toml` if it exists. **Resume, don't overwrite.** Show the existing content and ask whether to extend or replace.
 
 ## 1. Read context

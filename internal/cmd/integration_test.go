@@ -62,6 +62,9 @@ func TestFullLifecycle(t *testing.T) {
 	mustRunSet(t, "runtime.dev_command", "docker compose up app")
 	mustRunSet(t, "runtime.test_command", "docker compose exec app pnpm test")
 	mustRunSet(t, "stack.languages", "typescript,go")
+	// Consent binds to the command, so it is granted only once project.toml
+	// holds the final runtime.test_command — an earlier grant would go stale.
+	trustFixture(t)
 
 	// --- status after project setup: now points at /dross-spec --new ---
 	out = captureStdout(t, func() { runCmd(t, Status()) })
@@ -259,6 +262,7 @@ func TestLifecycleResumeAfterInterruption(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	mustRunSet(t, "project.name", "x")
 	mustRunSet(t, "runtime.mode", "native")
 	if err := runCmd(t, Phase(), "create", "x"); err != nil {

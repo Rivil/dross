@@ -49,6 +49,7 @@ func writeJSONTaskFixture(t *testing.T) string {
 	mustWrite(t, filepath.Join(dir, ".dross", "phases", "01-auth", "spec.toml"),
 		"[phase]\nid = \"01-auth\"\ntitle = \"Auth\"\n")
 	mustWrite(t, filepath.Join(dir, ".dross", "phases", "01-auth", "plan.toml"), jsonTaskPlan)
+	trustFixture(t)
 	return dir
 }
 

@@ -3,6 +3,7 @@ package mutation
 import (
 	"math"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -201,10 +202,16 @@ func TestDispatch(t *testing.T) {
 // Node — the invocation must use @stryker-mutator/core.
 func TestStrykerRunArgsScopedPackage(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo"}
-	args := s.runArgs([]string{"src/a.ts", "src/b.ts"})
+	args, err := s.runArgs([]string{"src/a.ts", "src/b.ts"})
+	if err != nil {
+		t.Fatalf("runArgs: %v", err)
+	}
 
 	joined := strings.Join(args, " ")
-	if !strings.Contains(joined, "@stryker-mutator/core run") {
+	// The spec now carries an exact version (see strykerPin), so the assertion
+	// is on the scoped name rather than on the bare-name-then-"run" adjacency
+	// it used to check. TestStrykerRunArgsPinned covers the version half.
+	if !strings.Contains(joined, "@stryker-mutator/core@") {
 		t.Errorf("must invoke the scoped package: %v", args)
 	}
 	for _, a := range args {
@@ -223,7 +230,10 @@ func TestStrykerRunArgsScopedPackage(t *testing.T) {
 func TestStrykerWorkdirMonorepo(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
 
-	args := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"})
+	args, err := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"})
+	if err != nil {
+		t.Fatalf("runArgs: %v", err)
+	}
 	if !strings.Contains(strings.Join(args, " "), "--mutate src/a.ts,src/b.svelte") {
 		t.Errorf("workdir prefix must be stripped from --mutate: %v", args)
 	}
@@ -250,5 +260,86 @@ func TestStrykerWorkdirMonorepo(t *testing.T) {
 	}
 	if bare.workDir() != "/repo" {
 		t.Errorf("no-workdir workDir = %q, want /repo", bare.workDir())
+	}
+}
+
+// strykerPinPattern is the shape an exact pin has: name@MAJOR.MINOR.PATCH and
+// nothing else. It deliberately rejects everything npm would happily accept in
+// its place — a bare name, a dist-tag, a caret or tilde range — because each of
+// those hands the choice of what code runs back to whatever the registry serves
+// at that moment.
+var strykerPinPattern = regexp.MustCompile(`^@stryker-mutator/core@\d+\.\d+\.\d+$`)
+
+// TestStrykerPinPatternRejectsLooseSpecs checks the checker. A regex that
+// accepted a bare name would make TestStrykerRunArgsPinned vacuous, and a
+// vacuous supply-chain test is worse than none — it reads as coverage.
+func TestStrykerPinPatternRejectsLooseSpecs(t *testing.T) {
+	for _, spec := range []string{
+		"@stryker-mutator/core",
+		"@stryker-mutator/core@latest",
+		"@stryker-mutator/core@next",
+		"@stryker-mutator/core@^9.0.0",
+		"@stryker-mutator/core@~9.6.0",
+		"@stryker-mutator/core@9",
+		"@stryker-mutator/core@9.6",
+		"@stryker-mutator/core@*",
+	} {
+		if strykerPinPattern.MatchString(spec) {
+			t.Errorf("pattern accepted a loose spec: %q", spec)
+		}
+	}
+	if !strykerPinPattern.MatchString("@stryker-mutator/core@9.6.1") {
+		t.Error("pattern rejected a valid exact pin")
+	}
+}
+
+// TestStrykerRunArgsPinned asserts the package spec npx is actually handed is
+// an exact version. `npx --yes` suppresses the install prompt, so an unpinned
+// spec here means dross downloads and executes registry-latest, unreviewed, on
+// a developer machine — the shape of the 2025–2026 npm compromises.
+func TestStrykerRunArgsPinned(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	args, err := s.runArgs([]string{"src/api/tags.ts"})
+	if err != nil {
+		t.Fatalf("runArgs: %v", err)
+	}
+
+	yes := -1
+	for i, a := range args {
+		if a == "--yes" {
+			yes = i
+			break
+		}
+	}
+	if yes < 0 {
+		t.Fatalf("no --yes in argv: %q", args)
+	}
+	if yes+1 >= len(args) {
+		t.Fatalf("nothing follows --yes: %q", args)
+	}
+	if spec := args[yes+1]; !strykerPinPattern.MatchString(spec) {
+		t.Errorf("package spec %q is not an exact pin (argv: %q)", spec, args)
+	}
+}
+
+// TestStrykerHintUsesSamePin catches the drift that makes a pin useless in
+// practice: the invocation pinned, the advice telling the user to install
+// something else. Forced through a Prefix naming a binary that does not exist,
+// which fails as an *exec.Error rather than an *exec.ExitError and so takes the
+// adapter-failure branch that carries the hint.
+func TestStrykerHintUsesSamePin(t *testing.T) {
+	s := &Stryker{
+		Prefix:      "dross-no-such-binary-9f3c1a",
+		ProjectRoot: t.TempDir(),
+	}
+	_, err := s.Run([]string{"src/api/tags.ts"})
+	if err == nil {
+		t.Fatal("expected the invocation to fail")
+	}
+	if !strings.Contains(err.Error(), "stryker invocation failed") {
+		t.Fatalf("not the adapter-failure branch: %v", err)
+	}
+	if !strings.Contains(err.Error(), strykerPin) {
+		t.Errorf("install hint does not carry %s: %v", strykerPin, err)
 	}
 }

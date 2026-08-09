@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/redact"
 )
 
 // GitHubClient talks to GitHub's REST issues API. GitHub's issues + milestones
@@ -50,13 +52,19 @@ func NewGitHubProjects(cfg Config) (*GitHubClient, error) {
 	if !ok || owner == "" || repo == "" {
 		return nil, fmt.Errorf("github [board].project %q is not \"owner/repo\"", cfg.Project)
 	}
-	token := os.Getenv(cfg.AuthEnv)
-	if token == "" {
-		return nil, fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", cfg.AuthEnv, cfg.AuthEnv)
-	}
+	// Resolved before the check, not after: the built-in default is what most
+	// repos actually use, so leaving it unchecked would exempt the common path
+	// from the guard entirely.
 	apiBase := strings.TrimRight(cfg.APIBase, "/")
 	if apiBase == "" {
 		apiBase = "https://api.github.com"
+	}
+	if err := cfg.Hosts.Check("[board].base_url", apiBase); err != nil {
+		return nil, err
+	}
+	token := os.Getenv(cfg.AuthEnv)
+	if token == "" {
+		return nil, fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", cfg.AuthEnv, cfg.AuthEnv)
 	}
 	return &GitHubClient{
 		owner:     owner,
@@ -293,10 +301,15 @@ func (r *githubIssue) toIssue() *Issue {
 
 // --- low-level REST/GraphQL ---
 
-// do performs a token-authenticated JSON request against GitHub's API. If out
-// is non-nil and the response has a body, it's decoded into out. Non-2xx
-// responses become errors carrying the status and a (truncated) body snippet.
+// do performs a token-authenticated JSON request against GitHub's API, with the
+// credential removed from whatever error comes back. See Client.do for why the
+// wrap sits around the whole request rather than at each Errorf.
 func (c *GitHubClient) do(method, endpoint string, body, out any) error {
+	return redact.Err(c.doRaw(method, endpoint, body, out), c.authEnv, c.token)
+}
+
+// doRaw is the unredacted request. Nothing outside do may call it.
+func (c *GitHubClient) doRaw(method, endpoint string, body, out any) error {
 	var rdr io.Reader
 	if body != nil {
 		buf := new(bytes.Buffer)

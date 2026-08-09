@@ -11,6 +11,17 @@ docs/dross.pdf
 # dross handoff — local working memory, not tracked
 .dross/handoff.md
 
+# dross machine-local values (quick_base) — deliberately untracked: a value
+# stored in tracked state would be dragged forward into every later tree by the
+# squash. Staying out of history is the whole point.
+.dross/local.toml
+
+# dross machine-local position + version state — deliberately untracked: no
+# ordinary commit carries a copy, so nothing can replay one over the live file.
+# (On refs cut before this line landed, dross itself refuses the switch — git
+# overwrites an *ignored* file without complaint.) Locked state_tracking.
+.dross/state.json
+
 # dross security run artifacts — local audit output; never pre-disclose on a public repo
 .dross/security/
 

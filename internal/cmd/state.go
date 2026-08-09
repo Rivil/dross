@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -99,7 +101,10 @@ func stateSet() *cobra.Command {
 			}
 			switch args[0] {
 			case "version":
-				s.Version = args[1]
+				// Both homes, one writer (c-4) — see writeVersion.
+				if err := writeVersion(filepath.Dir(path), s, args[1]); err != nil {
+					return err
+				}
 			case "current_milestone":
 				s.CurrentMilestone = args[1]
 			case "current_phase":
@@ -159,6 +164,10 @@ func stateBump() *cobra.Command {
 			if args[0] != "internal" {
 				return fmt.Errorf("unsupported segment %q (only `internal` is bumpable)", args[0])
 			}
+			// A loop-step boundary — see execGatedCommands.
+			if err := requireExecConsent(); err != nil {
+				return err
+			}
 			s, path, err := loadState()
 			if err != nil {
 				return err
@@ -168,7 +177,11 @@ func stateBump() *cobra.Command {
 				return err
 			}
 			prev := s.Version
-			s.Version = next
+			// Both homes, one writer (c-4): a bump that only moved state.json
+			// would leave the release tag pinned at the previous value.
+			if err := writeVersion(filepath.Dir(path), s, next); err != nil {
+				return err
+			}
 			s.Touch(fmt.Sprintf("bump internal %s → %s", prev, next))
 			if err := s.Save(path); err != nil {
 				return err
@@ -183,18 +196,90 @@ func stateBump() *cobra.Command {
 // Rejects anything that doesn't match major.minor.patch.internal with
 // non-negative integer segments.
 func bumpInternal(v string) (string, error) {
+	if err := validateVersion(v); err != nil {
+		return "", err
+	}
 	parts := strings.Split(v, ".")
-	if len(parts) != 4 {
-		return "", fmt.Errorf("version %q is not 4-part (major.minor.patch.internal)", v)
-	}
-	for _, p := range parts {
-		if _, err := strconv.Atoi(p); err != nil {
-			return "", fmt.Errorf("version %q has non-integer segment %q", v, p)
-		}
-	}
 	last, _ := strconv.Atoi(parts[3])
 	parts[3] = strconv.Itoa(last + 1)
 	return strings.Join(parts, "."), nil
+}
+
+// validateVersion checks the 4-part major.minor.patch.internal form with
+// non-negative integer segments. Shared so the writer and the bumper cannot
+// disagree about what a version is.
+func validateVersion(v string) error {
+	parts := strings.Split(v, ".")
+	if len(parts) != 4 {
+		return fmt.Errorf("version %q is not 4-part (major.minor.patch.internal)", v)
+	}
+	for _, p := range parts {
+		if n, err := strconv.Atoi(p); err != nil || n < 0 {
+			return fmt.Errorf("version %q has non-integer segment %q", v, p)
+		}
+	}
+	return nil
+}
+
+// writeVersion is the single writer for the project version, which lives in two
+// places: state.json, the machine-local position dross reads, and
+// project.toml's [project].version, the tracked value release.yml tags from
+// (locked version_home). One call writes both, so the release-facing number and
+// the number dross bumps cannot drift apart (c-4).
+//
+// Order and sequencing are the contract:
+//
+//   - Validation runs before either write, so a rejected version leaves both
+//     files byte-unchanged rather than truncating one and failing on the other.
+//   - project.toml is written first and its failure returns immediately, naming
+//     the path. A half-write that left state.json ahead of the tracked copy is
+//     exactly the divergence this function exists to prevent.
+//   - s is mutated but not saved: the caller usually has a Touch to append and
+//     owns the save. By then the tracked copy is already on disk.
+func writeVersion(root string, s *state.State, v string) error {
+	if err := validateVersion(v); err != nil {
+		return err
+	}
+	projPath := filepath.Join(root, project.File)
+	p, err := project.Load(projPath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", projPath, err)
+	}
+	p.Project.Version = v
+	if err := p.Save(projPath); err != nil {
+		return fmt.Errorf("write %s: %w", projPath, err)
+	}
+	s.Version = v
+	return nil
+}
+
+// ensureState materializes .dross/state.json when it is absent, so a fresh
+// clone — where the file is machine-local and gitignored rather than committed
+// (locked decision: state_tracking) — resolves as a working root instead of a
+// broken one. Version is seeded from project.toml's [project].version, the
+// release-facing home of the number, and History starts empty: the durable
+// record is the git log plus the tracked phase artefacts, not a mirrored
+// activity log (locked decision: history_durability).
+//
+// It is strictly non-destructive. A file already on disk is left exactly as it
+// is, malformed or not — parsing it belongs to whoever loads it, and replacing
+// a corrupt state.json here would destroy the history it may still hold.
+func ensureState(root string) error {
+	path := filepath.Join(root, state.File)
+	switch _, err := os.Stat(path); {
+	case err == nil:
+		return nil
+	case !errors.Is(err, fs.ErrNotExist):
+		return err
+	}
+	s := state.New()
+	// An unparseable project.toml, or one carrying no version, is not this
+	// function's to report — every command that loads it says so loudly. Seed
+	// the default rather than turning it into a root-resolution failure.
+	if p, err := project.Load(filepath.Join(root, project.File)); err == nil && p.Project.Version != "" {
+		s.Version = p.Project.Version
+	}
+	return s.Save(path)
 }
 
 func loadState() (*state.State, string, error) {

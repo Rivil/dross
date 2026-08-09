@@ -1,0 +1,227 @@
+{
+  "phase": "exec-trust-followups",
+  "pr": 77,
+  "base": "milestone/v1.2",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/argfence/argfence.go",
+        "internal/argfence/policy.go",
+        "internal/argfence/argfence_test.go"
+      ],
+      "commit": "d67999b",
+      "completed_at": "2026-08-09T07:14:19.598596Z",
+      "landmarks": [
+        {
+          "feature": "subprocess argv fencing",
+          "symbol": "PolicyFor",
+          "loc": "internal/argfence/policy.go:104",
+          "what": "per-tool argv policy table (separator vs reject) read by both runtime call sites and the audit gate"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "assets/prompts/execute.md",
+        "assets/prompts/quick.md",
+        "assets/prompts/verify.md",
+        "internal/cmd/consent_surface_test.go"
+      ],
+      "commit": "1672448",
+      "completed_at": "2026-08-09T08:18:12.038815Z",
+      "landmarks": [
+        {
+          "feature": "exec consent gate",
+          "symbol": "checkConfigTrust",
+          "loc": "internal/cmd/doctor.go:943",
+          "what": "doctor reports consent state (granted/stale/absent) and the three loop prompts pre-flight with dross trust --check"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/codex/ast_grep.go",
+        "internal/codex/argv_test.go"
+      ],
+      "commit": "b158043",
+      "completed_at": "2026-08-09T07:38:50.916275Z",
+      "landmarks": [
+        {
+          "feature": "subprocess argv fencing",
+          "symbol": "astGrepArgv",
+          "loc": "internal/codex/ast_grep.go:187",
+          "what": "ast-grep file operand behind an end-of-options token, lang checked against the closed indexer set"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "assets/prompts/secure.md",
+        "internal/cmd/secure_prompt_test.go"
+      ],
+      "commit": "ca15bb2",
+      "completed_at": "2026-08-09T09:26:10.655505Z",
+      "landmarks": [
+        {
+          "feature": "subprocess argv fencing",
+          "symbol": "TestSecurePromptFencesScannerOperands",
+          "loc": "internal/cmd/secure_prompt_test.go:65",
+          "what": "semgrep's agent-driven path operand fenced behind an end-of-options token in secure.md, gated by a prompt-content test"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/trust.go",
+        "internal/cmd/local.go",
+        "internal/cmd/trust_test.go"
+      ],
+      "commit": "52b471f",
+      "completed_at": "2026-08-09T07:19:11.841826Z",
+      "landmarks": [
+        {
+          "feature": "exec consent gate",
+          "symbol": "CheckConsent",
+          "loc": "internal/cmd/trust.go:110",
+          "what": "machine-local consent bound to sha256(runtime.test_command), refused unread when local.toml is tracked"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/redact/redact.go",
+        "internal/redact/redact_test.go",
+        "internal/forge/forge.go",
+        "internal/forge/github.go",
+        "internal/forge/jira.go",
+        "internal/forge/youtrack.go"
+      ],
+      "commit": "60f8a8b",
+      "completed_at": "2026-08-09T07:25:17.319666Z",
+      "landmarks": [
+        {
+          "feature": "credential redaction",
+          "symbol": "Scrub",
+          "loc": "internal/redact/redact.go:66",
+          "what": "strips raw and base64-encoded credentials from emitted text; every forge do routes its error through it"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/mutation/gremlins.go",
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_net.go",
+        "internal/mutation/argv_test.go",
+        "internal/mutation/gremlins_test.go",
+        "internal/mutation/stryker_test.go"
+      ],
+      "commit": "da2707f",
+      "completed_at": "2026-08-09T07:35:09.287646Z",
+      "landmarks": [
+        {
+          "feature": "subprocess argv fencing",
+          "symbol": "buildUnleashArgs",
+          "loc": "internal/mutation/gremlins.go:219",
+          "what": "mutation runners refuse leading-dash derived values before exec and return a nil report"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/ship/open.go",
+        "internal/ship/comment.go",
+        "internal/ship/merged.go",
+        "internal/ship/basepr.go",
+        "internal/ship/gharg_test.go",
+        "internal/ship/comment_test.go",
+        "internal/ship/merged_test.go"
+      ],
+      "commit": "af5c614",
+      "completed_at": "2026-08-09T07:30:08.355377Z",
+      "landmarks": [
+        {
+          "feature": "subprocess argv fencing",
+          "symbol": "gitHubPRStatus",
+          "loc": "internal/ship/merged.go:59",
+          "what": "gh argv puts derived values behind the separator or in their flag's value slot, flags ahead of the separator"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/trust.go",
+        "internal/cmd/verify.go",
+        "internal/cmd/task.go",
+        "internal/cmd/state.go",
+        "internal/cmd/changes.go",
+        "cmd/dross/main.go",
+        "internal/cmd/trust_test.go",
+        "internal/cmd/cmd_test.go"
+      ],
+      "commit": "1563d8a",
+      "completed_at": "2026-08-09T07:56:27.795379Z",
+      "landmarks": [
+        {
+          "feature": "exec consent gate",
+          "symbol": "requireExecConsent",
+          "loc": "internal/cmd/trust.go:185",
+          "what": "dross trust plus the refusal at the five loop commands that lead to spawning the repo's test command"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/ship/forgejo.go",
+        "internal/ship/gitlab.go",
+        "internal/ship/bitbucket.go",
+        "internal/ship/comment.go",
+        "internal/ship/open.go",
+        "internal/ship/redact_test.go"
+      ],
+      "commit": "abba11a",
+      "completed_at": "2026-08-09T08:02:17.672181Z",
+      "landmarks": [
+        {
+          "feature": "credential redaction",
+          "symbol": "gitlabReq",
+          "loc": "internal/ship/gitlab.go:195",
+          "what": "ship request helpers scrub the response body at the point it enters the package, covering every downstream interpolation"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/subprocargs_audit_test.go",
+        "internal/cmd/testdata/subprocargs_audit/snippets.txt",
+        "ARCHITECTURE.md"
+      ],
+      "commit": "7356b8d",
+      "completed_at": "2026-08-09T08:08:59.074065Z",
+      "landmarks": [
+        {
+          "feature": "subprocess argv fencing",
+          "symbol": "auditFile",
+          "loc": "internal/cmd/subprocargs_audit_test.go:129",
+          "what": "AST gate resolving every spawn site to a binary and applying argfence's per-tool policy, fail-closed on unknown binaries"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/token_leak_test.go"
+      ],
+      "commit": "9d2892d",
+      "completed_at": "2026-08-09T08:13:59.621441Z",
+      "landmarks": [
+        {
+          "feature": "credential redaction",
+          "symbol": "TestTokenReachesNoEmittedSurface",
+          "loc": "internal/cmd/token_leak_test.go:129",
+          "what": "two-canary proof that no emitted surface (stdout, error, telemetry JSONL) carries either credential"
+        }
+      ]
+    }
+  }
+}

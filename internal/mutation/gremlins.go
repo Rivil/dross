@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/Rivil/dross/internal/argfence"
 )
 
 // DefaultTimeoutCoefficient is the dross-chosen override for gremlins'
@@ -84,7 +86,20 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		return &Report{Tool: g.Name()}, nil
 	}
 
-	pkgs := packagesFromFiles(files)
+	pkgs := packagesFromFilesFn(files)
+
+	// Gremlins has no end-of-options token, so a derived value that begins with
+	// a dash cannot be fenced — it is refused before anything is spawned. The
+	// policy lives in argfence's table rather than here, so this call site and
+	// the audit gate read the same map.
+	//
+	// Today packagesFromFiles always emits "." or "./<dir>", which is
+	// prefix-constant and could not produce a dash. That is exactly why the
+	// guard is here: the safety is a property of one derivation function, one
+	// refactor away from not holding, and nothing downstream would notice.
+	if _, err := argfence.Fence("gremlins", "package", pkgs...); err != nil {
+		return nil, err
+	}
 
 	reportDir := filepath.Join(g.ProjectRoot, "reports", "gremlins")
 	// Gremlins won't create parent dirs for --output; it errors on the
@@ -104,8 +119,11 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		// writes nothing this time.
 		_ = os.Remove(reportAbs)
 
-		args := g.buildUnleashArgs(reportRel, []string{pkg})
-		cmd := g.buildCmd(args)
+		args, err := g.buildUnleashArgs(reportRel, []string{pkg})
+		if err != nil {
+			return nil, err
+		}
+		cmd := gremlinsBuildCmd(g, args)
 		cmd.Stdout = os.Stderr // streamed; not captured (long-running)
 		cmd.Stderr = os.Stderr
 
@@ -196,7 +214,20 @@ func sanitizePkg(pkg string) string {
 // buildUnleashArgs assembles the gremlins invocation for the configured
 // timeout coefficient and package set. Extracted from Run() so the flag
 // shape is unit-testable without shelling out.
-func (g *Gremlins) buildUnleashArgs(reportRel string, pkgs []string) []string {
+// It returns an error rather than a best-effort argv when a value would be read
+// as an option: gremlins has no `--`, so there is nothing to fall back to.
+func (g *Gremlins) buildUnleashArgs(reportRel string, pkgs []string) ([]string, error) {
+	// --output's value is an option ARGUMENT, not a positional, so a leading
+	// dash there is not the same vector as a dash package. It is checked anyway
+	// because the cost is one line and the alternative is a reader having to
+	// re-derive which of the two slots is safe today.
+	if _, err := argfence.Fence("gremlins", "output report", reportRel); err != nil {
+		return nil, err
+	}
+	fenced, err := argfence.Fence("gremlins", "package", pkgs...)
+	if err != nil {
+		return nil, err
+	}
 	coef := g.TimeoutCoefficient
 	if coef <= 0 {
 		coef = DefaultTimeoutCoefficient
@@ -216,8 +247,20 @@ func (g *Gremlins) buildUnleashArgs(reportRel string, pkgs []string) []string {
 		"--workers", strconv.Itoa(workers),
 		"--test-cpu", strconv.Itoa(testCPU),
 	}
-	return append(args, pkgs...)
+	return append(args, fenced...), nil
 }
+
+// gremlinsBuildCmd is the process-construction seam. Rejection tests substitute
+// one that fails the test if it is called, so "refused BEFORE exec" is asserted
+// rather than assumed — a refusal that still spawned gremlins would otherwise
+// look identical to one that didn't.
+var gremlinsBuildCmd = (*Gremlins).buildCmd
+
+// packagesFromFilesFn is the package-derivation seam, overridable so a test can
+// prove Run's guard fires. Today's derivation cannot produce a dash package;
+// substituting one that does is the only way to exercise the guard without
+// waiting for the refactor that makes it reachable for real.
+var packagesFromFilesFn = packagesFromFiles
 
 func (g *Gremlins) buildCmd(args []string) *exec.Cmd {
 	if g.Prefix == "" {

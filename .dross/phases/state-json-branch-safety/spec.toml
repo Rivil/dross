@@ -1,0 +1,71 @@
+[phase]
+  id = "state-json-branch-safety"
+  title = "state-json-branch-safety"
+  milestone = "v1.2"
+
+[[criteria]]
+  id = "c-1"
+  text = "A branch carrying a stale .dross/state.json cannot silently replace the live one on a switch dross performs — the live state either survives the switch untouched or the switch is refused outright, naming the file and the fix."
+
+[[criteria]]
+  id = "c-2"
+  text = "release.yml resolves the project version from a clean CI checkout of main with no dross binary present, and the value it reads is the one dross last bumped."
+
+[[criteria]]
+  id = "c-3"
+  text = "Every dross command that switches branches — phase complete, --recover, ship recover, milestone complete — leaves .dross/state.json holding every history entry it had before the switch, plus its own."
+
+[[criteria]]
+  id = "c-4"
+  text = "The release-facing version and the version dross bumps cannot diverge: one bump writes both, and a stale copy is a detectable error rather than a silent wrong value."
+
+[[criteria]]
+  id = "c-5"
+  text = "A regression test reproduces the incident end to end — live state with N history entries, a stale long-lived branch checked out over it — and fails against the pre-milestone code."
+
+[[criteria]]
+  id = "c-6"
+  text = "dross doctor detects a repo whose .dross/state.json is still tracked, or whose release version file is missing or stale, and names the exact fix."
+
+[[criteria]]
+  id = "c-7"
+  text = "A milestone/* branch whose work is already on the main branch is reported as stale and removable local+remote, including the squash-merged case that git branch --merged does not detect."
+
+[[decisions]]
+  key = "state_tracking"
+  choice = ".dross/state.json is removed from the index (git rm --cached) and gitignored, mirroring .dross/local.toml. Live state becomes machine-local working state."
+  why = "Untracking removes the file from every future commit, so no ordinary checkout has a copy to replay. AMENDED during execution (t-8): the original rationale claimed git would refuse the checkout on branches that still track it. That is false for an IGNORED path — git declines to overwrite an untracked working-tree file only when it is not ignored, and overwrites an ignored one silently (pinned by TestGitDoesNotRefuseIgnoredClobber). The residual legacy-branch case is therefore closed by a dross-side pre-check in checkoutBranch, which refuses and names the fix. A bare `git checkout` of a legacy branch remains a silent clobber; doctor reports branches that still track the file."
+  locked = true
+
+[[decisions]]
+  key = "version_home"
+  choice = "The release-facing version lives in .dross/project.toml's [project].version, read by release.yml with grep/sed rather than jq."
+  why = "The field already exists, is already tracked, and already has a `dross project set version` writer — and is currently the dead 0.2.0.0 value this phase's c-4 kills. A new version.json would leave that dead field in place as a third version location. TOML is the locked config format."
+  locked = true
+
+[[decisions]]
+  key = "migration_scope"
+  choice = "Untrack going forward only — no history rewrite, no filter-repo, no force-push. Past branches and tags keep their copies."
+  why = "Purging from history rewrites every commit SHA on a published public repo, breaking clones, tags and PR references — a far larger blast radius than the bug. The residual case (checking out an old branch that still tracks the file) resolves as a git refusal, which c-1 already treats as correct behaviour."
+  locked = true
+
+[[decisions]]
+  key = "history_durability"
+  choice = "state.json's history[] becomes machine-local and is not mirrored to any tracked file; a fresh clone starts with no history."
+  why = "The durable record is the git log plus the tracked phase artifacts (spec/plan/verify/changes), and reconstructing current position from those is exactly what the next roadmap phase, dross-repair, exists to do. A mirrored append-only log would add a second writer to keep in sync and would still conflict on merge."
+  locked = true
+
+[[decisions]]
+  key = "prune_surface"
+  choice = "dross doctor reports a stale milestone/* branch (read-only, alongside c-6's tracked-state detection); a separate explicit `dross milestone prune` performs the local+remote deletion."
+  why = "Keeps doctor a pure diagnostic and makes deleting a remote branch a conscious act rather than a --fix side effect — the same reasoning that made complete-base-truth's legacy_escape an explicit --base rather than an inference. Doing the sweep inside milestone complete instead would never fire for an interrupted milestone."
+  locked = true
+
+[[deferred]]
+  text = "An upgrade note (CHANGELOG / README) telling an existing adopter what to do the first time the checkout refusal fires on a branch that still tracks .dross/state.json."
+  why = "doctor already names the exact fix (`git rm --cached .dross/state.json`) per c-6, which covers diagnosis at the moment it bites; a release-note is distribution work, not safety work, and this repo has no external adopters to warn."
+
+[[deferred]]
+  text = "A checkout also wipes tracked .dross/phases/<newer-phase>/ dirs from the working tree; untracking state.json does not cover that clobber."
+  why = "Milestone criterion 8 — detect a clobbered or incomplete .dross/ and repair it from git history — is exactly this input, and dross-repair is already on the v1.2 roadmap."
+  target = "dross-repair"

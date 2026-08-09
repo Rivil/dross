@@ -108,6 +108,11 @@ func taskNext() *cobra.Command {
 		Short: "Print the id of the next runnable task (or nothing if none)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			// A loop-step boundary: refusing here stops an execute run before it
+			// reaches the step that runs the repo's tests.
+			if err := requireExecConsent(); err != nil {
+				return err
+			}
 			plan, _, err := loadPhasePlan(args[0])
 			if err != nil {
 				return err
@@ -187,6 +192,14 @@ func taskStatus() *cobra.Command {
 			case phase.StatusPending, phase.StatusInProgress, phase.StatusDone, phase.StatusFailed:
 			default:
 				return fmt.Errorf("invalid status: %s (want pending|in_progress|done|failed)", status)
+			}
+			// Only in_progress. `done` and `failed` are post-hoc records of work
+			// that already happened — gating them would leave a half-run phase
+			// unrecordable, which is a worse state than the one being prevented.
+			if status == phase.StatusInProgress {
+				if err := requireExecConsent(); err != nil {
+					return err
+				}
 			}
 
 			plan, planPath, err := loadPhasePlan(args[0])

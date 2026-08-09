@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -92,6 +93,7 @@ func TestStateBumpInternalIncrementsLastSegment(t *testing.T) {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
+	trustFixture(t)
 	if err := runCmd(t, State(), "set", "version", "1.2.3.4"); err != nil {
 		t.Fatal(err)
 	}
@@ -125,19 +127,137 @@ func TestStateBumpRejectsUnsupportedSegment(t *testing.T) {
 }
 
 func TestStateBumpRejectsMalformedVersion(t *testing.T) {
-	chdir(t, t.TempDir())
+	dir := t.TempDir()
+	chdir(t, dir)
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatal(err)
 	}
-	if err := runCmd(t, State(), "set", "version", "1.2.3"); err != nil {
+	trustFixture(t)
+	// `state set version` rejects a 3-part value outright now — one writer owns
+	// both homes and validates before touching either (c-4).
+	if err := runCmd(t, State(), "set", "version", "1.2.3"); err == nil {
+		t.Fatal("state set version should reject a non-4-part value")
+	} else if !strings.Contains(err.Error(), "4-part") {
+		t.Errorf("error should mention '4-part': %v", err)
+	}
+
+	// The bumper still guards independently, for a state.json edited by hand.
+	stPath := filepath.Join(dir, ".dross", state.File)
+	s, err := state.Load(stPath)
+	if err != nil {
 		t.Fatal(err)
 	}
-	err := runCmd(t, State(), "bump", "internal")
+	s.Version = "1.2.3"
+	if err := s.Save(stPath); err != nil {
+		t.Fatal(err)
+	}
+	err = runCmd(t, State(), "bump", "internal")
 	if err == nil {
 		t.Fatal("expected error for non-4-part version")
 	}
 	if !strings.Contains(err.Error(), "4-part") {
 		t.Errorf("error should mention '4-part': %v", err)
+	}
+}
+
+// TestBumpInternalWritesBothFiles (c-4): a bump moves the release-facing value
+// too. Dropping the project.toml write leaves the tag pinned at the old number
+// while dross reports the new one.
+func TestBumpInternalWritesBothFiles(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	trustFixture(t)
+	if err := runCmd(t, State(), "set", "version", "1.2.1.0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "bump", "internal"); err != nil {
+		t.Fatal(err)
+	}
+	assertVersionParity(t, dir, "1.2.1.1")
+}
+
+// TestWriteVersionRejectsBeforeWriting (c-4): validation runs first, so a
+// rejected version leaves BOTH files exactly as they were. Validating after the
+// first write leaves one of them moved.
+func TestWriteVersionRejectsBeforeWriting(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "set", "version", "2.0.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"1.2.3", "1.2.3.4.5", "1.2.x.0", "1.2.3.-1"} {
+		t.Run(bad, func(t *testing.T) {
+			if err := runCmd(t, State(), "set", "version", bad); err == nil {
+				t.Fatalf("version %q should be rejected", bad)
+			}
+			assertVersionParity(t, dir, "2.0.0.0")
+		})
+	}
+}
+
+// TestWriteVersionFailureNamesBothPaths (c-4): project.toml is written first
+// and its failure returns immediately, so state.json is never left ahead of the
+// tracked copy — and the error names the file that refused.
+func TestWriteVersionFailureNamesBothPaths(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses file permissions")
+	}
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "set", "version", "2.0.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	projPath := filepath.Join(dir, ".dross", project.File)
+	if err := os.Chmod(projPath, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(projPath, 0o644) })
+
+	err := runCmd(t, State(), "set", "version", "2.1.0.0")
+	if err == nil {
+		t.Fatal("an unwritable project.toml must fail the version write")
+	}
+	if !strings.Contains(err.Error(), project.File) {
+		t.Errorf("error should name %s, got: %v", project.File, err)
+	}
+	s, loadErr := state.Load(filepath.Join(dir, ".dross", state.File))
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if s.Version != "2.0.0.0" {
+		t.Errorf("state.json ran ahead of the tracked copy: %q", s.Version)
+	}
+}
+
+// assertVersionParity re-reads BOTH files from disk and asserts they agree.
+// Fixture-level on purpose: a parity check against the repo root would be
+// invalid — CI checks out a tree with no state.json, and where one is
+// materialized its version is seeded FROM project.toml, making the comparison
+// tautological.
+func assertVersionParity(t *testing.T, dir, want string) {
+	t.Helper()
+	s, err := state.Load(filepath.Join(dir, ".dross", state.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := project.Load(filepath.Join(dir, ".dross", project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Version != want {
+		t.Errorf("state.json version = %q, want %q", s.Version, want)
+	}
+	if p.Project.Version != want {
+		t.Errorf("project.toml [project].version = %q, want %q", p.Project.Version, want)
 	}
 }
 
@@ -166,7 +286,7 @@ func TestStateShowRendersJSON(t *testing.T) {
 // bailing passes the first two checks and fails the third.
 func TestStateTouchSilentOnNonRoot(t *testing.T) {
 	dir := realTempDir(t)
-	root := mkRoot(t, dir, "project.toml")
+	root := mkRoot(t, dir) // incomplete: no project.toml
 	chdir(t, dir)
 
 	var err error
@@ -188,15 +308,15 @@ func TestStateTouchSilentOnNonRoot(t *testing.T) {
 // swallow down into loadState() makes it silent and fails here.
 func TestStateShowLoudOnNonRoot(t *testing.T) {
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir) // incomplete: no project.toml
 	chdir(t, dir)
 
 	err := runCmd(t, State(), "show")
 	if err == nil {
 		t.Fatal("state show should fail on an incomplete root")
 	}
-	if !strings.Contains(err.Error(), filepath.Join(RootDirName, "state.json")) {
-		t.Errorf("error should name .dross/state.json, got %v", err)
+	if !strings.Contains(err.Error(), filepath.Join(RootDirName, "project.toml")) {
+		t.Errorf("error should name .dross/project.toml, got %v", err)
 	}
 }
 

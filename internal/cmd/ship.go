@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/ship"
@@ -18,14 +19,30 @@ import (
 	"github.com/Rivil/dross/internal/verify"
 )
 
+// remotePolicy derives the API host allowlist for [remote] calls: the host of
+// [remote].url, the built-in SaaS defaults, and the machine-local additions
+// from .dross/local.toml.
+//
+// It returns an error — rather than an empty extras list — when git reports
+// local.toml tracked, because a committed local.toml is a repo authorizing its
+// own exfiltration host through the one input the derivation trusts.
+func remotePolicy(root, repoDir string, p *project.Project) (hostallow.Policy, error) {
+	extra, err := readAllowHosts(root, repoDir)
+	if err != nil {
+		return hostallow.Policy{}, err
+	}
+	return hostallow.Derive(p.Remote.URL, extra), nil
+}
+
 // buildOpenOpts maps a project's [remote] config onto ship.OpenOpts. Extracted
 // from the inline ship literal so the provider / auth_user / auth_scheme /
 // project_id wiring is unit-testable — a dropped field (e.g. GitLab silently
 // using default auth or a derived project id even when the user overrode them,
 // or Bitbucket losing the user half of its Basic credential and 401ing on every
 // ship) is caught by ship_test.go.
-func buildOpenOpts(p *project.Project) ship.OpenOpts {
+func buildOpenOpts(p *project.Project, hosts hostallow.Policy) ship.OpenOpts {
 	return ship.OpenOpts{
+		Hosts:      hosts,
 		Provider:   p.Remote.Provider,
 		URL:        p.Remote.URL,
 		APIBase:    p.Remote.APIBase,
@@ -39,8 +56,9 @@ func buildOpenOpts(p *project.Project) ship.OpenOpts {
 
 // buildCommentOpts maps a project's [remote] config onto ship.CommentOpts,
 // carrying the same provider / auth / project fields as buildOpenOpts.
-func buildCommentOpts(p *project.Project) ship.CommentOpts {
+func buildCommentOpts(p *project.Project, hosts hostallow.Policy) ship.CommentOpts {
 	return ship.CommentOpts{
+		Hosts:      hosts,
 		Provider:   p.Remote.Provider,
 		URL:        p.Remote.URL,
 		APIBase:    p.Remote.APIBase,
@@ -162,13 +180,20 @@ func Ship() *cobra.Command {
 
 			// Must be on the phase branch. Pushing from anywhere else is
 			// almost certainly a mistake — phase work belongs on phase/<id>.
+			//
+			// The suggestion names the guarded verb, not `git checkout`: a raw
+			// checkout of a branch that still tracks .dross/state.json replays
+			// it over the live machine-local copy without complaint, which is
+			// what destroyed a live history on the state-json-branch-safety
+			// ship. A refusal that hands the user the unguarded form reopens
+			// that hole by hand, one obedient copy-paste at a time.
 			cur, err := gitTrim(repoDir, "symbolic-ref", "--short", "HEAD")
 			if err != nil {
 				return fmt.Errorf("read current branch: %w", err)
 			}
 			if cur != phaseBranch {
-				return fmt.Errorf("must be on %s to ship (currently on %s); switch with `git checkout %s`",
-					phaseBranch, cur, phaseBranch)
+				return fmt.Errorf("must be on %s to ship (currently on %s); switch with `dross phase checkout %s`",
+					phaseBranch, cur, phaseID)
 			}
 
 			// 4) Title + body.
@@ -208,29 +233,31 @@ func Ship() *cobra.Command {
 				narrate("auto-committed .dross-only bookkeeping\n")
 			}
 
-			// 5) Fold the completion record into the squash. Write the
-			//    completed-state transition (clear current_phase + status,
-			//    append a `completed <id>` history entry) and commit it
-			//    *before* the push, so the pushed ref carries it and the
-			//    provider's squash-merge lands it on main. This is what
-			//    eliminates the completion-chore divergence: phase complete
-			//    no longer writes a standalone post-merge commit to local
-			//    main (it becomes ff + branch-delete only — see t-2). The PR
-			//    URL is known only post-push, so it drops out of the commit
-			//    and is printed instead.
+			// 5) Mark the phase shipped. Ship deliberately does NOT write
+			//    the completed-state transition: a phase is not complete
+			//    until its PR is merged, and ship runs before that is known.
+			//    `dross phase complete` is the sole writer of the completion
+			//    record, behind its merge gate. What ship records is the
+			//    intermediate truth — current_phase stays set, status becomes
+			//    "shipped" — so status surfaces can name the open PR instead
+			//    of claiming a completion nothing confirmed.
 			//
-			//    Idempotent: re-shipping after review edits re-writes the
-			//    same state and only commits when something actually staged,
-			//    so a no-op re-ship doesn't error on "nothing to commit".
-			s.CurrentPhase = ""
-			s.CurrentPhaseStatus = ""
-			s.Touch(fmt.Sprintf("completed %s", phaseID))
+			//    Idempotent: a re-ship after review edits re-writes the same
+			//    status, the `shipped <id>` entry is history-scan-guarded so
+			//    it never doubles up, and the commit below only runs when
+			//    something actually staged.
+			s.CurrentPhaseStatus = "shipped"
+			if !historyHasAction(s, "shipped "+phaseID) {
+				s.Touch(fmt.Sprintf("shipped %s", phaseID))
+			}
 			if err := s.Save(filepath.Join(root, state.File)); err != nil {
 				return fmt.Errorf("save state: %w", err)
 			}
-			if out, err := gitCombined(repoDir, "add", filepath.Join(".dross", state.File)); err != nil {
-				return fmt.Errorf("git add state.json: %w\n%s", err, out)
-			}
+			// The write stays local: state.json is gitignored (locked
+			// state_tracking), so there is nothing to stage — an explicit
+			// `git add .dross/state.json` here hard-fails on "paths are
+			// ignored by one of your .gitignore files". Anything else the
+			// auto-commit above left staged still gets its commit.
 			if err := gitNoOut(repoDir, "diff", "--cached", "--quiet"); err != nil {
 				// Non-nil err means there IS a staged change to commit.
 				shipMsg := fmt.Sprintf("chore(dross): ship %s", phaseID)
@@ -252,7 +279,7 @@ func Ship() *cobra.Command {
 			// incomplete — refuse rather than open a PR against a base the
 			// provider can't see. main is the always-present default.
 			if milestoneActive {
-				if err := gitNoOut(repoDir, "ls-remote", "--exit-code", "--heads", "origin", baseBranch); err != nil {
+				if err := gitNoOut(repoDir, gitRefArgs("ls-remote", []string{"--exit-code", "--heads"}, "origin", baseBranch)...); err != nil {
 					return fmt.Errorf("base branch %q is not on origin — it is pushed when the milestone is scoped; re-scope or push it before shipping", baseBranch)
 				}
 			}
@@ -275,16 +302,23 @@ func Ship() *cobra.Command {
 			if basePushed {
 				narrate("pushed unpushed .dross chores on %s to origin\n", baseBranch)
 			}
+			quickPushed, quickBase, err := pushQuickBaseIfRecorded(repoDir, root, baseBranch)
+			if err != nil {
+				return err
+			}
+			if quickPushed {
+				narrate("pushed unpushed .dross chores on %s (recorded quick_base) to origin\n", quickBase)
+			}
 
 			// 7) Push phase/<id> directly. The provider's squash-merge will
 			//    collapse the per-task commits into one on the base; no
 			//    client-side synthetic branch needed.
-			pushArgs := []string{"push", "-u", "origin", phaseBranch}
+			pushArgs := gitRefArgs("push", []string{"-u"}, "origin", phaseBranch)
 			if forcePush {
 				// --force-with-lease guards against clobbering a concurrent
 				// push from another machine without requiring the user to
 				// know the remote SHA.
-				pushArgs = []string{"push", "-u", "--force-with-lease", "origin", phaseBranch}
+				pushArgs = gitRefArgs("push", []string{"-u", "--force-with-lease"}, "origin", phaseBranch)
 			}
 			pushOut, perr := gitCombined(repoDir, pushArgs...)
 			if perr != nil {
@@ -293,7 +327,11 @@ func Ship() *cobra.Command {
 			narrate("Pushed %s to origin\n", phaseBranch)
 
 			// 8) Open the PR via the provider (base resolved in step 6).
-			opts := buildOpenOpts(p)
+			hosts, herr := remotePolicy(root, repoDir, p)
+			if herr != nil {
+				return herr
+			}
+			opts := buildOpenOpts(p, hosts)
 			opts.HeadBranch = phaseBranch
 			opts.BaseBranch = baseBranch
 			opts.Title = title
@@ -327,7 +365,7 @@ func Ship() *cobra.Command {
 				// Non-fatal post-PR errors (e.g. reviewer add failed).
 				narrate("Warning: %v\n", err)
 			}
-			narrate("Completion record folded into %s — squash-merge will land it on %s\n", phaseBranch, baseBranch)
+			narrate("Marked %s shipped — once the PR merges, `dross phase complete %s` writes the completion record\n", phaseID, phaseID)
 
 			// Persist the opened PR number into the phase-scoped changes.json
 			// so `dross phase complete` can gate on THIS phase's authoritative
@@ -348,8 +386,18 @@ func Ship() *cobra.Command {
 				if err := changes.SetPR(root, phaseID, res.Number); err != nil {
 					return fmt.Errorf("persist PR number: %w", err)
 				}
+				// The authoritative half of base_write_timing: what the PR was
+				// actually opened against wins over the value create recorded,
+				// if the two ever diverge (a milestone scoped after the fork is
+				// the ordinary way that happens). It rides the same commit and
+				// push as the PR number, so the squash carries base and pr onto
+				// the base branch together and `dross phase complete` reads a
+				// consistent pair.
+				if err := changes.SetBase(root, phaseID, baseBranch); err != nil {
+					return fmt.Errorf("persist PR base branch: %w", err)
+				}
 				changesRel := filepath.Join(".dross", "phases", phaseID, changes.File)
-				if out, err := gitCombined(repoDir, "add", changesRel); err != nil {
+				if out, err := gitCombined(repoDir, gitPathArgs("add", nil, changesRel)...); err != nil {
 					return fmt.Errorf("git add changes.json: %w\n%s", err, out)
 				}
 				// Only commit + push when the add actually staged a change, so a
@@ -363,9 +411,9 @@ func Ship() *cobra.Command {
 					// Push the record onto the phase branch so it reaches the
 					// open PR / squash / base. Mirror the initial push's
 					// force-with-lease handling under --force.
-					recordPushArgs := []string{"push", "origin", phaseBranch}
+					recordPushArgs := gitRefArgs("push", nil, "origin", phaseBranch)
 					if forcePush {
-						recordPushArgs = []string{"push", "--force-with-lease", "origin", phaseBranch}
+						recordPushArgs = gitRefArgs("push", []string{"--force-with-lease"}, "origin", phaseBranch)
 					}
 					if out, err := gitCombined(repoDir, recordPushArgs...); err != nil {
 						return fmt.Errorf("git push PR record: %w\n%s", err, out)
@@ -471,7 +519,15 @@ func shipComment() *cobra.Command {
 			if p.Remote.URL == "" || p.Remote.Provider == "" {
 				return errors.New("project has no [remote].url or .provider — run /dross-options or /dross-onboard")
 			}
-			co := buildCommentOpts(p)
+			root, rerr := FindRoot()
+			if rerr != nil {
+				return rerr
+			}
+			hosts, herr := remotePolicy(root, filepath.Dir(root), p)
+			if herr != nil {
+				return herr
+			}
+			co := buildCommentOpts(p, hosts)
 			co.PRNumber = prNumber
 			co.Body = body
 			if err := ship.PostComment(co); err != nil {

@@ -1,0 +1,53 @@
+[phase]
+  id = "exec-trust-followups"
+  title = "exec-trust-followups"
+  milestone = "v1.2"
+
+[[criteria]]
+  id = "c-1"
+  text = "Running a repo's `runtime.test_command` requires explicit consent when the `.dross/` was not authored on this machine; without consent the run refuses rather than executing."
+
+[[criteria]]
+  id = "c-2"
+  text = "No config- or argv-derived value reaches gremlins, stryker (Go and .NET), ast-grep or semgrep as a bare positional: each derived value sits behind that tool's end-of-options separator, or is rejected for a leading dash where the tool has none."
+
+[[criteria]]
+  id = "c-3"
+  text = "A refused or failed forge request never puts the token value into the returned error, a telemetry event, or stdout/stderr — proven by seeding a recognisable token and asserting it appears on no emitted surface."
+
+[[criteria]]
+  id = "c-4"
+  text = "The `gh` invocations in ship carry the same discipline as git: no config- or state-derived value (PR title, body, reviewers, base) can be read by `gh` as a flag."
+
+[[criteria]]
+  id = "c-5"
+  text = "The unseparated-positional audit gate covers every subprocess dross spawns, not just git: a newly added call passing a caller-derived bare positional to any of them fails the build by file and line."
+
+[[decisions]]
+  key = "exec_consent_gate"
+  choice = "Consent is a closed key in the gitignored `.dross/local.toml`, granted by an explicit `dross trust` command; absence of local.toml is the not-authored-here signal, and `dross verify` / `dross quick` / phase execute refuse to proceed without it"
+  why = "Reuses the `allow_hosts` precedent exactly — a gitignored store cannot be self-authorizing, so a clone carries no consent by construction. Enforcement sits in the CLI rather than in prompt text, which is the only half that cannot be talked out of it. Accepted limit: the CLI cannot stop an agent invoking `go test` directly; the gate covers dross's own loop commands."
+  locked = true
+
+[[decisions]]
+  key = "consent_binding"
+  choice = "Consent is bound to a hash of the consented `runtime.test_command`, not to the repo; a changed command revokes it and re-prompts"
+  why = "The attack this gate exists for is a repo already trusted whose test_command is rewritten by a later pull. Repo-scoped consent would inherit trust granted to the old command. Cost is a re-prompt after a legitimate test_command edit, which is cheap and rare. No blanket `--repo` escape hatch: one fewer way to permanently trust a file you don't control."
+  locked = true
+
+[[decisions]]
+  key = "analyzer_arg_policy"
+  choice = "Per-tool: `--` for semgrep and ast-grep, which honour it; outright rejection of a leading-dash derived value for gremlins and stryker, which have no end-of-options; the audit gate encodes which policy applies per tool"
+  why = "Each tool gets the strongest guarantee it can actually offer rather than a uniform rule levelled to the weakest. Rejection is a classifier and config-trust-hardening's own reasoning names the classifier as the vulnerability — so it is the fallback where no separator exists, never the default. Encoding the per-tool policy in the gate makes the choice checked rather than remembered."
+  locked = true
+
+[[decisions]]
+  key = "audit_gate_breadth"
+  choice = "The gate scans every `exec.Command` / `exec.CommandContext` site in internal/ and cmd/ regardless of binary; accepted cases are named with their reason in the audit file's header"
+  why = "Fail-closed: a subprocess for a binary nobody anticipated is in scope the day it is added, which is the exact failure mode the git-only audit was written to prevent and which this phase's c-4 proves real. The named-exception header is the r-02 shape gitargs_audit_test.go already uses, rather than a file:line exception list that rots."
+  locked = true
+
+[[deferred]]
+  text = "Give assets/prompts/secure.md end-of-options guidance for semgrep (a `--` before the path operand, alongside the existing --metrics=off line), with a prompt-content test in the shape of the existing ones."
+  why = "c-2 names semgrep, but dross spawns it nowhere in Go — internal/security/catalog.go:55 is a LookPath presence entry, so the argfence table entry is forward-looking and the criterion is satisfied vacuously. The only place semgrep genuinely runs with derived arguments is agent-driven from secure.md:72-78, which is prompt guidance rather than a Go call site — a different kind of fix from the rest of this phase. Surfaced by /dross-verify 2026-08-09 (verdict partial, c-2 weak)."
+  dismissed = true

@@ -312,7 +312,14 @@ Two phases:
   branch; `dross phase create` / `dross quick` branch off *that* (not main) and
   their merges land on the milestone branch; `dross milestone` completion opens
   **one PR of the whole milestone branch → main**, so main advances only at
-  milestone boundaries. **Supersedes** the v0.6 `phase/<id>`-off-main model —
+  milestone boundaries. Since v1.2 (`milestone-stacking`) the cut point and that
+  PR's target are **conditional**, not always main: a new milestone is cut from
+  the current milestone's branch while that branch is still unmerged (and from
+  the main branch once it has merged, is gone, or there's no current milestone),
+  the branch it was cut from is recorded as the milestone's `base` and read back
+  verbatim rather than re-inferred, `--base <branch>` forces it, and its
+  integration PR targets that recorded parent until the parent merges.
+  **Supersedes** the v0.6 `phase/<id>`-off-main model —
   re-scopes `phase create`, `ship`, `phase complete`, and `ship recover` around a
   milestone base, plus the `.dross/` divergence/recovery machinery shipped in
   `ship-complete-recovery-hardening`.

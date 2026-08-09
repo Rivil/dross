@@ -3,22 +3,30 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
 
-// shipPromptContent loads assets/prompts/ship.md and normalises it —
+// promptContent loads one prompt out of assets/prompts/ and normalises it —
 // lowercased, with markdown emphasis and backticks stripped — so assertions
 // test the presence of a rule, not its exact formatting.
-func shipPromptContent(t *testing.T) string {
+func promptContent(t *testing.T, name string) string {
 	t.Helper()
 	root := repoRootFromTest(t)
-	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "ship.md"))
+	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", name))
 	if err != nil {
-		t.Fatalf("read ship.md: %v", err)
+		t.Fatalf("read %s: %v", name, err)
 	}
 	s := strings.ToLower(string(b))
 	return strings.NewReplacer("`", "", "*", "", "_", "").Replace(s)
+}
+
+// shipPromptContent is promptContent pinned to ship.md, the prompt most of this
+// file's assertions are about.
+func shipPromptContent(t *testing.T) string {
+	t.Helper()
+	return promptContent(t, "ship.md")
 }
 
 // TestShipPromptRecoverySection (c-5) gates the recovery cookbook: all three
@@ -141,13 +149,118 @@ func TestShipPromptGitLabSections(t *testing.T) {
 		t.Error("ship.md §5 missing the no-pipeline (empty pipelines array) surface-and-ask path")
 	}
 
-	// §6 GitLab squash-merge + remote-branch removal (underscore-stripped forms).
-	for _, needle := range []string{
-		"mergerequests",            // merge_requests
+	// §6 GitLab squash-merge endpoint (underscore-stripped form).
+	if !strings.Contains(content, "mergerequests") {
+		t.Errorf("ship.md §6 missing GitLab squash-merge endpoint token %q", "mergerequests")
+	}
+	// The remote-branch removal flag is deliberately GONE. gitlab-ship-provider
+	// pinned `should_remove_source_branch` as part of the locked merge mapping;
+	// completion-state-truth supersedes that, because provider-side teardown is
+	// now dross's job on every provider (see TestShipPromptNoUnguardedSwitch).
+	if strings.Contains(content, "shouldremovesourcebranch") {
+		t.Error("ship.md §6 must not ask GitLab to remove the source branch — `dross phase complete` owns the teardown")
+	}
+}
+
+// TestShipPromptNoUnguardedSwitch (c-1) is the executable guard on the hole
+// this phase closes: no step of /dross-ship may switch branches outside dross's
+// guarded primitives. `gh pr merge --delete-branch` does its own raw checkout of
+// the base branch — that is what destroyed a live state.json on the
+// state-json-branch-safety ship — and a raw `git checkout` in the prompt is the
+// same hole with the user's hands on it.
+//
+// The whole file is scanned, not just §4-to-EOF: §0's pre-flight step 5 has a
+// guarded replacement now (`dross phase checkout`), so there is nowhere left
+// that legitimately types one.
+func TestShipPromptNoUnguardedSwitch(t *testing.T) {
+	content := shipPromptContent(t)
+
+	for _, forbidden := range []string{
+		"--delete-branch",
 		"shouldremovesourcebranch", // should_remove_source_branch
+		"deletesourcebranch",       // delete_source_branch
+		"git checkout",
+		"git switch",
+	} {
+		if strings.Contains(content, forbidden) {
+			t.Errorf("ship.md must not contain %q — every branch switch and branch deletion goes through dross", forbidden)
+		}
+	}
+}
+
+// rawPhaseSwitch matches an instruction to switch onto a phase branch with git
+// rather than `dross phase checkout`. Deliberately narrower than "mentions git
+// checkout": `git checkout -- <files>` (quick.md's abort path) restores files
+// and switches nothing, and pause.md's hard rules *forbid* checkout by naming
+// it. What is banned is the branch-switching form aimed at phase/<id> — the one
+// that replays a tracked .dross/state.json over the live machine-local copy.
+// `git switch` has no path-restore form at all, so any use of it is a switch.
+var rawPhaseSwitch = regexp.MustCompile(`git\s+checkout[^\n]*phase/|git\s+switch\b`)
+
+// TestNoPromptPerformsRawBranchSwitch (c-1) generalises the ship.md guard to
+// every prompt. ship.md was fixed first and covered by
+// TestShipPromptNoUnguardedSwitch, while execute.md, plan.md, spec.md and
+// resume.md kept telling the user to type `git checkout phase/<id>` — the same
+// hole, four more doors, none of them scanned. A guard bound to one file only
+// proves that file is clean.
+func TestNoPromptPerformsRawBranchSwitch(t *testing.T) {
+	root := repoRootFromTest(t)
+	dir := filepath.Join(root, "assets", "prompts")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+
+	scanned := 0
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		scanned++
+		content := promptContent(t, e.Name())
+		for i, line := range strings.Split(content, "\n") {
+			if rawPhaseSwitch.MatchString(line) {
+				t.Errorf("%s:%d instructs a raw branch switch — use `dross phase checkout <id>`, which guards the live state.json:\n  %s",
+					e.Name(), i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+	// A mis-rooted walk finds nothing and would otherwise report success.
+	if scanned == 0 {
+		t.Fatalf("scanned no prompts under %s — the guard proved nothing", dir)
+	}
+
+	// The negative alone is satisfied by deleting the instruction. Each prompt
+	// that needs to get the user onto the phase branch must still say how.
+	for _, name := range []string{"execute.md", "plan.md", "spec.md", "resume.md"} {
+		if !strings.Contains(promptContent(t, name), "dross phase checkout") {
+			t.Errorf("%s must name `dross phase checkout` as the way onto the phase branch", name)
+		}
+	}
+}
+
+// TestShipPromptNamesCompleteAsTeardownOwner (c-1, c-3): with the provider's
+// delete flags gone, the prompt has to say who does the deletion instead — and
+// §6.3's description of `dross phase complete` has to stop describing the old
+// behaviour (a switch to main, and a chore commit carrying the record).
+func TestShipPromptNamesCompleteAsTeardownOwner(t *testing.T) {
+	// Collapse whitespace so multi-word needles match across line wraps.
+	content := strings.Join(strings.Fields(shipPromptContent(t)), " ")
+
+	for _, needle := range []string{
+		"dross phase complete performs the local and remote",
+		"on every provider",
 	} {
 		if !strings.Contains(content, needle) {
-			t.Errorf("ship.md §6 missing GitLab squash-merge token %q", needle)
+			t.Errorf("ship.md §6 must name `dross phase complete` as the teardown owner: missing %q", needle)
+		}
+	}
+	for _, stale := range []string{
+		"switches to main",
+		"chore commit",
+	} {
+		if strings.Contains(content, stale) {
+			t.Errorf("ship.md §6.3 still describes the retired completion behaviour: %q", stale)
 		}
 	}
 }

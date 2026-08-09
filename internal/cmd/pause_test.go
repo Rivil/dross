@@ -205,7 +205,7 @@ func TestPauseAutoSnapshotCleanRepo(t *testing.T) {
 // the snapshot passes an error check and fails here.
 func TestPauseAutoSilentOnIncompleteRoot(t *testing.T) {
 	dir := realTempDir(t)
-	root := mkRoot(t, dir, "project.toml")
+	root := mkRoot(t, dir) // incomplete: no project.toml
 	chdir(t, dir)
 
 	if err := pauseAuto(pauseNow); err != nil {

@@ -1,0 +1,354 @@
+{
+  "phase": "config-trust-hardening",
+  "pr": 76,
+  "base": "milestone/v1.2",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "fixtures/hostile-config-c5/project.toml",
+        "fixtures/hostile-config-c5/local-tracked.toml",
+        "fixtures/hostile-config-c5/RUN.md",
+        "fixtures/hostile-config-c5/expected-refusals.txt"
+      ],
+      "commit": "ec57abf",
+      "completed_at": "2026-08-04T13:09:16.963655Z",
+      "landmarks": [
+        {
+          "feature": "hostile-config regression fixtures",
+          "symbol": "expected-refusals.txt",
+          "loc": "fixtures/hostile-config-c5/expected-refusals.txt:1",
+          "what": "11-row pinned refusal contract + hostile .dross/ payloads driving the c-5 suite"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "83e5dcf",
+      "completed_at": "2026-08-04T14:10:07.561714Z",
+      "landmarks": [
+        {
+          "feature": "config health diagnostics",
+          "symbol": "checkConfigTrust",
+          "loc": "internal/cmd/doctor.go:660",
+          "what": "doctor reports rejectable branch names, off-allowlist API hosts, an untracked-local.toml gap and a pre-2.24 git as exit-code-moving findings"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/switchbranch.go",
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/gitseparator_test.go"
+      ],
+      "commit": "e1dff2e",
+      "completed_at": "2026-08-04T14:19:17.540856Z",
+      "landmarks": [
+        {
+          "feature": "git argument separators",
+          "symbol": "gitArgvRecorder",
+          "loc": "internal/cmd/phase.go:889",
+          "what": "phase and switch call sites build argv through the separator builders, with an exec seam that records argv so ordering regressions are caught at the call site"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_stale.go",
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/repair_state.go",
+        "internal/cmd/repair_files.go",
+        "internal/cmd/repair_phasedirs.go",
+        "internal/cmd/cleantree.go",
+        "internal/cmd/basebranch.go",
+        "internal/cmd/ship.go",
+        "internal/cmd/phase_lifecycle.go",
+        "internal/cmd/topology.go",
+        "internal/cmd/doctor.go",
+        "internal/codex/git.go",
+        "internal/cmd/gitseparator_remaining_test.go"
+      ],
+      "commit": "63c5bd5",
+      "completed_at": "2026-08-04T14:27:43.299015Z",
+      "landmarks": [
+        {
+          "feature": "git argument separators",
+          "symbol": "historyFromPhaseCommits",
+          "loc": "internal/cmd/repair_state.go:78",
+          "what": "remaining config-derived git positionals fenced behind separators, closing the dross-repair arbitrary-file-write via git log --output="
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/cmd/gitargs_audit_test.go",
+        "internal/cmd/testdata/gitargs_audit/snippets.txt",
+        "internal/cmd/phase.go",
+        "internal/cmd/repair.go",
+        "internal/cmd/status.go",
+        "internal/cmd/milestone_merged.go",
+        "internal/cmd/basebranch.go",
+        "internal/cmd/phase_checkout.go",
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_stale.go"
+      ],
+      "commit": "9abb4f0",
+      "completed_at": "2026-08-04T14:34:05.742913Z",
+      "landmarks": [
+        {
+          "feature": "git argument separators",
+          "symbol": "auditFile",
+          "loc": "internal/cmd/gitargs_audit_test.go:73",
+          "what": "AST gate failing by file:line on any git positional that is neither a literal nor prefix-constant, self-checked against a FLAG/PASS snippet table"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/milestone_dependents.go",
+        "internal/cmd/hostpolicy_test.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/ship.go"
+      ],
+      "commit": "4d38516",
+      "completed_at": "2026-08-04T14:37:41.951234Z",
+      "landmarks": [
+        {
+          "feature": "API host allowlist",
+          "symbol": "mergeGate",
+          "loc": "internal/cmd/phase.go:762",
+          "what": "host refusals re-raise instead of degrading to git ancestry, keeping an attack from reading as a transient forge failure"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "internal/cmd/hostile_config_test.go",
+        "internal/forge/hostile_config_test.go",
+        "fixtures/hostile-config-c5/RUN.md"
+      ],
+      "commit": "1a0deb8",
+      "completed_at": "2026-08-04T14:45:45.433009Z",
+      "landmarks": [
+        {
+          "feature": "hostile-config regression fixtures",
+          "symbol": "TestHostileConfigVectors",
+          "loc": "internal/cmd/hostile_config_test.go:279",
+          "what": "12-vector suite driven off the pinned refusal contract plus an observed red replay showing dross repair wrote an attacker-named file pre-phase"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "e276fdc",
+      "completed_at": "2026-08-04T15:25:58.185798Z",
+      "landmarks": [
+        {
+          "feature": "config trust diagnostics",
+          "symbol": "TestDoctorReportsTrackedLocalToml",
+          "loc": "internal/cmd/doctor_test.go:1911",
+          "what": "doctor's four config-trust arms (tracked local.toml, unreadable .gitignore, unreadable git version, ported escape-hatch hint) are each driven and boundary-pinned"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "internal/cmd/hostpolicy_test.go"
+      ],
+      "commit": "b9bde04",
+      "completed_at": "2026-08-04T15:28:52.151371Z",
+      "landmarks": [
+        {
+          "feature": "host allowlist enforcement",
+          "symbol": "TestDependentsCheckDegradesOnTransientError",
+          "loc": "internal/cmd/hostpolicy_test.go:202",
+          "what": "the dependents open-PR check's degrade arm is asserted alongside its refusal twin, keeping the ErrRefused case narrow"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/hostallow/hostallow_test.go"
+      ],
+      "commit": "5e2c5df",
+      "completed_at": "2026-08-04T15:32:05.934779Z",
+      "landmarks": [
+        {
+          "feature": "host allowlist enforcement",
+          "symbol": "TestHTTPDefaultsToPort80",
+          "loc": "internal/hostallow/hostallow_test.go:182",
+          "what": "port normalization is pinned in both directions so an http-derived entry cannot authorize its https twin"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/milestone_dependents.go"
+      ],
+      "commit": "d94ade6",
+      "completed_at": "2026-08-04T17:37:56.745822Z",
+      "landmarks": [
+        {
+          "feature": "config trust diagnostics",
+          "symbol": "checkConfigTrust",
+          "loc": "internal/cmd/doctor.go:916",
+          "what": "tagless-switch arms rewritten as if/else chains so go-cover attributes their conditions and mutation testing can reach them"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/refguard.go",
+        "internal/cmd/refguard_test.go",
+        "internal/cmd/switchbranch.go"
+      ],
+      "commit": "c70fcbe",
+      "completed_at": "2026-08-04T13:13:27.407865Z",
+      "landmarks": [
+        {
+          "feature": "config-derived ref validation",
+          "symbol": "validateGitRef",
+          "loc": "internal/cmd/refguard.go:33",
+          "what": "pre-exec guard refusing leading-dash and check-ref-format-invalid refs at the four guarded switch helpers"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/gitargs.go",
+        "internal/cmd/gitargs_test.go"
+      ],
+      "commit": "370c697",
+      "completed_at": "2026-08-04T13:16:50.172669Z",
+      "landmarks": [
+        {
+          "feature": "git argument separators",
+          "symbol": "gitRefArgs",
+          "loc": "internal/cmd/gitargs.go:45",
+          "what": "unconditional --end-of-options/-- argv builders fencing config-derived refs and pathspecs from git's option parser"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_test.go"
+      ],
+      "commit": "266a84d",
+      "completed_at": "2026-08-04T13:19:40.554617Z",
+      "landmarks": [
+        {
+          "feature": "mutation adapter supply-chain pinning",
+          "symbol": "strykerPin",
+          "loc": "internal/mutation/stryker.go:81",
+          "what": "exact @stryker-mutator/core@9.6.1 pin shared by the npx invocation and the install hint"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/hostallow/hostallow.go",
+        "internal/hostallow/hostallow_test.go"
+      ],
+      "commit": "6fef81a",
+      "completed_at": "2026-08-04T13:23:55.66165Z",
+      "landmarks": [
+        {
+          "feature": "API host allowlist",
+          "symbol": "Policy.Check",
+          "loc": "internal/hostallow/hostallow.go:130",
+          "what": "derived-not-configured host policy refusing off-allowlist api_base before any token is read, fail-closed on the zero value"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/gitignore.go",
+        "internal/cmd/local.go",
+        "internal/cmd/gitignore_test.go",
+        "internal/cmd/local_test.go",
+        "README.md",
+        "docs/dross.1"
+      ],
+      "commit": "000286c",
+      "completed_at": "2026-08-04T13:28:51.983785Z",
+      "landmarks": [
+        {
+          "feature": "machine-local config store",
+          "symbol": "readAllowHosts",
+          "loc": "internal/cmd/local.go:96",
+          "what": "allow_hosts escape hatch plus a refusal to read a git-tracked local.toml, keeping the host allowlist from being self-authorizing"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_checkout.go",
+        "internal/cmd/milestone.go",
+        "internal/cmd/ship_recover.go",
+        "internal/cmd/refguard_entrypoints_test.go"
+      ],
+      "commit": "60ee005",
+      "completed_at": "2026-08-04T13:39:15.450281Z",
+      "landmarks": [
+        {
+          "feature": "config-derived ref validation",
+          "symbol": "resolveCompleteBase",
+          "loc": "internal/cmd/phase.go:645",
+          "what": "validateGitRef wired at phase complete, checkout, milestone create and ship recover ahead of any git call"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/forge/forge.go",
+        "internal/forge/github.go",
+        "internal/forge/jira.go",
+        "internal/forge/youtrack.go",
+        "internal/forge/hostallow_test.go",
+        "internal/cmd/issue.go"
+      ],
+      "commit": "a80d9c2",
+      "completed_at": "2026-08-04T13:54:21.125034Z",
+      "landmarks": [
+        {
+          "feature": "API host allowlist",
+          "symbol": "forge.Config.Hosts",
+          "loc": "internal/forge/forge.go:69",
+          "what": "all four forge constructors refuse an off-allowlist api_base before the auth token is read from the environment"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/ship/hostguard.go",
+        "internal/ship/hostguard_test.go",
+        "internal/ship/open.go",
+        "internal/ship/forgejo.go",
+        "internal/ship/gitlab.go",
+        "internal/ship/bitbucket.go",
+        "internal/ship/comment.go",
+        "internal/cmd/ship.go"
+      ],
+      "commit": "702bc2e",
+      "completed_at": "2026-08-04T14:04:51.976697Z",
+      "landmarks": [
+        {
+          "feature": "API host allowlist",
+          "symbol": "resolveToken",
+          "loc": "internal/ship/hostguard.go:33",
+          "what": "single guarded token read for all five ship backends, enforced structurally by an AST audit for bare os.Getenv"
+        }
+      ]
+    }
+  }
+}

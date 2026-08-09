@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/redact"
 )
 
 // YouTrackClient talks to a YouTrack instance's REST API. Unlike the forge
@@ -54,6 +55,9 @@ func NewYouTrack(cfg Config) (*YouTrackClient, error) {
 	}
 	if cfg.Project == "" {
 		return nil, fmt.Errorf("youtrack backend needs Project (set [board].project)")
+	}
+	if err := cfg.Hosts.Check("[board].base_url", cfg.APIBase); err != nil {
+		return nil, err
 	}
 	token := os.Getenv(cfg.AuthEnv)
 	if token == "" {
@@ -417,10 +421,15 @@ func (r *youtrackIssue) toIssue() *Issue {
 
 // --- low-level REST ---
 
-// do performs a bearer-authenticated JSON request. If out is non-nil and the
-// response has a body, it's decoded into out. Non-2xx responses become errors
-// carrying the status and a (truncated) body snippet.
+// do performs a bearer-authenticated JSON request, with the credential removed
+// from whatever error comes back. See Client.do for why the wrap sits around
+// the whole request rather than at each Errorf.
 func (c *YouTrackClient) do(method, endpoint string, body, out any) error {
+	return redact.Err(c.doRaw(method, endpoint, body, out), c.authEnv, c.token)
+}
+
+// doRaw is the unredacted request. Nothing outside do may call it.
+func (c *YouTrackClient) doRaw(method, endpoint string, body, out any) error {
 	var rdr io.Reader
 	if body != nil {
 		buf := new(bytes.Buffer)

@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -54,6 +58,225 @@ func TestReadmeAdvertisesOnlyRealCommands(t *testing.T) {
 	}
 	if len(seen) == 0 {
 		t.Fatal("parsed zero `dross <cmd>` references from README — the regex or path is wrong")
+	}
+}
+
+// promptCmdRef matches a `dross <verb>` (optionally `dross <verb> <sub>`)
+// invocation inside a backtick code span. The optional second word only
+// matches a bare lowercase word, so flags (`--auto`) and placeholders
+// (`<phase-id>`) fall out and leave just the top-level verb to check.
+var promptCmdRef = regexp.MustCompile("`dross ([a-z][a-z0-9-]*)(?: ([a-z][a-z0-9-]*))?")
+
+// TestShipPromptCommandsExist is the parity guard for ship.md, the sibling of
+// TestReadmeAdvertisesOnlyRealCommands above: every `dross …` invocation the
+// prompt tells the model to run must resolve against the assembled cobra tree.
+// It lives here rather than in internal/cmd because the tree is assembled by
+// newRoot, which is in package main and cannot be imported from internal/cmd.
+//
+// This is what stops a prompt advertising a command before it exists — the
+// failure mode where a prompt edit lands ahead of the CLI verb it depends on
+// and every run of the slash command hits "unknown command".
+func TestShipPromptCommandsExist(t *testing.T) {
+	top := topLevelIndex(newRoot())
+
+	b, err := os.ReadFile(filepath.Join("..", "..", "assets", "prompts", "ship.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	matches := promptCmdRef.FindAllStringSubmatch(string(b), -1)
+	if len(matches) == 0 {
+		t.Fatal("parsed zero `dross <cmd>` references from ship.md — the regex or path is wrong")
+	}
+	for _, m := range matches {
+		if why := resolveCmdRef(top, m[1], m[2]); why != "" {
+			t.Errorf("ship.md runs `%s` but %s", strings.TrimSpace("dross "+m[1]+" "+m[2]), why)
+		}
+	}
+}
+
+// topLevelIndex maps every top-level command name and alias to its command.
+func topLevelIndex(root *cobra.Command) map[string]*cobra.Command {
+	top := map[string]*cobra.Command{}
+	for _, c := range root.Commands() {
+		top[c.Name()] = c
+		for _, a := range c.Aliases {
+			top[a] = c
+		}
+	}
+	return top
+}
+
+// resolveCmdRef reports why `dross <verb> [<sub>]` fails to resolve against the
+// assembled tree, or "" when it resolves. A sub against a leaf command is not a
+// subcommand claim — it's an argument — so it resolves.
+func resolveCmdRef(top map[string]*cobra.Command, verb, sub string) string {
+	parent, ok := top[verb]
+	if !ok {
+		return "no such command exists in the cobra tree"
+	}
+	if sub == "" || !parent.HasSubCommands() {
+		return ""
+	}
+	for _, c := range parent.Commands() {
+		if c.Name() == sub {
+			return ""
+		}
+		for _, a := range c.Aliases {
+			if a == sub {
+				return ""
+			}
+		}
+	}
+	return fmt.Sprintf("%q has no such subcommand", verb)
+}
+
+// --- narrated-command parity (c-1) ---
+
+// narratedRef is one `dross <verb> [<sub>]` reference lifted out of a Go string
+// literal, tagged with the file that narrates it.
+type narratedRef struct {
+	file string
+	verb string
+	sub  string
+}
+
+func (r narratedRef) String() string {
+	return strings.TrimSpace("dross " + r.verb + " " + r.sub)
+}
+
+// narratedIgnore holds `dross …` forms that appear in narration strings but are
+// not command claims — placeholder verbs the user substitutes, and mis-reaches
+// the error text quotes back at the user precisely because they do not resolve.
+//
+// Every entry is asserted below to be (a) actually used by some narration and
+// (b) a form the guard would otherwise reject, so a stale entry cannot sit here
+// masking a real command that has since been removed.
+var narratedIgnore = map[string]bool{}
+
+// narratedCmdRefs extracts every `dross <verb> [<sub>]` reference from the
+// string literals of one Go file. Literals only: a stale command name in a
+// comment misleads a reader, but only a narration string reaches the user, and
+// that is the claim this guard is about.
+func narratedCmdRefs(t *testing.T, path string) []narratedRef {
+	t.Helper()
+	f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+
+	var out []narratedRef
+	base := filepath.Base(path)
+	ast.Inspect(f, func(n ast.Node) bool {
+		lit, ok := n.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		val, err := strconv.Unquote(lit.Value)
+		if err != nil {
+			return true
+		}
+		for _, m := range promptCmdRef.FindAllStringSubmatch(val, -1) {
+			out = append(out, narratedRef{file: base, verb: m[1], sub: m[2]})
+		}
+		return true
+	})
+	return out
+}
+
+// unresolvedNarrations returns one message per reference that neither resolves
+// against the tree nor sits on the ignore list, and the set of ignore entries
+// the references actually used. Pure over its inputs so the guard's own failure
+// path can be exercised with a synthetic reference.
+func unresolvedNarrations(top map[string]*cobra.Command, refs []narratedRef) (msgs []string, usedIgnores map[string]bool) {
+	usedIgnores = map[string]bool{}
+	for _, r := range refs {
+		if narratedIgnore[r.String()] {
+			usedIgnores[r.String()] = true
+			continue
+		}
+		if why := resolveCmdRef(top, r.verb, r.sub); why != "" {
+			msgs = append(msgs, fmt.Sprintf("%s narrates `%s` but %s", r.file, r, why))
+		}
+	}
+	return msgs, usedIgnores
+}
+
+// TestNarratedCommandsResolveAgainstTheTree is the fourth sibling of the
+// README / ship.md / curated-hint parity guards, covering the one narration
+// surface none of them reach: a `dross …` invocation the CLI prints at the user
+// from a Go string literal.
+//
+// The failure mode is a command being unregistered (or renamed) while an error
+// message still tells the user to run it — they hit "unknown command" and fall
+// back to the raw git incantation the whole phase exists to retire. Deleting
+// `cmd.Checkout()` from main.go leaves every other test in this repo green;
+// this one goes red, naming both the dead command and the file narrating it.
+func TestNarratedCommandsResolveAgainstTheTree(t *testing.T) {
+	top := topLevelIndex(newRoot())
+
+	files, err := filepath.Glob(filepath.Join("..", "..", "internal", "cmd", "*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var refs []narratedRef
+	for _, f := range files {
+		// Test sources deliberately narrate commands that do not exist — the
+		// mis-reach fixtures (`dross task wibble`) are the point of them.
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		refs = append(refs, narratedCmdRefs(t, f)...)
+	}
+	if len(refs) == 0 {
+		t.Fatal("parsed zero `dross <cmd>` references from internal/cmd — the glob, the literal walk or the regex is wrong")
+	}
+
+	msgs, usedIgnores := unresolvedNarrations(top, refs)
+	for _, m := range msgs {
+		t.Error(m)
+	}
+
+	// Ignore-list hygiene: an entry no narration uses is dead weight, and an
+	// entry that resolves is masking nothing — either way it would silently
+	// swallow a real regression later.
+	for key := range narratedIgnore {
+		if !usedIgnores[key] {
+			t.Errorf("ignore entry %q matches no narration — stale, drop it", key)
+		}
+		parts := strings.Fields(key)
+		if len(parts) < 2 || parts[0] != "dross" {
+			t.Errorf("ignore entry %q is not a `dross <verb> [<sub>]` form", key)
+			continue
+		}
+		var sub string
+		if len(parts) > 2 {
+			sub = parts[2]
+		}
+		if resolveCmdRef(top, parts[1], sub) == "" {
+			t.Errorf("ignore entry %q resolves against the tree — it is a real command, drop it from the ignore list", key)
+		}
+	}
+}
+
+// TestNarratedCommandsGuardCatchesBogusSubcommands exercises the guard's own
+// failure path: top-level resolution alone must not satisfy it, and the message
+// must name both the unresolvable invocation and the file that narrates it.
+func TestNarratedCommandsGuardCatchesBogusSubcommands(t *testing.T) {
+	top := topLevelIndex(newRoot())
+
+	msgs, _ := unresolvedNarrations(top, []narratedRef{
+		{file: "phase.go", verb: "phase", sub: "nope"},
+		{file: "phase.go", verb: "phase", sub: "create"},
+		{file: "wat.go", verb: "definitelynotacommand"},
+	})
+	if len(msgs) != 2 {
+		t.Fatalf("got %d messages, want 2 (`dross phase nope` and `dross definitelynotacommand`):\n%s",
+			len(msgs), strings.Join(msgs, "\n"))
+	}
+	if !strings.Contains(msgs[0], "phase.go") || !strings.Contains(msgs[0], "dross phase nope") {
+		t.Errorf("message must name both the file and the invocation, got: %q", msgs[0])
 	}
 }
 

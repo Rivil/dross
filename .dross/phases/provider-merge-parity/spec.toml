@@ -1,0 +1,42 @@
+[phase]
+id        = "provider-merge-parity"
+title     = "provider-merge-parity"
+milestone = "v1.2"
+
+[[criteria]]
+id   = "c-1"
+text = "GitLab gets an authoritative PRMerged lookup (via the merge-request API) instead of ErrMergeStatusUnsupported."
+
+[[criteria]]
+id   = "c-2"
+text = "Forgejo and Gitea get an authoritative PRMerged lookup (via their PR API) instead of ErrMergeStatusUnsupported."
+
+[[criteria]]
+id   = "c-3"
+text = "mergeGate announces (prints, matching guardOpenPRsTargeting's pattern) whenever it falls back to ancestry because the configured provider can't answer authoritatively — no silent degrade."
+
+[[criteria]]
+id   = "c-4"
+text = "GitLab and Forgejo/Gitea also get authoritative OpenPRsTargeting (open-PRs-by-base, used by milestone-branch-delete guards)."
+
+[[criteria]]
+id   = "c-5"
+text = "Base-retargeting is detected across all 4 providers at completion time — if a PR's base was retargeted on the forge since it was recorded, dross warns and refuses completion rather than proceeding against a stale base."
+
+[[decisions]]
+key    = "retarget_scope"
+choice = "Base-retarget detection (c-5) applies to all 5 providers (github, gitlab, forgejo, gitea, bitbucket), not just the 3 parity providers"
+why    = "GitHub already has authoritative PR lookup so adding a base-ref check is nearly free, and it closes the gap everywhere at once rather than leaving GitHub exposed. Bitbucket is in active use and treated as a first-class provider, not an afterthought — its base-ref is cheap to populate once the PRStatus struct exists (t-1), so excluding it would leave a real, actively-used provider exposed for no savings."
+locked = true
+
+[[decisions]]
+key    = "retarget_response"
+choice = "On detecting a base retarget, dross warns and refuses completion"
+why    = "Forces a conscious re-check instead of silently completing against a stale base — matches the milestone's 'the base is a fact, not a guess' theme"
+locked = true
+
+[[decisions]]
+key    = "retarget_timing"
+choice = "Retarget check runs at completion time only, piggybacked on mergeGate's existing provider query"
+why    = "Reuses the same API call mergeGate already makes for merge status; avoids doubling API surface with a separate ship-time check"
+locked = true

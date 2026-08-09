@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/state"
 )
 
 func TestMilestoneCreateAndList(t *testing.T) {
@@ -220,6 +223,59 @@ func TestMilestoneSetRejectsListPaths(t *testing.T) {
 	err := runCmd(t, Milestone(), "set", "v0.1", "scope.success_criteria", "x")
 	if err == nil || !strings.Contains(err.Error(), "use `dross milestone add`") {
 		t.Errorf("expected helpful error pointing at add, got: %v", err)
+	}
+}
+
+// The recorded cut branch is readable through the CLI — assets/prompts/
+// milestone.md forbids reading the toml directly, so `get` is the only
+// sanctioned route to the one fact this milestone exists to store. It is not
+// writable: `milestone create` is the sole writer of the base.
+func TestMilestoneGetBaseReadableNotSettable(t *testing.T) {
+	chdir(t, t.TempDir())
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Milestone(), "create", "v1.2"); err != nil {
+		t.Fatal(err)
+	}
+	path := milestone.FilePath(".dross", "v1.2")
+	m, err := milestone.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Milestone.Base = "milestone/v1.1"
+	if err := m.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, field := range []string{"milestone.base", "base"} {
+		out := captureStdout(t, func() {
+			if err := runCmd(t, Milestone(), "get", "v1.2", field); err != nil {
+				t.Errorf("get %s: %v", field, err)
+			}
+		})
+		if !strings.Contains(out, "milestone/v1.1") {
+			t.Errorf("get %s returned %q, want the recorded base", field, out)
+		}
+	}
+
+	// Settable would reintroduce the hand-edited base this milestone kills.
+	for _, field := range []string{"milestone.base", "base"} {
+		err := runCmd(t, Milestone(), "set", "v1.2", field, "milestone/v0.9")
+		if err == nil {
+			t.Fatalf("set %s succeeded; base must not be settable", field)
+		}
+		if !strings.Contains(err.Error(), "unsettable") {
+			t.Errorf("set %s error = %v, want an unsettable-field refusal", field, err)
+		}
+	}
+	// The refused writes left the recorded base untouched.
+	after, err := milestone.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Milestone.Base != "milestone/v1.1" {
+		t.Errorf("base is now %q — a refused set still wrote", after.Milestone.Base)
 	}
 }
 
@@ -503,6 +559,12 @@ func milestoneOpenFixture(t *testing.T) (string, *msPRCapture) {
 		t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 	}))
 	t.Cleanup(server.Close)
+	// The API lives on a different host from [remote].url here, which is the
+	// case the machine-local escape hatch exists for: authorize it by hand on
+	// this machine, never through committed config.
+	if err := runCmd(t, Local(), "set", "allow_hosts", server.Listener.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
 	if err := runCmd(t, Project(), "set", "remote.api_base", server.URL); err != nil {
 		t.Fatal(err)
 	}
@@ -603,6 +665,80 @@ func TestMilestoneCleanupRefusesUnmerged(t *testing.T) {
 	}
 	if r := mustGit(t, dir, "ls-remote", "--heads", "origin", "milestone/"+version); r == "" {
 		t.Error("remote milestone branch should NOT be deleted on refusal")
+	}
+}
+
+// TestMilestoneFinalizeFromMilestoneBranch runs finalize from the branch it is
+// finalizing — the natural place to be, and the only shape that reaches
+// milestoneFinalize's `if cur != mainBranch` switch. Both existing finalize
+// tests start on main, so that branch-switch call site never runs under them.
+func TestMilestoneFinalizeFromMilestoneBranch(t *testing.T) {
+	dir, version := milestoneFinalizeFixture(t, true)
+	seeded := seedHistory(t, dir, 12)
+	mustGit(t, dir, "checkout", "-q", "milestone/"+version)
+
+	if err := runCmd(t, Milestone(), "complete", version, "--finalize"); err != nil {
+		t.Fatalf("finalize from the milestone branch: %v", err)
+	}
+
+	// The switch happened, and it landed on main rather than leaving HEAD on a
+	// branch the same command then deletes.
+	if head := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); head != "main" {
+		t.Errorf("finalize should leave HEAD on main, got %q", head)
+	}
+	if l, o := mustGit(t, dir, "rev-parse", "main"), mustGit(t, dir, "rev-parse", "origin/main"); l != o {
+		t.Errorf("main not ff'd to origin: local %s != origin %s", l, o)
+	}
+	if b := mustGit(t, dir, "branch", "--list", "milestone/"+version); b != "" {
+		t.Errorf("local milestone branch not deleted: %q", b)
+	}
+	if r := mustGit(t, dir, "ls-remote", "--heads", "origin", "milestone/"+version); r != "" {
+		t.Errorf("remote milestone branch not deleted: %q", r)
+	}
+	// The switch off the milestone branch is a checkout like any other, so the
+	// live history has to come through it intact.
+	assertHistorySurvives(t, dir, seeded)
+}
+
+// TestMilestoneFinalizeSurfacesCheckoutRefusal is the guard half of the same
+// call site: finalize's switch to main must go through checkoutBranch, so a
+// main that still carries a pre-untrack tracked state.json is refused by name
+// instead of silently replaying its copy over the live one. Reverting that line
+// to a raw `git checkout` passes the test above and fails this one.
+func TestMilestoneFinalizeSurfacesCheckoutRefusal(t *testing.T) {
+	dir, version := milestoneFinalizeFixture(t, true)
+
+	// Give main the pre-untrack shape. Committing it here also removes the file
+	// from the working tree on the way back to the milestone branch, which is
+	// why the live copy is written after the switch, not before.
+	mustGit(t, dir, "add", "-f", ".dross/"+state.File)
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): pre-untrack state copy")
+	mustGit(t, dir, "checkout", "-q", "milestone/"+version)
+	stPath := filepath.Join(dir, ".dross", state.File)
+	live := state.New()
+	for i := 0; i < 12; i++ {
+		live.Touch("live entry")
+	}
+	if err := live.Save(stPath); err != nil {
+		t.Fatal(err)
+	}
+
+	err := runCmd(t, Milestone(), "complete", version, "--finalize")
+	if err == nil {
+		t.Fatal("finalize must not exit zero when the switch to main was refused")
+	}
+	if !strings.Contains(err.Error(), ".dross/"+state.File) {
+		t.Errorf("the failure should name the blocking file: %v", err)
+	}
+	// A refused switch deletes nothing, on either side.
+	if b := mustGit(t, dir, "branch", "--list", "milestone/"+version); b == "" {
+		t.Error("a refused switch must not delete the local milestone branch")
+	}
+	if r := mustGit(t, dir, "ls-remote", "--heads", "origin", "milestone/"+version); r == "" {
+		t.Error("a refused switch must not delete the remote milestone branch")
+	}
+	if s, lerr := state.Load(stPath); lerr != nil || len(s.History) != 12 {
+		t.Errorf("the live state must survive the refusal: %v / %+v", lerr, s)
 	}
 }
 
@@ -829,6 +965,45 @@ func TestMilestoneGetUnknownPathAmongSeveral(t *testing.T) {
 	}
 	if strings.TrimSpace(out) != "" {
 		t.Errorf("a partial object was emitted: %q", out)
+	}
+}
+
+// TestPruneRefusalNamesGuardedCheckout (c-1): the refusal is the last narration
+// in the tree that handed the user a raw `git checkout`. The branch it tells
+// them to leave is stale by definition — precisely the vintage that may still
+// track .dross/state.json — so the suggested switch off it is the one most
+// likely to replay that copy over the live machine-local one.
+func TestPruneRefusalNamesGuardedCheckout(t *testing.T) {
+	dir := pruneFixture(t)
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
+	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
+	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	mustGit(t, dir, "checkout", "-q", "milestone/v1.0")
+
+	// Precondition: HEAD really is on the stale branch, so the refusal under
+	// test is the current-HEAD one and not some earlier gate.
+	if cur := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); cur != "milestone/v1.0" {
+		t.Fatalf("precondition: HEAD = %q, want milestone/v1.0", cur)
+	}
+
+	err := runCmd(t, Milestone(), "prune")
+	if err == nil {
+		t.Fatal("prune must refuse while HEAD is on a branch it would delete")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "dross checkout main") {
+		t.Errorf("the refusal should hand over the guarded verb, got: %v", err)
+	}
+	if strings.Contains(msg, "git checkout") {
+		t.Errorf("the refusal must not suggest a raw checkout, got: %v", err)
+	}
+	// The verb swap must not cost the diagnostic detail: which branch is
+	// stale, and where to go instead.
+	if !strings.Contains(msg, "milestone/v1.0") {
+		t.Errorf("the refusal should name the stale branch: %v", err)
+	}
+	if !strings.Contains(msg, "main") {
+		t.Errorf("the refusal should name the target branch: %v", err)
 	}
 }
 

@@ -9,13 +9,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/architecture"
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/state"
 )
 
 // Doctor checks project-level health for the current dross repo.
@@ -49,7 +53,7 @@ func Doctor() *cobra.Command {
 
 			// --- Foundational files ---
 			//
-			// project.toml + rules.toml + state.json must exist before
+			// project.toml + rules.toml must exist before
 			// loadProject can succeed. Surface their absence with a
 			// remediation hint — most common cause is a botched recovery
 			// after a legacy .dross/-stripping ship.
@@ -64,7 +68,7 @@ func Doctor() *cobra.Command {
 				// Two different diagnoses share this block. A missing
 				// rules.toml is an ordinary repairable issue — the trio is
 				// doctor's own, wider notion of "foundational". A missing
-				// project.toml or state.json means the root isn't a dross repo
+				// project.toml means the root isn't a dross repo
 				// at all, which every other command now reports as such, so
 				// doctor names it separately rather than collapsing the two.
 				if len(rootMissing) > 0 {
@@ -73,7 +77,7 @@ func Doctor() *cobra.Command {
 				}
 				return finalizeDoctor(issues, len(warnings))
 			}
-			Print("  ✓ project.toml, rules.toml, state.json present")
+			Print("  ✓ project.toml, rules.toml present")
 			Print("")
 
 			p, _, err := loadProject()
@@ -225,6 +229,8 @@ func Doctor() *cobra.Command {
 			}
 			Print("")
 
+			issues += checkConfigTrust(root, repoDir, p)
+
 			// --- Phase work on main ---
 			//
 			// Phase commits should live on phase/<id> branches, not on
@@ -317,6 +323,106 @@ func Doctor() *cobra.Command {
 						issues++
 					}
 					Print("    Fix: add a `### dross-<name>` audit section (interactive) or an `## Exempt` entry (non-interactive) in docs/interaction-audit.md.")
+				}
+				Print("")
+			}
+
+			// --- state.json tracking ---
+			//
+			// The file is machine-local (locked state_tracking). A repo that
+			// still has it in the index is one squash-merge away from a
+			// checkout replacing the live copy — the incident this milestone
+			// closed. The fix is one command, so print the command.
+			Print("State file:")
+			if gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", RootDirName+"/"+state.File) == nil {
+				Printf("  ✗ %s/%s is tracked — a branch carrying a stale copy can replace the live one. Fix: `git rm --cached %s/%s` (it is already gitignored)\n",
+					RootDirName, state.File, RootDirName, state.File)
+				issues++
+			} else {
+				Printf("  ✓ %s/%s is not tracked\n", RootDirName, state.File)
+			}
+			Print("")
+
+			// --- Clobbered / missing tracked .dross/ files ---
+			//
+			// Read-only reuse of `dross repair`'s own detectors (t-1, t-3): a
+			// working-tree edit that never got committed, or a checkout that
+			// wiped a phase dir origin still knows about, both leave this
+			// project-level check silently wrong until someone notices by
+			// hand. Fixing is `dross repair`'s job, not doctor's — this only
+			// surfaces the finding.
+			Print("Clobbered/missing .dross/ files:")
+			clobbered, clobberErr := detectModifiedOrMissingTracked(repoDir)
+			missingDirs, missingDirsErr := detectMissingPhaseDirs(repoDir, root, mainBranch)
+			switch {
+			case clobberErr != nil:
+				Printf("  ⚠ couldn't scan tracked .dross/ files: %v\n", clobberErr)
+			case missingDirsErr != nil:
+				Printf("  ⚠ couldn't scan for missing phase dirs: %v\n", missingDirsErr)
+			case len(clobbered) == 0 && len(missingDirs) == 0:
+				Print("  ✓ no clobbered or missing tracked .dross/ files")
+			default:
+				for _, f := range clobbered {
+					if f.Missing {
+						Printf("  ✗ %s — missing\n", f.Path)
+					} else {
+						Printf("  ✗ %s — diverged from HEAD\n", f.Path)
+					}
+					issues++
+				}
+				for _, id := range missingDirs {
+					Printf("  ✗ %s/phases/%s — phase dir known to origin but absent from working tree\n", RootDirName, id)
+					issues++
+				}
+				Print("    Fix: `dross repair` (add --apply to write the restores).")
+			}
+			Print("")
+
+			// --- Version parity ---
+			//
+			// project.toml's [project].version is what release.yml tags from
+			// and state.json's is what dross bumps; writeVersion writes both,
+			// so a difference means something wrote one behind the other's back.
+			// Skipped where there is no state.json — a fresh clone has none,
+			// and comparing against a value seeded FROM project.toml would be
+			// tautological anyway.
+			Print("Version:")
+			switch {
+			case p.Project.Version == "":
+				Printf("  ✗ .dross/project.toml has no [project].version — release.yml resolves the release tag from it. Fix: `dross project set project.version <major.minor.patch.internal>`\n")
+				issues++
+			default:
+				if st, err := state.Load(filepath.Join(root, state.File)); err != nil {
+					Printf("  ✓ [project].version = %s (no state.json to compare — fresh clone)\n", p.Project.Version)
+				} else if st.Version != p.Project.Version {
+					Printf("  ✗ version drift: project.toml = %s, state.json = %s. Fix: `dross state set version <value>` writes both\n",
+						p.Project.Version, st.Version)
+					issues++
+				} else {
+					Printf("  ✓ project.toml and state.json agree on %s\n", p.Project.Version)
+				}
+			}
+			Print("")
+
+			// --- Stale milestone branches ---
+			//
+			// Read-only, always: doctor names them and `dross milestone prune`
+			// deletes them (locked prune_surface). Deleting a remote branch as
+			// a diagnostic side effect is exactly what that decision rules out.
+			mainForStale := p.Repo.GitMainBranch
+			if mainForStale == "" {
+				mainForStale = "main"
+			}
+			if stale, err := staleMilestoneBranches(repoDir, mainForStale); err == nil && len(stale) > 0 {
+				Print("Stale milestone branches:")
+				for _, b := range stale {
+					where := "local"
+					if b.HasRemote {
+						where = "local + origin"
+					}
+					Printf("  ✗ %s (%s, %s) — its work is already on %s. Fix: `dross milestone prune`\n",
+						b.Name, b.Reason, where, mainForStale)
+					issues++
 				}
 				Print("")
 			}
@@ -545,10 +651,15 @@ func finalizeIncompleteRoot(rootMissing []string, issues, warnings int) error {
 
 // checkFoundationalFiles returns the list of missing foundational files
 // (relative paths) that loadProject would otherwise crash on. Empty
-// slice means the trio is intact.
+// slice means the pair is intact.
+//
+// state.json is deliberately not in the set: it is machine-local and gitignored
+// (locked state_tracking), so a fresh clone legitimately has none, and root
+// resolution materializes one on demand. Reporting its absence would make every
+// clone read as broken.
 func checkFoundationalFiles(root string) []string {
 	var missing []string
-	for _, rel := range []string{"project.toml", "rules.toml", "state.json"} {
+	for _, rel := range []string{"project.toml", "rules.toml"} {
 		if _, err := os.Stat(filepath.Join(root, rel)); errors.Is(err, fs.ErrNotExist) {
 			missing = append(missing, ".dross/"+rel)
 		}
@@ -607,8 +718,8 @@ func phaseCommitsOnMain(root, repoDir, mainBranch string) ([]leakedPhaseCommit, 
 	}
 
 	// List commits on local main not in origin/main.
-	out, err := exec.Command("git", "-C", repoDir,
-		"rev-list", "origin/"+mainBranch+".."+mainBranch).Output()
+	out, err := exec.Command("git", append([]string{"-C", repoDir},
+		gitRefArgs("rev-list", nil, "origin/"+mainBranch+".."+mainBranch)...)...).Output()
 	if err != nil {
 		return nil, err
 	}
@@ -698,4 +809,215 @@ func parseGitForCompare(raw string) (host, path string) {
 		return rest[:slash], rest[slash+1:]
 	}
 	return "", ""
+}
+
+// --- config-trust checks (c-6, c-7) ---
+
+// gitVersionOutput is the seam TestDoctorReportsOldGit stubs. The version floor
+// cannot be exercised any other way: CI's git is new enough, so without a seam
+// the check would only ever be observed passing.
+var gitVersionOutput = func() (string, error) {
+	out, err := exec.Command("git", "--version").Output()
+	return string(out), err
+}
+
+// endOfOptionsMinGit is the git version that introduced --end-of-options, which
+// every rewritten call site now emits. Below it, those argv are unparseable —
+// so this is not advice, it is the floor the locked ref_separator_token decision
+// depends on and nothing else in the phase enforces.
+const endOfOptionsMinGit = "2.24"
+
+// checkConfigTrust reports hostile-or-broken config BEFORE a command refuses
+// mid-run, and returns the number of issues found.
+//
+// Every finding here counts as an issue, not a warning. A finding printed
+// without moving doctor's exit code is a finding nobody acts on — and for two
+// of these the alternative to acting is a command dying halfway through a
+// branch operation, or a token going somewhere the user never chose.
+func checkConfigTrust(root, repoDir string, p *project.Project) int {
+	issues := 0
+
+	// 1. Branch names git would reject.
+	Print("Branch names:")
+	branchChecks := []struct{ kind, value string }{
+		{"repo.git_main_branch", p.Repo.GitMainBranch},
+	}
+	// branch_pattern is rendered with a placeholder id rather than read raw:
+	// the pattern itself is not a ref, the thing it produces is. Nothing
+	// consumes it today (branch names are built as "phase/"+id), which is
+	// exactly why it needs reporting — it is broken config that becomes a live
+	// vector the day something starts honouring it.
+	if bp := p.Repo.BranchPattern; bp != "" {
+		rendered := strings.ReplaceAll(bp, "<id>", "example-phase")
+		branchChecks = append(branchChecks, struct{ kind, value string }{"repo.branch_pattern", rendered})
+	}
+	clean := true
+	for _, bc := range branchChecks {
+		if bc.value == "" {
+			continue
+		}
+		if err := validateGitRef(bc.kind, bc.value); err != nil {
+			Printf("  ✗ %v\n", err)
+			Printf("    Fix: `dross project set %s <name>` — git reads a leading dash as an option, not a branch.\n", bc.kind)
+			issues++
+			clean = false
+		}
+	}
+	if clean {
+		Printf("  ✓ configured branch names are valid git refs\n")
+	}
+	Print("")
+
+	// 2. API hosts outside the derived allowlist.
+	Print("API host:")
+	extra, hostErr := readAllowHosts(root, repoDir)
+	if hostErr != nil {
+		Printf("  ✗ %v\n", hostErr)
+		issues++
+	}
+	policy := hostallow.Derive(p.Remote.URL, extra)
+	hostChecks := []struct{ kind, value string }{
+		{"[remote].api_base", p.Remote.APIBase},
+		{"[board].base_url", p.Board.BaseURL},
+	}
+	clean = true
+	for _, hc := range hostChecks {
+		if hc.value == "" {
+			continue
+		}
+		if err := policy.Check(hc.kind, hc.value); err != nil {
+			Printf("  ✗ %v\n", err)
+			// The escape hatch is named here and nowhere else in the runtime
+			// paths: a refusal with no way forward is where a legitimate
+			// self-hosted user gets stuck and starts editing the guard out.
+			if h := hostOf(hc.value); h != "" {
+				Printf("    Fix (only if you trust this host): `dross local set allow_hosts %s`\n", h)
+			}
+			issues++
+			clean = false
+		}
+	}
+	if clean && hostErr == nil {
+		Printf("  ✓ configured API hosts are within the allowlist derived from [remote].url\n")
+	}
+	Print("")
+
+	// 3. local.toml not gitignored.
+	//
+	// Doctor is the ONLY command that runs against already-onboarded repos,
+	// which never re-run init or onboard. Without this, those repos would
+	// never gain the ignore line at all.
+	Print("Machine-local store:")
+	body, rerr := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
+	// if/else-if rather than a tagless switch: go-cover attributes a switch
+	// case-condition to no basic block, so a mutant sitting on one is reported
+	// NOT-COVERED even when a test drives the arm. An `else if` condition does
+	// get a block, so the existing tests can kill it.
+	if rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+		Printf("  ⚠ couldn't read .gitignore: %v\n", rerr)
+	} else if !ignoresPath(string(body), drossLocalIgnorePath) {
+		Printf("  ✗ %s is not gitignored — a committed copy would let a cloned repo authorize its own API host.\n", drossLocalIgnorePath)
+		Printf("    Fix: add `%s` to .gitignore (and `git rm --cached %s` if it is already tracked).\n",
+			drossLocalIgnorePath, drossLocalIgnorePath)
+		issues++
+	} else {
+		Printf("  ✓ %s is gitignored\n", drossLocalIgnorePath)
+	}
+	Print("")
+
+	// 4. git too old for --end-of-options.
+	Print("git version:")
+	raw, gerr := gitVersionOutput()
+	// if/else-if for the same coverage-attribution reason as the block above.
+	if gerr != nil {
+		Printf("  ⚠ couldn't read `git --version`: %v\n", gerr)
+	} else if gitVersionAtLeast(raw, endOfOptionsMinGit) {
+		Printf("  ✓ %s supports --end-of-options\n", strings.TrimSpace(raw))
+	} else {
+		Printf("  ✗ %s is older than git %s, which introduced --end-of-options.\n", strings.TrimSpace(raw), endOfOptionsMinGit)
+		Printf("    dross places that separator before every config-derived ref, so git will reject those commands. Fix: upgrade git.\n")
+		issues++
+	}
+	Print("")
+
+	// 5. exec consent for runtime.test_command.
+	//
+	// The half the locked exec_consent_gate decision admits the CLI cannot
+	// enforce on its own: the gate refuses at the moment of use, but nothing
+	// tells the user what state they are in until something has already
+	// refused. Doctor is where that becomes visible before it bites.
+	//
+	// Severity is split deliberately. ABSENT is the honest state of every fresh
+	// clone and is reported as an advisory with the remedy — failing doctor on
+	// it would make a clean checkout look broken. STALE is an exit-code issue:
+	// something WAS trusted here and the command has since changed, which is
+	// precisely the signature the consent binding exists to catch.
+	Print("Exec consent:")
+	switch state, cerr := CheckConsent(root, repoDir, p.Runtime.TestCommand); state {
+	case ConsentGranted:
+		Printf("  ✓ this machine has trusted the configured test command\n")
+	case ConsentStale:
+		Printf("  ✗ consent is stale — the test command has CHANGED since it was trusted here:\n")
+		Printf("      %s\n", p.Runtime.TestCommand)
+		Printf("    Fix (only after reading that line): `dross trust`\n")
+		issues++
+	case ConsentRefused:
+		Printf("  ✗ %v\n", cerr)
+		issues++
+	case ConsentNotApplicable:
+		Printf("  ⚠ no runtime.test_command is configured, so the loop commands refuse.\n")
+		Printf("    Fix: `dross project set runtime.test_command \"<cmd>\"`, then `dross trust`.\n")
+	default:
+		Printf("  ⚠ this machine has not trusted the configured test command:\n")
+		Printf("      %s\n", p.Runtime.TestCommand)
+		Printf("    Fix (only after reading that line): `dross trust`\n")
+	}
+	Print("")
+
+	return issues
+}
+
+// hostOf extracts a bare host from a URL for the allow_hosts hint. Returns ""
+// when there is nothing quotable — a hint naming garbage is worse than none.
+func hostOf(rawURL string) string {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Hostname() == "" {
+		return ""
+	}
+	if port := u.Port(); port != "" {
+		return u.Hostname() + ":" + port
+	}
+	return u.Hostname()
+}
+
+// gitVersionAtLeast compares `git --version` output against a "MAJOR.MINOR"
+// floor. It parses only the two leading components: git's suffixes vary by
+// platform ("2.39.5 (Apple Git-154)", "2.44.0.windows.1"), and a stricter
+// parser would report a false finding on a perfectly capable git — which is how
+// a version check gets deleted.
+func gitVersionAtLeast(raw, floor string) bool {
+	nums := func(s string) (int, int, bool) {
+		fields := strings.Fields(s)
+		for _, f := range fields {
+			parts := strings.SplitN(f, ".", 3)
+			if len(parts) < 2 {
+				continue
+			}
+			maj, err1 := strconv.Atoi(parts[0])
+			min, err2 := strconv.Atoi(parts[1])
+			if err1 == nil && err2 == nil {
+				return maj, min, true
+			}
+		}
+		return 0, 0, false
+	}
+	fMaj, fMin, ok := nums(floor)
+	if !ok {
+		return true // an unparseable floor must not fail every repo
+	}
+	gMaj, gMin, ok := nums(raw)
+	if !ok {
+		return true // an unreadable version is a warning above, not a finding
+	}
+	return gMaj > fMaj || (gMaj == fMaj && gMin >= fMin)
 }

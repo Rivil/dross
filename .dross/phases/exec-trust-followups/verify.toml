@@ -1,0 +1,94 @@
+[verify]
+  phase = "exec-trust-followups"
+  generated_at = 2026-08-09T09:30:34.514443Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-09T09:51:43.597422Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9505169867060561
+  mutants_killed = 2574
+  mutants_survived = 134
+  mutants_not_covered = 134
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/trust_test.go:TestConsentStates (four untrusted states as separate subtests: no local.toml, key absent, wrong hash, tracked local.toml)", "internal/cmd/trust_test.go:TestVerifyRefusesWithoutConsent (refusal proven to precede exec by a configuredAdapters seam that t.Fatal()s if reached)", "internal/cmd/trust_test.go:TestGatedCommandsRefuse (one subtest per gated command) / TestExecGatedSetIsExplicit", "internal/cmd/trust_test.go:TestRefusalWritesNothing (no tests.json / verify.toml written by a refusal)", "internal/cmd/trust_test.go:TestEmptyTestCommandDoesNotBypassGate (blank test_command is a refusal, not a free pass)", "internal/cmd/trust_test.go:TestTrustStaleMessage (rewritten command reports stale, not never-trusted)", "internal/cmd/consent_surface_test.go:TestExecutePromptChecksConsent (consent check precedes the test-command run, asserted by index)", "internal/cmd/consent_surface_test.go:TestPromptsNeverGrantConsentForTheUser"]
+  notes = "Both halves of the locked exec_consent_gate decision are exercised: the CLI refusal (with a seam proving nothing was spawned) and the prompt guidance. The stale/never-trusted distinction is pinned separately, so collapsing the two fails."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/mutation/argv_test.go:TestGremlinsRejectsDashPackage / TestUnleashArgsRejectsDashReport", "internal/mutation/argv_test.go:TestStrykerRejectsDashEntries (incl. the post-Workdir-trim form) / TestStrykerNetRejectsDashOutputDir", "internal/mutation/argv_test.go:TestRejectionYieldsNilReport (a rejection must not return an empty report, which reads as a perfect score)", "internal/codex/argv_test.go:TestAstGrepArgvSeparator (full argv asserted by index; a file named \"-rf\" must land behind the separator)", "internal/codex/argv_test.go:TestAstGrepRejectsUnknownLang / TestAstGrepReadsTheSharedPolicy", "internal/cmd/secure_prompt_test.go:TestSecurePromptFencesScannerOperands (semgrep leg — end-of-options guidance, the flags-before-separator exemplar, and a proximity guard keeping the rule attached to semgrep)", "internal/argfence/argfence_test.go:TestPolicyFor / TestPolicyCoversEveryKnownBinary / TestFenceUnknownToolFailsClosed / TestEveryCatalogToolHasAnArgvPolicy"]
+  notes = "All four legs now have a test that fails when the guarantee breaks. gremlins, npx and dotnet are Reject-policy, asserted with spawn seams that fail the test if a refused value still reached exec; ast-grep is Separator, asserted by argv index. The semgrep leg was WEAK on the first verify pass (2026-08-09) because dross spawns semgrep nowhere in Go and secure.md carried no fencing guidance — closed by t-12, whose test was observed red against the pre-t-12 prompt before going green. Accepted limit, recorded rather than hidden: semgrep is agent-driven, so its guarantee is prompt guidance an agent could ignore, not a mechanical refusal. That is the same class of limit the locked exec_consent_gate decision already names for a direct `go test`."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/redact/redact_test.go:TestEveryForgeClientRedacts (one row per client: Client token/bearer/basic, GitHub, Jira, YouTrack)", "internal/redact/redact_test.go:TestEveryForgeDoRedacts (AST walk — a fifth `do` cannot join the package unscrubbed)", "internal/redact/redact_test.go:TestForgeErrorsCarryNoToken (401/403/404/500 + hard transport failure as separate rows)", "internal/ship/redact_test.go:TestEveryShipBodyInterpolationRedacts (enumerates all 14 body interpolations by file:line, not a sample)", "internal/ship/redact_test.go:TestShipHelpersScrubAtSource (the four helpers must scrub, and no other function may read a body)", "internal/cmd/token_leak_test.go:TestTokenReachesNoEmittedSurface (two canaries, three board providers; stdout, returned error and telemetry JSONL all asserted, plus base64 forms)"]
+  notes = "The plan review's under-coverage FLAG (ship has ~15 leak sites, not 5) was answered with an enumerating gate rather than a wider table. The canary proof asserts server hit-counts and the presence of the `[redacted $` marker, so a change that stopped making the requests fails rather than passing by silence. Minor: the canary sweep captures stdout and the returned error but not stderr directly — cobra routes the error to stderr, so that surface is covered transitively rather than by its own assertion."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/ship/gharg_test.go:TestPRStatusArgv (asserts [pr view --json state,mergedAt,baseRefName -- 12] by index — flags ahead of the separator)", "internal/ship/gharg_test.go:TestPostCommentArgv / TestPostCommentBodyBeforeSeparator (a demoted --body is silent wrong content, pinned separately)", "internal/ship/gharg_test.go:TestOpenPRArgvWalk (Title/Body/Base/Reviewers all set to flag-shaped values; walk asserts value index == flag index + 1 and no new bare positional)", "internal/ship/gharg_test.go:TestListBasePRsArgv (a base of \"--state\" must not become a second --state flag)", "internal/ship/gharg_test.go:TestPRStatusRejectsBadNumber (refusal precedes exec via a ghCommand double that fails on invocation)"]
+  notes = "The plan review's BLOCKING finding — the original contract asserted [pr view -- 12 --json …], an argv cobra parses as three positionals and gh rejects — was fixed before execution. The test now pins the working order by index, and the gate's PASS exemplar matches it."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/subprocargs_audit_test.go:TestNoUnseparatedPositional (repo-wide walk over internal/ and cmd/, every binary; fails if it scans zero files)", "internal/cmd/subprocargs_audit_test.go:TestUnknownBinaryFailsClosed (an unlisted binary and a non-literal binary are both findings)", "internal/cmd/subprocargs_audit_test.go:TestAuditFlagsItsOwnSnippets (29 FLAG/PASS rows; the floor is derived from the file at run time, so no row can be deleted silently)", "internal/cmd/subprocargs_audit_test.go:TestAuditScansMutationAndShip / TestAuditScansCodexPackage (scan roots asserted, not assumed)", "internal/cmd/subprocargs_audit_test.go:TestNoUnseparatedGitPositional / TestAuditFlagsBarePrefixlessVar (the original git guarantee survives the rename)", "internal/cmd/subprocargs_audit_test.go:TestAuditKnowsEveryPolicyBinary (argfence table and the value-taking-flag table cannot drift apart)"]
+  notes = "Fail-closed as the locked audit_gate_breadth decision requires: unknown binary is a finding, non-literal binary is a finding unless named with its reason, and a flag demoted PAST a separator is its own finding. The accepted cases (argv spreads, update.go's self-exec) are named with reasons in the file header rather than as a file:line exception list."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation: 2574 killed, 0 LIVED, 134 NOT COVERED across 42 files (score 0.95, efficacy excluding not-covered = 1.00). Full `go test ./...` observed green (exit 0) after t-12 in the same session. Counts are identical to the first pass because t-12 added only a .md prompt and a _test.go file, neither of which carries mutants."
+
+[[finding]]
+  severity = "NOTE"
+  text = "ACCEPTED (r-02) — in-diff survivors, 4 of 134, unchanged from the first pass. internal/argfence/policy.go:33 (ARITHMETIC_BASE) is `Separator Kind = iota + 1`, a const initializer: the known go-cover attribution ceiling, and renumbering the enum is semantically inert because every caller compares by symbol. internal/cmd/trust.go:279-281 (ARITHMETIC_BASE x3) are string-literal concatenations inside the `dross trust` \"nothing to trust: runtime.test_command is not set\" message — not viable mutants on strings. Neither is a test gap; both stop being reported."
+
+[[finding]]
+  severity = "NOTE"
+  text = "ACCEPTED (r-02) — the other 130 survivors sit outside this phase's diff and are all the gremlins NOT-COVERED attribution ceiling, sampled and confirmed across doctor.go:93/95/98, hints.go:86, footer_coverage.go:52, phase_lifecycle.go:23/25 (all `switch{}` case-conditions), stryker_net.go:74/79 and codex/ast_grep.go:128 (guards around a real subprocess that is not installed under test). go-cover does not attribute execution to these lines even when the behaviour is tested. Recorded as accepted rather than re-listed inertly; they stop being reported."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-2's semgrep guarantee is guidance-gated, not mechanically enforced. TestSecurePromptFencesScannerOperands fails if secure.md loses the end-of-options rule or regresses its flag/separator order, but nothing stops an agent from ignoring the prompt — semgrep has no Go call site to fence. If one is ever added, internal/argfence already carries a Separator policy for it and TestEveryCatalogToolHasAnArgvPolicy keeps the table honest."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Uncovered line, not a criterion gap: no test drives `dross trust` with an empty runtime.test_command, so the guard at internal/cmd/trust.go:277 is unexercised. Deleting it would store Fingerprint(\"\") and print an empty command line, but CheckConsent refuses on an empty test_command before it ever reads the store (trust.go:119), so the gate cannot be bypassed this way. Cosmetic, recorded rather than routed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The plan review's ARCHITECTURE.md FLAG stands: architecture_test.go's three tests all run against a synthetic document in a temp dir, so nothing fails if a landmark line rots. The landmark bullets WERE updated correctly this phase (auditFile, TestNoUnseparatedPositional, plus line-number drift in task.go and forge.go), but that is executor discipline, not an enforced contract. Outside all five criteria."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped ARCHITECTURE.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/execute.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/quick.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/secure.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/verify.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/subprocargs_audit/snippets.txt: no mutation adapter for .txt"

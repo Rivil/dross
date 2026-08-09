@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -48,8 +49,8 @@ The recovery is the same in both cases:
 
   1. fetch origin
   2. reset --hard origin/<main>
-  3. checkout <pre-merge-sha> -- .dross/   (default: current HEAD)
-  4. update state.json (records the merge)
+  3. checkout <pre-merge-sha> -- .dross/, minus state.json   (default: current HEAD)
+  4. update state.json locally (records the merge; the file is machine-local)
   5. one atomic commit with the restored .dross/ tree
 
 Pass --pre-merge-sha if you've already manually reset main and HEAD no
@@ -85,9 +86,30 @@ longer holds the pre-merge .dross/ tree:
 				return errors.New("no phase id given and state has no current_phase")
 			}
 
-			mainBranch := p.Repo.GitMainBranch
-			if mainBranch == "" {
-				mainBranch = "main"
+			// The branch to guard on and reset is the one THIS phase was forked
+			// from, not the configured main branch: under a milestone the phase
+			// based on milestone/<version>, and resetting main instead would
+			// hard-reset a branch that has nothing to do with the phase being
+			// recovered. Falls back to git_main_branch when there is no record,
+			// which is the legacy repo this command exists for — those phases
+			// predate the record and did live on main.
+			baseBranch := p.Repo.GitMainBranch
+			if baseBranch == "" {
+				baseBranch = "main"
+			}
+			if ch, cerr := changes.Load(changes.FilePath(root, phaseID), phaseID); cerr == nil && ch.Base != "" {
+				baseBranch = ch.Base
+			}
+			// Validated after the record has had its say, so the kind names the
+			// source that actually won, and before the first git call — this
+			// command's whole job is a `reset --hard`, so a refusal that lands
+			// after the branch check has already let a payload reach git.
+			kind := "repo.git_main_branch"
+			if baseBranch != p.Repo.GitMainBranch {
+				kind = "recorded base in changes.json"
+			}
+			if err := validateGitRef(kind, baseBranch); err != nil {
+				return err
 			}
 
 			// Refuse to run on the wrong branch — reset is destructive.
@@ -95,8 +117,8 @@ longer holds the pre-merge .dross/ tree:
 			if err != nil {
 				return fmt.Errorf("read current branch: %w", err)
 			}
-			if cur != mainBranch {
-				return fmt.Errorf("must be on %s before recovering (currently on %s)", mainBranch, cur)
+			if cur != baseBranch {
+				return fmt.Errorf("must be on %s before recovering (currently on %s)", baseBranch, cur)
 			}
 
 			// Refuse to run on a dirty tree — reset would silently destroy work.
@@ -112,7 +134,7 @@ longer holds the pre-merge .dross/ tree:
 			// shared recovery routine — the same one `dross phase complete
 			// --recover` delegates to, so the heal procedure can't drift
 			// between the two entry points.
-			return runDrossRecovery(repoDir, root, s, phaseID, preMergeSHA, mainBranch)
+			return runDrossRecovery(repoDir, root, s, phaseID, preMergeSHA, baseBranch)
 		},
 	}
 	c.Flags().StringVar(&preMergeSHA, "pre-merge-sha", "",
@@ -150,8 +172,8 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 
 	// Pre-check: SHA must actually contain a .dross/ tree, or the checkout
 	// step would fail with an unhelpful pathspec error.
-	if err := exec.Command("git", "-C", repoDir, "rev-parse", "--verify",
-		sha+":.dross").Run(); err != nil {
+	if err := exec.Command("git", append([]string{"-C", repoDir},
+		gitRefArgs("rev-parse", []string{"--verify"}, sha+":.dross")...)...).Run(); err != nil {
 		return fmt.Errorf("commit %s has no .dross/ tree — nothing to restore. "+
 			"If you've already reset main, pass "+
 			"--pre-merge-sha=$(git rev-parse HEAD@{1})", short(sha))
@@ -160,18 +182,31 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 	if out, err := gitCombined(repoDir, "fetch", "origin"); err != nil {
 		return fmt.Errorf("git fetch: %w\n%s", err, out)
 	}
-	if out, err := gitCombined(repoDir, "reset", "--hard", "origin/"+baseBranch); err != nil {
+	if out, err := guardedResetHard(repoDir, "origin/"+baseBranch); err != nil {
 		return fmt.Errorf("git reset --hard origin/%s: %w\n%s", baseBranch, err, out)
 	}
-	if out, err := gitCombined(repoDir, "checkout", sha, "--", ".dross/"); err != nil {
+	// Exclude state.json from the restore. A pre-untrack commit still carries a
+	// copy, and restoring it would overwrite the live machine-local file with
+	// whatever history that commit happened to hold — the very clobber this
+	// milestone exists to end (locked state_tracking).
+	if out, err := gitCombined(repoDir, gitRefPathArgs("checkout", nil, []string{sha}, ".dross/", ":(exclude).dross/"+state.File)...); err != nil {
 		return fmt.Errorf("git checkout %s -- .dross/: %w\n%s", short(sha), err, out)
 	}
 
 	// Delta gate. Stage the restored .dross/ and check whether it actually
 	// differs from origin/main (which we just reset to). If nothing staged,
-	// main already carries the full tree — a clean no-op, no commit. Checked
-	// *before* state.Touch, because touching state.json would always
-	// manufacture a delta and make this no-op unreachable.
+	// main already carries the full tree — a clean no-op, no commit.
+	//
+	// The directory form, deliberately: `git add` over a directory silently
+	// skips ignored paths, while an explicit `:(exclude).dross/state.json`
+	// counts as naming an ignored file and makes the whole command exit 1
+	// ("paths are ignored by one of your .gitignore files"). The checkout above
+	// is where the exclusion has to live — nothing re-enters the index here as
+	// long as nothing was restored into the tree.
+	//
+	// This gate used to be correct only because it ran before state.Touch, which
+	// always manufactured a delta. With state.json out of the tree the no-op is
+	// genuinely reachable, and it must exit 0 having written nothing.
 	if out, err := gitCombined(repoDir, "add", ".dross/"); err != nil {
 		return fmt.Errorf("git add: %w\n%s", err, out)
 	}
@@ -189,9 +224,8 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 		return nil
 	}
 
-	// Real delta: record the merge in state history and commit the restored
-	// tree in one atomic commit. state.json is inside .dross/, so the same
-	// `git add .dross/` stages the touch.
+	// Real delta: record the merge in state history — a local write, since
+	// state.json is machine-local — and commit the restored tree.
 	s.Touch(fmt.Sprintf("merged %s", phaseID))
 	if err := s.Save(filepath.Join(root, state.File)); err != nil {
 		return fmt.Errorf("save state: %w", err)
@@ -226,6 +260,7 @@ func runDrossRecovery(repoDir, root string, s *state.State, phaseID, preMergeSHA
 }
 
 func gitTrim(repoDir string, args ...string) (string, error) {
+	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
 	out, err := exec.Command("git", full...).Output()
 	if err != nil {
@@ -235,6 +270,7 @@ func gitTrim(repoDir string, args ...string) (string, error) {
 }
 
 func gitCombined(repoDir string, args ...string) (string, error) {
+	gitArgvTap(args)
 	full := append([]string{"-C", repoDir}, args...)
 	out, err := exec.Command("git", full...).CombinedOutput()
 	return string(out), err

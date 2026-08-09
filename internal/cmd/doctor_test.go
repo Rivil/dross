@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/state"
 )
 
 func TestSameRemoteURL(t *testing.T) {
@@ -135,7 +138,7 @@ func TestDoctorValidatesBoardBlock(t *testing.T) {
 			// stays clean and only the [board] block decides the verdict.
 			"remote.auth_env":      tokenEnv,
 			"board.provider":       "youtrack",
-			"board.base_url":       "https://yt.example.com",
+			"board.base_url":       "https://acme.youtrack.cloud",
 			"board.auth_env":       tokenEnv,
 			"board.project":        "PROJ",
 			"board.enabled":        "true",
@@ -217,7 +220,7 @@ func TestDoctorFlagsUnknownStateMapKey(t *testing.T) {
 		for _, kv := range [][2]string{
 			{"remote.auth_env", tokenEnv},
 			{"board.provider", "youtrack"},
-			{"board.base_url", "https://yt.example.com"},
+			{"board.base_url", "https://acme.youtrack.cloud"},
 			{"board.auth_env", tokenEnv},
 			{"board.project", "PROJ"},
 			{"board.enabled", "true"},
@@ -394,6 +397,128 @@ func TestDoctorFlagsMissingGitattributes(t *testing.T) {
 	}
 	if !strings.Contains(out, drossGitattributesLine) {
 		t.Errorf("output should include the line to add:\n%s", out)
+	}
+}
+
+// TestDoctorFlagsClobberedFile proves doctor's clobber section (c-6) surfaces
+// a t-1 finding — an uncommitted content change to a tracked .dross/ file —
+// as a ✗ line with a fix hint naming `dross repair`, and counts it as an issue.
+func TestDoctorFlagsClobberedFile(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	projPath := filepath.Join(dir, ".dross", "project.toml")
+	// Append rather than replace: valid TOML that still parses, but whose
+	// content diverges from HEAD's tracked blob (a clobbered file, not a
+	// corrupt one — doctor's other sections still need to load project.toml).
+	body := mustRead(t, projPath)
+	mustWrite(t, projPath, body+"\n# clobbered\n")
+
+	out := captureStdout(t, func() {
+		_ = runCmd(t, Doctor())
+	})
+	if !strings.Contains(out, ".dross/project.toml") || !strings.Contains(out, "diverged from HEAD") {
+		t.Errorf("expected a clobbered-file finding for project.toml, got:\n%s", out)
+	}
+	if !strings.Contains(out, "dross repair") {
+		t.Errorf("expected a fix hint naming dross repair, got:\n%s", out)
+	}
+}
+
+// TestDoctorClobberSectionCleanIsNotAnIssue proves the negative half of the
+// contract: a healthy tree gets a ✓ line and doctor's existing issue count is
+// unaffected (Doctor still exits 0 here, matching the other all-clean checks).
+func TestDoctorClobberSectionCleanIsNotAnIssue(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Doctor()); err != nil {
+			t.Fatalf("doctor should exit clean on a healthy tree: %v", err)
+		}
+	})
+	if !strings.Contains(out, "no clobbered or missing tracked .dross/ files") {
+		t.Errorf("expected the clean-clobber ✓ line, got:\n%s", out)
+	}
+}
+
+// TestDoctorFlagsMissingPhaseDir proves the other half of the clobber
+// section (c-6): a phase dir origin/<mainBranch> knows about but the current
+// working tree lacks is surfaced as a ✗ line and counted as an issue,
+// exercising the missing-dir issues++ increment (doctor.go:370) and the
+// missing-dir arm of the clean-vs-findings switch (doctor.go:357).
+func TestDoctorFlagsMissingPhaseDir(t *testing.T) {
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+
+	dir := t.TempDir()
+	gitInit(t, dir, remoteDir)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	// y is pushed to origin/main from a second clone, so the working tree
+	// here never had it — a phase dir known to origin but absent locally.
+	otherDir := t.TempDir()
+	mustGit(t, otherDir, "clone", "-q", remoteDir, ".")
+	mustGit(t, otherDir, "config", "user.email", "test@example.com")
+	mustGit(t, otherDir, "config", "user.name", "Test")
+	mustWrite(t, filepath.Join(otherDir, ".dross", "phases", "y", "spec.toml"), "[phase]\nid = \"y\"\n")
+	mustGit(t, otherDir, "add", ".")
+	mustGit(t, otherDir, "commit", "-q", "-m", "chore: scaffold y")
+	mustGit(t, otherDir, "push", "-q", "origin", "main")
+	mustGit(t, dir, "fetch", "-q", "origin")
+
+	out := captureStdout(t, func() {
+		_ = runCmd(t, Doctor())
+	})
+	if !strings.Contains(out, ".dross/phases/y") || !strings.Contains(out, "phase dir known to origin but absent") {
+		t.Errorf("expected a missing-phase-dir finding for y, got:\n%s", out)
+	}
+	if !strings.Contains(out, "dross repair") {
+		t.Errorf("expected a fix hint naming dross repair, got:\n%s", out)
+	}
+}
+
+// TestDoctorClobberScanErrorIsAdvisory covers doctor.go:353 — when
+// detectModifiedOrMissingTracked itself can't run (here, .git is removed
+// after init so `git ls-files` fails), the section prints an advisory ⚠
+// scan-error line instead of silently reporting a clean or wrong result.
+func TestDoctorClobberScanErrorIsAdvisory(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	if err := os.RemoveAll(filepath.Join(dir, ".git")); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStdout(t, func() {
+		_ = runCmd(t, Doctor())
+	})
+	if !strings.Contains(out, "couldn't scan tracked .dross/ files") {
+		t.Errorf("expected the clobber-scan-error ⚠ line, got:\n%s", out)
 	}
 }
 
@@ -665,7 +790,7 @@ func TestDoctorCover_BoardAuthEnvUnset(t *testing.T) {
 	}
 	for k, v := range map[string]string{
 		"board.provider":       "youtrack",
-		"board.base_url":       "https://yt.example.com",
+		"board.base_url":       "https://acme.youtrack.cloud",
 		"board.milestone_mode": "version",
 		// board.auth_env deliberately left empty → line 122/123
 	} {
@@ -780,7 +905,7 @@ func runDoctorEnum(t *testing.T, overrides map[string]string) (string, error) {
 	fields := map[string]string{
 		"remote.auth_env":      tokenEnv,
 		"board.provider":       "youtrack",
-		"board.base_url":       "https://yt.example.com",
+		"board.base_url":       "https://acme.youtrack.cloud",
 		"board.auth_env":       tokenEnv,
 		"board.project":        "PROJ",
 		"board.enabled":        "true",
@@ -1146,7 +1271,7 @@ func incompleteRootBlock(t *testing.T, out string) []string {
 // prints nothing and fails both halves.
 func TestDoctorDiagnosesIncompleteRoot(t *testing.T) {
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir, "state.json")
 	chdir(t, dir)
 
 	var out string
@@ -1154,7 +1279,7 @@ func TestDoctorDiagnosesIncompleteRoot(t *testing.T) {
 	if err == nil {
 		t.Fatal("doctor should report an issue on an incomplete root")
 	}
-	if !strings.Contains(out, "✗ .dross/state.json — missing") {
+	if !strings.Contains(out, "✗ .dross/project.toml — missing") {
 		t.Errorf("output should name the missing file:\n%s", out)
 	}
 	if !strings.Contains(err.Error(), "project-level issue") {
@@ -1166,17 +1291,14 @@ func TestDoctorDiagnosesIncompleteRoot(t *testing.T) {
 // second needle.
 func TestDoctorNamesEveryRootMiss(t *testing.T) {
 	dir := realTempDir(t)
-	root := mkRoot(t, dir)
-	if err := os.WriteFile(filepath.Join(root, "rules.toml"), []byte(""), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	mkRoot(t, dir)
 	chdir(t, dir)
 
 	var out string
 	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
-		t.Fatal("doctor should report issues when both root files are missing")
+		t.Fatal("doctor should report issues when both foundational files are missing")
 	}
-	for _, want := range []string{".dross/project.toml", ".dross/state.json"} {
+	for _, want := range []string{".dross/project.toml", ".dross/rules.toml"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output should name %s:\n%s", want, out)
 		}
@@ -1206,7 +1328,7 @@ func TestDoctorIncompleteRootVerdictIsDistinct(t *testing.T) {
 	}
 
 	incomplete := realTempDir(t)
-	mkRoot(t, incomplete, "project.toml")
+	mkRoot(t, incomplete, "state.json")
 	chdir(t, incomplete)
 	incompleteErr := runCmdCapturing(t, new(string), Doctor())
 	if incompleteErr == nil {
@@ -1251,7 +1373,7 @@ func TestDoctorMissingFileLineCarriesBothHints(t *testing.T) {
 // meaningful rather than accidental.
 func TestDoctorIncompleteRootBlockMatchesLocateRoot(t *testing.T) {
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir, "state.json")
 	chdir(t, dir)
 
 	_, want, err := LocateRoot()
@@ -1435,5 +1557,455 @@ func TestValidateIgnoresTaskStatus(t *testing.T) {
 	}
 	if err := runCmd(t, Doctor()); err == nil {
 		t.Error("doctor accepted it too — the check landed nowhere")
+	}
+}
+
+// doctorRepo is an initialised dross repo with a git origin, on main, with a
+// clean tree — the baseline the three checks below perturb one at a time.
+func doctorRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remote)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	for _, set := range [][]string{
+		{"set", "project.name", "p"},
+		{"set", "project.version", "1.0.0.0"},
+		{"set", "runtime.mode", "native"},
+		{"set", "repo.git_main_branch", "main"},
+		{"set", "remote.url", remote},
+	} {
+		if err := runCmd(t, Project(), set...); err != nil {
+			t.Fatalf("project %v: %v", set, err)
+		}
+	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+	return dir
+}
+
+// TestDoctorReportsTrackedStateJSON (c-6): a repo that still has state.json in
+// the index is one squash away from the clobber. Doctor names it and prints the
+// literal command, not a description of one.
+func TestDoctorReportsTrackedStateJSON(t *testing.T) {
+	dir := doctorRepo(t)
+	mustGit(t, dir, "add", "-f", ".dross/"+state.File)
+	mustGit(t, dir, "commit", "-q", "-m", "chore: track state.json")
+
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err == nil {
+		t.Fatal("a tracked state.json is an issue, not a clean bill of health")
+	}
+	if !strings.Contains(out, "git rm --cached .dross/state.json") {
+		t.Errorf("doctor should print the literal fix command:\n%s", out)
+	}
+}
+
+// TestDoctorCleanRepoPassesNewSections: with versions in parity, state
+// untracked and no stale branch, none of the three sections may fire. An
+// over-firing check makes doctor exit non-zero on a healthy repo forever.
+func TestDoctorCleanRepoPassesNewSections(t *testing.T) {
+	dir := doctorRepo(t)
+	_ = dir
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+		t.Fatalf("a clean repo should pass: %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		"✓ .dross/state.json is not tracked",
+		"✓ project.toml and state.json agree on 1.0.0.0",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "Stale milestone branches:") {
+		t.Errorf("no milestone branches exist — the section must stay silent:\n%s", out)
+	}
+}
+
+// TestDoctorReportsVersionDrift (c-6): the two homes must agree. The message
+// carries both values on one line so the direction of the drift is readable.
+func TestDoctorReportsVersionDrift(t *testing.T) {
+	dir := doctorRepo(t)
+	// Write project.toml behind state.json's back — the shape writeVersion
+	// exists to prevent, and the one doctor has to catch when it happens anyway.
+	p, err := project.Load(filepath.Join(dir, ".dross", project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Project.Version = "1.1.0.0"
+	if err := p.Save(filepath.Join(dir, ".dross", project.File)); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Fatal("version drift is an issue")
+	}
+	for _, want := range []string{"1.1.0.0", "1.0.0.0", "version drift"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("drift line should contain %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestDoctorReportsMissingProjectVersion (c-6): an absent version is its own
+// issue naming project.toml, not an empty-string drift message.
+func TestDoctorReportsMissingProjectVersion(t *testing.T) {
+	dir := doctorRepo(t)
+	mustWrite(t, filepath.Join(dir, ".dross", project.File),
+		"[project]\n  name = \"p\"\n\n[runtime]\n  mode = \"native\"\n\n[repo]\n  git_main_branch = \"main\"\n")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Fatal("a missing [project].version is an issue")
+	}
+	if !strings.Contains(out, "no [project].version") {
+		t.Errorf("should report the absent version distinctly:\n%s", out)
+	}
+	if strings.Contains(out, "version drift") {
+		t.Errorf("an absent version is not a drift:\n%s", out)
+	}
+}
+
+// TestDoctorSkipsDriftOnFreshClone (c-6): a checkout with project.toml and no
+// state.json is the fresh-clone shape. Comparing against a value that would be
+// seeded FROM project.toml is tautological, so the check must skip.
+func TestDoctorSkipsDriftOnFreshClone(t *testing.T) {
+	dir := doctorRepo(t)
+	if err := os.Remove(filepath.Join(dir, ".dross", state.File)); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if strings.Contains(out, "version drift") {
+		t.Errorf("a fresh clone has no state.json to drift from:\n%s", out)
+	}
+	if err != nil && strings.Contains(err.Error(), "state.json") {
+		t.Errorf("a missing state.json is not a doctor issue: %v", err)
+	}
+	if strings.Contains(out, "✗ .dross/state.json — missing") {
+		t.Errorf("state.json is not a foundational file any more:\n%s", out)
+	}
+}
+
+// TestDoctorReportsStaleMilestoneBranchReadOnly (c-7, prune_surface): doctor
+// names the branch and points at `dross milestone prune`. It must not delete
+// anything itself, and a stale branch must move the exit code.
+func TestDoctorReportsStaleMilestoneBranchReadOnly(t *testing.T) {
+	dir := doctorRepo(t)
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
+	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
+	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+
+	var out string
+	err := runCmdCapturing(t, &out, Doctor())
+	if err == nil {
+		t.Fatal("a stale milestone branch must move the exit code, not just advise")
+	}
+	if !strings.Contains(out, "milestone/v1.0") || !strings.Contains(out, "dross milestone prune") {
+		t.Errorf("doctor should name the branch and the prune command:\n%s", out)
+	}
+	if !gitAllowFail(dir, "rev-parse", "--verify", "--quiet", "refs/heads/milestone/v1.0") {
+		t.Error("doctor deleted the branch — it is a diagnostic, prune is the actor")
+	}
+}
+
+// --- config-trust findings (c-6, c-7) ---
+
+// TestDoctorReportsDashBranchName: a finding printed without moving the exit
+// code is a finding nobody acts on — doctor's exit gates CI and pre-push hooks,
+// and this class of config kills a command mid-branch-operation.
+func TestDoctorReportsDashBranchName(t *testing.T) {
+	dir := doctorRepo(t)
+	ppath := filepath.Join(dir, ".dross", project.File)
+	p, err := project.Load(ppath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Repo.GitMainBranch = "--output=/tmp/dross-pwned-doctor"
+	if err := p.Save(ppath); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	err = runCmdCapturing(t, &out, Doctor())
+	if err == nil {
+		t.Error("a hostile git_main_branch must move doctor's exit code, not just print")
+	}
+	for _, want := range []string{"--output=/tmp/dross-pwned-doctor", "git_main_branch"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor output does not name %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestDoctorReportsDashBranchPattern: branch_pattern is not a live vector today
+// — nothing renders branch names from it — which is exactly why it needs
+// reporting rather than refusing. It is broken config that becomes a vector the
+// day something starts honouring it.
+func TestDoctorReportsDashBranchPattern(t *testing.T) {
+	dir := doctorRepo(t)
+	ppath := filepath.Join(dir, ".dross", project.File)
+	p, err := project.Load(ppath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Repo.BranchPattern = "-p/<id>"
+	if err := p.Save(ppath); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Error("a leading-dash branch_pattern must move doctor's exit code")
+	}
+	for _, want := range []string{"branch_pattern", "-p/"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor output does not name %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestDoctorReportsOffAllowlistAPIBase asserts the escape hatch is named. A
+// refusal with no way forward is where a legitimate self-hosted user gets stuck
+// and starts editing the guard out — so the locked escape_hatch decision
+// requires the literal command, not a description of one.
+func TestDoctorReportsOffAllowlistAPIBase(t *testing.T) {
+	dir := doctorRepo(t)
+	ppath := filepath.Join(dir, ".dross", project.File)
+	p, err := project.Load(ppath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Remote.URL = "https://github.com/Rivil/dross"
+	p.Remote.APIBase = "https://attacker.example"
+	if err := p.Save(ppath); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Error("an off-allowlist api_base must move doctor's exit code")
+	}
+	if !strings.Contains(out, "attacker.example") {
+		t.Errorf("doctor output does not name the refused host:\n%s", out)
+	}
+	if !strings.Contains(out, "dross local set allow_hosts attacker.example") {
+		t.Errorf("doctor output does not carry the escape-hatch command verbatim:\n%s", out)
+	}
+}
+
+// TestDoctorReportsUnignoredLocalToml: doctor is the ONLY command that runs
+// against already-onboarded repos, which never re-run init or onboard. Without
+// this finding those repos never gain the ignore line at all.
+func TestDoctorReportsUnignoredLocalToml(t *testing.T) {
+	dir := doctorRepo(t)
+	// A .gitignore covering state.json but NOT local.toml — the exact shape a
+	// repo onboarded before this phase has.
+	mustWrite(t, filepath.Join(dir, ".gitignore"), drossStateIgnorePath+"\n")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Error("an unignored local.toml must move doctor's exit code")
+	}
+	if !strings.Contains(out, drossLocalIgnorePath) {
+		t.Errorf("doctor output does not name the missing path:\n%s", out)
+	}
+}
+
+// TestDoctorReportsOldGit exercises the version floor through the stub seam.
+// CI's git is always new enough, so without the seam this check would only ever
+// be observed passing — which is indistinguishable from it not working.
+func TestDoctorReportsOldGit(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		version string
+		wantHit bool
+	}{
+		{"below the floor", "git version 2.23.0\n", true},
+		{"at the floor", "git version 2.24.0\n", false},
+		{"well above", "git version 2.51.0 (Apple Git-999)\n", false},
+		{"platform suffix below", "git version 2.23.1.windows.1\n", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doctorRepo(t)
+			prev := gitVersionOutput
+			t.Cleanup(func() { gitVersionOutput = prev })
+			gitVersionOutput = func() (string, error) { return tc.version, nil }
+
+			var out string
+			err := runCmdCapturing(t, &out, Doctor())
+			// The ✓ line names --end-of-options too, so match the finding's own
+			// wording rather than the flag name.
+			hit := strings.Contains(out, "is older than git")
+			if hit != tc.wantHit {
+				t.Errorf("finding present = %v, want %v, for %q:\n%s", hit, tc.wantHit, tc.version, out)
+			}
+			if tc.wantHit && err == nil {
+				t.Error("an unusable git must move doctor's exit code")
+			}
+		})
+	}
+}
+
+// TestDoctorCleanConfigHasNoNewFindings is the false-positive gate. A check
+// satisfied by always reporting is worse than no check: it trains the user to
+// ignore doctor's output. This repo's own shape — github.com / api.github.com /
+// "main" — must produce the ✓ lines and add zero issues.
+func TestDoctorCleanConfigHasNoNewFindings(t *testing.T) {
+	dir := doctorRepo(t)
+	ppath := filepath.Join(dir, ".dross", project.File)
+	p, err := project.Load(ppath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Remote.URL = "https://github.com/Rivil/dross"
+	p.Remote.APIBase = "https://api.github.com"
+	p.Repo.GitMainBranch = "main"
+	p.Repo.BranchPattern = "phase/<id>"
+	if err := p.Save(ppath); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	_ = runCmdCapturing(t, &out, Doctor())
+
+	for _, want := range []string{
+		"✓ configured branch names are valid git refs",
+		"✓ configured API hosts are within the allowlist derived from [remote].url",
+		"✓ " + drossLocalIgnorePath + " is gitignored",
+		"supports --end-of-options",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("clean config did not produce %q:\n%s", want, out)
+		}
+	}
+	// And no config-trust finding fired.
+	for _, unwanted := range []string{"unsafe git ref", "refusing to contact host", "is not gitignored"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("clean config produced a false finding %q:\n%s", unwanted, out)
+		}
+	}
+}
+
+// --- config-trust arms routed back from /dross-verify (2026-08-04) ---
+
+// TestDoctorReportsTrackedLocalToml drives checkConfigTrust's readAllowHosts
+// error branch. A tracked local.toml is the one input that makes the allowlist
+// self-authorizing — a cloned repo would carry its own permission slip — so the
+// refusal has to count as an issue here, not just print. Doctor is also the only
+// command a user runs *looking* for this, which is what makes the exit code the
+// assertion that matters.
+func TestDoctorReportsTrackedLocalToml(t *testing.T) {
+	dir := doctorRepo(t)
+	// -f because init already gitignored it; tracking it takes deliberate effort,
+	// which is exactly the state doctor exists to catch.
+	mustWrite(t, filepath.Join(dir, ".dross", LocalFile), "allow_hosts = \"attacker.example\"\n")
+	mustGit(t, dir, "add", "-f", drossLocalIgnorePath)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Error("a tracked local.toml must move doctor's exit code, not just print")
+	}
+	for _, want := range []string{"refusing to read " + drossLocalIgnorePath, "tracked", "git rm --cached " + drossLocalIgnorePath} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor output does not carry %q:\n%s", want, out)
+		}
+	}
+	// The refusal must not be laundered into the clean line — a repo in this
+	// state has an unknown allowlist, not a verified one.
+	if strings.Contains(out, "✓ configured API hosts are within the allowlist") {
+		t.Errorf("doctor claimed the hosts were checked despite refusing to read the store:\n%s", out)
+	}
+}
+
+// TestDoctorWarnsOnUnreadableGitignore separates "cannot tell" from "proven
+// missing". An unreadable .gitignore is the first; reporting it as the second
+// would send the user to add a line to a file they cannot write, and reporting
+// nothing would hide a broken repo. A directory named .gitignore makes
+// os.ReadFile return EISDIR rather than fs.ErrNotExist, so no new seam is needed.
+func TestDoctorWarnsOnUnreadableGitignore(t *testing.T) {
+	dir := doctorRepo(t)
+	gi := filepath.Join(dir, ".gitignore")
+	if err := os.Remove(gi); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(gi, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	_ = runCmdCapturing(t, &out, Doctor())
+
+	if !strings.Contains(out, "couldn't read .gitignore") {
+		t.Errorf("doctor did not warn about the unreadable .gitignore:\n%s", out)
+	}
+	// The two arms are mutually exclusive: an unreadable file must not be
+	// reported as a missing ignore line.
+	if strings.Contains(out, "is not gitignored") {
+		t.Errorf("an unreadable .gitignore was reported as a missing ignore line:\n%s", out)
+	}
+}
+
+// TestDoctorWarnsOnGitVersionError covers the failure twin of
+// TestDoctorReportsOldGit. An unreadable version is not an old one: claiming
+// "older than git 2.24" when `git --version` failed would send the user to
+// upgrade a git that may be perfectly current, and is how a version check earns
+// enough distrust to get deleted.
+func TestDoctorWarnsOnGitVersionError(t *testing.T) {
+	doctorRepo(t)
+	prev := gitVersionOutput
+	t.Cleanup(func() { gitVersionOutput = prev })
+	gitVersionOutput = func() (string, error) { return "", errors.New("exec: \"git\": executable file not found in $PATH") }
+
+	var out string
+	_ = runCmdCapturing(t, &out, Doctor())
+
+	if !strings.Contains(out, "couldn't read `git --version`") {
+		t.Errorf("doctor did not warn that the git version was unreadable:\n%s", out)
+	}
+	if !strings.Contains(out, "executable file not found") {
+		t.Errorf("doctor swallowed the underlying error:\n%s", out)
+	}
+	if strings.Contains(out, "is older than git") {
+		t.Errorf("an unreadable git version was reported as an old one:\n%s", out)
+	}
+}
+
+// TestDoctorEscapeHatchCarriesPort pins hostOf's host:port arm at the doctor
+// layer. The hint is only useful if it is copy-pasteable: the allowlist compares
+// ports explicitly, so a hint that dropped :8443 would name a host the
+// comparison never matches — the user would run it, see the same refusal, and
+// conclude the guard is broken rather than their config.
+func TestDoctorEscapeHatchCarriesPort(t *testing.T) {
+	dir := doctorRepo(t)
+	ppath := filepath.Join(dir, ".dross", project.File)
+	p, err := project.Load(ppath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Remote.URL = "https://github.com/Rivil/dross"
+	p.Remote.APIBase = "https://odd.example:8443"
+	if err := p.Save(ppath); err != nil {
+		t.Fatal(err)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err == nil {
+		t.Error("an off-allowlist ported api_base must move doctor's exit code")
+	}
+	if !strings.Contains(out, "dross local set allow_hosts odd.example:8443") {
+		t.Errorf("escape-hatch hint dropped the port:\n%s", out)
 	}
 }

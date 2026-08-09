@@ -16,8 +16,9 @@ Use when:
 2. Read `.dross/project.toml` — `runtime.*` (test/typecheck/lint), `paths.*`, `repo.commit_convention`, `repo.git_main_branch`, `stack.locked`.
 3. Read `.dross/state.json`. Note `current_phase` (may be empty — that's fine, standalone mode).
 4. **Verify the current branch matches the mode** with `git symbolic-ref --short HEAD`:
-   - **In-phase** (`current_phase` set): branch must be `phase/<current_phase>`. If not, switch to it (or stop if it doesn't exist locally). Quick changes inside a phase belong on the phase branch — they ship together with the phase.
-   - **Standalone** (no `current_phase`): run `dross base-branch` and branch must be **that** — the active milestone's integration branch (`milestone/<version>`) when one exists, else the configured main branch. Don't hardcode `repo.git_main_branch`; `dross base-branch` resolves the milestone-vs-main cutover for you (and nudges on stderr when no milestone is active). Standalone quick changes go to that base directly via a small commit.
+   - **In-phase** (`current_phase` set, `current_phase_status` NOT `shipped`): branch must be `phase/<current_phase>`. If not, switch to it with `dross phase checkout <current_phase>` (or stop if it doesn't exist locally). Quick changes inside a phase belong on the phase branch — they ship together with the phase.
+   - **Shipped phase** (`current_phase` set, `current_phase_status` = `shipped`): the phase's PR is already open and may already be merged; `dross phase complete` is about to delete `phase/<current_phase>` locally and on origin, so work committed there would be lost or need re-shipping. Treat this as **standalone** and follow the rule below. `dross ship` leaves `current_phase` set until a confirmed merge, which is what makes this window reachable — surface it to the user in one line rather than silently routing.
+   - **Standalone** (no `current_phase`, or a shipped one per the case above): run `dross base-branch` and branch must be **that** — the active milestone's integration branch (`milestone/<version>`) when one exists, else the configured main branch. Don't hardcode `repo.git_main_branch`; `dross base-branch` resolves the milestone-vs-main cutover for you (and nudges on stderr when no milestone is active). Standalone quick changes go to that base directly via a small commit. Once the branch is confirmed, record it: `dross local set quick_base <branch>` — `dross ship` and `dross phase complete` reconcile that recorded branch rather than re-deriving one, so an unpushed `.dross` chore left here can't re-seed divergence later. The store is `.dross/local.toml`, gitignored so the value never rides cumulative history.
 5. Check `git status --porcelain`. If working tree is dirty:
    - Surface the diff to the user.
    - Ask via `AskUserQuestion`: "commit existing work first / stash / abort". Atomic commit semantics require a clean baseline.
@@ -77,6 +78,17 @@ If `runtime.test_command` is set and the change is behavioural, **write/update t
 ## 4. Diff + test gate
 
 Show `git diff` (filtered to the touched files). Run `dross validate` if any `.dross/` files changed.
+
+Before running it, check consent — dross will not run a repo's test command
+until this machine has explicitly trusted it, and the loop commands below refuse
+without it:
+```
+dross trust --check
+```
+Exit 0 means trusted; run the command. Non-zero means it is untrusted or stale —
+**stop and show the user the exact `runtime.test_command` line**, then let them
+run `dross trust`. Never run `dross trust` on their behalf: the whole point of
+the gate is that a human reads the line the repo supplied.
 
 If `runtime.test_command` is set, run it:
 ```

@@ -109,6 +109,101 @@ func TestSetPRPersists(t *testing.T) {
 	}
 }
 
+// TestBaseFieldRoundTrips pins the forked-from base through marshal/unmarshal.
+// `dross phase complete` reconciles against this value instead of re-deriving a
+// base from current_milestone, so dropping the field or its json tag would send
+// completion back to the inference that fast-forwards a stale milestone branch.
+func TestBaseFieldRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "changes.json")
+
+	c := New("phase-x")
+	c.PR = 42
+	c.Base = "main"
+	if err := c.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got, err := Load(path, "phase-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Base != "main" {
+		t.Errorf("Base lost through round-trip: got %q want %q", got.Base, "main")
+	}
+	if got.PR != 42 {
+		t.Errorf("PR lost alongside Base: got %d want 42", got.PR)
+	}
+}
+
+// TestSetBaseCoexistsWithSetPR proves the two load-set-save helpers compose
+// rather than truncate: ship writes both into one record, so a SetBase that
+// started from a fresh Changes would silently drop the PR the merge gate reads.
+func TestSetBaseCoexistsWithSetPR(t *testing.T) {
+	root := t.TempDir()
+	if err := SetPR(root, "phase-x", 42); err != nil {
+		t.Fatalf("SetPR: %v", err)
+	}
+	if err := SetBase(root, "phase-x", "main"); err != nil {
+		t.Fatalf("SetBase: %v", err)
+	}
+	got, err := Load(FilePath(root, "phase-x"), "phase-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PR != 42 {
+		t.Errorf("SetBase truncated the record: PR is %d want 42", got.PR)
+	}
+	if got.Base != "main" {
+		t.Errorf("SetBase did not persist: got %q want %q", got.Base, "main")
+	}
+}
+
+// TestSetBaseCreatesMissingFile proves the base can be recorded at fork time,
+// before execute has written any task record — that's the only moment the
+// branch actually forked from is known.
+func TestSetBaseCreatesMissingFile(t *testing.T) {
+	root := t.TempDir()
+	if err := SetBase(root, "phase-x", "milestone/v1.2"); err != nil {
+		t.Fatalf("SetBase: %v", err)
+	}
+	got, err := Load(FilePath(root, "phase-x"), "phase-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Base != "milestone/v1.2" {
+		t.Errorf("SetBase on a phase with no changes.json: got %q want %q", got.Base, "milestone/v1.2")
+	}
+}
+
+// TestBaseEmptyOmitted proves omitempty keeps a legacy record (written before
+// the base field existed) byte-stable through a load/save cycle — a phase with
+// no recorded base must stay distinguishable from one recorded as "", since
+// completion refuses on the former.
+func TestBaseEmptyOmitted(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "changes.json")
+	if err := os.WriteFile(path, []byte(`{"phase":"p","pr":7,"tasks":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path, "p")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if c.Base != "" {
+		t.Errorf("legacy record gained a base: %q", c.Base)
+	}
+	if err := c.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"base"`) {
+		t.Errorf("empty Base should be omitted from JSON, got %s", b)
+	}
+}
+
 func TestRecordOverwritesOnRerun(t *testing.T) {
 	c := New("p")
 	c.Record("t-1", []string{"a.ts"}, "old", "", nil)

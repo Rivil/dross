@@ -13,6 +13,11 @@ Three checks, in order: mutation efficacy (mechanical), criterion-to-test mappin
 3. Read `.dross/phases/<id>/spec.toml` and `plan.toml`. If either is missing, route to `/dross-spec` or `/dross-plan` first.
 4. Read `.dross/phases/<id>/changes.json`. If missing or empty: `/dross-execute` hasn't touched anything for this phase yet — stop and route there.
 5. Parse `--skip-mutation` flag. Default OFF (run mutation testing). Skip if user explicitly asked.
+6. Check exec consent before §1 — `dross verify` shells out to mutation tools that run this repo's test suite, and it refuses without it:
+   ```
+   dross trust --check
+   ```
+   Exit 0 means trusted; continue. Non-zero means untrusted or stale — **stop and show the user the exact `runtime.test_command` line** from project.toml, then let them run `dross trust`. Never run `dross trust` on their behalf: the gate exists so a human reads the line the repo supplied.
 
 ## 1. Mechanical pass — `dross verify`
 
@@ -159,7 +164,7 @@ dross state touch "verified <phase-id>: <verdict> (<criteria-covered>/<total>, m
 
 Commit the verify artefacts so `.dross/` doesn't sit dirty (CLI writes the files but doesn't auto-commit):
 ```
-git add .dross/state.json .dross/phases/<phase-id>/verify.toml .dross/phases/<phase-id>/tests.json
+git add .dross/phases/<phase-id>/verify.toml .dross/phases/<phase-id>/tests.json
 git commit -m "chore(dross): record verify for <phase-id> (<verdict>)"
 ```
 Use `repo.commit_convention` from project.toml. Skip `tests.json` from the `add` if mutation was skipped (`--skip-mutation`) and the file wasn't written.

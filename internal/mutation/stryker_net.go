@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/Rivil/dross/internal/argfence"
 )
 
 // StrykerNet adapter for C# / .NET mutation testing via stryker-mutator/stryker-net.
@@ -53,11 +55,20 @@ func (s *StrykerNet) Run(files []string) (*Report, error) {
 	}
 	outDir := s.outputDir()
 
+	// dotnet and stryker.net both parse options positionally with no
+	// end-of-options token, so a dash output dir is refused before the process
+	// is built. Both forms are checked: the raw config value, which is the line
+	// the user has to fix, and the resolved path, which is what lands in argv —
+	// outputDir() joins ProjectRoot when one is set, so the two differ.
+	if _, err := argfence.Fence("dotnet", "output dir", s.OutputDir, outDir); err != nil {
+		return nil, err
+	}
+
 	args := []string{"dotnet", "stryker",
 		"--reporter", "json",
 		"--output", outDir,
 	}
-	cmd := s.buildCmd(args)
+	cmd := strykerNetBuildCmd(s, args)
 	cmd.Stdout = os.Stderr // streamed; not captured
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -99,6 +110,9 @@ func (s *StrykerNet) outputDir() string {
 	}
 	return dir
 }
+
+// strykerNetBuildCmd is the process-construction seam — see gremlinsBuildCmd.
+var strykerNetBuildCmd = (*StrykerNet).buildCmd
 
 func (s *StrykerNet) buildCmd(args []string) *exec.Cmd {
 	if s.Prefix == "" {

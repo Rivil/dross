@@ -1,0 +1,106 @@
+[verify]
+  phase = "config-trust-hardening"
+  generated_at = 2026-08-05T06:40:08.370072Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-05T07:07:59.774748Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9490254872563718
+  mutants_killed = 2532
+  mutants_survived = 136
+  mutants_not_covered = 136
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/refguard_test.go:TestValidateGitRefRejects", "internal/cmd/refguard_test.go:TestGuardedHelpersRefuseLeadingDash", "internal/cmd/refguard_entrypoints_test.go:TestPhaseCompleteRefusesDashMainBranch", "internal/cmd/refguard_entrypoints_test.go:TestPhaseCheckoutRefusesDashArg", "internal/cmd/refguard_entrypoints_test.go:TestMilestoneCreateRefusesDashMainBranch", "internal/cmd/refguard_entrypoints_test.go:TestShipRecoverRefusesDashMainBranch"]
+  notes = "One entrypoint test per command the criterion names, each asserting the refusal precedes the first exec. Zero live mutants in refguard.go; unchanged across both amend runs."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/gitargs_test.go:TestGitRefArgsSeparator", "internal/cmd/gitargs_test.go:TestGitRefPathArgsSeparators", "internal/cmd/gitargs_test.go:TestSeparatorsAreDistinct", "internal/cmd/gitargs_test.go:TestGitAcceptsEndOfOptions", "internal/cmd/gitseparator_test.go:TestPhaseCompleteArgvCarriesSeparator", "internal/cmd/gitseparator_remaining_test.go:TestRemainingGitCallsCarrySeparator", "internal/cmd/gitargs_audit_test.go:TestNoUnseparatedGitPositional"]
+  notes = "Argv pinned exactly at the builders, recorded at the call sites through an exec seam, and gated repo-wide by an AST audit whose own non-vacuity is asserted (TestAuditFlagsItsOwnSnippets, TestAuditFlagsBarePrefixlessVar, TestAuditScansCodexPackage). TestGitAcceptsEndOfOptions makes the git>=2.24 floor executable rather than assumed."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/mutation/stryker_test.go:TestStrykerRunArgsPinned", "internal/mutation/stryker_test.go:TestStrykerPinPatternRejectsLooseSpecs", "internal/mutation/stryker_test.go:TestStrykerHintUsesSamePin"]
+  notes = "strykerPin is the exact triple `@stryker-mutator/core@9.6.1` (internal/mutation/stryker.go:94). The pin assertion is guarded against vacuity by a test of the checker itself (dist-tags, caret/tilde ranges and partial versions all rejected), and the install hint is asserted to carry the same pin."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/hostallow/hostallow_test.go:TestCheckRefusesOffAllowlistHost", "internal/hostallow/hostallow_test.go:TestSuffixWildcardIsNotSubstring", "internal/hostallow/hostallow_test.go:TestDeriveEmptyIsNotAllowAll", "internal/hostallow/hostallow_test.go:TestHTTPDefaultsToPort80", "internal/forge/hostallow_test.go:TestRefusedHostNeverReadsToken", "internal/forge/hostallow_test.go:TestForgeNewAllowsDerivedHost", "internal/ship/hostguard_test.go:TestNoGetenvOutsideHostguard", "internal/ship/hostguard_test.go:TestHostguardChecksBeforeReadingEnv", "internal/cmd/hostpolicy_test.go:TestMergeGateDoesNotDegradeOnHostRefusal", "internal/cmd/hostpolicy_test.go:TestDependentsCheckDoesNotDegradeOnHostRefusal", "internal/cmd/hostpolicy_test.go:TestDependentsCheckDegradesOnTransientError"]
+  notes = "Covers where the secret goes (all four forge clients + the ship backends), the ORDER (host checked before os.Getenv, pinned by asserting the error is the refusal and not \"$X is not set\"), the non-degradation the refusal_behaviour decision locks, and the over-refusal gate (github.com/api.github.com split and a self-hosted forge must still construct). TestNoGetenvOutsideHostguard is an AST gate so a new ship backend cannot skip the check. Both narrowness halves hold: TestDependentsCheckDegradesOnTransientError keeps the refusal case from widening into a catch-all that would block a legitimate prune on a flaky forge, and TestHTTPDefaultsToPort80 pins :80/:443 as distinct so an http-derived entry cannot authorize its https twin. No live or in-diff uncovered mutants remain in hostallow.go, forge/hostallow.go, ship/hostguard.go or the hostpolicy arms."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/hostile_config_test.go:TestHostileConfigVectors", "internal/cmd/hostile_config_test.go:TestEveryVectorHasASubtest", "internal/cmd/hostile_config_test.go:TestHostileConfigNoPwnSentinel", "internal/cmd/hostile_config_test.go:TestRedProofPinsBaseCommit", "internal/forge/hostile_config_test.go:TestHostileConfigForgeClientsRefuse", "internal/forge/hostile_config_test.go:TestHostileConfigHonestRemoteStillWorks"]
+  notes = "Twelve vectors driven off fixtures/hostile-config-c5/expected-refusals.txt, a contract pinned before the guards existed. Every vector also asserts the side effect no wording can fake (no sentinel file, no token in the output), the contract and the driver set gate each other in both directions, and TestRedProofPinsBaseCommit verifies RUN.md's base SHA resolves and names every vector. The red replay is recorded against d62be41 by building the base-commit binary; the arbitrary-file-write via `git log --output=` was observed landing pre-phase and absent post-phase."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/doctor_test.go:TestDoctorReportsDashBranchName", "internal/cmd/doctor_test.go:TestDoctorReportsDashBranchPattern", "internal/cmd/doctor_test.go:TestDoctorReportsOffAllowlistAPIBase", "internal/cmd/doctor_test.go:TestDoctorEscapeHatchCarriesPort", "internal/cmd/doctor_test.go:TestDoctorCleanConfigHasNoNewFindings", "internal/cmd/doctor_test.go:TestDoctorReportsOldGit", "internal/cmd/doctor_test.go:TestDoctorWarnsOnGitVersionError", "internal/cmd/hostile_config_test.go:TestHostileConfigVectors/doctor-branch", "internal/cmd/hostile_config_test.go:TestHostileConfigVectors/doctor-host"]
+  notes = "Both named finding classes are asserted to move doctor's exit code, not merely print, and the host finding is asserted to carry the escape-hatch command verbatim per the locked escape_hatch decision. TestDoctorCleanConfigHasNoNewFindings is the false-positive gate on this repo's own shape. TestDoctorEscapeHatchCarriesPort keeps the hint's :8443 copy-pasteable against the port-explicit comparison; TestDoctorWarnsOnGitVersionError separates an unreadable `git --version` from an old one, and its mutant — now at doctor.go:932 after the switch→if/else-if rewrite — is RUNNABLE and killed."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/gitignore_test.go:TestEnsureGitignoreCoversLocalToml", "internal/cmd/gitignore_test.go:TestIgnoresLocalTomlViaBroaderPattern", "internal/cmd/gitignore_test.go:TestInitScaffoldsStateIgnore", "internal/cmd/gitignore_test.go:TestOnboardScaffoldsStateIgnore", "internal/cmd/local_test.go:TestReadAllowHostsRefusesTrackedLocal", "internal/cmd/doctor_test.go:TestDoctorReportsTrackedLocalToml", "internal/cmd/doctor_test.go:TestDoctorWarnsOnUnreadableGitignore", "internal/cmd/hostile_config_test.go:TestHostileConfigVectors/tracked-local"]
+  notes = "The seeding half is covered compositionally rather than end-to-end: ensureDrossGitignore is the single seeding function (only non-test callers are init.go:101 and onboard.go:119, re-confirmed this run), TestEnsureGitignoreCoversLocalToml asserts it covers local.toml, and the init/onboard tests assert both commands reach it — dropping either half fails a test. The refusal half asserts hosts are nil, the message names the `git rm --cached` fix, the file's contents are NOT echoed (proving it was refused unread), and that the same file untracked is honoured. The doctor layer holds: a tracked local.toml moves doctor's exit code and is not laundered into the clean line, and TestDoctorWarnsOnUnreadableGitignore separates \"cannot tell\" from \"proven missing\" — its mutant, now at doctor.go:916, is RUNNABLE and killed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "CLOSED BY AMEND RUN #2 — the three FLAGs the previous verify routed into this phase are dead. The switch→if/else-if rewrite (d94ade6) moved each case-condition into a basic block go-cover attributes, so gremlins finally runs a test against it. Observed this run: `gremlins unleash --dry-run ./internal/cmd/` reports RUNNABLE (not NOT-COVERED) at doctor.go:916, doctor.go:932 and milestone_dependents.go:122 — the post-rewrite positions of the old doctor.go:913, doctor.go:929 and milestone_dependents.go:118 — and the full run reports Lived=0 with none of the three in the surviving set. In-diff survivors fell 10 → 7; total survivors 139 → 136; killed rose 2529 → 2532."
+
+[[finding]]
+  severity = "NOTE"
+  text = "ACCEPTED WITH REASON (rule r-02) — the 7 remaining in-diff NOT-COVERED mutants are all at internal/cmd/gitignore.go:17,46,47,48,64,65,66, ARITHMETIC_BASE on string concatenation inside a const initializer (drossLocalIgnorePath) and the drossIgnoreEntries package-level var. This is the documented gremlins/go-cover attribution ceiling for initializers evaluated before coverage is attributed — not a test gap: the values' effect IS asserted by TestEnsureGitignoreCoversLocalToml and TestEnsureDrossGitignoreAppendsToExisting. Unlike the three switch-case FLAGs, no rewrite moves these — a const initializer has no enclosing block to fall into. Not to be re-reported."
+
+[[finding]]
+  severity = "NOTE"
+  text = "PRE-EXISTING, ALREADY ROUTED (rule r-02) — 129 of the 136 NOT-COVERED mutants fall outside this phase's added lines (classified by intersecting each survivor against the `git diff -U0 milestone/v1.2...HEAD` added-line set). gremlins runs per package, so a phase touching internal/cmd, internal/forge, internal/ship, internal/hostallow, internal/mutation and internal/codex surfaces every package's standing gap. This backlog is already routed as deferred items: dross-repair[0] ('76 pre-existing mutation survivors across 23 internal/cmd files') and completion-state-truth[1] ('drain the standing 75 pre-existing survivors'), with completion-state-truth[0] tracking the verify survivor-lifecycle mechanism that would stop them being re-emitted run over run. Both re-confirmed present this run; no duplicate entry created. Raw per-mutant list preserved in tests.json (languages[].mutation.Surviving)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation efficacy is 100%: zero mutants LIVED (killed=2532, survived=136, all NOT-COVERED). Score 0.9490 is entirely the NOT-COVERED rollup (136/2668); excluding them the score is 1.00. No criterion was downgraded covered→weak by the cross-check — the only 7 in-diff uncovered lines are the accepted const-initializer set above, whose asserted effect is c-7's seeding surface."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Full suite observed green this session: `go test -count=1 ./...` — all 30 packages ok, exit 0 (internal/cmd 123.1s)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/dross.1: no mutation adapter for .1"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped fixtures/hostile-config-c5/RUN.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped fixtures/hostile-config-c5/expected-refusals.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped fixtures/hostile-config-c5/local-tracked.toml: no mutation adapter for .toml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped fixtures/hostile-config-c5/project.toml: no mutation adapter for .toml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/gitargs_audit/snippets.txt: no mutation adapter for .txt"

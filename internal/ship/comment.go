@@ -3,12 +3,12 @@ package ship
 import (
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/hostallow"
 )
 
 // CommentOpts is the input shape for posting a comment to an open PR.
@@ -24,6 +24,10 @@ type CommentOpts struct {
 	ProjectID  string // gitlab: numeric project-id override; empty = derive from URL
 	PRNumber   int    // PR / MR / issue number to comment on (gitlab: MR iid)
 	Body       string // comment body, markdown
+
+	// Hosts is the API host allowlist APIBase is checked against before the
+	// token is read. Zero value = SaaS defaults, never unrestricted.
+	Hosts hostallow.Policy
 }
 
 // PostComment dispatches to the right provider and posts a single
@@ -51,8 +55,17 @@ func PostComment(opts CommentOpts) error {
 }
 
 func postGitHubComment(opts CommentOpts) error {
-	args := []string{"pr", "comment", fmt.Sprint(opts.PRNumber), "--body", opts.Body}
-	out, err := ghCommand(args...).CombinedOutput()
+	// Repeated here rather than left to PostComment's dispatch check: this
+	// function is one refactor away from being reachable without it, and the
+	// guard is what keeps a derived number out of the argv entirely.
+	if opts.PRNumber <= 0 {
+		return fmt.Errorf("gh pr comment: PR number %d is not a valid number", opts.PRNumber)
+	}
+	// --body stays AHEAD of the separator; the number goes behind it. Demoting
+	// --body past `--` would not crash — cobra would read the body text as a
+	// second positional and the comment would post with the wrong content,
+	// which is the worse failure of the two.
+	out, err := ghCommand("pr", "comment", "--body", opts.Body, "--", fmt.Sprint(opts.PRNumber)).CombinedOutput()
 	if err != nil {
 		// Surface the missing-gh case with the original install pointer
 		// rather than the raw exec error. Tests override ghCommand so
@@ -72,9 +85,9 @@ func postForgejoComment(opts CommentOpts) error {
 	if opts.AuthEnv == "" {
 		return errors.New("forgejo backend needs AuthEnv (set [remote].auth_env)")
 	}
-	token := os.Getenv(opts.AuthEnv)
-	if token == "" {
-		return fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", opts.AuthEnv, opts.AuthEnv)
+	token, err := resolveToken(opts.APIBase, opts.AuthEnv, opts.Hosts)
+	if err != nil {
+		return err
 	}
 	owner, repo, err := splitOwnerRepo(opts.URL)
 	if err != nil {
@@ -84,7 +97,7 @@ func postForgejoComment(opts CommentOpts) error {
 	// number space for issues and PRs is shared.
 	endpoint := strings.TrimRight(opts.APIBase, "/") +
 		fmt.Sprintf("/repos/%s/%s/issues/%d/comments", owner, repo, opts.PRNumber)
-	if _, err := jsonPost(endpoint, token, map[string]any{
+	if _, err := jsonPost(endpoint, opts.AuthEnv, token, map[string]any{
 		"body": opts.Body,
 	}); err != nil {
 		return fmt.Errorf("post comment: %w", err)
@@ -99,9 +112,9 @@ func postGitLabComment(opts CommentOpts) error {
 	if opts.AuthEnv == "" {
 		return errors.New("gitlab backend needs AuthEnv (set [remote].auth_env)")
 	}
-	token := os.Getenv(opts.AuthEnv)
-	if token == "" {
-		return fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", opts.AuthEnv, opts.AuthEnv)
+	token, err := resolveToken(opts.APIBase, opts.AuthEnv, opts.Hosts)
+	if err != nil {
+		return err
 	}
 	owner, repo, err := splitOwnerRepo(opts.URL)
 	if err != nil {
@@ -112,7 +125,7 @@ func postGitLabComment(opts CommentOpts) error {
 	// GitLab MR comments are "notes" on the merge request; PRNumber is the iid.
 	endpoint := strings.TrimRight(opts.APIBase, "/") +
 		fmt.Sprintf("/projects/%s/merge_requests/%d/notes", ref, opts.PRNumber)
-	rb, status, err := gitlabReq("POST", endpoint, opts.AuthScheme, token, map[string]any{"body": opts.Body})
+	rb, status, err := gitlabReq("POST", endpoint, opts.AuthEnv, opts.AuthScheme, token, map[string]any{"body": opts.Body})
 	if err != nil {
 		return fmt.Errorf("post note: %w", err)
 	}
@@ -129,7 +142,7 @@ func postGitLabComment(opts CommentOpts) error {
 // pullrequests endpoint — Bitbucket has no shared issue/PR number space to
 // reuse the way Forgejo does.
 func postBitbucketComment(opts CommentOpts) error {
-	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser)
+	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser, opts.Hosts)
 	if err != nil {
 		return err
 	}
@@ -139,7 +152,7 @@ func postBitbucketComment(opts CommentOpts) error {
 	}
 	endpoint := strings.TrimRight(opts.APIBase, "/") +
 		fmt.Sprintf("/repositories/%s/%s/pullrequests/%d/comments", workspace, slug, opts.PRNumber)
-	rb, status, err := bbRequest("POST", endpoint, user, token, map[string]any{
+	rb, status, err := bbRequest("POST", endpoint, opts.AuthEnv, user, token, map[string]any{
 		"content": map[string]any{"raw": opts.Body},
 	})
 	if err != nil {

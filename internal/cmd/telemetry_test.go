@@ -249,7 +249,7 @@ func TestTelemetryRepoHashOnIncompleteRoot(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := realTempDir(t)
-			mkRoot(t, dir, "project.toml") // incomplete: no state.json
+			mkRoot(t, dir) // incomplete: no project.toml
 			chdir(t, dir)
 			telemetryCovEnable(t)
 
@@ -286,7 +286,7 @@ func TestClassifyRealIncompleteRootError(t *testing.T) {
 	incompleteRoot := func(t *testing.T) error {
 		t.Helper()
 		dir := realTempDir(t)
-		mkRoot(t, dir, "project.toml")
+		mkRoot(t, dir) // incomplete: no project.toml
 		chdir(t, dir)
 		_, err := FindRoot()
 		if err == nil {

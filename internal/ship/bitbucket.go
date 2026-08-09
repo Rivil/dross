@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Rivil/dross/internal/hostallow"
+	"github.com/Rivil/dross/internal/redact"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
@@ -46,7 +47,7 @@ func bbRepoRef(repoURL string) (workspace, slug string, err error) {
 // body and status. body is JSON-encoded when non-nil. Endpoints are relative to
 // api_base, which project.DetectRemote autodetects as
 // https://api.bitbucket.org/2.0 for a bitbucket.org remote.
-func bbRequest(method, endpoint, user, token string, body any) ([]byte, int, error) {
+func bbRequest(method, endpoint, authEnv, user, token string, body any) ([]byte, int, error) {
 	var buf io.Reader
 	if body != nil {
 		b := new(bytes.Buffer)
@@ -72,6 +73,11 @@ func bbRequest(method, endpoint, user, token string, body any) ([]byte, int, err
 	}
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(resp.Body)
+	// Scrubbed HERE, at the one place the body enters the package, rather than at
+	// each Errorf that interpolates it. Every caller's `string(respBody)` is then
+	// safe by construction — including the ones that are not about HTTP status at
+	// all ("response missing iid"), which a per-error-site scrub would miss.
+	respBody = []byte(redact.Scrub(string(respBody), authEnv, token))
 	return respBody, resp.StatusCode, nil
 }
 
@@ -79,7 +85,7 @@ func bbRequest(method, endpoint, user, token string, body any) ([]byte, int, err
 // before any request is made when a piece is missing. auth_user is checked here
 // rather than at the transport: sending Basic base64(:token) would 401 with a
 // message that names nothing the user can act on.
-func bbCredentials(apiBase, authEnv, authUser string) (user, token string, err error) {
+func bbCredentials(apiBase, authEnv, authUser string, policy hostallow.Policy) (user, token string, err error) {
 	if apiBase == "" {
 		return "", "", errors.New("bitbucket backend needs APIBase (set [remote].api_base)")
 	}
@@ -89,11 +95,53 @@ func bbCredentials(apiBase, authEnv, authUser string) (user, token string, err e
 	if strings.TrimSpace(authUser) == "" {
 		return "", "", errors.New("bitbucket backend needs AuthUser (set [remote].auth_user) — its credential is HTTP Basic user:token")
 	}
-	token = os.Getenv(authEnv)
-	if token == "" {
-		return "", "", fmt.Errorf("$%s is not set; run `dross env set %s` in your shell", authEnv, authEnv)
+	token, err = resolveToken(apiBase, authEnv, policy)
+	if err != nil {
+		return "", "", err
 	}
 	return strings.TrimSpace(authUser), token, nil
+}
+
+// bitbucketPRStatus reads the PR's authoritative state and destination branch
+// from Bitbucket Cloud.
+//
+// The state is one of OPEN, MERGED, DECLINED or SUPERSEDED — so merged is
+// state == MERGED, never state != OPEN. A declined or superseded PR is closed
+// without ever having landed, and reporting it merged would false-complete a
+// phase whose work was thrown away.
+func bitbucketPRStatus(opts OpenOpts) (PRStatus, error) {
+	if opts.PRNumber <= 0 {
+		return PRStatus{}, errors.New("bitbucket merged-status lookup needs a PR number")
+	}
+	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser, opts.Hosts)
+	if err != nil {
+		return PRStatus{}, err
+	}
+	workspace, slug, err := bbRepoRef(opts.URL)
+	if err != nil {
+		return PRStatus{}, err
+	}
+	endpoint := strings.TrimRight(opts.APIBase, "/") +
+		fmt.Sprintf("/repositories/%s/%s/pullrequests/%d", workspace, slug, opts.PRNumber)
+	rb, status, err := bbRequest("GET", endpoint, opts.AuthEnv, user, token, nil)
+	if err != nil {
+		return PRStatus{}, fmt.Errorf("get PR #%d: %w", opts.PRNumber, err)
+	}
+	if status >= 300 {
+		return PRStatus{}, fmt.Errorf("get PR #%d: HTTP %d: %s", opts.PRNumber, status, string(rb))
+	}
+	var pr struct {
+		State       string `json:"state"`
+		Destination struct {
+			Branch struct {
+				Name string `json:"name"`
+			} `json:"branch"`
+		} `json:"destination"`
+	}
+	if err := json.Unmarshal(rb, &pr); err != nil {
+		return PRStatus{}, fmt.Errorf("parse bitbucket PR #%d: %w", opts.PRNumber, err)
+	}
+	return PRStatus{Merged: strings.EqualFold(pr.State, "MERGED"), BaseRef: pr.Destination.Branch.Name}, nil
 }
 
 // bbReviewerRefs maps configured reviewer strings to Bitbucket user objects.
@@ -121,7 +169,7 @@ func bbReviewerRefs(reviewers []string) []map[string]any {
 // Unlike Forgejo and GitLab, draft is a real boolean on this API — there is no
 // "Draft:" title-prefix convention to imitate here.
 func openBitbucketPR(opts OpenOpts) (*OpenResult, error) {
-	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser)
+	user, token, err := bbCredentials(opts.APIBase, opts.AuthEnv, opts.AuthUser, opts.Hosts)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +189,7 @@ func openBitbucketPR(opts OpenOpts) (*OpenResult, error) {
 	}
 
 	base := strings.TrimRight(opts.APIBase, "/") + fmt.Sprintf("/repositories/%s/%s/pullrequests", workspace, slug)
-	respBody, status, err := bbRequest("POST", base, user, token, body)
+	respBody, status, err := bbRequest("POST", base, opts.AuthEnv, user, token, body)
 	if err != nil {
 		return nil, fmt.Errorf("create PR: %w", err)
 	}
@@ -167,7 +215,7 @@ func openBitbucketPR(opts OpenOpts) (*OpenResult, error) {
 		// costs the caller an already-open PR — return the result *and* the
 		// error, as the Forgejo and GitLab backends do.
 		updEndpoint := base + fmt.Sprintf("/%d", pr.ID)
-		rb, st, err := bbRequest("PUT", updEndpoint, user, token, map[string]any{
+		rb, st, err := bbRequest("PUT", updEndpoint, opts.AuthEnv, user, token, map[string]any{
 			// Bitbucket's PR update wants the title alongside any mutation.
 			"title":     opts.Title,
 			"reviewers": refs,

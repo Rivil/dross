@@ -2,6 +2,7 @@ package ship
 
 import (
 	"encoding/json"
+	"github.com/Rivil/dross/internal/hostallow"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -84,6 +85,7 @@ func TestOpenForgejoPRHappyPath(t *testing.T) {
 		Provider:   "forgejo",
 		URL:        "https://forge.example/me/p",
 		APIBase:    server.URL,
+		Hosts:      hostallow.Derive(server.URL, nil),
 		AuthEnv:    "MOCK_FORGEJO_TOKEN",
 		HeadBranch: "pr/01-x",
 		BaseBranch: "main",
@@ -126,7 +128,7 @@ func TestOpenForgejoPRDraftPrefix(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	_, _ = OpenPR(OpenOpts{
-		Provider: "forgejo", URL: "https://x/o/r", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://x/o/r", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN", HeadBranch: "pr", BaseBranch: "main",
 		Title: "real title", Draft: true,
 	})
@@ -137,7 +139,7 @@ func TestOpenForgejoPRDraftPrefix(t *testing.T) {
 
 func TestOpenForgejoPRMissingToken(t *testing.T) {
 	_, err := OpenPR(OpenOpts{
-		Provider: "forgejo", URL: "https://x/o/r", APIBase: "https://api",
+		Provider: "forgejo", URL: "https://x/o/r", APIBase: "https://api", Hosts: hostallow.Derive("https://api", nil),
 		AuthEnv: "DROSS_TEST_DEFINITELY_UNSET_TOKEN", HeadBranch: "pr", BaseBranch: "main",
 		Title: "x",
 	})
@@ -162,7 +164,7 @@ func TestOpenForgejoPRReviewerFailureNonFatal(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	res, err := OpenPR(OpenOpts{
-		Provider: "forgejo", URL: "https://forge/o/r", APIBase: server.URL,
+		Provider: "forgejo", URL: "https://forge/o/r", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_FORGEJO_TOKEN", HeadBranch: "pr", BaseBranch: "main",
 		Title: "x", Reviewers: []string{"ghost"},
 	})
@@ -249,6 +251,7 @@ func TestOpenGitLabPRHappyPath(t *testing.T) {
 		Provider:   "gitlab",
 		URL:        "https://gitlab.example/me/p",
 		APIBase:    server.URL,
+		Hosts:      hostallow.Derive(server.URL, nil),
 		AuthEnv:    "MOCK_GITLAB_TOKEN",
 		HeadBranch: "phase/x",
 		BaseBranch: "main",
@@ -291,7 +294,7 @@ func TestOpenGitLabPRDraftPrefix(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	_, _ = OpenPR(OpenOpts{
-		Provider: "gitlab", URL: "https://x/o/r", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://x/o/r", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN", HeadBranch: "phase/x", BaseBranch: "main",
 		Title: "real title", Draft: true,
 	})
@@ -315,7 +318,7 @@ func TestOpenGitLabPRReviewerFailureNonFatal(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	res, err := OpenPR(OpenOpts{
-		Provider: "gitlab", URL: "https://gitlab/o/r", APIBase: server.URL,
+		Provider: "gitlab", URL: "https://gitlab/o/r", APIBase: server.URL, Hosts: hostallow.Derive(server.URL, nil),
 		AuthEnv: "MOCK_GITLAB_TOKEN", HeadBranch: "phase/x", BaseBranch: "main",
 		Title: "x", Reviewers: []string{"ghost"},
 	})

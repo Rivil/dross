@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
@@ -21,8 +22,10 @@ const (
 	// DriftCompleteUnverified: every task is done but verify hasn't passed
 	// (verify.toml absent, or verdict empty/pending/partial/fail).
 	DriftCompleteUnverified = "complete_unverified"
-	// DriftVerifiedUnshipped: verify passed but the phase hasn't been completed
-	// (no `completed <slug>` folded into state history by ship).
+	// DriftVerifiedUnshipped: verify passed but the phase has neither been
+	// shipped nor completed — no `completed <slug>` in state history (written
+	// by `dross phase complete` after it confirms the merge) and no open PR
+	// awaiting one.
 	DriftVerifiedUnshipped = "verified_unshipped"
 )
 
@@ -93,6 +96,14 @@ func classifyPhase(root, id string, st *state.State) (string, bool) {
 	if stateHasCompleted(st, id) {
 		return "", false
 	}
+	// A shipped phase with an open PR is waiting on a merge, not drifting.
+	// `dross ship` leaves current_phase set and marks it shipped; only a
+	// confirmed merge clears it, so this window is reachable on every phase
+	// between the push and the merge. Calling it "verified but unshipped"
+	// there is simply false — it names the one thing that already happened.
+	if stateHasShipped(st, id) && phaseHasOpenPR(root, id) {
+		return "", false
+	}
 	dir := phase.Dir(root, id)
 	if readVerdict(filepath.Join(dir, "verify.toml")) == "pass" {
 		return DriftVerifiedUnshipped, true
@@ -111,7 +122,8 @@ func classifyPhase(root, id string, st *state.State) (string, bool) {
 }
 
 // stateHasCompleted reports whether state history carries a `completed <id>`
-// action — mirrors status.go's stateRecordsCompleted.
+// action — the record `dross phase complete` writes once the merge is
+// confirmed.
 func stateHasCompleted(st *state.State, id string) bool {
 	if st == nil {
 		return false
@@ -122,6 +134,22 @@ func stateHasCompleted(st *state.State, id string) bool {
 		}
 	}
 	return false
+}
+
+// stateHasShipped reports whether id is the current phase and reads `shipped`.
+// Keyed on the status field rather than history so a phase re-shipped after
+// review edits reads the same either way.
+func stateHasShipped(st *state.State, id string) bool {
+	return st != nil && st.CurrentPhase == id && st.CurrentPhaseStatus == "shipped"
+}
+
+// phaseHasOpenPR reports whether the phase's changes.json carries a PR number —
+// the tracked, phase-scoped "this was shipped" record, written by `dross ship`
+// post-push. Paired with stateHasShipped so a status field alone, with no PR to
+// point at, still counts as drift.
+func phaseHasOpenPR(root, id string) bool {
+	ch, err := changes.Load(changes.FilePath(root, id), id)
+	return err == nil && ch.PR > 0
 }
 
 // readVerdict scans a verify.toml for its `verdict` line and returns the value,

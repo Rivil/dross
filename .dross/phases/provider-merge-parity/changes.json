@@ -1,0 +1,154 @@
+{
+  "phase": "provider-merge-parity",
+  "pr": 74,
+  "base": "milestone/v1.2",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/ship/merged.go",
+        "internal/ship/merged_test.go",
+        "internal/ship/bitbucket.go",
+        "internal/ship/bitbucket_test.go",
+        "internal/ship/bitbucket_comment_test.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go",
+        "internal/cmd/enum_divergence_test.go"
+      ],
+      "commit": "0045e85",
+      "completed_at": "2026-08-03T10:36:54.916955Z",
+      "landmarks": [
+        {
+          "feature": "provider merge-status parity",
+          "symbol": "GetPRStatus",
+          "loc": "internal/ship/merged.go:20",
+          "what": "PRMerged/PRMergedFunc replaced by PRStatus{Merged,BaseRef}/GetPRStatus/PRStatusFunc across github+bitbucket+mergeGate, wiring BaseRef for the retarget check landing in t-6b"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/ship/gitlab.go",
+        "internal/ship/gitlab_test.go",
+        "internal/ship/basepr.go",
+        "internal/ship/basepr_test.go",
+        "internal/ship/open.go"
+      ],
+      "commit": "82b6c20",
+      "completed_at": "2026-08-03T10:42:30.500124Z",
+      "landmarks": [
+        {
+          "feature": "provider merge-status parity",
+          "symbol": "gitlabOpenMRsTargeting",
+          "loc": "internal/ship/gitlab.go:104",
+          "what": "GitLab open-MRs-by-target-branch dispatch added to OpenPRsTargeting, paginated via per_page/page, gitlab.go now holds the extracted preamble (gitlabTarget/gitlabReq/splitOwnerRepo/gitlabProjectRef) out of open.go"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/ship/forgejo.go",
+        "internal/ship/forgejo_test.go",
+        "internal/ship/basepr.go",
+        "internal/ship/basepr_test.go",
+        "internal/ship/open.go"
+      ],
+      "commit": "b21fa4f",
+      "completed_at": "2026-08-03T10:46:38.594174Z",
+      "landmarks": [
+        {
+          "feature": "provider merge-status parity",
+          "symbol": "forgejoOpenPRsTargeting",
+          "loc": "internal/ship/forgejo.go:88",
+          "what": "Forgejo/Gitea open-PRs-by-base dispatch added to OpenPRsTargeting, paginated with client-side base.ref filtering (Gitea has no base= query param); forgejo.go now holds extracted forgejoTarget preamble + new jsonGet helper"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/ship/gitlab.go",
+        "internal/ship/gitlab_test.go",
+        "internal/ship/merged.go",
+        "internal/ship/merged_test.go",
+        "internal/ship/bitbucket_comment_test.go"
+      ],
+      "commit": "a7bda84",
+      "completed_at": "2026-08-03T10:54:49.232133Z",
+      "landmarks": [
+        {
+          "feature": "provider merge-status parity",
+          "symbol": "gitlabPRStatus",
+          "loc": "internal/ship/gitlab.go:56",
+          "what": "GitLab wired into GetPRStatus dispatch (state==merged, target_branch-\u003eBaseRef); c-1 satisfied for GitLab"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/ship/forgejo.go",
+        "internal/ship/forgejo_test.go",
+        "internal/ship/merged.go",
+        "internal/ship/merged_test.go",
+        "internal/ship/bitbucket_comment_test.go"
+      ],
+      "commit": "570229c",
+      "completed_at": "2026-08-03T11:00:27.176277Z",
+      "landmarks": [
+        {
+          "feature": "provider merge-status parity",
+          "symbol": "forgejoPRStatus",
+          "loc": "internal/ship/forgejo.go:88",
+          "what": "Forgejo/Gitea wired into GetPRStatus dispatch (merged bool, not state, plus base.ref-\u003eBaseRef); all 5 ship providers now authoritative, ErrMergeStatusUnsupported unreachable via real dispatch"
+        }
+      ]
+    },
+    "t-6a": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go",
+        "ARCHITECTURE.md"
+      ],
+      "commit": "18fd8ca",
+      "completed_at": "2026-08-03T11:05:21.158575Z",
+      "landmarks": [
+        {
+          "feature": "provider merge-status parity",
+          "symbol": "mergeGate",
+          "loc": "internal/cmd/phase.go:730",
+          "what": "mergeGate now announces (prints) when it falls back to ancestry on ErrMergeStatusUnsupported or a provider error, matching guardOpenPRsTargeting's print-then-continue pattern; ARCHITECTURE.md provider index corrected for the PRMerged-\u003ePRStatus rename"
+        }
+      ]
+    },
+    "t-6b": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "4d4fb45",
+      "completed_at": "2026-08-03T11:09:37.625826Z",
+      "landmarks": [
+        {
+          "feature": "provider merge-status parity",
+          "symbol": "checkBaseRetarget",
+          "loc": "internal/cmd/phase.go:769",
+          "what": "mergeGate refuses completion when the provider's reported base differs from reconcileBranch, even when merged=true; empty BaseRef announces a skipped check rather than a false alarm"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/ship/retarget_matrix_test.go",
+        "internal/cmd/phase_retarget_matrix_test.go"
+      ],
+      "commit": "e05e15a",
+      "completed_at": "2026-08-03T11:14:28.583924Z",
+      "landmarks": [
+        {
+          "feature": "provider merge-status parity",
+          "symbol": "TestPRStatusBaseRefAcrossProviders",
+          "loc": "internal/ship/retarget_matrix_test.go:13",
+          "what": "table test proving each provider's wire shape maps to PRStatus.BaseRef correctly, plus a cmd-level table proving mergeGate's retarget refusal is uniform across all 5 ship providers"
+        }
+      ]
+    }
+  }
+}

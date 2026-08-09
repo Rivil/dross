@@ -13,6 +13,7 @@ import (
 	"github.com/Rivil/dross/internal/board"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/forge"
+	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
@@ -87,7 +88,15 @@ func openBoard() (ctx *boardCtx, enabled bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
-	client, err := forge.NewBoard(boardConfig(proj.Board))
+	// The machine-local allowlist additions. readAllowHosts errors — rather
+	// than returning an empty list — when git reports .dross/local.toml
+	// tracked, so a repo that committed one cannot authorize its own board
+	// host through it.
+	extra, err := readAllowHosts(root, filepath.Dir(root))
+	if err != nil {
+		return nil, false, err
+	}
+	client, err := forge.NewBoard(boardConfig(proj.Board, proj.Remote.URL, extra))
 	if err != nil {
 		return nil, false, err
 	}
@@ -109,7 +118,12 @@ func openBoard() (ctx *boardCtx, enabled bool, err error) {
 // forge backends, the numeric/path project ref for GitLab, the short-name for
 // YouTrack. For the forge backends a synthetic URL carries owner/repo to the
 // client (the real host is irrelevant — every call targets base_url).
-func boardConfig(b project.Board) forge.Config {
+// remoteURL is the derivation source for the API host allowlist, and it is
+// [remote].url — NOT the synthetic "https://board.local/<project>" URL below.
+// The synthetic URL exists only to carry owner/repo to the forge backends;
+// deriving the allowlist from it would authorize a host nobody configured and
+// make the policy self-satisfying.
+func boardConfig(b project.Board, remoteURL string, extra []string) forge.Config {
 	cfg := forge.Config{
 		Provider: b.Provider,
 		APIBase:  b.BaseURL,
@@ -118,6 +132,7 @@ func boardConfig(b project.Board) forge.Config {
 		Project:  b.Project,
 		BoardID:  b.GitHubProject,
 		URL:      "https://board.local/" + b.Project,
+		Hosts:    hostallow.Derive(remoteURL, extra),
 	}
 	if configenum.Normalize(b.Provider) == "gitlab" {
 		cfg.ProjectID = b.Project

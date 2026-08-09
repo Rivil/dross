@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/state"
 )
 
 // realTempDir is t.TempDir() with symlinks resolved. On macOS /var is a
@@ -42,7 +44,7 @@ func mkRoot(t *testing.T, dir string, files ...string) string {
 // hook target stays silent. Unwrapping the sentinel makes them all go loud.
 func TestFindRootIncompleteIsNoRoot(t *testing.T) {
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir) // bare: no project.toml
 	chdir(t, dir)
 
 	_, err := FindRoot()
@@ -54,33 +56,17 @@ func TestFindRootIncompleteIsNoRoot(t *testing.T) {
 	}
 }
 
-// TestFindRootIncompleteMessage covers every miss combination: the message
-// names each absent path and carries the shared repair hint, and the
-// single-miss rows never name the file that is present.
+// TestFindRootIncompleteMessage covers the miss combinations: project.toml is
+// the only required file, so the message names it, carries the shared repair
+// hint, and never names state.json — which is machine-local and materialized
+// rather than demanded. Leaving state.json in RequiredRootFiles fails both rows.
 func TestFindRootIncompleteMessage(t *testing.T) {
 	cases := []struct {
 		name    string
 		present []string
-		want    []string
-		absent  []string
 	}{
-		{
-			name:    "state.json absent",
-			present: []string{"project.toml"},
-			want:    []string{".dross/state.json"},
-			absent:  []string{"project.toml"},
-		},
-		{
-			name:    "project.toml absent",
-			present: []string{"state.json"},
-			want:    []string{".dross/project.toml"},
-			absent:  []string{"state.json"},
-		},
-		{
-			name:    "both absent",
-			present: nil,
-			want:    []string{".dross/project.toml", ".dross/state.json"},
-		},
+		{name: "project.toml absent", present: []string{"state.json"}},
+		{name: "bare root", present: nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -93,18 +79,151 @@ func TestFindRootIncompleteMessage(t *testing.T) {
 				t.Fatal("expected an error")
 			}
 			msg := err.Error()
-			for _, want := range tc.want {
-				if !strings.Contains(msg, want) {
-					t.Errorf("message should name %q; got %q", want, msg)
-				}
+			if !strings.Contains(msg, ".dross/project.toml") {
+				t.Errorf("message should name %q; got %q", ".dross/project.toml", msg)
 			}
-			for _, no := range tc.absent {
-				if strings.Contains(msg, no) {
-					t.Errorf("message should not name the present file %q; got %q", no, msg)
-				}
+			if strings.Contains(msg, "state.json") {
+				t.Errorf("message must not demand state.json — it is materialized, not required; got %q", msg)
 			}
 			if !strings.Contains(msg, RepairHint) {
 				t.Errorf("message should contain RepairHint %q; got %q", RepairHint, msg)
+			}
+		})
+	}
+}
+
+// TestFindRootMaterializesState pins the fresh-clone shape (c-1): a `.dross/`
+// holding project.toml and rules.toml but no state.json is a complete root, and
+// resolving it leaves a state.json seeded from project.toml's version with no
+// history. Dropping the materialization makes this an IncompleteRootError.
+func TestFindRootMaterializesState(t *testing.T) {
+	dir := realTempDir(t)
+	root := mkRoot(t, dir, "rules.toml")
+	mustWrite(t, filepath.Join(root, "project.toml"), "[project]\nversion = \"3.4.5.6\"\n")
+	chdir(t, dir)
+
+	got, err := FindRoot()
+	if err != nil {
+		t.Fatalf("a clone with no state.json is a complete root: %v", err)
+	}
+	if got != root {
+		t.Fatalf("root = %q, want %q", got, root)
+	}
+	s, err := state.Load(filepath.Join(root, "state.json"))
+	if err != nil {
+		t.Fatalf("state.json should have been materialized: %v", err)
+	}
+	if s.Version != "3.4.5.6" {
+		t.Errorf("version = %q, want project.toml's %q", s.Version, "3.4.5.6")
+	}
+	if len(s.History) != 0 {
+		t.Errorf("a materialized state starts with no history (history_durability), got %+v", s.History)
+	}
+}
+
+// TestEnsureStateIsNonDestructive: the materialization only ever fills an
+// absent file. An existing state is left byte-identical — history included —
+// and a malformed one is left for whoever loads it to report, never silently
+// replaced with a fresh file that has lost everything it held.
+func TestEnsureStateIsNonDestructive(t *testing.T) {
+	t.Run("existing state survives repeated resolution", func(t *testing.T) {
+		dir := realTempDir(t)
+		root := mkRoot(t, dir, "project.toml")
+		chdir(t, dir)
+
+		s := state.New()
+		for _, a := range []string{"one", "two", "three", "four"} {
+			s.Touch(a)
+		}
+		stPath := filepath.Join(root, "state.json")
+		if err := s.Save(stPath); err != nil {
+			t.Fatal(err)
+		}
+
+		for i := 0; i < 2; i++ {
+			if _, err := FindRoot(); err != nil {
+				t.Fatalf("FindRoot call %d: %v", i+1, err)
+			}
+		}
+		got, err := state.Load(stPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.History) != 4 {
+			t.Errorf("history = %d entries, want the 4 already on disk: %+v", len(got.History), got.History)
+		}
+	})
+
+	t.Run("malformed state is not replaced", func(t *testing.T) {
+		dir := realTempDir(t)
+		root := mkRoot(t, dir, "project.toml")
+		stPath := filepath.Join(root, "state.json")
+		if err := os.WriteFile(stPath, []byte("{{{"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		chdir(t, dir)
+
+		if _, err := FindRoot(); err != nil {
+			t.Fatalf("a corrupt-but-present state.json is not an incomplete root: %v", err)
+		}
+		b, err := os.ReadFile(stPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(b) != "{{{" {
+			t.Fatalf("the corrupt file was rewritten: %q", b)
+		}
+		// And the corruption surfaces as a real error from whoever loads it.
+		if err := runCmd(t, State(), "show"); err == nil {
+			t.Error("state show should fail with an unmarshal error on a corrupt state.json")
+		} else if !strings.Contains(err.Error(), "unmarshal") {
+			t.Errorf("error should name the unmarshal failure, got: %v", err)
+		}
+	})
+}
+
+// errText renders an error for substring assertions, empty when there is none.
+func errText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+// TestValidateAndPauseInheritMaterialization: both commands resolve their root
+// through FindRoot, so neither may report a missing state.json on a fresh
+// clone. Bypassing the materialization for either makes its row fail — validate
+// with a state.json problem, pause --auto as broken state.
+func TestValidateAndPauseInheritMaterialization(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		run  func(t *testing.T) error
+	}{
+		{"validate", func(t *testing.T) error { return runCmd(t, Validate()) }},
+		{"pause --auto", func(t *testing.T) error { return runCmd(t, Pause(), "--auto") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := realTempDir(t)
+			chdir(t, dir)
+			if err := runCmd(t, Init()); err != nil {
+				t.Fatalf("init: %v", err)
+			}
+			stPath := filepath.Join(dir, RootDirName, "state.json")
+			if err := os.Remove(stPath); err != nil {
+				t.Fatal(err)
+			}
+
+			// Whatever else a bare `dross init` root has left to fill in, the
+			// one thing neither command may report is a missing state.json.
+			var out string
+			err := runCmdCapturingInto(t, &out, func() error { return tc.run(t) })
+			for _, s := range []string{out, errText(err)} {
+				if strings.Contains(s, "state.json") {
+					t.Errorf("%s named state.json instead of materializing it:\n%s", tc.name, s)
+				}
+			}
+			if _, err := os.Stat(stPath); err != nil {
+				t.Errorf("%s should have materialized state.json: %v", tc.name, err)
 			}
 		})
 	}
@@ -121,7 +240,7 @@ func TestFindRootStopsAtFirstDross(t *testing.T) {
 	if err := os.MkdirAll(deep, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	mkRoot(t, child, "project.toml")
+	mkRoot(t, child) // bare: incomplete, while the parent's root is complete
 	chdir(t, deep)
 
 	got, err := FindRoot()
@@ -224,7 +343,7 @@ func TestFindRootUnreadableDross(t *testing.T) {
 // needs — it returns the root plus the misses rather than refusing.
 func TestLocateRootReportsMissing(t *testing.T) {
 	dir := realTempDir(t)
-	root := mkRoot(t, dir, "project.toml")
+	root := mkRoot(t, dir, "state.json")
 	chdir(t, dir)
 
 	got, missing, err := LocateRoot()
@@ -234,7 +353,7 @@ func TestLocateRootReportsMissing(t *testing.T) {
 	if got != root {
 		t.Errorf("root = %q, want %q", got, root)
 	}
-	if want := []string{filepath.Join(RootDirName, "state.json")}; !reflect.DeepEqual(missing, want) {
+	if want := []string{filepath.Join(RootDirName, "project.toml")}; !reflect.DeepEqual(missing, want) {
 		t.Errorf("missing = %v, want %v", missing, want)
 	}
 }
@@ -249,14 +368,14 @@ func TestMissingRootFilesDoesNotWalk(t *testing.T) {
 	if err := os.MkdirAll(child, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	childRoot := mkRoot(t, child, "project.toml")
+	childRoot := mkRoot(t, child, "state.json")
 	chdir(t, child)
 
 	missing, err := MissingRootFiles(childRoot)
 	if err != nil {
 		t.Fatalf("MissingRootFiles: %v", err)
 	}
-	want := []string{filepath.Join(RootDirName, "state.json")}
+	want := []string{filepath.Join(RootDirName, "project.toml")}
 	if !reflect.DeepEqual(missing, want) {
 		t.Fatalf("missing = %v, want %v — the parent's complete root must not be consulted", missing, want)
 	}
@@ -268,7 +387,7 @@ func TestMissingRootFilesDoesNotWalk(t *testing.T) {
 // with the not-a-dross-repo message, which is exactly what this rejects.
 func TestShipRecoverResolvesIncompleteRoot(t *testing.T) {
 	dir := realTempDir(t)
-	mkRoot(t, dir, "project.toml")
+	mkRoot(t, dir) // bare: no project.toml
 	chdir(t, dir)
 
 	err := runCmd(t, Ship(), "recover", "some-phase")
