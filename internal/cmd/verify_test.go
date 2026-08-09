@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -433,6 +434,84 @@ func TestVerifyCover_SummaryStatusMessages(t *testing.T) {
 		})
 		if !strings.Contains(out, c.want) {
 			t.Errorf("status %q: missing %q\n--- out ---\n%s", c.status, c.want, out)
+		}
+	}
+}
+
+// --- printScopeSummary file-list truncation (verify.go:471-474) ---
+//
+// The scope line names files up to scopeFileListCap and collapses the rest
+// into "(+N more)". That subtraction is the only place the collapsed count is
+// computed and no end-to-end fixture reaches the cap, so it is pinned here
+// with an exact figure: over a cap of 12, a 15-file scope reads "(+3 more)".
+// An arithmetic mutant that turns the subtraction into addition prints 27 and
+// fails, and so does any mutant that shifts the boundary the slice is taken at.
+
+// scopeSummaryFixture builds a Tests/Verify pair whose scope carries n files
+// named internal/f00.go … internal/fNN.go. The names are fixed-width so no
+// name is a substring of another — an absence assertion has to mean absence.
+func scopeSummaryFixture(n int) (*verify.Tests, *verify.Verify) {
+	files := make([]string, n)
+	for i := range files {
+		files[i] = scopeSummaryFile(i)
+	}
+	tests := &verify.Tests{
+		Phase: "01-cov",
+		Scope: &verify.Scope{
+			Files:  files,
+			Source: verify.SourceUnion,
+			Base:   "0123456789abcdef0123456789abcdef01234567",
+		},
+	}
+	v := verifyCovVerify(verify.MutationMeasured)
+	v.Summary.MutantsInScope = 4
+	v.Summary.MutationScore = 0.50
+	return tests, v
+}
+
+func scopeSummaryFile(i int) string { return fmt.Sprintf("internal/f%02d.go", i) }
+
+// TestVerifyCover_ScopeFileListTruncation drives the >cap side of the
+// truncation branch: the suffix carries the exact overflow count, the count
+// prefix still reports the FULL file set (truncation is a display concern, not
+// a scope concern), the first cap files are named and the overflowing ones are
+// not.
+func TestVerifyCover_ScopeFileListTruncation(t *testing.T) {
+	const over = 3
+	tests, v := scopeSummaryFixture(scopeFileListCap + over)
+	out := captureStdout(t, func() { printScopeSummary(tests, v) })
+
+	if !strings.Contains(out, " (+3 more)") {
+		t.Errorf("expected exactly %q for %d files over a cap of %d\n--- out ---\n%s",
+			" (+3 more)", scopeFileListCap+over, scopeFileListCap, out)
+	}
+	if want := fmt.Sprintf("scope: %d file(s)", scopeFileListCap+over); !strings.Contains(out, want) {
+		t.Errorf("scope line must count the full set (%q):\n%s", want, out)
+	}
+	if last := scopeSummaryFile(scopeFileListCap - 1); !strings.Contains(out, last) {
+		t.Errorf("expected the %dth file %q to be named:\n%s", scopeFileListCap, last, out)
+	}
+	for i := scopeFileListCap; i < scopeFileListCap+over; i++ {
+		if name := scopeSummaryFile(i); strings.Contains(out, name) {
+			t.Errorf("file %q is past the cap and must not be named:\n%s", name, out)
+		}
+	}
+}
+
+// TestVerifyCover_ScopeFileListAtCapIsNotTruncated pins the boundary: exactly
+// cap files print every name and no suffix at all. A `>=` mutant on the
+// truncation condition prints "(+0 more)" here and fails.
+func TestVerifyCover_ScopeFileListAtCapIsNotTruncated(t *testing.T) {
+	tests, v := scopeSummaryFixture(scopeFileListCap)
+	out := captureStdout(t, func() { printScopeSummary(tests, v) })
+
+	if strings.Contains(out, "more)") {
+		t.Errorf("exactly %d files is at the cap, not over it — no suffix expected:\n%s",
+			scopeFileListCap, out)
+	}
+	for i := 0; i < scopeFileListCap; i++ {
+		if name := scopeSummaryFile(i); !strings.Contains(out, name) {
+			t.Errorf("expected every file at the cap to be named, missing %q:\n%s", name, out)
 		}
 	}
 }
