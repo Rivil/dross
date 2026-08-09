@@ -3,7 +3,7 @@ phases = ["complete-base-truth", "state-json-branch-safety", "completion-state-t
 [milestone]
   version = "v1.2"
   title = "1.2 branch-model truth — the base is a fact, not a guess"
-  status = "active"
+  status = "complete"
   started = "2026-07-31"
 
 [scope]
