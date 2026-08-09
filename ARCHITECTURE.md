@@ -170,12 +170,17 @@ The analyzer catalog now sources language-dedicated tools from the active stack 
 
 _introduced 06-dross-quality · extended 07-stack-profiles · extended 09-marker-file-detection · extended deepen-container-iac-scanning · cea9254_
 
-### Config-derived git argument safety
+### Config-derived subprocess argument safety
 
 A value read out of `.dross/project.toml` is untrusted input to git, not a trusted argument. Two layers hold. Config-derived **ref names** are validated before any git process starts: a leading `-`, or anything `git check-ref-format` rejects, is refused with a named error at `phase complete`, `phase checkout`, `milestone create` and `ship recover`. And every git invocation that passes a config- or user-derived **positional** builds its argv through separator-carrying builders — `--end-of-options` for refs, `--` for pathspecs, deliberately distinct (locked `ref_separator_token`: a `--` in a ref position makes git reinterpret the branch as a pathspec, which is a different bug, not a fix). That second layer closed a real arbitrary-file-write, where `dross repair`'s `git log` took an attacker-supplied `--output=` straight out of config. Coverage is structural rather than by inspection: a repo-wide AST audit fails by `file:line` on any positional that is neither a literal nor a prefix-constant, and the audit is itself self-checked against a FLAG/PASS snippet table so it cannot pass vacuously. That audit covers **every** binary dross spawns, not only git (locked `audit_gate_breadth`): it resolves each spawn site to a binary, looks the binary up in `internal/argfence`'s policy table, and applies whichever defence that tool can actually offer — an end-of-options token for git / `gh` / ast-grep / semgrep, outright rejection of a leading-dash value for gremlins / npx / dotnet, which have none. A binary with no table entry is a finding, so a tool nobody anticipated is in scope the day it is added, and a flag demoted *past* a separator is a finding too — in cobra `--` ends flag parsing rather than fencing one token, so a demoted flag silently becomes a positional. The `git >= 2.24` floor `--end-of-options` implies is executed, not assumed.
 
+- `argfence.PolicyFor` (per-tool policy table — separator vs reject — read by both the runtime call sites and the audit gate) — `internal/argfence/policy.go:104`
 - `validateGitRef` (pre-exec ref guard behind the four guarded switch helpers) — `internal/cmd/refguard.go:32`
 - `gitRefArgs` / `gitRefPathArgs` (separator-carrying argv builders) — `internal/cmd/gitargs.go:45`
+- `buildUnleashArgs` (mutation runners refuse a leading-dash derived value before exec, returning a nil report rather than an empty one) — `internal/mutation/gremlins.go:219`
+- `gitHubPRStatus` (`gh` argv: derived values behind the separator or in their flag's value slot, flags ahead of it) — `internal/ship/merged.go:59`
+- `astGrepArgv` (ast-grep file operand behind an end-of-options token; lang checked against the closed indexer set) — `internal/codex/ast_grep.go:187`
+- `TestSecurePromptFencesScannerOperands` (semgrep is agent-driven with no Go call site, so its operand fencing is guidance in `secure.md` gated by a prompt-content test) — `internal/cmd/secure_prompt_test.go:66`
 - `TestPhaseCompleteRefusesDashMainBranch` (one entrypoint test per guarded command, refusal asserted to precede the first exec) — `internal/cmd/refguard_entrypoints_test.go:79`
 - `historyFromPhaseCommits` (repair's `git log` fenced — the arbitrary-file-write site) — `internal/cmd/repair_state.go:78`
 - `auditFile` (AST gate flagging unseparated positionals for EVERY spawned binary by file:line, per-tool policy read from `argfence`) — `internal/cmd/subprocargs_audit_test.go:129`
@@ -184,7 +189,7 @@ A value read out of `.dross/project.toml` is untrusted input to git, not a trust
 - `TestHostileConfigVectors` (12-vector hostile-`.dross/` suite off a pinned refusal contract, with an observed red replay) — `internal/cmd/hostile_config_test.go:302`
 - hostile-config fixture (pinned refusal contract + payloads) — `fixtures/hostile-config-c5/expected-refusals.txt:1`
 
-_introduced config-trust-hardening · 370c697_
+_introduced config-trust-hardening · 370c697 · extended exec-trust-followups · ca15bb2_
 
 ### Configuration
 
@@ -217,6 +222,21 @@ The project version has two homes and one writer. The release-facing copy lives 
 
 _c8b346e · extended gitlab-ship-provider · 0f209c9 · extended validator-truth · 5e73e88 · extended cli-surface-sweep · 1a840f4 · extended board-state-map-truth · 3272339 · extended state-json-branch-safety · 3f12d7e · extended config-trust-hardening · 83e5dcf_
 
+### Credential redaction
+
+The secret named by an `auth_env` never reaches an emitted surface. A refused or failed forge request puts a `[redacted $VAR]` marker where the token was — in the returned error, in a telemetry event, and on stdout — and the scrub catches the base64 form too, so a credential embedded in a basic-auth header can't slip out re-encoded. Placement is at the **source**, not per error site: each ship backend scrubs the response body at the single point it enters the package, which covers every downstream interpolation at once, including the errors that never quote the body at all. Coverage is enumerated rather than sampled — an AST walk fails if a fifth forge `do` joins the package unscrubbed, all 14 ship body interpolations are pinned by `file:line`, and a two-canary end-to-end proof asserts server hit-counts alongside the marker, so a change that stopped making the requests fails instead of passing by silence.
+
+- `redact.Scrub` (raw and base64 credential runs replaced by the `[redacted $VAR]` marker) — `internal/redact/redact.go:66`
+- `redact.Err` (error wrapper that scrubs the message while keeping `errors.Is`/`Unwrap` intact) — `internal/redact/redact.go:94`
+- `gitlabReq` (ship request helpers scrub where the body enters the package, not at each error site) — `internal/ship/gitlab.go:195`
+- `TestEveryForgeClientRedacts` (one row per client: token, bearer, basic, GitHub, Jira, YouTrack) — `internal/redact/redact_test.go:195`
+- `TestEveryForgeDoRedacts` (AST walk — a new `do` cannot join the package unscrubbed) — `internal/redact/redact_test.go:282`
+- `TestEveryShipBodyInterpolationRedacts` (all 14 interpolations enumerated by file:line) — `internal/ship/redact_test.go:188`
+- `TestShipHelpersScrubAtSource` (the four helpers must scrub, and no other function may read a body) — `internal/ship/redact_test.go:231`
+- `TestTokenReachesNoEmittedSurface` (two canaries × three board providers over stdout, returned error and telemetry JSONL) — `internal/cmd/token_leak_test.go:129`
+
+_introduced exec-trust-followups · ca15bb2_
+
 ### Deferred-item routing
 
 Give every deferred idea a destination instead of leaving it write-only: `/dross-spec` routes each (pull-into-phase / milestone-backlog / named-phase / someday), parked ideas re-surface as candidate criteria when their target phase is scaffolded, and someday items get triaged through `/dross-inbox`. An item lives in one of three states — someday (no target), routed (target set, cleared back to someday with `dross deferred unroute`), or dismissed (`dross deferred dismiss`, `--undo` to reverse); a board-less repo still triages its local deferred backlog because `/dross-inbox` §0 skips the board source rather than hard-stopping.
@@ -233,6 +253,22 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 - `/dross-inbox` board-off fallback + dismiss funnel — `assets/prompts/inbox.md`
 
 _introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps · 539d475 · extended deferred-unroute-command · fb24bc2_
+
+### Exec consent gate
+
+A cloned `.dross/` proposes a command to run; it does not get to run it. Spawning the repo's `runtime.test_command` requires consent granted **on this machine**, stored as a closed key in the gitignored [`.dross/local.toml`](#machine-local-store) by an explicit `dross trust` — so a fresh clone carries no consent by construction, exactly as `allow_hosts` does (locked `exec_consent_gate`). Consent binds to `sha256(runtime.test_command)`, not to the repo (locked `consent_binding`): a test command rewritten by a later pull revokes it and re-prompts, which is the attack the gate exists for, and there is deliberately no blanket `--repo` escape hatch. Enforcement sits in the CLI rather than in prompt text — the half that can't be talked out of it — across a **closed** set of five loop commands, with the refusal proven to precede exec by a seam that fails the test if reached, and a refusal writes nothing (no `tests.json`, no `verify.toml`) so it can't read as a run that happened. An empty `test_command` is a refusal, not a free pass, and "stale" is reported distinctly from "never trusted". The prompts carry the matching pre-flight (`dross trust --check`) and are pinned never to grant consent on the user's behalf. Accepted limit, stated rather than hidden: the CLI cannot stop an agent invoking `go test` directly — the gate covers dross's own loop commands.
+
+- `CheckConsent` (state resolution: granted / stale / absent; refuses unread when local.toml is git-tracked) — `internal/cmd/trust.go:115`
+- `Fingerprint` (consent bound to a hash of the consented command, not to the repo) — `internal/cmd/trust.go:99`
+- `execGatedCommands` (the CLOSED set of five gated loop commands) — `internal/cmd/trust.go:172`
+- `requireExecConsent` (the refusal, sited ahead of every spawn of the repo's test command) — `internal/cmd/trust.go:185`
+- `Trust` (`dross trust`, `--check`) — `internal/cmd/trust.go:242`
+- doctor's exec-consent section (granted / stale / absent reported pre-flight) — `internal/cmd/doctor.go:943`
+- `TestVerifyRefusesWithoutConsent` (refusal proven to precede exec by a seam that `t.Fatal`s if reached) — `internal/cmd/trust_test.go:293`
+- `TestConsentStates` (four untrusted states as separate subtests, incl. a tracked local.toml) — `internal/cmd/trust_test.go:84`
+- `TestExecutePromptChecksConsent` / `TestPromptsNeverGrantConsentForTheUser` (prompt pre-flight asserted by index; prompts may not self-grant) — `internal/cmd/consent_surface_test.go:127`
+
+_introduced exec-trust-followups · ca15bb2_
 
 ### Findings lifecycle
 
