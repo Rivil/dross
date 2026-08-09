@@ -1,5 +1,6 @@
 {
   "phase": "exec-trust-followups",
+  "pr": 77,
   "base": "milestone/v1.2",
   "tasks": {
     "t-1": {
