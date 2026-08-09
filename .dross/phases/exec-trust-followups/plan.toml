@@ -1,4 +1,4 @@
-task_seq = 11
+task_seq = 12
 
 [phase]
   id = "exec-trust-followups"
@@ -118,4 +118,14 @@ task_seq = 11
   covers = ["c-1"]
   depends_on = ["t-6"]
   test_contract = ["if doctor stops reporting stale consent, TestDoctorReportsStaleConsent fails — the output must contain \"stale\" and the `dross trust` command line", "if doctor offers a remedy when consent is granted, TestDoctorReportsGrantedConsent fails — it must say granted and offer none", "if a prompt tells the agent to run <runtime.test_command> without a preceding consent check, TestExecutePromptChecksConsent fails — it greps the prompt bodies, the same shape as the existing prompt-content tests", "if the literal `dross trust --check` line is dropped from either quick.md or verify.md, TestQuickPromptHasTrustPreflight fails"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 4
+  title = "Fence semgrep's path operand in secure.md"
+  files = ["assets/prompts/secure.md", "internal/cmd/secure_prompt_test.go"]
+  description = "c-2's semgrep leg, closed on the surface where semgrep actually runs.\ndross spawns semgrep nowhere in Go, so argfence's table entry is forward-looking;\nthe real invocation is agent-driven from secure.md section 2. Adds end-of-options\nguidance beside the existing --metrics=off line and a prompt-content test in the\nshape of TestSecurePromptMandatedSections. r-01: the prompt edit is not live for\nthe installed binary until `make install`, but the test reads the source file.\n"
+  covers = ["c-2"]
+  test_contract = ["if secure.md loses the semgrep end-of-options guidance, TestSecurePromptFencesScannerOperands fails on the \"end-of-options\" needle", "if the guidance drifts away from semgrep, the test fails: semgrep must be named within the 200 chars preceding \"end-of-options\". A window rather than a line because the prompt wraps; a whole-document substring would let the rule drift into an unrelated section, and a bare \"--\" needle in a document full of --flags proves nothing", "if the guidance stops saying WHERE the separator goes, the test fails on the \"before the path operand\" needle", "if the exemplar's ORDER regresses — a separator ahead of the flags, which demotes the ruleset into a scan path and is silently wrong rather than loudly broken — the test fails on the index comparison between \"--config\" and \" -- \", asserted independently of the exemplar needle", "if the existing no-egress row regresses, TestSecurePromptMandatedSections still fails independently — the new test does not subsume it"]
   status = "done"

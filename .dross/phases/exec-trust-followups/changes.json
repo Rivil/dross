@@ -54,6 +54,22 @@
         }
       ]
     },
+    "t-12": {
+      "files": [
+        "assets/prompts/secure.md",
+        "internal/cmd/secure_prompt_test.go"
+      ],
+      "commit": "ca15bb2",
+      "completed_at": "2026-08-09T09:26:10.655505Z",
+      "landmarks": [
+        {
+          "feature": "subprocess argv fencing",
+          "symbol": "TestSecurePromptFencesScannerOperands",
+          "loc": "internal/cmd/secure_prompt_test.go:65",
+          "what": "semgrep's agent-driven path operand fenced behind an end-of-options token in secure.md, gated by a prompt-content test"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/trust.go",
