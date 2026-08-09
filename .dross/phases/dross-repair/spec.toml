@@ -1,57 +1,57 @@
 [phase]
-id        = "dross-repair"
-title     = "dross-repair"
-milestone = "v1.2"
+  id = "dross-repair"
+  title = "dross-repair"
+  milestone = "v1.2"
 
 [[criteria]]
-id   = "c-1"
-text = "`dross repair` detects missing/clobbered tracked `.dross/` files (phase dirs, milestone tomls, project.toml, rules.toml) by diffing the working tree against git history, and reports exactly what's wrong."
+  id = "c-1"
+  text = "`dross repair` detects missing/clobbered tracked `.dross/` files (phase dirs, milestone tomls, project.toml, rules.toml) by diffing the working tree against git history, and reports exactly what's wrong."
 
 [[criteria]]
-id   = "c-2"
-text = "For clobbered/missing tracked files, `dross repair` restores them from git history in one command, without the user hand-picking a SHA or phase id."
+  id = "c-2"
+  text = "For clobbered/missing tracked files, `dross repair` restores them from git history in one command, without the user hand-picking a SHA or phase id."
 
 [[criteria]]
-id   = "c-3"
-text = "When `state.json` is missing or clearly stale, `dross repair` reconstructs a plausible version (current_phase, current_milestone, history) by inferring it from tracked git history."
+  id = "c-3"
+  text = "When `state.json` is missing or clearly stale, `dross repair` reconstructs a plausible version (current_phase, current_milestone, history) by inferring it from tracked git history."
 
 [[criteria]]
-id   = "c-4"
-text = "A checkout that wipes tracked `.dross/phases/<newer-phase>/` dirs from the working tree is detected and repaired by `dross repair`, closing the gap that state.json's own clobber guard doesn't cover."
+  id = "c-4"
+  text = "A checkout that wipes tracked `.dross/phases/<newer-phase>/` dirs from the working tree is detected and repaired by `dross repair`, closing the gap that state.json's own clobber guard doesn't cover."
 
 [[criteria]]
-id   = "c-5"
-text = "Running `dross repair` against a healthy `.dross/` is a safe no-op that reports \"nothing to repair\"."
+  id = "c-5"
+  text = "Running `dross repair` against a healthy `.dross/` is a safe no-op that reports \"nothing to repair\"."
 
 [[criteria]]
-id   = "c-6"
-text = "`dross doctor` surfaces a detected clobber and points at `dross repair`, matching its existing remediation-hint pattern."
+  id = "c-6"
+  text = "`dross doctor` surfaces a detected clobber and points at `dross repair`, matching its existing remediation-hint pattern."
 
 [[decisions]]
-key    = "repair_invocation_mode"
-choice = "Dry-run by default; an explicit --apply flag writes the fixes"
-why    = "state.json reconstruction is inferred/lossy — showing the plan before committing avoids a bad inference silently becoming the new truth; matches the project's execution-safety rules on gating destructive/irreversible writes."
-locked = true
+  key = "repair_invocation_mode"
+  choice = "Dry-run by default; an explicit --apply flag writes the fixes"
+  why = "state.json reconstruction is inferred/lossy — showing the plan before committing avoids a bad inference silently becoming the new truth; matches the project's execution-safety rules on gating destructive/irreversible writes."
+  locked = true
 
 [[decisions]]
-key    = "state_json_reconstruction_source"
-choice = "Infer history from phase-completion commit markers (ship.go's \"phase %s: %s\") and current_phase/current_milestone from the checked-out phase/<id> branch"
-why    = "Both are already-established conventions in the codebase — no new markers needed, and the checked-out branch is the most direct signal for where the user currently is."
-locked = true
+  key = "state_json_reconstruction_source"
+  choice = "Infer history from phase-completion commit markers (ship.go's \"phase %s: %s\") and current_phase/current_milestone from the checked-out phase/<id> branch"
+  why = "Both are already-established conventions in the codebase — no new markers needed, and the checked-out branch is the most direct signal for where the user currently is."
+  locked = true
 
 [[decisions]]
-key    = "repair_vs_ship_recover"
-choice = "Coexist as separate commands: dross repair handles general everyday clobber detection/fix via git history; dross ship recover stays a manual SHA-targeted tool for the specific post-squash-merge scenario"
-why    = "Different triggers and different precision needs; folding one into the other would blur ship recover's narrow, already-proven manual-restore contract."
-locked = true
+  key = "repair_vs_ship_recover"
+  choice = "Coexist as separate commands: dross repair handles general everyday clobber detection/fix via git history; dross ship recover stays a manual SHA-targeted tool for the specific post-squash-merge scenario"
+  why = "Different triggers and different precision needs; folding one into the other would blur ship recover's narrow, already-proven manual-restore contract."
+  locked = true
 
 [[decisions]]
-key    = "clobber_detection_scope"
-choice = "Tree-diff only: repair restores files missing/differing from their last git-tracked version; semantic/schema inconsistencies stay dross validate's job"
-why    = "Keeps repair's contract narrow and predictable (a restorer, not a semantic fixer); avoids overlapping responsibility with dross validate."
-locked = true
+  key = "clobber_detection_scope"
+  choice = "Tree-diff only: repair restores files missing/differing from their last git-tracked version; semantic/schema inconsistencies stay dross validate's job"
+  why = "Keeps repair's contract narrow and predictable (a restorer, not a semantic fixer); avoids overlapping responsibility with dross validate."
+  locked = true
 
 [[deferred]]
-text = "76 pre-existing mutation survivors across 23 internal/cmd files (doctor.go older sections, hints.go, status.go, ship.go, phase_lifecycle.go, env.go, footer_coverage.go, gitignore.go, milestone_dependents.go, statusline.go, phase.go, watch.go, validate.go, update.go, project.go, install.go, state.go, basebranch.go, rule.go, hooks.go, issue.go, root.go) — surfaced by dross-repair's package-wide gremlins run, not caused by it."
-why = "r-02: pre-existing findings outside the phase diff must be routed, not left inert."
-target = ""
+  text = "76 pre-existing mutation survivors across 23 internal/cmd files (doctor.go older sections, hints.go, status.go, ship.go, phase_lifecycle.go, env.go, footer_coverage.go, gitignore.go, milestone_dependents.go, statusline.go, phase.go, watch.go, validate.go, update.go, project.go, install.go, state.go, basebranch.go, rule.go, hooks.go, issue.go, root.go) — surfaced by dross-repair's package-wide gremlins run, not caused by it."
+  why = "r-02: pre-existing findings outside the phase diff must be routed, not left inert."
+  target = "survivor-drain"

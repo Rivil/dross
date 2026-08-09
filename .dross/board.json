@@ -1,6 +1,7 @@
 {
   "milestones": {
-    "v1.2": "DRO-1"
+    "v1.2": "DRO-1",
+    "v1.3": "DRO-7"
   },
   "phases": {
     "exec-trust-followups": "DRO-2"

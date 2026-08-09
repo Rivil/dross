@@ -81,7 +81,9 @@
 [[deferred]]
   text = "runtime.mode = \"hybrid\" is documented in the schema and settable, but nothing in the codebase branches on it"
   why = "Needs a decide-to-implement-or-remove call; no home yet"
+  target = "config-value-truth"
 
 [[deferred]]
   text = "A typo in [mutation].adapters silently filters out every adapter, so all files land in Skipped with no warning"
   why = "Verify-side validation; no home yet"
+  target = "mutation-diff-scope"
