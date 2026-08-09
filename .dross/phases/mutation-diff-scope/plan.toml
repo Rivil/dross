@@ -1,238 +1,101 @@
+task_seq = 0
+
 [phase]
-id = "mutation-diff-scope"
+  id = "mutation-diff-scope"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Attribute every mutant to its file"
-files         = [
-  "internal/mutation/adapter.go",
-  "internal/mutation/gremlins.go",
-  "internal/mutation/stryker.go",
-  "internal/mutation/gremlins_test.go",
-  "internal/mutation/stryker_test.go",
-]
-description   = """
-Add per-file counters to Report (killed/survived/timeout/errors/not-covered) as a
-map[string]FileStat, populated in ParseGremlinsJSON and ParseStrykerJSON, preserved
-through mergeInto and Stryker.rePrefixFiles. Go and TS only — stryker-net inherits the
-counters through its ParseStrykerJSON delegation, but its path shape is t-9's problem
-and must not hold up this task.
-
-Also declare the origin tag field on mutation.Mutant itself (alongside File/Line/Op/
-Snippet) — t-4 stamps it, but it has to live on Mutant, not a verify-side wrapper,
-because kept survivors reach tests.json through languages[].mutation.surviving, which
-serialises []mutation.Mutant, and t-7 instructs the prompt to read that tag.
-
-Gremlins re-prefixing seam: ParseGremlinsJSON takes bytes and no package argument —
-the package identity exists only in Gremlins.Run's per-package loop. Put the re-prefix
-in that loop or in an exported helper taking the pkg dir, so the test is written where
-the package dir is actually known.
-"""
-covers        = ["c-2", "c-4"]
-test_contract = [
-  "per-status attribution: a report with KILLED+LIVED in file1.go and NOT COVERED in file2.go yields {file1: killed=1, survived=1} and {file2: survived=1, not_covered=1}, leaving the aggregate Killed/Survived totals unchanged",
-  "drift assertion: sum of per-file Killed equals Report.Killed, and likewise for Survived/Timeout/NotCovered — an adapter that forgets to populate the new field fails here, not silently three layers downstream",
-  "gremlins path re-prefix at the pkg-aware seam: exercised through Gremlins.Run's per-package loop (or the exported helper taking the pkg dir) — NOT through ParseGremlinsJSON, which has no package argument and cannot express this. A report that names `changes.go` while invoked for ./internal/changes surfaces `internal/changes/changes.go` in both Surviving[].File and the per-file keys; the fixture is a real gremlins payload carrying its bare basename, copied into internal/mutation/testdata/ as a tracked file (NOT read from reports/, which is gitignored runtime output), never a hand-written repo-relative one",
-  "merge keeps packages distinct: ./a and ./b each reporting x.go yield two rows (a/x.go, b/x.go), not one summed entry",
-  "merge sums a genuine repeat: two per-package reports that both carry internal/x/a.go sum into ONE row",
-  "stryker workdir parity: Workdir=\"web\" re-prefixes the per-file key src/a.ts to web/src/a.ts, matching its Surviving entry",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Attribute every mutant to its file"
+  files = ["internal/mutation/adapter.go", "internal/mutation/gremlins.go", "internal/mutation/stryker.go", "internal/mutation/gremlins_test.go", "internal/mutation/stryker_test.go"]
+  description = "Add per-file counters to Report (killed/survived/timeout/errors/not-covered) as a\nmap[string]FileStat, populated in ParseGremlinsJSON and ParseStrykerJSON, preserved\nthrough mergeInto and Stryker.rePrefixFiles. Go and TS only — stryker-net inherits the\ncounters through its ParseStrykerJSON delegation, but its path shape is t-9's problem\nand must not hold up this task.\n\nAlso declare the origin tag field on mutation.Mutant itself (alongside File/Line/Op/\nSnippet) — t-4 stamps it, but it has to live on Mutant, not a verify-side wrapper,\nbecause kept survivors reach tests.json through languages[].mutation.surviving, which\nserialises []mutation.Mutant, and t-7 instructs the prompt to read that tag.\n\nGremlins re-prefixing seam: ParseGremlinsJSON takes bytes and no package argument —\nthe package identity exists only in Gremlins.Run's per-package loop. Put the re-prefix\nin that loop or in an exported helper taking the pkg dir, so the test is written where\nthe package dir is actually known.\n"
+  covers = ["c-2", "c-4"]
+  test_contract = ["per-status attribution: a report with KILLED+LIVED in file1.go and NOT COVERED in file2.go yields {file1: killed=1, survived=1} and {file2: survived=1, not_covered=1}, leaving the aggregate Killed/Survived totals unchanged", "drift assertion: sum of per-file Killed equals Report.Killed, and likewise for Survived/Timeout/NotCovered — an adapter that forgets to populate the new field fails here, not silently three layers downstream", "gremlins path re-prefix at the pkg-aware seam: exercised through Gremlins.Run's per-package loop (or the exported helper taking the pkg dir) — NOT through ParseGremlinsJSON, which has no package argument and cannot express this. A report that names `changes.go` while invoked for ./internal/changes surfaces `internal/changes/changes.go` in both Surviving[].File and the per-file keys; the fixture is a real gremlins payload carrying its bare basename, copied into internal/mutation/testdata/ as a tracked file (NOT read from reports/, which is gitignored runtime output), never a hand-written repo-relative one", "merge keeps packages distinct: ./a and ./b each reporting x.go yield two rows (a/x.go, b/x.go), not one summed entry", "merge sums a genuine repeat: two per-package reports that both carry internal/x/a.go sum into ONE row", "stryker workdir parity: Workdir=\"web\" re-prefixes the per-file key src/a.ts to web/src/a.ts, matching its Surviving entry"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "Scope model, path normalisation and hunk parser"
-files         = ["internal/verify/scope.go", "internal/verify/scope_test.go"]
-description   = """
-verify.Scope — normalised file set, per-file changed line ranges, a Sources/Degraded
-provenance record, Contains(file) and InHunk(file, line); plus a `@@` unified-diff hunk
-parser and the in-hunk / inherited-by-proximity classifier. Pure: no git, no I/O.
-"""
-covers        = ["c-6", "c-7"]
-test_contract = [
-  "normalisation: `./internal/a.go`, `internal/a.go`, `<root>/internal/a.go` and `internal\\a.go` collapse to one key and Contains() is true for each",
-  "hunk arithmetic: `@@ -1,0 +5 @@` yields [5,5]; `@@ -3,2 +7,3 @@` yields [7,9]; `@@ -10,0 +11,3 @@` yields [11,13] with line 13 INSIDE — the exclusive-end off-by-one is the failure being pinned",
-  "pure deletion: `@@ -4,2 +6,0 @@` contributes no range; mutants in that file classify as inherited rather than crashing on a zero-length range",
-  "classifier defaults to proximity: a line in a file present in the map but outside every range returns inherited, NOT in-hunk — a classifier that defaults the other way fails here",
-  "malformed header degrades: a garbage `@@` line keeps the ranges parsed so far and adds a Degraded entry naming the file, instead of erroring the whole parse out",
-  "union fails open: git-side [a.go] union changes-side [a.go, b.go] equals [a.go, b.go], deduped and sorted; an empty git side still yields the changes-side files plus a Degraded entry — a build that intersects returns empty and fails",
-  "path escape: a changes.json entry of `../../etc/passwd` or `/etc/passwd` is recorded as Degraded and never becomes a Contains match",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Scope model, path normalisation and hunk parser"
+  files = ["internal/verify/scope.go", "internal/verify/scope_test.go"]
+  description = "verify.Scope — normalised file set, per-file changed line ranges, a Sources/Degraded\nprovenance record, Contains(file) and InHunk(file, line); plus a `@@` unified-diff hunk\nparser and the in-hunk / inherited-by-proximity classifier. Pure: no git, no I/O.\n"
+  covers = ["c-6", "c-7"]
+  test_contract = ["normalisation: `./internal/a.go`, `internal/a.go`, `<root>/internal/a.go` and `internal\\a.go` collapse to one key and Contains() is true for each", "hunk arithmetic: `@@ -1,0 +5 @@` yields [5,5]; `@@ -3,2 +7,3 @@` yields [7,9]; `@@ -10,0 +11,3 @@` yields [11,13] with line 13 INSIDE — the exclusive-end off-by-one is the failure being pinned", "pure deletion: `@@ -4,2 +6,0 @@` contributes no range; mutants in that file classify as inherited rather than crashing on a zero-length range", "classifier defaults to proximity: a line in a file present in the map but outside every range returns inherited, NOT in-hunk — a classifier that defaults the other way fails here", "malformed header degrades: a garbage `@@` line keeps the ranges parsed so far and adds a Degraded entry naming the file, instead of erroring the whole parse out", "union fails open: git-side [a.go] union changes-side [a.go, b.go] equals [a.go, b.go], deduped and sorted; an empty git side still yields the changes-side files plus a Degraded entry — a build that intersects returns empty and fails", "path escape: a changes.json entry of `../../etc/passwd` or `/etc/passwd` is recorded as Degraded and never becomes a Contains match"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-2"]
-title         = "Derive the phase scope from git"
-files         = ["internal/cmd/verifyscope.go", "internal/cmd/verifyscope_test.go"]
-description   = """
-Build a verify.Scope for a phase: merge-base(changes.json `base`, HEAD) then
-`git diff --name-only --no-renames` for files and `git diff -U0` for hunks, unioned with
-changes.json's per-task files. Every git failure degrades to the changes.json side with a
-recorded reason. Git calls go through the existing fenced argv builders in internal/cmd.
-"""
-covers        = ["c-6"]
-test_contract = [
-  "fallback: a phase whose changes.json has no `base` still yields the recorded task files, returns no error, and carries a Degraded entry naming the missing source",
-  "resolved sha, not ref: Scope records the merge-base SHA, not the branch name from changes.json — asserting on the resolved sha is what makes a stale-base run diagnosable instead of plausible",
-  "source provenance: recorded=nil plus git files gives source git-only; git-failed plus recorded files gives changes-only — proves the union is symmetric rather than git-gated",
-  "renames: a.go renamed to b.go in the phase puts BOTH a.go and b.go in scope (--no-renames emits both sides)",
-  "quoted paths: a committed file named `internal/naïve file.go` comes back as that path and matches a mutant reported under it",
-  "argv fence: a base of `--output=<tmp>/pwned` leaves that file non-existent, and the gitargs audit fails if the diff refs precede --end-of-options",
-  "hunks collected: a phase commit editing lines 10-12 of a.go yields Hunks[\"a.go\"] = [{10,12}]",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Derive the phase scope from git"
+  files = ["internal/cmd/verifyscope.go", "internal/cmd/verifyscope_test.go"]
+  description = "Build a verify.Scope for a phase: merge-base(changes.json `base`, HEAD) then\n`git diff --name-only --no-renames` for files and `git diff -U0` for hunks, unioned with\nchanges.json's per-task files. Every git failure degrades to the changes.json side with a\nrecorded reason. Git calls go through the existing fenced argv builders in internal/cmd.\n"
+  covers = ["c-6"]
+  depends_on = ["t-2"]
+  test_contract = ["fallback: a phase whose changes.json has no `base` still yields the recorded task files, returns no error, and carries a Degraded entry naming the missing source", "resolved sha, not ref: Scope records the merge-base SHA, not the branch name from changes.json — asserting on the resolved sha is what makes a stale-base run diagnosable instead of plausible", "source provenance: recorded=nil plus git files gives source git-only; git-failed plus recorded files gives changes-only — proves the union is symmetric rather than git-gated", "renames: a.go renamed to b.go in the phase puts BOTH a.go and b.go in scope (--no-renames emits both sides)", "quoted paths: a committed file named `internal/naïve file.go` comes back as that path and matches a mutant reported under it", "argv fence: a base of `--output=<tmp>/pwned` leaves that file non-existent, and the gitargs audit fails if the diff refs precede --end-of-options", "hunks collected: a phase commit editing lines 10-12 of a.go yields Hunks[\"a.go\"] = [{10,12}]"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 2
-depends_on    = ["t-1", "t-2"]
-title         = "Filter mutation reports to in-scope mutants"
-files         = ["internal/verify/verify.go", "internal/verify/verify_test.go"]
-description   = """
-Split every adapter Report against the Scope: counts and Score recomputed from in-scope
-per-file rows only, out-of-scope survivors collected aside with file/line/op/language
-intact, each kept survivor stamped in-hunk or inherited.
-
-Seam: filtering lands as its own exported entry point over a Report (applied by Run/Skeleton),
-or the Scope reaches Run as a nil-tolerant field — never as a required new Run parameter.
-verify.Run's only non-test caller is internal/cmd/verify.go, which t-6 does not touch until
-wave 4, so t-4 and t-5 must each compile and pass `go test ./...` standalone.
-"""
-covers        = ["c-1", "c-2", "c-4", "c-7"]
-test_contract = [
-  "drops the untouched sibling: a survivor in touched.go and one in untouched.go of the same package leaves exactly one entry in Surviving and the other in the out-of-scope list",
-  "numerator immunity: a KILLED mutant in untouched b.go leaves kept.Killed and kept.Score identical to the same report without it",
-  "denominator immunity: a SURVIVED mutant in untouched b.go likewise leaves kept.Score unchanged — both assertions fail if the filter prunes only the Surviving slice and leaves the counters alone",
-  "concrete arithmetic: killed=1 survived=1 in touched.go plus killed=9 in untouched.go gives score 0.50 / killed=1 / survived=1 — not 0.91 / 10 / 1",
-  "denominator convention pinned: a row with a TIMEOUT in an in-scope file — killed=1, survived=0, timeout=1 — scores 0.50, matching Report.Score's live killed/(killed+survived+timeout). The struct doc at adapter.go:24 claims killed/(killed+survived) and is wrong; a recomputation written from that comment scores 1.00 and fails here",
-  "adapter-agnostic table: one table test over a gremlins-parsed and a stryker-parsed report built from the same logical mutant set yields identical kept counts and identical dropped counts; a filter that special-cases a tool's path shape fails here, and the same table runs inside a multi-leg Tests so the file-granular leg is proven to take the same path",
-  "every kept survivor tagged: a survivor with an empty origin tag fails; a survivor inside a hunk is in-hunk, one on an untouched line of the same file is inherited, and BOTH stay in the denominator and in Surviving",
-  "dropped list is complete: dropped survivors preserve file/line/op/language and dropped.Count equals len(dropped list) — an implementation that discards them fails the empty-list assertion",
-  "degenerate inputs: an in-scope file with zero mutants invents no rows; an empty scope yields zero counts, Score 0, and everything dropped",
-  "failed leg survives filtering: a leg with Error set and no report still appears in Languages and does not nil-panic the filter",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 2
+  title = "Filter mutation reports to in-scope mutants"
+  files = ["internal/verify/verify.go", "internal/verify/verify_test.go"]
+  description = "Split every adapter Report against the Scope: counts and Score recomputed from in-scope\nper-file rows only, out-of-scope survivors collected aside with file/line/op/language\nintact, each kept survivor stamped in-hunk or inherited.\n\nSeam: filtering lands as its own exported entry point over a Report (applied by Run/Skeleton),\nor the Scope reaches Run as a nil-tolerant field — never as a required new Run parameter.\nverify.Run's only non-test caller is internal/cmd/verify.go, which t-6 does not touch until\nwave 4, so t-4 and t-5 must each compile and pass `go test ./...` standalone.\n"
+  covers = ["c-1", "c-2", "c-4", "c-7"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["drops the untouched sibling: a survivor in touched.go and one in untouched.go of the same package leaves exactly one entry in Surviving and the other in the out-of-scope list", "numerator immunity: a KILLED mutant in untouched b.go leaves kept.Killed and kept.Score identical to the same report without it", "denominator immunity: a SURVIVED mutant in untouched b.go likewise leaves kept.Score unchanged — both assertions fail if the filter prunes only the Surviving slice and leaves the counters alone", "concrete arithmetic: killed=1 survived=1 in touched.go plus killed=9 in untouched.go gives score 0.50 / killed=1 / survived=1 — not 0.91 / 10 / 1", "denominator convention pinned: a row with a TIMEOUT in an in-scope file — killed=1, survived=0, timeout=1 — scores 0.50, matching Report.Score's live killed/(killed+survived+timeout). The struct doc at adapter.go:24 claims killed/(killed+survived) and is wrong; a recomputation written from that comment scores 1.00 and fails here", "adapter-agnostic table: one table test over a gremlins-parsed and a stryker-parsed report built from the same logical mutant set yields identical kept counts and identical dropped counts; a filter that special-cases a tool's path shape fails here, and the same table runs inside a multi-leg Tests so the file-granular leg is proven to take the same path", "every kept survivor tagged: a survivor with an empty origin tag fails; a survivor inside a hunk is in-hunk, one on an untouched line of the same file is inherited, and BOTH stay in the denominator and in Surviving", "dropped list is complete: dropped survivors preserve file/line/op/language and dropped.Count equals len(dropped list) — an implementation that discards them fails the empty-list assertion", "degenerate inputs: an in-scope file with zero mutants invents no rows; an empty scope yields zero counts, Score 0, and everything dropped", "failed leg survives filtering: a leg with Error set and no report still appears in Languages and does not nil-panic the filter"]
+  status = "done"
 
 [[task]]
-id            = "t-5"
-wave          = 3
-depends_on    = ["t-4"]
-title         = "Persist scope, out-of-scope survivors, status and NOTE"
-files         = ["internal/verify/verify.go", "internal/verify/verify_test.go"]
-description   = """
-tests.json gains a top-level `out_of_scope` list (file/line/op/language per filtered
-survivor) and a `scope` block (file set, resolved base, per-source provenance, degraded
-reasons). Skeleton computes score/status from the FILTERED reports, adds
-MutationOutOfScope = "out-of-scope", records summary.mutants_in_scope, and emits one NOTE
-carrying the filtered count. Filtering is post-Report — verify.Run never narrows what the
-adapter was dispatched to mutate.
-"""
-covers        = ["c-2", "c-3", "c-5", "c-6"]
-test_contract = [
-  "persisted, not dropped: one {file, line, op, language} entry per filtered survivor under top-level `out_of_scope`, and none of them under languages[].mutation.surviving — both halves asserted",
-  "language attribution survives: a two-leg run's dropped survivors carry the leg's language, so a merged list still says which adapter produced each",
-  "round-trip: tests.json reloads with the scope block intact (files, resolved base, provenance, degraded text) — a struct missing json tags on the new block fails the reload, not just the write",
-  "degraded scope readable after the fact: a changes-only scope serialises its source and its reason, so a stale-base run is diagnosable rather than looking clean",
-  "filtered score: 2 in-scope killed plus 5 out-of-scope killed reports score 1.00 over mutants_in_scope=2 — a Skeleton still reading the package-wide report fails with 7/7 vs 2/2",
-  "own status: a run where every mutant landed out of scope sets mutation_status=\"out-of-scope\" — NOT \"measured\" with 0.00, NOT \"unmeasurable\" — with mutants_in_scope=0; all three asserted so collapsing it into unmeasurable fails",
-  "exactly one NOTE, no FLAG flood: a fixture with 7 filtered survivors AND one in-scope survivor produces exactly ONE NOTE carrying the count 7, and exactly ONE FLAG — the in-scope survivor's. The seven filtered ones contribute zero FLAGs; assert the counts, not presence, so a per-survivor loop over the unfiltered set fails with 8. Zero out-of-scope survivors emit no such NOTE at all",
-  "degraded scope raises no FLAG: a run whose git leg failed records the reason and emits no FLAG, so a missing `base` cannot fail the phase on a bookkeeping gap",
-  "sample-size signal: verify.toml's [summary] carries mutants_in_scope=3 for a 3-mutant in-scope run — the signal the small_denominator_gate lock requires in place of a threshold change",
-  "adapter invocation untouched: the fake adapter records its argument, catching a regression that narrows what gets MUTATED instead of what gets ATTRIBUTED",
-]
-status        = "pending"
+  id = "t-5"
+  wave = 3
+  title = "Persist scope, out-of-scope survivors, status and NOTE"
+  files = ["internal/verify/verify.go", "internal/verify/verify_test.go"]
+  description = "tests.json gains a top-level `out_of_scope` list (file/line/op/language per filtered\nsurvivor) and a `scope` block (file set, resolved base, per-source provenance, degraded\nreasons). Skeleton computes score/status from the FILTERED reports, adds\nMutationOutOfScope = \"out-of-scope\", records summary.mutants_in_scope, and emits one NOTE\ncarrying the filtered count. Filtering is post-Report — verify.Run never narrows what the\nadapter was dispatched to mutate.\n"
+  covers = ["c-2", "c-3", "c-5", "c-6"]
+  depends_on = ["t-4"]
+  test_contract = ["persisted, not dropped: one {file, line, op, language} entry per filtered survivor under top-level `out_of_scope`, and none of them under languages[].mutation.surviving — both halves asserted", "language attribution survives: a two-leg run's dropped survivors carry the leg's language, so a merged list still says which adapter produced each", "round-trip: tests.json reloads with the scope block intact (files, resolved base, provenance, degraded text) — a struct missing json tags on the new block fails the reload, not just the write", "degraded scope readable after the fact: a changes-only scope serialises its source and its reason, so a stale-base run is diagnosable rather than looking clean", "filtered score: 2 in-scope killed plus 5 out-of-scope killed reports score 1.00 over mutants_in_scope=2 — a Skeleton still reading the package-wide report fails with 7/7 vs 2/2", "own status: a run where every mutant landed out of scope sets mutation_status=\"out-of-scope\" — NOT \"measured\" with 0.00, NOT \"unmeasurable\" — with mutants_in_scope=0; all three asserted so collapsing it into unmeasurable fails", "exactly one NOTE, no FLAG flood: a fixture with 7 filtered survivors AND one in-scope survivor produces exactly ONE NOTE carrying the count 7, and exactly ONE FLAG — the in-scope survivor's. The seven filtered ones contribute zero FLAGs; assert the counts, not presence, so a per-survivor loop over the unfiltered set fails with 8. Zero out-of-scope survivors emit no such NOTE at all", "degraded scope raises no FLAG: a run whose git leg failed records the reason and emits no FLAG, so a missing `base` cannot fail the phase on a bookkeeping gap", "sample-size signal: verify.toml's [summary] carries mutants_in_scope=3 for a 3-mutant in-scope run — the signal the small_denominator_gate lock requires in place of a threshold change", "adapter invocation untouched: the fake adapter records its argument, catching a regression that narrows what gets MUTATED instead of what gets ATTRIBUTED"]
+  status = "done"
 
 [[task]]
-id            = "t-6"
-wave          = 4
-depends_on    = ["t-3", "t-5"]
-title         = "Wire diff scoping into `dross verify`"
-files         = ["internal/cmd/verify.go", "internal/cmd/verify_test.go"]
-description   = """
-`dross verify` builds the scope before running adapters, feeds the UNION to the adapters
-(widening dispatch so a git-changed file is not left un-mutated and therefore un-gated) and
-to verify.Run, prints in-scope / filtered / degraded lines, and tags the telemetry outcome
-with the scope status. Unconditional — no flag. Widening happens here at dispatch; the
-post-Report filter in t-5 never narrows the list.
-"""
-covers        = ["c-1", "c-3", "c-5", "c-6"]
-test_contract = [
-  "union is the adapter input: a file changed in git but absent from changes.json is still handed to the adapter and its survivors still gate",
-  "empty changes.json no longer short-circuits: a phase with an empty or absent changes.json but a non-empty git diff runs the adapters instead of printing \"no changes recorded for this phase yet\" and returning nil — the scope_source lock makes the git side sufficient on its own",
-  "real repo: over a temp git repo with a base commit touching a.go and an untouched sibling b.go, output names a.go in the scope line and never names b.go as a survivor",
-  "summary shows scoping: output carries the in-scope mutant count next to the score (so 0.50 over 2 reads as a small sample) and \"filtered N out-of-scope survivors\", plus a degraded-source line when the base was unresolvable — a summary printing score alone fails",
-  "out-of-scope prints its own line: the switch-on-status test table gains a row; a status with no case falls through silently and fails it",
-  "no base still runs: an unresolvable or absent base completes the run, prints the warning, does not abort",
-  "deleted paths: a git-deleted path stays in the scope set for filtering but never reaches the adapter's file list (passing it to `stryker --mutate` fails the leg)",
-  "bookkeeping paths raise no NOTE flood: a scope whose git side includes .dross/phases/<id>/spec.toml, plan.toml and changes.json reaches the filter but produces ZERO per-file skipped NOTEs — assert the NOTE count, since verify.Run sends unmatched files to Tests.Skipped and Skeleton emits one NOTE each, which would put 4-6 standing NOTEs in every verify.toml against rule r-02",
-  "telemetry cannot disagree with verify.toml, under stated conditions: on a SINGLE-leg run with ZERO timeouts, the outcome event's mutation_score equals verify.toml's, both computed from the in-scope killed/survived — that is the range where the two existing formulas agree, and it still catches duplicated-arithmetic drift in the new scoping code. Do NOT widen the fixture to multiple legs or a timeout and do NOT change combineScore or recordVerifyOutcome to make a wider assertion pass: verify.toml means across legs, telemetry pools, and Report.Score puts timeouts in the denominator — reconciling them changes the number every phase's thresholds apply to and is deferred to survivor-lifecycle",
-  "telemetry status tag: its mutation_status tag reads \"out-of-scope\" on an all-filtered run",
-]
-status        = "pending"
+  id = "t-6"
+  wave = 4
+  title = "Wire diff scoping into `dross verify`"
+  files = ["internal/cmd/verify.go", "internal/cmd/verify_test.go"]
+  description = "`dross verify` builds the scope before running adapters, feeds the UNION to the adapters\n(widening dispatch so a git-changed file is not left un-mutated and therefore un-gated) and\nto verify.Run, prints in-scope / filtered / degraded lines, and tags the telemetry outcome\nwith the scope status. Unconditional — no flag. Widening happens here at dispatch; the\npost-Report filter in t-5 never narrows the list.\n"
+  covers = ["c-1", "c-3", "c-5", "c-6"]
+  depends_on = ["t-3", "t-5"]
+  test_contract = ["union is the adapter input: a file changed in git but absent from changes.json is still handed to the adapter and its survivors still gate", "empty changes.json no longer short-circuits: a phase with an empty or absent changes.json but a non-empty git diff runs the adapters instead of printing \"no changes recorded for this phase yet\" and returning nil — the scope_source lock makes the git side sufficient on its own", "real repo: over a temp git repo with a base commit touching a.go and an untouched sibling b.go, output names a.go in the scope line and never names b.go as a survivor", "summary shows scoping: output carries the in-scope mutant count next to the score (so 0.50 over 2 reads as a small sample) and \"filtered N out-of-scope survivors\", plus a degraded-source line when the base was unresolvable — a summary printing score alone fails", "out-of-scope prints its own line: the switch-on-status test table gains a row; a status with no case falls through silently and fails it", "no base still runs: an unresolvable or absent base completes the run, prints the warning, does not abort", "deleted paths: a git-deleted path stays in the scope set for filtering but never reaches the adapter's file list (passing it to `stryker --mutate` fails the leg)", "bookkeeping paths raise no NOTE flood: a scope whose git side includes .dross/phases/<id>/spec.toml, plan.toml and changes.json reaches the filter but produces ZERO per-file skipped NOTEs — assert the NOTE count, since verify.Run sends unmatched files to Tests.Skipped and Skeleton emits one NOTE each, which would put 4-6 standing NOTEs in every verify.toml against rule r-02", "telemetry cannot disagree with verify.toml, under stated conditions: on a SINGLE-leg run with ZERO timeouts, the outcome event's mutation_score equals verify.toml's, both computed from the in-scope killed/survived — that is the range where the two existing formulas agree, and it still catches duplicated-arithmetic drift in the new scoping code. Do NOT widen the fixture to multiple legs or a timeout and do NOT change combineScore or recordVerifyOutcome to make a wider assertion pass: verify.toml means across legs, telemetry pools, and Report.Score puts timeouts in the denominator — reconciling them changes the number every phase's thresholds apply to and is deferred to survivor-lifecycle", "telemetry status tag: its mutation_status tag reads \"out-of-scope\" on an all-filtered run"]
+  status = "done"
 
 [[task]]
-id            = "t-7"
-wave          = 5
-depends_on    = ["t-5", "t-6"]
-title         = "Truth-pass the verify prompt and README"
-files         = ["assets/prompts/verify.md", "README.md", "internal/cmd/verify_prompt_test.go"]
-description   = """
-Verdict rules gain the out-of-scope status (criterion coverage alone, NOTE recorded), the
-§4 report block prints the in-scope mutant count beside the score, the survivor cross-check
-reads in-scope survivors only and weights them by origin tag, and README's verify row states
-the scoping guarantee. Prompt edits are not live until `make install` (rule r-01).
-"""
-covers        = ["c-3", "c-5", "c-7"]
-test_contract = [
-  "all four statuses named: the prompt names measured|unmeasurable|skipped|out-of-scope — adding the Go constant without the prompt line fails; this test is the only gate, since mutation_status is absent from internal/configenum and no enum-divergence check exists",
-  "non-threshold branch: \"out-of-scope\" appears in the verdict branch that does NOT apply the 0.80/0.60 cutoffs, so pasting it into the measured branch fails",
-  "reads the out-of-scope list: substring assertion on `out_of_scope`, with the instruction not to re-list those survivors as phase findings (r-02's routing lives with the count NOTE and the named successor phase, not per-survivor FLAGs)",
-  "origin weighting: the cross-check is told to read the in-hunk vs inherited tag when weighting a survivor",
-  "report block agrees with the CLI: the §4 template carries the in-scope count alongside score, matching printVerifySummary",
-  "docs no longer claim package-wide attribution: README's `dross verify` row says the score covers only the phase's changed files",
-]
-status        = "pending"
+  id = "t-7"
+  wave = 5
+  title = "Truth-pass the verify prompt and README"
+  files = ["assets/prompts/verify.md", "README.md", "internal/cmd/verify_prompt_test.go"]
+  description = "Verdict rules gain the out-of-scope status (criterion coverage alone, NOTE recorded), the\n§4 report block prints the in-scope mutant count beside the score, the survivor cross-check\nreads in-scope survivors only and weights them by origin tag, and README's verify row states\nthe scoping guarantee. Prompt edits are not live until `make install` (rule r-01).\n"
+  covers = ["c-3", "c-5", "c-7"]
+  depends_on = ["t-5", "t-6"]
+  test_contract = ["all four statuses named: the prompt names measured|unmeasurable|skipped|out-of-scope — adding the Go constant without the prompt line fails; this test is the only gate, since mutation_status is absent from internal/configenum and no enum-divergence check exists", "non-threshold branch: \"out-of-scope\" appears in the verdict branch that does NOT apply the 0.80/0.60 cutoffs, so pasting it into the measured branch fails", "reads the out-of-scope list: substring assertion on `out_of_scope`, with the instruction not to re-list those survivors as phase findings (r-02's routing lives with the count NOTE and the named successor phase, not per-survivor FLAGs)", "origin weighting: the cross-check is told to read the in-hunk vs inherited tag when weighting a survivor", "report block agrees with the CLI: the §4 template carries the in-scope count alongside score, matching printVerifySummary", "docs no longer claim package-wide attribution: README's `dross verify` row says the score covers only the phase's changed files"]
+  status = "done"
 
 [[task]]
-id            = "t-8"
-wave          = 5
-depends_on    = ["t-6"]
-title         = "Regression: untouched survivor never gates"
-files         = ["internal/cmd/verify_scoping_test.go"]
-description   = """
-End-to-end through `dross verify` over a real temp git repo with a stub adapter: mutants in
-a touched file and in an untouched file of the same package.
-"""
-covers        = ["c-1", "c-3", "c-5"]
-test_contract = [
-  "attribution holds end to end: the untouched sibling's survivor appears only under out_of_scope in tests.json and produces no FLAG in verify.toml, while the touched file's survivor produces one",
-  "the vacuous pass is not reachable: an adapter whose report paths match nothing in scope yields mutation_status=\"out-of-scope\" and a NOTE naming the count — never verdict inputs indistinguishable from a clean measured run",
-  "no opt-out: no flag on `dross verify` disables scoping (scoping_always_on lock)",
-]
-status        = "pending"
+  id = "t-8"
+  wave = 5
+  title = "Regression: untouched survivor never gates"
+  files = ["internal/cmd/verify_scoping_test.go"]
+  description = "End-to-end through `dross verify` over a real temp git repo with a stub adapter: mutants in\na touched file and in an untouched file of the same package.\n"
+  covers = ["c-1", "c-3", "c-5"]
+  depends_on = ["t-6"]
+  test_contract = ["attribution holds end to end: the untouched sibling's survivor appears only under out_of_scope in tests.json and produces no FLAG in verify.toml, while the touched file's survivor produces one", "the vacuous pass is not reachable: an adapter whose report paths match nothing in scope yields mutation_status=\"out-of-scope\" and a NOTE naming the count — never verdict inputs indistinguishable from a clean measured run", "no opt-out: no flag on `dross verify` disables scoping (scoping_always_on lock)"]
+  status = "done"
 
 [[task]]
-id            = "t-9"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Make stryker-net paths repo-relative"
-files         = ["internal/mutation/stryker_net.go", "internal/mutation/stryker_net_test.go"]
-description   = """
-Settle the .NET leg's path shape against a real stryker.NET report and make its per-file
-keys and Surviving[].File repo-relative. StrykerNet.Run delegates to ParseStrykerJSON (so
-it inherits t-1's per-file counters for free) but has no Workdir field and never calls
-rePrefixFiles, so a solution- or project-relative shape needs a re-prefix step here.
-Split out of t-1 deliberately: this is the plan's one genuine unknown and must not sit on
-the critical path the whole graph blocks on. strykerNetBuildCmd is a stubbable var.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "repo-relative keys: a real stryker.NET report fixture (tracked under internal/mutation/testdata/) parsed through StrykerNet.Run yields per-file keys and Surviving[].File that a repo-relative scope's Contains() matches — the vacuous outcome this pins is every C# mutant filtering out as out-of-scope and the leg scoring 0/0",
-  "re-prefix parity with stryker: if the report's paths are project-relative, the applied prefix produces the same shape Stryker.rePrefixFiles yields for its Workdir case, so t-4's adapter-agnostic table treats both legs identically",
-  "no regression when already repo-relative: a report whose paths are already repo-relative passes through unchanged rather than being double-prefixed",
-]
-status        = "pending"
+  id = "t-9"
+  wave = 2
+  title = "Make stryker-net paths repo-relative"
+  files = ["internal/mutation/stryker_net.go", "internal/mutation/stryker_net_test.go"]
+  description = "Settle the .NET leg's path shape against a real stryker.NET report and make its per-file\nkeys and Surviving[].File repo-relative. StrykerNet.Run delegates to ParseStrykerJSON (so\nit inherits t-1's per-file counters for free) but has no Workdir field and never calls\nrePrefixFiles, so a solution- or project-relative shape needs a re-prefix step here.\nSplit out of t-1 deliberately: this is the plan's one genuine unknown and must not sit on\nthe critical path the whole graph blocks on. strykerNetBuildCmd is a stubbable var.\n"
+  covers = ["c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["repo-relative keys: a real stryker.NET report fixture (tracked under internal/mutation/testdata/) parsed through StrykerNet.Run yields per-file keys and Surviving[].File that a repo-relative scope's Contains() matches — the vacuous outcome this pins is every C# mutant filtering out as out-of-scope and the leg scoring 0/0", "re-prefix parity with stryker: if the report's paths are project-relative, the applied prefix produces the same shape Stryker.rePrefixFiles yields for its Workdir case, so t-4's adapter-agnostic table treats both legs identically", "no regression when already repo-relative: a report whose paths are already repo-relative passes through unchanged rather than being double-prefixed"]
+  status = "done"
