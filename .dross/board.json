@@ -4,7 +4,8 @@
     "v1.3": "DRO-7"
   },
   "phases": {
-    "exec-trust-followups": "DRO-2"
+    "exec-trust-followups": "DRO-2",
+    "mutation-diff-scope": "DRO-9"
   },
   "quicks": {
     "1.2.8.1": "DRO-6"
