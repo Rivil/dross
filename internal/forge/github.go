@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Rivil/dross/internal/redact"
 )
 
 // GitHubClient talks to GitHub's REST issues API. GitHub's issues + milestones
@@ -299,10 +301,15 @@ func (r *githubIssue) toIssue() *Issue {
 
 // --- low-level REST/GraphQL ---
 
-// do performs a token-authenticated JSON request against GitHub's API. If out
-// is non-nil and the response has a body, it's decoded into out. Non-2xx
-// responses become errors carrying the status and a (truncated) body snippet.
+// do performs a token-authenticated JSON request against GitHub's API, with the
+// credential removed from whatever error comes back. See Client.do for why the
+// wrap sits around the whole request rather than at each Errorf.
 func (c *GitHubClient) do(method, endpoint string, body, out any) error {
+	return redact.Err(c.doRaw(method, endpoint, body, out), c.authEnv, c.token)
+}
+
+// doRaw is the unredacted request. Nothing outside do may call it.
+func (c *GitHubClient) doRaw(method, endpoint string, body, out any) error {
 	var rdr io.Reader
 	if body != nil {
 		buf := new(bytes.Buffer)

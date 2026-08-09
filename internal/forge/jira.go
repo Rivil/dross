@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/redact"
 )
 
 // JiraClient talks to a Jira Cloud instance's REST API v3. Like the
@@ -487,10 +488,19 @@ func (n adfNode) text() string {
 
 // --- low-level REST ---
 
-// do performs a Basic-authenticated JSON request. If out is non-nil and the
-// response has a body, it's decoded into out. Non-2xx responses become errors
-// carrying the status and a (truncated) body snippet.
+// do performs a Basic-authenticated JSON request, with the credential removed
+// from whatever error comes back. See Client.do for why the wrap sits around
+// the whole request rather than at each Errorf.
+//
+// Jira's credential reaches the wire as base64(email:token), which no literal
+// token match would find — redact.Scrub decodes base64 runs precisely so this
+// client needs no special case.
 func (c *JiraClient) do(method, endpoint string, body, out any) error {
+	return redact.Err(c.doRaw(method, endpoint, body, out), c.authEnv, c.token)
+}
+
+// doRaw is the unredacted request. Nothing outside do may call it.
+func (c *JiraClient) doRaw(method, endpoint string, body, out any) error {
 	var rdr io.Reader
 	if body != nil {
 		buf := new(bytes.Buffer)
