@@ -124,6 +124,17 @@ Show `git diff` (filtered to `task.files` if helpful). Run `dross validate` to e
 
 If the touched files include `.svelte` and `mcp__svelte__svelte-autofixer` is available, run it on each touched component before the test gate and re-apply fixes until clean. The autofixer catches Svelte 4 → Svelte 5 syntax drift (runes, `onclick` vs `on:click`, snippets vs slots, deprecated APIs) that training data otherwise keeps reaching for. Same pattern for any future language-specific MCP autofixer.
 
+Before running it, check consent — dross will not run a repo's test command
+until this machine has explicitly trusted it, and the loop commands below refuse
+without it:
+```
+dross trust --check
+```
+Exit 0 means trusted; run the command. Non-zero means it is untrusted or stale —
+**stop and show the user the exact `runtime.test_command` line**, then let them
+run `dross trust`. Never run `dross trust` on their behalf: the whole point of
+the gate is that a human reads the line the repo supplied.
+
 Run the test command:
 ```
 <runtime.test_command>
