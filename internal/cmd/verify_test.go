@@ -1,13 +1,16 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/verify"
 )
 
@@ -435,6 +438,84 @@ func TestVerifyCover_SummaryStatusMessages(t *testing.T) {
 	}
 }
 
+// --- printScopeSummary file-list truncation (verify.go:471-474) ---
+//
+// The scope line names files up to scopeFileListCap and collapses the rest
+// into "(+N more)". That subtraction is the only place the collapsed count is
+// computed and no end-to-end fixture reaches the cap, so it is pinned here
+// with an exact figure: over a cap of 12, a 15-file scope reads "(+3 more)".
+// An arithmetic mutant that turns the subtraction into addition prints 27 and
+// fails, and so does any mutant that shifts the boundary the slice is taken at.
+
+// scopeSummaryFixture builds a Tests/Verify pair whose scope carries n files
+// named internal/f00.go … internal/fNN.go. The names are fixed-width so no
+// name is a substring of another — an absence assertion has to mean absence.
+func scopeSummaryFixture(n int) (*verify.Tests, *verify.Verify) {
+	files := make([]string, n)
+	for i := range files {
+		files[i] = scopeSummaryFile(i)
+	}
+	tests := &verify.Tests{
+		Phase: "01-cov",
+		Scope: &verify.Scope{
+			Files:  files,
+			Source: verify.SourceUnion,
+			Base:   "0123456789abcdef0123456789abcdef01234567",
+		},
+	}
+	v := verifyCovVerify(verify.MutationMeasured)
+	v.Summary.MutantsInScope = 4
+	v.Summary.MutationScore = 0.50
+	return tests, v
+}
+
+func scopeSummaryFile(i int) string { return fmt.Sprintf("internal/f%02d.go", i) }
+
+// TestVerifyCover_ScopeFileListTruncation drives the >cap side of the
+// truncation branch: the suffix carries the exact overflow count, the count
+// prefix still reports the FULL file set (truncation is a display concern, not
+// a scope concern), the first cap files are named and the overflowing ones are
+// not.
+func TestVerifyCover_ScopeFileListTruncation(t *testing.T) {
+	const over = 3
+	tests, v := scopeSummaryFixture(scopeFileListCap + over)
+	out := captureStdout(t, func() { printScopeSummary(tests, v) })
+
+	if !strings.Contains(out, " (+3 more)") {
+		t.Errorf("expected exactly %q for %d files over a cap of %d\n--- out ---\n%s",
+			" (+3 more)", scopeFileListCap+over, scopeFileListCap, out)
+	}
+	if want := fmt.Sprintf("scope: %d file(s)", scopeFileListCap+over); !strings.Contains(out, want) {
+		t.Errorf("scope line must count the full set (%q):\n%s", want, out)
+	}
+	if last := scopeSummaryFile(scopeFileListCap - 1); !strings.Contains(out, last) {
+		t.Errorf("expected the %dth file %q to be named:\n%s", scopeFileListCap, last, out)
+	}
+	for i := scopeFileListCap; i < scopeFileListCap+over; i++ {
+		if name := scopeSummaryFile(i); strings.Contains(out, name) {
+			t.Errorf("file %q is past the cap and must not be named:\n%s", name, out)
+		}
+	}
+}
+
+// TestVerifyCover_ScopeFileListAtCapIsNotTruncated pins the boundary: exactly
+// cap files print every name and no suffix at all. A `>=` mutant on the
+// truncation condition prints "(+0 more)" here and fails.
+func TestVerifyCover_ScopeFileListAtCapIsNotTruncated(t *testing.T) {
+	tests, v := scopeSummaryFixture(scopeFileListCap)
+	out := captureStdout(t, func() { printScopeSummary(tests, v) })
+
+	if strings.Contains(out, "more)") {
+		t.Errorf("exactly %d files is at the cap, not over it — no suffix expected:\n%s",
+			scopeFileListCap, out)
+	}
+	for i := 0; i < scopeFileListCap; i++ {
+		if name := scopeSummaryFile(i); !strings.Contains(out, name) {
+			t.Errorf("expected every file at the cap to be named, missing %q:\n%s", name, out)
+		}
+	}
+}
+
 // --- recordVerifyOutcome coverage (verify.go:211-236) ---
 //
 // recordVerifyOutcome emits a telemetry "outcome" event. We enable
@@ -649,4 +730,489 @@ covers = ["c-1"]
 	if got := strings.Count(telemBody, `"verdict":"pass"`); got != 1 {
 		t.Errorf("second finalize emitted a duplicate outcome event (%d):\n%s", got, telemBody)
 	}
+}
+
+// --- diff scoping wired into `dross verify` ---------------------------------
+
+// stubMutationAdapter returns a fixed report for a set of extensions and
+// remembers what it was handed.
+type stubMutationAdapter struct {
+	name   string
+	exts   []string
+	report *mutation.Report
+	got    []string
+}
+
+func (s *stubMutationAdapter) Name() string { return s.name }
+func (s *stubMutationAdapter) Supports(file string) bool {
+	for _, e := range s.exts {
+		if strings.EqualFold(filepath.Ext(file), e) {
+			return true
+		}
+	}
+	return false
+}
+func (s *stubMutationAdapter) Run(files []string) (*mutation.Report, error) {
+	s.got = append([]string(nil), files...)
+	return s.report, nil
+}
+
+// useStubAdapter installs a stub in place of the configured adapters.
+func useStubAdapter(t *testing.T, a mutation.Adapter) {
+	t.Helper()
+	prev := configuredAdaptersFn
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) []mutation.Adapter {
+		return []mutation.Adapter{a}
+	}
+	t.Cleanup(func() { configuredAdaptersFn = prev })
+}
+
+// goReport builds a gremlins-shaped report whose aggregates and per-file rows
+// agree, as every adapter is required to produce.
+func goReport(rows map[string]mutation.FileStat, surviving ...mutation.Mutant) *mutation.Report {
+	r := &mutation.Report{Tool: "gremlins", Files: rows, Surviving: surviving}
+	for _, st := range rows {
+		r.Killed += st.Killed
+		r.Survived += st.Survived
+		r.Timeout += st.Timeout
+	}
+	if d := r.Killed + r.Survived + r.Timeout; d > 0 {
+		r.Score = float64(r.Killed) / float64(d)
+	}
+	return r
+}
+
+// scopedVerifyRepo builds a real git repo with a dross project, a `base`
+// branch, and a phase forked from it. Returns the repo dir.
+func scopedVerifyRepo(t *testing.T, phaseSlug string) string {
+	t.Helper()
+	dir := t.TempDir()
+	chdir(t, dir)
+	gitInit(t, dir, "git@github.com:example/x.git")
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	trustFixture(t)
+	mustRunSet(t, "project.name", "x")
+	mustRunSet(t, "runtime.mode", "native")
+
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return true }\n")
+	writeScopeFile(t, dir, "b.go", "package x\n\nfunc B() bool { return false }\n")
+	// The dross scaffold goes into the base commit too: `phase create` refuses
+	// a dirty tree, and the phase's diff should start from a clean baseline.
+	mustGit(t, dir, "add", "-A")
+	mustGit(t, dir, "commit", "-qm", "base")
+	mustGit(t, dir, "branch", "base")
+
+	if err := runCmd(t, Phase(), "create", phaseSlug); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// phaseSpec writes a one-criterion spec for the phase.
+func phaseSpec(t *testing.T, phaseID string) {
+	t.Helper()
+	mustWrite(t, ".dross/phases/"+phaseID+"/spec.toml", `[phase]
+id = "`+phaseID+`"
+title = "x"
+[[criteria]]
+id = "c-1"
+text = "x"
+`)
+}
+
+// TestVerifyScopesToPhaseChangesEndToEnd is the whole feature through the CLI
+// over a real repo: a.go is edited by the phase, b.go is its untouched sibling
+// in the same package, and each has a survivor.
+//
+// Before scoping, b.go's survivor was this phase's problem — same package, so
+// same gremlins report. It must now appear only as a filtered count, and a.go
+// must be named as what the run actually scoped to.
+func TestVerifyScopesToPhaseChangesEndToEnd(t *testing.T) {
+	dir := scopedVerifyRepo(t, "scoped")
+	phaseSpec(t, "01-scoped")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go")
+	if err := runCmd(t, Changes(), "record", "01-scoped", "t-1", "--files", "a.go"); err != nil {
+		t.Fatal(err)
+	}
+	mustSetBase(t, "01-scoped", "base")
+
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(
+			map[string]mutation.FileStat{"a.go": {Survived: 1}, "b.go": {Survived: 1}},
+			mutation.Mutant{File: "a.go", Line: 3, Op: "CONDITIONALS_BOUNDARY"},
+			mutation.Mutant{File: "b.go", Line: 3, Op: "CONDITIONALS_NEGATION"},
+		)}
+	useStubAdapter(t, stub)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Verify(), "01-scoped"); err != nil {
+			t.Fatalf("verify: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "a.go") {
+		t.Errorf("scope line must name the phase's own file:\n%s", out)
+	}
+	if !strings.Contains(out, "filtered 1 out-of-scope survivor") {
+		t.Errorf("filtered count missing:\n%s", out)
+	}
+
+	body := mustRead(t, filepath.Join(dir, ".dross/phases/01-scoped/tests.json"))
+	if !strings.Contains(body, `"out_of_scope"`) || !strings.Contains(body, `"b.go"`) {
+		t.Errorf("b.go's survivor should be recorded under out_of_scope:\n%s", body)
+	}
+	vbody := mustRead(t, filepath.Join(dir, ".dross/phases/01-scoped/verify.toml"))
+	if strings.Contains(vbody, "b.go") {
+		t.Errorf("an untouched sibling's survivor must not be a phase finding:\n%s", vbody)
+	}
+	if !strings.Contains(vbody, "a.go") {
+		t.Errorf("the phase's own survivor must still FLAG:\n%s", vbody)
+	}
+}
+
+// TestVerifyUnionFeedsTheAdapter: a file git saw change but no task recorded
+// is still handed to the adapter. Otherwise it is never mutated, so its
+// survivors cannot gate anything — the same escape hatch on the dispatch side
+// that filtering closes on the attribution side.
+func TestVerifyUnionFeedsTheAdapter(t *testing.T) {
+	dir := scopedVerifyRepo(t, "union")
+	phaseSpec(t, "01-union")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	writeScopeFile(t, dir, "unrecorded.go", "package x\n\nfunc U() bool { return 2 > 1 }\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-qm", "phase edits two files, records one")
+	if err := runCmd(t, Changes(), "record", "01-union", "t-1", "--files", "a.go"); err != nil {
+		t.Fatal(err)
+	}
+	mustSetBase(t, "01-union", "base")
+
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"unrecorded.go": {Survived: 1}},
+			mutation.Mutant{File: "unrecorded.go", Line: 3, Op: "X"})}
+	useStubAdapter(t, stub)
+
+	if err := runCmd(t, Verify(), "01-union"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+
+	var sawUnrecorded bool
+	for _, f := range stub.got {
+		if f == "unrecorded.go" {
+			sawUnrecorded = true
+		}
+	}
+	if !sawUnrecorded {
+		t.Errorf("git-changed but unrecorded file never reached the adapter: %v", stub.got)
+	}
+	vbody := mustRead(t, filepath.Join(dir, ".dross/phases/01-union/verify.toml"))
+	if !strings.Contains(vbody, "unrecorded.go") {
+		t.Errorf("its survivor must gate — expected a FLAG:\n%s", vbody)
+	}
+}
+
+// TestVerifyEmptyChangesStillRunsWithGitDiff: an empty changes.json used to
+// short-circuit the whole command. Under the scope_source lock the git side is
+// sufficient on its own, so the run proceeds.
+func TestVerifyEmptyChangesStillRunsWithGitDiff(t *testing.T) {
+	dir := scopedVerifyRepo(t, "nochanges")
+	phaseSpec(t, "01-nochanges")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase work, nothing recorded")
+	mustSetBase(t, "01-nochanges", "base")
+
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}
+	useStubAdapter(t, stub)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Verify(), "01-nochanges"); err != nil {
+			t.Fatalf("verify: %v", err)
+		}
+	})
+	if strings.Contains(out, "no changes recorded") {
+		t.Errorf("git diff was non-empty; the run must not short-circuit:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".dross/phases/01-nochanges/tests.json")); err != nil {
+		t.Errorf("tests.json should have been written: %v", err)
+	}
+	if len(stub.got) == 0 {
+		t.Error("the adapter was never invoked")
+	}
+}
+
+// TestVerifyPrintsOutOfScopeStatusAndSampleSize covers the summary surface: an
+// all-filtered run prints its own status line, and the in-scope mutant count
+// sits beside the score so a low score on a tiny sample reads as one.
+func TestVerifyPrintsOutOfScopeStatusAndSampleSize(t *testing.T) {
+	dir := scopedVerifyRepo(t, "allfiltered")
+	phaseSpec(t, "01-allfiltered")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go")
+	mustSetBase(t, "01-allfiltered", "base")
+
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"b.go": {Survived: 2}},
+			mutation.Mutant{File: "b.go", Line: 1, Op: "X"},
+			mutation.Mutant{File: "b.go", Line: 2, Op: "Y"},
+		)}
+	useStubAdapter(t, stub)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Verify(), "01-allfiltered"); err != nil {
+			t.Fatalf("verify: %v", err)
+		}
+	})
+	if !strings.Contains(out, "mutation status: out-of-scope") {
+		t.Errorf("out-of-scope needs its own line in the status switch:\n%s", out)
+	}
+	if !strings.Contains(out, "in-scope mutants: 0") {
+		t.Errorf("summary must carry the in-scope count:\n%s", out)
+	}
+	vbody := mustRead(t, filepath.Join(dir, ".dross/phases/01-allfiltered/verify.toml"))
+	if !strings.Contains(vbody, `mutation_status = "out-of-scope"`) {
+		t.Errorf("verify.toml status:\n%s", vbody)
+	}
+	if !strings.Contains(vbody, "mutants_in_scope = 0") {
+		t.Errorf("verify.toml sample size:\n%s", vbody)
+	}
+}
+
+// TestVerifyWithoutBaseStillRuns: an unresolvable base degrades the scope and
+// says so, but must not abort the run. A bookkeeping gap is not a reason to
+// refuse to verify.
+func TestVerifyWithoutBaseStillRuns(t *testing.T) {
+	dir := scopedVerifyRepo(t, "nobase")
+	phaseSpec(t, "01-nobase")
+	if err := runCmd(t, Changes(), "record", "01-nobase", "t-1", "--files", "a.go"); err != nil {
+		t.Fatal(err)
+	}
+	mustSetBase(t, "01-nobase", "no-such-branch")
+
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}
+	useStubAdapter(t, stub)
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Verify(), "01-nobase"); err != nil {
+			t.Fatalf("an unresolvable base must not abort verify: %v", err)
+		}
+	})
+	if !strings.Contains(out, "scope degraded") {
+		t.Errorf("a degraded scope must be visible in the summary:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".dross/phases/01-nobase/tests.json")); err != nil {
+		t.Errorf("the run must still complete: %v", err)
+	}
+}
+
+// TestVerifyDeletedPathNeverReachesAdapter: a deleted file stays in the scope
+// so its mutants can still be recognised and filtered, but it must not be
+// handed to a tool — `stryker --mutate <gone>` fails the whole leg.
+func TestVerifyDeletedPathNeverReachesAdapter(t *testing.T) {
+	dir := scopedVerifyRepo(t, "deleted")
+	phaseSpec(t, "01-deleted")
+	mustGit(t, dir, "rm", "-q", "b.go")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-qm", "delete b.go, edit a.go")
+	mustSetBase(t, "01-deleted", "base")
+
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}
+	useStubAdapter(t, stub)
+
+	if err := runCmd(t, Verify(), "01-deleted"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	for _, f := range stub.got {
+		if f == "b.go" {
+			t.Errorf("deleted path was handed to the adapter: %v", stub.got)
+		}
+	}
+	body := mustRead(t, filepath.Join(dir, ".dross/phases/01-deleted/tests.json"))
+	if !strings.Contains(body, `"b.go"`) {
+		t.Errorf("the deleted path must still be recorded in the scope:\n%s", body)
+	}
+}
+
+// TestVerifyBookkeepingPathsRaiseNoNoteFlood: every phase's git diff contains
+// its own .dross/ artefacts. Dispatching them would add a "skipped, no
+// adapter" NOTE each, putting a standing, undrainable backlog in every
+// verify.toml — the thing rule r-02 exists to prevent. The NOTE COUNT is
+// asserted, not their absence by substring, so a rename of the reason text
+// cannot make this pass hollow.
+func TestVerifyBookkeepingPathsRaiseNoNoteFlood(t *testing.T) {
+	dir := scopedVerifyRepo(t, "bookkeeping")
+	phaseSpec(t, "01-bookkeeping")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustWrite(t, ".dross/phases/01-bookkeeping/plan.toml", `[phase]
+id = "01-bookkeeping"
+[[task]]
+id = "t-1"
+wave = 1
+title = "x"
+files = ["a.go"]
+covers = ["c-1"]
+`)
+	mustGit(t, dir, "add", "a.go", ".dross")
+	mustGit(t, dir, "commit", "-qm", "phase work plus its own bookkeeping")
+	mustSetBase(t, "01-bookkeeping", "base")
+
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"a.go": {Killed: 1}})}
+	useStubAdapter(t, stub)
+
+	if err := runCmd(t, Verify(), "01-bookkeeping"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+
+	// Premise guard: the .dross artefacts really are in the phase's diff.
+	body := mustRead(t, filepath.Join(dir, ".dross/phases/01-bookkeeping/tests.json"))
+	if !strings.Contains(body, ".dross/phases/01-bookkeeping/spec.toml") {
+		t.Fatalf("expected the phase's own spec.toml in the scope:\n%s", body)
+	}
+
+	v, err := verify.LoadVerify(filepath.Join(dir, ".dross/phases/01-bookkeeping/verify.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	notes := 0
+	for _, f := range v.Findings {
+		if f.Severity == "NOTE" {
+			notes++
+		}
+	}
+	if notes != 0 {
+		t.Errorf("bookkeeping paths produced %d NOTE(s): %+v", notes, v.Findings)
+	}
+}
+
+// TestVerifyTelemetryAgreesWithVerifyToml pins telemetry against verify.toml
+// on a SINGLE-leg, ZERO-timeout run — the range where the two live score
+// formulas agree, and enough to catch duplicated arithmetic drifting in the
+// new scoping code.
+//
+// Do NOT widen this fixture to multiple legs or a timeout, and do not "fix"
+// combineScore or recordVerifyOutcome to make a wider assertion pass:
+// verify.toml means across legs, telemetry pools, and Report.Score puts
+// timeouts in the denominator. Picking a normative formula changes the number
+// every phase's thresholds are applied to and is deferred to survivor-lifecycle.
+func TestVerifyTelemetryAgreesWithVerifyToml(t *testing.T) {
+	dir := scopedVerifyRepo(t, "telemetry")
+	enableTelemetry(t)
+	phaseSpec(t, "01-telemetry")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go")
+	mustSetBase(t, "01-telemetry", "base")
+
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(
+			map[string]mutation.FileStat{"a.go": {Killed: 1, Survived: 1}, "b.go": {Killed: 8}},
+			mutation.Mutant{File: "a.go", Line: 3, Op: "X"},
+		)}
+	useStubAdapter(t, stub)
+
+	if err := runCmd(t, Verify(), "01-telemetry"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+
+	v, err := verify.LoadVerify(filepath.Join(dir, ".dross/phases/01-telemetry/verify.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Summary.MutationScore != 0.5 || v.Summary.MutantsInScope != 2 {
+		t.Fatalf("verify.toml should score the in-scope slice 1/2: score=%v in_scope=%d",
+			v.Summary.MutationScore, v.Summary.MutantsInScope)
+	}
+
+	ev := lastVerifyOutcome(t)
+	if got := ev.Numbers["mutation_score"]; got != v.Summary.MutationScore {
+		t.Errorf("telemetry mutation_score=%v disagrees with verify.toml %v",
+			got, v.Summary.MutationScore)
+	}
+	if got := ev.Counts["mutants_in_scope"]; got != v.Summary.MutantsInScope {
+		t.Errorf("telemetry mutants_in_scope=%d want %d", got, v.Summary.MutantsInScope)
+	}
+	if got := ev.Counts["out_of_scope"]; got != 0 {
+		t.Errorf("no survivor was filtered here; out_of_scope=%d", got)
+	}
+}
+
+// TestVerifyTelemetryTagsOutOfScopeStatus: an all-filtered run must be visible
+// in aggregate, not only in that phase's verify.toml.
+func TestVerifyTelemetryTagsOutOfScopeStatus(t *testing.T) {
+	dir := scopedVerifyRepo(t, "telemstatus")
+	enableTelemetry(t)
+	phaseSpec(t, "01-telemstatus")
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go")
+	mustSetBase(t, "01-telemstatus", "base")
+
+	stub := &stubMutationAdapter{name: "gremlins", exts: []string{".go"},
+		report: goReport(map[string]mutation.FileStat{"b.go": {Survived: 1}},
+			mutation.Mutant{File: "b.go", Line: 1, Op: "X"})}
+	useStubAdapter(t, stub)
+
+	if err := runCmd(t, Verify(), "01-telemstatus"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	ev := lastVerifyOutcome(t)
+	if ev.Tags["mutation_status"] != verify.MutationOutOfScope {
+		t.Errorf("mutation_status tag = %q want %q",
+			ev.Tags["mutation_status"], verify.MutationOutOfScope)
+	}
+	if ev.Counts["out_of_scope"] != 1 {
+		t.Errorf("out_of_scope count = %d want 1", ev.Counts["out_of_scope"])
+	}
+}
+
+// TestVerifyHasNoScopingOptOut pins the scoping_always_on lock at the CLI
+// surface: no flag on `dross verify` turns attribution back off.
+func TestVerifyHasNoScopingOptOut(t *testing.T) {
+	flags := Verify().Flags()
+	for _, name := range []string{"scope", "no-scope", "whole-package", "no-diff-scope", "unscoped"} {
+		if flags.Lookup(name) != nil {
+			t.Errorf("--%s exists; diff scoping must have no opt-out", name)
+		}
+	}
+}
+
+// enableTelemetry re-enables recording into a throwaway HOME. It must run
+// AFTER the repo helper: chdir() sets DROSS_NO_TELEMETRY=1, so anything set
+// before it is overwritten.
+func enableTelemetry(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("DROSS_NO_TELEMETRY", "")
+}
+
+// mustSetBase records the phase's fork point in changes.json.
+func mustSetBase(t *testing.T, phaseID, base string) {
+	t.Helper()
+	root, err := FindRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := changes.SetBase(root, phaseID, base); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// lastVerifyOutcome returns the most recent verify outcome event.
+func lastVerifyOutcome(t *testing.T) telemetry.Event {
+	t.Helper()
+	evs, err := telemetry.Load(telemetryPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := len(evs) - 1; i >= 0; i-- {
+		if evs[i].Kind == "outcome" && evs[i].Command == "verify" {
+			return evs[i]
+		}
+	}
+	t.Fatal("no verify outcome event recorded")
+	return telemetry.Event{}
 }

@@ -28,8 +28,10 @@ dross verify <phase> [--skip-mutation]
 
 This shells out to mutation tools (currently Stryker for TS/JS/Svelte; other languages skip with a reason), parses the JSON reports, and writes:
 
-- `.dross/phases/<id>/tests.json` — raw machine output, killed/survived counts per language
-- `.dross/phases/<id>/verify.toml` — skeleton verdict with `verdict = "pending"`, per-criterion `status = "unknown"`, and `[summary].mutation_status` of `measured | unmeasurable | skipped` (use this — not the raw score — to decide if mutation thresholds apply in §3)
+- `.dross/phases/<id>/tests.json` — raw machine output, killed/survived counts per language, plus the `scope` block (what the run scoped to) and the `out_of_scope` list (survivors in files this phase never touched)
+- `.dross/phases/<id>/verify.toml` — skeleton verdict with `verdict = "pending"`, per-criterion `status = "unknown"`, and `[summary].mutation_status` of `measured | unmeasurable | skipped | out-of-scope` (use this — not the raw score — to decide if mutation thresholds apply in §3)
+
+**The score covers only this phase's changed files.** Mutation tools attribute at a coarser granularity than a phase does — gremlins mutates a whole Go package — so every report is filtered against the phase's change set before it reaches these files. A survivor in an untouched sibling is real, but it is not this phase's, and it is neither scored nor flagged here. `[summary].mutants_in_scope` is the denominator that filtering left: read it next to the score, because 0.50 over 2 mutants and 0.50 over 200 are the same number and not the same evidence.
 
 **Read both files before continuing.** They're the inputs for the LLM judgement step.
 
@@ -64,10 +66,16 @@ Show your reasoning per criterion in 1-3 lines. Don't be silent — the user nee
 
 ### Cross-check with mutation results
 
-For each surviving mutant in `tests.json`:
+For each surviving mutant under `languages[].mutation.surviving` in `tests.json` — the **in-scope** survivors, the ones in files this phase touched:
 - Does the mutated line participate in any criterion's covering test?
 - If yes: the test exists but doesn't catch this kind of breakage → downgrade that criterion from `covered` to `weak`.
 - If no: less concerning, but still surface as a FLAG finding ("survived mutant in <file>:<line>").
+
+**Weight each survivor by its `origin` tag.** Every in-scope survivor carries one:
+- `in-hunk` — the mutated line is inside a hunk this phase changed. This is the phase's own new or edited logic escaping its tests; treat it as strong evidence and downgrade the criterion.
+- `inherited` — the phase touched the file but not that line. Still in scope and still counted, but the weaker signal: it is pre-existing code the phase inherited responsibility for by editing around it. Prefer a FLAG over a `covered` → `weak` downgrade unless the line is genuinely part of what a criterion claims.
+
+**Do not re-list the `out_of_scope` entries as findings.** They are survivors in files this phase never touched, already recorded as one count NOTE by the skeleton and kept in full under `out_of_scope` for the survivor-lifecycle phase to route. A FLAG each would seed a standing backlog no phase can drain — the routing lives with that count and its named successor phase, not with per-survivor findings here.
 
 ## 3. Update `verify.toml`
 
@@ -85,10 +93,11 @@ notes  = ""               # short rationale; required for weak/uncovered
 Update `[summary]`:
 ```toml
 [summary]
-mutation_status    = <from tests.json — preserve: measured | unmeasurable | skipped>
+mutation_status    = <from tests.json — preserve: measured | unmeasurable | skipped | out-of-scope>
 mutation_score     = <from tests.json — preserve>
 mutants_killed     = <preserve>
 mutants_survived   = <preserve>
+mutants_in_scope   = <preserve — the denominator the score was computed over>
 criteria_total     = <count of criteria>
 criteria_covered   = <count where status=covered>
 criteria_uncovered = <count where status=uncovered or weak>
@@ -101,8 +110,8 @@ If `mutation_status == "measured"`:
 - **`partial`** if at least one criterion is `weak` OR mutation score is between 0.60-0.80 OR there are FLAG findings but no BLOCKING.
 - **`fail`** if any criterion is `uncovered`, OR mutation score < 0.60, OR any BLOCKING findings exist.
 
-If `mutation_status` is `unmeasurable` or `skipped` (base verdict on criterion coverage alone):
-- **`pass`** if all criteria are `covered` and no BLOCKING findings. Add a NOTE finding recording why mutation didn't apply (e.g. "mutation unmeasurable: project scope excludes all touched files" or "mutation skipped: --skip-mutation passed").
+If `mutation_status` is `unmeasurable`, `skipped` or `out-of-scope` (base verdict on criterion coverage alone — the 0.80/0.60 cutoffs do NOT apply):
+- **`pass`** if all criteria are `covered` and no BLOCKING findings. Add a NOTE finding recording why mutation didn't apply (e.g. "mutation unmeasurable: project scope excludes all touched files", "mutation skipped: --skip-mutation passed", or "mutation out-of-scope: every mutant landed in files this phase did not touch").
 - **`partial`** if at least one criterion is `weak` OR there are FLAG findings but no BLOCKING.
 - **`fail`** if any criterion is `uncovered` OR any BLOCKING findings exist.
 
@@ -123,7 +132,8 @@ Surface the verdict plus a **compact criterion→test/status mapping** — the j
 ```
 verify <phase-id> — <verdict>
 
-  Mutation:    score=<X.XX> killed=<N> survived=<M>
+  Mutation:    score=<X.XX> over <mutants_in_scope> in-scope mutants — killed=<N> survived=<M>
+               <only when non-zero: "filtered <K> out-of-scope survivor(s)">
   Criteria:    <covered>/<total> covered, <weak> weak, <uncovered> uncovered
 
   Criterion map:

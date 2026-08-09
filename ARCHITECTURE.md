@@ -392,19 +392,36 @@ Author and validate milestone.toml — title, success criteria, non-goals, phase
 
 _c8b346e_
 
+### Mutation diff scoping
+
+A phase's mutation score covers only the files that phase touched: a survivor in an untouched sibling of the same Go package is never attributed to it. The scope is the **union** of git's merge-base-to-HEAD file set and `changes.json`'s recorded per-task files, so a forgotten `dross changes record` widens the scope rather than silently shrinking the phase to nothing; any git failure degrades to the changes.json view with the reason recorded, keeping a mis-scoped run distinguishable from a clean one. Scoping is unconditional — no flag, no whole-package opt-out. Gating is file-level (touch a file, own its mutants); hunk ranges only annotate each kept survivor as in-hunk or inherited-by-proximity. Filtering recomputes the score from in-scope per-file rows rather than pruning the survivor list, so an out-of-scope kill moves neither numerator nor denominator. Filtered survivors are not discarded — they persist under `out_of_scope` in tests.json with one count-carrying NOTE, and a run whose mutants all land out of scope gets its own `out-of-scope` status instead of a bare 0.00.
+
+- `Scope` (scope model, hunk ranges, in-hunk/inherited classifier) — `internal/verify/scope.go:26`
+- `NewScope` (git ∪ changes.json union) — `internal/verify/scope.go:99`
+- `Scope.Origin` (in-hunk vs inherited tag) — `internal/verify/scope.go:225`
+- `phaseScope` (merge-base resolution, git file set + hunks, degraded fallback) — `internal/cmd/verifyscope.go:24`
+- `FilterReport` (split against scope, recompute counts, tag survivors) — `internal/verify/verify.go:121`
+- `RunScoped` — `internal/verify/verify.go:257`
+- `MutationOutOfScope` (all-filtered run status) — `internal/verify/verify.go:50`
+- `printScopeSummary` (scoped file list + `(+N more)` overflow) — `internal/cmd/verify.go:465`
+
+_introduced mutation-diff-scope · cd0b5f6_
+
 ### Mutation testing adapters
 
-Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Svelte, Gremlins for Go invoked per-package). Stryker is invoked as `npx @stryker-mutator/core` (not the deprecated bare `stryker`) at an **exact pinned version** rather than whatever the registry currently serves as latest — the same pin backs the argv and the install hint, so a compromised release can't be pulled into a verify run — with a `[mutation.stryker] workdir` monorepo knob that round-trips repo-relative paths. In docker runtime mode the exec prefix is derived from `runtime.test_command` by `dockerPrefix`, whose leading binary must be **exactly** `docker` (a field check, not `HasPrefix`) so a committed `dockerevil …` can't promote an arbitrary PATH binary into the adapter's argv under clone-and-run.
+Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Svelte, Gremlins for Go invoked per-package). Every mutant is attributed to its own file via per-file `FileStat` counters on the Report, which is what lets a report be rescored over a subset of files — and each adapter re-prefixes its native path keys to repo-relative form first, so package-granular Gremlins and file-granular Stryker/Stryker.NET reports (whose `FullPath` keys are absolute) both match a phase's change set. Stryker is invoked as `npx @stryker-mutator/core` (not the deprecated bare `stryker`) at an **exact pinned version** rather than whatever the registry currently serves as latest — the same pin backs the argv and the install hint, so a compromised release can't be pulled into a verify run — with a `[mutation.stryker] workdir` monorepo knob that round-trips repo-relative paths. In docker runtime mode the exec prefix is derived from `runtime.test_command` by `dockerPrefix`, whose leading binary must be **exactly** `docker` (a field check, not `HasPrefix`) so a committed `dockerevil …` can't promote an arbitrary PATH binary into the adapter's argv under clone-and-run.
 
-- `Adapter` — `internal/mutation/adapter.go:46`
+- `Adapter` — `internal/mutation/adapter.go:104`
 - `Report` — `internal/mutation/adapter.go:18`
-- `Gremlins.Run` — `internal/mutation/gremlins.go:84`
+- `FileStat` (per-file mutant counters backing subset rescoring) — `internal/mutation/adapter.go:50`
+- `Gremlins.Run` (per-package invocation + path re-prefix) — `internal/mutation/gremlins.go:84`
 - `Stryker.Run` — `internal/mutation/stryker.go:48`
 - `Stryker.runArgs` (npx invocation + workdir knob) — `internal/mutation/stryker.go:113`
 - `strykerPin` (exact `@stryker-mutator/core@9.6.1`, shared by the argv and the install hint) — `internal/mutation/stryker.go:100`
-- `dockerPrefix` (exact-`docker` exec-prefix guard) — `internal/cmd/verify.go:234`
+- `StrykerNet.rePrefixFiles` (absolute `FullPath` → repo-relative) — `internal/mutation/stryker_net.go:148`
+- `dockerPrefix` (exact-`docker` exec-prefix guard) — `internal/cmd/verify.go:257`
 
-_introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076 · extended config-trust-hardening · 266a84d_
+_introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076 · extended config-trust-hardening · 266a84d · extended mutation-diff-scope · 16d4426_
 
 ### Phase base truth
 
@@ -726,16 +743,17 @@ _introduced board-state-map-truth · extended state-json-branch-safety · 47f383
 
 ### Verification
 
-Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
+Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. The mutation leg is scoped to the phase's own diff (see **Mutation diff scoping**), so the score and verdict rest only on files the phase touched, survivors are weighted by their in-hunk/inherited origin tag, and an all-filtered run resolves through the non-threshold branch as `out-of-scope` rather than a bare 0.00. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
 
 - `Verify` (CLI) — `internal/cmd/verify.go:29`
-- `verify.Run` — `internal/verify/verify.go:137`
-- `LanguageRun.Error` (record-and-continue adapter failure) — `internal/verify/verify.go:54`
-- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:191`
-- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:153`
-- verify.md §2 size-gated offload (large criterion-mapping reads fan to read-only subagents; judgement + verdict stay main-loop) — `internal/cmd/verify_prompt_test.go:17`
+- `verify.Run` — `internal/verify/verify.go:246`
+- `LanguageRun.Error` (record-and-continue adapter failure) — `internal/verify/verify.go:83`
+- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:214`
+- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:176`
+- verify.md §2 verdict rules (diff-scoping guarantee, out-of-scope status, origin-weighted survivors) — `assets/prompts/verify.md:34`
+- `TestVerifyPromptOffloadGuidance` (verify.md §2 size-gated offload — large criterion-mapping reads fan to read-only subagents; judgement + verdict stay main-loop) — `internal/cmd/verify_prompt_test.go:20`
 
-_e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79_
+_e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79 · extended mutation-diff-scope · cd0b5f6_
 
 ### Watch heartbeat (dross-watch)
 

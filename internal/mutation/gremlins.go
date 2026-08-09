@@ -155,6 +155,10 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 			unmeasured = append(unmeasured, pkg+" (unreadable report: "+err.Error()+")")
 			continue
 		}
+		// The package identity exists only here, in the loop — the payload
+		// itself names files by bare basename. Re-prefix before merging so
+		// every path downstream is repo-relative.
+		RePrefixGremlinsFiles(rep, pkg)
 		if !hasCoverage(rep) {
 			// Report exists but every mutant is NOT COVERED — gremlins
 			// instrumented zero usable coverage here (a coverage-tool blind
@@ -192,10 +196,55 @@ func mergeInto(dst, src *Report) {
 	dst.Errors += src.Errors
 	dst.NotCovered += src.NotCovered
 	dst.Surviving = append(dst.Surviving, src.Surviving...)
+	// Per-file rows accumulate by path, so two packages that each report a
+	// bare `x.go` stay distinct (they were re-prefixed before merging) while
+	// two reports naming the same repo-relative file sum into one row.
+	for name, s := range src.Files {
+		dst.addFile(name, s)
+	}
 	denom := dst.Killed + dst.Survived + dst.Timeout
 	if denom > 0 {
 		dst.Score = float64(dst.Killed) / float64(denom)
 	}
+}
+
+// RePrefixGremlinsFiles rewrites a single package's gremlins report so its
+// paths are repo-relative, both in Surviving[].File and in the per-file rows.
+//
+// Gremlins names a file by its basename ("changes.go") and carries the package
+// identity only in the invocation — ParseGremlinsJSON takes bytes and no
+// package argument, so it cannot do this. Left un-prefixed, every Go mutant
+// fails to match a repo-relative change set and the whole leg filters out as
+// out-of-scope: a vacuous 0/0 that reads like a clean run.
+//
+// pkg is the package path Run invoked gremlins with ("./internal/changes", or
+// "." for the module root). Paths already carrying the prefix are left alone,
+// so applying this twice is a no-op.
+func RePrefixGremlinsFiles(r *Report, pkg string) {
+	dir := strings.TrimPrefix(filepath.ToSlash(pkg), "./")
+	if dir == "" || dir == "." {
+		return
+	}
+	prefix := dir + "/"
+	rename := func(p string) string {
+		p = filepath.ToSlash(p)
+		if strings.HasPrefix(p, prefix) {
+			return p
+		}
+		return prefix + p
+	}
+	for i := range r.Surviving {
+		r.Surviving[i].File = rename(r.Surviving[i].File)
+	}
+	if len(r.Files) == 0 {
+		return
+	}
+	files := make(map[string]FileStat, len(r.Files))
+	for name, s := range r.Files {
+		k := rename(name)
+		files[k] = files[k].plus(s)
+	}
+	r.Files = files
 }
 
 // sanitizePkg turns a gremlins package path into a filesystem-safe report
@@ -355,10 +404,14 @@ func ParseGremlinsJSON(data []byte) (*Report, error) {
 			switch m.Status {
 			case "KILLED":
 				r.Killed++
+				r.addFile(f.Filename, FileStat{Killed: 1})
 			case "LIVED", "NOT COVERED":
 				r.Survived++
 				if m.Status == "NOT COVERED" {
 					r.NotCovered++
+					r.addFile(f.Filename, FileStat{Survived: 1, NotCovered: 1})
+				} else {
+					r.addFile(f.Filename, FileStat{Survived: 1})
 				}
 				r.Surviving = append(r.Surviving, Mutant{
 					File: f.Filename,
@@ -370,11 +423,13 @@ func ParseGremlinsJSON(data []byte) (*Report, error) {
 				})
 			case "TIMED OUT":
 				r.Timeout++
+				r.addFile(f.Filename, FileStat{Timeout: 1})
 			case "NOT VIABLE", "SKIPPED", "RUNNABLE", "":
 				// not counted
 			default:
 				// future statuses — surface as errors so they're visible
 				r.Errors++
+				r.addFile(f.Filename, FileStat{Errors: 1})
 			}
 		}
 	}

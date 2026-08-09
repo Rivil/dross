@@ -32,7 +32,58 @@ type Report struct {
 	// the score alone can't surface. Other adapters (Stryker, Stryker.NET)
 	// don't report this status and leave the field at zero.
 	NotCovered int
+
+	// Files attributes the same counters per source file: every mutant
+	// counted in the aggregates above is counted in exactly one row here.
+	// That is what lets verify recompute a score over a SUBSET of files —
+	// the phase's own change set — without re-running the tool. An adapter
+	// that populates the aggregates but not this map silently hands verify
+	// a report it can only score whole-package.
+	//
+	// Not persisted: tests.json carries the filtered aggregates and the
+	// out-of-scope survivor list, not the raw per-file table.
+	Files map[string]FileStat `json:"-"`
 }
+
+// FileStat is one file's slice of a Report — the same per-status counters,
+// attributed to the file the mutant landed in.
+type FileStat struct {
+	Killed     int
+	Survived   int
+	Timeout    int
+	Errors     int
+	NotCovered int
+}
+
+// plus returns the element-wise sum of two rows. Used both to accumulate
+// mutants into a row and to merge per-package reports.
+func (f FileStat) plus(o FileStat) FileStat {
+	return FileStat{
+		Killed:     f.Killed + o.Killed,
+		Survived:   f.Survived + o.Survived,
+		Timeout:    f.Timeout + o.Timeout,
+		Errors:     f.Errors + o.Errors,
+		NotCovered: f.NotCovered + o.NotCovered,
+	}
+}
+
+// addFile accumulates one row into r.Files, allocating the map on first use.
+func (r *Report) addFile(file string, s FileStat) {
+	if r.Files == nil {
+		r.Files = map[string]FileStat{}
+	}
+	r.Files[file] = r.Files[file].plus(s)
+}
+
+// Origin tags record how a surviving mutant relates to the phase's diff.
+// Set by verify's diff scoping, not by an adapter.
+const (
+	// OriginInHunk means the mutated line sits inside a hunk the phase changed.
+	OriginInHunk = "in-hunk"
+	// OriginInherited means the phase touched the file but not this line —
+	// still in scope and still gating, just weaker evidence.
+	OriginInherited = "inherited"
+)
 
 // Mutant is one specific change that survived.
 type Mutant struct {
@@ -40,6 +91,13 @@ type Mutant struct {
 	Line    int
 	Op      string // operator (e.g. "ConditionalNegation")
 	Snippet string // the surviving mutated source slice
+
+	// Origin is OriginInHunk or OriginInherited once diff scoping has
+	// classified the mutant; empty as the adapter produces it. It lives on
+	// Mutant rather than on a verify-side wrapper because kept survivors
+	// reach tests.json through languages[].mutation.surviving, which
+	// serialises []Mutant directly.
+	Origin string
 }
 
 // Adapter runs mutation tests for one language family.

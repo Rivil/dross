@@ -64,17 +64,40 @@ func Verify() *cobra.Command {
 			for taskID, rec := range ch.Tasks {
 				filesByTask[taskID] = rec.Files
 			}
-			files := verify.FilesFromChanges(filesByTask)
-			if len(files) == 0 {
-				Print("verify: no changes recorded for this phase yet (execute hasn't touched any files).")
+			recorded := verify.FilesFromChanges(filesByTask)
+
+			// Scoping is unconditional — there is no flag for it. It is a
+			// correctness fix, not a mode: without it a survivor in an
+			// untouched file of the same package gates this phase, and a
+			// neighbour's kills inflate its score.
+			scope := phaseScope(filepath.Dir(root), ch.Base, recorded)
+
+			// The UNION is what gets mutated, not just the recorded files. A
+			// file git saw change but no task recorded would otherwise never
+			// be mutated at all, so its survivors could not gate anything —
+			// the same escape hatch this phase closes on the attribution side.
+			// Widening happens here, at dispatch; the post-Report filter never
+			// narrows it back.
+			files, gone := mutationCandidates(filepath.Dir(root), scope.Files)
+			if len(files) == 0 && len(gone) == 0 {
+				Print("verify: no changes recorded for this phase and nothing changed since the base.")
 				Print("Run /dross-execute first, or record changes manually with `dross changes record`.")
 				return nil
 			}
 
 			adapters := configuredAdaptersFn(proj, root, skipMutation)
-			t, err := verify.Run(phaseID, files, adapters)
+			t, err := verify.RunScoped(phaseID, files, adapters, scope)
 			if err != nil {
 				return err
+			}
+			// Deleted paths stay in the record — they are part of what the
+			// phase did — but as a skip with an honest reason rather than as
+			// an argument to a mutation tool.
+			for _, f := range gone {
+				t.Skipped = append(t.Skipped, verify.SkippedFile{
+					File:   f,
+					Reason: "file no longer exists in the working tree",
+				})
 			}
 
 			testsPath, verifyPath := verify.FilePaths(root, phaseID)
@@ -260,6 +283,32 @@ func dockerPrefix(p *project.Project) string {
 	return "docker compose exec app"
 }
 
+// mutationCandidates splits the scope's file set into what may be handed to a
+// mutation adapter and what may not. The scope itself keeps every path —
+// filtering a report has to recognise them all — but two kinds are held back:
+//
+//   - gone: paths no longer in the working tree. A deleted file cannot be
+//     mutated, and passing one to `stryker --mutate` fails the whole leg. The
+//     caller still records them, as skips with a reason.
+//   - .dross/ bookkeeping: dropped entirely, from both lists. Every phase's
+//     git diff necessarily contains its own spec.toml, plan.toml and
+//     changes.json, so recording them as skips would seed four to six
+//     permanent NOTEs into every verify.toml — a standing backlog no phase can
+//     ever drain, which is what rule r-02 forbids.
+func mutationCandidates(repoDir string, files []string) (dispatch, gone []string) {
+	for _, f := range files {
+		if f == ".dross" || strings.HasPrefix(f, ".dross/") {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(repoDir, f)); err != nil {
+			gone = append(gone, f)
+			continue
+		}
+		dispatch = append(dispatch, f)
+	}
+	return dispatch, gone
+}
+
 // recordVerifyOutcome writes a telemetry outcome event capturing the
 // shape of this verify run — verdict, mutation score, file/criterion
 // counts. Never logs file paths or criterion text.
@@ -290,6 +339,16 @@ func recordVerifyOutcome(t *verify.Tests, v *verify.Verify) {
 		counts["files"] = files
 		counts["mutants_killed"] = killed
 		counts["mutants_survived"] = survived
+		// Both counts are already post-filter — Tests carries the in-scope
+		// reports — so the score below is the in-scope score, the same
+		// fraction verify.toml reports. They agree exactly on a single-leg,
+		// zero-timeout run; wider than that the two sides use different
+		// conventions (verify.toml means across legs, this pools; Report.Score
+		// puts timeouts in the denominator, this does not). Reconciling them
+		// changes the number every phase's thresholds apply to and is
+		// deliberately out of this phase's diff.
+		counts["mutants_in_scope"] = v.Summary.MutantsInScope
+		counts["out_of_scope"] = len(t.OutOfScope)
 		if total := killed + survived; total > 0 {
 			nums["mutation_score"] = float64(killed) / float64(total)
 		}
@@ -306,6 +365,11 @@ func recordVerifyOutcome(t *verify.Tests, v *verify.Verify) {
 	}
 	if v.Summary.MutationStatus != "" {
 		tags["mutation_status"] = v.Summary.MutationStatus
+	}
+	// Which sources the scope came from, so a run of degraded verifies is
+	// visible in aggregate. A source name, never a path.
+	if t != nil && t.Scope != nil {
+		tags["scope_source"] = t.Scope.Source
 	}
 	recordVerifyPhaseOutcome(v.Verify.Phase, counts, nums, tags)
 }
@@ -368,7 +432,12 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 	for _, s := range t.Skipped {
 		Printf("  skipped %s — %s\n", s.File, s.Reason)
 	}
+	printScopeSummary(t, v)
 	switch v.Summary.MutationStatus {
+	case verify.MutationOutOfScope:
+		Print("  mutation status: out-of-scope — the adapters found mutants, but every one of them " +
+			"landed in a file this phase never touched. Nothing here measures these changes; " +
+			"/dross-verify will base the verdict on criterion coverage alone.")
 	case verify.MutationUnmeasurable:
 		Print("  mutation status: unmeasurable — adapter ran but instrumented 0 mutants " +
 			"(likely the project's mutation scope excludes every touched file). " +
@@ -378,4 +447,42 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 			"Score is 0/0 — /dross-verify will base the verdict on criterion coverage alone.")
 	}
 	Printf("\nWrote tests.json + verify.toml (verdict=%s — /dross-verify will fill criterion mappings).\n", v.Verify.Verdict)
+}
+
+// scopeFileListCap bounds how many scoped files are named before the line
+// collapses to a count. Naming them is the point — a reader has to be able to
+// see the scope was what they expected — but a fifty-file phase should not
+// bury the score under its own file list.
+const scopeFileListCap = 12
+
+// printScopeSummary reports what the run scoped to, how much it filtered, and
+// whether that view was complete.
+//
+// The in-scope mutant count sits beside the score deliberately: 0.50 over two
+// mutants and 0.50 over two hundred are the same number and not the same
+// evidence, and the locked decision was to surface the sample size rather than
+// add a threshold that could launder a real survivor.
+func printScopeSummary(t *verify.Tests, v *verify.Verify) {
+	if t.Scope == nil {
+		return
+	}
+	names := t.Scope.Files
+	suffix := ""
+	if len(names) > scopeFileListCap {
+		suffix = fmt.Sprintf(" (+%d more)", len(names)-scopeFileListCap)
+		names = names[:scopeFileListCap]
+	}
+	base := "no base resolved"
+	if t.Scope.Base != "" {
+		base = "base " + short(t.Scope.Base)
+	}
+	Printf("  scope: %d file(s) from %s, %s — %s%s\n",
+		len(t.Scope.Files), t.Scope.Source, base, strings.Join(names, ", "), suffix)
+	Printf("  in-scope mutants: %d (score %.2f)\n", v.Summary.MutantsInScope, v.Summary.MutationScore)
+	if n := len(t.OutOfScope); n > 0 {
+		Printf("  filtered %d out-of-scope survivor(s) — see `out_of_scope` in tests.json\n", n)
+	}
+	for _, d := range t.Scope.Degraded {
+		Printf("  scope degraded: %s\n", d)
+	}
 }

@@ -1,0 +1,82 @@
+[phase]
+  id = "mutation-diff-scope"
+  title = "mutation-diff-scope"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "A verify run's reported survivors contain only mutants in files in the phase's own change set; a survivor in an untouched file in the same package never appears as a phase survivor."
+
+[[criteria]]
+  id = "c-2"
+  text = "The mutation score recorded in verify.toml and tests.json is computed from in-scope mutants only: a killed or surviving mutant in an untouched file changes neither the numerator nor the denominator."
+
+[[criteria]]
+  id = "c-3"
+  text = "Out-of-scope mutants are not silently discarded: a verify run reports how many out-of-scope survivors it filtered and where, distinctly from the phase's own survivors."
+
+[[criteria]]
+  id = "c-4"
+  text = "Diff scoping is adapter-agnostic: it applies to every configured adapter's normalised Report, so a package-granular tool and a file-granular one produce the same attribution guarantee."
+
+[[criteria]]
+  id = "c-5"
+  text = "A phase whose in-scope mutant set turns out empty (every mutant landed in untouched files) is reported with an explicit status rather than a bare 0.00 score or the package's score."
+
+[[criteria]]
+  id = "c-6"
+  text = "A verify run records the exact file set it scoped to, so a mis-scoped run (missing or stale change record) is diagnosable after the fact rather than looking like a clean pass."
+
+[[criteria]]
+  id = "c-7"
+  text = "Every in-scope survivor is tagged as either inside one of the phase's changed hunks or inherited by proximity (same file, untouched lines)."
+
+[[decisions]]
+  key = "scope_source"
+  choice = "The phase's change set is the union of (a) files changed between merge-base(changes.json `base`, HEAD) and HEAD, and (b) changes.json's recorded per-task files."
+  why = "Git is the truth about what the phase touched; changes.json covers what git can't see or what a later commit restored. Union fails open — scoping wider — so a forgotten `dross changes record` never silently shrinks the phase to nothing."
+  locked = true
+
+[[decisions]]
+  key = "scope_granularity"
+  choice = "In-scope is file-level and that is what gates: touch a file, own its mutants for score and verdict. Hunk position annotates only — each in-scope survivor is tagged in-hunk vs inherited-by-proximity."
+  why = "File-level matches the milestone criterion's wording and keeps a survivor in code you edited around from escaping the gate; the hunk tag still gives the tighter signal without making line-range parsing load-bearing for pass/fail."
+  locked = true
+
+[[decisions]]
+  key = "small_denominator_gate"
+  choice = "The 0.95 threshold is unchanged. The run surfaces the in-scope mutant count alongside the score so a low score on a tiny N reads as a small sample; the pass/fail call stays with /dross-verify's existing partial-verdict path."
+  why = "A sample-size floor would stop a real survivor from failing anything in exactly the phases where scrutiny is cheapest. No new tunable, no new way to launder a survivor."
+  locked = true
+
+[[decisions]]
+  key = "out_of_scope_surface"
+  choice = "Out-of-scope survivors persist as a structured list (file, line, op) under their own key in tests.json, plus one NOTE-severity line in verify.toml carrying the count."
+  why = "Machine-readable for the survivor-lifecycle phase to consume, one line of human noise, and it reuses the NOTE severity verify.toml already emits for skipped files — no new artefact to schema or validate."
+  locked = true
+
+[[decisions]]
+  key = "scoping_always_on"
+  choice = "Diff scoping is unconditional — no flag and no opt-out to run whole-package attribution."
+  why = "It is a bug fix, not a mode; c-3's out-of-scope reporting already covers seeing what was filtered."
+  locked = true
+
+[[deferred]]
+  text = "Reconcile the three live mutation-score formulas: verify.toml's combineScore takes the MEAN across legs, recordVerifyOutcome POOLS killed/(killed+survived) with timeouts excluded, and Report.Score uses killed/(killed+survived+timeout) — while adapter.go's struct doc claims killed/(killed+survived) and is simply wrong. A two-leg run with unequal leg sizes diverges (1/1 and 0/9 gives 0.50 vs 0.10) and a single-leg run diverges as soon as one mutant times out."
+  why = "Surfaced by this phase's plan review, but out of its diff: picking a normative formula changes the number every phase's 0.80/0.60 thresholds are applied to, which this spec never scoped. mutation-diff-scope contains it instead — t-6's telemetry-equality contract is explicitly narrowed to the single-leg, zero-timeout range where the existing formulas already agree, with a standing instruction not to 'fix' combineScore to widen it."
+  target = "survivor-lifecycle"
+
+[[deferred]]
+  text = "Cover the mutation adapters' error and process-seam paths: internal/mutation/gremlins.go:155 and :166 (unreadable-report and zero-coverage message construction), stryker.go:73 and :80 (report-read and parse error branches), stryker.go:263 (the future-status default arm), stryker_net.go:221 (buildCmd's prefix seam)."
+  why = "Nine survivors this phase's verify run surfaced as `inherited` — same file, untouched lines. They are pre-existing adapter I/O plumbing the phase inherited responsibility for by editing around it, not scoping logic, and none participates in any acceptance criterion. Routed rather than re-listed per rule r-02; recorded as accepted-for-now in verify.toml so the next verify does not re-report them."
+  target = "survivor-lifecycle"
+
+[[deferred]]
+  text = "Gate the verdict on an absolute count of unclassified in-scope survivors instead of a ratio."
+  why = "Changes the verdict contract for every phase and depends on 'unclassified' being a real survivor state — which survivor-lifecycle builds."
+  target = "survivor-lifecycle"
+
+[[deferred]]
+  text = "Fix doctor's stale-milestone-branch check: it told a v1.3 ship to `dross milestone prune` the branch that was the open PR's own base. Two independent faults — it never consults [milestone].status, so an active milestone with 10 unrun phases is reported prunable; and it measures merged-ness against LOCAL main, so a local main sitting unpushed-ahead of origin (here 3 chore commits) makes a freshly-cut milestone branch look identical to main and therefore merged. Gate on status != active, and compare against origin/<base> rather than the local ref."
+  why = "Found during this phase's own ship, outside its diff: doctor exited 1 and the documented §0.3 exit-0 gate had to be overridden by hand to open the PR. Following the advice would have deleted the PR's base branch. Belongs with milestone-lifecycle-close, whose criterion already owns distinguishing a missing branch ref from an unmerged one."
+  target = "milestone-lifecycle-close"
