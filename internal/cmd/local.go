@@ -63,6 +63,16 @@ type localStore struct {
 	// cloned, so a repo cannot ship its own authorization. readAllowHosts
 	// protects exactly that property.
 	AllowHosts string `toml:"allow_hosts,omitempty"`
+
+	// TrustedTestCommand is sha256(runtime.test_command) for the command the
+	// user consented to dross spawning — see trust.go for the whole gate.
+	//
+	// It is deliberately ABSENT from localKeys: `dross local set` must not be
+	// able to grant it. Consent is granted only by `dross trust`, which prints
+	// the command it is about to trust; a generic key-writer would let an agent
+	// grant consent on the user's behalf without ever showing them what for,
+	// which is the entire thing being defended against.
+	TrustedTestCommand string `toml:"trusted_test_command,omitempty"`
 }
 
 // localKeys maps each key to its accessors, keeping `local get` and
@@ -95,17 +105,8 @@ var localKeys = map[string]struct {
 // optional, and a fresh clone legitimately has none. Only "git says this is
 // tracked" is an error.
 func readAllowHosts(root, repoDir string) ([]string, error) {
-	rel := RootDirName + "/" + LocalFile
-	if gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", rel) == nil {
-		return nil, fmt.Errorf(
-			"refusing to read %s: git reports it tracked.\n\n"+
-				"%s is machine-local by design — it is where a host is added to the API\n"+
-				"allowlist, so a committed copy would let this repo authorize its own API\n"+
-				"host. dross will not read a tracked one.\n\n"+
-				"To fix, untrack it and keep the local copy:\n\n"+
-				"    git rm --cached %s\n"+
-				"    git commit -m \"chore: untrack dross local store\"",
-			rel, rel, rel)
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return nil, err
 	}
 	l, err := loadLocal(localPath(root))
 	if err != nil {
@@ -118,6 +119,32 @@ func readAllowHosts(root, repoDir string) ([]string, error) {
 		}
 	}
 	return hosts, nil
+}
+
+// refuseTrackedLocal is the provenance check every reader of a trust-bearing
+// key in local.toml goes through, extracted so readAllowHosts and the exec
+// consent gate share ONE refusal rather than two that drift apart.
+//
+// It returns nil for a missing or untracked file — local.toml is optional, and
+// a fresh clone legitimately has none. Only "git says this is tracked" is an
+// error, and the file is refused UNREAD in that case: a committed store is
+// either an accident an honest repo wants to know about, or a hostile repo
+// authorizing itself through the one input dross trusts precisely because it is
+// never cloned.
+func refuseTrackedLocal(repoDir string) error {
+	rel := RootDirName + "/" + LocalFile
+	if gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", rel) != nil {
+		return nil
+	}
+	return fmt.Errorf(
+		"refusing to read %s: git reports it tracked.\n\n"+
+			"%s is machine-local by design — it is where this machine records what it\n"+
+			"trusts (API allowlist hosts, the consented test command), so a committed\n"+
+			"copy would let the repo authorize itself. dross will not read a tracked one.\n\n"+
+			"To fix, untrack it and keep the local copy:\n\n"+
+			"    git rm --cached %s\n"+
+			"    git commit -m \"chore: untrack dross local store\"",
+		rel, rel, rel)
 }
 
 func localKeyNames() string {
