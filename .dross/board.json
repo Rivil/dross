@@ -5,6 +5,8 @@
   "phases": {
     "exec-trust-followups": "DRO-2"
   },
-  "quicks": {},
+  "quicks": {
+    "1.2.8.1": "DRO-6"
+  },
   "last_pull": "0001-01-01T00:00:00Z"
 }
