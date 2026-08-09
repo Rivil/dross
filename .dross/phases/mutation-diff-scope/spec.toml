@@ -62,6 +62,11 @@
   locked = true
 
 [[deferred]]
+  text = "Reconcile the three live mutation-score formulas: verify.toml's combineScore takes the MEAN across legs, recordVerifyOutcome POOLS killed/(killed+survived) with timeouts excluded, and Report.Score uses killed/(killed+survived+timeout) — while adapter.go's struct doc claims killed/(killed+survived) and is simply wrong. A two-leg run with unequal leg sizes diverges (1/1 and 0/9 gives 0.50 vs 0.10) and a single-leg run diverges as soon as one mutant times out."
+  why = "Surfaced by this phase's plan review, but out of its diff: picking a normative formula changes the number every phase's 0.80/0.60 thresholds are applied to, which this spec never scoped. mutation-diff-scope contains it instead — t-6's telemetry-equality contract is explicitly narrowed to the single-leg, zero-timeout range where the existing formulas already agree, with a standing instruction not to 'fix' combineScore to widen it."
+  target = "survivor-lifecycle"
+
+[[deferred]]
   text = "Gate the verdict on an absolute count of unclassified in-scope survivors instead of a ratio."
   why = "Changes the verdict contract for every phase and depends on 'unclassified' being a real survivor state — which survivor-lifecycle builds."
   target = "survivor-lifecycle"
