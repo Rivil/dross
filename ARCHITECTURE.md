@@ -140,7 +140,7 @@ Make every structured `show` machine-readable on the same terms: `project`, `mil
 
 - `emitJSON` (bare-document emitter behind `--json`) — `internal/cmd/jsonout.go:20`
 - `summarizeStats` (one aggregation struct behind both table and JSON) — `internal/cmd/stats.go:133`
-- `taskShow` (`--json` status normalised through `orPending`) — `internal/cmd/task.go:125`
+- `taskShow` (`--json` status normalised through `orPending`) — `internal/cmd/task.go:130`
 - `TestEveryStructuredShowAcceptsJSON` (tree walk + wired-not-just-registered check) — `cmd/dross/main_test.go:450`
 
 _introduced board-state-map-truth · 3272339_
@@ -172,14 +172,15 @@ _introduced 06-dross-quality · extended 07-stack-profiles · extended 09-marker
 
 ### Config-derived git argument safety
 
-A value read out of `.dross/project.toml` is untrusted input to git, not a trusted argument. Two layers hold. Config-derived **ref names** are validated before any git process starts: a leading `-`, or anything `git check-ref-format` rejects, is refused with a named error at `phase complete`, `phase checkout`, `milestone create` and `ship recover`. And every git invocation that passes a config- or user-derived **positional** builds its argv through separator-carrying builders — `--end-of-options` for refs, `--` for pathspecs, deliberately distinct (locked `ref_separator_token`: a `--` in a ref position makes git reinterpret the branch as a pathspec, which is a different bug, not a fix). That second layer closed a real arbitrary-file-write, where `dross repair`'s `git log` took an attacker-supplied `--output=` straight out of config. Coverage is structural rather than by inspection: a repo-wide AST audit fails by `file:line` on any git positional that is neither a literal nor a prefix-constant, and the audit is itself self-checked against a FLAG/PASS snippet table so it cannot pass vacuously. The `git >= 2.24` floor `--end-of-options` implies is executed, not assumed.
+A value read out of `.dross/project.toml` is untrusted input to git, not a trusted argument. Two layers hold. Config-derived **ref names** are validated before any git process starts: a leading `-`, or anything `git check-ref-format` rejects, is refused with a named error at `phase complete`, `phase checkout`, `milestone create` and `ship recover`. And every git invocation that passes a config- or user-derived **positional** builds its argv through separator-carrying builders — `--end-of-options` for refs, `--` for pathspecs, deliberately distinct (locked `ref_separator_token`: a `--` in a ref position makes git reinterpret the branch as a pathspec, which is a different bug, not a fix). That second layer closed a real arbitrary-file-write, where `dross repair`'s `git log` took an attacker-supplied `--output=` straight out of config. Coverage is structural rather than by inspection: a repo-wide AST audit fails by `file:line` on any positional that is neither a literal nor a prefix-constant, and the audit is itself self-checked against a FLAG/PASS snippet table so it cannot pass vacuously. That audit covers **every** binary dross spawns, not only git (locked `audit_gate_breadth`): it resolves each spawn site to a binary, looks the binary up in `internal/argfence`'s policy table, and applies whichever defence that tool can actually offer — an end-of-options token for git / `gh` / ast-grep / semgrep, outright rejection of a leading-dash value for gremlins / npx / dotnet, which have none. A binary with no table entry is a finding, so a tool nobody anticipated is in scope the day it is added, and a flag demoted *past* a separator is a finding too — in cobra `--` ends flag parsing rather than fencing one token, so a demoted flag silently becomes a positional. The `git >= 2.24` floor `--end-of-options` implies is executed, not assumed.
 
 - `validateGitRef` (pre-exec ref guard behind the four guarded switch helpers) — `internal/cmd/refguard.go:32`
 - `gitRefArgs` / `gitRefPathArgs` (separator-carrying argv builders) — `internal/cmd/gitargs.go:45`
 - `TestPhaseCompleteRefusesDashMainBranch` (one entrypoint test per guarded command, refusal asserted to precede the first exec) — `internal/cmd/refguard_entrypoints_test.go:79`
 - `historyFromPhaseCommits` (repair's `git log` fenced — the arbitrary-file-write site) — `internal/cmd/repair_state.go:78`
-- `auditFile` (AST gate flagging unseparated git positionals by file:line) — `internal/cmd/gitargs_audit_test.go:73`
-- `TestNoUnseparatedGitPositional` (the repo-wide run of that gate) — `internal/cmd/gitargs_audit_test.go:211`
+- `auditFile` (AST gate flagging unseparated positionals for EVERY spawned binary by file:line, per-tool policy read from `argfence`) — `internal/cmd/subprocargs_audit_test.go:129`
+- `TestNoUnseparatedPositional` (the repo-wide run of that gate, all binaries) — `internal/cmd/subprocargs_audit_test.go:346`
+- `TestNoUnseparatedGitPositional` (the original git-only guarantee, kept as its own test after the generalisation) — `internal/cmd/subprocargs_audit_test.go:359`
 - `TestHostileConfigVectors` (12-vector hostile-`.dross/` suite off a pinned refusal contract, with an observed red replay) — `internal/cmd/hostile_config_test.go:302`
 - hostile-config fixture (pinned refusal contract + payloads) — `fixtures/hostile-config-c5/expected-refusals.txt:1`
 
@@ -199,7 +200,7 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - doctor enum validation via `configenum` Sets — `internal/cmd/doctor.go:117`
 - `remoteCombinationWarnings` (runtime-fatal pairings as advisory warnings) — `internal/cmd/doctor.go:452`
 - `Remote.AuthUser` (`[remote].auth_user` schema + dotted read/write) — `internal/project/project.go:103`
-- `forge.Client.do` (basic scheme + construction-time auth_user check) — `internal/forge/forge.go:621`
+- `forge.Client.do` (basic scheme + construction-time auth_user check) — `internal/forge/forge.go:628`
 - `providerSwitchIn` (go/ast validator↔dispatch divergence guard) — `internal/cmd/enum_divergence_test.go:56`
 - `TestPromptProviderListsMatchShipProviders` (init/onboard provider bullets pinned to ShipProviders) — `internal/cmd/prompt_provider_list_test.go:73`
 - `renderMultiGet` (shared 1+-path get renderer: bare value or keyed JSON in argument order) — `internal/cmd/dotget.go:24`
@@ -208,7 +209,7 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `resolveBareMilestoneField` (unambiguous bare name → dotted path, ambiguity rejected) — `internal/cmd/milestone.go:784`
 - `stateMapKey` (`board.state_map` keys gated + normalised on write; doctor reports one on disk as an issue) — `internal/cmd/project.go:477`
 - `TestTomlFieldsCarryMatchingJSONTags` (toml↔json tag parity, transitive walk over the eight document roots) — `internal/cmd/json_tag_parity_test.go:48`
-- `writeVersion` (one validated writer for both version homes, tracked copy first) — `internal/cmd/state.go:235`
+- `writeVersion` (one validated writer for both version homes, tracked copy first) — `internal/cmd/state.go:239`
 - doctor version-drift check (project.toml vs state.json, skipped on a fresh clone) — `internal/cmd/doctor.go:349`
 - `checkConfigTrust` (rejectable branch name, off-allowlist api_base, tracked local.toml and pre-2.24 git as exit-code-moving findings) — `internal/cmd/doctor.go:837`
 
@@ -287,12 +288,12 @@ _introduced 10-interaction-contract · extended 11-retrofit-core-loop · extende
 
 Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue board — driven solely by a dedicated `[board]` config block, independent of `[remote]`, so a repo ships code to one host and tracks issues on another. Backends sit behind a `BoardClient` interface that `forge.NewBoard` dispatches by provider: the provider-aware forge `*Client` (forgejo/gitea/gitlab), a sibling `YouTrackClient` (REST CRUD, bearer permanent-token, readable-id `PROJ-7` addressing, `?fields` projection), a `JiraClient` (Jira Cloud REST v3, HTTP Basic email:token, string `PROJ-123` keys, ADF bodies, transition-driven state, milestones as project versions), or a `GitHubClient` (repo issues with integer milestones — forge-shaped — plus an isolated Projects v2 `addProjectV2ItemById` add-to-board on create when a board is configured). board.json links every artefact by the tracker's readable **string** id. YouTrack adds milestone entities per `[board].milestone_mode` (version bundle / agile board / epic), lifecycle→State mapping via the default map + `[board].state_map` (unmapped warns and skips), and backlog sync of unscaffolded slugs + someday ideas attached per mode (Fix versions / Epic subtask / project-based board). The lifecycle vocabulary that both sides of that mapping speak has **one** home in `configenum.LifecycleStatuses` — planned / in-progress / verifying / shipped / complete — and the producer emits `planned` (locked `lifecycle_vocabulary`, renamed from `planning`), so a locked-but-unstarted plan sets tracker state instead of hitting the unmapped-transition skip. Two guards keep emitters and maps from drifting apart again: a **bidirectional** test fails when a status dross emits at a call site has no state-map entry *or* a state map keys on a status nothing emits (each forge map checked independently, never unioned), and `--status` on `dross issue phase-sync` is validated against the set — ahead of the `[board].enabled` short-circuit, so a bad value can't exit 0 as a silent no-op — then normalised back before use. `shipped` and `complete` are emitted rather than dead keys (locked `dead_map_keys` / `terminal_emit_sites`): ship sets `--status shipped` when the PR merges and `--status complete --close` at finalize, the two board moments ship already had, leaving `dross phase complete` with no board coupling. `dross doctor` validates a configured `[board]`; the inbox board source is gated on `[board].enabled`. The Jira path is **proven end-to-end against live Jira Cloud** (2026-07-25 v1.0 self-audit): the round-trip surfaced and fixed two bugs the httptest coverage had hidden — `board.auth_user` (required by `NewJira`) wasn't wired into `dross project set`, and `ListIssues` used Jira's removed `/rest/api/3/search` endpoint (HTTP 410), now migrated to `/search/jql`.
 
-- `forge.BoardClient` (interface) + `forge.NewBoard` (provider dispatch) — `internal/forge/forge.go:150`
-- `forge.YouTrackClient` + `NewYouTrack` — `internal/forge/youtrack.go:27`
-- `YouTrackClient.EnsureMilestoneEntity` / `SetState` — `internal/forge/youtrack.go:189`
-- `forge.JiraClient` + `NewJira` (REST v3, versions, transitions) — `internal/forge/jira.go:27`
-- `JiraClient.ListIssues` (current `/search/jql` endpoint; the legacy `/search` was removed) — `internal/forge/jira.go:183`
-- `forge.GitHubClient` + `NewGitHubProjects` (repo issues + Projects v2 attach) — `internal/forge/github.go:26`
+- `forge.BoardClient` (interface) + `forge.NewBoard` (provider dispatch) — `internal/forge/forge.go:151`
+- `forge.YouTrackClient` + `NewYouTrack` — `internal/forge/youtrack.go:28`
+- `YouTrackClient.EnsureMilestoneEntity` / `SetState` — `internal/forge/youtrack.go:190`
+- `forge.JiraClient` + `NewJira` (REST v3, versions, transitions) — `internal/forge/jira.go:28`
+- `JiraClient.ListIssues` (current `/search/jql` endpoint; the legacy `/search` was removed) — `internal/forge/jira.go:184`
+- `forge.GitHubClient` + `NewGitHubProjects` (repo issues + Projects v2 attach) — `internal/forge/github.go:28`
 - `board.Board` (string readable-id link registry) — `internal/board/board.go:29`
 - `openBoard` (resolves client solely from `[board]`) / `syncBacklog` — `internal/cmd/issue.go:79`
 - `board.*` dotted config incl. `auth_user` — `internal/cmd/project.go:193`
@@ -311,7 +312,7 @@ Facts that are true of *this* clone and must never ride cumulative history live 
 The first tenant is `.dross/local.toml`, read and written through `dross local get|set`. Because it is machine-authored and never cloned, it is where the [host allowlist](#api-host-allowlist)'s escape hatch lives: `allow_hosts` adds a host the derivation can't reach, and the read **refuses a `local.toml` that git reports as tracked** rather than trusting its contents — otherwise a hostile repo could ship its own authorization and the allowlist would be self-authorizing again. `init` and `onboard` seed the gitignore entry so the file starts untracked, and doctor reports a tracked one. Its own first tenant is `quick_base` — the branch a standalone quick task forked from. Ship and `phase complete` push a recorded quick base's unpushed `.dross/` chores on *that* branch rather than on an inferred one, closing the divergence where a quick committed to main mid-phase left local main unpushed and the next phase squash-merge could not fast-forward it. An unrecorded quick base, or one whose ref is gone, is left alone rather than guessed at, and a base equal to the phase's own base is a no-op.
 
 - `Local` (`dross local get|set`, gitignored `.dross/local.toml`) — `internal/cmd/local.go:34`
-- `readAllowHosts` (`allow_hosts` escape hatch; refuses a git-tracked local.toml instead of trusting it) — `internal/cmd/local.go:97`
+- `readAllowHosts` (`allow_hosts` escape hatch; refuses a git-tracked local.toml instead of trusting it) — `internal/cmd/local.go:107`
 - `TestReadAllowHostsRefusesTrackedLocal` (the self-authorizing hole, pinned shut) — `internal/cmd/local_test.go:134`
 - `pushQuickBaseIfRecorded` (ship + complete push chores on the recorded quick base, never an inferred one) — `internal/cmd/basebranch.go:129`
 - `TestShipReconcilesRecordedQuickBase` (pins ship's call site so a recorded quick base can't be left unpushed) — `internal/cmd/ship_test.go:1115`
@@ -361,11 +362,11 @@ Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Sve
 
 - `Adapter` — `internal/mutation/adapter.go:46`
 - `Report` — `internal/mutation/adapter.go:18`
-- `Gremlins.Run` — `internal/mutation/gremlins.go:82`
-- `Stryker.Run` — `internal/mutation/stryker.go:46`
-- `Stryker.runArgs` (npx invocation + workdir knob) — `internal/mutation/stryker.go:101`
-- `strykerPin` (exact `@stryker-mutator/core@9.6.1`, shared by the argv and the install hint) — `internal/mutation/stryker.go:94`
-- `dockerPrefix` (exact-`docker` exec-prefix guard) — `internal/cmd/verify.go:221`
+- `Gremlins.Run` — `internal/mutation/gremlins.go:84`
+- `Stryker.Run` — `internal/mutation/stryker.go:48`
+- `Stryker.runArgs` (npx invocation + workdir knob) — `internal/mutation/stryker.go:113`
+- `strykerPin` (exact `@stryker-mutator/core@9.6.1`, shared by the argv and the install hint) — `internal/mutation/stryker.go:100`
+- `dockerPrefix` (exact-`docker` exec-prefix guard) — `internal/cmd/verify.go:234`
 
 _introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076 · extended config-trust-hardening · 266a84d_
 
@@ -460,7 +461,7 @@ Decide what counts as a dross repo, and say so the same way everywhere. `state.j
 - `finalizeIncompleteRoot` (doctor's distinct verdict) / `incompleteRootHeading` — `internal/cmd/doctor.go:642`
 - `Onboard` (adopts an incomplete root in place) — `internal/cmd/onboard.go:26`
 - `TestRootHelperCallersAreAllowlisted` (AST allowlist over the swallow set) — `internal/cmd/incompleteroot_test.go:166`
-- `ensureState` (materializes a missing state.json from project.toml's version) — `internal/cmd/state.go:263`
+- `ensureState` (materializes a missing state.json from project.toml's version) — `internal/cmd/state.go:267`
 
 _introduced root-robustness · extended state-json-branch-safety · 93b072a_
 
@@ -549,12 +550,12 @@ _52f6c75 · extended ship-complete-recovery-hardening · extended ship-clean-tre
 Push the phase branch and open a provider-aware PR/MR (GitHub/Forgejo/GitLab/Bitbucket) with reviewers, merging the phase's landmarks into ARCHITECTURE.md first — auto-backfilling the whole doc via the prompt-driven generation when it's absent, so an older repo self-heals on its next interactive ship (non-blocking; `--auto` skips it) — marks the phase `shipped` in the machine-local, gitignored `state.json` and **leaves `current_phase` set**, because a phase is not complete until its PR is merged and ship runs before that is known; `dross phase complete` is the sole writer of the completed-state transition (see [Phase lifecycle](#phase-lifecycle)). The `shipped <id>` breadcrumb is history-scan-guarded so a re-ship never doubles it, and ship returns on a clean tree; squash-merge collapses per-task commits. The GitLab path is raw REST (no `gh`/`glab` CLI): `openGitLabPR` opens a Merge Request (source/target branch, `Draft:` prefix, `web_url`→URL, `iid`→Number) and resolves reviewer usernames→ids non-fatally; `postGitLabComment` posts an MR note. The post-push PR/MR URL is intentionally printed, not persisted to state.json (avoids the completion-chore divergence); the PR *number*, however, is recorded per-phase in changes.json (`changes.SetPR`), then committed **and pushed** onto the phase branch — drag-proof, unlike cumulative history — so the squash-merge carries the record onto the base's changes.json where `phase complete`'s `mergeGate` reads it to authoritatively confirm the merge (the push is essential: a local-only record never reaches the PR/squash/base, which would leave `mergeGate` blind and refusing every squash-merged completion). The CI-watch + squash-merge steps are prompt-driven (ship.md §5/§6) with the locked GitLab pipeline-status mapping. A non-interactive fast-path makes ship callable from a script or loop: `dross ship --auto` requests zero reviewers for the run without mutating `remote.reviewers` (gating the narration + telemetry off `opts.Reviewers`) and keeps the generated body, while `--json` emits a single `{url, number, result}` object on stdout through a suppressible `narrate` closure — the two compose, and explicit `--body`/`--body-file`/`--draft` still win. `ship.md §0.5` skips the interactive body-preview/body-override/reviewer turns and shells to `dross ship --auto`, opening the PR and returning without driving the merge. Bitbucket Cloud is a real ship provider over HTTP Basic (`auth_scheme = basic` + `[remote].auth_user`, its app-password/API-token wire format): `openBitbucketPR` creates the PR from the nested source/destination branch payload and reads the URL back off `links.html.href`, `postBitbucketComment` posts a `content.raw` note, and `bitbucketPRStatus` reports the authoritative merged status from `state == "MERGED"` plus `destination.branch.name` as BaseRef — a status all 5 ship providers now answer authoritatively via `ship.GetPRStatus`, not just Bitbucket — every provider switch on the path normalises through `configenum`, so the set ship dispatches, the set doctor blesses and the set the init/onboard prompts tell an agent to write are one set. GitLab and Forgejo/Gitea complete the same pair of surfaces Bitbucket did: `gitlabPRStatus` / `forgejoPRStatus` complete the `GetPRStatus` dispatch (`state == merged` + `target_branch`→BaseRef for GitLab; a `merged` boolean, not `state`, plus `base.ref`→BaseRef for Forgejo/Gitea, since Gitea's `state` field reports misleadingly), and `gitlabOpenMRsTargeting` / `forgejoOpenPRsTargeting` complete `OpenPRsTargeting` (GitLab paginates via `per_page`/`page`; Forgejo/Gitea filters client-side by `base.ref` since Gitea has no `base=` query param) — so every ship provider now answers both merge-status and open-PRs-by-base authoritatively, not just GitHub/Bitbucket.
 
 - `Ship` (CLI; `--auto` / `--json` non-interactive flags) — `internal/cmd/ship.go:76`
-- `ship.OpenPR` (provider switch → github/forgejo/`openGitLabPR`/`openBitbucketPR`) — `internal/ship/open.go:48`
+- `ship.OpenPR` (provider switch → github/forgejo/`openGitLabPR`/`openBitbucketPR`) — `internal/ship/open.go:49`
 - `ship.PostComment` / `postGitLabComment` / `postBitbucketComment` — `internal/ship/comment.go`
-- `openBitbucketPR` (Basic-auth PR creation, nested branch payload) — `internal/ship/bitbucket.go:165`
-- `bitbucketPRStatus` (authoritative `state == MERGED` + `destination.branch.name` as BaseRef) — `internal/ship/bitbucket.go:106`
-- `gitlabPRStatus` / `gitlabOpenMRsTargeting` (GitLab PRStatus + open-MRs-by-target parity) — `internal/ship/gitlab.go:100`, `internal/ship/gitlab.go:104`
-- `forgejoPRStatus` / `forgejoOpenPRsTargeting` (Forgejo/Gitea PRStatus + open-PRs-by-base parity) — `internal/ship/forgejo.go:84`
+- `openBitbucketPR` (Basic-auth PR creation, nested branch payload) — `internal/ship/bitbucket.go:171`
+- `bitbucketPRStatus` (authoritative `state == MERGED` + `destination.branch.name` as BaseRef) — `internal/ship/bitbucket.go:112`
+- `gitlabPRStatus` / `gitlabOpenMRsTargeting` (GitLab PRStatus + open-MRs-by-target parity) — `internal/ship/gitlab.go:101`, `internal/ship/gitlab.go:104`
+- `forgejoPRStatus` / `forgejoOpenPRsTargeting` (Forgejo/Gitea PRStatus + open-PRs-by-base parity) — `internal/ship/forgejo.go:86`
 - `buildOpenOpts` / `buildCommentOpts` (thread remote auth_scheme/project_id/auth_user) — `internal/cmd/ship.go:43`
 - `changes.SetPR` (records opened PR number per-phase for the completion merge-gate) — `internal/changes/changes.go:141`
 - `ship.BuildPRBody` — `internal/ship/body.go:20`
@@ -627,9 +628,9 @@ _introduced native-statusline · 46e5025_
 List, add, remove, edit, and reposition tasks inside a phase's plan.toml through guarded CLI verbs, so the plan is readable and mutable through dross and never hand-edited. `dross task list` renders the plan as an aligned id/wave/status/title table for a human at a terminal or a `--json` array for a script (an empty plan emits `[]`, never `null`), with the phase-id argument optional and defaulting to `state.current_phase` — matching how `phase list` and `deferred list` already behave (locked `task_list_output`). New task ids come from a persisted per-plan high-water counter (Plan.TaskSeq): NextTaskID assigns high_water+1, and RemoveTask backfills the counter before deleting, so a freed id — even the highest — is never reissued; a new task's wave is the explicit --wave or one past its deepest dependency's wave (deriveWave). `add` appends at the tail by default and only positions relative to an anchor (--after/--before) when asked; `remove` is dependency-safe, refusing when another task depends on the target unless --force strips the id from every dependent; `edit` is a partial field update that changes only the flags passed and never status (dross task status stays that owner). `move` repositions a task relative to an `--before`/`--after` anchor: a move that would break dependency order is rejected with plan.toml untouched, a legal move adopts the anchor's wave and reflows transitive pending dependents (history stays frozen), ids stay stable across a move, and `task next` follows the new order because its same-wave tie-break is plan-array position rather than lexicographic id. Every mutation passes through saveIfValid → ValidatePlan (duplicate-id, unknown-depends_on, and covers→criterion parity with dross validate) and is written only if valid, leaving plan.toml byte-unchanged on rejection.
 
 - `taskList` (`dross task list`, table or `--json`, defaults to current_phase) — `internal/cmd/task.go:39`
-- `taskAdd` / `taskRemove` / `taskEdit` (CLI verbs) — `internal/cmd/task.go:212`
-- `taskMove` (`dross task move --before/--after`, resolveAnchor + saveIfValid) — `internal/cmd/task.go:346`
-- `saveIfValid` (validate-then-write guard) — `internal/cmd/task.go:383`
+- `taskAdd` / `taskRemove` / `taskEdit` (CLI verbs) — `internal/cmd/task.go:225`
+- `taskMove` (`dross task move --before/--after`, resolveAnchor + saveIfValid) — `internal/cmd/task.go:359`
+- `saveIfValid` (validate-then-write guard) — `internal/cmd/task.go:396`
 - `Plan.AddTask` / `Plan.RemoveTask` / `Plan.EditTask` (pure in-memory mutators) — `internal/phase/plan_edit.go:143`
 - `Plan.MoveTask` (guarded reposition, anchor-wave adoption + dependent reflow) — `internal/phase/plan_edit.go:228`
 - `Plan.NextRunnable` (same-wave tie-break by plan-array position) — `internal/phase/phase.go:303`
@@ -694,8 +695,8 @@ Map acceptance criteria to tests and run mutation testing; decide pass/partial/f
 - `Verify` (CLI) — `internal/cmd/verify.go:29`
 - `verify.Run` — `internal/verify/verify.go:137`
 - `LanguageRun.Error` (record-and-continue adapter failure) — `internal/verify/verify.go:54`
-- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:178`
-- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:146`
+- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:191`
+- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:153`
 - verify.md §2 size-gated offload (large criterion-mapping reads fan to read-only subagents; judgement + verdict stay main-loop) — `internal/cmd/verify_prompt_test.go:17`
 
 _e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79_

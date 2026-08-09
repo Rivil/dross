@@ -1,0 +1,121 @@
+# Snippets the audit must classify. A checker that degraded into "return
+# nothing" passes the real gate forever and reads as coverage, so it is made to
+# prove it can still see — and to prove it can still tell a fenced argv from an
+# unfenced one for EVERY binary in argfence's table, not just git.
+#
+# Each block is:
+#   FLAG <name>   — the audit MUST report at least one finding
+#   PASS <name>   — the audit MUST report none
+# followed by one or more lines of Go, wrapped by the test into
+#   func snippet(repoDir, branch, base, ref, path, msg, pkg, dir, fields, num,
+#                file, lang, pattern, mutate, chosen string) { … }
+#
+# The floor is derived: TestAuditFlagsItsOwnSnippets asserts it exercised every
+# row it parsed, so a row cannot be deleted or skipped without failing.
+
+# --- git (Separator, --end-of-options for refs / -- for paths) ---
+
+FLAG bare-var-positional
+	gitCombined(repoDir, "branch", "-D", branch)
+
+FLAG bare-var-after-subcommand
+	gitNoOut(repoDir, "rev-parse", branch)
+
+FLAG const-suffix-is-not-a-prefix
+	gitTrim(repoDir, "ls-tree", ref+":.dross/phases")
+
+FLAG exec-command-direct
+	exec.Command("git", "-C", repoDir, "log", branch)
+
+FLAG separator-after-the-value
+	gitNoOut(repoDir, "rev-parse", branch, "--end-of-options")
+
+FLAG path-without-separator
+	gitCombined(repoDir, "add", path)
+
+PASS all-literals
+	gitCombined(repoDir, "fetch", "origin")
+
+PASS const-prefix-concat
+	gitNoOut(repoDir, "rev-parse", "--verify", "refs/heads/"+branch)
+
+PASS ref-separator-then-value
+	gitCombined(repoDir, "checkout", "--end-of-options", branch)
+
+PASS path-separator-then-value
+	gitNoOut(repoDir, "ls-files", "--error-unmatch", "--", path)
+
+PASS option-argument-not-positional
+	gitCombined(repoDir, "commit", "-m", msg)
+
+PASS mixed-ref-and-path-separators
+	gitCombined(repoDir, "checkout", "--end-of-options", ref, "--", path)
+
+# --- gh (Separator, --; cobra ENDS flag parsing there) ---
+#
+# gh was out of scope while the gate was git-only, and was passing config-derived
+# values the whole time. It is in scope now, which is what this row records.
+
+FLAG gh-bare-positional
+	ghCommand("pr", "view", num)
+
+FLAG gh-exec-direct-bare-positional
+	exec.Command("gh", "pr", "view", num)
+
+PASS gh-flags-before-separator
+	ghCommand("pr", "view", "--json", fields, "--", num)
+
+# A `--` in cobra ends flag parsing entirely rather than fencing one token, so a
+# flag AFTER it becomes a positional. `gh pr view` takes at most one and exits
+# "accepts at most 1 arg(s), received 3"; `gh pr comment` posts the wrong body.
+# Both are green against a ghCommand test double, which is how this shape got
+# written in the first place.
+FLAG gh-flag-demoted-past-separator
+	ghCommand("pr", "view", "--", num, "--json", fields)
+
+PASS gh-value-slot-needs-no-separator
+	ghCommand("pr", "list", "--base", base, "--state", "open")
+
+# --- ast-grep (Separator, --) ---
+
+FLAG ast-grep-bare-file
+	exec.Command("ast-grep", "run", "--lang", lang, "--pattern", pattern, file)
+
+PASS ast-grep-separator-before-operand
+	exec.Command("ast-grep", "run", "--lang", lang, "--pattern", pattern, "--json=compact", "--", file)
+
+# --- gremlins / npx / dotnet (Reject — no end-of-options token exists) ---
+
+FLAG gremlins-bare-pkg
+	exec.Command("gremlins", "unleash", pkg)
+
+# The distinguishing row for the Reject policy: a separator does NOT rescue a
+# tool that has none. gremlins would read "--" as a package path.
+FLAG gremlins-separator-does-not-rescue
+	exec.Command("gremlins", "unleash", "--", pkg)
+
+PASS gremlins-const-prefixed-pkg
+	exec.Command("gremlins", "unleash", "./"+pkg)
+
+PASS gremlins-option-argument
+	exec.Command("gremlins", "unleash", "--output", path, "./"+pkg)
+
+FLAG dotnet-bare-positional
+	exec.Command("dotnet", "stryker", dir)
+
+PASS dotnet-option-argument
+	exec.Command("dotnet", "stryker", "--output", dir)
+
+FLAG npx-bare-positional
+	exec.Command("npx", "--yes", "@stryker-mutator/core@9.6.1", "run", mutate)
+
+PASS npx-option-argument
+	exec.Command("npx", "--yes", "@stryker-mutator/core@9.6.1", "run", "--mutate", mutate, "--reporters", "json")
+
+# --- fail-closed ---
+
+FLAG unknown-binary-has-no-policy
+	exec.Command("cargo", "test", pkg)
+
+FLAG non-literal-binary-unresolvable
+	exec.Command(chosen, "install")
