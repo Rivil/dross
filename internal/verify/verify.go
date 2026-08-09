@@ -41,6 +41,13 @@ const (
 	// MutationSkipped — no adapter ran. Either `--skip-mutation` was
 	// passed, or none of the touched files matched any configured adapter.
 	MutationSkipped = "skipped"
+	// MutationOutOfScope — adapters ran and found mutants, but every one of
+	// them landed in a file this phase never touched. Distinct from
+	// unmeasurable (nothing to measure) and from measured-at-0.00 (a real
+	// score): the tool worked, the phase simply owns none of the result.
+	// Collapsing it into either of those is what makes a vacuous pass look
+	// like a clean one.
+	MutationOutOfScope = "out-of-scope"
 )
 
 // Tests is the machine-written aggregation of mutation/coverage results.
@@ -55,6 +62,13 @@ type Tests struct {
 	// per-language because it is read as one list; each entry carries its own
 	// language so a merged read still says which adapter produced it.
 	OutOfScope []OutOfScopeMutant `json:"out_of_scope,omitempty"`
+
+	// Scope records exactly what the run scoped to: the file set, the
+	// resolved base, which sources contributed, and any reason the view was
+	// incomplete. Persisted so a mis-scoped run is diagnosable after the fact
+	// — without it, a scope that silently narrowed is indistinguishable from
+	// a phase that genuinely had little to measure.
+	Scope *Scope `json:"scope,omitempty"`
 }
 
 type LanguageRun struct {
@@ -192,6 +206,13 @@ type VerifySummary struct {
 	// coverage blind spots ("test never ran the line"). Omitted when
 	// zero — only gremlins currently reports this status.
 	MutantsNotCovered int `toml:"mutants_not_covered,omitempty"`
+	// MutantsInScope is the denominator the score was computed over:
+	// killed + survived + timeout, counting only mutants in files this phase
+	// touched. Always written, including as 0, because it is the sample size
+	// — a 0.50 over 2 mutants and a 0.50 over 200 are the same number and not
+	// the same evidence. It is the signal the small_denominator_gate lock
+	// requires in place of moving the threshold.
+	MutantsInScope    int `toml:"mutants_in_scope"`
 	CriteriaTotal     int `toml:"criteria_total"`
 	CriteriaCovered   int `toml:"criteria_covered"`
 	CriteriaUncovered int `toml:"criteria_uncovered"`
@@ -237,6 +258,7 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 	t := &Tests{
 		Phase:       phaseID,
 		GeneratedAt: time.Now().UTC(),
+		Scope:       scope,
 	}
 
 	// Group files by adapter.
@@ -389,9 +411,20 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		if v.Summary.MutationStatus == MutationSkipped {
 			v.Summary.MutationStatus = MutationUnmeasurable
 		}
-		if lr.Mutation.Killed+lr.Mutation.Survived+lr.Mutation.Timeout > 0 {
+		inScope := lr.Mutation.Killed + lr.Mutation.Survived + lr.Mutation.Timeout
+		v.Summary.MutantsInScope += inScope
+		if inScope > 0 {
 			v.Summary.MutationStatus = MutationMeasured
 		}
+	}
+	// Every mutant the tools produced landed outside this phase's files. The
+	// adapters worked and found plenty; none of it is this phase's to answer
+	// for. Reporting that as unmeasurable would claim there was nothing to
+	// measure, and as measured-0.00 would fail the phase for a neighbour's
+	// debt — both read as a settled result where the honest answer is that
+	// this run measured nothing about these changes.
+	if v.Summary.MutantsInScope == 0 && len(t.OutOfScope) > 0 {
+		v.Summary.MutationStatus = MutationOutOfScope
 	}
 	for _, id := range criteriaIDs {
 		v.Criteria = append(v.Criteria, CriterionResult{
@@ -421,6 +454,29 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		v.Findings = append(v.Findings, Finding{
 			Severity: "NOTE",
 			Text:     fmt.Sprintf("skipped %s: %s", s.File, s.Reason),
+		})
+	}
+	// ONE line for the whole filtered set, not one per survivor. Those
+	// mutants are real but they are not this phase's findings, and a FLAG
+	// each would put a standing backlog in every verify.toml that no phase
+	// can ever drain — precisely what rule r-02 forbids. The count plus the
+	// structured list in tests.json is what a survivor-lifecycle pass needs.
+	if n := len(t.OutOfScope); n > 0 {
+		v.Findings = append(v.Findings, Finding{
+			Severity: "NOTE",
+			Text: fmt.Sprintf("filtered %d out-of-scope survivor(s) in files this phase did not touch "+
+				"— listed under `out_of_scope` in tests.json, not counted in the score", n),
+		})
+	}
+	// A degraded scope is a NOTE, never a FLAG: the run may have measured
+	// less than it should have, but a missing base or an unrecorded task is a
+	// bookkeeping gap, and failing a phase for one would punish the wrong
+	// thing. Recording it is what keeps a narrowed run from reading as clean.
+	if t.Scope != nil && len(t.Scope.Degraded) > 0 {
+		v.Findings = append(v.Findings, Finding{
+			Severity: "NOTE",
+			Text: fmt.Sprintf("mutation scope is degraded (source: %s) — %s",
+				t.Scope.Source, strings.Join(t.Scope.Degraded, "; ")),
 		})
 	}
 	return v

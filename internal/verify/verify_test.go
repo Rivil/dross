@@ -2,9 +2,11 @@ package verify
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/Rivil/dross/internal/mutation"
@@ -733,5 +735,343 @@ func TestRunScopedFailedLegSurvivesFiltering(t *testing.T) {
 		if lr.Tool == "gremlins" && lr.Mutation.Killed != 1 {
 			t.Errorf("healthy leg was discarded: %+v", lr.Mutation)
 		}
+	}
+}
+
+// --- persistence, status and the single NOTE --------------------------------
+
+// recordingAdapter remembers what it was handed, so a change that narrows what
+// gets MUTATED (rather than what gets ATTRIBUTED) is caught.
+type recordingAdapter struct {
+	fakeAdapter
+	got []string
+}
+
+func (r *recordingAdapter) Run(files []string) (*mutation.Report, error) {
+	r.got = append([]string(nil), files...)
+	return r.fakeAdapter.Run(files)
+}
+
+// TestRunScopedPersistsOutOfScopeSurvivors: filtered survivors appear in the
+// top-level list and NOWHERE in the per-language surviving lists. Both halves
+// are asserted — an implementation that copies rather than moves them would
+// pass the first and fail the second.
+func TestRunScopedPersistsOutOfScopeSurvivors(t *testing.T) {
+	rep := reportOf("gremlins", map[string]mutation.FileStat{
+		"a.go": {Survived: 1},
+		"b.go": {Survived: 1},
+	},
+		mutation.Mutant{File: "a.go", Line: 1, Op: "CONDITIONALS_NEGATION"},
+		mutation.Mutant{File: "b.go", Line: 2, Op: "ARITHMETIC_BASE"},
+	)
+	tests, err := RunScoped("p", []string{"a.go"},
+		[]mutation.Adapter{&fakeAdapter{name: "gremlins", supportsExt: []string{".go"}, report: rep}},
+		scopeOf("a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []OutOfScopeMutant{{File: "b.go", Line: 2, Op: "ARITHMETIC_BASE", Language: "go"}}
+	if !reflect.DeepEqual(tests.OutOfScope, want) {
+		t.Errorf("out_of_scope:\n got %+v\nwant %+v", tests.OutOfScope, want)
+	}
+	for _, lr := range tests.Languages {
+		for _, m := range lr.Mutation.Surviving {
+			if m.File == "b.go" {
+				t.Errorf("filtered survivor still listed under languages[].mutation.surviving: %+v", m)
+			}
+		}
+	}
+}
+
+// TestRunScopedKeepsLanguageOnDroppedSurvivors: a merged list must still say
+// which adapter produced each entry, or a two-language repo's filtered set is
+// unattributable.
+func TestRunScopedKeepsLanguageOnDroppedSurvivors(t *testing.T) {
+	goRep := reportOf("gremlins", map[string]mutation.FileStat{"x.go": {Survived: 1}},
+		mutation.Mutant{File: "x.go", Line: 1})
+	tsRep := reportOf("stryker", map[string]mutation.FileStat{"x.ts": {Survived: 1}},
+		mutation.Mutant{File: "x.ts", Line: 1})
+
+	tests, err := RunScoped("p", []string{"x.go", "x.ts"}, []mutation.Adapter{
+		&fakeAdapter{name: "gremlins", supportsExt: []string{".go"}, report: goRep},
+		&fakeAdapter{name: "stryker", supportsExt: []string{".ts"}, report: tsRep},
+	}, scopeOf("nothing-here.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	byLang := map[string]string{}
+	for _, d := range tests.OutOfScope {
+		byLang[d.Language] = d.File
+	}
+	if byLang["go"] != "x.go" || byLang["typescript"] != "x.ts" {
+		t.Errorf("language attribution lost: %+v", tests.OutOfScope)
+	}
+}
+
+// TestTestsScopeRoundTrip: the scope block must survive a write/reload. A
+// struct missing json tags writes fine and comes back empty, so the reload is
+// the half that actually pins it.
+func TestTestsScopeRoundTrip(t *testing.T) {
+	scope := NewScope(ScopeInput{
+		Root:     "/repo",
+		Base:     "abc123def456",
+		Git:      []string{"a.go"},
+		Recorded: []string{"b.go"},
+		Hunks:    map[string][]Range{"a.go": {{Start: 10, End: 12}}},
+	})
+	orig := &Tests{Phase: "p", Scope: scope, OutOfScope: []OutOfScopeMutant{
+		{File: "z.go", Line: 3, Op: "ARITHMETIC_BASE", Language: "go"},
+	}}
+
+	path := filepath.Join(t.TempDir(), "tests.json")
+	if err := orig.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadTests(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Scope == nil {
+		t.Fatal("scope block did not survive the reload")
+	}
+	if !reflect.DeepEqual(got.Scope.Files, []string{"a.go", "b.go"}) {
+		t.Errorf("files: %v", got.Scope.Files)
+	}
+	if got.Scope.Base != "abc123def456" {
+		t.Errorf("base: %q", got.Scope.Base)
+	}
+	if got.Scope.Source != SourceUnion {
+		t.Errorf("source: %q", got.Scope.Source)
+	}
+	if !reflect.DeepEqual(got.Scope.Hunks["a.go"], []Range{{10, 12}}) {
+		t.Errorf("hunks: %+v", got.Scope.Hunks)
+	}
+	// The lookup index is not persisted; a reloaded scope must still answer.
+	if !got.Scope.Contains("a.go") {
+		t.Error("reloaded scope cannot answer Contains")
+	}
+	if !reflect.DeepEqual(got.OutOfScope, orig.OutOfScope) {
+		t.Errorf("out_of_scope: %+v", got.OutOfScope)
+	}
+}
+
+// TestTestsDegradedScopeIsReadableAfterTheFact: the reason a scope was partial
+// is the difference between "this run measured little" and "this run measured
+// little BECAUSE the base was missing". Only the second is actionable.
+func TestTestsDegradedScopeIsReadableAfterTheFact(t *testing.T) {
+	scope := NewScope(ScopeInput{
+		Recorded: []string{"a.go"},
+		Degraded: []string{"changes.json records no base branch"},
+	})
+	path := filepath.Join(t.TempDir(), "tests.json")
+	if err := (&Tests{Phase: "p", Scope: scope}).Save(path); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadTests(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Scope.Source != SourceChangesOnly {
+		t.Errorf("source: %q want %q", got.Scope.Source, SourceChangesOnly)
+	}
+	joined := strings.Join(got.Scope.Degraded, "\n")
+	if !strings.Contains(joined, "no base branch") {
+		t.Errorf("degraded reason lost: %v", got.Scope.Degraded)
+	}
+}
+
+// TestSkeletonScoresFromFilteredReport: the skeleton must read the FILTERED
+// report. A Skeleton still reading the package-wide numbers reports 7/7 here
+// where the phase's own slice is 2/2.
+func TestSkeletonScoresFromFilteredReport(t *testing.T) {
+	rep := reportOf("gremlins", map[string]mutation.FileStat{
+		"a.go":         {Killed: 2},
+		"untouched.go": {Killed: 5},
+	})
+	tests, err := RunScoped("p", []string{"a.go"},
+		[]mutation.Adapter{&fakeAdapter{name: "gremlins", supportsExt: []string{".go"}, report: rep}},
+		scopeOf("a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := Skeleton(tests, []string{"c-1"})
+
+	if v.Summary.MutantsInScope != 2 {
+		t.Errorf("mutants_in_scope = %d want 2", v.Summary.MutantsInScope)
+	}
+	if v.Summary.MutantsKilled != 2 {
+		t.Errorf("mutants_killed = %d want 2 (not 7)", v.Summary.MutantsKilled)
+	}
+	if v.Summary.MutationScore != 1.0 {
+		t.Errorf("score = %v want 1.00", v.Summary.MutationScore)
+	}
+	if v.Summary.MutationStatus != MutationMeasured {
+		t.Errorf("status = %q want %q", v.Summary.MutationStatus, MutationMeasured)
+	}
+}
+
+// TestSkeletonOutOfScopeStatus: when every mutant landed outside the phase,
+// the status is its own value. All three alternatives are asserted against,
+// because collapsing it into unmeasurable or measured-0.00 is exactly how a
+// vacuous run gets to look like a settled one.
+func TestSkeletonOutOfScopeStatus(t *testing.T) {
+	rep := reportOf("gremlins", map[string]mutation.FileStat{"untouched.go": {Killed: 3, Survived: 1}},
+		mutation.Mutant{File: "untouched.go", Line: 2})
+	tests, err := RunScoped("p", []string{"a.go"},
+		[]mutation.Adapter{&fakeAdapter{name: "gremlins", supportsExt: []string{".go"}, report: rep}},
+		scopeOf("a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := Skeleton(tests, []string{"c-1"})
+
+	if v.Summary.MutationStatus != MutationOutOfScope {
+		t.Errorf("status = %q want %q", v.Summary.MutationStatus, MutationOutOfScope)
+	}
+	if v.Summary.MutationStatus == MutationMeasured || v.Summary.MutationStatus == MutationUnmeasurable {
+		t.Error("out-of-scope must not collapse into measured or unmeasurable")
+	}
+	if v.Summary.MutantsInScope != 0 {
+		t.Errorf("mutants_in_scope = %d want 0", v.Summary.MutantsInScope)
+	}
+	if v.Summary.MutationScore != 0 {
+		t.Errorf("score = %v want 0 (and read via the status, not the number)", v.Summary.MutationScore)
+	}
+}
+
+// TestSkeletonOneNoteNoFlagFlood: seven filtered survivors plus one real one
+// produce exactly ONE NOTE carrying the count, and exactly ONE FLAG — the
+// phase's own. Counts are asserted rather than presence: a loop over the
+// unfiltered set yields eight FLAGs and still "contains" the right one.
+func TestSkeletonOneNoteNoFlagFlood(t *testing.T) {
+	rows := map[string]mutation.FileStat{"touched.go": {Survived: 1}, "other.go": {Survived: 7}}
+	surviving := []mutation.Mutant{{File: "touched.go", Line: 1, Op: "X"}}
+	for i := 0; i < 7; i++ {
+		surviving = append(surviving, mutation.Mutant{File: "other.go", Line: i + 1, Op: "Y"})
+	}
+	rep := reportOf("gremlins", rows, surviving...)
+
+	tests, err := RunScoped("p", []string{"touched.go"},
+		[]mutation.Adapter{&fakeAdapter{name: "gremlins", supportsExt: []string{".go"}, report: rep}},
+		scopeOf("touched.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := Skeleton(tests, []string{"c-1"})
+
+	var notes, flags []Finding
+	for _, f := range v.Findings {
+		switch f.Severity {
+		case "NOTE":
+			notes = append(notes, f)
+		case "FLAG":
+			flags = append(flags, f)
+		}
+	}
+	if len(flags) != 1 {
+		t.Errorf("expected exactly 1 FLAG (the phase's own survivor), got %d: %+v", len(flags), flags)
+	}
+	if len(notes) != 1 {
+		t.Fatalf("expected exactly 1 NOTE, got %d: %+v", len(notes), notes)
+	}
+	if !strings.Contains(notes[0].Text, "7") {
+		t.Errorf("the NOTE must carry the filtered count: %q", notes[0].Text)
+	}
+
+	// Nothing filtered → no such NOTE at all, so a clean run stays clean.
+	clean := reportOf("gremlins", map[string]mutation.FileStat{"touched.go": {Killed: 1}})
+	cleanTests, err := RunScoped("p", []string{"touched.go"},
+		[]mutation.Adapter{&fakeAdapter{name: "gremlins", supportsExt: []string{".go"}, report: clean}},
+		scopeOf("touched.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range Skeleton(cleanTests, nil).Findings {
+		if strings.Contains(f.Text, "out-of-scope survivor") {
+			t.Errorf("no survivors were filtered; NOTE should be absent: %q", f.Text)
+		}
+	}
+}
+
+// TestSkeletonDegradedScopeRaisesNoFlag: a missing base is a bookkeeping gap.
+// It has to be visible, but failing the phase for it would punish the wrong
+// thing entirely.
+func TestSkeletonDegradedScopeRaisesNoFlag(t *testing.T) {
+	scope := NewScope(ScopeInput{
+		Recorded: []string{"a.go"},
+		Degraded: []string{"could not resolve merge-base of \"base\" and HEAD"},
+	})
+	rep := reportOf("gremlins", map[string]mutation.FileStat{"a.go": {Killed: 1}})
+	tests, err := RunScoped("p", []string{"a.go"},
+		[]mutation.Adapter{&fakeAdapter{name: "gremlins", supportsExt: []string{".go"}, report: rep}},
+		scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	v := Skeleton(tests, nil)
+	var sawReason bool
+	for _, f := range v.Findings {
+		if f.Severity == "FLAG" {
+			t.Errorf("a degraded scope must not FLAG: %q", f.Text)
+		}
+		if strings.Contains(f.Text, "merge-base") {
+			sawReason = true
+		}
+	}
+	if !sawReason {
+		t.Errorf("the degradation reason must reach verify.toml: %+v", v.Findings)
+	}
+}
+
+// TestSkeletonSampleSizeSignal: mutants_in_scope reaches verify.toml's
+// [summary] and survives the round-trip. It is the small_denominator_gate
+// lock's substitute for moving the threshold — a 0.67 over 3 has to read as a
+// small sample rather than as a near-miss.
+func TestSkeletonSampleSizeSignal(t *testing.T) {
+	rep := reportOf("gremlins", map[string]mutation.FileStat{"a.go": {Killed: 2, Survived: 1}})
+	tests, err := RunScoped("p", []string{"a.go"},
+		[]mutation.Adapter{&fakeAdapter{name: "gremlins", supportsExt: []string{".go"}, report: rep}},
+		scopeOf("a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := Skeleton(tests, nil)
+	if v.Summary.MutantsInScope != 3 {
+		t.Fatalf("mutants_in_scope = %d want 3", v.Summary.MutantsInScope)
+	}
+
+	path := filepath.Join(t.TempDir(), "verify.toml")
+	if err := v.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "mutants_in_scope = 3") {
+		t.Errorf("verify.toml [summary] missing the sample size:\n%s", body)
+	}
+}
+
+// TestRunScopedDoesNotNarrowAdapterInvocation: scoping filters what is
+// ATTRIBUTED, never what is MUTATED. An implementation that passed the scope
+// down to the adapter would change which mutants exist — a different, and
+// much quieter, way to make survivors disappear.
+func TestRunScopedDoesNotNarrowAdapterInvocation(t *testing.T) {
+	rec := &recordingAdapter{fakeAdapter: fakeAdapter{
+		name:        "gremlins",
+		supportsExt: []string{".go"},
+		report:      reportOf("gremlins", map[string]mutation.FileStat{"a.go": {Killed: 1}}),
+	}}
+	files := []string{"a.go", "b.go"}
+
+	if _, err := RunScoped("p", files, []mutation.Adapter{rec}, scopeOf("a.go")); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(rec.got, files) {
+		t.Errorf("adapter was handed %v, want the full list %v", rec.got, files)
 	}
 }
