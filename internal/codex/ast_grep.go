@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
+
+	"github.com/Rivil/dross/internal/argfence"
 )
 
 // AstGrepIndexer is a generic Indexer that shells out to `ast-grep`
@@ -131,14 +134,11 @@ func astGrepAvailable() bool { return astGrepAvailableFn() }
 // so we can exercise pattern handling without depending on the real
 // binary being installed.
 var runAstGrepFn = func(file, lang, pattern string) ([]astGrepMatch, error) {
-	cmd := exec.Command("ast-grep",
-		"run",
-		"--lang", lang,
-		"--pattern", pattern,
-		"--json=compact",
-		file,
-	)
-	out, err := cmd.Output()
+	argv, err := astGrepArgv(file, lang, pattern)
+	if err != nil {
+		return nil, err
+	}
+	out, err := astGrepOutput(argv)
 	if err != nil {
 		return nil, fmt.Errorf("ast-grep run: %w", err)
 	}
@@ -156,4 +156,66 @@ var runAstGrepFn = func(file, lang, pattern string) ([]astGrepMatch, error) {
 
 func runAstGrep(file, lang, pattern string) ([]astGrepMatch, error) {
 	return runAstGrepFn(file, lang, pattern)
+}
+
+// astGrepLangs is the closed set of ast-grep language ids dross passes.
+//
+// It is a set rather than a pass-through because --lang's value is read by
+// ast-grep's own parser: a lang of "--config=/tmp/x" would not be a language
+// that fails to resolve, it would be a flag that succeeds. Every entry here is
+// registered by an AstGrepIndexer in languages.go, which
+// TestAstGrepLangsCoversEveryIndexer pins — adding a language there without
+// adding it here would silently disable that indexer.
+var astGrepLangs = map[string]bool{
+	"ts":       true,
+	"tsx":      true,
+	"svelte":   true,
+	"csharp":   true,
+	"gdscript": true,
+}
+
+// astGrepArgv builds the full invocation, binary included.
+//
+// The file operand sits behind `--`, emitted unconditionally: ast-grep honours
+// an end-of-options token, so the strongest guarantee available here is the
+// separator rather than the leading-dash rejection the mutation runners have to
+// settle for. Everything after it is a path by construction, whatever it
+// contains — including a file literally named "-rf".
+//
+// The dross-chosen flags stay AHEAD of the separator. They are literals, not
+// derived values; demoting them past it would just break the command.
+func astGrepArgv(file, lang, pattern string) ([]string, error) {
+	if !astGrepLangs[lang] {
+		return nil, fmt.Errorf("ast-grep: lang %q is not a known ast-grep language (want one of %s)",
+			lang, strings.Join(sortedAstGrepLangs(), ", "))
+	}
+	fenced, err := argfence.Fence("ast-grep", "file", file)
+	if err != nil {
+		return nil, err
+	}
+	argv := []string{"ast-grep", "run",
+		"--lang", lang,
+		"--pattern", pattern,
+		"--json=compact",
+	}
+	return append(argv, fenced...), nil
+}
+
+func sortedAstGrepLangs() []string {
+	out := make([]string, 0, len(astGrepLangs))
+	for l := range astGrepLangs {
+		out = append(out, l)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// astGrepOutput spawns the built argv. Split from runAstGrepFn so a rejection
+// test can prove nothing was spawned — a refusal that still shelled out would
+// otherwise be indistinguishable from one that didn't.
+//
+// The binary is named as a literal here, not taken from argv[0], so the
+// subprocess audit gate can resolve this site to a tool and look its policy up.
+var astGrepOutput = func(argv []string) ([]byte, error) {
+	return exec.Command("ast-grep", argv[1:]...).Output()
 }
