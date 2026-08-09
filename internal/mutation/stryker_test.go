@@ -202,7 +202,10 @@ func TestDispatch(t *testing.T) {
 // Node — the invocation must use @stryker-mutator/core.
 func TestStrykerRunArgsScopedPackage(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo"}
-	args := s.runArgs([]string{"src/a.ts", "src/b.ts"})
+	args, err := s.runArgs([]string{"src/a.ts", "src/b.ts"})
+	if err != nil {
+		t.Fatalf("runArgs: %v", err)
+	}
 
 	joined := strings.Join(args, " ")
 	// The spec now carries an exact version (see strykerPin), so the assertion
@@ -227,7 +230,10 @@ func TestStrykerRunArgsScopedPackage(t *testing.T) {
 func TestStrykerWorkdirMonorepo(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
 
-	args := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"})
+	args, err := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"})
+	if err != nil {
+		t.Fatalf("runArgs: %v", err)
+	}
 	if !strings.Contains(strings.Join(args, " "), "--mutate src/a.ts,src/b.svelte") {
 		t.Errorf("workdir prefix must be stripped from --mutate: %v", args)
 	}
@@ -293,7 +299,10 @@ func TestStrykerPinPatternRejectsLooseSpecs(t *testing.T) {
 // a developer machine — the shape of the 2025–2026 npm compromises.
 func TestStrykerRunArgsPinned(t *testing.T) {
 	s := &Stryker{ProjectRoot: t.TempDir()}
-	args := s.runArgs([]string{"src/api/tags.ts"})
+	args, err := s.runArgs([]string{"src/api/tags.ts"})
+	if err != nil {
+		t.Fatalf("runArgs: %v", err)
+	}
 
 	yes := -1
 	for i, a := range args {

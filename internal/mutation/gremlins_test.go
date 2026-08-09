@@ -319,7 +319,10 @@ func TestGremlinsRunToleratesMissingReport(t *testing.T) {
 // for fast Go test suites; see DefaultTimeoutCoefficient comment.
 func TestGremlinsBuildUnleashArgsDefault(t *testing.T) {
 	g := &Gremlins{}
-	args := g.buildUnleashArgs("reports/gremlins/output.json", []string{"./internal/api"})
+	args, err := g.buildUnleashArgs("reports/gremlins/output.json", []string{"./internal/api"})
+	if err != nil {
+		t.Fatalf("buildUnleashArgs: %v", err)
+	}
 	want := []string{
 		"gremlins", "unleash",
 		"--output", "reports/gremlins/output.json",
@@ -337,7 +340,10 @@ func TestGremlinsBuildUnleashArgsDefault(t *testing.T) {
 // flow through to the flags, and that the defaults (NumCPU/2, 1) apply
 // when unset — the parallelism that avoids the oversubscription timeouts.
 func TestGremlinsBuildUnleashArgsWorkers(t *testing.T) {
-	args := (&Gremlins{Workers: 4, TestCPU: 2}).buildUnleashArgs("r.json", []string{"./x"})
+	args, err := (&Gremlins{Workers: 4, TestCPU: 2}).buildUnleashArgs("r.json", []string{"./x"})
+	if err != nil {
+		t.Fatalf("buildUnleashArgs: %v", err)
+	}
 	if !argHasFlag(args, "--workers", "4") {
 		t.Errorf("expected --workers 4, got %v", args)
 	}
@@ -345,7 +351,10 @@ func TestGremlinsBuildUnleashArgsWorkers(t *testing.T) {
 		t.Errorf("expected --test-cpu 2, got %v", args)
 	}
 
-	def := (&Gremlins{}).buildUnleashArgs("r.json", []string{"./x"})
+	def, derr := (&Gremlins{}).buildUnleashArgs("r.json", []string{"./x"})
+	if derr != nil {
+		t.Fatalf("buildUnleashArgs: %v", derr)
+	}
 	if !argHasFlag(def, "--workers", strconv.Itoa(defaultWorkers())) {
 		t.Errorf("expected default --workers %d, got %v", defaultWorkers(), def)
 	}
@@ -368,7 +377,10 @@ func argHasFlag(args []string, flag, val string) bool {
 // TimeoutCoefficient flows through to the flag.
 func TestGremlinsBuildUnleashArgsOverride(t *testing.T) {
 	g := &Gremlins{TimeoutCoefficient: 60}
-	args := g.buildUnleashArgs("reports/gremlins/output.json", []string{"./..."})
+	args, err := g.buildUnleashArgs("reports/gremlins/output.json", []string{"./..."})
+	if err != nil {
+		t.Fatalf("buildUnleashArgs: %v", err)
+	}
 	for i, a := range args {
 		if a == "--timeout-coefficient" {
 			if i+1 >= len(args) || args[i+1] != "60" {
