@@ -41,6 +41,10 @@ choice = "Per-tool: `--` for semgrep and ast-grep, which honour it; outright rej
 why    = "Each tool gets the strongest guarantee it can actually offer rather than a uniform rule levelled to the weakest. Rejection is a classifier and config-trust-hardening's own reasoning names the classifier as the vulnerability — so it is the fallback where no separator exists, never the default. Encoding the per-tool policy in the gate makes the choice checked rather than remembered."
 locked = true
 
+[[deferred]]
+text = "Give assets/prompts/secure.md end-of-options guidance for semgrep (a `--` before the path operand, alongside the existing --metrics=off line), with a prompt-content test in the shape of the existing ones."
+why  = "c-2 names semgrep, but dross spawns it nowhere in Go — internal/security/catalog.go:55 is a LookPath presence entry, so the argfence table entry is forward-looking and the criterion is satisfied vacuously. The only place semgrep genuinely runs with derived arguments is agent-driven from secure.md:72-78, which is prompt guidance rather than a Go call site — a different kind of fix from the rest of this phase. Surfaced by /dross-verify 2026-08-09 (verdict partial, c-2 weak)."
+
 [[decisions]]
 key    = "audit_gate_breadth"
 choice = "The gate scans every `exec.Command` / `exec.CommandContext` site in internal/ and cmd/ regardless of binary; accepted cases are named with their reason in the audit file's header"
