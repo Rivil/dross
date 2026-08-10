@@ -109,16 +109,16 @@ func TestVerifyPromptPutsOutOfScopeInTheNonThresholdBranch(t *testing.T) {
 }
 
 // TestVerifyPromptCrossCheckReadsInScopeOnly: the cross-check must be pointed
-// at the filtered survivor list and told not to re-raise the filtered ones.
-// Per-survivor findings for another file's debt is a standing backlog no phase
-// can drain, which rule r-02 forbids; the routing lives with the count NOTE
-// and the named successor phase.
+// at both survivor lists and told what to DO with the filtered ones. The old
+// instruction was "do not re-list them" — correct when there was nowhere to put
+// them, and wrong now that accept/route exist: the survivors get closed out in
+// the same run rather than copied into findings or left for the next one.
 func TestVerifyPromptCrossCheckReadsInScopeOnly(t *testing.T) {
 	prompt := verifyPromptBody(t)
 	for _, phrase := range []string{
 		"languages[].mutation.surviving",
 		"out_of_scope",
-		"Do not re-list the `out_of_scope` entries as findings",
+		"your job is to clear them, not to copy them",
 	} {
 		if !strings.Contains(prompt, phrase) {
 			t.Errorf("verify.md cross-check missing %q", phrase)
@@ -183,6 +183,125 @@ func TestReadmeStatesScopingGuarantee(t *testing.T) {
 	} {
 		if !strings.Contains(row, phrase) {
 			t.Errorf("README verify row missing %q:\n%s", phrase, row)
+		}
+	}
+}
+
+// TestVerifyPromptRetiresDeferralLanguage: the prompt used to park out-of-scope
+// survivors for "the survivor-lifecycle phase to route". That phase has shipped
+// the verbs, so a prompt still pointing at a future phase tells the model to
+// wait for machinery that already exists.
+func TestVerifyPromptRetiresDeferralLanguage(t *testing.T) {
+	prompt := verifyPromptBody(t)
+	for _, stale := range []string{
+		"for the survivor-lifecycle phase to route",
+		"Do not re-list the `out_of_scope` entries as findings.",
+	} {
+		if strings.Contains(prompt, stale) {
+			t.Errorf("verify.md still carries the pre-lifecycle deferral text: %q", stale)
+		}
+	}
+}
+
+// TestVerifyPromptNamesTheDrainVerbs: the prompt has to name both escapes and
+// all four states, or a model reading it cannot tell an unclassified survivor
+// from an accepted one — and cannot drain either.
+func TestVerifyPromptNamesTheDrainVerbs(t *testing.T) {
+	prompt := verifyPromptBody(t)
+	for _, want := range []string{
+		"dross survivor accept",
+		"dross survivor route",
+		"--reason",
+		"--target",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("verify.md must name %q", want)
+		}
+	}
+	for _, state := range []string{
+		verify.LifecycleInDiff,
+		verify.LifecycleRouted,
+		verify.LifecycleAccepted,
+		verify.LifecycleUnclassified,
+	} {
+		if !strings.Contains(prompt, state) {
+			t.Errorf("verify.md must name the %q lifecycle state", state)
+		}
+	}
+}
+
+// TestVerifyPromptRestatesTheDrainPolicy: the builtin rule states the policy
+// globally; the prompt has to restate it at the point of use, where the model
+// is actually deciding what to do with a survivor it just read.
+func TestVerifyPromptRestatesTheDrainPolicy(t *testing.T) {
+	prompt := verifyPromptBody(t)
+	for _, want := range []string{
+		"the backlog only ever shrinks",
+		"drain it this run",
+		"dross-survivor-drain",
+	} {
+		if !strings.Contains(strings.ToLower(prompt), strings.ToLower(want)) {
+			t.Errorf("verify.md must restate the drain policy at the point of use, missing %q", want)
+		}
+	}
+}
+
+// TestReadmeDocumentsSurvivorCommands: the README's command table is the one
+// place a reader learns the verbs exist. A shipped drain nobody can find is a
+// backlog that keeps growing.
+func TestReadmeDocumentsSurvivorCommands(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := string(b)
+
+	row := ""
+	for _, line := range strings.Split(readme, "\n") {
+		if strings.Contains(line, "`dross survivor {accept,route,list}`") {
+			row = line
+			break
+		}
+	}
+	if row == "" {
+		t.Fatal("README has no `dross survivor {accept,route,list}` command-table row")
+	}
+	for _, phrase := range []string{"survivors.toml", "reason", "--stale"} {
+		if !strings.Contains(row, phrase) {
+			t.Errorf("README survivor row missing %q:\n%s", phrase, row)
+		}
+	}
+}
+
+// TestReadmeVerifyRowDescribesLifecycle: the verify row described the
+// pre-phase behaviour, where filtered survivors were reported only as a count.
+// They now each carry a state, and an unclassified one is FLAGged for draining.
+func TestReadmeVerifyRowDescribesLifecycle(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := ""
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.Contains(line, "`dross verify <phase>`") {
+			row = line
+			break
+		}
+	}
+	if row == "" {
+		t.Fatal("README has no `dross verify <phase>` row")
+	}
+	if strings.Contains(row, "reported as one count") {
+		t.Errorf("README verify row still describes the pre-lifecycle behaviour:\n%s", row)
+	}
+	for _, state := range []string{
+		verify.LifecycleInDiff,
+		verify.LifecycleRouted,
+		verify.LifecycleAccepted,
+		verify.LifecycleUnclassified,
+	} {
+		if !strings.Contains(row, state) {
+			t.Errorf("README verify row must name the %q state:\n%s", state, row)
 		}
 	}
 }

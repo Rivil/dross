@@ -75,7 +75,23 @@ For each surviving mutant under `languages[].mutation.surviving` in `tests.json`
 - `in-hunk` — the mutated line is inside a hunk this phase changed. This is the phase's own new or edited logic escaping its tests; treat it as strong evidence and downgrade the criterion.
 - `inherited` — the phase touched the file but not that line. Still in scope and still counted, but the weaker signal: it is pre-existing code the phase inherited responsibility for by editing around it. Prefer a FLAG over a `covered` → `weak` downgrade unless the line is genuinely part of what a criterion claims.
 
-**Do not re-list the `out_of_scope` entries as findings.** They are survivors in files this phase never touched, already recorded as one count NOTE by the skeleton and kept in full under `out_of_scope` for the survivor-lifecycle phase to route. A FLAG each would seed a standing backlog no phase can drain — the routing lives with that count and its named successor phase, not with per-survivor findings here.
+**Close out every survivor in this run — the backlog only ever shrinks.** Each survivor in `tests.json` carries exactly one `Lifecycle` state, and each state has one job:
+
+| state | what it means | what you do |
+| --- | --- | --- |
+| `in-diff` | in a file this phase touched | judge it as above — downgrade the criterion, or FLAG it |
+| `routed` | a deferred item carries its key plus a destination | leave it; the skeleton NOTEs it with its target |
+| `accepted` | recorded in `.dross/survivors.toml` with a reason | leave it; it is already silent, by decision |
+| `unclassified` | no state applies — out of the diff, unrouted, unaccepted, or its identity would not resolve | **drain it this run** |
+
+Drain an `unclassified` survivor with one of exactly two verbs, then re-run `dross verify`:
+```
+dross survivor accept <file>:<line> --op <OP> --reason "<why it is permanently acceptable>"
+dross survivor route  <file>:<line> --op <OP> --target <phase-slug>
+```
+`accept` is for a survivor that is genuinely unkillable (e.g. gremlins' switch-case / const-initializer attribution ceiling) — it is the only state that earns silence, and the reason is mandatory. `route` is for real debt with a home: it stays visible, labelled with where it went.
+
+Leaving `unclassified` rows to be re-listed by the next run is the standing-backlog failure the `dross-survivor-drain` builtin rule forbids. Do not re-state them as extra findings either — the skeleton already FLAGs each one; your job is to clear them, not to copy them.
 
 ## 3. Update `verify.toml`
 
@@ -134,6 +150,8 @@ verify <phase-id> — <verdict>
 
   Mutation:    score=<X.XX> over <mutants_in_scope> in-scope mutants — killed=<N> survived=<M>
                <only when non-zero: "filtered <K> out-of-scope survivor(s)">
+  Survivors:   <N> in-diff, <N> routed, <N> accepted, <N> unclassified
+               <only when unclassified > 0: "↳ drain with dross survivor accept|route">
   Criteria:    <covered>/<total> covered, <weak> weak, <uncovered> uncovered
 
   Criterion map:
