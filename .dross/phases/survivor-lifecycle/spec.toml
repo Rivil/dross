@@ -1,0 +1,68 @@
+[phase]
+  id = "survivor-lifecycle"
+  title = "survivor-lifecycle"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every survivor a verify run reports carries exactly one lifecycle state — in-diff, routed, or accepted — and a survivor with no state is reported as unclassified rather than blending into the list."
+
+[[criteria]]
+  id = "c-2"
+  text = "A survivor recorded as accepted-with-reason is not re-emitted by any later verify run, and an acceptance submitted without a reason is rejected."
+
+[[criteria]]
+  id = "c-3"
+  text = "Accepting or routing a survivor is a CLI action rather than a hand-edit, and the resulting record outlives the phase that made it — a later phase's verify run still sees it."
+
+[[criteria]]
+  id = "c-4"
+  text = "A survivor is recognised as the same survivor across runs after unrelated edits shift its line number, and a genuinely new survivor at an accepted survivor's old position is not mistaken for it."
+
+[[criteria]]
+  id = "c-5"
+  text = "An acceptance whose subject no longer exists (file deleted, or the mutant is no longer produced) is surfaced as stale rather than kept silently forever."
+
+[[criteria]]
+  id = "c-6"
+  text = "The drain-don't-relist policy ships as a builtin rule: `dross rule show` lists it in a repo with no project rules configured, and the project-local r-02 duplicate is removed from this repo."
+
+[[criteria]]
+  id = "c-7"
+  text = "Out-of-scope survivors get the same lifecycle: the tests.json `out_of_scope` list is routable to a destination rather than a write-only audit record."
+
+[[decisions]]
+  key = "acceptance_store"
+  choice = "Accepted survivors live in a single tracked repo-level `.dross/survivors.toml`."
+  why = "An acceptance is a durable engineering claim about the codebase, so it belongs in history where a reviewer sees the reason. Tracked also means it survives the squash-merge — an untracked or phase-branch-local record dies exactly the way the board mapping did."
+  locked = true
+
+[[decisions]]
+  key = "survivor_identity"
+  choice = "A survivor's key is file + mutation op + a hash of the mutated line's normalized source text. When that text occurs more than once in the file the match is ambiguous, and an ambiguous acceptance does not suppress — the survivor re-emits with a note."
+  why = "Survives line drift anywhere in the file without an AST, and stays language-agnostic for the later multilang work. The ambiguity rule picks the safe failure direction: a lapsed acceptance is noise, a false suppression hides a real bug."
+  locked = true
+
+[[decisions]]
+  key = "acceptance_granularity"
+  choice = "One entry per accepted survivor, keyed by its own identity. Entries may name a shared `category` whose reason prose is written once."
+  why = "Keeps c-4 matching and c-5 staleness per-mutant and rules out blanket suppression of survivors that don't exist yet. The category only deduplicates prose, so the drain's ~76 entries stay individually accounted without 76 copy-pasted reasons."
+  locked = true
+
+[[decisions]]
+  key = "routed_state_source"
+  choice = "Routing a survivor creates a deferred item carrying its identity key and a target, reusing the existing `dross deferred route` machinery; `.dross/survivors.toml` stays accepted-only. Routed survivors still appear in the run, labelled with their destination rather than counted unclassified."
+  why = "Reuses the loop-closer that already re-surfaces parked ideas on the target phase's spec slate, instead of re-implementing routing beside it. Debt with a home should stay visible — only an accepted survivor earns silence."
+  locked = true
+
+[[decisions]]
+  key = "cli_namespace"
+  choice = "The verbs are `dross survivor accept|route|list`."
+  why = "The store is a survivor registry, not a verify artifact, and the record outlives any one phase's verify run — hanging the verbs off `dross verify` would imply otherwise."
+  locked = true
+
+[[decisions]]
+  key = "no_acceptance_ttl"
+  choice = "Acceptances do not expire. Staleness is detected structurally (c-5) — subject gone — never by age."
+  why = "A TTL would re-flood the standing backlog this milestone exists to drain, on a timer, with no new information."
+  locked = true

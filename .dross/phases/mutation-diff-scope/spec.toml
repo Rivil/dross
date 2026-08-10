@@ -64,17 +64,17 @@
 [[deferred]]
   text = "Reconcile the three live mutation-score formulas: verify.toml's combineScore takes the MEAN across legs, recordVerifyOutcome POOLS killed/(killed+survived) with timeouts excluded, and Report.Score uses killed/(killed+survived+timeout) — while adapter.go's struct doc claims killed/(killed+survived) and is simply wrong. A two-leg run with unequal leg sizes diverges (1/1 and 0/9 gives 0.50 vs 0.10) and a single-leg run diverges as soon as one mutant times out."
   why = "Surfaced by this phase's plan review, but out of its diff: picking a normative formula changes the number every phase's 0.80/0.60 thresholds are applied to, which this spec never scoped. mutation-diff-scope contains it instead — t-6's telemetry-equality contract is explicitly narrowed to the single-leg, zero-timeout range where the existing formulas already agree, with a standing instruction not to 'fix' combineScore to widen it."
-  target = "survivor-lifecycle"
+  target = "mutation-score-truth"
 
 [[deferred]]
   text = "Cover the mutation adapters' error and process-seam paths: internal/mutation/gremlins.go:155 and :166 (unreadable-report and zero-coverage message construction), stryker.go:73 and :80 (report-read and parse error branches), stryker.go:263 (the future-status default arm), stryker_net.go:221 (buildCmd's prefix seam)."
   why = "Nine survivors this phase's verify run surfaced as `inherited` — same file, untouched lines. They are pre-existing adapter I/O plumbing the phase inherited responsibility for by editing around it, not scoping logic, and none participates in any acceptance criterion. Routed rather than re-listed per rule r-02; recorded as accepted-for-now in verify.toml so the next verify does not re-report them."
-  target = "survivor-lifecycle"
+  target = "survivor-drain"
 
 [[deferred]]
   text = "Gate the verdict on an absolute count of unclassified in-scope survivors instead of a ratio."
   why = "Changes the verdict contract for every phase and depends on 'unclassified' being a real survivor state — which survivor-lifecycle builds."
-  target = "survivor-lifecycle"
+  target = "survivor-drain"
 
 [[deferred]]
   text = "Fix doctor's stale-milestone-branch check: it told a v1.3 ship to `dross milestone prune` the branch that was the open PR's own base. Two independent faults — it never consults [milestone].status, so an active milestone with 10 unrun phases is reported prunable; and it measures merged-ness against LOCAL main, so a local main sitting unpushed-ahead of origin (here 3 chore commits) makes a freshly-cut milestone branch look identical to main and therefore merged. Gate on status != active, and compare against origin/<base> rather than the local ref."
