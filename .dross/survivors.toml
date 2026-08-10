@@ -747,3 +747,75 @@
   line = 264
   reason = "Unreachable given the caller, not untested: ship runs autoCommitDrossDirt immediately above this guard, which does git add .dross and commits, and its pre-stage gate refuses any non-.dross dirt before anything is staged at all. The index is therefore empty on every path into the guard, so its commit branch cannot be reached. TestAutoCommitDrossDirtLeavesTheIndexEmpty pins that premise for both the dirty and clean cases and fails the day autoCommitDrossDirt stops draining the index, at which point the branch becomes reachable and owes a test rather than this reason."
   accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "96af9ac8d2c3b95e"
+  file = "internal/cmd/phase.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(args) == 1:"
+  line = 308
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "5fafdd3feef11dd4"
+  file = "internal/cmd/phase.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.CurrentPhase != \"\":"
+  line = 310
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "08b98041fe733176"
+  file = "internal/cmd/phase.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 768
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "4296aba7fc10199c"
+  file = "internal/cmd/phase_lifecycle.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case after != \"\" && before != \"\":"
+  line = 23
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "656a800e0c49e82b"
+  file = "internal/cmd/phase_lifecycle.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case after == \"\" && before == \"\":"
+  line = 25
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "6ae95da642b1e841"
+  file = "internal/cmd/phase_lifecycle.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case before != \"\":"
+  line = 27
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "928e3536acd36ece"
+  file = "internal/cmd/watch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case newCount > 0:"
+  line = 130
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "739beac06e8e62e1"
+  file = "internal/cmd/watch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case newCount > 0:"
+  line = 130
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
