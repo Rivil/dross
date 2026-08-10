@@ -93,11 +93,25 @@ type SkippedFile struct {
 // but kept, in full, so the filtering is auditable and a later survivor-
 // lifecycle pass can route it somewhere. Discarding them would trade one
 // silent mis-attribution for another.
+// The lifecycle fields mirror mutation.Mutant's, so an out-of-scope survivor
+// carries the same state as an in-scope one — c-7's "same lifecycle" is a
+// property of the data, not of a report-time special case. Their json tags are
+// lowercase here and absent (hence capitalised) on mutation.Mutant; that split
+// is pre-existing on these two types and is pinned by tests at both ends rather
+// than left to drift.
 type OutOfScopeMutant struct {
 	File     string `json:"file"`
 	Line     int    `json:"line"`
 	Op       string `json:"op,omitempty"`
 	Language string `json:"language,omitempty"`
+
+	// Key is the survivor's cross-run identity (internal/survivor).
+	Key string `json:"key,omitempty"`
+	// Lifecycle is one of the four states; see lifecycle.go.
+	Lifecycle string `json:"lifecycle,omitempty"`
+	// Note explains a state that needs explaining — destination, ambiguity,
+	// or the reason identity could not be resolved.
+	Note string `json:"note,omitempty"`
 }
 
 // FilterReport splits a mutation report against the phase's scope: the mutants
@@ -443,11 +457,28 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 			continue
 		}
 		for _, m := range lr.Mutation.Surviving {
-			v.Findings = append(v.Findings, Finding{
-				Severity: "FLAG",
-				Text: fmt.Sprintf("%s mutant survived: %s:%d (%s)",
-					lr.Tool, m.File, m.Line, m.Op),
-			})
+			// An accepted survivor is the only one that earns silence. A
+			// routed one keeps a NOTE naming where it went — debt with a
+			// home stays visible. Everything else, including a survivor with
+			// no state at all (a run from before lifecycle classification),
+			// keeps the FLAG it always had.
+			switch m.Lifecycle {
+			case LifecycleAccepted:
+				continue
+			case LifecycleRouted:
+				v.Findings = append(v.Findings, Finding{
+					Severity: "NOTE",
+					Text: fmt.Sprintf("%s mutant survived: %s:%d (%s) — %s",
+						lr.Tool, m.File, m.Line, m.Op, m.Note),
+				})
+				continue
+			}
+			text := fmt.Sprintf("%s mutant survived: %s:%d (%s)",
+				lr.Tool, m.File, m.Line, m.Op)
+			if m.Note != "" {
+				text += " — " + m.Note
+			}
+			v.Findings = append(v.Findings, Finding{Severity: "FLAG", Text: text})
 		}
 	}
 	for _, s := range t.Skipped {
@@ -456,16 +487,49 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 			Text:     fmt.Sprintf("skipped %s: %s", s.File, s.Reason),
 		})
 	}
-	// ONE line for the whole filtered set, not one per survivor. Those
-	// mutants are real but they are not this phase's findings, and a FLAG
-	// each would put a standing backlog in every verify.toml that no phase
-	// can ever drain — precisely what rule r-02 forbids. The count plus the
-	// structured list in tests.json is what a survivor-lifecycle pass needs.
-	if n := len(t.OutOfScope); n > 0 {
+	// Out-of-scope survivors get the same lifecycle as in-scope ones (c-7).
+	// An accepted one is silent, a routed one is a NOTE naming its
+	// destination, and one with no state is an individually-actionable FLAG:
+	// there are exactly two ways to clear it, and naming both is what turns a
+	// write-only audit list into a backlog that drains.
+	remainder := 0
+	for _, o := range t.OutOfScope {
+		switch o.Lifecycle {
+		case LifecycleAccepted:
+			continue
+		case LifecycleRouted:
+			remainder++
+			v.Findings = append(v.Findings, Finding{
+				Severity: "NOTE",
+				Text: fmt.Sprintf("out-of-scope mutant survived: %s:%d (%s) — %s",
+					o.File, o.Line, o.Op, o.Note),
+			})
+			continue
+		case LifecycleUnclassified:
+			remainder++
+			v.Findings = append(v.Findings, Finding{
+				Severity: "FLAG",
+				Text: fmt.Sprintf("unclassified out-of-scope survivor: %s:%d (%s) — accept it with "+
+					"`dross survivor accept` or route it with `dross survivor route --target`",
+					o.File, o.Line, o.Op),
+			})
+			continue
+		default:
+			// No classification ran (pre-lifecycle run, or identity
+			// unavailable): keep the pre-phase behaviour of counting it into
+			// the one-line summary rather than inventing a state for it.
+			remainder++
+		}
+	}
+	// ONE line for the whole remaining filtered set. The count is the
+	// post-lifecycle remainder — accepted survivors are gone from it, which is
+	// what makes the number shrink as the backlog is drained instead of
+	// standing still forever.
+	if remainder > 0 {
 		v.Findings = append(v.Findings, Finding{
 			Severity: "NOTE",
 			Text: fmt.Sprintf("filtered %d out-of-scope survivor(s) in files this phase did not touch "+
-				"— listed under `out_of_scope` in tests.json, not counted in the score", n),
+				"— listed under `out_of_scope` in tests.json, not counted in the score", remainder),
 		})
 	}
 	// A degraded scope is a NOTE, never a FLAG: the run may have measured

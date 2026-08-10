@@ -5,10 +5,12 @@
   },
   "phases": {
     "exec-trust-followups": "DRO-2",
-    "mutation-diff-scope": "DRO-9"
+    "mutation-diff-scope": "DRO-9",
+    "survivor-lifecycle": "DRO-10"
   },
   "quicks": {
-    "1.2.8.1": "DRO-6"
+    "1.2.8.1": "DRO-6",
+    "ship-body-routed-survivor-noise": "DRO-11"
   },
   "last_pull": "0001-01-01T00:00:00Z"
 }

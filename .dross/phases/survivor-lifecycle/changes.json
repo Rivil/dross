@@ -1,0 +1,195 @@
+{
+  "phase": "survivor-lifecycle",
+  "pr": 80,
+  "base": "milestone/v1.3",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/survivor/identity.go",
+        "internal/survivor/identity_test.go",
+        "internal/mutation/adapter.go"
+      ],
+      "commit": "bd85460",
+      "completed_at": "2026-08-10T06:44:11.256578Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "survivor.Resolve",
+          "loc": "internal/survivor/identity.go:82",
+          "what": "text-derived cross-run survivor key with ambiguity + subject-gone guards; mutation.Mutant gains Key/Lifecycle/Note"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/verify/verify_test.go",
+        "internal/verify/lifecycle_test.go"
+      ],
+      "commit": "ed3aac5",
+      "completed_at": "2026-08-10T08:52:25.982903Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "TestAmbiguousAndRoutedSurvivorCarriesBothNotes",
+          "loc": "internal/verify/lifecycle_test.go:328",
+          "what": "ambiguity+routing note join and in-scope Note rendering pinned by test"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/survivor/store_test.go",
+        "internal/cmd/survivor_test.go"
+      ],
+      "commit": "a6b366d",
+      "completed_at": "2026-08-10T11:48:17.306403Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "TestAddCategoryOnlyReferencesExistingProse",
+          "loc": "internal/survivor/store_test.go:210",
+          "what": "shared-category acceptance pinned at both the Add gate and the --category CLI flag"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/survivor/store.go",
+        "internal/survivor/store_test.go"
+      ],
+      "commit": "1af1632",
+      "completed_at": "2026-08-10T06:48:50.796927Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "survivor.Accept",
+          "loc": "internal/survivor/store.go:238",
+          "what": "repo-root .dross/survivors.toml registry with reason enforcement at load and write, shared-category prose, atomic read-modify-write"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/rules/rules.go",
+        "internal/rules/rules_test.go",
+        "internal/cmd/rule_test.go",
+        ".dross/rules.toml"
+      ],
+      "commit": "e5bc529",
+      "completed_at": "2026-08-10T06:52:14.927509Z",
+      "landmarks": [
+        {
+          "feature": "rules system",
+          "symbol": "rules.Builtins",
+          "loc": "internal/rules/rules.go:143",
+          "what": "dross-survivor-drain ships as a builtin naming both escapes; project-local r-02 duplicate retired"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/phase_test.go",
+        "internal/cmd/deferred.go",
+        "internal/cmd/deferred_test.go"
+      ],
+      "commit": "238dadf",
+      "completed_at": "2026-08-10T06:55:31.202721Z",
+      "landmarks": [
+        {
+          "feature": "deferred routing",
+          "symbol": "phase.Deferred.Survivor",
+          "loc": "internal/phase/phase.go:259",
+          "what": "optional survivor identity key persisted through spec.toml and emitted by deferred list --json, preserved across unroute"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/verify/lifecycle.go",
+        "internal/verify/lifecycle_test.go",
+        "internal/verify/verify.go",
+        "internal/verify/verify_test.go"
+      ],
+      "commit": "da40545",
+      "completed_at": "2026-08-10T07:04:40.416204Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "verify.Classify",
+          "loc": "internal/verify/lifecycle.go:108",
+          "what": "every survivor gets exactly one of in-diff/routed/accepted/unclassified via a fakeable Identifier seam; Skeleton silences only accepted, NOTEs routed with destination, FLAGs unclassified out-of-scope individually"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/survivor/stale.go",
+        "internal/survivor/stale_test.go"
+      ],
+      "commit": "3da1711",
+      "completed_at": "2026-08-10T07:08:20.750567Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "survivor.StaleAcceptances",
+          "loc": "internal/survivor/stale.go:57",
+          "what": "read-only, clock-free staleness pass reporting file-gone vs text-gone and keeping unreadable subjects unverifiable rather than stale"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/survivor.go",
+        "internal/cmd/survivor_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "03be852",
+      "completed_at": "2026-08-10T07:14:52.697209Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "cmd.Survivor",
+          "loc": "internal/cmd/survivor.go:26",
+          "what": "dross survivor accept/route/list — reason-gated repo-root acceptances, deferred append into the current phase's spec with a validated target, and stale/json listing"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_test.go",
+        "internal/cmd/verify_scoping_test.go",
+        "internal/survivor/identity.go",
+        "internal/cmd/survivor.go"
+      ],
+      "commit": "826f24f",
+      "completed_at": "2026-08-10T07:23:42.927965Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "cmd.workTreeIdentifier",
+          "loc": "internal/cmd/verify.go:493",
+          "what": "verify loads the repo-root store and the cross-phase routed map, classifies + persists key/state into tests.json, prints the four lifecycle counts, and NOTEs stale acceptances without touching the verdict"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "assets/prompts/verify.md",
+        "internal/cmd/verify_prompt_test.go",
+        "README.md"
+      ],
+      "commit": "63bd0fc",
+      "completed_at": "2026-08-10T07:27:34.598456Z",
+      "landmarks": [
+        {
+          "feature": "verify prompt",
+          "symbol": "verify.md §2 survivor close-out",
+          "loc": "assets/prompts/verify.md:78",
+          "what": "four-state table plus the two drain verbs replace the park-for-later instruction; README gains the dross survivor command row"
+        }
+      ]
+    }
+  }
+}

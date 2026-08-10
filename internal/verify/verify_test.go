@@ -1075,3 +1075,194 @@ func TestRunScopedDoesNotNarrowAdapterInvocation(t *testing.T) {
 		t.Errorf("adapter was handed %v, want the full list %v", rec.got, files)
 	}
 }
+
+// lifecycleTests builds a Tests with one in-scope survivor and three
+// out-of-scope ones, classified with the given acceptance/routing maps.
+func lifecycleTests(t *testing.T, accepted, routed map[string]string) *Tests {
+	t.Helper()
+	tests := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{{
+			Name: "go", Tool: "gremlins",
+			Mutation: &mutation.Report{
+				Killed: 3, Survived: 4, Score: 3.0 / 7.0,
+				Surviving: []mutation.Mutant{{File: "in.go", Line: 10, Op: "OP"}},
+			},
+		}},
+		OutOfScope: []OutOfScopeMutant{
+			{File: "routed.go", Line: 20, Op: "OP", Language: "go"},
+			{File: "accept.go", Line: 30, Op: "OP", Language: "go"},
+			{File: "bare.go", Line: 40, Op: "OP", Language: "go"},
+		},
+	}
+	ApplyLifecycle(tests, accepted, routed, fixtureIdentifier())
+	return tests
+}
+
+func findingsBySeverity(v *Verify, severity string) []Finding {
+	var out []Finding
+	for _, f := range v.Findings {
+		if f.Severity == severity {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// TestSkeletonAcceptanceSuppressesExactlyOneFlag is c-2 at the report surface,
+// and it pins the suppression to the acceptance itself: with the acceptance the
+// survivor is silent, and deleting ONLY that acceptance brings back exactly one
+// FLAG naming it. A suppression that isn't attributable to a recorded reason is
+// indistinguishable from a survivor being dropped.
+func TestSkeletonAcceptanceSuppressesExactlyOneFlag(t *testing.T) {
+	ti := fixtureIdentifier()
+	acceptKey := keyOf(t, ti, "accept.go", 30, "OP")
+	routing := map[string]string{keyOf(t, ti, "routed.go", 20, "OP"): "board-sync-truth"}
+
+	withAcceptance := Skeleton(lifecycleTests(t, map[string]string{acceptKey: "ceiling"}, routing), []string{"c-1"})
+	without := Skeleton(lifecycleTests(t, nil, routing), []string{"c-1"})
+
+	for _, f := range withAcceptance.Findings {
+		if strings.Contains(f.Text, "accept.go") {
+			t.Errorf("accepted survivor still reported: %+v", f)
+		}
+	}
+
+	var named []Finding
+	for _, f := range findingsBySeverity(without, "FLAG") {
+		if strings.Contains(f.Text, "accept.go") {
+			named = append(named, f)
+		}
+	}
+	if len(named) != 1 {
+		t.Fatalf("deleting the acceptance produced %d FLAGs for accept.go, want exactly 1: %+v", len(named), named)
+	}
+}
+
+// TestSkeletonInScopeSurvivorRendersItsNote: a note that never reaches
+// verify.toml explains nothing. The case that matters is the ambiguous
+// acceptance — the survivor re-emits as in-diff, and its FLAG is the only place
+// the user learns why the acceptance they recorded did not silence it. Without
+// the note the FLAG is indistinguishable from a survivor nobody ever accepted.
+func TestSkeletonInScopeSurvivorRendersItsNote(t *testing.T) {
+	ti := fixtureIdentifier()
+	ambiguous := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{{
+			Name: "go", Tool: "gremlins",
+			Mutation: &mutation.Report{
+				Killed: 3, Survived: 1, Score: 0.75,
+				Surviving: []mutation.Mutant{{File: "dup.go", Line: 50, Op: "OP"}},
+			},
+		}},
+	}
+	ApplyLifecycle(ambiguous, map[string]string{keyOf(t, ti, "dup.go", 50, "OP"): "ceiling"}, nil, ti)
+
+	flags := findingsBySeverity(Skeleton(ambiguous, []string{"c-1"}), "FLAG")
+	var named []Finding
+	for _, f := range flags {
+		if strings.Contains(f.Text, "dup.go:50") {
+			named = append(named, f)
+		}
+	}
+	if len(named) != 1 {
+		t.Fatalf("want exactly 1 FLAG for the re-emitted survivor, got %d: %+v", len(named), named)
+	}
+	if !strings.Contains(named[0].Text, "— accepted key is ambiguous") {
+		t.Errorf("FLAG = %q, must carry the survivor's note saying why the acceptance was withheld", named[0].Text)
+	}
+
+	// The other half: a survivor with no note renders with no dangling
+	// separator, so the note is genuinely conditional rather than always-on.
+	plain := findingsBySeverity(Skeleton(lifecycleTests(t, nil, nil), []string{"c-1"}), "FLAG")
+	for _, f := range plain {
+		if strings.Contains(f.Text, "in.go:10") && strings.Contains(f.Text, "—") {
+			t.Errorf("note-less survivor rendered a separator with nothing after it: %q", f.Text)
+		}
+	}
+}
+
+// TestSkeletonAcceptanceDoesNotTouchTheScore: an acceptance suppresses a
+// finding, never a count. If accepted survivors folded out of the denominator, a
+// phase could raise its mutation score by declaring its survivors acceptable.
+func TestSkeletonAcceptanceDoesNotTouchTheScore(t *testing.T) {
+	ti := fixtureIdentifier()
+	acceptKey := keyOf(t, ti, "in.go", 10, "OP")
+
+	before := Skeleton(lifecycleTests(t, nil, nil), []string{"c-1"})
+	after := Skeleton(lifecycleTests(t, map[string]string{acceptKey: "ceiling"}, nil), []string{"c-1"})
+
+	if before.Summary.MutantsSurvived != after.Summary.MutantsSurvived {
+		t.Errorf("mutants_survived changed from %d to %d after an acceptance",
+			before.Summary.MutantsSurvived, after.Summary.MutantsSurvived)
+	}
+	if before.Summary.MutationScore != after.Summary.MutationScore {
+		t.Errorf("mutation score changed from %v to %v after an acceptance",
+			before.Summary.MutationScore, after.Summary.MutationScore)
+	}
+}
+
+// TestSkeletonOutOfScopeIsLifecycleAware is c-7: an out-of-scope survivor gets
+// the same treatment as an in-scope one. Unclassified means one actionable FLAG
+// naming both escapes; routed means a NOTE naming the destination; accepted
+// means silence — and the one-line filtered NOTE counts only what is left.
+func TestSkeletonOutOfScopeIsLifecycleAware(t *testing.T) {
+	ti := fixtureIdentifier()
+	v := Skeleton(lifecycleTests(t,
+		map[string]string{keyOf(t, ti, "accept.go", 30, "OP"): "ceiling"},
+		map[string]string{keyOf(t, ti, "routed.go", 20, "OP"): "board-sync-truth"},
+	), []string{"c-1"})
+
+	var bareFlags, routedNotes, filteredNotes []Finding
+	for _, f := range v.Findings {
+		switch {
+		case f.Severity == "FLAG" && strings.Contains(f.Text, "bare.go"):
+			bareFlags = append(bareFlags, f)
+		case f.Severity == "NOTE" && strings.Contains(f.Text, "routed.go"):
+			routedNotes = append(routedNotes, f)
+		case strings.Contains(f.Text, "out-of-scope survivor(s)"):
+			filteredNotes = append(filteredNotes, f)
+		}
+		if strings.Contains(f.Text, "accept.go") {
+			t.Errorf("accepted out-of-scope survivor still reported: %+v", f)
+		}
+	}
+
+	if len(bareFlags) != 1 {
+		t.Errorf("unrouted, unaccepted out-of-scope survivor produced %d FLAGs, want 1: %+v", len(bareFlags), bareFlags)
+	} else {
+		for _, escape := range []string{"dross survivor accept", "dross survivor route"} {
+			if !strings.Contains(bareFlags[0].Text, escape) {
+				t.Errorf("unclassified FLAG must name %q: %q", escape, bareFlags[0].Text)
+			}
+		}
+	}
+	if len(routedNotes) != 1 || !strings.Contains(routedNotes[0].Text, "board-sync-truth") {
+		t.Errorf("routed out-of-scope survivor should be one NOTE naming its destination, got %+v", routedNotes)
+	}
+	if len(filteredNotes) != 1 {
+		t.Fatalf("want exactly 1 filtered-count NOTE, got %d: %+v", len(filteredNotes), filteredNotes)
+	}
+	// 3 out-of-scope entries, 1 accepted → the remainder is 2, not 3.
+	if !strings.Contains(filteredNotes[0].Text, "filtered 2 out-of-scope") {
+		t.Errorf("filtered NOTE must count the post-lifecycle remainder, got %q", filteredNotes[0].Text)
+	}
+}
+
+// TestSkeletonUnclassifiedNoteFallsAwayWhenDrained: once every out-of-scope
+// survivor is accepted, the one-line NOTE disappears entirely. That is the
+// ratchet — a drained backlog reads as drained, not as "0 remaining".
+func TestSkeletonUnclassifiedNoteFallsAwayWhenDrained(t *testing.T) {
+	ti := fixtureIdentifier()
+	accepted := map[string]string{
+		keyOf(t, ti, "routed.go", 20, "OP"): "r",
+		keyOf(t, ti, "accept.go", 30, "OP"): "a",
+		keyOf(t, ti, "bare.go", 40, "OP"):   "b",
+	}
+	v := Skeleton(lifecycleTests(t, accepted, nil), []string{"c-1"})
+	for _, f := range v.Findings {
+		if strings.Contains(f.Text, "out-of-scope") {
+			t.Errorf("fully drained out-of-scope set still reported: %+v", f)
+		}
+	}
+}

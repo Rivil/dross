@@ -1,0 +1,527 @@
+[verify]
+  phase = "survivor-lifecycle"
+  generated_at = 2026-08-10T12:10:18.986813Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-10T12:30:55.575265Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9447674418604651
+  mutants_killed = 325
+  mutants_survived = 19
+  mutants_not_covered = 19
+  mutants_in_scope = 344
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/verify/lifecycle_test.go:TestClassifyPartitionsEverySurvivor", "internal/verify/lifecycle_test.go:TestClassifyAssignsEachStateOnce", "internal/verify/lifecycle_test.go:TestNoSurvivorReachesTestsJSONStateless", "internal/verify/lifecycle_test.go:TestAmbiguousAndRoutedSurvivorCarriesBothNotes", "internal/cmd/verify_scoping_test.go:TestVerifyPrintsLifecycleCounts"]
+  notes = "Total() equals the input count and each state holds exactly one complete record; an empty state fails at the persistence boundary. Proven live across four runs of this phase, every state exercised on real data: 91 unclassified -> 0, then 1 accepted, then 8 accepted + 93 routed + 1 in-diff, with the counts summing to the run total each time."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/survivor/store_test.go:TestAcceptRejectsReasonlessAndWritesNothing", "internal/survivor/store_test.go:TestLoadRejectsHandEditedReasonlessEntry", "internal/survivor/store_test.go:TestAddCategoryOnlyReferencesExistingProse", "internal/survivor/store_test.go:TestCategoryResolution", "internal/cmd/survivor_test.go:TestSurvivorAcceptCategoryFlag", "internal/verify/verify_test.go:TestSkeletonAcceptanceSuppressesExactlyOneFlag"]
+  notes = "Reason enforcement closed on both entrances (write gate Accept, read gate Load), with the rejection asserted byte-identical against an existing store. t-11 closed the gap the previous run found: the category-only path is now pinned at the Add gate directly — not only through Accept, which Save's validate() would catch anyway — and through the --category CLI flag. store.go:160 is now executed (coverprofile n=1) though gremlins still reports it NOT_COVERED, which is the attribution ceiling, not a gap."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/survivor_test.go:TestSurvivorAcceptWritesRepoRootStore", "internal/cmd/survivor_test.go:TestSurvivorStoreIsTracked", "internal/cmd/verify_scoping_test.go:TestVerifyReadsStoreAcrossPhases", "internal/survivor/store_test.go:TestLocatePathResolvesRepoRootFromNestedSubdir"]
+  notes = "TestVerifyReadsStoreAcrossPhases is load-bearing: accept under one phase, flip current_phase, assert the acceptance still suppresses — the phase-local-read failure that killed the board mapping. Demonstrated live: acceptances recorded during two separate execute runs were read back and applied by later verify runs."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/survivor/identity_test.go:TestKeyStableAcrossLineDrift", "internal/survivor/identity_test.go:TestKeyIsTextDerived", "internal/survivor/identity_test.go:TestAmbiguityDetection", "internal/verify/lifecycle_test.go:TestFalseSuppressionGuard", "internal/verify/lifecycle_test.go:TestAmbiguousAcceptanceDoesNotSuppress", "internal/verify/verify_test.go:TestSkeletonInScopeSurvivorRendersItsNote"]
+  notes = "Drift and false-suppression asserted as an exact pair on one fixture. The strongest evidence is live rather than fixture: this run recorded a genuinely ambiguous acceptance (internal/survivor/identity.go:103, whose text also appears at line 84) and the system withheld suppression and re-emitted with the reason, exactly as the locked survivor_identity rule requires. 93 routed survivors also survived a real code edit with their text-derived keys intact."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/survivor/stale_test.go:TestStaleDetectsDeletedFile", "internal/survivor/stale_test.go:TestStaleDetectsVanishedText", "internal/survivor/stale_test.go:TestStaleIgnoresLineDrift", "internal/survivor/stale_test.go:TestStaleReportsReadErrorsSeparately", "internal/survivor/stale_test.go:TestStaleSignatureHasNoClock", "internal/cmd/verify_scoping_test.go:TestVerifyReportsStaleAcceptance"]
+  notes = "Both staleness shapes covered, with the two degradation modes excluded: line drift must not retire a live acceptance, and an unreadable file is Unverifiable rather than Stale. The no_acceptance_ttl lock is enforced structurally by reflecting over the signature for a time.Time/Duration parameter."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/rules/rules_test.go:TestRenderEmitsSurvivorDrainBuiltin", "internal/rules/rules_test.go:TestProjectRuleR02Retired", "internal/rules/rules_test.go:TestDrainPolicyRenderedOnce", "internal/rules/rules_test.go:TestDrainRuleNamesBothEscapes", "internal/cmd/rule_test.go:TestRuleShowEmitsSurvivorDrainInCleanRepo"]
+  notes = "Ship half runs Render over the empty set and again through `dross rule show` in a freshly-inited temp repo. Delete half asserts on rule TEXT, not the id, since nextID reallocates r-02 and an id check would pass vacuously. TestDrainPolicyRenderedOnce counts occurrences so a returning project copy fails."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/verify/lifecycle_test.go:TestApplyLifecycleStampsBothRecordTypes", "internal/verify/lifecycle_test.go:TestOutOfScopeMutantWireForm", "internal/verify/verify_test.go:TestSkeletonOutOfScopeIsLifecycleAware", "internal/verify/verify_test.go:TestSkeletonUnclassifiedNoteFallsAwayWhenDrained", "internal/cmd/survivor_test.go:TestSurvivorRouteAppendsToCurrentPhaseSpec", "internal/cmd/deferred_test.go:TestDeferredListTargetIncludesSurvivorEntries"]
+  notes = "Routing lands in the CURRENT phase's spec and explicitly not the target's, then is reachable via `deferred list --target`. Proven at scale rather than by fixture: 107 out-of-scope rows routed to survivor-drain and still resolving as routed three verify runs and one code change later."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Verdict judgement, stated rather than assumed: section 3's partial rule triggers on any FLAG, and one FLAG remains. It is recorded as pass because that FLAG is not an uncovered surface — internal/survivor/identity.go:103 is executed by the suite (coverprofile n=1), carries a recorded acceptance, and re-emits only because its source text is not unique in the file so the locked survivor_identity rule withholds suppression. That is the designed safe-failure direction firing correctly, not a test gap. If you would rather the letter of the rule win, change this to partial."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation efficacy over executed mutants is 1.00 — all 19 in-scope survivors are NOT_COVERED, none is a mutant the tests ran and failed to kill. t-10 killed 3 (internal/verify/lifecycle.go:162 x2, internal/verify/verify.go:479); t-11 brought internal/survivor/store.go:160 under test though gremlins still reports it uncovered."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Backlog drained to 1 in-diff, 93 routed, 8 accepted, 0 unclassified. The 8 acceptances share one category (gremlins-attribution-ceiling) whose prose is written once, each measured individually at coverprofile count>=1 before being accepted. internal/rules/rules.go:104 was routed rather than accepted: it is a genuine weakness — TestMergeSortGlobalFirstThenByID compares one global against one project rule, so scopes always differ and the by-ID tiebreak its name promises never runs."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The acceptance recorded for internal/survivor/identity.go:103 is ambiguous and will not suppress until that line's text is unique in the file (it also appears at line 84, inside Resolve). Left standing deliberately: a lapsed acceptance is noise, a false suppression hides a real bug."
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/rules/rules.go:104 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/rules/rules.go:104 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "FLAG"
+  text = "gremlins mutant survived: internal/survivor/identity.go:103 (CONDITIONALS_NEGATION) — accepted key is ambiguous in this file (identical source text on more than one line) — acceptance withheld"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/verify.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/issue.go:171 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/footer_coverage.go:52 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/footer_coverage.go:55 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/footer_coverage.go:58 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/footer_coverage.go:60 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/install.go:65 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/phase_lifecycle.go:23 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/phase_lifecycle.go:23 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/phase_lifecycle.go:25 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/phase_lifecycle.go:25 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/phase_lifecycle.go:27 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/rule.go:143 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/watch.go:130 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/watch.go:130 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone_dependents.go:158 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone_dependents.go:160 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone_dependents.go:160 (INVERT_NEGATIVES) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/milestone_dependents.go:160 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/basebranch.go:104 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/gitignore.go:17 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/gitignore.go:48 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/gitignore.go:47 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/gitignore.go:46 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/gitignore.go:66 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/gitignore.go:65 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/gitignore.go:64 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/project.go:81 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/project.go:83 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/repair.go:131 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/repair.go:133 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/repair.go:133 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/hooks.go:100 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/phase.go:308 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/phase.go:310 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/phase.go:768 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/status.go:442 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/status.go:442 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/status.go:444 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/status.go:444 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/status.go:444 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/status.go:472 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/status.go:474 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/env.go:105 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/env.go:109 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/env.go:114 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/env.go:119 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/env.go:148 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/statusline.go:23 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/statusline.go:189 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/statusline.go:189 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:93 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:93 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:95 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:95 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:98 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:98 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:164 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:248 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:251 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:251 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:358 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:360 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:362 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:362 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/doctor.go:391 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/hints.go:86 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/hints.go:86 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/hints.go:86 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/hints.go:86 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/hints.go:88 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/hints.go:88 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/hints.go:133 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/hints.go:133 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/root.go:61 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/validate.go:92 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/validate.go:96 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/ship.go:264 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/ship.go:550 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/ship.go:550 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/ship.go:552 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/ship.go:552 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/ship.go:554 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/state.go:270 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/trust.go:281 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/trust.go:280 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/trust.go:279 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/update.go:181 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/cmd/update.go:184 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/mutation/stryker.go:73 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/mutation/stryker.go:80 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/mutation/stryker.go:263 (INCREMENT_DECREMENT) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/mutation/stryker_net.go:221 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/mutation/gremlins.go:155 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/mutation/gremlins.go:155 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/mutation/gremlins.go:155 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/mutation/gremlins.go:166 (ARITHMETIC_BASE) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/verify/scope.go:147 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/verify/scope.go:147 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/verify/scope.go:151 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/verify/scope.go:151 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/verify/scope.go:151 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/verify/scope.go:151 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/verify/scope.go:153 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/verify/scope.go:153 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/verify/scope.go:155 (CONDITIONALS_BOUNDARY) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/verify/scope.go:155 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "out-of-scope mutant survived: internal/verify/scope.go:260 (CONDITIONALS_NEGATION) — routed to survivor-drain"
+
+[[finding]]
+  severity = "NOTE"
+  text = "filtered 107 out-of-scope survivor(s) in files this phase did not touch — listed under `out_of_scope` in tests.json, not counted in the score"

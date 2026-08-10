@@ -1,0 +1,614 @@
+[phase]
+  id = "survivor-lifecycle"
+  title = "survivor-lifecycle"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every survivor a verify run reports carries exactly one lifecycle state — in-diff, routed, or accepted — and a survivor with no state is reported as unclassified rather than blending into the list."
+
+[[criteria]]
+  id = "c-2"
+  text = "A survivor recorded as accepted-with-reason is not re-emitted by any later verify run, and an acceptance submitted without a reason is rejected."
+
+[[criteria]]
+  id = "c-3"
+  text = "Accepting or routing a survivor is a CLI action rather than a hand-edit, and the resulting record outlives the phase that made it — a later phase's verify run still sees it."
+
+[[criteria]]
+  id = "c-4"
+  text = "A survivor is recognised as the same survivor across runs after unrelated edits shift its line number, and a genuinely new survivor at an accepted survivor's old position is not mistaken for it."
+
+[[criteria]]
+  id = "c-5"
+  text = "An acceptance whose subject no longer exists (file deleted, or the mutant is no longer produced) is surfaced as stale rather than kept silently forever."
+
+[[criteria]]
+  id = "c-6"
+  text = "The drain-don't-relist policy ships as a builtin rule: `dross rule show` lists it in a repo with no project rules configured, and the project-local r-02 duplicate is removed from this repo."
+
+[[criteria]]
+  id = "c-7"
+  text = "Out-of-scope survivors get the same lifecycle: the tests.json `out_of_scope` list is routable to a destination rather than a write-only audit record."
+
+[[decisions]]
+  key = "acceptance_store"
+  choice = "Accepted survivors live in a single tracked repo-level `.dross/survivors.toml`."
+  why = "An acceptance is a durable engineering claim about the codebase, so it belongs in history where a reviewer sees the reason. Tracked also means it survives the squash-merge — an untracked or phase-branch-local record dies exactly the way the board mapping did."
+  locked = true
+
+[[decisions]]
+  key = "survivor_identity"
+  choice = "A survivor's key is file + mutation op + a hash of the mutated line's normalized source text. When that text occurs more than once in the file the match is ambiguous, and an ambiguous acceptance does not suppress — the survivor re-emits with a note."
+  why = "Survives line drift anywhere in the file without an AST, and stays language-agnostic for the later multilang work. The ambiguity rule picks the safe failure direction: a lapsed acceptance is noise, a false suppression hides a real bug."
+  locked = true
+
+[[decisions]]
+  key = "acceptance_granularity"
+  choice = "One entry per accepted survivor, keyed by its own identity. Entries may name a shared `category` whose reason prose is written once."
+  why = "Keeps c-4 matching and c-5 staleness per-mutant and rules out blanket suppression of survivors that don't exist yet. The category only deduplicates prose, so the drain's ~76 entries stay individually accounted without 76 copy-pasted reasons."
+  locked = true
+
+[[decisions]]
+  key = "routed_state_source"
+  choice = "Routing a survivor creates a deferred item carrying its identity key and a target, reusing the existing `dross deferred route` machinery; `.dross/survivors.toml` stays accepted-only. Routed survivors still appear in the run, labelled with their destination rather than counted unclassified."
+  why = "Reuses the loop-closer that already re-surfaces parked ideas on the target phase's spec slate, instead of re-implementing routing beside it. Debt with a home should stay visible — only an accepted survivor earns silence."
+  locked = true
+
+[[decisions]]
+  key = "cli_namespace"
+  choice = "The verbs are `dross survivor accept|route|list`."
+  why = "The store is a survivor registry, not a verify artifact, and the record outlives any one phase's verify run — hanging the verbs off `dross verify` would imply otherwise."
+  locked = true
+
+[[decisions]]
+  key = "no_acceptance_ttl"
+  choice = "Acceptances do not expire. Staleness is detected structurally (c-5) — subject gone — never by age."
+  why = "A TTL would re-flood the standing backlog this milestone exists to drain, on a timer, with no new information."
+  locked = true
+
+[[deferred]]
+  text = "survivor internal/cmd/basebranch.go:104 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "f64b7c4c5d0d7836"
+
+[[deferred]]
+  text = "survivor internal/cmd/statusline.go:23 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "a49c53b3ad283fc8"
+
+[[deferred]]
+  text = "survivor internal/cmd/statusline.go:189 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "ba29537aba9784ed"
+
+[[deferred]]
+  text = "survivor internal/cmd/validate.go:92 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "c52f92cc35982cda"
+
+[[deferred]]
+  text = "survivor internal/cmd/validate.go:96 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "fa5ac88f46292d4a"
+
+[[deferred]]
+  text = "survivor internal/cmd/footer_coverage.go:52 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "2a845b586a6c46b8"
+
+[[deferred]]
+  text = "survivor internal/cmd/footer_coverage.go:55 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "b7c74e48a4862dab"
+
+[[deferred]]
+  text = "survivor internal/cmd/footer_coverage.go:58 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "b5ddcc58cdde21aa"
+
+[[deferred]]
+  text = "survivor internal/cmd/footer_coverage.go:60 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "50fe59a84e58fd2d"
+
+[[deferred]]
+  text = "survivor internal/cmd/repair.go:131 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "e6e177e15d5ffcf2"
+
+[[deferred]]
+  text = "survivor internal/cmd/repair.go:133 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "f57b2f9dd061303d"
+
+[[deferred]]
+  text = "survivor internal/cmd/phase.go:308 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "96af9ac8d2c3b95e"
+
+[[deferred]]
+  text = "survivor internal/cmd/phase.go:310 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "5fafdd3feef11dd4"
+
+[[deferred]]
+  text = "survivor internal/cmd/phase.go:768 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "08b98041fe733176"
+
+[[deferred]]
+  text = "survivor internal/cmd/phase_lifecycle.go:23 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "4296aba7fc10199c"
+
+[[deferred]]
+  text = "survivor internal/cmd/phase_lifecycle.go:25 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "656a800e0c49e82b"
+
+[[deferred]]
+  text = "survivor internal/cmd/phase_lifecycle.go:27 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "6ae95da642b1e841"
+
+[[deferred]]
+  text = "survivor internal/cmd/watch.go:130 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "928e3536acd36ece"
+
+[[deferred]]
+  text = "survivor internal/cmd/watch.go:130 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "739beac06e8e62e1"
+
+[[deferred]]
+  text = "survivor internal/cmd/trust.go:281 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "c930c60169027d0d"
+
+[[deferred]]
+  text = "survivor internal/cmd/trust.go:280 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "3a361ab2ea3bd045"
+
+[[deferred]]
+  text = "survivor internal/cmd/trust.go:279 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "c1aa91bc3fedd330"
+
+[[deferred]]
+  text = "survivor internal/cmd/install.go:65 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "ce9147b293c6813d"
+
+[[deferred]]
+  text = "survivor internal/cmd/status.go:442 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "5cd804cb4301552d"
+
+[[deferred]]
+  text = "survivor internal/cmd/status.go:442 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "43f3ee380345b6b8"
+
+[[deferred]]
+  text = "survivor internal/cmd/status.go:444 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "cbe0c58e5d2cb069"
+
+[[deferred]]
+  text = "survivor internal/cmd/status.go:444 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "7a36fb899b36807b"
+
+[[deferred]]
+  text = "survivor internal/cmd/status.go:444 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "38470da216963a96"
+
+[[deferred]]
+  text = "survivor internal/cmd/status.go:472 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "f2ccf21f766939d9"
+
+[[deferred]]
+  text = "survivor internal/cmd/status.go:474 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "b1b3323d3c458a3c"
+
+[[deferred]]
+  text = "survivor internal/cmd/ship.go:264 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "da9683b212e497f3"
+
+[[deferred]]
+  text = "survivor internal/cmd/ship.go:550 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "8facc7fea486a231"
+
+[[deferred]]
+  text = "survivor internal/cmd/ship.go:552 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "b391c1a5b1496088"
+
+[[deferred]]
+  text = "survivor internal/cmd/ship.go:554 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "2fd95c208f2dd748"
+
+[[deferred]]
+  text = "survivor internal/cmd/gitignore.go:17 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "28ece17d11f1de42"
+
+[[deferred]]
+  text = "survivor internal/cmd/gitignore.go:48 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "cac86369304b7dc1"
+
+[[deferred]]
+  text = "survivor internal/cmd/gitignore.go:47 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "0f7ff16de78d0188"
+
+[[deferred]]
+  text = "survivor internal/cmd/gitignore.go:46 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "48cac81a1a5e0bc7"
+
+[[deferred]]
+  text = "survivor internal/cmd/gitignore.go:66 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "f0f2e97a783fbeb1"
+
+[[deferred]]
+  text = "survivor internal/cmd/gitignore.go:65 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "68d51f164866815b"
+
+[[deferred]]
+  text = "survivor internal/cmd/gitignore.go:64 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "7c6fb95f3d81167c"
+
+[[deferred]]
+  text = "survivor internal/cmd/issue.go:171 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "b3bca090eb817d72"
+
+[[deferred]]
+  text = "survivor internal/cmd/hints.go:86 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "b8ff967b67f96d9e"
+
+[[deferred]]
+  text = "survivor internal/cmd/hints.go:86 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "8550041424bd9279"
+
+[[deferred]]
+  text = "survivor internal/cmd/hints.go:88 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "bb3a21ac111537ea"
+
+[[deferred]]
+  text = "survivor internal/cmd/hints.go:88 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "e51d801a8015aaf5"
+
+[[deferred]]
+  text = "survivor internal/cmd/hints.go:133 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "d52a461e0f28435b"
+
+[[deferred]]
+  text = "survivor internal/cmd/hints.go:133 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "960198b17e257f5c"
+
+[[deferred]]
+  text = "survivor internal/cmd/hooks.go:100 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "cac586a7c24a5048"
+
+[[deferred]]
+  text = "survivor internal/cmd/milestone_dependents.go:158 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "c84bb90c5fdb562c"
+
+[[deferred]]
+  text = "survivor internal/cmd/milestone_dependents.go:160 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "b36db01df5cbb210"
+
+[[deferred]]
+  text = "survivor internal/cmd/milestone_dependents.go:160 (INVERT_NEGATIVES)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "90a89fcc0c93c7b9"
+
+[[deferred]]
+  text = "survivor internal/cmd/milestone_dependents.go:160 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "d0c1c73cf5c9f87e"
+
+[[deferred]]
+  text = "survivor internal/cmd/project.go:81 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "570d2fdc4eb27db2"
+
+[[deferred]]
+  text = "survivor internal/cmd/project.go:83 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "919acc418a9a0821"
+
+[[deferred]]
+  text = "survivor internal/cmd/doctor.go:93 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "8050884712acc62f"
+
+[[deferred]]
+  text = "survivor internal/cmd/doctor.go:95 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "de94300e7681c476"
+
+[[deferred]]
+  text = "survivor internal/cmd/doctor.go:98 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "f2b8e6bc447a05eb"
+
+[[deferred]]
+  text = "survivor internal/cmd/doctor.go:164 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "9f6d0e6b8fa5ab9b"
+
+[[deferred]]
+  text = "survivor internal/cmd/doctor.go:248 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "a3a6f65c557890b7"
+
+[[deferred]]
+  text = "survivor internal/cmd/doctor.go:251 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "b91bfa24fdf586c0"
+
+[[deferred]]
+  text = "survivor internal/cmd/doctor.go:251 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "89f2fa68e2d27733"
+
+[[deferred]]
+  text = "survivor internal/cmd/doctor.go:358 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "f1f5b5ca57ba6394"
+
+[[deferred]]
+  text = "survivor internal/cmd/doctor.go:360 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "ef37177ea24e0368"
+
+[[deferred]]
+  text = "survivor internal/cmd/doctor.go:362 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "e7956d86bc3d1b73"
+
+[[deferred]]
+  text = "survivor internal/cmd/doctor.go:391 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "ce81e615d18b28b1"
+
+[[deferred]]
+  text = "survivor internal/cmd/root.go:61 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "65e701d659c601c1"
+
+[[deferred]]
+  text = "survivor internal/cmd/env.go:105 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "05f0338039800ccf"
+
+[[deferred]]
+  text = "survivor internal/cmd/env.go:109 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "106fd6b0e20249ac"
+
+[[deferred]]
+  text = "survivor internal/cmd/env.go:114 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "853f82b709c29f83"
+
+[[deferred]]
+  text = "survivor internal/cmd/env.go:119 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "e3dd7d178cf10df9"
+
+[[deferred]]
+  text = "survivor internal/cmd/state.go:270 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "e0a52d6f5c8d7569"
+
+[[deferred]]
+  text = "survivor internal/cmd/update.go:181 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "e6d8584559369934"
+
+[[deferred]]
+  text = "survivor internal/cmd/update.go:184 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "2f4b2750232fddbd"
+
+[[deferred]]
+  text = "survivor internal/cmd/rule.go:143 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "4492a5676351c59d"
+
+[[deferred]]
+  text = "survivor internal/mutation/gremlins.go:155 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "919dc00a970c3bd3"
+
+[[deferred]]
+  text = "survivor internal/mutation/gremlins.go:166 (ARITHMETIC_BASE)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "96980044cc25afee"
+
+[[deferred]]
+  text = "survivor internal/mutation/stryker.go:73 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "8a28747b05d24dcf"
+
+[[deferred]]
+  text = "survivor internal/mutation/stryker.go:263 (INCREMENT_DECREMENT)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "f53890787985494c"
+
+[[deferred]]
+  text = "survivor internal/mutation/stryker_net.go:221 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "d985416df83db101"
+
+[[deferred]]
+  text = "survivor internal/verify/scope.go:147 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "656043a9d613879d"
+
+[[deferred]]
+  text = "survivor internal/verify/scope.go:147 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "7b243556585c4e16"
+
+[[deferred]]
+  text = "survivor internal/verify/scope.go:151 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "eafc28a069169896"
+
+[[deferred]]
+  text = "survivor internal/verify/scope.go:151 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "89b1d0ebd34a7589"
+
+[[deferred]]
+  text = "survivor internal/verify/scope.go:153 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "7be8190b55e43484"
+
+[[deferred]]
+  text = "survivor internal/verify/scope.go:153 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "d0df948dd0650e34"
+
+[[deferred]]
+  text = "survivor internal/verify/scope.go:155 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "a3b61f6ed11078be"
+
+[[deferred]]
+  text = "survivor internal/verify/scope.go:155 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "dd6d55632a94d070"
+
+[[deferred]]
+  text = "survivor internal/verify/scope.go:260 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "1ab0a93a037fdf79"
+
+[[deferred]]
+  text = "survivor internal/rules/rules.go:104 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "3c2d6c8a35bc4492"
+
+[[deferred]]
+  text = "survivor internal/rules/rules.go:104 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "d9a7ba1aeb37d486"

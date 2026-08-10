@@ -23,6 +23,10 @@ type deferredEntry struct {
 	Why       string `json:"why,omitempty"`
 	Target    string `json:"target,omitempty"`
 	Dismissed bool   `json:"dismissed,omitempty"`
+	// Survivor is the survivor identity key when this entry is a routed
+	// surviving mutant. omitempty so ordinary deferred items don't carry a
+	// meaningless empty key through the JSON a prompt consumes.
+	Survivor string `json:"survivor,omitempty"`
 }
 
 // Deferred inspects and routes deferred items captured across phase specs.
@@ -60,6 +64,7 @@ func collectDeferred(root string) ([]deferredEntry, error) {
 				Why:       d.Why,
 				Target:    d.Target,
 				Dismissed: d.Dismissed,
+				Survivor:  d.Survivor,
 			})
 		}
 	}

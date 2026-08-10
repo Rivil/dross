@@ -462,3 +462,110 @@ func TestDeferredListCover_SomedayMarkerVsRoutedTarget(t *testing.T) {
 		t.Errorf("routed row must not render as (someday), got:\n%s", routed)
 	}
 }
+
+// survivorFixture adds a routed survivor-carrying deferred entry to the gamma
+// phase of the standard fixture, so the survivor path is exercised alongside
+// ordinary entries rather than in a world of its own.
+func survivorFixture(t *testing.T) (dir, key string) {
+	t.Helper()
+	dir = setupDeferredFixture(t)
+	key = "a1b2c3d4e5f60718"
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "gamma", "spec.toml"),
+		`[phase]
+id = "gamma"
+title = "Gamma"
+
+[[criteria]]
+id = "c-1"
+text = "x"
+
+[[deferred]]
+text = "gamma someday idea"
+
+[[deferred]]
+text = "survivor internal/x.go:40 CONDITIONALS_NEGATION"
+target = "alpha"
+survivor = "`+key+`"
+`)
+	return dir, key
+}
+
+// TestDeferredListJSONCarriesSurvivor pins the JSON surface routed-survivor
+// consumers read: the key is emitted on entries that carry one, and omitted
+// entirely on entries that don't. A blanket empty "survivor" would make every
+// ordinary deferred item look like an unresolvable survivor.
+func TestDeferredListJSONCarriesSurvivor(t *testing.T) {
+	_, key := survivorFixture(t)
+
+	var withKey, without int
+	for _, e := range listJSON(t, "--json") {
+		if e.Survivor == key {
+			withKey++
+			continue
+		}
+		if e.Survivor != "" {
+			t.Errorf("unexpected survivor key %q on %+v", e.Survivor, e)
+		}
+		without++
+	}
+	if withKey != 1 {
+		t.Errorf("expected exactly 1 entry carrying the survivor key, got %d", withKey)
+	}
+	if without == 0 {
+		t.Error("fixture should also hold ordinary entries with no survivor key")
+	}
+
+	// And the raw JSON must not carry the field on entries without one.
+	var raw string
+	if err := runCmdCapturing(t, &raw, Deferred(), "list", "--someday", "--json"); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if strings.Contains(raw, `"survivor"`) {
+		t.Errorf("someday entries emitted a survivor field: %s", raw)
+	}
+}
+
+// TestDeferredListTargetIncludesSurvivorEntries: a routed survivor is an
+// ordinary deferred item as far as triage is concerned. If it were special-cased
+// out of --target, the destination phase's slate would never show the debt that
+// was routed to it — the exact loop routed_state_source exists to close.
+func TestDeferredListTargetIncludesSurvivorEntries(t *testing.T) {
+	_, key := survivorFixture(t)
+
+	got := listJSON(t, "--target", "alpha", "--json")
+	var sawSurvivor, sawOrdinary bool
+	for _, e := range got {
+		if e.Survivor == key {
+			sawSurvivor = true
+		} else {
+			sawOrdinary = true
+		}
+	}
+	if !sawSurvivor {
+		t.Errorf("--target alpha dropped the routed survivor: %+v", got)
+	}
+	if !sawOrdinary {
+		t.Errorf("--target alpha should also list the ordinary routed entry: %+v", got)
+	}
+}
+
+// TestDeferredUnrouteKeepsSurvivorKey: un-routing withdraws the destination, not
+// the identity. Clearing the key too would turn a survivor back into prose and
+// make it unroutable a second time.
+func TestDeferredUnrouteKeepsSurvivorKey(t *testing.T) {
+	dir, key := survivorFixture(t)
+
+	if err := runCmd(t, Deferred(), "unroute", "gamma", "1"); err != nil {
+		t.Fatalf("unroute: %v", err)
+	}
+	spec, err := phase.LoadSpec(filepath.Join(dir, ".dross", "phases", "gamma", "spec.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Deferred[1].Target != "" {
+		t.Errorf("unroute did not clear target: got %q", spec.Deferred[1].Target)
+	}
+	if spec.Deferred[1].Survivor != key {
+		t.Errorf("unroute cleared the survivor key: got %q want %q", spec.Deferred[1].Survivor, key)
+	}
+}

@@ -332,3 +332,112 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		t.Errorf("rules drift on round-trip: %+v", loaded.Rules)
 	}
 }
+
+// drainRuleText returns the Text of the dross-survivor-drain builtin.
+func drainRuleText(t *testing.T) string {
+	t.Helper()
+	for _, r := range Builtins {
+		if r.ID == "dross-survivor-drain" {
+			return r.Text
+		}
+	}
+	t.Fatal("dross-survivor-drain builtin not found")
+	return ""
+}
+
+// TestRenderEmitsSurvivorDrainBuiltin is c-6: the drain policy ships with dross
+// rather than being re-typed into each repo's rules.toml. Render over the empty
+// merged set is the "repo with no project rules configured" case.
+func TestRenderEmitsSurvivorDrainBuiltin(t *testing.T) {
+	out := Render(nil)
+	if !strings.Contains(out, "[builtin/hard/dross-survivor-drain]") {
+		t.Error("render missing dross-survivor-drain builtin")
+	}
+	// The ratchet is the point of the rule — if it is reworded away, the
+	// backlog is free to grow again.
+	if !strings.Contains(out, "only ever shrinks") {
+		t.Errorf("drain rule missing its ratchet clause: %q", out)
+	}
+}
+
+// TestRenderEmptyStillFlagsNoUserRules guards against the drain rule being
+// registered as a user rule instead of a builtin: a repo with no configured
+// rules must still say so, and the builtins must not be what fills that slot.
+func TestRenderEmptyStillFlagsNoUserRules(t *testing.T) {
+	out := Render(nil)
+	if !strings.Contains(out, "(no user rules configured)") {
+		t.Errorf("empty render must still print the no-user-rules sentinel: %q", out)
+	}
+}
+
+// TestDrainRuleNamesBothEscapes pins the rule to the shipped CLI. A policy that
+// says "close it out" without naming how is a rule nobody can follow; a policy
+// naming verbs that don't exist is worse.
+func TestDrainRuleNamesBothEscapes(t *testing.T) {
+	text := drainRuleText(t)
+	for _, escape := range []string{"dross survivor accept --reason", "dross survivor route --target"} {
+		if !strings.Contains(text, escape) {
+			t.Errorf("drain rule must name %q: %q", escape, text)
+		}
+	}
+}
+
+// TestProjectRuleR02Retired is the deletion half of c-6: this repo must not
+// carry its own copy of the policy now that it ships as a builtin. Asserted on
+// TEXT, not on the id — nextID reallocates "r-02" to the next unrelated
+// `dross rule add`, so an id check would either pass vacuously or fail on an
+// innocent rule.
+func TestProjectRuleR02Retired(t *testing.T) {
+	set, err := LoadFile(filepath.Join(repoRoot(t), ".dross", File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range set.Rules {
+		if strings.Contains(r.Text, "Pre-existing faults are not furniture") {
+			t.Errorf("project rule %s still duplicates the drain policy now shipped as a builtin: %q", r.ID, r.Text)
+		}
+	}
+}
+
+// TestDrainPolicyRenderedOnce is the overlap guard: if the project copy ever
+// creeps back, the merged block states the policy twice and the two copies
+// drift. Counted, not merely contained — "contains" passes on a duplicate.
+func TestDrainPolicyRenderedOnce(t *testing.T) {
+	project, err := LoadFile(filepath.Join(repoRoot(t), ".dross", File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := Render(Merge(&Set{}, project))
+	if n := strings.Count(out, "Pre-existing faults are not furniture"); n != 1 {
+		t.Errorf("drain policy appears %d times in the rendered block, want exactly 1:\n%s", n, out)
+	}
+}
+
+// TestBuiltinsAreUniqueAndComplete guards against a copy-pasted builtin: a
+// duplicated id would silently shadow another invariant in every rendered block.
+func TestBuiltinsAreUniqueAndComplete(t *testing.T) {
+	want := []string{
+		"dross-commit-hygiene",
+		"dross-agent-gate",
+		"dross-interaction-contract",
+		"dross-survivor-drain",
+	}
+	if len(Builtins) != len(want) {
+		t.Fatalf("Builtins has %d entries, want %d — a new builtin needs a test, not just a slot", len(Builtins), len(want))
+	}
+	seen := map[string]bool{}
+	for _, r := range Builtins {
+		if seen[r.ID] {
+			t.Errorf("duplicate builtin id %q", r.ID)
+		}
+		seen[r.ID] = true
+		if r.Scope != "builtin" {
+			t.Errorf("builtin %s has scope %q, want \"builtin\"", r.ID, r.Scope)
+		}
+	}
+	for _, id := range want {
+		if !seen[id] {
+			t.Errorf("missing builtin %q", id)
+		}
+	}
+}

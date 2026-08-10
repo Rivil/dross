@@ -256,6 +256,13 @@ type Deferred struct {
 	// "someday" (no target, not dismissed) and "routed" (target set); dismiss
 	// is someday-only, so a dismissed entry never carries a target.
 	Dismissed bool `toml:"dismissed,omitempty" json:"dismissed,omitempty"`
+	// Survivor carries the identity key of a routed surviving mutant
+	// (internal/survivor). The locked routed_state_source decision routes a
+	// survivor through this machinery rather than a parallel one, so a routed
+	// survivor re-surfaces on the destination phase's slate like any other
+	// parked item — and stays queryable as a survivor rather than dissolving
+	// into the prose of Text. Empty on ordinary deferred items.
+	Survivor string `toml:"survivor,omitempty" json:"survivor,omitempty"`
 }
 
 // Plan is the task graph for a phase.
