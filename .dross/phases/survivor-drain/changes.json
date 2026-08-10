@@ -1,0 +1,131 @@
+{
+  "phase": "survivor-drain",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/survivor_drain.go",
+        "internal/cmd/survivor_drain_test.go",
+        "internal/cmd/survivor.go",
+        "README.md"
+      ],
+      "commit": "3a5fafd",
+      "completed_at": "2026-08-10T16:51:15.042788Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "survivorDrain",
+          "loc": "internal/cmd/survivor_drain.go:234",
+          "what": "repo-wide undisposed-survivor gate classifying from raw per-package reports with unmeasured packages fatal"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/survivor/store.go",
+        "internal/survivor/store_test.go",
+        "internal/cmd/survivor.go",
+        "internal/cmd/survivor_test.go",
+        "README.md"
+      ],
+      "commit": "e8be938",
+      "completed_at": "2026-08-10T15:09:09.173485Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "Retire",
+          "loc": "internal/survivor/store.go:307",
+          "what": "retire acceptances by key or --stale, dropping orphaned categories and writing nothing on a failed multi-key retire"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/mutation/gremlins.go",
+        "internal/mutation/gremlins_test.go"
+      ],
+      "commit": "87ba203",
+      "completed_at": "2026-08-10T15:14:23.117329Z",
+      "landmarks": [
+        {
+          "feature": "mutation adapter reporting",
+          "symbol": "Unmeasured",
+          "loc": "internal/mutation/gremlins.go:101",
+          "what": "per-package score exclusions surface as typed entries distinguishing missing from unreadable from zero-covered"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/mutation/stryker_test.go",
+        "internal/mutation/stryker_net_test.go",
+        "internal/mutation/testdata/stryker-unknown-status.json"
+      ],
+      "commit": "4644e55",
+      "completed_at": "2026-08-10T15:18:07.250782Z",
+      "landmarks": [
+        {
+          "feature": "mutation adapter reporting",
+          "symbol": "TestStrykerRunDistinguishesMissingFromUnreadable",
+          "loc": "internal/mutation/stryker_test.go:440",
+          "what": "stryker report-read process and parse seams killed by tests driving the build-cmd seam rather than accepted"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/mutation/ceiling_test.go",
+        "internal/mutation/testdata/ceiling/ceiling.go",
+        "internal/mutation/testdata/ceiling/ceiling_test.go",
+        "internal/mutation/testdata/ceiling/gremlins-report.json",
+        "internal/survivor/reasons_repo_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "dc47548",
+      "completed_at": "2026-08-10T16:27:25.247825Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "TestAttributionCeilingIsReal",
+          "loc": "internal/mutation/ceiling_test.go:175",
+          "what": "acceptance reasons must cite a real test and the ceiling category is backed by a live coverage-vs-gremlins fixture"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/verify/verify_test.go",
+        "assets/prompts/verify.md",
+        "internal/cmd/verify_prompt_test.go"
+      ],
+      "commit": "e22b16b",
+      "completed_at": "2026-08-10T16:35:04.727107Z",
+      "landmarks": [
+        {
+          "feature": "phase verification verdict",
+          "symbol": "VerifySummary.UnclassifiedInScope",
+          "loc": "internal/verify/verify.go:244",
+          "what": "mutation leg fails on an absolute count of undisposed in-scope survivors instead of a score ratio"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/survivor/evidence.go",
+        "internal/survivor/evidence_test.go",
+        "internal/cmd/survivor_drain.go",
+        "internal/cmd/survivor_drain_test.go"
+      ],
+      "commit": "cec016a",
+      "completed_at": "2026-08-10T17:01:41.389719Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "Derive",
+          "loc": "internal/survivor/evidence.go:273",
+          "what": "per-survivor coverage plus operator-applicability evidence decides kill-vs-accept with the attribution ceiling dominating killability"
+        }
+      ]
+    }
+  }
+}
