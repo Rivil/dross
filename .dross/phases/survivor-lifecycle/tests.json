@@ -1,6 +1,6 @@
 {
   "phase": "survivor-lifecycle",
-  "generated_at": "2026-08-10T08:19:14.064911Z",
+  "generated_at": "2026-08-10T08:58:16.22687Z",
   "languages": [
     {
       "name": "go",
@@ -34,12 +34,32 @@
       ],
       "mutation": {
         "Tool": "gremlins",
-        "Killed": 322,
-        "Survived": 22,
+        "Killed": 325,
+        "Survived": 19,
         "Timeout": 0,
         "Errors": 0,
-        "Score": 0.936046511627907,
+        "Score": 0.9447674418604651,
         "Surviving": [
+          {
+            "File": "internal/cmd/survivor.go",
+            "Line": 242,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "742de35850fac7e6",
+            "Lifecycle": "accepted",
+            "Note": "Defensive branch unreachable through the CLI: survivor list resolves reasons via Store.ReasonFor, which only errors when an acceptance has no reason and no resolvable category — and Load rejects both of those before list ever sees the store (TestLoadRejectsHandEditedReasonlessEntry, TestCategoryResolution). The guard is kept in case Load's validation ever loosens; it cannot be exercised while that validation holds."
+          },
+          {
+            "File": "internal/cmd/survivor.go",
+            "Line": 242,
+            "Op": "ARITHMETIC_BASE",
+            "Snippet": "",
+            "Origin": "in-hunk",
+            "Key": "742de35850fac7e6",
+            "Lifecycle": "accepted",
+            "Note": "Defensive branch unreachable through the CLI: survivor list resolves reasons via Store.ReasonFor, which only errors when an acceptance has no reason and no resolvable category — and Load rejects both of those before list ever sees the store (TestLoadRejectsHandEditedReasonlessEntry, TestCategoryResolution). The guard is kept in case Load's validation ever loosens; it cannot be exercised while that validation holds."
+          },
           {
             "File": "internal/cmd/deferred.go",
             "Line": 143,
@@ -51,26 +71,6 @@
             "Note": ""
           },
           {
-            "File": "internal/cmd/survivor.go",
-            "Line": 242,
-            "Op": "ARITHMETIC_BASE",
-            "Snippet": "",
-            "Origin": "in-hunk",
-            "Key": "742de35850fac7e6",
-            "Lifecycle": "in-diff",
-            "Note": ""
-          },
-          {
-            "File": "internal/cmd/survivor.go",
-            "Line": 242,
-            "Op": "ARITHMETIC_BASE",
-            "Snippet": "",
-            "Origin": "in-hunk",
-            "Key": "742de35850fac7e6",
-            "Lifecycle": "in-diff",
-            "Note": ""
-          },
-          {
             "File": "internal/phase/phase.go",
             "Line": 190,
             "Op": "CONDITIONALS_BOUNDARY",
@@ -147,6 +147,16 @@
             "Snippet": "",
             "Origin": "inherited",
             "Key": "961ea2e0f678ec6f",
+            "Lifecycle": "in-diff",
+            "Note": ""
+          },
+          {
+            "File": "internal/rules/rules.go",
+            "Line": 104,
+            "Op": "CONDITIONALS_NEGATION",
+            "Snippet": "",
+            "Origin": "inherited",
+            "Key": "3c2d6c8a35bc4492",
             "Lifecycle": "in-diff",
             "Note": ""
           },
@@ -161,12 +171,12 @@
             "Note": ""
           },
           {
-            "File": "internal/rules/rules.go",
-            "Line": 104,
+            "File": "internal/survivor/identity.go",
+            "Line": 103,
             "Op": "CONDITIONALS_NEGATION",
             "Snippet": "",
-            "Origin": "inherited",
-            "Key": "3c2d6c8a35bc4492",
+            "Origin": "in-hunk",
+            "Key": "4d59cb22a0cd55c0",
             "Lifecycle": "in-diff",
             "Note": ""
           },
@@ -219,49 +229,9 @@
             "Key": "41ca5be68bd0ad59",
             "Lifecycle": "in-diff",
             "Note": ""
-          },
-          {
-            "File": "internal/survivor/identity.go",
-            "Line": 103,
-            "Op": "CONDITIONALS_NEGATION",
-            "Snippet": "",
-            "Origin": "in-hunk",
-            "Key": "4d59cb22a0cd55c0",
-            "Lifecycle": "in-diff",
-            "Note": ""
-          },
-          {
-            "File": "internal/verify/lifecycle.go",
-            "Line": 162,
-            "Op": "ARITHMETIC_BASE",
-            "Snippet": "",
-            "Origin": "in-hunk",
-            "Key": "612a80b13afc2260",
-            "Lifecycle": "in-diff",
-            "Note": ""
-          },
-          {
-            "File": "internal/verify/lifecycle.go",
-            "Line": 162,
-            "Op": "ARITHMETIC_BASE",
-            "Snippet": "",
-            "Origin": "in-hunk",
-            "Key": "612a80b13afc2260",
-            "Lifecycle": "in-diff",
-            "Note": ""
-          },
-          {
-            "File": "internal/verify/verify.go",
-            "Line": 479,
-            "Op": "ARITHMETIC_BASE",
-            "Snippet": "",
-            "Origin": "in-hunk",
-            "Key": "c6bee578ae058529",
-            "Lifecycle": "in-diff",
-            "Note": ""
           }
         ],
-        "NotCovered": 22
+        "NotCovered": 19
       }
     }
   ],
@@ -276,51 +246,6 @@
     }
   ],
   "out_of_scope": [
-    {
-      "file": "internal/cmd/footer_coverage.go",
-      "line": 52,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "2a845b586a6c46b8",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/footer_coverage.go",
-      "line": 55,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "b7c74e48a4862dab",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/footer_coverage.go",
-      "line": 58,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "b5ddcc58cdde21aa",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/footer_coverage.go",
-      "line": 60,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "50fe59a84e58fd2d",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/root.go",
-      "line": 61,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "65e701d659c601c1",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
     {
       "file": "internal/cmd/phase.go",
       "line": 308,
@@ -349,47 +274,56 @@
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/phase_lifecycle.go",
-      "line": 23,
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 158,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "4296aba7fc10199c",
+      "key": "c84bb90c5fdb562c",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/phase_lifecycle.go",
-      "line": 23,
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 160,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "4296aba7fc10199c",
+      "key": "b36db01df5cbb210",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/phase_lifecycle.go",
-      "line": 25,
-      "op": "CONDITIONALS_NEGATION",
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 160,
+      "op": "INVERT_NEGATIVES",
       "language": "go",
-      "key": "656a800e0c49e82b",
+      "key": "90a89fcc0c93c7b9",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/phase_lifecycle.go",
-      "line": 25,
-      "op": "CONDITIONALS_NEGATION",
+      "file": "internal/cmd/milestone_dependents.go",
+      "line": 160,
+      "op": "ARITHMETIC_BASE",
       "language": "go",
-      "key": "656a800e0c49e82b",
+      "key": "d0c1c73cf5c9f87e",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/phase_lifecycle.go",
-      "line": 27,
+      "file": "internal/cmd/update.go",
+      "line": 181,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "6ae95da642b1e841",
+      "key": "e6d8584559369934",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/update.go",
+      "line": 184,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "2f4b2750232fddbd",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
@@ -399,6 +333,123 @@
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
       "key": "e0a52d6f5c8d7569",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 92,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "c52f92cc35982cda",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/validate.go",
+      "line": 96,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "fa5ac88f46292d4a",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/watch.go",
+      "line": 130,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "928e3536acd36ece",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/watch.go",
+      "line": 130,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "739beac06e8e62e1",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/basebranch.go",
+      "line": 104,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "f64b7c4c5d0d7836",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/rule.go",
+      "line": 143,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "4492a5676351c59d",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/hooks.go",
+      "line": 100,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "cac586a7c24a5048",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/install.go",
+      "line": 65,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "ce9147b293c6813d",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 105,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "05f0338039800ccf",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 109,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "106fd6b0e20249ac",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 114,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "853f82b709c29f83",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 119,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "e3dd7d178cf10df9",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/env.go",
+      "line": 148,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "e3dd7d178cf10df9",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
@@ -475,191 +526,56 @@
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/hooks.go",
-      "line": 100,
+      "file": "internal/cmd/ship.go",
+      "line": 264,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "cac586a7c24a5048",
+      "key": "da9683b212e497f3",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/statusline.go",
-      "line": 23,
-      "op": "ARITHMETIC_BASE",
-      "language": "go",
-      "key": "a49c53b3ad283fc8",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/statusline.go",
-      "line": 189,
+      "file": "internal/cmd/ship.go",
+      "line": 550,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "ba29537aba9784ed",
+      "key": "8facc7fea486a231",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/statusline.go",
-      "line": 189,
+      "file": "internal/cmd/ship.go",
+      "line": 550,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "ba29537aba9784ed",
+      "key": "8facc7fea486a231",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/env.go",
-      "line": 105,
+      "file": "internal/cmd/ship.go",
+      "line": 552,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "05f0338039800ccf",
+      "key": "b391c1a5b1496088",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/env.go",
-      "line": 109,
+      "file": "internal/cmd/ship.go",
+      "line": 552,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "106fd6b0e20249ac",
+      "key": "b391c1a5b1496088",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/env.go",
-      "line": 114,
+      "file": "internal/cmd/ship.go",
+      "line": 554,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "853f82b709c29f83",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/env.go",
-      "line": 119,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "e3dd7d178cf10df9",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/env.go",
-      "line": 148,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "e3dd7d178cf10df9",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/repair.go",
-      "line": 131,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "e6e177e15d5ffcf2",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/repair.go",
-      "line": 133,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "f57b2f9dd061303d",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/repair.go",
-      "line": 133,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "f57b2f9dd061303d",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/validate.go",
-      "line": 92,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "c52f92cc35982cda",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/validate.go",
-      "line": 96,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "fa5ac88f46292d4a",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/update.go",
-      "line": 181,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "e6d8584559369934",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/update.go",
-      "line": 184,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "2f4b2750232fddbd",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/project.go",
-      "line": 81,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "570d2fdc4eb27db2",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/project.go",
-      "line": 83,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "919acc418a9a0821",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/trust.go",
-      "line": 281,
-      "op": "ARITHMETIC_BASE",
-      "language": "go",
-      "key": "c930c60169027d0d",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/trust.go",
-      "line": 280,
-      "op": "ARITHMETIC_BASE",
-      "language": "go",
-      "key": "3a361ab2ea3bd045",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/trust.go",
-      "line": 279,
-      "op": "ARITHMETIC_BASE",
-      "language": "go",
-      "key": "c1aa91bc3fedd330",
+      "key": "2fd95c208f2dd748",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
@@ -727,128 +643,38 @@
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/basebranch.go",
-      "line": 104,
-      "op": "ARITHMETIC_BASE",
-      "language": "go",
-      "key": "f64b7c4c5d0d7836",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/install.go",
-      "line": 65,
+      "file": "internal/cmd/repair.go",
+      "line": 131,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "ce9147b293c6813d",
+      "key": "e6e177e15d5ffcf2",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/status.go",
-      "line": 442,
-      "op": "CONDITIONALS_BOUNDARY",
-      "language": "go",
-      "key": "5cd804cb4301552d",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/status.go",
-      "line": 442,
+      "file": "internal/cmd/repair.go",
+      "line": 133,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "43f3ee380345b6b8",
+      "key": "f57b2f9dd061303d",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/status.go",
-      "line": 444,
-      "op": "CONDITIONALS_BOUNDARY",
-      "language": "go",
-      "key": "cbe0c58e5d2cb069",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/status.go",
-      "line": 444,
+      "file": "internal/cmd/repair.go",
+      "line": 133,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "7a36fb899b36807b",
+      "key": "f57b2f9dd061303d",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/status.go",
-      "line": 444,
-      "op": "ARITHMETIC_BASE",
-      "language": "go",
-      "key": "38470da216963a96",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/status.go",
-      "line": 472,
+      "file": "internal/cmd/root.go",
+      "line": 61,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "f2ccf21f766939d9",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/status.go",
-      "line": 474,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "b1b3323d3c458a3c",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/milestone_dependents.go",
-      "line": 158,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "c84bb90c5fdb562c",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/milestone_dependents.go",
-      "line": 160,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "b36db01df5cbb210",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/milestone_dependents.go",
-      "line": 160,
-      "op": "INVERT_NEGATIVES",
-      "language": "go",
-      "key": "90a89fcc0c93c7b9",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/milestone_dependents.go",
-      "line": 160,
-      "op": "ARITHMETIC_BASE",
-      "language": "go",
-      "key": "d0c1c73cf5c9f87e",
-      "lifecycle": "routed",
-      "note": "routed to survivor-drain"
-    },
-    {
-      "file": "internal/cmd/issue.go",
-      "line": 171,
-      "op": "CONDITIONALS_NEGATION",
-      "language": "go",
-      "key": "b3bca090eb817d72",
+      "key": "65e701d659c601c1",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
@@ -988,83 +814,227 @@
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/ship.go",
-      "line": 264,
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 52,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "da9683b212e497f3",
+      "key": "2a845b586a6c46b8",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/ship.go",
-      "line": 550,
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 55,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "8facc7fea486a231",
+      "key": "b7c74e48a4862dab",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/ship.go",
-      "line": 550,
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 58,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "8facc7fea486a231",
+      "key": "b5ddcc58cdde21aa",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/ship.go",
-      "line": 552,
+      "file": "internal/cmd/footer_coverage.go",
+      "line": 60,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "b391c1a5b1496088",
+      "key": "50fe59a84e58fd2d",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/ship.go",
-      "line": 552,
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 23,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "b391c1a5b1496088",
+      "key": "4296aba7fc10199c",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/ship.go",
-      "line": 554,
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 23,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "2fd95c208f2dd748",
+      "key": "4296aba7fc10199c",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/watch.go",
-      "line": 130,
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 25,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "656a800e0c49e82b",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 25,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "656a800e0c49e82b",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/phase_lifecycle.go",
+      "line": 27,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "6ae95da642b1e841",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/trust.go",
+      "line": 281,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "c930c60169027d0d",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/trust.go",
+      "line": 280,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "3a361ab2ea3bd045",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/trust.go",
+      "line": 279,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "c1aa91bc3fedd330",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/project.go",
+      "line": 81,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "570d2fdc4eb27db2",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/project.go",
+      "line": 83,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "919acc418a9a0821",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 442,
       "op": "CONDITIONALS_BOUNDARY",
       "language": "go",
-      "key": "928e3536acd36ece",
+      "key": "5cd804cb4301552d",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/watch.go",
-      "line": 130,
+      "file": "internal/cmd/status.go",
+      "line": 442,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "739beac06e8e62e1",
+      "key": "43f3ee380345b6b8",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
     {
-      "file": "internal/cmd/rule.go",
-      "line": 143,
+      "file": "internal/cmd/status.go",
+      "line": 444,
+      "op": "CONDITIONALS_BOUNDARY",
+      "language": "go",
+      "key": "cbe0c58e5d2cb069",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 444,
       "op": "CONDITIONALS_NEGATION",
       "language": "go",
-      "key": "4492a5676351c59d",
+      "key": "7a36fb899b36807b",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 444,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "38470da216963a96",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 472,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "f2ccf21f766939d9",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/status.go",
+      "line": 474,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "b1b3323d3c458a3c",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/issue.go",
+      "line": 171,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "b3bca090eb817d72",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/statusline.go",
+      "line": 23,
+      "op": "ARITHMETIC_BASE",
+      "language": "go",
+      "key": "a49c53b3ad283fc8",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/statusline.go",
+      "line": 189,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "ba29537aba9784ed",
+      "lifecycle": "routed",
+      "note": "routed to survivor-drain"
+    },
+    {
+      "file": "internal/cmd/statusline.go",
+      "line": 189,
+      "op": "CONDITIONALS_NEGATION",
+      "language": "go",
+      "key": "ba29537aba9784ed",
       "lifecycle": "routed",
       "note": "routed to survivor-drain"
     },
@@ -1253,8 +1223,11 @@
       ".dross/phases/survivor-lifecycle/panel/verification.md",
       ".dross/phases/survivor-lifecycle/plan.toml",
       ".dross/phases/survivor-lifecycle/spec.toml",
+      ".dross/phases/survivor-lifecycle/tests.json",
+      ".dross/phases/survivor-lifecycle/verify.toml",
       ".dross/project.toml",
       ".dross/rules.toml",
+      ".dross/survivors.toml",
       "README.md",
       "assets/prompts/verify.md",
       "cmd/dross/main.go",
@@ -1319,7 +1292,7 @@
       ".dross/phases/survivor-lifecycle/changes.json": [
         {
           "start": 1,
-          "end": 162
+          "end": 178
         }
       ],
       ".dross/phases/survivor-lifecycle/panel/mvp.md": [
@@ -1349,19 +1322,37 @@
       ".dross/phases/survivor-lifecycle/plan.toml": [
         {
           "start": 1,
-          "end": 99
+          "end": 110
         }
       ],
       ".dross/phases/survivor-lifecycle/spec.toml": [
         {
           "start": 1,
-          "end": 68
+          "end": 602
+        }
+      ],
+      ".dross/phases/survivor-lifecycle/tests.json": [
+        {
+          "start": 1,
+          "end": 1617
+        }
+      ],
+      ".dross/phases/survivor-lifecycle/verify.toml": [
+        {
+          "start": 1,
+          "end": 611
         }
       ],
       ".dross/project.toml": [
         {
           "start": 3,
           "end": 3
+        }
+      ],
+      ".dross/survivors.toml": [
+        {
+          "start": 1,
+          "end": 8
         }
       ],
       "README.md": [
@@ -1579,7 +1570,7 @@
       "internal/verify/lifecycle_test.go": [
         {
           "start": 1,
-          "end": 350
+          "end": 385
         }
       ],
       "internal/verify/verify.go": [
@@ -1607,7 +1598,7 @@
       "internal/verify/verify_test.go": [
         {
           "start": 1078,
-          "end": 1225
+          "end": 1268
         }
       ]
     },
