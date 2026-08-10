@@ -1,0 +1,253 @@
+[phase]
+id = "survivor-lifecycle"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Add survivor identity key and ambiguity"
+files         = [
+  "internal/survivor/identity.go",
+  "internal/survivor/identity_test.go",
+  "internal/mutation/adapter.go",
+]
+description   = """
+New internal/survivor package resolving a survivor's key from file + mutation op
++ a hash of the mutated line's normalized source text, reporting ambiguity when
+that text occurs more than once. mutation.Mutant gains Key/Lifecycle/Note;
+verify.OutOfScopeMutant gets the same fields in t-5, which owns verify.go.
+"""
+covers        = ["c-4"]
+test_contract = [
+  "if normalization breaks, the same source line indented differently, with trailing whitespace, or CRLF-terminated no longer hashes to the same key",
+  "if the op is dropped from the key, two different ops on the same line collide instead of hashing differently",
+  "if line number leaks into the hash, a fixture whose target text moves from line 40 to line 88 stops resolving to the same key",
+  "if ambiguity detection breaks, identical normalized text on two lines returns ambiguous=false instead of true with occurrences=2",
+  "if the empty-text guard breaks, a deleted file / a line index past EOF / a blank line returns a constructible key instead of ErrSubjectGone plus an empty key",
+  "if the key stops being text-derived, replacing the line's source text while holding file+line+op fixed still produces the old key — the false-suppression half of c-4",
+  "if the struct fields are added to the wrong type, mutation.Mutant stops round-tripping through tests.json with Key/Lifecycle/Note present",
+  "if the wire form drifts, mutation.Mutant's new fields stop serialising as \"Key\"/\"Lifecycle\"/\"Note\" under languages[].mutation.surviving — the type carries no json tags, so the capitalised form is the deliberate, asserted shape",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 1
+title         = "Add survivors.toml store with reason enforcement"
+files         = [
+  "internal/survivor/store.go",
+  "internal/survivor/store_test.go",
+]
+description   = """
+Repo-level .dross/survivors.toml load/save with atomic read-modify-write. The store
+keys on an opaque string, so it builds independently of t-1's resolver — the wave-1
+parallelism is deliberate, not an undeclared dependency. A reason (own or resolved
+from a named category) is mandatory at load as well as at write.
+"""
+covers        = ["c-2", "c-3"]
+test_contract = [
+  "if the write-path reason check breaks, Add with an empty reason and no category succeeds, or leaves survivors.toml non-byte-identical after the rejection",
+  "if the load-path reason check breaks, a hand-edited reason = \"\" entry loads and silently suppresses instead of failing load",
+  "if category resolution breaks, an entry naming an absent or prose-less category loads instead of being rejected, or one naming a valid category fails to resolve its reason",
+  "if key uniqueness breaks, two entries with the same key load instead of failing with 'duplicate survivor key', or Add of a present key duplicates instead of replacing",
+  "if category encoding breaks, two acceptances sharing a category stop round-tripping Save->Load with the prose encoded exactly once",
+  "if the first-run path breaks, Load of a missing survivors.toml returns an error instead of an empty store and nil",
+  "if the read-modify-write or atomic save breaks, entries the writer never touched are lost, or a failed encode leaves a truncated file rather than the prior bytes",
+  "if root resolution breaks, the store path stops resolving to <repo-root>/.dross/survivors.toml when called from a nested subdir",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 1
+title         = "Ship drain policy as builtin rule"
+files         = [
+  "internal/rules/rules.go",
+  "internal/rules/rules_test.go",
+  "internal/cmd/rule_test.go",
+  ".dross/rules.toml",
+]
+description   = """
+Add dross-survivor-drain to rules.Builtins and delete the project-local r-02
+duplicate from this repo's .dross/rules.toml. Stays wave 1: the rule is a static
+string with no build dependency on t-7, and policy text may name verbs landing
+later in the same squash-merged phase.
+"""
+covers        = ["c-6"]
+test_contract = [
+  "if the builtin is not registered, Render over the empty merged set (no global, no project rules) omits [builtin/hard/dross-survivor-drain] or the phrase 'only ever shrinks'",
+  "if the builtin is misclassified as a user rule, Render over the empty set stops emitting '(no user rules configured)'",
+  "if the rule text drifts from the CLI, it stops naming both escapes: dross survivor accept --reason and dross survivor route --target",
+  "if r-02 creeps back, a test reading this repo's .dross/rules.toml finds a rule whose text contains 'Pre-existing faults are not furniture' — assert on text only, since nextID reallocates the id r-02 to the next unrelated dross rule add",
+  "if builtin and project rule overlap, the rendered block contains the drain text more than once (occurrence count, not contains)",
+  "if a copy-pasted id collides, rules.Builtins stops having exactly 4 entries with unique ids",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-4"
+wave          = 1
+title         = "Carry a survivor key on deferred items"
+files         = [
+  "internal/phase/phase.go",
+  "internal/phase/phase_test.go",
+  "internal/cmd/deferred.go",
+  "internal/cmd/deferred_test.go",
+]
+description   = """
+Optional survivor field on phase.Deferred, persisted through spec.toml and exposed
+by the deferred CLI so a routed survivor is queryable rather than prose.
+"""
+covers        = ["c-7"]
+test_contract = [
+  "if the field is dropped on save, a spec.toml with [[deferred]] survivor = \"<key>\" loses it across LoadSpec->Save",
+  "if JSON emission breaks, dross deferred list --json omits survivor on entries carrying one, or emits an empty survivor key on entries that do not",
+  "if survivor-carrying entries are special-cased out, dross deferred list --target <slug> stops returning one alongside ordinary entries",
+  "if unroute over-clears, dross deferred unroute on a survivor-carrying entry clears survivor as well as target",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-5"
+wave          = 2
+depends_on    = ["t-1", "t-2"]
+title         = "Classify survivors into one lifecycle state"
+files         = [
+  "internal/verify/lifecycle.go",
+  "internal/verify/lifecycle_test.go",
+  "internal/verify/verify.go",
+  "internal/verify/verify_test.go",
+]
+description   = """
+Assign every survivor exactly one of in-diff / routed / accepted / unclassified and
+emit it, with routed records labelled by destination. Identity arrives via an
+Identifier interface so classification stays pure and fakeable; routed state arrives
+as an opaque key->target map, so t-5 needs no phase.Deferred dependency on t-4.
+verify.OutOfScopeMutant gains Key/Lifecycle/Note here, mirroring t-1's mutation.Mutant
+change.
+"""
+covers        = ["c-1", "c-2", "c-4", "c-7"]
+test_contract = [
+  "if a survivor is double-listed or silently dropped, len(in-diff)+len(routed)+len(accepted)+len(unclassified) stops equalling the input survivor count",
+  "if a state is unassigned, a fixture with one in-scope survivor, one routed out_of_scope entry, one accepted entry and one bare out_of_scope entry stops producing each of the four states exactly once with every record non-empty",
+  "if suppression is not attributable to the acceptance, deleting only the acceptance from the fixture fails to produce exactly one FLAG for that survivor",
+  "if the ambiguity rule breaks, a survivor whose key resolves ambiguous is suppressed by an accepted key instead of re-emitting with the ambiguity note",
+  "if precedence breaks, a survivor matching both an acceptance and a routed entry lands in two buckets instead of accepted only",
+  "if acceptances leak into the denominator, summary.mutants_survived or the mutation score changes from the pre-acceptance run",
+  "if the out_of_scope path is not lifecycle-aware, an unrouted unaccepted out_of_scope entry gets no unclassified FLAG, or the 'filtered N out-of-scope survivor(s)' NOTE stops counting only the post-lifecycle remainder",
+  "if dedup breaks, duplicate Surviving rows with identical file/line/op stop collapsing to one record and one acceptance no longer suppresses both",
+  "if ErrSubjectGone is mishandled, it panics, silently drops, or defaults to in-diff instead of yielding unclassified with the error in the note",
+  "if state is left empty, a survivor reaching tests.json with state == \"\" passes instead of failing the test",
+  "if the destination label is dropped, a routed record reaches tests.json with an empty target — bucketed routed but destination-less, violating routed_state_source",
+  "if the false-suppression guard breaks, a survivor whose line text changed at an accepted survivor's old file+line+op is suppressed instead of re-emitting as a new survivor",
+  "if OutOfScopeMutant misses the new fields, an out_of_scope entry round-trips through tests.json without Key/Lifecycle/Note",
+  "if the wire form drifts, OutOfScopeMutant's new fields stop serialising as lowercase \"key\"/\"lifecycle\"/\"note\" — the casing split against mutation.Mutant's capitalised keys is pre-existing and deliberately accepted, so both shapes are pinned rather than left to drift",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-6"
+wave          = 2
+depends_on    = ["t-1", "t-2"]
+title         = "Detect stale acceptances structurally"
+files         = [
+  "internal/survivor/stale.go",
+  "internal/survivor/stale_test.go",
+]
+description   = """
+Report acceptances whose subject no longer exists: file deleted, or the recorded
+normalized text absent from the file. Read-only; no clock, no TTL.
+"""
+covers        = ["c-5"]
+test_contract = [
+  "if file-gone detection breaks, an acceptance whose file was deleted is not returned with reason 'file no longer exists'",
+  "if text-gone detection breaks, an acceptance whose recorded normalized text no longer occurs in its existing file is not returned with reason 'mutant no longer produced'",
+  "if staleness degenerates into a line-number check, an acceptance whose text merely moved to a different line is reported stale",
+  "if scoping breaks, an acceptance in a file the run never examined, whose subject is intact, is reported stale",
+  "if the no_acceptance_ttl lock is violated, Stale() gains a clock or TTL parameter in its signature",
+  "if error handling breaks, an unreadable file is classified stale instead of reported with its read error",
+  "if staleness starts mutating, the store is not byte-identical after a staleness pass",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-7"
+wave          = 3
+depends_on    = ["t-1", "t-2", "t-4", "t-6"]
+title         = "Add dross survivor accept/route/list"
+files         = [
+  "internal/cmd/survivor.go",
+  "internal/cmd/survivor_test.go",
+  "cmd/dross/main.go",
+]
+description   = """
+CLI verbs resolving a survivor from file:line + op against the working tree:
+accept writes the repo-root store, list reads it (with --stale and --json). route
+appends a new [[deferred]] entry to the CURRENT phase's spec.toml carrying the key
+plus target = the destination slug — deferred items live in the spec that deferred
+them, matching `dross deferred route`; there is no append path today, so t-7 adds one.
+"""
+covers        = ["c-2", "c-3", "c-5", "c-7"]
+test_contract = [
+  "if the reason gate breaks, survivor accept <file>:<line> --op OP with neither --reason nor --category exits zero, or leaves a .dross/survivors.toml behind",
+  "if the acceptance_store lock is violated, accept writes under .dross/phases/<id>/ instead of <root>/.dross/survivors.toml, or survivor list from a nested subdir stops printing the repo-root store's entries",
+  "if the store becomes untracked, ignoresPath(gitignore body, \".dross/survivors.toml\") returns true",
+  "if routing breaks, survivor route --target SLUG fails to append a [[deferred]] entry with both survivor and target set, dross deferred list --target <slug> does not then list it, or routing to a nonexistent slug writes before erroring",
+  "if the entry lands in the wrong spec, the [[deferred]] item appears in the TARGET phase's spec.toml instead of the current phase's — assert the exact file that gained it, since deferred list --target collects across specs and cannot distinguish them",
+  "if the no-current-phase path breaks, survivor route with no current phase set writes somewhere instead of erroring cleanly",
+  "if JSON shape drifts, survivor list --json emits a '# ' header line instead of a bare unmarshalable array",
+  "if list filtering breaks, survivor list --stale prints entries t-6 does not call stale, or an empty store stops printing '(no accepted survivors)' and exiting 0",
+  "if subcommand guarding breaks, dross survivor frob prints help and exits 0 instead of exiting non-zero via EnforceSubcommandKnown",
+  "if the ambiguity warning breaks, accepting a file:line whose normalized text is ambiguous records silently with no stdout warning",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-8"
+wave          = 3
+depends_on    = ["t-2", "t-4", "t-5", "t-6"]
+title         = "Wire lifecycle and staleness into dross verify"
+files         = [
+  "internal/cmd/verify.go",
+  "internal/cmd/verify_test.go",
+  "internal/cmd/verify_scoping_test.go",
+]
+description   = """
+Load the repo-root store and build the routed key->target map from collectDeferred
+(internal/cmd/deferred.go:40, which walks every phase spec), run classification and
+staleness during verify, print the lifecycle counts, and persist key + state into
+tests.json.
+"""
+covers        = ["c-1", "c-2", "c-3", "c-5"]
+test_contract = [
+  "if the store is read phase-locally, an acceptance recorded while phase A was current stops suppressing the matching survivor in a dross verify B run",
+  "if the summary breaks, it stops printing 'survivors: <n> in-diff, <n> routed, <n> accepted, <n> unclassified', the counts stop summing to the survivor total, or unclassified reads zero for a fixture with an unrouted out_of_scope entry",
+  "if the missing-store path breaks, verify's findings for in-scope survivors stop being byte-identical to pre-phase behaviour when survivors.toml is absent",
+  "if corrupt-store handling breaks, a malformed survivors.toml proceeds with zero acceptances and re-emits the drained backlog instead of failing with a 'load survivors' error",
+  "if staleness reporting breaks, a stale acceptance stops producing exactly one NOTE naming the file and reason, or changes the verdict / mutation score / non-zero exit",
+  "if persistence breaks, tests.json stops carrying the resolved key and state on classified survivors and out_of_scope entries",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-9"
+wave          = 4
+depends_on    = ["t-7", "t-8"]
+title         = "Retire deferral text in verify prompt and README"
+files         = [
+  "assets/prompts/verify.md",
+  "internal/cmd/verify_prompt_test.go",
+  "README.md",
+]
+description   = """
+Replace the 'route later' language in the verify prompt with the shipped survivor
+verbs and the four lifecycle states; add the survivor command row to the README.
+Rule r-01: run make install before relying on the prompt change.
+"""
+covers        = ["c-1", "c-7"]
+test_contract = [
+  "if the stale sentence survives, verify_prompt_test finds 'for the survivor-lifecycle phase to route' still in assets/prompts/verify.md",
+  "if the prompt is not updated, it omits dross survivor route / dross survivor accept, or fails to name all four lifecycle states including unclassified",
+  "if the drain policy is not restated at the point of use, the prompt keeps the 'Do not re-list the out_of_scope entries as findings' section instead of instructing that in-diff / unclassified / out_of_scope rows are closed out in the same run",
+  "if the README drifts, it gains no dross survivor {accept,route,list} command-table row, or the dross verify row's out_of_scope wording still describes the pre-phase behaviour asserted by TestReadmeStatesScopingGuarantee",
+]
+status        = "pending"
