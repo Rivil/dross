@@ -1139,6 +1139,49 @@ func TestSkeletonAcceptanceSuppressesExactlyOneFlag(t *testing.T) {
 	}
 }
 
+// TestSkeletonInScopeSurvivorRendersItsNote: a note that never reaches
+// verify.toml explains nothing. The case that matters is the ambiguous
+// acceptance — the survivor re-emits as in-diff, and its FLAG is the only place
+// the user learns why the acceptance they recorded did not silence it. Without
+// the note the FLAG is indistinguishable from a survivor nobody ever accepted.
+func TestSkeletonInScopeSurvivorRendersItsNote(t *testing.T) {
+	ti := fixtureIdentifier()
+	ambiguous := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{{
+			Name: "go", Tool: "gremlins",
+			Mutation: &mutation.Report{
+				Killed: 3, Survived: 1, Score: 0.75,
+				Surviving: []mutation.Mutant{{File: "dup.go", Line: 50, Op: "OP"}},
+			},
+		}},
+	}
+	ApplyLifecycle(ambiguous, map[string]string{keyOf(t, ti, "dup.go", 50, "OP"): "ceiling"}, nil, ti)
+
+	flags := findingsBySeverity(Skeleton(ambiguous, []string{"c-1"}), "FLAG")
+	var named []Finding
+	for _, f := range flags {
+		if strings.Contains(f.Text, "dup.go:50") {
+			named = append(named, f)
+		}
+	}
+	if len(named) != 1 {
+		t.Fatalf("want exactly 1 FLAG for the re-emitted survivor, got %d: %+v", len(named), named)
+	}
+	if !strings.Contains(named[0].Text, "— accepted key is ambiguous") {
+		t.Errorf("FLAG = %q, must carry the survivor's note saying why the acceptance was withheld", named[0].Text)
+	}
+
+	// The other half: a survivor with no note renders with no dangling
+	// separator, so the note is genuinely conditional rather than always-on.
+	plain := findingsBySeverity(Skeleton(lifecycleTests(t, nil, nil), []string{"c-1"}), "FLAG")
+	for _, f := range plain {
+		if strings.Contains(f.Text, "in.go:10") && strings.Contains(f.Text, "—") {
+			t.Errorf("note-less survivor rendered a separator with nothing after it: %q", f.Text)
+		}
+	}
+}
+
 // TestSkeletonAcceptanceDoesNotTouchTheScore: an acceptance suppresses a
 // finding, never a count. If accepted survivors folded out of the denominator, a
 // phase could raise its mutation score by declaring its survivors acceptable.

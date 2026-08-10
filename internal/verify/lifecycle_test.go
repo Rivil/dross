@@ -317,6 +317,41 @@ func TestNoSurvivorReachesTestsJSONStateless(t *testing.T) {
 	}
 }
 
+// TestAmbiguousAndRoutedSurvivorCarriesBothNotes covers the two-note join. A
+// survivor gets there by being ambiguous (so the acceptance is withheld and a
+// note recorded) AND routed, which is precisely when the user needs both facts:
+// why the acceptance did not silence it, and where the debt went. Dropping the
+// join would silently keep only the destination and leave the withheld
+// acceptance unexplained.
+//
+// Contrast TestAcceptedBeatsRouted: there the key is unambiguous, so the
+// acceptance wins outright and routing never runs. Ambiguity is what lets the
+// routed branch see a note already in place.
+func TestAmbiguousAndRoutedSurvivorCarriesBothNotes(t *testing.T) {
+	ti := fixtureIdentifier()
+	key := keyOf(t, ti, "dup.go", 50, "OP")
+	survivors := []Survivor{{File: "dup.go", Line: 50, Op: "OP"}}
+
+	l := Classify(survivors,
+		map[string]string{key: "accepted reason"},
+		map[string]string{key: "survivor-drain"},
+		ti)
+
+	if len(l.Routed) != 1 {
+		t.Fatalf("want the ambiguous-but-routed survivor in the routed bucket, got %+v", l)
+	}
+	note := l.Routed[0].Note
+	if !strings.Contains(note, "ambiguous") {
+		t.Errorf("note = %q, must still say the acceptance was withheld for ambiguity", note)
+	}
+	if !strings.Contains(note, "routed to survivor-drain") {
+		t.Errorf("note = %q, must name the destination", note)
+	}
+	if !strings.Contains(note, "; ") {
+		t.Errorf("note = %q, must join the two facts rather than overwrite one with the other", note)
+	}
+}
+
 // TestOutOfScopeMutantWireForm pins both the round-trip and the serialised key
 // names. The lowercase casing here differs from mutation.Mutant's capitalised
 // (tagless) form; that split is pre-existing and deliberately accepted, so both
