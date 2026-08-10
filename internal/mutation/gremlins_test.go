@@ -643,3 +643,201 @@ func TestGremlinsDispatch(t *testing.T) {
 		t.Errorf("expected nil for unsupported ext; got %v", got)
 	}
 }
+
+// fakeGremlinsPerPackage substitutes the process seam with one that writes a
+// DIFFERENT payload per package, keyed by the package path Run passes ("./a").
+// A package absent from the map gets no report at all — the missing-report case.
+// The single-payload fakeGremlins cannot express any of the skip kinds, because
+// every package would hit the same one.
+func fakeGremlinsPerPackage(t *testing.T, byPkg map[string]string) func() {
+	t.Helper()
+	orig := gremlinsBuildCmd
+	gremlinsBuildCmd = func(g *Gremlins, args []string) *exec.Cmd {
+		var out, pkg string
+		for i, a := range args {
+			if a == "--output" && i+1 < len(args) {
+				out = args[i+1]
+			}
+			if strings.HasPrefix(a, "./") || a == "." {
+				pkg = a
+			}
+		}
+		if payload, ok := byPkg[pkg]; ok && out != "" {
+			if err := os.WriteFile(filepath.Join(g.ProjectRoot, out), []byte(payload), 0o644); err != nil {
+				t.Fatalf("write fake gremlins report for %s: %v", pkg, err)
+			}
+		}
+		return exec.Command("true")
+	}
+	return func() { gremlinsBuildCmd = orig }
+}
+
+// gremlinsAllNotCovered is a parseable report whose every mutant is NOT COVERED
+// — the coverage blind spot. It parses, so the package IS measured; it just
+// contributes nothing usable to a score.
+const gremlinsAllNotCovered = `{
+  "go_module": "example.com/go/module",
+  "files": [
+    {
+      "file_name": "b.go",
+      "mutations": [
+        {"line":7,"column":1,"type":"CONDITIONALS_NEGATION","status":"NOT COVERED"},
+        {"line":9,"column":1,"type":"CONDITIONALS_BOUNDARY","status":"NOT COVERED"}
+      ]
+    }
+  ]
+}`
+
+// gremlinsCovered is an ordinary report with real killed and lived mutants.
+const gremlinsCovered = `{
+  "go_module": "example.com/go/module",
+  "files": [
+    {
+      "file_name": "c.go",
+      "mutations": [
+        {"line":3,"column":1,"type":"CONDITIONALS_NEGATION","status":"KILLED"},
+        {"line":5,"column":1,"type":"CONDITIONALS_NEGATION","status":"LIVED"}
+      ]
+    }
+  ]
+}`
+
+// unmeasuredFor returns the entry for pkg, or a zero value if the package was
+// not excluded at all.
+func unmeasuredFor(t *testing.T, g *Gremlins, pkg string) Unmeasured {
+	t.Helper()
+	for _, u := range g.Unmeasured {
+		if u.Package == pkg {
+			return u
+		}
+	}
+	return Unmeasured{}
+}
+
+// TestGremlinsUnmeasuredDistinguishesSkipKinds is c-4's collection half, and
+// the fact the drain gates on. "No report at all" and "a report with zero
+// covered mutants" both drop out of the score, but they mean opposite things:
+// the first is no evidence (fatal for a drain), the second is evidence of
+// survivors nobody has killed (classify them). Collapsing the two into one
+// prose line — which is all Run used to emit — makes an unmeasured package
+// indistinguishable from a clean one.
+func TestGremlinsUnmeasuredDistinguishesSkipKinds(t *testing.T) {
+	defer fakeGremlinsPerPackage(t, map[string]string{
+		"./a": "{not json at all",
+		"./b": gremlinsAllNotCovered,
+		"./c": gremlinsCovered,
+		// "./d" is absent: gremlins writes nothing for it.
+	})()
+
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	rep, err := g.Run([]string{"a/x.go", "b/x.go", "c/x.go", "d/x.go"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(g.Unmeasured) != 3 {
+		t.Fatalf("Unmeasured holds %d entries, want 3 (a, b, d):\n%+v", len(g.Unmeasured), g.Unmeasured)
+	}
+
+	// The malformed report: exact message, including every concatenation.
+	a := unmeasuredFor(t, g, "./a")
+	wantA := "./a (unreadable report: decode gremlins report: invalid character 'n' looking for beginning of object key string)"
+	if a.Message != wantA {
+		t.Errorf("malformed-report message:\n got %q\nwant %q", a.Message, wantA)
+	}
+	if a.Kind != UnmeasuredUnreadable {
+		t.Errorf("malformed report Kind = %q, want %q", a.Kind, UnmeasuredUnreadable)
+	}
+
+	// The zero-coverage report: exact message, and marked uncovered — NOT
+	// missing. The drain must classify this package's survivors, not fail on it.
+	b := unmeasuredFor(t, g, "./b")
+	wantB := "./b (zero covered mutants — coverage blind spot)"
+	if b.Message != wantB {
+		t.Errorf("zero-coverage message:\n got %q\nwant %q", b.Message, wantB)
+	}
+	if b.Kind != UnmeasuredUncovered {
+		t.Errorf("zero-coverage Kind = %q, want %q", b.Kind, UnmeasuredUncovered)
+	}
+
+	// The absent report: marked missing, distinguishable from ./b as DATA and
+	// not only by its prose.
+	d := unmeasuredFor(t, g, "./d")
+	if d.Kind != UnmeasuredMissing {
+		t.Errorf("absent report Kind = %q, want %q", d.Kind, UnmeasuredMissing)
+	}
+	if d.Kind == b.Kind {
+		t.Error("a package with no report is indistinguishable from one with zero covered mutants")
+	}
+
+	// The good package is excluded from neither, and its rows do reach the merge.
+	if got := unmeasuredFor(t, g, "./c"); got.Kind != "" {
+		t.Errorf("a readable, covered package was reported unmeasured: %+v", got)
+	}
+	if _, ok := rep.Files["c/c.go"]; !ok {
+		t.Errorf("the covered package's rows did not reach the merge: %+v", rep.Files)
+	}
+
+	// And the zero-coverage package contributes no rows to the MERGED report —
+	// the exclusion is scoring-only. Its raw report is still on disk for the
+	// drain to classify from.
+	if _, ok := rep.Files["b/b.go"]; ok {
+		t.Errorf("zero-coverage package leaked rows into the merged score: %+v", rep.Files)
+	}
+	raw := filepath.Join(g.ProjectRoot, "reports", "gremlins", "b.json")
+	if _, err := os.Stat(raw); err != nil {
+		t.Errorf("zero-coverage package's raw report must survive for the drain to read: %v", err)
+	}
+}
+
+// TestGremlinsUnmeasuredIsPerRun: the field describes the most recent Run, not
+// an accumulation. A stale entry from a prior run would make the drain fail on
+// a package that has since been measured.
+func TestGremlinsUnmeasuredIsPerRun(t *testing.T) {
+	restore := fakeGremlinsPerPackage(t, map[string]string{})
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	if _, err := g.Run([]string{"a/x.go"}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(g.Unmeasured) != 1 {
+		t.Fatalf("first run: Unmeasured = %+v, want 1 entry", g.Unmeasured)
+	}
+	restore()
+
+	defer fakeGremlinsPerPackage(t, map[string]string{"./a": gremlinsCovered})()
+	if _, err := g.Run([]string{"a/x.go"}); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	if len(g.Unmeasured) != 0 {
+		t.Errorf("a measured re-run left stale exclusions behind: %+v", g.Unmeasured)
+	}
+}
+
+// TestMissingReportIsSkipNotError: a missing report is a skip INSIDE the
+// adapter — Run returns a nil error and an empty report. Turning absence fatal
+// here would abort every verify whose repo has one uncoverable package; the
+// drain is where absence becomes fatal, because that is the caller that needs
+// evidence rather than a best-effort score.
+func TestMissingReportIsSkipNotError(t *testing.T) {
+	defer fakeGremlinsPerPackage(t, map[string]string{})()
+
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	rep, err := g.Run([]string{"a/x.go"})
+	if err != nil {
+		t.Fatalf("a missing report must not be an adapter error: %v", err)
+	}
+	if rep == nil {
+		t.Fatal("expected a non-nil (empty) report")
+	}
+	if len(rep.Surviving) != 0 || rep.Killed != 0 {
+		t.Errorf("expected an empty report, got %+v", rep)
+	}
+	if len(g.Unmeasured) != 1 || g.Unmeasured[0].Kind != UnmeasuredMissing {
+		t.Fatalf("the skip must be recorded as missing: %+v", g.Unmeasured)
+	}
+	// And the reason is still printed — the field supplements stderr, it does
+	// not replace it.
+	if got := g.Unmeasured[0].String(); got != g.Unmeasured[0].Message {
+		t.Errorf("String() = %q, want the printed message %q", got, g.Unmeasured[0].Message)
+	}
+}
