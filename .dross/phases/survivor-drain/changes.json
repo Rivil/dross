@@ -19,6 +19,54 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/cmd/basebranch_test.go",
+        "internal/cmd/trust_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "ce6c40d",
+      "completed_at": "2026-08-10T18:44:58.364463Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "TestPushBaseRejectedPushSurfacesGitOutput",
+          "loc": "internal/cmd/basebranch_test.go:298",
+          "what": "string-concat survivors killed by covering their lines while declaration initializers are accepted, applying the amended arithmetic split"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/ship_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "4a6f74c",
+      "completed_at": "2026-08-10T18:50:17.74612Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "TestAutoCommitDrossDirtLeavesTheIndexEmpty",
+          "loc": "internal/cmd/ship_test.go:1422",
+          "what": "status and ship survivors accepted with the ship staged-commit guard pinned as unreachable by its caller"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        ".dross/survivors.toml"
+      ],
+      "commit": "6491f17",
+      "completed_at": "2026-08-10T18:54:30.17659Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "gremlins-attribution-ceiling",
+          "loc": ".dross/survivors.toml:1",
+          "what": "phase, phase_lifecycle and watch switch-case survivors accepted rather than chased with tests that cannot move them"
+        }
+      ]
+    },
     "t-15": {
       "files": [
         "internal/verify/scope_test.go",
@@ -218,6 +266,39 @@
           "symbol": "Derive",
           "loc": "internal/survivor/evidence.go:273",
           "what": "per-survivor coverage plus operator-applicability evidence decides kill-vs-accept with the attribution ceiling dominating killability"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/doctor_test.go",
+        "internal/cmd/hints_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "06e4227",
+      "completed_at": "2026-08-10T18:29:06.586182Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "TestDetectMissingPhaseDirsNeverErrors",
+          "loc": "internal/cmd/doctor_test.go:2023",
+          "what": "doctor and hints survivors drained with dead-by-construction arms accepted against falsifying tests rather than filed as ceiling cases"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/statusline_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "3775232",
+      "completed_at": "2026-08-10T18:36:47.545818Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "TestInteractiveConfirmRefusesWithoutATTY",
+          "loc": "internal/cmd/statusline_test.go:224",
+          "what": "footer/validate/repair/statusline survivors accepted with the tty seam pinned by its reachable refusal half"
         }
       ]
     }

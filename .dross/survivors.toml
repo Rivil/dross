@@ -10,6 +10,14 @@
   name = "curated-table-tiebreak"
   reason = "Unreachable given the curated data, not untested: CuratedMisreaches sorts by command path and only falls back to comparing tokens when two entries SHARE a path. All four curated entries have distinct command paths, so sort.Slice never invokes the tie-break. Pinned by TestCuratedMisreachPathsAreDistinct, which also asserts the primary path ordering — add a second entry under an existing path and that test fails, making the tie-break reachable and owing a real ordering test instead of this reason."
 
+[[category]]
+  name = "tty-secret-entry"
+  reason = "Unreachable without a TTY on stdin: `dross env set` reads the secret with term.ReadPassword(int(os.Stdin.Fd())), which fails outright when stdin is not a terminal, and the guard immediately above returns that error — so no line after it can run. term.ReadPassword is called directly on the real fd with no seam to inject a pty, and a Go test binary never has one. TestEnvCover_SetReadPasswordErrorsOnNonTTY pins the reachable half: the command fails cleanly rather than storing an empty or garbage secret. Remove or seam that read and these lines become reachable and owe tests rather than this reason."
+
+[[category]]
+  name = "self-replacing-binary-path"
+  reason = "Unreachable in a test by construction: this block runs only when updateOpts.targetPath is empty, and it resolves the target to os.Executable() — which, under `go test`, is the running test binary. update.AtomicReplace would then overwrite the test binary mid-run, so every test in update_test.go (TestUpdateAppliesAndResyncs and its siblings) must pass an explicit targetPath, and the default-resolution branch is skipped by all of them. The branch is real in production and untestable in-process; exercising it would destroy the process exercising it."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -818,4 +826,121 @@
   text = "case newCount > 0:"
   line = 130
   category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e3dd7d178cf10df9"
+  file = "internal/cmd/env.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "}); err != nil {"
+  line = 119
+  category = "tty-secret-entry"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "c84bb90c5fdb562c"
+  file = "internal/cmd/milestone_dependents.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case i == 0:"
+  line = 158
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "d0c1c73cf5c9f87e"
+  file = "internal/cmd/milestone_dependents.go"
+  op = "ARITHMETIC_BASE"
+  text = "case i == len(vs)-1:"
+  line = 160
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b36db01df5cbb210"
+  file = "internal/cmd/milestone_dependents.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case i == len(vs)-1:"
+  line = 160
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "90a89fcc0c93c7b9"
+  file = "internal/cmd/milestone_dependents.go"
+  op = "INVERT_NEGATIVES"
+  text = "case i == len(vs)-1:"
+  line = 160
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "570d2fdc4eb27db2"
+  file = "internal/cmd/project.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case unset && len(args) != 1:"
+  line = 81
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "919acc418a9a0821"
+  file = "internal/cmd/project.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !unset && len(args) != 2:"
+  line = 83
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e0a52d6f5c8d7569"
+  file = "internal/cmd/state.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 270
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "05f0338039800ccf"
+  file = "internal/cmd/env.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if len(value) == 0 {"
+  line = 105
+  category = "tty-secret-entry"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "106fd6b0e20249ac"
+  file = "internal/cmd/env.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 109
+  category = "tty-secret-entry"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "853f82b709c29f83"
+  file = "internal/cmd/env.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if envMap == nil {"
+  line = 114
+  category = "tty-secret-entry"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e6d8584559369934"
+  file = "internal/cmd/update.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 181
+  category = "self-replacing-binary-path"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "2f4b2750232fddbd"
+  file = "internal/cmd/update.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if resolved, err := filepath.EvalSymlinks(exe); err == nil {"
+  line = 184
+  category = "self-replacing-binary-path"
   accepted_in = "survivor-drain"

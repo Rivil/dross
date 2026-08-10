@@ -84,7 +84,7 @@ task_seq = 0
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain --report reports/gremlins/internal_cmd.json` reports zero outstanding for doctor.go and hints.go", "doctor.go:251 and hints.go:86/88/133 are CONDITIONALS_BOUNDARY sites, so each test asserts at n-1, n and n+1 — a `>=`→`>` mutation changes one of the three", "TestDoctorReportsStaleBinary: a binary older than its source is reported, an equal-mtime one is not", "every acceptance passes the t-5 reason audit and matches its t-7 evidence"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-9"
@@ -95,7 +95,7 @@ task_seq = 0
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain` reports zero outstanding for those four files, all 12 mutants accounted for", "each of footer_coverage.go's four guards has a test asserting BOTH sides of the condition, and each band renders its own distinct footer string, so negating any one guard flips exactly one assertion and no two bands can be swapped undetected", "repair.go:133 and statusline.go:189 each carry two mutants: the drain reports zero outstanding for those lines, so a test killing only one operator fails", "TestValidateSeparatesMissingFromMalformed: validate.go 92/96 must keep discriminating their two failure shapes", "any acceptance states which caller makes the branch unreachable and cites the test pinning that caller — the t-5 audit fails otherwise"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-10"
@@ -106,7 +106,7 @@ task_seq = 0
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor list` shows every key resolving to the shared category prose, and survivors.toml holds exactly one [[category]] block for it", "the category reason cites t-5's proof test by name, so the audit fails if the prose is later replaced with an assertion", "TestNoKillableSurvivorIsAccepted: an acceptance whose line t-7 reports covered AND whose operator t-7 reports applicable fails the test — the killable-but-accepted case, which is the laundering c-3 forbids", "TestNoAcceptedKeyIsAmbiguous: an ambiguous key never suppresses, so it cannot leave the drain red while the store looks drained", "TestEnsureGitignoreWritesExactBlock: an exact-block assertion on the appended lines, so any gitignore.go line t-7 marks operator-applicable is killed rather than accepted", "survivor.go:242 carries two ARITHMETIC_BASE mutants on one line and one pre-existing acceptance: the drain reports zero outstanding for that line, so an identity key covering only one of the two fails — the same shape t-17 asserts for store.go:157", "deferred.go:143's existing ceiling acceptance still resolves after this task, so all 91 internal/cmd mutants are classified once wave 4 completes", "`dross survivor drain` reports zero outstanding ARITHMETIC_BASE survivors in internal/cmd, and the adapter still emits them — this phase accepts, it does not filter"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-11"
@@ -117,7 +117,7 @@ task_seq = 0
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain` reports zero outstanding for status.go and ship.go", "humanizeAge is tested at 59m, 1h, 23h, 24h and 25h so each band renders its own string: mutating `24*time.Hour` to `24/time.Hour` makes the hours band unreachable and the 23h case fails", "TestShipResultTagRendersEachArm: ship.go 550/552/554's three arms each render their own distinct string, so negating any one changes which tag is emitted", "for status.go 442/444's BOUNDARY and NEGATION mutants, t-7's evidence decides kill versus ceiling-acceptance — an acceptance cites that evidence and resolves to the t-5 ceiling category"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-12"
@@ -128,7 +128,7 @@ task_seq = 0
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain` reports zero outstanding for those three files", "phase_lifecycle.go 23/25/27 gain one test per guard driving insert/move/rename argument validation to its failure message, and the three arms produce distinct messages — each negation makes a rejected input succeed, and swapping two arms is caught", "watch.go:130's pair is killed at boundary and past boundary (same fixture at n and n+1), not by a single call"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-13"
@@ -139,7 +139,7 @@ task_seq = 0
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain` reports zero outstanding for those five files", "env.go 109/114/119 are each driven to their own failure message through `dross env` — an unwritable settings path, a nil env map and a failing mutation produce three distinct errors, so negating any one collapses two onto the same message", "env.go:105 is resolved explicitly: either a test drives the empty-secret path without a tty, or it is accepted with the term.ReadPassword seam named and the test pinning that seam cited — a bare \"needs a tty\" fails the t-5 audit", "env.go:148 is killed or accepted alongside the other four guards — the drain reports zero outstanding for env.go, all 5 mutants", "update.go 181/184 are pinned on path resolution: a failing os.Executable surfaces its error, and an executable behind a symlink resolves to the link target while an unresolvable one falls back to the unresolved path", "milestone_dependents.go:160's `len(vs)-1` is killed by a three-element input — `len(vs)+1` drops the \" and \" join, which the rendered string assertion catches", "milestone_dependents.go:158 is a switch-case condition: t-7's evidence decides kill versus ceiling-acceptance"]
-  status = "pending"
+  status = "in_progress"
 
 [[task]]
   id = "t-14"
