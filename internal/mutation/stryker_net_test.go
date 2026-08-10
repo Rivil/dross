@@ -321,3 +321,31 @@ func TestStrykerNetWindowsPathsFold(t *testing.T) {
 		t.Errorf("per-file key = %+v want src/Foo.cs", r.Files)
 	}
 }
+
+// TestStrykerNetBuildCmdPrefix pins both arms of the runtime-prefix seam. With
+// no prefix the argv must be exactly what the caller assembled; with one, the
+// prefix's words come first and the original args follow in order. Inverting
+// the guard swaps the two behaviours: a native run would try to exec the first
+// word of an empty prefix, and a docker run would exec the tool on the host —
+// bypassing the container the project runs everything else in.
+func TestStrykerNetBuildCmdPrefix(t *testing.T) {
+	args := []string{"dotnet", "stryker", "--output", "out"}
+
+	t.Run("no prefix runs the args verbatim", func(t *testing.T) {
+		cmd := strykerNetBuildCmd(&StrykerNet{}, args)
+		if !reflect.DeepEqual(cmd.Args, args) {
+			t.Errorf("Args = %v, want exactly the args passed in %v", cmd.Args, args)
+		}
+	})
+
+	t.Run("prefix is prepended word by word", func(t *testing.T) {
+		cmd := strykerNetBuildCmd(&StrykerNet{Prefix: "docker run"}, args)
+		want := append([]string{"docker", "run"}, args...)
+		if !reflect.DeepEqual(cmd.Args, want) {
+			t.Errorf("Args = %v, want %v", cmd.Args, want)
+		}
+		if filepath.Base(cmd.Path) != "docker" {
+			t.Errorf("Path = %q, want the prefix's first word to be the executable", cmd.Path)
+		}
+	})
+}
