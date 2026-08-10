@@ -325,3 +325,34 @@ func TestRuleShowDegradesOutsideRepo(t *testing.T) {
 		t.Fatalf("rule show should exit 0 outside a dross repo, got %v", err)
 	}
 }
+
+// TestRuleShowEmitsSurvivorDrainInCleanRepo is c-6 at the CLI surface: in a repo
+// with no project rules configured, `dross rule show` still states the drain
+// policy — exactly once, and marked as a builtin rather than as a user rule.
+// The package-level test pins Render; this pins that the command the prompts
+// actually call reaches it.
+func TestRuleShowEmitsSurvivorDrainInCleanRepo(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	ruleCovFakeHome(t)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+
+	var showErr error
+	out := captureStdout(t, func() { showErr = runCmd(t, Rule(), "show") })
+	if showErr != nil {
+		t.Fatalf("rule show: %v", showErr)
+	}
+	if !strings.Contains(out, "[builtin/hard/dross-survivor-drain]") {
+		t.Errorf("rule show omits the drain builtin in a clean repo:\n%s", out)
+	}
+	if n := strings.Count(out, "Pre-existing faults are not furniture"); n != 1 {
+		t.Errorf("drain policy stated %d times, want exactly 1:\n%s", n, out)
+	}
+	for _, escape := range []string{"dross survivor accept --reason", "dross survivor route --target"} {
+		if !strings.Contains(out, escape) {
+			t.Errorf("rule show must name the escape %q:\n%s", escape, out)
+		}
+	}
+}
