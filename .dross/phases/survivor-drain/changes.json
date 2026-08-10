@@ -19,6 +19,100 @@
         }
       ]
     },
+    "t-15": {
+      "files": [
+        "internal/verify/scope_test.go",
+        "internal/rules/rules_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "d0857d0",
+      "completed_at": "2026-08-10T17:41:05.041099Z",
+      "landmarks": [
+        {
+          "feature": "diff scoping",
+          "symbol": "TestNewScopeSourceQuadrants",
+          "loc": "internal/verify/scope_test.go:292",
+          "what": "scope source selection and deleted-file hunk skipping pinned by tests with the switch-case ceiling survivors accepted"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        "assets/embed_test.go",
+        "cmd/dross/main_test.go",
+        "internal/defaults/defaults_test.go",
+        "internal/profile/profile_test.go",
+        "internal/stack/detect_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "676618b",
+      "completed_at": "2026-08-10T17:51:29.162916Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "TestMainEntryPoint",
+          "loc": "cmd/dross/main_test.go:626",
+          "what": "leaf and entrypoint packages drained with main's telemetry guards killed through a real subprocess entry point"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "internal/survivor/identity_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "9468ab9",
+      "completed_at": "2026-08-10T17:59:16.409972Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "TestResolveAtSplitsRootFromRelPath",
+          "loc": "internal/survivor/identity_test.go:328",
+          "what": "state and domain packages drained with an ambiguous lapsed acceptance retired rather than left suppressing nothing"
+        }
+      ]
+    },
+    "t-18": {
+      "files": [
+        "internal/codex/ast_grep_test.go",
+        "internal/codex/codex_test.go",
+        "internal/codex/refs_test.go",
+        "internal/quality/catalog_test.go",
+        "internal/quality/lifecycle_test.go",
+        "internal/security/catalog_test.go",
+        "internal/security/lifecycle_test.go",
+        "internal/techdebt/run_test.go"
+      ],
+      "commit": "731229b",
+      "completed_at": "2026-08-10T18:08:10.505148Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "TestRealRunAstGrepFnHandlesEveryOutputShape",
+          "loc": "internal/codex/ast_grep_test.go:191",
+          "what": "analyzer catalog packages drained entirely by tests with no acceptances"
+        }
+      ]
+    },
+    "t-19": {
+      "files": [
+        "internal/forge/youtrack_test.go",
+        "internal/forge/jira_test.go",
+        "internal/forge/github_test.go",
+        "internal/ship/comment_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "975870f",
+      "completed_at": "2026-08-10T18:19:53.061554Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "TestYouTrackErrorSnippetTruncatesAndHints",
+          "loc": "internal/forge/youtrack_test.go:411",
+          "what": "forge transport error paths and backlog/subtask calls killed through httptest fakes rather than accepted as network seams"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/survivor/store.go",

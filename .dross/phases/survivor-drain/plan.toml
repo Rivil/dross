@@ -161,7 +161,7 @@ task_seq = 0
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain --packages ./internal/verify/... ./internal/rules/...` exits 0", "Source selection is pinned by a table over the four gitCount/recordedCount quadrants: union, git-only, changes-only (with its Degraded message) and none — so a swapped case arm changes the reported Source", "TestDeletedFileHunksAttachToNoFile: a diff whose `+++` is /dev/null contributes no ranges, and its hunks do not attach to the preceding file — inverting scope.go:260's guard mis-attributes them", "rules.go:104 is exercised one under, exactly at, and one over the boundary", "any acceptance among 147/151/153/155 cites t-7's coverage evidence for that exact line and resolves to the t-5 ceiling category"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-16"
@@ -172,7 +172,7 @@ task_seq = 0
   covers = ["c-1", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain --packages ./assets/... ./cmd/dross/... ./internal/argfence/... ./internal/configenum/... ./internal/defaults/... ./internal/hostallow/... ./internal/profile/... ./internal/project/... ./internal/redact/... ./internal/stack/... ./internal/telemetry/...` exits 0", "the task starts from 13 recorded survivors: the commit records how many were killed and how many accepted, and the two must sum to 13 — a task that accepts its way to green is visible in that split", "cmd/dross's two main.go guards (96 and 102, CONDITIONALS_NEGATION) are killed through the real main entry point, not accepted as unmeasurable — its report has zero covered mutants but is a measured package under t-1's rule", "every acceptance passes the t-5 reason audit and matches its t-7 evidence"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-17"
@@ -183,7 +183,7 @@ task_seq = 0
   covers = ["c-1", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain --packages ./internal/board/... ./internal/changes/... ./internal/hooks/... ./internal/milestone/... ./internal/state/... ./internal/statusline/... ./internal/phase/... ./internal/survivor/...` exits 0", "the task starts from 24 recorded survivors of which 7 already carry acceptances: the commit records kills + new acceptances + pre-existing acceptances summing to 24", "phase.go:190's eight mutants all resolve: the two already accepted still resolve to the ceiling category with no duplicate key and no second reason, and the remaining six are killed or accepted individually", "store.go:157 carries two mutants — the drain reports zero outstanding for that line, so a single acceptance covering only one of them fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-18"
@@ -194,7 +194,7 @@ task_seq = 0
   covers = ["c-1", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain --packages ./internal/codex/... ./internal/findings/... ./internal/quality/... ./internal/security/... ./internal/techdebt/...` exits 0", "the task starts from 29 recorded survivors: the commit records the kill/accept split summing to 29", "catalog-selection survivors are killed by a case that selects a DIFFERENT analyzer, so an inverted match is observable in the chosen tool name rather than only in a count", "every acceptance passes the t-5 reason audit and matches its t-7 evidence"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-19"
@@ -205,7 +205,7 @@ task_seq = 0
   covers = ["c-1", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain --packages ./internal/architecture/... ./internal/forge/... ./internal/ship/... ./internal/update/... ./internal/watch/...` exits 0", "the task starts from 24 recorded survivors: the commit records the kill/accept split summing to 24", "any acceptance names the process or HTTP seam that makes the branch unreachable AND cites the existing test proving that seam is the only way in — \"needs the network\" alone fails the t-5 audit", "youtrack.go's 11 survivors are killed through the existing httptest fakes in youtrack_test.go, not accepted — that file is the largest single survivor block outside internal/cmd, and an acceptance sweep there would silence the board-sync path this repo depends on"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-20"
