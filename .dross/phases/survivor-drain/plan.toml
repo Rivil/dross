@@ -1,0 +1,596 @@
+[phase]
+id = "survivor-drain"
+
+# Wave order note: every wave-4 task appends to .dross/survivors.toml, whose store is
+# load → append → save. Wave 4 is executed serially on that file; tasks are independent
+# in their test files but must not have their acceptances written concurrently.
+#
+# Survivor budget. internal/cmd holds 91 recorded mutants — the routed backlog — and they
+# decompose exactly across wave 4: t-8 23, t-9 12, t-10 13, t-11 13, t-12 10, t-13 14, t-14 5
+# (= 90), plus deferred.go:143, which already carries a ceiling acceptance and is verified by
+# t-10 rather than re-drained. Task descriptions list survivor LINES; the counts above are
+# MUTANTS, and several lines carry two or more (doctor.go 93/95/98/362, hints.go 86×4,
+# repair.go 133, statusline.go 189, ship.go 550/552, phase_lifecycle.go 23/25, survivor.go 242).
+
+[[task]]
+id    = "t-2"
+wave  = 1
+title = "Add `dross survivor retire` for stale acceptances"
+files = [
+  "internal/survivor/store.go",
+  "internal/survivor/store_test.go",
+  "internal/cmd/survivor.go",
+  "internal/cmd/survivor_test.go",
+  "README.md",
+]
+description = """
+Store.Remove(key) plus survivor.Retire(path, key) (load → remove → atomic save), and
+`survivor retire <key>...` with --stale to retire everything StaleAcceptances reports as Stale.
+Run `make install` before any later wave shells out to the new verb (r-01).
+"""
+covers = ["c-7"]
+test_contract = [
+  "retiring an absent key returns \"no acceptance with key <k>\" and leaves survivors.toml byte-identical — compared as file bytes, not entry count",
+  "retiring 1 of 3 keys leaves the other two [[accepted]] blocks and every [[category]] block present, and the store still Loads (validate() passes)",
+  "TestRetireDropsOrphanedCategory: retiring the last member of a category drops the now-orphaned [[category]] block",
+  "`--stale` retires exactly Report.Stale; an entry in Report.Unverifiable (unreadable file) is still present afterwards — \"I could not look\" must never retire a live acceptance",
+  "a failed retire inside a multi-key invocation writes nothing at all",
+]
+status = "pending"
+
+[[task]]
+id    = "t-3"
+wave  = 1
+title = "Collect gremlins skip reasons; cover the message seams"
+files = [
+  "internal/mutation/gremlins.go",
+  "internal/mutation/gremlins_test.go",
+]
+description = """
+Promote the per-package skip reasons Run() currently builds as a local slice printed to stderr
+(gremlins.go:145-175) into a Gremlins.Unmeasured field (still printed), and distinguish the two
+skip kinds t-1 gates on: "no report at all" versus "report present, zero covered mutants".
+gremlins.go's only survivors are 4 ARITHMETIC_BASE mutants on string concatenation (3 on line 155,
+1 on 166), currently NOT COVERED. Covering those lines makes gremlins compile the mutant, and `-`
+on string operands does not compile — the expectation is they drop to NOT VIABLE and leave the
+survivor list. Collecting a message is not filtering a mutant; mutant filtering stays
+mutation-score-truth's contract.
+"""
+covers = ["c-4"]
+test_contract = [
+  "a malformed-JSON report produces exactly `./a (unreadable report: <parse error text>)` as an Unmeasured element — exact string compare over all three concatenations on line 155",
+  "an all-NOT_COVERED report produces exactly `./b (zero covered mutants — coverage blind spot)` (gremlins.go:166) and contributes no file rows to the merged report — the exclusion is scoring-only and must not remove the package's parsed rows from what t-1 classifies",
+  "the two skip kinds are distinguishable on the Unmeasured entry, not only by message text: a package with no report on disk is marked missing, a package whose report has zero covered mutants is marked uncovered — t-1 fails on the first and classifies the second",
+  "a readable, covered report appears in neither Unmeasured nor the skip output, and its rows do reach the merge",
+  "TestMissingReportIsSkipNotError: a missing report is a skip inside the adapter, not a run failure — t-1 is where absence turns fatal",
+  "after this task `dross survivor drain --packages ./internal/mutation/...` reports zero outstanding for gremlins.go; if any of the four ARITHMETIC_BASE mutants persists as a survivor rather than turning NOT VIABLE, it is accepted into t-10's bogus-arithmetic category instead, and that outcome is recorded in the task's commit message",
+]
+status = "pending"
+
+[[task]]
+id    = "t-4"
+wave  = 1
+title = "Kill the stryker + stryker_net error seams"
+files = [
+  "internal/mutation/stryker_test.go",
+  "internal/mutation/stryker_net_test.go",
+  "internal/mutation/testdata/stryker-unknown-status.json",
+]
+description = """
+Tests driven through strykerBuildCmd / strykerNetBuildCmd against a temp ProjectRoot: no report
+written, report path is a directory, malformed JSON, unrecognised mutant status, and buildCmd with
+and without Prefix. Routed survivors: stryker.go 73 and 80 (CONDITIONALS_NEGATION), 263
+(INCREMENT_DECREMENT), stryker_net.go 221 (CONDITIONALS_NEGATION).
+"""
+covers = ["c-4"]
+test_contract = [
+  "no report on disk → error names the expected path and says \"did not write a report\"; report path replaced by a directory → error begins \"read stryker report:\" — inverting the `if err != nil` at stryker.go:73 (whose fs.ErrNotExist discrimination is on 74) fails one of the two",
+  "a non-JSON body makes Run return the ParseStrykerJSON error and a nil report, so the `if err != nil` after parsing (stryker.go:80) cannot be dropped",
+  "a report whose only mutant status is \"Quantum\" parses to Killed=0, Errors=1 and a per-file stat of Errors=1; flipping the default arm's `r.Errors++` (stryker.go:263) to `--` yields -1 and fails the equality assert",
+  "buildCmd with Prefix \"\" yields Args identical to the args passed in; with Prefix \"docker run\" yields [\"docker\",\"run\", …args] — stryker_net.go:221 cannot be inverted without failing one",
+  "`dross survivor drain --packages ./internal/mutation/...` reports zero outstanding for stryker.go and stryker_net.go",
+]
+status = "pending"
+
+[[task]]
+id    = "t-5"
+wave  = 1
+title = "Prove attribution ceiling; require cited evidence"
+files = [
+  "internal/mutation/ceiling_test.go",
+  "internal/mutation/testdata/ceiling/ceiling.go",
+  "internal/mutation/testdata/ceiling/ceiling_test.go",
+  "internal/mutation/testdata/ceiling/gremlins-report.json",
+  "internal/survivor/reasons_repo_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+A fixture package holding a switch-case condition, a const initializer and a string-concat return.
+The proof test runs `go test -coverprofile` over the fixture live, asserts the switch-case line has
+count>=1, then reads the recorded gremlins report for the same fixture and asserts that line is
+NOT-COVERED. A second test audits .dross/survivors.toml: every own-reason and every category reason
+must name a Go test that exists in the repo. Rewriting the existing gremlins-attribution-ceiling
+category reason to cite the new proof test is part of this task — as written today it cites a dated
+coverage run and names no TestXxx, so the audit fails against the real store until it is replaced.
+"""
+covers = ["c-3", "c-5"]
+test_contract = [
+  "the live coverage profile reports count>=1 on the switch-case line; if the fixture test stops executing it, the proof fails rather than silently proving nothing",
+  "the recorded report marks that same file:line NOT-COVERED, asserted by line and status, so re-recording it as COVERED fails",
+  "the report contains an ARITHMETIC_BASE mutant on the string-concat line — the evidence t-10 cites",
+  "TestStringConcatArithmeticMutantIsNoOp: that mutant is shown to be a no-op — the swap produces identical output, so the bogus-arithmetic category rests on demonstrated inapplicability, not on the report's silence",
+  "the const-initializer half of the category gets its own evidence, distinct from the string-concat no-op: the fixture's const initializer is shown either operator-inapplicable or unobservable through any caller — an acceptance citing only the string-concat proof fails the audit",
+  "the reason audit fails, naming the offending key, for a synthetic store whose reason cites no TestXxx and for one citing `TestThatDoesNotExist`; after this task's rewrite it passes against the real .dross/survivors.toml",
+]
+status = "pending"
+
+[[task]]
+id    = "t-6"
+wave  = 1
+title = "Gate the verdict on unclassified in-scope count"
+files = [
+  "internal/verify/verify.go",
+  "internal/verify/verify_test.go",
+  "assets/prompts/verify.md",
+  "internal/cmd/verify_prompt_test.go",
+]
+description = """
+Add Summary.UnclassifiedInScope — in-scope survivors that are neither accepted nor routed — emit
+each as BLOCKING instead of FLAG, and rewrite verify.md's verdict rules so the mutation fail lever
+is that absolute count, the score reported but no longer a threshold. The 0.80/0.60 cutoffs are
+also coached at assets/prompts/verify.md:134 and :247; both must go or the prompt contradicts its
+own verdict rules. Run `make install` (r-01).
+"""
+covers = ["c-6"]
+test_contract = [
+  "one in-scope survivor in state `in-diff` gives UnclassifiedInScope==1 and a BLOCKING finding naming `file:line (op)`; the same survivor `accepted` gives 0 and no BLOCKING",
+  "an in-scope `routed` survivor leaves the count at 0 and keeps its NOTE",
+  "a fixture with mutation_score 0.95 and one unclassified in-scope survivor still emits BLOCKING — a high ratio can no longer buy a pass",
+  "TestUnresolvedInDiffIdentityStillBlocks: an in-scope survivor whose identity failed to resolve still blocks, so an unparseable key cannot fall out of the count",
+  "TestUnclassifiedInScopeExcludesOutOfScope: the count excludes out-of-scope unclassified survivors, or the standing backlog would fail every phase in the repo",
+  "the prompt test asserts the measured branch's `fail` bullet names `unclassified_in_scope`",
+  "after this task the literals \"0.80\" and \"0.60\" appear nowhere in verify.md — the test greps the whole file and fails on any occurrence, so the coaching at :32, :125-127, :129 and :134 must go with the verdict branches",
+  "the word \"threshold\" survives in exactly one place: the guidance about capturing a user's stated preference as a project rule (currently :247), which is not a verdict lever. The test pins that count at one, so a reintroduced threshold anywhere else fails",
+]
+status = "pending"
+
+[[task]]
+id         = "t-1"
+wave       = 2
+depends_on = ["t-3"]
+title      = "Add `dross survivor drain` unclassified gate"
+files = [
+  "internal/cmd/survivor_drain.go",
+  "internal/cmd/survivor_drain_test.go",
+  "internal/cmd/survivor.go",
+  "README.md",
+]
+description = """
+New `survivor drain` subcommand. Reads one or more gremlins JSON reports (--report) or runs the
+configured adapter over --packages, classifies every survivor through verify.Classify using
+acceptedReasons() + routedSurvivors(), prints the ones with no disposition, and errors when any
+remain. No diff scoping. A survivor routed to the phase being drained is reported outstanding,
+never silenced. Depends on t-3 for the Unmeasured field and its missing-vs-uncovered distinction.
+
+The drain classifies from the per-package RAW reports, never from Run()'s merged report. The merged
+report deliberately drops zero-coverage packages (gremlins.go:160-168) so a blind spot cannot
+inflate the score — that exclusion is scoring-only. Classifying from the merged report would make
+cmd/dross, the one package hasCoverage() rejects, exit 0 with nothing outstanding: a vacuous green
+on c-1 produced by the drain's own plumbing.
+
+Run `make install` so wave 4 shells out to the real binary (r-01).
+"""
+covers = ["c-1", "c-2"]
+test_contract = [
+  "a report survivor absent from survivors.toml and from every [[deferred]] makes the command error naming `internal/x/y.go:12 (CONDITIONALS_NEGATION)`; the same survivor with an [[accepted]] entry exits 0 printing \"0 unclassified\"",
+  "a survivor whose deferred entry targets the phase being drained (state.CurrentPhase, or --phase) counts outstanding; retargeted to another phase it reports `routed` and exits 0 — the drain cannot be closed by re-routing to itself",
+  "a dismissed deferred entry counts outstanding — dismissal is triage, not a disposition",
+  "TestDrainFailsOnUnmeasuredPackage: a package for which the adapter wrote NO report fails the run and is named, so an unmeasured package never looks like a package with zero survivors",
+  "TestZeroCoveredPackageIsMeasured: a package whose report exists but holds only NOT-COVERED mutants does NOT fail as unmeasured — its survivors flow into the normal classify path and must each be killed or accepted (this is cmd/dross today: 2 NOT-COVERED mutants, 0 killed)",
+  "TestDrainClassifiesFromRawReports: a fixture whose only package is zero-coverage yields those survivors as outstanding — asserted against the same input that makes Run()'s merged report empty, so wiring the drain to the merged report fails the test rather than exiting 0",
+  "TestDrainCoversEveryGoPackage: with --packages omitted the dispatched set equals `go list ./...` for the fixture repo — 33 packages in this repo",
+  "an empty report set exits 0 rather than erroring on \"nothing to do\"",
+]
+status = "pending"
+
+[[task]]
+id         = "t-7"
+wave       = 3
+depends_on = ["t-1", "t-5"]
+title      = "Derive kill-vs-accept evidence per survivor"
+files = [
+  "internal/survivor/evidence.go",
+  "internal/survivor/evidence_test.go",
+  "internal/cmd/survivor_drain.go",
+  "internal/cmd/survivor_drain_test.go",
+]
+description = """
+For each unclassified survivor t-1 reports, attach two derived facts — does a go-cover profile show
+count>=1 for its line, and can its operator alter that line's source text — and print the pair, so
+kill-vs-accept is answered by code rather than by per-item judgement across ~91 near-identical entries.
+Run `make install` (r-01) — this is the last binary-changing task before the twelve wave-4 tasks that
+shell out to `dross survivor drain` and assert on its evidence output.
+"""
+covers = ["c-3"]
+test_contract = [
+  "TestArithmeticOnStringConcatIsInapplicable: ARITHMETIC_BASE over a line whose only `+` joins string operands reports inapplicable; over an integer or time.Duration expression it reports applicable",
+  "TestMissingProfileIsUnknownNotUncovered: a missing profile is `unknown`, never `not covered` — unknown coverage must never read as evidence for acceptance",
+  "TestCeilingEligibilityRequiresCoverage: a line with count 0 is not ceiling-eligible",
+  "TestCoveredAndApplicableIsKillable: a line with count>=1 whose operator IS applicable is reported killable — the case an acceptance must never claim",
+]
+status = "pending"
+
+[[task]]
+id         = "t-8"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Drain doctor.go and hints.go survivors"
+files = [
+  "internal/cmd/doctor_test.go",
+  "internal/cmd/hints_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+23 routed mutants across 17 lines — doctor.go 15 (93, 95, 98 and 362 carry two each) and hints.go 8
+(86 carries four: two BOUNDARY, two NEGATION). Reached through each command's RunE with a fixture
+repo and killed; accepted only where t-7 marks the entry ceiling-eligible or operator-inapplicable.
+"""
+covers = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "`dross survivor drain --report reports/gremlins/internal_cmd.json` reports zero outstanding for doctor.go and hints.go",
+  "doctor.go:251 and hints.go:86/88/133 are CONDITIONALS_BOUNDARY sites, so each test asserts at n-1, n and n+1 — a `>=`→`>` mutation changes one of the three",
+  "TestDoctorReportsStaleBinary: a binary older than its source is reported, an equal-mtime one is not",
+  "every acceptance passes the t-5 reason audit and matches its t-7 evidence",
+]
+status = "pending"
+
+[[task]]
+id         = "t-9"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Drain footer_coverage, validate, repair, statusline"
+files = [
+  "internal/cmd/footer_coverage_test.go",
+  "internal/cmd/validate_test.go",
+  "internal/cmd/repair_test.go",
+  "internal/cmd/statusline_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+12 mutants: footer_coverage.go 52/55/58/60 (4), validate.go 92/96 (2), repair.go 131/133 (3 — 133
+carries two), and all of statusline.go (3 — 189 carries two CONDITIONALS_NEGATION, plus the
+ARITHMETIC_BASE on 23). The negation guards are killed through the public command surface; accepted
+only where the guard is unreachable through the CLI, with the unreachability named. statusline.go:23
+is `const stdinDeadline = 3 * time.Second` — a const initializer whose `*` is applicable arithmetic,
+so t-7's evidence decides: covered-and-applicable means killed, otherwise it is accepted into t-10's
+bogus-arithmetic category. This task owns the whole file so no two wave-4 tasks write
+internal/cmd/statusline_test.go concurrently.
+"""
+covers = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "`dross survivor drain` reports zero outstanding for those four files, all 12 mutants accounted for",
+  "each of footer_coverage.go's four guards has a test asserting BOTH sides of the condition, and each band renders its own distinct footer string, so negating any one guard flips exactly one assertion and no two bands can be swapped undetected",
+  "repair.go:133 and statusline.go:189 each carry two mutants: the drain reports zero outstanding for those lines, so a test killing only one operator fails",
+  "TestValidateSeparatesMissingFromMalformed: validate.go 92/96 must keep discriminating their two failure shapes",
+  "any acceptance states which caller makes the branch unreachable and cites the test pinning that caller — the t-5 audit fails otherwise",
+]
+status = "pending"
+
+[[task]]
+id         = "t-10"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Accept string-concat ARITHMETIC_BASE as one category"
+files = [
+  ".dross/survivors.toml",
+  "internal/cmd/gitignore_test.go",
+  "internal/cmd/survivor_test.go",
+]
+description = """
+13 mutants. Define the bogus-arithmetic category once (reason cites t-5's proof test) and accept the
+ARITHMETIC_BASE survivors that are genuinely string concatenation — gitignore.go 17/46/47/48/64/65/66
+(7), trust.go 279/280/281 (3), basebranch.go 104 (1), survivor.go 242 (2 mutants on one line). The
+entry set is confirmed against t-7's applicability output per line, not taken from the line list.
+Removed from this set: status.go:444 and milestone_dependents.go:160 are real arithmetic on covered
+lines (killed by t-11 and t-13), and statusline.go:23 moved to t-9 with the rest of its file. This
+task also verifies the two internal/cmd survivors that already carry acceptances — survivor.go:242
+and deferred.go:143 — still classify, closing the 91st mutant.
+"""
+covers = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "`dross survivor list` shows every key resolving to the shared category prose, and survivors.toml holds exactly one [[category]] block for it",
+  "the category reason cites t-5's proof test by name, so the audit fails if the prose is later replaced with an assertion",
+  "TestNoKillableSurvivorIsAccepted: an acceptance whose line t-7 reports covered AND whose operator t-7 reports applicable fails the test — the killable-but-accepted case, which is the laundering c-3 forbids",
+  "TestNoAcceptedKeyIsAmbiguous: an ambiguous key never suppresses, so it cannot leave the drain red while the store looks drained",
+  "TestEnsureGitignoreWritesExactBlock: an exact-block assertion on the appended lines, so any gitignore.go line t-7 marks operator-applicable is killed rather than accepted",
+  "survivor.go:242 carries two ARITHMETIC_BASE mutants on one line and one pre-existing acceptance: the drain reports zero outstanding for that line, so an identity key covering only one of the two fails — the same shape t-17 asserts for store.go:157",
+  "deferred.go:143's existing ceiling acceptance still resolves after this task, so all 91 internal/cmd mutants are classified once wave 4 completes",
+  "`dross survivor drain` reports zero outstanding ARITHMETIC_BASE survivors in internal/cmd, and the adapter still emits them — this phase accepts, it does not filter",
+]
+status = "pending"
+
+[[task]]
+id         = "t-11"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Drain status.go and ship.go survivors"
+files = [
+  "internal/cmd/status_test.go",
+  "internal/cmd/ship_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+13 mutants: status.go 7 (442×2, 444×3 — BOUNDARY, NEGATION and the ARITHMETIC_BASE moved here from
+t-10 — plus 472 and 474) and ship.go 6 (264, 550×2, 552×2, 554). ship.go 550/552/554 are
+shipResultTag's arms, which render `failed`, `partial` and `opened` — 554 is a success arm, not a
+rejection. status.go 442/444 are humanizeAge's switch-case conditions: t-7's evidence decides kill
+versus ceiling-acceptance for those two, but 444's ARITHMETIC_BASE on `24*time.Hour` is real
+multiplication on a covered line and must be killed.
+"""
+covers = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "`dross survivor drain` reports zero outstanding for status.go and ship.go",
+  "humanizeAge is tested at 59m, 1h, 23h, 24h and 25h so each band renders its own string: mutating `24*time.Hour` to `24/time.Hour` makes the hours band unreachable and the 23h case fails",
+  "TestShipResultTagRendersEachArm: ship.go 550/552/554's three arms each render their own distinct string, so negating any one changes which tag is emitted",
+  "for status.go 442/444's BOUNDARY and NEGATION mutants, t-7's evidence decides kill versus ceiling-acceptance — an acceptance cites that evidence and resolves to the t-5 ceiling category",
+]
+status = "pending"
+
+[[task]]
+id         = "t-12"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Drain phase, phase_lifecycle and watch survivors"
+files = [
+  "internal/cmd/phase_test.go",
+  "internal/cmd/phase_lifecycle_test.go",
+  "internal/cmd/watch_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+10 mutants: phase.go 308/310/768 (3), phase_lifecycle.go 23/25/27 (5 — 23 and 25 carry two each),
+watch.go 130 (2 — BOUNDARY + NEGATION on the same line).
+"""
+covers = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "`dross survivor drain` reports zero outstanding for those three files",
+  "phase_lifecycle.go 23/25/27 gain one test per guard driving insert/move/rename argument validation to its failure message, and the three arms produce distinct messages — each negation makes a rejected input succeed, and swapping two arms is caught",
+  "watch.go:130's pair is killed at boundary and past boundary (same fixture at n and n+1), not by a single call",
+]
+status = "pending"
+
+[[task]]
+id         = "t-13"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Drain env, state, update, project, milestone_dependents"
+files = [
+  "internal/cmd/env_test.go",
+  "internal/cmd/state_test.go",
+  "internal/cmd/update_test.go",
+  "internal/cmd/project_test.go",
+  "internal/cmd/milestone_dependents_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+14 mutants: env.go 5 — 105 (`len(value) == 0` after term.ReadPassword — a tty seam), 109
+(settingsPath error), 114 (envMap == nil), 119 (mutateSettings error) and 148; state.go 270 (1);
+update.go 181 (the err check after os.Executable) and 184 (the EvalSymlinks err == nil) — 2, and
+executable-path resolution, not signature verification; project.go 81/83 (2);
+milestone_dependents.go 158 (1) and 160 (3: ARITHMETIC_BASE moved here from t-10, plus
+CONDITIONALS_NEGATION and INVERT_NEGATIVES on `case i == len(vs)-1`).
+"""
+covers = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "`dross survivor drain` reports zero outstanding for those five files",
+  "env.go 109/114/119 are each driven to their own failure message through `dross env` — an unwritable settings path, a nil env map and a failing mutation produce three distinct errors, so negating any one collapses two onto the same message",
+  "env.go:105 is resolved explicitly: either a test drives the empty-secret path without a tty, or it is accepted with the term.ReadPassword seam named and the test pinning that seam cited — a bare \"needs a tty\" fails the t-5 audit",
+  "env.go:148 is killed or accepted alongside the other four guards — the drain reports zero outstanding for env.go, all 5 mutants",
+  "update.go 181/184 are pinned on path resolution: a failing os.Executable surfaces its error, and an executable behind a symlink resolves to the link target while an unresolvable one falls back to the unresolved path",
+  "milestone_dependents.go:160's `len(vs)-1` is killed by a three-element input — `len(vs)+1` drops the \" and \" join, which the rendered string assertion catches",
+  "milestone_dependents.go:158 is a switch-case condition: t-7's evidence decides kill versus ceiling-acceptance",
+]
+status = "pending"
+
+[[task]]
+id         = "t-14"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Drain the single-guard command files"
+files = [
+  "internal/cmd/install_test.go",
+  "internal/cmd/rule_test.go",
+  "internal/cmd/hooks_test.go",
+  "internal/cmd/issue_test.go",
+  "internal/cmd/root_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+One CONDITIONALS_NEGATION guard each: install.go 65, rule.go 143, hooks.go 100, issue.go 171,
+root.go 61. Killed through each command's own entry point; accepted only with a named unreachable caller.
+"""
+covers = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "`dross survivor drain` reports zero outstanding for those five files",
+  "each guard's test asserts both outcomes through the command's RunE, not by calling the helper with a hand-built struct that could never occur",
+  "root.go:61's test drives the real cobra root command, so the guard is proven reachable from `dross` itself",
+]
+status = "pending"
+
+[[task]]
+id         = "t-15"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Drain internal/verify/scope.go and internal/rules"
+files = [
+  "internal/verify/scope_test.go",
+  "internal/rules/rules_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+13 survivors: scope.go 147×2 (the sort.Slice comparator closure), 151×4, 153×2, 155×2 (the
+switch-case conditions selecting Source), 260 (the deleted-file `+++ /dev/null` hunk-skip case),
+and rules.go 104×2. The closure and switch-case sites are prime attribution-ceiling candidates —
+t-7's evidence decides kill versus ceiling-acceptance for each, rather than the task assuming
+either outcome.
+"""
+covers = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "`dross survivor drain --packages ./internal/verify/... ./internal/rules/...` exits 0",
+  "Source selection is pinned by a table over the four gitCount/recordedCount quadrants: union, git-only, changes-only (with its Degraded message) and none — so a swapped case arm changes the reported Source",
+  "TestDeletedFileHunksAttachToNoFile: a diff whose `+++` is /dev/null contributes no ranges, and its hunks do not attach to the preceding file — inverting scope.go:260's guard mis-attributes them",
+  "rules.go:104 is exercised one under, exactly at, and one over the boundary",
+  "any acceptance among 147/151/153/155 cites t-7's coverage evidence for that exact line and resolves to the t-5 ceiling category",
+]
+status = "pending"
+
+[[task]]
+id         = "t-16"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Sweep the leaf and entrypoint packages"
+files = [
+  "assets/embed_test.go",
+  "cmd/dross/main_test.go",
+  "internal/argfence/argfence_test.go",
+  "internal/defaults/defaults_test.go",
+  "internal/profile/profile_test.go",
+  "internal/stack/detect_test.go",
+  "internal/telemetry/telemetry_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+First group of the never-mutated packages the locked drain_scope decision pulls in. Recorded
+survivors by source file: assets/embed.go 3, cmd/dross/main.go 2 (lines 96 and 102), argfence 1,
+defaults 1, profile/profile.go 2, stack/detect.go 2, telemetry/telemetry.go 2 — 13 total. Also
+nominally covers configenum, hostallow, redact and project, which have zero recorded survivors and
+need only the drain assertion.
+"""
+covers = ["c-1", "c-3"]
+test_contract = [
+  "`dross survivor drain --packages ./assets/... ./cmd/dross/... ./internal/argfence/... ./internal/configenum/... ./internal/defaults/... ./internal/hostallow/... ./internal/profile/... ./internal/project/... ./internal/redact/... ./internal/stack/... ./internal/telemetry/...` exits 0",
+  "the task starts from 13 recorded survivors: the commit records how many were killed and how many accepted, and the two must sum to 13 — a task that accepts its way to green is visible in that split",
+  "cmd/dross's two main.go guards (96 and 102, CONDITIONALS_NEGATION) are killed through the real main entry point, not accepted as unmeasurable — its report has zero covered mutants but is a measured package under t-1's rule",
+  "every acceptance passes the t-5 reason audit and matches its t-7 evidence",
+]
+status = "pending"
+
+[[task]]
+id         = "t-17"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Sweep the state and domain packages"
+files = [
+  "internal/statusline/render_test.go",
+  "internal/statusline/settings_test.go",
+  "internal/phase/phase_test.go",
+  "internal/survivor/store_test.go",
+  "internal/survivor/identity_test.go",
+  "internal/survivor/stale_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+Second sweep group: 24 recorded survivors — statusline 10 (render.go 8, settings.go 2 on lines
+34/36), phase 8 (all on phase.go:190, of which 2 are already accepted under the ceiling category),
+survivor 6 (identity.go 103, stale.go 83, store.go 157×2/160/164, of which 5 are already accepted).
+Also covers board, changes, hooks, milestone and state, which have zero recorded survivors.
+"""
+covers = ["c-1", "c-3"]
+test_contract = [
+  "`dross survivor drain --packages ./internal/board/... ./internal/changes/... ./internal/hooks/... ./internal/milestone/... ./internal/state/... ./internal/statusline/... ./internal/phase/... ./internal/survivor/...` exits 0",
+  "the task starts from 24 recorded survivors of which 7 already carry acceptances: the commit records kills + new acceptances + pre-existing acceptances summing to 24",
+  "phase.go:190's eight mutants all resolve: the two already accepted still resolve to the ceiling category with no duplicate key and no second reason, and the remaining six are killed or accepted individually",
+  "store.go:157 carries two mutants — the drain reports zero outstanding for that line, so a single acceptance covering only one of them fails",
+]
+status = "pending"
+
+[[task]]
+id         = "t-18"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Sweep the analyzer catalog packages"
+files = [
+  "internal/codex/ast_grep_test.go",
+  "internal/codex/codex_test.go",
+  "internal/codex/refs_test.go",
+  "internal/quality/catalog_test.go",
+  "internal/quality/lifecycle_test.go",
+  "internal/security/catalog_test.go",
+  "internal/security/lifecycle_test.go",
+  "internal/techdebt/run_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+Third sweep group and the largest: 29 recorded survivors — codex 10 (ast_grep.go 4, codex.go 5,
+refs.go 1), quality 8 (catalog.go 1, lifecycle.go 7), security 8 (catalog.go 1, lifecycle.go 7),
+techdebt/run.go 3. Also covers findings, which has zero recorded survivors. quality/lifecycle.go and
+security/lifecycle.go survive at identical lines (37, 42×2, 46, 57, 61, 65), so those 14 are one fix
+pattern applied twice. refs_test.go and both lifecycle_test.go files do not exist yet and are
+created by this task.
+"""
+covers = ["c-1", "c-3"]
+test_contract = [
+  "`dross survivor drain --packages ./internal/codex/... ./internal/findings/... ./internal/quality/... ./internal/security/... ./internal/techdebt/...` exits 0",
+  "the task starts from 29 recorded survivors: the commit records the kill/accept split summing to 29",
+  "catalog-selection survivors are killed by a case that selects a DIFFERENT analyzer, so an inverted match is observable in the chosen tool name rather than only in a count",
+  "every acceptance passes the t-5 reason audit and matches its t-7 evidence",
+]
+status = "pending"
+
+[[task]]
+id         = "t-19"
+wave       = 4
+depends_on = ["t-7"]
+title      = "Sweep the process and forge packages"
+files = [
+  "internal/forge/youtrack_test.go",
+  "internal/forge/jira_test.go",
+  "internal/forge/github_test.go",
+  "internal/forge/forge_test.go",
+  "internal/ship/comment_test.go",
+  "internal/architecture/links_test.go",
+  ".dross/survivors.toml",
+]
+description = """
+Final sweep group: 24 recorded survivors — forge 20 (youtrack.go 11, github.go 4, jira.go 4,
+forge.go 1), ship/comment.go 1 (line 73), architecture/links.go 3 (121, 129×2). Survivors on real
+network/exec paths are accepted with the seam named; everything reachable through an existing fake
+is killed. Also covers update and watch, which have zero recorded survivors.
+"""
+covers = ["c-1", "c-3"]
+test_contract = [
+  "`dross survivor drain --packages ./internal/architecture/... ./internal/forge/... ./internal/ship/... ./internal/update/... ./internal/watch/...` exits 0",
+  "the task starts from 24 recorded survivors: the commit records the kill/accept split summing to 24",
+  "any acceptance names the process or HTTP seam that makes the branch unreachable AND cites the existing test proving that seam is the only way in — \"needs the network\" alone fails the t-5 audit",
+  "youtrack.go's 11 survivors are killed through the existing httptest fakes in youtrack_test.go, not accepted — that file is the largest single survivor block outside internal/cmd, and an acceptance sweep there would silence the board-sync path this repo depends on",
+]
+status = "pending"
+
+[[task]]
+id         = "t-20"
+wave       = 5
+depends_on = ["t-8", "t-9", "t-10", "t-11", "t-12", "t-13", "t-14", "t-15", "t-16", "t-17", "t-18", "t-19"]
+title      = "Close the routed deferred backlog"
+files = [
+  ".dross/phases/survivor-lifecycle/spec.toml",
+  ".dross/phases/mutation-diff-scope/spec.toml",
+  ".dross/phases/dross-repair/spec.toml",
+  ".dross/phases/completion-state-truth/spec.toml",
+  "internal/cmd/survivor_backlog_repo_test.go",
+]
+description = """
+Walk `dross deferred list --target survivor-drain --json` and close each entry with
+`dross deferred unroute <phase> <idx>` then `dross deferred dismiss <phase> <idx>` — indices are
+stable because neither verb removes an element. The four non-survivor items are resolved by hand:
+mutation-diff-scope[1] and [2] are delivered by t-3/t-4/t-6, the bulk-backlog asks by t-8…t-15.
+Then a full repo-wide `dross survivor drain` over all 33 packages must exit 0.
+"""
+covers = ["c-1", "c-2"]
+test_contract = [
+  "TestSurvivorDrainBacklogClosed fails if collectDeferred over the repo yields any entry with Target==\"survivor-drain\" and Dismissed==false — enforced by CI, not by a ship-time eyeball",
+  "the same test fails if any survivor-keyed deferred entry is routed to a phase that sits AFTER survivor-drain in the milestone's phases array — the \"none is re-routed forward\" half of c-2. Survivor-keyed means the entry's text resolves to a `file.go:line (OP)` survivor identity; this phase's own two [[deferred]] entries are prose about phase-create adoption and adapter mutant-filtering, resolve to no identity, and are expected to pass while still routed forward to phase-create-adoption and mutation-score-truth",
+  "after closure `dross survivor drain` still exits 0: dismissing a routed entry drops it out of routedSurvivors(), so a survivor closed by dismissal alone (never killed, never accepted) reappears as outstanding and fails the run",
+  "the repo-wide run covers all 33 packages `go list ./...` reports and accounts for all 202 recorded non-killed mutants — every one killed, accepted, or gone as NOT VIABLE",
+  "`dross deferred list --dismissed` still shows each closed item with its survivor key, so the drain is auditable after the fact",
+]
+status = "pending"
