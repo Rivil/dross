@@ -45,8 +45,8 @@
 
 [[decisions]]
   key = "bogus_arithmetic_class"
-  choice = "String-concatenation and const-initializer ARITHMETIC_BASE survivors are accepted under one named shared category whose reason is backed by a proof test, not filtered out at the adapter."
-  why = "The operator does not apply to those lines, so no test can kill them. One evidence-backed category beats ~30 near-identical paragraphs, and acceptance keeps them visible in `dross survivor list` where adapter filtering would hide them."
+  choice = "Const-initializer ARITHMETIC_BASE survivors are accepted under one named shared category whose reason is backed by a proof test, not filtered out at the adapter. String-concatenation ARITHMETIC_BASE survivors are NOT accepted: they are coverage gaps and are killed by covering the line."
+  why = "Amended during execution (t-5), on evidence that contradicted the original premise. A const initializer emits no go-cover block at all, so gremlins never compiles its mutant and no test can ever kill it — genuinely unkillable, so acceptance is the only honest disposition. A string-concatenation line is different: gremlins only compiles mutants on COVERED lines, and `string - string` does not compile, so covering the line kills the mutant automatically. Proven twice — t-3 took gremlins.go's four string-concat survivors to zero with tests and no acceptance, and the t-5 fixture reports its covered concat line KILLED x4 while its const initializer stays NOT COVERED x2. Accepting the string-concat half would silence killable survivors, which is exactly the laundering c-3 forbids. One evidence-backed category still beats near-identical paragraphs, and acceptance keeps the const entries visible in `dross survivor list` where adapter filtering would hide them."
   locked = true
 
 [[decisions]]
