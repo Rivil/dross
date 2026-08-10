@@ -271,3 +271,72 @@ func TestSupportsFile(t *testing.T) {
 		}
 	}
 }
+
+// TestIndexSymbolsSortStably covers Index's symbol comparator, which no other
+// test reaches: sort.Slice never calls a comparator with fewer than two
+// elements, and every existing Index test indexes a single file with a single
+// symbol.
+//
+// Ordering is not cosmetic here — the Result is what a prompt reads to decide
+// what to look at first, and an unstable order makes the same repo produce a
+// different briefing on every run.
+func TestIndexSymbolsSortStably(t *testing.T) {
+	dir := makeFixture(t)
+	// Two files, two symbols each: enough for both comparator branches — the
+	// cross-file compare and the same-file line compare.
+	bravo := writeFile(t, dir, "core/bravo.go", `package core
+
+func BravoOne() {}
+
+func BravoTwo() {}
+`)
+	alpha := writeFile(t, dir, "core/alpha.go", `package core
+
+func AlphaOne() {}
+
+func AlphaTwo() {}
+`)
+
+	res, err := Index([]string{bravo, alpha})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Symbols) < 4 {
+		t.Fatalf("indexed %d symbols, want at least 4 — the fixture is not exercising the sort: %+v",
+			len(res.Symbols), res.Symbols)
+	}
+
+	// Ascending by File, then by Line. Asserted as a total order over the
+	// whole slice, so inverting either comparison shows up.
+	for i := 1; i < len(res.Symbols); i++ {
+		prev, cur := res.Symbols[i-1], res.Symbols[i]
+		switch {
+		case prev.File > cur.File:
+			t.Errorf("symbols not sorted by file at %d: %q then %q", i, prev.File, cur.File)
+		case prev.File == cur.File && prev.Line > cur.Line:
+			t.Errorf("symbols not sorted by line within %s at %d: %d then %d", cur.File, i, prev.Line, cur.Line)
+		}
+	}
+
+	// The premise the same-file branch needs: at least one adjacent pair
+	// shares a file, and at least one pair does not. Without both, the test
+	// would pass while exercising only half the comparator.
+	var sameFile, crossFile int
+	for i := 1; i < len(res.Symbols); i++ {
+		if res.Symbols[i-1].File == res.Symbols[i].File {
+			sameFile++
+		} else {
+			crossFile++
+		}
+	}
+	if sameFile == 0 || crossFile == 0 {
+		t.Fatalf("fixture exercises only one comparator branch (same-file=%d cross-file=%d)", sameFile, crossFile)
+	}
+
+	// And the first file really is the lexically smaller one, so the sort did
+	// something rather than preserving input order by luck.
+	if filepath.Base(res.Symbols[0].File) != "alpha.go" {
+		t.Errorf("first symbol is in %q, want alpha.go — input order was bravo, alpha",
+			filepath.Base(res.Symbols[0].File))
+	}
+}

@@ -177,3 +177,40 @@ func TestScannersTrackProfile(t *testing.T) {
 		t.Error("agnostic scanner gitleaks must remain available")
 	}
 }
+
+// TestAppliesToMatchesLanguageOrAgnostic is the security twin of the quality
+// test of the same name: ScannersFor never presents a dedicated scanner with a
+// non-matching language, so the loop's match branch and its fall-through were
+// never both exercised.
+//
+// A wrong answer here is silent in the worst way for this package: the run
+// skips a scanner and the report reads as clean because nobody looked.
+func TestAppliesToMatchesLanguageOrAgnostic(t *testing.T) {
+	agnostic := Scanner{Name: "osv-scanner"}
+	dedicated := Scanner{Name: "gosec", Languages: []string{"go", "rust"}}
+
+	cases := []struct {
+		name    string
+		scanner Scanner
+		lang    string
+		want    bool
+	}{
+		{"agnostic applies to anything", agnostic, "go", true},
+		{"agnostic applies to an unknown language", agnostic, "brainfuck", true},
+		{"dedicated applies to its first language", dedicated, "go", true},
+		{"dedicated applies to a later language", dedicated, "rust", true},
+		{"dedicated does not apply elsewhere", dedicated, "typescript", false},
+		{"dedicated does not apply to the empty language", dedicated, "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.scanner.AppliesTo(tc.lang); got != tc.want {
+				t.Errorf("%s.AppliesTo(%q) = %v, want %v", tc.scanner.Name, tc.lang, got, tc.want)
+			}
+		})
+	}
+
+	if agnostic.AppliesTo("typescript") == dedicated.AppliesTo("typescript") {
+		t.Error("agnostic and dedicated scanners agree on a non-listed language — the shortcut is unexercised")
+	}
+}
