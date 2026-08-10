@@ -98,6 +98,24 @@ type Mutant struct {
 	// reach tests.json through languages[].mutation.surviving, which
 	// serialises []Mutant directly.
 	Origin string
+
+	// Key is the survivor's cross-run identity (internal/survivor), resolved
+	// during verify rather than by an adapter. It is what lets an acceptance
+	// recorded in one phase still match this mutant in a later phase's run
+	// after unrelated edits have shifted its line.
+	Key string
+
+	// Lifecycle is the one state this survivor carries in a run — in-diff,
+	// routed, accepted, or unclassified. Empty as the adapter produces it;
+	// a survivor that reaches tests.json still empty is a classification bug,
+	// not an unremarkable default.
+	Lifecycle string
+
+	// Note carries the reason a survivor's state needs explaining: the
+	// destination of a routed survivor, the ambiguity that stopped an
+	// acceptance from suppressing it, or the resolution error that left it
+	// unclassified.
+	Note string
 }
 
 // Adapter runs mutation tests for one language family.
