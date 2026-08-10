@@ -648,3 +648,102 @@
   line = 66
   category = "const-initializer-arithmetic"
   accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "5cd804cb4301552d"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case d < time.Hour:"
+  line = 442
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "43f3ee380345b6b8"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d < time.Hour:"
+  line = 442
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "38470da216963a96"
+  file = "internal/cmd/status.go"
+  op = "ARITHMETIC_BASE"
+  text = "case d < 24*time.Hour:"
+  line = 444
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "cbe0c58e5d2cb069"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case d < 24*time.Hour:"
+  line = 444
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "7a36fb899b36807b"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d < 24*time.Hour:"
+  line = 444
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "f2ccf21f766939d9"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.area.available && s.area.command != \"\":"
+  line = 472
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b1b3323d3c458a3c"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.area.command != \"\":"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "8facc7fea486a231"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil && res == nil:"
+  line = 550
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b391c1a5b1496088"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil && res != nil:"
+  line = 552
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "2fd95c208f2dd748"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case res != nil:"
+  line = 554
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "da9683b212e497f3"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if out, err := gitCombined(repoDir, \"commit\", \"-m\", shipMsg); err != nil {"
+  line = 264
+  reason = "Unreachable given the caller, not untested: ship runs autoCommitDrossDirt immediately above this guard, which does git add .dross and commits, and its pre-stage gate refuses any non-.dross dirt before anything is staged at all. The index is therefore empty on every path into the guard, so its commit branch cannot be reached. TestAutoCommitDrossDirtLeavesTheIndexEmpty pins that premise for both the dirty and clean cases and fails the day autoCommitDrossDirt stops draining the index, at which point the branch becomes reachable and owes a test rather than this reason."
+  accepted_in = "survivor-drain"
