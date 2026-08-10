@@ -108,3 +108,14 @@ task_seq = 0
   depends_on = ["t-8"]
   test_contract = ["if Skeleton stops appending a surviving mutant's Note to its FLAG text, an in-scope survivor carrying a note renders without the note and the test fails", "if joinNote drops its second-note branch, an ambiguous-and-routed survivor's note names only one of the two facts instead of both, and the test fails"]
   status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 6
+  title = "Cover the shared-category acceptance path"
+  files = ["internal/survivor/store_test.go", "internal/cmd/survivor_test.go"]
+  description = "The verify run downgraded c-2 to weak: Add's category-only branch\n(store.go:160) is never entered because every test that sets Category also sets\nReason, and the CLI --category flag has no test at all. That branch is where a\nreasonless acceptance is conditionally allowed or rejected on whether the\ncategory resolves — the surface c-2 claims. acceptance_granularity depends on\nit: survivor-drain will lean on shared prose for its bulk accepts. Tests only.\n"
+  covers = ["c-2"]
+  depends_on = ["t-7"]
+  test_contract = ["if Add stops resolving a category-only acceptance, an entry naming existing shared prose is rejected instead of accepted and the test fails", "if Add stops validating a category-only acceptance, an entry naming a category that does not exist is silently accepted with no resolvable reason and the test fails", "if the CLI --category flag stops threading through to Accept, a second acceptance referencing shared prose either fails or duplicates the prose, and the test fails"]
+  status = "done"

@@ -35,6 +35,22 @@
         }
       ]
     },
+    "t-11": {
+      "files": [
+        "internal/survivor/store_test.go",
+        "internal/cmd/survivor_test.go"
+      ],
+      "commit": "a6b366d",
+      "completed_at": "2026-08-10T11:48:17.306403Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "TestAddCategoryOnlyReferencesExistingProse",
+          "loc": "internal/survivor/store_test.go:210",
+          "what": "shared-category acceptance pinned at both the Add gate and the --category CLI flag"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/survivor/store.go",
