@@ -600,3 +600,15 @@
   why = "surviving mutant routed out of a verify run"
   target = "survivor-drain"
   survivor = "1ab0a93a037fdf79"
+
+[[deferred]]
+  text = "survivor internal/rules/rules.go:104 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "3c2d6c8a35bc4492"
+
+[[deferred]]
+  text = "survivor internal/rules/rules.go:104 (CONDITIONALS_BOUNDARY)"
+  why = "surviving mutant routed out of a verify run"
+  target = "survivor-drain"
+  survivor = "d9a7ba1aeb37d486"

@@ -1,3 +1,7 @@
+[[category]]
+  name = "gremlins-attribution-ceiling"
+  reason = "gremlins reports these lines NOT_COVERED although the test suite provably executes them: a go test -coverprofile run over ./internal/... on 2026-08-10 shows count>=1 for every line in this category. They are switch-case conditions and closure bodies, which go-cover attributes to the enclosing block rather than the line gremlins mutates. Killing them is not possible by adding tests, because tests already run them."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -5,4 +9,76 @@
   text = "reason = \"(unresolved: \" + err.Error() + \")\""
   line = 242
   reason = "Defensive branch unreachable through the CLI: survivor list resolves reasons via Store.ReasonFor, which only errors when an acceptance has no reason and no resolvable category — and Load rejects both of those before list ever sees the store (TestLoadRejectsHandEditedReasonlessEntry, TestCategoryResolution). The guard is kept in case Load's validation ever loosens; it cannot be exercised while that validation holds."
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "9a54fa8954540cc3"
+  file = "internal/survivor/store.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a.Category != \"\" && a.Reason != \"\":"
+  line = 157
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "19964e8434d21f2d"
+  file = "internal/survivor/store.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a.Category != \"\":"
+  line = 160
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "41ca5be68bd0ad59"
+  file = "internal/survivor/store.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a.Reason == \"\":"
+  line = 164
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "7d0099f5991ace2c"
+  file = "internal/survivor/stale.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.err == nil:"
+  line = 83
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "4d59cb22a0cd55c0"
+  file = "internal/survivor/identity.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 103
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "5b1df21097ad0a06"
+  file = "internal/phase/phase.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case r >= 'a' && r <= 'z', r >= '0' && r <= '9':"
+  line = 190
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "961ea2e0f678ec6f"
+  file = "internal/phase/phase.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r >= 'a' && r <= 'z', r >= '0' && r <= '9':"
+  line = 190
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "df5f8952de532770"
+  file = "internal/cmd/deferred.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case tgt == \"\":"
+  line = 143
+  category = "gremlins-attribution-ceiling"
   accepted_in = "survivor-lifecycle"
