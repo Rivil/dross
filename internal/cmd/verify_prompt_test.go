@@ -256,15 +256,24 @@ func TestReadmeDocumentsSurvivorCommands(t *testing.T) {
 	}
 	readme := string(b)
 
+	// Matched on the row's prefix, not on the exact verb set: pinning the
+	// literal list makes every new verb fail here for the wrong reason. The
+	// verbs themselves are asserted below, so an added verb still has to be
+	// documented — it just fails with a message that says which one is missing.
 	row := ""
 	for _, line := range strings.Split(readme, "\n") {
-		if strings.Contains(line, "`dross survivor {accept,route,list}`") {
+		if strings.Contains(line, "`dross survivor {") {
 			row = line
 			break
 		}
 	}
 	if row == "" {
-		t.Fatal("README has no `dross survivor {accept,route,list}` command-table row")
+		t.Fatal("README has no `dross survivor {...}` command-table row")
+	}
+	for _, verb := range []string{"accept", "route", "list", "retire"} {
+		if !strings.Contains(row, verb) {
+			t.Errorf("README survivor row does not name the %q verb:\n%s", verb, row)
+		}
 	}
 	for _, phrase := range []string{"survivors.toml", "reason", "--stale"} {
 		if !strings.Contains(row, phrase) {

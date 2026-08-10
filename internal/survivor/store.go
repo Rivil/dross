@@ -174,6 +174,45 @@ func (s *Store) Add(a Acceptance) error {
 	return nil
 }
 
+// Remove deletes the acceptance with key and reports whether it was present.
+//
+// A category left with no members is dropped in the same pass: an orphaned
+// [[category]] block is prose nothing references, and leaving it behind would
+// let a later acceptance silently inherit a reason that was written — and
+// reviewed — for an entry that has since been retired.
+func (s *Store) Remove(key string) bool {
+	idx := -1
+	for i := range s.Accepted {
+		if s.Accepted[i].Key == key {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return false
+	}
+	s.Accepted = append(s.Accepted[:idx], s.Accepted[idx+1:]...)
+	s.pruneCategories()
+	return true
+}
+
+// pruneCategories drops every category no remaining acceptance references.
+func (s *Store) pruneCategories() {
+	used := make(map[string]bool, len(s.Accepted))
+	for _, a := range s.Accepted {
+		if a.Category != "" {
+			used[a.Category] = true
+		}
+	}
+	kept := s.Categories[:0]
+	for _, c := range s.Categories {
+		if used[c.Name] {
+			kept = append(kept, c)
+		}
+	}
+	s.Categories = kept
+}
+
 func (s *Store) putCategory(name, reason string) {
 	for i := range s.Categories {
 		if s.Categories[i].Name == name {
@@ -254,6 +293,32 @@ func Accept(path string, a Acceptance) error {
 	}
 	if err := s.Add(a); err != nil {
 		return err
+	}
+	return Save(path, s)
+}
+
+// Retire is the read-modify-write behind `dross survivor retire`: load the store
+// at path, drop every named key, save it back. It is the CLI's way out of the
+// store, so retiring an acceptance never means hand-editing survivors.toml.
+//
+// Every key is checked BEFORE any is removed, so a multi-key invocation naming
+// one absent key writes nothing at all: a half-applied retirement would leave a
+// store nobody asked for and no way to tell which half landed.
+func Retire(path string, keys ...string) error {
+	if len(keys) == 0 {
+		return errors.New("no acceptance keys given to retire")
+	}
+	s, err := Load(path)
+	if err != nil {
+		return err
+	}
+	for _, k := range keys {
+		if _, ok := s.Get(k); !ok {
+			return fmt.Errorf("no acceptance with key %s", k)
+		}
+	}
+	for _, k := range keys {
+		s.Remove(k)
 	}
 	return Save(path, s)
 }

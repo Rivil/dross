@@ -377,6 +377,93 @@ func TestSurvivorListStaleFiltering(t *testing.T) {
 	}
 }
 
+// TestSurvivorRetireStaleSparesTheUnverifiable is c-7's discrimination half.
+// `--stale` must retire exactly Report.Stale: an acceptance the pass could not
+// check — here a "file" that is really a directory, so the read fails with
+// something other than ErrNotExist — is left alone. Collapsing the two would let
+// a permissions blip or a mount hiccup retire live acceptances wholesale.
+func TestSurvivorRetireStaleSparesTheUnverifiable(t *testing.T) {
+	dir := setupSurvivorFixture(t)
+
+	// An unreadable subject: a directory where the acceptance expects a file.
+	if err := os.MkdirAll(filepath.Join(dir, "internal", "unreadable.go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, storeFileOf(dir), `
+[[accepted]]
+  key = "live"
+  file = "internal/x.go"
+  op = "OP"
+  text = "if limit > 0 {"
+  reason = "subject is intact"
+
+[[accepted]]
+  key = "gone"
+  file = "internal/vanished.go"
+  op = "OP"
+  text = "if limit > 0 {"
+  reason = "subject file is gone"
+
+[[accepted]]
+  key = "unchecked"
+  file = "internal/unreadable.go"
+  op = "OP"
+  text = "if limit > 0 {"
+  reason = "subject could not be read"
+`)
+
+	if err := runCmd(t, Survivor(), "retire", "--stale"); err != nil {
+		t.Fatalf("retire --stale: %v", err)
+	}
+
+	store, err := survivor.Load(storeFileOf(dir))
+	if err != nil {
+		t.Fatalf("Load after retire --stale: %v", err)
+	}
+	if _, ok := store.Get("gone"); ok {
+		t.Error("--stale left behind an acceptance whose file is gone")
+	}
+	if _, ok := store.Get("live"); !ok {
+		t.Error("--stale retired an acceptance whose subject is intact")
+	}
+	if _, ok := store.Get("unchecked"); !ok {
+		t.Error(`--stale retired an unverifiable acceptance — "I could not look" is not "it is gone"`)
+	}
+}
+
+// TestSurvivorRetireByKey is c-7's plain path: an entry leaves the store through
+// the CLI, and naming a key that isn't there fails loudly rather than silently
+// no-opping into a rewritten file.
+func TestSurvivorRetireByKey(t *testing.T) {
+	dir := setupSurvivorFixture(t)
+	if err := runCmd(t, Survivor(), "accept", "internal/x.go:4",
+		"--op", "OP", "--reason", "boundary is unobservable here"); err != nil {
+		t.Fatal(err)
+	}
+	store, err := survivor.Load(storeFileOf(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := store.Accepted[0].Key
+
+	if err := runCmd(t, Survivor(), "retire", "no-such-key"); err == nil {
+		t.Fatal("retire of an absent key exited 0, want an error")
+	}
+	if store, err = survivor.Load(storeFileOf(dir)); err != nil || len(store.Accepted) != 1 {
+		t.Fatalf("failed retire disturbed the store (err=%v, entries=%d)", err, len(store.Accepted))
+	}
+
+	if err := runCmd(t, Survivor(), "retire", key); err != nil {
+		t.Fatalf("retire %s: %v", key, err)
+	}
+	if store, err = survivor.Load(storeFileOf(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.Accepted) != 0 {
+		t.Errorf("store still holds %d entries after retiring the only one", len(store.Accepted))
+	}
+}
+
 // TestSurvivorUnknownSubcommandExitsNonZero: without the guard, cobra prints
 // help and exits 0, so a typo lands in telemetry as a successful no-op.
 func TestSurvivorUnknownSubcommandExitsNonZero(t *testing.T) {

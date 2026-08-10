@@ -406,6 +406,145 @@ func TestLocatePathWithoutRoot(t *testing.T) {
 	}
 }
 
+// TestRetireAbsentKeyWritesNothing is c-7's safety half. A retire that names a
+// key the store does not hold must say so and leave the file byte-identical —
+// compared as bytes, not as an entry count, because a re-encode that happened to
+// preserve the count would still have rewritten prose and formatting nobody
+// asked it to touch.
+func TestRetireAbsentKeyWritesNothing(t *testing.T) {
+	path := storePath(t)
+	mustAccept(t, path, Acceptance{Key: "k1", File: "a.go", Op: "OP", Text: "x := 1", Reason: "one"})
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = Retire(path, "nope")
+	if err == nil {
+		t.Fatal("Retire of an absent key succeeded, want error")
+	}
+	if want := "no acceptance with key nope"; !strings.Contains(err.Error(), want) {
+		t.Errorf("err = %q, want it to contain %q", err, want)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("store unreadable after a failed retire: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("failed retire mutated the store:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// TestRetireKeepsEveryUntouchedEntry: retiring one of three keys must leave the
+// other two acceptances and every still-referenced category behind, and the
+// result must still Load — a retire that produced a store failing validate()
+// would lock the user out of their own registry.
+func TestRetireKeepsEveryUntouchedEntry(t *testing.T) {
+	path := storePath(t)
+	mustAccept(t, path, Acceptance{Key: "k1", File: "a.go", Op: "OP", Text: "x := 1", Reason: "own prose"})
+	mustAccept(t, path, Acceptance{Key: "k2", File: "b.go", Op: "OP", Text: "y := 2",
+		Category: "ceiling", Reason: "go-cover cannot attribute this line"})
+	mustAccept(t, path, Acceptance{Key: "k3", File: "c.go", Op: "OP", Text: "z := 3", Category: "ceiling"})
+
+	if err := Retire(path, "k1"); err != nil {
+		t.Fatalf("Retire: %v", err)
+	}
+
+	s, err := Load(path)
+	if err != nil {
+		t.Fatalf("store does not Load after a retire: %v", err)
+	}
+	if _, ok := s.Get("k1"); ok {
+		t.Error("k1 survived its own retirement")
+	}
+	for _, key := range []string{"k2", "k3"} {
+		if _, ok := s.Get(key); !ok {
+			t.Errorf("untouched entry %s was dropped by retiring k1", key)
+		}
+	}
+	if _, ok := s.CategoryReason("ceiling"); !ok {
+		t.Error("still-referenced category dropped by an unrelated retire")
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(body), "[[accepted]]"); got != 2 {
+		t.Errorf("file holds %d [[accepted]] blocks, want 2:\n%s", got, body)
+	}
+	if got := strings.Count(string(body), "[[category]]"); got != 1 {
+		t.Errorf("file holds %d [[category]] blocks, want 1:\n%s", got, body)
+	}
+}
+
+// TestRetireDropsOrphanedCategory: retiring the last member of a category drops
+// the now-orphaned block. Prose nothing references is not a record — and left
+// behind, a later acceptance could silently inherit a reason written and
+// reviewed for an entry that is gone.
+func TestRetireDropsOrphanedCategory(t *testing.T) {
+	path := storePath(t)
+	mustAccept(t, path, Acceptance{Key: "k1", File: "a.go", Op: "OP", Text: "x := 1",
+		Category: "solo", Reason: "the only member's shared prose"})
+	mustAccept(t, path, Acceptance{Key: "k2", File: "b.go", Op: "OP", Text: "y := 2", Reason: "own prose"})
+
+	if err := Retire(path, "k1"); err != nil {
+		t.Fatalf("Retire: %v", err)
+	}
+
+	s, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, ok := s.CategoryReason("solo"); ok {
+		t.Error("category survived the retirement of its last member")
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "[[category]]") {
+		t.Errorf("orphaned [[category]] block left in the file:\n%s", body)
+	}
+	if _, ok := s.Get("k2"); !ok {
+		t.Error("the unrelated own-prose entry was dropped")
+	}
+}
+
+// TestRetireMultiKeyFailureWritesNothing: one bad key in a multi-key invocation
+// aborts the whole retire. A half-applied retirement leaves a store nobody asked
+// for, and no way to tell from the error which half landed.
+func TestRetireMultiKeyFailureWritesNothing(t *testing.T) {
+	path := storePath(t)
+	mustAccept(t, path, Acceptance{Key: "k1", File: "a.go", Op: "OP", Text: "x := 1", Reason: "one"})
+	mustAccept(t, path, Acceptance{Key: "k2", File: "b.go", Op: "OP", Text: "y := 2", Reason: "two"})
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Retire(path, "k1", "nope", "k2"); err == nil {
+		t.Fatal("multi-key Retire naming an absent key succeeded, want error")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("a failed multi-key retire wrote to the store:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+
+	// And the good keys in that invocation are still there.
+	s, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"k1", "k2"} {
+		if _, ok := s.Get(key); !ok {
+			t.Errorf("%s was removed by a retire that failed", key)
+		}
+	}
+}
+
 func write(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
