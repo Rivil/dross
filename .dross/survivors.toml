@@ -2,6 +2,10 @@
   name = "gremlins-attribution-ceiling"
   reason = "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count>=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
 
+[[category]]
+  name = "const-initializer-arithmetic"
+  reason = "A const initializer is evaluated at compile time and produces no statement, so go-cover emits no coverage block for its line at all — not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so a const line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go (which pins the distinction from an ordinary coverage gap). Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -144,4 +148,31 @@
   text = "case sawHeader && current == \"\" && strings.HasPrefix(line, \"@@\"):"
   line = 260
   category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "2a2a99d0b72e16f2"
+  file = "internal/argfence/policy.go"
+  op = "ARITHMETIC_BASE"
+  text = "Separator Kind = iota + 1"
+  line = 33
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b719039db2db5888"
+  file = "internal/stack/detect.go"
+  op = "ARITHMETIC_BASE"
+  text = "const contentSniffCap = 64 * 1024"
+  line = 260
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "66efff73f31f61f5"
+  file = "internal/telemetry/telemetry.go"
+  op = "ARITHMETIC_BASE"
+  text = "const MaxBytes = 10 * 1024 * 1024"
+  line = 46
+  category = "const-initializer-arithmetic"
   accepted_in = "survivor-drain"

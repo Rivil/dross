@@ -69,9 +69,20 @@ const (
 	CoverageUnknown Coverage = "unknown"
 	// CoverageCovered — a profile block containing the line ran at least once.
 	CoverageCovered Coverage = "covered"
-	// CoverageNotCovered — the line sits in a block that never ran, or in no
-	// block at all (a const initializer, which go-cover never instruments).
+	// CoverageNotCovered — the line sits in a coverage block that never ran,
+	// or its file is absent from the profile entirely. Either way nothing
+	// executed it, and a test could.
 	CoverageNotCovered Coverage = "not covered"
+	// CoverageNoBlock — the file IS in the profile but the line belongs to no
+	// block at all. go-cover instruments statements, so a const initializer or
+	// a declaration is not merely uncovered, it is uninstrumentable: no test
+	// can ever make it covered, so the mutation tool will never build its
+	// mutant and no test can ever kill it.
+	//
+	// Distinct from CoverageNotCovered because they demand opposite actions —
+	// write a test, versus accept it — and collapsing them sends someone to
+	// write a test that cannot possibly work.
+	CoverageNoBlock Coverage = "no coverage block"
 )
 
 // Applicability is whether a mutation operator can change a line's source.
@@ -158,12 +169,13 @@ func (p *Profile) CoverageAt(file string, line int) (Coverage, int) {
 		return CoverageUnknown, 0
 	}
 	file = filepath.ToSlash(file)
-	best, found := 0, false
+	best, found, fileKnown := 0, false, false
 	for key, blocks := range p.blocks {
 		key = filepath.ToSlash(key)
 		if key != file && !strings.HasSuffix(key, "/"+file) {
 			continue
 		}
+		fileKnown = true
 		for _, b := range blocks {
 			if line < b.startLine || line > b.endLine {
 				continue
@@ -174,17 +186,22 @@ func (p *Profile) CoverageAt(file string, line int) (Coverage, int) {
 			}
 		}
 	}
-	if !found {
-		// The file may simply not be in the profile at all — an untested
-		// package — which is a different thing from a line that no block
-		// covers. Both read as "not covered" here, and both are honest: in
-		// neither case did anything execute this line.
+	switch {
+	case found && best > 0:
+		return CoverageCovered, best
+	case found:
+		// A real block that never ran: a coverage gap a test can close.
+		return CoverageNotCovered, 0
+	case fileKnown:
+		// The file was instrumented, yet this line is in no block — go-cover
+		// emits blocks for statements, so this is a const initializer or a
+		// declaration. Uninstrumentable, not untested.
+		return CoverageNoBlock, 0
+	default:
+		// The file is absent from the profile: its package was not tested at
+		// all. Nothing ran the line, and a test could.
 		return CoverageNotCovered, 0
 	}
-	if best > 0 {
-		return CoverageCovered, best
-	}
-	return CoverageNotCovered, 0
 }
 
 // ApplicabilityAt reports whether op can rewrite the given line's source.
@@ -301,6 +318,9 @@ func Derive(repoRoot, file string, line int, op string, prof *Profile, reportedN
 		e.Why = op + " does not apply to this line (string operands) — no test can kill it"
 	case e.Coverage == CoverageUnknown:
 		e.Why = "no coverage profile — unknown, which is not evidence for anything"
+	case e.Coverage == CoverageNoBlock:
+		e.Why = "no coverage block: a const initializer or declaration, which go-cover never " +
+			"instruments — the mutant can never be built, so no test can kill it; accept it"
 	case e.Coverage == CoverageNotCovered:
 		e.Why = "line never executes — this is a coverage gap, so cover it"
 	default:

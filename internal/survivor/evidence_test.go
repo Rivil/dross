@@ -254,3 +254,50 @@ func mustProfile(t *testing.T, path string) *Profile {
 	}
 	return p
 }
+
+// TestNoCoverageBlockIsNotACoverageGap is the const-initializer distinction,
+// and it decides opposite actions. go-cover instruments STATEMENTS, so a const
+// initializer belongs to no block at all — it is not merely untested, it is
+// uninstrumentable. No test can make it covered, so the mutation tool never
+// builds its mutant and no test can ever kill it.
+//
+// Collapsing this into "not covered" sends someone to write a test that cannot
+// possibly work, which is exactly what happened to argfence/policy.go:33,
+// stack/detect.go:260 and telemetry/telemetry.go:46 before this existed.
+func TestNoCoverageBlockIsNotACoverageGap(t *testing.T) {
+	root, rel := evidenceFixture(t)
+	constLine := lineOfText(t, root, rel, `const Deadline =`)
+	stmtLine := lineOfText(t, root, rel, `return a + b + 1`)
+
+	// The file IS instrumented — a statement block exists — but the const line
+	// falls in no block.
+	prof := mustProfile(t, writeProfile(t, t.TempDir(), rel, [][3]int{{stmtLine, stmtLine, 4}}))
+
+	if cov, _ := prof.CoverageAt(rel, constLine); cov != CoverageNoBlock {
+		t.Errorf("const initializer coverage = %q, want %q", cov, CoverageNoBlock)
+	}
+	e := Derive(root, rel, constLine, "ARITHMETIC_BASE", prof, true)
+	if e.Killable {
+		t.Error("a const initializer was reported killable")
+	}
+	if !strings.Contains(e.Why, "accept it") {
+		t.Errorf("Why = %q, must route a const initializer to acceptance rather than to a test", e.Why)
+	}
+
+	// A statement block that simply never ran is the OPPOSITE verdict: a real
+	// coverage gap, and the advice must be to cover it.
+	unrun := mustProfile(t, writeProfile(t, t.TempDir(), rel, [][3]int{{stmtLine, stmtLine, 0}}))
+	gap := Derive(root, rel, stmtLine, "ARITHMETIC_BASE", unrun, false)
+	if gap.Coverage != CoverageNotCovered {
+		t.Errorf("an unrun statement block = %q, want %q", gap.Coverage, CoverageNotCovered)
+	}
+	if !strings.Contains(gap.Why, "cover it") {
+		t.Errorf("Why = %q, must send a real coverage gap to a test", gap.Why)
+	}
+
+	// A file the profile never mentions is not-covered, never no-block: its
+	// package simply was not tested, and a test would fix that.
+	if cov, _ := prof.CoverageAt("other/pkg/z.go", 1); cov != CoverageNotCovered {
+		t.Errorf("unmentioned file = %q, want %q", cov, CoverageNotCovered)
+	}
+}

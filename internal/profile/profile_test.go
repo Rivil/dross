@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -114,4 +115,84 @@ func keysOf(m map[string]Dimension) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// TestSeedFromGSDBranches covers all four arms of the seeding path. Three of
+// them never ran before, and the middle one matters most: a machine with no GSD
+// profile is the COMMON case, and it must be a silent no-op rather than an
+// error — `dross init` calls this unconditionally, so turning "no profile
+// here" into a failure would break every greenfield bootstrap.
+func TestSeedFromGSDBranches(t *testing.T) {
+	gsdPath := func(home string) string {
+		return filepath.Join(home, ".claude", "get-shit-done", "USER-PROFILE.md")
+	}
+
+	t.Run("no GSD profile is a silent no-op", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		dest := filepath.Join(t.TempDir(), "profile.toml")
+
+		if err := SeedFromGSD(dest); err != nil {
+			t.Fatalf("a missing GSD profile must not be an error: %v", err)
+		}
+		if _, err := os.Stat(dest); !os.IsNotExist(err) {
+			t.Errorf("nothing to seed from, yet a profile was written (stat err = %v)", err)
+		}
+	})
+
+	t.Run("an existing GSD profile is parsed and written", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		src := gsdPath(home)
+		if err := os.MkdirAll(filepath.Dir(src), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		body := "## Communication\n\n**Rating:** terse-direct | **Confidence:** high\n\n**Directive:** be terse\n"
+		if err := os.WriteFile(src, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		dest := filepath.Join(t.TempDir(), "profile.toml")
+
+		if err := SeedFromGSD(dest); err != nil {
+			t.Fatalf("SeedFromGSD: %v", err)
+		}
+		p, err := LoadFile(dest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.Source != "seeded_from_gsd" {
+			t.Errorf("Source = %q, want the seeding provenance", p.Source)
+		}
+		if p.Dimensions["communication"].Rating != "terse-direct" {
+			t.Errorf("the GSD profile was not parsed into dimensions: %+v", p.Dimensions)
+		}
+	})
+
+	t.Run("an unreadable GSD profile is an error, not a no-op", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		// A directory where the profile should be: the read fails with
+		// something that is NOT fs.ErrNotExist, so it must surface rather than
+		// be swallowed by the "no profile here" arm.
+		if err := os.MkdirAll(gsdPath(home), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		dest := filepath.Join(t.TempDir(), "profile.toml")
+
+		if err := SeedFromGSD(dest); err == nil {
+			t.Error("an unreadable GSD profile was treated as absent")
+		}
+		if _, err := os.Stat(dest); !os.IsNotExist(err) {
+			t.Errorf("a failed seed wrote a profile anyway (stat err = %v)", err)
+		}
+	})
+
+	t.Run("an unresolvable home is an error", func(t *testing.T) {
+		t.Setenv("HOME", "")
+		dest := filepath.Join(t.TempDir(), "profile.toml")
+
+		if err := SeedFromGSD(dest); err == nil {
+			t.Error("SeedFromGSD returned nil with no resolvable home directory")
+		}
+	})
 }
