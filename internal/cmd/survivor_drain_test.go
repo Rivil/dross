@@ -641,3 +641,137 @@ func TestDrainCeilingIsPerMutantNotPerFile(t *testing.T) {
 		t.Errorf("expected exactly one killable survivor:\n%s", out)
 	}
 }
+
+// TestRealGoListDirsSurfacesFailures covers the REAL package-discovery closure.
+// Every other drain test substitutes goListDirs wholesale, so the function that
+// actually shells out to the toolchain had no coverage: a broken `go list` would
+// have surfaced as an empty package set — a drain that reports nothing
+// outstanding because it looked at nothing.
+func TestRealGoListDirsSurfacesFailures(t *testing.T) {
+	t.Run("a directory with no Go module is an error", func(t *testing.T) {
+		// Not a module: `go list ./...` exits non-zero.
+		_, err := goListDirs(t.TempDir())
+		if err == nil {
+			t.Fatal("goListDirs over a non-module directory returned no error")
+		}
+		if !strings.Contains(err.Error(), "go list") {
+			t.Errorf("err = %q, want the go list context", err)
+		}
+	})
+
+	t.Run("this repo lists its packages", func(t *testing.T) {
+		dirs, err := goListDirs(repoRootFromTest(t))
+		if err != nil {
+			t.Fatalf("goListDirs over the real repo: %v", err)
+		}
+		if len(dirs) < 20 {
+			t.Fatalf("listed %d package dirs, want the whole repo — the blank-line filter or the split is wrong", len(dirs))
+		}
+		for _, d := range dirs {
+			if strings.TrimSpace(d) == "" {
+				t.Error("a blank line survived into the package list")
+			}
+		}
+	})
+}
+
+// TestRunGremlinsOverPackagesRequiresAProject covers the real adapter-dispatch
+// helper, which drainRunner replaces in every other test. Its first act is to
+// load project.toml for the runtime prefix and timeout coefficient; without one
+// there is no configuration to run under, and continuing would invoke gremlins
+// with silent defaults that do not match the repo.
+func TestRunGremlinsOverPackagesRequiresAProject(t *testing.T) {
+	_, err := runGremlinsOverPackages(t.TempDir(), []string{"./internal"})
+	if err == nil {
+		t.Fatal("runGremlinsOverPackages with no project.toml returned no error")
+	}
+}
+
+// TestDrainSortsOutstandingDeterministically covers the outstanding comparator.
+// sort.Slice never calls a comparator with fewer than two elements, and every
+// other drain test has one outstanding survivor — so the ordering the user
+// reads had never been exercised. An unstable order makes the same repo print a
+// different list every run, which is the fastest way to make a gate's output
+// unreadable.
+func TestDrainSortsOutstandingDeterministically(t *testing.T) {
+	dir := drainFixture(t, []string{"./internal"})
+	// Deliberately out of order, and spanning both comparator branches: two
+	// files, and two lines within one of them, plus two ops on one line.
+	mustWrite(t, mutation.GremlinsReportPath(dir, "./internal"),
+		`{"go_module":"example.com/m","files":[`+
+			`{"file_name":"z.go","mutations":[`+mutantJSON(9, "OP", "LIVED")+`]},`+
+			`{"file_name":"y.go","mutations":[`+
+			mutantJSON(20, "OP", "LIVED")+`,`+
+			mutantJSON(4, "ZOP", "LIVED")+`,`+
+			mutantJSON(4, "AOP", "LIVED")+
+			`]}]}`)
+	fakeDrainRunner(t)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Survivor(), "drain"); err == nil {
+		t.Fatalf("expected outstanding survivors:\n%s", out)
+	}
+
+	var got []string
+	for _, l := range strings.Split(out, "\n") {
+		if !strings.HasPrefix(l, "  internal/") {
+			continue
+		}
+		// Drop any note suffix: this test is about ORDER, and a fixture line
+		// that does not exist on disk legitimately carries one.
+		head, _, _ := strings.Cut(strings.TrimSpace(l), " — ")
+		got = append(got, head)
+	}
+	want := []string{
+		"internal/y.go:4 (AOP)",
+		"internal/y.go:4 (ZOP)",
+		"internal/y.go:20 (OP)",
+		"internal/z.go:9 (OP)",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("printed %d outstanding lines, want %d:\n%s", len(got), len(want), out)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("outstanding order:\n got %v\nwant %v", got, want)
+		}
+	}
+}
+
+// TestDrainPrintsTheSurvivorNote covers the conditional note suffix. A survivor
+// whose identity will not resolve carries the reason why, and that reason is
+// the only thing distinguishing "you have not decided about this" from "this
+// could not even be looked up" — the two need different actions from the user.
+func TestDrainPrintsTheSurvivorNote(t *testing.T) {
+	dir := drainFixture(t, []string{"./internal"})
+	// gone.go is not on disk, so identity resolution fails and the classifier
+	// attaches its error as the note.
+	mustWrite(t, mutation.GremlinsReportPath(dir, "./internal"),
+		`{"go_module":"example.com/m","files":[`+
+			`{"file_name":"gone.go","mutations":[`+mutantJSON(3, "OP", "LIVED")+`]},`+
+			`{"file_name":"y.go","mutations":[`+mutantJSON(4, "OP", "LIVED")+`]}]}`)
+	fakeDrainRunner(t)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Survivor(), "drain"); err == nil {
+		t.Fatalf("expected outstanding survivors:\n%s", out)
+	}
+
+	var noted, plain string
+	for _, l := range strings.Split(out, "\n") {
+		switch {
+		case strings.Contains(l, "internal/gone.go:3"):
+			noted = l
+		case strings.Contains(l, "internal/y.go:4"):
+			plain = l
+		}
+	}
+	if !strings.Contains(noted, " — ") || !strings.Contains(noted, "identity") {
+		t.Errorf("the unresolvable survivor printed no note: %q", noted)
+	}
+	// And the note is genuinely conditional: a resolvable survivor renders no
+	// dangling separator.
+	if strings.Contains(plain, " — ") {
+		t.Errorf("a note-less survivor rendered a separator with nothing after it: %q", plain)
+	}
+}

@@ -953,3 +953,30 @@
   line = 181
   category = "self-replacing-binary-path"
   accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "c8caaa5f181b2a1d"
+  file = "internal/cmd/hooks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 100
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b3bca090eb817d72"
+  file = "internal/cmd/issue.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case configenum.Normalize(p.Board.Provider) == \"\":"
+  line = 171
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "65e701d659c601c1"
+  file = "internal/cmd/root.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 61
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"

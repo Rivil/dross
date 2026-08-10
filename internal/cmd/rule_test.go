@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -354,5 +355,45 @@ func TestRuleShowEmitsSurvivorDrainInCleanRepo(t *testing.T) {
 		if !strings.Contains(out, escape) {
 			t.Errorf("rule show must name the escape %q:\n%s", escape, out)
 		}
+	}
+}
+
+// TestRuleCover_PromoteProjectSaveError covers the save-failure arm of promote.
+// Promotion is a two-file move — add to global, remove from project — and the
+// project save is the second write. If its failure were swallowed the rule
+// would exist in BOTH scopes, which the merge then resolves silently in favour
+// of the project copy: the promotion would look done and have changed nothing.
+func TestRuleCover_PromoteProjectSaveError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: a read-only directory would not stop the write")
+	}
+	dir := realTempDir(t)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", t.TempDir())
+
+	if err := runCmd(t, Rule(), "add", "project rules must be promotable", "--scope", "project"); err != nil {
+		t.Fatal(err)
+	}
+	set, path, err := loadScope("project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(set.Rules) != 1 {
+		t.Fatalf("fixture: project scope holds %d rules, want 1", len(set.Rules))
+	}
+	id := set.Rules[0].ID
+
+	// Make the rules file itself read-only: the load above already succeeded,
+	// so only the save can fail.
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+
+	if err := runCmd(t, Rule(), "promote", id); err == nil {
+		t.Error("promote with an unwritable project rules file exited 0 — the rule would live in both scopes")
 	}
 }

@@ -158,3 +158,49 @@ func TestHooksEnsureCommand(t *testing.T) {
 		t.Errorf("second `hooks ensure` not byte-identical:\n--- first ---\n%s\n--- second ---\n%s", first, second)
 	}
 }
+
+// TestUserSettingsPathFallsBackToHome covers both arms of the settings-path
+// resolution, including the home-resolution failure the CLAUDE_CONFIG_DIR
+// override normally hides.
+//
+// The override exists so a test (and a user with a relocated config) never
+// touches the real ~/.claude, so the fallback below it only runs when the
+// override is absent — which is exactly why it went unmeasured.
+func TestUserSettingsPathFallsBackToHome(t *testing.T) {
+	t.Run("the override wins outright", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("CLAUDE_CONFIG_DIR", dir)
+		got, err := userSettingsPath()
+		if err != nil {
+			t.Fatalf("userSettingsPath: %v", err)
+		}
+		if want := filepath.Join(dir, "settings.json"); got != want {
+			t.Errorf("userSettingsPath = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("without it, it falls back to ~/.claude", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("CLAUDE_CONFIG_DIR", "")
+		t.Setenv("HOME", home)
+		got, err := userSettingsPath()
+		if err != nil {
+			t.Fatalf("userSettingsPath: %v", err)
+		}
+		if want := filepath.Join(home, ".claude", "settings.json"); got != want {
+			t.Errorf("userSettingsPath = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("an unresolvable home is an error, not a bare path", func(t *testing.T) {
+		t.Setenv("CLAUDE_CONFIG_DIR", "")
+		t.Setenv("HOME", "")
+		got, err := userSettingsPath()
+		if err == nil {
+			t.Fatalf("userSettingsPath returned %q with no resolvable home, want an error", got)
+		}
+		if got != "" {
+			t.Errorf("a failed resolve returned a path anyway: %q — writing to it would land somewhere arbitrary", got)
+		}
+	})
+}
