@@ -39,8 +39,8 @@
 
 [[decisions]]
   key = "survivor_identity"
-  choice = "A survivor's key is file + mutation op + a hash of the mutated line's normalized source text. When that text occurs more than once in the file the match is ambiguous, and an ambiguous acceptance does not suppress — the survivor re-emits with a note."
-  why = "Survives line drift anywhere in the file without an AST, and stays language-agnostic for the later multilang work. The ambiguity rule picks the safe failure direction: a lapsed acceptance is noise, a false suppression hides a real bug."
+  choice = "A survivor's key is file + mutation op + a hash of the mutated line's normalized source text. When that text occurs more than once in the file, the key is additionally scoped by the enclosing top-level declaration and the occurrence ordinal within it, so each repeated line stays separately addressable. A unique line's key is unchanged."
+  why = "Survives line drift anywhere in the file without an AST, and stays language-agnostic for the later multilang work. AMENDED during survivor-drain, on evidence: the original rule withheld an acceptance whose text repeated in its file, which is the safe direction but made a large class of survivors impossible to close — `if err != nil {` occurs 10 times in internal/cmd/env.go and 11 in update.go, and env.go:119 and :148 collided with EACH OTHER so the store could not even hold both. That made c-1 (\"zero unclassified\") unreachable for any survivor on a repeated line, and neither disposition applied: they sit behind a term.ReadPassword tty seam and a self-replacing-binary path, so they cannot be killed either. Scoping keeps the original guarantee — an acceptance never suppresses a survivor it cannot be attributed to — by making the key unique rather than by refusing to match. Scoping to the enclosing declaration rather than to the whole file bounds the drift: only an edit inside the same function can renumber an ordinal, and that is an edit to the very code the acceptance is about. Additive by design: a unique line keys byte-identically, so every acceptance recorded before scoping still resolves."
   locked = true
 
 [[decisions]]

@@ -115,32 +115,100 @@ func TestKeyIsTextDerived(t *testing.T) {
 // TestAmbiguityDetection pins the locked survivor_identity ambiguity rule:
 // identical normalized text on two lines is ambiguous, with the occurrence
 // count reported so the caller can say why suppression was withheld.
-func TestAmbiguityDetection(t *testing.T) {
+func TestRepeatedTextResolvesToDistinctScopedKeys(t *testing.T) {
 	src := []byte(strings.Join([]string{
 		"package p",
 		"",
-		"\treturn nil",
+		"func alpha() error {",
+		"\tif err != nil {",
+		"\t\treturn err",
+		"\t}",
+		"\tif err != nil {",
+		"\t\treturn err",
+		"\t}",
+		"}",
+		"",
+		"func bravo() error {",
+		"\tif err != nil {",
+		"\t\treturn err",
+		"\t}",
+		"}",
+		"",
 		"x := 1",
-		"    return nil",
 	}, "\n"))
 
-	got, err := ResolveSource(src, "a.go", 3, "OP")
+	// Three occurrences of the same line text across two functions. Each must
+	// resolve to its OWN key, or an acceptance cannot address one of them
+	// without addressing all three.
+	first, err := ResolveSource(src, "a.go", 4, "OP")
 	if err != nil {
-		t.Fatalf("ResolveSource: %v", err)
+		t.Fatal(err)
 	}
-	if !got.Ambiguous {
-		t.Errorf("Ambiguous = false, want true — identical normalized text on two lines is ambiguous")
+	second, err := ResolveSource(src, "a.go", 7, "OP")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got.Occurrences != 2 {
-		t.Errorf("Occurrences = %d, want 2", got.Occurrences)
+	other, err := ResolveSource(src, "a.go", 13, "OP")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	unique, err := ResolveSource(src, "a.go", 4, "OP")
-	if err != nil {
-		t.Fatalf("ResolveSource unique line: %v", err)
+	for _, r := range []Resolved{first, second, other} {
+		if r.Occurrences != 3 {
+			t.Errorf("Occurrences = %d, want 3", r.Occurrences)
+		}
+		if r.Ambiguous {
+			t.Errorf("a scoped key must not report Ambiguous: %+v", r)
+		}
+		if r.Key == "" {
+			t.Errorf("no key derived: %+v", r)
+		}
 	}
-	if unique.Ambiguous || unique.Occurrences != 1 {
-		t.Errorf("unique line reported Ambiguous=%v Occurrences=%d, want false/1", unique.Ambiguous, unique.Occurrences)
+
+	keys := map[string]string{first.Key: "first", second.Key: "second", other.Key: "other"}
+	if len(keys) != 3 {
+		t.Fatalf("repeated text collapsed to %d distinct keys, want 3 — an acceptance would suppress survivors it cannot be attributed to", len(keys))
+	}
+
+	// The scope is the enclosing declaration, and the ordinal counts WITHIN it,
+	// so the two in alpha() are 1 and 2 while bravo()'s restarts at 1. That is
+	// what keeps an edit in one function from renumbering the other's.
+	if first.Scope != "func alpha() error {" || first.Ordinal != 1 {
+		t.Errorf("first = scope %q ordinal %d", first.Scope, first.Ordinal)
+	}
+	if second.Scope != "func alpha() error {" || second.Ordinal != 2 {
+		t.Errorf("second = scope %q ordinal %d", second.Scope, second.Ordinal)
+	}
+	if other.Scope != "func bravo() error {" || other.Ordinal != 1 {
+		t.Errorf("other = scope %q ordinal %d", other.Scope, other.Ordinal)
+	}
+}
+
+// TestUniqueTextKeepsItsUnscopedKey is the backward-compatibility half:
+// scoping is ADDITIVE. A line whose text occurs once keys exactly as it did
+// before scoping existed, so every acceptance recorded earlier still resolves.
+func TestUniqueTextKeepsItsUnscopedKey(t *testing.T) {
+	src := []byte(strings.Join([]string{
+		"package p",
+		"",
+		"func alpha() error {",
+		"\tif limit > 0 {",
+		"\t}",
+		"}",
+	}, "\n"))
+
+	got, err := ResolveSource(src, "a.go", 4, "OP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Occurrences != 1 || got.Ambiguous {
+		t.Errorf("unique line reported Ambiguous=%v Occurrences=%d, want false/1", got.Ambiguous, got.Occurrences)
+	}
+	if got.Key != KeyFor("a.go", "OP", "if limit > 0 {") {
+		t.Errorf("a unique line's key changed — every pre-scoping acceptance would stop resolving")
+	}
+	if got.Scope != "" || got.Ordinal != 0 {
+		t.Errorf("an unscoped key must carry no scope: %+v", got)
 	}
 }
 

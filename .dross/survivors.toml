@@ -829,15 +829,6 @@
   accepted_in = "survivor-drain"
 
 [[accepted]]
-  key = "e3dd7d178cf10df9"
-  file = "internal/cmd/env.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "}); err != nil {"
-  line = 119
-  category = "tty-secret-entry"
-  accepted_in = "survivor-drain"
-
-[[accepted]]
   key = "c84bb90c5fdb562c"
   file = "internal/cmd/milestone_dependents.go"
   op = "CONDITIONALS_NEGATION"
@@ -910,7 +901,16 @@
   accepted_in = "survivor-drain"
 
 [[accepted]]
-  key = "106fd6b0e20249ac"
+  key = "2f4b2750232fddbd"
+  file = "internal/cmd/update.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if resolved, err := filepath.EvalSymlinks(exe); err == nil {"
+  line = 184
+  category = "self-replacing-binary-path"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e1dbef123483111f"
   file = "internal/cmd/env.go"
   op = "CONDITIONALS_NEGATION"
   text = "if err != nil {"
@@ -919,7 +919,7 @@
   accepted_in = "survivor-drain"
 
 [[accepted]]
-  key = "853f82b709c29f83"
+  key = "32cfc0f3981611ef"
   file = "internal/cmd/env.go"
   op = "CONDITIONALS_NEGATION"
   text = "if envMap == nil {"
@@ -928,19 +928,28 @@
   accepted_in = "survivor-drain"
 
 [[accepted]]
-  key = "e6d8584559369934"
+  key = "25a2bee296c5727a"
+  file = "internal/cmd/env.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "}); err != nil {"
+  line = 119
+  category = "tty-secret-entry"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "d20cbcdcf9d2e529"
+  file = "internal/cmd/env.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "}); err != nil {"
+  line = 148
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "67bbc496d8103359"
   file = "internal/cmd/update.go"
   op = "CONDITIONALS_NEGATION"
   text = "if err != nil {"
   line = 181
-  category = "self-replacing-binary-path"
-  accepted_in = "survivor-drain"
-
-[[accepted]]
-  key = "2f4b2750232fddbd"
-  file = "internal/cmd/update.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "if resolved, err := filepath.EvalSymlinks(exe); err == nil {"
-  line = 184
   category = "self-replacing-binary-path"
   accepted_in = "survivor-drain"

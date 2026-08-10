@@ -128,23 +128,52 @@ func TestSurvivorStoreIsTracked(t *testing.T) {
 	}
 }
 
-// TestSurvivorAcceptWarnsOnAmbiguity: an ambiguous acceptance will not suppress,
-// so recording it silently would leave the user watching the survivor reappear
-// forever with no idea why.
-func TestSurvivorAcceptWarnsOnAmbiguity(t *testing.T) {
+// TestSurvivorAcceptScopesRepeatedText: a line whose text repeats in its file
+// used to be unacceptable outright — the key was ambiguous and the acceptance
+// was withheld, so the survivor re-emitted forever. Scoping makes each
+// occurrence separately addressable, and the CLI says so rather than silently
+// narrowing.
+func TestSurvivorAcceptScopesRepeatedText(t *testing.T) {
 	dir := setupSurvivorFixture(t)
 	// Lines 5 and 7 of the fixture are both "return nil".
 	var out string
-	err := runCmdCapturing(t, &out, Survivor(), "accept", "internal/x.go:5",
-		"--op", "OP", "--reason", "unreachable")
-	if err != nil {
+	if err := runCmdCapturing(t, &out, Survivor(), "accept", "internal/x.go:5",
+		"--op", "OP", "--reason", "unreachable — pinned by TestSurvivorAcceptScopesRepeatedText"); err != nil {
 		t.Fatalf("accept: %v", err)
 	}
-	if !strings.Contains(out, "ambiguous") {
-		t.Errorf("accepting an ambiguous line printed no warning:\n%s", out)
+	// The narrowing is said out loud: the acceptance addresses ONE of several
+	// identical lines, and the user should see which.
+	for _, want := range []string{"shares its source text", "occurrence"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("accepting a repeated line did not report the scoping (%q):\n%s", want, out)
+		}
 	}
-	if _, err := os.Stat(storeFileOf(dir)); err != nil {
-		t.Errorf("ambiguous acceptance should still be recorded: %v", err)
+
+	store, err := survivor.Load(storeFileOf(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.Accepted) != 1 {
+		t.Fatalf("store holds %d entries, want 1", len(store.Accepted))
+	}
+
+	// And it suppresses THAT line only. Accepting the sibling occurrence must
+	// produce a second, different entry rather than collide with the first —
+	// which is the whole point of scoping, and what previously made both
+	// unacceptable.
+	if err := runCmd(t, Survivor(), "accept", "internal/x.go:7",
+		"--op", "OP", "--reason", "also unreachable — pinned by the same test"); err != nil {
+		t.Fatalf("accept sibling: %v", err)
+	}
+	if store, err = survivor.Load(storeFileOf(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.Accepted) != 2 {
+		t.Fatalf("store holds %d entries after accepting both occurrences, want 2 — "+
+			"the second overwrote the first, so one line cannot be addressed without the other", len(store.Accepted))
+	}
+	if store.Accepted[0].Key == store.Accepted[1].Key {
+		t.Error("both occurrences resolved to the same key")
 	}
 }
 

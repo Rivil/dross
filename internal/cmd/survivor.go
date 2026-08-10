@@ -97,13 +97,14 @@ func survivorAccept() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("resolve %s:%d: %w", loc.rel, loc.line, err)
 			}
-			if res.Ambiguous {
-				// Loud, because an ambiguous acceptance will not suppress: the
-				// user would otherwise see a clean "accepted" and keep seeing
-				// the survivor in every later run with no idea why.
-				Printf("warning: %s:%d is ambiguous — its source text occurs on %d lines in this file, "+
-					"so this acceptance will not suppress it until the text is unique\n",
-					loc.rel, loc.line, res.Occurrences)
+			if res.Occurrences > 1 {
+				// Said out loud, because the acceptance is narrower than it
+				// looks: it addresses ONE of several identical lines, and the
+				// user should see which, and that an edit inside the same
+				// declaration can renumber it.
+				Printf("note: %s:%d shares its source text with %d other line(s) in this file, "+
+					"so the key is scoped to occurrence %d of %q\n",
+					loc.rel, loc.line, res.Occurrences-1, res.Ordinal, res.Scope)
 			}
 
 			s, err := state.Load(filepath.Join(root, state.File))
