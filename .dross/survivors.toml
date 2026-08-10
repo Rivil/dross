@@ -311,3 +311,30 @@
   line = 324
   category = "gremlins-attribution-ceiling"
   accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "6a14746cfac567ee"
+  file = "internal/architecture/links.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case trimmed == \"\":"
+  line = 121
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "88674c5a8297e6dd"
+  file = "internal/architecture/links.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case cur.OneLine == \"\" && len(cur.Links) == 0:"
+  line = 129
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "6b4bd3699dba97f2"
+  file = "internal/forge/forge.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case configenum.Normalize(c.authScheme) == \"basic\":"
+  line = 654
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
