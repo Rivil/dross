@@ -90,6 +90,25 @@ func Resolve(path string, line int, op string) (Resolved, error) {
 	return ResolveSource(src, path, line, op)
 }
 
+// ResolveAt resolves the survivor at rel (a repo-relative path) by reading
+// root/rel, but derives the key from rel itself.
+//
+// Keeping the two apart is load-bearing: the key must be stable across working
+// directories, so it is derived from the path the store records, never from the
+// absolute path a particular caller happened to read. Resolving with an
+// absolute path and storing a relative one produces a key nothing can ever
+// match again.
+func ResolveAt(root, rel string, line int, op string) (Resolved, error) {
+	src, err := os.ReadFile(filepath.Join(root, rel))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Resolved{}, ErrSubjectGone
+		}
+		return Resolved{}, err
+	}
+	return ResolveSource(src, rel, line, op)
+}
+
 // ResolveSource is Resolve over source bytes already in hand. Kept separate so
 // classification and staleness can resolve without re-reading the file, and so
 // the identity rules are testable without touching disk.

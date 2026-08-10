@@ -36,7 +36,6 @@ func Survivor() *cobra.Command {
 type survivorLocation struct {
 	repoRoot string
 	rel      string
-	abs      string
 	line     int
 }
 
@@ -64,7 +63,6 @@ func parseLocation(root, arg string) (survivorLocation, error) {
 	return survivorLocation{
 		repoRoot: repoRoot,
 		rel:      filepath.ToSlash(rel),
-		abs:      abs,
 		line:     line,
 	}, nil
 }
@@ -95,7 +93,7 @@ func survivorAccept() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := survivor.Resolve(loc.abs, loc.line, op)
+			res, err := survivor.ResolveAt(loc.repoRoot, loc.rel, loc.line, op)
 			if err != nil {
 				return fmt.Errorf("resolve %s:%d: %w", loc.rel, loc.line, err)
 			}
@@ -175,7 +173,7 @@ func survivorRoute() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := survivor.Resolve(loc.abs, loc.line, op)
+			res, err := survivor.ResolveAt(loc.repoRoot, loc.rel, loc.line, op)
 			if err != nil {
 				return fmt.Errorf("resolve %s:%d: %w", loc.rel, loc.line, err)
 			}

@@ -865,10 +865,18 @@ func TestVerifyScopesToPhaseChangesEndToEnd(t *testing.T) {
 		t.Errorf("b.go's survivor should be recorded under out_of_scope:\n%s", body)
 	}
 	vbody := mustRead(t, filepath.Join(dir, ".dross/phases/01-scoped/verify.toml"))
-	if strings.Contains(vbody, "b.go") {
+	// The sibling's survivor is still not one of the PHASE's survivors — it is
+	// out of scope, out of the score, and never reported as "gremlins mutant
+	// survived". It IS reported, once, as unclassified debt with the two verbs
+	// that clear it: the drain rule forbids re-listing it inertly, and silence
+	// is what let the backlog accumulate in the first place.
+	if strings.Contains(vbody, "gremlins mutant survived: b.go") {
 		t.Errorf("an untouched sibling's survivor must not be a phase finding:\n%s", vbody)
 	}
-	if !strings.Contains(vbody, "a.go") {
+	if !strings.Contains(vbody, "unclassified out-of-scope survivor: b.go:3") {
+		t.Errorf("the sibling's survivor must be reported once as unclassified:\n%s", vbody)
+	}
+	if !strings.Contains(vbody, "gremlins mutant survived: a.go:3") {
 		t.Errorf("the phase's own survivor must still FLAG:\n%s", vbody)
 	}
 }

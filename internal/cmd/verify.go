@@ -13,6 +13,7 @@ import (
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/verify"
 )
@@ -100,6 +101,26 @@ func Verify() *cobra.Command {
 				})
 			}
 
+			// Lifecycle classification runs BEFORE tests.json is written, so
+			// the persisted record carries each survivor's key and state. The
+			// store is read from the repo root, never from the phase dir: an
+			// acceptance recorded during one phase has to keep suppressing in
+			// the next one, which is the whole point of c-3.
+			store, err := survivor.Load(survivor.Path(root))
+			if err != nil {
+				return err
+			}
+			accepted, err := acceptedReasons(store)
+			if err != nil {
+				return err
+			}
+			routed, err := routedSurvivors(root)
+			if err != nil {
+				return err
+			}
+			repoRoot := filepath.Dir(root)
+			lc := verify.ApplyLifecycle(t, accepted, routed, workTreeIdentifier{repoRoot: repoRoot})
+
 			testsPath, verifyPath := verify.FilePaths(root, phaseID)
 			if err := t.Save(testsPath); err != nil {
 				return err
@@ -110,11 +131,13 @@ func Verify() *cobra.Command {
 				ids = append(ids, c.ID)
 			}
 			v := verify.Skeleton(t, ids)
+			appendStalenessNotes(v, repoRoot, store)
 			if err := v.Save(verifyPath); err != nil {
 				return err
 			}
 
 			printVerifySummary(t, v)
+			printLifecycleSummary(lc)
 			recordVerifyOutcome(t, v)
 			return nil
 		},
@@ -484,5 +507,104 @@ func printScopeSummary(t *verify.Tests, v *verify.Verify) {
 	}
 	for _, d := range t.Scope.Degraded {
 		Printf("  scope degraded: %s\n", d)
+	}
+}
+
+// workTreeIdentifier resolves a survivor's identity against the working tree.
+//
+// It reads through repoRoot but keys on the path the tool reported, so the key
+// a verify run computes is the same one `dross survivor accept` recorded from
+// any working directory. Resolving on an absolute path would mint a key nothing
+// could ever match again.
+type workTreeIdentifier struct{ repoRoot string }
+
+func (w workTreeIdentifier) Identify(file string, line int, op string) (string, bool, error) {
+	rel := file
+	if filepath.IsAbs(rel) {
+		if r, err := filepath.Rel(w.repoRoot, rel); err == nil {
+			rel = r
+		}
+	}
+	rel = filepath.ToSlash(rel)
+	res, err := survivor.ResolveAt(w.repoRoot, rel, line, op)
+	if err != nil {
+		return "", false, err
+	}
+	return res.Key, res.Ambiguous, nil
+}
+
+// acceptedReasons flattens the store into the key→reason map the classifier
+// takes. Resolution failures are surfaced rather than swallowed: an acceptance
+// whose reason cannot be resolved must not silently suppress a survivor.
+func acceptedReasons(store *survivor.Store) (map[string]string, error) {
+	out := map[string]string{}
+	for _, a := range store.Accepted {
+		reason, err := store.ReasonFor(a)
+		if err != nil {
+			return nil, fmt.Errorf("load survivors: %w", err)
+		}
+		out[a.Key] = reason
+	}
+	return out, nil
+}
+
+// routedSurvivors builds the key→target map from every phase's [[deferred]]
+// entries. It walks all specs (via collectDeferred) rather than just the
+// current phase's: a survivor routed while phase A was current is still routed
+// when phase B runs, and a phase-local read would resurrect it as unclassified
+// debt the moment the phase changed.
+//
+// Dismissed entries are skipped — a dismissed item is triaged away, not parked
+// at a destination — as are entries with no target, which are "someday" and
+// therefore still unclassified.
+func routedSurvivors(root string) (map[string]string, error) {
+	entries, err := collectDeferred(root)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, e := range entries {
+		if e.Survivor == "" || e.Target == "" || e.Dismissed {
+			continue
+		}
+		out[e.Survivor] = e.Target
+	}
+	return out, nil
+}
+
+// appendStalenessNotes reports acceptances whose subject is gone (c-5) as
+// NOTEs. Deliberately NOT findings that gate: a stale acceptance is bookkeeping
+// to clean up, and failing a phase over one would punish the phase that
+// happened to run next — the same reasoning as a degraded scope.
+func appendStalenessNotes(v *verify.Verify, repoRoot string, store *survivor.Store) {
+	rep := survivor.StaleAcceptances(repoRoot, store)
+	for _, s := range rep.Stale {
+		v.Findings = append(v.Findings, verify.Finding{
+			Severity: "NOTE",
+			Text: fmt.Sprintf("stale acceptance: %s (%s) — %s — retire it from .dross/%s",
+				s.File, s.Key, s.Reason, survivor.StoreFile),
+		})
+	}
+	for _, u := range rep.Unverifiable {
+		v.Findings = append(v.Findings, verify.Finding{
+			Severity: "NOTE",
+			Text:     fmt.Sprintf("acceptance could not be checked: %s (%s) — %v", u.File, u.Key, u.Err),
+		})
+	}
+}
+
+// printLifecycleSummary prints the one line that makes the drain measurable:
+// how many survivors are this phase's own, how many have a destination, how
+// many are accepted, and how many still need a decision. The four counts sum to
+// the run's survivor total by construction.
+func printLifecycleSummary(lc *verify.Lifecycle) {
+	if lc == nil || lc.Total() == 0 {
+		return
+	}
+	Printf("  survivors: %d in-diff, %d routed, %d accepted, %d unclassified\n",
+		len(lc.InDiff), len(lc.Routed), len(lc.Accepted), len(lc.Unclassified))
+	if n := len(lc.Unclassified); n > 0 {
+		Printf("    ↳ %d unclassified — `dross survivor accept <file>:<line> --op OP --reason ...` "+
+			"or `dross survivor route <file>:<line> --op OP --target <phase>`\n", n)
 	}
 }
