@@ -198,6 +198,74 @@ func TestKeyUniqueness(t *testing.T) {
 	}
 }
 
+// TestAddCategoryOnlyReferencesExistingProse covers the category-only Add
+// branch: an acceptance that carries no reason of its own and names a category
+// instead. It is the one path where a reasonless acceptance is legitimately
+// allowed, so both directions matter — resolving against existing prose, and
+// refusing when there is no prose to resolve against.
+//
+// Without this, c-2's reason guarantee is only proven for the plain
+// reason-or-nothing shape, and the shared-prose form a bulk drain depends on
+// goes to production unexercised.
+func TestAddCategoryOnlyReferencesExistingProse(t *testing.T) {
+	path := storePath(t)
+	const prose = "gremlins switch-case attribution ceiling"
+	mustAccept(t, path, Acceptance{Key: "k1", File: "a.go", Op: "OP", Text: "case 1:", Category: "switch-ceiling", Reason: prose})
+
+	// The reference: no Reason of its own, category already registered.
+	mustAccept(t, path, Acceptance{Key: "k2", File: "b.go", Op: "OP", Text: "case 2:", Category: "switch-ceiling"})
+
+	s, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	var ref Acceptance
+	for _, a := range s.Accepted {
+		if a.Key == "k2" {
+			ref = a
+		}
+	}
+	if ref.Key == "" {
+		t.Fatalf("category-only acceptance was not stored: %+v", s.Accepted)
+	}
+	if ref.Reason != "" {
+		t.Errorf("Reason = %q, want empty — the prose belongs to the category, not the entry", ref.Reason)
+	}
+	got, err := s.ReasonFor(ref)
+	if err != nil {
+		t.Fatalf("ReasonFor(k2): %v", err)
+	}
+	if got != prose {
+		t.Errorf("ReasonFor(k2) = %q, want the shared prose %q", got, prose)
+	}
+
+	// The refusal: naming a category nothing has registered is a reasonless
+	// acceptance wearing a name, and must not reach the file.
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Accept(path, Acceptance{Key: "k3", File: "c.go", Op: "OP", Text: "case 3:", Category: "no-such-category"}); err == nil {
+		t.Fatal("Accept referencing an unregistered category succeeded, want error")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("rejected category-only accept mutated the store:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+
+	// Asserted against Add directly, not only through Accept. Save validates the
+	// whole store on the way out, so Accept would still refuse even if Add's own
+	// guard were deleted — going through Accept alone proves the behaviour but
+	// leaves the early guard unpinned, and a caller that builds a Store in memory
+	// and never saves would silently gain an unresolvable entry.
+	if err := s.Add(Acceptance{Key: "k4", File: "d.go", Op: "OP", Text: "case 4:", Category: "no-such-category"}); err == nil {
+		t.Error("Store.Add accepted a reference to an unregistered category, want error")
+	}
+}
+
 // TestSharedCategoryProseEncodedOnce pins acceptance_granularity's payoff: many
 // entries, one copy of the prose. If prose starts being copied per entry, a
 // bulk drain becomes 76 copy-pasted reasons that drift apart on the first edit.

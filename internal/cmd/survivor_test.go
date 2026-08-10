@@ -148,6 +148,78 @@ func TestSurvivorAcceptWarnsOnAmbiguity(t *testing.T) {
 	}
 }
 
+// TestSurvivorAcceptCategoryFlag covers --category end to end: one invocation
+// defines the shared prose, a second references it with no --reason at all.
+// That second form is the whole point of acceptance_granularity — a bulk drain
+// records many entries against one reason — and it is the shape that reaches
+// Add's category-only branch. The flag shipped with no test behind it.
+func TestSurvivorAcceptCategoryFlag(t *testing.T) {
+	dir := setupSurvivorFixture(t)
+	const prose = "gremlins switch-case attribution ceiling"
+
+	// Lines 3 and 4 of the fixture are each unique, so neither acceptance is
+	// withheld for ambiguity and the category path is what is under test.
+	if err := runCmd(t, Survivor(), "accept", "internal/x.go:4",
+		"--op", "CONDITIONALS_BOUNDARY", "--category", "switch-ceiling", "--reason", prose); err != nil {
+		t.Fatalf("accept defining the category: %v", err)
+	}
+	if err := runCmd(t, Survivor(), "accept", "internal/x.go:3",
+		"--op", "CONDITIONALS_NEGATION", "--category", "switch-ceiling"); err != nil {
+		t.Fatalf("accept referencing the category with no --reason: %v", err)
+	}
+
+	raw, err := os.ReadFile(storeFileOf(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(raw), prose); n != 1 {
+		t.Errorf("prose encoded %d times through the CLI, want exactly 1:\n%s", n, raw)
+	}
+
+	store, err := survivor.Load(storeFileOf(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.Accepted) != 2 {
+		t.Fatalf("store holds %d entries, want 2", len(store.Accepted))
+	}
+	for _, a := range store.Accepted {
+		got, err := store.ReasonFor(a)
+		if err != nil {
+			t.Fatalf("ReasonFor(%s): %v", a.Key, err)
+		}
+		if got != prose {
+			t.Errorf("ReasonFor(%s) = %q, want the shared prose", a.Key, got)
+		}
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Survivor(), "list"); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if n := strings.Count(out, prose); n != 2 {
+		t.Errorf("list resolved the shared reason for %d of 2 entries:\n%s", n, out)
+	}
+
+	// A category nothing registered must be refused, not stored as an entry
+	// whose reason can never resolve.
+	before, err := os.ReadFile(storeFileOf(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, Survivor(), "accept", "internal/x.go:1",
+		"--op", "OP", "--category", "no-such-category"); err == nil {
+		t.Error("accept naming an unregistered category succeeded, want error")
+	}
+	after, err := os.ReadFile(storeFileOf(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("rejected accept mutated the store:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
 // TestSurvivorRouteAppendsToCurrentPhaseSpec is c-7 + routed_state_source: the
 // deferred entry carries both the survivor key and the target, lands in the
 // CURRENT phase's spec (deferred items live in the spec that deferred them),
