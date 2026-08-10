@@ -6,6 +6,10 @@
   name = "const-initializer-arithmetic"
   reason = "A const initializer is evaluated at compile time and produces no statement, so go-cover emits no coverage block for its line at all — not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so a const line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go (which pins the distinction from an ordinary coverage gap). Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
 
+[[category]]
+  name = "curated-table-tiebreak"
+  reason = "Unreachable given the curated data, not untested: CuratedMisreaches sorts by command path and only falls back to comparing tokens when two entries SHARE a path. All four curated entries have distinct command paths, so sort.Slice never invokes the tie-break. Pinned by TestCuratedMisreachPathsAreDistinct, which also asserts the primary path ordering — add a second entry under an existing path and that test fails, making the tie-break reachable and owing a real ordering test instead of this reason."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -337,4 +341,157 @@
   text = "case configenum.Normalize(c.authScheme) == \"basic\":"
   line = 654
   category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "8050884712acc62f"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitURL == \"\" && p.Remote.URL == \"\":"
+  line = 93
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "de94300e7681c476"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitURL == \"\" && p.Remote.URL != \"\":"
+  line = 95
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "f2b8e6bc447a05eb"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitURL != \"\" && p.Remote.URL == \"\":"
+  line = 98
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "9f6d0e6b8fa5ab9b"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case b.BaseURL == \"\":"
+  line = 164
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "a3a6f65c557890b7"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 248
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b91bfa24fdf586c0"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(leaked) > 0:"
+  line = 251
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "89f2fa68e2d27733"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(leaked) > 0:"
+  line = 251
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "f1f5b5ca57ba6394"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case clobberErr != nil:"
+  line = 358
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e7956d86bc3d1b73"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(clobbered) == 0 && len(missingDirs) == 0:"
+  line = 362
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "ce81e615d18b28b1"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case p.Project.Version == \"\":"
+  line = 391
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b8ff967b67f96d9e"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case d > nearestMaxDistance || d > best:"
+  line = 86
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "8550041424bd9279"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d > nearestMaxDistance || d > best:"
+  line = 86
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "bb3a21ac111537ea"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case d < best:"
+  line = 88
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e51d801a8015aaf5"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d < best:"
+  line = 88
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "ef37177ea24e0368"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case missingDirsErr != nil:"
+  line = 360
+  reason = "Dead by construction, not untested: detectMissingPhaseDirs (internal/cmd/repair_phasedirs.go) returns a nil error on every path — a missing origin ref, an unreadable .dross/phases tree and an empty listing are all \"nothing known\" by design — so missingDirsErr is never non-nil and this arm cannot be reached by any fixture. Pinned by TestDetectMissingPhaseDirsNeverErrors, which fails the day the function reports a real error, at which point the arm becomes reachable and owes a test rather than this reason."
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "d52a461e0f28435b"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "return out[i][1] < out[j][1]"
+  line = 133
+  category = "curated-table-tiebreak"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "960198b17e257f5c"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "return out[i][1] < out[j][1]"
+  line = 133
+  category = "curated-table-tiebreak"
   accepted_in = "survivor-drain"
