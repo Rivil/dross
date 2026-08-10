@@ -97,3 +97,14 @@ task_seq = 0
   depends_on = ["t-7", "t-8"]
   test_contract = ["if the stale sentence survives, verify_prompt_test finds 'for the survivor-lifecycle phase to route' still in assets/prompts/verify.md", "if the prompt is not updated, it omits dross survivor route / dross survivor accept, or fails to name all four lifecycle states including unclassified", "if the drain policy is not restated at the point of use, the prompt keeps the 'Do not re-list the out_of_scope entries as findings' section instead of instructing that in-diff / unclassified / out_of_scope rows are closed out in the same run", "if the README drifts, it gains no dross survivor {accept,route,list} command-table row, or the dross verify row's out_of_scope wording still describes the pre-phase behaviour asserted by TestReadmeStatesScopingGuarantee"]
   status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 5
+  title = "Cover the note-rendering branches the verify run found uncovered"
+  files = ["internal/verify/verify_test.go", "internal/verify/lifecycle_test.go"]
+  description = "The survivor-lifecycle verify run flagged two in-hunk lines with coverprofile\ncount=0. Both are note-rendering paths: Skeleton never renders an in-scope\nsurvivor's Note into its FLAG text, and joinNote's second-note branch is never\ntaken. A survivor reaches the second branch when it is ambiguous (so Classify\nsets a note) AND routed or out-of-diff, which is exactly the case where a user\nmost needs both facts. Tests only — no production change.\n"
+  covers = ["c-1", "c-4"]
+  depends_on = ["t-8"]
+  test_contract = ["if Skeleton stops appending a surviving mutant's Note to its FLAG text, an in-scope survivor carrying a note renders without the note and the test fails", "if joinNote drops its second-note branch, an ambiguous-and-routed survivor's note names only one of the two facts instead of both, and the test fails"]
+  status = "done"

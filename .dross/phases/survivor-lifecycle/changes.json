@@ -19,6 +19,22 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/verify/verify_test.go",
+        "internal/verify/lifecycle_test.go"
+      ],
+      "commit": "ed3aac5",
+      "completed_at": "2026-08-10T08:52:25.982903Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "TestAmbiguousAndRoutedSurvivorCarriesBothNotes",
+          "loc": "internal/verify/lifecycle_test.go:328",
+          "what": "ambiguity+routing note join and in-scope Note rendering pinned by test"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/survivor/store.go",

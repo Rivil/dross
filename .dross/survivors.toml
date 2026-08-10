@@ -1,0 +1,8 @@
+[[accepted]]
+  key = "742de35850fac7e6"
+  file = "internal/cmd/survivor.go"
+  op = "ARITHMETIC_BASE"
+  text = "reason = \"(unresolved: \" + err.Error() + \")\""
+  line = 242
+  reason = "Defensive branch unreachable through the CLI: survivor list resolves reasons via Store.ReasonFor, which only errors when an acceptance has no reason and no resolvable category — and Load rejects both of those before list ever sees the store (TestLoadRejectsHandEditedReasonlessEntry, TestCategoryResolution). The guard is kept in case Load's validation ever loosens; it cannot be exercised while that validation holds."
+  accepted_in = "survivor-lifecycle"
