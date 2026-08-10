@@ -501,3 +501,41 @@ func TestEmptyTestCommandDoesNotBypassGate(t *testing.T) {
 		t.Errorf("refusal does not name the remedy: %v", err)
 	}
 }
+
+// TestTrustWithoutATestCommandRefuses covers the nothing-to-trust branch.
+// Consent is bound to the exact test command (that is what TestFingerprint
+// pins), so with no command configured there is nothing to bind to — granting
+// anyway would record consent for the empty string and then silently satisfy
+// the gate for whatever command was set later.
+//
+// The message has to route the user to the fix; a bare refusal leaves them
+// re-running `dross trust` and getting the same wall.
+func TestTrustWithoutATestCommandRefuses(t *testing.T) {
+	dir := realTempDir(t)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	mustRunSet(t, "project.name", "test-app")
+	// runtime.test_command deliberately left unset.
+
+	err := runCmd(t, Trust())
+	if err == nil {
+		t.Fatal("`dross trust` with no runtime.test_command exited 0 — it recorded consent for nothing")
+	}
+	for _, want := range []string{
+		"nothing to trust",
+		"runtime.test_command",
+		"dross project set",
+		"consent is bound to the command",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal %q does not mention %q", err, want)
+		}
+	}
+
+	// And nothing was written: a refused trust must not leave a consent record.
+	if state, cerr := CheckConsent(filepath.Join(dir, ".dross"), dir, ""); cerr == nil {
+		t.Errorf("a refused trust granted consent anyway (state=%v)", state)
+	}
+}

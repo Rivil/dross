@@ -4,7 +4,7 @@
 
 [[category]]
   name = "const-initializer-arithmetic"
-  reason = "A const initializer is evaluated at compile time and produces no statement, so go-cover emits no coverage block for its line at all — not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so a const line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go (which pins the distinction from an ordinary coverage gap). Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
+  reason = "A package-level declaration initializer — a const, or a var whose composite literal is built at init — is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all: not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so such a line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go, which pins the distinction from an ordinary coverage gap — a gap is a block that never ran, and a test can close it. Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
 
 [[category]]
   name = "curated-table-tiebreak"
@@ -584,4 +584,67 @@
   text = "return resp == \"y\" || resp == \"yes\""
   line = 189
   reason = "Unreachable without a TTY on stdin: interactiveConfirm returns false at term.IsTerminal(os.Stdin.Fd()) before ever parsing an answer, and the guard calls term.IsTerminal directly on the real fd — there is no seam to inject a fake terminal, and a Go test binary never has one. TestInteractiveConfirmRefusesWithoutATTY pins the reachable half (no TTY means no consent, so a non-interactive install cannot clobber a foreign statusLine) and would fail if that guard were removed, at which point this line becomes reachable and owes a test rather than this reason."
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "28ece17d11f1de42"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "const drossLocalIgnorePath = \".dross/\" + LocalFile"
+  line = 17
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "48cac81a1a5e0bc7"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# dross machine-local position + version state — deliberately untracked: no\\n\" +"
+  line = 46
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "0f7ff16de78d0188"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# ordinary commit carries a copy, so nothing can replay one over the live file.\\n\" +"
+  line = 47
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "cac86369304b7dc1"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# (On refs cut before this line landed, dross itself refuses the switch — git\\n\" +"
+  line = 48
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "7c6fb95f3d81167c"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# dross machine-local config — host allowlist additions and the standalone-quick\\n\" +"
+  line = 64
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "68d51f164866815b"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# base branch. MUST stay untracked: a committed copy would let a cloned repo\\n\" +"
+  line = 65
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "f0f2e97a783fbeb1"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# authorize its own API host, which is the loop the derived allowlist avoids.\\n\" +"
+  line = 66
+  category = "const-initializer-arithmetic"
   accepted_in = "survivor-drain"

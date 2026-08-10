@@ -284,3 +284,49 @@ func TestShipPushesBaseAheadDrossChores(t *testing.T) {
 		t.Errorf("local main should be fully pushed after ship's safety net, got ahead: %q", ahead)
 	}
 }
+
+// TestPushBaseRejectedPushSurfacesGitOutput covers the safety-net push's
+// failure message, which the unreachable-origin test above never reaches: with
+// a bogus remote URL git fails before the push is attempted, so the block that
+// builds this error never ran.
+//
+// Here the remote is real and reachable and the PUSH itself is refused — origin
+// is a non-bare repo with main checked out, which git declines to update. That
+// is the realistic shape of this failure, and the message has to carry git's
+// own output: "push failed" alone leaves the user with a base still diverged
+// from origin and no idea why.
+func TestPushBaseRejectedPushSurfacesGitOutput(t *testing.T) {
+	dir, origin := basePushFixture(t)
+	// A pre-receive hook that refuses: deterministic and portable, unlike
+	// relying on filesystem permissions or a git default.
+	hook := filepath.Join(origin, "hooks", "pre-receive")
+	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\necho 'refused by policy hook' >&2\nexit 1\n"
+	if err := os.WriteFile(hook, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# handoff\n")
+	mustGit(t, dir, "add", ".dross")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): pause snapshot")
+
+	pushed, err := pushBaseIfAheadDrossOnly(dir, "main")
+	if err == nil {
+		t.Fatalf("a refused push must be a hard error (pushed=%v)", pushed)
+	}
+	if pushed {
+		t.Error("pushed=true reported for a push git refused")
+	}
+	for _, want := range []string{"safety-net push", "main", "Refusing to continue"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+	// git's own output must survive into the message — it is the only thing
+	// that says WHY the push was refused.
+	if !strings.Contains(err.Error(), "refused by policy hook") && !strings.Contains(err.Error(), "rejected") {
+		t.Errorf("error %q carries none of git's output", err)
+	}
+}
