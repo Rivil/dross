@@ -52,15 +52,6 @@
   accepted_in = "survivor-lifecycle"
 
 [[accepted]]
-  key = "4d59cb22a0cd55c0"
-  file = "internal/survivor/identity.go"
-  op = "CONDITIONALS_NEGATION"
-  text = "if err != nil {"
-  line = 103
-  category = "gremlins-attribution-ceiling"
-  accepted_in = "survivor-lifecycle"
-
-[[accepted]]
   key = "5b1df21097ad0a06"
   file = "internal/phase/phase.go"
   op = "CONDITIONALS_BOUNDARY"
@@ -175,4 +166,148 @@
   text = "const MaxBytes = 10 * 1024 * 1024"
   line = 46
   category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "9604e7cd024a83d4"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case in.TodoActiveForm != \"\":"
+  line = 88
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "0d940d2aa751071e"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case in.DrossState != \"\":"
+  line = 90
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "739859daa4a5acd2"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case used < 50:"
+  line = 215
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "851955b8d36078ad"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case used < 50:"
+  line = 215
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "137f7dc085ef2070"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case used < 65:"
+  line = 217
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "6ed8fdb1f159e731"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case used < 65:"
+  line = 217
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "a9e78b47a4c45134"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case used < 80:"
+  line = 219
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "c86ad981d2ebec40"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case used < 80:"
+  line = 219
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "16ecdd9d52d7d433"
+  file = "internal/statusline/settings.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case existing == command:"
+  line = 34
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "17c2421cae88f5a1"
+  file = "internal/statusline/settings.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case existing != \"\" && !force:"
+  line = 36
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "c8b6907a949e3232"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case found && best > 0:"
+  line = 190
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "8e6c2c29d520c5b5"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case found && best > 0:"
+  line = 190
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "3254c429b4bccbdd"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Applicable == Inapplicable:"
+  line = 317
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "4058fbc93372f246"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Coverage == CoverageUnknown:"
+  line = 319
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "afbf090a4284a6f6"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Coverage == CoverageNoBlock:"
+  line = 321
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "bdf050911ae90301"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Coverage == CoverageNotCovered:"
+  line = 324
+  category = "gremlins-attribution-ceiling"
   accepted_in = "survivor-drain"

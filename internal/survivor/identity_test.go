@@ -315,3 +315,70 @@ func buildFixture(t *testing.T, at int, target string, total int) []byte {
 	lines[at-1] = target
 	return []byte(strings.Join(lines, "\n") + "\n")
 }
+
+// TestResolveAtSplitsRootFromRelPath covers ResolveAt's own read guard, which
+// the Resolve tests above never reach — they exercise the single-path variant.
+//
+// The root/rel split is load-bearing (see ResolveAt's doc): the key must be
+// derived from the path the STORE records, never the absolute path a caller
+// happened to read, or the key never matches again. So the success case
+// asserts the key equals the one derived from the relative path alone, and
+// both failure arms are pinned separately: a missing subject is ErrSubjectGone,
+// an unreadable one is not.
+func TestResolveAtSplitsRootFromRelPath(t *testing.T) {
+	root := t.TempDir()
+	rel := "internal/pkg/a.go"
+	src := buildFixture(t, 12, "\tif limit > 0 {", 20)
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("resolves against root but keys on rel", func(t *testing.T) {
+		got, err := ResolveAt(root, rel, 12, "OP")
+		if err != nil {
+			t.Fatalf("ResolveAt: %v", err)
+		}
+		want, err := ResolveSource(src, rel, 12, "OP")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("ResolveAt = %+v, want the rel-derived identity %+v", got, want)
+		}
+		// The absolute path must NOT be what the key was derived from.
+		abs, err := ResolveSource(src, path, 12, "OP")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Key == abs.Key {
+			t.Error("ResolveAt keyed on the absolute path — that key can never be matched again")
+		}
+	})
+
+	t.Run("a missing subject is ErrSubjectGone", func(t *testing.T) {
+		_, err := ResolveAt(root, "internal/pkg/gone.go", 12, "OP")
+		if !errors.Is(err, ErrSubjectGone) {
+			t.Errorf("err = %v, want ErrSubjectGone", err)
+		}
+	})
+
+	t.Run("an unreadable subject is not ErrSubjectGone", func(t *testing.T) {
+		// A directory where the file should be: the read fails with something
+		// other than ErrNotExist. Collapsing the two would let a permissions
+		// blip mark live acceptances stale.
+		if err := os.MkdirAll(filepath.Join(root, "internal", "pkg", "dir.go"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		_, err := ResolveAt(root, "internal/pkg/dir.go", 1, "OP")
+		if err == nil {
+			t.Fatal("ResolveAt on a directory returned no error")
+		}
+		if errors.Is(err, ErrSubjectGone) {
+			t.Errorf("an unreadable subject was reported as gone: %v", err)
+		}
+	})
+}
