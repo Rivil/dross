@@ -82,3 +82,66 @@
   line = 143
   category = "gremlins-attribution-ceiling"
   accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "eafc28a069169896"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case gitCount > 0 && recordedCount > 0:"
+  line = 151
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "89b1d0ebd34a7589"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitCount > 0 && recordedCount > 0:"
+  line = 151
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "7be8190b55e43484"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case gitCount > 0:"
+  line = 153
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "d0df948dd0650e34"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitCount > 0:"
+  line = 153
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "a3b61f6ed11078be"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case recordedCount > 0:"
+  line = 155
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "dd6d55632a94d070"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case recordedCount > 0:"
+  line = 155
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "1ab0a93a037fdf79"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case sawHeader && current == \"\" && strings.HasPrefix(line, \"@@\"):"
+  line = 260
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"

@@ -283,3 +283,127 @@ func TestParseHunksDequotesPaths(t *testing.T) {
 		t.Errorf("quoted path not decoded: %v", hunks)
 	}
 }
+
+// TestNewScopeSourceQuadrants pins Source across all four gitCount/recordedCount
+// quadrants as a table, so swapping two case arms changes the reported Source
+// rather than staying invisible. Source is what a later reader uses to judge
+// whether a run measured what it should have; a mislabelled one makes a
+// narrowed scope read as a complete one.
+func TestNewScopeSourceQuadrants(t *testing.T) {
+	cases := []struct {
+		name         string
+		in           ScopeInput
+		wantSource   string
+		wantDegraded string // substring, empty means "no degradation"
+	}{
+		{
+			name:       "both sides contribute → union",
+			in:         ScopeInput{Git: []string{"a.go"}, Recorded: []string{"b.go"}},
+			wantSource: SourceUnion,
+		},
+		{
+			name:       "git only",
+			in:         ScopeInput{Git: []string{"a.go"}},
+			wantSource: SourceGitOnly,
+		},
+		{
+			name:         "changes only, and it says why it is partial",
+			in:           ScopeInput{Recorded: []string{"a.go"}},
+			wantSource:   SourceChangesOnly,
+			wantDegraded: "changes.json only",
+		},
+		{
+			name:         "neither side contributes",
+			in:           ScopeInput{},
+			wantSource:   SourceNone,
+			wantDegraded: "no files in scope",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewScope(tc.in)
+			if s.Source != tc.wantSource {
+				t.Errorf("Source = %q, want %q", s.Source, tc.wantSource)
+			}
+			joined := strings.Join(s.Degraded, "\n")
+			if tc.wantDegraded == "" {
+				if len(s.Degraded) != 0 {
+					t.Errorf("this quadrant is complete, not degraded: %v", s.Degraded)
+				}
+				return
+			}
+			if !strings.Contains(joined, tc.wantDegraded) {
+				t.Errorf("Degraded = %v, want it to mention %q", s.Degraded, tc.wantDegraded)
+			}
+		})
+	}
+
+	// The union case is the one the other three cannot catch: both counts are
+	// positive, so an arm ordered wrong would report git-only for a scope that
+	// really drew on both, and the changes.json side would silently stop being
+	// credited.
+	both := NewScope(ScopeInput{Git: []string{"a.go"}, Recorded: []string{"b.go"}})
+	if want := []string{"a.go", "b.go"}; !reflect.DeepEqual(both.Files, want) {
+		t.Errorf("union must carry both sides' files: %v", both.Files)
+	}
+}
+
+// TestDeletedFileHunksAttachToNoFile is the other half of the deleted-file
+// guard. A `+++ /dev/null` section has no new side, so its hunks belong to no
+// file — and specifically must not extend the ranges of whatever file preceded
+// them, which is what inverting the guard does. Mis-attributed ranges make a
+// deleted file's line numbers look like edits to a living one, and origin
+// tagging then reports the wrong lines as in-hunk.
+func TestDeletedFileHunksAttachToNoFile(t *testing.T) {
+	diff := "+++ b/live.go\n" +
+		"@@ -1,0 +1,2 @@\n" +
+		"+++ /dev/null\n" +
+		"@@ -40,5 +900,7 @@\n" +
+		"@@ -60,5 +950,3 @@\n"
+
+	hunks, degraded := ParseHunks(diff)
+
+	if len(hunks) != 1 {
+		t.Fatalf("deleted-file hunks attached somewhere: %v", hunks)
+	}
+	want := []Range{{1, 2}}
+	if !reflect.DeepEqual(hunks["live.go"], want) {
+		t.Errorf("live.go ranges = %v, want %v — the deleted file's hunks were folded in", hunks["live.go"], want)
+	}
+	// The distinctive line numbers above would be unmistakable if they leaked.
+	for file, ranges := range hunks {
+		for _, r := range ranges {
+			if r.Start >= 900 {
+				t.Errorf("%s picked up a deleted file's range %v", file, r)
+			}
+		}
+	}
+	if len(degraded) != 0 {
+		t.Errorf("a deletion is not a degradation: %v", degraded)
+	}
+}
+
+// TestNewScopeSortsHunkRanges: ranges arrive in whatever order the diff and the
+// per-file appends produced, and every consumer of Hunks assumes ascending
+// Start. An unsorted list makes origin tagging answer from whichever range
+// happened to land first.
+func TestNewScopeSortsHunkRanges(t *testing.T) {
+	s := NewScope(ScopeInput{
+		Git:   []string{"a.go"},
+		Hunks: map[string][]Range{"a.go": {{40, 45}, {1, 5}, {20, 25}}},
+	})
+
+	got := s.Hunks["a.go"]
+	want := []Range{{1, 5}, {20, 25}, {40, 45}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("hunk ranges = %v, want them ascending by Start %v", got, want)
+	}
+	// And the sort is by Start specifically: a comparator inverted to `>`
+	// yields the exact reverse, which the equality above catches.
+	for i := 1; i < len(got); i++ {
+		if got[i-1].Start > got[i].Start {
+			t.Errorf("ranges are not ascending at %d: %v", i, got)
+		}
+	}
+}
