@@ -162,8 +162,8 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 	}
 
 	for _, pkg := range pkgs {
-		reportRel := filepath.Join("reports", "gremlins", sanitizePkg(pkg)+".json")
-		reportAbs := filepath.Join(g.ProjectRoot, reportRel)
+		reportAbs := GremlinsReportPath(g.ProjectRoot, pkg)
+		reportRel := filepath.Join("reports", "gremlins", filepath.Base(reportAbs))
 		// A stale report from a prior run must not be re-read if gremlins
 		// writes nothing this time.
 		_ = os.Remove(reportAbs)
@@ -298,6 +298,19 @@ func RePrefixGremlinsFiles(r *Report, pkg string) {
 		files[k] = files[k].plus(s)
 	}
 	r.Files = files
+}
+
+// GremlinsReportPath is where Run writes pkg's RAW per-package report, given
+// the same ProjectRoot the adapter ran with.
+//
+// Exported because a caller that must classify every survivor — rather than
+// score them — has to read those raw reports: Run's merged report deliberately
+// drops zero-coverage packages, so a caller reading the merge would see a
+// coverage blind spot as a package with nothing to answer for. Deriving the
+// path here rather than re-implementing the stem rule keeps the two from
+// drifting into disagreeing about which file to read.
+func GremlinsReportPath(projectRoot, pkg string) string {
+	return filepath.Join(projectRoot, "reports", "gremlins", sanitizePkg(pkg)+".json")
 }
 
 // sanitizePkg turns a gremlins package path into a filesystem-safe report

@@ -88,6 +88,10 @@ var table = map[string]Rule{
 		Kind: Reject,
 		Why:  "no end-of-options token; a leading-dash package path is refused before exec",
 	},
+	"go": {
+		Kind: Reject,
+		Why:  "the go tool parses flags ahead of package patterns and has no end-of-options token, so a pattern beginning with a dash is read as a flag",
+	},
 	"npx": {
 		Kind: Reject,
 		Why:  "npx consumes leading-dash arguments itself before the wrapped binary sees them",

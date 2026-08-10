@@ -27,7 +27,7 @@ func Survivor() *cobra.Command {
 		Use:   "survivor",
 		Short: "Accept, route and list surviving mutants (the drain for out-of-diff debt)",
 	}
-	c.AddCommand(survivorAccept(), survivorRoute(), survivorList(), survivorRetire())
+	c.AddCommand(survivorAccept(), survivorRoute(), survivorList(), survivorRetire(), survivorDrain())
 	return c
 }
 
