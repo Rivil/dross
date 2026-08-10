@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 var slNow = time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
@@ -206,5 +208,29 @@ func TestStatuslineCover_DisableRunESuccess(t *testing.T) {
 	cmd.SetOut(io.Discard)
 	if err := cmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("disable RunE on happy path returned error: %v", err)
+	}
+}
+
+// TestInteractiveConfirmRefusesWithoutATTY is the evidence behind
+// statusline.go:189's acceptance. The consent prompt is guarded by
+// term.IsTerminal(os.Stdin.Fd()) and returns false outright when stdin is not
+// interactive, so the answer-parsing line below it cannot run in a test — Go's
+// test binary never has a TTY on stdin, and there is no seam to inject one:
+// the guard calls term.IsTerminal directly on the real fd.
+//
+// The refusal is the safety property worth pinning anyway. A non-interactive
+// install must never silently clobber a foreign statusLine, so "no TTY" has to
+// mean "no", not "assume yes".
+func TestInteractiveConfirmRefusesWithoutATTY(t *testing.T) {
+	c := &cobra.Command{Use: "statusline"}
+	var out bytes.Buffer
+	c.SetOut(&out)
+
+	confirm := interactiveConfirm(c)
+	if confirm("some/other/statusline --flags") {
+		t.Error("interactiveConfirm consented with no TTY on stdin — a non-interactive install would clobber a foreign statusLine")
+	}
+	if out.Len() != 0 {
+		t.Errorf("it prompted despite having no TTY to read the answer from: %q", out.String())
 	}
 }

@@ -495,3 +495,93 @@
   line = 133
   category = "curated-table-tiebreak"
   accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "2a845b586a6c46b8"
+  file = "internal/cmd/footer_coverage.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case footer == footerMalformed:"
+  line = 52
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b7c74e48a4862dab"
+  file = "internal/cmd/footer_coverage.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case footer == footerPresent && isExempt:"
+  line = 55
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b5ddcc58cdde21aa"
+  file = "internal/cmd/footer_coverage.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case footer == footerPresent:"
+  line = 58
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "50fe59a84e58fd2d"
+  file = "internal/cmd/footer_coverage.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case isExempt && strings.TrimSpace(reason) == \"\":"
+  line = 60
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e6e177e15d5ffcf2"
+  file = "internal/cmd/repair.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case loadErr != nil:"
+  line = 131
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "f57b2f9dd061303d"
+  file = "internal/cmd/repair.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case branchPhase != \"\" && existing.CurrentPhase != branchPhase:"
+  line = 133
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "c52f92cc35982cda"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if _, err := loadIfExists(specPath, func() (any, error) { s, err := phase.LoadSpec(specPath); spec = s; return s, err }); err != nil {"
+  line = 92
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "fa5ac88f46292d4a"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if _, err := loadIfExists(planPath, func() (any, error) { p, err := phase.LoadPlan(planPath); plan = p; return p, err }); err != nil {"
+  line = 96
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "a49c53b3ad283fc8"
+  file = "internal/cmd/statusline.go"
+  op = "ARITHMETIC_BASE"
+  text = "const stdinDeadline = 3 * time.Second"
+  line = 23
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "ba29537aba9784ed"
+  file = "internal/cmd/statusline.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "return resp == \"y\" || resp == \"yes\""
+  line = 189
+  reason = "Unreachable without a TTY on stdin: interactiveConfirm returns false at term.IsTerminal(os.Stdin.Fd()) before ever parsing an answer, and the guard calls term.IsTerminal directly on the real fd — there is no seam to inject a fake terminal, and a Go test binary never has one. TestInteractiveConfirmRefusesWithoutATTY pins the reachable half (no TTY means no consent, so a non-interactive install cannot clobber a foreign statusLine) and would fail if that guard were removed, at which point this line becomes reachable and owes a test rather than this reason."
+  accepted_in = "survivor-drain"
