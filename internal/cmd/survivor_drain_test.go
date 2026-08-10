@@ -521,3 +521,123 @@ func TestDrainDropsTestdataSurvivorsEndToEnd(t *testing.T) {
 		t.Errorf("expected exactly one outstanding survivor:\n%s", out)
 	}
 }
+
+// fakeCoverage substitutes the coverage seam with a profile built from the
+// given file:line → count table.
+func fakeCoverage(t *testing.T, rel string, lines map[int]int) {
+	t.Helper()
+	body := "mode: set\n"
+	for line, count := range lines {
+		body += "example.com/m/" + rel + ":" + itoa(line) + ".1," + itoa(line) + ".2 1 " + itoa(count) + "\n"
+	}
+	path := filepath.Join(t.TempDir(), "cover.out")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	prof, err := survivor.ParseProfile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := coverageProfileFn
+	coverageProfileFn = func(string, []string) *survivor.Profile { return prof }
+	t.Cleanup(func() { coverageProfileFn = orig })
+}
+
+// TestDrainAttachesEvidenceToEachOutstanding: the drain answers kill-vs-accept
+// per survivor from code, rather than leaving ~91 near-identical judgement
+// calls to be made by hand. The covered-and-applicable case must say so
+// explicitly — that is the one an acceptance may never claim.
+func TestDrainAttachesEvidenceToEachOutstanding(t *testing.T) {
+	dir := drainFixture(t, []string{"./internal"})
+	writeRawReport(t, dir, "./internal", gremlinsReportWith("y.go", mutantJSON(4, "CONDITIONALS_NEGATION", "LIVED")))
+	fakeDrainRunner(t)
+	fakeCoverage(t, "internal/y.go", map[int]int{4: 7})
+
+	var out string
+	if err := runCmdCapturing(t, &out, Survivor(), "drain"); err == nil {
+		t.Fatalf("expected the survivor to be outstanding:\n%s", out)
+	}
+	for _, want := range []string{
+		"coverage=covered",
+		"applicable=applicable",
+		"do not accept it",
+		"covered AND operator-applicable",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("drain output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestDrainEvidenceUnknownWithoutProfile: with no coverage profile the drain
+// must say unknown, not "not covered". An unknown that read as uncovered would
+// be evidence FOR an acceptance produced by the absence of evidence.
+func TestDrainEvidenceUnknownWithoutProfile(t *testing.T) {
+	dir := drainFixture(t, []string{"./internal"})
+	writeRawReport(t, dir, "./internal", gremlinsReportWith("y.go", mutantJSON(4, "OP", "LIVED")))
+	fakeDrainRunner(t)
+
+	orig := coverageProfileFn
+	coverageProfileFn = func(string, []string) *survivor.Profile { return nil }
+	t.Cleanup(func() { coverageProfileFn = orig })
+
+	var out string
+	if err := runCmdCapturing(t, &out, Survivor(), "drain"); err == nil {
+		t.Fatalf("expected the survivor to be outstanding:\n%s", out)
+	}
+	if !strings.Contains(out, "coverage=unknown") {
+		t.Errorf("a missing profile must report unknown:\n%s", out)
+	}
+	if strings.Contains(out, "coverage=not covered") {
+		t.Errorf("a missing profile was reported as uncovered:\n%s", out)
+	}
+	if strings.Contains(out, "covered AND operator-applicable") {
+		t.Errorf("an unknown-coverage survivor was called killable:\n%s", out)
+	}
+}
+
+// TestDrainCeilingIsPerMutantNotPerFile: ceiling eligibility turns on whether
+// the tool called THIS mutant NOT COVERED. A file-granular approximation would
+// let one uncovered mutant grant the ceiling to every other survivor in its
+// file — which is exactly how a killable survivor gets accepted.
+func TestDrainCeilingIsPerMutantNotPerFile(t *testing.T) {
+	dir := drainFixture(t, []string{"./internal"})
+	// Same file, same coverage: one mutant the tool called NOT COVERED (the
+	// ceiling shape) and one it called LIVED (a genuine, killable escape).
+	writeRawReport(t, dir, "./internal", gremlinsReportWith("y.go",
+		mutantJSON(4, "CONDITIONALS_NEGATION", "NOT COVERED"),
+		mutantJSON(6, "CONDITIONALS_NEGATION", "LIVED"),
+	))
+	fakeDrainRunner(t)
+	fakeCoverage(t, "internal/y.go", map[int]int{4: 3, 6: 3})
+
+	var out string
+	if err := runCmdCapturing(t, &out, Survivor(), "drain"); err == nil {
+		t.Fatalf("expected outstanding survivors:\n%s", out)
+	}
+
+	lines := strings.Split(out, "\n")
+	evidenceFor := func(loc string) string {
+		for i, l := range lines {
+			if strings.Contains(l, loc) && i+1 < len(lines) {
+				return lines[i+1]
+			}
+		}
+		t.Fatalf("no evidence line for %s:\n%s", loc, out)
+		return ""
+	}
+
+	if got := evidenceFor("internal/y.go:4"); !strings.Contains(got, "ceiling-eligible=yes") {
+		t.Errorf("the NOT COVERED mutant should be ceiling-eligible: %q", got)
+	}
+	if got := evidenceFor("internal/y.go:6"); strings.Contains(got, "ceiling-eligible=yes") {
+		t.Errorf("the LIVED mutant inherited its neighbour's ceiling: %q", got)
+	}
+	if got := evidenceFor("internal/y.go:6"); !strings.Contains(got, "do not accept it") {
+		t.Errorf("the LIVED mutant is covered and applicable, so it is killable: %q", got)
+	}
+	// And exactly one of the two is counted killable.
+	if !strings.Contains(out, "1 of these are covered AND operator-applicable") {
+		t.Errorf("expected exactly one killable survivor:\n%s", out)
+	}
+}

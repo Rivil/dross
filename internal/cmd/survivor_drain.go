@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -156,10 +158,40 @@ func runGremlinsOverPackages(repoRoot string, pkgs []string) ([]mutation.Unmeasu
 }
 
 // drainSurvivor is one survivor read out of a raw report, with the package it
-// came from.
+// came from and what the mutation tool said about its coverage.
 type drainSurvivor struct {
 	verify.Survivor
 	Package string
+	// ReportedNotCovered is the tool's own NOT COVERED status. Kept because the
+	// attribution ceiling is the DISAGREEMENT between this and go-cover, and a
+	// deriver that only saw one of the two could not detect it.
+	ReportedNotCovered bool
+}
+
+// coverageProfileFn is the coverage seam: it produces a go-cover profile over
+// the drained packages. Overridable so the classify path is testable without a
+// live test run, and so a caller with no working toolchain degrades to
+// "unknown" rather than to a wrong answer.
+var coverageProfileFn = runCoverageProfile
+
+// runCoverageProfile runs `go test -coverprofile` over pkgs and parses the
+// result. A failure is not fatal: coverage is EVIDENCE, and a drain that
+// refused to run without it would be less useful than one that reports
+// unknown — as long as unknown never reads as "not covered", which is
+// Profile's contract.
+func runCoverageProfile(repoRoot string, pkgs []string) *survivor.Profile {
+	out := filepath.Join(os.TempDir(), "dross-drain-cover.out")
+	args := append([]string{"test", "-count=1", "-coverprofile=" + out}, pkgs...)
+	cmd := exec.Command("go", args...)
+	cmd.Dir = repoRoot
+	// Output is discarded: a failing suite still produces a usable profile for
+	// the packages that did run, and the drain is not a test runner.
+	_ = cmd.Run()
+	prof, err := survivor.ParseProfile(out)
+	if err != nil {
+		return nil
+	}
+	return prof
 }
 
 // readRawReport parses one gremlins report and returns its survivors with
@@ -177,15 +209,69 @@ func readRawReport(path, pkg string) ([]drainSurvivor, error) {
 	if pkg != "" {
 		mutation.RePrefixGremlinsFiles(rep, pkg)
 	}
+	// Ceiling eligibility turns on whether the TOOL called this exact mutant
+	// NOT COVERED, so the status is read per mutant from the raw payload.
+	// mutation.Report folds LIVED and NOT COVERED into one Surviving list, and
+	// a file-granular approximation would let one uncovered mutant grant the
+	// ceiling to every other survivor in its file — accepting killable code.
+	notCovered, err := notCoveredPositions(b, pkg)
+	if err != nil {
+		return nil, err
+	}
+
 	out := make([]drainSurvivor, 0, len(rep.Surviving))
 	for _, m := range rep.Surviving {
 		if isTestdataPath(m.File) {
 			continue
 		}
 		out = append(out, drainSurvivor{
-			Survivor: verify.Survivor{File: m.File, Line: m.Line, Op: m.Op, Language: "go"},
-			Package:  pkg,
+			Survivor:           verify.Survivor{File: m.File, Line: m.Line, Op: m.Op, Language: "go"},
+			Package:            pkg,
+			ReportedNotCovered: notCovered[mutantPos(m.File, m.Line, m.Op)],
 		})
+	}
+	return out, nil
+}
+
+// mutantPos keys a mutant by the triple that identifies it within a report.
+func mutantPos(file string, line int, op string) string {
+	return file + ":" + strconv.Itoa(line) + ":" + op
+}
+
+// rawGremlinsPayload is the minimal view of the report needed to recover each
+// mutant's STATUS, which mutation.Report deliberately does not carry (it folds
+// LIVED and NOT COVERED into one Surviving list, because for scoring they are
+// the same thing). For deciding accept-vs-kill they are opposites.
+type rawGremlinsPayload struct {
+	Files []struct {
+		Filename  string `json:"file_name"`
+		Mutations []struct {
+			Type   string `json:"type"`
+			Status string `json:"status"`
+			Line   int    `json:"line"`
+		} `json:"mutations"`
+	} `json:"files"`
+}
+
+// notCoveredPositions returns the set of mutants the tool reported NOT COVERED,
+// keyed the same way the survivor list is, with pkg applied so the paths match.
+func notCoveredPositions(payload []byte, pkg string) (map[string]bool, error) {
+	var raw rawGremlinsPayload
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return nil, fmt.Errorf("read mutant statuses: %w", err)
+	}
+	prefix := strings.TrimPrefix(filepath.ToSlash(pkg), "./")
+	out := map[string]bool{}
+	for _, f := range raw.Files {
+		name := filepath.ToSlash(f.Filename)
+		if prefix != "" && prefix != "." && !strings.HasPrefix(name, prefix+"/") {
+			name = prefix + "/" + name
+		}
+		for _, m := range f.Mutations {
+			if m.Status == "NOT COVERED" {
+				out[mutantPos(name, m.Line, m.Type)] = true
+			}
+		}
 	}
 	return out, nil
 }
@@ -260,7 +346,7 @@ func survivorDrain() *cobra.Command {
 				phaseID = s.CurrentPhase
 			}
 
-			survivors, err := gatherDrainSurvivors(repoRoot, reports, packages)
+			survivors, drainedPackages, err := gatherDrainSurvivors(repoRoot, reports, packages)
 			if err != nil {
 				return err
 			}
@@ -316,12 +402,34 @@ func survivorDrain() *cobra.Command {
 				Print("0 unclassified")
 				return nil
 			}
+
+			// Attach the derived evidence, so kill-vs-accept is answered by
+			// code rather than by judgement repeated across ~91 near-identical
+			// entries. This is the whole reason the drain is worth running
+			// before the acceptance work rather than after it.
+			prof := coverageProfileFn(repoRoot, drainedPackages)
+			reported := map[string]bool{}
+			for _, s := range survivors {
+				reported[fmt.Sprintf("%s:%d", s.File, s.Line)] = s.ReportedNotCovered
+			}
+			killable := 0
 			for _, o := range outstanding {
 				line := fmt.Sprintf("  %s:%d (%s)", o.File, o.Line, o.Op)
 				if o.Note != "" {
 					line += " — " + o.Note
 				}
 				Print(line)
+				e := survivor.Derive(repoRoot, o.File, o.Line, o.Op, prof,
+					reported[fmt.Sprintf("%s:%d", o.File, o.Line)])
+				if e.Killable {
+					killable++
+				}
+				Printf("      coverage=%s applicable=%s%s → %s\n",
+					e.Coverage, e.Applicable, ceilingTag(e), e.Why)
+			}
+			if killable > 0 {
+				Printf("  %d of these are covered AND operator-applicable: kill them with a test. "+
+					"An acceptance on one of those is a coverage gap wearing a reason.\n", killable)
 			}
 			return fmt.Errorf("%d survivor(s) have no disposition: kill each with a test, "+
 				"accept it with `dross survivor accept --reason`, or route it with "+
@@ -343,17 +451,22 @@ func survivorDrain() *cobra.Command {
 // accumulates silently. A package whose report exists but holds only NOT
 // COVERED mutants is the opposite case: it WAS measured, and its survivors flow
 // into the normal classify path to be killed or accepted like any other.
-func gatherDrainSurvivors(repoRoot string, reports, packages []string) ([]drainSurvivor, error) {
+func gatherDrainSurvivors(repoRoot string, reports, packages []string) ([]drainSurvivor, []string, error) {
 	if len(reports) > 0 {
 		var out []drainSurvivor
+		var pkgs []string
 		for _, path := range reports {
-			found, err := readRawReport(path, reportStemToPackage(repoRoot, path))
+			pkg := reportStemToPackage(repoRoot, path)
+			found, err := readRawReport(path, pkg)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
+			}
+			if pkg != "" {
+				pkgs = append(pkgs, pkg)
 			}
 			out = append(out, found...)
 		}
-		return out, nil
+		return out, pkgs, nil
 	}
 
 	var pkgs []string
@@ -364,17 +477,17 @@ func gatherDrainSurvivors(repoRoot string, reports, packages []string) ([]drainS
 		pkgs, err = allGoPackages(repoRoot)
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(pkgs) == 0 {
 		// Nothing to do is not an error: a repo with no Go packages has no Go
 		// survivors, and erroring here would make the drain unusable as a gate.
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	unmeasured, err := drainRunner(repoRoot, pkgs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var blind []string
 	for _, u := range unmeasured {
@@ -384,7 +497,7 @@ func gatherDrainSurvivors(repoRoot string, reports, packages []string) ([]drainS
 		blind = append(blind, u.Message)
 	}
 	if len(blind) > 0 {
-		return nil, fmt.Errorf("%d package(s) were not measured, so nothing is known about them:\n  %s",
+		return nil, nil, fmt.Errorf("%d package(s) were not measured, so nothing is known about them:\n  %s",
 			len(blind), strings.Join(blind, "\n  "))
 	}
 
@@ -394,11 +507,20 @@ func gatherDrainSurvivors(repoRoot string, reports, packages []string) ([]drainS
 		found, err := readRawReport(path, pkg)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
-				return nil, fmt.Errorf("no report for package %s at %s — the package was not measured", pkg, path)
+				return nil, nil, fmt.Errorf("no report for package %s at %s — the package was not measured", pkg, path)
 			}
-			return nil, err
+			return nil, nil, err
 		}
 		out = append(out, found...)
 	}
-	return out, nil
+	return out, pkgs, nil
+}
+
+// ceilingTag renders the attribution-ceiling marker, empty when it does not
+// apply, so the evidence line stays one line.
+func ceilingTag(e survivor.Evidence) string {
+	if e.CeilingEligible {
+		return " ceiling-eligible=yes"
+	}
+	return ""
 }
