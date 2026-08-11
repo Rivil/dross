@@ -67,6 +67,45 @@
         }
       ]
     },
+    "t-13": {
+      "files": [
+        "internal/survivor/identity.go",
+        "internal/survivor/identity_test.go",
+        "internal/cmd/survivor.go",
+        "internal/cmd/survivor_test.go",
+        ".dross/survivors.toml",
+        ".dross/phases/survivor-lifecycle/spec.toml"
+      ],
+      "commit": "9861873",
+      "completed_at": "2026-08-10T19:16:49.465045Z",
+      "landmarks": [
+        {
+          "feature": "survivor identity",
+          "symbol": "scopeOf",
+          "loc": "internal/survivor/identity.go:166",
+          "what": "a repeated line's key is scoped by enclosing declaration and occurrence ordinal so each stays separately acceptable"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/cmd/hooks_test.go",
+        "internal/cmd/install_test.go",
+        "internal/cmd/rule_test.go",
+        "internal/cmd/survivor_drain_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "6241af6",
+      "completed_at": "2026-08-10T19:46:16.255159Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "TestRealGoListDirsSurfacesFailures",
+          "loc": "internal/cmd/survivor_drain_test.go:650",
+          "what": "single-guard command files and the drain's own real seams killed so the gate answers for its own code"
+        }
+      ]
+    },
     "t-15": {
       "files": [
         "internal/verify/scope_test.go",
@@ -177,6 +216,25 @@
           "symbol": "Retire",
           "loc": "internal/survivor/store.go:307",
           "what": "retire acceptances by key or --stale, dropping orphaned categories and writing nothing on a failed multi-key retire"
+        }
+      ]
+    },
+    "t-20": {
+      "files": [
+        ".dross/phases/survivor-lifecycle/spec.toml",
+        ".dross/phases/mutation-diff-scope/spec.toml",
+        ".dross/phases/dross-repair/spec.toml",
+        ".dross/phases/completion-state-truth/spec.toml",
+        "internal/cmd/survivor_backlog_repo_test.go"
+      ],
+      "commit": "1f600bb",
+      "completed_at": "2026-08-11T10:29:14.17619Z",
+      "landmarks": [
+        {
+          "feature": "survivor acceptance lifecycle",
+          "symbol": "TestSurvivorDrainBacklogClosed",
+          "loc": "internal/cmd/survivor_backlog_repo_test.go:237",
+          "what": "CI gate proving survivor-drain's routed backlog is empty and no survivor was re-routed past the phase"
         }
       ]
     },

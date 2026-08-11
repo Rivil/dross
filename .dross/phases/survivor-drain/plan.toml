@@ -139,7 +139,7 @@ task_seq = 0
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain` reports zero outstanding for those five files", "env.go 109/114/119 are each driven to their own failure message through `dross env` — an unwritable settings path, a nil env map and a failing mutation produce three distinct errors, so negating any one collapses two onto the same message", "env.go:105 is resolved explicitly: either a test drives the empty-secret path without a tty, or it is accepted with the term.ReadPassword seam named and the test pinning that seam cited — a bare \"needs a tty\" fails the t-5 audit", "env.go:148 is killed or accepted alongside the other four guards — the drain reports zero outstanding for env.go, all 5 mutants", "update.go 181/184 are pinned on path resolution: a failing os.Executable surfaces its error, and an executable behind a symlink resolves to the link target while an unresolvable one falls back to the unresolved path", "milestone_dependents.go:160's `len(vs)-1` is killed by a three-element input — `len(vs)+1` drops the \" and \" join, which the rendered string assertion catches", "milestone_dependents.go:158 is a switch-case condition: t-7's evidence decides kill versus ceiling-acceptance"]
-  status = "in_progress"
+  status = "done"
 
 [[task]]
   id = "t-14"
@@ -150,7 +150,7 @@ task_seq = 0
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-7"]
   test_contract = ["`dross survivor drain` reports zero outstanding for those five files", "each guard's test asserts both outcomes through the command's RunE, not by calling the helper with a hand-built struct that could never occur", "root.go:61's test drives the real cobra root command, so the guard is proven reachable from `dross` itself"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-15"
@@ -216,4 +216,4 @@ task_seq = 0
   covers = ["c-1", "c-2"]
   depends_on = ["t-8", "t-9", "t-10", "t-11", "t-12", "t-13", "t-14", "t-15", "t-16", "t-17", "t-18", "t-19"]
   test_contract = ["TestSurvivorDrainBacklogClosed fails if collectDeferred over the repo yields any entry with Target==\"survivor-drain\" and Dismissed==false — enforced by CI, not by a ship-time eyeball", "the same test fails if any survivor-keyed deferred entry is routed to a phase that sits AFTER survivor-drain in the milestone's phases array — the \"none is re-routed forward\" half of c-2. Survivor-keyed means the entry's text resolves to a `file.go:line (OP)` survivor identity; this phase's own two [[deferred]] entries are prose about phase-create adoption and adapter mutant-filtering, resolve to no identity, and are expected to pass while still routed forward to phase-create-adoption and mutation-score-truth", "after closure `dross survivor drain` still exits 0: dismissing a routed entry drops it out of routedSurvivors(), so a survivor closed by dismissal alone (never killed, never accepted) reappears as outstanding and fails the run", "the repo-wide run covers all 33 packages `go list ./...` reports and accounts for all 202 recorded non-killed mutants — every one killed, accepted, or gone as NOT VIABLE", "`dross deferred list --dismissed` still shows each closed item with its survivor key, so the drain is auditable after the fact"]
-  status = "pending"
+  status = "done"
