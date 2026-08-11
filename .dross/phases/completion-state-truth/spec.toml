@@ -53,7 +53,7 @@
 [[deferred]]
   text = "Drain the standing 75 pre-existing mutation survivors (status.go, phase.go 307/309/735/737, ship.go, doctor.go, hints.go, env.go, gitignore.go, footer_coverage.go and the rest) accumulated before this phase."
   why = "Routed rather than fixed here: they sit outside completion-state-truth's diff and its six criteria. Held with the r-02 enforcement work so the rule and the first drain land together."
-  target = "survivor-drain"
+  dismissed = true
 
 [[deferred]]
   text = "Widen the narrated-command parity guard past backticked forms. TestNarratedCommandsResolveAgainstTheTree lifts `dross <verb> [<sub>]` only from backticked spans inside string literals, so an unbackticked narrated invocation escapes it — doctor.go:192 (\"    Fix: dross project set --unset board.state_map.%s\") and hooks.go:57-58 (\"dross pause --auto\", \"dross reentry\") are live examples today. A concatenation-split form (\"…`dross \" + \"checkout`…\") escapes it for the same reason, since each literal is inspected separately."
