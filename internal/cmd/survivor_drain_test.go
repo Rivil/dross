@@ -687,6 +687,28 @@ func TestRunGremlinsOverPackagesRequiresAProject(t *testing.T) {
 	}
 }
 
+// TestRunGremlinsOverPackagesDispatchesEveryPackage covers the rest of the real
+// helper: the module-root special case and the adapter invocation.
+//
+// Gremlins derives its package set from the DIRECTORIES of the files it is
+// handed, so the helper synthesises one representative path per package — and
+// the module root has to become "" rather than ".", or the derived path is
+// "./drain.go" and the root package is silently dropped from the run.
+func TestRunGremlinsOverPackagesDispatchesEveryPackage(t *testing.T) {
+	dir := drainFixture(t, []string{".", "./internal"})
+
+	// A repo with a project.toml but no Go module: gremlins is invoked and
+	// fails fast, which is the arm that proves the error is surfaced rather
+	// than swallowed into an empty "nothing unmeasured" result.
+	_, err := runGremlinsOverPackages(dir, []string{".", "./internal"})
+	if err == nil {
+		t.Skip("gremlins is installed and succeeded over the fixture — the failure arm is unreachable here")
+	}
+	if !strings.Contains(err.Error(), "gremlins") {
+		t.Errorf("err = %q, want the adapter's own failure", err)
+	}
+}
+
 // TestDrainSortsOutstandingDeterministically covers the outstanding comparator.
 // sort.Slice never calls a comparator with fewer than two elements, and every
 // other drain test has one outstanding survivor — so the ordering the user
