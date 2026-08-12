@@ -11,7 +11,7 @@ task_seq = 10
   description = "A pure classifier over (milestone toml status, origin/milestone/<v> presence, ancestry vs\norigin/<main> and vs the recorded base) returning alreadyFinalized / branchGone / merged(target) /\nunmerged, plus its rendered message. milestoneFinalize consumes it in t-4; nothing in milestone.go\nchanges yet.\n"
   covers = ["c-2", "c-3"]
   test_contract = ["status=\"complete\" with origin/milestone/<v> deleted classifies alreadyFinalized without any ancestry query — the fixture with no branch anywhere still classifies finalized (locked already_finalized_evidence)", "origin/milestone/<v> absent with status=\"active\" classifies branchGone, and the rendered message contains \"gone\" and does NOT contain \"is not merged into\"", "origin/milestone/<v> present and genuinely unmerged classifies unmerged, and the message still contains \"is not merged into origin/\" — the existing refusal survives for the case it was written for", "a child merged into its recorded base but not into origin/main classifies merged with target = the base branch; the existing stacking arm (milestone.go:279-298) is pinned, not rewritten (locked stacked_child_status)", "branchGone's message names `dross milestone set <v> status complete` as the remedy — the path exists in milestoneSettablePaths (milestone.go:771)"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-2"
@@ -21,7 +21,7 @@ task_seq = 10
   description = "staleMilestoneBranches resolves its comparison ref to refs/remotes/origin/<main> when it exists,\nfalling back to refs/heads/<main> only when origin carries no such ref. Both the ancestry arm\n(isAncestor) and the squash-content walk (resolveSquashCommit) use the resolved ref.\n"
   covers = ["c-6"]
   test_contract = ["milestone/v1.0 squash-merged onto LOCAL main only is absent from staleMilestoneBranches; after `git push origin main` on the identical fixture it is returned with Reason == \"squash-merged\" — the two runs differ only in origin/main's position, so a detector still reading local main fails the first half", "the ancestry arm follows the same resolved ref: a branch fast-forwarded into local main with origin/main behind is not reported merged", "a repo with NO origin/<main> ref at all still reports a locally-merged milestone branch, non-empty and without error — the fallback is exercised, not just declared"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -31,7 +31,7 @@ task_seq = 10
   description = "`dross milestone remove [version] <list.path> \"<exact value>\"` and `dross milestone replace\n[version] <list.path> \"<old>\" \"<new>\"` over phases / scope.success_criteria / scope.non_goals,\nsharing normalizeListField (milestone.go:847) and add's version defaulting. A non-matching value is\nan error. Both registered in Milestone().\n"
   covers = ["c-7"]
   test_contract = ["`remove v1.3 phases b` on [a,b,c] leaves exactly [a,c] with order preserved — a swap-with-last implementation fails", "the identical second remove exits non-zero quoting the missing value AND the toml bytes read back byte-identical; a silent no-op fails both halves (locked remove_addressing)", "`replace v1.3 phases b x` on [a,b,c] yields [a,x,c] — the entry keeps index 1, so a phase-order fix is not a reorder", "a scalar path (milestone.title) errors naming the three valid list fields and leaves the toml byte-identical", "bare list names resolve as add does: `remove v1.3 success_criteria \"<t>\"` and `remove v1.3 scope.success_criteria \"<t>\"` hit the same field", "README's `dross milestone {…}` row names `remove` and `replace`, same grep-guard shape as TestReadmeMilestoneRowDocumentsBaseFlag (milestone_narration_test.go:61)"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-9"
@@ -41,7 +41,7 @@ task_seq = 10
   description = "Add Changes.Status (\"shipped\" | \"complete\") to changes.json. `dross ship` writes \"shipped\"\nalongside the PR number it already commits (ship.go:374); `dross phase complete` writes \"complete\"\nnext to its existing breadcrumb save (phase.go:560). Includes a one-off backfill of v1.3's already\nfinished phases (mutation-diff-scope, survivor-lifecycle, survivor-drain), whose breadcrumbs the\n50-entry history cap has already evicted. This is the per-phase-durable signal locked\nphases_done_test names; state history stays a supplementary OR-arm in t-6.\n"
   covers = ["c-4"]
   test_contract = ["after `dross phase complete <id>` the phase's changes.json reads status = \"complete\", and re-running complete over an already-recorded phase leaves it \"complete\" rather than reverting to \"shipped\"", "after `dross ship` the phase's changes.json reads status = \"shipped\" and carries the PR number in the same write — a ship that records pr but no status fails the assertion", "a changes.json written before this field existed (no `status` key) Loads without error and reports the empty string, so every pre-existing phase record stays readable", "the three finished v1.3 phase dirs read status \"complete\" after the backfill, asserted per-slug rather than by count", "status survives a subsequent Record() of a task: loading, recording, saving and reloading leaves status unchanged — the field is not dropped by the append-only task write path"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-4"
@@ -52,7 +52,7 @@ task_seq = 10
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-1"]
   test_contract = ["after `dross milestone complete <v> --finalize` on a merged milestone, .dross/milestones/<v>.toml reads [milestone].status = \"complete\" — dropping the Save fails the field assertion", "the second --finalize exits 0, prints \"already finalized\", and its combined output contains NEITHER \"is not merged into\" NOR any git delete attempt", "a child merged only into its recorded parent base finalizes to status=\"complete\" while local main's SHA is unchanged (locked stacked_child_status)", "ordering: with a pre-receive hook on the bare origin rejecting branch deletes, finalize returns an error naming the failed remote delete, YET <v>.toml already reads status=\"complete\" and the re-run exits 0 already-finalized", "leftover report: status=\"complete\" with refs/heads/milestone/<v> still present prints the branch name and points at `dross milestone prune`, and deletes no ref — re-checked with rev-parse --verify after the run", "c-3 at the command level: with origin/milestone/<v> absent and status=\"active\", `dross milestone complete <v> --finalize` emits a message containing \"gone\" and NOT containing \"is not merged into\" — an implementation that classifies branchGone correctly but still prints milestoneFinalize's old refusal fails here", "one refusal path only: the literal \"is not merged into\" appears exactly once in internal/cmd, so the classifier's message and a surviving inline copy cannot drift apart"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -63,7 +63,7 @@ task_seq = 10
   covers = ["c-5"]
   depends_on = ["t-2"]
   test_contract = [".dross/milestones/v1.0.toml at status=\"active\" with milestone/v1.0 squash-merged is absent from staleMilestoneBranches AND `dross doctor` prints no \"Stale milestone branches:\" section; flipping that ONE field to \"complete\" makes both report it, nothing else in the fixture moving", "milestone/v9.9 with no toml is never reported, even when squash-merged (locked toml_less_branch_not_stale) — a distinct fixture from the above because no status was read", "status=\"planning\" (branch cut, work not started) is likewise absent", "`dross milestone prune` leaves an active milestone's squash-merged branch in place — prune consumes the same gated detector, so the doctor fix cannot drift from the destructive consumer", "doctor's issue count is unchanged by the gate when the milestone is complete — the section still counts toward a non-zero exit"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-6"
@@ -74,7 +74,7 @@ task_seq = 10
   covers = ["c-4"]
   depends_on = ["t-3", "t-9"]
   test_contract = ["a phase dir whose changes.json reads status=\"complete\" counts done with NO breadcrumb anywhere in state history — the case history-only doneness gets wrong today (mutation-diff-scope: verdict pass, PR 79, zero breadcrumbs)", "run against this repo's real .dross, v1.3 reports mutation-diff-scope, survivor-lifecycle and survivor-drain as done and does not list them under `remaining`", "phases=[a,b] with only a marked complete: --json reports done=1, remaining=[\"b\"], all_done=false", "a slug in `phases` with NO directory under .dross/phases/ counts not-done and is listed under `unscaffolded`, even when history carries \"completed <slug>\" (locked phases_done_test) — an implementation counting array entries, or one skipping missing dirs, fails here", "a phase whose only evidence is status=\"shipped\" counts as done, and one with no marker and no breadcrumb counts not-done even when verify.toml reads verdict=\"pass\" — verified is not complete", "the history fallback matches the action token, not a substring: with `completed mutation-diff-scope` in history and both `mutation-diff` and `mutation-diff-scope` listed in phases, the shorter slug is NOT counted done (historyHasAction is strings.Contains, phase.go:39-44)", "emitted `status` is [milestone].status verbatim, and the exit code is 0 in every arm including status=\"planning\" — this is dispatch data, not a gate", "no version arg and no state.current_milestone exits non-zero with the no-current-milestone message, not a nil-deref"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-7"
@@ -85,7 +85,7 @@ task_seq = 10
   covers = ["c-4"]
   depends_on = ["t-4", "t-6"]
   test_contract = ["the `dross milestone progress --json` invocation appears BEFORE the \"## 2. Title\" heading — scoping is an arm of the dispatch, not the default path", "the all-done arm names `dross milestone complete` and `--finalize` and states \"merge commit\" and \"not squash\" INSIDE that same arm — dropping the squash gate fails the assertion pinning c-4's gating merge-commit-not-squash", "the outstanding arm names the `remaining` field and routes to /dross-spec, never reaching `dross milestone create` or the success-criteria walk, and does not use `phase list` or verify.toml as the source of doneness", "the prompt names the already-finalized outcome (re-running --finalize is safe) so dispatch never treats it as an error state", "the pre-flight still runs `dross rule show` + `dross interaction show`, and milestone.md still carries NO clear-point sentinel — the interaction-coverage and footer-audit Exempt gates stay green", "arm precedence is stated: the prompt branches on `status` BEFORE `all_done`, so a just-finalized milestone (status \"complete\", every phase done, current_milestone still set) routes to scoping the next one rather than re-running completion — the two arms cannot both fire", "the no-milestone arm names `progress`'s non-zero exit and its no-current-milestone message as the trigger for scoping, so the dispatch reads that failure as an arm rather than as a broken command"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-8"
@@ -96,4 +96,4 @@ task_seq = 10
   covers = ["c-1", "c-2", "c-3", "c-5"]
   depends_on = ["t-4", "t-5"]
   test_contract = ["step 1: an active milestone whose branch is merged to origin/main is returned by staleMilestoneBranches as nothing — the active gate holds while finalize has not run", "step 2: --finalize leaves <v>.toml status \"complete\" AND both refs/heads/milestone/v1.0 and refs/remotes/origin/milestone/v1.0 absent", "step 3: re-running --finalize exits 0 printing \"already finalized\" with no \"is not merged into\" anywhere in the output", "step 4: recreating milestone/v1.0 at the merged commit makes the same detector NOW return it with Reason \"merged\" — a finalized milestone's leftover branch IS prunable, which is the outcome reverting either the flip or the gate destroys"]
-  status = "pending"
+  status = "done"
