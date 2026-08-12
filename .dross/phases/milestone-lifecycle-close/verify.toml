@@ -1,0 +1,104 @@
+[verify]
+  phase = "milestone-lifecycle-close"
+  generated_at = 2026-08-12T14:52:26.647386Z
+  verdict = "fail"
+  finalized = true
+  finalized_at = 2026-08-12T15:27:13.695462Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9525423728813559
+  mutants_killed = 562
+  mutants_survived = 28
+  mutants_not_covered = 28
+  mutants_in_scope = 590
+  unclassified_in_scope = 4
+  criteria_total = 7
+  criteria_covered = 6
+  criteria_uncovered = 1
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/milestone_finalize_test.go:TestFinalizeWritesCompleteStatus", "internal/cmd/milestone_finalize_test.go:TestFinalizeRecordsStatusBeforeTeardown", "internal/cmd/milestone_finalize_test.go:TestFinalizeStackedChildFlipsStatus", "internal/cmd/milestone_lifecycle_close_test.go:TestMilestoneLifecycleCloseSeam (step 2)"]
+  notes = "Status assertion is read back off the toml, not off narration. Ordering is pinned separately: with a pre-receive hook rejecting the remote delete, the run errors YET the toml already reads complete — dropping the Save or moving it after teardown fails one of the two."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/milestone_finalize_test.go:TestFinalizeSecondRunSaysAlreadyFinalized", "internal/cmd/milestone_finalize_state_test.go:TestClassifyAlreadyFinalizedNeedsNoBranch", "internal/cmd/milestone_finalize_test.go:TestFinalizeReportsLeftoverBranchWithoutDeleting", "internal/cmd/milestone_lifecycle_close_test.go:TestMilestoneLifecycleCloseSeam (step 3)"]
+  notes = "The re-run asserts all three halves — exit 0, \"already finalized\" present, \"is not merged into\" absent — plus that no branch was resurrected. The classifier test reaches the arm with no ref anywhere, so a status-blind implementation cannot pass it."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/milestone_finalize_test.go:TestFinalizeBranchGoneIsNotReportedAsUnmerged", "internal/cmd/milestone_finalize_state_test.go:TestClassifyBranchGoneIsNotUnmerged", "internal/cmd/milestone_finalize_state_test.go:TestClassifyBranchGoneNamesTheRemedy", "internal/cmd/milestone_finalize_state_test.go:TestClassifyUnmergedKeepsTheRefusal", "internal/cmd/milestone_finalize_test.go:TestOneUnmergedRefusalInCmd"]
+  notes = "Asserted at both levels — classifier and command — so a correct classifier printed over by the old inline refusal still fails. TestOneUnmergedRefusalInCmd counts the literal across internal/cmd non-test sources and requires exactly 1, which is what stops the two texts drifting."
+
+[[criterion]]
+  id = "c-4"
+  status = "weak"
+  tests = ["internal/cmd/milestone_dispatch_prompt_test.go:TestMilestonePromptDispatchesBeforeScoping", "internal/cmd/milestone_dispatch_prompt_test.go:TestMilestonePromptAllDoneArmGatesTheMerge", "internal/cmd/milestone_dispatch_prompt_test.go:TestMilestonePromptOutstandingArmOnlyReports", "internal/cmd/milestone_dispatch_prompt_test.go:TestMilestonePromptStatesArmPrecedence", "internal/cmd/milestone_progress_test.go:TestProgressCountsDurableMarkerWithoutBreadcrumb", "internal/cmd/milestone_progress_test.go:TestProgressUnscaffoldedSlugIsNotDone", "internal/cmd/milestone_progress_test.go:TestProgressHistoryFallbackMatchesWholeSlug", "internal/cmd/milestone_progress_test.go:TestProgressAgainstThisRepo"]
+  notes = "The dispatch data and the prompt arms are both well pinned — prompt assertions are section-scoped so one arm's wording cannot satisfy another's, and the doneness rule is tested against the real .dross. Downgraded to weak on the mutation cross-check: four in-hunk survivors on milestone_progress.go:76,79 show the command's human-readable arm is exercised by nothing. Every progress test reads --json (progressJSON helper), so both output guards can be negated or loosened with no test noticing."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/milestone_stale_test.go:TestStaleGatesOnMilestoneStatus", "internal/cmd/milestone_stale_test.go:TestStalePlanningMilestoneIsNotStale", "internal/cmd/milestone_stale_test.go:TestStaleTomlLessBranchIsNotStale", "internal/cmd/doctor_test.go:TestDoctorStaleSectionGatesOnMilestoneStatus", "internal/cmd/milestone_lifecycle_close_test.go:TestMilestoneLifecycleCloseSeam (steps 1, 4)"]
+  notes = "Both the detector and doctor's rendered section are asserted, and both do it by flipping exactly one toml field on an otherwise identical fixture — so a detector that simply stopped reporting anything fails the second half. The seam test adds the pairing t-4 and t-5 cannot each see alone."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/milestone_stale_test.go:TestStaleIgnoresLocalOnlyMerge", "internal/cmd/milestone_stale_test.go:TestStaleAncestryArmFollowsOriginToo", "internal/cmd/milestone_stale_test.go:TestStaleFallsBackToLocalMainWithoutOrigin"]
+  notes = "The primary test runs the identical fixture twice, differing only in whether main was pushed, so a detector still reading refs/heads/main fails the first half. The ancestry arm is covered separately with a precondition proving local main really does contain the branch, and the no-origin fallback is exercised rather than asserted."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/milestone_listedit_test.go:TestMilestoneRemovePreservesOrder", "internal/cmd/milestone_listedit_test.go:TestMilestoneRemoveMissingValueErrors", "internal/cmd/milestone_listedit_test.go:TestMilestoneReplaceKeepsPosition", "internal/cmd/milestone_listedit_test.go:TestMilestoneRemoveRejectsScalarPath", "internal/cmd/milestone_listedit_test.go:TestMilestoneRemoveAcceptsFieldAliases", "internal/cmd/milestone_listedit_test.go:TestMilestoneRemoveDefaultsToCurrentMilestone", "internal/cmd/milestone_listedit_test.go:TestReadmeMilestoneRowDocumentsListEdits"]
+  notes = "The locked remove_addressing contract is asserted on both halves — non-zero exit quoting the missing value AND byte-identical toml — so a silent no-op fails twice. Order preservation and index-stable replace are checked against the array, not the exit code."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/milestone_progress.go:76 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/milestone_progress.go:76 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/milestone_progress.go:79 (CONDITIONALS_BOUNDARY)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/milestone_progress.go:79 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "`dross milestone progress`'s human-readable output path (milestone_progress.go:75-84) has no test at all — every progress test goes through --json via the progressJSON helper. Drain decision (user, this run): KILL, not accept or route. Add one test invoking `progress` without --json asserting the `remaining:` and `not scaffolded yet:` lines appear when their slices are non-empty and are absent when empty, then re-run /dross-verify."
+
+[[finding]]
+  severity = "FLAG"
+  text = "t-5's test contract named a case pinning `dross milestone prune` on an ACTIVE milestone's squash-merged branch, and no such test exists — the prune suite only ever seeds status=complete (seedCompleteMilestone, milestone_prune_test.go:31). The gate is proven at the detector and at doctor, so the behaviour is right; what is unpinned is the destructive consumer's own end of it."
+
+[[finding]]
+  severity = "NOTE"
+  text = "24 of the 28 in-scope survivors were already accepted before this run (gremlins' switch-case / const-initializer attribution ceiling, plus two dead-by-construction arms). 60 further out-of-scope survivors were filtered out by the phase's change set. Efficacy excluding not-covered mutants is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-4's prompt half can only ever be verified by assertions over assets/prompts/milestone.md's text — .md has no mutation adapter, so the dispatch arms carry no mutation evidence either way. The assertions are section-scoped, which is the strongest available substitute."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Surface discrepancy in dross itself: `dross verify`'s stdout reported `survivors: 4 in-diff, 0 routed, 71 accepted, 0 unclassified` while the verify.toml it wrote in the same run set unclassified_in_scope = 4 and seeded four BLOCKING findings from them. Both are describing the same four in-diff survivors under different vocabularies; the stdout line reads as an all-clear when the gate is in fact open."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/milestone.md: no mutation adapter for .md"
