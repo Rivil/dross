@@ -13,10 +13,10 @@ import (
 //
 // The classification exists because the old inline guard collapsed three
 // different situations into one refusal. A milestone that had already been
-// finalized, and one whose branch was deleted by hand, both came back as
-// "origin/milestone/<v> is not merged into origin/<main> yet" — a message that
-// is false in both cases and points at a PR that already merged. Separating the
-// states is the whole point: each one gets its own message and its own arm.
+// finalized, and one whose branch was deleted by hand, both came back as the
+// unmerged-branch refusal below — a message that is false in both cases and
+// points at a PR that already merged. Separating the states is the whole point:
+// each one gets its own message and its own arm.
 
 // milestoneStatusComplete is the [milestone].status a finalized milestone
 // carries — one of configenum.MilestoneStatuses. It gets a name here because it
