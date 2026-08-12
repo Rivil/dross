@@ -1,5 +1,7 @@
 {
   "phase": "survivor-drain",
+  "pr": 82,
+  "base": "milestone/v1.3",
   "tasks": {
     "t-1": {
       "files": [
