@@ -1,0 +1,128 @@
+[verify]
+  phase = "survivor-drain"
+  generated_at = 2026-08-12T05:57:17.064278Z
+  verdict = "fail"
+  finalized = true
+  finalized_at = 2026-08-12T06:52:30.506341Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9021739130434783
+  mutants_killed = 332
+  mutants_survived = 36
+  mutants_not_covered = 36
+  mutants_in_scope = 368
+  unclassified_in_scope = 24
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/survivor_drain_test.go:110:TestDrainReportsUndisposedSurvivor", "internal/cmd/survivor_drain_test.go:308:TestDrainCoversEveryGoPackage", "internal/cmd/survivor_drain_test.go:227:TestDrainFailsOnUnmeasuredPackage", "internal/cmd/survivor_drain_test.go:482:TestDrainExcludesTestdataFixtures"]
+  notes = "TestDrainReportsUndisposedSurvivor is the criterion at the command boundary in both directions: an undisposed survivor makes the drain exit non-zero and names it, and the same survivor with an acceptance exits 0 printing the zero-outstanding sentinel. TestDrainCoversEveryGoPackage pins the repo-wide scope the drain_scope decision locks (dispatch asserted per package, not just in aggregate), and TestDrainFailsOnUnmeasuredPackage keeps absence-of-evidence from reading as clean. Confirmed live against freshly re-measured reports during this verify: `dross survivor drain` -> 106 classified, 106 accepted, 0 routed, 0 outstanding, exit 0."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/survivor_backlog_repo_test.go:237:TestSurvivorDrainBacklogClosed", "internal/cmd/survivor_backlog_repo_test.go:149:TestSurvivorBacklogAuditCatchesItsFailureShapes", "internal/cmd/survivor_drain_test.go:142:TestDrainCannotBeClosedByRoutingToItself", "internal/cmd/survivor_drain_test.go:173:TestDrainCountsDismissedDeferredAsOutstanding"]
+  notes = "TestSurvivorDrainBacklogClosed runs the audit over this repo's real spec files, so the claim is enforced by CI rather than by a ship-time eyeball, and it t.Fatals when no deferred entries are found so it cannot pass vacuously. Its checker is itself tested from both sides by TestSurvivorBacklogAuditCatchesItsFailureShapes, which pins four legitimate entry shapes as NOT flagged -- the half that stops the gate from being deleted for noise. TestDrainCannotBeClosedByRoutingToItself closes the obvious laundering route. Confirmed live: `dross deferred list --target survivor-drain` -> no deferred items."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/survivor/reasons_repo_test.go:181:TestRepoAcceptanceReasonsCiteRealTests", "internal/survivor/reasons_repo_test.go:111:TestReasonAuditCatchesUncheckableProse", "internal/cmd/survivor_test.go:57:TestSurvivorAcceptRequiresAReason", "internal/cmd/survivor_drain_test.go:550:TestDrainAttachesEvidenceToEachOutstanding"]
+  notes = "The strongest mapping in the phase: auditReasons resolves each acceptance's EFFECTIVE reason (its own prose or the category's, so a shared category cannot launder an uncheckable one), extracts every Go test name from it, and fails if the reason names no test or names one that does not exist in this repo. That makes 'concrete checkable justification' machine-checked over all 107 live acceptances rather than reviewed by eye."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/mutation/gremlins_test.go:724:TestGremlinsUnmeasuredDistinguishesSkipKinds", "internal/mutation/stryker_test.go:440:TestStrykerRunDistinguishesMissingFromUnreadable", "internal/mutation/stryker_test.go:487:TestStrykerRunSurfacesParseError", "internal/mutation/stryker_test.go:512:TestStrykerRunUnknownStatusCountsAsError", "internal/mutation/stryker_net_test.go:331:TestStrykerNetBuildCmdPrefix"]
+  notes = "All six named seams are killed by real tests, and the assertions are tight enough to catch the breakage rather than the code path. The gremlins test pins the unreadable-report and zero-coverage messages as exact strings including their concatenations, and asserts the two are distinguishable as DATA (Kind) and not only by prose. The stryker trio separates missing from unreadable, refuses a nil report alongside a parse error, and drives the status switch's default arm from a fixture whose premise ('Quantum') is guarded, counting an unknown status as an exact equality so a decrement yields -1."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/mutation/ceiling_test.go:175:TestAttributionCeilingIsReal", "internal/mutation/ceiling_test.go:209:TestConstInitializerHasNoCoverageBlock", "internal/mutation/ceiling_test.go:252:TestStringConcatArithmeticMutantIsNoOp"]
+  notes = "A demonstration, not an assertion: the test takes a live `go test -coverprofile` run over the testdata/ceiling fixture, asserts count>=1 on the switch-case condition line, and asserts the recorded gremlins report marks that same line NOT COVERED -- with an explicit failure message for the case where re-recording it as covered would dissolve the category. The const half carries its own distinct evidence (no coverage block at all, not a zero-count block) and the string-concat half deliberately cuts the other way, which is what justifies the amended bogus_arithmetic_class split rather than one blanket acceptance."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/verify/verify_test.go:1297:TestUnclassifiedInScopeCountsOnlyUndisposedSurvivors", "internal/verify/verify_test.go:1390:TestUnclassifiedInScopeExcludesOutOfScope", "internal/cmd/verify_prompt_test.go:115:TestVerifyPromptGatesOnUnclassifiedCount", "internal/cmd/verify_prompt_test.go:142:TestVerifyPromptCarriesNoScoreCutoffs"]
+  notes = "The count is asserted per lifecycle state, including that an unresolvable identity cannot fall out of the count by being unreadable, and that out-of-scope survivors are excluded so the standing backlog does not fail every phase. The prompt-side test keeps the doc in step: the measured branch's fail bullet must name unclassified_in_scope, and the old score cutoffs must not reappear as coaching. This criterion is also demonstrated by this very run -- the gate fired on 24 in-scope survivors and produced the fail below, which is the behaviour c-6 specifies working as designed."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/survivor_test.go:466:TestSurvivorRetireByKey", "internal/cmd/survivor_test.go:414:TestSurvivorRetireStaleSparesTheUnverifiable", "internal/survivor/store_test.go:414:TestRetireAbsentKeyWritesNothing", "internal/survivor/store_test.go:442:TestRetireKeepsEveryUntouchedEntry", "internal/survivor/store_test.go:484:TestRetireDropsOrphanedCategory", "internal/survivor/store_test.go:516:TestRetireMultiKeyFailureWritesNothing"]
+  notes = "Retirement exists at both layers and the store half is tested for the destructive failure modes a hand-edit would otherwise cause: an absent key writes nothing, untouched entries survive, an orphaned category is dropped with its last referent, and a multi-key failure is all-or-nothing rather than partially applied."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "internal/verify has no testdata exclusion, so the ceiling proof fixture is classified as this phase's own undisposed debt. isTestdataPath is applied in internal/cmd/survivor_drain.go:224 but has no counterpart in internal/verify's in-scope classifier. The same repo state therefore reads as `0 unclassified` from `dross survivor drain` and `unclassified_in_scope = 24` from `dross verify` in this run. This is the root cause of the six findings below, and the only finding of the seven that is a defect rather than a consequence."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/mutation/testdata/ceiling/ceiling.go:13 (ARITHMETIC_BASE) — the const initializer `const Greeting = \"hello\" + \", \" + \"world\"`. Unkillable by construction: TestConstInitializerHasNoCoverageBlock proves go-cover emits no block for it at all, so gremlins never compiles the mutant."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/mutation/testdata/ceiling/ceiling.go:20 (CONDITIONALS_BOUNDARY) — the switch-case condition `case r >= 'a' && r <= 'z':`, the attribution-ceiling subject TestAttributionCeilingIsReal asserts must stay NOT COVERED."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/mutation/testdata/ceiling/ceiling.go:20 (CONDITIONALS_NEGATION) — same switch-case condition, negation operator."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/mutation/testdata/ceiling/ceiling.go:22 (CONDITIONALS_BOUNDARY) — the second switch-case condition `case r >= '0' && r <= '9':`."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/mutation/testdata/ceiling/ceiling.go:22 (CONDITIONALS_NEGATION) — same condition, negation operator."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/mutation/testdata/ceiling/ceiling.go:32 (ARITHMETIC_BASE) — the string-concatenation line in Describe. Note this one is recorded KILLED in the fixture's own gremlins-report.json, which the proof test drives by explicit path; it survives here only because the fixture lives under testdata/ where `go test ./...` never runs it, so nothing covers the line in an ordinary run."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The 24 counted in unclassified_in_scope are 6 distinct (file,line,op) mutants, each listed 4 times by duplicate column entries in the gremlins report. The six BLOCKING findings above are the deduplicated set; the count is left at the raw 24 the CLI computed. The drain applies the same (file,line,type) collapse when it classifies."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Live repo-wide drain re-run during this verify, against reports re-measured by this run: 106 survivor(s) classified — 106 accepted, 0 routed, 0 outstanding, 0 unclassified, exit 0. This is c-1's claim confirmed against fresh measurement rather than inherited from the phase's own execution."
+
+[[finding]]
+  severity = "NOTE"
+  text = ".dross/survivors.toml holds 107 acceptances while the drain classifies 106 — one acceptance with no matching survivor in the current reports. `dross survivor list --stale` reports no stale acceptances, so the entry's line still exists in source; only its survivor is gone. Non-gating by the locked staleness_handling decision, and retirable through `dross survivor retire` if it is confirmed dead."
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation scope is degraded (source: changes-only) — changes.json records no base branch, so no git diff could be taken; git contributed no files; scope is changes.json only and misses anything unrecorded"
+
+[[finding]]
+  severity = "NOTE"
+  text = "Every in-scope survivor carries origin=inherited, including the fixture this phase created. That tag is unreliable in this run: with no base branch resolved there is no hunk information, so nothing could be tagged in-hunk. The origin weighting in the cross-check was therefore not usable as evidence either way."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The other 12 in-scope survivors (internal/cmd/survivor.go:290, internal/survivor/evidence.go:190/317/319/321/324, internal/survivor/store.go:157/160/164) are already accepted with reasons that cite real tests, and are silent by decision rather than by omission."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/verify.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/testdata/ceiling/gremlins-report.json: no mutation adapter for .json"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/testdata/stryker-unknown-status.json: no mutation adapter for .json"
