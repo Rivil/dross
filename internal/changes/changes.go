@@ -30,9 +30,28 @@ type Changes struct {
 	// complete` reconciles against, instead of re-deriving a base from
 	// current_milestone (which goes wrong the moment a stale milestone branch
 	// is sitting in the local repo). Phase-scoped for the same reason PR is.
-	Base  string                `json:"base,omitempty"`
-	Tasks map[string]TaskRecord `json:"tasks"`
+	Base string `json:"base,omitempty"`
+	// Status is how far this phase got: StatusShipped once its PR is open,
+	// StatusComplete once `dross phase complete` reconciled it. Empty on every
+	// record written before the field existed, which reads as "unknown", not
+	// "not done".
+	//
+	// It exists because the only durable evidence of a finished phase used to
+	// be the "completed <id>" breadcrumb in state.json's history — and that
+	// history is capped at 50 entries. mutation-diff-scope's breadcrumb had
+	// already been evicted while the phase was plainly done (verdict pass, PR
+	// 79 merged), so anything counting doneness from history alone was reading
+	// a window, not a record. This field is per-phase and never scrolls.
+	Status string                `json:"status,omitempty"`
+	Tasks  map[string]TaskRecord `json:"tasks"`
 }
+
+// The two values Status takes. Ordered: a phase reaches shipped first and
+// complete after, and SetStatus refuses to walk that backwards.
+const (
+	StatusShipped  = "shipped"
+	StatusComplete = "complete"
+)
 
 type TaskRecord struct {
 	Files       []string   `json:"files"`
@@ -160,6 +179,26 @@ func SetBase(root, phaseID, branch string) error {
 		return err
 	}
 	c.Base = branch
+	return c.Save(path)
+}
+
+// SetStatus records how far the phase got, mirroring SetPR's load-set-save.
+//
+// It is monotonic: once a phase reads StatusComplete, a later StatusShipped
+// write is dropped rather than applied. Re-shipping a completed phase (a
+// follow-up PR against the same phase dir) is a real thing to do, and it must
+// not make a finished phase look unfinished to everything that reads this
+// marker.
+func SetStatus(root, phaseID, status string) error {
+	path := FilePath(root, phaseID)
+	c, err := Load(path, phaseID)
+	if err != nil {
+		return err
+	}
+	if c.Status == StatusComplete && status == StatusShipped {
+		return nil
+	}
+	c.Status = status
 	return c.Save(path)
 }
 

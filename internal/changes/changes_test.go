@@ -417,3 +417,82 @@ func TestLandmarkRoundTrip(t *testing.T) {
 		t.Errorf("landmark[1] value lost its = or · through JSON: %q", lms[1].What)
 	}
 }
+
+// TestStatusAbsentFromOldRecordReadsEmpty: every changes.json written before
+// this field existed has to keep loading. An empty Status means "unknown", and
+// callers treat that as not-done rather than erroring on it.
+func TestStatusAbsentFromOldRecordReadsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "changes.json")
+	if err := os.WriteFile(path, []byte(`{"phase":"old-phase","pr":12,"tasks":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Load(path, "old-phase")
+	if err != nil {
+		t.Fatalf("a record without status must still load: %v", err)
+	}
+	if got.Status != "" {
+		t.Errorf("status = %q, want empty for a pre-field record", got.Status)
+	}
+	if got.PR != 12 {
+		t.Errorf("the rest of the record was lost: %+v", got)
+	}
+}
+
+// TestSetStatusIsMonotonic: shipping again after completion must not walk the
+// marker backwards. Everything that counts finished phases reads this field, so
+// a downgrade would make a done phase look outstanding.
+func TestSetStatusIsMonotonic(t *testing.T) {
+	root := t.TempDir()
+
+	if err := SetStatus(root, "p", StatusShipped); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetStatus(root, "p", StatusComplete); err != nil {
+		t.Fatal(err)
+	}
+	// A second ship over a completed phase.
+	if err := SetStatus(root, "p", StatusShipped); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Load(FilePath(root, "p"), "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusComplete {
+		t.Errorf("status = %q, want %q — a re-ship demoted a completed phase", got.Status, StatusComplete)
+	}
+}
+
+// TestStatusSurvivesTaskRecord: the task write path is load-record-save, and it
+// must carry the phase-level fields through. A Record() that dropped Status
+// would erase the marker on the next task of a re-run.
+func TestStatusSurvivesTaskRecord(t *testing.T) {
+	root := t.TempDir()
+	path := FilePath(root, "p")
+	if err := SetStatus(root, "p", StatusComplete); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := Load(path, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Record("t-1", []string{"a.go"}, "abc1234", "", nil)
+	if err := c.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Load(path, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusComplete {
+		t.Errorf("status = %q after recording a task, want %q", got.Status, StatusComplete)
+	}
+	if _, ok := got.Tasks["t-1"]; !ok {
+		t.Error("the task record itself was lost")
+	}
+}

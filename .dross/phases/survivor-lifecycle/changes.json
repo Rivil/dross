@@ -2,6 +2,7 @@
   "phase": "survivor-lifecycle",
   "pr": 80,
   "base": "milestone/v1.3",
+  "status": "complete",
   "tasks": {
     "t-1": {
       "files": [

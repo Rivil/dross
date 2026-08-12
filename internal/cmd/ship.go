@@ -396,6 +396,12 @@ func Ship() *cobra.Command {
 				if err := changes.SetBase(root, phaseID, baseBranch); err != nil {
 					return fmt.Errorf("persist PR base branch: %w", err)
 				}
+				// Rides the same write as pr and base: a phase with an open PR
+				// is shipped, and that is the first durable point anything can
+				// tell how far the phase got without reading state history.
+				if err := changes.SetStatus(root, phaseID, changes.StatusShipped); err != nil {
+					return fmt.Errorf("persist phase status: %w", err)
+				}
 				changesRel := filepath.Join(".dross", "phases", phaseID, changes.File)
 				if out, err := gitCombined(repoDir, gitPathArgs("add", nil, changesRel)...); err != nil {
 					return fmt.Errorf("git add changes.json: %w\n%s", err, out)
