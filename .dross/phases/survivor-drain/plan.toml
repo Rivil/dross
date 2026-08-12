@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 21
 
 [phase]
   id = "survivor-drain"
@@ -216,4 +216,15 @@ task_seq = 0
   covers = ["c-1", "c-2"]
   depends_on = ["t-8", "t-9", "t-10", "t-11", "t-12", "t-13", "t-14", "t-15", "t-16", "t-17", "t-18", "t-19"]
   test_contract = ["TestSurvivorDrainBacklogClosed fails if collectDeferred over the repo yields any entry with Target==\"survivor-drain\" and Dismissed==false — enforced by CI, not by a ship-time eyeball", "the same test fails if any survivor-keyed deferred entry is routed to a phase that sits AFTER survivor-drain in the milestone's phases array — the \"none is re-routed forward\" half of c-2. Survivor-keyed means the entry's text resolves to a `file.go:line (OP)` survivor identity; this phase's own two [[deferred]] entries are prose about phase-create adoption and adapter mutant-filtering, resolve to no identity, and are expected to pass while still routed forward to phase-create-adoption and mutation-score-truth", "after closure `dross survivor drain` still exits 0: dismissing a routed entry drops it out of routedSurvivors(), so a survivor closed by dismissal alone (never killed, never accepted) reappears as outstanding and fails the run", "the repo-wide run covers all 33 packages `go list ./...` reports and accounts for all 202 recorded non-killed mutants — every one killed, accepted, or gone as NOT VIABLE", "`dross deferred list --dismissed` still shows each closed item with its survivor key, so the drain is auditable after the fact"]
+  status = "done"
+
+[[task]]
+  id = "t-21"
+  wave = 6
+  title = "Share the testdata scope rule with internal/verify"
+  files = ["internal/verify/verify.go", "internal/verify/verify_test.go", "internal/cmd/survivor_drain.go", "internal/cmd/survivor_drain_test.go"]
+  description = "Verify's in-scope classifier has no counterpart to the drain's isTestdataPath, so the ceiling proof fixture reads as this phase's own undisposed debt (unclassified_in_scope=24 from verify vs 0 from drain over the same repo state). Export isTestdataPath as verify.IsTestdataPath, delete the internal/cmd copy so one implementation serves both, and apply it in FilterReport: a testdata survivor is dropped entirely rather than routed to OutOfScope (routing it out-of-scope only re-lists it as an unclassified FLAG, which the drain-don't-relist rule forbids), and its r.Files stat row is dropped with it so the score denominator and the survivor list agree."
+  covers = ["c-1", "c-6"]
+  depends_on = ["t-20"]
+  test_contract = ["FilterReport over a report carrying one in-scope survivor and one under testdata/ keeps exactly the in-scope one and returns ZERO OutOfScopeMutants — the testdata survivor is dropped, not relisted, so it can never surface as an unclassified out-of-scope FLAG", "the same call drops the testdata file's stat row: the recomputed score is computed over the in-scope row alone, so a testdata row with a different kill ratio cannot move the score", "verify.IsTestdataPath is the ONE implementation — internal/cmd's copy is gone and survivor_drain.go calls the exported one, asserted by a test that would fail if a second local copy reappeared", "a path with a segment merely CONTAINING \"testdata\" (mytestdata/, testdata.go) is not excluded — the rule is a path segment, not a substring"]
   status = "done"
