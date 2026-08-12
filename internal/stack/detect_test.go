@@ -715,3 +715,27 @@ func repoRoot(t *testing.T) string {
 		dir = parent
 	}
 }
+
+// TestNormalizeExtAddsExactlyOneDot pins both arms of the dot guard. Extensions
+// reach this from two places that spell them differently — profile TOML writes
+// "go", detection code passes ".go" — and every downstream match is a string
+// compare. An inverted guard yields "..go" for the already-dotted form, which
+// matches nothing and silently disables the gate that depends on it.
+func TestNormalizeExtAddsExactlyOneDot(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"", ""},
+		{"go", ".go"},
+		{".go", ".go"},
+		{"tar.gz", ".tar.gz"},
+		{".tar.gz", ".tar.gz"},
+	}
+	for _, tc := range cases {
+		if got := normalizeExt(tc.in); got != tc.want {
+			t.Errorf("normalizeExt(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	// Idempotent: normalising twice must not accumulate dots.
+	if got := normalizeExt(normalizeExt("go")); got != ".go" {
+		t.Errorf("normalizeExt is not idempotent: %q", got)
+	}
+}

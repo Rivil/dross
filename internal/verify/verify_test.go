@@ -213,18 +213,23 @@ func TestSkeletonSeedsFromMachineResults(t *testing.T) {
 	if len(v.Findings) != 2 {
 		t.Fatalf("findings: %+v", v.Findings)
 	}
-	flagCount, noteCount := 0, 0
+	blockingCount, noteCount := 0, 0
 	for _, f := range v.Findings {
 		switch f.Severity {
-		case "FLAG":
-			flagCount++
+		case "BLOCKING":
+			blockingCount++
 		case "NOTE":
 			noteCount++
 		}
 	}
-	if flagCount != 1 || noteCount != 1 {
-		t.Errorf("expected 1 FLAG (surviving mutant) + 1 NOTE (skip); got flags=%d notes=%d",
-			flagCount, noteCount)
+	// The in-scope survivor is BLOCKING, not a FLAG: an unclassified survivor
+	// inside the phase's own diff is the mutation leg's fail lever.
+	if blockingCount != 1 || noteCount != 1 {
+		t.Errorf("expected 1 BLOCKING (surviving mutant) + 1 NOTE (skip); got blocking=%d notes=%d",
+			blockingCount, noteCount)
+	}
+	if v.Summary.UnclassifiedInScope != 1 {
+		t.Errorf("UnclassifiedInScope = %d, want 1", v.Summary.UnclassifiedInScope)
 	}
 }
 
@@ -577,6 +582,70 @@ func TestFilterReportDroppedListIsComplete(t *testing.T) {
 	}
 	if !reflect.DeepEqual(dropped, want) {
 		t.Errorf("dropped:\n got %+v\nwant %+v", dropped, want)
+	}
+}
+
+// TestFilterReportDropsTestdataEntirely: a fixture under testdata/ leaves
+// through NEITHER exit. Not kept — the phase does not answer for a file Go
+// excludes from `./...` and never compiles into the binary. And not dropped
+// either: an OutOfScopeMutant is backlog, so routing it there would resurface
+// it as an unclassified FLAG for someone to accept or route, and there is
+// nothing to accept. Both halves are asserted because dropping it from
+// Surviving alone still leaves it re-listed one findings-section down, which is
+// the drain-don't-relist rule with extra steps.
+//
+// The scope is asked to CONTAIN the fixture, so the exclusion cannot pass by
+// accident: without the rule this survivor is in scope and BLOCKING, which is
+// precisely how this repo's own ceiling fixture failed its phase.
+func TestFilterReportDropsTestdataEntirely(t *testing.T) {
+	r := reportOf("gremlins",
+		map[string]mutation.FileStat{
+			"internal/mutation/gremlins.go":                 {Killed: 1, Survived: 1},
+			"internal/mutation/testdata/ceiling/ceiling.go": {Survived: 3},
+		},
+		mutation.Mutant{File: "internal/mutation/gremlins.go", Line: 4, Op: "CONDITIONALS_NEGATION"},
+		mutation.Mutant{File: "internal/mutation/testdata/ceiling/ceiling.go", Line: 20, Op: "CONDITIONALS_BOUNDARY"},
+	)
+	s := scopeOf("internal/mutation/gremlins.go", "internal/mutation/testdata/ceiling/ceiling.go")
+
+	kept, dropped := FilterReport(r, s, "go")
+
+	if len(kept.Surviving) != 1 || kept.Surviving[0].File != "internal/mutation/gremlins.go" {
+		t.Errorf("a testdata fixture was kept as this phase's debt: %+v", kept.Surviving)
+	}
+	if len(dropped) != 0 {
+		t.Errorf("a testdata fixture was relisted as out-of-scope backlog: %+v", dropped)
+	}
+	// The stat row goes with the survivor: a denominator counting mutants the
+	// survivor list has dropped is the same inconsistency one layer down. With
+	// the fixture's 3 survived rolled in, the score would be 1/5 = 0.20.
+	if _, ok := kept.Files["internal/mutation/testdata/ceiling/ceiling.go"]; ok {
+		t.Errorf("the fixture's stat row survived filtering: %+v", kept.Files)
+	}
+	if kept.Survived != 1 || kept.Killed != 1 || kept.Score != 0.5 {
+		t.Errorf("score computed over the fixture: killed=%d survived=%d score=%v, want 1/1/0.5",
+			kept.Killed, kept.Survived, kept.Score)
+	}
+}
+
+// TestIsTestdataPathIsSegmentScoped pins the rule's narrowness at the shared
+// implementation both `dross verify` and `dross survivor drain` now call. A
+// substring match would silently exclude ordinary packages from the gate.
+func TestIsTestdataPathIsSegmentScoped(t *testing.T) {
+	for _, tc := range []struct {
+		file string
+		want bool
+	}{
+		{"internal/mutation/testdata/ceiling/ceiling.go", true},
+		{"testdata/x.go", true},
+		{"internal/testdata/deep/nested/y.go", true},
+		{"internal/cmd/doctor.go", false},
+		{"internal/testdatabase/store.go", false},
+		{"internal/mytestdata.go", false},
+	} {
+		if got := IsTestdataPath(tc.file); got != tc.want {
+			t.Errorf("IsTestdataPath(%q) = %v, want %v", tc.file, got, tc.want)
+		}
 	}
 }
 
@@ -961,17 +1030,17 @@ func TestSkeletonOneNoteNoFlagFlood(t *testing.T) {
 	}
 	v := Skeleton(tests, []string{"c-1"})
 
-	var notes, flags []Finding
+	var notes, blocking []Finding
 	for _, f := range v.Findings {
 		switch f.Severity {
 		case "NOTE":
 			notes = append(notes, f)
-		case "FLAG":
-			flags = append(flags, f)
+		case "BLOCKING":
+			blocking = append(blocking, f)
 		}
 	}
-	if len(flags) != 1 {
-		t.Errorf("expected exactly 1 FLAG (the phase's own survivor), got %d: %+v", len(flags), flags)
+	if len(blocking) != 1 {
+		t.Errorf("expected exactly 1 BLOCKING (the phase's own survivor), got %d: %+v", len(blocking), blocking)
 	}
 	if len(notes) != 1 {
 		t.Fatalf("expected exactly 1 NOTE, got %d: %+v", len(notes), notes)
@@ -1158,23 +1227,23 @@ func TestSkeletonInScopeSurvivorRendersItsNote(t *testing.T) {
 	}
 	ApplyLifecycle(ambiguous, map[string]string{keyOf(t, ti, "dup.go", 50, "OP"): "ceiling"}, nil, ti)
 
-	flags := findingsBySeverity(Skeleton(ambiguous, []string{"c-1"}), "FLAG")
+	blocking := findingsBySeverity(Skeleton(ambiguous, []string{"c-1"}), "BLOCKING")
 	var named []Finding
-	for _, f := range flags {
+	for _, f := range blocking {
 		if strings.Contains(f.Text, "dup.go:50") {
 			named = append(named, f)
 		}
 	}
 	if len(named) != 1 {
-		t.Fatalf("want exactly 1 FLAG for the re-emitted survivor, got %d: %+v", len(named), named)
+		t.Fatalf("want exactly 1 BLOCKING for the re-emitted survivor, got %d: %+v", len(named), named)
 	}
 	if !strings.Contains(named[0].Text, "— accepted key is ambiguous") {
-		t.Errorf("FLAG = %q, must carry the survivor's note saying why the acceptance was withheld", named[0].Text)
+		t.Errorf("BLOCKING = %q, must carry the survivor's note saying why the acceptance was withheld", named[0].Text)
 	}
 
 	// The other half: a survivor with no note renders with no dangling
 	// separator, so the note is genuinely conditional rather than always-on.
-	plain := findingsBySeverity(Skeleton(lifecycleTests(t, nil, nil), []string{"c-1"}), "FLAG")
+	plain := findingsBySeverity(Skeleton(lifecycleTests(t, nil, nil), []string{"c-1"}), "BLOCKING")
 	for _, f := range plain {
 		if strings.Contains(f.Text, "in.go:10") && strings.Contains(f.Text, "—") {
 			t.Errorf("note-less survivor rendered a separator with nothing after it: %q", f.Text)
@@ -1263,6 +1332,142 @@ func TestSkeletonUnclassifiedNoteFallsAwayWhenDrained(t *testing.T) {
 	for _, f := range v.Findings {
 		if strings.Contains(f.Text, "out-of-scope") {
 			t.Errorf("fully drained out-of-scope set still reported: %+v", f)
+		}
+	}
+}
+
+// inScopeTests builds a Tests whose only survivor is in-scope, at the given
+// file:line, with the given score.
+func inScopeTests(t *testing.T, file string, line int, score float64, accepted, routed map[string]string) *Tests {
+	t.Helper()
+	tests := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{{
+			Name: "go", Tool: "gremlins",
+			Mutation: &mutation.Report{
+				Killed: 19, Survived: 1, Score: score,
+				Surviving: []mutation.Mutant{{File: file, Line: line, Op: "OP"}},
+			},
+		}},
+	}
+	ApplyLifecycle(tests, accepted, routed, fixtureIdentifier())
+	return tests
+}
+
+// TestUnclassifiedInScopeCountsOnlyUndisposedSurvivors is c-6's core. The
+// mutation leg's fail lever is an absolute count of in-scope survivors with no
+// disposition — not a ratio. A disposition is a reason (accepted) or a
+// destination (routed); anything else is debt this phase is leaving behind.
+func TestUnclassifiedInScopeCountsOnlyUndisposedSurvivors(t *testing.T) {
+	ti := fixtureIdentifier()
+	key := keyOf(t, ti, "in.go", 10, "OP")
+
+	cases := []struct {
+		name         string
+		accepted     map[string]string
+		routed       map[string]string
+		wantCount    int
+		wantBlocking int
+		wantNote     int
+	}{
+		{
+			name:         "undisposed in-diff survivor blocks",
+			wantCount:    1,
+			wantBlocking: 1,
+		},
+		{
+			name:      "accepted survivor is silent",
+			accepted:  map[string]string{key: "unreachable through the CLI"},
+			wantCount: 0,
+		},
+		{
+			name:      "routed survivor keeps its NOTE and does not block",
+			routed:    map[string]string{key: "later-phase"},
+			wantCount: 0,
+			wantNote:  1,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := Skeleton(inScopeTests(t, "in.go", 10, 0.95, tc.accepted, tc.routed), []string{"c-1"})
+
+			if v.Summary.UnclassifiedInScope != tc.wantCount {
+				t.Errorf("UnclassifiedInScope = %d, want %d", v.Summary.UnclassifiedInScope, tc.wantCount)
+			}
+			blocking := findingsBySeverity(v, "BLOCKING")
+			if len(blocking) != tc.wantBlocking {
+				t.Fatalf("got %d BLOCKING findings, want %d: %+v", len(blocking), tc.wantBlocking, blocking)
+			}
+			if tc.wantBlocking == 1 && !strings.Contains(blocking[0].Text, "in.go:10 (OP)") {
+				t.Errorf("BLOCKING = %q, must name file:line (op) so the survivor is addressable", blocking[0].Text)
+			}
+			if got := len(findingsBySeverity(v, "NOTE")); got != tc.wantNote {
+				t.Errorf("got %d NOTE findings, want %d", got, tc.wantNote)
+			}
+		})
+	}
+}
+
+// TestHighScoreCannotBuyAPass is why the lever moved off the ratio. A phase
+// that adds a pile of killed mutants can bury a live one and still clear any
+// cutoff — 0.95 here, comfortably over the old 0.80. The absolute count is
+// immune to that arithmetic.
+func TestHighScoreCannotBuyAPass(t *testing.T) {
+	v := Skeleton(inScopeTests(t, "in.go", 10, 0.95, nil, nil), []string{"c-1"})
+
+	if v.Summary.MutationScore < 0.9 {
+		t.Fatalf("fixture premise broken: score = %v, want a comfortably passing one", v.Summary.MutationScore)
+	}
+	if v.Summary.UnclassifiedInScope != 1 {
+		t.Errorf("UnclassifiedInScope = %d, want 1", v.Summary.UnclassifiedInScope)
+	}
+	if got := findingsBySeverity(v, "BLOCKING"); len(got) != 1 {
+		t.Errorf("a 0.95 score suppressed the BLOCKING finding: %+v", got)
+	}
+}
+
+// TestUnresolvedInDiffIdentityStillBlocks: a survivor whose identity could not
+// be resolved is still in this phase's diff and still undisposed. If an
+// unreadable key let it fall out of the count, the cheapest way to pass the
+// gate would be to make the survivor unidentifiable.
+func TestUnresolvedInDiffIdentityStillBlocks(t *testing.T) {
+	// "unknown.go" is absent from fixtureIdentifier, so Identify errors.
+	v := Skeleton(inScopeTests(t, "unknown.go", 99, 0.95, nil, nil), []string{"c-1"})
+
+	if v.Summary.UnclassifiedInScope != 1 {
+		t.Errorf("UnclassifiedInScope = %d, want 1 — an unresolvable key must not escape the count", v.Summary.UnclassifiedInScope)
+	}
+	blocking := findingsBySeverity(v, "BLOCKING")
+	if len(blocking) != 1 {
+		t.Fatalf("got %d BLOCKING findings, want 1: %+v", len(blocking), blocking)
+	}
+	if !strings.Contains(blocking[0].Text, "unknown.go:99") {
+		t.Errorf("BLOCKING = %q, must still name the survivor", blocking[0].Text)
+	}
+}
+
+// TestUnclassifiedInScopeExcludesOutOfScope: the standing backlog lives outside
+// the diff. Counting it here would fail every phase in this repo for debt it
+// did not create — and would make the gate impossible to ever go green under,
+// which is the fastest way to get a gate disabled.
+func TestUnclassifiedInScopeExcludesOutOfScope(t *testing.T) {
+	// lifecycleTests has one in-scope survivor plus three out-of-scope ones,
+	// none of them accepted or routed.
+	v := Skeleton(lifecycleTests(t, nil, nil), []string{"c-1"})
+
+	if v.Summary.UnclassifiedInScope != 1 {
+		t.Errorf("UnclassifiedInScope = %d, want 1 (the in-scope survivor only)", v.Summary.UnclassifiedInScope)
+	}
+	// The out-of-scope ones are still individually visible for draining —
+	// excluded from the gate is not excluded from the report.
+	flags := findingsBySeverity(v, "FLAG")
+	if len(flags) != 3 {
+		t.Errorf("got %d FLAG findings for out-of-scope survivors, want 3: %+v", len(flags), flags)
+	}
+	for _, f := range flags {
+		if strings.Contains(f.Text, "in.go:10") {
+			t.Errorf("the in-scope survivor was demoted to a FLAG: %q", f.Text)
 		}
 	}
 }

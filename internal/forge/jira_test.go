@@ -455,3 +455,74 @@ func TestJiraUpdateIssueStateTransitions(t *testing.T) {
 		t.Errorf("State=open fired transition %q, want 11 (reopen/indeterminate)", postedID)
 	}
 }
+
+// TestJiraErrorSnippetTruncatesAndHints is the Jira twin of the GitHub and
+// YouTrack error-path tests. Jira's 401 hint is the one that names TWO config
+// keys — the token env and [board].auth_user — because Jira Cloud authenticates
+// with an email/token pair and getting the email wrong looks identical to a bad
+// token from the outside.
+func TestJiraErrorSnippetTruncatesAndHints(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		body    string
+		wantIn  []string
+		wantOut []string
+	}{
+		{
+			name:    "oversized body is truncated to the cap",
+			status:  500,
+			body:    bigBody(),
+			wantOut: []string{"TAIL-MARKER"},
+		},
+		{
+			name:   "a short body is passed through whole",
+			status: 500,
+			body:   "boom",
+			wantIn: []string{"boom"},
+		},
+		{
+			name:   "401 names both the token env and the auth user",
+			status: 401,
+			body:   "unauthorized",
+			wantIn: []string{jiraTokenEnv, "auth_user"},
+		},
+		{
+			name:   "403 names the permission problem",
+			status: 403,
+			body:   "forbidden",
+			wantIn: []string{"lacks permission"},
+		},
+		{
+			name:   "404 names the project and the config keys",
+			status: 404,
+			body:   "missing",
+			wantIn: []string{"PROJ", "base_url"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := newTestJiraClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			})
+
+			_, err := c.GetIssue("PROJ-1")
+			if err == nil {
+				t.Fatalf("status %d returned no error", tc.status)
+			}
+			msg := err.Error()
+			for _, want := range tc.wantIn {
+				if !strings.Contains(msg, want) {
+					t.Errorf("error %q does not mention %q", msg, want)
+				}
+			}
+			for _, unwanted := range tc.wantOut {
+				if strings.Contains(msg, unwanted) {
+					t.Errorf("error %q still carries %q — the snippet was not truncated", msg, unwanted)
+				}
+			}
+		})
+	}
+}

@@ -27,7 +27,7 @@ func Survivor() *cobra.Command {
 		Use:   "survivor",
 		Short: "Accept, route and list surviving mutants (the drain for out-of-diff debt)",
 	}
-	c.AddCommand(survivorAccept(), survivorRoute(), survivorList())
+	c.AddCommand(survivorAccept(), survivorRoute(), survivorList(), survivorRetire(), survivorDrain())
 	return c
 }
 
@@ -97,13 +97,14 @@ func survivorAccept() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("resolve %s:%d: %w", loc.rel, loc.line, err)
 			}
-			if res.Ambiguous {
-				// Loud, because an ambiguous acceptance will not suppress: the
-				// user would otherwise see a clean "accepted" and keep seeing
-				// the survivor in every later run with no idea why.
-				Printf("warning: %s:%d is ambiguous — its source text occurs on %d lines in this file, "+
-					"so this acceptance will not suppress it until the text is unique\n",
-					loc.rel, loc.line, res.Occurrences)
+			if res.Occurrences > 1 {
+				// Said out loud, because the acceptance is narrower than it
+				// looks: it addresses ONE of several identical lines, and the
+				// user should see which, and that an edit inside the same
+				// declaration can renumber it.
+				Printf("note: %s:%d shares its source text with %d other line(s) in this file, "+
+					"so the key is scoped to occurrence %d of %q\n",
+					loc.rel, loc.line, res.Occurrences-1, res.Ordinal, res.Scope)
 			}
 
 			s, err := state.Load(filepath.Join(root, state.File))
@@ -193,6 +194,53 @@ func survivorRoute() *cobra.Command {
 	}
 	c.Flags().StringVar(&op, "op", "", "mutation operator, e.g. CONDITIONALS_NEGATION (required)")
 	c.Flags().StringVar(&target, "target", "", "destination phase slug (required)")
+	return c
+}
+
+func survivorRetire() *cobra.Command {
+	var stale bool
+	c := &cobra.Command{
+		Use:   "retire <key>...",
+		Short: "Remove acceptances from the store (--stale for every acceptance whose subject is gone)",
+		Long: "Retire acceptances from <repo>/.dross/survivors.toml by identity key. This is the " +
+			"CLI path out of the store, so retiring an entry never means hand-editing the file. " +
+			"--stale retires exactly the acceptances whose subject is gone; one that could not " +
+			"be checked is left alone — \"I could not look\" is not \"it is gone\".",
+		Args: cobra.ArbitraryArgs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			path := survivor.Path(root)
+			keys := args
+			if stale {
+				if len(args) > 0 {
+					return errors.New("--stale retires every stale acceptance; do not also name keys")
+				}
+				store, err := survivor.Load(path)
+				if err != nil {
+					return err
+				}
+				for _, s := range survivor.StaleAcceptances(filepath.Dir(root), store).Stale {
+					keys = append(keys, s.Key)
+				}
+				if len(keys) == 0 {
+					Print("(no stale acceptances to retire)")
+					return nil
+				}
+			}
+			if len(keys) == 0 {
+				return errors.New("name at least one acceptance key to retire, or pass --stale")
+			}
+			if err := survivor.Retire(path, keys...); err != nil {
+				return err
+			}
+			Printf("retired %d acceptance(s): %s\n", len(keys), strings.Join(keys, ", "))
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&stale, "stale", false, "retire every acceptance whose subject no longer exists")
 	return c
 }
 

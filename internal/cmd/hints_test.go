@@ -112,3 +112,36 @@ func TestLineTeachesMisreachIgnoresTheWorkingForm(t *testing.T) {
 		t.Error("--new matched inside --newest")
 	}
 }
+
+// TestCuratedMisreachPathsAreDistinct is the evidence behind hints.go:133's
+// acceptance. CuratedMisreaches sorts by command path and falls back to the
+// token only when two entries SHARE a path — and no two curated entries do, so
+// the tie-break never runs. It is unreachable given the data, not untested.
+//
+// Pinning the premise makes the acceptance falsifiable: add a second entry
+// under an existing command path and this test fails, at which point the
+// tie-break is reachable and owes a real ordering test instead.
+func TestCuratedMisreachPathsAreDistinct(t *testing.T) {
+	misreaches := CuratedMisreaches()
+	if len(misreaches) < 2 {
+		t.Fatalf("the curated table has %d entries — the ordering question is vacuous", len(misreaches))
+	}
+
+	seen := map[string]string{}
+	for _, mr := range misreaches {
+		path, token := mr[0], mr[1]
+		if prev, dup := seen[path]; dup {
+			t.Errorf("two curated entries share the command path %q (tokens %q and %q) — "+
+				"the sort tie-break is now reachable and needs a real ordering test", path, prev, token)
+		}
+		seen[path] = token
+	}
+
+	// And the primary ordering IS exercised: paths come back ascending.
+	for i := 1; i < len(misreaches); i++ {
+		if misreaches[i-1][0] > misreaches[i][0] {
+			t.Errorf("curated misreaches are not sorted by command path at %d: %q then %q",
+				i, misreaches[i-1][0], misreaches[i][0])
+		}
+	}
+}

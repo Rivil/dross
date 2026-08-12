@@ -6,6 +6,7 @@
   "phases": {
     "exec-trust-followups": "DRO-2",
     "mutation-diff-scope": "DRO-9",
+    "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10"
   },
   "quicks": {

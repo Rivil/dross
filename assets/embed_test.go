@@ -129,3 +129,45 @@ func TestInteractionPlaybookFromFS(t *testing.T) {
 		t.Errorf("InteractionPlaybook looks empty/wrong: %.40q", InteractionPlaybook)
 	}
 }
+
+// TestMustReadStringPanicsOnMissingAsset covers the fail-fast branch. It is the
+// one path that never runs in a correctly built binary, which is exactly why it
+// went unmeasured — and why it is worth pinning: if it ever stopped panicking,
+// a mis-built binary would emit an empty playbook at runtime instead of
+// refusing to start, and the failure would surface as a silently useless
+// prompt rather than a build error.
+func TestMustReadStringPanicsOnMissingAsset(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("mustReadString returned for a missing asset instead of panicking")
+		}
+		msg, ok := r.(string)
+		if !ok {
+			t.Fatalf("panic value = %T, want a string", r)
+		}
+		// The message must name the missing asset AND carry the underlying
+		// error: "embedded file missing" alone does not say which one.
+		for _, want := range []string{"assets: embedded file missing:", "prompts/does-not-exist.md"} {
+			if !strings.Contains(msg, want) {
+				t.Errorf("panic message %q missing %q", msg, want)
+			}
+		}
+		if strings.HasSuffix(msg, "prompts/does-not-exist.md: ") {
+			t.Errorf("panic message carries no underlying error: %q", msg)
+		}
+	}()
+	_ = mustReadString("prompts/does-not-exist.md")
+}
+
+// TestMustReadStringReturnsRealAsset is the other arm: a present file comes
+// back whole, so the guard is genuinely conditional rather than always-panicking.
+func TestMustReadStringReturnsRealAsset(t *testing.T) {
+	got := mustReadString("prompts/_interaction.md")
+	if got == "" {
+		t.Fatal("mustReadString returned empty for a file that is embedded")
+	}
+	if got != InteractionPlaybook {
+		t.Error("mustReadString and the package-level playbook disagree on the same asset")
+	}
+}

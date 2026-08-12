@@ -300,3 +300,39 @@ func TestInstallCover_ClearPathRealDir(t *testing.T) {
 		t.Errorf("clearPath did not remove the directory (err=%v)", err)
 	}
 }
+
+// TestInstallStatuslineModes covers the opt-in status-line branch, which is
+// skipped on every ordinary install — so the guard that gates it had never run
+// with either flag set.
+//
+// Wiring is deliberately opt-in: `dross install` must never touch a user's
+// settings.json unasked. This drives both directions in one temp config dir.
+func TestInstallStatuslineModes(t *testing.T) {
+	home := t.TempDir()
+	cfg := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	settings := filepath.Join(cfg, "settings.json")
+
+	if err := runCmd(t, Install(), "--statusline"); err != nil {
+		t.Fatalf("install --statusline: %v", err)
+	}
+	body, err := os.ReadFile(settings)
+	if err != nil {
+		t.Fatalf("--statusline wrote no settings.json: %v", err)
+	}
+	if !strings.Contains(string(body), "statusLine") {
+		t.Errorf("settings.json carries no statusLine after --statusline:\n%s", body)
+	}
+
+	if err := runCmd(t, Install(), "--no-statusline"); err != nil {
+		t.Fatalf("install --no-statusline: %v", err)
+	}
+	after, err := os.ReadFile(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(after), "dross statusline") {
+		t.Errorf("--no-statusline left the wiring behind:\n%s", after)
+	}
+}

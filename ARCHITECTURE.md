@@ -130,7 +130,7 @@ Make a wrong invocation self-correcting: an unknown subcommand or flag fails non
 - `EnforceSubcommandKnown` (unknown-subcommand guard, non-zero exit) — `internal/cmd/subcommand_guard.go:17`
 - `decorateFlagError` / `InstallFlagHints` (root FlagErrorFunc parent-walk, telemetry-preserving) — `internal/cmd/flag_hint.go:30`
 - `LineTeachesMisreach` (prompt-corpus guard against broken invocations) — `internal/cmd/hints.go:145`
-- `TestMisreachesAreSelfCorrecting` (c-2 executed against the assembled tree) — `cmd/dross/main_test.go:314`
+- `TestMisreachesAreSelfCorrecting` (c-2 executed against the assembled tree) — `cmd/dross/main_test.go:316`
 
 _introduced cli-surface-sweep · ad037f3_
 
@@ -141,7 +141,7 @@ Make every structured `show` machine-readable on the same terms: `project`, `mil
 - `emitJSON` (bare-document emitter behind `--json`) — `internal/cmd/jsonout.go:20`
 - `summarizeStats` (one aggregation struct behind both table and JSON) — `internal/cmd/stats.go:133`
 - `taskShow` (`--json` status normalised through `orPending`) — `internal/cmd/task.go:130`
-- `TestEveryStructuredShowAcceptsJSON` (tree walk + wired-not-just-registered check) — `cmd/dross/main_test.go:450`
+- `TestEveryStructuredShowAcceptsJSON` (tree walk + wired-not-just-registered check) — `cmd/dross/main_test.go:452`
 
 _introduced board-state-map-truth · 3272339_
 
@@ -174,18 +174,18 @@ _introduced 06-dross-quality · extended 07-stack-profiles · extended 09-marker
 
 A value read out of `.dross/project.toml` is untrusted input to git, not a trusted argument. Two layers hold. Config-derived **ref names** are validated before any git process starts: a leading `-`, or anything `git check-ref-format` rejects, is refused with a named error at `phase complete`, `phase checkout`, `milestone create` and `ship recover`. And every git invocation that passes a config- or user-derived **positional** builds its argv through separator-carrying builders — `--end-of-options` for refs, `--` for pathspecs, deliberately distinct (locked `ref_separator_token`: a `--` in a ref position makes git reinterpret the branch as a pathspec, which is a different bug, not a fix). That second layer closed a real arbitrary-file-write, where `dross repair`'s `git log` took an attacker-supplied `--output=` straight out of config. Coverage is structural rather than by inspection: a repo-wide AST audit fails by `file:line` on any positional that is neither a literal nor a prefix-constant, and the audit is itself self-checked against a FLAG/PASS snippet table so it cannot pass vacuously. That audit covers **every** binary dross spawns, not only git (locked `audit_gate_breadth`): it resolves each spawn site to a binary, looks the binary up in `internal/argfence`'s policy table, and applies whichever defence that tool can actually offer — an end-of-options token for git / `gh` / ast-grep / semgrep, outright rejection of a leading-dash value for gremlins / npx / dotnet, which have none. A binary with no table entry is a finding, so a tool nobody anticipated is in scope the day it is added, and a flag demoted *past* a separator is a finding too — in cobra `--` ends flag parsing rather than fencing one token, so a demoted flag silently becomes a positional. The `git >= 2.24` floor `--end-of-options` implies is executed, not assumed.
 
-- `argfence.PolicyFor` (per-tool policy table — separator vs reject — read by both the runtime call sites and the audit gate) — `internal/argfence/policy.go:104`
+- `argfence.PolicyFor` (per-tool policy table — separator vs reject — read by both the runtime call sites and the audit gate) — `internal/argfence/policy.go:108`
 - `validateGitRef` (pre-exec ref guard behind the four guarded switch helpers) — `internal/cmd/refguard.go:32`
 - `gitRefArgs` / `gitRefPathArgs` (separator-carrying argv builders) — `internal/cmd/gitargs.go:45`
-- `buildUnleashArgs` (mutation runners refuse a leading-dash derived value before exec, returning a nil report rather than an empty one) — `internal/mutation/gremlins.go:268`
+- `buildUnleashArgs` (mutation runners refuse a leading-dash derived value before exec, returning a nil report rather than an empty one) — `internal/mutation/gremlins.go:334`
 - `gitHubPRStatus` (`gh` argv: derived values behind the separator or in their flag's value slot, flags ahead of it) — `internal/ship/merged.go:59`
 - `astGrepArgv` (ast-grep file operand behind an end-of-options token; lang checked against the closed indexer set) — `internal/codex/ast_grep.go:187`
 - `TestSecurePromptFencesScannerOperands` (semgrep is agent-driven with no Go call site, so its operand fencing is guidance in `secure.md` gated by a prompt-content test) — `internal/cmd/secure_prompt_test.go:66`
 - `TestPhaseCompleteRefusesDashMainBranch` (one entrypoint test per guarded command, refusal asserted to precede the first exec) — `internal/cmd/refguard_entrypoints_test.go:79`
 - `historyFromPhaseCommits` (repair's `git log` fenced — the arbitrary-file-write site) — `internal/cmd/repair_state.go:78`
-- `auditFile` (AST gate flagging unseparated positionals for EVERY spawned binary by file:line, per-tool policy read from `argfence`) — `internal/cmd/subprocargs_audit_test.go:129`
-- `TestNoUnseparatedPositional` (the repo-wide run of that gate, all binaries) — `internal/cmd/subprocargs_audit_test.go:346`
-- `TestNoUnseparatedGitPositional` (the original git-only guarantee, kept as its own test after the generalisation) — `internal/cmd/subprocargs_audit_test.go:359`
+- `auditFile` (AST gate flagging unseparated positionals for EVERY spawned binary by file:line, per-tool policy read from `argfence`) — `internal/cmd/subprocargs_audit_test.go:133`
+- `TestNoUnseparatedPositional` (the repo-wide run of that gate, all binaries) — `internal/cmd/subprocargs_audit_test.go:350`
+- `TestNoUnseparatedGitPositional` (the original git-only guarantee, kept as its own test after the generalisation) — `internal/cmd/subprocargs_audit_test.go:363`
 - `TestHostileConfigVectors` (12-vector hostile-`.dross/` suite off a pinned refusal contract, with an observed red replay) — `internal/cmd/hostile_config_test.go:302`
 - hostile-config fixture (pinned refusal contract + payloads) — `fixtures/hostile-config-c5/expected-refusals.txt:1`
 
@@ -338,9 +338,10 @@ Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue 
 - `issuePhaseSync` (`--status` validated against the set before the enabled short-circuit, then normalised) — `internal/cmd/issue.go:411`
 - `TestStateMapsKeyExactlyTheEmittedStatuses` (bidirectional emitted-statuses ↔ state-map-keys gate) — `internal/cmd/board_lifecycle_divergence_test.go:242`
 - `TestShipPromptEmitsTerminalBoardStatuses` (ship emits `shipped` on merge, `complete` at finalize) — `internal/cmd/ship_prompt_test.go:304`
+- `TestYouTrackErrorSnippetTruncatesAndHints` (transport error paths + backlog/subtask calls driven through httptest fakes, not accepted as network seams) — `internal/forge/youtrack_test.go:411`
 
 _a073ab7 · extended gitlab-ship-provider · 27e1a4f · extended youtrack-board-integration · extended prove-or-demote-board-sync · 50290f0_
-_extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2 · extended board-state-map-truth · 3272339_
+_extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2 · extended board-state-map-truth · 3272339 · extended survivor-drain · 975870f_
 
 ### Machine-local store
 
@@ -395,34 +396,38 @@ _c8b346e_
 
 ### Mutation diff scoping
 
-A phase's mutation score covers only the files that phase touched: a survivor in an untouched sibling of the same Go package is never attributed to it. The scope is the **union** of git's merge-base-to-HEAD file set and `changes.json`'s recorded per-task files, so a forgotten `dross changes record` widens the scope rather than silently shrinking the phase to nothing; any git failure degrades to the changes.json view with the reason recorded, keeping a mis-scoped run distinguishable from a clean one. Scoping is unconditional — no flag, no whole-package opt-out. Gating is file-level (touch a file, own its mutants); hunk ranges only annotate each kept survivor as in-hunk or inherited-by-proximity. Filtering recomputes the score from in-scope per-file rows rather than pruning the survivor list, so an out-of-scope kill moves neither numerator nor denominator. Filtered survivors are not discarded — they persist under `out_of_scope` in tests.json with one count-carrying NOTE, and a run whose mutants all land out of scope gets its own `out-of-scope` status instead of a bare 0.00.
+A phase's mutation score covers only the files that phase touched: a survivor in an untouched sibling of the same Go package is never attributed to it. The scope is the **union** of git's merge-base-to-HEAD file set and `changes.json`'s recorded per-task files, so a forgotten `dross changes record` widens the scope rather than silently shrinking the phase to nothing; any git failure degrades to the changes.json view with the reason recorded, keeping a mis-scoped run distinguishable from a clean one. Scoping is unconditional — no flag, no whole-package opt-out. Gating is file-level (touch a file, own its mutants); hunk ranges only annotate each kept survivor as in-hunk or inherited-by-proximity. Filtering recomputes the score from in-scope per-file rows rather than pruning the survivor list, so an out-of-scope kill moves neither numerator nor denominator. Filtered survivors are not discarded — they persist under `out_of_scope` in tests.json with one count-carrying NOTE, and a run whose mutants all land out of scope gets its own `out-of-scope` status instead of a bare 0.00. `testdata/` is the one exception and it is a **shared** rule: `IsTestdataPath` is the single segment-scoped predicate that both the drain and `FilterReport` apply, and a fixture survivor is dropped from the report **entirely** — not relisted under `out_of_scope` — so a phase's own mutation fixtures can never read back as its standing debt.
 
 - `Scope` (scope model, hunk ranges, in-hunk/inherited classifier) — `internal/verify/scope.go:26`
 - `NewScope` (git ∪ changes.json union) — `internal/verify/scope.go:99`
 - `Scope.Origin` (in-hunk vs inherited tag) — `internal/verify/scope.go:225`
 - `phaseScope` (merge-base resolution, git file set + hunks, degraded fallback) — `internal/cmd/verifyscope.go:24`
 - `FilterReport` (split against scope, recompute counts, tag survivors) — `internal/verify/verify.go:135`
-- `RunScoped` — `internal/verify/verify.go:271`
+- `IsTestdataPath` (one segment-scoped testdata rule shared by the drain and verify) — `internal/verify/verify.go:219`
+- `RunScoped` — `internal/verify/verify.go:327`
 - `MutationOutOfScope` (all-filtered run status) — `internal/verify/verify.go:50`
 - `printScopeSummary` (scoped file list + `(+N more)` overflow) — `internal/cmd/verify.go:488`
+- `TestFilterReportDropsTestdataEntirely` (fixtures leave through neither exit) — `internal/verify/verify_test.go:600`
 
-_introduced mutation-diff-scope · cd0b5f6_
+_introduced mutation-diff-scope · cd0b5f6 · extended survivor-drain · f508b72_
 
 ### Mutation testing adapters
 
-Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Svelte, Gremlins for Go invoked per-package). Every mutant is attributed to its own file via per-file `FileStat` counters on the Report, which is what lets a report be rescored over a subset of files — and each adapter re-prefixes its native path keys to repo-relative form first, so package-granular Gremlins and file-granular Stryker/Stryker.NET reports (whose `FullPath` keys are absolute) both match a phase's change set. Stryker is invoked as `npx @stryker-mutator/core` (not the deprecated bare `stryker`) at an **exact pinned version** rather than whatever the registry currently serves as latest — the same pin backs the argv and the install hint, so a compromised release can't be pulled into a verify run — with a `[mutation.stryker] workdir` monorepo knob that round-trips repo-relative paths. In docker runtime mode the exec prefix is derived from `runtime.test_command` by `dockerPrefix`, whose leading binary must be **exactly** `docker` (a field check, not `HasPrefix`) so a committed `dockerevil …` can't promote an arbitrary PATH binary into the adapter's argv under clone-and-run.
+Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Svelte, Gremlins for Go invoked per-package). Every mutant is attributed to its own file via per-file `FileStat` counters on the Report, which is what lets a report be rescored over a subset of files — and each adapter re-prefixes its native path keys to repo-relative form first, so package-granular Gremlins and file-granular Stryker/Stryker.NET reports (whose `FullPath` keys are absolute) both match a phase's change set. Stryker is invoked as `npx @stryker-mutator/core` (not the deprecated bare `stryker`) at an **exact pinned version** rather than whatever the registry currently serves as latest — the same pin backs the argv and the install hint, so a compromised release can't be pulled into a verify run — with a `[mutation.stryker] workdir` monorepo knob that round-trips repo-relative paths. In docker runtime mode the exec prefix is derived from `runtime.test_command` by `dockerPrefix`, whose leading binary must be **exactly** `docker` (a field check, not `HasPrefix`) so a committed `dockerevil …` can't promote an arbitrary PATH binary into the adapter's argv under clone-and-run. A package that contributes nothing to the merged score is never silently absent: Gremlins records it as a typed `Unmeasured` entry that distinguishes a missing report from an unreadable one from a genuinely zero-covered package, which is what lets the survivor drain treat an unmeasured package as fatal rather than as zero debt. The Stryker adapter's own process seams — report missing vs unreadable, parse error, an unknown future mutant status, and the Stryker.NET build-cmd prefix — are pinned by tests rather than accepted as untestable network/process boundaries.
 
 - `Adapter` — `internal/mutation/adapter.go:122`
 - `Report` — `internal/mutation/adapter.go:18`
 - `FileStat` (per-file mutant counters backing subset rescoring) — `internal/mutation/adapter.go:50`
-- `Gremlins.Run` (per-package invocation + path re-prefix) — `internal/mutation/gremlins.go:84`
+- `Gremlins.Run` (per-package invocation + path re-prefix) — `internal/mutation/gremlins.go:130`
+- `Unmeasured` (typed per-package score exclusion: missing / unreadable / zero-covered) — `internal/mutation/gremlins.go:101`
 - `Stryker.Run` — `internal/mutation/stryker.go:48`
+- `TestStrykerRunDistinguishesMissingFromUnreadable` (report-read, parse and unknown-status seams killed) — `internal/mutation/stryker_test.go:440`
 - `Stryker.runArgs` (npx invocation + workdir knob) — `internal/mutation/stryker.go:113`
 - `strykerPin` (exact `@stryker-mutator/core@9.6.1`, shared by the argv and the install hint) — `internal/mutation/stryker.go:100`
 - `StrykerNet.rePrefixFiles` (absolute `FullPath` → repo-relative) — `internal/mutation/stryker_net.go:148`
 - `dockerPrefix` (exact-`docker` exec-prefix guard) — `internal/cmd/verify.go:280`
 
-_introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076 · extended config-trust-hardening · 266a84d · extended mutation-diff-scope · 16d4426_
+_introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076 · extended config-trust-hardening · 266a84d · extended mutation-diff-scope · 16d4426 · extended survivor-drain · 87ba203_
 
 ### Phase base truth
 
@@ -472,11 +477,11 @@ _introduced task-lifecycle-commands · 367c723_
 Keeps the README's command table from lying about the CLI: `newRoot` is extracted from `main` so a test can inspect the real assembled command tree, and a parity test asserts every `` `dross <cmd>` `` the README advertises is a real top-level command (the over-claim failure mode) plus that the status line isn't a stale `v0.x`. Under-claiming (an internal command the table omits) is allowed. A companion needle guard pins the surfaces a user has to *know about* to recover a phase — `dross local`, `quick_base`, and complete's `--base` / `--recover` — so shipping the behaviour without documenting it fails the suite.
 
 - `newRoot` (testable command-tree assembly) — `cmd/dross/main.go:16`
-- `TestReadmeAdvertisesOnlyRealCommands` (over-claim guard) — `cmd/dross/main_test.go:33`
-- `TestReadmeStatusNotStale` (stale-version guard) — `cmd/dross/main_test.go:285`
+- `TestReadmeAdvertisesOnlyRealCommands` (over-claim guard) — `cmd/dross/main_test.go:35`
+- `TestReadmeStatusNotStale` (stale-version guard) — `cmd/dross/main_test.go:287`
 - `TestReadmeDocumentsBaseTruthSurfaces` (needle guard: `dross local`, `quick_base`, `--base`/`--recover`) — `internal/cmd/readme_doc_test.go:43`
-- `TestNarratedCommandsResolveAgainstTheTree` (fourth sibling: `dross <cmd>` narrated from a Go string literal) — `cmd/dross/main_test.go:215`
-- `TestNarratedCommandsGuardCatchesBogusSubcommands` (the guard's own failure path — top-level resolution alone must not satisfy it) — `cmd/dross/main_test.go:266`
+- `TestNarratedCommandsResolveAgainstTheTree` (fourth sibling: `dross <cmd>` narrated from a Go string literal) — `cmd/dross/main_test.go:217`
+- `TestNarratedCommandsGuardCatchesBogusSubcommands` (the guard's own failure path — top-level resolution alone must not satisfy it) — `cmd/dross/main_test.go:268`
 
 The guard is now a family of four over every surface that can name a command: the README table, `ship.md`, the curated hint table, and — added last — the `dross …` invocations the CLI *prints at the user* from Go string literals. That fourth surface is where the family's own gap was found: a command can be unregistered from `newRoot` while an error message still tells the user to run it, and the resulting "unknown command" pushes them back to the raw git incantation the guard exists to retire. Mutation testing cannot catch it either (gremlins skips `./cmd/dross` as a zero-covered-mutant blind spot), so the guard is proven by hand-mutation: deleting `cmd.Checkout()` leaves the rest of the suite green and turns this one red. It reads **string literals only** — a stale name in a comment misleads a reader, but only a narration string reaches the user.
 
@@ -680,18 +685,26 @@ _introduced native-statusline · 46e5025_
 
 ### Survivor lifecycle
 
-Every surviving mutant a verify run reports carries exactly one state — in-diff, routed, accepted, or unclassified — so pre-existing faults stop being furniture. A survivor's identity is its file, mutation operator, and a hash of the mutated line's *normalized source text*, so it survives line drift anywhere in the file while a genuinely different line at the same position is never mistaken for it; when that text is not unique the match is ambiguous and the acceptance is withheld rather than allowed to suppress the wrong thing. Only an accepted survivor earns silence, recorded with a mandatory reason in the tracked repo-root `.dross/survivors.toml` (entries may share a `category` whose prose is written once); routed debt stays visible, labelled with the destination phase it went to. Acceptances never expire — staleness is structural (subject gone), never time-based — and a stale one is surfaced rather than kept silently forever.
+Every surviving mutant a verify run reports carries exactly one state — in-diff, routed, accepted, or unclassified — so pre-existing faults stop being furniture. A survivor's identity is its file, mutation operator, and a hash of the mutated line's *normalized source text*, so it survives line drift anywhere in the file while a genuinely different line at the same position is never mistaken for it; a repeated line is further scoped by its enclosing declaration and occurrence ordinal, so two identical lines in different functions stay separately addressable instead of collapsing into one ambiguous key. When that text is still not unique the match is ambiguous and the acceptance is withheld rather than allowed to suppress the wrong thing. Only an accepted survivor earns silence, recorded with a mandatory reason in the tracked repo-root `.dross/survivors.toml` (entries may share a `category` whose prose is written once); routed debt stays visible, labelled with the destination phase it went to. Acceptances never expire — staleness is structural (subject gone), never time-based — and a stale one is surfaced rather than kept silently forever, and retired **through the CLI** (`dross survivor retire` by key or `--stale`, dropping a category left with no members and writing nothing at all when any key in a multi-key retire fails) so removing an entry never means hand-editing the file. `dross survivor drain` closes the loop for the whole repo: it classifies every survivor in the raw per-package reports, treats an unmeasured package as fatal rather than as zero debt, excludes `testdata/` fixtures, and exits non-zero on any undisposed survivor — and it cannot be satisfied by routing a survivor back to the phase that owns the drain. Kill-vs-accept is decided from derived evidence — per-survivor line coverage plus operator applicability, with the gremlins attribution ceiling dominating killability — and an acceptance reason must cite a concrete checkable justification (a real test, or a shared category backed by a live coverage-vs-gremlins fixture) rather than plausible prose.
 
-- `survivor.Resolve` (text-derived key, ambiguity + subject-gone guards) — `internal/survivor/identity.go:82`
-- `survivor.Accept` (reason-gated atomic read-modify-write) — `internal/survivor/store.go:250`
+- `survivor.Resolve` (text-derived key, ambiguity + subject-gone guards) — `internal/survivor/identity.go:95`
+- `scopeOf` (enclosing-declaration + occurrence-ordinal scoping for repeated lines) — `internal/survivor/identity.go:166`
+- `survivor.Accept` (reason-gated atomic read-modify-write) — `internal/survivor/store.go:289`
+- `survivor.Retire` (retire by key or `--stale`; orphaned categories dropped, all-or-nothing multi-key) — `internal/survivor/store.go:307`
+- `survivor.Derive` (coverage + operator-applicability evidence; ceiling dominates killability) — `internal/survivor/evidence.go:290`
 - `survivor.StaleAcceptances` (clock-free; file-gone vs text-gone vs unverifiable) — `internal/survivor/stale.go:55`
 - `verify.Classify` (exactly one state per survivor, via a fakeable Identifier seam) — `internal/verify/lifecycle.go:108`
 - `verify.ApplyLifecycle` (stamps state onto in-scope and out-of-scope records alike) — `internal/verify/lifecycle.go:187`
 - `Survivor` (dross survivor accept/route/list) — `internal/cmd/survivor.go:25`
+- `survivorRetire` (CLI retirement path — no hand-editing of survivors.toml) — `internal/cmd/survivor.go:200`
+- `survivorDrain` (repo-wide undisposed gate; unmeasured package fatal, testdata excluded, self-routing refused) — `internal/cmd/survivor_drain.go:304`
 - `workTreeIdentifier` (verify resolves identity against the working tree) — `internal/cmd/verify.go:519`
+- `TestAttributionCeilingIsReal` (live fixture proving the gremlins NOT-COVERED ceiling the shared category rests on) — `internal/mutation/ceiling_test.go:175`
+- `TestRepoAcceptanceReasonsCiteRealTests` (every acceptance reason names a checkable justification) — `internal/survivor/reasons_repo_test.go:181`
+- `TestSurvivorDrainBacklogClosed` (CI gate: the routed backlog is empty and nothing was re-routed past the phase) — `internal/cmd/survivor_backlog_repo_test.go:237`
 - verify.md §2 four-state close-out table + the two drain verbs — `assets/prompts/verify.md:78`
 
-_introduced survivor-lifecycle · a6b366d_
+_introduced survivor-lifecycle · a6b366d · extended survivor-drain · 3a5fafd_
 
 ### Task lifecycle
 
@@ -760,10 +773,11 @@ _introduced board-state-map-truth · extended state-json-branch-safety · 47f383
 
 ### Verification
 
-Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. The mutation leg is scoped to the phase's own diff (see **Mutation diff scoping**), so the score and verdict rest only on files the phase touched, survivors are weighted by their in-hunk/inherited origin tag, and an all-filtered run resolves through the non-threshold branch as `out-of-scope` rather than a bare 0.00. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
+Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. The mutation leg is scoped to the phase's own diff (see **Mutation diff scoping**), so the score and verdict rest only on files the phase touched, survivors are weighted by their in-hunk/inherited origin tag, and an all-filtered run resolves through the non-threshold branch as `out-of-scope` rather than a bare 0.00. The mutation verdict gates on an **absolute count** of undisposed in-scope survivors, not a score ratio: `UnclassifiedInScope` counts only survivors carrying no disposition, out-of-scope ones never reach it, and any single unclassified survivor inside the phase's own diff fails the phase — there is no tolerance band and the prompt carries no score cutoff. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
 
 - `Verify` (CLI) — `internal/cmd/verify.go:30`
-- `verify.Run` — `internal/verify/verify.go:260`
+- `verify.Run` — `internal/verify/verify.go:316`
+- `VerifySummary.UnclassifiedInScope` (absolute undisposed-in-scope gate, not a ratio) — `internal/verify/verify.go:285`
 - `LanguageRun.Error` (record-and-continue adapter failure) — `internal/verify/verify.go:83`
 - `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:237`
 - `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:199`
@@ -771,7 +785,7 @@ Map acceptance criteria to tests and run mutation testing; decide pass/partial/f
 - `TestVerifyPromptOffloadGuidance` (verify.md §2 size-gated offload — large criterion-mapping reads fan to read-only subagents; judgement + verdict stay main-loop) — `internal/cmd/verify_prompt_test.go:20`
 - survivor lifecycle wiring (loads the acceptance store + cross-phase routed map, persists key/state into tests.json, prints the four counts, NOTEs stale acceptances without touching the verdict — see **Survivor lifecycle**) — `internal/cmd/verify.go:122`
 
-_e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79 · extended mutation-diff-scope · cd0b5f6 · extended survivor-lifecycle · a6b366d_
+_e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79 · extended mutation-diff-scope · cd0b5f6 · extended survivor-lifecycle · a6b366d · extended survivor-drain · e22b16b_
 
 ### Watch heartbeat (dross-watch)
 

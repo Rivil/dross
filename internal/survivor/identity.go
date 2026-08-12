@@ -13,6 +13,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -34,16 +35,28 @@ type Resolved struct {
 	// without re-deriving it from a line number that has since moved.
 	Text string
 
-	// Ambiguous is true when Text occurs on more than one line of the file,
-	// making the key non-unique within that file. An ambiguous acceptance
-	// must not suppress — the survivor re-emits with a note instead. The
-	// locked survivor_identity decision picks that direction deliberately: a
-	// lapsed acceptance is noise, a false suppression hides a real bug.
+	// Ambiguous reports that the key could not be made unique within its file.
+	//
+	// It is now always false: when Text repeats, the key is scoped by the
+	// enclosing declaration and the occurrence ordinal within it, which is
+	// unique by construction. The field is kept because callers branch on it
+	// and because the guarantee it names — an acceptance never suppresses a
+	// survivor it cannot be attributed to — is still the contract; scoping is
+	// how that guarantee is now met instead of by withholding.
 	Ambiguous bool
 
 	// Occurrences is how many lines in the file share Text. Always >= 1 on a
-	// successful resolve.
+	// successful resolve. Greater than 1 means the key is scoped.
 	Occurrences int
+
+	// Scope is the enclosing top-level declaration a scoped key was derived
+	// against, and Ordinal is which occurrence of Text within it this is
+	// (1-based). Both empty/zero for an unscoped key.
+	//
+	// They are recorded so a reader of survivors.toml can see WHY two entries
+	// with the same file, op and text are different survivors.
+	Scope   string
+	Ordinal int
 }
 
 // Normalize reduces a source line to the text the key hashes. Leading
@@ -122,12 +135,79 @@ func ResolveSource(src []byte, file string, line int, op string) (Resolved, erro
 		return Resolved{}, ErrSubjectGone
 	}
 	n := countOccurrences(lines, text)
+	if n == 1 {
+		// The common case, and the one every key recorded before scoping
+		// existed used. Left byte-identical so those acceptances keep
+		// resolving — scoping is additive, not a re-keying.
+		return Resolved{
+			Key:         KeyFor(file, op, text),
+			Text:        text,
+			Occurrences: n,
+		}, nil
+	}
+	scope, ordinal := scopeOf(lines, line, text)
 	return Resolved{
-		Key:         KeyFor(file, op, text),
+		Key:         keyForScoped(file, op, text, scope, ordinal),
 		Text:        text,
-		Ambiguous:   n > 1,
 		Occurrences: n,
+		Scope:       scope,
+		Ordinal:     ordinal,
 	}, nil
+}
+
+// scopeOf locates the survivor at the 1-based line within the file: the nearest
+// preceding top-level declaration, and which occurrence of text this line is
+// INSIDE that declaration.
+//
+// Scoping to the declaration rather than to the whole file is what keeps the
+// ordinal stable: an edit elsewhere in the file cannot renumber it, so only a
+// change inside the same function can, and that is a change to the very code
+// the acceptance is about.
+func scopeOf(lines []string, line int, text string) (scope string, ordinal int) {
+	start := 0
+	for i := line - 1; i >= 0; i-- {
+		if isTopLevelDecl(lines[i]) {
+			scope, start = Normalize(lines[i]), i
+			break
+		}
+	}
+	for i := start; i < line; i++ {
+		if Normalize(lines[i]) == text {
+			ordinal++
+		}
+	}
+	return scope, ordinal
+}
+
+// isTopLevelDecl reports whether a line opens a top-level declaration — an
+// unindented `func`, `type`, `var` or `const`. Deliberately textual rather than
+// parsed: identity must work on any language's source, and the only property
+// needed is a stable, recognisable anchor above the survivor.
+func isTopLevelDecl(line string) bool {
+	if line == "" || line[0] == ' ' || line[0] == '\t' {
+		return false
+	}
+	for _, kw := range []string{"func ", "func(", "type ", "var ", "const "} {
+		if strings.HasPrefix(line, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// keyForScoped derives the identity of a survivor whose line text repeats in
+// its file, adding the enclosing declaration and the occurrence ordinal within
+// it. Both ride in the hashed payload behind the same NUL separator, so a
+// scoped key can never collide with an unscoped one.
+func keyForScoped(file, op, text, scope string, ordinal int) string {
+	if text == "" {
+		return ""
+	}
+	joined := strings.Join([]string{
+		normalizePath(file), op, text, scope, strconv.Itoa(ordinal),
+	}, "\x00")
+	sum := sha256.Sum256([]byte(joined))
+	return hex.EncodeToString(sum[:8])
 }
 
 // Occurrences counts how many lines of src normalize to text. Zero means the

@@ -1,0 +1,66 @@
+[phase]
+  id = "survivor-drain"
+  title = "survivor-drain"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "A mutation run over every Go package in the repo reports zero unclassified survivors: each survivor is either killed by a test or recorded accepted-with-reason in .dross/survivors.toml."
+
+[[criteria]]
+  id = "c-2"
+  text = "Every survivor-keyed deferred item routed to survivor-drain is resolved by a kill or an acceptance — none is re-routed forward to a later phase — and `dross deferred list --target survivor-drain` reports nothing outstanding at ship time."
+
+[[criteria]]
+  id = "c-3"
+  text = "Each accepted survivor's reason names a concrete checkable justification (unreachable through the CLI, or a shared category backed by evidence); a survivor whose subject is reachable through the CLI is killed by a test rather than accepted."
+
+[[criteria]]
+  id = "c-4"
+  text = "The mutation adapters' error and process seams are killed by real tests rather than accepted: the gremlins unreadable-report and zero-coverage-message branches, the stryker report-read, parse-error and future-status-default branches, and the stryker_net buildCmd prefix seam."
+
+[[criteria]]
+  id = "c-5"
+  text = "A test demonstrates the gremlins attribution ceiling — a switch case or const initializer with provable line coverage is still reported NOT-COVERED — so the shared category's reason is evidence-backed rather than asserted."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross verify`'s verdict gates on an absolute count of unclassified in-scope survivors instead of a ratio: any unclassified survivor inside the phase's own diff fails the phase."
+
+[[criteria]]
+  id = "c-7"
+  text = "A stale acceptance can be retired through the CLI, so removing an entry from .dross/survivors.toml never requires hand-editing the file."
+
+[[decisions]]
+  key = "drain_scope"
+  choice = "The drain covers every Go package in the repo, not only the four packages the 91 routed survivors live in."
+  why = "Only a repo-wide run makes \"zero unclassified\" a true statement about standing debt; a package-scoped drain leaves never-mutated packages accumulating silently."
+  locked = true
+
+[[decisions]]
+  key = "unclassified_gate"
+  choice = "Any unclassified in-scope survivor fails the phase — the absolute threshold is zero, with no tolerance band."
+  why = "Matches the drain-don't-relist rule; a numeric allowance re-opens the arbitrary-number argument every phase."
+  locked = true
+
+[[decisions]]
+  key = "bogus_arithmetic_class"
+  choice = "Const-initializer ARITHMETIC_BASE survivors are accepted under one named shared category whose reason is backed by a proof test, not filtered out at the adapter. String-concatenation ARITHMETIC_BASE survivors are NOT accepted: they are coverage gaps and are killed by covering the line."
+  why = "Amended during execution (t-5), on evidence that contradicted the original premise. A const initializer emits no go-cover block at all, so gremlins never compiles its mutant and no test can ever kill it — genuinely unkillable, so acceptance is the only honest disposition. A string-concatenation line is different: gremlins only compiles mutants on COVERED lines, and `string - string` does not compile, so covering the line kills the mutant automatically. Proven twice — t-3 took gremlins.go's four string-concat survivors to zero with tests and no acceptance, and the t-5 fixture reports its covered concat line KILLED x4 while its const initializer stays NOT COVERED x2. Accepting the string-concat half would silence killable survivors, which is exactly the laundering c-3 forbids. One evidence-backed category still beats near-identical paragraphs, and acceptance keeps the const entries visible in `dross survivor list` where adapter filtering would hide them."
+  locked = true
+
+[[decisions]]
+  key = "staleness_handling"
+  choice = "Ship a CLI retirement path for stale acceptances; staleness itself stays a non-gating verify NOTE."
+  why = "This phase multiplies acceptances roughly sixfold, so hand-editing survivors.toml becomes a real write-only gap. Gating on staleness would break verify on every refactor of a survivor-bearing file."
+  locked = true
+
+[[deferred]]
+  text = "`dross phase create <title>` coins a duplicate slug (survivor-drain-2) when a phase directory of that name already exists — scaffolded earlier by `dross survivor route --target` — instead of adopting it. It also appends the duplicate to the milestone's phases array and cuts a branch for it."
+  why = "Phase-lifecycle plumbing, unrelated to draining survivors. Hit during this command's own pre-flight and reverted by hand."
+  target = "phase-create-adoption"
+
+[[deferred]]
+  text = "Teach the gremlins adapter to drop ARITHMETIC_BASE mutants on string-concatenation and const-initializer lines so they never reach the survivor list at all."
+  why = "Removing inapplicable mutants changes the reported mutation score — that is mutation-score-truth's contract to move, not the drain's."
+  target = "mutation-score-truth"

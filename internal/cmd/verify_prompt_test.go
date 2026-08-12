@@ -103,8 +103,68 @@ func TestVerifyPromptPutsOutOfScopeInTheNonThresholdBranch(t *testing.T) {
 	if !strings.Contains(tail, verify.MutationOutOfScope) {
 		t.Errorf("out-of-scope is not listed in the coverage-only branch:\n%s", tail)
 	}
-	if !strings.Contains(prompt, "0.80/0.60 cutoffs do NOT apply") {
-		t.Error("the coverage-only branch must say the cutoffs do not apply")
+	if !strings.Contains(tail, "neither passes nor fails the phase") {
+		t.Error("the coverage-only branch must say the mutation leg does not gate when nothing was measured")
+	}
+}
+
+// TestVerifyPromptGatesOnUnclassifiedCount pins the verdict lever to the
+// absolute count. The score was the lever until this phase; it cannot be, since
+// a phase that adds a pile of killed mutants buries a live one and still clears
+// any cutoff.
+func TestVerifyPromptGatesOnUnclassifiedCount(t *testing.T) {
+	prompt := verifyPromptBody(t)
+
+	measured := strings.Index(prompt, "\nIf `mutation_status == \"measured\"`")
+	nonThreshold := strings.Index(prompt, "\nIf `mutation_status` is `unmeasurable`")
+	if measured < 0 || nonThreshold < 0 {
+		t.Fatalf("verify.md's verdict branches moved: measured=%d nonThreshold=%d", measured, nonThreshold)
+	}
+	branch := prompt[measured:nonThreshold]
+
+	failIdx := strings.Index(branch, "**`fail`**")
+	if failIdx < 0 {
+		t.Fatal("the measured branch has no fail bullet")
+	}
+	failBullet := branch[failIdx:]
+	if end := strings.Index(failBullet, "\n"); end > 0 {
+		failBullet = failBullet[:end]
+	}
+	if !strings.Contains(failBullet, "unclassified_in_scope") {
+		t.Errorf("the measured branch's fail bullet does not name unclassified_in_scope:\n%s", failBullet)
+	}
+}
+
+// TestVerifyPromptCarriesNoScoreCutoffs greps the WHOLE file. The 0.80/0.60
+// cutoffs were coached in four places besides the verdict branches; leaving any
+// of them turns the prompt into a contradiction, and an LLM reading a
+// contradictory prompt picks whichever half it saw last.
+func TestVerifyPromptCarriesNoScoreCutoffs(t *testing.T) {
+	prompt := verifyPromptBody(t)
+	for _, literal := range []string{"0.80", "0.60"} {
+		if strings.Contains(prompt, literal) {
+			t.Errorf("verify.md still coaches the %s score cutoff — the mutation leg gates on unclassified_in_scope now", literal)
+		}
+	}
+}
+
+// TestVerifyPromptThresholdSurvivesOnlyAsUserPreference: the word is allowed in
+// exactly one place — the guidance about capturing a user's OWN stated
+// preference as a project rule, which is not a verdict lever this prompt
+// applies. Pinning the count at one means a reintroduced threshold anywhere
+// else fails here rather than quietly becoming policy again.
+func TestVerifyPromptThresholdSurvivesOnlyAsUserPreference(t *testing.T) {
+	prompt := verifyPromptBody(t)
+	if got := strings.Count(strings.ToLower(prompt), "threshold"); got != 1 {
+		t.Fatalf("verify.md mentions \"threshold\" %d times, want exactly 1 (the user-preference rule guidance)", got)
+	}
+	for _, line := range strings.Split(prompt, "\n") {
+		if !strings.Contains(strings.ToLower(line), "threshold") {
+			continue
+		}
+		if !strings.Contains(line, "/dross-rule") {
+			t.Errorf("the surviving \"threshold\" mention is not the rule-capture guidance:\n%s", line)
+		}
 	}
 }
 
@@ -256,15 +316,24 @@ func TestReadmeDocumentsSurvivorCommands(t *testing.T) {
 	}
 	readme := string(b)
 
+	// Matched on the row's prefix, not on the exact verb set: pinning the
+	// literal list makes every new verb fail here for the wrong reason. The
+	// verbs themselves are asserted below, so an added verb still has to be
+	// documented — it just fails with a message that says which one is missing.
 	row := ""
 	for _, line := range strings.Split(readme, "\n") {
-		if strings.Contains(line, "`dross survivor {accept,route,list}`") {
+		if strings.Contains(line, "`dross survivor {") {
 			row = line
 			break
 		}
 	}
 	if row == "" {
-		t.Fatal("README has no `dross survivor {accept,route,list}` command-table row")
+		t.Fatal("README has no `dross survivor {...}` command-table row")
+	}
+	for _, verb := range []string{"accept", "route", "list", "retire"} {
+		if !strings.Contains(row, verb) {
+			t.Errorf("README survivor row does not name the %q verb:\n%s", verb, row)
+		}
 	}
 	for _, phrase := range []string{"survivors.toml", "reason", "--stale"} {
 		if !strings.Contains(row, phrase) {

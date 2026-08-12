@@ -115,32 +115,100 @@ func TestKeyIsTextDerived(t *testing.T) {
 // TestAmbiguityDetection pins the locked survivor_identity ambiguity rule:
 // identical normalized text on two lines is ambiguous, with the occurrence
 // count reported so the caller can say why suppression was withheld.
-func TestAmbiguityDetection(t *testing.T) {
+func TestRepeatedTextResolvesToDistinctScopedKeys(t *testing.T) {
 	src := []byte(strings.Join([]string{
 		"package p",
 		"",
-		"\treturn nil",
+		"func alpha() error {",
+		"\tif err != nil {",
+		"\t\treturn err",
+		"\t}",
+		"\tif err != nil {",
+		"\t\treturn err",
+		"\t}",
+		"}",
+		"",
+		"func bravo() error {",
+		"\tif err != nil {",
+		"\t\treturn err",
+		"\t}",
+		"}",
+		"",
 		"x := 1",
-		"    return nil",
 	}, "\n"))
 
-	got, err := ResolveSource(src, "a.go", 3, "OP")
+	// Three occurrences of the same line text across two functions. Each must
+	// resolve to its OWN key, or an acceptance cannot address one of them
+	// without addressing all three.
+	first, err := ResolveSource(src, "a.go", 4, "OP")
 	if err != nil {
-		t.Fatalf("ResolveSource: %v", err)
+		t.Fatal(err)
 	}
-	if !got.Ambiguous {
-		t.Errorf("Ambiguous = false, want true — identical normalized text on two lines is ambiguous")
+	second, err := ResolveSource(src, "a.go", 7, "OP")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got.Occurrences != 2 {
-		t.Errorf("Occurrences = %d, want 2", got.Occurrences)
+	other, err := ResolveSource(src, "a.go", 13, "OP")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	unique, err := ResolveSource(src, "a.go", 4, "OP")
-	if err != nil {
-		t.Fatalf("ResolveSource unique line: %v", err)
+	for _, r := range []Resolved{first, second, other} {
+		if r.Occurrences != 3 {
+			t.Errorf("Occurrences = %d, want 3", r.Occurrences)
+		}
+		if r.Ambiguous {
+			t.Errorf("a scoped key must not report Ambiguous: %+v", r)
+		}
+		if r.Key == "" {
+			t.Errorf("no key derived: %+v", r)
+		}
 	}
-	if unique.Ambiguous || unique.Occurrences != 1 {
-		t.Errorf("unique line reported Ambiguous=%v Occurrences=%d, want false/1", unique.Ambiguous, unique.Occurrences)
+
+	keys := map[string]string{first.Key: "first", second.Key: "second", other.Key: "other"}
+	if len(keys) != 3 {
+		t.Fatalf("repeated text collapsed to %d distinct keys, want 3 — an acceptance would suppress survivors it cannot be attributed to", len(keys))
+	}
+
+	// The scope is the enclosing declaration, and the ordinal counts WITHIN it,
+	// so the two in alpha() are 1 and 2 while bravo()'s restarts at 1. That is
+	// what keeps an edit in one function from renumbering the other's.
+	if first.Scope != "func alpha() error {" || first.Ordinal != 1 {
+		t.Errorf("first = scope %q ordinal %d", first.Scope, first.Ordinal)
+	}
+	if second.Scope != "func alpha() error {" || second.Ordinal != 2 {
+		t.Errorf("second = scope %q ordinal %d", second.Scope, second.Ordinal)
+	}
+	if other.Scope != "func bravo() error {" || other.Ordinal != 1 {
+		t.Errorf("other = scope %q ordinal %d", other.Scope, other.Ordinal)
+	}
+}
+
+// TestUniqueTextKeepsItsUnscopedKey is the backward-compatibility half:
+// scoping is ADDITIVE. A line whose text occurs once keys exactly as it did
+// before scoping existed, so every acceptance recorded earlier still resolves.
+func TestUniqueTextKeepsItsUnscopedKey(t *testing.T) {
+	src := []byte(strings.Join([]string{
+		"package p",
+		"",
+		"func alpha() error {",
+		"\tif limit > 0 {",
+		"\t}",
+		"}",
+	}, "\n"))
+
+	got, err := ResolveSource(src, "a.go", 4, "OP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Occurrences != 1 || got.Ambiguous {
+		t.Errorf("unique line reported Ambiguous=%v Occurrences=%d, want false/1", got.Ambiguous, got.Occurrences)
+	}
+	if got.Key != KeyFor("a.go", "OP", "if limit > 0 {") {
+		t.Errorf("a unique line's key changed — every pre-scoping acceptance would stop resolving")
+	}
+	if got.Scope != "" || got.Ordinal != 0 {
+		t.Errorf("an unscoped key must carry no scope: %+v", got)
 	}
 }
 
@@ -314,4 +382,71 @@ func buildFixture(t *testing.T, at int, target string, total int) []byte {
 	}
 	lines[at-1] = target
 	return []byte(strings.Join(lines, "\n") + "\n")
+}
+
+// TestResolveAtSplitsRootFromRelPath covers ResolveAt's own read guard, which
+// the Resolve tests above never reach — they exercise the single-path variant.
+//
+// The root/rel split is load-bearing (see ResolveAt's doc): the key must be
+// derived from the path the STORE records, never the absolute path a caller
+// happened to read, or the key never matches again. So the success case
+// asserts the key equals the one derived from the relative path alone, and
+// both failure arms are pinned separately: a missing subject is ErrSubjectGone,
+// an unreadable one is not.
+func TestResolveAtSplitsRootFromRelPath(t *testing.T) {
+	root := t.TempDir()
+	rel := "internal/pkg/a.go"
+	src := buildFixture(t, 12, "\tif limit > 0 {", 20)
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("resolves against root but keys on rel", func(t *testing.T) {
+		got, err := ResolveAt(root, rel, 12, "OP")
+		if err != nil {
+			t.Fatalf("ResolveAt: %v", err)
+		}
+		want, err := ResolveSource(src, rel, 12, "OP")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("ResolveAt = %+v, want the rel-derived identity %+v", got, want)
+		}
+		// The absolute path must NOT be what the key was derived from.
+		abs, err := ResolveSource(src, path, 12, "OP")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Key == abs.Key {
+			t.Error("ResolveAt keyed on the absolute path — that key can never be matched again")
+		}
+	})
+
+	t.Run("a missing subject is ErrSubjectGone", func(t *testing.T) {
+		_, err := ResolveAt(root, "internal/pkg/gone.go", 12, "OP")
+		if !errors.Is(err, ErrSubjectGone) {
+			t.Errorf("err = %v, want ErrSubjectGone", err)
+		}
+	})
+
+	t.Run("an unreadable subject is not ErrSubjectGone", func(t *testing.T) {
+		// A directory where the file should be: the read fails with something
+		// other than ErrNotExist. Collapsing the two would let a permissions
+		// blip mark live acceptances stale.
+		if err := os.MkdirAll(filepath.Join(root, "internal", "pkg", "dir.go"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		_, err := ResolveAt(root, "internal/pkg/dir.go", 1, "OP")
+		if err == nil {
+			t.Fatal("ResolveAt on a directory returned no error")
+		}
+		if errors.Is(err, ErrSubjectGone) {
+			t.Errorf("an unreadable subject was reported as gone: %v", err)
+		}
+	})
 }

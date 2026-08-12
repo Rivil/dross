@@ -2009,3 +2009,56 @@ func TestDoctorEscapeHatchCarriesPort(t *testing.T) {
 		t.Errorf("escape-hatch hint dropped the port:\n%s", out)
 	}
 }
+
+// TestDetectMissingPhaseDirsNeverErrors is the evidence behind doctor.go:360's
+// acceptance. That switch arm reads `case missingDirsErr != nil:` — but
+// detectMissingPhaseDirs returns nil on EVERY path, including the ones where
+// git itself failed (a missing ref and an unreadable tree are both "nothing
+// known", by design). The arm is therefore dead by construction, not merely
+// untested, and no fixture can reach it.
+//
+// Pinning that here makes the acceptance falsifiable: the day someone makes
+// this function report a real error, this test fails and the arm becomes
+// reachable — at which point it needs a test, not a reason.
+func TestDetectMissingPhaseDirsNeverErrors(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T) (repoDir, root string)
+	}{
+		{
+			name: "not a git repo at all",
+			setup: func(t *testing.T) (string, string) {
+				dir := realTempDir(t)
+				return dir, filepath.Join(dir, ".dross")
+			},
+		},
+		{
+			name: "a git repo with no origin ref",
+			setup: func(t *testing.T) (string, string) {
+				dir := realTempDir(t)
+				gitInit(t, dir, "")
+				return dir, filepath.Join(dir, ".dross")
+			},
+		},
+		{
+			name: "a git repo whose origin ref carries no .dross/phases tree",
+			setup: func(t *testing.T) (string, string) {
+				dir := realTempDir(t)
+				gitInit(t, dir, "https://example.com/x/y")
+				return dir, filepath.Join(dir, ".dross")
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repoDir, root := tc.setup(t)
+			got, err := detectMissingPhaseDirs(repoDir, root, "main")
+			if err != nil {
+				t.Fatalf("detectMissingPhaseDirs returned an error (%v) — doctor.go's "+
+					"missingDirsErr arm is no longer dead and now needs a test, not an acceptance", err)
+			}
+			_ = got
+		})
+	}
+}

@@ -2,6 +2,7 @@ package codex
 
 import (
 	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -177,5 +178,91 @@ func TestIndexUsesAstGrepWhenAvailable(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("Index didn't pick up the ast-grep fake: %+v", res.Symbols)
+	}
+}
+
+// TestRealRunAstGrepFnHandlesEveryOutputShape covers the REAL runAstGrepFn
+// body. Every other test in this package substitutes it wholesale, so its four
+// branches never ran — the invoker that actually talks to ast-grep was the one
+// piece of this package with no coverage at all.
+//
+// Only the process seam (astGrepOutput) is faked, so the decode path under test
+// is the shipped one.
+func TestRealRunAstGrepFnHandlesEveryOutputShape(t *testing.T) {
+	fakeOutput := func(t *testing.T, out []byte, err error) {
+		t.Helper()
+		prev := astGrepOutput
+		astGrepOutput = func([]string) ([]byte, error) { return out, err }
+		t.Cleanup(func() { astGrepOutput = prev })
+	}
+
+	t.Run("a spawn failure is wrapped, not swallowed", func(t *testing.T) {
+		fakeOutput(t, nil, errors.New("exec: no such file"))
+		got, err := runAstGrepFn("a.ts", "ts", "function $NAME($$$) { $$$ }")
+		if err == nil {
+			t.Fatal("a failing ast-grep run returned no error")
+		}
+		if !strings.Contains(err.Error(), "ast-grep run:") {
+			t.Errorf("err = %q, want it wrapped with the run context", err)
+		}
+		if got != nil {
+			t.Errorf("matches returned alongside an error: %+v", got)
+		}
+	})
+
+	t.Run("empty output is no matches, not an error", func(t *testing.T) {
+		// ast-grep prints nothing when a pattern matches nothing. Treating
+		// that as a decode failure would make every clean scan an error.
+		for _, body := range []string{"", "   ", "\n\t\n"} {
+			fakeOutput(t, []byte(body), nil)
+			got, err := runAstGrepFn("a.ts", "ts", "class $NAME { $$$ }")
+			if err != nil {
+				t.Errorf("empty output %q errored: %v", body, err)
+			}
+			if got != nil {
+				t.Errorf("empty output %q yielded matches: %+v", body, got)
+			}
+		}
+	})
+
+	t.Run("malformed JSON is a decode error", func(t *testing.T) {
+		fakeOutput(t, []byte("{not an array"), nil)
+		_, err := runAstGrepFn("a.ts", "ts", "class $NAME { $$$ }")
+		if err == nil {
+			t.Fatal("malformed ast-grep JSON returned no error")
+		}
+		if !strings.Contains(err.Error(), "decode ast-grep JSON") {
+			t.Errorf("err = %q, want the decode context", err)
+		}
+	})
+
+	t.Run("a valid array is decoded", func(t *testing.T) {
+		fakeOutput(t, []byte(`[{"file":"src/a.ts","range":{"start":{"line":11}},`+
+			`"metaVariables":{"single":{"NAME":{"text":"parseToken"}}}}]`), nil)
+		got, err := runAstGrepFn("src/a.ts", "ts", "function $NAME($$$) { $$$ }")
+		if err != nil {
+			t.Fatalf("runAstGrepFn: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("decoded %d matches, want 1: %+v", len(got), got)
+		}
+		if got[0].File != "src/a.ts" {
+			t.Errorf("File = %q", got[0].File)
+		}
+		if name := got[0].MetaVars.Single["NAME"].Text; name != "parseToken" {
+			t.Errorf("NAME = %q, want parseToken", name)
+		}
+	})
+}
+
+// TestAstGrepAvailableAsksLookPath covers the real availability closure, which
+// every other test replaces with a constant. The answer depends on whether
+// ast-grep is installed here, so it is asserted against exec.LookPath rather
+// than against a fixed value — the point is that the closure consults the PATH
+// at all, not what this machine happens to have.
+func TestAstGrepAvailableAsksLookPath(t *testing.T) {
+	_, lookErr := exec.LookPath("ast-grep")
+	if got, want := astGrepAvailable(), lookErr == nil; got != want {
+		t.Errorf("astGrepAvailable() = %v, but exec.LookPath says %v", got, want)
 	}
 }

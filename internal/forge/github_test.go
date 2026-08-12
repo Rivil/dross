@@ -287,3 +287,73 @@ func TestGitHubEnsureMilestone(t *testing.T) {
 		}
 	})
 }
+
+// TestGitHubErrorSnippetTruncatesAndHints is the GitHub twin of the YouTrack
+// and Jira error-path tests. All three transports share this shape and each is
+// pinned in its own package file, because the hint text differs per provider
+// and that text is the whole point: it turns a bare 401 into "which token".
+func TestGitHubErrorSnippetTruncatesAndHints(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		body    string
+		wantIn  []string
+		wantOut []string
+	}{
+		{
+			name:    "oversized body is truncated to the cap",
+			status:  500,
+			body:    bigBody(),
+			wantOut: []string{"TAIL-MARKER"},
+		},
+		{
+			name:   "a short body is passed through whole",
+			status: 500,
+			body:   "boom",
+			wantIn: []string{"boom"},
+		},
+		{
+			name:   "401 names the token env",
+			status: 401,
+			body:   "unauthorized",
+			wantIn: []string{ghTokenEnv, "expired"},
+		},
+		{
+			name:   "403 mentions permission or rate limiting",
+			status: 403,
+			body:   "forbidden",
+			wantIn: []string{"lacks permission"},
+		},
+		{
+			name:   "404 names the repo and the config key",
+			status: 404,
+			body:   "missing",
+			wantIn: []string{"octo", "repo", "project"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			})
+
+			_, err := c.GetIssue("1")
+			if err == nil {
+				t.Fatalf("status %d returned no error", tc.status)
+			}
+			msg := err.Error()
+			for _, want := range tc.wantIn {
+				if !strings.Contains(msg, want) {
+					t.Errorf("error %q does not mention %q", msg, want)
+				}
+			}
+			for _, unwanted := range tc.wantOut {
+				if strings.Contains(msg, unwanted) {
+					t.Errorf("error %q still carries %q — the snippet was not truncated", msg, unwanted)
+				}
+			}
+		})
+	}
+}

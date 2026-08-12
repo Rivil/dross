@@ -94,22 +94,22 @@ func TestScopingAttributionHoldsEndToEnd(t *testing.T) {
 	// THIS PHASE's ("gremlins mutant survived"). The sibling still appears, as
 	// unclassified out-of-scope debt with the verbs that clear it — visible, but
 	// never attributed to this phase and never in its score.
-	var phaseFlags, siblingFlags []verify.Finding
+	// The phase's own survivor is BLOCKING — an unclassified survivor inside
+	// the diff is the mutation leg's fail lever. The sibling's stays a FLAG:
+	// visible for draining, never able to fail a phase that did not create it.
+	var phaseBlocking, siblingFlags []verify.Finding
 	for _, f := range v.Findings {
-		if f.Severity != "FLAG" {
-			continue
-		}
 		switch {
 		case strings.Contains(f.Text, "mutant survived: b.go"):
 			t.Errorf("the untouched sibling was attributed to this phase: %+v", f)
-		case strings.Contains(f.Text, "unclassified out-of-scope survivor: b.go"):
+		case f.Severity == "FLAG" && strings.Contains(f.Text, "unclassified out-of-scope survivor: b.go"):
 			siblingFlags = append(siblingFlags, f)
-		default:
-			phaseFlags = append(phaseFlags, f)
+		case f.Severity == "BLOCKING":
+			phaseBlocking = append(phaseBlocking, f)
 		}
 	}
-	if len(phaseFlags) != 1 || !strings.Contains(phaseFlags[0].Text, "a.go") {
-		t.Errorf("expected exactly one phase FLAG, for a.go's survivor: %+v", phaseFlags)
+	if len(phaseBlocking) != 1 || !strings.Contains(phaseBlocking[0].Text, "a.go") {
+		t.Errorf("expected exactly one phase BLOCKING finding, for a.go's survivor: %+v", phaseBlocking)
 	}
 	if len(siblingFlags) != 1 {
 		t.Errorf("the sibling's survivor must be surfaced once as unclassified: %+v", siblingFlags)

@@ -2,6 +2,7 @@ package forge
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -393,5 +394,209 @@ func TestYouTrackBearerAuth(t *testing.T) {
 	// The readable id, never an internal database id, addresses the issue.
 	if !strings.HasSuffix(gotPath, "/PROJ-7") {
 		t.Errorf("issue path %q is not addressed by readable id", gotPath)
+	}
+}
+
+// bigBody returns a response body longer than the 500-byte snippet cap, with a
+// recognisable tail so truncation is provable rather than merely a length check.
+func bigBody() string {
+	return strings.Repeat("x", 600) + "TAIL-MARKER"
+}
+
+// TestYouTrackErrorSnippetTruncatesAndHints covers the error branch of the
+// YouTrack transport, which the happy-path fakes never reach. Both halves
+// matter operationally: an untruncated body dumps a whole HTML error page into
+// the user's terminal, and the per-status hint is the difference between "403"
+// and knowing which token to fix.
+func TestYouTrackErrorSnippetTruncatesAndHints(t *testing.T) {
+	cases := []struct {
+		name     string
+		status   int
+		body     string
+		wantIn   []string
+		wantOut  []string
+		truncate bool
+	}{
+		{
+			name:     "oversized body is truncated to the cap",
+			status:   500,
+			body:     bigBody(),
+			wantOut:  []string{"TAIL-MARKER"},
+			truncate: true,
+		},
+		{
+			name:   "a short body is passed through whole",
+			status: 500,
+			body:   "boom",
+			wantIn: []string{"boom"},
+		},
+		{
+			name:   "401 names the token env",
+			status: 401,
+			body:   "unauthorized",
+			wantIn: []string{ytTokenEnv, "expired"},
+		},
+		{
+			name:   "403 names the permission problem",
+			status: 403,
+			body:   "forbidden",
+			wantIn: []string{"lacks permission"},
+		},
+		{
+			name:   "404 names the project and the config keys to check",
+			status: 404,
+			body:   "missing",
+			wantIn: []string{"PROJ", "base_url"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := newTestYTClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			})
+
+			_, err := c.GetIssue("PROJ-1")
+			if err == nil {
+				t.Fatalf("status %d returned no error", tc.status)
+			}
+			msg := err.Error()
+			for _, want := range tc.wantIn {
+				if !strings.Contains(msg, want) {
+					t.Errorf("error %q does not mention %q", msg, want)
+				}
+			}
+			for _, unwanted := range tc.wantOut {
+				if strings.Contains(msg, unwanted) {
+					t.Errorf("error %q still carries %q — the snippet was not truncated", msg, unwanted)
+				}
+			}
+			if tc.truncate && strings.Count(msg, "x") > 520 {
+				t.Errorf("snippet is %d x's long, want it capped near 500", strings.Count(msg, "x"))
+			}
+		})
+	}
+}
+
+// TestYouTrackCreateBacklogItem covers both arms of the fix-version guard and
+// the create path's own error branch. Attaching the version is how a backlog
+// item lands in the right milestone bundle; skipping it when none is given is
+// what keeps an unversioned item from being filed against an empty version.
+func TestYouTrackCreateBacklogItem(t *testing.T) {
+	capture := func(t *testing.T, fixVersion string) map[string]any {
+		t.Helper()
+		var got map[string]any
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewDecoder(r.Body).Decode(&got)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"idReadable":"PROJ-9","summary":"s"}`))
+		})
+		issue, err := c.CreateBacklogItem("s", "d", fixVersion)
+		if err != nil {
+			t.Fatalf("CreateBacklogItem: %v", err)
+		}
+		if issue.Key != "PROJ-9" {
+			t.Errorf("Key = %q, want PROJ-9", issue.Key)
+		}
+		return got
+	}
+
+	t.Run("with a fix version it is attached", func(t *testing.T) {
+		body := capture(t, "v1.3")
+		fields, ok := body["customFields"]
+		if !ok {
+			t.Fatalf("no customFields sent: %v", body)
+		}
+		if !strings.Contains(fmt.Sprint(fields), "v1.3") {
+			t.Errorf("customFields does not carry the version: %v", fields)
+		}
+	})
+
+	t.Run("without one, no customFields are sent", func(t *testing.T) {
+		body := capture(t, "")
+		if _, ok := body["customFields"]; ok {
+			t.Errorf("an empty fix version still sent customFields: %v", body)
+		}
+	})
+
+	t.Run("a transport failure is wrapped", func(t *testing.T) {
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte("nope"))
+		})
+		if _, err := c.CreateBacklogItem("s", "d", ""); err == nil {
+			t.Fatal("a failing create returned no error")
+		} else if !strings.Contains(err.Error(), "create backlog item") {
+			t.Errorf("err = %q, want the create context", err)
+		}
+	})
+}
+
+// TestYouTrackLinkSubtask covers the commands-API link path and its error arm.
+// Re-applying an existing link is a documented no-op, so this is called on
+// every re-sync — a silently failing link leaves an orphaned child issue.
+func TestYouTrackLinkSubtask(t *testing.T) {
+	t.Run("applies the subtask command to the child", func(t *testing.T) {
+		var got map[string]any
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewDecoder(r.Body).Decode(&got)
+			w.WriteHeader(200)
+		})
+		if err := c.LinkSubtask("PROJ-1", "PROJ-2"); err != nil {
+			t.Fatalf("LinkSubtask: %v", err)
+		}
+		if q, _ := got["query"].(string); q != "subtask of PROJ-1" {
+			t.Errorf("query = %q, want the parent in the command", q)
+		}
+		if !strings.Contains(fmt.Sprint(got["issues"]), "PROJ-2") {
+			t.Errorf("the child issue is not the command's target: %v", got["issues"])
+		}
+	})
+
+	t.Run("a failure names both issues", func(t *testing.T) {
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(500)
+		})
+		err := c.LinkSubtask("PROJ-1", "PROJ-2")
+		if err == nil {
+			t.Fatal("a failing link returned no error")
+		}
+		for _, want := range []string{"PROJ-1", "PROJ-2"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("err = %q, want it to name %q", err, want)
+			}
+		}
+	})
+}
+
+// TestYouTrackBuildQueryFoldsStateAndLabels covers the label loop, which no
+// existing test reaches — every ListIssues fixture filters by state only. The
+// query is what scopes a sync to this project's issues, so a dropped label
+// clause silently widens a sync to the whole board.
+func TestYouTrackBuildQueryFoldsStateAndLabels(t *testing.T) {
+	c, _ := newTestYTClient(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) })
+
+	cases := []struct {
+		name   string
+		filter IssueFilter
+		want   string
+	}{
+		{"default state is open", IssueFilter{}, "project: PROJ #Unresolved"},
+		{"explicit open", IssueFilter{State: "open"}, "project: PROJ #Unresolved"},
+		{"closed", IssueFilter{State: "closed"}, "project: PROJ #Resolved"},
+		{"one label", IssueFilter{Labels: []string{"bug"}}, "project: PROJ #Unresolved tag: bug"},
+		{
+			"several labels, each its own clause",
+			IssueFilter{State: "closed", Labels: []string{"bug", "dross"}},
+			"project: PROJ #Resolved tag: bug tag: dross",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := c.buildQuery(tc.filter); got != tc.want {
+				t.Errorf("buildQuery = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

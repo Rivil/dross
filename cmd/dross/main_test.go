@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -602,5 +604,88 @@ func writeFixture(t *testing.T, path, body string) {
 	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestMainEntryPoint drives the real main() in a subprocess, which is the only
+// way to reach it: main() ends in os.Exit, so calling it in-process would take
+// the test binary down with it.
+//
+// The two guards it covers are the telemetry fallbacks, and they only ever run
+// in opposite situations, so both arms need a real invocation:
+//
+//   - `if resolvedCmd == nil` — Execute can fail BEFORE PersistentPreRun (an
+//     unknown subcommand, a flag parse error), leaving no resolved command and
+//     a telemetry event with no `cmd` field. The fallback re-Finds it, so the
+//     event still records what was attempted.
+//   - `if err != nil` — the exit-code path. Dropped, dross would exit 0 on
+//     every failure and every caller gating on `dross …` would see success.
+//
+// The child branch replaces os.Args before calling main(), so the invocation
+// under test is exact rather than whatever `go test` was passed.
+func TestMainEntryPoint(t *testing.T) {
+	if args, ok := os.LookupEnv("DROSS_MAIN_TEST_ARGS"); ok {
+		os.Args = append([]string{"dross"}, strings.Fields(args)...)
+		main()
+		return
+	}
+
+	cases := []struct {
+		name     string
+		args     string
+		wantExit int
+		wantErr  string // substring of combined output; empty means "no dross: line"
+	}{
+		{
+			name:     "a resolved command exits 0",
+			args:     "version",
+			wantExit: 0,
+		},
+		{
+			name:     "an unknown command exits 1 and names the failure",
+			args:     "definitelynotacommand",
+			wantExit: 1,
+			wantErr:  "dross:",
+		},
+		{
+			name:     "a flag parse error also exits 1",
+			args:     "--definitelynotaflag",
+			wantExit: 1,
+			wantErr:  "dross:",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sub := exec.Command(os.Args[0], "-test.run=^TestMainEntryPoint$")
+			sub.Env = append(os.Environ(),
+				"DROSS_MAIN_TEST_ARGS="+c.args,
+				"DROSS_NO_TELEMETRY=1",
+				"HOME="+t.TempDir(),
+				"CLAUDE_CONFIG_DIR="+t.TempDir(),
+			)
+			out, err := sub.CombinedOutput()
+
+			exit := 0
+			if err != nil {
+				var ee *exec.ExitError
+				if !errors.As(err, &ee) {
+					t.Fatalf("running the child failed outright: %v\n%s", err, out)
+				}
+				exit = ee.ExitCode()
+			}
+			if exit != c.wantExit {
+				t.Errorf("`dross %s` exited %d, want %d:\n%s", c.args, exit, c.wantExit, out)
+			}
+			if c.wantErr == "" {
+				if strings.Contains(string(out), "dross: ") {
+					t.Errorf("`dross %s` succeeded but printed an error line:\n%s", c.args, out)
+				}
+				return
+			}
+			if !strings.Contains(string(out), c.wantErr) {
+				t.Errorf("`dross %s` did not print %q:\n%s", c.args, c.wantErr, out)
+			}
+		})
 	}
 }

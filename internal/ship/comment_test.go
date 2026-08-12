@@ -205,3 +205,40 @@ func TestPostGitLabCommentBearerScheme(t *testing.T) {
 		t.Errorf("PRIVATE-TOKEN should be empty under bearer, got %q", gotPriv)
 	}
 }
+
+// TestPostGitHubCommentSurfacesFailures covers the error branch of the comment
+// path. The two arms are deliberately different messages: a missing `gh` is a
+// setup problem with an install pointer, and anything else must surface gh's
+// own output — swallowing it leaves the user with "it failed" and no idea that,
+// say, the PR was already closed.
+func TestPostGitHubCommentSurfacesFailures(t *testing.T) {
+	t.Run("a gh failure carries gh's own output", func(t *testing.T) {
+		prev := ghCommand
+		ghCommand = func(args ...string) *exec.Cmd {
+			// `false` exits non-zero; the message comes from the printed line.
+			return exec.Command("sh", "-c", "echo 'pull request is closed' >&2; exit 1")
+		}
+		defer func() { ghCommand = prev }()
+
+		err := postGitHubComment(CommentOpts{Provider: "github", PRNumber: 7, Body: "hi"})
+		if err == nil {
+			t.Fatal("a failing gh invocation returned no error")
+		}
+		if !strings.Contains(err.Error(), "gh pr comment") {
+			t.Errorf("err = %q, want the command context", err)
+		}
+		if !strings.Contains(err.Error(), "pull request is closed") {
+			t.Errorf("err = %q, want gh's own output included", err)
+		}
+	})
+
+	t.Run("success returns nil", func(t *testing.T) {
+		prev := ghCommand
+		ghCommand = func(args ...string) *exec.Cmd { return exec.Command("true") }
+		defer func() { ghCommand = prev }()
+
+		if err := postGitHubComment(CommentOpts{Provider: "github", PRNumber: 7, Body: "hi"}); err != nil {
+			t.Errorf("a successful comment returned %v", err)
+		}
+	})
+}

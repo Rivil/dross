@@ -29,7 +29,7 @@ dross verify <phase> [--skip-mutation]
 This shells out to mutation tools (currently Stryker for TS/JS/Svelte; other languages skip with a reason), parses the JSON reports, and writes:
 
 - `.dross/phases/<id>/tests.json` — raw machine output, killed/survived counts per language, plus the `scope` block (what the run scoped to) and the `out_of_scope` list (survivors in files this phase never touched)
-- `.dross/phases/<id>/verify.toml` — skeleton verdict with `verdict = "pending"`, per-criterion `status = "unknown"`, and `[summary].mutation_status` of `measured | unmeasurable | skipped | out-of-scope` (use this — not the raw score — to decide if mutation thresholds apply in §3)
+- `.dross/phases/<id>/verify.toml` — skeleton verdict with `verdict = "pending"`, per-criterion `status = "unknown"`, and `[summary].mutation_status` of `measured | unmeasurable | skipped | out-of-scope` (use this — not the raw score — to decide whether the mutation leg gates at all in §3), plus `[summary].unclassified_in_scope`, the mutation leg's fail lever
 
 **The score covers only this phase's changed files.** Mutation tools attribute at a coarser granularity than a phase does — gremlins mutates a whole Go package — so every report is filtered against the phase's change set before it reaches these files. A survivor in an untouched sibling is real, but it is not this phase's, and it is neither scored nor flagged here. `[summary].mutants_in_scope` is the denominator that filtering left: read it next to the score, because 0.50 over 2 mutants and 0.50 over 200 are the same number and not the same evidence.
 
@@ -119,19 +119,21 @@ criteria_covered   = <count where status=covered>
 criteria_uncovered = <count where status=uncovered or weak>
 ```
 
-Compute `[verify].verdict`. **Read `mutation_status` first** — when status is not `measured`, the score is a 0/0 artifact, not a signal, and the score thresholds must NOT be applied. This is the dogfood-surfaced bug from FeastAhead phase 04/05: Stryker scoped to `src/lib/utils` only, phase touched server/Svelte files, mutation_score landed at 0.0, verdict heuristic falsely flagged `fail` despite 5/5 criteria covered.
+Compute `[verify].verdict`. **Read `mutation_status` first** — when status is not `measured`, the score is a 0/0 artifact and the mutation leg has nothing to say. This is the dogfood-surfaced bug from FeastAhead phase 04/05: Stryker scoped to `src/lib/utils` only, phase touched server/Svelte files, mutation_score landed at 0.0, verdict heuristic falsely flagged `fail` despite 5/5 criteria covered.
+
+**The mutation leg gates on a count, not a ratio.** `[summary].unclassified_in_scope` is the number of survivors inside this phase's own diff carrying no disposition — neither accepted with a reason nor routed to a destination. The bar is zero, with no tolerance band. `mutation_score` is still reported and still worth reading as evidence of how thorough the suite is, but it is **not** a verdict lever: a phase that adds a pile of killed mutants can bury a live one and still clear any cutoff, and a cutoff re-opens the arbitrary-number argument every phase.
 
 If `mutation_status == "measured"`:
-- **`pass`** if all criteria are `covered`, mutation score ≥ 0.80, no BLOCKING findings.
-- **`partial`** if at least one criterion is `weak` OR mutation score is between 0.60-0.80 OR there are FLAG findings but no BLOCKING.
-- **`fail`** if any criterion is `uncovered`, OR mutation score < 0.60, OR any BLOCKING findings exist.
+- **`pass`** if all criteria are `covered`, `unclassified_in_scope` is 0, and there are no BLOCKING findings.
+- **`partial`** if at least one criterion is `weak`, OR there are FLAG findings but no BLOCKING.
+- **`fail`** if any criterion is `uncovered`, OR `unclassified_in_scope` > 0, OR any BLOCKING findings exist.
 
-If `mutation_status` is `unmeasurable`, `skipped` or `out-of-scope` (base verdict on criterion coverage alone — the 0.80/0.60 cutoffs do NOT apply):
+If `mutation_status` is `unmeasurable`, `skipped` or `out-of-scope`, base verdict on criterion coverage alone — nothing was measured, so the mutation leg neither passes nor fails the phase:
 - **`pass`** if all criteria are `covered` and no BLOCKING findings. Add a NOTE finding recording why mutation didn't apply (e.g. "mutation unmeasurable: project scope excludes all touched files", "mutation skipped: --skip-mutation passed", or "mutation out-of-scope: every mutant landed in files this phase did not touch").
 - **`partial`** if at least one criterion is `weak` OR there are FLAG findings but no BLOCKING.
 - **`fail`** if any criterion is `uncovered` OR any BLOCKING findings exist.
 
-Don't tune the thresholds without flagging it. The 0.80/0.60 mutation cutoffs are heuristics — if the user wants different values for their project, they can edit verify.toml manually after.
+Each unclassified in-scope survivor is seeded as its own BLOCKING finding naming `file:line (op)`, so clearing the leg means clearing them individually — kill it with a test, accept it with `dross survivor accept --reason`, or route it with `dross survivor route --target`. Do not clear one by re-routing it to the phase you are verifying.
 
 Add findings as needed (preserve the ones the skeleton seeded from surviving mutants):
 
@@ -244,7 +246,7 @@ state is on disk — safe to /clear · fresh session: /dross-execute <id>
 
 - **Follow the interaction playbook (`_interaction.md`); verify.toml is never a review medium.** §4 surfaces the verdict plus a compact criterion→test/status mapping — the report the user must trust — and never pastes the raw `verify.toml` back. Point the user at the file for surviving-mutant detail rather than dumping it.
 - **Don't fake coverage.** If you can't find a test that maps to a criterion, mark it `uncovered`. Better to have an honest `fail` verdict than a false `pass`.
-- **Don't tune thresholds silently.** If the user pushes back ("0.80 is too strict for this codebase"), capture that as a project-scope rule via `/dross-rule` ("mutation score threshold is 0.70 for this project") so future verifies inherit it consistently.
+- **Capture a stated preference as a rule, don't apply it ad hoc.** If the user pushes back on how the verdict is decided — including asking for a score threshold this project should hold itself to — capture that as a project-scope rule via `/dross-rule` so future verifies inherit it consistently rather than it being re-litigated per run. A rule the user wrote is not a verdict lever this prompt invented.
 - **Don't write tests yourself.** /dross-verify is a check, not a fix. If criteria are uncovered, point the user back to /dross-execute (which can amend the failing task) or /dross-plan (to add a test-writing task).
 - **Don't skip the cross-check.** Surviving mutants in covered code is the whole point of mutation testing — failing to downgrade `covered` → `weak` when a mutant in the touched file survives is the exact theatrical-coverage problem dross exists to catch.
 - **Single pass, no checker loop.** /dross-verify writes a verdict; the user decides what to do. Don't auto-rerun after fixes.

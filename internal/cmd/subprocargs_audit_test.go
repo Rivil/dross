@@ -94,6 +94,10 @@ var valueTakingFlags = map[string]map[string]bool{
 	},
 	"npx":    {"--mutate": true, "--reporters": true},
 	"dotnet": {"--output": true, "--reporter": true},
+	// `go list -f <template>`: the template is a constant format string at
+	// every call site, but the carve-out has to exist or the value reads as an
+	// unfenced positional.
+	"go": {"-f": true},
 }
 
 // separatorTokens are the end-of-options tokens any tool in the table uses.

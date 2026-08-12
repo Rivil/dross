@@ -62,7 +62,53 @@ type Gremlins struct {
 	// TestCPU caps the CPUs each mutant's test run may use (--test-cpu).
 	// Zero or negative falls back to DefaultTestCPU (1).
 	TestCPU int
+
+	// Unmeasured records every package Run excluded from the merged score,
+	// with why. It is set by each Run, replacing whatever the previous Run
+	// left, so it always describes the most recent invocation.
+	//
+	// The reasons were previously a local slice printed to stderr and thrown
+	// away. A caller that has to decide whether "no survivors" means "clean"
+	// or "never measured" cannot read stderr — and the two are the opposite
+	// of each other, so the distinction has to survive the call.
+	Unmeasured []Unmeasured
 }
+
+// UnmeasuredKind is why a package contributed nothing to the merged score.
+// The kinds are deliberately distinguishable as data rather than by matching
+// on Message: a caller that greps prose breaks the moment the prose is
+// reworded, and these three call for opposite handling.
+type UnmeasuredKind string
+
+const (
+	// UnmeasuredMissing — gremlins wrote no report at all for the package,
+	// so nothing is known about it. Absence of survivors here is absence of
+	// evidence, and a drain must treat it as fatal rather than as clean.
+	UnmeasuredMissing UnmeasuredKind = "missing"
+
+	// UnmeasuredUnreadable — a report exists but could not be parsed. Like
+	// missing, it yields no rows: nothing was learned about the package.
+	UnmeasuredUnreadable UnmeasuredKind = "unreadable"
+
+	// UnmeasuredUncovered — the report parsed fine, but every mutant in it is
+	// NOT COVERED. The package IS measured; it just has no usable coverage,
+	// so its rows are real survivors to classify even though excluding them
+	// keeps a coverage blind spot from masquerading as a score.
+	UnmeasuredUncovered UnmeasuredKind = "uncovered"
+)
+
+// Unmeasured is one package left out of the merged score, and why.
+type Unmeasured struct {
+	// Package is the gremlins package path Run invoked, e.g. "./internal/cmd".
+	Package string
+	// Kind classifies the exclusion; see UnmeasuredKind.
+	Kind UnmeasuredKind
+	// Message is the human-readable line, "<package> (<why>)".
+	Message string
+}
+
+// String renders the entry as it is printed to stderr.
+func (u Unmeasured) String() string { return u.Message }
 
 func (g *Gremlins) Name() string { return "gremlins" }
 
@@ -110,11 +156,14 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 	}
 
 	merged := &Report{Tool: g.Name()}
-	var unmeasured []string
+	var unmeasured []Unmeasured
+	skip := func(pkg string, kind UnmeasuredKind, why string) {
+		unmeasured = append(unmeasured, Unmeasured{Package: pkg, Kind: kind, Message: pkg + " (" + why + ")"})
+	}
 
 	for _, pkg := range pkgs {
-		reportRel := filepath.Join("reports", "gremlins", sanitizePkg(pkg)+".json")
-		reportAbs := filepath.Join(g.ProjectRoot, reportRel)
+		reportAbs := GremlinsReportPath(g.ProjectRoot, pkg)
+		reportRel := filepath.Join("reports", "gremlins", filepath.Base(reportAbs))
 		// A stale report from a prior run must not be re-read if gremlins
 		// writes nothing this time.
 		_ = os.Remove(reportAbs)
@@ -146,13 +195,14 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		b, err := os.ReadFile(reportAbs)
 		if err != nil {
 			// No report — gremlins gathered no covered mutants for this
-			// package and exited without writing. Exclude, don't fail.
-			unmeasured = append(unmeasured, pkg+" (no report — gremlins gathered no covered mutants)")
+			// package and exited without writing. Exclude, don't fail: only
+			// a caller that needs evidence (the drain) turns absence fatal.
+			skip(pkg, UnmeasuredMissing, "no report — gremlins gathered no covered mutants")
 			continue
 		}
 		rep, err := ParseGremlinsJSON(b)
 		if err != nil {
-			unmeasured = append(unmeasured, pkg+" (unreadable report: "+err.Error()+")")
+			skip(pkg, UnmeasuredUnreadable, "unreadable report: "+err.Error())
 			continue
 		}
 		// The package identity exists only here, in the loop — the payload
@@ -162,13 +212,16 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		if !hasCoverage(rep) {
 			// Report exists but every mutant is NOT COVERED — gremlins
 			// instrumented zero usable coverage here (a coverage-tool blind
-			// spot, not a test-quality signal). Exclude from the score.
-			unmeasured = append(unmeasured, pkg+" (zero covered mutants — coverage blind spot)")
+			// spot, not a test-quality signal). Exclude from the SCORE only:
+			// the package was measured, and its rows are real survivors that
+			// still have to be killed or accepted.
+			skip(pkg, UnmeasuredUncovered, "zero covered mutants — coverage blind spot")
 			continue
 		}
 		mergeInto(merged, rep)
 	}
 
+	g.Unmeasured = unmeasured
 	for _, u := range unmeasured {
 		fmt.Fprintf(os.Stderr, "gremlins: skipped %s\n", u)
 	}
@@ -245,6 +298,19 @@ func RePrefixGremlinsFiles(r *Report, pkg string) {
 		files[k] = files[k].plus(s)
 	}
 	r.Files = files
+}
+
+// GremlinsReportPath is where Run writes pkg's RAW per-package report, given
+// the same ProjectRoot the adapter ran with.
+//
+// Exported because a caller that must classify every survivor — rather than
+// score them — has to read those raw reports: Run's merged report deliberately
+// drops zero-coverage packages, so a caller reading the merge would see a
+// coverage blind spot as a package with nothing to answer for. Deriving the
+// path here rather than re-implementing the stem rule keeps the two from
+// drifting into disagreeing about which file to read.
+func GremlinsReportPath(projectRoot, pkg string) string {
+	return filepath.Join(projectRoot, "reports", "gremlins", sanitizePkg(pkg)+".json")
 }
 
 // sanitizePkg turns a gremlins package path into a filesystem-safe report

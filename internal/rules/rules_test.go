@@ -441,3 +441,64 @@ func TestBuiltinsAreUniqueAndComplete(t *testing.T) {
 		}
 	}
 }
+
+// TestMergeSortIsTotalWithinAScope exercises the ID comparison in Merge's
+// comparator, which the scope-only test above never reaches: with one rule per
+// scope the comparator returns on the Scope check and the ID branch never runs.
+//
+// The order is asserted exactly, so an inverted `<` yields the reverse and
+// fails. Rendering order is what a reader of `dross rule show` sees, and an
+// unstable one makes the rule block churn in every diff.
+func TestMergeSortIsTotalWithinAScope(t *testing.T) {
+	g := &Set{Rules: []Rule{
+		{ID: "r-gc", Text: "third global"},
+		{ID: "r-ga", Text: "first global"},
+		{ID: "r-gb", Text: "second global"},
+	}}
+	p := &Set{Rules: []Rule{
+		{ID: "r-pb", Text: "second project"},
+		{ID: "r-pa", Text: "first project"},
+	}}
+
+	merged := Merge(g, p)
+
+	var got []string
+	for _, r := range merged {
+		got = append(got, r.ID)
+	}
+	want := []string{"r-ga", "r-gb", "r-gc", "r-pa", "r-pb"}
+	if len(got) != len(want) {
+		t.Fatalf("merged IDs = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("merged IDs = %v, want %v", got, want)
+		}
+	}
+
+	// Globals first, and every global ahead of every project rule — the two
+	// halves of the comparator, asserted separately so one can fail alone.
+	lastGlobal := -1
+	for i, r := range merged {
+		if r.Scope == Global {
+			lastGlobal = i
+		}
+	}
+	for i, r := range merged {
+		if r.Scope != Global && i < lastGlobal {
+			t.Errorf("project rule %s sorted ahead of a global one", r.ID)
+		}
+	}
+
+	// Equal IDs cannot occur post-merge: the map is keyed by ID and a
+	// collision resolves to the project rule (TestMergeProjectWinsOnIDCollision),
+	// so the comparator's equality case is unreachable by construction rather
+	// than untested.
+	seen := map[string]bool{}
+	for _, r := range merged {
+		if seen[r.ID] {
+			t.Fatalf("duplicate ID %s survived the merge", r.ID)
+		}
+		seen[r.ID] = true
+	}
+}

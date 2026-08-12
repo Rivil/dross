@@ -143,7 +143,7 @@ func FilterReport(r *mutation.Report, s *Scope, language string) (*mutation.Repo
 	// no rows therefore contributes nothing to the score — visibly zero rather
 	// than silently whole-package. mutation's drift tests keep adapters honest.
 	for file, st := range r.Files {
-		if !s.Contains(file) {
+		if IsTestdataPath(file) || !s.Contains(file) {
 			continue
 		}
 		kept.Killed += st.Killed
@@ -166,6 +166,16 @@ func FilterReport(r *mutation.Report, s *Scope, language string) (*mutation.Repo
 
 	var dropped []OutOfScopeMutant
 	for _, m := range r.Surviving {
+		// A testdata fixture is nobody's debt, so it leaves through neither
+		// exit: not kept (it is not this phase's to answer for) and not
+		// dropped (an OutOfScopeMutant is backlog — it resurfaces as an
+		// unclassified FLAG for someone to accept or route, and there is
+		// nothing to accept). `dross survivor drain` already skips these at
+		// readRawReport; the two commands must read the same repo state the
+		// same way, which is the whole reason IsTestdataPath is shared.
+		if IsTestdataPath(m.File) {
+			continue
+		}
 		if !s.Contains(m.File) {
 			dropped = append(dropped, OutOfScopeMutant{
 				File:     m.File,
@@ -182,6 +192,37 @@ func FilterReport(r *mutation.Report, s *Scope, language string) (*mutation.Repo
 		kept.Surviving = append(kept.Surviving, m)
 	}
 	return kept, dropped
+}
+
+// IsTestdataPath reports whether a path lies under a testdata/ directory.
+//
+// Gremlins walks the package DIRECTORY, not the Go package, so a fixture under
+// testdata/ lands in its parent's report — and it is always reported NOT
+// COVERED there, because the parent's tests do not run it. That is not debt: Go
+// excludes testdata from `./...` by construction, the code is never compiled
+// into the binary, and a fixture exists to be measured by its own recorded run
+// rather than covered by its neighbour's tests.
+//
+// This is a SCOPE rule — which files a run answers for — not a mutant-class
+// filter. The adapter still emits these mutants; filtering mutants out of the
+// report itself remains mutation-score-truth's contract to change, not this
+// one's.
+//
+// It lives here rather than beside either caller because it is the ONE
+// implementation: `dross survivor drain` and `dross verify` classified the same
+// repo state differently while each owned a copy (the drain read 0 unclassified
+// where verify read 24, all of them this repo's own ceiling fixture). A second
+// copy is the bug, not a convenience.
+//
+// The match is on a path SEGMENT: "internal/testdatabase/store.go" and
+// "internal/mytestdata.go" are ordinary code and stay in scope.
+func IsTestdataPath(file string) bool {
+	for _, seg := range strings.Split(filepath.ToSlash(file), "/") {
+		if seg == "testdata" {
+			return true
+		}
+	}
+	return false
 }
 
 // Verify is the human-readable + LLM-mappable verdict.
@@ -226,10 +267,25 @@ type VerifySummary struct {
 	// — a 0.50 over 2 mutants and a 0.50 over 200 are the same number and not
 	// the same evidence. It is the signal the small_denominator_gate lock
 	// requires in place of moving the threshold.
-	MutantsInScope    int `toml:"mutants_in_scope"`
-	CriteriaTotal     int `toml:"criteria_total"`
-	CriteriaCovered   int `toml:"criteria_covered"`
-	CriteriaUncovered int `toml:"criteria_uncovered"`
+	MutantsInScope int `toml:"mutants_in_scope"`
+	// UnclassifiedInScope counts in-scope survivors carrying no disposition:
+	// neither accepted with a reason nor routed to a destination. It is the
+	// mutation leg's fail lever, in place of the score.
+	//
+	// A ratio cannot express "this phase left debt behind" — a phase that adds
+	// 200 killed mutants can bury a live one and still clear any cutoff, and
+	// the cutoff itself re-opens the arbitrary-number argument every phase. The
+	// absolute threshold is zero, with no tolerance band (the locked
+	// unclassified_gate decision): the score stays reported as evidence, but a
+	// single unclassified survivor inside the phase's own diff fails it.
+	//
+	// Out-of-scope survivors are deliberately excluded — counting the standing
+	// backlog here would fail every phase in the repo for debt it did not
+	// create. They stay individually FLAGged for draining.
+	UnclassifiedInScope int `toml:"unclassified_in_scope"`
+	CriteriaTotal       int `toml:"criteria_total"`
+	CriteriaCovered     int `toml:"criteria_covered"`
+	CriteriaUncovered   int `toml:"criteria_uncovered"`
 }
 
 type CriterionResult struct {
@@ -459,9 +515,14 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		for _, m := range lr.Mutation.Surviving {
 			// An accepted survivor is the only one that earns silence. A
 			// routed one keeps a NOTE naming where it went — debt with a
-			// home stays visible. Everything else, including a survivor with
-			// no state at all (a run from before lifecycle classification),
-			// keeps the FLAG it always had.
+			// home stays visible.
+			//
+			// Everything else is an IN-SCOPE survivor with no disposition:
+			// this phase's own diff, no reason, nowhere to go. That is
+			// BLOCKING, not a FLAG, and it is counted — including a survivor
+			// whose identity failed to resolve, which must not be able to fall
+			// out of the count by being unreadable, and one with no state at
+			// all (a run from before lifecycle classification).
 			switch m.Lifecycle {
 			case LifecycleAccepted:
 				continue
@@ -473,12 +534,13 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 				})
 				continue
 			}
+			v.Summary.UnclassifiedInScope++
 			text := fmt.Sprintf("%s mutant survived: %s:%d (%s)",
 				lr.Tool, m.File, m.Line, m.Op)
 			if m.Note != "" {
 				text += " — " + m.Note
 			}
-			v.Findings = append(v.Findings, Finding{Severity: "FLAG", Text: text})
+			v.Findings = append(v.Findings, Finding{Severity: "BLOCKING", Text: text})
 		}
 	}
 	for _, s := range t.Skipped {
