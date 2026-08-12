@@ -29,6 +29,8 @@ func Milestone() *cobra.Command {
 		milestoneGet(),
 		milestoneSet(),
 		milestoneAdd(),
+		milestoneRemove(),
+		milestoneReplace(),
 		milestoneComplete(),
 		milestonePrune(),
 	)
