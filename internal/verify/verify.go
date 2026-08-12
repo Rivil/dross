@@ -143,7 +143,7 @@ func FilterReport(r *mutation.Report, s *Scope, language string) (*mutation.Repo
 	// no rows therefore contributes nothing to the score — visibly zero rather
 	// than silently whole-package. mutation's drift tests keep adapters honest.
 	for file, st := range r.Files {
-		if !s.Contains(file) {
+		if IsTestdataPath(file) || !s.Contains(file) {
 			continue
 		}
 		kept.Killed += st.Killed
@@ -166,6 +166,16 @@ func FilterReport(r *mutation.Report, s *Scope, language string) (*mutation.Repo
 
 	var dropped []OutOfScopeMutant
 	for _, m := range r.Surviving {
+		// A testdata fixture is nobody's debt, so it leaves through neither
+		// exit: not kept (it is not this phase's to answer for) and not
+		// dropped (an OutOfScopeMutant is backlog — it resurfaces as an
+		// unclassified FLAG for someone to accept or route, and there is
+		// nothing to accept). `dross survivor drain` already skips these at
+		// readRawReport; the two commands must read the same repo state the
+		// same way, which is the whole reason IsTestdataPath is shared.
+		if IsTestdataPath(m.File) {
+			continue
+		}
 		if !s.Contains(m.File) {
 			dropped = append(dropped, OutOfScopeMutant{
 				File:     m.File,
@@ -182,6 +192,37 @@ func FilterReport(r *mutation.Report, s *Scope, language string) (*mutation.Repo
 		kept.Surviving = append(kept.Surviving, m)
 	}
 	return kept, dropped
+}
+
+// IsTestdataPath reports whether a path lies under a testdata/ directory.
+//
+// Gremlins walks the package DIRECTORY, not the Go package, so a fixture under
+// testdata/ lands in its parent's report — and it is always reported NOT
+// COVERED there, because the parent's tests do not run it. That is not debt: Go
+// excludes testdata from `./...` by construction, the code is never compiled
+// into the binary, and a fixture exists to be measured by its own recorded run
+// rather than covered by its neighbour's tests.
+//
+// This is a SCOPE rule — which files a run answers for — not a mutant-class
+// filter. The adapter still emits these mutants; filtering mutants out of the
+// report itself remains mutation-score-truth's contract to change, not this
+// one's.
+//
+// It lives here rather than beside either caller because it is the ONE
+// implementation: `dross survivor drain` and `dross verify` classified the same
+// repo state differently while each owned a copy (the drain read 0 unclassified
+// where verify read 24, all of them this repo's own ceiling fixture). A second
+// copy is the bug, not a convenience.
+//
+// The match is on a path SEGMENT: "internal/testdatabase/store.go" and
+// "internal/mytestdata.go" are ordinary code and stay in scope.
+func IsTestdataPath(file string) bool {
+	for _, seg := range strings.Split(filepath.ToSlash(file), "/") {
+		if seg == "testdata" {
+			return true
+		}
+	}
+	return false
 }
 
 // Verify is the human-readable + LLM-mappable verdict.

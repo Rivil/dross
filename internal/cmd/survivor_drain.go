@@ -221,7 +221,7 @@ func readRawReport(path, pkg string) ([]drainSurvivor, error) {
 
 	out := make([]drainSurvivor, 0, len(rep.Surviving))
 	for _, m := range rep.Surviving {
-		if isTestdataPath(m.File) {
+		if verify.IsTestdataPath(m.File) {
 			continue
 		}
 		out = append(out, drainSurvivor{
@@ -276,27 +276,11 @@ func notCoveredPositions(payload []byte, pkg string) (map[string]bool, error) {
 	return out, nil
 }
 
-// isTestdataPath reports whether a path lies under a testdata/ directory.
-//
-// Gremlins walks the package DIRECTORY, not the Go package, so a fixture under
-// testdata/ lands in its parent's report — and it is always reported NOT
-// COVERED there, because the parent's tests do not run it. That is not debt: Go
-// excludes testdata from `./...` by construction, the code is never compiled
-// into the binary, and a fixture exists to be measured by its own recorded run
-// rather than covered by its neighbour's tests.
-//
-// This is a SCOPE rule — which files the drain answers for — not a mutant-class
-// filter. The adapter still emits these mutants and the score still counts
-// them; filtering mutants out of the report itself remains mutation-score-
-// truth's contract to change, not this one's.
-func isTestdataPath(file string) bool {
-	for _, seg := range strings.Split(filepath.ToSlash(file), "/") {
-		if seg == "testdata" {
-			return true
-		}
-	}
-	return false
-}
+// The testdata scope rule now lives at verify.IsTestdataPath, so the drain and
+// `dross verify` cannot disagree about which files are anybody's debt. Do not
+// reintroduce a local copy here — divergence between the two copies is exactly
+// what made the same repo state read as 0 unclassified from the drain and 24
+// from verify.
 
 // reportStemToPackage inverts the report filename stem back to a package path
 // by matching against the repo's real package list. Deriving it by string

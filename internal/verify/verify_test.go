@@ -585,6 +585,70 @@ func TestFilterReportDroppedListIsComplete(t *testing.T) {
 	}
 }
 
+// TestFilterReportDropsTestdataEntirely: a fixture under testdata/ leaves
+// through NEITHER exit. Not kept — the phase does not answer for a file Go
+// excludes from `./...` and never compiles into the binary. And not dropped
+// either: an OutOfScopeMutant is backlog, so routing it there would resurface
+// it as an unclassified FLAG for someone to accept or route, and there is
+// nothing to accept. Both halves are asserted because dropping it from
+// Surviving alone still leaves it re-listed one findings-section down, which is
+// the drain-don't-relist rule with extra steps.
+//
+// The scope is asked to CONTAIN the fixture, so the exclusion cannot pass by
+// accident: without the rule this survivor is in scope and BLOCKING, which is
+// precisely how this repo's own ceiling fixture failed its phase.
+func TestFilterReportDropsTestdataEntirely(t *testing.T) {
+	r := reportOf("gremlins",
+		map[string]mutation.FileStat{
+			"internal/mutation/gremlins.go":                 {Killed: 1, Survived: 1},
+			"internal/mutation/testdata/ceiling/ceiling.go": {Survived: 3},
+		},
+		mutation.Mutant{File: "internal/mutation/gremlins.go", Line: 4, Op: "CONDITIONALS_NEGATION"},
+		mutation.Mutant{File: "internal/mutation/testdata/ceiling/ceiling.go", Line: 20, Op: "CONDITIONALS_BOUNDARY"},
+	)
+	s := scopeOf("internal/mutation/gremlins.go", "internal/mutation/testdata/ceiling/ceiling.go")
+
+	kept, dropped := FilterReport(r, s, "go")
+
+	if len(kept.Surviving) != 1 || kept.Surviving[0].File != "internal/mutation/gremlins.go" {
+		t.Errorf("a testdata fixture was kept as this phase's debt: %+v", kept.Surviving)
+	}
+	if len(dropped) != 0 {
+		t.Errorf("a testdata fixture was relisted as out-of-scope backlog: %+v", dropped)
+	}
+	// The stat row goes with the survivor: a denominator counting mutants the
+	// survivor list has dropped is the same inconsistency one layer down. With
+	// the fixture's 3 survived rolled in, the score would be 1/5 = 0.20.
+	if _, ok := kept.Files["internal/mutation/testdata/ceiling/ceiling.go"]; ok {
+		t.Errorf("the fixture's stat row survived filtering: %+v", kept.Files)
+	}
+	if kept.Survived != 1 || kept.Killed != 1 || kept.Score != 0.5 {
+		t.Errorf("score computed over the fixture: killed=%d survived=%d score=%v, want 1/1/0.5",
+			kept.Killed, kept.Survived, kept.Score)
+	}
+}
+
+// TestIsTestdataPathIsSegmentScoped pins the rule's narrowness at the shared
+// implementation both `dross verify` and `dross survivor drain` now call. A
+// substring match would silently exclude ordinary packages from the gate.
+func TestIsTestdataPathIsSegmentScoped(t *testing.T) {
+	for _, tc := range []struct {
+		file string
+		want bool
+	}{
+		{"internal/mutation/testdata/ceiling/ceiling.go", true},
+		{"testdata/x.go", true},
+		{"internal/testdata/deep/nested/y.go", true},
+		{"internal/cmd/doctor.go", false},
+		{"internal/testdatabase/store.go", false},
+		{"internal/mytestdata.go", false},
+	} {
+		if got := IsTestdataPath(tc.file); got != tc.want {
+			t.Errorf("IsTestdataPath(%q) = %v, want %v", tc.file, got, tc.want)
+		}
+	}
+}
+
 // TestFilterReportDegenerateInputs: an in-scope file the tool never mutated
 // invents no row, and an empty scope keeps nothing at all.
 func TestFilterReportDegenerateInputs(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/survivor"
+	"github.com/Rivil/dross/internal/verify"
 )
 
 // gremlinsReportWith renders a per-package gremlins report naming file by bare
@@ -479,6 +480,10 @@ func TestGremlinsReportPathMatchesWhatRunWrites(t *testing.T) {
 // This is a scope rule, and it is deliberately narrow: only a path with a
 // literal `testdata` SEGMENT is excluded, so a real package that merely has
 // "testdata" inside a longer directory name is still drained.
+//
+// The rule is asserted through verify.IsTestdataPath because that is the one
+// the drain now calls — `dross verify` classifies the same repo state with the
+// same function, and a local copy here is what let the two disagree.
 func TestDrainExcludesTestdataFixtures(t *testing.T) {
 	for _, tc := range []struct {
 		file string
@@ -491,9 +496,29 @@ func TestDrainExcludesTestdataFixtures(t *testing.T) {
 		{"internal/testdatabase/store.go", false},
 		{"internal/mytestdata.go", false},
 	} {
-		if got := isTestdataPath(tc.file); got != tc.want {
-			t.Errorf("isTestdataPath(%q) = %v, want %v", tc.file, got, tc.want)
+		if got := verify.IsTestdataPath(tc.file); got != tc.want {
+			t.Errorf("IsTestdataPath(%q) = %v, want %v", tc.file, got, tc.want)
 		}
+	}
+}
+
+// TestDrainHasNoLocalTestdataRule fails if a second copy of the scope rule
+// reappears in internal/cmd. The defect this task fixes was not a wrong
+// predicate — both copies agreed — it was that only one of the two commands
+// applied one at all, and a private copy here is how that divergence hides.
+// Sharing verify.IsTestdataPath is the fix; this test is what keeps it shared.
+func TestDrainHasNoLocalTestdataRule(t *testing.T) {
+	b, err := os.ReadFile("survivor_drain.go")
+	if err != nil {
+		t.Fatalf("read survivor_drain.go: %v", err)
+	}
+	if strings.Contains(string(b), "func isTestdataPath(") {
+		t.Error("survivor_drain.go redefines the testdata scope rule locally; " +
+			"call verify.IsTestdataPath so the drain and `dross verify` cannot diverge")
+	}
+	if !strings.Contains(string(b), "verify.IsTestdataPath(") {
+		t.Error("survivor_drain.go no longer calls verify.IsTestdataPath — " +
+			"testdata fixtures will be drained as standing debt")
 	}
 }
 
