@@ -46,6 +46,7 @@ func TestPruneDeletesOnlyStaleBranches(t *testing.T) {
 	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
 	mustGit(t, dir, "push", "-q", "origin", "milestone/v1.0")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	pushMain(t, dir)
 
 	// Live: one commit that is nowhere on main.
 	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.2", "main")
@@ -82,6 +83,7 @@ func TestPruneRefusesOnCurrentHEAD(t *testing.T) {
 	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
 	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	pushMain(t, dir)
 	mustGit(t, dir, "checkout", "-q", "milestone/v1.0")
 
 	err := runCmd(t, Milestone(), "prune")
@@ -103,6 +105,7 @@ func TestPruneLocalOnlyBranchSkipsRemote(t *testing.T) {
 	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
 	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	pushMain(t, dir)
 
 	var out string
 	if err := runCmdCapturing(t, &out, Milestone(), "prune"); err != nil {
@@ -150,6 +153,7 @@ func TestPruneRefusesDirtyTree(t *testing.T) {
 	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
 	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	pushMain(t, dir)
 	mustWrite(t, filepath.Join(dir, "uncommitted.txt"), "dirt\n")
 
 	err := runCmd(t, Milestone(), "prune")

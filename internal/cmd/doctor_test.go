@@ -1707,6 +1707,9 @@ func TestDoctorReportsStaleMilestoneBranchReadOnly(t *testing.T) {
 	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
 	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	// The detector measures against origin/main, so the squash has to be
+	// published before the branch counts as stale.
+	pushMain(t, dir)
 
 	var out string
 	err := runCmdCapturing(t, &out, Doctor())

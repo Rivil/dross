@@ -55,12 +55,18 @@ const (
 // A branch with no matching commit is simply not stale: an amended or rewritten
 // squash is unresolvable, and reporting nothing is the safe answer for something
 // `dross milestone prune` will delete.
+//
+// The comparison is made against ORIGIN's main branch, not this repo's — see
+// resolveMainCompareRef. Local main is a working copy that can be ahead of the
+// shared branch by commits nobody else has, and a merge measured against it
+// reports work as landed that origin has never seen.
 func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 	if mainBranch == "" {
 		return nil, errors.New("stale milestone scan: no main branch given")
 	}
-	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, mainBranch)...); err != nil {
-		return nil, fmt.Errorf("stale milestone scan: no such branch %q", mainBranch)
+	compare, err := resolveMainCompareRef(repoDir, mainBranch)
+	if err != nil {
+		return nil, err
 	}
 
 	listed, err := gitTrim(repoDir, "for-each-ref", "--format=%(refname:short)", "refs/heads/milestone/*")
@@ -83,7 +89,7 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 			HasRemote: gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+name)...) == nil,
 		}
 
-		merged, err := isAncestor(repoDir, name, mainBranch)
+		merged, err := isAncestor(repoDir, name, compare)
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +99,7 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 			continue
 		}
 
-		squash, err := resolveSquashCommit(repoDir, name, mainBranch)
+		squash, err := resolveSquashCommit(repoDir, name, compare)
 		if err != nil {
 			return nil, err
 		}
@@ -105,6 +111,29 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 		stale = append(stale, entry)
 	}
 	return stale, nil
+}
+
+// resolveMainCompareRef picks the ref every merged-ness question in this file is
+// asked against: refs/remotes/origin/<main> when origin carries it, and only
+// otherwise refs/heads/<main>.
+//
+// Origin first because the consumer is a destructive prune and local main is not
+// the shared branch. A repo whose main is pushed-ahead of origin — a `dross
+// quick` committed but not pushed, a squash landed locally — makes a
+// freshly-cut milestone branch look merged into work nobody else has, and the
+// branch is then deleted local AND remote on the strength of it.
+//
+// The local fallback is for a repo with no origin at all, or one whose main has
+// never been pushed. There the local ref is the only answer available, and it is
+// also the correct one: nothing else has a claim on that history.
+func resolveMainCompareRef(repoDir, mainBranch string) (string, error) {
+	if remote := "refs/remotes/origin/" + mainBranch; gitRefExists(repoDir, remote) {
+		return remote, nil
+	}
+	if local := "refs/heads/" + mainBranch; gitRefExists(repoDir, local) {
+		return local, nil
+	}
+	return "", fmt.Errorf("stale milestone scan: no such branch %q", mainBranch)
 }
 
 // resolveSquashCommit returns the commit on mainBranch whose patch is the

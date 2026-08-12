@@ -978,6 +978,7 @@ func TestPruneRefusalNamesGuardedCheckout(t *testing.T) {
 	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
 	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	pushMain(t, dir)
 	mustGit(t, dir, "checkout", "-q", "milestone/v1.0")
 
 	// Precondition: HEAD really is on the stale branch, so the refusal under
