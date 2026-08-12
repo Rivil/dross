@@ -413,7 +413,7 @@ func Doctor() *cobra.Command {
 			if mainForStale == "" {
 				mainForStale = "main"
 			}
-			if stale, err := staleMilestoneBranches(repoDir, mainForStale); err == nil && len(stale) > 0 {
+			if stale, err := staleMilestoneBranches(root, repoDir, mainForStale); err == nil && len(stale) > 0 {
 				Print("Stale milestone branches:")
 				for _, b := range stale {
 					where := "local"

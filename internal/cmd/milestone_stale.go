@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/Rivil/dross/internal/milestone"
 )
 
 // This file answers one question and writes nothing: which milestone/* branches
@@ -60,7 +62,13 @@ const (
 // resolveMainCompareRef. Local main is a working copy that can be ahead of the
 // shared branch by commits nobody else has, and a merge measured against it
 // reports work as landed that origin has never seen.
-func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
+//
+// A branch is only ever reported once its milestone says it is finished. Merged
+// content is not the same claim as a finished milestone: a milestone branch
+// whose first phase has already squash-merged into main has all of its current
+// work "on main" and is very much still in use. Gating on the milestone's own
+// status is what separates the two, and root is where that status is read from.
+func staleMilestoneBranches(root, repoDir, mainBranch string) ([]staleBranch, error) {
 	if mainBranch == "" {
 		return nil, errors.New("stale milestone scan: no main branch given")
 	}
@@ -88,6 +96,9 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 			Version:   strings.TrimPrefix(name, "milestone/"),
 			HasRemote: gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+name)...) == nil,
 		}
+		if !milestoneIsFinished(root, entry.Version) {
+			continue
+		}
 
 		merged, err := isAncestor(repoDir, name, compare)
 		if err != nil {
@@ -111,6 +122,30 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 		stale = append(stale, entry)
 	}
 	return stale, nil
+}
+
+// milestoneIsFinished reports whether milestones/<version>.toml says this
+// milestone is done — the gate a branch has to pass before it can be called
+// stale.
+//
+// Only status="complete" qualifies. Everything else fails closed: "active" is
+// obviously live, "planning" is a branch cut before the work started, an empty
+// status is a milestone that never said, and a version with no toml at all is
+// unknown (locked toml_less_branch_not_stale). The consumer is `dross milestone
+// prune`, which deletes local AND remote, so the ambiguous cases have to answer
+// "leave it alone".
+//
+// This is the one place merged-ness is not the whole answer. Under the
+// milestone-branch model phases squash-merge into milestone/<version> and the
+// milestone merges into main at the end, so a milestone whose early phases have
+// landed can look entirely "already on main" while the next phase is still
+// being written against it.
+func milestoneIsFinished(root, version string) bool {
+	m, err := milestone.Load(milestone.FilePath(root, version))
+	if err != nil {
+		return false
+	}
+	return m.Milestone.Status == milestoneStatusComplete
 }
 
 // resolveMainCompareRef picks the ref every merged-ness question in this file is

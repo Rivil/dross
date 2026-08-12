@@ -75,7 +75,7 @@ func milestonePrune() *cobra.Command {
 				return err
 			}
 
-			stale, err := staleMilestoneBranches(repoDir, mainBranch)
+			stale, err := staleMilestoneBranches(root, repoDir, mainBranch)
 			if err != nil {
 				return err
 			}

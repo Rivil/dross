@@ -25,6 +25,17 @@ func pruneFixture(t *testing.T) string {
 	return dir
 }
 
+// seedCompleteMilestone records the milestone as finished and commits the
+// record. Prune's detector reports only branches whose milestone says complete,
+// and prune itself refuses on a dirty tree, so the toml has to be both present
+// and committed.
+func seedCompleteMilestone(t *testing.T, dir, version string) {
+	t.Helper()
+	completeMilestone(t, dir, version)
+	mustGit(t, dir, "add", ".dross")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record "+version+" complete")
+}
+
 func branchExists(t *testing.T, dir, branch string) bool {
 	t.Helper()
 	return gitAllowFail(dir, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
@@ -47,6 +58,7 @@ func TestPruneDeletesOnlyStaleBranches(t *testing.T) {
 	mustGit(t, dir, "push", "-q", "origin", "milestone/v1.0")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
 	pushMain(t, dir)
+	seedCompleteMilestone(t, dir, "v1.0")
 
 	// Live: one commit that is nowhere on main.
 	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.2", "main")
@@ -80,6 +92,9 @@ func TestPruneDeletesOnlyStaleBranches(t *testing.T) {
 // on, and skipping it silently reports a prune that did not happen.
 func TestPruneRefusesOnCurrentHEAD(t *testing.T) {
 	dir := pruneFixture(t)
+	// Seeded before the branch is cut, so milestone/v1.0 carries the record
+	// too — prune is run from that branch here.
+	seedCompleteMilestone(t, dir, "v1.0")
 	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
 	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
@@ -106,6 +121,7 @@ func TestPruneLocalOnlyBranchSkipsRemote(t *testing.T) {
 	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
 	pushMain(t, dir)
+	seedCompleteMilestone(t, dir, "v1.0")
 
 	var out string
 	if err := runCmdCapturing(t, &out, Milestone(), "prune"); err != nil {
@@ -154,6 +170,7 @@ func TestPruneRefusesDirtyTree(t *testing.T) {
 	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
 	pushMain(t, dir)
+	seedCompleteMilestone(t, dir, "v1.0")
 	mustWrite(t, filepath.Join(dir, "uncommitted.txt"), "dirt\n")
 
 	err := runCmd(t, Milestone(), "prune")
