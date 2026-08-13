@@ -4,7 +4,7 @@
     "v1.3": "DRO-7"
   },
   "phases": {
-    "board-sync-truth": "DRO-18",
+    "board-sync-truth": "DRO-19",
     "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
     "milestone-lifecycle-close": "DRO-13",
