@@ -68,6 +68,11 @@ type Config struct {
 	AuthUser   string // jira: account email for HTTP Basic auth (email:token)
 	BoardID    string // github: Projects v2 board node id to add created issues to (empty = repo issues only)
 
+	// Fields overrides the tracker-native field names sync writes to. Every
+	// entry is optional; an empty one falls back to the provider's own literal,
+	// so a zero-value Config behaves exactly as it did before this existed.
+	Fields Fields
+
 	// Hosts is the API host allowlist every constructor checks APIBase
 	// against before it reads the token out of the environment.
 	//
@@ -75,6 +80,16 @@ type Config struct {
 	// SaaS defaults — so a caller that forgets to populate this field fails
 	// closed rather than silently reopening the hole. See internal/hostallow.
 	Hosts hostallow.Policy
+}
+
+// Fields names the tracker-native fields board sync writes to, so a project
+// that renamed one (or runs a non-English tracker UI) syncs without a code
+// change. Each zero value means "use this provider's default literal" —
+// resolution lives with the provider that knows those literals, not here.
+type Fields struct {
+	State       string // youtrack: State custom field (default "State")
+	Type        string // youtrack: issue-type custom field (default "Type")
+	FixVersions string // youtrack: version bundle field (default "Fix versions")
 }
 
 // New validates config, resolves the token from the environment, and returns
@@ -159,6 +174,27 @@ type BoardClient interface {
 
 var _ BoardClient = (*Client)(nil)
 
+// ErrNoLinkType means the tracker exposes no issue-link type to relate two
+// issues with. It is a capability gap, not an outage: the caller warns, keeps
+// whatever label carries the relationship instead, and continues. Callers must
+// be able to tell it apart from a real HTTP failure, which is why it is a
+// sentinel rather than a generic error string.
+var ErrNoLinkType = errors.New("tracker exposes no issue-link type")
+
+// IssueLinker is the optional capability of relating two issues to each other.
+// It is deliberately NOT part of BoardClient: GitHub's REST issues API has no
+// generic issue-link primitive, so that backend must fail an interface
+// assertion rather than satisfy the method with a no-op — a silent stub would
+// make the "no link possible here" path untestable and invisible.
+//
+// Callers assert for it (`linker, ok := client.(IssueLinker)`) and fall back to
+// a label when the assertion fails.
+type IssueLinker interface {
+	// LinkIssues relates `from` to `to`. Idempotent: re-linking an existing
+	// pair is a no-op, so it is safe on every re-sync.
+	LinkIssues(from, to string) error
+}
+
 // NewBoard returns the board client for the configured provider: the YouTrack
 // backend for provider=youtrack, the Jira backend for provider=jira, the GitHub
 // (repo-issues + Projects v2) backend for provider=github, otherwise the forge
@@ -186,6 +222,16 @@ type Issue struct {
 	Labels    []string
 	Milestone string // milestone title, "" if none
 	URL       string // html_url
+
+	// Resolved is the tracker's own verdict that this issue is done, read back
+	// from the tracker rather than inferred from what dross just wrote.
+	//
+	// It exists because "the close request returned 200" is not the same claim
+	// as "the issue is closed": on YouTrack a State write can succeed against a
+	// workflow that refuses the transition, leaving the issue open while ship
+	// prints a confident "(closed)". A verify-on-read-back needs a field the
+	// tracker fills in — this one.
+	Resolved bool
 }
 
 // IssueInput is the create payload. Labels are names; missing ones are
@@ -219,6 +265,40 @@ type LabelSpec struct {
 	Name        string
 	Color       string // "#rrggbb"; defaults to defaultLabelColor
 	Description string
+}
+
+// FilterKnownLabels splits `requested` against the tracker's `known` label
+// index, preserving request order in both halves.
+//
+// A label the tracker has never heard of cannot match anything, and on some
+// providers an unknown name makes the whole query error. Dropping it lets a
+// partly-stale filter still do useful work — but the caller must name the
+// dropped labels (see WarnDroppedLabels), because a silent drop reads as
+// "nothing matched", which is the zero-versus-failure confusion c-2 exists to
+// kill.
+func FilterKnownLabels(requested, known []string) (kept, dropped []string) {
+	index := make(map[string]bool, len(known))
+	for _, k := range known {
+		index[k] = true
+	}
+	for _, r := range requested {
+		if index[r] {
+			kept = append(kept, r)
+			continue
+		}
+		dropped = append(dropped, r)
+	}
+	return kept, dropped
+}
+
+// WarnDroppedLabels names labels dropped by FilterKnownLabels on stderr. A
+// no-op when nothing was dropped.
+func WarnDroppedLabels(provider string, dropped []string) {
+	if len(dropped) == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "warning: %s does not know the label(s) %s — dropped from the query\n",
+		provider, strings.Join(dropped, ", "))
 }
 
 // --- milestones ---
@@ -472,11 +552,61 @@ func (c *Client) GetIssue(key string) (*Issue, error) {
 // ListIssues returns issues matching the filter. PRs are excluded (the
 // Forgejo/Gitea issues endpoint otherwise returns both) so inbound triage
 // never surfaces pull requests as "new work".
+//
+// Labels are OR'd: forgejo, gitea and gitlab all intersect a comma-joined
+// `labels=` param, so several labels in one request match only issues carrying
+// every one of them. One request per label, unioned by issue number, is the
+// only way to express "either label" against these APIs.
+//
+// Labels the instance does not know are dropped and named on stderr first (see
+// FilterKnownLabels), and when every requested label is unknown the call
+// returns nothing rather than degrading into a whole-project list.
 func (c *Client) ListIssues(f IssueFilter) ([]Issue, error) {
+	// One pass with no label param when unfiltered; otherwise one per label.
+	// An empty filter reads no label index at all — `dross watch` polls this
+	// unlabelled on a timer, and a label-index blip must not fail a heartbeat.
+	queries := []string{""}
+	if len(f.Labels) > 0 {
+		if err := c.loadLabels(); err != nil {
+			return nil, err
+		}
+		known := make([]string, 0, len(c.labelIDs))
+		for name := range c.labelIDs {
+			known = append(known, name)
+		}
+		kept, dropped := FilterKnownLabels(f.Labels, known)
+		WarnDroppedLabels(c.provider, dropped)
+		if len(kept) == 0 {
+			return nil, nil
+		}
+		queries = kept
+	}
+
+	out := []Issue{}
+	seen := make(map[int]bool, len(queries))
+	for _, label := range queries {
+		batch, err := c.listIssuesByLabel(f.State, label)
+		if err != nil {
+			return nil, err
+		}
+		for _, iss := range batch {
+			if seen[iss.Number] {
+				continue // already unioned in under an earlier label
+			}
+			seen[iss.Number] = true
+			out = append(out, iss)
+		}
+	}
+	return out, nil
+}
+
+// listIssuesByLabel runs one issue query, scoped to a single label (or none
+// when label is empty).
+func (c *Client) listIssuesByLabel(filterState, label string) ([]Issue, error) {
 	if c.isGitLab() {
 		// GitLab spells the open state "opened" and serves issues on a
 		// dedicated endpoint (no PRs mixed in, so no type filter needed).
-		state := f.State
+		state := filterState
 		switch state {
 		case "", "open":
 			state = "opened"
@@ -484,8 +614,8 @@ func (c *Client) ListIssues(f IssueFilter) ([]Issue, error) {
 		q := url.Values{}
 		q.Set("state", state)
 		q.Set("per_page", "50")
-		if len(f.Labels) > 0 {
-			q.Set("labels", strings.Join(f.Labels, ","))
+		if label != "" {
+			q.Set("labels", label)
 		}
 		var raw []gitlabIssueResponse
 		if err := c.do("GET", c.path("/issues")+"?"+q.Encode(), nil, &raw); err != nil {
@@ -497,7 +627,7 @@ func (c *Client) ListIssues(f IssueFilter) ([]Issue, error) {
 		}
 		return out, nil
 	}
-	state := f.State
+	state := filterState
 	if state == "" {
 		state = "open"
 	}
@@ -505,8 +635,8 @@ func (c *Client) ListIssues(f IssueFilter) ([]Issue, error) {
 	q.Set("state", state)
 	q.Set("type", "issues") // exclude PRs
 	q.Set("limit", "50")
-	if len(f.Labels) > 0 {
-		q.Set("labels", strings.Join(f.Labels, ","))
+	if label != "" {
+		q.Set("labels", label)
 	}
 	var raw []issueResponse
 	if err := c.do("GET", c.path("/issues")+"?"+q.Encode(), nil, &raw); err != nil {

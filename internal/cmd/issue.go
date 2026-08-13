@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -41,6 +42,14 @@ const (
 )
 
 func statusLabel(s string) string { return "dross/status:" + s }
+
+// phaseLabel is the durable identity of a phase's board issue. It is what
+// makes the TRACKER the source of truth for the phase→issue mapping: board.json
+// is git-tracked, so a phase-sync writes it on phase/<id>, which `phase
+// complete` then deletes — the mapping never reaches the base branch, and the
+// next ship mints a duplicate. A label on the issue survives that, and survives
+// a second machine or CI that never had the file.
+func phaseLabel(phaseID string) string { return "dross/phase:" + phaseID }
 
 // Issue registers `dross issue …` — mirroring dross planning artefacts onto
 // the repo's issue-tracker board, and pulling inbound issues for triage.
@@ -135,6 +144,11 @@ func boardConfig(b project.Board, remoteURL string, extra []string) forge.Config
 		BoardID:  b.GitHubProject,
 		URL:      "https://board.local/" + b.Project,
 		Hosts:    hostallow.Derive(remoteURL, extra),
+		Fields: forge.Fields{
+			State:       b.Fields.State,
+			Type:        b.Fields.Type,
+			FixVersions: b.Fields.FixVersions,
+		},
 	}
 	if configenum.Normalize(b.Provider) == "gitlab" {
 		cfg.ProjectID = b.Project
@@ -315,13 +329,34 @@ func issueBacklogSync() *cobra.Command {
 // written by an older dross may still hold this item's link under. It is
 // consulted only when the id key has no link yet, and only after the stored
 // issue's title is confirmed to still be this item's — see adoptLegacyBacklogKey.
-type backlogItem struct{ key, title, body, legacyKey string }
+type backlogItem struct {
+	key, title, body, legacyKey string
+
+	// labels is the issue's full label set. The marker is always present; a
+	// deferred item adds its identity label, and a routed one its destination.
+	labels []string
+	// identity, when set, is the label the tracker is queried by to resolve
+	// this item's existing issue — the same trick resolvePhaseIssue uses, and
+	// for the same reason: board.json dies with the phase branch.
+	identity string
+	// target is the destination phase slug of a routed item, "" otherwise. It
+	// drives the issue-link attempt; the label carries the routing either way.
+	target string
+}
 
 // deferredBacklogKey is the board-link key for a deferred item. It keys on the
 // item's stable id, never its position: a positional key re-points at whatever
 // item slides into the index when an earlier sibling is removed, which silently
 // re-titles a live issue to a different finding's text (c-8).
 func deferredBacklogKey(id string) string { return "someday:id:" + id }
+
+// deferredLabel is a deferred item's durable identity on the tracker, and
+// targetLabel carries its routed destination. Both are labels rather than
+// board.json entries for the reason phaseLabel is: mirrorDeferredAdd mints the
+// issue on phase/<id>, whose board.json dies with the branch — so the mapping
+// has to live somewhere the tracker keeps.
+func deferredLabel(id string) string { return "dross/deferred:" + id }
+func targetLabel(slug string) string { return "dross/target:" + slug }
 
 // legacyDeferredBacklogKey is the positional key dross used before ids existed.
 func legacyDeferredBacklogKey(source string, idx int) string {
@@ -422,7 +457,7 @@ func adoptLegacyBacklogKey(ctx *boardCtx, it backlogItem) bool {
 }
 
 // syncBacklog mirrors a milestone's backlog — its unscaffolded roadmap phase
-// slugs and unrouted `someday` deferred ideas — onto the board as Open issues
+// slugs and its deferred ideas, routed or not — onto the board as Open issues
 // attached to the milestone entity, recorded in board.json's backlog map.
 // Idempotent: re-running updates the same items by their readable-id link.
 func syncBacklog(ctx *boardCtx, version string) error {
@@ -438,20 +473,24 @@ func syncBacklog(ctx *boardCtx, version string) error {
 			continue // scaffolded — tracked by its own phase issue
 		}
 		items = append(items, backlogItem{
-			key:   "slug:" + slug,
-			title: "[backlog] " + slug,
-			body:  fmt.Sprintf("Roadmap phase `%s` in milestone %s — not yet scaffolded.\n\n_Tracked by dross._", slug, version),
+			key:    "slug:" + slug,
+			title:  "[backlog] " + slug,
+			body:   fmt.Sprintf("Roadmap phase `%s` in milestone %s — not yet scaffolded.\n\n_Tracked by dross._", slug, version),
+			labels: []string{labelMarker},
 		})
 	}
-	// Unrouted `someday` deferred ideas (no target, not dismissed). Every item
+	// Deferred ideas (everything not dismissed). Every item
 	// is stamped with a stable id first: the board link keys on it, so an
 	// id-less item would have no durable handle to key by.
 	deferredItems, err := ensureDeferredIDs(ctx.root)
 	if err != nil {
 		return err
 	}
+	// Routed items are included: c-6 is precisely that a routed item gets a
+	// board issue and stays current. Only a dismissed item has nothing to
+	// mirror.
 	for _, d := range deferredItems {
-		if d.Target != "" || d.Dismissed {
+		if d.Dismissed {
 			continue
 		}
 		items = append(items, deferredBacklogItem(d))
@@ -470,12 +509,90 @@ func syncBacklog(ctx *boardCtx, version string) error {
 // titles and bodies — a divergence would make an added item's issue flip its
 // text on the first sync.
 func deferredBacklogItem(d deferredEntry) backlogItem {
-	return backlogItem{
+	it := backlogItem{
 		key:       deferredBacklogKey(d.ID),
 		legacyKey: legacyDeferredBacklogKey(d.Source, d.Index),
 		title:     "[someday] " + d.Text,
 		body:      fmt.Sprintf("Someday idea (from phase `%s`): %s\n\n_Tracked by dross._", d.Source, d.Text),
+		labels:    []string{labelMarker},
 	}
+	if d.ID != "" {
+		it.identity = deferredLabel(d.ID)
+		it.labels = append(it.labels, it.identity)
+	}
+	if d.Target != "" {
+		// A routed item is no longer "someday" — it has a destination, and the
+		// title has to say so or the board keeps describing it as unplanned.
+		it.title = "[routed] " + d.Text
+		it.body = fmt.Sprintf("Deferred item routed to `%s` (from phase `%s`): %s\n\n_Tracked by dross._", d.Target, d.Source, d.Text)
+		it.labels = append(it.labels, targetLabel(d.Target))
+		it.target = d.Target
+	}
+	return it
+}
+
+// lookupPhaseIssue returns the board issue for a phase, or "" when there is
+// none yet. It is resolvePhaseIssue's read-only cousin: no cache healing, no
+// legacy summary adoption, and above all no create — a link attempt must never
+// mint the very issue it wanted to point at, or a typo'd target would conjure
+// a phase issue for a phase that does not exist.
+func lookupPhaseIssue(ctx *boardCtx, phaseID string) string {
+	if key, ok := ctx.board.PhaseIssue(phaseID); ok {
+		return key
+	}
+	found, err := ctx.client.ListIssues(forge.IssueFilter{State: "all", Labels: []string{phaseLabel(phaseID)}})
+	if err != nil {
+		return ""
+	}
+	var matches []string
+	for _, iss := range found {
+		if hasMarker(iss) {
+			matches = append(matches, iss.Key)
+		}
+	}
+	if len(matches) == 0 {
+		return ""
+	}
+	sort.Strings(matches)
+	return matches[0]
+}
+
+// resolveBacklogIssue finds a backlog item's existing issue, or "" if there is
+// none. Same three-step shape as resolvePhaseIssue, and for the same reason:
+// `deferred add` mirrors the issue at file time, on phase/<id>, whose board.json
+// dies with the branch — so after a ship the cache is empty while the issue is
+// very much alive, and a create here would duplicate it.
+//
+//  1. board.json's cached key.
+//  2. A tracker query for the item's identity label.
+//  3. The pre-id positional link (adoptLegacyBacklogKey), title-verified.
+func resolveBacklogIssue(ctx *boardCtx, it backlogItem) (string, error) {
+	if key, ok := ctx.board.BacklogID(it.key); ok {
+		return key, nil
+	}
+	if it.identity != "" {
+		found, err := ctx.client.ListIssues(forge.IssueFilter{State: "all", Labels: []string{it.identity}})
+		if err != nil {
+			return "", wrapBoard(err)
+		}
+		var matches []string
+		for _, iss := range found {
+			// Same marker post-filter as the phase resolver: an issue that
+			// happens to carry the label but is not dross's is not adoptable.
+			if hasMarker(iss) {
+				matches = append(matches, iss.Key)
+			}
+		}
+		if len(matches) > 0 {
+			sort.Strings(matches)
+			return matches[0], nil
+		}
+	}
+	if adoptLegacyBacklogKey(ctx, it) {
+		key, _ := ctx.board.BacklogID(it.key)
+		return key, nil
+	}
+	return "", nil
 }
 
 // pushBacklogItems creates or updates each item on the board and records its
@@ -502,18 +619,65 @@ func pushBacklogItems(ctx *boardCtx, version string, items []backlogItem) (creat
 		fixVersion = entityID
 	}
 
-	for _, it := range items {
-		key, ok := ctx.board.BacklogID(it.key)
-		if !ok && adoptLegacyBacklogKey(ctx, it) {
-			key, ok = ctx.board.BacklogID(it.key)
+	// c-7: a routed item's issue is linked to its target phase's issue where
+	// the provider can express a link. Where it cannot — no IssueLinker, no
+	// link type, or the target has no issue yet — the run warns and continues,
+	// leaving the dross/target label as the relationship and the item
+	// relinkable on a later sync. None of this may fail the backlog sync: the
+	// items themselves are the deliverable, the link is an enrichment.
+	linker, canLink := ctx.client.(forge.IssueLinker)
+	warnedNoLinker := false
+	linkRouted := func(it backlogItem, itemKey string) {
+		if it.target == "" {
+			return
 		}
-		if ok {
-			title, body := it.title, it.body
-			if _, err := ctx.client.UpdateIssue(key, forge.IssuePatch{Title: &title, Body: &body}); err != nil {
+		if !canLink {
+			// Once per run, not once per item — a GitHub board would otherwise
+			// emit one warning per routed item on every sync.
+			if !warnedNoLinker {
+				warnedNoLinker = true
+				fmt.Fprintf(os.Stderr, "warning: this board provider cannot link issues — routed items keep their dross/target label only\n")
+			}
+			return
+		}
+		targetKey := lookupPhaseIssue(ctx, it.target)
+		if targetKey == "" {
+			fmt.Fprintf(os.Stderr, "warning: phase %q has no board issue yet — %s keeps its dross/target label and links on a later sync\n", it.target, itemKey)
+			return
+		}
+		if err := linker.LinkIssues(itemKey, targetKey); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not link %s to %s: %v\n", itemKey, targetKey, err)
+		}
+	}
+
+	for _, it := range items {
+		key, err := resolveBacklogIssue(ctx, it)
+		if err != nil {
+			return created, updated, err
+		}
+		if key != "" {
+			title, body, labels := it.title, it.body, it.labels
+			patch := forge.IssuePatch{Title: &title, Body: &body}
+			if len(labels) > 0 {
+				// Sent on every update, not only on create: a re-routed item
+				// has to LOSE its old dross/target label, and a label set that
+				// is only ever added to would leave the issue claiming both
+				// destinations forever.
+				patch.Labels = &labels
+			}
+			if _, err := ctx.client.UpdateIssue(key, patch); err != nil {
 				return created, updated, wrapBoard(err)
 			}
+			// Re-record: the key may have come from the tracker rather than
+			// the cache, and board.json has to catch up.
+			ctx.board.SetBacklog(it.key, key)
+			linkRouted(it, key)
 			updated++
 			continue
+		}
+		labels := it.labels
+		if len(labels) == 0 {
+			labels = []string{labelMarker}
 		}
 		var iss *forge.Issue
 		if yt, ok := ctx.client.(*forge.YouTrackClient); ok {
@@ -522,12 +686,17 @@ func pushBacklogItems(ctx *boardCtx, version string, items []backlogItem) (creat
 				// Attach to the Epic entity as a subtask.
 				err = yt.LinkSubtask(entityID, iss.Key)
 			}
+			if err == nil {
+				// CreateBacklogItem takes no labels — YouTrack tags are entity
+				// writes, applied through the patch path.
+				_, err = ctx.client.UpdateIssue(iss.Key, forge.IssuePatch{Labels: &labels})
+			}
 		} else {
 			ms, _ := strconv.Atoi(entityID)
 			iss, err = ctx.client.CreateIssue(forge.IssueInput{
 				Title:     it.title,
 				Body:      it.body,
-				Labels:    []string{labelMarker},
+				Labels:    labels,
 				Milestone: ms,
 			})
 		}
@@ -535,6 +704,7 @@ func pushBacklogItems(ctx *boardCtx, version string, items []backlogItem) (creat
 			return created, updated, wrapBoard(err)
 		}
 		ctx.board.SetBacklog(it.key, iss.Key)
+		linkRouted(it, iss.Key)
 		created++
 	}
 	if err := ctx.board.Save(ctx.boardPath); err != nil {
@@ -583,6 +753,76 @@ func issuePhaseSync() *cobra.Command {
 	return c
 }
 
+// hasMarker reports whether an issue carries the dross marker label. Every
+// adoption path post-filters on it: the tracker query is by phase label alone
+// (see resolvePhaseIssue), and a hand-made issue that happens to carry that
+// label must not be silently taken over.
+func hasMarker(iss forge.Issue) bool {
+	for _, l := range iss.Labels {
+		if l == labelMarker {
+			return true
+		}
+	}
+	return false
+}
+
+// resolvePhaseIssue finds the phase's existing board issue, or "" if there is
+// none yet. Resolution order:
+//
+//  1. board.json's cached key, verified against the tracker. A key that no
+//     longer resolves is dropped rather than trusted — the file is a cache.
+//  2. A tracker query for the phase label. This is the durable mapping: it
+//     survives the deleted phase branch that takes board.json with it.
+//  3. A legacy issue carrying the marker and the exact `<id> — <title>`
+//     summary, from before phase labels existed. Adopting it (the caller
+//     back-fills the phase label on update) is what stops one duplicate per
+//     pre-existing phase the first time this runs.
+//
+// The query filters on ONE label. Two would be OR'd now (c-1), which would
+// adopt an arbitrary dross issue; and State must be "all", because an
+// already-closed phase issue is exactly the one a re-ship must find.
+func resolvePhaseIssue(ctx *boardCtx, phaseID, title string) (string, error) {
+	if key, ok := ctx.board.PhaseIssue(phaseID); ok {
+		if iss, err := ctx.client.GetIssue(key); err == nil && iss != nil && hasMarker(*iss) {
+			return key, nil
+		}
+		fmt.Fprintf(os.Stderr, "warning: board.json points %s at %s, which no longer resolves — re-resolving from the tracker\n", phaseID, key)
+		ctx.board.DeletePhase(phaseID)
+	}
+
+	byLabel, err := ctx.client.ListIssues(forge.IssueFilter{State: "all", Labels: []string{phaseLabel(phaseID)}})
+	if err != nil {
+		return "", wrapBoard(err)
+	}
+	var matches []string
+	for _, iss := range byLabel {
+		if hasMarker(iss) {
+			matches = append(matches, iss.Key)
+		}
+	}
+	if len(matches) > 0 {
+		sort.Strings(matches)
+		if len(matches) > 1 {
+			fmt.Fprintf(os.Stderr, "warning: %d issues carry %s (%s) — updating %s and leaving the rest\n",
+				len(matches), phaseLabel(phaseID), strings.Join(matches, ", "), matches[0])
+		}
+		return matches[0], nil
+	}
+
+	// Legacy adoption: issues synced before phase labels existed are only
+	// identifiable by their summary.
+	byMarker, err := ctx.client.ListIssues(forge.IssueFilter{State: "all", Labels: []string{labelMarker}})
+	if err != nil {
+		return "", wrapBoard(err)
+	}
+	for _, iss := range byMarker {
+		if iss.Title == title && hasMarker(iss) {
+			return iss.Key, nil
+		}
+	}
+	return "", nil
+}
+
 func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 	dir := phase.Dir(ctx.root, phaseID)
 	spec, err := phase.LoadSpec(filepath.Join(dir, "spec.toml"))
@@ -598,7 +838,7 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 
 	title := fmt.Sprintf("%s — %s", phaseID, spec.Phase.Title)
 	body := renderPhaseBody(phaseID, spec, plan)
-	labels := []string{labelMarker, statusLabel(status)}
+	labels := []string{labelMarker, phaseLabel(phaseID), statusLabel(status)}
 
 	// Assign to the milestone if the phase declares one and it's syncable.
 	// IssueInput.Milestone is the forge int id; the board stores it as a string.
@@ -611,8 +851,12 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 		milestoneID, _ = strconv.Atoi(id) // "" / non-numeric (youtrack entity) → 0, unassigned
 	}
 
-	key, linked := ctx.board.PhaseIssue(phaseID)
-	if !linked {
+	key, err := resolvePhaseIssue(ctx, phaseID, title)
+	if err != nil {
+		return err
+	}
+	created := key == ""
+	if created {
 		iss, err := ctx.client.CreateIssue(forge.IssueInput{
 			Title:     title,
 			Body:      body,
@@ -629,13 +873,17 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 		if milestoneID > 0 {
 			patch.Milestone = &milestoneID
 		}
-		if doClose {
-			closed := "closed"
-			patch.State = &closed
-		}
+		// The close is NOT folded into the patch: it goes through
+		// closeBoardIssue below, so the created and updated edges take one
+		// path. Splitting them is what let the close-on-create branch regress
+		// unnoticed.
 		if _, err := ctx.client.UpdateIssue(key, patch); err != nil {
 			return wrapBoard(err)
 		}
+		// Re-record: the key may have come from the tracker rather than the
+		// cache (an adopted or re-resolved issue), and board.json has to catch
+		// up or the next run pays for the lookup again.
+		ctx.board.SetPhase(phaseID, key)
 	}
 	// YouTrack tracks lifecycle on the State custom field (not a status label),
 	// mapped via the default map overridden by [board].state_map. An unmapped
@@ -654,10 +902,12 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 			return wrapBoard(err)
 		}
 	}
-	// Close-on-create edge: created above then asked to close.
-	if doClose && !linked {
-		if err := ctx.client.CloseIssue(key); err != nil {
-			return wrapBoard(err)
+	// One close path for both edges — created-then-closed and updated-then-
+	// closed. It errors rather than warns, so nothing prints "(closed)" for an
+	// issue that is still open.
+	if doClose {
+		if err := closeBoardIssue(ctx, key, status); err != nil {
+			return err
 		}
 	}
 	if err := ctx.board.Save(ctx.boardPath); err != nil {
@@ -670,6 +920,25 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 	}
 	Printf("phase %s -> board %s (%s)\n", phaseID, key, state)
 	return nil
+}
+
+// closeBoardIssue resolves an issue on the board and reports failure rather
+// than assuming success.
+//
+// The lenient warn-and-continue that SetState uses is right for a status label
+// — a cosmetic loss — and wrong here. `--close` is the caller asserting the
+// work is done; if the tracker did not record that, printing "(closed)" turns
+// a failed write into a false claim about the state of the work, which is what
+// c-5 exists to stop. So an unmapped status is an error, not a warning.
+func closeBoardIssue(ctx *boardCtx, key, status string) error {
+	if status == "" {
+		status = "complete"
+	}
+	if yt, ok := ctx.client.(*forge.YouTrackClient); ok {
+		// CloseIssueAs writes the mapped state and verifies the read-back.
+		return wrapBoard(yt.CloseIssueAs(key, status, ctx.proj.Board.StateMap))
+	}
+	return wrapBoard(ctx.client.CloseIssue(key))
 }
 
 // derivePhaseStatus maps plan progress onto a lifecycle label. Its return
@@ -795,6 +1064,36 @@ func collectInbound(ctx *boardCtx, filter forge.IssueFilter) ([]forge.Issue, err
 	return inbound, nil
 }
 
+// pullEnvelope is the `issue pull --json` shape. It exists so a board that
+// could not be reached is distinguishable from a board with nothing on it: a
+// bare array collapses both onto `[]`, and every prompt then reports zero
+// inbound issues for a tracker that is simply down.
+//
+// Issues is never null — an empty feed is `[]` — and Error is null on success.
+type pullEnvelope struct {
+	Issues []forge.Issue `json:"issues"`
+	Error  *string       `json:"error"`
+}
+
+// emitPullEnvelope marshals and prints the envelope. Issues is normalised to a
+// non-nil slice so consumers can index it without a null check.
+func emitPullEnvelope(issues []forge.Issue, boardErr error) error {
+	env := pullEnvelope{Issues: issues}
+	if env.Issues == nil {
+		env.Issues = []forge.Issue{}
+	}
+	if boardErr != nil {
+		msg := boardErr.Error()
+		env.Error = &msg
+	}
+	out, err := json.Marshal(env)
+	if err != nil {
+		return err
+	}
+	Print(string(out))
+	return nil
+}
+
 func issuePull() *cobra.Command {
 	var labels, state string
 	var asJSON, mark bool
@@ -808,7 +1107,7 @@ func issuePull() *cobra.Command {
 			}
 			if !enabled {
 				if asJSON {
-					Print("[]")
+					return emitPullEnvelope(nil, nil)
 				}
 				return nil
 			}
@@ -816,13 +1115,23 @@ func issuePull() *cobra.Command {
 			if labels != "" {
 				filter.Labels = splitCSV(labels)
 			}
-			inbound, err := collectInbound(ctx, filter)
-			if err != nil {
-				return err
+			inbound, boardErr := collectInbound(ctx, filter)
+			if boardErr != nil {
+				// A fetch failure is reported, not raised: the workflow
+				// prompts call `dross issue …` unconditionally on the promise
+				// that it is a safe no-op, so a non-zero exit would break
+				// that contract. The signal travels in the payload instead.
+				if asJSON {
+					return emitPullEnvelope(nil, boardErr)
+				}
+				Printf("board unreachable: %v\n", boardErr)
+				return nil
 			}
 
 			// Read-only by default so /dross-status can poll without
 			// mutating .dross. --mark stamps last_pull (used by /dross-inbox).
+			// Only a pull that actually happened is worth stamping — marking
+			// a failed fetch is the silent-zero fault wearing a different hat.
 			if mark {
 				ctx.board.MarkPulled()
 				if err := ctx.board.Save(ctx.boardPath); err != nil {
@@ -831,12 +1140,7 @@ func issuePull() *cobra.Command {
 			}
 
 			if asJSON {
-				out, err := json.Marshal(inbound)
-				if err != nil {
-					return err
-				}
-				Print(string(out))
-				return nil
+				return emitPullEnvelope(inbound, nil)
 			}
 			if len(inbound) == 0 {
 				Print("no new issues on the board")
@@ -855,7 +1159,7 @@ func issuePull() *cobra.Command {
 	}
 	c.Flags().StringVar(&labels, "labels", "", "only issues with these labels (csv, e.g. bug,enhancement)")
 	c.Flags().StringVar(&state, "state", "open", "issue state: open|closed|all")
-	c.Flags().BoolVar(&asJSON, "json", false, "emit a JSON array (for prompt consumption)")
+	c.Flags().BoolVar(&asJSON, "json", false, "emit a JSON envelope {issues, error} (for prompt consumption)")
 	c.Flags().BoolVar(&mark, "mark", false, "record the pull time in board.json (otherwise read-only)")
 	return c
 }

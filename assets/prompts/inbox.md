@@ -19,7 +19,18 @@ dross issue pull --mark --json
 
 (Skip this pull entirely when `board.enabled` is off — §0 already routed you past the board source straight to the deferred ideas below.)
 
-`--mark` records the pull time. The result is a JSON array of open board issues **not** already linked to a dross phase/quick and **not** previously dismissed. Default filter is none; pass `$ARGUMENTS` through, e.g. `dross issue pull --mark --labels bug,enhancement --json`, when the user wants to scope by label.
+`--mark` records the pull time. The result is a JSON **envelope**, not a bare array:
+
+```
+{"issues": [...], "error": null}
+```
+
+`.issues` holds the open board issues **not** already linked to a dross phase/quick and **not** previously dismissed. Default filter is none; pass `$ARGUMENTS` through, e.g. `dross issue pull --mark --labels bug,enhancement --json`, when the user wants to scope by label.
+
+**Check `.error` before reading `.issues`.** The command exits 0 even when the board fetch fails, so an empty `.issues` alone does not mean an empty board. When `.error` is non-null:
+- Print one line naming it: `board unreachable: <error> — triaging local deferred items only`.
+- Skip the board source entirely for this run (it is not empty, it is unknown) and continue to the deferred ideas below.
+- Never report the board as clear, and never dismiss or triage anything on the strength of a failed pull. `--mark` does not stamp a pull that failed, so re-running once the board is back picks up where it left off.
 
 **Second source — `someday` deferred ideas.** The board isn't the only intake: items parked and never routed anywhere ("someday") are the local half of the backlog — punted during `/dross-spec`, filed mid-flight with `dross deferred add`, or routed in from a survivor drain. Pull them too:
 ```
@@ -27,7 +38,7 @@ dross deferred list --someday --json
 ```
 Each entry carries its `source` and `index` — the handle you'll pass to `dross deferred route` when triaging it. `source` is usually the originating phase slug, but not always: `_project` is the project-level store, where items filed with no usable phase home land. Treat them as a second batch of inbound items alongside the board issues.
 
-If **both** sources are empty: print `Inbox clear — no new board issues or deferred ideas.` and stop.
+If **both** sources are empty: print `Inbox clear — no new board issues or deferred ideas.` and stop. Only claim this when the board pull actually succeeded (`.error` is null) — an unreachable board is unknown, not clear.
 
 ## 2. Triage each issue
 

@@ -19,17 +19,54 @@ import (
 type fakeBoard struct {
 	t        *testing.T
 	srv      *httptest.Server
-	issues   map[string]string // issue key -> current summary
-	creates  []string          // summaries, in create order
-	patches  []patchCall       // every UpdateIssue, with its target key
+	issues   map[string]string   // issue key -> current summary
+	tags     map[string][]string // issue key -> tag names currently on it
+	tagIndex []string            // tag entities the instance knows
+	creates  []string            // summaries, in create order
+	patches  []patchCall         // every UpdateIssue, with its target key
+	links    []linkCall          // every relates-to link, in order
 	nextItem int
+}
+
+type linkCall struct{ from, to string }
+
+// knownTags is the instance's tag vocabulary: everything created plus
+// everything any issue carries. FilterKnownLabels checks queries against it.
+func (f *fakeBoard) knownTags() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(n string) {
+		if n != "" && !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	for _, n := range f.tagIndex {
+		add(n)
+	}
+	for _, tags := range f.tags {
+		for _, n := range tags {
+			add(n)
+		}
+	}
+	return out
+}
+
+// issueBody renders an issue with its tags, the shape the resolvers read.
+func (f *fakeBoard) issueBody(key string) string {
+	var tagJSON []string
+	for _, n := range f.tags[key] {
+		tagJSON = append(tagJSON, fmt.Sprintf(`{"id":"tid-%s","name":%q}`, n, n))
+	}
+	return fmt.Sprintf(`{"idReadable":%q,"summary":%q,"tags":[%s]}`,
+		key, f.issues[key], strings.Join(tagJSON, ","))
 }
 
 type patchCall struct{ key, summary string }
 
 func newFakeBoard(t *testing.T) *fakeBoard {
 	t.Helper()
-	f := &fakeBoard{t: t, issues: map[string]string{}}
+	f := &fakeBoard{t: t, issues: map[string]string{}, tags: map[string][]string{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/customFields") && r.Method == "GET":
@@ -48,22 +85,94 @@ func newFakeBoard(t *testing.T) *fakeBoard {
 			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":%q,"summary":%q}`, key, summary))
 		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "GET":
 			key := strings.TrimPrefix(r.URL.Path, "/api/issues/")
-			summary, ok := f.issues[key]
-			if !ok {
+			if _, ok := f.issues[key]; !ok {
 				w.WriteHeader(http.StatusNotFound)
 				_, _ = io.WriteString(w, `{"error":"not found"}`)
 				return
 			}
-			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":%q,"summary":%q}`, key, summary))
+			_, _ = io.WriteString(w, f.issueBody(key))
+		// --- tags (labels are entity writes on YouTrack) ---
+		case r.URL.Path == "/api/issueTags" && r.Method == "GET":
+			var out []string
+			for _, n := range f.knownTags() {
+				out = append(out, fmt.Sprintf(`{"id":"tid-%s","name":%q}`, n, n))
+			}
+			_, _ = io.WriteString(w, "["+strings.Join(out, ",")+"]")
+		case r.URL.Path == "/api/issueTags" && r.Method == "POST":
+			var b struct {
+				Name string `json:"name"`
+			}
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &b)
+			f.tagIndex = append(f.tagIndex, b.Name)
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"id":"tid-%s"}`, b.Name))
+		case strings.HasSuffix(r.URL.Path, "/tags") && r.Method == "POST":
+			key := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/issues/"), "/tags")
+			var b struct {
+				ID string `json:"id"`
+			}
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &b)
+			f.tags[key] = append(f.tags[key], strings.TrimPrefix(b.ID, "tid-"))
+			_, _ = io.WriteString(w, `{}`)
+
 		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "POST":
 			key := strings.TrimPrefix(r.URL.Path, "/api/issues/")
 			var b map[string]any
 			raw, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(raw, &b)
-			summary, _ := b["summary"].(string)
-			f.issues[key] = summary
-			f.patches = append(f.patches, patchCall{key: key, summary: summary})
-			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":%q,"summary":%q}`, key, summary))
+			// A labels-only patch carries no summary; it is tag traffic, not an
+			// issue-body update, and counting it would double every patch.
+			if summary, ok := b["summary"].(string); ok {
+				f.issues[key] = summary
+				f.patches = append(f.patches, patchCall{key: key, summary: summary})
+			}
+			_, _ = io.WriteString(w, f.issueBody(key))
+
+		case strings.Contains(r.URL.Path, "/tags/") && r.Method == "DELETE":
+			rest := strings.TrimPrefix(r.URL.Path, "/api/issues/")
+			key, id, _ := strings.Cut(rest, "/tags/")
+			drop := strings.TrimPrefix(id, "tid-")
+			var kept []string
+			for _, n := range f.tags[key] {
+				if n != drop {
+					kept = append(kept, n)
+				}
+			}
+			f.tags[key] = kept
+			_, _ = io.WriteString(w, `{}`)
+
+		// The resolvers' label query.
+		case r.URL.Path == "/api/issues" && r.Method == "GET":
+			query := r.URL.Query().Get("query")
+			var out []string
+			for key := range f.issues {
+				for _, n := range f.tags[key] {
+					if n != "" && strings.Contains(query, n) {
+						out = append(out, f.issueBody(key))
+						break
+					}
+				}
+			}
+			_, _ = io.WriteString(w, "["+strings.Join(out, ",")+"]")
+
+		case r.URL.Path == "/api/commands" && r.Method == "POST":
+			var b struct {
+				Query  string `json:"query"`
+				Issues []struct {
+					IDReadable string `json:"idReadable"`
+				} `json:"issues"`
+			}
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &b)
+			if len(b.Issues) > 0 && strings.HasPrefix(b.Query, "relates to ") {
+				f.links = append(f.links, linkCall{
+					from: b.Issues[0].IDReadable,
+					to:   strings.TrimPrefix(b.Query, "relates to "),
+				})
+			}
+			_, _ = io.WriteString(w, `{}`)
+
 		default:
 			f.t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -318,10 +427,11 @@ func TestBacklogSyncBackfillsIDsIdempotently(t *testing.T) {
 	}
 }
 
-// TestBacklogSyncStillSkipsRoutedItems pins the filter this task deliberately
-// leaves alone: backlog-sync mirrors only unrouted someday items. Board coverage
-// of routed items is board-sync-truth's remit (this phase's own [[deferred]]).
-func TestBacklogSyncStillSkipsRoutedItems(t *testing.T) {
+// TestBacklogSyncCoversRoutedButNotDismissed pins c-6's scope change: a routed
+// item IS mirrored (it has a destination, not an absence of one), while a
+// dismissed item still is not. The earlier `Target != ""` skip is what left a
+// routed item's issue frozen at its filed text — the staleness c-6 closes.
+func TestBacklogSyncCoversRoutedButNotDismissed(t *testing.T) {
 	f := newFakeBoard(t)
 	dir := youtrackBoardRepo(t, f.srv.URL)
 	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v0.1.toml"), `
@@ -354,7 +464,15 @@ dismissed = true
 	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
-	if len(f.creates) != 0 {
-		t.Errorf("routed/dismissed items must not reach the board from backlog-sync; creates=%v", f.creates)
+	if len(f.creates) != 1 {
+		t.Fatalf("creates = %v, want exactly the routed item", f.creates)
+	}
+	if !strings.Contains(f.creates[0], "routed idea") {
+		t.Errorf("created %q, want the routed item", f.creates[0])
+	}
+	for _, got := range f.creates {
+		if strings.Contains(got, "dismissed idea") {
+			t.Error("a dismissed item reached the board — the skip removal must be scoped to routed items")
+		}
 	}
 }

@@ -2,6 +2,7 @@ package forge
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -189,6 +190,10 @@ func TestJiraCloseIssueTransitions(t *testing.T) {
 func TestJiraListIssuesJQL(t *testing.T) {
 	var gotPath, gotJQL, gotFields string
 	c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/label") {
+			_, _ = io.WriteString(w, `{"values":["dross"]}`)
+			return
+		}
 		gotPath = r.URL.Path
 		gotJQL = r.URL.Query().Get("jql")
 		gotFields = r.URL.Query().Get("fields")
@@ -208,7 +213,7 @@ func TestJiraListIssuesJQL(t *testing.T) {
 	if !strings.Contains(gotJQL, "project = ") {
 		t.Errorf("JQL %q missing project scope", gotJQL)
 	}
-	if !strings.Contains(gotJQL, "labels = ") {
+	if !strings.Contains(gotJQL, `labels IN ("dross")`) {
 		t.Errorf("JQL %q missing label clause", gotJQL)
 	}
 	if gotFields == "" {
@@ -217,6 +222,39 @@ func TestJiraListIssuesJQL(t *testing.T) {
 	if len(issues) != 2 || issues[0].Key != "PROJ-7" || issues[1].Key != "PROJ-8" {
 		t.Errorf("list returned %+v", issues)
 	}
+}
+
+// TestJiraBuildJQLOrsLabels pins the OR semantics. AND-joining one
+// `labels = ` clause per label matches only issues carrying every label at
+// once, so a two-label pull returns near-nothing — the c-1 bug.
+func TestJiraBuildJQLOrsLabels(t *testing.T) {
+	c, _ := newTestJiraClient(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) })
+
+	t.Run("labels share one IN clause", func(t *testing.T) {
+		got := c.buildJQL(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if !strings.Contains(got, `labels IN ("bug","enhancement")`) {
+			t.Errorf("JQL = %q, want a single `labels IN (...)` clause", got)
+		}
+		if strings.Contains(got, " AND labels = ") {
+			t.Errorf("JQL = %q, want no AND-joined `labels = ` clause", got)
+		}
+	})
+
+	t.Run("the state clause stays AND-joined", func(t *testing.T) {
+		got := c.buildJQL(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if !strings.Contains(got, "statusCategory != Done") {
+			t.Fatalf("JQL = %q, want the open-state clause preserved", got)
+		}
+		if !strings.Contains(got, "AND statusCategory != Done") {
+			t.Errorf("JQL = %q, want statusCategory still AND-joined — the OR must not widen the state scope", got)
+		}
+	})
+
+	t.Run("no labels emits no label clause", func(t *testing.T) {
+		if got := c.buildJQL(IssueFilter{}); strings.Contains(got, "labels") {
+			t.Errorf("JQL = %q, want no label clause at all", got)
+		}
+	})
 }
 
 func TestJiraEnsureMilestoneVersion(t *testing.T) {
@@ -524,5 +562,239 @@ func TestJiraErrorSnippetTruncatesAndHints(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestJiraListIssuesDropsUnknownLabels covers the label-index gate — same
+// contract as YouTrack's, against Jira's /label index.
+func TestJiraListIssuesDropsUnknownLabels(t *testing.T) {
+	t.Run("unknown label dropped and named, known one still queried", func(t *testing.T) {
+		var gotJQL string
+		var searchCalls int
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/label") {
+				_, _ = io.WriteString(w, `{"values":["bug"]}`)
+				return
+			}
+			searchCalls++
+			gotJQL = r.URL.Query().Get("jql")
+			_, _ = io.WriteString(w, `{"issues":[{"key":"PROJ-1","fields":{"summary":"a"}}]}`)
+		})
+
+		warn := captureForgeStderr(t, func() {
+			if _, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "typo"}}); err != nil {
+				t.Fatalf("ListIssues: %v", err)
+			}
+		})
+
+		if searchCalls != 1 {
+			t.Fatalf("issued %d searches, want 1", searchCalls)
+		}
+		if !strings.Contains(gotJQL, "bug") {
+			t.Errorf("JQL %q lost the known label", gotJQL)
+		}
+		if strings.Contains(gotJQL, "typo") {
+			t.Errorf("JQL %q carried the unknown label to the wire", gotJQL)
+		}
+		if !strings.Contains(warn, "typo") {
+			t.Errorf("stderr = %q, want the dropped label named", warn)
+		}
+	})
+
+	t.Run("every label unknown returns nothing, never the whole project", func(t *testing.T) {
+		var searchCalls int
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/label") {
+				_, _ = io.WriteString(w, `{"values":["bug"]}`)
+				return
+			}
+			searchCalls++
+			_, _ = io.WriteString(w, `{"issues":[{"key":"PROJ-1","fields":{"summary":"everything"}}]}`)
+		})
+
+		var issues []Issue
+		_ = captureForgeStderr(t, func() {
+			var err error
+			if issues, err = c.ListIssues(IssueFilter{Labels: []string{"typo"}}); err != nil {
+				t.Fatalf("ListIssues: %v", err)
+			}
+		})
+		if len(issues) != 0 || searchCalls != 0 {
+			t.Errorf("returned %+v via %d searches, want zero of each", issues, searchCalls)
+		}
+	})
+
+	t.Run("a failing label index refuses the query", func(t *testing.T) {
+		var searchCalls int
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/label") {
+				w.WriteHeader(500)
+				return
+			}
+			searchCalls++
+			_, _ = io.WriteString(w, `{"issues":[]}`)
+		})
+		if _, err := c.ListIssues(IssueFilter{Labels: []string{"bug"}}); err == nil {
+			t.Fatal("a 500 from the label index returned no error")
+		}
+		if searchCalls != 0 {
+			t.Errorf("issued %d searches after the index failed, want 0", searchCalls)
+		}
+	})
+
+	t.Run("an empty filter reads no label index at all", func(t *testing.T) {
+		var labelCalls int
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/label") {
+				labelCalls++
+			}
+			_, _ = io.WriteString(w, `{"issues":[]}`)
+		})
+		if _, err := c.ListIssues(IssueFilter{}); err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		if labelCalls != 0 {
+			t.Errorf("unlabelled list read the label index %d times — a blip must not fail `dross watch`", labelCalls)
+		}
+	})
+}
+
+// TestJiraLinkIssues covers the Jira half of c-7: a real link where the
+// instance can express one, no duplicate on re-sync, and a distinguishable
+// capability gap where it cannot.
+func TestJiraLinkIssues(t *testing.T) {
+	t.Run("links a new pair exactly once", func(t *testing.T) {
+		var posts int
+		var gotBody map[string]any
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/issueLinkType"):
+				_, _ = io.WriteString(w, `{"issueLinkTypes":[{"id":"10000","name":"Blocks"},{"id":"10003","name":"Relates"}]}`)
+			case strings.HasSuffix(r.URL.Path, "/issueLink") && r.Method == "POST":
+				posts++
+				raw, _ := io.ReadAll(r.Body)
+				_ = json.Unmarshal(raw, &gotBody)
+				w.WriteHeader(http.StatusCreated)
+			default: // the issuelinks read
+				_, _ = io.WriteString(w, `{"fields":{"issuelinks":[]}}`)
+			}
+		})
+
+		if err := c.LinkIssues("PROJ-9", "PROJ-3"); err != nil {
+			t.Fatalf("LinkIssues: %v", err)
+		}
+		if posts != 1 {
+			t.Fatalf("issued %d link POSTs, want exactly 1", posts)
+		}
+		inward, _ := gotBody["inwardIssue"].(map[string]any)
+		outward, _ := gotBody["outwardIssue"].(map[string]any)
+		if inward["key"] != "PROJ-9" || outward["key"] != "PROJ-3" {
+			t.Errorf("link body = %v, want it to name both issues", gotBody)
+		}
+		linkType, _ := gotBody["type"].(map[string]any)
+		if name, _ := linkType["name"].(string); name == "" {
+			t.Errorf("link body carries no type: %v", gotBody)
+		}
+	})
+
+	t.Run("an existing pair sends no POST", func(t *testing.T) {
+		var posts int
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/issueLinkType"):
+				_, _ = io.WriteString(w, `{"issueLinkTypes":[{"name":"Relates"}]}`)
+			case strings.HasSuffix(r.URL.Path, "/issueLink") && r.Method == "POST":
+				posts++
+				w.WriteHeader(http.StatusCreated)
+			default:
+				_, _ = io.WriteString(w, `{"fields":{"issuelinks":[{"outwardIssue":{"key":"PROJ-3"}}]}}`)
+			}
+		})
+		if err := c.LinkIssues("PROJ-9", "PROJ-3"); err != nil {
+			t.Fatalf("LinkIssues: %v", err)
+		}
+		if posts != 0 {
+			t.Errorf("re-linking an existing pair issued %d POSTs, want 0", posts)
+		}
+	})
+
+	t.Run("no link type yields ErrNoLinkType, not a generic failure", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			serve func(w http.ResponseWriter)
+		}{
+			{"empty list", func(w http.ResponseWriter) { _, _ = io.WriteString(w, `{"issueLinkTypes":[]}`) }},
+			{"404", func(w http.ResponseWriter) { w.WriteHeader(404) }},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+					if strings.HasSuffix(r.URL.Path, "/issueLinkType") {
+						tc.serve(w)
+						return
+					}
+					_, _ = io.WriteString(w, `{"fields":{"issuelinks":[]}}`)
+				})
+				err := c.LinkIssues("PROJ-9", "PROJ-3")
+				if !errors.Is(err, ErrNoLinkType) {
+					t.Errorf("err = %v, want ErrNoLinkType — the caller must tell a capability gap from an outage", err)
+				}
+			})
+		}
+	})
+}
+
+// TestJiraDoneCategoryIsResolved pins the Jira half of the read-back signal:
+// the done status-category is the tracker's own verdict that the issue is
+// finished, and it has to reach Issue.Resolved as well as Issue.State.
+func TestJiraDoneCategoryIsResolved(t *testing.T) {
+	cases := []struct {
+		name         string
+		body         string
+		wantResolved bool
+		wantState    string
+	}{
+		{
+			"done category",
+			`{"key":"PROJ-7","fields":{"summary":"a","status":{"name":"Done","statusCategory":{"key":"done"}}}}`,
+			true, "closed",
+		},
+		{
+			"in progress",
+			`{"key":"PROJ-7","fields":{"summary":"a","status":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}}}`,
+			false, "open",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := newTestJiraClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = io.WriteString(w, tc.body)
+			})
+			iss, err := c.GetIssue("PROJ-7")
+			if err != nil {
+				t.Fatalf("GetIssue: %v", err)
+			}
+			if iss.Resolved != tc.wantResolved {
+				t.Errorf("Resolved = %v, want %v", iss.Resolved, tc.wantResolved)
+			}
+			if iss.State != tc.wantState {
+				t.Errorf("State = %q, want %q", iss.State, tc.wantState)
+			}
+		})
+	}
+}
+
+// TestJiraCloseWithoutADoneTransitionErrors pins that a workflow with no path
+// to the done category is a failure, not a shrug. Warning here would let ship
+// print "(closed)" for an issue nothing moved.
+func TestJiraCloseWithoutADoneTransitionErrors(t *testing.T) {
+	c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/transitions") && r.Method == "GET" {
+			_, _ = io.WriteString(w, `{"transitions":[{"id":"11","name":"Start","to":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}}]}`)
+			return
+		}
+		t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+	})
+	if err := c.CloseIssue("PROJ-7"); err == nil {
+		t.Fatal("a board with no done-category transition closed without error")
 	}
 }

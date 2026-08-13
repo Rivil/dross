@@ -174,6 +174,11 @@ func TestIssuePhaseSyncCreatesThenUpdates(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/issues/12") && r.Method == "PATCH":
 			issuePatch++
 			_, _ = w.Write([]byte(`{"number":12}`))
+		// The phase resolver's tracker query and cache verification.
+		case strings.HasSuffix(r.URL.Path, "/issues") && r.Method == "GET":
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(r.URL.Path, "/issues/") && r.Method == "GET":
+			_, _ = w.Write([]byte(`{"number":12,"labels":[{"name":"dross"}]}`))
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -293,12 +298,9 @@ func TestIssuePullFiltersLinkedAndDismissed(t *testing.T) {
 			t.Fatalf("pull: %v", err)
 		}
 	})
-	var got []map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
-		t.Fatalf("pull --json not valid JSON: %v\n%s", err, out)
-	}
-	if len(got) != 1 || got[0]["Key"].(string) != "21" {
-		t.Errorf("expected only #21 inbound, got %v", got)
+	got := decodePull(t, out)
+	if len(got.Issues) != 1 || got.Issues[0].Key != "21" {
+		t.Errorf("expected only #21 inbound, got %v", got.Issues)
 	}
 }
 
@@ -337,6 +339,22 @@ func TestIssuePhaseSyncYouTrackCreatesThenUpdates(t *testing.T) {
 		case r.URL.Path == "/api/issues/PROJ-7" && r.Method == "POST":
 			updates++
 			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7"}`)
+		// Tag traffic: the dross marker labels are entity writes on YouTrack,
+		// not names on the issue body. Served permissively — this test counts
+		// creates vs updates, not tags (youtrack_test.go pins those).
+		case strings.HasSuffix(r.URL.Path, "/issueTags") && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case strings.HasSuffix(r.URL.Path, "/issueTags") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"id":"t-1"}`)
+		case strings.Contains(r.URL.Path, "/tags"):
+			_, _ = io.WriteString(w, `{"id":"t-1"}`)
+		// The phase resolver: it verifies board.json's cached key against the
+		// tracker (the marker tag is what proves the issue is dross's), and
+		// queries by label when there is no cached key.
+		case r.URL.Path == "/api/issues/PROJ-7" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7","tags":[{"id":"t-1","name":"dross"}]}`)
+		case r.URL.Path == "/api/issues" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -442,6 +460,11 @@ success_criteria = ["ships"]
 func TestIssuePullYouTrackFiltersLinkedAndDismissed(t *testing.T) {
 	var gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The tag index the label filter is checked against before querying.
+		if strings.HasSuffix(r.URL.Path, "/issueTags") {
+			_, _ = io.WriteString(w, `[{"name":"bug"}]`)
+			return
+		}
 		gotQuery = r.URL.Query().Get("query")
 		// PROJ-12 is linked (a phase), PROJ-20 dismissed, PROJ-21 is new.
 		_, _ = io.WriteString(w, `[
@@ -462,12 +485,9 @@ func TestIssuePullYouTrackFiltersLinkedAndDismissed(t *testing.T) {
 			t.Fatalf("pull: %v", err)
 		}
 	})
-	var got []map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
-		t.Fatalf("pull --json not valid JSON: %v\n%s", err, out)
-	}
-	if len(got) != 1 || got[0]["Key"].(string) != "PROJ-21" {
-		t.Errorf("expected only PROJ-21 inbound, got %v", got)
+	got := decodePull(t, out)
+	if len(got.Issues) != 1 || got.Issues[0].Key != "PROJ-21" {
+		t.Errorf("expected only PROJ-21 inbound, got %v", got.Issues)
 	}
 	if !strings.Contains(gotQuery, "bug") {
 		t.Errorf("upstream YouTrack query %q must carry the bug tag filter", gotQuery)
@@ -559,8 +579,29 @@ func TestIssueBacklogSyncYouTrackIdempotent(t *testing.T) {
 			createBodies = append(createBodies, b)
 			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 200+creates))
 		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "POST":
-			updates++
+			// A labels-only patch carries no summary; count issue-body updates.
+			raw, _ := io.ReadAll(r.Body)
+			var b map[string]any
+			_ = json.Unmarshal(raw, &b)
+			if _, isPatch := b["summary"]; isPatch {
+				updates++
+			}
 			_, _ = io.WriteString(w, `{"idReadable":"PROJ-upd"}`)
+		case r.URL.Path == "/api/issues" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`) // no pre-existing labelled issue
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-201","tags":[{"id":"tid-dross","name":"dross"}]}`)
+		// Tag traffic and the backlog resolver's label query. Labels are
+		// entity writes on YouTrack; served permissively — this test counts
+		// creates vs updates, not tags.
+		case r.URL.Path == "/api/issueTags" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"id":"tid-x"}`)
+		case strings.HasSuffix(r.URL.Path, "/tags") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{}`)
+		case strings.Contains(r.URL.Path, "/tags/") && r.Method == "DELETE":
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -648,6 +689,21 @@ func TestIssueBacklogSyncYouTrackEpicMode(t *testing.T) {
 			_ = json.Unmarshal(raw, &b)
 			linkQueries = append(linkQueries, fmt.Sprint(b["query"]))
 			_, _ = io.WriteString(w, `{}`)
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-201","tags":[{"id":"tid-dross","name":"dross"}]}`)
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-upd"}`)
+		// Tag traffic and the backlog resolver's label query. Labels are
+		// entity writes on YouTrack; served permissively — this test counts
+		// creates vs updates, not tags.
+		case r.URL.Path == "/api/issueTags" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"id":"tid-x"}`)
+		case strings.HasSuffix(r.URL.Path, "/tags") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{}`)
+		case strings.Contains(r.URL.Path, "/tags/") && r.Method == "DELETE":
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -710,6 +766,17 @@ func TestIssueBacklogSyncYouTrackAgileMode(t *testing.T) {
 			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 300+itemCreates))
 		case r.URL.Path == "/api/commands":
 			t.Error("agile mode must not link subtasks — boards are query/project-based")
+		// Tag traffic and the backlog resolver's label query.
+		case r.URL.Path == "/api/issues" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-301","tags":[]}`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"id":"tid-x"}`)
+		case strings.HasSuffix(r.URL.Path, "/tags") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -820,9 +887,18 @@ func TestIssueCover_phaseSyncMilestoneLinks(t *testing.T) {
 			// "dross/status:planning" here is what made these two fixtures the
 			// only casualties of the planned/planning rename.
 			_, _ = fmt.Fprintf(w, `[{"id":1,"name":"dross"},{"id":2,"name":%q}]`, statusLabel(statusPlanned))
+		case strings.HasSuffix(r.URL.Path, "/labels") && r.Method == "POST":
+			// The phase-identity label is new to this board.
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":3}`))
 		case strings.HasSuffix(r.URL.Path, "/issues") && r.Method == "POST":
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"number":12,"state":"open"}`))
+		// The phase resolver's tracker query and cache verification.
+		case strings.HasSuffix(r.URL.Path, "/issues") && r.Method == "GET":
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(r.URL.Path, "/issues/") && r.Method == "GET":
+			_, _ = w.Write([]byte(`{"number":12,"labels":[{"name":"dross"}]}`))
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -873,12 +949,21 @@ func TestIssueCover_phaseSyncCloseOnCreate(t *testing.T) {
 			// "dross/status:planning" here is what made these two fixtures the
 			// only casualties of the planned/planning rename.
 			_, _ = fmt.Fprintf(w, `[{"id":1,"name":"dross"},{"id":2,"name":%q}]`, statusLabel(statusPlanned))
+		case strings.HasSuffix(r.URL.Path, "/labels") && r.Method == "POST":
+			// The phase-identity label is new to this board.
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":3}`))
 		case strings.HasSuffix(r.URL.Path, "/issues") && r.Method == "POST":
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"number":12,"state":"open"}`))
 		case strings.HasSuffix(r.URL.Path, "/issues/12") && r.Method == "PATCH":
 			closed = true
 			_, _ = w.Write([]byte(`{"number":12,"state":"closed"}`))
+		// The phase resolver's tracker query and cache verification.
+		case strings.HasSuffix(r.URL.Path, "/issues") && r.Method == "GET":
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(r.URL.Path, "/issues/") && r.Method == "GET":
+			_, _ = w.Write([]byte(`{"number":12,"labels":[{"name":"dross"}]}`))
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -1023,12 +1108,9 @@ func TestIssueCover_pullMarkPrints(t *testing.T) {
 			t.Fatalf("pull --mark --json: %v", err)
 		}
 	})
-	var got []map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
-		t.Fatalf("pull --mark --json not valid JSON: %v\noutput=%q", err, out)
-	}
-	if len(got) != 1 || got[0]["Key"].(string) != "21" {
-		t.Errorf("inbound = %v, want a single issue keyed 21", got)
+	got := decodePull(t, out)
+	if len(got.Issues) != 1 || got.Issues[0].Key != "21" {
+		t.Errorf("inbound = %v, want a single issue keyed 21", got.Issues)
 	}
 	// --mark must have persisted last_pull.
 	body := mustRead(t, filepath.Join(dir, ".dross", "board.json"))
@@ -1363,6 +1445,19 @@ func TestMilestoneSyncTrimsMilestoneMode(t *testing.T) {
 			_ = json.Unmarshal(raw, &b)
 			createBodies = append(createBodies, b)
 			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 300+len(createBodies)))
+		// The backlog resolver's label query and the tag writes behind it.
+		case r.URL.Path == "/api/issues" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-301","tags":[]}`)
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-301"}`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"id":"tid-x"}`)
+		case strings.HasSuffix(r.URL.Path, "/tags") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -1478,6 +1573,14 @@ func TestIssuePhaseSyncJiraTransitionsALockedButUnstartedPlan(t *testing.T) {
 			issuePuts++
 			putFields = readFields(r)
 			w.WriteHeader(http.StatusNoContent)
+		// The phase resolver's label-index read, tracker query and cache
+		// verification.
+		case r.URL.Path == "/rest/api/3/label" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"values":["dross","dross/phase:01-auth"]}`)
+		case r.URL.Path == "/rest/api/3/search/jql" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"issues":[]}`)
+		case r.URL.Path == "/rest/api/3/issue/PROJ-1" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"key":"PROJ-1","fields":{"summary":"","labels":["dross"]}}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -1658,6 +1761,14 @@ func TestIssuePhaseSyncNormalizesStatusBeforeUse(t *testing.T) {
 		case r.URL.Path == "/rest/api/3/issue/PROJ-1/transitions" && r.Method == "POST":
 			transitionPosts++
 			w.WriteHeader(http.StatusNoContent)
+		// The phase resolver's label-index read, tracker query and cache
+		// verification.
+		case r.URL.Path == "/rest/api/3/label" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"values":["dross","dross/phase:01-auth"]}`)
+		case r.URL.Path == "/rest/api/3/search/jql" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"issues":[]}`)
+		case r.URL.Path == "/rest/api/3/issue/PROJ-1" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"key":"PROJ-1","fields":{"summary":"","labels":["dross"]}}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -1706,6 +1817,14 @@ func TestIssuePhaseSyncStillDerivesWithoutTheFlag(t *testing.T) {
 			_, _ = io.WriteString(w, `{"transitions":[{"id":"21","name":"In Progress","to":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}}]}`)
 		case r.URL.Path == "/rest/api/3/issue/PROJ-1/transitions" && r.Method == "POST":
 			w.WriteHeader(http.StatusNoContent)
+		// The phase resolver's label-index read, tracker query and cache
+		// verification.
+		case r.URL.Path == "/rest/api/3/label" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"values":["dross","dross/phase:01-auth"]}`)
+		case r.URL.Path == "/rest/api/3/search/jql" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"issues":[]}`)
+		case r.URL.Path == "/rest/api/3/issue/PROJ-1" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"key":"PROJ-1","fields":{"summary":"","labels":["dross"]}}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}

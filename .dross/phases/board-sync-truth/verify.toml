@@ -1,0 +1,76 @@
+[verify]
+  phase = "board-sync-truth"
+  generated_at = 2026-08-13T15:31:16.506436Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-13T15:55:21.88317Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9937402190923318
+  mutants_killed = 635
+  mutants_survived = 4
+  mutants_not_covered = 4
+  mutants_in_scope = 639
+  unclassified_in_scope = 0
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/forge/youtrack_test.go:TestYouTrackBuildQueryOrsLabels", "internal/forge/jira_test.go:TestJiraBuildJQLOrsLabels", "internal/forge/github_test.go:TestGitHubListIssuesOrsLabels", "internal/forge/forge_test.go:TestRESTListIssuesOrsLabels", "internal/forge/youtrack_test.go:TestYouTrackListIssuesDropsUnknownLabels", "internal/forge/jira_test.go:TestJiraListIssuesDropsUnknownLabels", "internal/forge/github_test.go:TestGitHubListIssuesDropsUnknownLabels", "internal/forge/forge_test.go:TestRESTListIssuesDropsUnknownLabels"]
+  notes = "OR is asserted structurally, not incidentally: the YouTrack test counts `tag:` tokens and demands exactly 1, so an AND rewrite fails it. The unknown-label arm is covered per backend and each asserts the inverse too — the query must not degrade into an unfiltered whole-board list when every label is unknown."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/pull_envelope_test.go:TestIssuePullEnvelopeOnBoardFailure", "internal/cmd/pull_envelope_test.go:TestIssuePullEnvelopeOnSuccess", "internal/cmd/pull_envelope_test.go:TestIssuePullEnvelopeWhenBoardDisabled", "internal/cmd/pull_envelope_test.go:TestIssuePullHumanModeReportsUnreachable", "internal/cmd/pull_envelope_test.go:TestIssuePullMarkDoesNotStampAFailedPull", "internal/cmd/status_prompt_test.go:TestPullConsumersReadTheEnvelope", "internal/cmd/status_prompt_test.go:TestStatusPromptDropsTheSilentSkip"]
+  notes = "Both halves of the criterion are pinned. The JSON half asserts exit 0 AND a non-empty error AND `issues: []` on a 500, so collapsing failure into emptiness fails. The human half asserts the string `no new issues on the board` is ABSENT on an unreachable board — the exact lie the criterion exists to kill. The mark gate is covered separately so a failed pull cannot stamp last_pull."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/forge/youtrack_test.go:TestYouTrackStateFieldIsConfigurable", "internal/forge/youtrack_test.go:TestYouTrackTypeFieldMovesQueryAndPayloadTogether", "internal/forge/youtrack_test.go:TestYouTrackFixVersionsFieldIsConfigurable", "internal/forge/youtrack_test.go:TestYouTrackEnsureVersionPicksTheConfiguredBundle", "internal/forge/youtrack_test.go:TestYouTrackReadsStateFromTheConfiguredField", "internal/forge/youtrack_test.go:TestYouTrackZeroConfigKeepsTodaysLiterals", "internal/cmd/project_test.go:TestBoardFieldsAllAddressable", "internal/cmd/project_test.go:TestBoardFieldsDottedArmsRoundTrip", "internal/cmd/project_test.go:TestBoardConfigCarriesFields"]
+  notes = "All three named fields are covered on both the write and the read side, plus the defaults guard (zero-config keeps State/Type/\"Fix versions\"). Two tests catch failure modes a naive rename test would miss: the Type field must move in the epic query AND the epic payload together, and version-bundle selection is proven against two VersionBundle-typed fields so picking whichever returned first fails."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/issue_phase_resolve_test.go:TestPhaseSyncAdoptsLabelledIssueWithEmptyBoardJSON", "internal/cmd/issue_phase_resolve_test.go:TestPhaseSyncHealsAStaleBoardJSON", "internal/cmd/issue_phase_resolve_test.go:TestPhaseSyncResolverQueryShape", "internal/cmd/issue_phase_resolve_test.go:TestPhaseSyncIgnoresAnUnmarkedMatch", "internal/cmd/issue_phase_resolve_test.go:TestPhaseSyncAdoptsALegacyIssueBySummary", "internal/cmd/issue_phase_resolve_test.go:TestPhaseSyncWithDuplicateLabelledIssues", "internal/cmd/issue_phase_resolve_test.go:TestPhaseSyncTwiceLeavesOneIssue", "internal/cmd/issue_phase_resolve_test.go:TestPhaseSyncCreatesWhenNothingResolves"]
+  notes = "The lost-mapping case the criterion names is tested directly (empty board.json, live labelled issue, asserts creates == 0). The resolver query shape is pinned against two regressions that would silently reintroduce the orphan: a second label would be OR'd under c-1 and adopt an arbitrary dross issue, and a state-scoped query would miss the closed phase issue and mint a new one on every re-ship."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/issue_close_truth_test.go:TestPhaseSyncCloseWritesStateAndVerifies", "internal/cmd/issue_close_truth_test.go:TestPhaseSyncCloseFailsWhenTheIssueStaysUnresolved", "internal/cmd/issue_close_truth_test.go:TestPhaseSyncCloseWithUnmappedStatusFails", "internal/cmd/issue_close_truth_test.go:TestPhaseSyncCloseOnCreateTakesTheSamePath", "internal/cmd/issue_close_truth_test.go:TestPhaseSyncWithoutCloseKeepsTheLenientPath", "internal/cmd/issue_close_truth_test.go:TestJiraCloseWithoutDoneTransitionFailsTheCommand", "internal/forge/youtrack_test.go:TestYouTrackCloseIssueResolvesForReal", "internal/forge/jira_test.go:TestJiraCloseWithoutADoneTransitionErrors"]
+  notes = "The read-back is what makes the criterion true, and it is tested by inversion: the fake accepts the State write but reports resolved:null, so the test cannot pass unless the code reads the issue back and refuses. The failure half asserts a non-nil error, that the error names the status, AND that no `closed` line is printed. Close-on-create is covered separately because that is the branch that regressed."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/deferred_routed_sync_test.go:TestRoutedDeferredGetsItsOwnIssue", "internal/cmd/deferred_routed_sync_test.go:TestRoutedDeferredStaysCurrent", "internal/cmd/deferred_routed_sync_test.go:TestRoutedDeferredAdoptsAnExistingIssue", "internal/cmd/deferred_routed_sync_test.go:TestReroutedDeferredSwapsItsTargetLabel", "internal/cmd/deferred_routed_sync_test.go:TestRoutedDeferredIgnoresAnUnmarkedMatch", "internal/cmd/deferred_routed_sync_test.go:TestDismissedRoutedItemProducesNoIssue", "internal/cmd/issue_backlog_id_test.go:TestBacklogSyncCoversRoutedButNotDismissed"]
+  notes = "Both clauses are asserted. `gets an issue`: one create per deferred item, carrying dross/target:host plus a dross/deferred:<id> identity label. `a later text edit updates it`: the re-sync asserts create count is unchanged AND exactly one patch to the same key AND that the patch summary carries the edited text — so an update that silently duplicated, or one that patched nothing, both fail. Reroute asserts the OLD target label is gone, not just that the new one is present."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/deferred_link_test.go:TestRoutedItemLinksToItsTargetPhaseIssue", "internal/cmd/deferred_link_test.go:TestRoutedItemWithoutATargetIssueWarnsAndContinues", "internal/cmd/deferred_link_test.go:TestRoutedItemLinksOnALaterSync", "internal/cmd/deferred_link_test.go:TestNoLinkTypeWarnsAndContinues", "internal/cmd/deferred_link_test.go:TestGitHubBoardRecordsNoLinkAttempts", "internal/cmd/deferred_link_test.go:TestLinkOutageDoesNotFailTheBacklogSync", "internal/forge/youtrack_test.go:TestYouTrackLinkIssuesRelates", "internal/forge/jira_test.go:TestJiraLinkIssues", "internal/forge/youtrack_test.go:TestIssueLinkerCapabilityIsAssertable"]
+  notes = "Each clause of the criterion has its own test: the link is made where possible; both cannot-link cases (no link type, target issue absent) assert exit 0 AND a warning naming the target AND that the dross/target label survives as the fallback relationship; and the later-sync clause proves the warn path leaves the item relinkable. The capability check is asserted as an interface assertion rather than a provider-string switch, which a no-op IssueLinker stub would otherwise silence."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/inbox.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/status.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 4 in-scope survivors are `switch { case ... }` condition lines (internal/cmd/project.go:81,83, internal/cmd/issue.go:187, internal/forge/forge.go:784), all origin=inherited and already accepted as the gremlins go-cover attribution ceiling proven by TestAttributionCeilingIsReal. No in-diff survivors, so no criterion was downgraded on mutation evidence."

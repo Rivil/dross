@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/project"
 )
 
@@ -379,6 +381,11 @@ func TestBoardFieldsAllAddressable(t *testing.T) {
 			// Map fields are addressed one entry at a time
 			// (locked state_map_write), so probe a concrete key.
 			path += ".planned"
+		case reflect.Struct:
+			// Nested tables are addressed one key at a time too. Probe the
+			// first declared key so a new sub-field of an existing table is
+			// still covered by the sub-table's own round-trip test.
+			path += "." + firstTOMLKey(t, f.Type)
 		case reflect.Bool:
 			probe = "true"
 		}
@@ -391,6 +398,20 @@ func TestBoardFieldsAllAddressable(t *testing.T) {
 			t.Errorf("Board.%s: readDotted(%q) not ok — field is not readable", f.Name, path)
 		}
 	}
+}
+
+// firstTOMLKey returns the toml key of a nested table's first field — the
+// probe TestBoardFieldsAllAddressable uses to reach into it.
+func firstTOMLKey(t *testing.T, typ reflect.Type) string {
+	t.Helper()
+	for i := 0; i < typ.NumField(); i++ {
+		tag, _, _ := strings.Cut(typ.Field(i).Tag.Get("toml"), ",")
+		if tag != "" && tag != "-" {
+			return tag
+		}
+	}
+	t.Fatalf("%s has no toml-tagged field — its dotted paths are undefined", typ)
+	return ""
 }
 
 func TestStateMapPerKeyWrite(t *testing.T) {
@@ -781,5 +802,159 @@ func TestRepoProjectVersionIsLive(t *testing.T) {
 	}
 	if p.Project.Version == "0.2.0.0" {
 		t.Error("[project].version is still the dead scaffold value 0.2.0.0")
+	}
+}
+
+// TestBoardFieldsDottedArmsRoundTrip drives the [board.fields] overrides
+// through the same writeDotted → Save → Load → readDotted path as the rest of
+// board.*. A missing arm on either side breaks the round-trip on that key.
+func TestBoardFieldsDottedArmsRoundTrip(t *testing.T) {
+	p := &project.Project{}
+	cases := map[string]string{
+		"board.fields.state":        "Статус",
+		"board.fields.type":         "Kind",
+		"board.fields.fix_versions": "Release",
+	}
+	for path, value := range cases {
+		if err := writeDotted(p, path, value); err != nil {
+			t.Errorf("writeDotted(%q, %q): %v", path, value, err)
+		}
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	if err := p.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err := project.Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	for dotted, want := range cases {
+		got, ok := readDotted(loaded, dotted)
+		if !ok {
+			t.Errorf("readDotted(%q): missing after Save→Load", dotted)
+			continue
+		}
+		if got != want {
+			t.Errorf("round-trip %q: got %q want %q", dotted, got, want)
+		}
+	}
+}
+
+// TestBoardFieldsUnsetIsScoped pins that clearing one override leaves its
+// siblings alone — a whole-table reset would silently revert two field names
+// the user still wants.
+func TestBoardFieldsUnsetIsScoped(t *testing.T) {
+	p := &project.Project{}
+	if err := writeDotted(p, "board.fields.state", "Статус"); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+	if err := writeDotted(p, "board.fields.type", "Kind"); err != nil {
+		t.Fatalf("write type: %v", err)
+	}
+	if err := unsetDotted(p, "board.fields.state"); err != nil {
+		t.Fatalf("unset state: %v", err)
+	}
+	if got, _ := readDotted(p, "board.fields.state"); got != "" {
+		t.Errorf("board.fields.state = %q after --unset, want empty", got)
+	}
+	if got, _ := readDotted(p, "board.fields.type"); got != "Kind" {
+		t.Errorf("board.fields.type = %q, want it untouched by the sibling unset", got)
+	}
+}
+
+// TestBoardFieldsRejectsUnknownKey pins that a typo'd override is refused by
+// name rather than silently stored where nothing reads it — and that the
+// refusal happens before anything is written.
+func TestBoardFieldsRejectsUnknownKey(t *testing.T) {
+	p := &project.Project{}
+	if err := writeDotted(p, "board.fields.state", "Статус"); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	if err := p.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	err = writeDotted(p, "board.fields.bogus", "x")
+	if err == nil {
+		t.Fatal("board.fields.bogus was accepted; a key nothing reads must be refused")
+	}
+	for _, want := range []string{"state", "type", "fix_versions"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name the accepted key %q", err, want)
+		}
+	}
+
+	if err := p.Save(path); err != nil {
+		t.Fatalf("re-save: %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("project.toml changed after a refused write:\nbefore %s\nafter  %s", before, after)
+	}
+}
+
+// TestBoardFieldsAbsentTableReadsEmpty pins the no-[board.fields] case: every
+// key reads back "" with no panic, matching how an absent [board.state_map]
+// behaves.
+func TestBoardFieldsAbsentTableReadsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	if err := os.WriteFile(path, []byte("[project]\n  name = \"x\"\n\n[board]\n  provider = \"youtrack\"\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	loaded, err := project.Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	for _, key := range []string{"board.fields.state", "board.fields.type", "board.fields.fix_versions"} {
+		got, ok := readDotted(loaded, key)
+		if !ok {
+			t.Errorf("readDotted(%q): not addressable without a [board.fields] table", key)
+			continue
+		}
+		if got != "" {
+			t.Errorf("readDotted(%q) = %q, want empty", key, got)
+		}
+	}
+}
+
+// TestBoardConfigCarriesFields pins the copy into forge.Config. A forgotten
+// field here makes every downstream field test unreachable — the config would
+// round-trip perfectly and never reach the client that uses it.
+func TestBoardConfigCarriesFields(t *testing.T) {
+	b := project.Board{
+		Provider: "youtrack",
+		BaseURL:  "https://yt.example.com",
+		Project:  "PROJ",
+		Fields: project.BoardFields{
+			State:       "Статус",
+			Type:        "Kind",
+			FixVersions: "Release",
+		},
+	}
+	cfg := boardConfig(b, "https://yt.example.com", nil)
+	if cfg.Fields.State != "Статус" {
+		t.Errorf("Fields.State = %q, want Статус", cfg.Fields.State)
+	}
+	if cfg.Fields.Type != "Kind" {
+		t.Errorf("Fields.Type = %q, want Kind", cfg.Fields.Type)
+	}
+	if cfg.Fields.FixVersions != "Release" {
+		t.Errorf("Fields.FixVersions = %q, want Release", cfg.Fields.FixVersions)
+	}
+
+	if zero := boardConfig(project.Board{Provider: "youtrack"}, "", nil); zero.Fields != (forge.Fields{}) {
+		t.Errorf("Fields = %+v for an unconfigured board, want the zero value", zero.Fields)
 	}
 }

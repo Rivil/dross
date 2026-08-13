@@ -143,6 +143,21 @@ func readDotted(p *project.Project, path string) (string, bool) {
 	if key, ok := stateMapKey(path); ok {
 		return p.Board.StateMap[key], true
 	}
+	// board.fields.<name> addresses one field-name override. Like state_map,
+	// the path is always known; an unset override reads back empty, and a
+	// project.toml with no [board.fields] table reads the struct's zero value
+	// rather than panicking on an absent table.
+	if key, ok := boardFieldKey(path); ok {
+		switch key {
+		case "state":
+			return p.Board.Fields.State, true
+		case "type":
+			return p.Board.Fields.Type, true
+		case "fix_versions":
+			return p.Board.Fields.FixVersions, true
+		}
+		return "", false
+	}
 	switch path {
 	// project
 	case "project.name":
@@ -322,6 +337,23 @@ func writeDotted(p *project.Project, path, value string) error {
 		p.Board.StateMap[key] = value
 		return nil
 	}
+	// One field-name override at a time, same shape as state_map. An
+	// unrecognised key is rejected before anything is written — a typo'd
+	// override that silently never applies is the same silent-breakage the
+	// state_map arm above refuses.
+	if key, ok := boardFieldKey(path); ok {
+		switch key {
+		case "state":
+			p.Board.Fields.State = value
+		case "type":
+			p.Board.Fields.Type = value
+		case "fix_versions":
+			p.Board.Fields.FixVersions = value
+		default:
+			return fmt.Errorf("unknown [board].fields key %q; expected state, type or fix_versions", key)
+		}
+		return nil
+	}
 	switch path {
 	// project
 	case "project.name":
@@ -476,6 +508,22 @@ func writeDotted(p *project.Project, path, value string) error {
 // address, which is exactly the repair path doctor's new check depends on.
 func stateMapKey(path string) (string, bool) {
 	key, ok := strings.CutPrefix(path, "board.state_map.")
+	if !ok || key == "" || strings.Contains(key, ".") {
+		return "", false
+	}
+	return configenum.Normalize(key), true
+}
+
+// boardFieldKey recognises a `board.fields.<name>` path and returns the field
+// key, normalized the same way state_map keys are so write, read and unset all
+// address the same override. Bare `board.fields` is not an addressable leaf.
+//
+// Recognising the prefix (rather than only the three valid suffixes) is
+// deliberate: it lets writeDotted reject `board.fields.bogus` by name and list
+// what is accepted, instead of falling through to the generic
+// "unknown or unsettable field".
+func boardFieldKey(path string) (string, bool) {
+	key, ok := strings.CutPrefix(path, "board.fields.")
 	if !ok || key == "" || strings.Contains(key, ".") {
 		return "", false
 	}

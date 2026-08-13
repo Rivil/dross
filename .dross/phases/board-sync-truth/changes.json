@@ -1,0 +1,247 @@
+{
+  "phase": "board-sync-truth",
+  "pr": 85,
+  "base": "milestone/v1.3",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/forge/youtrack.go",
+        "internal/forge/jira.go",
+        "internal/forge/youtrack_test.go",
+        "internal/forge/jira_test.go"
+      ],
+      "commit": "2ecf300",
+      "completed_at": "2026-08-13T13:56:55.192607Z",
+      "landmarks": [
+        {
+          "feature": "board issue pull",
+          "symbol": "buildQuery",
+          "loc": "internal/forge/youtrack.go:366",
+          "what": "label filters OR instead of AND on YouTrack and Jira"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/issue.go",
+        "internal/cmd/deferred_add.go",
+        "internal/cmd/deferred_routed_sync_test.go",
+        "internal/cmd/issue_backlog_id_test.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "73d3ef9",
+      "completed_at": "2026-08-13T14:55:45.509791Z",
+      "landmarks": [
+        {
+          "feature": "deferred backlog sync",
+          "symbol": "resolveBacklogIssue",
+          "loc": "internal/cmd/issue.go:520",
+          "what": "routed deferred items mirrored with a dross/target label and resolved from the tracker by identity label"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/forge/forge.go",
+        "internal/forge/youtrack.go",
+        "internal/forge/jira.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_close_truth_test.go",
+        "internal/forge/youtrack_test.go",
+        "internal/forge/jira_test.go"
+      ],
+      "commit": "f40ede4",
+      "completed_at": "2026-08-13T15:06:39.45092Z",
+      "landmarks": [
+        {
+          "feature": "board issue sync",
+          "symbol": "YouTrackClient.CloseIssueAs",
+          "loc": "internal/forge/youtrack.go:275",
+          "what": "close writes the mapped resolved state and verifies the read-back instead of returning a bare nil"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/issue.go",
+        "internal/cmd/deferred_link_test.go"
+      ],
+      "commit": "a587471",
+      "completed_at": "2026-08-13T15:12:58.087141Z",
+      "landmarks": [
+        {
+          "feature": "deferred backlog sync",
+          "symbol": "lookupPhaseIssue",
+          "loc": "internal/cmd/issue.go:520",
+          "what": "routed items linked to their target phase issue where the provider allows, warn-and-relink otherwise"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/forge/forge.go",
+        "internal/forge/forge_test.go"
+      ],
+      "commit": "779d93d",
+      "completed_at": "2026-08-13T14:59:22.411469Z",
+      "landmarks": [
+        {
+          "feature": "board issue pull",
+          "symbol": "Client.listIssuesByLabel",
+          "loc": "internal/forge/forge.go:600",
+          "what": "per-label fan-out unioned by number so forgejo/gitea/gitlab label filters OR"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/forge/github.go",
+        "internal/forge/github_test.go"
+      ],
+      "commit": "5855f79",
+      "completed_at": "2026-08-13T13:59:51.510861Z",
+      "landmarks": [
+        {
+          "feature": "board issue pull",
+          "symbol": "GitHubClient.ListIssues",
+          "loc": "internal/forge/github.go:168",
+          "what": "per-label fan-out unioned by issue number so label filters OR"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/forge/forge.go",
+        "internal/forge/youtrack.go",
+        "internal/forge/jira.go",
+        "internal/forge/github.go",
+        "internal/forge/forge_test.go",
+        "internal/forge/youtrack_test.go",
+        "internal/forge/jira_test.go",
+        "internal/forge/github_test.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "f08edc0",
+      "completed_at": "2026-08-13T14:10:31.18461Z",
+      "landmarks": [
+        {
+          "feature": "board issue pull",
+          "symbol": "FilterKnownLabels",
+          "loc": "internal/forge/forge.go:234",
+          "what": "unknown labels dropped and named on stderr, index failure refuses the query"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/issue.go",
+        "assets/prompts/status.md",
+        "assets/prompts/inbox.md",
+        "internal/cmd/pull_envelope_test.go",
+        "internal/cmd/status_prompt_test.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "4f75c94",
+      "completed_at": "2026-08-13T14:15:55.937861Z",
+      "landmarks": [
+        {
+          "feature": "board issue pull",
+          "symbol": "pullEnvelope",
+          "loc": "internal/cmd/issue.go:798",
+          "what": "--json emits {issues,error} so an unreachable board is distinguishable from an empty one"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/project/project.go",
+        "internal/cmd/project.go",
+        "internal/forge/forge.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/project_test.go",
+        "README.md"
+      ],
+      "commit": "e085e47",
+      "completed_at": "2026-08-13T14:20:39.957492Z",
+      "landmarks": [
+        {
+          "feature": "board sync configuration",
+          "symbol": "BoardFields",
+          "loc": "internal/project/project.go:130",
+          "what": "[board.fields] overrides tracker-native field names, defaulting to today's literals"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/forge/youtrack.go",
+        "internal/forge/youtrack_test.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "c93a163",
+      "completed_at": "2026-08-13T14:27:29.245045Z",
+      "landmarks": [
+        {
+          "feature": "board issue sync",
+          "symbol": "YouTrackClient.applyTags",
+          "loc": "internal/forge/youtrack.go:456",
+          "what": "dross marker tags reach YouTrack issues on create and update with replace semantics"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/forge/forge.go",
+        "internal/forge/youtrack.go",
+        "internal/forge/jira.go",
+        "internal/forge/youtrack_test.go",
+        "internal/forge/jira_test.go"
+      ],
+      "commit": "415569d",
+      "completed_at": "2026-08-13T14:31:32.446487Z",
+      "landmarks": [
+        {
+          "feature": "board issue sync",
+          "symbol": "IssueLinker",
+          "loc": "internal/forge/forge.go:178",
+          "what": "optional relates-to link capability on YouTrack and Jira, absent on GitHub by design"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/forge/youtrack.go",
+        "internal/forge/youtrack_test.go"
+      ],
+      "commit": "75bd683",
+      "completed_at": "2026-08-13T14:35:23.839676Z",
+      "landmarks": [
+        {
+          "feature": "board sync configuration",
+          "symbol": "YouTrackClient.stateField",
+          "loc": "internal/forge/youtrack.go:56",
+          "what": "YouTrack custom-field names read from [board.fields], defaulting to today's literals"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/issue.go",
+        "internal/board/board.go",
+        "internal/cmd/issue_phase_resolve_test.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "9ea735b",
+      "completed_at": "2026-08-13T14:44:37.034606Z",
+      "landmarks": [
+        {
+          "feature": "board issue sync",
+          "symbol": "resolvePhaseIssue",
+          "loc": "internal/cmd/issue.go:600",
+          "what": "phase issue resolved from the tracker by phase label; board.json demoted to a self-healing cache"
+        }
+      ]
+    }
+  }
+}

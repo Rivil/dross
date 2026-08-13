@@ -128,6 +128,14 @@ func (b *Board) PhaseIssue(phaseID string) (string, bool) {
 	return n, ok
 }
 
+// DeletePhase drops a phase's cached issue link, leaving the issue itself
+// alone. board.json is a cache, not the mapping's source of truth — the
+// tracker is — so an entry that no longer resolves has to be droppable, or a
+// stale key would keep shadowing the live issue on every sync.
+func (b *Board) DeletePhase(phaseID string) {
+	delete(b.Phases, phaseID)
+}
+
 // SetQuick records the readable issue id for a quick-task ref.
 func (b *Board) SetQuick(ref, issue string) {
 	b.ensureMaps()
