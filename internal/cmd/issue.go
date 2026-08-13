@@ -329,13 +329,31 @@ func issueBacklogSync() *cobra.Command {
 // written by an older dross may still hold this item's link under. It is
 // consulted only when the id key has no link yet, and only after the stored
 // issue's title is confirmed to still be this item's — see adoptLegacyBacklogKey.
-type backlogItem struct{ key, title, body, legacyKey string }
+type backlogItem struct {
+	key, title, body, legacyKey string
+
+	// labels is the issue's full label set. The marker is always present; a
+	// deferred item adds its identity label, and a routed one its destination.
+	labels []string
+	// identity, when set, is the label the tracker is queried by to resolve
+	// this item's existing issue — the same trick resolvePhaseIssue uses, and
+	// for the same reason: board.json dies with the phase branch.
+	identity string
+}
 
 // deferredBacklogKey is the board-link key for a deferred item. It keys on the
 // item's stable id, never its position: a positional key re-points at whatever
 // item slides into the index when an earlier sibling is removed, which silently
 // re-titles a live issue to a different finding's text (c-8).
 func deferredBacklogKey(id string) string { return "someday:id:" + id }
+
+// deferredLabel is a deferred item's durable identity on the tracker, and
+// targetLabel carries its routed destination. Both are labels rather than
+// board.json entries for the reason phaseLabel is: mirrorDeferredAdd mints the
+// issue on phase/<id>, whose board.json dies with the branch — so the mapping
+// has to live somewhere the tracker keeps.
+func deferredLabel(id string) string { return "dross/deferred:" + id }
+func targetLabel(slug string) string { return "dross/target:" + slug }
 
 // legacyDeferredBacklogKey is the positional key dross used before ids existed.
 func legacyDeferredBacklogKey(source string, idx int) string {
@@ -436,7 +454,7 @@ func adoptLegacyBacklogKey(ctx *boardCtx, it backlogItem) bool {
 }
 
 // syncBacklog mirrors a milestone's backlog — its unscaffolded roadmap phase
-// slugs and unrouted `someday` deferred ideas — onto the board as Open issues
+// slugs and its deferred ideas, routed or not — onto the board as Open issues
 // attached to the milestone entity, recorded in board.json's backlog map.
 // Idempotent: re-running updates the same items by their readable-id link.
 func syncBacklog(ctx *boardCtx, version string) error {
@@ -452,20 +470,24 @@ func syncBacklog(ctx *boardCtx, version string) error {
 			continue // scaffolded — tracked by its own phase issue
 		}
 		items = append(items, backlogItem{
-			key:   "slug:" + slug,
-			title: "[backlog] " + slug,
-			body:  fmt.Sprintf("Roadmap phase `%s` in milestone %s — not yet scaffolded.\n\n_Tracked by dross._", slug, version),
+			key:    "slug:" + slug,
+			title:  "[backlog] " + slug,
+			body:   fmt.Sprintf("Roadmap phase `%s` in milestone %s — not yet scaffolded.\n\n_Tracked by dross._", slug, version),
+			labels: []string{labelMarker},
 		})
 	}
-	// Unrouted `someday` deferred ideas (no target, not dismissed). Every item
+	// Deferred ideas (everything not dismissed). Every item
 	// is stamped with a stable id first: the board link keys on it, so an
 	// id-less item would have no durable handle to key by.
 	deferredItems, err := ensureDeferredIDs(ctx.root)
 	if err != nil {
 		return err
 	}
+	// Routed items are included: c-6 is precisely that a routed item gets a
+	// board issue and stays current. Only a dismissed item has nothing to
+	// mirror.
 	for _, d := range deferredItems {
-		if d.Target != "" || d.Dismissed {
+		if d.Dismissed {
 			continue
 		}
 		items = append(items, deferredBacklogItem(d))
@@ -484,12 +506,63 @@ func syncBacklog(ctx *boardCtx, version string) error {
 // titles and bodies — a divergence would make an added item's issue flip its
 // text on the first sync.
 func deferredBacklogItem(d deferredEntry) backlogItem {
-	return backlogItem{
+	it := backlogItem{
 		key:       deferredBacklogKey(d.ID),
 		legacyKey: legacyDeferredBacklogKey(d.Source, d.Index),
 		title:     "[someday] " + d.Text,
 		body:      fmt.Sprintf("Someday idea (from phase `%s`): %s\n\n_Tracked by dross._", d.Source, d.Text),
+		labels:    []string{labelMarker},
 	}
+	if d.ID != "" {
+		it.identity = deferredLabel(d.ID)
+		it.labels = append(it.labels, it.identity)
+	}
+	if d.Target != "" {
+		// A routed item is no longer "someday" — it has a destination, and the
+		// title has to say so or the board keeps describing it as unplanned.
+		it.title = "[routed] " + d.Text
+		it.body = fmt.Sprintf("Deferred item routed to `%s` (from phase `%s`): %s\n\n_Tracked by dross._", d.Target, d.Source, d.Text)
+		it.labels = append(it.labels, targetLabel(d.Target))
+	}
+	return it
+}
+
+// resolveBacklogIssue finds a backlog item's existing issue, or "" if there is
+// none. Same three-step shape as resolvePhaseIssue, and for the same reason:
+// `deferred add` mirrors the issue at file time, on phase/<id>, whose board.json
+// dies with the branch — so after a ship the cache is empty while the issue is
+// very much alive, and a create here would duplicate it.
+//
+//  1. board.json's cached key.
+//  2. A tracker query for the item's identity label.
+//  3. The pre-id positional link (adoptLegacyBacklogKey), title-verified.
+func resolveBacklogIssue(ctx *boardCtx, it backlogItem) (string, error) {
+	if key, ok := ctx.board.BacklogID(it.key); ok {
+		return key, nil
+	}
+	if it.identity != "" {
+		found, err := ctx.client.ListIssues(forge.IssueFilter{State: "all", Labels: []string{it.identity}})
+		if err != nil {
+			return "", wrapBoard(err)
+		}
+		var matches []string
+		for _, iss := range found {
+			// Same marker post-filter as the phase resolver: an issue that
+			// happens to carry the label but is not dross's is not adoptable.
+			if hasMarker(iss) {
+				matches = append(matches, iss.Key)
+			}
+		}
+		if len(matches) > 0 {
+			sort.Strings(matches)
+			return matches[0], nil
+		}
+	}
+	if adoptLegacyBacklogKey(ctx, it) {
+		key, _ := ctx.board.BacklogID(it.key)
+		return key, nil
+	}
+	return "", nil
 }
 
 // pushBacklogItems creates or updates each item on the board and records its
@@ -517,17 +590,32 @@ func pushBacklogItems(ctx *boardCtx, version string, items []backlogItem) (creat
 	}
 
 	for _, it := range items {
-		key, ok := ctx.board.BacklogID(it.key)
-		if !ok && adoptLegacyBacklogKey(ctx, it) {
-			key, ok = ctx.board.BacklogID(it.key)
+		key, err := resolveBacklogIssue(ctx, it)
+		if err != nil {
+			return created, updated, err
 		}
-		if ok {
-			title, body := it.title, it.body
-			if _, err := ctx.client.UpdateIssue(key, forge.IssuePatch{Title: &title, Body: &body}); err != nil {
+		if key != "" {
+			title, body, labels := it.title, it.body, it.labels
+			patch := forge.IssuePatch{Title: &title, Body: &body}
+			if len(labels) > 0 {
+				// Sent on every update, not only on create: a re-routed item
+				// has to LOSE its old dross/target label, and a label set that
+				// is only ever added to would leave the issue claiming both
+				// destinations forever.
+				patch.Labels = &labels
+			}
+			if _, err := ctx.client.UpdateIssue(key, patch); err != nil {
 				return created, updated, wrapBoard(err)
 			}
+			// Re-record: the key may have come from the tracker rather than
+			// the cache, and board.json has to catch up.
+			ctx.board.SetBacklog(it.key, key)
 			updated++
 			continue
+		}
+		labels := it.labels
+		if len(labels) == 0 {
+			labels = []string{labelMarker}
 		}
 		var iss *forge.Issue
 		if yt, ok := ctx.client.(*forge.YouTrackClient); ok {
@@ -536,12 +624,17 @@ func pushBacklogItems(ctx *boardCtx, version string, items []backlogItem) (creat
 				// Attach to the Epic entity as a subtask.
 				err = yt.LinkSubtask(entityID, iss.Key)
 			}
+			if err == nil {
+				// CreateBacklogItem takes no labels — YouTrack tags are entity
+				// writes, applied through the patch path.
+				_, err = ctx.client.UpdateIssue(iss.Key, forge.IssuePatch{Labels: &labels})
+			}
 		} else {
 			ms, _ := strconv.Atoi(entityID)
 			iss, err = ctx.client.CreateIssue(forge.IssueInput{
 				Title:     it.title,
 				Body:      it.body,
-				Labels:    []string{labelMarker},
+				Labels:    labels,
 				Milestone: ms,
 			})
 		}

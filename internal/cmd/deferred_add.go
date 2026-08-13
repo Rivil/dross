@@ -145,10 +145,11 @@ func deferredAdd() *cobra.Command {
 // A disabled board or an absent current milestone is a silent no-op — there is
 // nothing to attach a backlog item to, and that is not a failure.
 //
-// The push is unconditional on --target, so a routed add IS mirrored. That is
-// knowingly asymmetric with backlog-sync, which skips routed items: the issue is
-// created once here and never updated by a later sync. The staleness is recorded
-// in this phase's [[deferred]] and left to board-sync-truth.
+// The push is unconditional on --target, so a routed add IS mirrored — and
+// backlog-sync now covers routed items too, so the issue this mints stays
+// current instead of freezing at its filed text. The item's `dross/deferred:<id>`
+// label is what lets a later sync find it again after this branch (and its
+// board.json) is gone.
 func mirrorDeferredAdd(root string, d deferredEntry) {
 	ctx, enabled, err := openBoard()
 	if err != nil {

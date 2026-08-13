@@ -579,8 +579,29 @@ func TestIssueBacklogSyncYouTrackIdempotent(t *testing.T) {
 			createBodies = append(createBodies, b)
 			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 200+creates))
 		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "POST":
-			updates++
+			// A labels-only patch carries no summary; count issue-body updates.
+			raw, _ := io.ReadAll(r.Body)
+			var b map[string]any
+			_ = json.Unmarshal(raw, &b)
+			if _, isPatch := b["summary"]; isPatch {
+				updates++
+			}
 			_, _ = io.WriteString(w, `{"idReadable":"PROJ-upd"}`)
+		case r.URL.Path == "/api/issues" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`) // no pre-existing labelled issue
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-201","tags":[{"id":"tid-dross","name":"dross"}]}`)
+		// Tag traffic and the backlog resolver's label query. Labels are
+		// entity writes on YouTrack; served permissively — this test counts
+		// creates vs updates, not tags.
+		case r.URL.Path == "/api/issueTags" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"id":"tid-x"}`)
+		case strings.HasSuffix(r.URL.Path, "/tags") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{}`)
+		case strings.Contains(r.URL.Path, "/tags/") && r.Method == "DELETE":
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -668,6 +689,21 @@ func TestIssueBacklogSyncYouTrackEpicMode(t *testing.T) {
 			_ = json.Unmarshal(raw, &b)
 			linkQueries = append(linkQueries, fmt.Sprint(b["query"]))
 			_, _ = io.WriteString(w, `{}`)
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-201","tags":[{"id":"tid-dross","name":"dross"}]}`)
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-upd"}`)
+		// Tag traffic and the backlog resolver's label query. Labels are
+		// entity writes on YouTrack; served permissively — this test counts
+		// creates vs updates, not tags.
+		case r.URL.Path == "/api/issueTags" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"id":"tid-x"}`)
+		case strings.HasSuffix(r.URL.Path, "/tags") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{}`)
+		case strings.Contains(r.URL.Path, "/tags/") && r.Method == "DELETE":
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -730,6 +766,17 @@ func TestIssueBacklogSyncYouTrackAgileMode(t *testing.T) {
 			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 300+itemCreates))
 		case r.URL.Path == "/api/commands":
 			t.Error("agile mode must not link subtasks — boards are query/project-based")
+		// Tag traffic and the backlog resolver's label query.
+		case r.URL.Path == "/api/issues" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-301","tags":[]}`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"id":"tid-x"}`)
+		case strings.HasSuffix(r.URL.Path, "/tags") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -1398,6 +1445,19 @@ func TestMilestoneSyncTrimsMilestoneMode(t *testing.T) {
 			_ = json.Unmarshal(raw, &b)
 			createBodies = append(createBodies, b)
 			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":"PROJ-%d"}`, 300+len(createBodies)))
+		// The backlog resolver's label query and the tag writes behind it.
+		case r.URL.Path == "/api/issues" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-301","tags":[]}`)
+		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-301"}`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"id":"tid-x"}`)
+		case strings.HasSuffix(r.URL.Path, "/tags") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
