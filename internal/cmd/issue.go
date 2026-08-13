@@ -135,6 +135,11 @@ func boardConfig(b project.Board, remoteURL string, extra []string) forge.Config
 		BoardID:  b.GitHubProject,
 		URL:      "https://board.local/" + b.Project,
 		Hosts:    hostallow.Derive(remoteURL, extra),
+		Fields: forge.Fields{
+			State:       b.Fields.State,
+			Type:        b.Fields.Type,
+			FixVersions: b.Fields.FixVersions,
+		},
 	}
 	if configenum.Normalize(b.Provider) == "gitlab" {
 		cfg.ProjectID = b.Project

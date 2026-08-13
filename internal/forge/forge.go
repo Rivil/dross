@@ -68,6 +68,11 @@ type Config struct {
 	AuthUser   string // jira: account email for HTTP Basic auth (email:token)
 	BoardID    string // github: Projects v2 board node id to add created issues to (empty = repo issues only)
 
+	// Fields overrides the tracker-native field names sync writes to. Every
+	// entry is optional; an empty one falls back to the provider's own literal,
+	// so a zero-value Config behaves exactly as it did before this existed.
+	Fields Fields
+
 	// Hosts is the API host allowlist every constructor checks APIBase
 	// against before it reads the token out of the environment.
 	//
@@ -75,6 +80,16 @@ type Config struct {
 	// SaaS defaults — so a caller that forgets to populate this field fails
 	// closed rather than silently reopening the hole. See internal/hostallow.
 	Hosts hostallow.Policy
+}
+
+// Fields names the tracker-native fields board sync writes to, so a project
+// that renamed one (or runs a non-English tracker UI) syncs without a code
+// change. Each zero value means "use this provider's default literal" —
+// resolution lives with the provider that knows those literals, not here.
+type Fields struct {
+	State       string // youtrack: State custom field (default "State")
+	Type        string // youtrack: issue-type custom field (default "Type")
+	FixVersions string // youtrack: version bundle field (default "Fix versions")
 }
 
 // New validates config, resolves the token from the environment, and returns

@@ -121,6 +121,21 @@ type Board struct {
 	Enabled       bool              `toml:"enabled,omitempty" json:"enabled,omitempty"`               // board sync is on
 	MilestoneMode string            `toml:"milestone_mode,omitempty" json:"milestone_mode,omitempty"` // version (default) | agile | epic
 	StateMap      map[string]string `toml:"state_map,omitempty" json:"state_map,omitempty"`           // dross lifecycle state → tracker State value override
+	Fields        BoardFields       `toml:"fields,omitempty" json:"fields,omitempty"`                 // tracker-native field-name overrides
+}
+
+// BoardFields overrides the tracker-native field names board sync writes to.
+// Every key defaults to the literal the provider ships with, so an untouched
+// project syncs exactly as it did before — but a project that renamed a field
+// (or runs a non-English tracker UI) no longer needs a code change.
+//
+// Scoped to YouTrack today, which is the only provider this repo runs against
+// and therefore the only one where the fix is provable; the Jira and GitHub
+// halves are deferred to the provider work itself.
+type BoardFields struct {
+	State       string `toml:"state,omitempty" json:"state,omitempty"`               // youtrack: the State custom field (default "State")
+	Type        string `toml:"type,omitempty" json:"type,omitempty"`                 // youtrack: the issue-type custom field (default "Type")
+	FixVersions string `toml:"fix_versions,omitempty" json:"fix_versions,omitempty"` // youtrack: the version bundle field (default "Fix versions")
 }
 
 type Paths struct {
