@@ -206,6 +206,51 @@ func TestProgressAgainstThisRepo(t *testing.T) {
 	}
 }
 
+// TestProgressPlainOutputListsWhatIsLeft covers the arm every other test in
+// this file skips. They all read --json, which returns before a single line is
+// printed — so the narration a human actually gets from `dross milestone
+// progress` was executed by nothing. Negating either guard silences the list it
+// protects while the JSON stays perfect.
+func TestProgressPlainOutputListsWhatIsLeft(t *testing.T) {
+	dir := progressRepo(t, "v1.3", "active", "built", "missing")
+	scaffoldPhase(t, dir, "built", changes.StatusComplete)
+	// "missing" is deliberately left unscaffolded, so one run puts something in
+	// both lists at once.
+
+	var out string
+	if err := runCmdCapturing(t, &out, Milestone(), "progress", "v1.3"); err != nil {
+		t.Fatalf("progress: %v", err)
+	}
+	for _, want := range []string{"1/2 phases done", "remaining: missing", "not scaffolded yet: missing"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the plain output does not carry %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestProgressPlainOutputOmitsEmptyLists is the other half, and it is the half
+// a loosened boundary lives in: `len(x) > 0` relaxed to `>= 0` prints both
+// labels with nothing after them, which no presence assertion can see. A
+// milestone with everything done is the only fixture where the two spellings
+// disagree.
+func TestProgressPlainOutputOmitsEmptyLists(t *testing.T) {
+	dir := progressRepo(t, "v2.0", "active", "only")
+	scaffoldPhase(t, dir, "only", changes.StatusComplete)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Milestone(), "progress", "v2.0"); err != nil {
+		t.Fatalf("progress: %v", err)
+	}
+	for _, unwanted := range []string{"remaining:", "not scaffolded yet:"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("an empty list still printed the %q label:\n%s", unwanted, out)
+		}
+	}
+	if !strings.Contains(out, "dross milestone complete v2.0") {
+		t.Errorf("the all-done arm should hand over the next command:\n%s", out)
+	}
+}
+
 func hasSlug(list []string, want string) bool {
 	for _, s := range list {
 		if s == want {
