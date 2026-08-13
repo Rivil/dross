@@ -165,27 +165,44 @@ func (c *GitHubClient) CloseIssue(key string) error {
 // ListIssues returns issues matching the filter. Pull requests are excluded
 // (GitHub's issues endpoint returns both, and each PR carries a pull_request
 // object) so inbound triage never surfaces PRs as new work.
+// Labels are OR'd: GitHub's `labels=` param intersects the names it is given,
+// so several labels in one request match only issues carrying all of them. One
+// request per label, unioned by issue number, is the only way to express "either
+// label" against this API.
 func (c *GitHubClient) ListIssues(f IssueFilter) ([]Issue, error) {
 	state := f.State
 	if state == "" {
 		state = "open"
 	}
-	q := url.Values{}
-	q.Set("state", state)
-	q.Set("per_page", "50")
+	// One pass with no label param when unfiltered; otherwise one per label.
+	queries := []string{""}
 	if len(f.Labels) > 0 {
-		q.Set("labels", strings.Join(f.Labels, ","))
+		queries = f.Labels
 	}
-	var raw []githubIssue
-	if err := c.do("GET", c.repoPath("/issues")+"?"+q.Encode(), nil, &raw); err != nil {
-		return nil, fmt.Errorf("list issues: %w", err)
-	}
-	out := make([]Issue, 0, len(raw))
-	for i := range raw {
-		if raw[i].PullRequest != nil {
-			continue // skip PRs
+
+	out := make([]Issue, 0, len(queries))
+	seen := make(map[int]bool, len(queries))
+	for _, label := range queries {
+		q := url.Values{}
+		q.Set("state", state)
+		q.Set("per_page", "50")
+		if label != "" {
+			q.Set("labels", label)
 		}
-		out = append(out, *raw[i].toIssue())
+		var raw []githubIssue
+		if err := c.do("GET", c.repoPath("/issues")+"?"+q.Encode(), nil, &raw); err != nil {
+			return nil, fmt.Errorf("list issues: %w", err)
+		}
+		for i := range raw {
+			if raw[i].PullRequest != nil {
+				continue // skip PRs
+			}
+			if seen[raw[i].Number] {
+				continue // already unioned in under an earlier label
+			}
+			seen[raw[i].Number] = true
+			out = append(out, *raw[i].toIssue())
+		}
 	}
 	return out, nil
 }

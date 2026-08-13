@@ -237,6 +237,98 @@ func TestGitHubGetUpdateCloseList(t *testing.T) {
 	})
 }
 
+// TestGitHubListIssuesOrsLabels pins the fan-out. GitHub's `labels=` param
+// ANDs the names it is handed, so a comma-joined filter returns only issues
+// carrying every label — c-1's bug in its GitHub form. The fix is one request
+// per label, unioned by number.
+func TestGitHubListIssuesOrsLabels(t *testing.T) {
+	t.Run("one request per label, results unioned", func(t *testing.T) {
+		var gotLabels []string
+		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, r *http.Request) {
+			l := r.URL.Query().Get("labels")
+			gotLabels = append(gotLabels, l)
+			switch l {
+			case "bug":
+				_, _ = io.WriteString(w, `[{"number":1,"title":"a bug"}]`)
+			case "enhancement":
+				_, _ = io.WriteString(w, `[{"number":2,"title":"an enhancement"}]`)
+			default:
+				t.Errorf("unexpected labels param %q", l)
+				_, _ = io.WriteString(w, `[]`)
+			}
+		})
+		issues, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		if len(gotLabels) != 2 {
+			t.Errorf("issued %d requests (%v), want exactly 2 — one per label", len(gotLabels), gotLabels)
+		}
+		if len(issues) != 2 {
+			t.Fatalf("union returned %+v, want both issues", issues)
+		}
+		if issues[0].Number != 1 || issues[1].Number != 2 {
+			t.Errorf("union = %+v, want #1 then #2", issues)
+		}
+	})
+
+	t.Run("an issue under both labels appears once", func(t *testing.T) {
+		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `[{"number":5,"title":"both"}]`)
+		})
+		issues, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		if len(issues) != 1 || issues[0].Number != 5 {
+			t.Errorf("union = %+v, want #5 exactly once", issues)
+		}
+	})
+
+	t.Run("an unlabelled filter issues one request with no labels param", func(t *testing.T) {
+		var requests int
+		var sawLabels bool
+		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, r *http.Request) {
+			requests++
+			if _, ok := r.URL.Query()["labels"]; ok {
+				sawLabels = true
+			}
+			_, _ = io.WriteString(w, `[{"number":1,"title":"issue"}]`)
+		})
+		if _, err := c.ListIssues(IssueFilter{}); err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		if requests != 1 {
+			t.Errorf("issued %d requests, want exactly 1 for an unlabelled filter", requests)
+		}
+		if sawLabels {
+			t.Error("an unlabelled filter sent a labels param")
+		}
+	})
+
+	t.Run("a PR in one label's response stays out of the union", func(t *testing.T) {
+		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Query().Get("labels") == "bug" {
+				_, _ = io.WriteString(w, `[{"number":1,"title":"issue"},{"number":9,"title":"a pr","pull_request":{"url":"x"}}]`)
+				return
+			}
+			_, _ = io.WriteString(w, `[{"number":2,"title":"other"}]`)
+		})
+		issues, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		for _, iss := range issues {
+			if iss.Number == 9 {
+				t.Fatalf("union carried the PR: %+v", issues)
+			}
+		}
+		if len(issues) != 2 {
+			t.Errorf("union = %+v, want the two real issues", issues)
+		}
+	})
+}
+
 func TestGitHubEnsureMilestone(t *testing.T) {
 	t.Run("reuses existing", func(t *testing.T) {
 		posted := false
