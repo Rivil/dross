@@ -41,7 +41,7 @@ func Deferred() *cobra.Command {
 		Use:   "deferred",
 		Short: "Inspect and route deferred items across phase specs",
 	}
-	c.AddCommand(deferredList(), deferredRoute(), deferredDismiss(), deferredUnroute())
+	c.AddCommand(deferredList(), deferredRoute(), deferredDismiss(), deferredUnroute(), deferredAdd())
 	return c
 }
 
