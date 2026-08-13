@@ -365,19 +365,33 @@ func filterDeferred(in []deferredEntry, keep func(deferredEntry) bool) []deferre
 }
 
 // repointDeferredTarget rewrites every [[deferred]] entry across all phase specs
-// whose Target is oldSlug to newSlug, so a `dross phase rename` doesn't leave a
-// dangling routing target. Entries pointing at any other slug are left exactly
-// as they are.
+// AND the project store whose Target is oldSlug to newSlug, so a
+// `dross phase rename` doesn't leave a dangling routing target. Entries pointing
+// at any other slug are left exactly as they are.
+//
+// The store is walked alongside the specs on purpose: it holds real routed items
+// now, and a walk over phase.List alone would leave every one of them pointing
+// at the dead slug.
 func repointDeferredTarget(root, oldSlug, newSlug string) error {
 	ids, err := phase.List(root)
 	if err != nil {
 		return err
 	}
+	paths := []string{}
 	for _, id := range ids {
+		if id == projectStoreSlug {
+			continue // reserved; validate reports the directory as a problem
+		}
 		specPath := filepath.Join(phase.Dir(root, id), "spec.toml")
 		if _, err := os.Stat(specPath); err != nil {
 			continue // no spec yet
 		}
+		paths = append(paths, specPath)
+	}
+	if storePath := deferredStorePath(root); fileExists(storePath) {
+		paths = append(paths, storePath)
+	}
+	for _, specPath := range paths {
 		spec, err := phase.LoadSpec(specPath)
 		if err != nil {
 			return fmt.Errorf("%s: %w", specPath, err)

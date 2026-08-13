@@ -103,11 +103,27 @@ func Validate() *cobra.Command {
 					}
 				}
 				if spec != nil {
-					for _, d := range spec.Deferred {
-						if d.Target != "" && !validTargets[d.Target] {
-							problems = append(problems, fmt.Sprintf("%s: deferred target %q names no phase dir or milestone.phases entry", specPath, d.Target))
-						}
-					}
+					problems = append(problems, danglingTargets(specPath, spec, validTargets)...)
+				}
+			}
+
+			// The reserved project-store slug must never be a phase directory:
+			// two sources would share the slug, making `_project 0` name two
+			// different items. `deferred list` skips it; validate says why.
+			for _, id := range phaseIDs {
+				if id == projectStoreSlug {
+					problems = append(problems, fmt.Sprintf("%s: %q is reserved for the project-level deferred store — rename the phase directory", filepath.Join("phases", id), projectStoreSlug))
+				}
+			}
+
+			// The project store carries routed items too, and is hand-editable
+			// like any spec, so it gets the same dangling-target walk.
+			storePath := filepath.Join(root, "deferred.toml")
+			if _, err := os.Stat(storePath); err == nil {
+				if store, err := phase.LoadSpec(storePath); err != nil {
+					problems = append(problems, fmt.Sprintf("%s: %v", storePath, err))
+				} else {
+					problems = append(problems, danglingTargets(storePath, store, validTargets)...)
 				}
 			}
 
@@ -121,6 +137,19 @@ func Validate() *cobra.Command {
 			return fmt.Errorf("%d problem(s) found", len(problems))
 		},
 	}
+}
+
+// danglingTargets reports every [[deferred]] target in one source that names no
+// valid destination. Shared by the phase-spec walk and the project store so both
+// are judged by exactly the same rule and reported in the same shape.
+func danglingTargets(path string, spec *phase.Spec, valid map[string]bool) []string {
+	var problems []string
+	for _, d := range spec.Deferred {
+		if d.Target != "" && !valid[d.Target] {
+			problems = append(problems, fmt.Sprintf("%s: deferred target %q names no phase dir or milestone.phases entry", path, d.Target))
+		}
+	}
+	return problems
 }
 
 // loadIfExists skips missing files quietly.
