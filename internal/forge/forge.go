@@ -174,6 +174,27 @@ type BoardClient interface {
 
 var _ BoardClient = (*Client)(nil)
 
+// ErrNoLinkType means the tracker exposes no issue-link type to relate two
+// issues with. It is a capability gap, not an outage: the caller warns, keeps
+// whatever label carries the relationship instead, and continues. Callers must
+// be able to tell it apart from a real HTTP failure, which is why it is a
+// sentinel rather than a generic error string.
+var ErrNoLinkType = errors.New("tracker exposes no issue-link type")
+
+// IssueLinker is the optional capability of relating two issues to each other.
+// It is deliberately NOT part of BoardClient: GitHub's REST issues API has no
+// generic issue-link primitive, so that backend must fail an interface
+// assertion rather than satisfy the method with a no-op — a silent stub would
+// make the "no link possible here" path untestable and invisible.
+//
+// Callers assert for it (`linker, ok := client.(IssueLinker)`) and fall back to
+// a label when the assertion fails.
+type IssueLinker interface {
+	// LinkIssues relates `from` to `to`. Idempotent: re-linking an existing
+	// pair is a no-op, so it is safe on every re-sync.
+	LinkIssues(from, to string) error
+}
+
 // NewBoard returns the board client for the configured provider: the YouTrack
 // backend for provider=youtrack, the Jira backend for provider=jira, the GitHub
 // (repo-issues + Projects v2) backend for provider=github, otherwise the forge

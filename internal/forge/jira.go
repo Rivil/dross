@@ -35,7 +35,10 @@ type JiraClient struct {
 	http *http.Client
 }
 
-var _ BoardClient = (*JiraClient)(nil)
+var (
+	_ BoardClient = (*JiraClient)(nil)
+	_ IssueLinker = (*JiraClient)(nil)
+)
 
 // defaultJiraIssueType is the issue type new dross issues are created as. Jira
 // projects always have a "Task" type in the default schemes.
@@ -259,6 +262,90 @@ func (c *JiraClient) buildJQL(f IssueFilter) string {
 		parts = append(parts, "labels IN ("+strings.Join(quoted, ",")+")")
 	}
 	return strings.Join(parts, " AND ") + " ORDER BY created DESC"
+}
+
+// --- issue links ---
+
+// LinkIssues relates `from` to `to`. Jira has no "relates" primitive of its
+// own — the link types are instance configuration — so the type is discovered
+// rather than assumed, and an instance with none reports ErrNoLinkType so the
+// caller can fall back to a label instead of treating a capability gap as an
+// outage.
+//
+// Idempotency is explicit here (unlike YouTrack's set semantics): Jira happily
+// records the same relation twice, so an existing pair is detected on the
+// issue's own issuelinks and short-circuits before the POST.
+func (c *JiraClient) LinkIssues(from, to string) error {
+	linked, err := c.issueLinked(from, to)
+	if err != nil {
+		return err
+	}
+	if linked {
+		return nil
+	}
+	linkType, err := c.relatesLinkType()
+	if err != nil {
+		return err
+	}
+	body := map[string]any{
+		"type":         map[string]any{"name": linkType},
+		"inwardIssue":  map[string]any{"key": from},
+		"outwardIssue": map[string]any{"key": to},
+	}
+	if err := c.do("POST", c.endpoint("/issueLink"), body, nil); err != nil {
+		return fmt.Errorf("link %s to %s: %w", from, to, err)
+	}
+	return nil
+}
+
+// issueLinked reports whether `from` already carries a link naming `to`, in
+// either direction.
+func (c *JiraClient) issueLinked(from, to string) (bool, error) {
+	var raw struct {
+		Fields struct {
+			IssueLinks []struct {
+				InwardIssue  struct{ Key string } `json:"inwardIssue"`
+				OutwardIssue struct{ Key string } `json:"outwardIssue"`
+			} `json:"issuelinks"`
+		} `json:"fields"`
+	}
+	if err := c.do("GET", c.endpoint("/issue/"+from)+"?fields=issuelinks", nil, &raw); err != nil {
+		return false, fmt.Errorf("read links on %s: %w", from, err)
+	}
+	for _, l := range raw.Fields.IssueLinks {
+		if l.InwardIssue.Key == to || l.OutwardIssue.Key == to {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// relatesLinkType returns the name of a link type expressing a peer relation,
+// preferring one literally called "Relates" and otherwise taking the first the
+// instance offers. An instance with no link types at all — or one where the
+// endpoint is absent — yields ErrNoLinkType.
+func (c *JiraClient) relatesLinkType() (string, error) {
+	var raw struct {
+		IssueLinkTypes []struct {
+			Name string `json:"name"`
+		} `json:"issueLinkTypes"`
+	}
+	if err := c.do("GET", c.endpoint("/issueLinkType"), nil, &raw); err != nil {
+		// A 404 here is "this instance cannot express links", not an outage.
+		if strings.Contains(err.Error(), "HTTP 404") {
+			return "", ErrNoLinkType
+		}
+		return "", fmt.Errorf("list issue link types: %w", err)
+	}
+	if len(raw.IssueLinkTypes) == 0 {
+		return "", ErrNoLinkType
+	}
+	for _, t := range raw.IssueLinkTypes {
+		if strings.EqualFold(t.Name, "Relates") {
+			return t.Name, nil
+		}
+	}
+	return raw.IssueLinkTypes[0].Name, nil
 }
 
 // --- milestones (versions) ---

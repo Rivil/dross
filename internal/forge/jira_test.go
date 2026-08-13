@@ -2,6 +2,7 @@ package forge
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -654,6 +655,90 @@ func TestJiraListIssuesDropsUnknownLabels(t *testing.T) {
 		}
 		if labelCalls != 0 {
 			t.Errorf("unlabelled list read the label index %d times — a blip must not fail `dross watch`", labelCalls)
+		}
+	})
+}
+
+// TestJiraLinkIssues covers the Jira half of c-7: a real link where the
+// instance can express one, no duplicate on re-sync, and a distinguishable
+// capability gap where it cannot.
+func TestJiraLinkIssues(t *testing.T) {
+	t.Run("links a new pair exactly once", func(t *testing.T) {
+		var posts int
+		var gotBody map[string]any
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/issueLinkType"):
+				_, _ = io.WriteString(w, `{"issueLinkTypes":[{"id":"10000","name":"Blocks"},{"id":"10003","name":"Relates"}]}`)
+			case strings.HasSuffix(r.URL.Path, "/issueLink") && r.Method == "POST":
+				posts++
+				raw, _ := io.ReadAll(r.Body)
+				_ = json.Unmarshal(raw, &gotBody)
+				w.WriteHeader(http.StatusCreated)
+			default: // the issuelinks read
+				_, _ = io.WriteString(w, `{"fields":{"issuelinks":[]}}`)
+			}
+		})
+
+		if err := c.LinkIssues("PROJ-9", "PROJ-3"); err != nil {
+			t.Fatalf("LinkIssues: %v", err)
+		}
+		if posts != 1 {
+			t.Fatalf("issued %d link POSTs, want exactly 1", posts)
+		}
+		inward, _ := gotBody["inwardIssue"].(map[string]any)
+		outward, _ := gotBody["outwardIssue"].(map[string]any)
+		if inward["key"] != "PROJ-9" || outward["key"] != "PROJ-3" {
+			t.Errorf("link body = %v, want it to name both issues", gotBody)
+		}
+		linkType, _ := gotBody["type"].(map[string]any)
+		if name, _ := linkType["name"].(string); name == "" {
+			t.Errorf("link body carries no type: %v", gotBody)
+		}
+	})
+
+	t.Run("an existing pair sends no POST", func(t *testing.T) {
+		var posts int
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/issueLinkType"):
+				_, _ = io.WriteString(w, `{"issueLinkTypes":[{"name":"Relates"}]}`)
+			case strings.HasSuffix(r.URL.Path, "/issueLink") && r.Method == "POST":
+				posts++
+				w.WriteHeader(http.StatusCreated)
+			default:
+				_, _ = io.WriteString(w, `{"fields":{"issuelinks":[{"outwardIssue":{"key":"PROJ-3"}}]}}`)
+			}
+		})
+		if err := c.LinkIssues("PROJ-9", "PROJ-3"); err != nil {
+			t.Fatalf("LinkIssues: %v", err)
+		}
+		if posts != 0 {
+			t.Errorf("re-linking an existing pair issued %d POSTs, want 0", posts)
+		}
+	})
+
+	t.Run("no link type yields ErrNoLinkType, not a generic failure", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			serve func(w http.ResponseWriter)
+		}{
+			{"empty list", func(w http.ResponseWriter) { _, _ = io.WriteString(w, `{"issueLinkTypes":[]}`) }},
+			{"404", func(w http.ResponseWriter) { w.WriteHeader(404) }},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+					if strings.HasSuffix(r.URL.Path, "/issueLinkType") {
+						tc.serve(w)
+						return
+					}
+					_, _ = io.WriteString(w, `{"fields":{"issuelinks":[]}}`)
+				})
+				err := c.LinkIssues("PROJ-9", "PROJ-3")
+				if !errors.Is(err, ErrNoLinkType) {
+					t.Errorf("err = %v, want ErrNoLinkType — the caller must tell a capability gap from an outage", err)
+				}
+			})
 		}
 	})
 }

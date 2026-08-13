@@ -980,3 +980,55 @@ func slicesContain(xs []string, want string) bool {
 	}
 	return false
 }
+
+// TestYouTrackLinkIssuesRelates pins the relates-to command. It is a peer
+// relation, deliberately not LinkSubtask's hierarchy — a routed backlog item
+// and its destination phase are not parent and child.
+func TestYouTrackLinkIssuesRelates(t *testing.T) {
+	var gotPath string
+	var gotBody map[string]any
+	c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &gotBody)
+		_, _ = io.WriteString(w, `{}`)
+	})
+
+	if err := c.LinkIssues("PROJ-9", "PROJ-3"); err != nil {
+		t.Fatalf("LinkIssues: %v", err)
+	}
+	if gotPath != "/api/commands" {
+		t.Fatalf("link hit %s, want /api/commands", gotPath)
+	}
+	query, _ := gotBody["query"].(string)
+	if !strings.Contains(query, "PROJ-3") {
+		t.Errorf("command query = %q, want it to name the target PROJ-3", query)
+	}
+	if strings.Contains(query, "subtask") {
+		t.Errorf("command query = %q, want a peer relation, not a subtask hierarchy", query)
+	}
+	issues, _ := gotBody["issues"].([]any)
+	if len(issues) != 1 {
+		t.Fatalf("issues = %v, want exactly the source issue", gotBody["issues"])
+	}
+	first, _ := issues[0].(map[string]any)
+	if first["idReadable"] != "PROJ-9" {
+		t.Errorf("issues[0].idReadable = %v, want PROJ-9", first["idReadable"])
+	}
+}
+
+// TestIssueLinkerCapabilityIsAssertable pins that the capability is a real
+// interface boundary. A future no-op stub on GitHub would satisfy the
+// assertion and silence c-7's warn arm undetectably — so the negative half is
+// asserted too.
+func TestIssueLinkerCapabilityIsAssertable(t *testing.T) {
+	if _, ok := any((*YouTrackClient)(nil)).(IssueLinker); !ok {
+		t.Error("YouTrackClient must satisfy IssueLinker")
+	}
+	if _, ok := any((*JiraClient)(nil)).(IssueLinker); !ok {
+		t.Error("JiraClient must satisfy IssueLinker")
+	}
+	if _, ok := any((*GitHubClient)(nil)).(IssueLinker); ok {
+		t.Error("GitHubClient must NOT satisfy IssueLinker — a no-op stub hides the fallback path")
+	}
+}

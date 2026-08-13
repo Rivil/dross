@@ -40,7 +40,10 @@ type YouTrackClient struct {
 	http *http.Client
 }
 
-var _ BoardClient = (*YouTrackClient)(nil)
+var (
+	_ BoardClient = (*YouTrackClient)(nil)
+	_ IssueLinker = (*YouTrackClient)(nil)
+)
 
 // ytIssueFields is the projection requested on every issue read/write. Without
 // an explicit fields list YouTrack returns only the database id, so we always
@@ -146,6 +149,23 @@ func (c *YouTrackClient) LinkSubtask(parentKey, childKey string) error {
 	}
 	if err := c.do("POST", c.endpoint("/commands"), body, nil); err != nil {
 		return fmt.Errorf("link %s as subtask of %s: %w", childKey, parentKey, err)
+	}
+	return nil
+}
+
+// LinkIssues relates `from` to `to` via the commands API. Distinct from
+// LinkSubtask, which asserts a hierarchy: a routed backlog item and the phase
+// it is destined for are peers, not parent and child.
+//
+// YouTrack treats links as a set, so re-applying an existing relation is a
+// no-op — safe on every re-sync with no read-back needed.
+func (c *YouTrackClient) LinkIssues(from, to string) error {
+	body := map[string]any{
+		"query":  "relates to " + to,
+		"issues": []map[string]any{{"idReadable": from}},
+	}
+	if err := c.do("POST", c.endpoint("/commands"), body, nil); err != nil {
+		return fmt.Errorf("link %s to %s: %w", from, to, err)
 	}
 	return nil
 }
