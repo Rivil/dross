@@ -90,3 +90,20 @@ func TestPausePromptGatePrecedesDrafting(t *testing.T) {
 		t.Errorf("the root gate is at byte %d, after the drafting heading at %d — it must precede it", gate, draft)
 	}
 }
+
+// TestPausePromptFilesFindingsInsteadOfParking: the writer of handoff.md is
+// what manufactures homeless findings — a bug parked as an "Open loops" bullet
+// lives in a gitignored file that the next pause rewrites. The prompt must route
+// a finding to `dross deferred add` instead.
+func TestPausePromptFilesFindingsInsteadOfParking(t *testing.T) {
+	content := pausePromptContent(t)
+	for _, want := range []string{
+		"dross deferred add",            // the verb itself
+		"a finding is not an open loop", // the rule, stated
+		"--target",                      // and the routed form
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("pause.md does not teach the finding path: missing %q", want)
+		}
+	}
+}

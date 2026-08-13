@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -150,6 +151,25 @@ func (b *Board) SetBacklog(key, issue string) {
 func (b *Board) BacklogID(key string) (string, bool) {
 	id, ok := b.Backlog[key]
 	return id, ok
+}
+
+// BacklogKeys returns the recorded backlog item keys in sorted order. It exists
+// for key migrations: a sync that re-keys its items needs to see what shape the
+// existing links are in, which BacklogID (a point lookup) can't tell it.
+func (b *Board) BacklogKeys() []string {
+	keys := make([]string, 0, len(b.Backlog))
+	for k := range b.Backlog {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// DeleteBacklog retires a backlog item key, leaving the issue itself alone. It
+// is the second half of a re-key: the link is re-recorded under the new key,
+// then the old key is dropped so the next sync doesn't consult it again.
+func (b *Board) DeleteBacklog(key string) {
+	delete(b.Backlog, key)
 }
 
 // --- inbound triage ---

@@ -1,0 +1,94 @@
+[verify]
+  phase = "deferred-add-command"
+  generated_at = 2026-08-13T10:00:21.817689Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-13T10:27:32.201478Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9587628865979382
+  mutants_killed = 279
+  mutants_survived = 12
+  mutants_not_covered = 12
+  mutants_in_scope = 291
+  unclassified_in_scope = 0
+  criteria_total = 8
+  criteria_covered = 8
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/deferred_add_test.go:42:TestDeferredAddLandsInCurrentPhase", "internal/cmd/deferred_add_test.go:94:TestDeferredAddWhyRoundTrips", "internal/cmd/deferred_add_test.go:183:TestDeferredAddRejectsEmptyText"]
+  notes = "Primary path asserted end-to-end: the item lands in the current phase's spec.toml at the expected index AND is listed immediately (source+index read back through `deferred list --json`). --why is proved optional in both directions — omitted emits no `why = \"\"` line, supplied round-trips. Empty text is refused without appending."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/deferred_add_test.go:62:TestDeferredAddWithNoCurrentPhase", "internal/cmd/deferred_add_test.go:75:TestDeferredAddFallsBackFromUnusableHome"]
+  notes = "Both arms of the locked storage_home fallback are exercised: no current phase, and a current phase whose spec.toml is missing. Each asserts a non-error exit and source = _project, so an implementation that errored for want of a home fails. The unusable-home test additionally pins that the fallback does not materialise a spec.toml for the ghost phase, and that stdout names the fallback."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/deferred_add_test.go:114:TestDeferredAddTargetRoutesInOneCommand"]
+  notes = "Both halves asserted in one test, each with a negative arm: a --target add appears under --routed and must NOT appear under --someday; a bare add appears under --someday and must NOT appear under --routed. An implementation that defaulted the target to anything non-empty, or that filed without routing, fails."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/deferred_add_test.go:232:TestDeferredAddedItemIsIndistinguishable", "internal/cmd/deferred_store_addressing_test.go:49:TestDeferredRouteAddressesStore", "internal/cmd/deferred_store_addressing_test.go:73:TestDeferredUnrouteDismissAddressStore", "internal/cmd/deferred_store_addressing_test.go:106:TestDeferredStoreIndexOutOfRange", "internal/cmd/deferred_store_addressing_test.go:150:TestDeferredStoreObeysThreeStateFilter"]
+  notes = "All four verbs are covered over both sources. Phase-sourced: one added item is routed, unrouted and dismissed through its `<phase> <idx>` handle. Store-sourced: the same handle shape against _project rewrites .dross/deferred.toml and provably no phase spec (byte-comparison snapshot of every phases/*/spec.toml), the dismiss guard emits the identical 'un-route before dismissing' message as the phase path, out-of-range errors in the same shape without writing, and the three-state filter behaves identically."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/deferred_add_test.go:273:TestDeferredAddReplaysHomelessFindings", "internal/cmd/deferred_homeless_repo_test.go:27:TestHandoffParksNoHomelessFinding"]
+  notes = "Both halves of the criterion are guarded. Filing: the replay test re-files both findings on a fixture in the exact shapes used — one bare `add` that must land someday, one `add --target` at a milestone-array-only slug — and asserts `dross validate` stays green after both. Removal: the handoff guard asserts neither finding sits as an Open-loops bullet, scoped to that section so post-filing narration in Thread/Next does not pin it. Observed passing (not skipping) locally this run; it Skipf's visibly in CI, where handoff.md is gitignored and absent. The real filings are on disk in this phase's spec.toml with minted ids, and handoff.md's Open loops carries neither."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/deferred_board_test.go:44:TestDeferredAddMirrorsToBoard", "internal/cmd/deferred_board_test.go:81:TestDeferredAddMirrorsRoutedItem", "internal/cmd/deferred_board_test.go:96:TestDeferredAddSurvivesBoardFailure", "internal/cmd/deferred_board_test.go:117:TestDeferredAddSkipsDisabledBoard", "internal/cmd/deferred_board_test.go:136:TestDeferredAddSkipsWithoutCurrentMilestone", "internal/cmd/deferred_board_test.go:168:TestDeferredAddSharesKeySpaceWithSync", "internal/cmd/deferred_add_test.go:165:TestDeferredAddRejectedTargetMakesNoBoardCall"]
+  notes = "Mirror-in-the-same-command is pinned to exactly one create against a fake board — zero would mean no mirror, more than one would mean add triggered a whole-milestone sync — and the created issue key must appear in stdout. The board-failure arm (locked board_push) drives a 500 and asserts a non-error exit, a warning naming the board, and the item still present in the local TOML, which also proves the local write precedes the push. The two silent no-op arms (board disabled, no current milestone) use a server that fails the test on ANY request, and the milestone-less arm additionally asserts stdout does not read like a failure."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/deferred_add_test.go:141:TestDeferredAddRejectsBadTargetIdenticallyToRoute", "internal/cmd/deferred_target_test.go:56:TestDeferredRouteAndValidateAgree", "internal/cmd/deferred_target_test.go:93:TestDeferredRouteRejectionNamesBothRemedies", "internal/cmd/deferred_target_test.go:111:TestDeferredRouteRejectionWritesNothing", "internal/cmd/deferred_target_test.go:132:TestDeferredRouteRejectsProjectStore", "internal/cmd/deferred_store_plumbing_test.go:24:TestValidateRejectsDanglingStoreTarget"]
+  notes = "'Same rule' is asserted mechanically rather than by inspection: add's and route's rejections are compared string-for-string in one assertion, and a 5-case table cross-checks route's accept/reject against `dross validate`'s verdict for each slug (phase-dir-only, milestone-array-only, both, unknown, reserved store) — a slug the two disagree on fails. 'No silently unreachable destination' is pinned on both write paths: a rejected route leaves the milestone toml AND the source spec byte-identical, so a typo is never auto-appended to the roadmap, and a rejected add leaves the spec byte-identical and makes no board call. The store is covered as a hand-editable hole too."
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/issue_backlog_id_test.go:112:TestBacklogSurvivesNeighbourRemoval", "internal/cmd/issue_backlog_id_test.go:177:TestBacklogMigratesLegacyPositionalKey", "internal/cmd/issue_backlog_id_test.go:237:TestBacklogDoesNotAdoptShiftedLegacyKey", "internal/cmd/issue_backlog_id_test.go:283:TestBacklogSyncBackfillsIDsIdempotently", "internal/cmd/deferred_add_test.go:196:TestDeferredAddMintsDistinctIDs"]
+  notes = "The criterion's exact scenario is reproduced against a fake board: two linked someday items, the first deleted, re-sync — the survivor's text must be patched onto its OWN issue and explicitly not onto the deleted item's key, and the survivor must be updated rather than re-created. Under the old positional keying that assertion fails. The surrounding identity contract is covered too: legacy positional keys migrate onto ids, a shifted legacy key is deliberately not adopted, backfill is idempotent, and two adds into one phase cannot collide onto a shared id."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/inbox.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/pause.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/status.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "all 12 in-scope survivors are origin=inherited and already accepted in .dross/survivors.toml under the gremlins switch-case/closure attribution ceiling (issue.go:173, deferred.go:169, validate.go:82+86, phase.go:190). 0 in-diff survivors, 0 unclassified — no criterion downgrade is warranted and there is nothing to drain."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-5's handoff-removal guard (deferred_homeless_repo_test.go:27) reads the machine-local, gitignored .dross/handoff.md and therefore Skipf's in CI. It was observed passing — not skipping — on this machine during this verify run. The general enforcement gap this shape belongs to is already filed as a deferred item (test-suite hermeticity, someday)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "full suite observed green this run: `go test -count=1 ./...` exit 0, 33 packages ok, no FAIL lines."

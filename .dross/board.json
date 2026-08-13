@@ -4,6 +4,7 @@
     "v1.3": "DRO-7"
   },
   "phases": {
+    "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
     "milestone-lifecycle-close": "DRO-13",
     "mutation-diff-scope": "DRO-9",
@@ -13,6 +14,10 @@
   "quicks": {
     "1.2.8.1": "DRO-6",
     "ship-body-routed-survivor-noise": "DRO-11"
+  },
+  "backlog": {
+    "someday:id:1ecc05633e1a85ed": "DRO-15",
+    "someday:id:e948eb6e07e8138b": "DRO-16"
   },
   "last_pull": "0001-01-01T00:00:00Z"
 }

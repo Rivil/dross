@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/rules"
@@ -70,19 +69,10 @@ func Validate() *cobra.Command {
 			// Valid deferred-target slugs: any existing phase dir, or any slug
 			// parked in a milestone's phases array. A target outside this set is
 			// dangling — it would silently break the 1:1 re-surface it routes to.
-			validTargets := map[string]bool{}
-			for _, id := range phaseIDs {
-				validTargets[id] = true
-			}
-			if versions, err := milestone.List(root); err == nil {
-				for _, v := range versions {
-					if m, err := milestone.Load(milestone.FilePath(root, v)); err == nil {
-						for _, ph := range m.Phases {
-							validTargets[ph] = true
-						}
-					}
-				}
-			}
+			// The set is built by the same helper `deferred route --target` and
+			// `deferred add --target` gate on, so a target the CLI accepts can
+			// never be one validate calls dangling (locked target_validation).
+			validTargets := deferredTargetSet(root)
 
 			for _, id := range phaseIDs {
 				dir := phase.Dir(root, id)
@@ -113,11 +103,27 @@ func Validate() *cobra.Command {
 					}
 				}
 				if spec != nil {
-					for _, d := range spec.Deferred {
-						if d.Target != "" && !validTargets[d.Target] {
-							problems = append(problems, fmt.Sprintf("%s: deferred target %q names no phase dir or milestone.phases entry", specPath, d.Target))
-						}
-					}
+					problems = append(problems, danglingTargets(specPath, spec, validTargets)...)
+				}
+			}
+
+			// The reserved project-store slug must never be a phase directory:
+			// two sources would share the slug, making `_project 0` name two
+			// different items. `deferred list` skips it; validate says why.
+			for _, id := range phaseIDs {
+				if id == projectStoreSlug {
+					problems = append(problems, fmt.Sprintf("%s: %q is reserved for the project-level deferred store — rename the phase directory", filepath.Join("phases", id), projectStoreSlug))
+				}
+			}
+
+			// The project store carries routed items too, and is hand-editable
+			// like any spec, so it gets the same dangling-target walk.
+			storePath := filepath.Join(root, "deferred.toml")
+			if _, err := os.Stat(storePath); err == nil {
+				if store, err := phase.LoadSpec(storePath); err != nil {
+					problems = append(problems, fmt.Sprintf("%s: %v", storePath, err))
+				} else {
+					problems = append(problems, danglingTargets(storePath, store, validTargets)...)
 				}
 			}
 
@@ -131,6 +137,19 @@ func Validate() *cobra.Command {
 			return fmt.Errorf("%d problem(s) found", len(problems))
 		},
 	}
+}
+
+// danglingTargets reports every [[deferred]] target in one source that names no
+// valid destination. Shared by the phase-spec walk and the project store so both
+// are judged by exactly the same rule and reported in the same shape.
+func danglingTargets(path string, spec *phase.Spec, valid map[string]bool) []string {
+	var problems []string
+	for _, d := range spec.Deferred {
+		if d.Target != "" && !valid[d.Target] {
+			problems = append(problems, fmt.Sprintf("%s: deferred target %q names no phase dir or milestone.phases entry", path, d.Target))
+		}
+	}
+	return problems
 }
 
 // loadIfExists skips missing files quietly.

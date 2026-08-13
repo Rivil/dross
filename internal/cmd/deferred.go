@@ -17,8 +17,14 @@ import (
 // originating phase (Source) and the position within that phase's [[deferred]]
 // array (Index) — the stable handle `dross deferred route` addresses it by.
 type deferredEntry struct {
-	Source    string `json:"source"`
-	Index     int    `json:"index"`
+	Source string `json:"source"`
+	Index  int    `json:"index"`
+	// ID carries the item's stable internal identity (phase.Deferred.ID) for
+	// in-process consumers — syncBacklog keys its board entry on it. It is
+	// json:"-" on purpose: the locked deferred_identity decision keeps the id
+	// out of every user-facing surface, so `deferred list --json` (which
+	// prompts consume) shows only the `<source> <idx>` handle.
+	ID        string `json:"-"`
 	Text      string `json:"text"`
 	Why       string `json:"why,omitempty"`
 	Target    string `json:"target,omitempty"`
@@ -35,12 +41,13 @@ func Deferred() *cobra.Command {
 		Use:   "deferred",
 		Short: "Inspect and route deferred items across phase specs",
 	}
-	c.AddCommand(deferredList(), deferredRoute(), deferredDismiss(), deferredUnroute())
+	c.AddCommand(deferredList(), deferredRoute(), deferredDismiss(), deferredUnroute(), deferredAdd())
 	return c
 }
 
-// collectDeferred flattens every .dross/phases/*/spec.toml [[deferred]] entry,
-// tagging each with its source phase and per-phase index.
+// collectDeferred flattens every .dross/phases/*/spec.toml [[deferred]] entry
+// plus the project-level store, tagging each with its source and per-source
+// index.
 func collectDeferred(root string) ([]deferredEntry, error) {
 	ids, err := phase.List(root)
 	if err != nil {
@@ -48,6 +55,12 @@ func collectDeferred(root string) ([]deferredEntry, error) {
 	}
 	entries := []deferredEntry{}
 	for _, id := range ids {
+		// A phases/_project directory would collide with the reserved store
+		// slug, making `_project 0` ambiguous between two sources. Skip it here
+		// and report it as a validation problem instead (validate.go).
+		if id == projectStoreSlug {
+			continue
+		}
 		specPath := filepath.Join(phase.Dir(root, id), "spec.toml")
 		if _, err := os.Stat(specPath); err != nil {
 			continue // no spec yet
@@ -56,19 +69,32 @@ func collectDeferred(root string) ([]deferredEntry, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", specPath, err)
 		}
-		for i, d := range spec.Deferred {
-			entries = append(entries, deferredEntry{
-				Source:    id,
-				Index:     i,
-				Text:      d.Text,
-				Why:       d.Why,
-				Target:    d.Target,
-				Dismissed: d.Dismissed,
-				Survivor:  d.Survivor,
-			})
-		}
+		entries = append(entries, flattenDeferred(id, spec.Deferred)...)
 	}
+	store, err := loadDeferredStore(root)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", deferredStorePath(root), err)
+	}
+	entries = append(entries, flattenDeferred(projectStoreSlug, store.Deferred)...)
 	return entries, nil
+}
+
+// flattenDeferred tags one source's [[deferred]] array with its provenance.
+func flattenDeferred(source string, items []phase.Deferred) []deferredEntry {
+	out := make([]deferredEntry, 0, len(items))
+	for i, d := range items {
+		out = append(out, deferredEntry{
+			Source:    source,
+			Index:     i,
+			ID:        d.ID,
+			Text:      d.Text,
+			Why:       d.Why,
+			Target:    d.Target,
+			Dismissed: d.Dismissed,
+			Survivor:  d.Survivor,
+		})
+	}
+	return out
 }
 
 func deferredList() *cobra.Command {
@@ -171,18 +197,23 @@ func deferredRoute() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Validate before anything is read or written: a stamped typo is a
+			// silently unreachable destination, and a rejected route must leave
+			// every file byte-identical.
+			if err := validDeferredTarget(root, target); err != nil {
+				return err
+			}
 			phaseID := args[0]
 			idx, err := strconv.Atoi(args[1])
 			if err != nil {
 				return fmt.Errorf("idx must be an integer: %w", err)
 			}
-			specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
-			spec, err := phase.LoadSpec(specPath)
+			spec, specPath, err := resolveDeferredSource(root, phaseID)
 			if err != nil {
 				return err
 			}
-			if idx < 0 || idx >= len(spec.Deferred) {
-				return fmt.Errorf("deferred index %d out of range (phase %s has %d deferred item(s))", idx, phaseID, len(spec.Deferred))
+			if err := deferredIndex(phaseID, spec, idx); err != nil {
+				return err
 			}
 			spec.Deferred[idx].Target = target
 			if err := spec.Save(specPath); err != nil {
@@ -212,13 +243,12 @@ func deferredDismiss() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("idx must be an integer: %w", err)
 			}
-			specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
-			spec, err := phase.LoadSpec(specPath)
+			spec, specPath, err := resolveDeferredSource(root, phaseID)
 			if err != nil {
 				return err
 			}
-			if idx < 0 || idx >= len(spec.Deferred) {
-				return fmt.Errorf("deferred index %d out of range (phase %s has %d deferred item(s))", idx, phaseID, len(spec.Deferred))
+			if err := deferredIndex(phaseID, spec, idx); err != nil {
+				return err
 			}
 			d := &spec.Deferred[idx]
 			if undo {
@@ -265,13 +295,12 @@ func deferredUnroute() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("idx must be an integer: %w", err)
 			}
-			specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
-			spec, err := phase.LoadSpec(specPath)
+			spec, specPath, err := resolveDeferredSource(root, phaseID)
 			if err != nil {
 				return err
 			}
-			if idx < 0 || idx >= len(spec.Deferred) {
-				return fmt.Errorf("deferred index %d out of range (phase %s has %d deferred item(s))", idx, phaseID, len(spec.Deferred))
+			if err := deferredIndex(phaseID, spec, idx); err != nil {
+				return err
 			}
 			d := &spec.Deferred[idx]
 			// Dismissed items already have an empty Target, so the someday check
@@ -296,6 +325,35 @@ func deferredUnroute() *cobra.Command {
 	return c
 }
 
+// resolveDeferredSource loads the [[deferred]]-carrying file for a source slug
+// and returns it with its path. It is what makes `_project <idx>` behave
+// identically to `<phase> <idx>` in route, unroute and dismiss: every verb
+// resolves through deferredStore rather than building a phases/<id>/spec.toml
+// path of its own, so the project store is a first-class source rather than a
+// place only `add` can write.
+func resolveDeferredSource(root, source string) (*phase.Spec, string, error) {
+	path, err := deferredStore(root, source)
+	if err != nil {
+		return nil, "", err
+	}
+	if source == projectStoreSlug {
+		spec, err := loadDeferredStore(root)
+		return spec, path, err
+	}
+	spec, err := phase.LoadSpec(path)
+	return spec, path, err
+}
+
+// deferredIndex bounds-checks an index against a source's items, naming the
+// source and its count. Sources are interchangeable here on purpose: a store
+// index out of range reads the same as a phase index out of range.
+func deferredIndex(source string, spec *phase.Spec, idx int) error {
+	if idx < 0 || idx >= len(spec.Deferred) {
+		return fmt.Errorf("deferred index %d out of range (%s has %d deferred item(s))", idx, source, len(spec.Deferred))
+	}
+	return nil
+}
+
 func filterDeferred(in []deferredEntry, keep func(deferredEntry) bool) []deferredEntry {
 	out := []deferredEntry{}
 	for _, e := range in {
@@ -307,19 +365,33 @@ func filterDeferred(in []deferredEntry, keep func(deferredEntry) bool) []deferre
 }
 
 // repointDeferredTarget rewrites every [[deferred]] entry across all phase specs
-// whose Target is oldSlug to newSlug, so a `dross phase rename` doesn't leave a
-// dangling routing target. Entries pointing at any other slug are left exactly
-// as they are.
+// AND the project store whose Target is oldSlug to newSlug, so a
+// `dross phase rename` doesn't leave a dangling routing target. Entries pointing
+// at any other slug are left exactly as they are.
+//
+// The store is walked alongside the specs on purpose: it holds real routed items
+// now, and a walk over phase.List alone would leave every one of them pointing
+// at the dead slug.
 func repointDeferredTarget(root, oldSlug, newSlug string) error {
 	ids, err := phase.List(root)
 	if err != nil {
 		return err
 	}
+	paths := []string{}
 	for _, id := range ids {
+		if id == projectStoreSlug {
+			continue // reserved; validate reports the directory as a problem
+		}
 		specPath := filepath.Join(phase.Dir(root, id), "spec.toml")
 		if _, err := os.Stat(specPath); err != nil {
 			continue // no spec yet
 		}
+		paths = append(paths, specPath)
+	}
+	if storePath := deferredStorePath(root); fileExists(storePath) {
+		paths = append(paths, storePath)
+	}
+	for _, specPath := range paths {
 		spec, err := phase.LoadSpec(specPath)
 		if err != nil {
 			return fmt.Errorf("%s: %w", specPath, err)
