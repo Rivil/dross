@@ -1200,3 +1200,129 @@ func TestYouTrackReadsStateFromTheConfiguredField(t *testing.T) {
 		t.Errorf("State = %q, want Done read out of the configured field", iss.State)
 	}
 }
+
+// TestYouTrackGetIssueReadsResolved pins the read-back signal. Without a field
+// the tracker fills in, "did the close take?" can only be answered by trusting
+// the write — which is exactly the assumption c-5 exists to remove.
+func TestYouTrackGetIssueReadsResolved(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"a resolved timestamp", `{"idReadable":"PROJ-7","resolved":1700000000000}`, true},
+		{"null", `{"idReadable":"PROJ-7","resolved":null}`, false},
+		{"absent", `{"idReadable":"PROJ-7"}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := newTestYTClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = io.WriteString(w, tc.body)
+			})
+			iss, err := c.GetIssue("PROJ-7")
+			if err != nil {
+				t.Fatalf("GetIssue: %v", err)
+			}
+			if iss.Resolved != tc.want {
+				t.Errorf("Resolved = %v, want %v", iss.Resolved, tc.want)
+			}
+		})
+	}
+}
+
+// TestYouTrackCloseIssueResolvesForReal is the c-5 core. CloseIssue used to be
+// `return nil`: ship printed "(closed)" for every YouTrack phase while the
+// issue stayed open, and nothing could tell the difference.
+func TestYouTrackCloseIssueResolvesForReal(t *testing.T) {
+	t.Run("writes the mapped state and verifies the read-back", func(t *testing.T) {
+		var stateWrite string
+		var readBacks int
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "GET" {
+				readBacks++
+				_, _ = io.WriteString(w, `{"idReadable":"PROJ-7","resolved":1700000000000}`)
+				return
+			}
+			var body struct {
+				CustomFields []struct {
+					Name  string `json:"name"`
+					Value struct {
+						Name string `json:"name"`
+					} `json:"value"`
+				} `json:"customFields"`
+			}
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &body)
+			if len(body.CustomFields) > 0 {
+				stateWrite = body.CustomFields[0].Value.Name
+			}
+			_, _ = io.WriteString(w, `{}`)
+		})
+
+		if err := c.CloseIssueAs("PROJ-7", "complete", nil); err != nil {
+			t.Fatalf("CloseIssueAs: %v", err)
+		}
+		if stateWrite != "Verified" {
+			t.Errorf("wrote State %q, want the mapped Verified — a bare nil write nothing at all", stateWrite)
+		}
+		if readBacks != 1 {
+			t.Errorf("read the issue back %d times, want exactly 1", readBacks)
+		}
+	})
+
+	t.Run("an accepted write that does not resolve is an error", func(t *testing.T) {
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "GET" {
+				// The workflow refused the transition; the POST still 200'd.
+				_, _ = io.WriteString(w, `{"idReadable":"PROJ-7","resolved":null}`)
+				return
+			}
+			_, _ = io.WriteString(w, `{}`)
+		})
+		err := c.CloseIssueAs("PROJ-7", "complete", nil)
+		if err == nil {
+			t.Fatal("a state write that left the issue unresolved returned no error")
+		}
+		if !strings.Contains(err.Error(), "unresolved") {
+			t.Errorf("err = %q, want it to say the issue still reads unresolved", err)
+		}
+	})
+
+	t.Run("an unmapped status errors instead of silently doing nothing", func(t *testing.T) {
+		var writes int
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "POST" {
+				writes++
+			}
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7","resolved":null}`)
+		})
+		err := c.CloseIssueAs("PROJ-7", "complete", map[string]string{"complete": ""})
+		if err == nil {
+			t.Fatal("an unmapped status returned no error — a close that does nothing must not read as success")
+		}
+		if !strings.Contains(err.Error(), "complete") {
+			t.Errorf("err = %q, want it to name the status", err)
+		}
+		if writes != 0 {
+			t.Errorf("wrote state %d times for an unmapped status, want 0", writes)
+		}
+	})
+
+	t.Run("the BoardClient CloseIssue is no longer a bare nil", func(t *testing.T) {
+		var writes int
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "POST" {
+				writes++
+				_, _ = io.WriteString(w, `{}`)
+				return
+			}
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7","resolved":1700000000000}`)
+		})
+		if err := c.CloseIssue("PROJ-7"); err != nil {
+			t.Fatalf("CloseIssue: %v", err)
+		}
+		if writes == 0 {
+			t.Error("CloseIssue made no state write at all — that silent nil IS the c-5 bug")
+		}
+	})
+}

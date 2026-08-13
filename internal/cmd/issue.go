@@ -810,10 +810,10 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 		if milestoneID > 0 {
 			patch.Milestone = &milestoneID
 		}
-		if doClose {
-			closed := "closed"
-			patch.State = &closed
-		}
+		// The close is NOT folded into the patch: it goes through
+		// closeBoardIssue below, so the created and updated edges take one
+		// path. Splitting them is what let the close-on-create branch regress
+		// unnoticed.
 		if _, err := ctx.client.UpdateIssue(key, patch); err != nil {
 			return wrapBoard(err)
 		}
@@ -839,10 +839,12 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 			return wrapBoard(err)
 		}
 	}
-	// Close-on-create edge: created above then asked to close.
-	if doClose && created {
-		if err := ctx.client.CloseIssue(key); err != nil {
-			return wrapBoard(err)
+	// One close path for both edges — created-then-closed and updated-then-
+	// closed. It errors rather than warns, so nothing prints "(closed)" for an
+	// issue that is still open.
+	if doClose {
+		if err := closeBoardIssue(ctx, key, status); err != nil {
+			return err
 		}
 	}
 	if err := ctx.board.Save(ctx.boardPath); err != nil {
@@ -855,6 +857,25 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 	}
 	Printf("phase %s -> board %s (%s)\n", phaseID, key, state)
 	return nil
+}
+
+// closeBoardIssue resolves an issue on the board and reports failure rather
+// than assuming success.
+//
+// The lenient warn-and-continue that SetState uses is right for a status label
+// — a cosmetic loss — and wrong here. `--close` is the caller asserting the
+// work is done; if the tracker did not record that, printing "(closed)" turns
+// a failed write into a false claim about the state of the work, which is what
+// c-5 exists to stop. So an unmapped status is an error, not a warning.
+func closeBoardIssue(ctx *boardCtx, key, status string) error {
+	if status == "" {
+		status = "complete"
+	}
+	if yt, ok := ctx.client.(*forge.YouTrackClient); ok {
+		// CloseIssueAs writes the mapped state and verifies the read-back.
+		return wrapBoard(yt.CloseIssueAs(key, status, ctx.proj.Board.StateMap))
+	}
+	return wrapBoard(ctx.client.CloseIssue(key))
 }
 
 // derivePhaseStatus maps plan progress onto a lifecycle label. Its return

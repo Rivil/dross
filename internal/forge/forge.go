@@ -222,6 +222,16 @@ type Issue struct {
 	Labels    []string
 	Milestone string // milestone title, "" if none
 	URL       string // html_url
+
+	// Resolved is the tracker's own verdict that this issue is done, read back
+	// from the tracker rather than inferred from what dross just wrote.
+	//
+	// It exists because "the close request returned 200" is not the same claim
+	// as "the issue is closed": on YouTrack a State write can succeed against a
+	// workflow that refuses the transition, leaving the issue open while ship
+	// prints a confident "(closed)". A verify-on-read-back needs a field the
+	// tracker fills in — this one.
+	Resolved bool
 }
 
 // IssueInput is the create payload. Labels are names; missing ones are

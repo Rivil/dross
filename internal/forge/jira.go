@@ -545,8 +545,11 @@ func (r *jiraIssue) toIssue() *Issue {
 		Labels: r.Fields.Labels,
 	}
 	// Normalise Jira's status-category to dross's open/closed vocabulary.
+	// The done category is also the tracker's own resolved verdict, which is
+	// what a close read-back checks.
 	if strings.EqualFold(r.Fields.Status.StatusCategory.Key, "done") {
 		iss.State = "closed"
+		iss.Resolved = true
 	} else if r.Fields.Status.Name != "" {
 		iss.State = "open"
 	}

@@ -85,7 +85,7 @@ var (
 // an explicit fields list YouTrack returns only the database id, so we always
 // ask for the readable id, summary/description, tags, and custom fields (State
 // rides in there).
-const ytIssueFields = "idReadable,summary,description,tags(name),customFields(name,value(name))"
+const ytIssueFields = "idReadable,summary,description,resolved,tags(name),customFields(name,value(name))"
 
 // NewYouTrack validates config, resolves the permanent token from the
 // environment, and returns a ready client. It errors early on the same shape
@@ -255,11 +255,46 @@ func (c *YouTrackClient) UpdateIssue(key string, patch IssuePatch) (*Issue, erro
 	return iss, nil
 }
 
-// CloseIssue resolves an issue. YouTrack has no separate "close" — an issue is
-// closed by moving its State to a resolved value, which the lifecycle-driven
-// state sync handles (plan t-7). Standalone close is a no-op here so the
-// BoardClient contract is satisfied without guessing at a resolved State name.
+// CloseIssue resolves an issue using the default lifecycle mapping for
+// "complete". Callers that know the project's [board].state_map should use
+// CloseIssueAs so a renamed resolved state is honoured.
 func (c *YouTrackClient) CloseIssue(key string) error {
+	return c.CloseIssueAs(key, "complete", nil)
+}
+
+// CloseIssueAs resolves an issue by writing the State value `status` maps to,
+// then reads the issue back and fails unless the tracker reports it resolved.
+//
+// This used to be `return nil`. That is the c-5 bug in one line: ship printed
+// "(closed)" for every YouTrack phase while the issue stayed open forever, and
+// nothing anywhere could tell the difference. Two things fix it — writing the
+// state for real, and verifying the write took. The read-back is not
+// belt-and-braces: a YouTrack workflow can accept the POST and refuse the
+// transition, so a 200 is not evidence the issue is resolved.
+//
+// An unmapped status is an error here, unlike SetState's lenient warn: a sync
+// that could not label an issue is a cosmetic loss, but a CLOSE that silently
+// did nothing is a false claim about the state of the work.
+func (c *YouTrackClient) CloseIssueAs(key, status string, override map[string]string) error {
+	value, ok := resolveYouTrackState(status, override)
+	if !ok {
+		return fmt.Errorf("cannot close %s: dross status %q has no YouTrack State mapping (set [board].state_map.%s)", key, status, status)
+	}
+	body := map[string]any{
+		"customFields": []map[string]any{
+			{"name": c.stateField(), "$type": "StateIssueCustomField", "value": map[string]any{"name": value}},
+		},
+	}
+	if err := c.do("POST", c.endpoint("/issues/"+key)+"?fields="+url.QueryEscape("idReadable"), body, nil); err != nil {
+		return fmt.Errorf("close %s: set state %q: %w", key, value, err)
+	}
+	iss, err := c.GetIssue(key)
+	if err != nil {
+		return fmt.Errorf("close %s: read back: %w", key, err)
+	}
+	if !iss.Resolved {
+		return fmt.Errorf("close %s: wrote State %q but the issue still reads unresolved — the workflow may not allow that transition", key, value)
+	}
 	return nil
 }
 
@@ -643,7 +678,10 @@ type youtrackIssue struct {
 	IDReadable  string `json:"idReadable"`
 	Summary     string `json:"summary"`
 	Description string `json:"description"`
-	Tags        []struct {
+	// Resolved is a millisecond timestamp when the issue is resolved and null
+	// otherwise — YouTrack's own verdict, not a state name we chose.
+	Resolved *int64 `json:"resolved"`
+	Tags     []struct {
 		Name string `json:"name"`
 	} `json:"tags"`
 	CustomFields []struct {
@@ -658,9 +696,10 @@ type youtrackIssue struct {
 // "State" on such an instance would report every issue as stateless.
 func (r *youtrackIssue) toIssue(stateField string) *Issue {
 	iss := &Issue{
-		Key:   r.IDReadable,
-		Title: r.Summary,
-		Body:  r.Description,
+		Key:      r.IDReadable,
+		Title:    r.Summary,
+		Body:     r.Description,
+		Resolved: r.Resolved != nil,
 	}
 	for _, t := range r.Tags {
 		iss.Labels = append(iss.Labels, t.Name)

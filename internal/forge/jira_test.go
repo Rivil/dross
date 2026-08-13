@@ -742,3 +742,59 @@ func TestJiraLinkIssues(t *testing.T) {
 		}
 	})
 }
+
+// TestJiraDoneCategoryIsResolved pins the Jira half of the read-back signal:
+// the done status-category is the tracker's own verdict that the issue is
+// finished, and it has to reach Issue.Resolved as well as Issue.State.
+func TestJiraDoneCategoryIsResolved(t *testing.T) {
+	cases := []struct {
+		name         string
+		body         string
+		wantResolved bool
+		wantState    string
+	}{
+		{
+			"done category",
+			`{"key":"PROJ-7","fields":{"summary":"a","status":{"name":"Done","statusCategory":{"key":"done"}}}}`,
+			true, "closed",
+		},
+		{
+			"in progress",
+			`{"key":"PROJ-7","fields":{"summary":"a","status":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}}}`,
+			false, "open",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := newTestJiraClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = io.WriteString(w, tc.body)
+			})
+			iss, err := c.GetIssue("PROJ-7")
+			if err != nil {
+				t.Fatalf("GetIssue: %v", err)
+			}
+			if iss.Resolved != tc.wantResolved {
+				t.Errorf("Resolved = %v, want %v", iss.Resolved, tc.wantResolved)
+			}
+			if iss.State != tc.wantState {
+				t.Errorf("State = %q, want %q", iss.State, tc.wantState)
+			}
+		})
+	}
+}
+
+// TestJiraCloseWithoutADoneTransitionErrors pins that a workflow with no path
+// to the done category is a failure, not a shrug. Warning here would let ship
+// print "(closed)" for an issue nothing moved.
+func TestJiraCloseWithoutADoneTransitionErrors(t *testing.T) {
+	c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/transitions") && r.Method == "GET" {
+			_, _ = io.WriteString(w, `{"transitions":[{"id":"11","name":"Start","to":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}}]}`)
+			return
+		}
+		t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+	})
+	if err := c.CloseIssue("PROJ-7"); err == nil {
+		t.Fatal("a board with no done-category transition closed without error")
+	}
+}
