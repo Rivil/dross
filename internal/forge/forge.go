@@ -542,11 +542,61 @@ func (c *Client) GetIssue(key string) (*Issue, error) {
 // ListIssues returns issues matching the filter. PRs are excluded (the
 // Forgejo/Gitea issues endpoint otherwise returns both) so inbound triage
 // never surfaces pull requests as "new work".
+//
+// Labels are OR'd: forgejo, gitea and gitlab all intersect a comma-joined
+// `labels=` param, so several labels in one request match only issues carrying
+// every one of them. One request per label, unioned by issue number, is the
+// only way to express "either label" against these APIs.
+//
+// Labels the instance does not know are dropped and named on stderr first (see
+// FilterKnownLabels), and when every requested label is unknown the call
+// returns nothing rather than degrading into a whole-project list.
 func (c *Client) ListIssues(f IssueFilter) ([]Issue, error) {
+	// One pass with no label param when unfiltered; otherwise one per label.
+	// An empty filter reads no label index at all — `dross watch` polls this
+	// unlabelled on a timer, and a label-index blip must not fail a heartbeat.
+	queries := []string{""}
+	if len(f.Labels) > 0 {
+		if err := c.loadLabels(); err != nil {
+			return nil, err
+		}
+		known := make([]string, 0, len(c.labelIDs))
+		for name := range c.labelIDs {
+			known = append(known, name)
+		}
+		kept, dropped := FilterKnownLabels(f.Labels, known)
+		WarnDroppedLabels(c.provider, dropped)
+		if len(kept) == 0 {
+			return nil, nil
+		}
+		queries = kept
+	}
+
+	out := []Issue{}
+	seen := make(map[int]bool, len(queries))
+	for _, label := range queries {
+		batch, err := c.listIssuesByLabel(f.State, label)
+		if err != nil {
+			return nil, err
+		}
+		for _, iss := range batch {
+			if seen[iss.Number] {
+				continue // already unioned in under an earlier label
+			}
+			seen[iss.Number] = true
+			out = append(out, iss)
+		}
+	}
+	return out, nil
+}
+
+// listIssuesByLabel runs one issue query, scoped to a single label (or none
+// when label is empty).
+func (c *Client) listIssuesByLabel(filterState, label string) ([]Issue, error) {
 	if c.isGitLab() {
 		// GitLab spells the open state "opened" and serves issues on a
 		// dedicated endpoint (no PRs mixed in, so no type filter needed).
-		state := f.State
+		state := filterState
 		switch state {
 		case "", "open":
 			state = "opened"
@@ -554,8 +604,8 @@ func (c *Client) ListIssues(f IssueFilter) ([]Issue, error) {
 		q := url.Values{}
 		q.Set("state", state)
 		q.Set("per_page", "50")
-		if len(f.Labels) > 0 {
-			q.Set("labels", strings.Join(f.Labels, ","))
+		if label != "" {
+			q.Set("labels", label)
 		}
 		var raw []gitlabIssueResponse
 		if err := c.do("GET", c.path("/issues")+"?"+q.Encode(), nil, &raw); err != nil {
@@ -567,7 +617,7 @@ func (c *Client) ListIssues(f IssueFilter) ([]Issue, error) {
 		}
 		return out, nil
 	}
-	state := f.State
+	state := filterState
 	if state == "" {
 		state = "open"
 	}
@@ -575,8 +625,8 @@ func (c *Client) ListIssues(f IssueFilter) ([]Issue, error) {
 	q.Set("state", state)
 	q.Set("type", "issues") // exclude PRs
 	q.Set("limit", "50")
-	if len(f.Labels) > 0 {
-		q.Set("labels", strings.Join(f.Labels, ","))
+	if label != "" {
+		q.Set("labels", label)
 	}
 	var raw []issueResponse
 	if err := c.do("GET", c.path("/issues")+"?"+q.Encode(), nil, &raw); err != nil {

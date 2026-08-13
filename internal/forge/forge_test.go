@@ -234,13 +234,21 @@ func TestCloseIssue(t *testing.T) {
 }
 
 func TestListIssuesExcludesPRsAndPassesFilters(t *testing.T) {
-	var gotQuery string
+	var queries []string
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		gotQuery = r.URL.RawQuery
-		_, _ = w.Write([]byte(`[
-			{"number":1,"title":"a bug","state":"open","labels":[{"name":"bug"}]},
-			{"number":2,"title":"a PR","state":"open","pull_request":{"merged":false}}
-		]`))
+		if strings.HasSuffix(r.URL.Path, "/labels") {
+			_, _ = w.Write([]byte(`[{"id":1,"name":"bug"},{"id":2,"name":"enhancement"}]`))
+			return
+		}
+		queries = append(queries, r.URL.RawQuery)
+		if strings.Contains(r.URL.RawQuery, "labels=bug") {
+			_, _ = w.Write([]byte(`[
+				{"number":1,"title":"a bug","state":"open","labels":[{"name":"bug"}]},
+				{"number":2,"title":"a PR","state":"open","pull_request":{"merged":false}}
+			]`))
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
 	})
 	got, err := c.ListIssues(IssueFilter{State: "open", Labels: []string{"bug", "enhancement"}})
 	if err != nil {
@@ -252,10 +260,18 @@ func TestListIssuesExcludesPRsAndPassesFilters(t *testing.T) {
 	if got[0].Labels[0] != "bug" {
 		t.Errorf("labels = %v", got[0].Labels)
 	}
-	for _, want := range []string{"state=open", "type=issues", "labels=bug%2Cenhancement"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
+	// One request per label — a comma-joined `labels=bug,enhancement` is an
+	// intersection on these APIs, which is the c-1 bug.
+	if len(queries) != 2 {
+		t.Fatalf("issued %d issue queries (%v), want one per label", len(queries), queries)
+	}
+	for _, want := range []string{"state=open", "type=issues", "labels=bug"} {
+		if !strings.Contains(queries[0], want) {
+			t.Errorf("query %q missing %q", queries[0], want)
 		}
+	}
+	if strings.Contains(queries[0], "labels=bug%2Cenhancement") {
+		t.Errorf("query %q comma-joins the labels — that ANDs them", queries[0])
 	}
 }
 
@@ -450,6 +466,10 @@ func TestGitLabGetIssue(t *testing.T) {
 func TestGitLabListIssuesMapsOpenedState(t *testing.T) {
 	var gotQuery string
 	c := newGitLabTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/labels") {
+			_, _ = w.Write([]byte(`[{"id":1,"name":"bug"}]`))
+			return
+		}
 		gotQuery = r.URL.RawQuery
 		_, _ = w.Write([]byte(`[{"iid":1,"title":"a","state":"opened","labels":["bug"]}]`))
 	})
@@ -723,4 +743,144 @@ func captureForgeStderr(t *testing.T, fn func()) string {
 	os.Stderr = old
 	out, _ := io.ReadAll(rd)
 	return string(out)
+}
+
+// TestRESTListIssuesOrsLabels pins the fan-out on the shared REST backend.
+// forgejo, gitea and gitlab all treat a comma-joined `labels=` param as an
+// intersection, so the old single request matched only issues carrying every
+// label — c-1's bug in its third form.
+func TestRESTListIssuesOrsLabels(t *testing.T) {
+	t.Run("forgejo unions one request per label", func(t *testing.T) {
+		var queried []string
+		c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = w.Write([]byte(`[{"id":1,"name":"bug"},{"id":2,"name":"enhancement"}]`))
+				return
+			}
+			label := r.URL.Query().Get("labels")
+			queried = append(queried, label)
+			switch label {
+			case "bug":
+				_, _ = w.Write([]byte(`[{"number":1,"title":"a bug","state":"open"}]`))
+			case "enhancement":
+				_, _ = w.Write([]byte(`[{"number":2,"title":"an idea","state":"open"}]`))
+			default:
+				t.Errorf("unexpected labels param %q", label)
+				_, _ = w.Write([]byte(`[]`))
+			}
+		})
+		got, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		if len(queried) != 2 {
+			t.Errorf("issued %d queries (%v), want one per label", len(queried), queried)
+		}
+		if len(got) != 2 || got[0].Number != 1 || got[1].Number != 2 {
+			t.Errorf("union = %+v, want both issues", got)
+		}
+	})
+
+	t.Run("an issue under both labels appears once", func(t *testing.T) {
+		c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = w.Write([]byte(`[{"id":1,"name":"bug"},{"id":2,"name":"enhancement"}]`))
+				return
+			}
+			_, _ = w.Write([]byte(`[{"number":5,"title":"both","state":"open"}]`))
+		})
+		got, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		if len(got) != 1 || got[0].Number != 5 {
+			t.Errorf("union = %+v, want #5 exactly once", got)
+		}
+	})
+
+	// GitLab is asserted against the fake only — this backend is wired but not
+	// dogfooded, so no live-server verification is claimed for it.
+	t.Run("gitlab returns issues carrying either label", func(t *testing.T) {
+		c := newGitLabTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = w.Write([]byte(`[{"id":1,"name":"bug"},{"id":2,"name":"enhancement"}]`))
+				return
+			}
+			switch r.URL.Query().Get("labels") {
+			case "bug":
+				_, _ = w.Write([]byte(`[{"iid":1,"title":"a","state":"opened"}]`))
+			default:
+				_, _ = w.Write([]byte(`[{"iid":2,"title":"b","state":"opened"}]`))
+			}
+		})
+		got, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		if len(got) != 2 {
+			t.Errorf("union = %+v, want an issue for each label", got)
+		}
+	})
+}
+
+// TestRESTListIssuesDropsUnknownLabels pins the same label-index gate the
+// YouTrack/Jira/GitHub backends carry, fed by the existing loadLabels index.
+func TestRESTListIssuesDropsUnknownLabels(t *testing.T) {
+	t.Run("unknown label dropped and named", func(t *testing.T) {
+		var queried []string
+		c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = w.Write([]byte(`[{"id":1,"name":"bug"}]`))
+				return
+			}
+			queried = append(queried, r.URL.Query().Get("labels"))
+			_, _ = w.Write([]byte(`[{"number":1,"title":"a","state":"open"}]`))
+		})
+
+		warn := captureForgeStderr(t, func() {
+			if _, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "typo"}}); err != nil {
+				t.Fatalf("ListIssues: %v", err)
+			}
+		})
+		if len(queried) != 1 || queried[0] != "bug" {
+			t.Errorf("queried %v, want only the known label", queried)
+		}
+		if !strings.Contains(warn, "typo") {
+			t.Errorf("stderr = %q, want the dropped label named", warn)
+		}
+	})
+
+	t.Run("a failing label index refuses the query", func(t *testing.T) {
+		var issueCalls int
+		c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				w.WriteHeader(500)
+				return
+			}
+			issueCalls++
+			_, _ = w.Write([]byte(`[]`))
+		})
+		if _, err := c.ListIssues(IssueFilter{Labels: []string{"bug"}}); err == nil {
+			t.Fatal("a 500 from /labels returned no error")
+		}
+		if issueCalls != 0 {
+			t.Errorf("issued %d issue queries after the index failed, want 0", issueCalls)
+		}
+	})
+
+	t.Run("an empty filter reads no label index at all", func(t *testing.T) {
+		var labelCalls int
+		c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				labelCalls++
+			}
+			_, _ = w.Write([]byte(`[]`))
+		})
+		if _, err := c.ListIssues(IssueFilter{}); err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		if labelCalls != 0 {
+			t.Errorf("unlabelled list read the label index %d times — a blip must not fail `dross watch`", labelCalls)
+		}
+	})
 }
