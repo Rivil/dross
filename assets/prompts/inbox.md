@@ -21,11 +21,11 @@ dross issue pull --mark --json
 
 `--mark` records the pull time. The result is a JSON array of open board issues **not** already linked to a dross phase/quick and **not** previously dismissed. Default filter is none; pass `$ARGUMENTS` through, e.g. `dross issue pull --mark --labels bug,enhancement --json`, when the user wants to scope by label.
 
-**Second source — `someday` deferred ideas.** The board isn't the only intake: ideas punted during `/dross-spec` and never routed anywhere ("someday") are the local half of the backlog. Pull them too:
+**Second source — `someday` deferred ideas.** The board isn't the only intake: items parked and never routed anywhere ("someday") are the local half of the backlog — punted during `/dross-spec`, filed mid-flight with `dross deferred add`, or routed in from a survivor drain. Pull them too:
 ```
 dross deferred list --someday --json
 ```
-Each entry carries its originating `source` phase and `index` — the handle you'll pass to `dross deferred route` when triaging it. Treat them as a second batch of inbound items alongside the board issues.
+Each entry carries its `source` and `index` — the handle you'll pass to `dross deferred route` when triaging it. `source` is usually the originating phase slug, but not always: `_project` is the project-level store, where items filed with no usable phase home land. Treat them as a second batch of inbound items alongside the board issues.
 
 If **both** sources are empty: print `Inbox clear — no new board issues or deferred ideas.` and stop.
 
