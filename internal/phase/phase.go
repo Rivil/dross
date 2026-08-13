@@ -246,6 +246,14 @@ type Decision struct {
 }
 
 type Deferred struct {
+	// ID is a stable internal identity for the item, assigned when it is filed
+	// (or backfilled on first board sync). It keys the item's issue-board
+	// backlog entry so a board link survives its neighbours being removed —
+	// positional keys re-point at whatever slid into the index. It is
+	// deliberately not an addressing handle: every CLI verb still addresses an
+	// item by `<source> <idx>` (the locked deferred_identity decision).
+	// omitempty so specs written before ids existed stay byte-clean.
+	ID   string `toml:"id,omitempty" json:"id,omitempty"`
 	Text string `toml:"text" json:"text"`
 	Why  string `toml:"why,omitempty" json:"why,omitempty"`
 	// Target routes the deferred item to a destination: a phase slug it should

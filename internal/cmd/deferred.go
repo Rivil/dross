@@ -17,8 +17,14 @@ import (
 // originating phase (Source) and the position within that phase's [[deferred]]
 // array (Index) — the stable handle `dross deferred route` addresses it by.
 type deferredEntry struct {
-	Source    string `json:"source"`
-	Index     int    `json:"index"`
+	Source string `json:"source"`
+	Index  int    `json:"index"`
+	// ID carries the item's stable internal identity (phase.Deferred.ID) for
+	// in-process consumers — syncBacklog keys its board entry on it. It is
+	// json:"-" on purpose: the locked deferred_identity decision keeps the id
+	// out of every user-facing surface, so `deferred list --json` (which
+	// prompts consume) shows only the `<source> <idx>` handle.
+	ID        string `json:"-"`
 	Text      string `json:"text"`
 	Why       string `json:"why,omitempty"`
 	Target    string `json:"target,omitempty"`
@@ -39,8 +45,9 @@ func Deferred() *cobra.Command {
 	return c
 }
 
-// collectDeferred flattens every .dross/phases/*/spec.toml [[deferred]] entry,
-// tagging each with its source phase and per-phase index.
+// collectDeferred flattens every .dross/phases/*/spec.toml [[deferred]] entry
+// plus the project-level store, tagging each with its source and per-source
+// index.
 func collectDeferred(root string) ([]deferredEntry, error) {
 	ids, err := phase.List(root)
 	if err != nil {
@@ -48,6 +55,12 @@ func collectDeferred(root string) ([]deferredEntry, error) {
 	}
 	entries := []deferredEntry{}
 	for _, id := range ids {
+		// A phases/_project directory would collide with the reserved store
+		// slug, making `_project 0` ambiguous between two sources. Skip it here
+		// and report it as a validation problem instead (validate.go).
+		if id == projectStoreSlug {
+			continue
+		}
 		specPath := filepath.Join(phase.Dir(root, id), "spec.toml")
 		if _, err := os.Stat(specPath); err != nil {
 			continue // no spec yet
@@ -56,19 +69,32 @@ func collectDeferred(root string) ([]deferredEntry, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", specPath, err)
 		}
-		for i, d := range spec.Deferred {
-			entries = append(entries, deferredEntry{
-				Source:    id,
-				Index:     i,
-				Text:      d.Text,
-				Why:       d.Why,
-				Target:    d.Target,
-				Dismissed: d.Dismissed,
-				Survivor:  d.Survivor,
-			})
-		}
+		entries = append(entries, flattenDeferred(id, spec.Deferred)...)
 	}
+	store, err := loadDeferredStore(root)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", deferredStorePath(root), err)
+	}
+	entries = append(entries, flattenDeferred(projectStoreSlug, store.Deferred)...)
 	return entries, nil
+}
+
+// flattenDeferred tags one source's [[deferred]] array with its provenance.
+func flattenDeferred(source string, items []phase.Deferred) []deferredEntry {
+	out := make([]deferredEntry, 0, len(items))
+	for i, d := range items {
+		out = append(out, deferredEntry{
+			Source:    source,
+			Index:     i,
+			ID:        d.ID,
+			Text:      d.Text,
+			Why:       d.Why,
+			Target:    d.Target,
+			Dismissed: d.Dismissed,
+			Survivor:  d.Survivor,
+		})
+	}
+	return out
 }
 
 func deferredList() *cobra.Command {
