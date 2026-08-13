@@ -660,3 +660,67 @@ func TestEnsureMilestoneEntityNormalisesMode(t *testing.T) {
 		t.Error("youtrack must reject an unknown mode")
 	}
 }
+
+// TestFilterKnownLabels pins the partition itself. Returning everything
+// reintroduces the unknown-label failure; returning nothing silently drops a
+// working filter — both halves have to be exact.
+func TestFilterKnownLabels(t *testing.T) {
+	cases := []struct {
+		name               string
+		requested, known   []string
+		wantKept, wantDrop []string
+	}{
+		{"one known, one unknown", []string{"bug", "typo"}, []string{"bug"}, []string{"bug"}, []string{"typo"}},
+		{"all known", []string{"bug", "dross"}, []string{"dross", "bug"}, []string{"bug", "dross"}, nil},
+		{"none known", []string{"typo"}, []string{"bug"}, nil, []string{"typo"}},
+		{"empty index drops everything", []string{"bug"}, nil, nil, []string{"bug"}},
+		{"no request keeps nothing", nil, []string{"bug"}, nil, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kept, dropped := FilterKnownLabels(tc.requested, tc.known)
+			if strings.Join(kept, ",") != strings.Join(tc.wantKept, ",") {
+				t.Errorf("kept = %v, want %v", kept, tc.wantKept)
+			}
+			if strings.Join(dropped, ",") != strings.Join(tc.wantDrop, ",") {
+				t.Errorf("dropped = %v, want %v", dropped, tc.wantDrop)
+			}
+		})
+	}
+}
+
+// TestWarnDroppedLabelsNamesThem pins that the drop is audible. A silent drop
+// reads as "nothing matched" — the same zero-versus-failure confusion c-2
+// exists to kill.
+func TestWarnDroppedLabelsNamesThem(t *testing.T) {
+	t.Run("names each dropped label", func(t *testing.T) {
+		warn := captureForgeStderr(t, func() { WarnDroppedLabels("youtrack", []string{"typo", "gone"}) })
+		for _, want := range []string{"typo", "gone"} {
+			if !strings.Contains(warn, want) {
+				t.Errorf("stderr = %q, want it to name %q", warn, want)
+			}
+		}
+	})
+
+	t.Run("silent when nothing was dropped", func(t *testing.T) {
+		if warn := captureForgeStderr(t, func() { WarnDroppedLabels("youtrack", nil) }); warn != "" {
+			t.Errorf("stderr = %q, want silence", warn)
+		}
+	})
+}
+
+// captureForgeStderr runs fn with os.Stderr redirected and returns what it wrote.
+func captureForgeStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stderr
+	rd, wr, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stderr = wr
+	fn()
+	_ = wr.Close()
+	os.Stderr = old
+	out, _ := io.ReadAll(rd)
+	return string(out)
+}

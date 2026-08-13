@@ -221,6 +221,40 @@ type LabelSpec struct {
 	Description string
 }
 
+// FilterKnownLabels splits `requested` against the tracker's `known` label
+// index, preserving request order in both halves.
+//
+// A label the tracker has never heard of cannot match anything, and on some
+// providers an unknown name makes the whole query error. Dropping it lets a
+// partly-stale filter still do useful work — but the caller must name the
+// dropped labels (see WarnDroppedLabels), because a silent drop reads as
+// "nothing matched", which is the zero-versus-failure confusion c-2 exists to
+// kill.
+func FilterKnownLabels(requested, known []string) (kept, dropped []string) {
+	index := make(map[string]bool, len(known))
+	for _, k := range known {
+		index[k] = true
+	}
+	for _, r := range requested {
+		if index[r] {
+			kept = append(kept, r)
+			continue
+		}
+		dropped = append(dropped, r)
+	}
+	return kept, dropped
+}
+
+// WarnDroppedLabels names labels dropped by FilterKnownLabels on stderr. A
+// no-op when nothing was dropped.
+func WarnDroppedLabels(provider string, dropped []string) {
+	if len(dropped) == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "warning: %s does not know the label(s) %s — dropped from the query\n",
+		provider, strings.Join(dropped, ", "))
+}
+
 // --- milestones ---
 
 // EnsureMilestone returns the id of the milestone titled `title`, creating it

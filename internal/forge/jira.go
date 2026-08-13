@@ -179,9 +179,32 @@ func (c *JiraClient) CloseIssue(key string) error {
 }
 
 // ListIssues returns issues in the configured project matching the filter, via
-// a JQL search. State maps to statusCategory clauses and each label becomes a
-// `labels = ` clause.
+// a JQL search. State maps to statusCategory clauses and the labels fold into
+// one OR'd `labels IN (...)` clause.
+//
+// Labels the tracker does not know are dropped (and named on stderr) before the
+// JQL is built; if every requested label is unknown the call returns nothing
+// rather than degrading into an unfiltered whole-project query.
 func (c *JiraClient) ListIssues(f IssueFilter) ([]Issue, error) {
+	if len(f.Labels) > 0 {
+		known, err := c.listLabelNames()
+		if err != nil {
+			return nil, err
+		}
+		// Jira stores labels with spaces collapsed to underscores (see
+		// CreateIssue), so compare in that form or every spaced label reads
+		// as unknown.
+		requested := make([]string, len(f.Labels))
+		for i, l := range f.Labels {
+			requested[i] = strings.ReplaceAll(l, " ", "_")
+		}
+		kept, dropped := FilterKnownLabels(requested, known)
+		WarnDroppedLabels("jira", dropped)
+		if len(kept) == 0 {
+			return nil, nil
+		}
+		f.Labels = kept
+	}
 	q := url.Values{}
 	q.Set("jql", c.buildJQL(f))
 	q.Set("fields", "summary,description,status,labels")
@@ -199,6 +222,19 @@ func (c *JiraClient) ListIssues(f IssueFilter) ([]Issue, error) {
 		out = append(out, *raw.Issues[i].toIssue())
 	}
 	return out, nil
+}
+
+// listLabelNames reads Jira's label index — the label vocabulary a JQL query
+// may name. A failure refuses the query rather than degrading it: an
+// unfiltered search on a shared project is far worse than an error.
+func (c *JiraClient) listLabelNames() ([]string, error) {
+	var page struct {
+		Values []string `json:"values"`
+	}
+	if err := c.do("GET", c.endpoint("/label")+"?maxResults=1000", nil, &page); err != nil {
+		return nil, fmt.Errorf("list labels: %w", err)
+	}
+	return page.Values, nil
 }
 
 // buildJQL assembles a JQL query scoped to the project, folding in the

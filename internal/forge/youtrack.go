@@ -344,9 +344,25 @@ func (c *YouTrackClient) SetState(key, status string, override map[string]string
 }
 
 // ListIssues returns issues in the configured project matching the filter.
-// State maps to YouTrack's resolved/unresolved query clauses and each label
-// becomes a `tag:` clause.
+// State maps to YouTrack's resolved/unresolved query clauses and the labels
+// fold into one OR'd `tag:` clause.
+//
+// Labels the tracker does not know are dropped (and named on stderr) before the
+// query is built; if every requested label is unknown the call returns nothing
+// rather than degrading into an unfiltered whole-board query.
 func (c *YouTrackClient) ListIssues(f IssueFilter) ([]Issue, error) {
+	if len(f.Labels) > 0 {
+		known, err := c.listTagNames()
+		if err != nil {
+			return nil, err
+		}
+		kept, dropped := FilterKnownLabels(f.Labels, known)
+		WarnDroppedLabels("youtrack", dropped)
+		if len(kept) == 0 {
+			return nil, nil
+		}
+		f.Labels = kept
+	}
 	q := url.Values{}
 	q.Set("query", c.buildQuery(f))
 	q.Set("fields", ytIssueFields)
@@ -359,6 +375,23 @@ func (c *YouTrackClient) ListIssues(f IssueFilter) ([]Issue, error) {
 		out = append(out, *raw[i].toIssue())
 	}
 	return out, nil
+}
+
+// listTagNames reads YouTrack's tag index — the label vocabulary a query may
+// name. A failure refuses the query rather than degrading it: an unfiltered
+// list on a shared board is far worse than an error.
+func (c *YouTrackClient) listTagNames() ([]string, error) {
+	var tags []struct {
+		Name string `json:"name"`
+	}
+	if err := c.do("GET", c.endpoint("/issueTags")+"?fields=name&$top=1000", nil, &tags); err != nil {
+		return nil, fmt.Errorf("list tags: %w", err)
+	}
+	names := make([]string, 0, len(tags))
+	for _, t := range tags {
+		names = append(names, t.Name)
+	}
+	return names, nil
 }
 
 // buildQuery assembles a YouTrack search query scoped to the project, with the

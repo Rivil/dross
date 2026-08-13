@@ -637,3 +637,102 @@ func TestYouTrackBuildQueryOrsLabels(t *testing.T) {
 		}
 	})
 }
+
+// TestYouTrackListIssuesDropsUnknownLabels covers the label-index gate. An
+// unknown tag cannot match anything, so it is dropped and named — but the query
+// must never degrade into an unfiltered whole-board list, and an unreadable
+// index must refuse rather than widen.
+func TestYouTrackListIssuesDropsUnknownLabels(t *testing.T) {
+	t.Run("unknown label dropped and named, known one still queried", func(t *testing.T) {
+		var gotQuery string
+		var issueCalls int
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/issueTags") {
+				_, _ = io.WriteString(w, `[{"name":"bug"}]`)
+				return
+			}
+			issueCalls++
+			gotQuery = r.URL.Query().Get("query")
+			_, _ = io.WriteString(w, `[{"idReadable":"PROJ-1","summary":"a"}]`)
+		})
+
+		warn := captureForgeStderr(t, func() {
+			if _, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "typo"}}); err != nil {
+				t.Fatalf("ListIssues: %v", err)
+			}
+		})
+
+		if issueCalls != 1 {
+			t.Fatalf("issued %d issue queries, want 1", issueCalls)
+		}
+		if !strings.Contains(gotQuery, "bug") {
+			t.Errorf("query %q lost the known label", gotQuery)
+		}
+		if strings.Contains(gotQuery, "typo") {
+			t.Errorf("query %q carried the unknown label to the wire", gotQuery)
+		}
+		if !strings.Contains(warn, "typo") {
+			t.Errorf("stderr = %q, want the dropped label named", warn)
+		}
+	})
+
+	t.Run("every label unknown returns nothing, never the whole board", func(t *testing.T) {
+		var issueCalls int
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/issueTags") {
+				_, _ = io.WriteString(w, `[{"name":"bug"}]`)
+				return
+			}
+			issueCalls++
+			_, _ = io.WriteString(w, `[{"idReadable":"PROJ-1","summary":"everything"}]`)
+		})
+
+		var issues []Issue
+		_ = captureForgeStderr(t, func() {
+			var err error
+			if issues, err = c.ListIssues(IssueFilter{Labels: []string{"typo"}}); err != nil {
+				t.Fatalf("ListIssues: %v", err)
+			}
+		})
+		if len(issues) != 0 {
+			t.Errorf("returned %+v, want zero issues", issues)
+		}
+		if issueCalls != 0 {
+			t.Errorf("issued %d unfiltered issue queries, want 0", issueCalls)
+		}
+	})
+
+	t.Run("a failing tag index refuses the query", func(t *testing.T) {
+		var issueCalls int
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/issueTags") {
+				w.WriteHeader(500)
+				return
+			}
+			issueCalls++
+			_, _ = io.WriteString(w, `[]`)
+		})
+		if _, err := c.ListIssues(IssueFilter{Labels: []string{"bug"}}); err == nil {
+			t.Fatal("a 500 from the tag index returned no error")
+		}
+		if issueCalls != 0 {
+			t.Errorf("issued %d issue queries after the index failed, want 0", issueCalls)
+		}
+	})
+
+	t.Run("an empty filter reads no tag index at all", func(t *testing.T) {
+		var tagCalls int
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/issueTags") {
+				tagCalls++
+			}
+			_, _ = io.WriteString(w, `[]`)
+		})
+		if _, err := c.ListIssues(IssueFilter{}); err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		if tagCalls != 0 {
+			t.Errorf("unlabelled list read the tag index %d times — a blip must not fail `dross watch`", tagCalls)
+		}
+	})
+}

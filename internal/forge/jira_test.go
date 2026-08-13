@@ -189,6 +189,10 @@ func TestJiraCloseIssueTransitions(t *testing.T) {
 func TestJiraListIssuesJQL(t *testing.T) {
 	var gotPath, gotJQL, gotFields string
 	c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/label") {
+			_, _ = io.WriteString(w, `{"values":["dross"]}`)
+			return
+		}
 		gotPath = r.URL.Path
 		gotJQL = r.URL.Query().Get("jql")
 		gotFields = r.URL.Query().Get("fields")
@@ -558,4 +562,98 @@ func TestJiraErrorSnippetTruncatesAndHints(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestJiraListIssuesDropsUnknownLabels covers the label-index gate — same
+// contract as YouTrack's, against Jira's /label index.
+func TestJiraListIssuesDropsUnknownLabels(t *testing.T) {
+	t.Run("unknown label dropped and named, known one still queried", func(t *testing.T) {
+		var gotJQL string
+		var searchCalls int
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/label") {
+				_, _ = io.WriteString(w, `{"values":["bug"]}`)
+				return
+			}
+			searchCalls++
+			gotJQL = r.URL.Query().Get("jql")
+			_, _ = io.WriteString(w, `{"issues":[{"key":"PROJ-1","fields":{"summary":"a"}}]}`)
+		})
+
+		warn := captureForgeStderr(t, func() {
+			if _, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "typo"}}); err != nil {
+				t.Fatalf("ListIssues: %v", err)
+			}
+		})
+
+		if searchCalls != 1 {
+			t.Fatalf("issued %d searches, want 1", searchCalls)
+		}
+		if !strings.Contains(gotJQL, "bug") {
+			t.Errorf("JQL %q lost the known label", gotJQL)
+		}
+		if strings.Contains(gotJQL, "typo") {
+			t.Errorf("JQL %q carried the unknown label to the wire", gotJQL)
+		}
+		if !strings.Contains(warn, "typo") {
+			t.Errorf("stderr = %q, want the dropped label named", warn)
+		}
+	})
+
+	t.Run("every label unknown returns nothing, never the whole project", func(t *testing.T) {
+		var searchCalls int
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/label") {
+				_, _ = io.WriteString(w, `{"values":["bug"]}`)
+				return
+			}
+			searchCalls++
+			_, _ = io.WriteString(w, `{"issues":[{"key":"PROJ-1","fields":{"summary":"everything"}}]}`)
+		})
+
+		var issues []Issue
+		_ = captureForgeStderr(t, func() {
+			var err error
+			if issues, err = c.ListIssues(IssueFilter{Labels: []string{"typo"}}); err != nil {
+				t.Fatalf("ListIssues: %v", err)
+			}
+		})
+		if len(issues) != 0 || searchCalls != 0 {
+			t.Errorf("returned %+v via %d searches, want zero of each", issues, searchCalls)
+		}
+	})
+
+	t.Run("a failing label index refuses the query", func(t *testing.T) {
+		var searchCalls int
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/label") {
+				w.WriteHeader(500)
+				return
+			}
+			searchCalls++
+			_, _ = io.WriteString(w, `{"issues":[]}`)
+		})
+		if _, err := c.ListIssues(IssueFilter{Labels: []string{"bug"}}); err == nil {
+			t.Fatal("a 500 from the label index returned no error")
+		}
+		if searchCalls != 0 {
+			t.Errorf("issued %d searches after the index failed, want 0", searchCalls)
+		}
+	})
+
+	t.Run("an empty filter reads no label index at all", func(t *testing.T) {
+		var labelCalls int
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/label") {
+				labelCalls++
+			}
+			_, _ = io.WriteString(w, `{"issues":[]}`)
+		})
+		if _, err := c.ListIssues(IssueFilter{}); err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		if labelCalls != 0 {
+			t.Errorf("unlabelled list read the label index %d times — a blip must not fail `dross watch`", labelCalls)
+		}
+	})
 }

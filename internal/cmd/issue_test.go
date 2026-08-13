@@ -442,6 +442,11 @@ success_criteria = ["ships"]
 func TestIssuePullYouTrackFiltersLinkedAndDismissed(t *testing.T) {
 	var gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The tag index the label filter is checked against before querying.
+		if strings.HasSuffix(r.URL.Path, "/issueTags") {
+			_, _ = io.WriteString(w, `[{"name":"bug"}]`)
+			return
+		}
 		gotQuery = r.URL.Query().Get("query")
 		// PROJ-12 is linked (a phase), PROJ-20 dismissed, PROJ-21 is new.
 		_, _ = io.WriteString(w, `[

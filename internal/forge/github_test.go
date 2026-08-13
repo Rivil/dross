@@ -220,6 +220,10 @@ func TestGitHubGetUpdateCloseList(t *testing.T) {
 	t.Run("list excludes PRs and passes filters", func(t *testing.T) {
 		var gotState, gotLabels string
 		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = io.WriteString(w, `[{"name":"dross"}]`)
+				return
+			}
 			gotState = r.URL.Query().Get("state")
 			gotLabels = r.URL.Query().Get("labels")
 			_, _ = io.WriteString(w, `[{"number":1,"title":"issue"},{"number":2,"title":"a pr","pull_request":{"url":"x"}}]`)
@@ -245,6 +249,10 @@ func TestGitHubListIssuesOrsLabels(t *testing.T) {
 	t.Run("one request per label, results unioned", func(t *testing.T) {
 		var gotLabels []string
 		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = io.WriteString(w, `[{"name":"bug"},{"name":"enhancement"}]`)
+				return
+			}
 			l := r.URL.Query().Get("labels")
 			gotLabels = append(gotLabels, l)
 			switch l {
@@ -273,7 +281,11 @@ func TestGitHubListIssuesOrsLabels(t *testing.T) {
 	})
 
 	t.Run("an issue under both labels appears once", func(t *testing.T) {
-		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, _ *http.Request) {
+		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = io.WriteString(w, `[{"name":"bug"},{"name":"enhancement"}]`)
+				return
+			}
 			_, _ = io.WriteString(w, `[{"number":5,"title":"both"}]`)
 		})
 		issues, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "enhancement"}})
@@ -308,6 +320,10 @@ func TestGitHubListIssuesOrsLabels(t *testing.T) {
 
 	t.Run("a PR in one label's response stays out of the union", func(t *testing.T) {
 		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = io.WriteString(w, `[{"name":"bug"},{"name":"enhancement"}]`)
+				return
+			}
 			if r.URL.Query().Get("labels") == "bug" {
 				_, _ = io.WriteString(w, `[{"number":1,"title":"issue"},{"number":9,"title":"a pr","pull_request":{"url":"x"}}]`)
 				return
@@ -448,4 +464,90 @@ func TestGitHubErrorSnippetTruncatesAndHints(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGitHubListIssuesDropsUnknownLabels covers the label-index gate — same
+// contract as YouTrack's and Jira's, against the repo's /labels index.
+func TestGitHubListIssuesDropsUnknownLabels(t *testing.T) {
+	t.Run("unknown label dropped and named, known one still queried", func(t *testing.T) {
+		var queried []string
+		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = io.WriteString(w, `[{"name":"bug"}]`)
+				return
+			}
+			queried = append(queried, r.URL.Query().Get("labels"))
+			_, _ = io.WriteString(w, `[{"number":1,"title":"a"}]`)
+		})
+
+		warn := captureForgeStderr(t, func() {
+			if _, err := c.ListIssues(IssueFilter{Labels: []string{"bug", "typo"}}); err != nil {
+				t.Fatalf("ListIssues: %v", err)
+			}
+		})
+
+		if len(queried) != 1 || queried[0] != "bug" {
+			t.Errorf("queried %v, want exactly the known label", queried)
+		}
+		if !strings.Contains(warn, "typo") {
+			t.Errorf("stderr = %q, want the dropped label named", warn)
+		}
+	})
+
+	t.Run("every label unknown returns nothing, never the whole repo", func(t *testing.T) {
+		var issueCalls int
+		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = io.WriteString(w, `[{"name":"bug"}]`)
+				return
+			}
+			issueCalls++
+			_, _ = io.WriteString(w, `[{"number":1,"title":"everything"}]`)
+		})
+
+		var issues []Issue
+		_ = captureForgeStderr(t, func() {
+			var err error
+			if issues, err = c.ListIssues(IssueFilter{Labels: []string{"typo"}}); err != nil {
+				t.Fatalf("ListIssues: %v", err)
+			}
+		})
+		if len(issues) != 0 || issueCalls != 0 {
+			t.Errorf("returned %+v via %d queries, want zero of each", issues, issueCalls)
+		}
+	})
+
+	t.Run("a failing label index refuses the query", func(t *testing.T) {
+		var issueCalls int
+		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				w.WriteHeader(500)
+				return
+			}
+			issueCalls++
+			_, _ = io.WriteString(w, `[]`)
+		})
+		if _, err := c.ListIssues(IssueFilter{Labels: []string{"bug"}}); err == nil {
+			t.Fatal("a 500 from the label index returned no error")
+		}
+		if issueCalls != 0 {
+			t.Errorf("issued %d issue queries after the index failed, want 0", issueCalls)
+		}
+	})
+
+	t.Run("an empty filter reads no label index at all", func(t *testing.T) {
+		var labelCalls int
+		c, _ := newTestGitHubClient(t, "", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				labelCalls++
+			}
+			_, _ = io.WriteString(w, `[]`)
+		})
+		if _, err := c.ListIssues(IssueFilter{}); err != nil {
+			t.Fatalf("ListIssues: %v", err)
+		}
+		if labelCalls != 0 {
+			t.Errorf("unlabelled list read the label index %d times — a blip must not fail `dross watch`", labelCalls)
+		}
+	})
 }

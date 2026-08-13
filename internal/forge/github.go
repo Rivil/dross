@@ -165,6 +165,23 @@ func (c *GitHubClient) CloseIssue(key string) error {
 // ListIssues returns issues matching the filter. Pull requests are excluded
 // (GitHub's issues endpoint returns both, and each PR carries a pull_request
 // object) so inbound triage never surfaces PRs as new work.
+// listLabelNames reads the repo's label index — the label vocabulary a query
+// may name. A failure refuses the query rather than degrading it: an
+// unfiltered list on a busy repo is far worse than an error.
+func (c *GitHubClient) listLabelNames() ([]string, error) {
+	var labels []struct {
+		Name string `json:"name"`
+	}
+	if err := c.do("GET", c.repoPath("/labels")+"?per_page=100", nil, &labels); err != nil {
+		return nil, fmt.Errorf("list labels: %w", err)
+	}
+	names := make([]string, 0, len(labels))
+	for _, l := range labels {
+		names = append(names, l.Name)
+	}
+	return names, nil
+}
+
 // Labels are OR'd: GitHub's `labels=` param intersects the names it is given,
 // so several labels in one request match only issues carrying all of them. One
 // request per label, unioned by issue number, is the only way to express "either
@@ -177,7 +194,18 @@ func (c *GitHubClient) ListIssues(f IssueFilter) ([]Issue, error) {
 	// One pass with no label param when unfiltered; otherwise one per label.
 	queries := []string{""}
 	if len(f.Labels) > 0 {
-		queries = f.Labels
+		known, err := c.listLabelNames()
+		if err != nil {
+			return nil, err
+		}
+		kept, dropped := FilterKnownLabels(f.Labels, known)
+		WarnDroppedLabels("github", dropped)
+		if len(kept) == 0 {
+			// Every requested label is unknown. Falling through to the
+			// unlabelled query would return the whole repo instead of nothing.
+			return nil, nil
+		}
+		queries = kept
 	}
 
 	out := make([]Issue, 0, len(queries))
