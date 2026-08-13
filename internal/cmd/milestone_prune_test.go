@@ -36,6 +36,17 @@ func seedCompleteMilestone(t *testing.T, dir, version string) {
 	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record "+version+" complete")
 }
 
+// seedActiveMilestone is seedCompleteMilestone's twin, differing in exactly one
+// field. Keeping the two seeders side by side is the point: any test can be
+// flipped between them to ask whether a behaviour is gated on status or on git
+// ancestry alone.
+func seedActiveMilestone(t *testing.T, dir, version string) {
+	t.Helper()
+	writeMilestoneToml(t, filepath.Join(dir, ".dross"), version, "active", "")
+	mustGit(t, dir, "add", ".dross")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record "+version+" active")
+}
+
 func branchExists(t *testing.T, dir, branch string) bool {
 	t.Helper()
 	return gitAllowFail(dir, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
@@ -182,5 +193,40 @@ func TestPruneRefusesDirtyTree(t *testing.T) {
 	}
 	if !branchExists(t, dir, "milestone/v1.0") {
 		t.Error("a refused prune must delete nothing")
+	}
+}
+
+// TestPruneLeavesAnActiveMilestoneAlone is the destructive consumer's own end of
+// the c-5 gate. The detector and doctor's rendered section both prove they stop
+// reporting an active milestone's branch, but neither of them deletes anything —
+// prune does. This fixture is byte-for-byte TestPruneDeletesOnlyStaleBranches's
+// stale half with one field changed, so git ancestry says "squash-merged, safe
+// to delete" just as loudly as it does there. Only [milestone].status stands
+// between an in-flight milestone and losing its branch on both sides.
+func TestPruneLeavesAnActiveMilestoneAlone(t *testing.T) {
+	dir := pruneFixture(t)
+
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
+	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
+	mustGit(t, dir, "push", "-q", "origin", "milestone/v1.0")
+	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	pushMain(t, dir)
+	seedActiveMilestone(t, dir, "v1.0")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Milestone(), "prune"); err != nil {
+		t.Fatalf("prune with nothing prunable should exit 0: %v", err)
+	}
+
+	if !branchExists(t, dir, "milestone/v1.0") {
+		t.Error("prune deleted an ACTIVE milestone's branch locally — the status gate is gone")
+	}
+	if !remoteHas(t, dir, "milestone/v1.0") {
+		t.Error("prune deleted an ACTIVE milestone's branch on origin — the status gate is gone")
+	}
+	// Exit 0 and an intact branch are also what a prune that crashed early would
+	// produce, so pin that it ran the whole way and found nothing.
+	if !strings.Contains(out, "nothing to prune") {
+		t.Errorf("prune should report a clean no-op, not silence:\n%s", out)
 	}
 }
