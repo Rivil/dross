@@ -85,7 +85,7 @@ var (
 // an explicit fields list YouTrack returns only the database id, so we always
 // ask for the readable id, summary/description, tags, and custom fields (State
 // rides in there).
-const ytIssueFields = "idReadable,summary,description,resolved,tags(name),customFields(name,value(name))"
+const ytIssueFields = "idReadable,summary,description,resolved,tags(name),customFields(name,value(name,isResolved))"
 
 // NewYouTrack validates config, resolves the permanent token from the
 // environment, and returns a ready client. It errors early on the same shape
@@ -679,7 +679,12 @@ type youtrackIssue struct {
 	Summary     string `json:"summary"`
 	Description string `json:"description"`
 	// Resolved is a millisecond timestamp when the issue is resolved and null
-	// otherwise — YouTrack's own verdict, not a state name we chose.
+	// otherwise. It is *not* sufficient on its own: YouTrack only stamps it
+	// from a workflow rule, so a project without that rule attached leaves it
+	// null forever even on issues sitting in a resolved state. The per-state
+	// isResolved flag below is the signal that is always populated; this one
+	// stays because a project that renamed the State field would otherwise
+	// lose its resolution verdict entirely.
 	Resolved *int64 `json:"resolved"`
 	Tags     []struct {
 		Name string `json:"name"`
@@ -710,10 +715,19 @@ func (r *youtrackIssue) toIssue(stateField string) *Issue {
 		}
 		var v struct {
 			Name string `json:"name"`
+			// IsResolved is YouTrack's per-state resolution flag, carried on
+			// the StateBundleElement itself. It is the only resolution signal
+			// present on every instance — see youtrackIssue.Resolved.
+			IsResolved bool `json:"isResolved"`
 		}
 		// Skip array/scalar shapes that don't carry a single named value.
 		if json.Unmarshal(cf.Value, &v) == nil {
 			iss.State = v.Name
+			// OR rather than replace: either signal saying resolved is
+			// enough. A renamed State field costs us this arm, a project
+			// without the stamping workflow costs us the timestamp, and
+			// neither absence may turn a resolved issue into an open one.
+			iss.Resolved = iss.Resolved || v.IsResolved
 		}
 	}
 	return iss

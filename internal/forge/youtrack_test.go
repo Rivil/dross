@@ -1213,6 +1213,14 @@ func TestYouTrackGetIssueReadsResolved(t *testing.T) {
 		{"a resolved timestamp", `{"idReadable":"PROJ-7","resolved":1700000000000}`, true},
 		{"null", `{"idReadable":"PROJ-7","resolved":null}`, false},
 		{"absent", `{"idReadable":"PROJ-7"}`, false},
+		// The live shape on an instance with no resolution-stamping workflow:
+		// the timestamp never fills in, so the State's own isResolved flag is
+		// the only thing that can answer "did the close take?".
+		{"null timestamp but a resolved state", `{"idReadable":"PROJ-7","resolved":null,"customFields":[{"name":"State","value":{"name":"Verified","isResolved":true}}]}`, true},
+		{"null timestamp and an unresolved state", `{"idReadable":"PROJ-7","resolved":null,"customFields":[{"name":"State","value":{"name":"In Progress","isResolved":false}}]}`, false},
+		// The timestamp arm must survive: a project that renamed the State
+		// field has no isResolved to read, and must not lose its verdict.
+		{"a resolved timestamp with the state field renamed away", `{"idReadable":"PROJ-7","resolved":1700000000000,"customFields":[{"name":"Статус","value":{"name":"Done","isResolved":true}}]}`, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1267,6 +1275,25 @@ func TestYouTrackCloseIssueResolvesForReal(t *testing.T) {
 		}
 		if readBacks != 1 {
 			t.Errorf("read the issue back %d times, want exactly 1", readBacks)
+		}
+	})
+
+	// The close gate shipped reading only the `resolved` timestamp, which
+	// YouTrack fills in from a workflow rule rather than from the state
+	// itself. On an instance without that rule the write lands, the issue
+	// really is resolved, and the gate reported failure anyway — a false
+	// negative on a correct close, found the first time ship ran against a
+	// live board.
+	t.Run("a resolved state with no stamped timestamp is a successful close", func(t *testing.T) {
+		c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "GET" {
+				_, _ = io.WriteString(w, `{"idReadable":"PROJ-7","resolved":null,"customFields":[{"name":"State","value":{"name":"Verified","isResolved":true}}]}`)
+				return
+			}
+			_, _ = io.WriteString(w, `{}`)
+		})
+		if err := c.CloseIssueAs("PROJ-7", "complete", nil); err != nil {
+			t.Fatalf("CloseIssueAs on an issue whose State reads resolved: %v", err)
 		}
 	})
 
