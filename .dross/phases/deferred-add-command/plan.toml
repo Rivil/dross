@@ -1,4 +1,4 @@
-task_seq = 7
+task_seq = 9
 
 [phase]
   id = "deferred-add-command"
@@ -7,15 +7,15 @@ task_seq = 7
   id = "t-1"
   wave = 1
   title = "Add deferred id + reserved project store"
-  files = ["internal/phase/phase.go", "internal/cmd/deferred_store.go", "internal/cmd/deferred_store_test.go", "internal/cmd/deferred.go", "internal/cmd/validate.go"]
+  files = ["internal/phase/phase.go", "internal/cmd/deferred_store.go", "internal/cmd/deferred_store_test.go", "internal/cmd/deferred.go"]
   description = """
-Add `ID string` (toml:"id,omitempty", json:"-") to phase.Deferred — internal per the locked
-deferred_identity decision. Reserved source slug `_project` backed by `.dross/deferred.toml` in
-phase.Spec shape so phase.LoadSpec/Save work unchanged, resolved by one `deferredStore(root, source)`
-helper every verb routes its path through. collectDeferred appends store entries as source
-`_project` and skips a `phases/_project` directory; validate reports such a directory as a
-reserved-slug problem and also walks the store for dangling targets; repointDeferredTarget walks the
-store so `phase rename` can't orphan a store entry (D4).
+Add `ID string` (toml:"id,omitempty") to phase.Deferred and `ID string` (json:"-") to
+cmd.deferredEntry — the carrier collectDeferred flattens and syncBacklog consumes, kept internal by
+the json:"-" tag per the locked deferred_identity decision. Reserved source slug `_project` backed by
+`.dross/deferred.toml` in phase.Spec shape so phase.LoadSpec/Save work unchanged, resolved by one
+`deferredStore(root, source)` helper every verb routes its path through. collectDeferred appends
+store entries as source `_project` and skips a `phases/_project` directory. The validate/rename
+plumbing that consumes this lives in t-8.
 """
   covers = ["c-2", "c-4"]
   test_contract = [
@@ -23,33 +23,34 @@ store so `phase rename` can't orphan a store entry (D4).
     "phase.Deferred.ID is absent from the emitted TOML on an entry without one (omitempty), so untouched specs stay byte-clean",
     "`deferredStore(root, \"_project\")` returns `.dross/deferred.toml`; falling through to phase.Dir fails the returned-path assertion on `.dross/phases/_project/spec.toml`",
     "`deferredStore(root, \"nope\")` errors for a slug with no phase dir instead of returning a creatable path",
-    "a hand-made `.dross/phases/_project/spec.toml` fails `dross validate` with a reserved-slug problem AND its items do not appear in `deferred list` — without the skip two sources share the slug and index 0 is ambiguous",
+    "a hand-made `.dross/phases/_project/spec.toml` has its items excluded from `deferred list` — without the skip two sources share the slug and index 0 is ambiguous (the validate half of this guard is t-8's)",
     "`phase.Slugify` can never emit `_project`: if slugify starts keeping leading underscores this test fails before a real phase can shadow the store",
-    "`deferred list --json` unmarshalled into `map[string]any` has no `id` key (locked deferred_identity)",
-    "a bogus target hand-written into `.dross/deferred.toml` makes `dross validate` exit non-zero naming deferred.toml — the hand-edit path is not a dangling-target hole",
-    "`dross phase rename alpha alpha2` repoints a `_project` store entry routed to alpha",
+    "`deferredEntry` carries the id in Go but `deferred list --json` unmarshalled into `map[string]any` has no `id` key — the json:\"-\" tag is what makes this non-trivial, and removing it fails here (locked deferred_identity)",
   ]
   status = "pending"
 
 [[task]]
   id = "t-2"
   wave = 1
-  title = "Share one target validator with route"
-  files = ["internal/cmd/deferred_target.go", "internal/cmd/deferred_target_test.go", "internal/cmd/deferred.go"]
+  title = "Share one target validator with validate"
+  files = ["internal/cmd/deferred_target.go", "internal/cmd/deferred_target_test.go", "internal/cmd/deferred.go", "internal/cmd/validate.go"]
   description = """
-`validDeferredTarget(root, slug)` — accept if a phase directory exists for the slug OR the slug
-appears in the current milestone's phases array; otherwise error naming both remedies. Wired into
-the existing `deferred route --target` ahead of the spec load, so route and add share one rule
-(locked target_validation). Never auto-appends an unknown slug to the roadmap.
+Extract validate.go's validTargets construction (validate.go:73-85 — every phase dir plus every slug
+in EVERY milestone's phases array) into `validDeferredTarget(root, slug)` and have both validate and
+`deferred route --target` call it. One rule, one implementation, per the target_validation decision
+as amended 2026-08-13. An invalid target errors naming both remedies; an unknown slug is never
+auto-appended to the roadmap.
 """
   covers = ["c-7"]
   test_contract = [
-    "`route --target <slug in the current milestone's phases array with no phase dir>` succeeds — deleting the milestone-array branch fails this test",
-    "`route --target <scaffolded phase absent from the milestone array>` is accepted — the arm a milestone-only check would wrongly reject",
-    "`route --target typo-slug` errors and the message contains both the \"scaffold a phase\" and \"add to the current milestone's phases array\" remedies; a bare \"unknown target\" fails the grep",
+    "`route --target <slug in a milestone's phases array with no phase dir>` succeeds — deleting the milestone-array branch fails this test",
+    "`route --target <scaffolded phase absent from every milestone array>` is accepted — the arm a milestone-only check would wrongly reject",
+    "validate and the CLI agree on the same slug: a target accepted by `route` never makes `dross validate` report it dangling, and one rejected by `route` is reported by validate — asserted over a table including `watch-pr-ci-status` (v0.9's array, no phase dir), which the pre-amendment current-milestone rule would have split",
+    "`route --target typo-slug` errors and the message contains both the \"scaffold a phase\" and \"add to a milestone's phases array\" remedies; a bare \"unknown target\" fails the grep",
     "a rejected route leaves the milestone toml byte-identical — the slug is never auto-appended to `phases`",
-    "a rejected route leaves the source spec.toml byte-identical AND makes no board HTTP call: validation precedes both the save and any mirror",
+    "a rejected route leaves the source spec.toml byte-identical: validation precedes the save",
     "`--target _project` is rejected (neither a phase dir nor a roadmap entry) — the store cannot become a routing destination",
+    "validate's existing dangling-target coverage still passes over the extraction, so the refactor is behaviour-preserving on the surface that already had this rule",
   ]
   status = "pending"
 
@@ -61,15 +62,18 @@ the existing `deferred route --target` ahead of the spec load, so route and add 
   description = """
 Replace syncBacklog's positional `someday:<source>#<idx>` key with `someday:id:<id>`, backfilling a
 missing id (crypto/rand hex, collision-checked against existing ids) into the owning spec or store
-before keying, and remapping an existing legacy index-keyed board.json entry onto the new key (D3).
-Extract the create/update loop into `pushBacklogItems(ctx, version, items)` — the single seam t-6
-consumes (D1).
+before keying, and remapping a legacy index-keyed board.json entry onto the new key. board.go gains
+the two accessors that remap needs beyond today's SetBacklog/BacklogID: `BacklogKeys()` to enumerate
+the recorded keys and `DeleteBacklog(key)` to retire a legacy one once re-keyed. Extract the
+create/update loop into `pushBacklogItems(ctx, version, items)` — the single seam t-6 consumes, so
+`deferred add` pushes exactly its own item instead of triggering a whole-milestone sync.
 """
   covers = ["c-8"]
   depends_on = ["t-1"]
   test_contract = [
     "two someday items in one phase, both board-linked: delete index 0 and re-run backlog-sync — the server sees an UpdateIssue for the survivor's OWN issue key and no request whose title is the survivor's text against the deleted item's key (per-issue PATCH bodies inspected). Index-keyed code fails this; it is c-8",
     "board.json holding only the legacy `someday:<phase>#0` key produces zero CreateIssue calls on the next sync — migrated, not orphaned into a duplicate live issue",
+    "the SHIFTED legacy case: a legacy board.json whose recorded index no longer names the same item (an earlier item was deleted before the upgrade run) does NOT adopt that key for the survivor — the migration compares the stored issue's title before adopting and re-creates rather than silently inheriting c-8's own fault permanently",
     "an id-less spec-authored `[[deferred]]` gains an `id` in its spec.toml after one sync, and carries the same id on the second run (no churn, no second issue)",
     "two items backfilled in the same run get different ids — a collision would silently merge two board links",
     "a routed item still gets no board issue from backlog-sync: the routed filter is untouched (board-sync-truth's remit, per this phase's own deferred item)",
@@ -83,10 +87,12 @@ consumes (D1).
   title = "Add dross deferred add with home selection"
   files = ["internal/cmd/deferred_add.go", "internal/cmd/deferred_add_test.go", "internal/cmd/deferred.go", "README.md"]
   description = """
-`dross deferred add "<text>" [--why <w>] [--target <slug>]`. Home per the locked storage_home
-decision: the current phase's spec.toml when current_phase is set, otherwise the `_project` store.
-Assigns a stable id, validates `--target` through t-2's helper BEFORE any write, appends and saves.
-README's deferred row gains `add`.
+`dross deferred add "<text>" [--why <w>] [--target <slug>]`. Home exactly as the locked storage_home
+decision now states it: the current phase's spec.toml when current_phase is set and that spec loads,
+otherwise the `_project` store — including the unusable-home arm, where a current_phase with a
+missing or unreadable spec.toml falls back rather than erroring. Assigns a stable id, validates
+`--target` through t-2's helper BEFORE any write, appends and saves. README's deferred row gains
+`add`.
 """
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-1", "t-2"]
@@ -95,10 +101,13 @@ README's deferred row gains `add`.
     "with no current phase, add exits 0 and the item lists under source `_project`; a non-nil error fails the test — this is c-2's \"never refuses for want of a home\"",
     "current phase set but its spec.toml absent: add exits 0, the item lands in `_project`, stdout names the fallback, and NO spec.toml appears under that phase dir",
     "`--why` omitted: the written TOML contains no `why =` line; `--why \"x\"` round-trips through `list --json`",
-    "`add \"t\" --target beta` in one command: `list --routed --target beta` includes it and `list --someday` excludes it (c-3)",
+    "`add \"t\" --target beta` in one command: `list --routed --target beta` includes it and `list --someday` excludes it",
+    "the mirror of the above, which is c-3's second half: a bare `add \"t\"` with no --target appears in `list --someday` and is absent from `list --routed` — an implementation defaulting the target to anything non-empty fails here",
     "`add \"t\" --target typo` errors with error text BYTE-IDENTICAL to the same rejection from `route` (one assertion comparing both outputs, so the two paths cannot drift) and the spec/store file is byte-identical afterwards — no orphan item with a dead target",
+    "a rejected `add --target` makes no board HTTP call: the fake server's handler `t.Error`s on any request, proving validation precedes the mirror as well as the write",
     "`add \"\"` is rejected instead of appending a blank `[[deferred]]`",
     "two adds into the same phase produce two different non-empty ids",
+    "c-4 on its primary path: after `add` into a normal phase, the returned `<phase> <idx>` handle round-trips through `route`, `unroute` and `dismiss` exactly as a spec-authored item does — an added item that any of the three cannot address fails here (t-5 proves the same for `_project`)",
     "README's deferred row reads `dross deferred {list,route,unroute,dismiss,add}` (docText assertion on the command table)",
   ]
   status = "pending"
@@ -125,14 +134,40 @@ item that has no source phase. This is c-4's "indistinguishable to all four verb
   status = "pending"
 
 [[task]]
+  id = "t-8"
+  wave = 2
+  title = "Teach validate and rename about the store"
+  files = ["internal/cmd/validate.go", "internal/cmd/deferred.go", "internal/cmd/deferred_store_plumbing_test.go"]
+  description = """
+The readers that walk phase dirs only, taught the store: validate reports a `phases/_project`
+directory as a reserved-slug problem and walks `.dross/deferred.toml` for dangling targets alongside
+the phase specs; repointDeferredTarget (deferred.go:313) walks the store so `dross phase rename`
+can't orphan a store entry's target. Widens the store from "a place add can write" to a first-class
+home, which is why it carries c-2.
+"""
+  covers = ["c-2"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = [
+    "a bogus target hand-written into `.dross/deferred.toml` makes `dross validate` exit non-zero naming deferred.toml — the hand-edit path is not a dangling-target hole, and it uses t-2's shared predicate so store and spec are judged by one rule",
+    "a valid target in `.dross/deferred.toml` (phase dir or any milestone's array) leaves `dross validate` green — the new walk doesn't false-positive",
+    "a hand-made `.dross/phases/_project/spec.toml` fails `dross validate` with a reserved-slug problem naming the directory",
+    "`dross phase rename alpha alpha2` repoints a `_project` store entry routed to alpha; a repoint that walks phase.List only leaves it pointing at the dead slug and fails here",
+    "`dross phase rename` leaves a `_project` entry routed to an unrelated slug byte-identical — the walk repoints only matching targets",
+  ]
+  status = "pending"
+
+[[task]]
   id = "t-6"
   wave = 3
   title = "Mirror an added item to the board"
   files = ["internal/cmd/deferred_add.go", "internal/cmd/deferred_board_test.go"]
   description = """
-After the local save succeeds, push the new item through t-3's `pushBacklogItems` seam and record its
+After the local save succeeds, push the item through t-3's `pushBacklogItems` seam and record its
 id -> issue key in board.json. Board failure warns and returns nil; a disabled board or no current
-milestone is a silent no-op (locked board_push). The push is unconditional on --target (D2).
+milestone is a silent no-op (locked board_push). The push is unconditional on --target, so a routed
+add IS mirrored — knowingly asymmetric with t-3, which leaves syncBacklog's routed-skip in place: the
+resulting issue is created once and never updated by a later sync. That staleness is recorded in this
+phase's [[deferred]] and left to board-sync-truth, not closed here.
 """
   covers = ["c-6"]
   depends_on = ["t-3", "t-4"]
@@ -142,7 +177,7 @@ milestone is a silent no-op (locked board_push). The push is unconditional on --
     "the local write happens BEFORE the push: with a 500ing server, the item's presence in the TOML proves the ordering",
     "`board.enabled = false`: the fake server's handler `t.Error`s on any request, and the item is still written",
     "`state.current_milestone` empty: zero board calls, exit 0, item written locally, and no output that reads like a failure",
-    "`add \"x\" --target <valid slug>` still issues exactly one create — the routed path mirrors too (D2); a Target != \"\" skip fails this",
+    "`add \"x\" --target <valid slug>` still issues exactly one create — the routed path mirrors too; a `Target != \"\"` skip copied from syncBacklog fails this",
     "after a successful add, board.json maps `someday:id:<id>` to the returned key, and a following `backlog-sync` issues an UpdateIssue rather than a second CreateIssue — add and sync share one key space",
   ]
   status = "pending"
@@ -150,23 +185,46 @@ milestone is a silent no-op (locked board_push). The push is unconditional on --
 [[task]]
   id = "t-7"
   wave = 4
-  title = "File the two homeless findings, strip handoff"
-  files = [".dross/handoff.md", ".dross/phases/deferred-add-command/spec.toml", "internal/cmd/deferred_add_test.go", "internal/cmd/deferred_homeless_repo_test.go", "assets/prompts/pause.md"]
+  title = "File the two homeless findings"
+  files = [".dross/handoff.md", ".dross/phases/deferred-add-command/spec.toml", "internal/cmd/deferred_add_test.go", "internal/cmd/deferred_homeless_repo_test.go"]
   description = """
-Run `make install` first (rule r-01), then file both findings with the real verb against the live
-board: the test-suite hermeticity gap bare (someday), and the verify survivor-vocabulary /
+Run `make install` first (rule r-01), and source ~/.config/development/dross.env so YOUTRACK_TOKEN is
+present — without it the c-6 mirror takes its warn-and-continue path and this task would "pass"
+having filed nothing on the board. Then file both findings with the real verb against the live board:
+the test-suite hermeticity gap bare (someday), and the verify survivor-vocabulary /
 unclassified_in_scope mismatch with `--target mutation-score-truth`. Delete both bullets from
-handoff.md's Open loops. Teach `assets/prompts/pause.md` to file a homeless finding with
-`dross deferred add` instead of parking it under "Open loops" (D8).
+handoff.md's Open loops.
 """
   covers = ["c-5"]
-  depends_on = ["t-4", "t-5", "t-6"]
+  depends_on = ["t-4", "t-6"]
   test_contract = [
-    "a hermetic regression test replays both findings' shapes on a fixture — one bare `add`, one `add --target <milestone-array-only slug>` — and asserts both land with the right target; the second is the only end-to-end exercise of t-2's milestone-array branch through `add` (mutation-score-truth is in v1.3's phases array with no phase dir)",
-    "a repo-level test over this repo's TRACKED .dross (pattern of survivor_backlog_repo_test.go) fails if collectDeferred yields no entry naming the hermeticity gap, and fails if no entry carries target `mutation-score-truth` — re-parking either finding instead of filing it turns CI red",
-    "the handoff.md side is asserted by OBSERVED CLI output at execution time, NOT by a Go test: `.dross/handoff.md` is gitignored (.gitignore:12), so a test reading it would be vacuous in CI and a re-commission of the exact fault being filed (D5)",
+    "a hermetic regression test replays both findings' shapes on a fixture — one bare `add`, one `add --target <milestone-array-only slug>` — and asserts both land with the right target; the second is the only end-to-end exercise of t-2's milestone-array branch through `add`",
+    "the repo-level guard asserts a SELF-RETIRING invariant, not the presence of either item: over `.dross/handoff.md` it fails if an \"Open loops\" bullet still carries either finding's marker text — a finding parked instead of filed turns it red, while a filed-then-consumed item leaves it green forever. Pinning `target = mutation-score-truth` instead would go red the day that phase consumes the item, for a correct action",
+    "that guard `t.Skip`s with a stated reason when `.dross/handoff.md` is absent rather than passing: the file is gitignored (.gitignore:12), so in CI it must visibly skip — a version that silently passes on a missing file is the vacuous-green gate this phase exists to stop shipping",
     "`dross deferred list --target mutation-score-truth` names the survivor-vocabulary finding and `list --someday` names the hermeticity gap, observed against the real repo",
+    "both filings are observed to have reached the board — the run's output shows a created issue key per item, not the warn-and-continue path; a missing YOUTRACK_TOKEN must fail this task rather than pass it quietly",
     "`dross validate` passes after both writes — proof the `mutation-score-truth` target is not dangling",
-    "TestPromptsTeachNoBrokenInvocation still passes over the edited pause.md",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-9"
+  wave = 4
+  title = "Fix deferred-backlog narration in three prompts"
+  files = ["assets/prompts/pause.md", "assets/prompts/inbox.md", "assets/prompts/status.md"]
+  description = """
+Doc truth for the verb, split from t-7 so a live-board token failure can't block it. Teach
+assets/prompts/pause.md to file a homeless finding with `dross deferred add` instead of parking it
+under "Open loops" — the writer of handoff.md is what manufactures homeless findings, so this is what
+stops c-5 recurring. Fix inbox.md:28 ("its originating `source` phase" — `_project` is not a phase)
+and status.md:12 ("ideas punted in `/dross-spec`" — no longer the only source).
+"""
+  covers = ["c-5"]
+  depends_on = ["t-4"]
+  test_contract = [
+    "pause.md's homeless-finding path names `dross deferred add`; a docText assertion fails if the prompt still routes a finding only to an \"Open loops\" bullet",
+    "inbox.md no longer calls the entry's `source` a phase — the `_project` store is a source that is not a phase, so the old wording is false; grep-guard on the narration line",
+    "status.md's someday line no longer attributes the backlog solely to `/dross-spec`",
+    "TestPromptsTeachNoBrokenInvocation passes over all three edited prompts — every command they narrate resolves against the real CLI tree",
   ]
   status = "pending"

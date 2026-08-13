@@ -37,14 +37,14 @@
 
 [[decisions]]
   key = "storage_home"
-  choice = "Write into the current phase's spec.toml when current_phase is set; otherwise into a project-level store surfaced under a reserved source slug."
-  why = "Preserves provenance for mid-phase punts so `list --milestone` keeps working, while guaranteeing a home when nothing is scaffolded."
+  choice = "Write into the current phase's spec.toml when current_phase is set AND that spec is loadable; otherwise — no current phase, or a current phase whose spec.toml is missing or unreadable — into a project-level store surfaced under a reserved source slug. The fallback covers an unusable home, not merely an absent one, and never errors for want of a home."
+  why = "Preserves provenance for mid-phase punts so `list --milestone` keeps working, while guaranteeing a home when nothing is scaffolded. The unusable-home arm was made explicit on 2026-08-13 after the plan review found it living only in a task description: c-2 demands the command never refuse, so an unloadable current spec must fall back rather than error — deliberately unlike `survivor route`, which errors."
   locked = true
 
 [[decisions]]
   key = "target_validation"
-  choice = "A target is valid if a phase directory exists for the slug, or the slug appears in the current milestone's phases array; anything else errors, naming both ways to make it valid. Never auto-append an unknown slug to the roadmap."
-  why = "An unvalidated typo stamps a silently unreachable destination — the exact failure this phase exists to kill. Auto-adding would turn a typo into a permanent fake phase."
+  choice = "A target is valid if a phase directory exists for the slug, or the slug appears in ANY milestone's phases array — the rule `dross validate` already enforces (validate.go:73-85), shared from one helper rather than reimplemented. Anything else errors, naming both ways to make it valid. Never auto-append an unknown slug to the roadmap."
+  why = "An unvalidated typo stamps a silently unreachable destination — the exact failure this phase exists to kill. Auto-adding would turn a typo into a permanent fake phase. Broadened from 'the current milestone' on 2026-08-13 after the plan review found validate.go already enforcing the wider rule: two rules for one concept is the worse hazard, and routing a finding to a phase parked in an earlier still-open milestone is legitimate — `watch-pr-ci-status` (v0.9 only) is routed that way in this repo today and would have been rejected by the narrow rule."
   locked = true
 
 [[decisions]]
@@ -60,6 +60,6 @@
   locked = true
 
 [[deferred]]
-  text = "Routed deferred items never reach the board — syncBacklog skips anything with a target, so a routed finding is invisible on the tracker."
-  why = "Board honesty is board-sync-truth's remit, not this verb's."
+  text = "Routed deferred items never reach the board — syncBacklog skips anything with a target, so a routed finding is invisible on the tracker. This phase makes the gap asymmetric rather than closing it: `deferred add --target X` mirrors its item once (c-6 is unconditional), but no later sync ever updates that issue, while the same item routed from an existing entry gets no issue at all. Board coverage of routed items is now verb-dependent, and add-created routed issues go stale on the first text edit."
+  why = "Board honesty is board-sync-truth's remit, not this verb's. Recorded 2026-08-13 from the plan review, which found the asymmetry the D2 decision introduces."
   target = "board-sync-truth"
