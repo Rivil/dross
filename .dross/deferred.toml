@@ -7,3 +7,15 @@
   text = "verify.md §5 resolves 'the next phase' with `dross phase list`, which prints only scaffolded phases — so a phase mid-milestone with unscaffolded successors is narrated as 'the last phase in the milestone' and the run recommends `dross milestone show` instead of the next spec. The milestone's own phases array is the ordering truth; phase list is a directory listing."
   why = "Hit live on 2026-08-13 verifying deferred-add-command (9 of 14 in v1.3): the wrap-up claimed feature-complete because the five successors had no phase dirs yet. Wrong next-command for the user, from a prompt reading the wrong source."
   target = "guard-remedy-ordering"
+
+[[deferred]]
+  id = "ea7e5b173c04d59a"
+  text = "`dross phase reconcile` — an explicit verb that clears merged-but-uncompleted phases: one fetch, batch the lot, and status/watch suggest the single verb instead of printing N raw `dross phase complete <id>` lines as a chore list. Nothing mutates on a read-only status call."
+  why = "No verb exists, so status/watch leak the chore list to the user. Shape agreed; folded here rather than scoped as a 15th phase — it's one verb plus wording."
+  target = "guard-remedy-ordering"
+
+[[deferred]]
+  id = "7b308a04a43d8cb9"
+  text = "`dross survivor list --stale` cannot see an orphan acceptance whose source line still exists — only its survivor is gone, so staleness detection returns none and the entry can only be retired by hand-supplied key. Observed as a keys-vs-classified count mismatch in the drain (107 keys / 106 classified at the time; the store now holds 112). Teach staleness to compare the acceptance store against the current survivor set, not just against source existence."
+  why = "The drain's count mismatch is the only symptom, and it is invisible to the verb that exists to catch it. Detection gap, not one bad row."
+  target = "mutation-score-truth"
