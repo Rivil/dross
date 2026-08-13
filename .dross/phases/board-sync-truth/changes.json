@@ -2,7 +2,7 @@
   "phase": "board-sync-truth",
   "pr": 85,
   "base": "milestone/v1.3",
-  "status": "shipped",
+  "status": "complete",
   "tasks": {
     "t-1": {
       "files": [
