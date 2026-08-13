@@ -1,0 +1,9 @@
+[phase]
+  id = "_project"
+  title = "project-level deferred store"
+
+[[deferred]]
+  id = "ab84f90d28487b7a"
+  text = "verify.md §5 resolves 'the next phase' with `dross phase list`, which prints only scaffolded phases — so a phase mid-milestone with unscaffolded successors is narrated as 'the last phase in the milestone' and the run recommends `dross milestone show` instead of the next spec. The milestone's own phases array is the ordering truth; phase list is a directory listing."
+  why = "Hit live on 2026-08-13 verifying deferred-add-command (9 of 14 in v1.3): the wrap-up claimed feature-complete because the five successors had no phase dirs yet. Wrong next-command for the user, from a prompt reading the wrong source."
+  target = "guard-remedy-ordering"
