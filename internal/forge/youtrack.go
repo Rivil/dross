@@ -31,6 +31,12 @@ type YouTrackClient struct {
 	token   string
 	authEnv string // env var name (kept for diagnostic error messages)
 
+	// tagIDs caches the instance's tag index (name -> entity id) for the
+	// client's lifetime. YouTrack tags are global entities referenced by id,
+	// so every tag write needs this lookup; re-reading it per issue would
+	// multiply a phase-sync's request count by its label count.
+	tagIDs map[string]string
+
 	http *http.Client
 }
 
@@ -83,6 +89,11 @@ func (c *YouTrackClient) endpoint(suffix string) string {
 // CreateIssue opens a new issue in the configured project and returns it. The
 // project is referenced by short-name; the ?fields projection makes YouTrack
 // echo back the readable id (otherwise only the database id comes back).
+//
+// Tags are a second write: YouTrack takes them as entity references, not names
+// on the create body, so they go through applyTags once the issue exists. A
+// failure there warns and still returns the issue — a tagging blip must not
+// orphan a real issue that the caller is about to record.
 func (c *YouTrackClient) CreateIssue(in IssueInput) (*Issue, error) {
 	body := map[string]any{
 		"project":     map[string]any{"shortName": c.project},
@@ -93,7 +104,15 @@ func (c *YouTrackClient) CreateIssue(in IssueInput) (*Issue, error) {
 	if err := c.do("POST", c.endpoint("/issues")+"?fields="+url.QueryEscape(ytIssueFields), body, &raw); err != nil {
 		return nil, fmt.Errorf("create issue: %w", err)
 	}
-	return raw.toIssue(), nil
+	iss := raw.toIssue()
+	if len(in.Labels) > 0 {
+		if err := c.applyTags(iss.Key, in.Labels); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: issue %s created but tagging it failed: %v\n", iss.Key, err)
+		} else {
+			iss.Labels = in.Labels
+		}
+	}
+	return iss, nil
 }
 
 // CreateBacklogItem creates an Open backlog issue and, when fixVersion is set,
@@ -143,6 +162,12 @@ func (c *YouTrackClient) GetIssue(key string) (*Issue, error) {
 // UpdateIssue applies a partial patch addressed by readable id. YouTrack
 // updates use POST (not PATCH/PUT). Title→summary and Body→description here;
 // the State custom-field write lands with the state-map task (plan t-7).
+//
+// A non-nil patch.Labels replaces the issue's tag set (see applyTags); a nil
+// one leaves tags entirely alone, so a title-only patch costs no tag traffic.
+// Unlike create, a failing tag write is returned: the label set is what the
+// phase and deferred resolvers query by, so silently leaving it wrong would
+// mint a duplicate issue on the next sync.
 func (c *YouTrackClient) UpdateIssue(key string, patch IssuePatch) (*Issue, error) {
 	body := map[string]any{}
 	if patch.Title != nil {
@@ -157,7 +182,20 @@ func (c *YouTrackClient) UpdateIssue(key string, patch IssuePatch) (*Issue, erro
 			return nil, fmt.Errorf("update issue %s: %w", key, err)
 		}
 	}
-	return raw.toIssue(), nil
+	if patch.Labels != nil {
+		if err := c.applyTags(key, *patch.Labels); err != nil {
+			return nil, fmt.Errorf("update issue %s: %w", key, err)
+		}
+	}
+	iss := raw.toIssue()
+	if iss.Key == "" {
+		// A labels-only patch sends no issue body, so nothing echoed back.
+		iss.Key = key
+	}
+	if patch.Labels != nil {
+		iss.Labels = *patch.Labels
+	}
+	return iss, nil
 }
 
 // CloseIssue resolves an issue. YouTrack has no separate "close" — an issue is
@@ -377,21 +415,111 @@ func (c *YouTrackClient) ListIssues(f IssueFilter) ([]Issue, error) {
 	return out, nil
 }
 
-// listTagNames reads YouTrack's tag index — the label vocabulary a query may
-// name. A failure refuses the query rather than degrading it: an unfiltered
-// list on a shared board is far worse than an error.
-func (c *YouTrackClient) listTagNames() ([]string, error) {
+// loadTags reads and caches YouTrack's tag index as name -> entity id. Tags
+// are instance-global entities, so this doubles as the label vocabulary a
+// query may name and as the id lookup every tag write needs.
+func (c *YouTrackClient) loadTags() (map[string]string, error) {
+	if c.tagIDs != nil {
+		return c.tagIDs, nil // already populated this run
+	}
 	var tags []struct {
+		ID   string `json:"id"`
 		Name string `json:"name"`
 	}
-	if err := c.do("GET", c.endpoint("/issueTags")+"?fields=name&$top=1000", nil, &tags); err != nil {
+	if err := c.do("GET", c.endpoint("/issueTags")+"?fields=id,name&$top=1000", nil, &tags); err != nil {
 		return nil, fmt.Errorf("list tags: %w", err)
 	}
-	names := make([]string, 0, len(tags))
+	index := make(map[string]string, len(tags))
 	for _, t := range tags {
-		names = append(names, t.Name)
+		index[t.Name] = t.ID
+	}
+	c.tagIDs = index
+	return index, nil
+}
+
+// listTagNames reads the tag index — the label vocabulary a query may name. A
+// failure refuses the query rather than degrading it: an unfiltered list on a
+// shared board is far worse than an error.
+func (c *YouTrackClient) listTagNames() ([]string, error) {
+	index, err := c.loadTags()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(index))
+	for name := range index {
+		names = append(names, name)
 	}
 	return names, nil
+}
+
+// ensureTag returns the entity id for a tag name, creating the tag when the
+// instance has never seen it. Idempotent: a name already in the index costs no
+// request.
+func (c *YouTrackClient) ensureTag(name string) (string, error) {
+	index, err := c.loadTags()
+	if err != nil {
+		return "", err
+	}
+	if id, ok := index[name]; ok {
+		return id, nil
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := c.do("POST", c.endpoint("/issueTags")+"?fields=id,name", map[string]any{"name": name}, &created); err != nil {
+		return "", fmt.Errorf("create tag %q: %w", name, err)
+	}
+	index[name] = created.ID
+	return created.ID, nil
+}
+
+// applyTags makes the issue's tag set exactly `names` — added tags are added,
+// tags no longer wanted are removed.
+//
+// Replace semantics matter because dross tags carry meaning that changes: a
+// re-routed deferred item must lose `dross/target:a` when it gains
+// `dross/target:b`, and a purely additive write would leave the issue claiming
+// both destinations forever.
+func (c *YouTrackClient) applyTags(key string, names []string) error {
+	var current struct {
+		Tags []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"tags"`
+	}
+	if err := c.do("GET", c.endpoint("/issues/"+key)+"?fields=tags(id,name)", nil, &current); err != nil {
+		return fmt.Errorf("read tags on %s: %w", key, err)
+	}
+	have := make(map[string]string, len(current.Tags))
+	for _, t := range current.Tags {
+		have[t.Name] = t.ID
+	}
+	want := make(map[string]bool, len(names))
+	for _, n := range names {
+		want[n] = true
+	}
+
+	for _, n := range names {
+		if _, ok := have[n]; ok {
+			continue
+		}
+		id, err := c.ensureTag(n)
+		if err != nil {
+			return err
+		}
+		if err := c.do("POST", c.endpoint("/issues/"+key+"/tags")+"?fields=id", map[string]any{"id": id}, nil); err != nil {
+			return fmt.Errorf("tag %s with %q: %w", key, n, err)
+		}
+	}
+	for name, id := range have {
+		if want[name] {
+			continue
+		}
+		if err := c.do("DELETE", c.endpoint("/issues/"+key+"/tags/"+id), nil, nil); err != nil {
+			return fmt.Errorf("untag %q from %s: %w", name, key, err)
+		}
+	}
+	return nil
 }
 
 // buildQuery assembles a YouTrack search query scoped to the project, with the

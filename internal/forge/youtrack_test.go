@@ -736,3 +736,247 @@ func TestYouTrackListIssuesDropsUnknownLabels(t *testing.T) {
 		}
 	})
 }
+
+// ytTagFake is a YouTrack fake that models tags as real entities: a global tag
+// index with ids, plus a per-issue tag set that POST/DELETE mutate. Assertions
+// can then read the issue's tags back by NAME, which is what the dross
+// resolvers actually query by.
+type ytTagFake struct {
+	index    map[string]string   // tag name -> id
+	onIssue  map[string][]string // issue key -> tag names
+	created  []string            // tag names created via POST /api/issueTags
+	nextID   int
+	tagWrite func(w http.ResponseWriter) bool // optional: intercept a tag write
+}
+
+func newYTTagFake(known ...string) *ytTagFake {
+	f := &ytTagFake{index: map[string]string{}, onIssue: map[string][]string{}}
+	for _, n := range known {
+		f.nextID++
+		f.index[n] = fmt.Sprintf("t-%d", f.nextID)
+	}
+	return f
+}
+
+func (f *ytTagFake) nameFor(id string) string {
+	for n, i := range f.index {
+		if i == id {
+			return n
+		}
+	}
+	return ""
+}
+
+func (f *ytTagFake) handler(t *testing.T) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case path == "/api/issueTags" && r.Method == "GET":
+			var out []string
+			for n, id := range f.index {
+				out = append(out, fmt.Sprintf(`{"id":%q,"name":%q}`, id, n))
+			}
+			_, _ = io.WriteString(w, "["+strings.Join(out, ",")+"]")
+
+		case path == "/api/issueTags" && r.Method == "POST":
+			var body struct {
+				Name string `json:"name"`
+			}
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &body)
+			f.nextID++
+			id := fmt.Sprintf("t-%d", f.nextID)
+			f.index[body.Name] = id
+			f.created = append(f.created, body.Name)
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"id":%q,"name":%q}`, id, body.Name))
+
+		case strings.HasSuffix(path, "/tags") && r.Method == "POST":
+			if f.tagWrite != nil && f.tagWrite(w) {
+				return
+			}
+			key := strings.TrimSuffix(strings.TrimPrefix(path, "/api/issues/"), "/tags")
+			var body struct {
+				ID string `json:"id"`
+			}
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &body)
+			f.onIssue[key] = append(f.onIssue[key], f.nameFor(body.ID))
+			_, _ = io.WriteString(w, `{}`)
+
+		case strings.Contains(path, "/tags/") && r.Method == "DELETE":
+			rest := strings.TrimPrefix(path, "/api/issues/")
+			key, id, _ := strings.Cut(rest, "/tags/")
+			name := f.nameFor(id)
+			var kept []string
+			for _, n := range f.onIssue[key] {
+				if n != name {
+					kept = append(kept, n)
+				}
+			}
+			f.onIssue[key] = kept
+			_, _ = io.WriteString(w, `{}`)
+
+		case strings.HasPrefix(path, "/api/issues/") && r.Method == "GET":
+			key := strings.TrimPrefix(path, "/api/issues/")
+			var tags []string
+			for _, n := range f.onIssue[key] {
+				tags = append(tags, fmt.Sprintf(`{"id":%q,"name":%q}`, f.index[n], n))
+			}
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":%q,"tags":[%s]}`, key, strings.Join(tags, ",")))
+
+		case path == "/api/issues" && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7","summary":"Hi"}`)
+
+		case strings.HasPrefix(path, "/api/issues/") && r.Method == "POST":
+			key := strings.TrimPrefix(path, "/api/issues/")
+			_, _ = io.WriteString(w, fmt.Sprintf(`{"idReadable":%q}`, key))
+
+		default:
+			t.Errorf("unexpected %s %s", r.Method, path)
+			_, _ = io.WriteString(w, `{}`)
+		}
+	}
+}
+
+// TestYouTrackCreateAppliesTags is the c-4/c-6 foundation: CreateIssue sent no
+// tags at all before this, so no dross marker had ever reached a YouTrack
+// issue — and every resolver that queries by that marker was dead on arrival.
+func TestYouTrackCreateAppliesTags(t *testing.T) {
+	f := newYTTagFake("dross", "dross/phase:01-x")
+	c, _ := newTestYTClient(t, f.handler(t))
+
+	iss, err := c.CreateIssue(IssueInput{Title: "Hi", Labels: []string{"dross", "dross/phase:01-x"}})
+	if err != nil {
+		t.Fatalf("CreateIssue: %v", err)
+	}
+	if iss.Key != "PROJ-7" {
+		t.Fatalf("Issue.Key = %q, want PROJ-7", iss.Key)
+	}
+	got := f.onIssue["PROJ-7"]
+	for _, want := range []string{"dross", "dross/phase:01-x"} {
+		if !slicesContain(got, want) {
+			t.Errorf("issue tags = %v, missing %q", got, want)
+		}
+	}
+}
+
+// TestYouTrackTagsReplaceRatherThanAccumulate pins replace semantics. An
+// additive implementation leaves a re-routed item claiming both destinations,
+// and every `dross/target:` filter then returns it twice.
+func TestYouTrackTagsReplaceRatherThanAccumulate(t *testing.T) {
+	f := newYTTagFake("dross", "dross/target:a", "dross/target:b")
+	f.onIssue["PROJ-7"] = []string{"dross", "dross/target:a"}
+	c, _ := newTestYTClient(t, f.handler(t))
+
+	labels := []string{"dross", "dross/target:b"}
+	if _, err := c.UpdateIssue("PROJ-7", IssuePatch{Labels: &labels}); err != nil {
+		t.Fatalf("UpdateIssue: %v", err)
+	}
+	got := f.onIssue["PROJ-7"]
+	if len(got) != 2 || !slicesContain(got, "dross") || !slicesContain(got, "dross/target:b") {
+		t.Fatalf("tags = %v, want exactly [dross dross/target:b]", got)
+	}
+	if slicesContain(got, "dross/target:a") {
+		t.Error("the replaced target tag survived — removals must remove")
+	}
+}
+
+// TestYouTrackCreatesMissingTagEntityOnce pins the ensure step: a name the
+// instance has never seen is created before the issue write, and a name it
+// already knows costs no create.
+func TestYouTrackCreatesMissingTagEntityOnce(t *testing.T) {
+	t.Run("absent name is created once", func(t *testing.T) {
+		f := newYTTagFake("dross")
+		c, _ := newTestYTClient(t, f.handler(t))
+		if _, err := c.CreateIssue(IssueInput{Title: "Hi", Labels: []string{"dross", "dross/phase:01-x"}}); err != nil {
+			t.Fatalf("CreateIssue: %v", err)
+		}
+		if len(f.created) != 1 || f.created[0] != "dross/phase:01-x" {
+			t.Errorf("created tags = %v, want exactly [dross/phase:01-x]", f.created)
+		}
+	})
+
+	t.Run("known names create nothing", func(t *testing.T) {
+		f := newYTTagFake("dross", "dross/phase:01-x")
+		c, _ := newTestYTClient(t, f.handler(t))
+		if _, err := c.CreateIssue(IssueInput{Title: "Hi", Labels: []string{"dross", "dross/phase:01-x"}}); err != nil {
+			t.Fatalf("CreateIssue: %v", err)
+		}
+		if len(f.created) != 0 {
+			t.Errorf("created %v, want no tag creates for names already in the index", f.created)
+		}
+	})
+}
+
+// TestYouTrackUpdateWithoutLabelsSendsNoTagWrite pins that a title-only patch
+// costs no tag traffic — and, more importantly, cannot strip an issue's tags
+// by treating "not mentioned" as "empty".
+func TestYouTrackUpdateWithoutLabelsSendsNoTagWrite(t *testing.T) {
+	var tagRequests int
+	c, _ := newTestYTClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/tags") || strings.HasSuffix(r.URL.Path, "/issueTags") {
+			tagRequests++
+		}
+		_, _ = io.WriteString(w, `{"idReadable":"PROJ-7","summary":"New"}`)
+	})
+	title := "New"
+	if _, err := c.UpdateIssue("PROJ-7", IssuePatch{Title: &title}); err != nil {
+		t.Fatalf("UpdateIssue: %v", err)
+	}
+	if tagRequests != 0 {
+		t.Errorf("a labels-nil patch made %d tag request(s), want 0", tagRequests)
+	}
+}
+
+// TestYouTrackCreateSurvivesATagBlip pins that a failed tag write does not
+// orphan a real issue: the caller still gets the key it has to record, plus a
+// warning naming the failure.
+func TestYouTrackCreateSurvivesATagBlip(t *testing.T) {
+	f := newYTTagFake("dross")
+	f.tagWrite = func(w http.ResponseWriter) bool {
+		w.WriteHeader(500)
+		return true
+	}
+	c, _ := newTestYTClient(t, f.handler(t))
+
+	var iss *Issue
+	var err error
+	warn := captureForgeStderr(t, func() {
+		iss, err = c.CreateIssue(IssueInput{Title: "Hi", Labels: []string{"dross"}})
+	})
+	if err != nil {
+		t.Fatalf("a tagging blip must not fail the create: %v", err)
+	}
+	if iss == nil || iss.Key != "PROJ-7" {
+		t.Fatalf("created issue = %+v, want its key returned so the caller can record it", iss)
+	}
+	if !strings.Contains(warn, "PROJ-7") {
+		t.Errorf("stderr = %q, want a warning naming the issue", warn)
+	}
+}
+
+// TestYouTrackGetIssueMapsTagsToLabels pins the read side. The phase and
+// deferred resolvers post-filter on Issue.Labels, so a GetIssue that dropped
+// tags would make every adoption check fail open.
+func TestYouTrackGetIssueMapsTagsToLabels(t *testing.T) {
+	c, _ := newTestYTClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"idReadable":"PROJ-7","summary":"Hi","tags":[{"name":"dross"},{"name":"dross/phase:01-x"}]}`)
+	})
+	iss, err := c.GetIssue("PROJ-7")
+	if err != nil {
+		t.Fatalf("GetIssue: %v", err)
+	}
+	if len(iss.Labels) != 2 || !slicesContain(iss.Labels, "dross") || !slicesContain(iss.Labels, "dross/phase:01-x") {
+		t.Errorf("Labels = %v, want both tags mapped through", iss.Labels)
+	}
+}
+
+func slicesContain(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
+}

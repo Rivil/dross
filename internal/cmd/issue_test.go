@@ -334,6 +334,17 @@ func TestIssuePhaseSyncYouTrackCreatesThenUpdates(t *testing.T) {
 		case r.URL.Path == "/api/issues/PROJ-7" && r.Method == "POST":
 			updates++
 			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7"}`)
+		// Tag traffic: the dross marker labels are entity writes on YouTrack,
+		// not names on the issue body. Served permissively — this test counts
+		// creates vs updates, not tags (youtrack_test.go pins those).
+		case strings.HasSuffix(r.URL.Path, "/issueTags") && r.Method == "GET":
+			_, _ = io.WriteString(w, `[]`)
+		case strings.HasSuffix(r.URL.Path, "/issueTags") && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"id":"t-1"}`)
+		case strings.Contains(r.URL.Path, "/tags"):
+			_, _ = io.WriteString(w, `{"id":"t-1"}`)
+		case r.URL.Path == "/api/issues/PROJ-7" && r.Method == "GET":
+			_, _ = io.WriteString(w, `{"idReadable":"PROJ-7","tags":[]}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
