@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -308,7 +310,116 @@ func issueBacklogSync() *cobra.Command {
 }
 
 // backlogItem is one milestone-backlog entry to mirror onto the board.
-type backlogItem struct{ key, title, body string }
+//
+// legacyKey is the pre-id positional key (`someday:<source>#<idx>`) a board.json
+// written by an older dross may still hold this item's link under. It is
+// consulted only when the id key has no link yet, and only after the stored
+// issue's title is confirmed to still be this item's — see adoptLegacyBacklogKey.
+type backlogItem struct{ key, title, body, legacyKey string }
+
+// deferredBacklogKey is the board-link key for a deferred item. It keys on the
+// item's stable id, never its position: a positional key re-points at whatever
+// item slides into the index when an earlier sibling is removed, which silently
+// re-titles a live issue to a different finding's text (c-8).
+func deferredBacklogKey(id string) string { return "someday:id:" + id }
+
+// legacyDeferredBacklogKey is the positional key dross used before ids existed.
+func legacyDeferredBacklogKey(source string, idx int) string {
+	return fmt.Sprintf("someday:%s#%d", source, idx)
+}
+
+// newDeferredID mints a stable id for a deferred item, retrying on collision
+// with an already-assigned one. A collision would silently merge two items' board
+// links, so it is checked rather than assumed away.
+func newDeferredID(used map[string]bool) (string, error) {
+	for attempt := 0; attempt < 8; attempt++ {
+		var b [8]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return "", fmt.Errorf("generate deferred id: %w", err)
+		}
+		id := hex.EncodeToString(b[:])
+		if !used[id] {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("could not mint a unique deferred id after 8 attempts")
+}
+
+// ensureDeferredIDs backfills an id into every [[deferred]] item that lacks one,
+// writing it back to the owning spec or the project store, and returns the
+// re-collected entries. Specs authored before ids existed are id-less, so the
+// first sync after an upgrade is what gives them a durable identity; a second
+// run must find them already stamped and churn nothing.
+func ensureDeferredIDs(root string) ([]deferredEntry, error) {
+	entries, err := collectDeferred(root)
+	if err != nil {
+		return nil, err
+	}
+	used := map[string]bool{}
+	missing := map[string][]int{}
+	for _, e := range entries {
+		if e.ID != "" {
+			used[e.ID] = true
+			continue
+		}
+		missing[e.Source] = append(missing[e.Source], e.Index)
+	}
+	if len(missing) == 0 {
+		return entries, nil
+	}
+	for source, idxs := range missing {
+		path, err := deferredStore(root, source)
+		if err != nil {
+			return nil, err
+		}
+		spec, err := phase.LoadSpec(path)
+		if err != nil {
+			return nil, err
+		}
+		for _, i := range idxs {
+			if i < 0 || i >= len(spec.Deferred) {
+				continue
+			}
+			id, err := newDeferredID(used)
+			if err != nil {
+				return nil, err
+			}
+			spec.Deferred[i].ID = id
+			used[id] = true
+		}
+		if err := spec.Save(path); err != nil {
+			return nil, fmt.Errorf("save %s: %w", path, err)
+		}
+	}
+	return collectDeferred(root)
+}
+
+// adoptLegacyBacklogKey migrates a pre-id positional link onto the item's id
+// key, so an upgrade re-uses the live issue instead of orphaning it and creating
+// a duplicate.
+//
+// It adopts only after confirming the stored issue still carries this item's
+// title. The positional key may already have drifted — if an earlier sibling was
+// deleted before the upgrade run, `someday:<phase>#0` names the issue of an item
+// that no longer exists, and adopting it blindly would inherit c-8's own fault
+// permanently. A title mismatch means "not mine": the link is left alone and the
+// item is created fresh.
+func adoptLegacyBacklogKey(ctx *boardCtx, it backlogItem) bool {
+	if it.legacyKey == "" {
+		return false
+	}
+	issueKey, ok := ctx.board.BacklogID(it.legacyKey)
+	if !ok {
+		return false
+	}
+	iss, err := ctx.client.GetIssue(issueKey)
+	if err != nil || iss == nil || iss.Title != it.title {
+		return false
+	}
+	ctx.board.SetBacklog(it.key, issueKey)
+	ctx.board.DeleteBacklog(it.legacyKey)
+	return true
+}
 
 // syncBacklog mirrors a milestone's backlog — its unscaffolded roadmap phase
 // slugs and unrouted `someday` deferred ideas — onto the board as Open issues
@@ -318,25 +429,6 @@ func syncBacklog(ctx *boardCtx, version string) error {
 	m, err := milestone.Load(milestone.FilePath(ctx.root, version))
 	if err != nil {
 		return fmt.Errorf("load milestone %q: %w", version, err)
-	}
-
-	// Ensure the milestone entity the backlog attaches to (version value / epic
-	// / agile board). Version mode tags each item's Fix versions with it.
-	entityID, err := ensureMilestoneLink(ctx, version)
-	if err != nil {
-		return err
-	}
-	// Per milestone_mode, attach each backlog item to the entity: version mode
-	// sets the item's Fix versions to the bundle value; epic mode links it as a
-	// subtask of the Epic; agile boards are query/project-based, so an item
-	// created in the project already appears on the board (no per-item call).
-	// Normalize, not a bare ToLower: doctor accepts a padded " version" now, and
-	// an untrimmed read here would silently skip the fixVersion branch for a
-	// value the validator just blessed.
-	mode := configenum.Normalize(ctx.proj.Board.MilestoneMode)
-	fixVersion := ""
-	if mode == "" || mode == "version" {
-		fixVersion = entityID
 	}
 
 	var items []backlogItem
@@ -351,8 +443,10 @@ func syncBacklog(ctx *boardCtx, version string) error {
 			body:  fmt.Sprintf("Roadmap phase `%s` in milestone %s — not yet scaffolded.\n\n_Tracked by dross._", slug, version),
 		})
 	}
-	// Unrouted `someday` deferred ideas (no target, not dismissed).
-	deferredItems, err := collectDeferred(ctx.root)
+	// Unrouted `someday` deferred ideas (no target, not dismissed). Every item
+	// is stamped with a stable id first: the board link keys on it, so an
+	// id-less item would have no durable handle to key by.
+	deferredItems, err := ensureDeferredIDs(ctx.root)
 	if err != nil {
 		return err
 	}
@@ -360,19 +454,63 @@ func syncBacklog(ctx *boardCtx, version string) error {
 		if d.Target != "" || d.Dismissed {
 			continue
 		}
-		items = append(items, backlogItem{
-			key:   fmt.Sprintf("someday:%s#%d", d.Source, d.Index),
-			title: "[someday] " + d.Text,
-			body:  fmt.Sprintf("Someday idea (from phase `%s`): %s\n\n_Tracked by dross._", d.Source, d.Text),
-		})
+		items = append(items, deferredBacklogItem(d))
 	}
 
-	created, updated := 0, 0
+	created, updated, err := pushBacklogItems(ctx, version, items)
+	if err != nil {
+		return err
+	}
+	Printf("backlog %s -> %d created, %d updated\n", version, created, updated)
+	return nil
+}
+
+// deferredBacklogItem renders one deferred entry as a board backlog item. It is
+// shared by backlog-sync and `deferred add` so both produce byte-identical
+// titles and bodies — a divergence would make an added item's issue flip its
+// text on the first sync.
+func deferredBacklogItem(d deferredEntry) backlogItem {
+	return backlogItem{
+		key:       deferredBacklogKey(d.ID),
+		legacyKey: legacyDeferredBacklogKey(d.Source, d.Index),
+		title:     "[someday] " + d.Text,
+		body:      fmt.Sprintf("Someday idea (from phase `%s`): %s\n\n_Tracked by dross._", d.Source, d.Text),
+	}
+}
+
+// pushBacklogItems creates or updates each item on the board and records its
+// link, returning the created/updated counts. It is the single push seam:
+// backlog-sync feeds it a whole milestone's items, `deferred add` feeds it the
+// one item it just filed, and both attach to the milestone entity the same way.
+func pushBacklogItems(ctx *boardCtx, version string, items []backlogItem) (created, updated int, err error) {
+	// Ensure the milestone entity the backlog attaches to (version value / epic
+	// / agile board). Version mode tags each item's Fix versions with it.
+	entityID, err := ensureMilestoneLink(ctx, version)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Per milestone_mode, attach each backlog item to the entity: version mode
+	// sets the item's Fix versions to the bundle value; epic mode links it as a
+	// subtask of the Epic; agile boards are query/project-based, so an item
+	// created in the project already appears on the board (no per-item call).
+	// Normalize, not a bare ToLower: doctor accepts a padded " version" now, and
+	// an untrimmed read here would silently skip the fixVersion branch for a
+	// value the validator just blessed.
+	mode := configenum.Normalize(ctx.proj.Board.MilestoneMode)
+	fixVersion := ""
+	if mode == "" || mode == "version" {
+		fixVersion = entityID
+	}
+
 	for _, it := range items {
-		if key, ok := ctx.board.BacklogID(it.key); ok {
+		key, ok := ctx.board.BacklogID(it.key)
+		if !ok && adoptLegacyBacklogKey(ctx, it) {
+			key, ok = ctx.board.BacklogID(it.key)
+		}
+		if ok {
 			title, body := it.title, it.body
 			if _, err := ctx.client.UpdateIssue(key, forge.IssuePatch{Title: &title, Body: &body}); err != nil {
-				return wrapBoard(err)
+				return created, updated, wrapBoard(err)
 			}
 			updated++
 			continue
@@ -394,16 +532,15 @@ func syncBacklog(ctx *boardCtx, version string) error {
 			})
 		}
 		if err != nil {
-			return wrapBoard(err)
+			return created, updated, wrapBoard(err)
 		}
 		ctx.board.SetBacklog(it.key, iss.Key)
 		created++
 	}
 	if err := ctx.board.Save(ctx.boardPath); err != nil {
-		return err
+		return created, updated, err
 	}
-	Printf("backlog %s -> %d created, %d updated\n", version, created, updated)
-	return nil
+	return created, updated, nil
 }
 
 // --- phase sync ---
