@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -41,6 +42,14 @@ const (
 )
 
 func statusLabel(s string) string { return "dross/status:" + s }
+
+// phaseLabel is the durable identity of a phase's board issue. It is what
+// makes the TRACKER the source of truth for the phase→issue mapping: board.json
+// is git-tracked, so a phase-sync writes it on phase/<id>, which `phase
+// complete` then deletes — the mapping never reaches the base branch, and the
+// next ship mints a duplicate. A label on the issue survives that, and survives
+// a second machine or CI that never had the file.
+func phaseLabel(phaseID string) string { return "dross/phase:" + phaseID }
 
 // Issue registers `dross issue …` — mirroring dross planning artefacts onto
 // the repo's issue-tracker board, and pulling inbound issues for triage.
@@ -588,6 +597,76 @@ func issuePhaseSync() *cobra.Command {
 	return c
 }
 
+// hasMarker reports whether an issue carries the dross marker label. Every
+// adoption path post-filters on it: the tracker query is by phase label alone
+// (see resolvePhaseIssue), and a hand-made issue that happens to carry that
+// label must not be silently taken over.
+func hasMarker(iss forge.Issue) bool {
+	for _, l := range iss.Labels {
+		if l == labelMarker {
+			return true
+		}
+	}
+	return false
+}
+
+// resolvePhaseIssue finds the phase's existing board issue, or "" if there is
+// none yet. Resolution order:
+//
+//  1. board.json's cached key, verified against the tracker. A key that no
+//     longer resolves is dropped rather than trusted — the file is a cache.
+//  2. A tracker query for the phase label. This is the durable mapping: it
+//     survives the deleted phase branch that takes board.json with it.
+//  3. A legacy issue carrying the marker and the exact `<id> — <title>`
+//     summary, from before phase labels existed. Adopting it (the caller
+//     back-fills the phase label on update) is what stops one duplicate per
+//     pre-existing phase the first time this runs.
+//
+// The query filters on ONE label. Two would be OR'd now (c-1), which would
+// adopt an arbitrary dross issue; and State must be "all", because an
+// already-closed phase issue is exactly the one a re-ship must find.
+func resolvePhaseIssue(ctx *boardCtx, phaseID, title string) (string, error) {
+	if key, ok := ctx.board.PhaseIssue(phaseID); ok {
+		if iss, err := ctx.client.GetIssue(key); err == nil && iss != nil && hasMarker(*iss) {
+			return key, nil
+		}
+		fmt.Fprintf(os.Stderr, "warning: board.json points %s at %s, which no longer resolves — re-resolving from the tracker\n", phaseID, key)
+		ctx.board.DeletePhase(phaseID)
+	}
+
+	byLabel, err := ctx.client.ListIssues(forge.IssueFilter{State: "all", Labels: []string{phaseLabel(phaseID)}})
+	if err != nil {
+		return "", wrapBoard(err)
+	}
+	var matches []string
+	for _, iss := range byLabel {
+		if hasMarker(iss) {
+			matches = append(matches, iss.Key)
+		}
+	}
+	if len(matches) > 0 {
+		sort.Strings(matches)
+		if len(matches) > 1 {
+			fmt.Fprintf(os.Stderr, "warning: %d issues carry %s (%s) — updating %s and leaving the rest\n",
+				len(matches), phaseLabel(phaseID), strings.Join(matches, ", "), matches[0])
+		}
+		return matches[0], nil
+	}
+
+	// Legacy adoption: issues synced before phase labels existed are only
+	// identifiable by their summary.
+	byMarker, err := ctx.client.ListIssues(forge.IssueFilter{State: "all", Labels: []string{labelMarker}})
+	if err != nil {
+		return "", wrapBoard(err)
+	}
+	for _, iss := range byMarker {
+		if iss.Title == title && hasMarker(iss) {
+			return iss.Key, nil
+		}
+	}
+	return "", nil
+}
+
 func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 	dir := phase.Dir(ctx.root, phaseID)
 	spec, err := phase.LoadSpec(filepath.Join(dir, "spec.toml"))
@@ -603,7 +682,7 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 
 	title := fmt.Sprintf("%s — %s", phaseID, spec.Phase.Title)
 	body := renderPhaseBody(phaseID, spec, plan)
-	labels := []string{labelMarker, statusLabel(status)}
+	labels := []string{labelMarker, phaseLabel(phaseID), statusLabel(status)}
 
 	// Assign to the milestone if the phase declares one and it's syncable.
 	// IssueInput.Milestone is the forge int id; the board stores it as a string.
@@ -616,8 +695,12 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 		milestoneID, _ = strconv.Atoi(id) // "" / non-numeric (youtrack entity) → 0, unassigned
 	}
 
-	key, linked := ctx.board.PhaseIssue(phaseID)
-	if !linked {
+	key, err := resolvePhaseIssue(ctx, phaseID, title)
+	if err != nil {
+		return err
+	}
+	created := key == ""
+	if created {
 		iss, err := ctx.client.CreateIssue(forge.IssueInput{
 			Title:     title,
 			Body:      body,
@@ -641,6 +724,10 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 		if _, err := ctx.client.UpdateIssue(key, patch); err != nil {
 			return wrapBoard(err)
 		}
+		// Re-record: the key may have come from the tracker rather than the
+		// cache (an adopted or re-resolved issue), and board.json has to catch
+		// up or the next run pays for the lookup again.
+		ctx.board.SetPhase(phaseID, key)
 	}
 	// YouTrack tracks lifecycle on the State custom field (not a status label),
 	// mapped via the default map overridden by [board].state_map. An unmapped
@@ -660,7 +747,7 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 		}
 	}
 	// Close-on-create edge: created above then asked to close.
-	if doClose && !linked {
+	if doClose && created {
 		if err := ctx.client.CloseIssue(key); err != nil {
 			return wrapBoard(err)
 		}
