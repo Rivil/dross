@@ -197,6 +197,12 @@ func deferredRoute() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Validate before anything is read or written: a stamped typo is a
+			// silently unreachable destination, and a rejected route must leave
+			// every file byte-identical.
+			if err := validDeferredTarget(root, target); err != nil {
+				return err
+			}
 			phaseID := args[0]
 			idx, err := strconv.Atoi(args[1])
 			if err != nil {
