@@ -206,6 +206,36 @@ func TestProgressAgainstThisRepo(t *testing.T) {
 	}
 }
 
+// TestProgressWithoutStateFile pins the fresh-clone case CI caught: state.json
+// is machine-local and gitignored, so a checkout nobody has run a dross command
+// in has none at all. It feeds only phaseIsDone's history fallback, never the
+// authoritative changes.json marker, so its absence has to degrade the fallback
+// to "nothing recorded" rather than fail the command outright.
+//
+// This is the same condition TestProgressAgainstThisRepo hits on CI. That test
+// claims to measure doneness off t-9's durable markers rather than a breadcrumb,
+// and CI is the only place that is really true — locally a state.json always
+// exists to fall back on.
+func TestProgressWithoutStateFile(t *testing.T) {
+	dir := progressRepo(t, "v1.3", "active", "built", "left")
+	scaffoldPhase(t, dir, "built", changes.StatusComplete)
+	scaffoldPhase(t, dir, "left", "")
+	if err := os.Remove(filepath.Join(dir, ".dross", state.File)); err != nil {
+		t.Fatalf("remove state.json: %v", err)
+	}
+
+	rep, err := buildMilestoneProgress(filepath.Join(dir, ".dross"), "v1.3")
+	if err != nil {
+		t.Fatalf("progress must survive a missing state.json: %v", err)
+	}
+	if rep.Done != 1 {
+		t.Errorf("done = %d, want 1 — the durable marker alone should carry it", rep.Done)
+	}
+	if !hasSlug(rep.Remaining, "left") {
+		t.Errorf("the unfinished phase should still read remaining: %v", rep.Remaining)
+	}
+}
+
 // TestProgressPlainOutputListsWhatIsLeft covers the arm every other test in
 // this file skips. They all read --json, which returns before a single line is
 // printed — so the narration a human actually gets from `dross milestone
