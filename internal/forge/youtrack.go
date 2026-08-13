@@ -363,6 +363,10 @@ func (c *YouTrackClient) ListIssues(f IssueFilter) ([]Issue, error) {
 
 // buildQuery assembles a YouTrack search query scoped to the project, with the
 // open/closed state and any label tags folded in.
+//
+// Labels are OR'd, not AND'd: YouTrack reads the comma-separated values of a
+// single `tag:` token as alternatives, whereas repeating the token once per
+// label intersects them. A filter naming two labels means "either label".
 func (c *YouTrackClient) buildQuery(f IssueFilter) string {
 	parts := []string{"project: " + c.project}
 	switch f.State {
@@ -371,10 +375,31 @@ func (c *YouTrackClient) buildQuery(f IssueFilter) string {
 	case "closed":
 		parts = append(parts, "#Resolved")
 	}
-	for _, l := range f.Labels {
-		parts = append(parts, "tag: "+l)
+	if len(f.Labels) > 0 {
+		vals := make([]string, len(f.Labels))
+		for i, l := range f.Labels {
+			vals[i] = quoteYouTrackValue(l)
+		}
+		parts = append(parts, "tag: "+strings.Join(vals, ", "))
 	}
 	return strings.Join(parts, " ")
+}
+
+// quoteYouTrackValue brace-wraps a query value that carries characters YouTrack
+// would otherwise read as syntax — `/`, `:`, `-` and spaces all appear in dross's
+// own tag names (`dross/phase:01-x`). A plain alphanumeric value is left bare.
+func quoteYouTrackValue(v string) string {
+	bare := v != ""
+	for _, r := range v {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_') {
+			bare = false
+			break
+		}
+	}
+	if bare {
+		return v
+	}
+	return "{" + v + "}"
 }
 
 // --- wire types ---

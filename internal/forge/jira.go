@@ -203,6 +203,10 @@ func (c *JiraClient) ListIssues(f IssueFilter) ([]Issue, error) {
 
 // buildJQL assembles a JQL query scoped to the project, folding in the
 // open/closed state (via statusCategory) and any label clauses.
+//
+// Labels are OR'd through a single `labels IN (...)` clause; AND-joining one
+// `labels = ` clause per label would only match issues carrying every label at
+// once. The project and statusCategory clauses stay AND-joined.
 func (c *JiraClient) buildJQL(f IssueFilter) string {
 	parts := []string{fmt.Sprintf("project = %q", c.project)}
 	switch f.State {
@@ -211,8 +215,12 @@ func (c *JiraClient) buildJQL(f IssueFilter) string {
 	case "closed":
 		parts = append(parts, "statusCategory = Done")
 	}
-	for _, l := range f.Labels {
-		parts = append(parts, fmt.Sprintf("labels = %q", strings.ReplaceAll(l, " ", "_")))
+	if len(f.Labels) > 0 {
+		quoted := make([]string, len(f.Labels))
+		for i, l := range f.Labels {
+			quoted[i] = fmt.Sprintf("%q", strings.ReplaceAll(l, " ", "_"))
+		}
+		parts = append(parts, "labels IN ("+strings.Join(quoted, ",")+")")
 	}
 	return strings.Join(parts, " AND ") + " ORDER BY created DESC"
 }

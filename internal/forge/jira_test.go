@@ -208,7 +208,7 @@ func TestJiraListIssuesJQL(t *testing.T) {
 	if !strings.Contains(gotJQL, "project = ") {
 		t.Errorf("JQL %q missing project scope", gotJQL)
 	}
-	if !strings.Contains(gotJQL, "labels = ") {
+	if !strings.Contains(gotJQL, `labels IN ("dross")`) {
 		t.Errorf("JQL %q missing label clause", gotJQL)
 	}
 	if gotFields == "" {
@@ -217,6 +217,39 @@ func TestJiraListIssuesJQL(t *testing.T) {
 	if len(issues) != 2 || issues[0].Key != "PROJ-7" || issues[1].Key != "PROJ-8" {
 		t.Errorf("list returned %+v", issues)
 	}
+}
+
+// TestJiraBuildJQLOrsLabels pins the OR semantics. AND-joining one
+// `labels = ` clause per label matches only issues carrying every label at
+// once, so a two-label pull returns near-nothing — the c-1 bug.
+func TestJiraBuildJQLOrsLabels(t *testing.T) {
+	c, _ := newTestJiraClient(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) })
+
+	t.Run("labels share one IN clause", func(t *testing.T) {
+		got := c.buildJQL(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if !strings.Contains(got, `labels IN ("bug","enhancement")`) {
+			t.Errorf("JQL = %q, want a single `labels IN (...)` clause", got)
+		}
+		if strings.Contains(got, " AND labels = ") {
+			t.Errorf("JQL = %q, want no AND-joined `labels = ` clause", got)
+		}
+	})
+
+	t.Run("the state clause stays AND-joined", func(t *testing.T) {
+		got := c.buildJQL(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if !strings.Contains(got, "statusCategory != Done") {
+			t.Fatalf("JQL = %q, want the open-state clause preserved", got)
+		}
+		if !strings.Contains(got, "AND statusCategory != Done") {
+			t.Errorf("JQL = %q, want statusCategory still AND-joined — the OR must not widen the state scope", got)
+		}
+	})
+
+	t.Run("no labels emits no label clause", func(t *testing.T) {
+		if got := c.buildJQL(IssueFilter{}); strings.Contains(got, "labels") {
+			t.Errorf("JQL = %q, want no label clause at all", got)
+		}
+	})
 }
 
 func TestJiraEnsureMilestoneVersion(t *testing.T) {

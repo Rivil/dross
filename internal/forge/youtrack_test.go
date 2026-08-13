@@ -587,9 +587,9 @@ func TestYouTrackBuildQueryFoldsStateAndLabels(t *testing.T) {
 		{"closed", IssueFilter{State: "closed"}, "project: PROJ #Resolved"},
 		{"one label", IssueFilter{Labels: []string{"bug"}}, "project: PROJ #Unresolved tag: bug"},
 		{
-			"several labels, each its own clause",
+			"several labels share one OR'd clause",
 			IssueFilter{State: "closed", Labels: []string{"bug", "dross"}},
-			"project: PROJ #Resolved tag: bug tag: dross",
+			"project: PROJ #Resolved tag: bug, dross",
 		},
 	}
 	for _, tc := range cases {
@@ -599,4 +599,41 @@ func TestYouTrackBuildQueryFoldsStateAndLabels(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestYouTrackBuildQueryOrsLabels pins the OR semantics themselves. Repeating
+// the `tag:` token per label intersects them, so a two-label pull would return
+// only issues carrying both — the AND bug c-1 exists to kill.
+func TestYouTrackBuildQueryOrsLabels(t *testing.T) {
+	c, _ := newTestYTClient(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) })
+
+	t.Run("exactly one tag token for several labels", func(t *testing.T) {
+		got := c.buildQuery(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if n := strings.Count(got, "tag:"); n != 1 {
+			t.Errorf("query %q carries %d `tag:` tokens, want exactly 1 (OR, not AND)", got, n)
+		}
+		if !strings.Contains(got, "tag: bug, enhancement") {
+			t.Errorf("query = %q, want it to carry `tag: bug, enhancement`", got)
+		}
+	})
+
+	t.Run("a structured label is brace-wrapped", func(t *testing.T) {
+		got := c.buildQuery(IssueFilter{Labels: []string{"dross/phase:01-x"}})
+		if !strings.Contains(got, "tag: {dross/phase:01-x}") {
+			t.Errorf("query = %q, want the label brace-wrapped — `/`, `:` and `-` are query syntax", got)
+		}
+	})
+
+	t.Run("the state clause is untouched by the label change", func(t *testing.T) {
+		got := c.buildQuery(IssueFilter{Labels: []string{"bug", "enhancement"}})
+		if !strings.Contains(got, "#Unresolved") {
+			t.Errorf("query = %q, want the #Unresolved state clause still scoped in", got)
+		}
+	})
+
+	t.Run("no labels emits no tag token", func(t *testing.T) {
+		if got := c.buildQuery(IssueFilter{}); strings.Contains(got, "tag:") {
+			t.Errorf("query = %q, want no `tag:` token at all", got)
+		}
+	})
 }
