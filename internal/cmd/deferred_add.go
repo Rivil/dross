@@ -116,12 +116,61 @@ func deferredAdd() *cobra.Command {
 				dest = target
 			}
 			Printf("added %s deferred[%d] → %s\n", source, idx, dest)
+
+			// The local write above is authoritative; the mirror below is
+			// best-effort and never turns a filed finding into a failed command
+			// (locked board_push).
+			mirrorDeferredAdd(root, deferredEntry{
+				Source: source,
+				Index:  idx,
+				ID:     id,
+				Text:   text,
+				Why:    why,
+				Target: target,
+			})
 			return nil
 		},
 	}
 	c.Flags().StringVar(&why, "why", "", "why this was parked (optional)")
 	c.Flags().StringVar(&target, "target", "", "route it to a destination phase slug in the same command")
 	return c
+}
+
+// mirrorDeferredAdd pushes the just-filed item onto the issue board, so filing
+// a finding and having it appear on the tracker are one command rather than two
+// (c-6). It never returns an error: the locked board_push decision makes the
+// local TOML authoritative, so a network blip warns and leaves the local write
+// standing rather than failing the command that just recorded a real finding.
+//
+// A disabled board or an absent current milestone is a silent no-op — there is
+// nothing to attach a backlog item to, and that is not a failure.
+//
+// The push is unconditional on --target, so a routed add IS mirrored. That is
+// knowingly asymmetric with backlog-sync, which skips routed items: the issue is
+// created once here and never updated by a later sync. The staleness is recorded
+// in this phase's [[deferred]] and left to board-sync-truth.
+func mirrorDeferredAdd(root string, d deferredEntry) {
+	ctx, enabled, err := openBoard()
+	if err != nil {
+		Printf("warning: board mirror skipped — %v\n", err)
+		return
+	}
+	if !enabled {
+		return
+	}
+	s, err := state.Load(filepath.Join(root, state.File))
+	if err != nil || s.CurrentMilestone == "" {
+		return
+	}
+	it := deferredBacklogItem(d)
+	// A brand-new item has no pre-id board link, so there is nothing to migrate
+	// — and leaving the positional key set would let it consult a stale link
+	// recorded for a long-gone item at the same index.
+	it.legacyKey = ""
+	if _, _, err := pushBacklogItems(ctx, s.CurrentMilestone, []backlogItem{it}); err != nil {
+		Printf("warning: board mirror failed — %v\n", err)
+		Printf("the item is filed locally; `dross issue backlog-sync %s` will mirror it later\n", s.CurrentMilestone)
+	}
 }
 
 // loadDeferredHome reads the resolved home, treating an absent file as an empty
