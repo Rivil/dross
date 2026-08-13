@@ -170,6 +170,14 @@ func mirrorDeferredAdd(root string, d deferredEntry) {
 	if _, _, err := pushBacklogItems(ctx, s.CurrentMilestone, []backlogItem{it}); err != nil {
 		Printf("warning: board mirror failed — %v\n", err)
 		Printf("the item is filed locally; `dross issue backlog-sync %s` will mirror it later\n", s.CurrentMilestone)
+		return
+	}
+	// Name the issue the mirror produced. Without it the push is invisible, and
+	// "did this reach the tracker?" can only be answered by reading board.json —
+	// which makes the warn-and-continue path indistinguishable from success at a
+	// glance, exactly when it matters most.
+	if key, ok := ctx.board.BacklogID(it.key); ok {
+		Printf("board: %s\n", key)
 	}
 }
 

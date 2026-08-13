@@ -264,3 +264,40 @@ func TestReadmeListsDeferredAdd(t *testing.T) {
 		t.Error("README's deferred row does not list the `add` verb")
 	}
 }
+
+// TestDeferredAddReplaysHomelessFindings replays the two findings c-5 names, on
+// a fixture, in exactly the shapes they were filed in: one bare `add` that must
+// land as someday, and one `add --target` at a slug that exists ONLY in an
+// earlier milestone's phases array — the sole end-to-end exercise of t-2's
+// milestone-array branch through the `add` verb.
+func TestDeferredAddReplaysHomelessFindings(t *testing.T) {
+	addFixture(t, "alpha")
+
+	const (
+		hermeticity = "test-suite hermeticity gap: a test read the real repo's gitignored state.json"
+		vocabulary  = "verify stdout and verify.toml disagree on survivor vocabulary"
+	)
+
+	if err := runCmd(t, Deferred(), "add", hermeticity,
+		"--why", "found by CI, not by dross"); err != nil {
+		t.Fatalf("bare add: %v", err)
+	}
+	// watch-pr-ci-status stands in for mutation-score-truth: a slug parked in an
+	// earlier milestone's array with no phase directory, which is precisely the
+	// shape the real filing used.
+	if err := runCmd(t, Deferred(), "add", vocabulary,
+		"--target", "watch-pr-ci-status"); err != nil {
+		t.Fatalf("routed add at a milestone-array-only slug: %v", err)
+	}
+
+	if got := findAdded(t, hermeticity, "--someday"); got.Target != "" {
+		t.Errorf("the bare filing should be someday, got target %q", got.Target)
+	}
+	if got := findAdded(t, vocabulary, "--target", "watch-pr-ci-status"); got.Target != "watch-pr-ci-status" {
+		t.Errorf("target = %q, want watch-pr-ci-status", got.Target)
+	}
+	// Neither filing may leave a dangling destination behind.
+	if err := runCmd(t, Validate()); err != nil {
+		t.Errorf("validate should stay green after both filings: %v", err)
+	}
+}

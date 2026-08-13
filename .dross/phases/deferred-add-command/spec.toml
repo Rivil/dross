@@ -63,3 +63,14 @@
   text = "Routed deferred items never reach the board — syncBacklog skips anything with a target, so a routed finding is invisible on the tracker. This phase makes the gap asymmetric rather than closing it: `deferred add --target X` mirrors its item once (c-6 is unconditional), but no later sync ever updates that issue, while the same item routed from an existing entry gets no issue at all. Board coverage of routed items is now verb-dependent, and add-created routed issues go stale on the first text edit."
   why = "Board honesty is board-sync-truth's remit, not this verb's. Recorded 2026-08-13 from the plan review, which found the asymmetry the D2 decision introduces."
   target = "board-sync-truth"
+
+[[deferred]]
+  id = "1ecc05633e1a85ed"
+  text = "Test-suite hermeticity gap: a test read the real repo's gitignored state.json and passed both the per-task gate and a full verify — only CI caught it. ARCHITECTURE.md carries a 'Test-suite hermeticity' entry, so the principle exists but nothing enforces it."
+  why = "Found by CI, not by dross. The gate that should have caught it is the one that let it through, so the enforcement gap is the finding — not the individual test."
+
+[[deferred]]
+  id = "e948eb6e07e8138b"
+  text = "dross verify stdout and verify.toml disagree on survivor vocabulary: stdout printed 'survivors: 4 in-diff, 0 routed, 71 accepted, 0 unclassified' while the verify.toml written by the same run set unclassified_in_scope = 4 — the same four survivors under two vocabularies, and the stdout line reads as an all-clear while the gate is open."
+  why = "Not reproduced on the 2026-08-13 re-run (0 in-diff survivors, both surfaces read 0 and agree) — unfixed, not disproven. Needs a run with in-diff survivors to confirm."
+  target = "mutation-score-truth"

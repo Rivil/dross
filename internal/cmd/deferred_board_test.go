@@ -43,9 +43,10 @@ func storedText(t *testing.T, dir string) string {
 // add triggered a whole-milestone sync instead of pushing its own item.
 func TestDeferredAddMirrorsToBoard(t *testing.T) {
 	f := newFakeBoard(t)
-	boardAddRepo(t, f.srv.URL)
+	dir := boardAddRepo(t, f.srv.URL)
 
-	if err := runCmd(t, Deferred(), "add", "mirrored finding"); err != nil {
+	var out string
+	if err := runCmdCapturing(t, &out, Deferred(), "add", "mirrored finding"); err != nil {
 		t.Fatalf("add: %v", err)
 	}
 	if len(f.creates) != 1 {
@@ -53,6 +54,24 @@ func TestDeferredAddMirrorsToBoard(t *testing.T) {
 	}
 	if f.creates[0] != "[someday] mirrored finding" {
 		t.Errorf("created title = %q", f.creates[0])
+	}
+	// The mirror must announce the issue it produced: a silent success is
+	// indistinguishable from the warn-and-continue path at a glance.
+	bj, err := readBoardJSON(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var linked string
+	for k, v := range bj.Backlog {
+		if strings.HasPrefix(k, "someday:id:") {
+			linked = v
+		}
+	}
+	if linked == "" {
+		t.Fatalf("no id-keyed board link recorded: %v", bj.Backlog)
+	}
+	if !strings.Contains(out, linked) {
+		t.Errorf("output does not name the created issue key %q:\n%s", linked, out)
 	}
 }
 
