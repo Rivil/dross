@@ -18,6 +18,36 @@
         }
       ]
     },
+    "t-11": {
+      "files": [
+        "internal/cmd/milestone_progress_test.go"
+      ],
+      "commit": "6fa515d",
+      "completed_at": "2026-08-13T06:14:50.239758Z",
+      "landmarks": [
+        {
+          "feature": "milestone progress reporting",
+          "symbol": "TestProgressPlainOutputListsWhatIsLeft",
+          "loc": "internal/cmd/milestone_progress_test.go:209",
+          "what": "plain-text progress output pinned in both directions, closing the four in-hunk survivors on its guards"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/milestone_prune_test.go"
+      ],
+      "commit": "93350ba",
+      "completed_at": "2026-08-13T06:18:49.421709Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch pruning",
+          "symbol": "TestPruneLeavesAnActiveMilestoneAlone",
+          "loc": "internal/cmd/milestone_prune_test.go:207",
+          "what": "prune's destructive end of the active-milestone gate pinned against a squash-merged branch"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/milestone_stale.go",

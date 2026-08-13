@@ -1,4 +1,4 @@
-task_seq = 10
+task_seq = 12
 
 [phase]
   id = "milestone-lifecycle-close"
@@ -96,4 +96,24 @@ task_seq = 10
   covers = ["c-1", "c-2", "c-3", "c-5"]
   depends_on = ["t-4", "t-5"]
   test_contract = ["step 1: an active milestone whose branch is merged to origin/main is returned by staleMilestoneBranches as nothing — the active gate holds while finalize has not run", "step 2: --finalize leaves <v>.toml status \"complete\" AND both refs/heads/milestone/v1.0 and refs/remotes/origin/milestone/v1.0 absent", "step 3: re-running --finalize exits 0 printing \"already finalized\" with no \"is not merged into\" anywhere in the output", "step 4: recreating milestone/v1.0 at the merged commit makes the same detector NOW return it with Reason \"merged\" — a finalized milestone's leftover branch IS prunable, which is the outcome reverting either the flip or the gate destroys"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 3
+  title = "Pin milestone progress's plain-text output"
+  files = ["internal/cmd/milestone_progress_test.go"]
+  description = "Two tests over the human-readable arm of `dross milestone progress` (milestone_progress.go:75-84), which every existing test skips by reading --json. Presence-when-non-empty kills CONDITIONALS_NEGATION on both guards; absence-when-empty kills CONDITIONALS_BOUNDARY, which only differs from > 0 at len 0. No production code."
+  covers = ["c-4"]
+  depends_on = ["t-6"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 3
+  title = "Pin prune's own refusal on an active milestone"
+  files = ["internal/cmd/milestone_prune_test.go"]
+  description = "Closes the verify FLAG: t-5's test contract named a case pinning `dross milestone prune` on an ACTIVE milestone's squash-merged branch, and no such test exists — the prune suite only ever seeds status=complete. The gate is proven at the detector and at doctor's rendered section, but prune is the destructive consumer and its own end is unpinned. One test mirroring TestPruneDeletesOnlyStaleBranches with an active milestone, asserting the branch survives local and on origin. No production code."
+  covers = ["c-5"]
+  depends_on = ["t-5"]
   status = "done"
