@@ -208,13 +208,12 @@ func deferredRoute() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("idx must be an integer: %w", err)
 			}
-			specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
-			spec, err := phase.LoadSpec(specPath)
+			spec, specPath, err := resolveDeferredSource(root, phaseID)
 			if err != nil {
 				return err
 			}
-			if idx < 0 || idx >= len(spec.Deferred) {
-				return fmt.Errorf("deferred index %d out of range (phase %s has %d deferred item(s))", idx, phaseID, len(spec.Deferred))
+			if err := deferredIndex(phaseID, spec, idx); err != nil {
+				return err
 			}
 			spec.Deferred[idx].Target = target
 			if err := spec.Save(specPath); err != nil {
@@ -244,13 +243,12 @@ func deferredDismiss() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("idx must be an integer: %w", err)
 			}
-			specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
-			spec, err := phase.LoadSpec(specPath)
+			spec, specPath, err := resolveDeferredSource(root, phaseID)
 			if err != nil {
 				return err
 			}
-			if idx < 0 || idx >= len(spec.Deferred) {
-				return fmt.Errorf("deferred index %d out of range (phase %s has %d deferred item(s))", idx, phaseID, len(spec.Deferred))
+			if err := deferredIndex(phaseID, spec, idx); err != nil {
+				return err
 			}
 			d := &spec.Deferred[idx]
 			if undo {
@@ -297,13 +295,12 @@ func deferredUnroute() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("idx must be an integer: %w", err)
 			}
-			specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
-			spec, err := phase.LoadSpec(specPath)
+			spec, specPath, err := resolveDeferredSource(root, phaseID)
 			if err != nil {
 				return err
 			}
-			if idx < 0 || idx >= len(spec.Deferred) {
-				return fmt.Errorf("deferred index %d out of range (phase %s has %d deferred item(s))", idx, phaseID, len(spec.Deferred))
+			if err := deferredIndex(phaseID, spec, idx); err != nil {
+				return err
 			}
 			d := &spec.Deferred[idx]
 			// Dismissed items already have an empty Target, so the someday check
@@ -326,6 +323,35 @@ func deferredUnroute() *cobra.Command {
 		},
 	}
 	return c
+}
+
+// resolveDeferredSource loads the [[deferred]]-carrying file for a source slug
+// and returns it with its path. It is what makes `_project <idx>` behave
+// identically to `<phase> <idx>` in route, unroute and dismiss: every verb
+// resolves through deferredStore rather than building a phases/<id>/spec.toml
+// path of its own, so the project store is a first-class source rather than a
+// place only `add` can write.
+func resolveDeferredSource(root, source string) (*phase.Spec, string, error) {
+	path, err := deferredStore(root, source)
+	if err != nil {
+		return nil, "", err
+	}
+	if source == projectStoreSlug {
+		spec, err := loadDeferredStore(root)
+		return spec, path, err
+	}
+	spec, err := phase.LoadSpec(path)
+	return spec, path, err
+}
+
+// deferredIndex bounds-checks an index against a source's items, naming the
+// source and its count. Sources are interchangeable here on purpose: a store
+// index out of range reads the same as a phase index out of range.
+func deferredIndex(source string, spec *phase.Spec, idx int) error {
+	if idx < 0 || idx >= len(spec.Deferred) {
+		return fmt.Errorf("deferred index %d out of range (%s has %d deferred item(s))", idx, source, len(spec.Deferred))
+	}
+	return nil
 }
 
 func filterDeferred(in []deferredEntry, keep func(deferredEntry) bool) []deferredEntry {
