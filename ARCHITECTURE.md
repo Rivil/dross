@@ -42,8 +42,8 @@ Every outbound request that would carry the secret named by `[remote].auth_env` 
 - `forge.Config.Hosts` (all four forge constructors refuse before the token is read) — `internal/forge/forge.go:76`
 - `resolveToken` (single guarded token read shared by the five ship backends) — `internal/ship/hostguard.go:33`
 - `TestNoGetenvOutsideHostguard` (AST gate: a new ship backend cannot skip the check) — `internal/ship/hostguard_test.go:137`
-- `mergeGate` (host refusal re-raises instead of degrading to git ancestry) — `internal/cmd/phase.go:762`
-- `TestDoctorReportsOffAllowlistAPIBase` (doctor names an off-allowlist host before a command refuses mid-run) — `internal/cmd/doctor_test.go:1784`
+- `mergeGate` (host refusal re-raises instead of degrading to git ancestry) — `internal/cmd/phase.go:784`
+- `TestDoctorReportsOffAllowlistAPIBase` (doctor names an off-allowlist host before a command refuses mid-run) — `internal/cmd/doctor_test.go:1789`
 
 _introduced config-trust-hardening · 6fef81a_
 
@@ -77,7 +77,7 @@ Answers "where did this work land, and is that correct-by-design or stuck?" — 
 
 - `branchTopology` (HEAD/work/main + commits-ahead-of-main, authoritative work override) — `internal/cmd/topology.go:47`
 - `renderTopologyLine` (the one renderer both consumers share) — `internal/cmd/topology.go:98`
-- `describeTeardown` (per-side teardown phrasing; never claims an undone deletion) — `internal/cmd/phase.go:630`
+- `describeTeardown` (per-side teardown phrasing; never claims an undone deletion) — `internal/cmd/phase.go:652`
 - `TestPhaseCompletePrintsTopologyStatement` (each clause of the completion statement asserted separately) — `internal/cmd/phase_test.go:1799`
 - `TestStatusTopologyLineAlways` (unconditional: mid-phase, between phases, no origin) — `internal/cmd/status_test.go:1007`
 - `TestBranchTopologyWorkOverrideWins` (recorded base beats an inferable milestone branch) — `internal/cmd/topology_test.go:94`
@@ -91,7 +91,7 @@ Every branch switch dross performs runs behind one guard: `guardLiveState` refus
 - `guardLiveState` (refuses a switch to any ref tracking state.json, names the fix) — `internal/cmd/switchbranch.go:109`
 - `checkoutBranch` / `checkoutBranchNew` (guarded checkout primitives) — `internal/cmd/switchbranch.go:36`
 - `guardedFF` / `guardedResetHard` (guarded fast-forward + hard reset) — `internal/cmd/switchbranch.go:81`
-- `milestoneFinalize` (guarded switch back to main, exercised from the milestone branch itself) — `internal/cmd/milestone.go:266`
+- `milestoneFinalize` (guarded switch back to main, exercised from the milestone branch itself) — `internal/cmd/milestone.go:269`
 - `TestHistorySurvivesEveryBranchSwitch` (history intact across every guarded op) — `internal/cmd/state_history_test.go:91`
 - `phaseCheckout` (`dross phase checkout <id>`: guarded switch; refuses a missing ref instead of creating it) — `internal/cmd/phase_checkout.go:22`
 - `Checkout` (`dross checkout <branch>`: extends the guard to non-phase targets, so `milestone prune`'s refusal stops handing over raw `git checkout`) — `internal/cmd/phase_checkout.go:73`
@@ -106,8 +106,8 @@ _introduced state-json-branch-safety · extended completion-state-truth · 1ecde
 
 Append-only per-task record of files touched, plus a typed `--landmark` record (feature/symbol/loc/what) parsed into a structured `Landmarks` array — replacing the old landmark-carried-in-`--notes` convention. Values may contain commas: a comma opens a new pair only at a recognised `key=` boundary (duplicate keys error loudly), and the `--landmark` help text documents the rule.
 
-- `Changes.Record` — `internal/changes/changes.go:203`
-- `changes.ParseLandmark` / `Landmark` (comma-in-value join, dup-key error) — `internal/changes/changes.go:72`
+- `Changes.Record` — `internal/changes/changes.go:242`
+- `changes.ParseLandmark` / `Landmark` (comma-in-value join, dup-key error) — `internal/changes/changes.go:91`
 - `Changes` (CLI, repeatable `--landmark`) — `internal/cmd/changes.go:15`
 
 _introduced 1d1f85a · extended 01-architecture-comprehension-layer · extended architecture-doc-enhancements · extended landmark-comma-fix · c896695_
@@ -209,9 +209,9 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `providerSwitchIn` (go/ast validator↔dispatch divergence guard) — `internal/cmd/enum_divergence_test.go:56`
 - `TestPromptProviderListsMatchShipProviders` (init/onboard provider bullets pinned to ShipProviders) — `internal/cmd/prompt_provider_list_test.go:73`
 - `renderMultiGet` (shared 1+-path get renderer: bare value or keyed JSON in argument order) — `internal/cmd/dotget.go:24`
-- `looksLikeMilestoneVersion` (shape-matched leading version, so a typo'd path is named) — `internal/cmd/milestone.go:635`
+- `looksLikeMilestoneVersion` (shape-matched leading version, so a typo'd path is named) — `internal/cmd/milestone.go:675`
 - `unsetDotted` (`project set --unset`: clear a scalar or one `board.state_map` entry) — `internal/cmd/project.go:489`
-- `resolveBareMilestoneField` (unambiguous bare name → dotted path, ambiguity rejected) — `internal/cmd/milestone.go:784`
+- `resolveBareMilestoneField` (unambiguous bare name → dotted path, ambiguity rejected) — `internal/cmd/milestone.go:824`
 - `stateMapKey` (`board.state_map` keys gated + normalised on write; doctor reports one on disk as an issue) — `internal/cmd/project.go:477`
 - `TestTomlFieldsCarryMatchingJSONTags` (toml↔json tag parity, transitive walk over the eight document roots) — `internal/cmd/json_tag_parity_test.go:48`
 - `writeVersion` (one validated writer for both version homes, tracked copy first) — `internal/cmd/state.go:239`
@@ -366,33 +366,48 @@ _introduced complete-base-truth · extended state-json-branch-safety · extended
 
 Milestone work rides a `milestone/<version>` integration branch: scoping a milestone stacks it on the current milestone's still-unmerged branch tip when one exists — else cuts from main, or from an explicit `--base` override — and records the cut point as a stored fact. New phases and quicks fork from the resolved base (falling back to main with a nudge when no milestone is active). Phase PRs target it and `phase complete` fast-forwards it. `dross milestone complete` opens the milestone's integration PR against its recorded parent while that parent is unmerged, retargeting main once the parent has merged or vanished (merge-commit; `--finalize` fast-forwards main and deletes the branch — refusing while an unmerged stacked dependent, or an open forge PR, still targets it).
 
-- `resolveMilestoneCutPoint` (create stacks on the current milestone's unmerged branch tip; `--base` forces it; the cut point is recorded, never re-inferred) — `internal/cmd/milestone.go:470`
+- `resolveMilestoneCutPoint` (create stacks on the current milestone's unmerged branch tip; `--base` forces it; the cut point is recorded, never re-inferred) — `internal/cmd/milestone.go:510`
 - `Milestone.BaseOr` (recorded cut-point branch; empty reads as main) — `internal/milestone/milestone.go:76`
 - `milestoneMergedIntoMain` (git-ancestry merge probe, origin-preferred with local fallback) — `internal/cmd/milestone_merged.go:32`
-- `milestonePRBase` (milestone-complete PR targets the recorded parent while unmerged and present on origin, else main) — `internal/cmd/milestone.go:232`
+- `milestonePRBase` (milestone-complete PR targets the recorded parent while unmerged and present on origin, else main) — `internal/cmd/milestone.go:235`
 - `resolveNewWorkBase` (existence-aware base resolver: milestone branch when its ref exists, else main) — `internal/cmd/basebranch.go:159`
-- `forkPhaseBranch` (phase create/insert fork off the resolved base) — `internal/cmd/phase.go:853`
+- `forkPhaseBranch` (phase create/insert fork off the resolved base) — `internal/cmd/phase.go:875`
 - `BaseBranch` (`dross base-branch`: resolved base on stdout, no-milestone nudge on stderr) — `internal/cmd/basebranch.go:20`
-- `ensureMilestoneBranch` (create cuts+pushes at scope time) — `internal/cmd/milestone.go:520`
+- `ensureMilestoneBranch` (create cuts+pushes at scope time) — `internal/cmd/milestone.go:560`
 - `dependentMilestones` (prune/finalize refuse to delete a branch an unmerged stacked milestone still records as its base) — `internal/cmd/milestone_dependents.go:33`
 - `OpenPRsTargeting` / `guardOpenPRsTargeting` (forge open-PR check layered over the record scan; an unavailable provider announces its skip rather than passing silently) — `internal/ship/basepr.go:36`, `internal/cmd/milestone_dependents.go:85`
-- `milestoneComplete` (opens the milestone's integration PR; `--finalize` ff + branch delete) — `internal/cmd/milestone.go:135`
-- `staleMilestoneBranches` (ancestry, then squash-commit resolution against the candidate's own first parent) — `internal/cmd/milestone_stale.go:58`
-- `milestonePrune` (`dross milestone prune`: deletes stale branches local + on origin) — `internal/cmd/milestone.go:49`
+- `milestoneComplete` (opens the milestone's integration PR; `--finalize` ff + branch delete) — `internal/cmd/milestone.go:138`
+- `staleMilestoneBranches` (ancestry, then squash-commit resolution against the candidate's own first parent) — `internal/cmd/milestone_stale.go:71`
+- `milestonePrune` (`dross milestone prune`: deletes stale branches local + on origin) — `internal/cmd/milestone.go:52`
 - doctor stale-milestone-branch report (read-only) — `internal/cmd/doctor.go:376`
+- `classifyFinalize` (finalize state classifier: already-finalized / branch-gone / merged / unmerged answered separately instead of all four via the unmerged refusal) — `internal/cmd/milestone_finalize_state.go:84`
+- `milestoneFinalize` (writes `status = complete` *before* teardown, so a failed branch delete still leaves the finalize recorded; safe to re-run) — `internal/cmd/milestone.go:269`
+- `milestoneIsFinished` (the status gate: only a milestone recorded complete can have a stale branch — active / planning / unknown all fail closed against the destructive prune) — `internal/cmd/milestone_stale.go:143`
+- `resolveMainCompareRef` (merged-ness measured against `origin/<main>`, never the local ref) — `internal/cmd/milestone_stale.go:164`
 
-A milestone branch whose work already landed on main is detected and removable. Ancestry catches the merge-commit case; the squash-merged case that `git branch --merged` is blind to is resolved by matching the branch's diff patch-id against main's commits, deterministically when several are ambiguous. The surfaces are split on purpose (locked `prune_surface`): `dross doctor` *reports* a stale branch read-only, and the explicit `dross milestone prune` performs the local+remote deletion, refusing on a dirty tree, when the branch is the current HEAD, or when an unmerged stacked dependent or open forge PR still targets it.
+A milestone branch whose work already landed on main is detected and removable. Ancestry catches the merge-commit case; the squash-merged case that `git branch --merged` is blind to is resolved by matching the branch's diff patch-id against main's commits, deterministically when several are ambiguous. Two facts gate that detection before ancestry is ever consulted. **Status**: a branch is stale only when its milestone toml reads `complete`, which is why finalize owns the flip — `[milestone].status` is the authoritative already-finalized marker (locked `already_finalized_evidence`), surviving any git state where ancestry cannot, since a successful finalize has already deleted the branch on both sides. **Ref choice**: merged-ness is measured against `origin/<main>`, so a local main sitting unpushed-ahead of origin cannot make a freshly-cut milestone branch look merged. The surfaces are split on purpose (locked `prune_surface`): `dross doctor` *reports* a stale branch read-only, and the explicit `dross milestone prune` performs the local+remote deletion, refusing on a dirty tree, when the branch is the current HEAD, or when an unmerged stacked dependent or open forge PR still targets it. All three consumers of the status gate — detector, doctor's rendered section, and prune's own destructive path — are pinned against the same fixture differing in exactly one toml field.
 
-_introduced milestone-branch-model · extended state-json-branch-safety · extended milestone-stacking · cbad9c9_
+_introduced milestone-branch-model · extended state-json-branch-safety · extended milestone-stacking · extended milestone-lifecycle-close · ea4df10_
+
+### Milestone progress reporting
+
+`dross milestone progress` answers, in one deterministic call, the question `/dross-milestone` must resolve before it can act: is there an active milestone, is it finished, and if not what is left. Every arm exits 0 — including "planning" and "nothing done yet" — because a non-zero exit would make a prompt read a normal state as a broken command. Status is reported verbatim from the toml, never normalised or inferred, since the dispatch branches on it first. Doneness is measured off each phase's own durable status marker rather than the state history, which is capped at 50 entries and silently forgets older phases; a slug listed on the roadmap with no phase directory counts as not-done, so a milestone cannot close with unbuilt criteria still on it (locked `phases_done_test`). `--json` emits the report as a document for prompts to consume; the plain-text arm narrates the same data for humans and is pinned on both of its list guards in each direction.
+
+- `buildMilestoneProgress` (status + done/total + remaining/unscaffolded from per-phase durable markers) — `internal/cmd/milestone_progress.go:92`
+- `milestoneProgressReport` (the emitted document; `AllDone` is true only when every listed slug is done *and* there is at least one) — `internal/cmd/milestone_progress.go:25`
+
+_introduced milestone-lifecycle-close · 7f2fd2d_
 
 ### Milestone scoping
 
-Author and validate milestone.toml — title, success criteria, non-goals, phase order.
+Author, validate and correct milestone.toml — title, success criteria, non-goals, phase order — and dispatch `/dross-milestone` on what that file says. The command branches on milestone state *before* scoping anything: with no active milestone it scopes a new one, with every phase done it drives completion (gating the integration PR on a merge commit rather than a squash), and otherwise it only reports what is left. List fields are correctable rather than write-only: `remove` and `replace` address an entry by its exact value, mirroring `add`'s signature, so a wrong entry never needs a hand-edit. A non-matching value is a loud error, never a silent no-op, because indices shift after every removal and a two-step edit would hit the wrong entry (locked `remove_addressing`); `remove` preserves the order of what stays and `replace` keeps the entry's position.
 
 - `Milestone` (CLI) — `internal/cmd/milestone.go:20`
 - `milestone.Milestone` — `internal/milestone/milestone.go:20`
+- `milestoneRemove` (remove/replace by exact value over `phases` and the `scope` lists; order-preserving, index-stable, fails loudly on a missing entry) — `internal/cmd/milestone_listedit.go:27`
+- milestone.md §0 Dispatch (the prompt branches on milestone state instead of always scoping) — `assets/prompts/milestone.md:11`
 
-_c8b346e_
+_c8b346e · extended milestone-lifecycle-close · 5823ca1_
 
 ### Mutation diff scoping
 
@@ -433,10 +448,10 @@ _introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended 
 
 The branch a phase forked from is a recorded fact, not an inference. `forkPhaseBranch` writes the resolved base into the phase-scoped `changes.json` (`changes.SetBase`, beside the existing `pr` field) as soon as `checkout -b` succeeds, and ship overwrites it with the base the PR was actually opened against, riding the same commit and push as the PR record — so a phase that never ships still has a base, and the PR's real target wins if the two ever diverge (locked `base_write_timing`). `phase complete` reads it back — working tree, then the phase ref, then an explicit `--base` — and **refuses** when nothing is recorded, naming the phase and both candidate branches, instead of falling back to a base derived from `current_milestone`. That inference is what fast-forwarded a stale `milestone/<version>` for a phase actually forked from main; the locked `legacy_escape` keeps pre-record phases completable by having the user *type* the branch, a conscious act rather than a guess. The incident is pinned end to end by a fixture staging the exact trap — phase forked from main, stale milestone branch present locally, PR merged to main — asserting completion either lands on main or refuses, never fast-forwarding the milestone branch and never deleting the phase branch. Side effect worth knowing: recording the base at create time makes `.dross/phases/<id>/` tracked immediately, so checking out another branch now removes a fresh phase's directory.
 
-- `changes.SetBase` (phase-scoped forked-from record, beside `pr`) — `internal/changes/changes.go:156`
-- `forkPhaseBranch` (create-time write, after `checkout -b` succeeds) — `internal/cmd/phase.go:853`
+- `changes.SetBase` (phase-scoped forked-from record, beside `pr`) — `internal/changes/changes.go:175`
+- `forkPhaseBranch` (create-time write, after `checkout -b` succeeds) — `internal/cmd/phase.go:875`
 - ship-time base overwrite (what the PR was actually opened against, on the PR-record commit) — `internal/cmd/ship.go:358`
-- `resolveCompleteBase` (tree → phase ref → `--base`; refuses rather than inferring) — `internal/cmd/phase.go:657`
+- `resolveCompleteBase` (tree → phase ref → `--base`; refuses rather than inferring) — `internal/cmd/phase.go:679`
 - `staleMilestoneFixture` (end-to-end incident reproduction, success and refusal arms) — `internal/cmd/phase_base_truth_test.go:31`
 
 _introduced complete-base-truth · e1f72be_
@@ -450,18 +465,21 @@ Create, list, number, migrate, complete, and reorder/insert/rename phases on ded
 - `phaseNumber` — `internal/cmd/phase.go:54`
 - `phaseMigrate` — `internal/cmd/migrate.go:31`
 - `phaseComplete` (branch switch deferred past every refusal path) — `internal/cmd/phase.go:234`
-- `mergeGate` (authoritative completion gate: recorded-PR merge status + ancestry refuse-when-inconclusive fallback) — `internal/cmd/phase.go:762`
-- `originRecordedPR` (post-fetch recorded-PR resolution from origin/<base>'s changes.json) — `internal/cmd/phase.go:737`
+- `mergeGate` (authoritative completion gate: recorded-PR merge status + ancestry refuse-when-inconclusive fallback) — `internal/cmd/phase.go:784`
+- `originRecordedPR` (post-fetch recorded-PR resolution from origin/<base>'s changes.json) — `internal/cmd/phase.go:759`
 - `ship.PRStatusFunc` / `ship.GetPRStatus` (provider merged-status + base-ref lookup across all 5 ship providers, exported overridable seam; `ErrMergeStatusUnsupported` is a forward seam, unreachable via real dispatch) — `internal/ship/merged.go:53`
-- `checkBaseRetarget` (mergeGate's post-merge base-retarget refusal, refs/heads/-normalized, uniform across all 5 providers) — `internal/cmd/phase.go:821`
+- `checkBaseRetarget` (mergeGate's post-merge base-retarget refusal, refs/heads/-normalized, uniform across all 5 providers) — `internal/cmd/phase.go:843`
 - `phaseMove` / `phaseInsert` / `phaseRename` — `internal/cmd/phase_lifecycle.go`
 - array-order splice helpers (`InsertRelative`, `MoveRelative`, `RenameInArray`) — `internal/phase/phase.go`
 - slug identity helpers (`Dir`, `Ordered`, `DisplayNumber`, `UniqueSlug`) — `internal/phase/phase.go:34`
 - complete-path verify heal (records a resolved-but-unfinalized verdict before the branch switch; never invents a verdict) — `internal/cmd/phase.go:296`
+- `changes.SetStatus` (monotonic per-phase shipped/complete marker written into changes.json — durable where the 50-entry state history is not) — `internal/changes/changes.go:192`
 
 The completion statement it prints at the end of a run — landing branch, per-side teardown, commits-not-yet-on-main — is covered in [Branch topology reporting](#branch-topology-reporting).
 
-_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · extended verify-auto-finalize · extended complete-base-truth · extended completion-state-truth · extended provider-merge-parity · 4d4fb45_
+Completion is recorded in two places with different lifetimes. `state.json` carries the machine-local transition (cleared `current_phase` plus the `completed <id>` history entry) and rides no commit; `changes.json` carries a **monotonic per-phase status marker** that is committed with the phase. The second exists because the history is capped at 50 entries, so a phase completed long enough ago drops out of it entirely — any consumer asking "is this phase done?" off history alone (milestone progress counting, drift classification) would silently answer no. The marker only ever advances, so a re-run or an out-of-order write cannot walk a phase backwards.
+
+_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · extended verify-auto-finalize · extended complete-base-truth · extended completion-state-truth · extended provider-merge-parity · extended milestone-lifecycle-close · 6b00db6_
 
 ### Plan persistence
 
@@ -617,7 +635,7 @@ Push the phase branch and open a provider-aware PR/MR (GitHub/Forgejo/GitLab/Bit
 - `gitlabPRStatus` / `gitlabOpenMRsTargeting` (GitLab PRStatus + open-MRs-by-target parity) — `internal/ship/gitlab.go:101`, `internal/ship/gitlab.go:104`
 - `forgejoPRStatus` / `forgejoOpenPRsTargeting` (Forgejo/Gitea PRStatus + open-PRs-by-base parity) — `internal/ship/forgejo.go:86`
 - `buildOpenOpts` / `buildCommentOpts` (thread remote auth_scheme/project_id/auth_user) — `internal/cmd/ship.go:43`
-- `changes.SetPR` (records opened PR number per-phase for the completion merge-gate) — `internal/changes/changes.go:141`
+- `changes.SetPR` (records opened PR number per-phase for the completion merge-gate) — `internal/changes/changes.go:160`
 - `ship.BuildPRBody` — `internal/ship/body.go:20`
 - verify-gate auto-heal (records a resolved-but-unrecorded verdict via `finalizeVerify` BEFORE the pass-only refusal — partial/fail recorded, then still refused) — `internal/cmd/ship.go:123`
 

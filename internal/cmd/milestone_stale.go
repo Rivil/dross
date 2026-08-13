@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/Rivil/dross/internal/milestone"
 )
 
 // This file answers one question and writes nothing: which milestone/* branches
@@ -55,12 +57,24 @@ const (
 // A branch with no matching commit is simply not stale: an amended or rewritten
 // squash is unresolvable, and reporting nothing is the safe answer for something
 // `dross milestone prune` will delete.
-func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
+//
+// The comparison is made against ORIGIN's main branch, not this repo's — see
+// resolveMainCompareRef. Local main is a working copy that can be ahead of the
+// shared branch by commits nobody else has, and a merge measured against it
+// reports work as landed that origin has never seen.
+//
+// A branch is only ever reported once its milestone says it is finished. Merged
+// content is not the same claim as a finished milestone: a milestone branch
+// whose first phase has already squash-merged into main has all of its current
+// work "on main" and is very much still in use. Gating on the milestone's own
+// status is what separates the two, and root is where that status is read from.
+func staleMilestoneBranches(root, repoDir, mainBranch string) ([]staleBranch, error) {
 	if mainBranch == "" {
 		return nil, errors.New("stale milestone scan: no main branch given")
 	}
-	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, mainBranch)...); err != nil {
-		return nil, fmt.Errorf("stale milestone scan: no such branch %q", mainBranch)
+	compare, err := resolveMainCompareRef(repoDir, mainBranch)
+	if err != nil {
+		return nil, err
 	}
 
 	listed, err := gitTrim(repoDir, "for-each-ref", "--format=%(refname:short)", "refs/heads/milestone/*")
@@ -82,8 +96,11 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 			Version:   strings.TrimPrefix(name, "milestone/"),
 			HasRemote: gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/remotes/origin/"+name)...) == nil,
 		}
+		if !milestoneIsFinished(root, entry.Version) {
+			continue
+		}
 
-		merged, err := isAncestor(repoDir, name, mainBranch)
+		merged, err := isAncestor(repoDir, name, compare)
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +110,7 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 			continue
 		}
 
-		squash, err := resolveSquashCommit(repoDir, name, mainBranch)
+		squash, err := resolveSquashCommit(repoDir, name, compare)
 		if err != nil {
 			return nil, err
 		}
@@ -105,6 +122,53 @@ func staleMilestoneBranches(repoDir, mainBranch string) ([]staleBranch, error) {
 		stale = append(stale, entry)
 	}
 	return stale, nil
+}
+
+// milestoneIsFinished reports whether milestones/<version>.toml says this
+// milestone is done — the gate a branch has to pass before it can be called
+// stale.
+//
+// Only status="complete" qualifies. Everything else fails closed: "active" is
+// obviously live, "planning" is a branch cut before the work started, an empty
+// status is a milestone that never said, and a version with no toml at all is
+// unknown (locked toml_less_branch_not_stale). The consumer is `dross milestone
+// prune`, which deletes local AND remote, so the ambiguous cases have to answer
+// "leave it alone".
+//
+// This is the one place merged-ness is not the whole answer. Under the
+// milestone-branch model phases squash-merge into milestone/<version> and the
+// milestone merges into main at the end, so a milestone whose early phases have
+// landed can look entirely "already on main" while the next phase is still
+// being written against it.
+func milestoneIsFinished(root, version string) bool {
+	m, err := milestone.Load(milestone.FilePath(root, version))
+	if err != nil {
+		return false
+	}
+	return m.Milestone.Status == milestoneStatusComplete
+}
+
+// resolveMainCompareRef picks the ref every merged-ness question in this file is
+// asked against: refs/remotes/origin/<main> when origin carries it, and only
+// otherwise refs/heads/<main>.
+//
+// Origin first because the consumer is a destructive prune and local main is not
+// the shared branch. A repo whose main is pushed-ahead of origin — a `dross
+// quick` committed but not pushed, a squash landed locally — makes a
+// freshly-cut milestone branch look merged into work nobody else has, and the
+// branch is then deleted local AND remote on the strength of it.
+//
+// The local fallback is for a repo with no origin at all, or one whose main has
+// never been pushed. There the local ref is the only answer available, and it is
+// also the correct one: nothing else has a claim on that history.
+func resolveMainCompareRef(repoDir, mainBranch string) (string, error) {
+	if remote := "refs/remotes/origin/" + mainBranch; gitRefExists(repoDir, remote) {
+		return remote, nil
+	}
+	if local := "refs/heads/" + mainBranch; gitRefExists(repoDir, local) {
+		return local, nil
+	}
+	return "", fmt.Errorf("stale milestone scan: no such branch %q", mainBranch)
 }
 
 // resolveSquashCommit returns the commit on mainBranch whose patch is the

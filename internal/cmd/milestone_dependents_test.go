@@ -10,16 +10,40 @@ import (
 )
 
 // writeMilestoneWithBase drops a milestone toml recording `base`, the fact the
-// delete gate reads.
+// delete gate reads. Status "active" — these are the still-open dependents.
 func writeMilestoneWithBase(t *testing.T, dir, version, base string) {
+	t.Helper()
+	writeMilestoneWithBaseStatus(t, dir, version, base, "active")
+}
+
+// writeMilestoneWithBaseStatus is the same record with the status spelled out.
+// The milestone prune is being aimed AT has to read "complete": the stale
+// detector reports only finished milestones, so a fixture that leaves the
+// target active is testing nothing — prune would decline it before ever
+// reaching the dependent gate under test.
+func writeMilestoneWithBaseStatus(t *testing.T, dir, version, base, status string) {
 	t.Helper()
 	m := &milestone.Milestone{}
 	m.Milestone.Version = version
-	m.Milestone.Status = "active"
+	m.Milestone.Status = status
 	m.Milestone.Base = base
 	if err := m.Save(milestone.FilePath(filepath.Join(dir, ".dross"), version)); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// stackedPruneFixture is stackedDeleteFixture aimed at prune: v1.2 is recorded
+// COMPLETE. The stale detector only ever names a finished milestone, so a prune
+// test whose target is still active would be declined before it ever reached
+// the dependent gate it means to exercise. The finalize tests keep the active
+// record — finalize is what flips it.
+func stackedPruneFixture(t *testing.T) string {
+	t.Helper()
+	dir := stackedDeleteFixture(t, true)
+	writeMilestoneWithBaseStatus(t, dir, "v1.2", "main", milestoneStatusComplete)
+	mustGit(t, dir, "add", ".dross")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): record v1.2 complete")
+	return dir
 }
 
 // stackedDeleteFixture builds main <- milestone/v1.2 <- milestone/v1.3, with
@@ -65,7 +89,7 @@ func stackedDeleteFixture(t *testing.T, squash bool) string {
 // The core protection: a branch an unmerged stacked child still sits on is not
 // deleted, however stale it looks on its own.
 func TestPruneRefusesBranchWithUnmergedDependent(t *testing.T) {
-	dir := stackedDeleteFixture(t, true)
+	dir := stackedPruneFixture(t)
 
 	err := runCmd(t, Milestone(), "prune")
 	if err == nil {
@@ -108,7 +132,7 @@ func TestFinalizeRefusesBranchWithUnmergedDependent(t *testing.T) {
 // dependent exists" would wedge the repo permanently — a merged child keeps its
 // recorded base forever.
 func TestPruneDeletesOnceDependentHasMerged(t *testing.T) {
-	dir := stackedDeleteFixture(t, true)
+	dir := stackedPruneFixture(t)
 	// Land v1.3 on origin/main too.
 	mustGit(t, dir, "checkout", "-q", "-b", "mergetmp", "main")
 	mustGit(t, dir, "merge", "--no-ff", "-q", "-m", "merge v1.3", "milestone/v1.3")
@@ -160,7 +184,7 @@ func TestSelfBaseDoesNotSelfBlock(t *testing.T) {
 // Fail closed. An unreadable toml is indistinguishable from "no dependents",
 // and the consequence of guessing is an irreversible remote delete.
 func TestPruneRefusesOnUnreadableMilestoneToml(t *testing.T) {
-	dir := stackedDeleteFixture(t, true)
+	dir := stackedPruneFixture(t)
 	broken := filepath.Join(dir, ".dross", "milestones", "v1.4.toml")
 	if err := os.WriteFile(broken, []byte("[milestone\n  version = ***\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -217,7 +241,7 @@ func mergedIntoParentFixture(t *testing.T) string {
 func threeDependentsFixture(t *testing.T) string {
 	t.Helper()
 	dir := pruneFixture(t)
-	writeMilestoneWithBase(t, dir, "v1.2", "main")
+	writeMilestoneWithBaseStatus(t, dir, "v1.2", "main", milestoneStatusComplete)
 	writeMilestoneWithBase(t, dir, "v1.3", "milestone/v1.2")
 	writeMilestoneWithBase(t, dir, "v1.4", "milestone/v1.2")
 	writeMilestoneWithBase(t, dir, "v1.5", "milestone/v1.2")

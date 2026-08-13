@@ -1707,6 +1707,11 @@ func TestDoctorReportsStaleMilestoneBranchReadOnly(t *testing.T) {
 	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
 	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	// The detector measures against origin/main, so the squash has to be
+	// published before the branch counts as stale — and only a milestone
+	// recorded complete is ever reported at all.
+	pushMain(t, dir)
+	completeMilestone(t, dir, "v1.0")
 
 	var out string
 	err := runCmdCapturing(t, &out, Doctor())
@@ -2060,5 +2065,36 @@ func TestDetectMissingPhaseDirsNeverErrors(t *testing.T) {
 			}
 			_ = got
 		})
+	}
+}
+
+// TestDoctorStaleSectionGatesOnMilestoneStatus is c-5 at doctor's level: the
+// diagnostic that tells the user to run the destructive prune must not name a
+// branch the milestone still says is active. One field moves between the two
+// halves; the git shape is identical.
+func TestDoctorStaleSectionGatesOnMilestoneStatus(t *testing.T) {
+	dir := doctorRepo(t)
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0", "main")
+	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
+	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	pushMain(t, dir)
+	writeMilestoneToml(t, filepath.Join(dir, ".dross"), "v1.0", "active", "")
+
+	var out string
+	_ = runCmdCapturing(t, &out, Doctor())
+	if strings.Contains(out, "Stale milestone branches:") {
+		t.Errorf("doctor reported an ACTIVE milestone's branch as prunable:\n%s", out)
+	}
+
+	// Only the status changes.
+	writeMilestoneToml(t, filepath.Join(dir, ".dross"), "v1.0", milestoneStatusComplete, "")
+
+	var after string
+	err := runCmdCapturing(t, &after, Doctor())
+	if !strings.Contains(after, "Stale milestone branches:") || !strings.Contains(after, "milestone/v1.0") {
+		t.Errorf("a complete milestone's leftover branch should be reported:\n%s", after)
+	}
+	if err == nil {
+		t.Error("a stale branch must still move doctor's exit code once the gate passes")
 	}
 }

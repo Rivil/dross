@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/milestone"
 )
 
 // staleRepo is a git repo with an origin bare remote, one baseline commit on
@@ -41,6 +44,31 @@ func squashOnto(t *testing.T, dir, branch, msg string) string {
 	return mustGit(t, dir, "rev-parse", "HEAD")
 }
 
+// pushMain publishes local main to origin. The detector measures merged-ness
+// against origin/main, so a fixture that lands work on main and stops there has
+// not yet reproduced a merge anyone else can see — which is exactly the
+// distinction TestStaleIgnoresLocalOnlyMerge pins.
+func pushMain(t *testing.T, dir string) {
+	t.Helper()
+	mustGit(t, dir, "push", "-q", "origin", "main")
+}
+
+// completeMilestone writes .dross/milestones/<version>.toml at status
+// "complete" — the gate a branch has to pass before the detector will call it
+// stale. Fixtures that expect a result need one; fixtures that expect nothing
+// get one too, so they still fail for the reason they were written for rather
+// than for a missing toml.
+func completeMilestone(t *testing.T, dir, version string) {
+	t.Helper()
+	writeMilestoneToml(t, filepath.Join(dir, ".dross"), version, milestoneStatusComplete, "")
+}
+
+// staleScan runs the detector against a fixture repo's own .dross root.
+func staleScan(t *testing.T, dir, mainBranch string) ([]staleBranch, error) {
+	t.Helper()
+	return staleMilestoneBranches(filepath.Join(dir, ".dross"), dir, mainBranch)
+}
+
 // byName indexes a result set so assertions read by branch rather than by
 // position — the order the detector walks refs in is git's, not the test's.
 func byName(got []staleBranch) map[string]staleBranch {
@@ -61,13 +89,15 @@ func TestStaleDetectsSquashMergedBranch(t *testing.T) {
 	commitOn(t, dir, "milestone/v1.0", "b.txt", "b\n", "feat: b")
 	commitOn(t, dir, "milestone/v1.0", "c.txt", "c\n", "feat: c")
 	squash := squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	pushMain(t, dir)
+	completeMilestone(t, dir, "v1.0")
 
 	// Precondition: git's own merged-check is blind to this.
 	if merged := mustGit(t, dir, "branch", "--merged", "main"); strings.Contains(merged, "milestone/v1.0") {
 		t.Fatalf("precondition: `git branch --merged` should not see a squash-merge, got:\n%s", merged)
 	}
 
-	got, err := staleMilestoneBranches(dir, "main")
+	got, err := staleScan(t, dir, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,8 +130,10 @@ func TestStaleSquashWithMainAdvancing(t *testing.T) {
 	// …and two more after it.
 	commitOn(t, dir, "main", "after1.txt", "1\n", "chore: after 1")
 	commitOn(t, dir, "main", "after2.txt", "2\n", "chore: after 2")
+	pushMain(t, dir)
+	completeMilestone(t, dir, "v1.0")
 
-	got, err := staleMilestoneBranches(dir, "main")
+	got, err := staleScan(t, dir, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,10 +159,12 @@ func TestStaleAmbiguousSquashIsDeterministic(t *testing.T) {
 	// two candidate commits.
 	mustGit(t, dir, "revert", "--no-edit", first)
 	second := squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0 again")
+	pushMain(t, dir)
+	completeMilestone(t, dir, "v1.0")
 
 	var seen string
 	for i := 0; i < 3; i++ {
-		got, err := staleMilestoneBranches(dir, "main")
+		got, err := staleScan(t, dir, "main")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -148,7 +182,7 @@ func TestStaleAmbiguousSquashIsDeterministic(t *testing.T) {
 		}
 	}
 	// The branch appears once, not once per matching commit.
-	got, _ := staleMilestoneBranches(dir, "main")
+	got, _ := staleScan(t, dir, "main")
 	if n := len(got); n != 1 {
 		t.Errorf("result has %d entries, want 1: %+v", n, got)
 	}
@@ -168,8 +202,13 @@ func TestStaleUnresolvableSquashIsNotStale(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, "a.txt"), "a-amended\n")
 	mustGit(t, dir, "add", "a.txt")
 	mustGit(t, dir, "commit", "-q", "--amend", "--no-edit")
+	// Force-push, so origin/main carries the amended commit too — otherwise the
+	// branch would read not-stale merely because origin never saw the squash,
+	// which is a different reason than the one this test is about.
+	mustGit(t, dir, "push", "-q", "--force", "origin", "main")
+	completeMilestone(t, dir, "v1.0")
 
-	got, err := staleMilestoneBranches(dir, "main")
+	got, err := staleScan(t, dir, "main")
 	if err != nil {
 		t.Fatalf("an unresolvable squash must not be an error: %v", err)
 	}
@@ -187,8 +226,10 @@ func TestStaleFastForwardIsMergedNotSquash(t *testing.T) {
 	commitOn(t, dir, "milestone/v1.1", "a.txt", "a\n", "feat: a")
 	mustGit(t, dir, "checkout", "-q", "main")
 	mustGit(t, dir, "merge", "-q", "--ff-only", "milestone/v1.1")
+	pushMain(t, dir)
+	completeMilestone(t, dir, "v1.1")
 
-	got, err := staleMilestoneBranches(dir, "main")
+	got, err := staleScan(t, dir, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,8 +253,9 @@ func TestStaleUnmergedBranchIsNotReported(t *testing.T) {
 	commitOn(t, dir, "milestone/v1.2", "a.txt", "a\n", "feat: a")
 	commitOn(t, dir, "milestone/v1.2", "b.txt", "b\n", "feat: b")
 	mustGit(t, dir, "checkout", "-q", "main")
+	completeMilestone(t, dir, "v1.2")
 
-	got, err := staleMilestoneBranches(dir, "main")
+	got, err := staleScan(t, dir, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,8 +274,11 @@ func TestStaleResolvesRemotePerBranch(t *testing.T) {
 		squashOnto(t, dir, "milestone/"+v, "feat(squash): "+v)
 	}
 	mustGit(t, dir, "push", "-q", "origin", "milestone/v1.0")
+	pushMain(t, dir)
+	completeMilestone(t, dir, "v1.0")
+	completeMilestone(t, dir, "v1.1")
 
-	got, err := staleMilestoneBranches(dir, "main")
+	got, err := staleScan(t, dir, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +299,7 @@ func TestStaleIgnoresNonMilestoneBranches(t *testing.T) {
 	commitOn(t, dir, "phase/foo", "a.txt", "a\n", "feat: a")
 	squashOnto(t, dir, "phase/foo", "feat(squash): foo")
 
-	got, err := staleMilestoneBranches(dir, "main")
+	got, err := staleScan(t, dir, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +313,7 @@ func TestStaleIgnoresNonMilestoneBranches(t *testing.T) {
 func TestStaleNoMilestoneRefs(t *testing.T) {
 	dir := staleRepo(t)
 
-	got, err := staleMilestoneBranches(dir, "main")
+	got, err := staleScan(t, dir, "main")
 	if err != nil {
 		t.Fatalf("no milestone refs is not an error: %v", err)
 	}
@@ -285,11 +330,17 @@ func TestStaleIsReadOnly(t *testing.T) {
 	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
 	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
 	mustGit(t, dir, "push", "-q", "origin", "milestone/v1.0")
+	pushMain(t, dir)
+	completeMilestone(t, dir, "v1.0")
+	// The fixture's own toml write is dirt this test would otherwise blame on
+	// the scan, so commit it before the snapshot is taken.
+	mustGit(t, dir, "add", ".dross")
+	mustGit(t, dir, "commit", "-q", "-m", "chore(dross): milestone record")
 
 	before := mustGit(t, dir, "for-each-ref", "--format=%(refname) %(objectname)")
 	head := mustGit(t, dir, "rev-parse", "HEAD")
 
-	if _, err := staleMilestoneBranches(dir, "main"); err != nil {
+	if _, err := staleScan(t, dir, "main"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -308,7 +359,179 @@ func TestStaleIsReadOnly(t *testing.T) {
 // not an empty result that reads as "nothing is stale".
 func TestStaleUnknownMainBranchErrors(t *testing.T) {
 	dir := staleRepo(t)
-	if _, err := staleMilestoneBranches(dir, "nope"); err == nil {
+	if _, err := staleScan(t, dir, "nope"); err == nil {
 		t.Error("an unknown main branch should error rather than report nothing stale")
+	}
+}
+
+// TestStaleIgnoresLocalOnlyMerge is c-6, and the two halves differ in exactly
+// one thing: whether origin/main has caught up.
+//
+// The failure it pins is not hypothetical — a milestone branch cut while local
+// main sat ahead of origin would be reported stale on the day it was created,
+// and `dross milestone prune` deletes what this reports, local and remote.
+func TestStaleIgnoresLocalOnlyMerge(t *testing.T) {
+	dir := staleRepo(t)
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0")
+	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
+	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	completeMilestone(t, dir, "v1.0")
+
+	// Half one: the squash exists on LOCAL main only. Origin has never seen it.
+	got, err := staleScan(t, dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, ok := byName(got)["milestone/v1.0"]; ok {
+		t.Fatalf("a merge origin has never seen must not make the branch stale, got %+v", b)
+	}
+
+	// Half two: the identical fixture, one push later.
+	pushMain(t, dir)
+
+	got, err = staleScan(t, dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, ok := byName(got)["milestone/v1.0"]
+	if !ok {
+		t.Fatalf("once origin/main carries the squash the branch is stale: %+v", got)
+	}
+	if b.Reason != reasonSquash {
+		t.Errorf("reason = %q, want %q", b.Reason, reasonSquash)
+	}
+}
+
+// TestStaleAncestryArmFollowsOriginToo: the resolved ref has to reach BOTH arms.
+// A fix applied only to the squash walk still reports a fast-forwarded branch as
+// merged off the back of a local-only main.
+func TestStaleAncestryArmFollowsOriginToo(t *testing.T) {
+	dir := staleRepo(t)
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.1")
+	commitOn(t, dir, "milestone/v1.1", "a.txt", "a\n", "feat: a")
+	mustGit(t, dir, "checkout", "-q", "main")
+	mustGit(t, dir, "merge", "-q", "--ff-only", "milestone/v1.1")
+	completeMilestone(t, dir, "v1.1")
+
+	// Precondition: local main really does contain the branch — an ancestry
+	// check against refs/heads/main would say merged right now.
+	if merged := mustGit(t, dir, "branch", "--merged", "main"); !strings.Contains(merged, "milestone/v1.1") {
+		t.Fatalf("precondition: local main should contain the branch, got:\n%s", merged)
+	}
+
+	got, err := staleScan(t, dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, ok := byName(got)["milestone/v1.1"]; ok {
+		t.Errorf("the ancestry arm still reads local main: %+v", b)
+	}
+}
+
+// TestStaleFallsBackToLocalMainWithoutOrigin: preferring origin cannot mean
+// requiring it. A repo whose main has never been pushed still gets an answer —
+// there the local ref is the only history with a claim on the question.
+func TestStaleFallsBackToLocalMainWithoutOrigin(t *testing.T) {
+	dir := t.TempDir()
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remote)
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	// Deliberately no push: origin exists but carries no refs at all.
+
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0")
+	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
+	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	completeMilestone(t, dir, "v1.0")
+
+	if gitRefExists(dir, "refs/remotes/origin/main") {
+		t.Fatal("precondition: this fixture must have no origin/main")
+	}
+
+	got, err := staleScan(t, dir, "main")
+	if err != nil {
+		t.Fatalf("no origin/main is a fallback, not an error: %v", err)
+	}
+	if _, ok := byName(got)["milestone/v1.0"]; !ok {
+		t.Errorf("with no origin/main the local ref answers the question, got: %+v", got)
+	}
+}
+
+// TestStaleGatesOnMilestoneStatus is c-5, and the two halves differ in exactly
+// one field.
+//
+// Under the milestone-branch model phases squash-merge into milestone/<version>
+// and only the milestone merges into main, so an ACTIVE milestone whose early
+// phases have landed looks entirely "already on main" while the next phase is
+// still being written against it. A content-only detector calls that branch
+// stale, and prune deletes it — local and remote — out from under live work.
+func TestStaleGatesOnMilestoneStatus(t *testing.T) {
+	dir := staleRepo(t)
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v1.0")
+	commitOn(t, dir, "milestone/v1.0", "a.txt", "a\n", "feat: a")
+	squashOnto(t, dir, "milestone/v1.0", "feat(squash): v1.0")
+	pushMain(t, dir)
+	writeMilestoneToml(t, filepath.Join(dir, ".dross"), "v1.0", "active", "")
+
+	got, err := staleScan(t, dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, ok := byName(got)["milestone/v1.0"]; ok {
+		t.Fatalf("an active milestone's branch must never be reported stale: %+v", b)
+	}
+
+	// Nothing moves but that one field.
+	writeMilestoneToml(t, filepath.Join(dir, ".dross"), "v1.0", milestoneStatusComplete, "")
+
+	got, err = staleScan(t, dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := byName(got)["milestone/v1.0"]; !ok {
+		t.Errorf("a complete milestone's merged branch is stale: %+v", got)
+	}
+}
+
+// TestStalePlanningMilestoneIsNotStale: a milestone branch cut before the work
+// started carries no commits of its own, so it is trivially "contained in" main.
+// Only status="complete" earns a report; every other status fails closed.
+func TestStalePlanningMilestoneIsNotStale(t *testing.T) {
+	dir := staleRepo(t)
+	mustGit(t, dir, "branch", "milestone/v2.0")
+	writeMilestoneToml(t, filepath.Join(dir, ".dross"), "v2.0", "planning", "")
+
+	got, err := staleScan(t, dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, ok := byName(got)["milestone/v2.0"]; ok {
+		t.Errorf("a planning milestone's branch must not be reported stale: %+v", b)
+	}
+}
+
+// TestStaleTomlLessBranchIsNotStale is locked toml_less_branch_not_stale. The
+// consumer is a destructive prune, so a version nothing on disk knows anything
+// about is the case that must fail closed — and it is a distinct fixture from
+// the status ones, because here no status was read at all.
+func TestStaleTomlLessBranchIsNotStale(t *testing.T) {
+	dir := staleRepo(t)
+	mustGit(t, dir, "checkout", "-q", "-b", "milestone/v9.9")
+	commitOn(t, dir, "milestone/v9.9", "a.txt", "a\n", "feat: a")
+	squashOnto(t, dir, "milestone/v9.9", "feat(squash): v9.9")
+	pushMain(t, dir)
+
+	if _, err := os.Stat(milestone.FilePath(filepath.Join(dir, ".dross"), "v9.9")); !os.IsNotExist(err) {
+		t.Fatal("precondition: this fixture must have no milestone toml for v9.9")
+	}
+
+	got, err := staleScan(t, dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, ok := byName(got)["milestone/v9.9"]; ok {
+		t.Errorf("a branch with no milestone record must not be reported stale: %+v", b)
 	}
 }

@@ -560,6 +560,28 @@ destructive reset of the local base branch; read the abort first.`,
 			if err := cs.Save(filepath.Join(root, state.File)); err != nil {
 				return fmt.Errorf("save completion record: %w", err)
 			}
+			// The durable half of the same fact. The breadcrumb above scrolls
+			// out of a 50-entry history; this one is phase-scoped and stays.
+			//
+			// Unlike state.json, changes.json is tracked, so the write has to
+			// be committed here or complete would hand back a dirty tree and
+			// the zero-manual-git contract would be a manual `git commit`. Same
+			// auto-commit the entry gate at the top of this RunE uses; we are
+			// on the base branch by now, so the record lands there.
+			if err := changes.SetStatus(root, phaseID, changes.StatusComplete); err != nil {
+				return fmt.Errorf("record phase status: %w", err)
+			}
+			if _, err := autoCommitDrossDirt(repoDir, "recording phase completion"); err != nil {
+				return fmt.Errorf("commit completion record: %w", err)
+			}
+			// …and publish it, through the same .dross-only safety net that
+			// handles unpushed chores on the way in. Complete's contract is
+			// that the base ends level with origin; a local-only record commit
+			// would leave it one ahead, which is the divergence the whole
+			// reconcile path exists to prevent.
+			if _, err := pushBaseIfAheadDrossOnly(repoDir, reconcileBranch); err != nil {
+				return fmt.Errorf("publish completion record: %w", err)
+			}
 
 			// Delete the local phase branch (best-effort: only if it exists).
 			localDeleted := false
