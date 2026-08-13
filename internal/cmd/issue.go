@@ -795,6 +795,36 @@ func collectInbound(ctx *boardCtx, filter forge.IssueFilter) ([]forge.Issue, err
 	return inbound, nil
 }
 
+// pullEnvelope is the `issue pull --json` shape. It exists so a board that
+// could not be reached is distinguishable from a board with nothing on it: a
+// bare array collapses both onto `[]`, and every prompt then reports zero
+// inbound issues for a tracker that is simply down.
+//
+// Issues is never null — an empty feed is `[]` — and Error is null on success.
+type pullEnvelope struct {
+	Issues []forge.Issue `json:"issues"`
+	Error  *string       `json:"error"`
+}
+
+// emitPullEnvelope marshals and prints the envelope. Issues is normalised to a
+// non-nil slice so consumers can index it without a null check.
+func emitPullEnvelope(issues []forge.Issue, boardErr error) error {
+	env := pullEnvelope{Issues: issues}
+	if env.Issues == nil {
+		env.Issues = []forge.Issue{}
+	}
+	if boardErr != nil {
+		msg := boardErr.Error()
+		env.Error = &msg
+	}
+	out, err := json.Marshal(env)
+	if err != nil {
+		return err
+	}
+	Print(string(out))
+	return nil
+}
+
 func issuePull() *cobra.Command {
 	var labels, state string
 	var asJSON, mark bool
@@ -808,7 +838,7 @@ func issuePull() *cobra.Command {
 			}
 			if !enabled {
 				if asJSON {
-					Print("[]")
+					return emitPullEnvelope(nil, nil)
 				}
 				return nil
 			}
@@ -816,13 +846,23 @@ func issuePull() *cobra.Command {
 			if labels != "" {
 				filter.Labels = splitCSV(labels)
 			}
-			inbound, err := collectInbound(ctx, filter)
-			if err != nil {
-				return err
+			inbound, boardErr := collectInbound(ctx, filter)
+			if boardErr != nil {
+				// A fetch failure is reported, not raised: the workflow
+				// prompts call `dross issue …` unconditionally on the promise
+				// that it is a safe no-op, so a non-zero exit would break
+				// that contract. The signal travels in the payload instead.
+				if asJSON {
+					return emitPullEnvelope(nil, boardErr)
+				}
+				Printf("board unreachable: %v\n", boardErr)
+				return nil
 			}
 
 			// Read-only by default so /dross-status can poll without
 			// mutating .dross. --mark stamps last_pull (used by /dross-inbox).
+			// Only a pull that actually happened is worth stamping — marking
+			// a failed fetch is the silent-zero fault wearing a different hat.
 			if mark {
 				ctx.board.MarkPulled()
 				if err := ctx.board.Save(ctx.boardPath); err != nil {
@@ -831,12 +871,7 @@ func issuePull() *cobra.Command {
 			}
 
 			if asJSON {
-				out, err := json.Marshal(inbound)
-				if err != nil {
-					return err
-				}
-				Print(string(out))
-				return nil
+				return emitPullEnvelope(inbound, nil)
 			}
 			if len(inbound) == 0 {
 				Print("no new issues on the board")
@@ -855,7 +890,7 @@ func issuePull() *cobra.Command {
 	}
 	c.Flags().StringVar(&labels, "labels", "", "only issues with these labels (csv, e.g. bug,enhancement)")
 	c.Flags().StringVar(&state, "state", "open", "issue state: open|closed|all")
-	c.Flags().BoolVar(&asJSON, "json", false, "emit a JSON array (for prompt consumption)")
+	c.Flags().BoolVar(&asJSON, "json", false, "emit a JSON envelope {issues, error} (for prompt consumption)")
 	c.Flags().BoolVar(&mark, "mark", false, "record the pull time in board.json (otherwise read-only)")
 	return c
 }

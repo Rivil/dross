@@ -293,12 +293,9 @@ func TestIssuePullFiltersLinkedAndDismissed(t *testing.T) {
 			t.Fatalf("pull: %v", err)
 		}
 	})
-	var got []map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
-		t.Fatalf("pull --json not valid JSON: %v\n%s", err, out)
-	}
-	if len(got) != 1 || got[0]["Key"].(string) != "21" {
-		t.Errorf("expected only #21 inbound, got %v", got)
+	got := decodePull(t, out)
+	if len(got.Issues) != 1 || got.Issues[0].Key != "21" {
+		t.Errorf("expected only #21 inbound, got %v", got.Issues)
 	}
 }
 
@@ -467,12 +464,9 @@ func TestIssuePullYouTrackFiltersLinkedAndDismissed(t *testing.T) {
 			t.Fatalf("pull: %v", err)
 		}
 	})
-	var got []map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
-		t.Fatalf("pull --json not valid JSON: %v\n%s", err, out)
-	}
-	if len(got) != 1 || got[0]["Key"].(string) != "PROJ-21" {
-		t.Errorf("expected only PROJ-21 inbound, got %v", got)
+	got := decodePull(t, out)
+	if len(got.Issues) != 1 || got.Issues[0].Key != "PROJ-21" {
+		t.Errorf("expected only PROJ-21 inbound, got %v", got.Issues)
 	}
 	if !strings.Contains(gotQuery, "bug") {
 		t.Errorf("upstream YouTrack query %q must carry the bug tag filter", gotQuery)
@@ -1028,12 +1022,9 @@ func TestIssueCover_pullMarkPrints(t *testing.T) {
 			t.Fatalf("pull --mark --json: %v", err)
 		}
 	})
-	var got []map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
-		t.Fatalf("pull --mark --json not valid JSON: %v\noutput=%q", err, out)
-	}
-	if len(got) != 1 || got[0]["Key"].(string) != "21" {
-		t.Errorf("inbound = %v, want a single issue keyed 21", got)
+	got := decodePull(t, out)
+	if len(got.Issues) != 1 || got.Issues[0].Key != "21" {
+		t.Errorf("inbound = %v, want a single issue keyed 21", got.Issues)
 	}
 	// --mark must have persisted last_pull.
 	body := mustRead(t, filepath.Join(dir, ".dross", "board.json"))
