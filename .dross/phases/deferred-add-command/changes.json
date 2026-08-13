@@ -2,7 +2,7 @@
   "phase": "deferred-add-command",
   "pr": 84,
   "base": "milestone/v1.3",
-  "status": "shipped",
+  "status": "complete",
   "tasks": {
     "t-1": {
       "files": [
