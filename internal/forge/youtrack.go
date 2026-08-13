@@ -37,7 +37,43 @@ type YouTrackClient struct {
 	// multiply a phase-sync's request count by its label count.
 	tagIDs map[string]string
 
+	// fields overrides the tracker-native custom-field names below. Every
+	// entry is optional; the accessors fall back to YouTrack's own defaults.
+	fields Fields
+
 	http *http.Client
+}
+
+// Default YouTrack custom-field names. A project that renamed one — or runs a
+// non-English UI — overrides it under [board.fields] rather than patching this.
+const (
+	ytDefaultStateField       = "State"
+	ytDefaultTypeField        = "Type"
+	ytDefaultFixVersionsField = "Fix versions"
+)
+
+// stateField names the custom field carrying an issue's workflow state.
+func (c *YouTrackClient) stateField() string {
+	if c.fields.State != "" {
+		return c.fields.State
+	}
+	return ytDefaultStateField
+}
+
+// typeField names the custom field carrying an issue's type (Epic, Bug, …).
+func (c *YouTrackClient) typeField() string {
+	if c.fields.Type != "" {
+		return c.fields.Type
+	}
+	return ytDefaultTypeField
+}
+
+// fixVersionsField names the version-bundle field milestones attach through.
+func (c *YouTrackClient) fixVersionsField() string {
+	if c.fields.FixVersions != "" {
+		return c.fields.FixVersions
+	}
+	return ytDefaultFixVersionsField
 }
 
 var (
@@ -77,6 +113,7 @@ func NewYouTrack(cfg Config) (*YouTrackClient, error) {
 		project: cfg.Project,
 		token:   token,
 		authEnv: cfg.AuthEnv,
+		fields:  cfg.Fields,
 		http:    &http.Client{Timeout: 30 * time.Second},
 	}, nil
 }
@@ -107,7 +144,7 @@ func (c *YouTrackClient) CreateIssue(in IssueInput) (*Issue, error) {
 	if err := c.do("POST", c.endpoint("/issues")+"?fields="+url.QueryEscape(ytIssueFields), body, &raw); err != nil {
 		return nil, fmt.Errorf("create issue: %w", err)
 	}
-	iss := raw.toIssue()
+	iss := raw.toIssue(c.stateField())
 	if len(in.Labels) > 0 {
 		if err := c.applyTags(iss.Key, in.Labels); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: issue %s created but tagging it failed: %v\n", iss.Key, err)
@@ -129,14 +166,14 @@ func (c *YouTrackClient) CreateBacklogItem(summary, description, fixVersion stri
 	}
 	if fixVersion != "" {
 		body["customFields"] = []map[string]any{
-			{"name": "Fix versions", "$type": "MultiVersionIssueCustomField", "value": []map[string]any{{"name": fixVersion}}},
+			{"name": c.fixVersionsField(), "$type": "MultiVersionIssueCustomField", "value": []map[string]any{{"name": fixVersion}}},
 		}
 	}
 	var raw youtrackIssue
 	if err := c.do("POST", c.endpoint("/issues")+"?fields="+url.QueryEscape(ytIssueFields), body, &raw); err != nil {
 		return nil, fmt.Errorf("create backlog item: %w", err)
 	}
-	return raw.toIssue(), nil
+	return raw.toIssue(c.stateField()), nil
 }
 
 // LinkSubtask makes childKey a subtask of parentKey via the commands API
@@ -176,7 +213,7 @@ func (c *YouTrackClient) GetIssue(key string) (*Issue, error) {
 	if err := c.do("GET", c.endpoint("/issues/"+key)+"?fields="+url.QueryEscape(ytIssueFields), nil, &raw); err != nil {
 		return nil, fmt.Errorf("get issue %s: %w", key, err)
 	}
-	return raw.toIssue(), nil
+	return raw.toIssue(c.stateField()), nil
 }
 
 // UpdateIssue applies a partial patch addressed by readable id. YouTrack
@@ -207,7 +244,7 @@ func (c *YouTrackClient) UpdateIssue(key string, patch IssuePatch) (*Issue, erro
 			return nil, fmt.Errorf("update issue %s: %w", key, err)
 		}
 	}
-	iss := raw.toIssue()
+	iss := raw.toIssue(c.stateField())
 	if iss.Key == "" {
 		// A labels-only patch sends no issue body, so nothing echoed back.
 		iss.Key = key
@@ -278,18 +315,32 @@ func (c *YouTrackClient) ensureVersion(name string) (string, error) {
 	if err := c.do("GET", c.endpoint("/admin/projects/"+c.project+"/customFields")+q, nil, &fields); err != nil {
 		return "", fmt.Errorf("list project custom fields: %w", err)
 	}
-	bundleID := ""
+	// Prefer the bundle behind the configured fix-versions field. A project
+	// can carry several VersionBundle-typed fields, and taking whichever came
+	// back first would write the milestone into the wrong one — silently, since
+	// the write itself succeeds.
+	bundleID, values := "", []struct {
+		Name string `json:"name"`
+	}(nil)
 	for _, f := range fields {
 		if f.Bundle == nil || f.Bundle.Type != "VersionBundle" {
 			continue
 		}
-		bundleID = f.Bundle.ID
-		for _, v := range f.Bundle.Values {
-			if v.Name == name {
-				return name, nil // already present — idempotent reuse
-			}
+		if f.Field.Name == c.fixVersionsField() {
+			bundleID, values = f.Bundle.ID, f.Bundle.Values
+			break
 		}
-		break
+		if bundleID == "" {
+			// Fallback: the first version bundle, used only when no field
+			// matches by name — so a project whose field is named something
+			// else still syncs rather than erroring.
+			bundleID, values = f.Bundle.ID, f.Bundle.Values
+		}
+	}
+	for _, v := range values {
+		if v.Name == name {
+			return name, nil // already present — idempotent reuse
+		}
 	}
 	if bundleID == "" {
 		return "", fmt.Errorf("project %s has no version bundle (no version-typed field?)", c.project)
@@ -328,7 +379,7 @@ func (c *YouTrackClient) ensureAgile(name string) (string, error) {
 // readable id. Reuse matches an existing Epic by summary.
 func (c *YouTrackClient) ensureEpic(name, description string) (string, error) {
 	q := url.Values{}
-	q.Set("query", "project: "+c.project+" Type: Epic")
+	q.Set("query", "project: "+c.project+" "+c.typeField()+": Epic")
 	q.Set("fields", "idReadable,summary")
 	var existing []youtrackIssue
 	if err := c.do("GET", c.endpoint("/issues")+"?"+q.Encode(), nil, &existing); err != nil {
@@ -344,7 +395,7 @@ func (c *YouTrackClient) ensureEpic(name, description string) (string, error) {
 		"summary":     name,
 		"description": description,
 		"customFields": []map[string]any{
-			{"name": "Type", "$type": "SingleEnumIssueCustomField", "value": map[string]any{"name": "Epic"}},
+			{"name": c.typeField(), "$type": "SingleEnumIssueCustomField", "value": map[string]any{"name": "Epic"}},
 		},
 	}
 	var created youtrackIssue
@@ -392,7 +443,7 @@ func (c *YouTrackClient) SetState(key, status string, override map[string]string
 	}
 	body := map[string]any{
 		"customFields": []map[string]any{
-			{"name": "State", "$type": "StateIssueCustomField", "value": map[string]any{"name": value}},
+			{"name": c.stateField(), "$type": "StateIssueCustomField", "value": map[string]any{"name": value}},
 		},
 	}
 	if err := c.do("POST", c.endpoint("/issues/"+key)+"?fields="+url.QueryEscape("idReadable"), body, nil); err != nil {
@@ -430,7 +481,7 @@ func (c *YouTrackClient) ListIssues(f IssueFilter) ([]Issue, error) {
 	}
 	out := make([]Issue, 0, len(raw))
 	for i := range raw {
-		out = append(out, *raw[i].toIssue())
+		out = append(out, *raw[i].toIssue(c.stateField()))
 	}
 	return out, nil
 }
@@ -601,7 +652,11 @@ type youtrackIssue struct {
 	} `json:"customFields"`
 }
 
-func (r *youtrackIssue) toIssue() *Issue {
+// toIssue converts the wire shape, reading the workflow state out of the named
+// custom field. The name is passed in rather than hardcoded because a project
+// may have renamed it ([board.fields].state) — and a read that looked for
+// "State" on such an instance would report every issue as stateless.
+func (r *youtrackIssue) toIssue(stateField string) *Issue {
 	iss := &Issue{
 		Key:   r.IDReadable,
 		Title: r.Summary,
@@ -611,7 +666,7 @@ func (r *youtrackIssue) toIssue() *Issue {
 		iss.Labels = append(iss.Labels, t.Name)
 	}
 	for _, cf := range r.CustomFields {
-		if cf.Name != "State" || len(cf.Value) == 0 || string(cf.Value) == "null" {
+		if cf.Name != stateField || len(cf.Value) == 0 || string(cf.Value) == "null" {
 			continue
 		}
 		var v struct {

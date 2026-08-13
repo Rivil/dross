@@ -1032,3 +1032,171 @@ func TestIssueLinkerCapabilityIsAssertable(t *testing.T) {
 		t.Error("GitHubClient must NOT satisfy IssueLinker — a no-op stub hides the fallback path")
 	}
 }
+
+// newTestYTClientFields is newTestYTClient with [board.fields] overrides
+// applied — the whole point of c-3 is that these travel from config into the
+// wire payloads.
+func newTestYTClientFields(t *testing.T, fields Fields, h http.HandlerFunc) *YouTrackClient {
+	t.Helper()
+	t.Setenv(ytTokenEnv, "secret")
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	c, err := NewYouTrack(Config{APIBase: srv.URL, AuthEnv: ytTokenEnv, Project: "PROJ", Fields: fields, Hosts: allowingSelf(srv.URL)})
+	if err != nil {
+		t.Fatalf("NewYouTrack: %v", err)
+	}
+	return c
+}
+
+// TestYouTrackStateFieldIsConfigurable proves the state half of c-3: a project
+// that renamed its State field syncs without a code change, and one that did
+// not is byte-identical to before.
+func TestYouTrackStateFieldIsConfigurable(t *testing.T) {
+	postedFieldName := func(t *testing.T, fields Fields) string {
+		t.Helper()
+		var got string
+		c := newTestYTClientFields(t, fields, func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				CustomFields []struct {
+					Name string `json:"name"`
+				} `json:"customFields"`
+			}
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &body)
+			if len(body.CustomFields) > 0 {
+				got = body.CustomFields[0].Name
+			}
+			_, _ = io.WriteString(w, `{}`)
+		})
+		if err := c.SetState("PROJ-7", "complete", nil); err != nil {
+			t.Fatalf("SetState: %v", err)
+		}
+		return got
+	}
+
+	if got := postedFieldName(t, Fields{State: "Статус"}); got != "Статус" {
+		t.Errorf("customFields[0].name = %q, want the configured Статус", got)
+	}
+	if got := postedFieldName(t, Fields{}); got != "State" {
+		t.Errorf("customFields[0].name = %q with Fields unset, want the default State", got)
+	}
+}
+
+// TestYouTrackFixVersionsFieldIsConfigurable proves the milestone half: the
+// backlog item's version attach goes to the configured field.
+func TestYouTrackFixVersionsFieldIsConfigurable(t *testing.T) {
+	var got string
+	c := newTestYTClientFields(t, Fields{FixVersions: "Release"}, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			CustomFields []struct {
+				Name string `json:"name"`
+			} `json:"customFields"`
+		}
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &body)
+		if len(body.CustomFields) > 0 {
+			got = body.CustomFields[0].Name
+		}
+		_, _ = io.WriteString(w, `{"idReadable":"PROJ-7"}`)
+	})
+	if _, err := c.CreateBacklogItem("s", "d", "v1.4"); err != nil {
+		t.Fatalf("CreateBacklogItem: %v", err)
+	}
+	if got != "Release" {
+		t.Errorf("fix-versions field = %q, want the configured Release", got)
+	}
+}
+
+// TestYouTrackTypeFieldMovesQueryAndPayloadTogether pins that the epic search
+// and the epic create use the SAME field name. If only one moved, ensureEpic
+// would create an epic it can then never find — one new epic per milestone
+// sync, forever.
+func TestYouTrackTypeFieldMovesQueryAndPayloadTogether(t *testing.T) {
+	var gotQuery, gotFieldName string
+	c := newTestYTClientFields(t, Fields{Type: "Kind"}, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			gotQuery = r.URL.Query().Get("query")
+			_, _ = io.WriteString(w, `[]`)
+			return
+		}
+		var body struct {
+			CustomFields []struct {
+				Name string `json:"name"`
+			} `json:"customFields"`
+		}
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &body)
+		if len(body.CustomFields) > 0 {
+			gotFieldName = body.CustomFields[0].Name
+		}
+		_, _ = io.WriteString(w, `{"idReadable":"PROJ-9","summary":"v1.4"}`)
+	})
+
+	if _, err := c.EnsureMilestoneEntity("epic", "v1.4", ""); err != nil {
+		t.Fatalf("EnsureMilestoneEntity: %v", err)
+	}
+	if !strings.Contains(gotQuery, "Kind: Epic") {
+		t.Errorf("epic search query = %q, want it to filter on the configured Kind field", gotQuery)
+	}
+	if gotFieldName != "Kind" {
+		t.Errorf("epic create field = %q, want Kind — query and payload must move together", gotFieldName)
+	}
+}
+
+// TestYouTrackEnsureVersionPicksTheConfiguredBundle pins bundle selection. A
+// project with two VersionBundle-typed fields would otherwise take whichever
+// came back first, writing the milestone into the wrong bundle — silently,
+// because that write succeeds.
+func TestYouTrackEnsureVersionPicksTheConfiguredBundle(t *testing.T) {
+	var gotBundlePath string
+	c := newTestYTClientFields(t, Fields{FixVersions: "Release"}, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/customFields") {
+			_, _ = io.WriteString(w, `[
+				{"field":{"name":"Sprint versions"},"bundle":{"id":"B-WRONG","$type":"VersionBundle","values":[]}},
+				{"field":{"name":"Release"},"bundle":{"id":"B-RIGHT","$type":"VersionBundle","values":[]}}
+			]`)
+			return
+		}
+		gotBundlePath = r.URL.Path
+		_, _ = io.WriteString(w, `{"name":"v1.4"}`)
+	})
+
+	if _, err := c.EnsureMilestoneEntity("version", "v1.4", ""); err != nil {
+		t.Fatalf("EnsureMilestoneEntity: %v", err)
+	}
+	if !strings.Contains(gotBundlePath, "B-RIGHT") {
+		t.Errorf("wrote to %q, want the bundle behind the configured Release field", gotBundlePath)
+	}
+}
+
+// TestYouTrackZeroConfigKeepsTodaysLiterals is the no-regression guard: an
+// existing project, which has no [board.fields] at all, must sync exactly as
+// it did before this task.
+func TestYouTrackZeroConfigKeepsTodaysLiterals(t *testing.T) {
+	c, _ := newTestYTClient(t, func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, `{}`) })
+	if got := c.stateField(); got != "State" {
+		t.Errorf("stateField() = %q, want State", got)
+	}
+	if got := c.typeField(); got != "Type" {
+		t.Errorf("typeField() = %q, want Type", got)
+	}
+	if got := c.fixVersionsField(); got != "Fix versions" {
+		t.Errorf("fixVersionsField() = %q, want \"Fix versions\"", got)
+	}
+}
+
+// TestYouTrackReadsStateFromTheConfiguredField pins the read side. A rename
+// that moved only the write would leave every issue reading back stateless —
+// and t-11's close read-back then cannot tell resolved from unresolved.
+func TestYouTrackReadsStateFromTheConfiguredField(t *testing.T) {
+	c := newTestYTClientFields(t, Fields{State: "Статус"}, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"idReadable":"PROJ-7","customFields":[{"name":"Статус","value":{"name":"Done"}}]}`)
+	})
+	iss, err := c.GetIssue("PROJ-7")
+	if err != nil {
+		t.Fatalf("GetIssue: %v", err)
+	}
+	if iss.State != "Done" {
+		t.Errorf("State = %q, want Done read out of the configured field", iss.State)
+	}
+}
