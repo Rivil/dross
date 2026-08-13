@@ -339,6 +339,9 @@ type backlogItem struct {
 	// this item's existing issue — the same trick resolvePhaseIssue uses, and
 	// for the same reason: board.json dies with the phase branch.
 	identity string
+	// target is the destination phase slug of a routed item, "" otherwise. It
+	// drives the issue-link attempt; the label carries the routing either way.
+	target string
 }
 
 // deferredBacklogKey is the board-link key for a deferred item. It keys on the
@@ -523,8 +526,35 @@ func deferredBacklogItem(d deferredEntry) backlogItem {
 		it.title = "[routed] " + d.Text
 		it.body = fmt.Sprintf("Deferred item routed to `%s` (from phase `%s`): %s\n\n_Tracked by dross._", d.Target, d.Source, d.Text)
 		it.labels = append(it.labels, targetLabel(d.Target))
+		it.target = d.Target
 	}
 	return it
+}
+
+// lookupPhaseIssue returns the board issue for a phase, or "" when there is
+// none yet. It is resolvePhaseIssue's read-only cousin: no cache healing, no
+// legacy summary adoption, and above all no create — a link attempt must never
+// mint the very issue it wanted to point at, or a typo'd target would conjure
+// a phase issue for a phase that does not exist.
+func lookupPhaseIssue(ctx *boardCtx, phaseID string) string {
+	if key, ok := ctx.board.PhaseIssue(phaseID); ok {
+		return key
+	}
+	found, err := ctx.client.ListIssues(forge.IssueFilter{State: "all", Labels: []string{phaseLabel(phaseID)}})
+	if err != nil {
+		return ""
+	}
+	var matches []string
+	for _, iss := range found {
+		if hasMarker(iss) {
+			matches = append(matches, iss.Key)
+		}
+	}
+	if len(matches) == 0 {
+		return ""
+	}
+	sort.Strings(matches)
+	return matches[0]
 }
 
 // resolveBacklogIssue finds a backlog item's existing issue, or "" if there is
@@ -589,6 +619,37 @@ func pushBacklogItems(ctx *boardCtx, version string, items []backlogItem) (creat
 		fixVersion = entityID
 	}
 
+	// c-7: a routed item's issue is linked to its target phase's issue where
+	// the provider can express a link. Where it cannot — no IssueLinker, no
+	// link type, or the target has no issue yet — the run warns and continues,
+	// leaving the dross/target label as the relationship and the item
+	// relinkable on a later sync. None of this may fail the backlog sync: the
+	// items themselves are the deliverable, the link is an enrichment.
+	linker, canLink := ctx.client.(forge.IssueLinker)
+	warnedNoLinker := false
+	linkRouted := func(it backlogItem, itemKey string) {
+		if it.target == "" {
+			return
+		}
+		if !canLink {
+			// Once per run, not once per item — a GitHub board would otherwise
+			// emit one warning per routed item on every sync.
+			if !warnedNoLinker {
+				warnedNoLinker = true
+				fmt.Fprintf(os.Stderr, "warning: this board provider cannot link issues — routed items keep their dross/target label only\n")
+			}
+			return
+		}
+		targetKey := lookupPhaseIssue(ctx, it.target)
+		if targetKey == "" {
+			fmt.Fprintf(os.Stderr, "warning: phase %q has no board issue yet — %s keeps its dross/target label and links on a later sync\n", it.target, itemKey)
+			return
+		}
+		if err := linker.LinkIssues(itemKey, targetKey); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not link %s to %s: %v\n", itemKey, targetKey, err)
+		}
+	}
+
 	for _, it := range items {
 		key, err := resolveBacklogIssue(ctx, it)
 		if err != nil {
@@ -610,6 +671,7 @@ func pushBacklogItems(ctx *boardCtx, version string, items []backlogItem) (creat
 			// Re-record: the key may have come from the tracker rather than
 			// the cache, and board.json has to catch up.
 			ctx.board.SetBacklog(it.key, key)
+			linkRouted(it, key)
 			updated++
 			continue
 		}
@@ -642,6 +704,7 @@ func pushBacklogItems(ctx *boardCtx, version string, items []backlogItem) (creat
 			return created, updated, wrapBoard(err)
 		}
 		ctx.board.SetBacklog(it.key, iss.Key)
+		linkRouted(it, iss.Key)
 		created++
 	}
 	if err := ctx.board.Save(ctx.boardPath); err != nil {
