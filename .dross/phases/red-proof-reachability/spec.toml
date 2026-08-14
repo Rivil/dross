@@ -1,0 +1,47 @@
+[phase]
+  id = "red-proof-reachability"
+  title = "red-proof-reachability"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "A phase records its resolved fork-point SHA alongside the base branch name when its branch is created, so a red proof has a durable commit to pin."
+
+[[criteria]]
+  id = "c-2"
+  text = "dross doctor fails when a red-proof pin names a SHA no branch reaches; a loose object that happens to survive in the local repo does not pass."
+
+[[criteria]]
+  id = "c-3"
+  text = "Unreachable and cannot-determine are distinct doctor outcomes: an unreachable pin is an issue naming the file and the SHA, a shallow clone or absent remote refs is a warning, and neither reports as a clean pass."
+
+[[criteria]]
+  id = "c-4"
+  text = "The reachability rule has one implementation: TestRedProofPinsBaseCommit's existence check delegates to the same shared check doctor runs, so the fixture suite and doctor cannot disagree about whether a pin is sound."
+
+[[criteria]]
+  id = "c-5"
+  text = "Doctor discovers red-proof pins by convention rather than a hardcoded path, so a red proof recorded by a later phase is checked without new code."
+
+[[decisions]]
+  key = "pin_location"
+  choice = "A red-proof entry in the phase's own .dross artefact records the pinned SHA plus the path to its prose doc. Doctor checks reachability of the recorded SHA and that the doc's `base commit:` line agrees with it."
+  why = "Keying the pin to a phase is what lets doctor name the fork point to repoint to — fixtures/hostile-config-c5/RUN.md names no phase. Cross-checking the doc stops the prose from lying to a human reader while the record stays sound."
+  locked = true
+
+[[decisions]]
+  key = "reachability_scope"
+  choice = "Reachable means contained in some remote-tracking branch (origin/*). Local branches do not count."
+  why = "The c-5 pin sat on phase/config-trust-hardening, which still existed on the author's machine — a local-branch check would have passed there and reddened in CI, which is the exact failure this phase kills. Remote-tracking refs are what a fresh clone sees."
+  locked = true
+
+[[decisions]]
+  key = "fork_point_backfill"
+  choice = "A phase with no recorded fork point resolves one on demand from its recorded base branch and its commits, and the result is cached into the phase's artefact on first use."
+  why = "~30 existing phase dirs predate the field. Resolve-on-demand covers them without a migration command to write, run and commit, and the check never degrades for want of a field."
+  locked = true
+
+[[deferred]]
+  text = "A repoint/heal verb — a --fix that rewrites a rotted red-proof pin to the phase's recorded fork point, instead of the hand-edit the c-5 pin needed."
+  why = "Doctor naming the rotted pin and the fork-point SHA is enough for this phase; automating the edit is its own capability."
+  target = "red-proof-repoint"
