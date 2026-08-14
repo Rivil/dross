@@ -1,0 +1,73 @@
+[phase]
+  id = "remote-mutation-runner"
+  title = "Remote mutation runner"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "With a remote configured, a phase's mutation run executes on that host and the local machine spawns no compile or test process; the per-package reports land in the local reports/ tree, so verify's diff scoping, scoring and survivor lifecycle are unchanged."
+
+[[criteria]]
+  id = "c-2"
+  text = "A remote host read from tracked project.toml is refused by name; only untracked machine-local config can authorize one."
+
+[[criteria]]
+  id = "c-3"
+  text = "The mutation runner's worker count and test-cpu are settable from config and honoured at both construction sites (verify and survivor drain); unset keeps today's NumCPU/2 and 1."
+
+[[criteria]]
+  id = "c-4"
+  text = "A broken remote — unreachable host, missing tool, failed sync — fails loudly with a named cause, and never degrades to a local run or an empty report that reads as clean."
+
+[[criteria]]
+  id = "c-5"
+  text = "dross doctor reports remote readiness — host reachable, and the configured adapter's toolchain present — rather than discovering it mid-run."
+
+[[criteria]]
+  id = "c-6"
+  text = "The tree that reaches the remote is the working tree under test, including uncommitted changes, and a stale remote workdir cannot contribute a report to this run."
+
+[[criteria]]
+  id = "c-7"
+  text = "A remote run restores the language's dependencies on the remote before the adapter runs (npm ci, dotnet restore); a Go run requires none."
+
+[[decisions]]
+  key = "consent_model"
+  choice = "A dedicated consent verb authorizes the remote, printing the host and workdir it is granting. The key is absent from `dross local set`."
+  why = "Configuring a remote is code execution on a machine of the config's choosing. A generic key-writer lets an agent grant that consent without ever showing the user what for — the same reason trusted_test_command is excluded from localKeys (internal/cmd/local.go:71)."
+  locked = true
+
+[[decisions]]
+  key = "adapter_scope"
+  choice = "Remoting is built as a seam shared by all three adapters (Gremlins, Stryker, Stryker.NET), not as Gremlins-only logic."
+  why = "The Prefix seam is already shared across the three. Wiring one adapter only would push seam discovery to a later refactor made under pressure by someone who has forgotten the constraints."
+  locked = true
+
+[[decisions]]
+  key = "sync_mechanism"
+  choice = "rsync over ssh, filtered by .gitignore, excluding .git, with --delete."
+  why = "Carries uncommitted work, which is what verify exists to measure; the .gitignore filter keeps dependency dirs off the wire; --delete supplies c-6's staleness guarantee without extra machinery."
+  locked = true
+
+[[decisions]]
+  key = "remote_workers"
+  choice = "The readiness probe reads the remote's core count, and the default worker count derives from it — NumCPU/2 on the remote, not on the local machine."
+  why = "The halving rule is right; it was just reading the wrong machine. Reserving less is unproven off a contended laptop and risks the false-timeout mode that masks real survivors (539 spurious timeouts at 14 workers, internal/mutation/gremlins.go:33)."
+  locked = true
+
+[[decisions]]
+  key = "config_key_shape"
+  choice = "Flat closed keys in .dross/local.toml, not a nested [mutation.remote] table."
+  why = "localStore is flat by construction and an unknown key is an error rather than a silently-written entry no reader looks for. Keeping that property matters more than schema elegance."
+  locked = true
+
+[[decisions]]
+  key = "report_fetch"
+  choice = "Each package's report is fetched from the remote immediately after that package's run, not in one batch at the end."
+  why = "Mirrors the existing per-package loop so UnmeasuredMissing keeps meaning exactly what it means today — no report written, nothing learned about the package."
+  locked = true
+
+[[deferred]]
+  text = "A verb that installs the pinned remote toolchain (Go + gremlins, Node, .NET) on a new host."
+  why = "Provisioning a machine is a different job from running a mutation test, and it is a one-time per-host cost — doctor naming what is missing is enough."
+  target = "remote-toolchain-bootstrap"
