@@ -1,269 +1,111 @@
+task_seq = 0
+
 [phase]
   id = "remote-mutation-runner"
 
 [[task]]
-  id    = "t-1"
-  wave  = 1
+  id = "t-1"
+  wave = 1
   title = "Add remote transport package and argv policy"
-  files = [
-    "internal/remote/remote.go",
-    "internal/remote/remote_test.go",
-    "internal/argfence/policy.go",
-    "internal/argfence/argfence_test.go",
-  ]
-  description = """
-New internal/remote owning Target{Host,Workdir,Cores}, the pure argv builders
-(SSHArgs, SyncArgs, FetchArgs), a Probe reading remote cores + tool presence, an
-exec seam var, exit-code classification, and the error sentinels the phase
-branches on (ErrTransport, ErrPartial, ErrRemoteCommand). argfence gains Reject
-entries for ssh and rsync.
-"""
+  files = ["internal/remote/remote.go", "internal/remote/remote_test.go", "internal/argfence/policy.go", "internal/argfence/argfence_test.go", "internal/cmd/subprocargs_audit_test.go", "internal/cmd/testdata/subprocargs_audit/snippets.txt"]
+  description = "New internal/remote owning Target{Host,Workdir,Cores}, the pure argv builders\n(SSHArgs, SyncArgs, FetchArgs), a Probe reading remote cores + tool presence, an\nexec seam var, exit-code classification, and the error sentinels the phase\nbranches on (ErrTransport, ErrPartial, ErrRemoteCommand). argfence gains Reject\nentries for ssh and rsync.\n"
   covers = ["c-6", "c-4"]
-  test_contract = [
-    "SyncArgs(Target{Host:\"helicon\",Workdir:\"/srv/x\"}, \"/local/repo\") yields argv[0]==\"rsync\" carrying --delete, --filter=':- .gitignore', --exclude=.git, a trailing-slash source and dest \"helicon:/srv/x\"; dropping --delete or the .gitignore filter fails it",
-    "SSHArgs wraps the adapter argv as `ssh <host> cd <workdir> && <argv>`; argv[0] is \"ssh\" and the adapter binary never appears at argv[0]",
-    "a Workdir containing ';', '$(', '`' or a newline is refused with an error naming the workdir and argv is not built — ssh hands the string to a remote shell, which argfence's dash rule does not cover",
-    "a Host beginning with '-' is refused; ssh and rsync carry Kind==Reject in Policy(), and deleting either entry makes TestUnknownBinaryFailsClosed / TestAuditKnowsEveryPolicyBinary (internal/cmd/subprocargs_audit_test.go) go red",
-    "internal/remote's own spawn sites pass the audit by declared accommodation, not by accident: the builders' non-literal positionals and the exec seam's non-literal binary each carry an accepted entry keyed file:binExpr with a reason string (the same shape gremlins.go:382 already uses), and a snippets.txt FLAG/PASS row pins the ssh and rsync argv shapes — removing a row or a reason makes the audit red",
-    "classify(exit): ssh 255 -> ErrTransport; rsync 23/24 -> ErrPartial; any other non-zero -> ErrRemoteCommand carrying the code — read from the exit code, never from stderr prose",
-    "Probe parses nproc-style output into Cores; unparseable or zero output is an error, and the test asserts the probe never returns the local runtime.NumCPU()",
-  ]
-  status = "pending"
+  test_contract = ["SyncArgs(Target{Host:\"helicon\",Workdir:\"/srv/x\"}, \"/local/repo\") yields argv[0]==\"rsync\" carrying --delete, --filter=':- .gitignore', --exclude=.git, a trailing-slash source and dest \"helicon:/srv/x\"; dropping --delete or the .gitignore filter fails it", "SSHArgs wraps the adapter argv as `ssh <host> cd <workdir> && <argv>`; argv[0] is \"ssh\" and the adapter binary never appears at argv[0]", "a Workdir containing ';', '$(', '`' or a newline is refused with an error naming the workdir and argv is not built — ssh hands the string to a remote shell, which argfence's dash rule does not cover", "a Host beginning with '-' is refused; ssh and rsync carry Kind==Reject in Policy(), and deleting either entry makes TestUnknownBinaryFailsClosed / TestAuditKnowsEveryPolicyBinary (internal/cmd/subprocargs_audit_test.go) go red", "internal/remote's own spawn sites pass the audit by declared accommodation, not by accident: the builders' non-literal positionals and the exec seam's non-literal binary each carry an accepted entry keyed file:binExpr with a reason string (the same shape gremlins.go:382 already uses), and a snippets.txt FLAG/PASS row pins the ssh and rsync argv shapes — removing a row or a reason makes the audit red", "classify(exit): ssh 255 -> ErrTransport; rsync 23/24 -> ErrPartial; any other non-zero -> ErrRemoteCommand carrying the code — read from the exit code, never from stderr prose", "Probe parses nproc-style output into Cores; unparseable or zero output is an error, and the test asserts the probe never returns the local runtime.NumCPU()"]
+  status = "done"
 
 [[task]]
-  id    = "t-2"
-  wave  = 1
+  id = "t-2"
+  wave = 1
   title = "Add remote consent keys and grant reader"
-  files = [
-    "internal/cmd/local.go",
-    "internal/cmd/local_test.go",
-  ]
-  description = """
-localStore gains mutation_remote_host + mutation_remote_workdir (deliberately
-ABSENT from localKeys) and mutation_workers + mutation_test_cpu (present in
-localKeys), plus the reader that resolves a grant through refuseTrackedLocal.
-"""
+  files = ["internal/cmd/local.go", "internal/cmd/local_test.go"]
+  description = "localStore gains mutation_remote_host + mutation_remote_workdir (deliberately\nABSENT from localKeys) and mutation_workers + mutation_test_cpu (present in\nlocalKeys), plus the reader that resolves a grant through refuseTrackedLocal.\n"
   covers = ["c-2", "c-3"]
-  test_contract = [
-    "`dross local set mutation_remote_host helicon` fails with \"unknown local key\" and the printed key list does not contain it — the same exclusion trusted_test_command has; adding it to localKeys fails this test",
-    "`dross local set mutation_workers 8` round-trips through `dross local get mutation_workers`",
-    "with .dross/local.toml tracked by git, the grant reader returns the refuseTrackedLocal error unread — the test writes a valid host into the tracked file and asserts it is still refused",
-    "a stored workdir with no stored host resolves to no grant, not to a half-grant — an unreachable workdir must not be treated as authorization",
-  ]
-  status = "pending"
+  test_contract = ["`dross local set mutation_remote_host helicon` fails with \"unknown local key\" and the printed key list does not contain it — the same exclusion trusted_test_command has; adding it to localKeys fails this test", "`dross local set mutation_workers 8` round-trips through `dross local get mutation_workers`", "with .dross/local.toml tracked by git, the grant reader returns the refuseTrackedLocal error unread — the test writes a valid host into the tracked file and asserts it is still refused", "a stored workdir with no stored host resolves to no grant, not to a half-grant — an unreachable workdir must not be treated as authorization"]
+  status = "done"
 
 [[task]]
-  id         = "t-10"
-  wave       = 2
+  id = "t-10"
+  wave = 2
+  title = "Add mutation remote grant verb and docs"
+  files = ["internal/cmd/mutation_remote.go", "internal/cmd/mutation_remote_test.go", "cmd/dross/main.go", "README.md", "docs/dross.1"]
+  description = "New `dross mutation remote grant|status|revoke`, registered in main.go, writing\nthe keys t-2 added and printing what it grants before it grants it.\n"
+  covers = ["c-2"]
   depends_on = ["t-2"]
-  title      = "Add mutation remote grant verb and docs"
-  files = [
-    "internal/cmd/mutation_remote.go",
-    "internal/cmd/mutation_remote_test.go",
-    "cmd/dross/main.go",
-    "README.md",
-    "docs/dross.1",
-  ]
-  description = """
-New `dross mutation remote grant|status|revoke`, registered in main.go, writing
-the keys t-2 added and printing what it grants before it grants it.
-"""
-  covers = ["c-2"]
-  test_contract = [
-    "`dross mutation remote grant helicon /srv/dross` prints both host and workdir BEFORE the write: with the write injected to fail, the banner is already in captured stdout and no key is stored",
-    "`revoke` clears host and workdir together and leaves mutation_workers intact",
-    "`status` on an ungranted repo prints \"not granted\" and exits 0; on a tracked local.toml it surfaces the refusal rather than the stored host",
-    "README.md and docs/dross.1 both contain \"mutation remote grant\", \"mutation_remote_host\", \"mutation_workers\", \"mutation_test_cpu\" and \".dross/local.toml\" — the same doc gate TestDocsCoverAllowHosts applies, and the two settable keys are named because those are the ones a user types",
-  ]
+  test_contract = ["`dross mutation remote grant helicon /srv/dross` prints both host and workdir BEFORE the write: with the write injected to fail, the banner is already in captured stdout and no key is stored", "`revoke` clears host and workdir together and leaves mutation_workers intact", "`status` on an ungranted repo prints \"not granted\" and exits 0; on a tracked local.toml it surfaces the refusal rather than the stored host", "README.md and docs/dross.1 both contain \"mutation remote grant\", \"mutation_remote_host\", \"mutation_workers\", \"mutation_test_cpu\" and \".dross/local.toml\" — the same doc gate TestDocsCoverAllowHosts applies, and the two settable keys are named because those are the ones a user types"]
   status = "pending"
 
 [[task]]
-  id    = "t-3"
-  wave  = 1
+  id = "t-3"
+  wave = 1
   title = "Refuse a remote host in tracked project.toml"
-  files = [
-    "internal/project/project.go",
-    "internal/project/project_test.go",
-  ]
-  description = """
-project.Mutation gains explicit trap fields (remote_host / remote_workdir) whose
-only purpose is to be refused; Load errors when either is non-empty.
-"""
+  files = ["internal/project/project.go", "internal/project/project_test.go"]
+  description = "project.Mutation gains explicit trap fields (remote_host / remote_workdir) whose\nonly purpose is to be refused; Load errors when either is non-empty.\n"
   covers = ["c-2"]
-  test_contract = [
-    "Load on a project.toml with [mutation] remote_host = \"helicon\" returns a nil Project and an error naming both \"mutation.remote_host\" and \"helicon\", pointing at `dross mutation remote grant`; nil matters because no caller can proceed on a partly-decoded config",
-    "the same refusal fires for remote_workdir alone — half a config is not a bypass",
-    "the real existing keys still decode — [mutation] adapters, [mutation.gremlins] timeout_coefficient and [mutation.stryker] workdir — and the repo's own .dross/project.toml plus every project fixture still load clean; the refusal is keyed to the trap field, not to unknown keys generally, because toml.DecodeFile (project.go:212) ignores undecoded keys silently",
-  ]
-  status = "pending"
+  test_contract = ["Load on a project.toml with [mutation] remote_host = \"helicon\" returns a nil Project and an error naming both \"mutation.remote_host\" and \"helicon\", pointing at `dross mutation remote grant`; nil matters because no caller can proceed on a partly-decoded config", "the same refusal fires for remote_workdir alone — half a config is not a bypass", "the real existing keys still decode — [mutation] adapters, [mutation.gremlins] timeout_coefficient and [mutation.stryker] workdir — and the repo's own .dross/project.toml plus every project fixture still load clean; the refusal is keyed to the trap field, not to unknown keys generally, because toml.DecodeFile (project.go:212) ignores undecoded keys silently"]
+  status = "done"
 
 [[task]]
-  id         = "t-4"
-  wave       = 2
-  depends_on = ["t-1"]
-  title      = "Wrap the three adapters in a shared remote launcher"
-  files = [
-    "internal/mutation/launcher.go",
-    "internal/mutation/gremlins.go",
-    "internal/mutation/stryker.go",
-    "internal/mutation/stryker_net.go",
-    "internal/mutation/launcher_test.go",
-  ]
-  description = """
-One Launcher struct (Prefix + *remote.Target) held as a NAMED field (not embedded)
-by Gremlins, Stryker and StrykerNet — Go keyed literals do not promote, so
-embedding would break every existing &Stryker{Prefix: ...} site and leave this
-task with no green commit. It owns buildCmd, the one-shot rsync push, the
-remote-report lifecycle
-(rm before the tool argv, fetch after), and the remote-derived worker default.
-The remote report path(s) are adapter-supplied through a closed table — an adapter
-absent from it is an error, not a silent no-op. Prefix and Target are mutually
-exclusive — both set is a refusal naming both, not a nesting.
-"""
+  id = "t-4"
+  wave = 2
+  title = "Wrap the three adapters in a shared remote launcher"
+  files = ["internal/mutation/launcher.go", "internal/mutation/gremlins.go", "internal/mutation/stryker.go", "internal/mutation/stryker_net.go", "internal/mutation/launcher_test.go"]
+  description = "One Launcher struct (Prefix + *remote.Target) held as a NAMED field (not embedded)\nby Gremlins, Stryker and StrykerNet — Go keyed literals do not promote, so\nembedding would break every existing &Stryker{Prefix: ...} site and leave this\ntask with no green commit. It owns buildCmd, the one-shot rsync push, the\nremote-report lifecycle\n(rm before the tool argv, fetch after), and the remote-derived worker default.\nThe remote report path(s) are adapter-supplied through a closed table — an adapter\nabsent from it is an error, not a silent no-op. Prefix and Target are mutually\nexclusive — both set is a refusal naming both, not a nesting.\n"
   covers = ["c-1", "c-3", "c-6"]
-  test_contract = [
-    "with Remote set, every *exec.Cmd the three adapters build has argv[0] in {\"ssh\",\"rsync\"}; the fake seam t.Fatal()s on \"gremlins\", \"npx\", \"dotnet\" or \"go\" at argv[0] — that failure is c-1's \"spawns no compile or test process\"",
-    "with Remote nil, argv is byte-identical to today: TestStrykerRunArgsPinned, TestGremlinsBuildUnleashArgsDefault and TestStrykerNetRejectsDashOutputDir keep passing unmodified",
-    "`go test ./...` is green at this task's commit with the existing keyed literals untouched — verify.go:247,249,253, survivor_drain.go:140 and the three adapter _test.go sites still construct with Prefix and still compile, which is what the named-field shape buys",
-    "the rsync source path equals the adapter's ProjectRoot as a value, not merely a trailing-slash shape — a push from any other local directory fails the assertion",
-    "a Stryker with Workdir=\"web\" on a remote runs `cd <join(Target.Workdir, \"web\")>`, not Target.Workdir — cmd.Dir on the local ssh process is meaningless, so the monorepo knob has to reach the remote cwd or stryker runs in the wrong package",
-    "the tree is pushed exactly once, before the first remote command: the recorded order starts with the rsync argv, and a second push inside the per-package loop fails the test",
-    "per package the recorded order is [remote rm of that package's report path, ssh gremlins run, fetch] — the missing rm is how a stale remote report gets fetched",
-    "the same rm-run-fetch order holds for Stryker (<remote-workdir>/reports/mutation/mutation.json) and StrykerNet (the whole StrykerOutput tree): each adapter supplies its remote report path and the launcher removes it before the tool argv — rsync --delete cannot, because --filter=':- .gitignore' protects ignored paths like /reports from deletion",
-    "an adapter whose name is absent from the remote-report-path table is an error, so a fourth adapter cannot run with no rm and no fetch",
-    "after a StrykerNet remote run that produced no new report, findReport does not return a prior run's mutation-report.json — the rm removed it, so the run errors instead of scoring a stale tree as clean",
-    "per adapter, the local path each Run reads its report from resolves after the fetch: GremlinsReportPath(root, pkg) for gremlins, reportPath() for Stryker, and findReport(outDir) for StrykerNet — a fetch that only lands the gremlins path shape fails the other two",
-    "the fetch for package N is issued before package N+1's run — an ordering assertion, not a count; a batched end-of-run fetch fails it",
-    "after a remote Run with testdata/gremlins_pkg_report.json delivered by the fake fetch, the file exists at GremlinsReportPath(root, pkg) and the merged Report equals the local expectation in TestGremlinsRunRePrefixesPackagePaths — same per-file keys, same score",
-    "Target{Cores:32} with Workers unset yields `--workers 16` regardless of local runtime.NumCPU(); Remote nil with Workers unset still yields the local defaultWorkers()",
-    "Prefix and Target both set is refused with an error naming both, and no *exec.Cmd is built",
-  ]
+  depends_on = ["t-1"]
+  test_contract = ["with Remote set, every *exec.Cmd the three adapters build has argv[0] in {\"ssh\",\"rsync\"}; the fake seam t.Fatal()s on \"gremlins\", \"npx\", \"dotnet\" or \"go\" at argv[0] — that failure is c-1's \"spawns no compile or test process\"", "with Remote nil, argv is byte-identical to today: TestStrykerRunArgsPinned, TestGremlinsBuildUnleashArgsDefault and TestStrykerNetRejectsDashOutputDir keep passing unmodified", "`go test ./...` is green at this task's commit with the existing keyed literals untouched — verify.go:247,249,253, survivor_drain.go:140 and the three adapter _test.go sites still construct with Prefix and still compile, which is what the named-field shape buys", "the rsync source path equals the adapter's ProjectRoot as a value, not merely a trailing-slash shape — a push from any other local directory fails the assertion", "a Stryker with Workdir=\"web\" on a remote runs `cd <join(Target.Workdir, \"web\")>`, not Target.Workdir — cmd.Dir on the local ssh process is meaningless, so the monorepo knob has to reach the remote cwd or stryker runs in the wrong package", "the tree is pushed exactly once, before the first remote command: the recorded order starts with the rsync argv, and a second push inside the per-package loop fails the test", "per package the recorded order is [remote rm of that package's report path, ssh gremlins run, fetch] — the missing rm is how a stale remote report gets fetched", "the same rm-run-fetch order holds for Stryker (<remote-workdir>/reports/mutation/mutation.json) and StrykerNet (the whole StrykerOutput tree): each adapter supplies its remote report path and the launcher removes it before the tool argv — rsync --delete cannot, because --filter=':- .gitignore' protects ignored paths like /reports from deletion", "an adapter whose name is absent from the remote-report-path table is an error, so a fourth adapter cannot run with no rm and no fetch", "after a StrykerNet remote run that produced no new report, findReport does not return a prior run's mutation-report.json — the rm removed it, so the run errors instead of scoring a stale tree as clean", "per adapter, the local path each Run reads its report from resolves after the fetch: GremlinsReportPath(root, pkg) for gremlins, reportPath() for Stryker, and findReport(outDir) for StrykerNet — a fetch that only lands the gremlins path shape fails the other two", "the fetch for package N is issued before package N+1's run — an ordering assertion, not a count; a batched end-of-run fetch fails it", "after a remote Run with testdata/gremlins_pkg_report.json delivered by the fake fetch, the file exists at GremlinsReportPath(root, pkg) and the merged Report equals the local expectation in TestGremlinsRunRePrefixesPackagePaths — same per-file keys, same score", "Target{Cores:32} with Workers unset yields `--workers 16` regardless of local runtime.NumCPU(); Remote nil with Workers unset still yields the local defaultWorkers()", "Prefix and Target both set is refused with an error naming both, and no *exec.Cmd is built"]
   status = "pending"
 
 [[task]]
-  id         = "t-5"
-  wave       = 2
-  depends_on = ["t-1", "t-2"]
-  title      = "Report remote readiness in doctor"
-  files = [
-    "internal/cmd/doctor.go",
-    "internal/cmd/doctor_remote_test.go",
-  ]
-  description = """
-New "Remote mutation:" section in checkConfigTrust reading the grant and calling
-remote.Probe through an overridable seam.
-"""
+  id = "t-5"
+  wave = 2
+  title = "Report remote readiness in doctor"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_remote_test.go"]
+  description = "New \"Remote mutation:\" section in checkConfigTrust reading the grant and calling\nremote.Probe through an overridable seam.\n"
   covers = ["c-5"]
-  test_contract = [
-    "no grant: prints an advisory line and doctor's issue count is unchanged — a local-only clone must not start failing doctor",
-    "granted + probe returns ErrTransport: prints ✗ naming the host and increments issues, so `dross doctor` exits non-zero",
-    "granted + reachable but gremlins absent: ✗ names both the missing binary and the adapter needing it, as a distinct line; with [mutation].adapters = [\"stryker\"] the same missing gremlins produces no finding",
-    "healthy: prints host, workdir and the probed core count, and the printed count equals what the probe seam returned — the number doctor shows is the number the worker default will use",
-    "doctor calls the same probe seam the run uses: a substituted seam sees exactly one call, so doctor cannot pass on a check verify performs differently",
-  ]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["no grant: prints an advisory line and doctor's issue count is unchanged — a local-only clone must not start failing doctor", "granted + probe returns ErrTransport: prints ✗ naming the host and increments issues, so `dross doctor` exits non-zero", "granted + reachable but gremlins absent: ✗ names both the missing binary and the adapter needing it, as a distinct line; with [mutation].adapters = [\"stryker\"] the same missing gremlins produces no finding", "healthy: prints host, workdir and the probed core count, and the printed count equals what the probe seam returned — the number doctor shows is the number the worker default will use", "doctor calls the same probe seam the run uses: a substituted seam sees exactly one call, so doctor cannot pass on a check verify performs differently"]
   status = "pending"
 
 [[task]]
-  id         = "t-6"
-  wave       = 3
+  id = "t-6"
+  wave = 3
+  title = "Fail loudly on a broken remote"
+  files = ["internal/mutation/launcher.go", "internal/mutation/gremlins.go", "internal/mutation/remote_failure_test.go"]
+  description = "Map remote.ErrTransport/ErrPartial onto adapter outcomes: transport failures are\nfatal and named; only a genuinely absent remote report stays an UnmeasuredMissing\nskip. No local fallback path exists.\n"
+  covers = ["c-4"]
   depends_on = ["t-4"]
-  title      = "Fail loudly on a broken remote"
-  files = [
-    "internal/mutation/launcher.go",
-    "internal/mutation/gremlins.go",
-    "internal/mutation/remote_failure_test.go",
-  ]
-  description = """
-Map remote.ErrTransport/ErrPartial onto adapter outcomes: transport failures are
-fatal and named; only a genuinely absent remote report stays an UnmeasuredMissing
-skip. No local fallback path exists.
-"""
-  covers = ["c-4"]
-  test_contract = [
-    "rsync push exits 255: Run returns an error naming the host and \"rsync\", produces no Report, and the fake records zero ssh invocations",
-    "an ssh package run exiting 255: Run returns a non-nil error and a nil Report, and Unmeasured is empty — today's ExitError tolerance would swallow this into UnmeasuredMissing, which the drain treats as non-fatal and the score excludes",
-    "a remote gremlins exiting 1 (surviving mutants) is still tolerated and its report parsed — the 255-vs-1 distinction is the whole test",
-    "a remote command exiting 126 or 127 with no report is FATAL and named (\"gremlins not found on <host>\"), never UnmeasuredMissing — ssh starts fine and relays the remote code as an ExitError, so today's fall-through (gremlins.go:184-201) would turn an uninstalled remote toolchain into a non-fatal skip the score excludes; the test asserts all three cases distinctly: 127-no-report fatal, exit-1-with-report tolerated, exit-0-no-report still UnmeasuredMissing",
-    "fetch failing rsync 23 (remote file absent) keeps UnmeasuredMissing; fetch failing 255 is fatal",
-    "with Remote set and any transport error, no *exec.Cmd is built whose argv[0] is \"gremlins\"/\"npx\"/\"dotnet\" — proof there is no local degradation path",
-    "a stale local report at GremlinsReportPath from a previous run is removed before the package's remote run, so a failed run cannot merge yesterday's numbers",
-  ]
+  test_contract = ["rsync push exits 255: Run returns an error naming the host and \"rsync\", produces no Report, and the fake records zero ssh invocations", "an ssh package run exiting 255: Run returns a non-nil error and a nil Report, and Unmeasured is empty — today's ExitError tolerance would swallow this into UnmeasuredMissing, which the drain treats as non-fatal and the score excludes", "a remote gremlins exiting 1 (surviving mutants) is still tolerated and its report parsed — the 255-vs-1 distinction is the whole test", "a remote command exiting 126 or 127 with no report is FATAL and named (\"gremlins not found on <host>\"), never UnmeasuredMissing — ssh starts fine and relays the remote code as an ExitError, so today's fall-through (gremlins.go:184-201) would turn an uninstalled remote toolchain into a non-fatal skip the score excludes; the test asserts all three cases distinctly: 127-no-report fatal, exit-1-with-report tolerated, exit-0-no-report still UnmeasuredMissing", "fetch failing rsync 23 (remote file absent) keeps UnmeasuredMissing; fetch failing 255 is fatal", "with Remote set and any transport error, no *exec.Cmd is built whose argv[0] is \"gremlins\"/\"npx\"/\"dotnet\" — proof there is no local degradation path", "a stale local report at GremlinsReportPath from a previous run is removed before the package's remote run, so a failed run cannot merge yesterday's numbers"]
   status = "pending"
 
 [[task]]
-  id         = "t-7"
-  wave       = 3
-  depends_on = ["t-2", "t-4"]
-  title      = "Wire config into both construction sites"
-  files = [
-    "internal/cmd/verify.go",
-    "internal/cmd/survivor_drain.go",
-    "internal/cmd/mutation_remote_wiring_test.go",
-  ]
-  description = """
-One shared constructor reads the grant + mutation_workers/mutation_test_cpu,
-probes the remote once for cores at construction time, and builds the adapters in
-configuredAdapters and runGremlinsOverPackages.
-"""
+  id = "t-7"
+  wave = 3
+  title = "Wire config into both construction sites"
+  files = ["internal/cmd/verify.go", "internal/cmd/survivor_drain.go", "internal/cmd/mutation_remote_wiring_test.go"]
+  description = "One shared constructor reads the grant + mutation_workers/mutation_test_cpu,\nprobes the remote once for cores at construction time, and builds the adapters in\nconfiguredAdapters and runGremlinsOverPackages.\n"
   covers = ["c-1", "c-3", "c-4"]
-  test_contract = [
-    "with a grant present, configuredAdapters returns Stryker, Gremlins and StrykerNet all carrying the same non-nil Target — an adapter left local is the silent half-remote run",
-    "runGremlinsOverPackages builds a Gremlins field-by-field equal to the one configuredAdapters builds for the same project + store; adding a knob at one site only fails here, so one table spans both sites",
-    "mutation_workers=8, mutation_test_cpu=2: both sites yield Workers==8, TestCPU==2; unset with no remote, both yield 0 so defaultWorkers() and DefaultTestCPU still apply",
-    "unset workers with a remote: Target.Cores comes from the probe and the gremlins argv carries cores/2",
-    "a grant plus a non-empty docker prefix aborts `dross verify` before any adapter Run, naming both — verify.go:247 and survivor_drain.go:140 build dockerPrefix(p) unconditionally, so without a pre-flight refusal this surfaces deep inside the first Run mid-verify",
-    "a probe failure, or a refusal (tracked local.toml / tracked project.toml), aborts `dross verify` with an error naming the host before any adapter Run — asserted through the seams so no verify.toml or tests.json is written, and it never returns a local-only adapter list",
-  ]
+  depends_on = ["t-2", "t-4"]
+  test_contract = ["with a grant present, configuredAdapters returns Stryker, Gremlins and StrykerNet all carrying the same non-nil Target — an adapter left local is the silent half-remote run", "runGremlinsOverPackages builds a Gremlins field-by-field equal to the one configuredAdapters builds for the same project + store; adding a knob at one site only fails here, so one table spans both sites", "mutation_workers=8, mutation_test_cpu=2: both sites yield Workers==8, TestCPU==2; unset with no remote, both yield 0 so defaultWorkers() and DefaultTestCPU still apply", "unset workers with a remote: Target.Cores comes from the probe and the gremlins argv carries cores/2", "a grant plus a non-empty docker prefix aborts `dross verify` before any adapter Run, naming both — verify.go:247 and survivor_drain.go:140 build dockerPrefix(p) unconditionally, so without a pre-flight refusal this surfaces deep inside the first Run mid-verify", "a probe failure, or a refusal (tracked local.toml / tracked project.toml), aborts `dross verify` with an error naming the host before any adapter Run — asserted through the seams so no verify.toml or tests.json is written, and it never returns a local-only adapter list"]
   status = "pending"
 
 [[task]]
-  id         = "t-8"
-  wave       = 4
-  depends_on = ["t-4", "t-6"]
-  title      = "Restore remote dependencies before the adapter runs"
-  files = [
-    "internal/mutation/launcher.go",
-    "internal/mutation/stryker.go",
-    "internal/mutation/stryker_net.go",
-    "internal/mutation/restore_test.go",
-  ]
-  description = """
-A closed adapter→restore table: Stryker `npm ci`, StrykerNet `dotnet restore`,
-Gremlins none — run over the ssh seam in the workdir before the tool argv. An
-adapter name absent from the table is an error, not a silent no-op.
-"""
+  id = "t-8"
+  wave = 4
+  title = "Restore remote dependencies before the adapter runs"
+  files = ["internal/mutation/launcher.go", "internal/mutation/stryker.go", "internal/mutation/stryker_net.go", "internal/mutation/restore_test.go"]
+  description = "A closed adapter→restore table: Stryker `npm ci`, StrykerNet `dotnet restore`,\nGremlins none — run over the ssh seam in the workdir before the tool argv. An\nadapter name absent from the table is an error, not a silent no-op.\n"
   covers = ["c-7", "c-4"]
-  test_contract = [
-    "Stryker remote Run: recorded order is [rsync, ssh npm ci, ssh npx stryker]; the npx argv appearing first fails it",
-    "`npm ci` runs in the same joined directory as the tool that follows it — for Stryker Workdir=\"web\", both cd into join(Target.Workdir, \"web\"); restoring at the repo root is how a monorepo run misses package-lock.json",
-    "`npm ci`, not `npm install` — the lockfile-respecting form is pinned as exact argv",
-    "StrykerNet remote Run issues `dotnet restore` before `dotnet stryker`",
-    "Gremlins remote Run issues no restore command at all — the fake fails on any command containing \"npm\", \"dotnet\" or \"restore\"",
-    "`npm ci` exiting non-zero: Run returns an error naming \"npm ci\" and the host, and the stryker argv is never built — a restore failure that fell through would report against a dependency-less tree",
-    "an adapter name absent from the table is an error, so a fourth adapter cannot silently skip its restore",
-    "Remote nil: no restore command for any adapter; native runs unchanged",
-  ]
+  depends_on = ["t-4", "t-6"]
+  test_contract = ["Stryker remote Run: recorded order is [rsync, ssh npm ci, ssh npx stryker]; the npx argv appearing first fails it", "`npm ci` runs in the same joined directory as the tool that follows it — for Stryker Workdir=\"web\", both cd into join(Target.Workdir, \"web\"); restoring at the repo root is how a monorepo run misses package-lock.json", "`npm ci`, not `npm install` — the lockfile-respecting form is pinned as exact argv", "StrykerNet remote Run issues `dotnet restore` before `dotnet stryker`", "Gremlins remote Run issues no restore command at all — the fake fails on any command containing \"npm\", \"dotnet\" or \"restore\"", "`npm ci` exiting non-zero: Run returns an error naming \"npm ci\" and the host, and the stryker argv is never built — a restore failure that fell through would report against a dependency-less tree", "an adapter name absent from the table is an error, so a fourth adapter cannot silently skip its restore", "Remote nil: no restore command for any adapter; native runs unchanged"]
   status = "pending"
 
 [[task]]
-  id         = "t-9"
-  wave       = 4
-  depends_on = ["t-6"]
-  title      = "Escalate a remote-leg failure to BLOCKING in verify"
-  files = [
-    "internal/verify/verify.go",
-    "internal/verify/verify_test.go",
-  ]
-  description = """
-verify currently turns any adapter error into a FLAG finding. Capture whether the
-error wraps remote.ErrTransport while the error value is still live, carry it on
-LanguageRun, and emit BLOCKING with the host named for that class.
-"""
+  id = "t-9"
+  wave = 4
+  title = "Escalate a remote-leg failure to BLOCKING in verify"
+  files = ["internal/verify/verify.go", "internal/verify/verify_test.go"]
+  description = "verify currently turns any adapter error into a FLAG finding. Capture whether the\nerror wraps remote.ErrTransport while the error value is still live, carry it on\nLanguageRun, and emit BLOCKING with the host named for that class.\n"
   covers = ["c-4"]
-  test_contract = [
-    "an adapter error wrapping remote.ErrTransport produces a BLOCKING finding and a non-zero blocking count — a phase cannot be verified past a leg that never ran",
-    "a plain adapter error (stryker misconfigured, no remote involved) stays a FLAG — the escalation does not swallow existing behaviour",
-    "the leg still records its Files, so the report names which files went unmeasured rather than showing an empty, clean-looking language run",
-    "record-and-continue is preserved: a failing remote gremlins leg does not discard a finished stryker leg in the same run",
-  ]
+  depends_on = ["t-6"]
+  test_contract = ["an adapter error wrapping remote.ErrTransport produces a BLOCKING finding and a non-zero blocking count — a phase cannot be verified past a leg that never ran", "a plain adapter error (stryker misconfigured, no remote involved) stays a FLAG — the escalation does not swallow existing behaviour", "the leg still records its Files, so the report names which files went unmeasured rather than showing an empty, clean-looking language run", "record-and-continue is preserved: a failing remote gremlins leg does not discard a finished stryker leg in the same run"]
   status = "pending"

@@ -2,5 +2,58 @@
   "phase": "remote-mutation-runner",
   "base": "milestone/v1.3",
   "base_commit": "d262bc78cc24a9a8450362f9732f21110f6cbd87",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go",
+        "internal/argfence/policy.go",
+        "internal/argfence/argfence_test.go",
+        "internal/cmd/subprocargs_audit_test.go",
+        "internal/cmd/testdata/subprocargs_audit/snippets.txt"
+      ],
+      "commit": "1c699a8",
+      "completed_at": "2026-08-14T14:51:49.131066Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation transport",
+          "symbol": "remote.Target",
+          "loc": "internal/remote/remote.go:52",
+          "what": "ssh/rsync argv builders with an allowlisted target, shell-quoted remote commands and exit-code failure classification"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/local.go",
+        "internal/cmd/local_test.go"
+      ],
+      "commit": "7599861",
+      "completed_at": "2026-08-14T14:56:50.176404Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation consent",
+          "symbol": "readRemoteGrant",
+          "loc": "internal/cmd/local.go:196",
+          "what": "machine-local remote grant excluded from local set and refused unread when tracked, plus settable worker/test-cpu knobs"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/project/project.go",
+        "internal/project/project_test.go"
+      ],
+      "commit": "8a10a08",
+      "completed_at": "2026-08-14T15:04:34.97994Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation consent",
+          "symbol": "Mutation.refuseRemote",
+          "loc": "internal/project/project.go:190",
+          "what": "trap fields make a remote host in tracked project.toml a named refusal instead of a silently ignored key"
+        }
+      ]
+    }
+  }
 }
