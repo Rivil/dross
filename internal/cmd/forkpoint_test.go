@@ -210,3 +210,60 @@ func TestForkPointBackfillUsesRecordedCommits(t *testing.T) {
 		t.Errorf("fork point from recorded commits = %q, want %q", got, want)
 	}
 }
+
+// TestForkPointBackfillFallsBackToMain covers the population a rotted pin
+// actually comes from: a completed phase whose recorded base — a milestone
+// branch — was merged and deleted long ago. Giving up there leaves doctor's
+// repoint hint unresolvable in exactly the case it exists for.
+func TestForkPointBackfillFallsBackToMain(t *testing.T) {
+	dir, want := backfillFixture(t, "auth")
+	root := filepath.Join(dir, ".dross")
+
+	// Rewrite the record the way a completed phase's looks: a base branch that
+	// no longer resolves anywhere, plus its own commits.
+	path := changes.FilePath(root, "auth")
+	c, err := changes.Load(path, "auth")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Base = "milestone/v1.2"
+	c.Record("t-1", []string{"work.txt"}, mustGit(t, dir, "rev-parse", "phase/auth"), "", nil)
+	if err := c.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, dir, "checkout", "-q", "main")
+	mustGit(t, dir, "branch", "-qD", "phase/auth")
+
+	got, err := phaseForkPoint(dir, root, "auth")
+	if err != nil {
+		t.Fatalf("a phase whose base branch is gone had no fork point: %v", err)
+	}
+	if got != want {
+		t.Errorf("fork point via the main-branch fallback = %q, want %q", got, want)
+	}
+}
+
+// TestForkPointBackfillNoSurvivingCommit: with the base gone AND no commit of
+// the phase's own left, there is genuinely nothing to merge-base. That must be
+// an error naming the phase, not a plausible-looking SHA from somewhere else.
+func TestForkPointBackfillNoSurvivingCommit(t *testing.T) {
+	dir := initWithGit(t)
+	root := filepath.Join(dir, ".dross")
+	path := changes.FilePath(root, "ghost")
+	c := changes.New("ghost")
+	c.Base = "milestone/v1.2"
+	if err := c.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := phaseForkPoint(dir, root, "ghost")
+	if err == nil {
+		t.Fatalf("expected an error, got fork point %q", got)
+	}
+	if got != "" {
+		t.Errorf("errored but still returned %q", got)
+	}
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Errorf("error does not name the phase: %v", err)
+	}
+}

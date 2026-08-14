@@ -12,9 +12,11 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/project"
 )
 
 // phaseForkPoint returns the commit phaseID was forked from.
@@ -38,7 +40,7 @@ func phaseForkPoint(repoDir, root, phaseID string) (string, error) {
 		return "", fmt.Errorf("phase %s records no base branch, so its fork point cannot be resolved; "+
 			"re-record it with `dross phase create` semantics or set base in %s", phaseID, path)
 	}
-	sha, err := resolveForkPoint(repoDir, phaseID, c)
+	sha, err := resolveForkPoint(repoDir, root, phaseID, c)
 	if err != nil {
 		return "", err
 	}
@@ -53,10 +55,22 @@ func phaseForkPoint(repoDir, root, phaseID string) (string, error) {
 // belongs to the phase. The phase branch is the obvious tip, but it is deleted
 // on completion, so a completed phase falls back to the newest commit its own
 // changes.json recorded — the phase's durable evidence of where it worked.
-func resolveForkPoint(repoDir, phaseID string, c *changes.Changes) (string, error) {
-	baseRef, err := resolvableRef(repoDir, c.Base, "origin/"+c.Base)
+//
+// The base itself is just as mortal: a phase forked off milestone/v1.2 outlives
+// that branch by months, and giving up there would leave the repoint hint
+// unresolvable for every completed phase — which is precisely the population a
+// rotted pin comes from. So the main branch stands in when the recorded base is
+// gone. The answer is then the nearest commit the phase's work sits on top of
+// that origin still reaches, which is exactly what a pin needs to be repointed
+// to.
+func resolveForkPoint(repoDir, root, phaseID string, c *changes.Changes) (string, error) {
+	bases := []string{c.Base, "origin/" + c.Base}
+	if main := mainBranchName(root); main != "" {
+		bases = append(bases, main, "origin/"+main)
+	}
+	baseRef, err := resolvableRef(repoDir, bases...)
 	if err != nil {
-		return "", fmt.Errorf("phase %s: base %q resolves to no ref locally or on origin", phaseID, c.Base)
+		return "", fmt.Errorf("phase %s: neither base %q nor the main branch resolves to a ref locally or on origin", phaseID, c.Base)
 	}
 	tips := phaseTipCandidates(phaseID, c)
 	tipRef, err := resolvableRef(repoDir, tips...)
@@ -110,4 +124,16 @@ func resolvableRef(repoDir string, candidates ...string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no candidate ref resolves to a commit")
+}
+
+// mainBranchName reads [repo].git_main_branch, defaulting to "main". An
+// unreadable project.toml yields "main" rather than an error: this is a
+// fallback path already, and refusing to guess here would only turn a
+// resolvable fork point back into an unresolvable one.
+func mainBranchName(root string) string {
+	p, err := project.Load(filepath.Join(root, project.File))
+	if err != nil || p.Repo.GitMainBranch == "" {
+		return "main"
+	}
+	return p.Repo.GitMainBranch
 }
