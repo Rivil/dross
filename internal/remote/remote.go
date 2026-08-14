@@ -1,0 +1,392 @@
+// Package remote owns the transport dross uses to run a mutation adapter on
+// another machine: the pure argv builders for ssh and rsync, the readiness
+// probe, and the exit-code classification every caller branches on.
+//
+// It deliberately decides no POLICY. Whether a remote is configured, which
+// adapter runs on it, and what a failure means for a verify report all live
+// above this package. What lives here is argv construction and exit codes —
+// thin enough that the three mutation adapters can share one seam instead of
+// growing three near-copies of it.
+//
+// The one thing this package IS opinionated about is the shell. ssh does not
+// take an argv: it takes a STRING that the remote login shell parses. That
+// makes every value crossing this boundary a shell-injection surface, which
+// argfence's leading-dash rule does not cover — a dash rule stops `-rf`, not
+// `; rm -rf /`. So Target validates against an allowlist and every element of
+// a remote command is single-quoted on the way out.
+package remote
+
+import (
+	"errors"
+	"fmt"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+var (
+	// ErrTransport is the connection itself failing: host unreachable, ssh
+	// refused, the stream dying mid-transfer. Nothing ran, so nothing was
+	// measured — callers must escalate rather than record a clean-looking
+	// empty result.
+	ErrTransport = errors.New("remote transport failed")
+	// ErrPartial is rsync reporting an incomplete transfer (a source file
+	// vanished, one path errored). The connection held; some files did not
+	// arrive. Fetching a report that does not exist lands here, which is the
+	// one remote failure that may legitimately stay a non-fatal skip.
+	ErrPartial = errors.New("remote transfer incomplete")
+	// ErrRemoteCommand is the remote program exiting non-zero. The transport
+	// worked; the thing it ran did not like something. A mutation tool exiting
+	// 1 because mutants survived is this, and is tolerated by its caller.
+	ErrRemoteCommand = errors.New("remote command failed")
+	// ErrUnsafeTarget is a host or workdir refused before any argv is built.
+	// It is returned INSTEAD of argv, never alongside it.
+	ErrUnsafeTarget = errors.New("remote target is not safe to hand to a shell")
+)
+
+// Target is the machine a mutation run is delegated to.
+type Target struct {
+	// Host is what ssh and rsync are handed as the destination: a hostname or
+	// an ssh_config alias, optionally user-qualified.
+	Host string
+	// Workdir is the absolute path on Host that the synced tree lands in and
+	// that every remote command cds into.
+	Workdir string
+	// Cores is the host's usable core count, filled in by Probe. Zero means
+	// "not probed yet" — callers deriving a worker count from it must probe
+	// first rather than silently substituting the LOCAL core count, which is
+	// the bug the remote_workers decision was written about.
+	Cores int
+}
+
+// Allowlists, not blocklists. A blocklist of shell metacharacters is a
+// classifier, and the character that matters is the one nobody thought of;
+// these say what a host and a path may contain and refuse everything else.
+//
+// hostRe permits an optional `user@` because that is how a non-default login
+// is expressed, and nothing else — no options, no ports, no colons (a colon
+// would make rsync read the destination as host:path twice over).
+//
+// workdirRe requires an absolute path: a relative workdir would resolve
+// against whatever the remote login shell happens to start in, which differs
+// per user and per host and is not something a mutation run should depend on.
+var (
+	hostRe    = regexp.MustCompile(`^([A-Za-z0-9][A-Za-z0-9._-]*@)?[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	workdirRe = regexp.MustCompile(`^/[A-Za-z0-9._/-]*$`)
+)
+
+// Validate refuses a target that cannot safely be handed to ssh.
+//
+// The refusal names the offending value, because the user's next move is to
+// edit the line they granted — an error that only says "invalid target" sends
+// them looking.
+func (t Target) Validate() error {
+	if t.Host == "" {
+		return fmt.Errorf("no remote host configured: %w", ErrUnsafeTarget)
+	}
+	if !hostRe.MatchString(t.Host) {
+		// A leading dash is the specific case argfence's Reject rule would
+		// catch for a local spawn; the allowlist covers it and everything else.
+		return fmt.Errorf("remote host %q is not a plain hostname: %w", t.Host, ErrUnsafeTarget)
+	}
+	if t.Workdir == "" {
+		return fmt.Errorf("no remote workdir configured for host %q: %w", t.Host, ErrUnsafeTarget)
+	}
+	if !workdirRe.MatchString(t.Workdir) {
+		return fmt.Errorf("remote workdir %q is not a plain absolute path: %w", t.Workdir, ErrUnsafeTarget)
+	}
+	if t.Workdir != path.Clean(t.Workdir) {
+		return fmt.Errorf("remote workdir %q is not in canonical form (want %q): %w", t.Workdir, path.Clean(t.Workdir), ErrUnsafeTarget)
+	}
+	return nil
+}
+
+// In returns the same target rooted at a subdirectory of its workdir — the
+// monorepo case, where an adapter runs in `web/` rather than at the repo root.
+//
+// It refuses a sub that escapes the workdir. cmd.Dir on the LOCAL ssh process
+// is meaningless for a remote run, so this is the only thing standing between
+// an adapter's workdir knob and a run in the wrong tree.
+func (t Target) In(sub string) (Target, error) {
+	if err := t.Validate(); err != nil {
+		return Target{}, err
+	}
+	if sub == "" || sub == "." {
+		return t, nil
+	}
+	// An absolute sub is refused rather than joined. path.Join would silently
+	// reinterpret "/etc" as "<workdir>/etc" — safe, but not what the caller
+	// wrote, and a workdir knob that quietly means something else is how an
+	// adapter ends up measuring the wrong tree.
+	if strings.HasPrefix(sub, "/") {
+		return Target{}, fmt.Errorf("remote subdirectory %q must be relative to workdir %q: %w", sub, t.Workdir, ErrUnsafeTarget)
+	}
+	joined := path.Join(t.Workdir, sub)
+	if joined != t.Workdir && !strings.HasPrefix(joined, t.Workdir+"/") {
+		return Target{}, fmt.Errorf("remote subdirectory %q escapes workdir %q: %w", sub, t.Workdir, ErrUnsafeTarget)
+	}
+	out := t
+	out.Workdir = joined
+	if err := out.Validate(); err != nil {
+		return Target{}, err
+	}
+	return out, nil
+}
+
+// SSHArgs returns the local argv that runs argv on the target, in its workdir.
+//
+// argv[0] of the RESULT is always "ssh" — the adapter's own binary never
+// reaches a local exec, which is what "the local machine spawns no compile or
+// test process" means in practice. The remote command is one shell string
+// because that is ssh's interface, so every element is quoted on the way in.
+func SSHArgs(t Target, argv []string) ([]string, error) {
+	if err := t.Validate(); err != nil {
+		return nil, err
+	}
+	if len(argv) == 0 {
+		return nil, fmt.Errorf("remote: empty command for host %q", t.Host)
+	}
+	var b strings.Builder
+	b.WriteString("cd ")
+	b.WriteString(shellQuote(t.Workdir))
+	b.WriteString(" && ")
+	for i, a := range argv {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(shellQuote(a))
+	}
+	return []string{"ssh", t.Host, b.String()}, nil
+}
+
+// SyncArgs returns the argv that pushes the local working tree to the target.
+//
+// The flags are the locked sync_mechanism decision, and each carries weight:
+//
+//   - --delete keeps the remote tree honest about files git tracks. It does NOT
+//     make the remote tree fresh in general — the .gitignore filter protects
+//     ignored paths from deletion, and every report location is gitignored, so
+//     a stale remote REPORT survives this. Staleness of reports is the
+//     launcher's explicit rm, not this flag.
+//   - --filter=:- .gitignore is a per-directory merge rule: it reads each
+//     .gitignore as it descends, which keeps dependency dirs off the wire.
+//     Written without shell quotes because there is no shell here — the rule is
+//     one argv element and quoting it would make the quotes part of the rule.
+//   - --exclude=.git comes FIRST so it applies whatever the .gitignore files
+//     say; rsync evaluates filter rules in command-line order.
+//
+// Uncommitted work is carried on purpose. Measuring the committed tree would
+// measure something the user is not looking at.
+func SyncArgs(t Target, localRoot string) ([]string, error) {
+	if err := t.Validate(); err != nil {
+		return nil, err
+	}
+	src, err := localPath(localRoot, "local root")
+	if err != nil {
+		return nil, err
+	}
+	return []string{
+		"rsync",
+		"-az",
+		"--delete",
+		"--exclude=.git",
+		"--filter=:- .gitignore",
+		// The trailing slash is load-bearing: without it rsync creates
+		// <workdir>/<basename>/ and every remote path in the run is off by one
+		// directory.
+		src + "/",
+		t.Host + ":" + t.Workdir,
+	}, nil
+}
+
+// FetchArgs returns the argv that copies remoteRel — a path relative to the
+// target's workdir — back to localPath.
+//
+// Per the locked report_fetch decision this is called once per package,
+// immediately after that package's run, so a package with no report means
+// exactly what it means for a local run: nothing was learned about it.
+func FetchArgs(t Target, remoteRel, local string) ([]string, error) {
+	sub, err := t.In(remoteRel)
+	if err != nil {
+		return nil, err
+	}
+	dst, err := localPath(local, "local destination")
+	if err != nil {
+		return nil, err
+	}
+	return []string{"rsync", "-a", t.Host + ":" + sub.Workdir, dst}, nil
+}
+
+// localPath cleans and checks a path on THIS machine before it becomes an
+// rsync operand. rsync has no end-of-options token, so a leading dash is an
+// option rather than a path — the same reason argfence lists it as Reject.
+func localPath(p, field string) (string, error) {
+	if p == "" {
+		return "", fmt.Errorf("remote: empty %s: %w", field, ErrUnsafeTarget)
+	}
+	if !filepath.IsAbs(p) {
+		return "", fmt.Errorf("remote: %s %q is not absolute: %w", field, p, ErrUnsafeTarget)
+	}
+	return filepath.Clean(p), nil
+}
+
+// shellQuote wraps s so a remote POSIX shell reads it as one literal word.
+// Single quotes suspend every expansion; the only character they cannot carry
+// is a single quote, which is closed, escaped and reopened.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// ExitError is a remote command's failure, carrying the exit code so callers
+// branch on the NUMBER rather than on stderr prose. Stderr text varies by ssh
+// version, locale and remote shell; the code does not.
+type ExitError struct {
+	Bin  string // "ssh" or "rsync" — which leg failed
+	Host string
+	Code int
+	kind error // one of ErrTransport / ErrPartial / ErrRemoteCommand
+}
+
+func (e *ExitError) Error() string {
+	return fmt.Sprintf("remote %s on %s exited %d: %v", e.Bin, e.Host, e.Code, e.kind)
+}
+
+// Unwrap exposes the class, so callers use errors.Is(err, ErrTransport) rather
+// than re-deriving the mapping from the code at every site.
+func (e *ExitError) Unwrap() error { return e.kind }
+
+// Classify maps an exit code onto the class its caller branches on.
+//
+// 255 is ssh's own "I could not do this" code — reserved by ssh precisely so a
+// transport failure is distinguishable from whatever the remote program
+// returns. rsync relays it, and adds a small set of its own stream failures
+// that mean the same thing. Everything else non-zero is the remote PROGRAM
+// speaking, which is not this package's business to interpret.
+func Classify(bin, host string, code int) error {
+	if code == 0 {
+		return nil
+	}
+	kind := ErrRemoteCommand
+	switch {
+	case code == 255:
+		kind = ErrTransport
+	case bin == "rsync" && (code == 10 || code == 12 || code == 30 || code == 35):
+		// socket I/O error, protocol stream error, I/O timeout, connection
+		// timeout — the connection, not the payload.
+		kind = ErrTransport
+	case bin == "rsync" && (code == 23 || code == 24):
+		// partial transfer due to error / due to vanished source files.
+		kind = ErrPartial
+	}
+	return &ExitError{Bin: bin, Host: host, Code: code, kind: kind}
+}
+
+// commandFn builds the *exec.Cmd for a fully-built remote argv. It is a var so
+// tests can substitute a fake and pin the argv without a live host.
+var commandFn = buildCommand
+
+// buildCommand turns a built argv into a command.
+//
+// Written as Command(argv[0]) plus an explicit Args assignment rather than the
+// usual Command(argv[0], argv[1:]...) spread, ON PURPOSE: the subprocess argv
+// audit skips any call carrying a `...` spread, because a spread hides its
+// elements from an AST walk. The spread form would therefore pass that gate by
+// accident. This form is evaluated by the audit and is accepted by a named
+// entry with a reason in internal/cmd/subprocargs_audit_test.go — accommodation
+// that someone had to write down, rather than a silence nobody chose.
+func buildCommand(argv []string) *exec.Cmd {
+	cmd := exec.Command(argv[0])
+	cmd.Args = argv
+	return cmd
+}
+
+// run executes a built argv and returns its stdout, classifying any failure.
+func run(host string, argv []string) (string, error) {
+	cmd := commandFn(argv)
+	out, err := cmd.Output()
+	if err == nil {
+		return string(out), nil
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return string(out), Classify(argv[0], host, ee.ExitCode())
+	}
+	// The local binary is missing, or could not be started at all. That is a
+	// transport failure by any useful definition: nothing ran on the remote.
+	return string(out), fmt.Errorf("remote %s on %s: %w: %v", argv[0], host, ErrTransport, err)
+}
+
+// Exec runs argv on the target and returns its stdout. It is the single place
+// a remote command is spawned from this package.
+func Exec(t Target, argv []string) (string, error) {
+	full, err := SSHArgs(t, argv)
+	if err != nil {
+		return "", err
+	}
+	return run(t.Host, full)
+}
+
+// Readiness is what a probe learned about a host.
+type Readiness struct {
+	// Cores is the host's online core count, read from the host itself.
+	Cores int
+	// Missing names the requested tools the host does not have, in the order
+	// they were asked for. Empty means every one resolved.
+	Missing []string
+}
+
+// Probe reads the target's core count and checks which of tools are present.
+//
+// The core count comes from the REMOTE machine and is the only number the
+// worker default may derive from — reading runtime.NumCPU() here is the exact
+// bug the remote_workers decision names, and it would size a 32-core host's run
+// by a laptop's core count.
+//
+// getconf _NPROCESSORS_ONLN rather than nproc: it is POSIX, present on Linux
+// and macOS alike, and prints a bare integer.
+//
+// A tool that is absent is recorded, not returned as an error — doctor wants
+// the whole list in one pass. A TRANSPORT failure aborts immediately, because
+// "the host is unreachable" must never be reported as "every tool is missing".
+func Probe(t Target, tools []string) (Readiness, error) {
+	out, err := Exec(t, []string{"getconf", "_NPROCESSORS_ONLN"})
+	if err != nil {
+		return Readiness{}, err
+	}
+	cores, err := parseCores(t.Host, out)
+	if err != nil {
+		return Readiness{}, err
+	}
+	r := Readiness{Cores: cores}
+	for _, tool := range tools {
+		if _, err := Exec(t, []string{"command", "-v", tool}); err != nil {
+			if errors.Is(err, ErrRemoteCommand) {
+				r.Missing = append(r.Missing, tool)
+				continue
+			}
+			return Readiness{}, err
+		}
+	}
+	return r, nil
+}
+
+// parseCores reads the probe's output. Unparseable or non-positive output is an
+// error rather than a fallback: a silent fallback is how the local core count
+// gets used for a remote run.
+func parseCores(host, out string) (int, error) {
+	s := strings.TrimSpace(out)
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("remote %s: unreadable core count %q: %w", host, s, ErrRemoteCommand)
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("remote %s: reported %d cores: %w", host, n, ErrRemoteCommand)
+	}
+	return n, nil
+}

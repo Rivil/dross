@@ -100,6 +100,14 @@ var table = map[string]Rule{
 		Kind: Reject,
 		Why:  "dotnet and stryker.net both parse options positionally with no end-of-options token",
 	},
+	"ssh": {
+		Kind: Reject,
+		Why:  "ssh reads options ahead of the destination and honours no end-of-options token, so a host beginning with a dash is an option — and `-o ProxyCommand=…` is arbitrary LOCAL execution, which makes this the worst binary in the table to get wrong",
+	},
+	"rsync": {
+		Kind: Reject,
+		Why:  "rsync parses options anywhere in the argv, so neither operand can be fenced; `-e …` is arbitrary local execution, the same shape as ssh's -o",
+	},
 }
 
 // PolicyFor returns the rule for a binary, and whether one exists. It fails

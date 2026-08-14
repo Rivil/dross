@@ -1,0 +1,397 @@
+package remote
+
+import (
+	"errors"
+	"fmt"
+	"os/exec"
+	"runtime"
+	"strings"
+	"testing"
+)
+
+const host = "helicon"
+
+func target() Target { return Target{Host: host, Workdir: "/srv/x"} }
+
+// contains reports whether argv carries want as one whole element. Substring
+// matching over a joined argv would pass on a value that is split across two
+// elements, which is exactly the bug an argv test exists to catch.
+func contains(argv []string, want string) bool {
+	for _, a := range argv {
+		if a == want {
+			return true
+		}
+	}
+	return false
+}
+
+// --- SyncArgs ---------------------------------------------------------------
+
+func TestSyncArgsCarriesTheLockedFlags(t *testing.T) {
+	argv, err := SyncArgs(target(), "/local/repo")
+	if err != nil {
+		t.Fatalf("SyncArgs = %v", err)
+	}
+	if argv[0] != "rsync" {
+		t.Fatalf("argv[0] = %q, want rsync", argv[0])
+	}
+	// Each of these is a locked decision, not a stylistic choice: dropping
+	// --delete leaves deleted files on the remote, and dropping the .gitignore
+	// filter puts node_modules and build output on the wire.
+	for _, want := range []string{"--delete", "--exclude=.git", "--filter=:- .gitignore"} {
+		if !contains(argv, want) {
+			t.Errorf("argv is missing %q: %v", want, argv)
+		}
+	}
+	// The filter rule is ONE argv element with no shell quotes. There is no
+	// shell between here and rsync, so quotes would become part of the rule and
+	// rsync would look for a file literally named "'- .gitignore'".
+	for _, a := range argv {
+		if strings.Contains(a, "'") {
+			t.Errorf("argv element %q carries a shell quote; rsync is spawned without a shell", a)
+		}
+	}
+	src, dst := argv[len(argv)-2], argv[len(argv)-1]
+	if src != "/local/repo/" {
+		t.Errorf("source = %q, want %q — without the trailing slash rsync nests the tree one directory deeper", src, "/local/repo/")
+	}
+	if dst != "helicon:/srv/x" {
+		t.Errorf("dest = %q, want %q", dst, "helicon:/srv/x")
+	}
+}
+
+func TestSyncArgsRefusesARelativeRoot(t *testing.T) {
+	// A relative root resolves against the caller's cwd, which for a mutation
+	// run is not knowably the repo root.
+	if _, err := SyncArgs(target(), "repo"); err == nil {
+		t.Fatal("a relative local root was accepted")
+	}
+}
+
+// --- SSHArgs ----------------------------------------------------------------
+
+func TestSSHArgsNeverSpawnsTheAdapterLocally(t *testing.T) {
+	argv, err := SSHArgs(target(), []string{"gremlins", "unleash", "./internal/cmd"})
+	if err != nil {
+		t.Fatalf("SSHArgs = %v", err)
+	}
+	if argv[0] != "ssh" {
+		t.Fatalf("argv[0] = %q, want ssh — the adapter binary must never reach a local exec", argv[0])
+	}
+	if argv[1] != host {
+		t.Errorf("argv[1] = %q, want the host %q", argv[1], host)
+	}
+	if len(argv) != 3 {
+		t.Fatalf("argv = %v, want exactly [ssh, host, command]", argv)
+	}
+	cmd := argv[2]
+	for _, want := range []string{"cd ", "/srv/x", "&&", "gremlins", "unleash", "./internal/cmd"} {
+		if !strings.Contains(cmd, want) {
+			t.Errorf("remote command %q is missing %q", cmd, want)
+		}
+	}
+	if strings.Index(cmd, "cd ") > strings.Index(cmd, "gremlins") {
+		t.Errorf("remote command runs the adapter before cd-ing into the workdir: %q", cmd)
+	}
+	for _, a := range argv {
+		if a == "gremlins" {
+			t.Errorf("the adapter binary appears as its own argv element %v — it must be inside the remote command string", argv)
+		}
+	}
+}
+
+func TestSSHArgsQuotesEveryRemoteWord(t *testing.T) {
+	// ssh hands its last argument to a remote shell. A package path carrying a
+	// space or a metacharacter that reached the shell unquoted would be split,
+	// or worse, executed.
+	argv, err := SSHArgs(target(), []string{"gremlins", "unleash", "./a b;c"})
+	if err != nil {
+		t.Fatalf("SSHArgs = %v", err)
+	}
+	if !strings.Contains(argv[2], `'./a b;c'`) {
+		t.Errorf("remote command does not quote the derived word: %q", argv[2])
+	}
+}
+
+func TestSSHArgsRejectsAnEmptyCommand(t *testing.T) {
+	if _, err := SSHArgs(target(), nil); err == nil {
+		t.Fatal("an empty remote command was accepted")
+	}
+}
+
+// --- Target validation ------------------------------------------------------
+
+// TestValidateRefusesShellMetacharacters is the guarantee argfence cannot give.
+// argfence's Reject rule stops a value that would be read as an OPTION; the
+// workdir is interpolated into a remote SHELL command, where `;` and `$(` are
+// the vector and no leading dash is involved.
+func TestValidateRefusesShellMetacharacters(t *testing.T) {
+	for _, workdir := range []string{
+		"/srv/x; rm -rf /",
+		"/srv/$(whoami)",
+		"/srv/`id`",
+		"/srv/x\nrm -rf /",
+		"/srv/x && curl evil.example",
+		"/srv/x|tee /tmp/y",
+		"srv/x",       // not absolute
+		"/srv/../etc", // not canonical
+	} {
+		t.Run(workdir, func(t *testing.T) {
+			tg := Target{Host: host, Workdir: workdir}
+			err := tg.Validate()
+			if err == nil {
+				t.Fatalf("workdir %q was accepted", workdir)
+			}
+			if !errors.Is(err, ErrUnsafeTarget) {
+				t.Errorf("refusal does not wrap ErrUnsafeTarget: %v", err)
+			}
+			// %q, not the raw string: the refusal quotes the value so a
+			// newline or a trailing space is visible in the message rather
+			// than reflowing it.
+			if !strings.Contains(err.Error(), fmt.Sprintf("%q", workdir)) {
+				t.Errorf("refusal does not name the workdir: %v", err)
+			}
+			// And no argv is built — a caller that dropped the error must not
+			// be handed something runnable.
+			if argv, err := SSHArgs(tg, []string{"gremlins"}); err == nil || argv != nil {
+				t.Errorf("SSHArgs built %v for an unsafe workdir", argv)
+			}
+			if argv, err := SyncArgs(tg, "/local/repo"); err == nil || argv != nil {
+				t.Errorf("SyncArgs built %v for an unsafe workdir", argv)
+			}
+		})
+	}
+}
+
+func TestValidateRefusesAnOptionShapedHost(t *testing.T) {
+	for _, h := range []string{"-oProxyCommand=id", "-helicon", "", "helicon:/srv", "he licon", "host$(id)"} {
+		t.Run(h, func(t *testing.T) {
+			tg := Target{Host: h, Workdir: "/srv/x"}
+			if err := tg.Validate(); err == nil {
+				t.Fatalf("host %q was accepted", h)
+			}
+			if argv, err := SSHArgs(tg, []string{"gremlins"}); err == nil || argv != nil {
+				t.Errorf("SSHArgs built %v for host %q", argv, h)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsRealTargets(t *testing.T) {
+	for _, tg := range []Target{
+		{Host: "helicon", Workdir: "/srv/dross"},
+		{Host: "build@helicon", Workdir: "/home/build/dross-work"},
+		{Host: "helicon.lan", Workdir: "/srv"},
+		{Host: "build-01.rivil.dev", Workdir: "/var/tmp/dross.run"},
+	} {
+		if err := tg.Validate(); err != nil {
+			t.Errorf("Validate(%+v) = %v, want nil — over-rejection pushes users off the safe path", tg, err)
+		}
+	}
+}
+
+// TestInStaysUnderTheWorkdir covers the monorepo knob: cmd.Dir on the local ssh
+// process is meaningless, so the sub-directory has to reach the remote cd.
+func TestInStaysUnderTheWorkdir(t *testing.T) {
+	sub, err := target().In("web")
+	if err != nil {
+		t.Fatalf("In(web) = %v", err)
+	}
+	if sub.Workdir != "/srv/x/web" {
+		t.Errorf("In(web).Workdir = %q, want /srv/x/web", sub.Workdir)
+	}
+	if sub.Host != host {
+		t.Errorf("In dropped the host: %+v", sub)
+	}
+	for _, escape := range []string{"../..", "../sibling", "/etc"} {
+		if got, err := target().In(escape); err == nil {
+			t.Errorf("In(%q) = %+v, want a refusal", escape, got)
+		}
+	}
+}
+
+// --- FetchArgs --------------------------------------------------------------
+
+func TestFetchArgsPullsFromTheWorkdir(t *testing.T) {
+	argv, err := FetchArgs(target(), "reports/gremlins/output.json", "/local/repo/reports/gremlins/output.json")
+	if err != nil {
+		t.Fatalf("FetchArgs = %v", err)
+	}
+	if argv[0] != "rsync" {
+		t.Fatalf("argv[0] = %q, want rsync", argv[0])
+	}
+	if argv[len(argv)-2] != "helicon:/srv/x/reports/gremlins/output.json" {
+		t.Errorf("source = %q", argv[len(argv)-2])
+	}
+	if argv[len(argv)-1] != "/local/repo/reports/gremlins/output.json" {
+		t.Errorf("dest = %q", argv[len(argv)-1])
+	}
+	if _, err := FetchArgs(target(), "../../etc/passwd", "/tmp/x"); err == nil {
+		t.Error("a fetch reaching outside the workdir was accepted")
+	}
+	if _, err := FetchArgs(target(), "reports/x.json", "relative/x.json"); err == nil {
+		t.Error("a relative local destination was accepted")
+	}
+}
+
+// --- Classify ---------------------------------------------------------------
+
+// TestClassifyReadsTheCodeNotTheProse: stderr text varies by ssh version,
+// locale and remote shell. The exit code does not, which is why the whole
+// failure taxonomy hangs off it.
+func TestClassifyReadsTheCodeNotTheProse(t *testing.T) {
+	for _, tc := range []struct {
+		bin  string
+		code int
+		want error
+	}{
+		{"ssh", 255, ErrTransport},
+		{"rsync", 255, ErrTransport},
+		{"rsync", 23, ErrPartial},
+		{"rsync", 24, ErrPartial},
+		{"rsync", 12, ErrTransport},
+		{"ssh", 1, ErrRemoteCommand},
+		{"ssh", 127, ErrRemoteCommand},
+		{"ssh", 126, ErrRemoteCommand},
+		{"rsync", 1, ErrRemoteCommand},
+	} {
+		t.Run(fmt.Sprintf("%s-%d", tc.bin, tc.code), func(t *testing.T) {
+			err := Classify(tc.bin, host, tc.code)
+			if err == nil {
+				t.Fatalf("Classify(%s, %d) = nil", tc.bin, tc.code)
+			}
+			if !errors.Is(err, tc.want) {
+				t.Errorf("Classify(%s, %d) = %v, want %v", tc.bin, tc.code, err, tc.want)
+			}
+			var ee *ExitError
+			if !errors.As(err, &ee) {
+				t.Fatalf("Classify did not return an *ExitError: %v", err)
+			}
+			if ee.Code != tc.code {
+				t.Errorf("carried code = %d, want %d", ee.Code, tc.code)
+			}
+			if !strings.Contains(err.Error(), host) || !strings.Contains(err.Error(), tc.bin) {
+				t.Errorf("error names neither host nor binary: %v", err)
+			}
+		})
+	}
+	if err := Classify("ssh", host, 0); err != nil {
+		t.Errorf("Classify(ssh, 0) = %v, want nil", err)
+	}
+}
+
+// TestClassifyKeepsTransportApartFromTheProgram is the distinction the whole
+// phase turns on: exit 1 is a mutation tool reporting survivors and is
+// tolerated; exit 255 is a leg that never ran and must never look like a clean
+// result.
+func TestClassifyKeepsTransportApartFromTheProgram(t *testing.T) {
+	survivors := Classify("ssh", host, 1)
+	unreachable := Classify("ssh", host, 255)
+	if errors.Is(survivors, ErrTransport) {
+		t.Error("a remote program exiting 1 was classified as a transport failure")
+	}
+	if errors.Is(unreachable, ErrRemoteCommand) {
+		t.Error("an unreachable host was classified as a remote command failure")
+	}
+}
+
+// --- exec seam + Probe ------------------------------------------------------
+
+// fakeExec substitutes the exec seam with a shell that replays a canned stdout
+// and exit code, recording every argv it was handed.
+func fakeExec(t *testing.T, reply func(argv []string) (string, int)) *[][]string {
+	t.Helper()
+	var recorded [][]string
+	prev := commandFn
+	commandFn = func(argv []string) *exec.Cmd {
+		recorded = append(recorded, append([]string(nil), argv...))
+		out, code := reply(argv)
+		script := fmt.Sprintf("printf %%s %s; exit %d", shellQuote(out), code)
+		return exec.Command("/bin/sh", "-c", script)
+	}
+	t.Cleanup(func() { commandFn = prev })
+	return &recorded
+}
+
+// TestProbeReadsTheRemoteCoreCount is the remote_workers decision in one
+// assertion: the number that sizes the run comes from the HOST, never from
+// runtime.NumCPU() here. A probe that quietly fell back to the local count
+// would size a 32-core host's run by a laptop.
+func TestProbeReadsTheRemoteCoreCount(t *testing.T) {
+	remoteCores := runtime.NumCPU()*2 + 7 // impossible to reach by accident
+	calls := fakeExec(t, func(argv []string) (string, int) {
+		return fmt.Sprintf("%d\n", remoteCores), 0
+	})
+	r, err := Probe(target(), nil)
+	if err != nil {
+		t.Fatalf("Probe = %v", err)
+	}
+	if r.Cores != remoteCores {
+		t.Errorf("Cores = %d, want %d", r.Cores, remoteCores)
+	}
+	if r.Cores == runtime.NumCPU() {
+		t.Errorf("Probe returned the LOCAL core count %d", runtime.NumCPU())
+	}
+	if len(*calls) != 1 {
+		t.Fatalf("Probe made %d calls, want 1", len(*calls))
+	}
+	if (*calls)[0][0] != "ssh" {
+		t.Errorf("Probe spawned %q, want ssh", (*calls)[0][0])
+	}
+}
+
+func TestProbeRejectsUnusableCoreCounts(t *testing.T) {
+	for _, out := range []string{"", "  ", "many", "0", "-4", "8 cores"} {
+		t.Run(out, func(t *testing.T) {
+			fakeExec(t, func([]string) (string, int) { return out, 0 })
+			r, err := Probe(target(), nil)
+			if err == nil {
+				t.Fatalf("Probe accepted %q as %d cores", out, r.Cores)
+			}
+			if r.Cores != 0 {
+				t.Errorf("Probe returned %d cores alongside an error", r.Cores)
+			}
+		})
+	}
+}
+
+func TestProbeRecordsMissingToolsButAbortsOnTransport(t *testing.T) {
+	calls := fakeExec(t, func(argv []string) (string, int) {
+		cmd := argv[len(argv)-1]
+		switch {
+		case strings.Contains(cmd, "getconf"):
+			return "32\n", 0
+		case strings.Contains(cmd, "gremlins"):
+			return "", 1 // command -v: not found
+		default:
+			return "/usr/bin/go\n", 0
+		}
+	})
+	r, err := Probe(target(), []string{"go", "gremlins"})
+	if err != nil {
+		t.Fatalf("Probe = %v", err)
+	}
+	if len(r.Missing) != 1 || r.Missing[0] != "gremlins" {
+		t.Errorf("Missing = %v, want [gremlins]", r.Missing)
+	}
+	if len(*calls) != 3 {
+		t.Errorf("Probe made %d calls, want 3 (cores + one per tool)", len(*calls))
+	}
+
+	// An unreachable host must not read as "every tool is missing" — that would
+	// send the user installing software on a box they cannot reach.
+	fakeExec(t, func([]string) (string, int) { return "", 255 })
+	if _, err := Probe(target(), []string{"go"}); !errors.Is(err, ErrTransport) {
+		t.Errorf("Probe on an unreachable host = %v, want ErrTransport", err)
+	}
+}
+
+func TestExecRefusesAnUnsafeTargetBeforeSpawning(t *testing.T) {
+	calls := fakeExec(t, func([]string) (string, int) { return "", 0 })
+	if _, err := Exec(Target{Host: "-oProxyCommand=id", Workdir: "/srv/x"}, []string{"go", "version"}); err == nil {
+		t.Fatal("Exec accepted an option-shaped host")
+	}
+	if len(*calls) != 0 {
+		t.Errorf("Exec spawned %v for a refused target", *calls)
+	}
+}

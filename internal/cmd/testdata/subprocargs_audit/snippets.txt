@@ -8,7 +8,7 @@
 #   PASS <name>   — the audit MUST report none
 # followed by one or more lines of Go, wrapped by the test into
 #   func snippet(repoDir, branch, base, ref, path, msg, pkg, dir, fields, num,
-#                file, lang, pattern, mutate, chosen string) { … }
+#                file, lang, pattern, mutate, chosen, host string) { … }
 #
 # The floor is derived: TestAuditFlagsItsOwnSnippets asserts it exercised every
 # row it parsed, so a row cannot be deleted or skipped without failing.
@@ -111,6 +111,37 @@ FLAG npx-bare-positional
 
 PASS npx-option-argument
 	exec.Command("npx", "--yes", "@stryker-mutator/core@9.6.1", "run", "--mutate", mutate, "--reporters", "json")
+
+# --- ssh / rsync (Reject — no end-of-options token, and a flag that executes) ---
+#
+# These two are the highest-stakes rows in the file. Every other Reject tool
+# mishandles a dash by running the wrong analysis; ssh's -o ProxyCommand and
+# rsync's -e run an arbitrary command on THIS machine. A derived host or path
+# that reaches either as a positional is local code execution, not a bad scan.
+
+FLAG ssh-bare-host
+	exec.Command("ssh", host, "nproc")
+
+FLAG ssh-bare-remote-command
+	exec.Command("ssh", "helicon", dir)
+
+PASS ssh-all-literal
+	exec.Command("ssh", "helicon", "cd /srv/dross && gremlins unleash ./internal/cmd")
+
+PASS ssh-option-argument
+	exec.Command("ssh", "-o", dir, "helicon", "nproc")
+
+FLAG rsync-bare-operands
+	exec.Command("rsync", "-az", "--delete", dir, path)
+
+FLAG rsync-bare-destination
+	exec.Command("rsync", "-az", "/local/repo/", host)
+
+PASS rsync-const-prefixed-operands
+	exec.Command("rsync", "-az", "--delete", "--exclude=.git", "/"+dir, "helicon:"+path)
+
+PASS rsync-option-argument
+	exec.Command("rsync", "-e", dir, "/"+path, "helicon:/srv/x")
 
 # --- fail-closed ---
 
