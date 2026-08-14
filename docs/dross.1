@@ -107,12 +107,15 @@ Manage milestones under
 .B add
 appends to list fields (success_criteria, non_goals, phases).
 .TP
-.B dross phase \fR{\fBlist\fR|\fBshow\fR|\fBcreate\fR|\fBcomplete\fR}
+.B dross phase \fR{\fBlist\fR|\fBshow\fR|\fBcreate\fR|\fBcomplete\fR|\fBred-proof\fR}
 .B create
 makes the next phase directory and checks out
 .IR phase/<id> ;
 .B complete
 finalizes after squash-merge (ff main, delete local branch).
+.B "red-proof set <phase-id> --sha <sha> --doc <path>"
+pins the commit a phase's red proof was captured at, plus the doc that
+replays it, so the pin is a validated record rather than a hand edit.
 .TP
 .B dross task \fR{\fBnext\fR|\fBshow\fR|\fBstatus\fR}
 Inspect and update tasks within a phase plan.
