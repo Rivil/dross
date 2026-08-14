@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -387,25 +388,89 @@ func TestRedProofPinsBaseCommit(t *testing.T) {
 		t.Fatal("RUN.md still carries the placeholder — the red replay was never recorded")
 	}
 
-	sha := redProofSHA(text)
-	if sha == "" {
-		t.Fatal("RUN.md does not pin a base commit SHA (expected a `base commit: <sha>` line)")
+	// The pin is read through discovery, not by re-parsing this doc's path: the
+	// record is what doctor checks, and a suite reading a different source
+	// could stay green over a pin doctor calls rotted.
+	pin := fixtureRedProofPin(t, root)
+	if docSHA := redProofSHA(text); docSHA != pin.SHA {
+		t.Errorf("RUN.md says base commit %q but %s's record pins %q — fix one to match the other (`dross phase red-proof set`)",
+			docSHA, pin.Phase, pin.SHA)
 	}
-	// A shallow clone genuinely does not carry the pinned commit — that is an
-	// absence of history, not a dishonest RUN.md, so reddening on it would be a
-	// false red. ci.yml fetches full history for exactly this assertion, so the
-	// log line below is a signal that some *other* environment truncated the
-	// clone, never a silently-disabled check in ours.
-	if shallow, shErr := gitTrim(root, "rev-parse", "--is-shallow-repository"); shErr == nil && shallow == "true" {
-		t.Logf("shallow clone — cannot verify pinned base commit %s (ci.yml fetches full history so this check still runs in CI)", sha)
-	} else if err := gitNoOut(root, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, sha+"^{commit}")...); err != nil {
-		t.Errorf("RUN.md pins base commit %s, which does not exist in this repo", sha)
+
+	// Reachability is decided by the SAME classifier doctor runs (c-4). A
+	// shallow clone reports cannot-determine, and that stays a skip-with-log:
+	// an absence of history is not a dishonest RUN.md, and reddening on it
+	// would be a false red. ci.yml fetches full history for exactly this
+	// assertion, so the log line is a signal that some *other* environment
+	// truncated the clone, never a silently-disabled check in ours.
+	verdict, why, err := classifyReachability(root, pin.SHA)
+	switch {
+	case err != nil:
+		t.Errorf("could not check the pin %s: %v", pin.SHA, err)
+	case verdict == reachIndeterminate:
+		t.Logf("cannot verify pinned base commit %s — %s (ci.yml fetches full history so this check still runs in CI)", pin.SHA, why)
+	case verdict == reachUnreachable:
+		t.Errorf("%s pins base commit %s, which is unreachable — %s. Repoint it to the phase's fork point %s",
+			pin.Doc, pin.SHA, why, fixtureForkPoint(t, root, pin.Phase))
 	}
 
 	for _, v := range loadVectors(t) {
 		if !strings.Contains(text, v.ID) {
 			t.Errorf("RUN.md's replay does not mention vector %q", v.ID)
 		}
+	}
+}
+
+// fixtureRedProofPin finds this fixture's pin through the same discovery doctor
+// uses. A missing pin is fatal: the fixture's whole claim is that the replay is
+// re-runnable, and an unrecorded proof is one nothing checks.
+func fixtureRedProofPin(t *testing.T, root string) redProofPin {
+	t.Helper()
+	pins, err := discoverRedProofPins(filepath.Join(root, RootDirName))
+	if err != nil {
+		t.Fatalf("discover red-proof pins: %v", err)
+	}
+	want := fixtureDir + "/RUN.md"
+	for _, p := range pins {
+		if p.Doc == want {
+			return p
+		}
+	}
+	t.Fatalf("no phase records a red proof for %s — record it with `dross phase red-proof set <phase> --sha <sha> --doc %s`", want, want)
+	return redProofPin{}
+}
+
+// fixtureForkPoint renders the commit a rotted pin should be repointed to, or
+// why it could not be resolved. It never fails the test on its own: the finding
+// is the rotted pin, and losing that message to a secondary failure would be
+// the worse outcome.
+func fixtureForkPoint(t *testing.T, root, phaseID string) string {
+	t.Helper()
+	fork, err := phaseForkPoint(root, filepath.Join(root, RootDirName), phaseID)
+	if err != nil {
+		return fmt.Sprintf("(unresolved: %v)", err)
+	}
+	return fork
+}
+
+// TestRedProofCheckHasOneCaller is the delegation gate for c-4. The reachability
+// rule must have ONE implementation: this file may read the doc and the record,
+// but the moment it asks git a containment question of its own, the suite and
+// doctor can disagree about whether a pin is sound — which is the exact split
+// that let the c-5 pin pass here and rot for everyone else.
+func TestRedProofCheckHasOneCaller(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join(fixtureRoot(t), "internal", "cmd", "hostile_config_test.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Built by concatenation so this gate does not match its own probe list.
+	for _, probe := range []string{"rev-" + "parse", "for-each-" + "ref", "merge-" + "base", "is-shallow-" + "repository"} {
+		if strings.Contains(string(body), probe) {
+			t.Errorf("hostile_config_test.go asks git %q itself — reachability must go through classifyReachability so this suite and doctor cannot disagree", probe)
+		}
+	}
+	if !strings.Contains(string(body), "classifyReachability(") {
+		t.Error("hostile_config_test.go no longer calls classifyReachability — the fixture check has stopped delegating")
 	}
 }
 
