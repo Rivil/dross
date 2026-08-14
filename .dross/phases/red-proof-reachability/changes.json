@@ -1,5 +1,129 @@
 {
   "phase": "red-proof-reachability",
   "base": "milestone/v1.3",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/forkpoint.go",
+        "internal/cmd/forkpoint_test.go"
+      ],
+      "commit": "530f75a",
+      "completed_at": "2026-08-14T07:25:47.194223Z",
+      "landmarks": [
+        {
+          "feature": "phase fork point",
+          "symbol": "phaseForkPoint",
+          "loc": "internal/cmd/forkpoint.go:28",
+          "what": "phase create records base_commit at fork time; pre-field records resolve a fork point from base + own commits and cache it back"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/redproof.go",
+        "internal/cmd/redproof_test.go"
+      ],
+      "commit": "6973694",
+      "completed_at": "2026-08-14T07:30:01.737699Z",
+      "landmarks": [
+        {
+          "feature": "red-proof reachability",
+          "symbol": "classifyReachability",
+          "loc": "internal/cmd/redproof.go:62",
+          "what": "three-way verdict (reachable / unreachable / cannot-determine) scoped to origin's tracking refs; shallow and no-origin-refs are indeterminate, a missing object is a hard unreachable"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/cmd/redproof.go",
+        "internal/cmd/redproof_test.go",
+        "internal/cmd/hostile_config_test.go"
+      ],
+      "commit": "a2049e9",
+      "completed_at": "2026-08-14T07:33:40.747001Z",
+      "landmarks": [
+        {
+          "feature": "red-proof reachability",
+          "symbol": "discoverRedProofPins",
+          "loc": "internal/cmd/redproof.go:119",
+          "what": "red_proof record (sha + doc) on changes.Changes; pins discovered by globbing phases/*/changes.json so a later phase's proof is checked with no new code"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/redproof_set.go",
+        "internal/cmd/redproof_set_test.go",
+        "internal/cmd/phase.go",
+        "README.md",
+        "docs/dross.1",
+        ".dross/phases/config-trust-hardening/changes.json"
+      ],
+      "commit": "1ca2ff3",
+      "completed_at": "2026-08-14T07:38:04.426802Z",
+      "notes": "plan named TestCommandsParity as the doc gate; no such test exists — TestDocsCoverRedProofVerb written instead (docs mention + cobra-tree resolution)",
+      "landmarks": [
+        {
+          "feature": "red-proof reachability",
+          "symbol": "phaseRedProofSet",
+          "loc": "internal/cmd/redproof_set.go:30",
+          "what": "dross phase red-proof set validates sha + doc and records the pin, so a machine-checked artefact is never hand-edited; live config-trust-hardening pin recorded"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go",
+        "README.md",
+        "docs/dross.1"
+      ],
+      "commit": "ecadb4b",
+      "completed_at": "2026-08-14T07:45:22.810013Z",
+      "notes": "shallow-clone test asserts the pin adds no issue to its own section rather than an absolute exit code 0 (fixture origin is a temp path project.toml cannot name)",
+      "landmarks": [
+        {
+          "feature": "red-proof reachability",
+          "symbol": "redProofChecks",
+          "loc": "internal/cmd/doctor.go:499",
+          "what": "doctor Red proofs section: unreachable pin is an issue naming doc + SHA + the phase's fork point to repoint to, shallow/no-origin-refs is a warning, doc/record disagreement is an issue"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/hostile_config_test.go"
+      ],
+      "commit": "18e3d74",
+      "completed_at": "2026-08-14T07:48:59.798864Z",
+      "landmarks": [
+        {
+          "feature": "red-proof reachability",
+          "symbol": "TestRedProofCheckHasOneCaller",
+          "loc": "internal/cmd/hostile_config_test.go:461",
+          "what": "fixture suite reads its pin through discovery and classifies via classifyReachability; a gate fails the build if this file asks git a containment question of its own"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/forkpoint.go",
+        "internal/cmd/forkpoint_test.go"
+      ],
+      "commit": "9f6dbaf",
+      "completed_at": "2026-08-14T07:52:46.722266Z",
+      "landmarks": [
+        {
+          "feature": "phase fork point",
+          "symbol": "resolveForkPoint",
+          "loc": "internal/cmd/forkpoint.go:66",
+          "what": "falls back to the main branch when the recorded base branch no longer resolves, so doctor's repoint hint names a real commit for completed phases whose milestone branch is long gone"
+        }
+      ]
+    }
+  }
 }
