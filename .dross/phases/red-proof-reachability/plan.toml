@@ -1,0 +1,136 @@
+task_seq = 6
+
+[phase]
+  id = "red-proof-reachability"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Record and backfill the phase fork point"
+  files = ["internal/changes/changes.go", "internal/cmd/phase.go", "internal/cmd/forkpoint.go", "internal/cmd/forkpoint_test.go"]
+  description = """
+changes.Changes gains base_commit alongside base; forkPhaseBranch resolves the base
+branch's tip at fork time and records both in one write. A phase whose record predates
+the field (the ~30 existing dirs) resolves a fork point on demand from its recorded base
+plus its own commits, and the result is cached back into changes.json on first use, per
+the locked fork_point_backfill decision. No migration command.
+"""
+  covers = ["c-1"]
+  test_contract = [
+    "if forkPhaseBranch stops recording the fork point, TestPhaseCreateRecordsForkPoint fails — changes.json carries base but an empty base_commit after `dross phase create`",
+    "if the recorded SHA is not the base branch's tip at fork time, the same test fails on the rev-parse comparison against the base ref",
+    "if the backfill resolver stops caching, TestForkPointBackfillCaches fails — the second call re-resolves via git instead of reading base_commit back off disk",
+    "if backfill silently returns an empty SHA for a phase with no recorded base, TestForkPointBackfillNoBase fails — it asserts an error naming the phase, not a blank result",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Add shared remote-reachability classifier"
+  files = ["internal/cmd/redproof.go", "internal/cmd/redproof_test.go"]
+  description = """
+One function classifying a SHA as reachable / unreachable / cannot-determine, scoped to
+refs/remotes/origin per the locked reachability_scope decision — origin's tracking refs
+specifically, not every remote a contributor happens to have. cannot-determine covers a
+shallow clone and a repo with no origin refs at all: an absence of history, never a
+verdict. A SHA missing from the object database is unreachable, not cannot-determine —
+git's non-zero exit there must not be folded into the indeterminate arm. Lives in
+internal/cmd so doctor and the fixture suite call the same implementation (c-4); reuses
+gitRefArgs/gitTrim.
+"""
+  covers = ["c-2", "c-3", "c-4"]
+  test_contract = [
+    "if the check counts local branches, TestReachabilityIgnoresLocalBranches fails — a SHA held only by a local branch classifies reachable",
+    "if a shallow clone or a repo with no origin refs classifies as unreachable, TestReachabilityIndeterminate fails — the three outcomes are asserted distinct, and cannot-determine is not unreachable",
+    "if a SHA absent from the object database classifies cannot-determine (git's \"malformed object name\" exit folded into the indeterminate arm), TestReachabilityMissingObject fails — the post-GC case c-2 is actually about must be a hard unreachable",
+    "if a SHA contained in origin/main stops classifying reachable, TestReachabilityRemoteBranch fails",
+    "if a loose object with no ref pointing at it classifies reachable, TestReachabilityLooseObject fails — rev-parse --verify succeeding is not reachability",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  depends_on = ["t-1", "t-2"]
+  title = "Add red-proof pin record and convention discovery"
+  files = ["internal/changes/changes.go", "internal/cmd/redproof.go", "internal/cmd/redproof_test.go", "internal/cmd/hostile_config_test.go"]
+  description = """
+The reader half of c-5. A red_proof entry (sha + doc path) on changes.Changes, and
+discovery that globs .dross/phases/*/changes.json rather than naming a path, so a pin
+recorded by a later phase is checked with no new code. redProofSHA moves out of
+hostile_config_test.go into redproof.go — same package, so the test file's copy must go in
+this task or the package stops compiling. Extends the files t-1 and t-2 create.
+"""
+  covers = ["c-5"]
+  test_contract = [
+    "if discovery hardcodes fixtures/hostile-config-c5, TestDiscoverRedProofPinsFindsLaterPhase fails — a pin recorded under a second phase dir is absent from the returned set",
+    "if a phase dir with no red_proof entry errors instead of being skipped, TestDiscoverRedProofPinsSkipsUnpinnedPhases fails — ~30 existing dirs carry none",
+    "if the shared doc parser stops handling the emphasised/backticked `**base commit: `<sha>`**` form RUN.md:99 actually carries, TestRedProofDocSHA fails",
+    "if redProofSHA is left declared in hostile_config_test.go as well as redproof.go, the cmd package fails to build — redeclaration, caught by any `go test ./internal/cmd/` run",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 3
+  depends_on = ["t-3"]
+  title = "Add phase red-proof set verb and record live pin"
+  files = ["internal/cmd/redproof_set.go", "internal/cmd/redproof_set_test.go", "internal/cmd/phase.go", "README.md", "docs/dross.1", ".dross/phases/config-trust-hardening/changes.json"]
+  description = """
+The writer half: `dross phase red-proof set --sha <sha> --doc <path>` so a machine artefact
+is never hand-edited. Per hard rule r-01 the binary must be rebuilt before the verb can
+record anything — `make install` (or `go run ./cmd/dross`) first, then run it to write the
+config-trust-hardening pin (a6ef729 + fixtures/hostile-config-c5/RUN.md). README:189's
+`dross phase {…}` subcommand row and the matching docs/dross.1 entry gain the verb.
+"""
+  covers = ["c-5"]
+  test_contract = [
+    "if the verb writes a pin without checking the doc path resolves or the SHA parses as a commit, TestRedProofSetRejectsBadInput fails",
+    "if the verb overwrites an unrelated phase's record or drops the existing base/base_commit fields, TestRedProofSetPreservesRecord fails",
+    "if the config-trust-hardening entry is missing, TestDiscoverRedProofPinsFindsRecordedPin fails — the live repo's one pin is absent from discovery",
+    "if the README/dross.1 phase-subcommand rows omit `red-proof`, TestCommandsParity fails — it already asserts every narrated command resolves against the real CLI tree",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 4
+  depends_on = ["t-1", "t-2", "t-4"]
+  title = "Add doctor red-proof section"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_test.go", "README.md", "docs/dross.1"]
+  description = """
+A "Red proofs:" section running every discovered pin through the shared classifier.
+Unreachable is an issue naming the doc path, the SHA and the owning phase's fork point to
+repoint to; cannot-determine is a warning that leaves the exit code alone; a doc whose
+`base commit:` line disagrees with the recorded SHA is an issue. Neither non-clean outcome
+prints a ✓. README:202's doctor-check enumeration and docs/dross.1 gain the check.
+"""
+  covers = ["c-2", "c-3", "c-5"]
+  test_contract = [
+    "if an unreachable pin stops moving doctor's exit code, TestDoctorReportsUnreachableRedProof fails",
+    "if the unreachable line stops naming the doc path, the SHA or the fork point to repoint to, the same test's substring assertions fail",
+    "if a shallow clone reports the pin as an issue instead of a ⚠, TestDoctorWarnsOnIndeterminateRedProof fails — it asserts the exit code stays 0 and no ✓ is printed",
+    "if a doc whose `base commit:` disagrees with the recorded SHA passes clean, TestDoctorReportsRedProofDocMismatch fails",
+    "if this repo's own recorded pin produces a finding, TestDoctorCleanRedProofsHaveNoFindings fails — the false-positive gate",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 4
+  depends_on = ["t-2", "t-3", "t-4"]
+  title = "Delegate fixture pin check to shared check"
+  files = ["internal/cmd/hostile_config_test.go"]
+  description = """
+TestRedProofPinsBaseCommit's existence check is replaced by a call to t-2's classifier,
+reading the pin through t-3's discovery instead of re-reading RUN.md's path itself. The
+suite and doctor can no longer disagree about whether a pin is sound (c-4).
+"""
+  covers = ["c-4"]
+  test_contract = [
+    "if the fixture test reverts to its own `rev-parse --verify` existence check, TestRedProofCheckHasOneCaller fails — the delegation gate asserts hostile_config_test.go makes no reachability call of its own",
+    "if the shared classifier reports unreachable for the recorded pin, TestRedProofPinsBaseCommit errors naming the pin and the phase's fork point rather than only \"does not exist\"",
+    "if the shallow-clone path stops being a skip-with-log and becomes a failure, TestRedProofPinsBaseCommit reddens in a shallow checkout — the same cannot-determine outcome doctor warns on",
+  ]
+  status = "pending"
