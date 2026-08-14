@@ -29,7 +29,11 @@
 
 [[criteria]]
   id = "c-7"
-  text = "A remote run restores the language's dependencies on the remote before the adapter runs (npm ci, dotnet restore); a Go run requires none."
+  text = "A remote run restores the language's dependencies on the remote before the adapter runs, using the lockfile-respecting form of the project's OWN package manager (pnpm/npm/yarn/bun, dotnet restore); a Go run requires none, and a package manager with no entry in the table is an error rather than a skipped restore."
+
+[[criteria]]
+  id = "c-8"
+  text = "A remote run carries the environment variables the adapter needs, and their values never reach the remote's process list, filesystem, or shell history; a named variable that is unset locally is an error rather than an empty export."
 
 [[decisions]]
   key = "consent_model"
@@ -65,6 +69,24 @@
   key = "report_fetch"
   choice = "Each package's report is fetched from the remote immediately after that package's run, not in one batch at the end."
   why = "Mirrors the existing per-package loop so UnmeasuredMissing keeps meaning exactly what it means today — no report written, nothing learned about the package."
+  locked = true
+
+[[decisions]]
+  key = "remote_env_transport"
+  choice = "Environment reaches the remote as `export` lines piped over ssh STDIN to `bash -s`. It is never interpolated into the ssh command string, never written to a file on the remote, and never passed via ssh SendEnv."
+  why = "The ssh command string is the remote shell's argv and shows up in that host's process list; a file persists after the run and survives it. Both are strictly worse than the docker-daemon status quo this replaces, where the values are at least confined to `docker inspect`. SendEnv needs a matching AcceptEnv in the remote sshd config, which is host state dross cannot verify and would fail open on. Stdin is the only channel that touches neither argv nor disk. Values still land in the remote process's own environment, readable via /proc/<pid>/environ by that user or root — unavoidable for any env mechanism, and not a reason to accept the avoidable leaks."
+  locked = true
+
+[[decisions]]
+  key = "remote_env_source"
+  choice = "`mutation_remote_env` in .dross/local.toml is a comma-separated allowlist of variable NAMES; dross reads each value from its own process environment at run time. It is a settable local key. An allowlisted name that is unset locally is an error."
+  why = "Names are not secrets, so the key stays settable rather than needing the grant verb's ceremony — and dross stores no secret anywhere, which is the property that makes this safe to ship. An allowlist rather than forwarding the whole environment: dross's own env carries GITHUB_TOKEN and YOUTRACK_TOKEN, and 'send everything' would put them on the mutation host. Reading from the process env matches the `set -a; . <file>; set +a` idiom already in use, and avoids growing a .env parser whose quoting and expansion rules would have to match docker-compose's or produce silently different values. Unset is an error because an empty export is not the same as an absent one: FeastAhead's DATABASE_URL flips which test suites load, so an empty value changes what gets measured rather than failing."
+  locked = true
+
+[[decisions]]
+  key = "docker_prefix_under_remote"
+  choice = "A remote grant DROPS the docker prefix rather than aborting on it. The Launcher's Prefix/Target mutual exclusion stays as an unreachable defensive invariant, but the wiring never builds both."
+  why = "dockerPrefix (internal/cmd/verify.go:280) gates only on runtime.mode == \"docker\", which describes the DEV stack and says nothing about where mutation runs. Aborting on it would refuse every docker-mode repo that grants a remote — the common case, and the one this phase exists for. The prefix is also exactly what a remote-native run should shed: the point is to run the adapter on the remote's own toolchain, and whether that toolchain is present is doctor's job (c-5) and the restore step's (c-7), not a pre-flight refusal keyed on an unrelated setting."
   locked = true
 
 [[deferred]]
