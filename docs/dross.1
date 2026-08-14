@@ -78,7 +78,12 @@ task. Also surfaces an open handoff and unfinalized verify verdicts.
 Check project-level health:
 .I project.toml
 vs reality, foundational files, the linguist attribute, phase commits
-leaked onto main.
+leaked onto main, and every recorded red proof still pinning a commit
+reachable from an
+.I origin/*
+ref (an unreachable pin is an issue naming the doc, the SHA and the
+phase's fork point to repoint to; a shallow clone is a warning that
+leaves the exit code alone).
 .TP
 .B dross validate
 Schema-check every dross artefact (including that each task's
