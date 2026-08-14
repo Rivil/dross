@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -251,6 +252,235 @@ func TestDocsCoverAllowHosts(t *testing.T) {
 				t.Errorf("%s does not mention %q", tc.file, want)
 			}
 		}
+	}
+}
+
+// TestRemoteGrantKeysAreNotSettable is the consent_model decision as a test.
+//
+// Configuring a remote is code execution on a machine of the config's choosing.
+// `dross local set` is a generic key-writer: anything it can write, an agent can
+// write without ever showing the user what it is authorizing. So the two grant
+// keys are excluded from localKeys exactly as trusted_test_command is, and this
+// fails the moment someone adds them "for symmetry".
+func TestRemoteGrantKeysAreNotSettable(t *testing.T) {
+	root := chdirDross(t)
+
+	for _, key := range []string{"mutation_remote_host", "mutation_remote_workdir", "trusted_test_command"} {
+		t.Run(key, func(t *testing.T) {
+			err := runCmd(t, Local(), "set", key, "helicon")
+			if err == nil {
+				t.Fatalf("`local set %s` succeeded — the grant must come from a verb that shows what it authorizes", key)
+			}
+			if !strings.Contains(err.Error(), "unknown local key") {
+				t.Errorf("error should say the key is unknown: %v", err)
+			}
+			// The printed key list is what a user reads to find out what they
+			// CAN set. A grant key appearing there is an invitation.
+			if strings.Contains(err.Error(), key) && strings.Contains(err.Error(), "want ") {
+				after := err.Error()[strings.Index(err.Error(), "want "):]
+				if strings.Contains(after, key) {
+					t.Errorf("the suggested key list advertises %q: %v", key, err)
+				}
+			}
+			if err := runCmd(t, Local(), "get", key); err == nil {
+				t.Errorf("`local get %s` succeeded — the key set must be closed in both directions", key)
+			}
+		})
+	}
+	if _, err := os.Stat(filepath.Join(root, LocalFile)); !os.IsNotExist(err) {
+		t.Errorf("a refused key must not create the store, stat err = %v", err)
+	}
+}
+
+// TestMutationTuningKeysRoundTrip: workers and test-cpu ARE settable. They are
+// performance knobs, not authorization — the worst a wrong value does is make a
+// run slow, which is a different category from granting code execution.
+func TestMutationTuningKeysRoundTrip(t *testing.T) {
+	root := chdirDross(t)
+
+	for key, val := range map[string]string{"mutation_workers": "8", "mutation_test_cpu": "2"} {
+		if err := runCmd(t, Local(), "set", key, val); err != nil {
+			t.Fatalf("local set %s: %v", key, err)
+		}
+		var out string
+		if err := runCmdCapturing(t, &out, Local(), "get", key); err != nil {
+			t.Fatalf("local get %s: %v", key, err)
+		}
+		if strings.TrimSpace(out) != val {
+			t.Errorf("%s did not round-trip: got %q want %q", key, strings.TrimSpace(out), val)
+		}
+	}
+
+	workers, testCPU, err := readMutationTuning(root)
+	if err != nil {
+		t.Fatalf("readMutationTuning: %v", err)
+	}
+	if workers != 8 || testCPU != 2 {
+		t.Errorf("readMutationTuning = (%d, %d), want (8, 2)", workers, testCPU)
+	}
+}
+
+// TestMutationTuningUnsetIsZeroNotDefaulted pins the difference between "unset"
+// and "zero". Unset must reach the adapters as 0 so THEY apply their own
+// default — the remote-derived one for a remote run. A reader that substituted
+// a local default here would size a 32-core host's run by this laptop.
+func TestMutationTuningUnsetIsZeroNotDefaulted(t *testing.T) {
+	root := chdirDross(t)
+
+	workers, testCPU, err := readMutationTuning(root)
+	if err != nil {
+		t.Fatalf("readMutationTuning on an empty store: %v", err)
+	}
+	if workers != 0 || testCPU != 0 {
+		t.Errorf("readMutationTuning = (%d, %d), want (0, 0) for an unset store", workers, testCPU)
+	}
+}
+
+// TestMutationTuningRefusesAValueThatDidNotTake: a typo'd knob must not resolve
+// to the default silently. The user typed something; if it cannot be honoured
+// they need to hear which key.
+func TestMutationTuningRefusesAValueThatDidNotTake(t *testing.T) {
+	root := chdirDross(t)
+
+	// Written straight into the store rather than through `local set`: cobra
+	// reads "-4" as a shorthand flag and never reaches the value, and a
+	// hand-edited local.toml is a supported way to set these anyway.
+	for _, bad := range []string{"eight", "0", "-4", "8 workers"} {
+		t.Run(bad, func(t *testing.T) {
+			body := fmt.Sprintf("mutation_workers = %q\n", bad)
+			if err := os.WriteFile(filepath.Join(root, LocalFile), []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			w, _, err := readMutationTuning(root)
+			if err == nil {
+				t.Fatalf("mutation_workers = %q was accepted as %d", bad, w)
+			}
+			if !strings.Contains(err.Error(), "mutation_workers") {
+				t.Errorf("error does not name the key: %v", err)
+			}
+		})
+	}
+}
+
+// TestReadRemoteGrantRefusesTrackedLocal is c-2's machine-local half.
+//
+// A committed local.toml naming a remote host is a repo shipping the machine it
+// wants your working tree rsync'd to and your test suite run on. The refusal
+// fires UNREAD — the same provenance check allow_hosts and the exec consent gate
+// go through, not a second one that could drift.
+func TestReadRemoteGrantRefusesTrackedLocal(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	root := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeCompleteRoot(t, root)
+
+	// A VALID grant, so the test proves provenance is what refuses it rather
+	// than the value happening to be malformed.
+	body := "mutation_remote_host = \"attacker.example\"\nmutation_remote_workdir = \"/srv/dross\"\n"
+	local := filepath.Join(root, LocalFile)
+	if err := os.WriteFile(local, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, dir, "add", "-f", ".dross/"+LocalFile)
+
+	got, err := readRemoteGrant(root, dir)
+	if err == nil {
+		t.Fatal("a tracked local.toml was read rather than refused")
+	}
+	if got != nil {
+		t.Errorf("grant must be nil on refusal, got %+v", got)
+	}
+	if strings.Contains(err.Error(), "attacker.example") {
+		t.Errorf("the refusal echoed the file's contents — it must not be parsed: %v", err)
+	}
+	for _, want := range []string{"refusing to read", ".dross/" + LocalFile, "tracked"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal does not mention %q: %v", want, err)
+		}
+	}
+
+	// Untracked, the same file grants: the refusal is about provenance, not
+	// about the value.
+	mustGit(t, dir, "rm", "--cached", "-q", ".dross/"+LocalFile)
+	got, err = readRemoteGrant(root, dir)
+	if err != nil {
+		t.Fatalf("an untracked local.toml must be readable: %v", err)
+	}
+	if got == nil || got.Host != "attacker.example" || got.Workdir != "/srv/dross" {
+		t.Errorf("grant did not parse: %+v", got)
+	}
+}
+
+// TestReadRemoteGrantWorkdirAloneIsNoGrant: the HOST is the authorization. A
+// leftover workdir with no host is not half a grant — it is nothing, and
+// treating it as authorization would be reading intent into a stale value.
+func TestReadRemoteGrantWorkdirAloneIsNoGrant(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	root := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeCompleteRoot(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, LocalFile),
+		[]byte("mutation_remote_workdir = \"/srv/dross\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readRemoteGrant(root, dir)
+	if err != nil {
+		t.Fatalf("a workdir with no host must not error: %v", err)
+	}
+	if got != nil {
+		t.Errorf("a workdir alone granted %+v", got)
+	}
+
+	// A missing store is likewise no grant, not a failure.
+	if err := os.Remove(filepath.Join(root, LocalFile)); err != nil {
+		t.Fatal(err)
+	}
+	got, err = readRemoteGrant(root, dir)
+	if err != nil || got != nil {
+		t.Errorf("a missing store = (%+v, %v), want (nil, nil)", got, err)
+	}
+}
+
+// TestReadRemoteGrantRefusesAnUnusableHost: a host WITH no usable workdir is
+// the opposite case — something was authorized and cannot be honoured, so it is
+// named rather than quietly dropped back to a local run.
+func TestReadRemoteGrantRefusesAnUnusableHost(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	root := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeCompleteRoot(t, root)
+
+	for _, tc := range []struct{ name, body, wantIn string }{
+		{"no workdir", "mutation_remote_host = \"helicon\"\n", "helicon"},
+		{"relative workdir", "mutation_remote_host = \"helicon\"\nmutation_remote_workdir = \"srv/x\"\n", "srv/x"},
+		{"shell metacharacter", "mutation_remote_host = \"helicon\"\nmutation_remote_workdir = \"/srv/x; id\"\n", "/srv/x; id"},
+		{"option-shaped host", "mutation_remote_host = \"-oProxyCommand=id\"\nmutation_remote_workdir = \"/srv/x\"\n", "-oProxyCommand=id"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(root, LocalFile), []byte(tc.body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			got, err := readRemoteGrant(root, dir)
+			if err == nil {
+				t.Fatalf("unusable grant was accepted: %+v", got)
+			}
+			if got != nil {
+				t.Errorf("grant must be nil alongside an error, got %+v", got)
+			}
+			if !strings.Contains(err.Error(), tc.wantIn) {
+				t.Errorf("error does not name the offending value %q: %v", tc.wantIn, err)
+			}
+		})
 	}
 }
 

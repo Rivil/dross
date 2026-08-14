@@ -7,10 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // Local manages .dross/local.toml — machine-local values that must NOT ride
@@ -73,6 +76,35 @@ type localStore struct {
 	// grant consent on the user's behalf without ever showing them what for,
 	// which is the entire thing being defended against.
 	TrustedTestCommand string `toml:"trusted_test_command,omitempty"`
+
+	// MutationRemoteHost and MutationRemoteWorkdir authorize a mutation run to
+	// execute on another machine.
+	//
+	// Both are deliberately ABSENT from localKeys, on exactly the
+	// TrustedTestCommand precedent above and for a strictly larger reason:
+	// configuring a remote is code execution on a machine of the config's
+	// choosing. `dross mutation remote grant` is the only writer, and it prints
+	// the host and workdir it is about to authorize BEFORE it writes them. A
+	// generic key-writer would let an agent grant that on the user's behalf
+	// without ever showing them what for.
+	//
+	// They live here rather than in project.toml for the same reason
+	// allow_hosts does: a committed remote host would be self-authorizing, and
+	// project.Load refuses one by name (see the trap fields there).
+	MutationRemoteHost    string `toml:"mutation_remote_host,omitempty"`
+	MutationRemoteWorkdir string `toml:"mutation_remote_workdir,omitempty"`
+
+	// MutationWorkers and MutationTestCPU tune the mutation runner's
+	// parallelism: how many mutants run at once, and how many CPUs each
+	// mutant's test run may use.
+	//
+	// These ARE in localKeys. They are performance knobs, not authorization —
+	// the worst a wrong value does is make a run slow or noisy, which is a
+	// different category from granting code execution on another host. Kept
+	// machine-local because the right number is a property of the box, not of
+	// the repo.
+	MutationWorkers string `toml:"mutation_workers,omitempty"`
+	MutationTestCPU string `toml:"mutation_test_cpu,omitempty"`
 }
 
 // localKeys maps each key to its accessors, keeping `local get` and
@@ -89,6 +121,17 @@ var localKeys = map[string]struct {
 		get: func(l *localStore) string { return l.AllowHosts },
 		set: func(l *localStore, v string) { l.AllowHosts = v },
 	},
+	"mutation_workers": {
+		get: func(l *localStore) string { return l.MutationWorkers },
+		set: func(l *localStore, v string) { l.MutationWorkers = v },
+	},
+	"mutation_test_cpu": {
+		get: func(l *localStore) string { return l.MutationTestCPU },
+		set: func(l *localStore, v string) { l.MutationTestCPU = v },
+	},
+	// mutation_remote_host and mutation_remote_workdir are NOT here. See the
+	// struct fields — they are granted by `dross mutation remote grant`, which
+	// shows the user what it is authorizing, and by nothing else.
 }
 
 // readAllowHosts returns the machine-local host allowlist additions, or an
@@ -145,6 +188,78 @@ func refuseTrackedLocal(repoDir string) error {
 			"    git rm --cached %s\n"+
 			"    git commit -m \"chore: untrack dross local store\"",
 		rel, rel, rel)
+}
+
+// readRemoteGrant returns the machine-local authorization for a remote mutation
+// run, or (nil, nil) when the repo has none.
+//
+// It goes through refuseTrackedLocal for the same reason the consent gate does,
+// and the reason is sharper here: a tracked local.toml naming a remote host is a
+// repo shipping the machine it wants your working tree rsync'd to and your test
+// suite executed on. The file is refused UNREAD in that case.
+//
+// The HOST is the authorization, so an absent host is simply no grant — a
+// stored workdir on its own is not half a grant, it is nothing, and treating it
+// as authorization would be reading intent into a leftover value. A host WITH no
+// usable workdir is different: something was authorized and cannot be honoured,
+// so Target.Validate refuses it by name rather than falling back.
+//
+// An unparseable store is an error, not an empty grant. Every other reader of
+// this file treats a decode failure as "no value"; a trust-bearing key cannot,
+// because "I could not read your config" must never resolve to a silent local
+// run the user thought was remote.
+func readRemoteGrant(root, repoDir string) (*remote.Target, error) {
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return nil, err
+	}
+	l, err := loadLocal(localPath(root))
+	if err != nil {
+		return nil, err
+	}
+	if l.MutationRemoteHost == "" {
+		return nil, nil
+	}
+	t := &remote.Target{Host: l.MutationRemoteHost, Workdir: l.MutationRemoteWorkdir}
+	if err := t.Validate(); err != nil {
+		return nil, fmt.Errorf("%s/%s: %w", RootDirName, LocalFile, err)
+	}
+	return t, nil
+}
+
+// readMutationTuning returns the machine-local worker and test-cpu overrides.
+//
+// Zero means unset, and unset is not the same as zero: the adapters read it as
+// "apply your own default" (NumCPU/2 locally, the probed remote count for a
+// remote run). Returning 0 for a value the user actually typed would silently
+// discard it, so a value that is present but unusable is an error naming the
+// key — the user typed something and deserves to hear that it did not take.
+func readMutationTuning(root string) (workers, testCPU int, err error) {
+	l, lerr := loadLocal(localPath(root))
+	if lerr != nil {
+		return 0, 0, lerr
+	}
+	if workers, err = parseTuning("mutation_workers", l.MutationWorkers); err != nil {
+		return 0, 0, err
+	}
+	if testCPU, err = parseTuning("mutation_test_cpu", l.MutationTestCPU); err != nil {
+		return 0, 0, err
+	}
+	return workers, testCPU, nil
+}
+
+func parseTuning(key, raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s/%s: %s = %q is not a number", RootDirName, LocalFile, key, raw)
+	}
+	if n < 1 {
+		return 0, fmt.Errorf("%s/%s: %s = %d must be at least 1", RootDirName, LocalFile, key, n)
+	}
+	return n, nil
 }
 
 func localKeyNames() string {
