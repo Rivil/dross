@@ -53,8 +53,21 @@ type Changes struct {
 	// already been evicted while the phase was plainly done (verdict pass, PR
 	// 79 merged), so anything counting doneness from history alone was reading
 	// a window, not a record. This field is per-phase and never scrolls.
-	Status string                `json:"status,omitempty"`
-	Tasks  map[string]TaskRecord `json:"tasks"`
+	Status string `json:"status,omitempty"`
+	// RedProof pins the commit a phase's red proof was recorded at, plus the
+	// prose doc that replays it. Keyed to the phase (rather than living in the
+	// doc alone) so a checker can name the fork point to repoint a rotted pin
+	// to — the doc names no phase, and a SHA with no owner is a dead end.
+	RedProof *RedProof             `json:"red_proof,omitempty"`
+	Tasks    map[string]TaskRecord `json:"tasks"`
+}
+
+// RedProof is the machine half of a red proof: the pinned commit and the path
+// (repo-relative) of the doc whose `base commit:` line must agree with it. The
+// doc stays the human artefact; this is what a check reads.
+type RedProof struct {
+	SHA string `json:"sha"`
+	Doc string `json:"doc"`
 }
 
 // The two values Status takes. Ordered: a phase reaches shipped first and

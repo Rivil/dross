@@ -409,23 +409,6 @@ func TestRedProofPinsBaseCommit(t *testing.T) {
 	}
 }
 
-// redProofSHA extracts the pinned base commit from the "base commit: <sha>"
-// line RUN.md is required to carry.
-func redProofSHA(text string) string {
-	for _, line := range strings.Split(text, "\n") {
-		l := strings.TrimSpace(line)
-		lower := strings.ToLower(l)
-		idx := strings.Index(lower, "base commit:")
-		if idx < 0 {
-			continue
-		}
-		rest := strings.TrimSpace(l[idx+len("base commit:"):])
-		if f := strings.Fields(rest); len(f) > 0 {
-			// Markdown emphasis and code fences travel with the value in prose;
-			// trimmed here rather than forbidden in RUN.md, which is written for
-			// a human reader first.
-			return strings.Trim(f[0], "`*_ ")
-		}
-	}
-	return ""
-}
+// The pin parser used to live here. It moved to redproof.go so doctor and this
+// suite read a doc's pin through the same code (c-4) — a second copy would be a
+// second answer to "what does this doc pin", and the two would drift.

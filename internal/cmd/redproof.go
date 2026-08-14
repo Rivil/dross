@@ -17,7 +17,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
+
+	"github.com/Rivil/dross/internal/changes"
 )
 
 // reachability is the three-way verdict. Three, not a bool, because "I cannot
@@ -91,4 +96,81 @@ func classifyReachability(repoDir, sha string) (reachability, string, error) {
 		return reachUnreachable, "no " + originRefGlob + "* ref contains it — a fresh clone would not have this commit", nil
 	}
 	return reachReachable, "contained in " + strings.TrimSpace(got), nil
+}
+
+// redProofPin is one discovered pin, carrying the phase that owns it so a
+// checker can name the fork point to repoint to when the SHA has rotted.
+type redProofPin struct {
+	Phase string
+	SHA   string
+	Doc   string
+}
+
+// discoverRedProofPins finds every red proof recorded under root by CONVENTION:
+// it globs phases/*/changes.json rather than naming a path. A red proof
+// recorded by a later phase is checked with no new code — which is the whole
+// point, since the one thing a hardcoded fixtures/hostile-config-c5 path
+// guarantees is that the next phase's proof goes unchecked.
+//
+// A phase dir with no red_proof entry is skipped, not an error: ~30 existing
+// dirs carry none, and that is the normal case. A changes.json that will not
+// parse IS an error naming the file — a record dross cannot read is a problem
+// to surface, not one to skip past quietly.
+func discoverRedProofPins(root string) ([]redProofPin, error) {
+	matches, err := filepath.Glob(filepath.Join(root, "phases", "*", changes.File))
+	if err != nil {
+		return nil, fmt.Errorf("scan for red-proof pins: %w", err)
+	}
+	var pins []redProofPin
+	for _, path := range matches {
+		phaseID := filepath.Base(filepath.Dir(path))
+		c, err := changes.Load(path, phaseID)
+		if err != nil {
+			return nil, err
+		}
+		if c.RedProof == nil || strings.TrimSpace(c.RedProof.SHA) == "" {
+			continue
+		}
+		pins = append(pins, redProofPin{Phase: phaseID, SHA: c.RedProof.SHA, Doc: c.RedProof.Doc})
+	}
+	// Glob order is filesystem order; sorting keeps doctor's output stable
+	// between machines so a diff of two runs means something.
+	sort.Slice(pins, func(i, j int) bool { return pins[i].Phase < pins[j].Phase })
+	return pins, nil
+}
+
+// redProofDocSHA reads the pin the prose doc claims, so the record and the doc
+// can be cross-checked. A doc that has drifted from the record is a doc lying
+// to the human reader who follows it, even while the record stays sound.
+func redProofDocSHA(repoDir, doc string) (string, error) {
+	body, err := os.ReadFile(filepath.Join(repoDir, doc))
+	if err != nil {
+		return "", err
+	}
+	return redProofSHA(string(body)), nil
+}
+
+// redProofSHA extracts the pinned base commit from the "base commit: <sha>"
+// line a red-proof doc is required to carry.
+//
+// Shared between doctor and the fixture suite (c-4): two parsers would be two
+// answers to "what does this doc pin", and the disagreement would surface as a
+// green suite next to a red doctor.
+func redProofSHA(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		l := strings.TrimSpace(line)
+		lower := strings.ToLower(l)
+		idx := strings.Index(lower, "base commit:")
+		if idx < 0 {
+			continue
+		}
+		rest := strings.TrimSpace(l[idx+len("base commit:"):])
+		if f := strings.Fields(rest); len(f) > 0 {
+			// Markdown emphasis and code fences travel with the value in prose;
+			// trimmed here rather than forbidden in the doc, which is written
+			// for a human reader first.
+			return strings.Trim(f[0], "`*_ ")
+		}
+	}
+	return ""
 }

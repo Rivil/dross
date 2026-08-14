@@ -4,6 +4,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/Rivil/dross/internal/changes"
 )
 
 // reachRepo builds a repo whose only origin ref is refs/remotes/origin/main,
@@ -158,5 +160,130 @@ func TestReachabilityRejectsEmptySHA(t *testing.T) {
 	dir, _ := reachRepo(t)
 	if got, _, err := classifyReachability(dir, "  "); err == nil {
 		t.Errorf("empty SHA classified %q instead of erroring", got)
+	}
+}
+
+// pinFixture writes a .dross root under a temp dir with one changes.json per
+// entry: a nil pin means the phase recorded none, which is the shape of the ~30
+// dirs that predate the field.
+func pinFixture(t *testing.T, pins map[string]*changes.RedProof) string {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), ".dross")
+	for phaseID, pin := range pins {
+		path := changes.FilePath(root, phaseID)
+		c := changes.New(phaseID)
+		c.Base = "main"
+		c.RedProof = pin
+		if err := c.Save(path); err != nil {
+			t.Fatalf("save changes for %s: %v", phaseID, err)
+		}
+	}
+	return root
+}
+
+func pinPhases(pins []redProofPin) []string {
+	out := make([]string, 0, len(pins))
+	for _, p := range pins {
+		out = append(out, p.Phase)
+	}
+	return out
+}
+
+// TestDiscoverRedProofPinsFindsLaterPhase is c-5: discovery is by convention,
+// so a proof recorded by a phase written after this code is checked with no new
+// code. A hardcoded fixtures/hostile-config-c5 path passes every test about the
+// pin that exists today and silently ignores every one recorded after it.
+func TestDiscoverRedProofPinsFindsLaterPhase(t *testing.T) {
+	root := pinFixture(t, map[string]*changes.RedProof{
+		"config-trust-hardening": {SHA: "a6ef729", Doc: "fixtures/hostile-config-c5/RUN.md"},
+		"some-later-phase":       {SHA: "deadbee", Doc: "fixtures/later/RUN.md"},
+	})
+
+	pins, err := discoverRedProofPins(root)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	got := pinPhases(pins)
+	if len(got) != 2 {
+		t.Fatalf("discovered %v, want both phases' pins", got)
+	}
+	var found bool
+	for _, p := range pins {
+		if p.Phase == "some-later-phase" {
+			found = true
+			if p.SHA != "deadbee" || p.Doc != "fixtures/later/RUN.md" {
+				t.Errorf("later phase's pin = %+v, want its own sha/doc", p)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("a pin recorded under a later phase dir is absent from %v — discovery is not by convention", got)
+	}
+}
+
+// TestDiscoverRedProofPinsSkipsUnpinnedPhases: a phase with no red proof is the
+// normal case, not an error. Erroring would make the check unusable in this
+// repo, where ~30 dirs carry none.
+func TestDiscoverRedProofPinsSkipsUnpinnedPhases(t *testing.T) {
+	root := pinFixture(t, map[string]*changes.RedProof{
+		"pinned":     {SHA: "a6ef729", Doc: "fixtures/hostile-config-c5/RUN.md"},
+		"unpinned-a": nil,
+		"unpinned-b": nil,
+	})
+
+	pins, err := discoverRedProofPins(root)
+	if err != nil {
+		t.Fatalf("discover errored on a phase with no red_proof entry: %v", err)
+	}
+	if got := pinPhases(pins); len(got) != 1 || got[0] != "pinned" {
+		t.Errorf("discovered %v, want only [pinned]", got)
+	}
+}
+
+// TestDiscoverRedProofPinsNoPhases covers the empty repo: no phases dir at all
+// is nothing to check, not a failure.
+func TestDiscoverRedProofPinsNoPhases(t *testing.T) {
+	pins, err := discoverRedProofPins(filepath.Join(t.TempDir(), ".dross"))
+	if err != nil {
+		t.Fatalf("discover on a root with no phases dir: %v", err)
+	}
+	if len(pins) != 0 {
+		t.Errorf("discovered %v from nothing", pinPhases(pins))
+	}
+}
+
+// TestRedProofDocSHA pins the parser against the form the live doc actually
+// carries — emphasised and backticked, because it is written for a human reader
+// first. A parser that only handles the bare form reports "no pin" for a doc
+// that plainly has one.
+func TestRedProofDocSHA(t *testing.T) {
+	const sha = "a6ef7295996db1d737be2ae2183f45e376ba3c19"
+	for _, tc := range []struct {
+		name, line, want string
+	}{
+		{"emphasised and backticked", "**base commit: `" + sha + "`** (`phase dross-repair`)", sha},
+		{"bare", "base commit: " + sha, sha},
+		{"capitalised", "Base commit: " + sha, sha},
+		{"absent", "no pin here at all", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mustWrite(t, filepath.Join(dir, "RUN.md"), "# proof\n\n"+tc.line+"\n")
+			got, err := redProofDocSHA(dir, "RUN.md")
+			if err != nil {
+				t.Fatalf("redProofDocSHA: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("parsed %q from %q, want %q", got, tc.line, tc.want)
+			}
+		})
+	}
+}
+
+// TestRedProofDocSHAMissingFile: a pin naming a doc that is not there is an
+// error the caller must see, not an empty SHA that reads as "no pin recorded".
+func TestRedProofDocSHAMissingFile(t *testing.T) {
+	if _, err := redProofDocSHA(t.TempDir(), "nope/RUN.md"); err == nil {
+		t.Error("expected an error for a pin naming a doc that does not exist")
 	}
 }
