@@ -46,7 +46,7 @@
 [[decisions]]
   key = "sync_mechanism"
   choice = "rsync over ssh, filtered by .gitignore, excluding .git, with --delete."
-  why = "Carries uncommitted work, which is what verify exists to measure; the .gitignore filter keeps dependency dirs off the wire; --delete supplies c-6's staleness guarantee without extra machinery."
+  why = "Carries uncommitted work, which is what verify exists to measure; the .gitignore filter keeps dependency dirs off the wire; --delete keeps the synced tree honest about files git tracks. It does NOT supply c-6: --filter=':- .gitignore' protects ignored paths from deletion, and every report location is gitignored (/reports is line 3 of .gitignore), so a stale remote report survives --delete. Staleness is supplied by the launcher's explicit per-adapter rm before each run — do not remove it believing rsync covers it."
   locked = true
 
 [[decisions]]
