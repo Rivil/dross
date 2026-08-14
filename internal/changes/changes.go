@@ -31,6 +31,17 @@ type Changes struct {
 	// current_milestone (which goes wrong the moment a stale milestone branch
 	// is sitting in the local repo). Phase-scoped for the same reason PR is.
 	Base string `json:"base,omitempty"`
+	// BaseCommit is the SHA Base pointed at when the phase branch was forked —
+	// the phase's fork point. Base alone names a moving target: by the time
+	// anything needs to know where the phase started, main has moved on. A red
+	// proof pinned to a commit needs a durable fork point to repoint to, and
+	// that is this field.
+	//
+	// Empty on every record written before the field existed; the fork point is
+	// then resolved on demand from Base plus the phase's own commits and cached
+	// back here (the locked fork_point_backfill decision — no migration
+	// command).
+	BaseCommit string `json:"base_commit,omitempty"`
 	// Status is how far this phase got: StatusShipped once its PR is open,
 	// StatusComplete once `dross phase complete` reconciled it. Empty on every
 	// record written before the field existed, which reads as "unknown", not
@@ -179,6 +190,26 @@ func SetBase(root, phaseID, branch string) error {
 		return err
 	}
 	c.Base = branch
+	return c.Save(path)
+}
+
+// SetFork records the branch a phase was forked from AND the commit that
+// branch pointed at, in one load-set-save. Written at fork time by `dross phase
+// create`/`insert`, which is the only moment both facts are known without
+// re-deriving either.
+//
+// Separate from SetBase because ship rewrites the base alone (the branch the PR
+// was actually opened against) long after the fork — a ship-time SHA would be
+// main's tip today, not the phase's fork point, and silently overwriting the
+// fork point with it is the exact rot this field exists to survive.
+func SetFork(root, phaseID, branch, commit string) error {
+	path := FilePath(root, phaseID)
+	c, err := Load(path, phaseID)
+	if err != nil {
+		return err
+	}
+	c.Base = branch
+	c.BaseCommit = commit
 	return c.Save(path)
 }
 
