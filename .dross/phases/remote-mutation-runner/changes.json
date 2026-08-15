@@ -1,6 +1,8 @@
 {
   "phase": "remote-mutation-runner",
+  "pr": 86,
   "base": "milestone/v1.3",
+  "status": "shipped",
   "tasks": {
     "t-1": {
       "files": [
