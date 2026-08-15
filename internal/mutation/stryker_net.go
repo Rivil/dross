@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/argfence"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // StrykerNet adapter for C# / .NET mutation testing via stryker-mutator/stryker-net.
@@ -41,6 +42,12 @@ type StrykerNet struct {
 	// containerised run whose absolute paths belong to the container's
 	// filesystem rather than the host's.
 	Workdir string
+
+	// Remote delegates the run to another machine. Nil runs locally, and a
+	// local run is byte-identical to what it was before remoting existed.
+	//
+	// A NAMED field rather than an embedded Launcher — see launcher.go.
+	Remote *remote.Target
 }
 
 // strykerNetRoot picks out the one top-level field ParseStrykerJSON ignores.
@@ -83,11 +90,34 @@ func (s *StrykerNet) Run(files []string) (*Report, error) {
 		return nil, err
 	}
 
+	lr, err := newLauncher(s.Name(), s.Prefix, s.Remote, s.ProjectRoot, "")
+	if err != nil {
+		return nil, err
+	}
+	// The remote output dir is workdir-relative by construction. An absolute
+	// one names a path on THIS machine that has no meaning on the remote, and
+	// silently rooting it under the remote workdir would be dross deciding the
+	// user meant something they did not write.
+	if lr.remoteRun() && filepath.IsAbs(s.OutputDir) {
+		return nil, fmt.Errorf(
+			"stryker.net: output dir %q is absolute, which cannot be resolved on remote host %q — "+
+				"use a repo-relative output dir for a remote run", s.OutputDir, s.Remote.Host)
+	}
+
 	args := []string{"dotnet", "stryker",
 		"--reporter", "json",
 		"--output", outDir,
 	}
-	cmd := strykerNetBuildCmd(s, args)
+	// The WHOLE output tree is cleared, not one file: findReport walks it and
+	// picks the most recently modified mutation-report.json, so a surviving
+	// subtree from a previous run is a report this run did not produce.
+	if err := lr.clearReport(s.OutputDir, outDir); err != nil {
+		return nil, err
+	}
+	cmd, err := lr.toolCmd(args, func(a []string) *exec.Cmd { return strykerNetBuildCmd(s, a) })
+	if err != nil {
+		return nil, err
+	}
 	cmd.Stdout = os.Stderr // streamed; not captured
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -98,6 +128,13 @@ func (s *StrykerNet) Run(files []string) (*Report, error) {
 		if !errors.As(err, &exitErr) {
 			return nil, fmt.Errorf("stryker.net invocation failed: %w (is stryker-net installed? `dotnet tool install -g dotnet-stryker`)", err)
 		}
+	}
+
+	// Fetched to the output dir's PARENT: the remote source is the tree itself,
+	// and rsync recreates it by name under the destination. Landing it at
+	// outDir would nest a second StrykerOutput inside the first.
+	if ferr := lr.fetchReport(s.OutputDir, filepath.Dir(outDir)); ferr != nil {
+		fmt.Fprintf(os.Stderr, "stryker.net: fetch report: %v\n", ferr)
 	}
 
 	reportPath, err := findReport(outDir)

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/argfence"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // DefaultTimeoutCoefficient is the dross-chosen override for gremlins'
@@ -62,6 +63,14 @@ type Gremlins struct {
 	// TestCPU caps the CPUs each mutant's test run may use (--test-cpu).
 	// Zero or negative falls back to DefaultTestCPU (1).
 	TestCPU int
+
+	// Remote delegates the run to another machine. Nil runs locally, and a
+	// local run is byte-identical to what it was before remoting existed.
+	//
+	// A NAMED field rather than an embedded Launcher: Go's keyed struct
+	// literals do not promote, so embedding would break every existing
+	// &Gremlins{Prefix: …} construction site. See launcher.go.
+	Remote *remote.Target
 
 	// Unmeasured records every package Run excluded from the merged score,
 	// with why. It is set by each Run, replacing whatever the previous Run
@@ -132,6 +141,14 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		return &Report{Tool: g.Name()}, nil
 	}
 
+	// Built before anything is spawned: a refused combination (a prefix AND a
+	// remote, an unvalidatable target) must produce no *exec.Cmd at all.
+	// Gremlins runs at the repo root, so the launcher carries no workdir.
+	lr, err := newLauncher(g.Name(), g.Prefix, g.Remote, g.ProjectRoot, "")
+	if err != nil {
+		return nil, err
+	}
+
 	pkgs := packagesFromFilesFn(files)
 
 	// Gremlins has no end-of-options token, so a derived value that begins with
@@ -167,12 +184,22 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		// A stale report from a prior run must not be re-read if gremlins
 		// writes nothing this time.
 		_ = os.Remove(reportAbs)
+		// The remote half of the same guarantee, and it is not optional: rsync
+		// --delete cannot clear the remote report because the locked
+		// `:- .gitignore` filter protects ignored paths, and reports/ is
+		// gitignored. No-op for a local run.
+		if err := lr.clearReport(pkg, reportAbs); err != nil {
+			return nil, err
+		}
 
 		args, err := g.buildUnleashArgs(reportRel, []string{pkg})
 		if err != nil {
 			return nil, err
 		}
-		cmd := gremlinsBuildCmd(g, args)
+		cmd, err := lr.toolCmd(args, func(a []string) *exec.Cmd { return gremlinsBuildCmd(g, a) })
+		if err != nil {
+			return nil, err
+		}
 		cmd.Stdout = os.Stderr // streamed; not captured (long-running)
 		cmd.Stderr = os.Stderr
 
@@ -190,6 +217,15 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 			if !errors.As(err, &exitErr) {
 				return nil, fmt.Errorf("gremlins invocation failed: %w\n  invocation: %s\n  (is gremlins installed? `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`)", err, invocation)
 			}
+		}
+
+		// Fetched per package, immediately after its own run (the locked
+		// report_fetch decision), so "no report for this package" keeps meaning
+		// what it means locally. Which fetch failures are FATAL rather than
+		// merely empty is t-6's escalation; here an unfetched report is simply
+		// no report, which is what the read below already concludes.
+		if ferr := lr.fetchReport(pkg, reportAbs); ferr != nil {
+			fmt.Fprintf(os.Stderr, "gremlins: fetch %s: %v\n", pkg, ferr)
 		}
 
 		b, err := os.ReadFile(reportAbs)
@@ -349,7 +385,9 @@ func (g *Gremlins) buildUnleashArgs(reportRel string, pkgs []string) ([]string, 
 	}
 	workers := g.Workers
 	if workers <= 0 {
-		workers = defaultWorkers()
+		// Derived from the machine the run happens ON. For a remote run that is
+		// the probed host, not this laptop — see launcherWorkers.
+		workers = launcherWorkers(g.Remote)
 	}
 	testCPU := g.TestCPU
 	if testCPU <= 0 {

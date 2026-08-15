@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/argfence"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // Stryker adapter for TS/JS/Svelte mutation testing via stryker-mutator.
@@ -32,6 +33,12 @@ type Stryker struct {
 	// stryker there, strips the prefix from --mutate paths, and re-prefixes
 	// report paths so tests.json stays repo-relative.
 	Workdir string
+
+	// Remote delegates the run to another machine. Nil runs locally, and a
+	// local run is byte-identical to what it was before remoting existed.
+	//
+	// A NAMED field rather than an embedded Launcher — see launcher.go.
+	Remote *remote.Target
 }
 
 func (s *Stryker) Name() string { return "stryker" }
@@ -50,12 +57,32 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		return &Report{Tool: s.Name()}, nil
 	}
 
+	// Built before anything is spawned, and carrying Workdir: cmd.Dir on a
+	// LOCAL ssh process says nothing about the remote cwd, so the monorepo knob
+	// has to reach the remote as part of the command itself or stryker runs in
+	// the wrong package.
+	lr, err := newLauncher(s.Name(), s.Prefix, s.Remote, s.ProjectRoot, s.Workdir)
+	if err != nil {
+		return nil, err
+	}
+
 	args, err := s.runArgs(files)
 	if err != nil {
 		return nil, err
 	}
-	cmd := strykerBuildCmd(s, args)
-	cmd.Dir = s.workDir()
+	reportPath := s.reportPath()
+	if err := lr.clearReport("", reportPath); err != nil {
+		return nil, err
+	}
+	cmd, err := lr.toolCmd(args, func(a []string) *exec.Cmd { return strykerBuildCmd(s, a) })
+	if err != nil {
+		return nil, err
+	}
+	if !lr.remoteRun() {
+		// Only meaningful locally. Remotely the workdir is the `cd` inside the
+		// ssh command, and setting it here would chdir the ssh client instead.
+		cmd.Dir = s.workDir()
+	}
 	cmd.Stdout = os.Stderr // streamed to user, not captured
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -68,7 +95,10 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		}
 	}
 
-	reportPath := s.reportPath()
+	if err := lr.fetchReport("", reportPath); err != nil {
+		fmt.Fprintf(os.Stderr, "stryker: fetch report: %v\n", err)
+	}
+
 	b, err := os.ReadFile(reportPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
