@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -48,6 +49,7 @@ func Validate() *cobra.Command {
 				if p.Runtime.Mode == "" {
 					problems = append(problems, "project.toml: runtime.mode is empty (docker | native | hybrid)")
 				}
+				problems = append(problems, enumProblems(p)...)
 			}
 
 			// state.json
@@ -137,6 +139,46 @@ func Validate() *cobra.Command {
 			return fmt.Errorf("%d problem(s) found", len(problems))
 		},
 	}
+}
+
+// enumProblems reports every enum-valued project.toml key holding a value its
+// set does not accept.
+//
+// This is the second of the two gates the enum_enforcement_point decision
+// requires, and it reads the SAME enumKeys table `project set` refuses on
+// (project.go) — not a restated list. Set-time rejection only ever sees values
+// a human typed at the CLI; project.toml is a tracked file that gets
+// hand-edited, cloned and carried forward across versions, so a value that
+// never passed through the setter would otherwise go unchecked forever. That
+// was most of them.
+//
+// An EMPTY value is never reported here. Empty means unset, every optional
+// key's absence is legitimate, and the one key where empty is itself a problem
+// (runtime.mode) is reported by its own check above — folding it in here would
+// report it twice and word it worse.
+//
+// Keys are walked in sorted order so a project.toml with several bad values
+// produces the same problem list every run.
+func enumProblems(p *project.Project) []string {
+	keys := make([]string, 0, len(enumKeys))
+	for k := range enumKeys {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var problems []string
+	for _, k := range keys {
+		v, ok := readDotted(p, k)
+		if !ok || strings.TrimSpace(v) == "" {
+			continue
+		}
+		if set := enumKeys[k]; !set.Has(v) {
+			// Both the key and the offending value, then what IS allowed.
+			// "invalid value" alone sends the reader to the source.
+			problems = append(problems, fmt.Sprintf("project.toml: %s = %q is not a valid value (%s)", k, v, set.List()))
+		}
+	}
+	return problems
 }
 
 // danglingTargets reports every [[deferred]] target in one source that names no
