@@ -136,11 +136,15 @@ func runGremlinsOverPackages(repoRoot string, pkgs []string) ([]mutation.Unmeasu
 	if err != nil {
 		return nil, err
 	}
-	g := &mutation.Gremlins{
-		Prefix:             dockerPrefix(p),
-		ProjectRoot:        repoRoot,
-		TimeoutCoefficient: p.Mutation.Gremlins.TimeoutCoefficient,
+	// The SAME resolution verify uses, through the same constructor. The drain
+	// running locally while verify ran on the granted remote would classify
+	// survivors against a different machine's measurements — and the drain is
+	// what decides whether a survivor is real.
+	mt, err := resolveMutationTuning(p, filepath.Join(repoRoot, RootDirName))
+	if err != nil {
+		return nil, err
 	}
+	g := mt.gremlins(repoRoot, p)
 	// Gremlins derives its package set from the directories of the files it is
 	// handed, so one representative path per package is the whole input.
 	files := make([]string, 0, len(pkgs))
