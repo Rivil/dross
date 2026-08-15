@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -2097,4 +2098,203 @@ func TestDoctorStaleSectionGatesOnMilestoneStatus(t *testing.T) {
 	if err == nil {
 		t.Error("a stale branch must still move doctor's exit code once the gate passes")
 	}
+}
+
+// redProofDoctorFixture builds a repo with an origin, a pinned red proof, and
+// a phase record carrying a base + fork point — the shape doctor's red-proof
+// section reads. It returns the repo dir and the SHA the pin names.
+func redProofDoctorFixture(t *testing.T, pinSHA func(dir string) string) (dir, sha string) {
+	t.Helper()
+	dir = t.TempDir()
+	remoteDir := t.TempDir()
+	mustGit(t, remoteDir, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remoteDir)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	sha = pinSHA(dir)
+	mustWrite(t, filepath.Join(dir, "fixtures/proof/RUN.md"),
+		"# proof\n\n**base commit: `"+sha+"`**\n")
+	phaseDir := filepath.Join(dir, ".dross", "phases", "pinned-phase")
+	if err := os.MkdirAll(phaseDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(phaseDir, "changes.json"),
+		`{"phase":"pinned-phase","base":"main","base_commit":"`+mustGit(t, dir, "rev-parse", "main")+`",`+
+			`"red_proof":{"sha":"`+sha+`","doc":"fixtures/proof/RUN.md"},"tasks":{}}`)
+	return dir, sha
+}
+
+// TestDoctorReportsUnreachableRedProof is c-2 + c-3: a pin no origin ref
+// reaches is an issue (it moves the exit code) and the line has to name the doc,
+// the SHA and the fork point to repoint to — a finding you cannot act on is a
+// finding you ignore.
+func TestDoctorReportsUnreachableRedProof(t *testing.T) {
+	var orphan string
+	dir, sha := redProofDoctorFixture(t, func(dir string) string {
+		// A commit on a branch that is never pushed, then deleted: present in
+		// this repo's object database, absent from every origin ref — exactly
+		// the post-squash-merge shape the c-5 pin rotted into.
+		mustGit(t, dir, "checkout", "-q", "-b", "doomed")
+		mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "red proof replay")
+		orphan = mustGit(t, dir, "rev-parse", "HEAD")
+		mustGit(t, dir, "checkout", "-q", "main")
+		mustGit(t, dir, "branch", "-qD", "doomed")
+		return orphan
+	})
+	forkPoint := mustGit(t, dir, "rev-parse", "main")
+
+	var err error
+	out := captureStdout(t, func() { err = runCmd(t, Doctor()) })
+	if err == nil {
+		t.Error("an unreachable red proof did not move doctor's exit code")
+	}
+	for _, want := range []string{"fixtures/proof/RUN.md", sha, forkPoint, "unreachable"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("red-proof finding does not name %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "✓ pinned-phase") {
+		t.Errorf("an unreachable pin still printed a ✓:\n%s", out)
+	}
+}
+
+// TestDoctorWarnsOnIndeterminateRedProof is the other half of c-3: an absence
+// of history is not a verdict. A shallow clone must warn and leave the exit
+// code alone, or every truncated CI checkout reddens on a sound pin.
+func TestDoctorWarnsOnIndeterminateRedProof(t *testing.T) {
+	src, sha := redProofDoctorFixture(t, func(dir string) string {
+		mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "red proof replay")
+		return mustGit(t, dir, "rev-parse", "HEAD")
+	})
+	// The pin and its doc have to be IN the clone, so commit them; then move
+	// origin on, so a depth-1 clone genuinely cannot see the pinned commit.
+	mustGit(t, src, "add", ".")
+	mustGit(t, src, "commit", "-q", "-m", "chore: record the pin")
+	mustGit(t, src, "push", "-q", "origin", "main")
+	mustGit(t, src, "commit", "-q", "--allow-empty", "-m", "later work")
+	mustGit(t, src, "push", "-q", "origin", "main")
+
+	dst := filepath.Join(t.TempDir(), "shallow")
+	clone := exec.Command("git", "clone", "-q", "--depth", "1", "file://"+src, dst)
+	if out, err := clone.CombinedOutput(); err != nil {
+		t.Fatalf("shallow clone: %v\n%s", err, out)
+	}
+	chdir(t, dst)
+
+	out := captureStdout(t, func() { _ = runCmd(t, Doctor()) })
+	if !strings.Contains(out, "⚠") || !strings.Contains(out, "cannot determine") {
+		t.Errorf("expected a cannot-determine warning for %s:\n%s", short(sha), out)
+	}
+	if strings.Contains(out, "✓ pinned-phase") {
+		t.Errorf("an undecidable pin still printed a ✓:\n%s", out)
+	}
+	// The exit-code claim, measured as the pin's own contribution rather than
+	// as an absolute: this fixture's origin is a temp path its project.toml
+	// cannot also name, so doctor reports unrelated findings either way. What
+	// must hold is that the undecidable pin contributes none of them — an ✗ in
+	// this section is what would move the exit code.
+	if n := countDoctorIssues(redProofSection(out)); n != 0 {
+		t.Errorf("a shallow clone produced %d red-proof issue(s), which would redden a sound pin:\n%s", n, redProofSection(out))
+	}
+	for _, l := range mustRedProofChecks(t, dst) {
+		if l.level != doctorWarn {
+			t.Errorf("shallow-clone pin classified %s (want %s): %s", l.level, doctorWarn, l.text)
+		}
+	}
+}
+
+// TestDoctorReportsRedProofDocMismatch: the record staying sound while the
+// prose names a different commit still sends the next reader to the wrong
+// place, so the disagreement is an issue rather than a clean pass.
+func TestDoctorReportsRedProofDocMismatch(t *testing.T) {
+	dir, sha := redProofDoctorFixture(t, func(dir string) string {
+		return mustGit(t, dir, "rev-parse", "HEAD")
+	})
+	mustWrite(t, filepath.Join(dir, "fixtures/proof/RUN.md"),
+		"# proof\n\n**base commit: `0123456789abcdef0123456789abcdef01234567`**\n")
+
+	var err error
+	out := captureStdout(t, func() { err = runCmd(t, Doctor()) })
+	if err == nil {
+		t.Error("a doc disagreeing with the recorded pin passed clean")
+	}
+	if !strings.Contains(out, "disagree") || !strings.Contains(out, sha) {
+		t.Errorf("expected a doc/record disagreement naming %s:\n%s", sha, out)
+	}
+	if strings.Contains(out, "✓ pinned-phase") {
+		t.Errorf("a mismatched pin still printed a ✓:\n%s", out)
+	}
+}
+
+// TestDoctorCleanRedProofsHaveNoFindings is the false-positive gate, run
+// against THIS repo's own recorded pin. A check that flags a sound proof is a
+// check people learn to ignore.
+func TestDoctorCleanRedProofsHaveNoFindings(t *testing.T) {
+	repo := repoRootForDocs(t)
+	lines, present := redProofChecks(filepath.Join(repo, ".dross"), repo)
+	if !present {
+		t.Fatal("this repo records no red-proof pin — the live pin is unchecked")
+	}
+	for _, l := range lines {
+		if l.level != doctorOK {
+			t.Errorf("this repo's own pin produced a %s: %s", l.level, l.text)
+		}
+	}
+}
+
+// TestDoctorSilentWithoutRedProofs: a project that records no red proof gets no
+// section, rather than a ✓ for a check it never ran.
+func TestDoctorSilentWithoutRedProofs(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	out := captureStdout(t, func() { _ = runCmd(t, Doctor()) })
+	if strings.Contains(out, "Red proofs:") {
+		t.Errorf("a repo with no pins printed a red-proof section:\n%s", out)
+	}
+}
+
+// countDoctorIssues counts the ✗ lines in a doctor run — the findings that move
+// its exit code.
+func countDoctorIssues(out string) int {
+	n := 0
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(l), "✗") {
+			n++
+		}
+	}
+	return n
+}
+
+// redProofSection slices doctor's output down to its "Red proofs:" block, so a
+// test can count what THIS check reported rather than what the whole run did.
+func redProofSection(out string) string {
+	_, rest, ok := strings.Cut(out, "Red proofs:\n")
+	if !ok {
+		return ""
+	}
+	section, _, _ := strings.Cut(rest, "\n\n")
+	return section
+}
+
+// mustRedProofChecks runs the classifier over a repo directly, for assertions
+// about the level a pin was given rather than about the glyph it printed.
+func mustRedProofChecks(t *testing.T, dir string) []doctorLine {
+	t.Helper()
+	lines, present := redProofChecks(filepath.Join(dir, ".dross"), dir)
+	if !present {
+		t.Fatalf("%s records no red-proof pin", dir)
+	}
+	return lines
 }

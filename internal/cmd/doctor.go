@@ -52,6 +52,13 @@ func Doctor() *cobra.Command {
 			// not to start breaking repos that work today.
 			var warnings []string
 
+			// Red-proof warnings are counted rather than collected: they are
+			// per-pin lines printed in their own section, not cross-field
+			// advisories for the "Combinations:" block. They still reach
+			// finalizeDoctor's tally, because a warning nobody counts is a
+			// warning nobody sees at the end of a long run.
+			redProofWarnings := 0
+
 			// --- Foundational files ---
 			//
 			// project.toml + rules.toml must exist before
@@ -284,6 +291,32 @@ func Doctor() *cobra.Command {
 			}
 			Print("")
 
+			// --- Red proofs ---
+			//
+			// A red proof pins the commit its replay was recorded at. Branches
+			// get squash-merged and deleted, so a pin that was sound when it
+			// was written rots into a SHA only its author's machine can find —
+			// which is what happened to the c-5 pin. Pins are discovered by
+			// convention (phases/*/changes.json), so a proof recorded by a
+			// later phase is checked here with no new code, and a repo with
+			// none gets no section at all.
+			if lines, present := redProofChecks(root, repoDir); present {
+				Print("Red proofs:")
+				for _, l := range lines {
+					switch l.level {
+					case doctorIssue:
+						Printf("  ✗ %s\n", l.text)
+						issues++
+					case doctorWarn:
+						Printf("  ⚠ %s\n", l.text)
+						redProofWarnings++
+					default:
+						Printf("  ✓ %s\n", l.text)
+					}
+				}
+				Print("")
+			}
+
 			// --- Architecture links ---
 			//
 			// ARCHITECTURE.md's `Symbol — file:line` bullets go stale as code
@@ -442,9 +475,110 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues, len(warnings))
+			return finalizeDoctor(issues, len(warnings)+redProofWarnings)
 		},
 	}
+}
+
+// doctorLine is one rendered check result. The level is carried rather than
+// baked into the text so the caller decides what a warning costs — a
+// cannot-determine red proof must not move the exit code, and a line that
+// printed its own glyph would make that decision unreadable.
+type doctorLine struct {
+	level string
+	text  string
+}
+
+const (
+	doctorOK    = "ok"
+	doctorWarn  = "warn"
+	doctorIssue = "issue"
+)
+
+// redProofChecks classifies every discovered red-proof pin. present is false
+// when the repo records none, so projects without red proofs get no section.
+func redProofChecks(root, repoDir string) ([]doctorLine, bool) {
+	pins, err := discoverRedProofPins(root)
+	if err != nil {
+		return []doctorLine{{doctorIssue, fmt.Sprintf("could not read red-proof pins: %v", err)}}, true
+	}
+	if len(pins) == 0 {
+		return nil, false
+	}
+	var lines []doctorLine
+	for _, pin := range pins {
+		lines = append(lines, redProofPinLines(root, repoDir, pin)...)
+	}
+	return lines, true
+}
+
+// redProofPinLines is the per-pin verdict. A pin earns its ✓ only by being
+// reachable AND agreeing with its doc: the record staying sound while the prose
+// names a different commit still sends the next reader to the wrong place.
+func redProofPinLines(root, repoDir string, pin redProofPin) []doctorLine {
+	verdict, why, err := classifyReachability(repoDir, pin.SHA)
+	if err != nil {
+		return []doctorLine{{doctorIssue, fmt.Sprintf("%s: cannot check the pin in %s: %v", pin.Phase, pin.Doc, err)}}
+	}
+
+	var lines []doctorLine
+	switch verdict {
+	case reachUnreachable:
+		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
+			"%s: %s pins %s, which is unreachable — %s. Fix: %s",
+			pin.Phase, pin.Doc, pin.SHA, why, redProofRepointHint(root, repoDir, pin))})
+	case reachIndeterminate:
+		lines = append(lines, doctorLine{doctorWarn, fmt.Sprintf(
+			"%s: cannot determine whether %s (pinned by %s) is reachable — %s",
+			pin.Phase, short(pin.SHA), pin.Doc, why)})
+	}
+
+	// The doc cross-check runs whatever the verdict: it is a separate claim
+	// about a separate artefact, and a shallow clone can still read a file.
+	docSHA, docErr := redProofDocSHA(repoDir, pin.Doc)
+	switch {
+	case docErr != nil:
+		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
+			"%s: pins %s as its replay doc, which cannot be read: %v", pin.Phase, pin.Doc, docErr)})
+	case docSHA == "":
+		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
+			"%s: %s carries no `base commit:` line, so nothing cross-checks the recorded %s",
+			pin.Phase, pin.Doc, short(pin.SHA))})
+	case !sameCommitSHA(docSHA, pin.SHA):
+		lines = append(lines, doctorLine{doctorIssue, fmt.Sprintf(
+			"%s: %s says base commit %s but the record pins %s — the prose and the record disagree",
+			pin.Phase, pin.Doc, docSHA, pin.SHA)})
+	}
+
+	if len(lines) == 0 {
+		lines = append(lines, doctorLine{doctorOK, fmt.Sprintf(
+			"%s: %s pins %s, %s", pin.Phase, pin.Doc, short(pin.SHA), why)})
+	}
+	return lines
+}
+
+// redProofRepointHint names the commit a rotted pin should move to: the owning
+// phase's fork point, which is the last commit its work is guaranteed to sit on
+// top of. Naming the phase is what makes this possible — the doc names none, so
+// the c-5 pin had to be repointed by hand.
+func redProofRepointHint(root, repoDir string, pin redProofPin) string {
+	fork, err := phaseForkPoint(repoDir, root, pin.Phase)
+	if err != nil {
+		return fmt.Sprintf("repoint it to a commit origin reaches (%s's fork point could not be resolved: %v)", pin.Phase, err)
+	}
+	return fmt.Sprintf("repoint it to %s's fork point %s — `dross phase red-proof set %s --sha %s --doc %s`",
+		pin.Phase, fork, pin.Phase, fork, pin.Doc)
+}
+
+// sameCommitSHA compares a doc's pin against a record's. Either side may be
+// abbreviated — the doc is written by hand for a human reader — so containment
+// counts, and an empty operand never matches.
+func sameCommitSHA(a, b string) bool {
+	a, b = strings.ToLower(strings.TrimSpace(a)), strings.ToLower(strings.TrimSpace(b))
+	if a == "" || b == "" {
+		return false
+	}
+	return strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
 }
 
 // remoteCombinationWarnings reports [remote] pairings that are individually

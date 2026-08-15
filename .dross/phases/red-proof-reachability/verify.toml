@@ -1,0 +1,60 @@
+[verify]
+  phase = "red-proof-reachability"
+  generated_at = 2026-08-15T12:56:55.482926Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-15T13:36:28.153349Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9466019417475728
+  mutants_killed = 390
+  mutants_survived = 22
+  mutants_not_covered = 22
+  mutants_in_scope = 412
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/changes/changes_test.go:TestSetForkRecordsBothFactsTogether", "internal/changes/changes_test.go:TestSetForkAndSetBaseDoNotClobberEachOther", "internal/changes/changes_test.go:TestSetForkPreservesTheRestOfTheRecord", "internal/cmd/redproof_set_test.go:TestRedProofSetRecordsPin"]
+  notes = "SetFork records branch and fork-commit in one load-set-save, and the pair is pinned together because either alone is useless for a pin. TestSetForkAndSetBaseDoNotClobberEachOther is the one that matters most: ship rewrites the base branch long after the fork, and a SetBase that also cleared BaseCommit would leave every red proof pinned to main's tip today while still looking recorded. These tests were added during verify — SetFork was referenced by no test at all, which a surviving mutant at changes.go:221 exposed."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/redproof_test.go:TestReachabilityLooseObject", "internal/cmd/redproof_test.go:TestReachabilityIgnoresLocalBranches", "internal/cmd/redproof_test.go:TestReachabilityRemoteBranch", "internal/cmd/redproof_test.go:TestReachabilityMissingObject"]
+  notes = "TestReachabilityLooseObject is the criterion stated exactly: an object that still exists in the local repo but no branch reaches must NOT pass, which is what a squash-merge leaves behind. The ref topology is built with update-ref rather than a real clone, so each test's reachability graph is explicit rather than a side effect of fetch."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/redproof_test.go:TestReachabilityIndeterminate", "internal/cmd/redproof_test.go:TestRedProofUnreadableDocIsAnIssue", "internal/cmd/redproof_test.go:TestRedProofDocWithoutABaseCommitLineIsAnIssue", "internal/cmd/redproof_test.go:TestRedProofDocAgreeingWithTheRecordIsClean"]
+  notes = "All three outcomes are distinguished, and each negative test also asserts that NO doctorOK line is emitted — which is the half that makes 'neither reports as a clean pass' an assertion rather than a hope. The two doc-cross-check tests were added during verify: redProofDocSHA was tested directly but the doctor branches consuming it were not, so a red proof nothing cross-checks would have reported sound."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/hostile_config_test.go:TestRedProofCheckHasOneCaller", "internal/cmd/hostile_config_test.go:TestRedProofPinsBaseCommit"]
+  notes = "The delegation gate greps the fixture suite for git containment probes (rev-parse, for-each-ref, merge-base, is-shallow-repository) and fails if it asks any of them itself, then asserts it still calls classifyReachability. Its probe list is built by string concatenation so the gate cannot match its own source — without that it would pass vacuously forever."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/redproof_test.go:TestDiscoverRedProofPinsFindsLaterPhase", "internal/cmd/redproof_test.go:TestDiscoverRedProofPinsSkipsUnpinnedPhases", "internal/cmd/redproof_test.go:TestDiscoverRedProofPinsNoPhases", "internal/cmd/redproof_set_test.go:TestDiscoverRedProofPinsFindsRecordedPin"]
+  notes = "Discovery globs phases/*/changes.json rather than naming a path, and TestDiscoverRedProofPinsFindsLaterPhase proves the convention by recording a pin under a phase that did not exist when the code was written and finding it with no new code. The skips-unpinned and no-phases cases keep the glob from turning every phase into a finding."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/dross.1: no mutation adapter for .1"
+
+[[finding]]
+  severity = "NOTE"
+  text = "Verify found three in-diff survivors that were real gaps rather than the attribution ceiling, and a task (t-8) was added to close them: SetFork was referenced by no test at all, and doctor's two doc-cross-check arms had no test asserting the line each produces. The SetFork mutant is now killed; the two doctor arms are switch{} case-conditions accepted with reasons naming the tests that assert their output."

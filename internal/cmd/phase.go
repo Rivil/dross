@@ -26,7 +26,7 @@ func Phase() *cobra.Command {
 		Use:   "phase",
 		Short: "Manage phase directories under .dross/phases/",
 	}
-	c.AddCommand(phaseList(), phaseCreate(), phaseCheckout(), phaseShow(), phaseComplete(), phaseNumber(), phaseMigrate(), phaseMove(), phaseInsert(), phaseRename())
+	c.AddCommand(phaseList(), phaseCreate(), phaseCheckout(), phaseShow(), phaseComplete(), phaseNumber(), phaseMigrate(), phaseMove(), phaseInsert(), phaseRename(), phaseRedProof())
 	return c
 }
 
@@ -894,7 +894,17 @@ func forkPhaseBranch(repoDir, root, phaseID, branchName string) (base string, mi
 	// changes.json behind, because the caller's rollback is os.Remove(dir),
 	// which only removes an empty directory — a record written up front would
 	// leak the phase id on every retry.
-	if err := changes.SetBase(root, phaseID, base); err != nil {
+	//
+	// The base's tip is read here, at fork time, and stored with the branch
+	// name in one write. Read later it would be whatever the base has moved on
+	// to, which is not this phase's fork point. A rev-parse that fails is not
+	// fatal: the branch exists and the base is recorded, and the backfill
+	// resolver covers a missing fork point on demand.
+	tip, tipErr := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, base)...)
+	if tipErr != nil {
+		tip = ""
+	}
+	if err := changes.SetFork(root, phaseID, base, tip); err != nil {
 		return "", false, fmt.Errorf("record forked-from base for %s: %w", phaseID, err)
 	}
 	return base, milestoneActive, nil

@@ -496,3 +496,93 @@ func TestStatusSurvivesTaskRecord(t *testing.T) {
 		t.Error("the task record itself was lost")
 	}
 }
+
+// TestSetForkRecordsBothFactsTogether covers the helper the red-proof pin
+// depends on. SetFork exists because branch and fork-commit are only both known
+// at one moment — `dross phase create` — and a pin recorded later would name
+// the base branch's tip rather than the phase's fork point.
+func TestSetForkRecordsBothFactsTogether(t *testing.T) {
+	root := t.TempDir()
+	if err := SetFork(root, "phase-x", "milestone/v1.3", "abc123def456"); err != nil {
+		t.Fatalf("SetFork: %v", err)
+	}
+	got, err := Load(FilePath(root, "phase-x"), "phase-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Base != "milestone/v1.3" {
+		t.Errorf("Base = %q, want milestone/v1.3", got.Base)
+	}
+	if got.BaseCommit != "abc123def456" {
+		t.Errorf("BaseCommit = %q, want abc123def456", got.BaseCommit)
+	}
+}
+
+// TestSetForkPreservesTheRestOfTheRecord is the load-set-save half: SetFork
+// starting from a fresh Changes would drop the PR number the merge gate reads,
+// exactly as TestSetBaseCoexistsWithSetPR pins for SetBase.
+func TestSetForkPreservesTheRestOfTheRecord(t *testing.T) {
+	root := t.TempDir()
+	if err := SetPR(root, "phase-x", 42); err != nil {
+		t.Fatalf("SetPR: %v", err)
+	}
+	if err := SetFork(root, "phase-x", "main", "deadbeef"); err != nil {
+		t.Fatalf("SetFork: %v", err)
+	}
+	got, err := Load(FilePath(root, "phase-x"), "phase-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PR != 42 {
+		t.Errorf("SetFork truncated the record: PR is %d want 42", got.PR)
+	}
+	if got.BaseCommit != "deadbeef" {
+		t.Errorf("BaseCommit did not persist: %q", got.BaseCommit)
+	}
+}
+
+// TestSetForkSurfacesAnUnreadableRecord pins the load error path.
+//
+// SetFork must not silently start from an empty record when the existing one
+// cannot be parsed: doing so would overwrite a real fork point with a fresh
+// one derived from nothing, which is precisely the rot the field exists to
+// survive. The failure has to reach the caller.
+func TestSetForkSurfacesAnUnreadableRecord(t *testing.T) {
+	root := t.TempDir()
+	path := FilePath(root, "phase-x")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetFork(root, "phase-x", "main", "abc123"); err == nil {
+		t.Fatal("SetFork overwrote a record it could not read")
+	}
+}
+
+// TestSetForkAndSetBaseDoNotClobberEachOther.
+//
+// Ship rewrites the base branch alone, long after the fork. If SetBase also
+// cleared BaseCommit — or SetFork were used at ship time — the recorded fork
+// point would become the base branch's tip today, and every red proof pinned
+// against it would be pinning the wrong commit while still looking recorded.
+func TestSetForkAndSetBaseDoNotClobberEachOther(t *testing.T) {
+	root := t.TempDir()
+	if err := SetFork(root, "phase-x", "milestone/v1.3", "forkpoint1"); err != nil {
+		t.Fatalf("SetFork: %v", err)
+	}
+	if err := SetBase(root, "phase-x", "main"); err != nil {
+		t.Fatalf("SetBase: %v", err)
+	}
+	got, err := Load(FilePath(root, "phase-x"), "phase-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.BaseCommit != "forkpoint1" {
+		t.Errorf("a ship-time SetBase destroyed the fork point: BaseCommit = %q", got.BaseCommit)
+	}
+	if got.Base != "main" {
+		t.Errorf("SetBase did not record the PR's base branch: %q", got.Base)
+	}
+}
