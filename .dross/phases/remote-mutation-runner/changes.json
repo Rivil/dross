@@ -1,0 +1,263 @@
+{
+  "phase": "remote-mutation-runner",
+  "pr": 86,
+  "base": "milestone/v1.3",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go",
+        "internal/argfence/policy.go",
+        "internal/argfence/argfence_test.go",
+        "internal/cmd/subprocargs_audit_test.go",
+        "internal/cmd/testdata/subprocargs_audit/snippets.txt"
+      ],
+      "commit": "1c699a8",
+      "completed_at": "2026-08-14T14:51:49.131066Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation transport",
+          "symbol": "remote.Target",
+          "loc": "internal/remote/remote.go:52",
+          "what": "ssh/rsync argv builders with an allowlisted target, shell-quoted remote commands and exit-code failure classification"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/mutation_remote.go",
+        "internal/cmd/mutation_remote_test.go",
+        "cmd/dross/main.go",
+        "README.md",
+        "docs/dross.1"
+      ],
+      "commit": "c900de4",
+      "completed_at": "2026-08-15T06:32:25.176784Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation consent",
+          "symbol": "Mutation",
+          "loc": "internal/cmd/mutation_remote.go:53",
+          "what": "dross mutation remote grant|status|revoke — the sole writer of the remote grant keys, printing host and workdir before it writes them"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go",
+        "internal/cmd/local.go",
+        "internal/cmd/local_test.go",
+        "internal/mutation/launcher.go",
+        "internal/mutation/remote_env_test.go",
+        "internal/mutation/launcher_test.go",
+        "internal/mutation/restore_test.go",
+        "internal/mutation/remote_failure_test.go"
+      ],
+      "commit": "2357324",
+      "completed_at": "2026-08-15T07:17:11.893968Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation runner",
+          "symbol": "Script",
+          "loc": "internal/remote/remote.go:196",
+          "what": "every remote command becomes ssh host bash -s with workdir, tool argv and shell-quoted env exports piped over stdin, so no value reaches the remote host's process list or filesystem"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "assets/prompts/options.md",
+        "internal/cmd/options_docs_test.go"
+      ],
+      "commit": "4a252f1",
+      "completed_at": "2026-08-15T08:54:00.229832Z",
+      "landmarks": [
+        {
+          "feature": "settings surface",
+          "symbol": "TestOptionsCoversEveryLocalKey",
+          "loc": "internal/cmd/options_docs_test.go:29",
+          "what": "walks localKeys itself so a store key added without a prompt line fails the build"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go",
+        "internal/mutation/launcher.go",
+        "internal/mutation/launcher_test.go"
+      ],
+      "commit": "1885526",
+      "completed_at": "2026-08-15T09:00:25.152616Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation runner",
+          "symbol": "ScriptAll",
+          "loc": "internal/remote/remote.go:193",
+          "what": "\u0026\u0026-chained remote commands in one round trip; clearReport uses it to rm the stale report and recreate its gitignored-and-therefore-never-synced directory"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go",
+        "internal/mutation/launcher.go",
+        "internal/mutation/gremlins.go",
+        "internal/mutation/remote_failure_test.go",
+        "internal/mutation/launcher_test.go"
+      ],
+      "commit": "7269e93",
+      "completed_at": "2026-08-15T09:14:17.137025Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation runner",
+          "symbol": "reportlessExitFatal",
+          "loc": "internal/mutation/launcher.go:505",
+          "what": "a remote tool that exits non-zero and writes no report is fatal, not a skip reading as clean"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/local.go",
+        "internal/cmd/local_test.go"
+      ],
+      "commit": "7599861",
+      "completed_at": "2026-08-14T14:56:50.176404Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation consent",
+          "symbol": "readRemoteGrant",
+          "loc": "internal/cmd/local.go:196",
+          "what": "machine-local remote grant excluded from local set and refused unread when tracked, plus settable worker/test-cpu knobs"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/project/project.go",
+        "internal/project/project_test.go"
+      ],
+      "commit": "8a10a08",
+      "completed_at": "2026-08-14T15:04:34.97994Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation consent",
+          "symbol": "Mutation.refuseRemote",
+          "loc": "internal/project/project.go:190",
+          "what": "trap fields make a remote host in tracked project.toml a named refusal instead of a silently ignored key"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/mutation/launcher.go",
+        "internal/mutation/launcher_test.go",
+        "internal/mutation/gremlins.go",
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_net.go"
+      ],
+      "commit": "d409607",
+      "completed_at": "2026-08-15T06:45:02.862829Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation runner",
+          "symbol": "Launcher",
+          "loc": "internal/mutation/launcher.go:44",
+          "what": "shared push/clear/ssh/fetch sequence the three mutation adapters delegate to, with the remote held as a named field so existing Prefix literals still compile"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_remote_test.go"
+      ],
+      "commit": "bfc79ef",
+      "completed_at": "2026-08-15T06:50:09.089938Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation consent",
+          "symbol": "checkRemoteMutation",
+          "loc": "internal/cmd/doctor.go:1046",
+          "what": "doctor section probing the granted host for reachability, core count and each configured adapter's remote toolchain through the same seam the run uses"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/mutation/launcher.go",
+        "internal/mutation/gremlins.go",
+        "internal/mutation/remote_failure_test.go"
+      ],
+      "commit": "5611dd9",
+      "completed_at": "2026-08-15T06:54:59.194864Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation runner",
+          "symbol": "remoteExitFatal",
+          "loc": "internal/mutation/launcher.go:307",
+          "what": "narrows the adapters' blanket ExitError tolerance by exit code over ssh so a transport failure or missing remote toolchain is fatal and named rather than a clean-looking skip"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/survivor_drain.go",
+        "internal/cmd/mutation_remote_wiring_test.go",
+        "internal/cmd/trust_test.go",
+        "internal/cmd/verify_test.go"
+      ],
+      "commit": "2d26c9b",
+      "completed_at": "2026-08-15T07:01:15.581076Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation runner",
+          "symbol": "resolveMutationTuning",
+          "loc": "internal/cmd/verify.go:266",
+          "what": "one table reading the grant, tuning knobs and probed core count, applied at both adapter construction sites and aborting verify before any run when the granted host is unreachable"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/mutation/launcher.go",
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_net.go",
+        "internal/mutation/restore_test.go",
+        "internal/mutation/launcher_test.go",
+        "internal/cmd/verify.go"
+      ],
+      "commit": "65da3ba",
+      "completed_at": "2026-08-15T07:08:59.695751Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation runner",
+          "symbol": "nodeRestoreArgv",
+          "loc": "internal/mutation/launcher.go:139",
+          "what": "closed (adapter, package manager) restore table running the project's own lockfile-respecting install on the remote before the tool, refusing to guess when stack.package_manager is unset"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/verify/verify_test.go"
+      ],
+      "commit": "9e7d496",
+      "completed_at": "2026-08-15T07:21:13.869588Z",
+      "landmarks": [
+        {
+          "feature": "verify findings",
+          "symbol": "LanguageRun.RemoteTransport",
+          "loc": "internal/verify/verify.go:84",
+          "what": "classifies an adapter error as a remote-transport failure while the error value is live and emits BLOCKING rather than FLAG, so a phase cannot be verified past a language leg that never ran"
+        }
+      ]
+    }
+  }
+}

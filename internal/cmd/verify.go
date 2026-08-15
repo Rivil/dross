@@ -13,6 +13,7 @@ import (
 	"github.com/Rivil/dross/internal/mutation"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/verify"
@@ -86,7 +87,13 @@ func Verify() *cobra.Command {
 				return nil
 			}
 
-			adapters := configuredAdaptersFn(proj, root, skipMutation)
+			// A refusal or an unreachable remote aborts HERE, before
+			// RunScoped — so neither tests.json nor verify.toml is written,
+			// and the run never falls back to a local-only adapter list.
+			adapters, err := configuredAdaptersFn(proj, root, skipMutation)
+			if err != nil {
+				return err
+			}
 			t, err := verify.RunScoped(phaseID, files, adapters, scope)
 			if err != nil {
 				return err
@@ -232,28 +239,111 @@ func finalizeVerify(root, phaseID string) (recorded bool, verdict string, err er
 // the code execution the consent gate exists to prevent.
 var configuredAdaptersFn = configuredAdapters
 
-// configuredAdapters returns the list of mutation adapters appropriate
-// for the project, with runtime prefixes applied (docker compose exec ...).
-func configuredAdapters(p *project.Project, _ string, skip bool) []mutation.Adapter {
-	if skip {
-		return nil // verify still runs — files end up in Skipped
+// mutationTuning is the machine-local half of every adapter's construction:
+// WHERE the run happens, and how parallel it is.
+//
+// It exists because there are two construction sites — configuredAdapters here
+// and runGremlinsOverPackages in the drain — and a knob added to one of them
+// only is a run that behaves differently depending on which command you reached
+// it through. One table read once, applied at both.
+type mutationTuning struct {
+	// Prefix is the local runtime prefix, and is EMPTY whenever Target is set.
+	Prefix string
+	// Target is the granted remote, with Cores filled in by the probe. Nil runs
+	// locally.
+	Target *remote.Target
+	// Workers and TestCPU are the machine-local overrides. Zero means unset,
+	// which the adapters read as "apply your own default" — not as zero.
+	Workers int
+	TestCPU int
+}
+
+// gremlins is the single Gremlins constructor. Both sites go through it, so a
+// knob can only be added in one place.
+func (mt mutationTuning) gremlins(projectRoot string, p *project.Project) *mutation.Gremlins {
+	return &mutation.Gremlins{
+		Prefix:             mt.Prefix,
+		ProjectRoot:        projectRoot,
+		TimeoutCoefficient: p.Mutation.Gremlins.TimeoutCoefficient,
+		Workers:            mt.Workers,
+		TestCPU:            mt.TestCPU,
+		Remote:             mt.Target,
 	}
-	prefix := dockerPrefix(p)
+}
+
+// resolveMutationTuning reads the grant and the tuning knobs, and probes the
+// remote once for the core count the worker default derives from.
+//
+// The probe is unconditional rather than only-when-workers-is-unset, and that is
+// the point: it doubles as the reachability pre-flight. A grant that cannot be
+// reached must abort the command HERE, before a tree is pushed and before any
+// adapter runs, rather than surfacing as an empty report the run cannot
+// distinguish from "nothing to measure".
+//
+// A grant DROPS the docker prefix (the locked docker_prefix_under_remote
+// decision) rather than refusing on it. dockerPrefix gates on runtime.mode,
+// which describes the DEV stack and says nothing about where mutation runs — so
+// aborting on the combination would refuse every docker-mode repo that grants a
+// remote, which is the common case and the one this exists for. Shedding the
+// prefix is also exactly right: the point is to run on the remote's OWN
+// toolchain, and whether that toolchain is present is doctor's question.
+func resolveMutationTuning(p *project.Project, root string) (mutationTuning, error) {
+	target, err := readRemoteGrant(root, filepath.Dir(root))
+	if err != nil {
+		return mutationTuning{}, err
+	}
+	workers, testCPU, err := readMutationTuning(root)
+	if err != nil {
+		return mutationTuning{}, err
+	}
+	mt := mutationTuning{Workers: workers, TestCPU: testCPU}
+	if target == nil {
+		mt.Prefix = dockerPrefix(p)
+		return mt, nil
+	}
+	ready, perr := remoteProbeFn(*target, nil)
+	if perr != nil {
+		return mutationTuning{}, fmt.Errorf(
+			"remote mutation host %s is not usable: %w\n"+
+				"Nothing was measured. Check ssh access, run `dross doctor`, or withdraw the grant with `dross mutation remote revoke`.",
+			target.Host, perr)
+	}
+	target.Cores = ready.Cores
+	mt.Target = target
+	return mt, nil
+}
+
+// configuredAdapters returns the list of mutation adapters appropriate
+// for the project, with the runtime prefix or the granted remote applied.
+func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.Adapter, error) {
+	if skip {
+		return nil, nil // verify still runs — files end up in Skipped
+	}
+	mt, err := resolveMutationTuning(p, root)
+	if err != nil {
+		return nil, err
+	}
 	// Project root for stryker is the runtime's cwd — host cwd for native,
 	// or the host cwd for docker (we read the report via bind-mounted fs).
 	// If docker volume layout diverges, this is where we'd surface config.
 	cwd, _ := os.Getwd()
 	all := []mutation.Adapter{
-		&mutation.Stryker{Prefix: prefix, ProjectRoot: cwd, Workdir: p.Mutation.Stryker.Workdir},
-		&mutation.Gremlins{
-			Prefix:             prefix,
-			ProjectRoot:        cwd,
-			TimeoutCoefficient: p.Mutation.Gremlins.TimeoutCoefficient,
+		&mutation.Stryker{
+			Prefix:      mt.Prefix,
+			ProjectRoot: cwd,
+			Workdir:     p.Mutation.Stryker.Workdir,
+			Remote:      mt.Target,
+			// Only consulted for a remote run, where the host has to install
+			// dependencies before stryker can resolve anything. Passed rather
+			// than defaulted: installing with the wrong manager produces a tree
+			// stryker resolves differently.
+			PackageManager: p.Stack.PackageManager,
 		},
-		&mutation.StrykerNet{Prefix: prefix, ProjectRoot: cwd},
+		mt.gremlins(cwd, p),
+		&mutation.StrykerNet{Prefix: mt.Prefix, ProjectRoot: cwd, Remote: mt.Target},
 	}
 	if len(p.Mutation.Adapters) == 0 {
-		return all
+		return all, nil
 	}
 	// [mutation] adapters = [...] allowlist: files whose adapter is filtered
 	// out fall into verify's existing Skipped path downstream.
@@ -267,7 +357,7 @@ func configuredAdapters(p *project.Project, _ string, skip bool) []mutation.Adap
 			out = append(out, a)
 		}
 	}
-	return out
+	return out, nil
 }
 
 // dockerPrefix returns the runtime command prefix for docker mode.

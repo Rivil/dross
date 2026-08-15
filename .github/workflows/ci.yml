@@ -28,11 +28,22 @@ jobs:
 
       - uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
         with:
-          # Matches go.mod's `go 1.25.0` directive. Pinning lower than the
-          # directive does not pin anything: GOTOOLCHAIN=auto silently fetches
-          # the newer toolchain mid-run, so the declared version was a fiction
-          # and the real one was whatever the proxy served.
-          go-version: '1.25'
+          # Pinned to an exact patch, not the '1.25' minor. Two reasons, and
+          # the second is why it is not just style:
+          #
+          # Pinning lower than go.mod's `go 1.25.0` directive would not pin
+          # anything — GOTOOLCHAIN=auto silently fetches the newer toolchain
+          # mid-run, so the declared version is a fiction and the real one is
+          # whatever the proxy served.
+          #
+          # And the floating minor is what the govulncheck gate below trips
+          # over: '1.25' resolved to a patch carrying four stdlib advisories
+          # (GO-2026-6218 net/url, GO-2026-6090 crypto/tls, GO-2026-5972
+          # encoding/asn1, GO-2026-5026 net/http), all fixed in go1.25.13.
+          # A floating version means the toolchain — the largest dependency
+          # here — is the one thing this hardened workflow did not pin.
+          # Bump this deliberately when a new advisory lands.
+          go-version: '1.25.13'
           cache: true
 
       - name: go vet
