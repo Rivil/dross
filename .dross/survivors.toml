@@ -18,6 +18,14 @@
   name = "self-replacing-binary-path"
   reason = "Unreachable in a test by construction: this block runs only when updateOpts.targetPath is empty, and it resolves the target to os.Executable() — which, under `go test`, is the running test binary. update.AtomicReplace would then overwrite the test binary mid-run, so every test in update_test.go (TestUpdateAppliesAndResyncs and its siblings) must pass an explicit targetPath, and the default-resolution branch is skipped by all of them. The branch is real in production and untestable in-process; exercising it would destroy the process exercising it."
 
+[[category]]
+  name = "gremlins-switch-case-ceiling"
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+
+[[category]]
+  name = "exec-seam-guard"
+  reason = "The 'if stdin != \"\"' guard lives inside the process-construction seam every test replaces (launcherCommand / recordRemote). Executing it would mean spawning the real ssh, which is the one thing these tests exist to avoid, so the line is unreachable from the suite by design rather than by omission."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -980,3 +988,84 @@
   line = 61
   category = "gremlins-attribution-ceiling"
   accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "cfe3741c8c0ef9a8"
+  file = "internal/remote/remote.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case code == 255:"
+  line = 382
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "421a488234549be2"
+  file = "internal/remote/remote.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case bin == \"rsync\" && (code == 10 || code == 12 || code == 30 || code == 35):"
+  line = 384
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "394b2fc32d7aa079"
+  file = "internal/remote/remote.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case bin == \"rsync\" && (code == 23 || code == 24):"
+  line = 388
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "54e08c890d4694bd"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 249
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "414c717115f74a03"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 1049
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "cb3b8dac437177c3"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case target == nil:"
+  line = 1052
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "07bfd62e7fab1a96"
+  file = "internal/remote/remote.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if stdin != \"\" {"
+  line = 416
+  category = "exec-seam-guard"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "c11ab65da8683924"
+  file = "internal/mutation/launcher.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if stdin != \"\" {"
+  line = 184
+  category = "exec-seam-guard"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "19e564758c4f7296"
+  file = "internal/mutation/launcher.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"mutation: adapter %q has no entry in the remote restore table — a remote run \"+"
+  line = 211
+  reason = "ARITHMETIC_BASE mutates + to - on a string concatenation inside an error message; the mutant does not compile and is never viable. The branch it sits in is covered by TestRemoteRestoreTableIsClosed."
+  accepted_in = "remote-mutation-runner"

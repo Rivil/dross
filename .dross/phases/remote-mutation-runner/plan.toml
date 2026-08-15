@@ -1,4 +1,4 @@
-task_seq = 12
+task_seq = 14
 
 [phase]
   id = "remote-mutation-runner"
@@ -129,4 +129,24 @@ task_seq = 12
   description = "Extend /dross-options from project.toml's first seven sections to every dross-managed setting. Add sections for .dross/local.toml (quick_base, allow_hosts, mutation_workers, mutation_test_cpu, mutation_remote_env via dross local set), the consent verbs that own the keys local set refuses (dross trust, dross mutation remote grant/revoke — options invokes the verb and never writes the key itself), and dross hooks. Fill the project.toml drift: [board] (provider, base_url, auth_env, auth_user, project, github_project, enabled, milestone_mode, state_map, fields.*), [mutation] (adapters, gremlins.timeout_coefficient, stryker.workdir), remote.auth_user/auth_scheme/project_id, stack.profile, and [constraints]/[competition] read-only. Add internal/cmd/options_docs_test.go asserting options.md names every localKeys entry, both consent verbs, and each project.toml top-level section."
   covers = ["c-9"]
   depends_on = ["t-11"]
+  status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 5
+  title = "Create the remote report directory before the adapter runs"
+  files = ["internal/remote/remote.go", "internal/remote/remote_test.go", "internal/mutation/launcher.go", "internal/mutation/launcher_test.go"]
+  description = "A remote run cannot write its report: reports/ is gitignored, the locked ':- .gitignore' rsync filter keeps it off the wire, so reports/gremlins/ never exists on the remote and gremlins fails with 'impossible to write file'. The fetch then 23s and every package lands UnmeasuredMissing, so a remote run can never produce a score. The local path already handles this with os.MkdirAll (gremlins.go:171). Add remote.ScriptAll for &&-chained commands in one round trip, and have Launcher.clearReport rm the stale report AND mkdir -p its parent, so the directory exists before the tool runs."
+  covers = ["c-1", "c-4"]
+  depends_on = ["t-12"]
+  status = "done"
+
+[[task]]
+  id = "t-14"
+  wave = 5
+  title = "Sync .git and make a reportless tool failure fatal"
+  files = ["internal/remote/remote.go", "internal/remote/remote_test.go", "internal/mutation/launcher.go", "internal/mutation/remote_failure_test.go", ".dross/phases/remote-mutation-runner/spec.toml"]
+  description = "Two defects found by running this phase against helicon. (1) --exclude=.git means the remote tree is not a git repo, so every test that shells out to git fails there: internal/cmd's suite fails on the remote while passing locally, gremlins cannot gather coverage, and the package containing most of this phase's code goes unmeasured. .git is 12M; sync it and amend the locked sync_mechanism decision. (2) The tool exiting non-zero with NO report is filed as UnmeasuredMissing and printed as 'gremlins gathered no covered mutants' — a tool that failed before producing anything reads as nothing-to-measure, which is exactly the empty-report-that-reads-as-clean c-4 forbids. Narrow the remote rule: non-zero exit AND no report is fatal, naming the tool and host. exit-1-with-a-report stays tolerated; exit-0-with-no-report stays a benign skip; local toleration is unchanged."
+  covers = ["c-1", "c-4", "c-6"]
+  depends_on = ["t-13"]
   status = "done"

@@ -80,6 +80,44 @@
         }
       ]
     },
+    "t-13": {
+      "files": [
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go",
+        "internal/mutation/launcher.go",
+        "internal/mutation/launcher_test.go"
+      ],
+      "commit": "1885526",
+      "completed_at": "2026-08-15T09:00:25.152616Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation runner",
+          "symbol": "ScriptAll",
+          "loc": "internal/remote/remote.go:193",
+          "what": "\u0026\u0026-chained remote commands in one round trip; clearReport uses it to rm the stale report and recreate its gitignored-and-therefore-never-synced directory"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go",
+        "internal/mutation/launcher.go",
+        "internal/mutation/gremlins.go",
+        "internal/mutation/remote_failure_test.go",
+        "internal/mutation/launcher_test.go"
+      ],
+      "commit": "7269e93",
+      "completed_at": "2026-08-15T09:14:17.137025Z",
+      "landmarks": [
+        {
+          "feature": "remote mutation runner",
+          "symbol": "reportlessExitFatal",
+          "loc": "internal/mutation/launcher.go:505",
+          "what": "a remote tool that exits non-zero and writes no report is fatal, not a skip reading as clean"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/local.go",
