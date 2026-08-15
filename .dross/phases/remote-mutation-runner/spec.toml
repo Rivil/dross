@@ -53,7 +53,7 @@
 
 [[decisions]]
   key = "sync_mechanism"
-  choice = "rsync over ssh, filtered by .gitignore, excluding .git, with --delete."
+  choice = "rsync over ssh, filtered by .gitignore, INCLUDING .git, with --delete. (Amended during execution: .git was originally excluded. Running the phase against a real host showed the exclusion makes the remote tree a non-repository, so every test that shells out to git fails there while passing locally — six in internal/cmd — which fails the package's coverage pass and leaves the package holding most of this phase's code unmeasured, in a run that still reported 0.95. .git is 12M; the .gitignore filter was always the size lever that matters.)"
   why = "Carries uncommitted work, which is what verify exists to measure; the .gitignore filter keeps dependency dirs off the wire; --delete keeps the synced tree honest about files git tracks. It does NOT supply c-6: --filter=':- .gitignore' protects ignored paths from deletion, and every report location is gitignored (/reports is line 3 of .gitignore), so a stale remote report survives --delete. Staleness is supplied by the launcher's explicit per-adapter rm before each run — do not remove it believing rsync covers it."
   locked = true
 

@@ -326,3 +326,76 @@ func TestLocalExitTolerationIsUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// TestRemoteReportlessFailureIsNotASkip is the regression test for the failure
+// this phase found by running against a real host.
+//
+// The remote tree failed `go test ./internal/cmd` — six tests that shell out to
+// git, which cannot pass on a tree synced without .git — so gremlins could not
+// gather coverage, exited 1 and wrote nothing. Every layer below behaved as
+// designed: exit 1 is "the tool speaking" and tolerated, the fetch 23'd because
+// the source file genuinely was not there, and the absent report became
+// UnmeasuredMissing. The run reported a clean 0.95 with the package holding
+// most of the phase's code silently unmeasured, and printed the words "gremlins
+// gathered no covered mutants" to say so.
+//
+// No single layer was wrong, which is why this is asserted at the composition.
+func TestRemoteReportlessFailureIsNotASkip(t *testing.T) {
+	failLocalSpawns(t)
+	scriptRemote(t, []remoteExit{{match: "tool", code: 1}}, nil) // exits 1, delivers nothing
+
+	g := remoteGremlins(t.TempDir())
+	report, err := g.Run([]string{"internal/cmd/verify.go"})
+	if err == nil {
+		t.Fatal("a tool that exited non-zero and wrote no report was filed as a skip")
+	}
+	if report != nil {
+		t.Errorf("a fatal reportless exit still produced a Report: %+v", report)
+	}
+	for _, want := range []string{"helicon", "wrote no report", "unmeasured rather than clean"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not say %q: %v", want, err)
+		}
+	}
+	if len(g.Unmeasured) != 0 {
+		t.Errorf("a fatal reportless exit was also filed as Unmeasured: %+v", g.Unmeasured)
+	}
+}
+
+// TestReportlessExitZeroStaysASkip is the other half, and the reason the rule
+// keys on the exit code rather than on the report alone: gremlins legitimately
+// writes nothing when a package has no covered mutants, and it exits 0 doing
+// so. Making every absent report fatal would turn that into a failure and make
+// the runner unusable on any repo with an untested package.
+func TestReportlessExitZeroStaysASkip(t *testing.T) {
+	failLocalSpawns(t)
+	scriptRemote(t, []remoteExit{}, nil) // everything exits 0; nothing is delivered
+
+	g := remoteGremlins(t.TempDir())
+	report, err := g.Run([]string{"a/x.go"})
+	if err != nil {
+		t.Fatalf("a package with no covered mutants was made fatal: %v", err)
+	}
+	if len(g.Unmeasured) != 1 || g.Unmeasured[0].Kind != UnmeasuredMissing {
+		t.Errorf("want one UnmeasuredMissing entry, got %+v", g.Unmeasured)
+	}
+	if report == nil {
+		t.Error("a skip must still produce an (empty) Report")
+	}
+}
+
+// TestLocalReportlessFailureIsUnchanged: the narrowing is a REMOTE rule. A local
+// gremlins exiting non-zero with no report keeps behaving as it always has —
+// this phase has no evidence about the local case and no business changing it.
+func TestLocalReportlessFailureIsUnchanged(t *testing.T) {
+	var local Launcher
+	for _, code := range []int{1, 2, 126, 127, 255} {
+		if err := local.reportlessExitFatal("gremlins", code); err != nil {
+			t.Errorf("a LOCAL reportless exit %d was escalated: %v", code, err)
+		}
+	}
+	rl := &Launcher{Target: &remote.Target{Host: "helicon", Workdir: "/srv/dross"}}
+	if err := rl.reportlessExitFatal("gremlins", 0); err != nil {
+		t.Errorf("a clean remote exit with no report was escalated: %v", err)
+	}
+}

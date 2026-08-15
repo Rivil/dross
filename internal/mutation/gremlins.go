@@ -213,6 +213,10 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		invocation := strings.Join(cmd.Args, " ")
 		fmt.Fprintf(os.Stderr, "gremlins: %s\n", invocation)
 
+		// Remembered so the report-absent branch below can tell "gremlins found
+		// nothing to cover" (exit 0) from "gremlins failed before writing"
+		// (non-zero) — indistinguishable once the report is merely missing.
+		toolExit := 0
 		if err := cmd.Run(); err != nil {
 			// Gremlins exits non-zero when threshold flags fail or surviving
 			// mutants exist — both are "ran, bad results"; read the report
@@ -236,6 +240,7 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 			if fatal := lr.remoteExitFatal("gremlins", exitErr.ExitCode()); fatal != nil {
 				return nil, fmt.Errorf("%w\n  invocation: %s", fatal, invocation)
 			}
+			toolExit = exitErr.ExitCode()
 		}
 
 		// Fetched per package, immediately after its own run (the locked
@@ -255,6 +260,12 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 
 		b, err := os.ReadFile(reportAbs)
 		if err != nil {
+			// Absent report plus a non-zero exit is not a skip — the tool fell
+			// over before measuring, and calling that "no covered mutants"
+			// reports the package as fine to ignore.
+			if fatal := lr.reportlessExitFatal("gremlins", toolExit); fatal != nil {
+				return nil, fmt.Errorf("%w\n  invocation: %s", fatal, invocation)
+			}
 			// No report — gremlins gathered no covered mutants for this
 			// package and exited without writing. Exclude, don't fail: only
 			// a caller that needs evidence (the drain) turns absence fatal.

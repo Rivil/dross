@@ -489,6 +489,34 @@ func (l *Launcher) remoteExitFatal(bin string, code int) error {
 	return nil
 }
 
+// reportlessExitFatal closes the gap remoteExitFatal leaves: a tool that exited
+// non-zero AND produced no report.
+//
+// remoteExitFatal judges the exit code alone, and it is right to let a non-zero
+// code through — gremlins exits 1 when mutants survive, which is a successful
+// measurement with bad results. But that judgement is only sound WITH a report
+// in hand. Without one the same code means the tool failed before writing
+// anything, and today that lands in UnmeasuredMissing and prints as "gremlins
+// gathered no covered mutants" — a sentence that says the package was fine to
+// skip.
+//
+// Found by running this phase against a real host: the remote tree failed
+// `go test ./internal/cmd` (six git-dependent tests, see SyncArgs), so gremlins
+// could not gather coverage, exited 1 and wrote nothing. Every layer below
+// behaved exactly as designed and the run still reported a clean 0.95 with the
+// package holding most of the phase's code silently unmeasured.
+//
+// The two states that already read correctly are preserved: exit 0 with no
+// report stays a benign skip (gremlins found no covered mutants), and any exit
+// WITH a report stays tolerated. Local runs are untouched.
+func (l *Launcher) reportlessExitFatal(bin string, code int) error {
+	if !l.remoteRun() || code == 0 {
+		return nil
+	}
+	return fmt.Errorf("remote %s on %s exited %d and wrote no report — it failed before measuring anything, so this package is unmeasured rather than clean; run it there to see why: %w",
+		bin, l.Target.Host, code, remote.ErrRemoteCommand)
+}
+
 // fetchFatal reports whether a failed report fetch ends the run.
 //
 // Only ErrPartial is survivable, and only because it is what rsync reports when

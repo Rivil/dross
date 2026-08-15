@@ -282,7 +282,22 @@ func SyncArgs(t Target, localRoot string) ([]string, error) {
 		"rsync",
 		"-az",
 		"--delete",
-		"--exclude=.git",
+		// .git IS synced, and the absence of `--exclude=.git` here is the
+		// deliberate part.
+		//
+		// It was excluded originally to keep the wire small. That traded a few
+		// megabytes for correctness: without .git the remote tree is not a git
+		// repository, so every test that shells out to git fails there while
+		// passing locally. On this repo that is six tests in internal/cmd
+		// (TestStateJSONNotTracked, TestLocalStoreIsUntracked and friends,
+		// which assert what git does and does not track) — enough to fail the
+		// package's coverage pass, so gremlins writes no report and the package
+		// holding most of the code goes unmeasured with nothing saying so.
+		//
+		// A remote run that measures a DIFFERENT tree than a local one is the
+		// thing this whole seam exists to avoid, and 12M is not a reason to
+		// accept it. The .gitignore filter below is what keeps node_modules and
+		// build output off the wire; that was always the size lever.
 		"--filter=:- .gitignore",
 		// The trailing slash is load-bearing: without it rsync creates
 		// <workdir>/<basename>/ and every remote path in the run is off by one

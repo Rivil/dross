@@ -39,9 +39,20 @@ func TestSyncArgsCarriesTheLockedFlags(t *testing.T) {
 	// Each of these is a locked decision, not a stylistic choice: dropping
 	// --delete leaves deleted files on the remote, and dropping the .gitignore
 	// filter puts node_modules and build output on the wire.
-	for _, want := range []string{"--delete", "--exclude=.git", "--filter=:- .gitignore"} {
+	for _, want := range []string{"--delete", "--filter=:- .gitignore"} {
 		if !contains(argv, want) {
 			t.Errorf("argv is missing %q: %v", want, argv)
+		}
+	}
+	// .git must NOT be excluded. Without it the remote tree is not a git
+	// repository, and every test that shells out to git fails there while
+	// passing locally — which fails the package's coverage pass and leaves it
+	// unmeasured with nothing saying so. Proven against a real host: six tests
+	// in internal/cmd, and the package holding most of this phase's code
+	// silently absent from a run that reported 0.95.
+	for _, forbidden := range []string{"--exclude=.git", "--exclude=.git/"} {
+		if contains(argv, forbidden) {
+			t.Errorf("argv carries %q — the remote tree would not be a git repo: %v", forbidden, argv)
 		}
 	}
 	// The filter rule is ONE argv element with no shell quotes. There is no

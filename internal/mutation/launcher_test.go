@@ -155,13 +155,16 @@ func TestGremlinsRemoteRunOrderAndArgv(t *testing.T) {
 	// The rsync source is the adapter's ProjectRoot as a VALUE, not merely
 	// something with a trailing slash: a push from any other local directory
 	// would measure a tree the user is not looking at.
-	// Indices are from the front: the recorder appends the (empty) stdin script
-	// as a trailing element, so counting back from the end would move.
+	// Counted back from the end, past the (empty) stdin script the recorder
+	// appends: rsync's source and destination are always its last two real
+	// arguments, whereas their offset from the front moves whenever a flag is
+	// added or removed — which is exactly what dropping --exclude=.git did.
 	push := (*rec)[0]
-	if src := push[5]; src != root+"/" {
+	src, dst := push[len(push)-3], push[len(push)-2]
+	if src != root+"/" {
 		t.Errorf("rsync source = %q, want %q (the adapter's ProjectRoot)", src, root+"/")
 	}
-	if dst := push[6]; dst != "helicon:/srv/dross" {
+	if dst != "helicon:/srv/dross" {
 		t.Errorf("rsync destination = %q, want helicon:/srv/dross", dst)
 	}
 
