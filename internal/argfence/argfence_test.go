@@ -25,6 +25,11 @@ func TestPolicyFor(t *testing.T) {
 		{"gremlins", Reject, true},
 		{"npx", Reject, true},
 		{"dotnet", Reject, true},
+		// ssh and rsync carry the remote mutation run. Reject rather than
+		// Separator because neither honours an end-of-options token, and both
+		// have a flag that executes a local command (-o ProxyCommand, -e).
+		{"ssh", Reject, true},
+		{"rsync", Reject, true},
 		// An unlisted binary must never resolve. A permissive default here is
 		// the whole failure mode the table exists to prevent.
 		{"cargo", 0, false},
@@ -53,7 +58,7 @@ func TestPolicyFor(t *testing.T) {
 }
 
 func TestPolicyCoversEveryKnownBinary(t *testing.T) {
-	want := []string{"ast-grep", "dotnet", "gh", "git", "go", "gremlins", "npx", "semgrep"}
+	want := []string{"ast-grep", "dotnet", "gh", "git", "go", "gremlins", "npx", "rsync", "semgrep", "ssh"}
 	var got []string
 	for k := range Policy() {
 		got = append(got, k)

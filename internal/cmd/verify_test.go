@@ -606,7 +606,14 @@ func TestVerifyCover_RecordOutcomeNilTestsZeroScore(t *testing.T) {
 // empty means all adapters; non-empty filters by Name(), so a polyglot repo
 // can run only the adapter that's actually set up.
 func TestConfiguredAdaptersAllowlist(t *testing.T) {
-	names := func(as []mutation.Adapter) []string {
+	// Takes the (adapters, error) pair whole: configuredAdapters can now refuse
+	// — an unreachable granted remote, a tracked local.toml — and a helper that
+	// dropped the error would let this test pass on an empty list.
+	names := func(as []mutation.Adapter, err error) []string {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("configuredAdapters: %v", err)
+		}
 		var out []string
 		for _, a := range as {
 			out = append(out, a.Name())
@@ -631,8 +638,12 @@ func TestConfiguredAdaptersAllowlist(t *testing.T) {
 		t.Errorf("allowlist [stryker gremlins] must keep both, got %v", got)
 	}
 
-	if got := configuredAdapters(p, "", true); got != nil {
-		t.Errorf("--skip-mutation must still return nil regardless of allowlist, got %v", names(got))
+	skipped, err := configuredAdapters(p, "", true)
+	if err != nil {
+		t.Fatalf("--skip-mutation returned an error: %v", err)
+	}
+	if skipped != nil {
+		t.Errorf("--skip-mutation must still return nil regardless of allowlist, got %v", names(skipped, nil))
 	}
 }
 
@@ -761,8 +772,8 @@ func (s *stubMutationAdapter) Run(files []string) (*mutation.Report, error) {
 func useStubAdapter(t *testing.T, a mutation.Adapter) {
 	t.Helper()
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) []mutation.Adapter {
-		return []mutation.Adapter{a}
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, error) {
+		return []mutation.Adapter{a}, nil
 	}
 	t.Cleanup(func() { configuredAdaptersFn = prev })
 }

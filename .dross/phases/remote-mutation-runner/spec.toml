@@ -1,0 +1,99 @@
+[phase]
+  id = "remote-mutation-runner"
+  title = "Remote mutation runner"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "With a remote configured, a phase's mutation run executes on that host and the local machine spawns no compile or test process; the per-package reports land in the local reports/ tree, so verify's diff scoping, scoring and survivor lifecycle are unchanged."
+
+[[criteria]]
+  id = "c-2"
+  text = "A remote host read from tracked project.toml is refused by name; only untracked machine-local config can authorize one."
+
+[[criteria]]
+  id = "c-3"
+  text = "The mutation runner's worker count and test-cpu are settable from config and honoured at both construction sites (verify and survivor drain); unset keeps today's NumCPU/2 and 1."
+
+[[criteria]]
+  id = "c-4"
+  text = "A broken remote — unreachable host, missing tool, failed sync — fails loudly with a named cause, and never degrades to a local run or an empty report that reads as clean."
+
+[[criteria]]
+  id = "c-5"
+  text = "dross doctor reports remote readiness — host reachable, and the configured adapter's toolchain present — rather than discovering it mid-run."
+
+[[criteria]]
+  id = "c-6"
+  text = "The tree that reaches the remote is the working tree under test, including uncommitted changes, and a stale remote workdir cannot contribute a report to this run."
+
+[[criteria]]
+  id = "c-7"
+  text = "A remote run restores the language's dependencies on the remote before the adapter runs, using the lockfile-respecting form of the project's OWN package manager (pnpm/npm/yarn/bun, dotnet restore); a Go run requires none, and a package manager with no entry in the table is an error rather than a skipped restore."
+
+[[criteria]]
+  id = "c-8"
+  text = "A remote run carries the environment variables the adapter needs, and their values never reach the remote's process list, filesystem, or shell history; a named variable that is unset locally is an error rather than an empty export."
+
+[[criteria]]
+  id = "c-9"
+  text = "/dross-options reaches every dross-managed setting rather than only project.toml's first seven sections: the whole of .dross/local.toml (quick_base, allow_hosts, mutation_workers, mutation_test_cpu, mutation_remote_env), the consent verbs that own the keys `local set` refuses (dross trust, dross mutation remote grant/revoke), the dross-owned Claude Code hooks, and the project.toml sections it currently omits — [board], [mutation], remote.auth_user/auth_scheme/project_id, stack.profile, and [constraints]/[competition] read-only. An authorization key is still written only by its consent verb, which prints what it authorizes before writing; options invokes that verb and never becomes a second writer."
+
+[[decisions]]
+  key = "consent_model"
+  choice = "A dedicated consent verb authorizes the remote, printing the host and workdir it is granting. The key is absent from `dross local set`."
+  why = "Configuring a remote is code execution on a machine of the config's choosing. A generic key-writer lets an agent grant that consent without ever showing the user what for — the same reason trusted_test_command is excluded from localKeys (internal/cmd/local.go:71)."
+  locked = true
+
+[[decisions]]
+  key = "adapter_scope"
+  choice = "Remoting is built as a seam shared by all three adapters (Gremlins, Stryker, Stryker.NET), not as Gremlins-only logic."
+  why = "The Prefix seam is already shared across the three. Wiring one adapter only would push seam discovery to a later refactor made under pressure by someone who has forgotten the constraints."
+  locked = true
+
+[[decisions]]
+  key = "sync_mechanism"
+  choice = "rsync over ssh, filtered by .gitignore, INCLUDING .git, with --delete. (Amended during execution: .git was originally excluded. Running the phase against a real host showed the exclusion makes the remote tree a non-repository, so every test that shells out to git fails there while passing locally — six in internal/cmd — which fails the package's coverage pass and leaves the package holding most of this phase's code unmeasured, in a run that still reported 0.95. .git is 12M; the .gitignore filter was always the size lever that matters.)"
+  why = "Carries uncommitted work, which is what verify exists to measure; the .gitignore filter keeps dependency dirs off the wire; --delete keeps the synced tree honest about files git tracks. It does NOT supply c-6: --filter=':- .gitignore' protects ignored paths from deletion, and every report location is gitignored (/reports is line 3 of .gitignore), so a stale remote report survives --delete. Staleness is supplied by the launcher's explicit per-adapter rm before each run — do not remove it believing rsync covers it."
+  locked = true
+
+[[decisions]]
+  key = "remote_workers"
+  choice = "The readiness probe reads the remote's core count, and the default worker count derives from it — NumCPU/2 on the remote, not on the local machine."
+  why = "The halving rule is right; it was just reading the wrong machine. Reserving less is unproven off a contended laptop and risks the false-timeout mode that masks real survivors (539 spurious timeouts at 14 workers, internal/mutation/gremlins.go:33)."
+  locked = true
+
+[[decisions]]
+  key = "config_key_shape"
+  choice = "Flat closed keys in .dross/local.toml, not a nested [mutation.remote] table."
+  why = "localStore is flat by construction and an unknown key is an error rather than a silently-written entry no reader looks for. Keeping that property matters more than schema elegance."
+  locked = true
+
+[[decisions]]
+  key = "report_fetch"
+  choice = "Each package's report is fetched from the remote immediately after that package's run, not in one batch at the end."
+  why = "Mirrors the existing per-package loop so UnmeasuredMissing keeps meaning exactly what it means today — no report written, nothing learned about the package."
+  locked = true
+
+[[decisions]]
+  key = "remote_env_transport"
+  choice = "Environment reaches the remote as `export` lines piped over ssh STDIN to `bash -s`. It is never interpolated into the ssh command string, never written to a file on the remote, and never passed via ssh SendEnv."
+  why = "The ssh command string is the remote shell's argv and shows up in that host's process list; a file persists after the run and survives it. Both are strictly worse than the docker-daemon status quo this replaces, where the values are at least confined to `docker inspect`. SendEnv needs a matching AcceptEnv in the remote sshd config, which is host state dross cannot verify and would fail open on. Stdin is the only channel that touches neither argv nor disk. Values still land in the remote process's own environment, readable via /proc/<pid>/environ by that user or root — unavoidable for any env mechanism, and not a reason to accept the avoidable leaks."
+  locked = true
+
+[[decisions]]
+  key = "remote_env_source"
+  choice = "`mutation_remote_env` in .dross/local.toml is a comma-separated allowlist of variable NAMES; dross reads each value from its own process environment at run time. It is a settable local key. An allowlisted name that is unset locally is an error."
+  why = "Names are not secrets, so the key stays settable rather than needing the grant verb's ceremony — and dross stores no secret anywhere, which is the property that makes this safe to ship. An allowlist rather than forwarding the whole environment: dross's own env carries GITHUB_TOKEN and YOUTRACK_TOKEN, and 'send everything' would put them on the mutation host. Reading from the process env matches the `set -a; . <file>; set +a` idiom already in use, and avoids growing a .env parser whose quoting and expansion rules would have to match docker-compose's or produce silently different values. Unset is an error because an empty export is not the same as an absent one: FeastAhead's DATABASE_URL flips which test suites load, so an empty value changes what gets measured rather than failing."
+  locked = true
+
+[[decisions]]
+  key = "docker_prefix_under_remote"
+  choice = "A remote grant DROPS the docker prefix rather than aborting on it. The Launcher's Prefix/Target mutual exclusion stays as an unreachable defensive invariant, but the wiring never builds both."
+  why = "dockerPrefix (internal/cmd/verify.go:280) gates only on runtime.mode == \"docker\", which describes the DEV stack and says nothing about where mutation runs. Aborting on it would refuse every docker-mode repo that grants a remote — the common case, and the one this phase exists for. The prefix is also exactly what a remote-native run should shed: the point is to run the adapter on the remote's own toolchain, and whether that toolchain is present is doctor's job (c-5) and the restore step's (c-7), not a pre-flight refusal keyed on an unrelated setting."
+  locked = true
+
+[[deferred]]
+  text = "A verb that installs the pinned remote toolchain (Go + gremlins, Node, .NET) on a new host."
+  why = "Provisioning a machine is a different job from running a mutation test, and it is a one-time per-host cost — doctor naming what is missing is enough."
+  target = "remote-toolchain-bootstrap"

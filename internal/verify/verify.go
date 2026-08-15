@@ -20,6 +20,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 const (
@@ -81,6 +82,15 @@ type LanguageRun struct {
 	// is recorded with Mutation nil and the error text, and Skeleton
 	// surfaces it as a FLAG finding.
 	Error string `json:"error,omitempty"`
+	// RemoteTransport marks an Error that was the remote never running at all —
+	// an unreachable host, a failed sync, a dead connection.
+	//
+	// It is captured HERE, at the moment the error value is still live, because
+	// Error is a string and errors.Is cannot be re-run against a string. The
+	// distinction is worth carrying: a misconfigured stryker is a FLAG someone
+	// reads and fixes, while a leg that never ran means this phase has no
+	// evidence about that language at all — which must not be verifiable past.
+	RemoteTransport bool `json:"remote_transport,omitempty"`
 }
 
 type SkippedFile struct {
@@ -366,6 +376,10 @@ func RunScoped(phaseID string, files []string, adapters []mutation.Adapter, scop
 				Tool:  name,
 				Files: byAdapter[name],
 				Error: err.Error(),
+				// Classified while the error VALUE is still live. Everything
+				// downstream sees only Error, a string, and errors.Is cannot be
+				// re-run against prose.
+				RemoteTransport: errors.Is(err, remote.ErrTransport),
 			})
 			continue
 		}
@@ -504,8 +518,23 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 	}
 	for _, lr := range t.Languages {
 		if lr.Error != "" {
+			// A leg whose REMOTE never ran is BLOCKING, not a FLAG. The two
+			// look the same from here — an adapter returned an error — but they
+			// mean opposite things about what this run knows. A misconfigured
+			// stryker is a problem with the tool, and its FLAG is read and
+			// fixed. An unreachable mutation host means nothing was measured
+			// for that language at all: there are no survivors to gate on
+			// precisely because nothing looked, and a phase must not be
+			// verifiable past a leg that never ran.
+			//
+			// lr.Error is carried into the text whole because it already names
+			// the host — every transport error from internal/remote does.
+			severity := "FLAG"
+			if lr.RemoteTransport {
+				severity = "BLOCKING"
+			}
 			v.Findings = append(v.Findings, Finding{
-				Severity: "FLAG",
+				Severity: severity,
 				Text:     fmt.Sprintf("mutation adapter %s failed: %s", lr.Tool, lr.Error),
 			})
 		}

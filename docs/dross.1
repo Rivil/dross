@@ -168,6 +168,46 @@ records what would have been mutated without executing.
 Record the resolved verdict from
 .I verify.toml
 as a telemetry outcome event.
+.TP
+.B dross mutation remote grant \fIhost\fR \fIworkdir\fR
+Authorize mutation runs to execute on another machine. A remote run rsyncs
+this working tree to
+.I workdir
+on
+.I host
+and runs the mutation adapters there, as you, so the command prints the host
+and workdir it is about to authorize
+.B before
+it writes them. It is the only writer of
+.B mutation_remote_host
+and
+.BR mutation_remote_workdir ,
+which are deliberately absent from
+.BR "dross local set" :
+a generic key-writer would let an agent grant code execution on another
+machine without ever showing you what for. The grant lives in the gitignored
+.IR .dross/local.toml ,
+so a clone carries none; a tracked
+.I local.toml
+is refused unread, and a remote host in the tracked
+.I project.toml
+is refused by name.
+.TP
+.B dross mutation remote status
+Print the authorized host and workdir, or
+.BR "not granted" .
+Exits 0 either way; a tracked
+.I local.toml
+surfaces the refusal rather than the host it names.
+.TP
+.B dross mutation remote revoke
+Clear
+.B mutation_remote_host
+and
+.B mutation_remote_workdir
+together, leaving
+.B mutation_workers
+and the other tuning keys untouched.
 .SS Shipping
 .TP
 .B dross ship \fR[\fIphase-id\fR] [\fIflags\fR]
@@ -350,6 +390,25 @@ redirects your token to; dross refuses to read this file if git reports it
 tracked, and names
 .B git rm --cached
 as the fix.
+.IP
+The remote-mutation keys live here too.
+.B mutation_remote_host
+and
+.B mutation_remote_workdir
+are written only by
+.BR "dross mutation remote grant" .
+The rest are settable with
+.BR "dross local set" :
+.B mutation_workers
+and
+.B mutation_test_cpu
+tune the runner's parallelism (unset keeps NumCPU/2 and 1, sized off the
+remote's own core count when one is granted), and
+.B mutation_remote_env
+is a comma-separated allowlist of variable NAMES \(em never name=value pairs.
+dross reads their values from the surrounding environment at run time, pipes
+them to the remote over ssh stdin, and stores none of them; an allowlisted
+name that is unset locally is an error rather than an empty export.
 .TP
 .I .dross/rules.toml
 Project-tier rules.

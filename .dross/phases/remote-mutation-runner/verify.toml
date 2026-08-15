@@ -1,0 +1,96 @@
+[verify]
+  phase = "remote-mutation-runner"
+  generated_at = 2026-08-15T09:53:00.177069Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-15T10:30:58.273904Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9572039942938659
+  mutants_killed = 671
+  mutants_survived = 30
+  mutants_not_covered = 30
+  mutants_in_scope = 701
+  unclassified_in_scope = 0
+  criteria_total = 9
+  criteria_covered = 9
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/mutation/launcher_test.go:TestGremlinsRemoteRunOrderAndArgv", "internal/mutation/launcher_test.go:TestGremlinsRemotePushesOnceAndFetchesPerPackage", "internal/mutation/launcher_test.go:TestStrykerRemoteRunCdsIntoTheJoinedWorkdir", "internal/mutation/launcher_test.go:TestRemoteNilSpawnsNothingThroughTheLauncherSeam", "internal/remote/remote_test.go:TestSSHArgsNeverSpawnsTheAdapterLocally"]
+  notes = "failLocalSpawns fails the test on any local gremlins/npx/dotnet spawn, and the run asserts argv[0] is in {ssh, rsync}, so a local fallback cannot pass. The merged remote report is compared field-for-field against the LOCAL expectation, which is what makes 'scoping, scoring and lifecycle unchanged' an assertion rather than a claim. Confirmed live against helicon: 0 local gremlins/go-test processes while the remote ran, and the reports landed at GremlinsReportPath."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/project/project_test.go:TestLoadRefusesARemoteHostInTrackedConfig", "internal/project/project_test.go:TestLoadStillDecodesTheRealMutationKeys", "internal/cmd/local_test.go:TestReadRemoteGrantRefusesTrackedLocal", "internal/cmd/local_test.go:TestRemoteGrantKeysAreNotSettable", "internal/cmd/mutation_remote_wiring_test.go:TestTrackedLocalRefusalAbortsTheWiring"]
+  notes = "Both halves are pinned: a tracked host is refused BY NAME with Load returning nil rather than a partly-usable Project, and the grant keys are absent from localKeys in both directions (get and set), so the generic key-writer cannot grant consent. The 'workdir alone' case proves half a config is not a bypass."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/mutation_remote_wiring_test.go:TestBothSitesBuildTheSameGremlins", "internal/cmd/mutation_remote_wiring_test.go:TestTuningUnsetStaysZeroSoAdaptersApplyTheirOwnDefault", "internal/cmd/mutation_remote_wiring_test.go:TestUnsetWorkersWithARemoteHalvesTheProbedCores", "internal/mutation/launcher_test.go:TestRemoteWorkersDeriveFromTheProbedHost", "internal/cmd/local_test.go:TestMutationTuningUnsetIsZeroNotDefaulted"]
+  notes = "The anti-drift assertion compares the two construction sites field-by-field with reflect.DeepEqual, so a knob wired at one site only fails there and nowhere else. Unset-is-not-zero is pinned separately, which is what lets the remote-derived default apply. Confirmed live: 16 remote cores produced --workers 8 on the helicon argv."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/mutation/remote_failure_test.go:TestRemoteToolExitCodesAreClassifiedDistinctly", "internal/mutation/remote_failure_test.go:TestRemoteTransportFailureNeverDegradesToLocal", "internal/mutation/remote_failure_test.go:TestRemotePushFailureIsFatalAndSpawnsNothing", "internal/mutation/remote_failure_test.go:TestRemoteFetchFailureSplitsPartialFromTransport", "internal/mutation/remote_failure_test.go:TestRemoteReportlessFailureIsNotASkip", "internal/verify/verify_test.go:TestRemoteTransportFailureIsBlocking"]
+  notes = "The three exit classes are asserted together because each alone is satisfiable by a rule that gets the other two wrong, and the exits come from real subprocesses so a wrong read of ExitError cannot pass. TestRemoteReportlessFailureIsNotASkip was added during this phase after a live run found the remaining hole: non-zero exit WITH no report was filed as UnmeasuredMissing and printed as 'gathered no covered mutants', which is the empty-report-that-reads-as-clean this criterion forbids."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/doctor_remote_test.go:TestDoctorRemoteMissingToolNamesTheAdapter", "internal/cmd/doctor_remote_test.go:TestDoctorRemoteTransportFailureIsAnIssue", "internal/cmd/doctor_remote_test.go:TestDoctorRemoteHealthyPrintsTheProbedCoreCount", "internal/cmd/doctor_remote_test.go:TestDoctorRemoteUngrantedIsAdvisory", "internal/cmd/doctor_remote_test.go:TestDoctorRemoteSurfacesTheTrackedRefusal"]
+  notes = "Readiness moves the exit code rather than only printing, and the finding names both the missing binary and the adapter that wanted it. The allowlist half matters as much: a repo whose adapters exclude gremlins is not probed for it. Proven live — doctor named the missing workdir, then the missing gremlins, then reported 'helicon reachable — 16 cores'."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/remote/remote_test.go:TestSyncArgsCarriesTheLockedFlags", "internal/mutation/launcher_test.go:TestStrykerNetRemoteRunClearsTheWholeOutputTree", "internal/mutation/launcher_test.go:TestRemoteReportDirIsCreatedInTheSameCommandAsTheRm", "internal/mutation/remote_failure_test.go:TestRemoteRunClearsYesterdaysLocalReport", "internal/mutation/launcher_test.go:TestRemoteRunCreatesTheReportDirectory"]
+  notes = "rsync pushes the working tree (source is the adapter's ProjectRoot, uncommitted work included), and staleness is cleared explicitly per adapter on both sides of the wire — the remote rm before each package and the local RemoveAll, neither of which rsync --delete can do for a gitignored reports/ path. The sync-flag test now also asserts .git is NOT excluded: a tree without it is not a git repo, which silently unmeasured internal/cmd."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/mutation/restore_test.go:TestStrykerRemoteRestoreUsesTheProjectsOwnPackageManager", "internal/mutation/restore_test.go:TestStrykerRemoteRestoreRejectsTheLooseForms", "internal/mutation/restore_test.go:TestStrykerRemoteRefusesAnUnsetPackageManager", "internal/mutation/restore_test.go:TestStrykerRemoteRefusesAnUnknownPackageManager", "internal/mutation/restore_test.go:TestGremlinsRemoteIssuesNoRestore", "internal/mutation/restore_test.go:TestRemoteRestoreTableIsClosed"]
+  notes = "Each manager's restore is pinned as an EXACT argv and asserted to precede the tool, and the loose forms are rejected from the other side so a lockfile-ignoring install cannot creep back. Unset and unknown are both refusals that name the setting or the value rather than guessing npm, and a Go run is asserted to issue no install at all."
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/mutation/remote_env_test.go:TestEnvValuesRoundTripThroughARealShell", "internal/mutation/remote_env_test.go:TestNoEnvValueEverReachesArgv", "internal/mutation/remote_env_test.go:TestNothingIsWrittenToTheRemoteFilesystemToCarryEnv", "internal/mutation/remote_env_test.go:TestUnsafeEnvNameIsRefusedBeforeAnyCommand", "internal/cmd/local_test.go:TestRemoteEnvRefusesAnUnsetName"]
+  notes = "The quoting guarantee is EXECUTED rather than reasoned about: the generated script is run by /bin/sh and the observed value compared byte for byte, across values carrying $( , backticks, quotes, newlines and empty. The process-list and filesystem claims are asserted on the recorded argv and script rather than by reading the builder, so a future caller that interpolates a value cannot pass."
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/options_docs_test.go:TestOptionsCoversEveryLocalKey", "internal/cmd/options_docs_test.go:TestOptionsCoversTheConsentVerbs", "internal/cmd/options_docs_test.go:TestOptionsCoversEveryProjectSection", "internal/cmd/options_docs_test.go:TestOptionsCoversTheProviderConditionalRemoteFields", "internal/cmd/options_docs_test.go:TestOptionsSaysMutationIsNotSettableThroughProjectSet"]
+  notes = "TestOptionsCoversEveryLocalKey walks localKeys itself rather than a typed list, so a key added to the store without a prompt line fails the build. The consent test asserts both directions — the verbs are named, AND the prompt is forbidden from telling the user to write a grant key through `dross local set`, which would invert the consent_model decision. It caught a real gap on first run: the prompt described the grant verb without ever naming mutation_remote_host."
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 30 surviving mutants are NOT-COVERED and all 9 in-diff (file:line) survivors were accepted with reasons: switch{} case-conditions in Classify and checkRemoteMutation (gremlins/go-cover attribution ceiling — the arms are asserted code-by-code by TestClassifyReadsTheCodeNotTheProse and the doctor tests), the `if stdin != \"\"` guards inside the process-construction seam every test replaces, and one ARITHMETIC_BASE on a string concatenation that does not compile as a mutant. Efficacy excluding not-covered is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "This phase was verified by running against a real remote host (helicon, 16 cores), which found three defects the unit tests could not: the report directory was never created remotely because reports/ is gitignored and the sync filter protects ignored paths; --exclude=.git left the remote tree a non-repository so six git-dependent tests in internal/cmd failed there and the package went unmeasured; and a non-zero tool exit with no report was filed as a benign skip. All three are fixed in t-13/t-14 with regression tests."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/options.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/dross.1: no mutation adapter for .1"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/subprocargs_audit/snippets.txt: no mutation adapter for .txt"

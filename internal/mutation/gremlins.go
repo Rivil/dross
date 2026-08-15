@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/argfence"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // DefaultTimeoutCoefficient is the dross-chosen override for gremlins'
@@ -62,6 +63,14 @@ type Gremlins struct {
 	// TestCPU caps the CPUs each mutant's test run may use (--test-cpu).
 	// Zero or negative falls back to DefaultTestCPU (1).
 	TestCPU int
+
+	// Remote delegates the run to another machine. Nil runs locally, and a
+	// local run is byte-identical to what it was before remoting existed.
+	//
+	// A NAMED field rather than an embedded Launcher: Go's keyed struct
+	// literals do not promote, so embedding would break every existing
+	// &Gremlins{Prefix: …} construction site. See launcher.go.
+	Remote *remote.Target
 
 	// Unmeasured records every package Run excluded from the merged score,
 	// with why. It is set by each Run, replacing whatever the previous Run
@@ -132,6 +141,14 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		return &Report{Tool: g.Name()}, nil
 	}
 
+	// Built before anything is spawned: a refused combination (a prefix AND a
+	// remote, an unvalidatable target) must produce no *exec.Cmd at all.
+	// Gremlins runs at the repo root, so the launcher carries no workdir.
+	lr, err := newLauncher(g.Name(), g.Prefix, g.Remote, g.ProjectRoot, "")
+	if err != nil {
+		return nil, err
+	}
+
 	pkgs := packagesFromFilesFn(files)
 
 	// Gremlins has no end-of-options token, so a derived value that begins with
@@ -155,6 +172,11 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		return nil, fmt.Errorf("prepare gremlins report dir: %w", err)
 	}
 
+	// Cleared up front so a Run that returns an error leaves no trace of the
+	// PREVIOUS run's exclusions behind. A caller reading Unmeasured after a
+	// failed Run would otherwise be reading a different run's answer.
+	g.Unmeasured = nil
+
 	merged := &Report{Tool: g.Name()}
 	var unmeasured []Unmeasured
 	skip := func(pkg string, kind UnmeasuredKind, why string) {
@@ -167,12 +189,22 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		// A stale report from a prior run must not be re-read if gremlins
 		// writes nothing this time.
 		_ = os.Remove(reportAbs)
+		// The remote half of the same guarantee, and it is not optional: rsync
+		// --delete cannot clear the remote report because the locked
+		// `:- .gitignore` filter protects ignored paths, and reports/ is
+		// gitignored. No-op for a local run.
+		if err := lr.clearReport(pkg, reportAbs); err != nil {
+			return nil, err
+		}
 
 		args, err := g.buildUnleashArgs(reportRel, []string{pkg})
 		if err != nil {
 			return nil, err
 		}
-		cmd := gremlinsBuildCmd(g, args)
+		cmd, err := lr.toolCmd(args, func(a []string) *exec.Cmd { return gremlinsBuildCmd(g, a) })
+		if err != nil {
+			return nil, err
+		}
 		cmd.Stdout = os.Stderr // streamed; not captured (long-running)
 		cmd.Stderr = os.Stderr
 
@@ -181,6 +213,10 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		invocation := strings.Join(cmd.Args, " ")
 		fmt.Fprintf(os.Stderr, "gremlins: %s\n", invocation)
 
+		// Remembered so the report-absent branch below can tell "gremlins found
+		// nothing to cover" (exit 0) from "gremlins failed before writing"
+		// (non-zero) — indistinguishable once the report is merely missing.
+		toolExit := 0
 		if err := cmd.Run(); err != nil {
 			// Gremlins exits non-zero when threshold flags fail or surviving
 			// mutants exist — both are "ran, bad results"; read the report
@@ -188,12 +224,48 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 			// found, etc.) is fatal.
 			var exitErr *exec.ExitError
 			if !errors.As(err, &exitErr) {
+				if lr.remoteRun() {
+					// The LOCAL ssh could not be started, so nothing reached the
+					// remote. Naming gremlins here would send the user to check
+					// an installation that was never consulted.
+					return nil, fmt.Errorf("remote ssh for gremlins on %s could not be started: %w: %v\n  invocation: %s",
+						g.Remote.Host, remote.ErrTransport, err, invocation)
+				}
 				return nil, fmt.Errorf("gremlins invocation failed: %w\n  invocation: %s\n  (is gremlins installed? `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`)", err, invocation)
 			}
+			// Over ssh the SAME exit channel carries the remote program's code
+			// and ssh's own transport failures, so the tolerance above has to be
+			// narrowed by code or an unreachable host becomes a clean-looking
+			// skip. No-op locally.
+			if fatal := lr.remoteExitFatal("gremlins", exitErr.ExitCode()); fatal != nil {
+				return nil, fmt.Errorf("%w\n  invocation: %s", fatal, invocation)
+			}
+			toolExit = exitErr.ExitCode()
+		}
+
+		// Fetched per package, immediately after its own run (the locked
+		// report_fetch decision), so "no report for this package" keeps meaning
+		// what it means locally.
+		//
+		// Only rsync's "source file is not there" survives as a skip — that one
+		// genuinely means the tool wrote nothing. A dead connection tells us
+		// nothing about whether a report exists, and calling it "no report"
+		// would mark a package unmeasured that may have measured fine.
+		if ferr := lr.fetchReport(pkg, reportAbs); ferr != nil {
+			if fetchFatal(ferr) {
+				return nil, fmt.Errorf("fetch gremlins report for %s: %w", pkg, ferr)
+			}
+			fmt.Fprintf(os.Stderr, "gremlins: fetch %s: %v\n", pkg, ferr)
 		}
 
 		b, err := os.ReadFile(reportAbs)
 		if err != nil {
+			// Absent report plus a non-zero exit is not a skip — the tool fell
+			// over before measuring, and calling that "no covered mutants"
+			// reports the package as fine to ignore.
+			if fatal := lr.reportlessExitFatal("gremlins", toolExit); fatal != nil {
+				return nil, fmt.Errorf("%w\n  invocation: %s", fatal, invocation)
+			}
 			// No report — gremlins gathered no covered mutants for this
 			// package and exited without writing. Exclude, don't fail: only
 			// a caller that needs evidence (the drain) turns absence fatal.
@@ -349,7 +421,9 @@ func (g *Gremlins) buildUnleashArgs(reportRel string, pkgs []string) ([]string, 
 	}
 	workers := g.Workers
 	if workers <= 0 {
-		workers = defaultWorkers()
+		// Derived from the machine the run happens ON. For a remote run that is
+		// the probed host, not this laptop — see launcherWorkers.
+		workers = launcherWorkers(g.Remote)
 	}
 	testCPU := g.TestCPU
 	if testCPU <= 0 {

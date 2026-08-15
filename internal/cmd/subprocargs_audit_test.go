@@ -98,6 +98,11 @@ var valueTakingFlags = map[string]map[string]bool{
 	// every call site, but the carve-out has to exist or the value reads as an
 	// unfenced positional.
 	"go": {"-f": true},
+	// ssh and rsync carry the remote mutation run. Only the flags dross itself
+	// would ever emit are listed — an over-broad set here silently waves
+	// through the operand that follows, which for ssh is the destination host.
+	"ssh":   {"-o": true, "-i": true, "-p": true, "-l": true, "-F": true},
+	"rsync": {"-e": true, "--filter": true, "--exclude": true, "--rsh": true},
 }
 
 // separatorTokens are the end-of-options tokens any tool in the table uses.
@@ -111,6 +116,8 @@ var separatorTokens = map[string]bool{"--": true, "--end-of-options": true}
 // moving. Anything not listed is a finding under the fail-closed rule.
 var acceptedNonLiteralBinaries = map[string]string{
 	"update.go:newBinary": "self-exec of the just-downloaded, signature-verified binary; argv is the single literal \"install\"",
+	"remote.go:argv[…]": "internal/remote's single exec seam. argv[0] is always the literal \"ssh\" or \"rsync\" chosen by SSHArgs/SyncArgs/FetchArgs, and every operand is validated against remote's host/workdir allowlist before the argv exists. " +
+		"It is written as Command(argv[0]) + an Args assignment rather than the usual Command(argv[0], argv[1:]...) spread ON PURPOSE: a spread is skipped by this walk, so the spread form would be accommodated by accident. This form is accommodated on the record.",
 }
 
 // gitCallFuncs are the helpers whose variadic tail IS a git argv.
@@ -468,7 +475,7 @@ func auditSnippet(t *testing.T, lines ...string) []auditFinding {
 		"func gitCombined(dir string, a ...string) (string, error) { return \"\", nil }\n" +
 		"func gitNoOut(dir string, a ...string) error { return nil }\n" +
 		"func gitTrim(dir string, a ...string) (string, error) { return \"\", nil }\n" +
-		"func snippet(repoDir, branch, base, ref, path, msg, pkg, dir, fields, num, file, lang, pattern, mutate, chosen string) {\n"
+		"func snippet(repoDir, branch, base, ref, path, msg, pkg, dir, fields, num, file, lang, pattern, mutate, chosen, host string) {\n"
 	f, err := parser.ParseFile(fset, "snippet.go", preamble+strings.Join(lines, "\n")+"\n}\n", 0)
 	if err != nil {
 		t.Fatalf("snippet does not parse: %v\n%s", err, strings.Join(lines, "\n"))
@@ -521,6 +528,14 @@ func TestAuditScansMutationAndShip(t *testing.T) {
 	} {
 		assertAuditCovers(t, rel)
 	}
+}
+
+// TestAuditScansRemotePackage: internal/remote is where dross spawns ssh and
+// rsync, the two binaries in the table that can execute an arbitrary LOCAL
+// command from a flag (-o ProxyCommand, -e). A scan root that stopped covering
+// it would leave the worst case unwatched.
+func TestAuditScansRemotePackage(t *testing.T) {
+	assertAuditCovers(t, filepath.Join("internal", "remote", "remote.go"))
 }
 
 func assertAuditCovers(t *testing.T, rel string) {

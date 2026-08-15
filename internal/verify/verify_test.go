@@ -2,6 +2,7 @@ package verify
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // fakeAdapter is a deterministic Adapter for unit-testing Run().
@@ -1469,5 +1471,111 @@ func TestUnclassifiedInScopeExcludesOutOfScope(t *testing.T) {
 		if strings.Contains(f.Text, "in.go:10") {
 			t.Errorf("the in-scope survivor was demoted to a FLAG: %q", f.Text)
 		}
+	}
+}
+
+// --- c-4: a remote leg that never ran is BLOCKING ---------------------------
+
+// TestRemoteTransportFailureIsBlocking.
+//
+// A failing adapter and an unreachable mutation host look identical from
+// verify's side — both are "the adapter returned an error" — but they mean
+// opposite things about what this run knows. A misconfigured stryker is a
+// problem with the tool: the FLAG is read and fixed. An unreachable host means
+// nothing was measured for that language at all, and the absence of survivors
+// is the absence of evidence rather than a clean result. A phase must not be
+// verifiable past a leg that never ran.
+func TestRemoteTransportFailureIsBlocking(t *testing.T) {
+	transport := fmt.Errorf("remote rsync on helicon exited 255: %w", remote.ErrTransport)
+	broken := &fakeAdapter{name: "gremlins", supportsExt: []string{".go"}, err: transport}
+
+	tests, err := RunScoped("p", []string{"a.go"}, []mutation.Adapter{broken}, scopeOf("a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tests.Languages) != 1 {
+		t.Fatalf("want one recorded leg, got %+v", tests.Languages)
+	}
+	if !tests.Languages[0].RemoteTransport {
+		t.Fatal("the transport class was not captured while the error value was live — errors.Is cannot be re-run against the stored string")
+	}
+	// The leg still names the files it did not measure. An empty Files list
+	// would make the report look like there was nothing to measure.
+	if len(tests.Languages[0].Files) != 1 || tests.Languages[0].Files[0] != "a.go" {
+		t.Errorf("the failed leg lost its Files: %+v", tests.Languages[0])
+	}
+
+	v := Skeleton(tests, []string{"c-1"})
+	blocking := findingsBySeverity(v, "BLOCKING")
+	if len(blocking) != 1 {
+		t.Fatalf("want 1 BLOCKING for a leg that never ran, got %d: %+v", len(blocking), v.Findings)
+	}
+	if !strings.Contains(blocking[0].Text, "helicon") {
+		t.Errorf("the BLOCKING finding does not name the host: %q", blocking[0].Text)
+	}
+	if len(findingsBySeverity(v, "FLAG")) != 0 {
+		t.Errorf("the transport failure was ALSO flagged: %+v", v.Findings)
+	}
+}
+
+// TestPlainAdapterFailureStaysAFlag is the regression half: the escalation must
+// not swallow the existing behaviour. A stryker that is merely misconfigured is
+// still a FLAG.
+func TestPlainAdapterFailureStaysAFlag(t *testing.T) {
+	broken := &fakeAdapter{name: "stryker", supportsExt: []string{".ts"}, err: errAdapterBoom}
+
+	tests, err := RunScoped("p", []string{"a.ts"}, []mutation.Adapter{broken}, scopeOf("a.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tests.Languages[0].RemoteTransport {
+		t.Error("a plain adapter error was classified as a transport failure")
+	}
+
+	v := Skeleton(tests, []string{"c-1"})
+	if flags := findingsBySeverity(v, "FLAG"); len(flags) != 1 {
+		t.Fatalf("want 1 FLAG for a plain adapter failure, got %d: %+v", len(flags), v.Findings)
+	}
+	if len(findingsBySeverity(v, "BLOCKING")) != 0 {
+		t.Errorf("a plain adapter failure was escalated: %+v", v.Findings)
+	}
+}
+
+// TestRemoteTransportFailurePreservesRecordAndContinue: escalating one leg must
+// not discard another's finished report. The gremlins host being unreachable
+// says nothing about the stryker run that already completed.
+func TestRemoteTransportFailurePreservesRecordAndContinue(t *testing.T) {
+	transport := fmt.Errorf("remote ssh on helicon exited 255: %w", remote.ErrTransport)
+	broken := &fakeAdapter{name: "gremlins", supportsExt: []string{".go"}, err: transport}
+	ok := &fakeAdapter{name: "stryker", supportsExt: []string{".ts"},
+		report: reportOf("stryker", map[string]mutation.FileStat{"a.ts": {Killed: 1}})}
+
+	tests, err := RunScoped("p", []string{"a.go", "a.ts"},
+		[]mutation.Adapter{broken, ok}, scopeOf("a.go", "a.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tests.Languages) != 2 {
+		t.Fatalf("want both legs recorded, got %+v", tests.Languages)
+	}
+	for _, lr := range tests.Languages {
+		switch lr.Tool {
+		case "gremlins":
+			if !lr.RemoteTransport || lr.Error == "" {
+				t.Errorf("the failed leg lost its classification: %+v", lr)
+			}
+		case "stryker":
+			if lr.Mutation == nil || lr.Mutation.Killed != 1 {
+				t.Errorf("the finished leg was discarded by the other's failure: %+v", lr.Mutation)
+			}
+			if lr.RemoteTransport {
+				t.Errorf("the healthy leg was marked as a transport failure: %+v", lr)
+			}
+		}
+	}
+
+	v := Skeleton(tests, []string{"c-1"})
+	if len(findingsBySeverity(v, "BLOCKING")) != 1 {
+		t.Errorf("want exactly the one BLOCKING for the unreachable leg: %+v", v.Findings)
 	}
 }
