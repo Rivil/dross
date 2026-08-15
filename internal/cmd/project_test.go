@@ -389,6 +389,13 @@ func TestBoardFieldsAllAddressable(t *testing.T) {
 		case reflect.Bool:
 			probe = "true"
 		}
+		// An enum-valued key is gated (config-value-truth), so the probe has to
+		// be a real member. The claim under test is that the field is
+		// ADDRESSABLE, not that it accepts arbitrary text — using "x" here
+		// would now assert the opposite of what the gate exists to do.
+		if set, gated := enumKeys[path]; gated {
+			probe = set.Values()[0]
+		}
 		p := &project.Project{}
 		if err := writeDotted(p, path, probe); err != nil {
 			t.Errorf("Board.%s: writeDotted(%q) = %v — field is not settable", f.Name, path, err)

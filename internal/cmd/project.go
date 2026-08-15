@@ -300,7 +300,48 @@ func readDotted(p *project.Project, path string) (string, bool) {
 	return "", false
 }
 
+// enumKeys maps every enum-valued project.toml key to the set that defines it.
+//
+// One table, read by BOTH gates: writeDotted below refuses an out-of-set value
+// at set time, and validate re-checks the file. Set-time rejection is what a
+// human sees while they still remember what they meant; validate is what
+// catches the file nobody typed, because project.toml is tracked, hand-edited
+// and cloned. A value that never passed through the CLI was otherwise unchecked
+// forever — which was most of them.
+//
+// Before this table all five accepted anything: `runtime.mode=banana`
+// round-tripped through set and get, and `dross validate` reported it clean.
+var enumKeys = map[string]configenum.Set{
+	"runtime.mode":           configenum.RuntimeModes,
+	"repo.layout":            configenum.RepoLayouts,
+	"repo.commit_convention": configenum.CommitConventions,
+	"remote.provider":        configenum.ShipProviders,
+	"board.milestone_mode":   configenum.MilestoneModes,
+}
+
+// checkEnumValue reports an out-of-set value for an enum-valued key.
+//
+// An EMPTY value is always allowed: it means "unset this", and every optional
+// key's absence is legitimate. Reddening on it would fail every partially
+// filled project.toml, which is every project.toml between init and the first
+// full options pass.
+func checkEnumValue(path, value string) error {
+	set, ok := enumKeys[path]
+	if !ok || strings.TrimSpace(value) == "" {
+		return nil
+	}
+	if !set.Has(value) {
+		return fmt.Errorf("invalid %s %q; expected %s", path, value, set.List())
+	}
+	return nil
+}
+
 func writeDotted(p *project.Project, path, value string) error {
+	// Checked before anything is written, so a refused value leaves
+	// project.toml byte-unchanged — the same shape as the state_map arm below.
+	if err := checkEnumValue(path, value); err != nil {
+		return err
+	}
 	splitCSV := func(s string) []string {
 		out := []string{}
 		for _, x := range strings.Split(s, ",") {
