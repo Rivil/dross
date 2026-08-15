@@ -1,3 +1,5 @@
+task_seq = 0
+
 [phase]
   id = "guard-remedy-ordering"
 
@@ -6,108 +8,47 @@
   wave = 1
   title = "Lead the state.json refusal with the fast-forward"
   files = ["internal/cmd/switchbranch.go", "internal/cmd/switchbranch_ff_remedy_test.go"]
-  description = """
-guardLiveState's refusal currently offers move-aside-and-restore or
-untrack-for-good. When the target is a local branch merely BEHIND its remote and
-that remote carries no tracked state.json, catching up is both cheaper and
-sufficient — so lead with it.
-
-Gated on both conditions (locked ff_lead_requires_a_clean_remote): the remote
-must contain the local ref, and must not carry the file itself. Otherwise the
-existing remedies stand, in their existing order.
-"""
+  description = "guardLiveState's refusal currently offers move-aside-and-restore or\nuntrack-for-good. When the target is a local branch merely BEHIND its remote and\nthat remote carries no tracked state.json, catching up is both cheaper and\nsufficient — so lead with it.\n\nGated on both conditions (locked ff_lead_requires_a_clean_remote): the remote\nmust contain the local ref, and must not carry the file itself. Otherwise the\nexisting remedies stand, in their existing order.\n"
   covers = ["c-1", "c-2"]
-  test_contract = [
-    "if the fast-forward stops being offered for a behind-but-clean branch, TestRefusalLeadsWithFastForward fails — it asserts the ff line appears BEFORE the move-aside block, since leading is the whole criterion",
-    "if the ff is offered when the remote still carries the file, TestNoFastForwardWhenRemoteStillCarriesIt fails — that advice moves the refusal instead of clearing it, and the user is refused again for the same reason",
-    "if the ff is offered for a branch with no remote-tracking ref, TestNoFastForwardWithoutARemote fails — there is nothing to fast-forward from",
-    "if the ff is offered for a genuinely diverged branch, TestNoFastForwardWhenDiverged fails — a diverged branch cannot fast-forward at all, so the lead line would be an instruction that errors",
-    "if the existing remedies disappear in any case, TestBothRemediesSurvive fails — the ff is an addition and a reordering, never a replacement",
-  ]
-  status = "pending"
+  test_contract = ["if the fast-forward stops being offered for a behind-but-clean branch, TestRefusalLeadsWithFastForward fails — it asserts the ff line appears BEFORE the move-aside block, since leading is the whole criterion", "if the ff is offered when the remote still carries the file, TestNoFastForwardWhenRemoteStillCarriesIt fails — that advice moves the refusal instead of clearing it, and the user is refused again for the same reason", "if the ff is offered for a branch with no remote-tracking ref, TestNoFastForwardWithoutARemote fails — there is nothing to fast-forward from", "if the ff is offered for a genuinely diverged branch, TestNoFastForwardWhenDiverged fails — a diverged branch cannot fast-forward at all, so the lead line would be an instruction that errors", "if the existing remedies disappear in any case, TestBothRemediesSurvive fails — the ff is an addition and a reordering, never a replacement"]
+  status = "done"
 
 [[task]]
   id = "t-2"
   wave = 1
   title = "Confirm and preview dross milestone prune"
   files = ["internal/cmd/milestone.go", "internal/cmd/milestone_prune_ux_test.go"]
-  description = """
-prune deletes the whole stale set — local and on origin — with no preview and no
-prompt. Print the branches first, then ask; `--dry-run` prints and exits, `--yes`
-skips the prompt for scripted use.
-
-Deleting a branch on origin is irreversible from the user's side, so the
-confirmation is default-on (locked prune_confirms_by_default) and a
-non-interactive stdin without --yes refuses rather than proceeding.
-"""
+  description = "prune deletes the whole stale set — local and on origin — with no preview and no\nprompt. Print the branches first, then ask; `--dry-run` prints and exits, `--yes`\nskips the prompt for scripted use.\n\nDeleting a branch on origin is irreversible from the user's side, so the\nconfirmation is default-on (locked prune_confirms_by_default) and a\nnon-interactive stdin without --yes refuses rather than proceeding.\n"
   covers = ["c-3"]
-  test_contract = [
-    "if --dry-run deletes anything, TestPruneDryRunDeletesNothing fails — it asserts every candidate branch still exists afterwards, which is the one property the flag is for",
-    "if --dry-run stops listing the branches, the same test fails on the output assertion — a dry run that prints nothing tells the user nothing",
-    "if the prompt is skipped on a non-interactive stdin, TestPruneRefusesWithoutConsent fails — it asserts no branch was deleted and the refusal names --yes, because silently proceeding is the shape the confirmation exists to prevent",
-    "if --yes starts prompting, TestPruneYesSkipsThePrompt fails — the scripted path must not block on stdin",
-    "if the preview stops naming a branch it then deletes, TestPruneListsWhatItDeletes fails — it compares the printed set to the deleted set, so a partial preview is caught",
-  ]
-  status = "pending"
+  test_contract = ["if --dry-run deletes anything, TestPruneDryRunDeletesNothing fails — it asserts every candidate branch still exists afterwards, which is the one property the flag is for", "if --dry-run stops listing the branches, the same test fails on the output assertion — a dry run that prints nothing tells the user nothing", "if the prompt is skipped on a non-interactive stdin, TestPruneRefusesWithoutConsent fails — it asserts no branch was deleted and the refusal names --yes, because silently proceeding is the shape the confirmation exists to prevent", "if --yes starts prompting, TestPruneYesSkipsThePrompt fails — the scripted path must not block on stdin", "if the preview stops naming a branch it then deletes, TestPruneListsWhatItDeletes fails — it compares the printed set to the deleted set, so a partial preview is caught"]
+  status = "done"
 
 [[task]]
   id = "t-3"
   wave = 1
   title = "Add dross phase reconcile"
   files = ["internal/cmd/phase_reconcile.go", "internal/cmd/phase.go", "internal/cmd/phase_reconcile_test.go"]
-  description = """
-One verb that completes every merged-but-uncompleted phase in the current
-milestone, instead of the user hand-running `dross phase complete <id>` per
-phase. It reuses the existing completion path per phase — same merge gate, same
-base resolution, same guarded switches — and reports one line each.
-
-A phase whose merge cannot be confirmed is reported and SKIPPED, not completed:
-batching is a convenience over the same gate, never a way around it.
-"""
+  description = "One verb that completes every merged-but-uncompleted phase in the current\nmilestone, instead of the user hand-running `dross phase complete <id>` per\nphase. It reuses the existing completion path per phase — same merge gate, same\nbase resolution, same guarded switches — and reports one line each.\n\nA phase whose merge cannot be confirmed is reported and SKIPPED, not completed:\nbatching is a convenience over the same gate, never a way around it.\n"
   covers = ["c-4"]
-  test_contract = [
-    "if reconcile completes a phase whose PR is not merged, TestReconcileSkipsUnmergedPhases fails — it asserts the phase is still current and its branch still exists, because a batch that relaxes the gate is worse than the chore list it replaces",
-    "if one unmergeable phase aborts the whole sweep, TestReconcileContinuesPastASkip fails — the mergeable ones must still land, or one blocked phase blocks the verb forever",
-    "if reconcile reports success for a phase it did not complete, TestReconcileReportsPerPhaseOutcome fails — it asserts one line per phase naming completed or skipped-with-reason",
-    "if reconcile finds nothing and errors, TestReconcileWithNothingToDoExitsZero fails — the ordinary state of a tidy repo is not a failure",
-  ]
-  status = "pending"
+  test_contract = ["if reconcile completes a phase whose PR is not merged, TestReconcileSkipsUnmergedPhases fails — it asserts the phase is still current and its branch still exists, because a batch that relaxes the gate is worse than the chore list it replaces", "if one unmergeable phase aborts the whole sweep, TestReconcileContinuesPastASkip fails — the mergeable ones must still land, or one blocked phase blocks the verb forever", "if reconcile reports success for a phase it did not complete, TestReconcileReportsPerPhaseOutcome fails — it asserts one line per phase naming completed or skipped-with-reason", "if reconcile finds nothing and errors, TestReconcileWithNothingToDoExitsZero fails — the ordinary state of a tidy repo is not a failure"]
+  status = "done"
 
 [[task]]
   id = "t-4"
   wave = 2
   title = "Point status and watch at the single verb"
   files = ["internal/cmd/status.go", "internal/watch/drift.go", "internal/cmd/status_reconcile_test.go"]
-  description = """
-Where status and the watch digest would print a `dross phase complete <id>` line
-per drifting phase, name `dross phase reconcile` once instead. Both stay
-read-only — they mention the verb and never run it.
-"""
+  description = "Where status and the watch digest would print a `dross phase complete <id>` line\nper drifting phase, name `dross phase reconcile` once instead. Both stay\nread-only — they mention the verb and never run it.\n"
   covers = ["c-4"]
-  test_contract = [
-    "if status prints a per-phase complete line when more than one phase is reconcilable, TestStatusNamesReconcileNotAChoreList fails — it asserts one suggestion, not N",
-    "if status or watch completes a phase, TestReadOnlySurfacesMutateNothing fails — it snapshots the phase dirs and state before and after and requires them byte-identical, since a read-only command that mutates on a glance is a trap",
-    "if the single-phase case loses its direct suggestion, TestSinglePhaseStillNamesCompleteDirectly fails — naming a batch verb for one item is worse guidance than naming the one command",
-  ]
-  status = "pending"
+  test_contract = ["if status prints a per-phase complete line when more than one phase is reconcilable, TestStatusNamesReconcileNotAChoreList fails — it asserts one suggestion, not N", "if status or watch completes a phase, TestReadOnlySurfacesMutateNothing fails — it snapshots the phase dirs and state before and after and requires them byte-identical, since a read-only command that mutates on a glance is a trap", "if the single-phase case loses its direct suggestion, TestSinglePhaseStillNamesCompleteDirectly fails — naming a batch verb for one item is worse guidance than naming the one command"]
+  status = "done"
 
 [[task]]
   id = "t-5"
   wave = 1
   title = "Resolve the next phase from the milestone array"
   files = ["assets/prompts/verify.md", "internal/cmd/prompt_next_phase_test.go"]
-  description = """
-verify.md §5 resolves 'the next phase' with `dross phase list`, which prints only
-SCAFFOLDED phases — so a phase mid-milestone whose successors have no directories
-yet is narrated as the last in the milestone. That happened live on 2026-08-13.
-
-Read the milestone toml's `phases` array instead, falling back to `dross phase
-list` only when no milestone is active.
-"""
+  description = "verify.md §5 resolves 'the next phase' with `dross phase list`, which prints only\nSCAFFOLDED phases — so a phase mid-milestone whose successors have no directories\nyet is narrated as the last in the milestone. That happened live on 2026-08-13.\n\nRead the milestone toml's `phases` array instead, falling back to `dross phase\nlist` only when no milestone is active.\n"
   covers = ["c-5"]
-  test_contract = [
-    "if verify.md goes back to resolving the next phase from `dross phase list`, TestVerifyPromptReadsTheMilestoneArray fails — it greps the §5 next-phase block for the milestone source and rejects the phase-list one",
-    "if the last-phase-in-milestone branch loses its condition, the same test fails — the prompt must say the array is the ordering truth, or the next reader re-derives the bug",
-    "if the no-milestone fallback disappears, TestVerifyPromptKeepsTheNoMilestoneFallback fails — a repo with no active milestone still needs an answer",
-  ]
-  status = "pending"
+  test_contract = ["if verify.md goes back to resolving the next phase from `dross phase list`, TestVerifyPromptReadsTheMilestoneArray fails — it greps the §5 next-phase block for the milestone source and rejects the phase-list one", "if the last-phase-in-milestone branch loses its condition, the same test fails — the prompt must say the array is the ordering truth, or the next reader re-derives the bug", "if the no-milestone fallback disappears, TestVerifyPromptKeepsTheNoMilestoneFallback fails — a repo with no active milestone still needs an answer"]
+  status = "done"
