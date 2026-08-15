@@ -35,6 +35,10 @@
   id = "c-8"
   text = "A remote run carries the environment variables the adapter needs, and their values never reach the remote's process list, filesystem, or shell history; a named variable that is unset locally is an error rather than an empty export."
 
+[[criteria]]
+  id = "c-9"
+  text = "/dross-options reaches every dross-managed setting rather than only project.toml's first seven sections: the whole of .dross/local.toml (quick_base, allow_hosts, mutation_workers, mutation_test_cpu, mutation_remote_env), the consent verbs that own the keys `local set` refuses (dross trust, dross mutation remote grant/revoke), the dross-owned Claude Code hooks, and the project.toml sections it currently omits — [board], [mutation], remote.auth_user/auth_scheme/project_id, stack.profile, and [constraints]/[competition] read-only. An authorization key is still written only by its consent verb, which prints what it authorizes before writing; options invokes that verb and never becomes a second writer."
+
 [[decisions]]
   key = "consent_model"
   choice = "A dedicated consent verb authorizes the remote, printing the host and workdir it is granting. The key is absent from `dross local set`."

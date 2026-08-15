@@ -1,4 +1,4 @@
-task_seq = 11
+task_seq = 12
 
 [phase]
   id = "remote-mutation-runner"
@@ -120,3 +120,13 @@ task_seq = 11
   depends_on = ["t-6"]
   test_contract = ["an adapter error wrapping remote.ErrTransport produces a BLOCKING finding and a non-zero blocking count — a phase cannot be verified past a leg that never ran", "a plain adapter error (stryker misconfigured, no remote involved) stays a FLAG — the escalation does not swallow existing behaviour", "the leg still records its Files, so the report names which files went unmeasured rather than showing an empty, clean-looking language run", "record-and-continue is preserved: a failing remote gremlins leg does not discard a finished stryker leg in the same run"]
   status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 5
+  title = "Cover every dross-managed setting in /dross-options"
+  files = ["assets/prompts/options.md", "internal/cmd/options_docs_test.go"]
+  description = "Extend /dross-options from project.toml's first seven sections to every dross-managed setting. Add sections for .dross/local.toml (quick_base, allow_hosts, mutation_workers, mutation_test_cpu, mutation_remote_env via dross local set), the consent verbs that own the keys local set refuses (dross trust, dross mutation remote grant/revoke — options invokes the verb and never writes the key itself), and dross hooks. Fill the project.toml drift: [board] (provider, base_url, auth_env, auth_user, project, github_project, enabled, milestone_mode, state_map, fields.*), [mutation] (adapters, gremlins.timeout_coefficient, stryker.workdir), remote.auth_user/auth_scheme/project_id, stack.profile, and [constraints]/[competition] read-only. Add internal/cmd/options_docs_test.go asserting options.md names every localKeys entry, both consent verbs, and each project.toml top-level section."
+  covers = ["c-9"]
+  depends_on = ["t-11"]
+  status = "pending"
