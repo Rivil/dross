@@ -58,7 +58,7 @@ func TestPolicyFor(t *testing.T) {
 }
 
 func TestPolicyCoversEveryKnownBinary(t *testing.T) {
-	want := []string{"ast-grep", "dotnet", "gh", "git", "go", "gremlins", "npx", "rsync", "semgrep", "ssh"}
+	want := []string{"ast-grep", "dotnet", "gh", "git", "go", "gremlins", "npx", "rsync", "semgrep", "sh", "ssh"}
 	var got []string
 	for k := range Policy() {
 		got = append(got, k)

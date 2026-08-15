@@ -163,8 +163,10 @@ func GrantConsent(root, testCmd string) error {
 //     gate bricks the very commands a user reaches for to understand why dross
 //     is refusing. A gate that makes diagnosis impossible gets disabled.
 //
-//   - `verify` is in it because it is the one command that spawns the suite
-//     itself. The other four are in it because they are the loop's step
+//   - `verify` and `test` are in it because they are the commands that spawn
+//     the suite itself — `dross test` is the execution site the prompts now
+//     call, so gating it is gating the run rather than the step boundary
+//     around it. The other four are in it because they are the loop's step
 //     boundaries: refusing there stops an execute run before it reaches the
 //     step that runs tests. The locked exec_consent_gate decision admits what
 //     this cannot do — nothing stops an agent typing `go test` directly. The
@@ -174,6 +176,7 @@ var execGatedCommands = []string{
 	"state bump",
 	"task next",
 	"task status in_progress",
+	"test",
 	"verify",
 }
 

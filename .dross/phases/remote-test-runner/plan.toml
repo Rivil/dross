@@ -1,0 +1,64 @@
+task_seq = 0
+
+[phase]
+  id = "remote-test-runner"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Generalize the grant to remote_host / remote_workdir"
+  files = ["internal/cmd/local.go", "internal/cmd/local_remote_alias_test.go"]
+  description = "Rename the machine-local grant keys to remote_host / remote_workdir and keep\nmutation_remote_host / mutation_remote_workdir resolving as deprecated aliases,\nso an existing local.toml keeps working with nothing re-issued by hand.\n\nBoth new keys stay OUT of localKeys for the same reason the old ones were: a\ngeneric key-writer would let an agent grant code execution on another machine.\nreadRemoteGrant reads the new key first and falls back to the alias.\n"
+  covers = ["c-4"]
+  test_contract = ["if the alias stops resolving, TestExistingMutationGrantStillResolves fails — it writes a local.toml carrying only mutation_remote_host/workdir and expects readRemoteGrant to return that target", "if the new key stops winning over the alias, TestNewKeyWinsOverAlias fails — a store carrying both must resolve to remote_host, because a half-migrated file must not silently run on the old box", "if either new key leaks into localKeys, TestRemoteGrantKeysAreNotGenericallySettable fails — `dross local set remote_host x` must be an unknown-key error, which is the whole consent model", "if an unparseable store starts resolving to no-grant, TestUnreadableStoreIsNotASilentLocalRun fails — a decode failure on a trust-bearing key must error, never degrade to a local run the user thought was remote"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Add dross remote grant/status/revoke with mutation alias"
+  files = ["internal/cmd/remote_grant.go", "internal/cmd/mutation_remote.go", "cmd/dross/main.go", "internal/cmd/remote_grant_test.go"]
+  description = "Move the consent verb to `dross remote {grant,status,revoke}` — the grant is no\nlonger mutation-specific — and keep `dross mutation remote *` registered as an\nalias onto the same implementation.\n\nThe print-before-write ordering is carried over verbatim: the banner naming the\nhost and workdir must already be on stdout before anything is stored.\n"
+  covers = ["c-4"]
+  test_contract = ["if the new verb writes before it prints, TestRemoteGrantPrintsBeforeItWrites fails — the existing injected-failing-write test is repointed at `dross remote grant` and asserts the banner is on stdout with nothing stored", "if `dross mutation remote grant` stops working, TestMutationRemoteAliasStillGrants fails — the old path must remain, because the README documents it and a user's muscle memory is not a migration", "if the two verbs stop sharing one implementation, TestBothVerbsWriteTheSameKeys fails — it grants through each and compares the resulting local.toml byte-for-byte", "if revoke stops clearing both keys together, TestRevokeClearsHostAndWorkdir fails — a workdir left behind after its host is gone is inherited by the next grant"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Add dross test — the local execution site"
+  files = ["internal/cmd/test.go", "cmd/dross/main.go", "internal/cmd/trust.go", "internal/cmd/test_test.go"]
+  description = "Create the command that runs runtime.test_command. Nothing in dross runs it\ntoday — it is only sha256'd for consent — so this is the execution site the rest\nof the phase points at.\n\nGated on requireExecConsent (add \"test\" to execGatedCommands), streams the\nsuite's output as it arrives rather than buffering, and exits with the suite's\nown status. Positional args are appended to the command as a package/path\nselector.\n"
+  covers = ["c-1", "c-3"]
+  test_contract = ["if the consent gate is skipped, TestTestRefusesWithoutTrust fails — an untrusted fixture must refuse BEFORE spawning anything, asserted by the spawn seam recording zero calls", "if a stale consent starts passing, TestTestRefusesOnStaleTrust fails — the refusal must name the changed command, not report a routine first run", "if the suite's exit status stops propagating, TestTestExitsWithTheSuiteStatus fails — a red suite must make `dross test` exit non-zero, since every caller gates a commit on it", "if output is buffered to the end, TestTestStreamsOutput fails — it asserts the first line is observable before the spawned command exits, because a silent two-minute run reads as a hang", "if a positional selector is dropped, TestTestAppendsSelector fails — `dross test ./internal/cmd/...` must reach the spawned argv, and no selector must leave the command byte-identical to runtime.test_command", "if a blank runtime.test_command is treated as a free pass, TestTestRefusesWithNoCommand fails — same refusal the mutation path gives, or the consent gate has a hole"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 3
+  title = "Route dross test through the granted remote"
+  files = ["internal/cmd/test.go", "internal/cmd/test_remote_test.go"]
+  description = "With a grant present, sync the tree and run the suite over ssh; --local forces\nthe local path. Composes internal/remote (Target, SyncArgs, SSHArgs, Script,\nClassify) directly per the locked compose_remote_not_adapter decision — the\nmutation launcher is keyed by adapter name through a closed report table and a\ntest run fetches no report.\n\nRemote is the default whenever a grant exists (locked remote_by_default).\n"
+  covers = ["c-2", "c-3"]
+  test_contract = ["if a grant stops routing remotely, TestGrantedHostRunsRemotely fails — the spawn seam must record an ssh argv and NO local test-command spawn, which is the whole criterion", "if --local stops overriding, TestLocalFlagForcesLocalRun fails — with a grant present it must spawn the test command here and open no connection", "if the tree is not synced before the run, TestRemoteRunSyncsBeforeExecuting fails — it asserts the rsync argv precedes the ssh argv, since running against a stale remote tree measures the wrong code", "if the selector is dropped on the remote path, TestSelectorReachesTheRemoteUnchanged fails — the same `./internal/cmd/...` must appear in the remote script, or the two transports mean different things", "if an unsafe host reaches a shell, TestUnsafeTargetIsRefusedBeforeSpawn fails — Target.Validate must refuse instead of returning argv, asserted by zero recorded spawns"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 3
+  title = "Keep a transport failure from reading as a pass"
+  files = ["internal/cmd/test.go", "internal/cmd/test_failure_test.go"]
+  description = "Classify remote failures through remote.Classify and report them distinctly from\na red suite: a different exit code and a message naming the transport. An\nunreachable host, an incomplete sync or a stream that dies mid-run must never\nexit 0 and must never look like a clean suite.\n"
+  covers = ["c-5"]
+  test_contract = ["if a dead transport exits 0, TestTransportFailureIsNotAPass fails — an ssh that never connects must exit non-zero, which is the false-green this task exists to prevent", "if the two failures collapse to one code, TestTransportAndSuiteFailuresDiffer fails — it asserts a red suite and an unreachable host produce different exit codes AND different messages, because a caller reacts to them differently", "if a partial sync is reported as success, TestIncompleteSyncFails fails — rsync's partial-transfer status must surface as a failure naming the transfer", "if the message stops naming the transport, the same test fails on the message assertion — 'command failed' sends the reader to the source instead of to the host"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 4
+  title = "Point the prompts and doctor at dross test"
+  files = ["assets/prompts/execute.md", "assets/prompts/quick.md", "assets/prompts/verify.md", "internal/cmd/doctor.go", "internal/cmd/prompt_test_command_test.go"]
+  description = "Rewrite the three prompts that gate on the suite to run `dross test` instead of\ninterpolating <runtime.test_command>, keeping the trust wording (dross test\nrefuses without consent; no prompt runs `dross trust` for the user).\n\nDoctor's \"Remote mutation\" section becomes one \"Remote\" section covering both\nuses, since one grant now serves both.\n"
+  covers = ["c-6", "c-4"]
+  test_contract = ["if a prompt reintroduces the raw interpolation, TestPromptsRunDrossTest fails — it greps execute.md, quick.md and verify.md for a bare <runtime.test_command> run line and expects none", "if a prompt starts telling an agent to run `dross trust`, TestNoPromptGrantsTrustForTheUser fails — the gate exists so a human reads the line the repo supplied", "if the prompts stop mentioning dross test at all, the first test fails from the other side — it also requires each of the three to name the command, so a deletion is not a pass", "if doctor still reports two separate remote sections, TestDoctorReportsOneRemoteSection fails — one grant reported twice invites the reader to think there are two"]
+  status = "done"

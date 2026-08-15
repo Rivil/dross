@@ -99,13 +99,13 @@ func TestDoctorRemoteUngrantedIsAdvisory(t *testing.T) {
 	var withoutSection string
 	base := doctorIssues(t, &withoutSection)
 
-	if !strings.Contains(withoutSection, "Remote mutation:") {
-		t.Fatalf("doctor printed no Remote mutation section:\n%s", withoutSection)
+	if !strings.Contains(withoutSection, "Remote:") {
+		t.Fatalf("doctor printed no Remote section:\n%s", withoutSection)
 	}
 	if !strings.Contains(withoutSection, "no remote granted") {
 		t.Errorf("the advisory line is missing:\n%s", withoutSection)
 	}
-	if !strings.Contains(withoutSection, "dross mutation remote grant") {
+	if !strings.Contains(withoutSection, "dross remote grant") {
 		t.Errorf("the advisory does not name the verb that fixes it:\n%s", withoutSection)
 	}
 	if *calls != 0 {

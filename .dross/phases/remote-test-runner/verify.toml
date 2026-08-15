@@ -1,0 +1,74 @@
+[verify]
+  phase = "remote-test-runner"
+  generated_at = 0001-01-01T00:00:00Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-15T19:07:39.401336Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9373040752351097
+  mutants_killed = 299
+  mutants_survived = 20
+  mutants_not_covered = 20
+  mutants_in_scope = 319
+  unclassified_in_scope = 0
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/test_test.go:TestTestRunsTheConsentedCommand", "internal/cmd/test_test.go:TestTestRefusesWithoutTrust", "internal/cmd/test_test.go:TestTestRefusesOnStaleTrust", "internal/cmd/test_test.go:TestTestRefusesWithNoCommand", "internal/cmd/test_test.go:TestTestStreamsOutput"]
+  notes = "The command exists and runs the consented line — asserted byte-for-byte, because a runner that ran anything other than what `dross trust` displayed would make the gate approve one command and execute another. The three refusal tests assert the SPAWN COUNT is zero rather than merely that an error came back: a refusal returned after the suite ran would still surface an error and would still have run the code it was refusing to authorize. Stale consent is kept distinct from never-granted (the refusal must name the changed command), and a blank test_command is refused rather than treated as a free pass — otherwise emptying the field is the way around the gate. Streaming is proven by timing rather than by inspection: the writer records the wall-clock of each write and the first and last must be ~0.4s apart within one run, which a buffered implementation cannot satisfy."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/test_remote_test.go:TestGrantedHostRunsRemotely", "internal/cmd/test_remote_test.go:TestLocalFlagForcesLocalRun", "internal/cmd/test_remote_test.go:TestNoGrantRunsLocally", "internal/cmd/test_remote_test.go:TestRemoteRunSyncsBeforeExecuting", "internal/cmd/test_remote_test.go:TestRunRemoteCommandPipesTheScript"]
+  notes = "The criterion is 'no test process spawns on this machine', and that is exactly what is asserted — the local spawn count must be 0, not merely that something also ran remotely, because a run that did both is not offload. --local is proven to open no connection at all, and a repo with no grant to open none either. Sync-before-run is asserted on the recorded ORDER: reversing it would measure whatever the remote tree held, which is the previous run's code — a green that says nothing about the change in hand. TestRunRemoteCommandPipesTheScript was added during verify to kill the one in-diff survivor this phase produced: every other test here replaces the spawn seam, so the real function's stdin guard was unexecuted, and negating it would have stopped piping the script to ssh with the whole suite still green."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/test_test.go:TestTestAppendsSelector", "internal/cmd/test_test.go:TestSelectorIsQuoted", "internal/cmd/test_remote_test.go:TestSelectorReachesTheRemoteUnchanged"]
+  notes = "Both transports are asserted with the same selector string, which is the claim: a targeted re-run must not measure different code depending on where it ran. The no-selector case is asserted too — the line must stay byte-identical to the consented command, so the ordinary run is still the one the user approved. The remote assertion also requires the script to cd into the granted workdir, without which the suite would run in whatever directory the login shell starts in. Quoting is covered separately because the selector comes from an agent's argv rather than the user's consented text and reaches a shell on both sides."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/local_remote_alias_test.go:TestExistingMutationGrantStillResolves", "internal/cmd/local_remote_alias_test.go:TestNewKeyWinsOverAlias", "internal/cmd/local_remote_alias_test.go:TestRemoteGrantPairResolvesTogether", "internal/cmd/local_remote_alias_test.go:TestRemoteGrantKeysAreNotGenericallySettable", "internal/cmd/remote_grant_test.go:TestMutationRemoteAliasStillGrants", "internal/cmd/remote_grant_test.go:TestBothVerbsWriteTheSameKeys", "internal/cmd/prompt_test_command_test.go:TestDoctorReportsOneRemoteSection"]
+  notes = "The compatibility claim is tested against a RAW local.toml written as a previous version of dross would have left it, not through the current writer — a file only today's code can produce would prove nothing about the one already on the user's machine. Resolution order is pinned (new wins: a half-migrated store's newest grant is the one most recently authorized) and so is the pair rule, where a new host with a deprecated workdir must REFUSE rather than splice two generations into a path on a machine that was never granted with it. TestBothVerbsWriteTheSameKeys compares the two verbs' resulting stores byte-for-byte, which is what stops the alias from becoming a second consent surface. The consent model is re-asserted on the new key names: `dross local set remote_host` must remain an unknown-key error."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/test_failure_test.go:TestTransportFailureIsNotAPass", "internal/cmd/test_failure_test.go:TestTransportAndSuiteFailuresDiffer", "internal/cmd/test_failure_test.go:TestIncompleteSyncFails", "internal/cmd/test_failure_test.go:TestSpawnThatNeverStartedIsTransport", "internal/cmd/test_failure_test.go:TestLocalSuiteFailureIsNotTransport"]
+  notes = "The difference is asserted as a difference — the two exit codes are compared to each other, so collapsing them fails even if both happen to be non-zero and both messages look reasonable. All four transport shapes are covered: ssh's reserved 255, rsync's two partial-transfer codes, and a binary that never started at all (nothing ran on the remote, which is a transport failure by any useful definition). The classifier matches an exitCoder interface rather than *exec.ExitError specifically so this is reachable without a live host: a rule about network failures that could only be exercised over a network is a rule nothing checks."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/prompt_test_command_test.go:TestPromptsRunDrossTest", "internal/cmd/prompt_test_command_test.go:TestNoPromptGrantsTrustForTheUser", "internal/cmd/prompt_test_command_test.go:TestPromptsExplainTheTransportExitCodes", "internal/cmd/consent_surface_test.go:TestExecutePromptChecksConsent"]
+  notes = "The guard runs in both directions: forbidding the raw <runtime.test_command> interpolation alone would be satisfied by a prompt that simply stopped running the suite, so each of the three files must also name `dross test`. The regex targets a fenced line that IS the placeholder rather than any mention of the field, because all three legitimately name runtime.test_command when telling the user which line to read before granting trust — a bare grep would forbid the honest use with the dishonest one. The trust wording is pinned across the whole prompt corpus, not just these three: no prompt may instruct a bare `dross trust`, since consent granted on the user's behalf is not consent. TestExecutePromptChecksConsent still holds the ordering — the check must precede the run."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/execute.md, quick.md and verify.md: no mutation adapter for .md. The prompt changes are covered by the grep guards in prompt_test_command_test.go instead."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The first verify run reported 1 in-diff survivor — runRemoteCommand's `stdin != \"\"` guard (test.go:197, origin=in-hunk), unexecuted because every test replaced the spawn seam. It was killed with a test rather than accepted (commit 4042430) and this run reports 0 in-diff. That is the whole reason the guard existed: negating it would have stopped piping the script to ssh with the entire suite still green."
+
+[[finding]]
+  severity = "NOTE"
+  text = "20 in-scope survivors remain, all accepted-with-reason and all the proven gremlins switch-case/closure attribution ceiling — go-cover attributes no block to those columns, so gremlins calls the line NOT COVERED although the suite runs it. Adding tests cannot kill them. unclassified_in_scope = 0."
+
+[[finding]]
+  severity = "NOTE"
+  text = "69 out-of-scope survivors were filtered — survivors in files this phase never touched. Score 0.94 is over the 319 in-scope mutants only; excluding the 20 uncoverable ones, efficacy on what the suite could reach is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Per the offload_not_speed locked decision, no criterion claims a speedup and none was measured. The local suite is ~112% CPU (serialized on shelling out to git), so the remote's cores buy little and rsync plus a remote compile may make wall-clock worse. The win recorded here is that the laptop stays free."

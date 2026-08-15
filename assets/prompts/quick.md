@@ -85,15 +85,21 @@ without it:
 ```
 dross trust --check
 ```
-Exit 0 means trusted; run the command. Non-zero means it is untrusted or stale —
+Exit 0 means trusted; run the suite. Non-zero means it is untrusted or stale —
 **stop and show the user the exact `runtime.test_command` line**, then let them
 run `dross trust`. Never run `dross trust` on their behalf: the whole point of
 the gate is that a human reads the line the repo supplied.
 
-If `runtime.test_command` is set, run it:
+If `runtime.test_command` is set, run the suite through dross rather than
+interpolating the raw command:
 ```
-<runtime.test_command>
+dross test
 ```
+It runs `runtime.test_command` under the same consent gate, and on the granted
+remote host when there is one — add `--local` to force it onto this machine, or
+a package/path selector to narrow it. Exit **1** is a red suite; **3** and **4**
+mean the run did not happen (unreachable host, incomplete transfer) and are
+never a reason to commit.
 
 Three outcomes:
 

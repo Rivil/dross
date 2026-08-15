@@ -187,7 +187,7 @@ _introduced 06-dross-quality · extended 07-stack-profiles · extended 09-marker
 
 A value read out of `.dross/project.toml` is untrusted input to git, not a trusted argument. Two layers hold. Config-derived **ref names** are validated before any git process starts: a leading `-`, or anything `git check-ref-format` rejects, is refused with a named error at `phase complete`, `phase checkout`, `milestone create` and `ship recover`. And every git invocation that passes a config- or user-derived **positional** builds its argv through separator-carrying builders — `--end-of-options` for refs, `--` for pathspecs, deliberately distinct (locked `ref_separator_token`: a `--` in a ref position makes git reinterpret the branch as a pathspec, which is a different bug, not a fix). That second layer closed a real arbitrary-file-write, where `dross repair`'s `git log` took an attacker-supplied `--output=` straight out of config. Coverage is structural rather than by inspection: a repo-wide AST audit fails by `file:line` on any positional that is neither a literal nor a prefix-constant, and the audit is itself self-checked against a FLAG/PASS snippet table so it cannot pass vacuously. That audit covers **every** binary dross spawns, not only git (locked `audit_gate_breadth`): it resolves each spawn site to a binary, looks the binary up in `internal/argfence`'s policy table, and applies whichever defence that tool can actually offer — an end-of-options token for git / `gh` / ast-grep / semgrep, outright rejection of a leading-dash value for gremlins / npx / dotnet, which have none. A binary with no table entry is a finding, so a tool nobody anticipated is in scope the day it is added, and a flag demoted *past* a separator is a finding too — in cobra `--` ends flag parsing rather than fencing one token, so a demoted flag silently becomes a positional. The `git >= 2.24` floor `--end-of-options` implies is executed, not assumed.
 
-- `argfence.PolicyFor` (per-tool policy table — separator vs reject — read by both the runtime call sites and the audit gate) — `internal/argfence/policy.go:116`
+- `argfence.PolicyFor` (per-tool policy table — separator vs reject — read by both the runtime call sites and the audit gate) — `internal/argfence/policy.go:120`
 - `validateGitRef` (pre-exec ref guard behind the four guarded switch helpers) — `internal/cmd/refguard.go:32`
 - `gitRefArgs` / `gitRefPathArgs` (separator-carrying argv builders) — `internal/cmd/gitargs.go:45`
 - `buildUnleashArgs` (mutation runners refuse a leading-dash derived value before exec, returning a nil report rather than an empty one) — `internal/mutation/gremlins.go:406`
@@ -196,9 +196,9 @@ A value read out of `.dross/project.toml` is untrusted input to git, not a trust
 - `TestSecurePromptFencesScannerOperands` (semgrep is agent-driven with no Go call site, so its operand fencing is guidance in `secure.md` gated by a prompt-content test) — `internal/cmd/secure_prompt_test.go:66`
 - `TestPhaseCompleteRefusesDashMainBranch` (one entrypoint test per guarded command, refusal asserted to precede the first exec) — `internal/cmd/refguard_entrypoints_test.go:79`
 - `historyFromPhaseCommits` (repair's `git log` fenced — the arbitrary-file-write site) — `internal/cmd/repair_state.go:78`
-- `auditFile` (AST gate flagging unseparated positionals for EVERY spawned binary by file:line, per-tool policy read from `argfence`) — `internal/cmd/subprocargs_audit_test.go:140`
-- `TestNoUnseparatedPositional` (the repo-wide run of that gate, all binaries) — `internal/cmd/subprocargs_audit_test.go:357`
-- `TestNoUnseparatedGitPositional` (the original git-only guarantee, kept as its own test after the generalisation) — `internal/cmd/subprocargs_audit_test.go:370`
+- `auditFile` (AST gate flagging unseparated positionals for EVERY spawned binary by file:line, per-tool policy read from `argfence`) — `internal/cmd/subprocargs_audit_test.go:147`
+- `TestNoUnseparatedPositional` (the repo-wide run of that gate, all binaries) — `internal/cmd/subprocargs_audit_test.go:364`
+- `TestNoUnseparatedGitPositional` (the original git-only guarantee, kept as its own test after the generalisation) — `internal/cmd/subprocargs_audit_test.go:377`
 - `TestHostileConfigVectors` (12-vector hostile-`.dross/` suite off a pinned refusal contract, with an observed red replay) — `internal/cmd/hostile_config_test.go:303`
 - hostile-config fixture (pinned refusal contract + payloads) — `fixtures/hostile-config-c5/expected-refusals.txt:1`
 
@@ -289,17 +289,17 @@ _introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps ·
 
 ### Exec consent gate
 
-A cloned `.dross/` proposes a command to run; it does not get to run it. Spawning the repo's `runtime.test_command` requires consent granted **on this machine**, stored as a closed key in the gitignored [`.dross/local.toml`](#machine-local-store) by an explicit `dross trust` — so a fresh clone carries no consent by construction, exactly as `allow_hosts` does (locked `exec_consent_gate`). Consent binds to `sha256(runtime.test_command)`, not to the repo (locked `consent_binding`): a test command rewritten by a later pull revokes it and re-prompts, which is the attack the gate exists for, and there is deliberately no blanket `--repo` escape hatch. Enforcement sits in the CLI rather than in prompt text — the half that can't be talked out of it — across a **closed** set of five loop commands, with the refusal proven to precede exec by a seam that fails the test if reached, and a refusal writes nothing (no `tests.json`, no `verify.toml`) so it can't read as a run that happened. An empty `test_command` is a refusal, not a free pass, and "stale" is reported distinctly from "never trusted". The prompts carry the matching pre-flight (`dross trust --check`) and are pinned never to grant consent on the user's behalf. Accepted limit, stated rather than hidden: the CLI cannot stop an agent invoking `go test` directly — the gate covers dross's own loop commands.
+A cloned `.dross/` proposes a command to run; it does not get to run it. Spawning the repo's `runtime.test_command` requires consent granted **on this machine**, stored as a closed key in the gitignored [`.dross/local.toml`](#machine-local-store) by an explicit `dross trust` — so a fresh clone carries no consent by construction, exactly as `allow_hosts` does (locked `exec_consent_gate`). Consent binds to `sha256(runtime.test_command)`, not to the repo (locked `consent_binding`): a test command rewritten by a later pull revokes it and re-prompts, which is the attack the gate exists for, and there is deliberately no blanket `--repo` escape hatch. Enforcement sits in the CLI rather than in prompt text — the half that can't be talked out of it — across a **closed** set of six loop commands, with the refusal proven to precede exec by a seam that fails the test if reached, and a refusal writes nothing (no `tests.json`, no `verify.toml`) so it can't read as a run that happened. `dross test` joined that set when it became the [test suite runner](#test-suite-runner): before it, the gate covered a command dross never actually spawned — the prompts told the agent to type it into Bash — so gating it is now gating the run rather than the step boundary around it. An empty `test_command` is a refusal, not a free pass, and "stale" is reported distinctly from "never trusted". The prompts carry the matching pre-flight (`dross trust --check`) and are pinned never to grant consent on the user's behalf. Accepted limit, stated rather than hidden: the CLI cannot stop an agent invoking `go test` directly — the gate covers dross's own loop commands.
 
 - `CheckConsent` (state resolution: granted / stale / absent; refuses unread when local.toml is git-tracked) — `internal/cmd/trust.go:115`
 - `Fingerprint` (consent bound to a hash of the consented command, not to the repo) — `internal/cmd/trust.go:99`
-- `execGatedCommands` (the CLOSED set of five gated loop commands) — `internal/cmd/trust.go:172`
-- `requireExecConsent` (the refusal, sited ahead of every spawn of the repo's test command) — `internal/cmd/trust.go:185`
-- `Trust` (`dross trust`, `--check`) — `internal/cmd/trust.go:242`
+- `execGatedCommands` (the CLOSED set of six gated loop commands) — `internal/cmd/trust.go:174`
+- `requireExecConsent` (the refusal, sited ahead of every spawn of the repo's test command) — `internal/cmd/trust.go:188`
+- `Trust` (`dross trust`, `--check`) — `internal/cmd/trust.go:245`
 - doctor's exec-consent section (granted / stale / absent reported pre-flight) — `internal/cmd/doctor.go:943`
 - `TestVerifyRefusesWithoutConsent` (refusal proven to precede exec by a seam that `t.Fatal`s if reached) — `internal/cmd/trust_test.go:293`
 - `TestConsentStates` (four untrusted states as separate subtests, incl. a tracked local.toml) — `internal/cmd/trust_test.go:84`
-- `TestExecutePromptChecksConsent` / `TestPromptsNeverGrantConsentForTheUser` (prompt pre-flight asserted by index; prompts may not self-grant) — `internal/cmd/consent_surface_test.go:127`
+- `TestExecutePromptChecksConsent` / `TestPromptsNeverGrantConsentForTheUser` (prompt pre-flight asserted by index; prompts may not self-grant) — `internal/cmd/consent_surface_test.go:133`
 
 _introduced exec-trust-followups · ca15bb2_
 
@@ -387,7 +387,7 @@ Facts that are true of *this* clone and must never ride cumulative history live 
 The first tenant is `.dross/local.toml`, read and written through `dross local get|set`. Because it is machine-authored and never cloned, it is where the [host allowlist](#api-host-allowlist)'s escape hatch lives: `allow_hosts` adds a host the derivation can't reach, and the read **refuses a `local.toml` that git reports as tracked** rather than trusting its contents — otherwise a hostile repo could ship its own authorization and the allowlist would be self-authorizing again. `init` and `onboard` seed the gitignore entry so the file starts untracked, and doctor reports a tracked one. Its own first tenant is `quick_base` — the branch a standalone quick task forked from. Ship and `phase complete` push a recorded quick base's unpushed `.dross/` chores on *that* branch rather than on an inferred one, closing the divergence where a quick committed to main mid-phase left local main unpushed and the next phase squash-merge could not fast-forward it. An unrecorded quick base, or one whose ref is gone, is left alone rather than guessed at, and a base equal to the phase's own base is a no-op.
 
 - `Local` (`dross local get|set`, gitignored `.dross/local.toml`) — `internal/cmd/local.go:37`
-- `readAllowHosts` (`allow_hosts` escape hatch; refuses a git-tracked local.toml instead of trusting it) — `internal/cmd/local.go:169`
+- `readAllowHosts` (`allow_hosts` escape hatch; refuses a git-tracked local.toml instead of trusting it) — `internal/cmd/local.go:204`
 - `TestReadAllowHostsRefusesTrackedLocal` (the self-authorizing hole, pinned shut) — `internal/cmd/local_test.go:135`
 - `pushQuickBaseIfRecorded` (ship + complete push chores on the recorded quick base, never an inferred one) — `internal/cmd/basebranch.go:129`
 - `TestShipReconcilesRecordedQuickBase` (pins ship's call site so a recorded quick base can't be left unpushed) — `internal/cmd/ship_test.go:1115`
@@ -541,6 +541,22 @@ Keeps the README's command table from lying about the CLI: `newRoot` is extracte
 The guard is now a family of four over every surface that can name a command: the README table, `ship.md`, the curated hint table, and — added last — the `dross …` invocations the CLI *prints at the user* from Go string literals. That fourth surface is where the family's own gap was found: a command can be unregistered from `newRoot` while an error message still tells the user to run it, and the resulting "unknown command" pushes them back to the raw git incantation the guard exists to retire. Mutation testing cannot catch it either (gremlins skips `./cmd/dross` as a zero-covered-mutant blind spot), so the guard is proven by hand-mutation: deleting `cmd.Checkout()` leaves the rest of the suite green and turns this one red. It reads **string literals only** — a stale name in a comment misleads a reader, but only a narration string reaches the user.
 
 _introduced readme-truth-pass · extended complete-base-truth · extended completion-state-truth · 1ecde33_
+
+### Remote execution grant
+
+One authorization — "run this repo's code on that machine" — serving every consumer that needs it: the mutation adapters, and `dross test` via the [test suite runner](#test-suite-runner). `dross remote grant <host> <workdir>` is the ONLY writer of `remote_host` / `remote_workdir`, which are deliberately absent from `dross local set`'s key table: a generic key-writer would let an agent authorize code execution on another machine without ever showing the user what for. The verb prints the host and workdir it is about to authorize **before** it writes them, and that ordering is the mechanism rather than a nicety — a grant that wrote first and printed after has already authorized the host by the time its name is on screen. It mirrors [`dross trust`](#exec-consent-gate) one step further out: trust consents to a command running HERE, this consents to it running THERE. The grant lives in the gitignored [`.dross/local.toml`](#machine-local-store), so a clone carries none, a `local.toml` git reports as tracked is refused unread, and a remote host in the tracked `project.toml` is refused by name. The verb used to be `dross mutation remote *`, from when mutation was the only thing that ran off-box; that spelling stays registered as an alias onto the same builders — one implementation, two names, because a second copy would be a second consent surface for one decision — and the deprecated `mutation_remote_*` keys still resolve, since the grant lives in an untracked file and a clean rename would have presented as a *local* run the user believed was remote. Host and workdir resolve as a **pair**, so a half-migrated store refuses via `Target.Validate` rather than splicing a new host onto a deprecated workdir — a path on a machine that was never granted with it. An unparseable store is an error, never a silent "no grant": "I could not read your config" must not resolve to a local run.
+
+- `remoteGrantTree` (one grant/status/revoke tree behind both spellings) — `internal/cmd/remote_grant.go:78`
+- `writeRemoteGrant` (writes the current keys, clears the deprecated aliases, leaves the tuning knobs alone) — `internal/cmd/remote_grant.go:55`
+- `effectiveRemote` (new keys win; host and workdir resolve as a pair) — `internal/cmd/local.go:184`
+- `readRemoteGrant` (the one reader every consumer goes through; an unparseable store errors) — `internal/cmd/local.go:265`
+- `remote.Target` / `Validate` (host + workdir allowlists, refused before any argv exists) — `internal/remote/remote.go:51`
+- `remote.SyncArgs` / `SSHArgs` / `Script` (the argv builders; they return an error INSTEAD of an argv) — `internal/remote/remote.go:273`
+- `resolveRemoteEnv` (`mutation_remote_env` forwards variable NAMES; values are read at run time and stored nowhere) — `internal/cmd/local.go:307`
+- `TestBothVerbsWriteTheSameKeys` (the alias cannot become a second implementation) — `internal/cmd/remote_grant_test.go:81`
+- `checkRemoteMutation` (doctor's Remote section — one section for the one grant) — `internal/cmd/doctor.go:1178`
+
+_introduced remote-mutation-runner · extended remote-test-runner · 3055f70_
 
 ### Repo onboarding
 
@@ -828,6 +844,21 @@ Keep the repo's own test runs independent of the developer's machine, so a green
 - `snapshotLiveState` (force-stages state.json and restores the live copy across a fixture's branch switches, so squash-merge fixtures hold once the file is gitignored) — `internal/cmd/phase_test.go:145`
 
 _introduced board-state-map-truth · extended state-json-branch-safety · 47f383b_
+
+### Test suite runner
+
+`dross test` is the one place dross runs this repo's suite. Until it existed dross never ran `runtime.test_command` at all — it hashed the command for consent and the prompts told the *agent* to type it into Bash, which left the [consent gate](#exec-consent-gate) covering a command nothing executed and left no execution site to point at another machine. You cannot delegate a run that no code performs, so building the site was the precondition for everything else here. It gates on consent before any I/O, streams output as it arrives (a suite that prints nothing for two minutes is indistinguishable from a hang, and the agent driving it reads the tail as it goes), and appends trailing arguments as a package/path selector so a targeted re-run after a fix costs a package rather than the whole suite — with no selector the line is byte-identical to what `dross trust` displayed, or the gate would be approving one command and running another. When a [remote is granted](#remote-execution-grant) the run goes there by default and nothing spawns locally; `--local` is the escape. The tree is pushed strictly *before* the run, since reversing them measures whatever the remote tree held — the previous run's code. Exit codes are a contract, not an implementation detail: **1** is a red suite, **3** an unreachable host, **4** an incomplete transfer. The last two mean the run did not happen and nothing was measured, and collapsing them into the first is how a dead transport gets read as a clean pass; the suite's own status is deliberately not propagated, since a suite is free to exit 3 and would collide with that band. The three prompts that gate on the suite call `dross test` rather than interpolating the raw command, pinned by a guard that fails in both directions — forbidding the interpolation alone would be satisfied by a prompt that stopped running the suite at all.
+
+Stated limit, measured rather than assumed: this buys a **free laptop, not a faster run**. The suite is ~112% CPU — serialized on shelling out to git, not CPU-bound — so the remote's cores buy little and rsync plus a remote compile may make wall-clock worse. No criterion claims a speedup (locked `offload_not_speed`).
+
+- `Test` (`dross test [selector...]`, `--local`) — `internal/cmd/test.go:144`
+- `runTestRemotely` (sync strictly before run; selector reaches the remote unchanged) — `internal/cmd/test.go:240`
+- `remoteFailure` / `ExitCode` (transport, partial transfer and red suite stay distinct to the exit code) — `internal/cmd/test.go:287`
+- `runLocalCommand` (streams through `sh -c`; the line is fenced by `shArgv`) — `internal/cmd/test.go:88`
+- `TestTestStreamsOutput` (streaming proven by write timing, not by inspection) — `internal/cmd/test_test.go:216`
+- `TestPromptsRunDrossTest` (the prompts run it, and no prompt reintroduces the raw interpolation) — `internal/cmd/prompt_test_command_test.go:40`
+
+_introduced remote-test-runner · 3055f70_
 
 ### Verification
 

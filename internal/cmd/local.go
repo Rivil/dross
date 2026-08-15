@@ -77,20 +77,36 @@ type localStore struct {
 	// which is the entire thing being defended against.
 	TrustedTestCommand string `toml:"trusted_test_command,omitempty"`
 
-	// MutationRemoteHost and MutationRemoteWorkdir authorize a mutation run to
-	// execute on another machine.
+	// RemoteHost and RemoteWorkdir authorize dross to run this repo's code on
+	// another machine — the mutation adapters and, since remote-test-runner,
+	// the test suite.
 	//
 	// Both are deliberately ABSENT from localKeys, on exactly the
 	// TrustedTestCommand precedent above and for a strictly larger reason:
 	// configuring a remote is code execution on a machine of the config's
-	// choosing. `dross mutation remote grant` is the only writer, and it prints
-	// the host and workdir it is about to authorize BEFORE it writes them. A
-	// generic key-writer would let an agent grant that on the user's behalf
-	// without ever showing them what for.
+	// choosing. `dross remote grant` is the only writer, and it prints the host
+	// and workdir it is about to authorize BEFORE it writes them. A generic
+	// key-writer would let an agent grant that on the user's behalf without
+	// ever showing them what for.
 	//
 	// They live here rather than in project.toml for the same reason
 	// allow_hosts does: a committed remote host would be self-authorizing, and
 	// project.Load refuses one by name (see the trap fields there).
+	RemoteHost    string `toml:"remote_host,omitempty"`
+	RemoteWorkdir string `toml:"remote_workdir,omitempty"`
+
+	// MutationRemoteHost and MutationRemoteWorkdir are the DEPRECATED aliases
+	// the same grant used to be written under, kept so an existing local.toml
+	// keeps working with nothing re-issued by hand.
+	//
+	// They are aliases rather than a rename because the grant lives in an
+	// untracked file: a clean rename would silently stop resolving on every
+	// machine that already granted a host, and the failure would present as a
+	// local run the user believed was remote — the exact confusion
+	// readRemoteGrant's unparseable-store handling exists to prevent.
+	//
+	// resolveRemoteGrant reads the new keys first; see effectiveRemote below
+	// for why a half-migrated file resolves to the NEW value.
 	MutationRemoteHost    string `toml:"mutation_remote_host,omitempty"`
 	MutationRemoteWorkdir string `toml:"mutation_remote_workdir,omitempty"`
 
@@ -148,9 +164,28 @@ var localKeys = map[string]struct {
 		get: func(l *localStore) string { return l.MutationRemoteEnv },
 		set: func(l *localStore, v string) { l.MutationRemoteEnv = v },
 	},
-	// mutation_remote_host and mutation_remote_workdir are NOT here. See the
-	// struct fields — they are granted by `dross mutation remote grant`, which
-	// shows the user what it is authorizing, and by nothing else.
+	// remote_host and remote_workdir — and their deprecated mutation_remote_*
+	// aliases — are NOT here. See the struct fields: they are granted by
+	// `dross remote grant`, which shows the user what it is authorizing, and by
+	// nothing else.
+}
+
+// effectiveRemote returns the granted host and workdir, preferring the current
+// keys over the deprecated mutation_remote_* aliases.
+//
+// New-wins is the deliberate direction. A store carrying both is half-migrated
+// — someone re-granted through the new verb while the old keys were still on
+// disk — and the value they most recently authorized is the new one. Falling
+// back the other way would run their code on a box they had already moved off.
+//
+// The pair is resolved TOGETHER rather than field by field: a host from one
+// generation of the file paired with a workdir from the other is a path on a
+// machine that was never granted with it.
+func (l *localStore) effectiveRemote() (host, workdir string) {
+	if l.RemoteHost != "" || l.RemoteWorkdir != "" {
+		return l.RemoteHost, l.RemoteWorkdir
+	}
+	return l.MutationRemoteHost, l.MutationRemoteWorkdir
 }
 
 // readAllowHosts returns the machine-local host allowlist additions, or an
@@ -235,14 +270,15 @@ func readRemoteGrant(root, repoDir string) (*remote.Target, error) {
 	if err != nil {
 		return nil, err
 	}
-	if l.MutationRemoteHost == "" {
+	host, workdir := l.effectiveRemote()
+	if host == "" {
 		return nil, nil
 	}
 	env, err := resolveRemoteEnv(l.MutationRemoteEnv)
 	if err != nil {
 		return nil, err
 	}
-	t := &remote.Target{Host: l.MutationRemoteHost, Workdir: l.MutationRemoteWorkdir, Env: env}
+	t := &remote.Target{Host: host, Workdir: workdir, Env: env}
 	if err := t.Validate(); err != nil {
 		return nil, fmt.Errorf("%s/%s: %w", RootDirName, LocalFile, err)
 	}

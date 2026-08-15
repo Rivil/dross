@@ -108,6 +108,10 @@ var table = map[string]Rule{
 		Kind: Reject,
 		Why:  "rsync parses options anywhere in the argv, so neither operand can be fenced; `-e …` is arbitrary local execution, the same shape as ssh's -o",
 	},
+	"sh": {
+		Kind: Reject,
+		Why:  "sh reads options before -c and honours no end-of-options token, so a command string beginning with a dash is read as a shell option (`-i`, `-x`) rather than as the script; the string itself is the consented runtime.test_command and is never a derived value, but the fence is what keeps that true if a caller ever passes one",
+	},
 }
 
 // PolicyFor returns the rule for a binary, and whether one exists. It fails

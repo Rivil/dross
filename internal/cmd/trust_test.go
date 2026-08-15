@@ -348,6 +348,7 @@ func TestExecGatedSetIsExplicit(t *testing.T) {
 		"state bump",
 		"task next",
 		"task status in_progress",
+		"test",
 		"verify",
 	}
 	got := append([]string(nil), execGatedCommands...)
@@ -358,7 +359,7 @@ func TestExecGatedSetIsExplicit(t *testing.T) {
 	// The declaration must match reality: every named command actually refuses.
 	// TestGatedCommandsRefuse drives exactly these five, so a name added here
 	// without a matching row (or a call site) shows up there.
-	if len(execGatedCommands) != 5 {
+	if len(execGatedCommands) != 6 {
 		t.Errorf("the gated set changed size — add or remove the matching row in TestGatedCommandsRefuse")
 	}
 }

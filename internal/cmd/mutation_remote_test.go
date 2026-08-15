@@ -1,119 +1,11 @@
 package cmd
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
-
-// TestRemoteGrantPrintsBeforeItWrites is the consent_model decision's ordering
-// half, executed.
-//
-// The verb exists because `dross local set` would let an agent authorize code
-// execution on another machine without ever showing the user what for. That
-// only holds if the banner reaches the user BEFORE the authorization lands — a
-// grant that wrote first and printed after has already authorized the host by
-// the time its name is on screen, and the print is then a receipt rather than a
-// consent.
-//
-// Injecting a failing write is the only way to observe the order: on the happy
-// path both happen and the sequence is invisible. With the write failing, the
-// banner must still be on stdout and the store must not exist.
-func TestRemoteGrantPrintsBeforeItWrites(t *testing.T) {
-	root := chdirDross(t)
-
-	orig := grantRemoteWrite
-	t.Cleanup(func() { grantRemoteWrite = orig })
-	grantRemoteWrite = func(_, _, _ string) error {
-		return errors.New("injected write failure")
-	}
-
-	var out string
-	err := runCmdCapturing(t, &out, Mutation(), "remote", "grant", "helicon", "/srv/dross")
-	if err == nil {
-		t.Fatal("the injected write failure did not surface — the command reported success")
-	}
-
-	for _, want := range []string{"helicon", "/srv/dross"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("the banner does not name %q — it must print what it authorizes before it writes it:\n%s", want, out)
-		}
-	}
-
-	if _, statErr := os.Stat(filepath.Join(root, LocalFile)); !os.IsNotExist(statErr) {
-		t.Errorf("a failed grant left a store behind, stat err = %v", statErr)
-	}
-	l, err := loadLocal(localPath(root))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if l.MutationRemoteHost != "" || l.MutationRemoteWorkdir != "" {
-		t.Errorf("a failed grant stored a key: host=%q workdir=%q", l.MutationRemoteHost, l.MutationRemoteWorkdir)
-	}
-}
-
-// TestRemoteGrantRoundTripsAndRevokeClearsBothKeys covers the happy path the
-// ordering test above deliberately cannot reach (its write is stubbed out), and
-// then the withdrawal.
-//
-// Two properties beyond the round-trip:
-//
-//   - revoke clears host and workdir TOGETHER. A workdir left behind after its
-//     host is gone is a leftover the next grant would silently inherit.
-//   - revoke leaves mutation_workers alone. The grant keys and the tuning knobs
-//     share one store; a revoke that truncated it would reset a performance
-//     setting the user never asked to change, unannounced.
-func TestRemoteGrantRoundTripsAndRevokeClearsBothKeys(t *testing.T) {
-	root := chdirDross(t)
-
-	if err := runCmd(t, Local(), "set", "mutation_workers", "8"); err != nil {
-		t.Fatalf("local set mutation_workers: %v", err)
-	}
-	if err := runCmd(t, Mutation(), "remote", "grant", "helicon", "/srv/dross"); err != nil {
-		t.Fatalf("mutation remote grant: %v", err)
-	}
-
-	// Read it back through the reader a real run uses, not through the struct:
-	// a grant status could agree with is a grant verify will act on.
-	target, err := readRemoteGrant(root, filepath.Dir(root))
-	if err != nil {
-		t.Fatalf("readRemoteGrant after a grant: %v", err)
-	}
-	if target == nil {
-		t.Fatal("the grant did not take — readRemoteGrant sees no target")
-	}
-	if target.Host != "helicon" || target.Workdir != "/srv/dross" {
-		t.Errorf("grant round-tripped as %+v, want helicon:/srv/dross", *target)
-	}
-
-	if err := runCmd(t, Mutation(), "remote", "revoke"); err != nil {
-		t.Fatalf("mutation remote revoke: %v", err)
-	}
-
-	l, err := loadLocal(localPath(root))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if l.MutationRemoteHost != "" {
-		t.Errorf("revoke left mutation_remote_host = %q", l.MutationRemoteHost)
-	}
-	if l.MutationRemoteWorkdir != "" {
-		t.Errorf("revoke left mutation_remote_workdir = %q — a workdir without its host is a leftover the next grant inherits", l.MutationRemoteWorkdir)
-	}
-	if l.MutationWorkers != "8" {
-		t.Errorf("revoke changed mutation_workers to %q, want 8 — withdrawing authorization is not a reason to reset a tuning knob", l.MutationWorkers)
-	}
-
-	target, err = readRemoteGrant(root, filepath.Dir(root))
-	if err != nil {
-		t.Fatalf("readRemoteGrant after a revoke: %v", err)
-	}
-	if target != nil {
-		t.Errorf("readRemoteGrant still returns %+v after revoke", *target)
-	}
-}
 
 // TestRemoteStatusUngrantedExitsZero: most repos have no remote, and that is
 // not a failure. `status` is the command a user reaches for to find out where

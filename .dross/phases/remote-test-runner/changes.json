@@ -1,0 +1,115 @@
+{
+  "phase": "remote-test-runner",
+  "pr": 89,
+  "base": "milestone/v1.3",
+  "base_commit": "880b4de846c66472f9cfaa6160aacbe3cd387d9f",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/local.go",
+        "internal/cmd/local_remote_alias_test.go"
+      ],
+      "commit": "3d6f72d",
+      "completed_at": "2026-08-15T16:47:58.599471Z",
+      "landmarks": [
+        {
+          "feature": "remote execution grant",
+          "symbol": "effectiveRemote",
+          "loc": "internal/cmd/local.go:184",
+          "what": "one machine-local grant serves mutation and tests — remote_host/remote_workdir with the mutation_remote_* names kept as resolving aliases, host and workdir resolved as a pair so a half-migrated store refuses instead of splicing"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/remote_grant.go",
+        "internal/cmd/mutation_remote.go",
+        "internal/cmd/remote_grant_test.go",
+        "internal/cmd/mutation_remote_test.go",
+        "cmd/dross/main.go"
+      ],
+      "commit": "435847c",
+      "completed_at": "2026-08-15T16:55:40.606709Z",
+      "landmarks": [
+        {
+          "feature": "remote execution grant",
+          "symbol": "remoteGrantTree",
+          "loc": "internal/cmd/remote_grant.go:78",
+          "what": "one grant tree behind two spellings — dross remote is the verb, dross mutation remote is a deprecated alias onto the same builders, so the consent surface cannot fork"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_test.go",
+        "internal/cmd/trust.go",
+        "cmd/dross/main.go",
+        "internal/argfence/policy.go"
+      ],
+      "commit": "8634af4",
+      "completed_at": "2026-08-15T17:07:54.126516Z",
+      "landmarks": [
+        {
+          "feature": "test suite runner",
+          "symbol": "Test",
+          "loc": "internal/cmd/test.go:143",
+          "what": "dross finally runs runtime.test_command itself — one consent-gated, streaming, selector-taking execution site, where before the command was only hashed and the agent typed it into Bash"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_remote_test.go",
+        "internal/cmd/subprocargs_audit_test.go"
+      ],
+      "commit": "f8deff0",
+      "completed_at": "2026-08-15T17:12:30.244702Z",
+      "landmarks": [
+        {
+          "feature": "test suite runner",
+          "symbol": "runTestRemotely",
+          "loc": "internal/cmd/test.go:240",
+          "what": "a granted host runs the suite and nothing spawns locally — sync strictly before run, selector reaching the remote unchanged, --local as the escape"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_failure_test.go"
+      ],
+      "commit": "5f350f6",
+      "completed_at": "2026-08-15T17:15:58.465527Z",
+      "landmarks": [
+        {
+          "feature": "test suite runner",
+          "symbol": "remoteFailure",
+          "loc": "internal/cmd/test.go:287",
+          "what": "a run that never happened never exits 0 — transport (3), incomplete transfer (4) and a red suite (1) stay distinct in exit code and message"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "assets/prompts/execute.md",
+        "assets/prompts/quick.md",
+        "assets/prompts/verify.md",
+        "internal/cmd/doctor.go",
+        "internal/cmd/prompt_test_command_test.go"
+      ],
+      "commit": "3055f70",
+      "completed_at": "2026-08-15T17:24:59.849122Z",
+      "landmarks": [
+        {
+          "feature": "test suite runner",
+          "symbol": "TestPromptsRunDrossTest",
+          "loc": "internal/cmd/prompt_test_command_test.go:38",
+          "what": "the three suite-gating prompts run dross test instead of interpolating the raw command, pinned in both directions, and doctor reports one Remote section for the one grant"
+        }
+      ]
+    }
+  }
+}
