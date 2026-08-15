@@ -1,0 +1,64 @@
+[verify]
+  phase = "guard-remedy-ordering"
+  generated_at = 0001-01-01T00:00:00Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-15T21:50:28.858667Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.967741935483871
+  mutants_killed = 420
+  mutants_survived = 14
+  mutants_not_covered = 14
+  mutants_in_scope = 434
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/switchbranch_ff_remedy_test.go:TestRefusalLeadsWithFastForward", "internal/cmd/switchbranch_ff_remedy_test.go:TestBothRemediesSurvive"]
+  notes = "LEADING is the criterion, not mentioning, so the test compares the two remedies' positions in the message rather than merely finding the ff line — an offer buried under the expensive remedy it replaces has not led. The fixture is a real git repo with a real bare origin: the branch genuinely tracks .dross/state.json, origin genuinely has the untracking commit, and local is genuinely rewound behind it, so the guard answers the question the way it will in a user's repo rather than against faked refs. The message must also say WHY the fast-forward is enough (\"only BEHIND\"), since a bare command with no reason is the kind of advice people skip."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/switchbranch_ff_remedy_test.go:TestNoFastForwardWhenRemoteStillCarriesIt", "internal/cmd/switchbranch_ff_remedy_test.go:TestNoFastForwardWithoutARemote", "internal/cmd/switchbranch_ff_remedy_test.go:TestNoFastForwardWhenDiverged", "internal/cmd/switchbranch_ff_remedy_test.go:TestGuardStillPassesACleanRef"]
+  notes = "All three not-applicable shapes are built as distinct real repos, because they fail differently: a remote that still tracks the file would MOVE the refusal (the user works, re-runs, is refused again by the same guard), a branch with no remote has nothing to fast-forward from, and a diverged branch cannot fast-forward at all — that last one would be an instruction that errors while looking authoritative. TestGuardStillPassesACleanRef is the control: without it, every assertion above would be satisfied by a guard that refused everything and offered nothing."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/milestone_prune_ux_test.go:TestPruneDryRunDeletesNothing", "internal/cmd/milestone_prune_ux_test.go:TestPruneRefusesWithoutConsent", "internal/cmd/milestone_prune_ux_test.go:TestPruneYesSkipsThePrompt", "internal/cmd/milestone_prune_ux_test.go:TestPruneListsWhatItDeletes", "internal/cmd/milestone_prune_ux_test.go:TestOnlyAnExplicitYesProceeds"]
+  notes = "Every assertion is against real branches on a real origin, checked with `git ls-remote` — a preview that silently deleted the remote branch would pass any output-only test. TestPruneListsWhatItDeletes compares the previewed set against the deleted set rather than checking that SOMETHING was printed, which is what catches a partial preview, the failure mode a confirmation gate is most likely to develop. TestOnlyAnExplicitYesProceeds was added during verify to kill a real in-diff survivor: a coverage profile showed the whole tail of confirmPrune running zero times, because the read needs a terminal — so which answers mean yes was unexecuted by the entire suite while standing in front of an irreversible delete. A bare Enter is now asserted to mean NO."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/phase_reconcile_test.go:TestReconcileSkipsUnmergedPhases", "internal/cmd/phase_reconcile_test.go:TestReconcileContinuesPastASkip", "internal/cmd/phase_reconcile_test.go:TestReconcileReportsPerPhaseOutcome", "internal/cmd/phase_reconcile_test.go:TestReconcileWithNothingToDoExitsZero", "internal/cmd/status_reconcile_test.go:TestStatusNamesReconcileNotAChoreList", "internal/cmd/status_reconcile_test.go:TestSinglePhaseStillNamesCompleteDirectly", "internal/cmd/status_reconcile_test.go:TestReadOnlySurfacesMutateNothing", "internal/cmd/watch_test.go:TestSuggestPrecedence"]
+  notes = "The sweep's own behaviour is tested with the per-phase completion stubbed, so what is asserted is which phases it picks, that a refusal is reported-and-survived rather than fatal, and that the tally matches what happened — the merge gate itself stays tested where it lives, and duplicating it here would be a second implementation of the check that must never disagree. The chore-list complaint is asserted directly: with three candidates, status must print the batch verb AND ZERO per-phase complete lines, while a single candidate must keep the direct command, since naming a batch verb for one item is worse guidance. Read-only is proven by snapshotting the phase dirs, the branch list and state.json around a status call and requiring them byte-identical — a suggestion that acted on what it found would show up in one of the three. TestSuggestPrecedence pins where the pile ranks: below advancing an in-flight phase, above new intake, and NOT triggered by a single phase."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/prompt_next_phase_test.go:TestVerifyPromptReadsTheMilestoneArray", "internal/cmd/prompt_next_phase_test.go:TestVerifyPromptGatesTheLastPhaseClaim", "internal/cmd/prompt_next_phase_test.go:TestVerifyPromptKeepsTheNoMilestoneFallback"]
+  notes = "The guard is scoped to §5's pass branch rather than grepping the whole prompt, so it asserts the ordering SOURCE at the one place the bug lived. It requires three things, not one: that the milestone array is named, that the prompt warns off `dross phase list` explaining it lists only scaffolded phases, and that the last-phase claim — the sentence that was actually wrong on 2026-08-13 — is tied to being the array's last entry. Stating the why matters because `phase list` is the obvious-looking source; a prompt that merely used the right one would be re-derived back to the bug by the next reader. The no-milestone fallback is pinned separately so tightening this does not leave a repo without an active milestone unanswered."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran LOCALLY, not on the granted remote: helicon became unreachable mid-phase (ssh exit 255) because this machine's Proton Pass ssh-agent stopped serving the key. `dross verify` refused rather than reporting an empty run, which is the remote-test-runner behaviour working as designed. The grant was temporarily revoked to force the local path and has been restored; the run took ~50 minutes on this laptop against ~40 on helicon. Nothing about the SCOPE or the score differs — the same adapters over the same change set."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The first verify run reported 3 in-diff survivors. Two (watch.go:130, boundary + negation) are the proven gremlins switch-case attribution ceiling — a coverage profile reports count=1 for that block while gremlins calls the line NOT COVERED, because go-cover's block for a case arm begins at the colon and the condition's own columns belong to no block. They are accepted-with-reason. The third (milestone.go:177) was a REAL gap and was killed with a test (commit 26edb3a) rather than accepted."
+
+[[finding]]
+  severity = "NOTE"
+  text = "14 in-scope survivors remain, all accepted-with-reason, all the same attribution ceiling. unclassified_in_scope = 0. 76 out-of-scope survivors were filtered — files this phase never touched. Score 0.97 is over the 434 in-scope mutants; excluding the 14 uncoverable ones, efficacy on what the suite could reach is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/verify.md: no mutation adapter for .md. The prompt change is covered by the grep guards in prompt_next_phase_test.go instead."

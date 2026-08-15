@@ -1087,3 +1087,21 @@
   line = 543
   reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. These two arms (the replay doc cannot be read; the doc carries no base-commit line) are asserted line-for-line by TestRedProofUnreadableDocIsAnIssue and TestRedProofDocWithoutABaseCommitLineIsAnIssue, with TestRedProofDocAgreeingWithTheRecordIsClean pinning the green path they are distinguished from."
   accepted_in = "red-proof-reachability"
+
+[[accepted]]
+  key = "08ec1d7666c48b32"
+  file = "internal/cmd/watch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case reconcilable > 1:"
+  line = 130
+  reason = "gremlins reports this line NOT COVERED although the suite provably executes it: a go test -coverprofile run over TestSuggestPrecedence reports count=1 for the block at watch.go:130.24, while gremlins marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the case CONDITION's own columns belong to no block, and gremlins only builds mutants on lines the profile shows as covered. TestSuggestPrecedence pins both the boundary and the negation directly — reconcilable=1 must NOT suggest the batch verb and reconcilable=2 must — so adding tests cannot kill these; the tests already exist and already run the line."
+  accepted_in = "guard-remedy-ordering"
+
+[[accepted]]
+  key = "5c88045d72401675"
+  file = "internal/cmd/watch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case reconcilable > 1:"
+  line = 130
+  reason = "gremlins reports this line NOT COVERED although the suite provably executes it: a go test -coverprofile run over TestSuggestPrecedence reports count=1 for the block at watch.go:130.24, while gremlins marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the case CONDITION's own columns belong to no block, and gremlins only builds mutants on lines the profile shows as covered. TestSuggestPrecedence pins both the boundary and the negation directly — reconcilable=1 must NOT suggest the batch verb and reconcilable=2 must — so adding tests cannot kill these; the tests already exist and already run the line."
+  accepted_in = "guard-remedy-ordering"
