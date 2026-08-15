@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Rivil/dross/internal/changes"
@@ -285,5 +287,89 @@ func TestRedProofDocSHA(t *testing.T) {
 func TestRedProofDocSHAMissingFile(t *testing.T) {
 	if _, err := redProofDocSHA(t.TempDir(), "nope/RUN.md"); err == nil {
 		t.Error("expected an error for a pin naming a doc that does not exist")
+	}
+}
+
+// --- the doc cross-check arms -------------------------------------------------
+//
+// redProofDocSHA is tested directly above, but the doctor branches that CONSUME
+// it were not: a pin whose doc cannot be read, and a doc carrying no `base
+// commit:` line, both produced an unasserted line. Those are two of c-3's
+// distinct outcomes, and an untested branch here fails in the direction that
+// matters — a red proof nothing cross-checks reports as sound.
+
+// docLines runs the per-pin verdict against a repo whose origin ref holds sha,
+// with doc placed (or deliberately absent) at the given relative path.
+func docLines(t *testing.T, docRel, docBody string) []doctorLine {
+	t.Helper()
+	dir, sha := reachRepo(t)
+	if docBody != "" {
+		path := filepath.Join(dir, docRel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, path, docBody)
+	}
+	return redProofPinLines(dir, dir, redProofPin{Phase: "phase-x", SHA: sha, Doc: docRel})
+}
+
+func hasIssueMentioning(lines []doctorLine, want string) bool {
+	for _, l := range lines {
+		if l.level == doctorIssue && strings.Contains(l.text, want) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestRedProofUnreadableDocIsAnIssue: a pin naming a replay doc that is not
+// there is not a cosmetic problem. The doc is the half a human reads, and its
+// absence means nothing cross-checks the recorded SHA — so the pin must not
+// earn its ✓ on reachability alone.
+func TestRedProofUnreadableDocIsAnIssue(t *testing.T) {
+	lines := docLines(t, "fixtures/gone/RUN.md", "") // never written
+
+	if !hasIssueMentioning(lines, "cannot be read") {
+		t.Errorf("an unreadable replay doc produced no issue: %+v", lines)
+	}
+	if !hasIssueMentioning(lines, "fixtures/gone/RUN.md") {
+		t.Errorf("the finding does not name the doc: %+v", lines)
+	}
+	for _, l := range lines {
+		if l.level == doctorOK {
+			t.Errorf("a pin with an unreadable doc still earned an OK line: %q", l.text)
+		}
+	}
+}
+
+// TestRedProofDocWithoutABaseCommitLineIsAnIssue: the doc exists and reads
+// fine, but pins nothing. This is the shape that looks healthiest and is worth
+// least — prose describing a red replay with no commit to replay it against.
+func TestRedProofDocWithoutABaseCommitLineIsAnIssue(t *testing.T) {
+	lines := docLines(t, "fixtures/x/RUN.md", "# red proof\n\nWe ran it and it was red.\n")
+
+	if !hasIssueMentioning(lines, "carries no `base commit:` line") {
+		t.Errorf("a doc with no pin line produced no issue: %+v", lines)
+	}
+	for _, l := range lines {
+		if l.level == doctorOK {
+			t.Errorf("a doc that cross-checks nothing still earned an OK line: %q", l.text)
+		}
+	}
+}
+
+// TestRedProofDocAgreeingWithTheRecordIsClean is the green path the two above
+// are only meaningful against: doc present, pin line present, same commit.
+func TestRedProofDocAgreeingWithTheRecordIsClean(t *testing.T) {
+	dir, sha := reachRepo(t)
+	path := filepath.Join(dir, "fixtures", "x", "RUN.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, path, "# red proof\n\nbase commit: `"+sha+"`\n")
+
+	lines := redProofPinLines(dir, dir, redProofPin{Phase: "phase-x", SHA: sha, Doc: "fixtures/x/RUN.md"})
+	if len(lines) != 1 || lines[0].level != doctorOK {
+		t.Errorf("a reachable pin agreeing with its doc did not come back clean: %+v", lines)
 	}
 }
