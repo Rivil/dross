@@ -203,7 +203,13 @@ Use `repo.commit_convention` from project.toml. Skip `tests.json` from the `add`
 
 If verdict is `pass`:
 
-1. Run `dross phase list` and find the phase immediately after `<id>` in the printed order. Call it `<next-id>`. If `<id>` is the last entry, there is no next phase — the milestone is feature-complete.
+1. Resolve `<next-id>` from the **milestone's `phases` array** — `dross milestone show` (or `.dross/milestones/<version>.toml`) — taking the entry immediately after `<id>`. That array is the ordering truth: it lists the whole roadmap, including phases nobody has started.
+
+   **Do not use `dross phase list` for this.** It is a directory listing — it prints only phases that have been *scaffolded*, and a phase is scaffolded only once someone begins it. Using it as the ordering source makes every unstarted successor invisible, which is how verifying phase 9 of 14 announced the milestone feature-complete on 2026-08-13 and sent the user to the wrong next command.
+
+   Only when there is no active milestone (`state.current_milestone` unset) fall back to `dross phase list`, which is then the only ordering there is.
+
+   `<id>` is the last phase in the milestone only when it is the last entry of that array.
 
 2. If `<next-id>` exists, print:
 ```
