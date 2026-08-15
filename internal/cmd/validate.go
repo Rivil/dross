@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/rules"
@@ -47,7 +48,10 @@ func Validate() *cobra.Command {
 					problems = append(problems, "project.toml: project.version is empty")
 				}
 				if p.Runtime.Mode == "" {
-					problems = append(problems, "project.toml: runtime.mode is empty (docker | native | hybrid)")
+					// Interpolated from the Set rather than typed out, so this
+					// message cannot name a value the code no longer accepts —
+					// which is exactly what it did while it offered hybrid.
+					problems = append(problems, fmt.Sprintf("project.toml: runtime.mode is empty (%s)", configenum.RuntimeModes.List()))
 				}
 				problems = append(problems, enumProblems(p)...)
 			}

@@ -57,7 +57,11 @@ type LockedChoice struct {
 // Runtime is the pain-point-killer section. Capture exact commands
 // so Claude never guesses pnpm/npm/docker again.
 type Runtime struct {
-	Mode             string             `toml:"mode" json:"mode"` // docker | native | hybrid
+	// Mode is docker | native — see configenum.RuntimeModes, which is the
+	// set both gates read. "hybrid" was a third accepted spelling whose only
+	// consumer was `Mode != "docker"`, so it compiled to native; a per-service
+	// split is what Services below already carries.
+	Mode             string             `toml:"mode" json:"mode"`
 	DevCommand       string             `toml:"dev_command,omitempty" json:"dev_command,omitempty"`
 	StopCommand      string             `toml:"stop_command,omitempty" json:"stop_command,omitempty"`
 	TestCommand      string             `toml:"test_command,omitempty" json:"test_command,omitempty"`

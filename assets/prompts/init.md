@@ -87,7 +87,7 @@ Now that the scaffold exists, derive runtime commands from `package.json` / `Mak
 
 Set with:
 ```
-dross project set runtime.mode              "<docker|native|hybrid>"
+dross project set runtime.mode              "<docker|native>"
 dross project set runtime.dev_command       "<exact command>"
 dross project set runtime.test_command      "<exact command>"
 dross project set runtime.typecheck_command "<exact command>"
