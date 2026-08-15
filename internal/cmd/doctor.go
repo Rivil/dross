@@ -19,6 +19,7 @@ import (
 	"github.com/Rivil/dross/internal/hostallow"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -974,6 +975,102 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 	}
 	Print("")
 
+	issues += checkRemoteMutation(root, repoDir, p)
+
+	return issues
+}
+
+// remoteAdapterTools maps each mutation adapter to the binary its run needs on
+// the REMOTE host. Only the adapters the project actually runs are probed: a
+// Go-only repo has no business failing doctor because the mutation host has no
+// dotnet.
+var remoteAdapterTools = map[string]string{
+	"gremlins":    "gremlins",
+	"stryker":     "npx",
+	"stryker-net": "dotnet",
+}
+
+// remoteAdapterOrder pins the probe order so doctor's output is stable run to
+// run. Map iteration order is not, and an unstable diagnostic is one nobody can
+// diff against yesterday's.
+var remoteAdapterOrder = []string{"stryker", "gremlins", "stryker-net"}
+
+// remoteProbeFn is the readiness seam.
+//
+// It is a package-level var so that doctor and the verify wiring probe through
+// the SAME function. A doctor that performed its own slightly different check
+// would be the worst kind of green: it would pass on a host the run then fails
+// on, which is exactly the mid-run discovery c-5 exists to prevent.
+var remoteProbeFn = remote.Probe
+
+// remoteMutationTools returns the tools to probe for, in a stable order, plus
+// which adapter needs each — so a missing binary can name the adapter that
+// wanted it rather than leaving the user to guess.
+func remoteMutationTools(p *project.Project) ([]string, map[string]string) {
+	allowed := map[string]bool{}
+	for _, name := range p.Mutation.Adapters {
+		allowed[name] = true
+	}
+	var tools []string
+	needBy := map[string]string{}
+	for _, adapter := range remoteAdapterOrder {
+		// An empty allowlist means every adapter runs — the same rule
+		// configuredAdapters applies, and the two must not disagree about which
+		// adapters a repo has.
+		if len(allowed) > 0 && !allowed[adapter] {
+			continue
+		}
+		tool := remoteAdapterTools[adapter]
+		if _, seen := needBy[tool]; seen {
+			continue
+		}
+		tools = append(tools, tool)
+		needBy[tool] = adapter
+	}
+	return tools, needBy
+}
+
+// checkRemoteMutation reports whether a granted remote is actually usable, and
+// returns the number of issues found.
+//
+// The point is timing. Without it, an unreachable host or a missing remote
+// toolchain is discovered part-way through a verify — after the tree has been
+// pushed, with a report that is empty for reasons the run cannot distinguish
+// from "nothing to measure". Doctor asks the same questions before any of that.
+//
+// No grant is an ADVISORY, not an issue. Most repos have no remote and never
+// will; failing doctor on that would make a normal local clone look broken,
+// which is how a check gets ignored.
+func checkRemoteMutation(root, repoDir string, p *project.Project) int {
+	issues := 0
+	Print("Remote mutation:")
+	target, err := readRemoteGrant(root, repoDir)
+	switch {
+	case err != nil:
+		Printf("  ✗ %v\n", err)
+		issues++
+	case target == nil:
+		Printf("  ⚠ no remote granted — mutation runs on this machine.\n")
+		Printf("    Grant one with `dross mutation remote grant <host> <workdir>`.\n")
+	default:
+		tools, needBy := remoteMutationTools(p)
+		ready, perr := remoteProbeFn(*target, tools)
+		if perr != nil {
+			Printf("  ✗ remote host %s is not usable: %v\n", target.Host, perr)
+			Printf("    Fix: check ssh access, or withdraw the grant with `dross mutation remote revoke`.\n")
+			issues++
+			break
+		}
+		Printf("  ✓ %s reachable — workdir %s, %d cores\n", target.Host, target.Workdir, ready.Cores)
+		for _, missing := range ready.Missing {
+			// One line per missing tool, each naming the adapter that wanted
+			// it: "something is missing" sends the user looking, and the
+			// remedy differs per toolchain.
+			Printf("  ✗ %s is not installed on %s — the %s adapter needs it there.\n", missing, target.Host, needBy[missing])
+			issues++
+		}
+	}
+	Print("")
 	return issues
 }
 
