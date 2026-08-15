@@ -43,7 +43,7 @@ Every outbound request that would carry the secret named by `[remote].auth_env` 
 - `resolveToken` (single guarded token read shared by the five ship backends) — `internal/ship/hostguard.go:33`
 - `TestNoGetenvOutsideHostguard` (AST gate: a new ship backend cannot skip the check) — `internal/ship/hostguard_test.go:137`
 - `mergeGate` (host refusal re-raises instead of degrading to git ancestry) — `internal/cmd/phase.go:784`
-- `TestDoctorReportsOffAllowlistAPIBase` (doctor names an off-allowlist host before a command refuses mid-run) — `internal/cmd/doctor_test.go:1789`
+- `TestDoctorReportsOffAllowlistAPIBase` (doctor names an off-allowlist host before a command refuses mid-run) — `internal/cmd/doctor_test.go:1828`
 
 _introduced config-trust-hardening · 6fef81a_
 
@@ -55,7 +55,7 @@ The single feature-organized ARCHITECTURE.md — fixed entry template + greenfie
 - `architecture.Skeleton` — `internal/architecture/architecture.go:41`
 - `architecture.ParseDoc` / `Resolve` (codex-backed link resolver) — `internal/architecture/links.go:91`
 - `codex.SupportsFile` (language-dispatch gate) — `internal/codex/codex.go:106`
-- `architectureLinkWarnings` (doctor advisory section) — `internal/cmd/doctor.go:521`
+- `architectureLinkWarnings` (doctor advisory section) — `internal/cmd/doctor.go:656`
 - `Architecture` (`dross architecture check [--fix]`) — `internal/cmd/architecture.go:16`
 - `Init` (seeds skeleton) — `internal/cmd/init.go:30`
 
@@ -65,9 +65,9 @@ _introduced 01-architecture-comprehension-layer · extended architecture-doc-enh
 
 Schema-check every .dross/ TOML/JSON artefact, including that plan `covers` reference real spec criteria. The two validators divide the work by blast radius (locked `status_check_home`): `dross validate` stays **structural only** because it runs in every slash command's wrap step and must never newly fail an existing repo, while `dross doctor` is the sole **enum-enforcing** validator. Doctor therefore owns the plan-task status check — a task whose `status` falls outside `pending|in_progress|done|failed` is reported as an exit-code issue naming both phase and task id, closing the hole where a hand-edited plan.toml silently dropped a task out of `NextRunnable`. A phase directory with no plan.toml is skipped in silence (spec'd-but-unplanned is legal); an unparseable one is its own issue rather than a clean verdict.
 
-- `Validate` — `internal/cmd/validate.go:27`
-- `loadIfExists` — `internal/cmd/validate.go:137`
-- `taskStatusIssues` (doctor's plan-task status enum check) — `internal/cmd/doctor.go:566`
+- `Validate` — `internal/cmd/validate.go:28`
+- `loadIfExists` — `internal/cmd/validate.go:202`
+- `taskStatusIssues` (doctor's plan-task status enum check) — `internal/cmd/doctor.go:701`
 
 _c8b346e · extended cli-surface-sweep · d105fd0_
 
@@ -119,8 +119,8 @@ _introduced state-json-branch-safety · extended completion-state-truth · 1ecde
 
 Append-only per-task record of files touched, plus a typed `--landmark` record (feature/symbol/loc/what) parsed into a structured `Landmarks` array — replacing the old landmark-carried-in-`--notes` convention. Values may contain commas: a comma opens a new pair only at a recognised `key=` boundary (duplicate keys error loudly), and the `--landmark` help text documents the rule.
 
-- `Changes.Record` — `internal/changes/changes.go:242`
-- `changes.ParseLandmark` / `Landmark` (comma-in-value join, dup-key error) — `internal/changes/changes.go:91`
+- `Changes.Record` — `internal/changes/changes.go:286`
+- `changes.ParseLandmark` / `Landmark` (comma-in-value join, dup-key error) — `internal/changes/changes.go:115`
 - `Changes` (CLI, repeatable `--landmark`) — `internal/cmd/changes.go:15`
 
 _introduced 1d1f85a · extended 01-architecture-comprehension-layer · extended architecture-doc-enhancements · extended landmark-comma-fix · c896695_
@@ -187,19 +187,19 @@ _introduced 06-dross-quality · extended 07-stack-profiles · extended 09-marker
 
 A value read out of `.dross/project.toml` is untrusted input to git, not a trusted argument. Two layers hold. Config-derived **ref names** are validated before any git process starts: a leading `-`, or anything `git check-ref-format` rejects, is refused with a named error at `phase complete`, `phase checkout`, `milestone create` and `ship recover`. And every git invocation that passes a config- or user-derived **positional** builds its argv through separator-carrying builders — `--end-of-options` for refs, `--` for pathspecs, deliberately distinct (locked `ref_separator_token`: a `--` in a ref position makes git reinterpret the branch as a pathspec, which is a different bug, not a fix). That second layer closed a real arbitrary-file-write, where `dross repair`'s `git log` took an attacker-supplied `--output=` straight out of config. Coverage is structural rather than by inspection: a repo-wide AST audit fails by `file:line` on any positional that is neither a literal nor a prefix-constant, and the audit is itself self-checked against a FLAG/PASS snippet table so it cannot pass vacuously. That audit covers **every** binary dross spawns, not only git (locked `audit_gate_breadth`): it resolves each spawn site to a binary, looks the binary up in `internal/argfence`'s policy table, and applies whichever defence that tool can actually offer — an end-of-options token for git / `gh` / ast-grep / semgrep, outright rejection of a leading-dash value for gremlins / npx / dotnet, which have none. A binary with no table entry is a finding, so a tool nobody anticipated is in scope the day it is added, and a flag demoted *past* a separator is a finding too — in cobra `--` ends flag parsing rather than fencing one token, so a demoted flag silently becomes a positional. The `git >= 2.24` floor `--end-of-options` implies is executed, not assumed.
 
-- `argfence.PolicyFor` (per-tool policy table — separator vs reject — read by both the runtime call sites and the audit gate) — `internal/argfence/policy.go:108`
+- `argfence.PolicyFor` (per-tool policy table — separator vs reject — read by both the runtime call sites and the audit gate) — `internal/argfence/policy.go:116`
 - `validateGitRef` (pre-exec ref guard behind the four guarded switch helpers) — `internal/cmd/refguard.go:32`
 - `gitRefArgs` / `gitRefPathArgs` (separator-carrying argv builders) — `internal/cmd/gitargs.go:45`
-- `buildUnleashArgs` (mutation runners refuse a leading-dash derived value before exec, returning a nil report rather than an empty one) — `internal/mutation/gremlins.go:334`
+- `buildUnleashArgs` (mutation runners refuse a leading-dash derived value before exec, returning a nil report rather than an empty one) — `internal/mutation/gremlins.go:406`
 - `gitHubPRStatus` (`gh` argv: derived values behind the separator or in their flag's value slot, flags ahead of it) — `internal/ship/merged.go:59`
 - `astGrepArgv` (ast-grep file operand behind an end-of-options token; lang checked against the closed indexer set) — `internal/codex/ast_grep.go:187`
 - `TestSecurePromptFencesScannerOperands` (semgrep is agent-driven with no Go call site, so its operand fencing is guidance in `secure.md` gated by a prompt-content test) — `internal/cmd/secure_prompt_test.go:66`
 - `TestPhaseCompleteRefusesDashMainBranch` (one entrypoint test per guarded command, refusal asserted to precede the first exec) — `internal/cmd/refguard_entrypoints_test.go:79`
 - `historyFromPhaseCommits` (repair's `git log` fenced — the arbitrary-file-write site) — `internal/cmd/repair_state.go:78`
-- `auditFile` (AST gate flagging unseparated positionals for EVERY spawned binary by file:line, per-tool policy read from `argfence`) — `internal/cmd/subprocargs_audit_test.go:133`
-- `TestNoUnseparatedPositional` (the repo-wide run of that gate, all binaries) — `internal/cmd/subprocargs_audit_test.go:350`
-- `TestNoUnseparatedGitPositional` (the original git-only guarantee, kept as its own test after the generalisation) — `internal/cmd/subprocargs_audit_test.go:363`
-- `TestHostileConfigVectors` (12-vector hostile-`.dross/` suite off a pinned refusal contract, with an observed red replay) — `internal/cmd/hostile_config_test.go:302`
+- `auditFile` (AST gate flagging unseparated positionals for EVERY spawned binary by file:line, per-tool policy read from `argfence`) — `internal/cmd/subprocargs_audit_test.go:140`
+- `TestNoUnseparatedPositional` (the repo-wide run of that gate, all binaries) — `internal/cmd/subprocargs_audit_test.go:357`
+- `TestNoUnseparatedGitPositional` (the original git-only guarantee, kept as its own test after the generalisation) — `internal/cmd/subprocargs_audit_test.go:370`
+- `TestHostileConfigVectors` (12-vector hostile-`.dross/` suite off a pinned refusal contract, with an observed red replay) — `internal/cmd/hostile_config_test.go:303`
 - hostile-config fixture (pinned refusal contract + payloads) — `fixtures/hostile-config-c5/expected-refusals.txt:1`
 
 _introduced config-trust-hardening · 370c697 · extended exec-trust-followups · ca15bb2_
@@ -213,25 +213,25 @@ Read/write project settings, global defaults, environment variables, and the GSD
 - `Env` — `internal/cmd/env.go:24`
 - `Profile` — `internal/cmd/profile.go:14`
 - `project.DetectRemote` / `KnownHostProviders` (host→provider autodetect + api_base) — `internal/project/remote.go:24`
-- `Doctor` (remote + auth_scheme validation) — `internal/cmd/doctor.go:32`
+- `Doctor` (remote + auth_scheme validation) — `internal/cmd/doctor.go:33`
 - `configenum.Set` (normalising enum home + per-field empty-value policy) — `internal/configenum/configenum.go:32`
 - doctor enum validation via `configenum` Sets — `internal/cmd/doctor.go:117`
-- `remoteCombinationWarnings` (runtime-fatal pairings as advisory warnings) — `internal/cmd/doctor.go:452`
+- `remoteCombinationWarnings` (runtime-fatal pairings as advisory warnings) — `internal/cmd/doctor.go:587`
 - `Remote.AuthUser` (`[remote].auth_user` schema + dotted read/write) — `internal/project/project.go:103`
-- `forge.Client.do` (basic scheme + construction-time auth_user check) — `internal/forge/forge.go:628`
+- `forge.Client.do` (basic scheme + construction-time auth_user check) — `internal/forge/forge.go:758`
 - `providerSwitchIn` (go/ast validator↔dispatch divergence guard) — `internal/cmd/enum_divergence_test.go:56`
 - `TestPromptProviderListsMatchShipProviders` (init/onboard provider bullets pinned to ShipProviders) — `internal/cmd/prompt_provider_list_test.go:73`
 - `renderMultiGet` (shared 1+-path get renderer: bare value or keyed JSON in argument order) — `internal/cmd/dotget.go:24`
 - `looksLikeMilestoneVersion` (shape-matched leading version, so a typo'd path is named) — `internal/cmd/milestone.go:675`
-- `unsetDotted` (`project set --unset`: clear a scalar or one `board.state_map` entry) — `internal/cmd/project.go:489`
+- `unsetDotted` (`project set --unset`: clear a scalar or one `board.state_map` entry) — `internal/cmd/project.go:578`
 - `resolveBareMilestoneField` (unambiguous bare name → dotted path, ambiguity rejected) — `internal/cmd/milestone.go:824`
-- `stateMapKey` (`board.state_map` keys gated + normalised on write; doctor reports one on disk as an issue) — `internal/cmd/project.go:477`
+- `stateMapKey` (`board.state_map` keys gated + normalised on write; doctor reports one on disk as an issue) — `internal/cmd/project.go:550`
 - `TestTomlFieldsCarryMatchingJSONTags` (toml↔json tag parity, transitive walk over the eight document roots) — `internal/cmd/json_tag_parity_test.go:48`
 - `writeVersion` (one validated writer for both version homes, tracked copy first) — `internal/cmd/state.go:239`
 - doctor version-drift check (project.toml vs state.json, skipped on a fresh clone) — `internal/cmd/doctor.go:349`
-- `checkConfigTrust` (rejectable branch name, off-allowlist api_base, tracked local.toml and pre-2.24 git as exit-code-moving findings) — `internal/cmd/doctor.go:837`
-- `project.BoardFields` (`[board.fields]` nested table, locked `field_config_shape` — same idiom as `board.state_map`) — `internal/project/project.go:135`
-- `boardFieldKey` (`board.fields.<name>` addressed per leaf; a bogus name is rejected by name, bare `board.fields` is not a leaf) — `internal/cmd/project.go:525`
+- `checkConfigTrust` (rejectable branch name, off-allowlist api_base, tracked local.toml and pre-2.24 git as exit-code-moving findings) — `internal/cmd/doctor.go:972`
+- `project.BoardFields` (`[board.fields]` nested table, locked `field_config_shape` — same idiom as `board.state_map`) — `internal/project/project.go:139`
+- `boardFieldKey` (`board.fields.<name>` addressed per leaf; a bogus name is rejected by name, bare `board.fields` is not a leaf) — `internal/cmd/project.go:566`
 - `enumKeys` (the one table both enum gates read: five dotted keys → their `configenum` Sets) — `internal/cmd/project.go:314`
 - `checkEnumValue` (set-time refusal, run before the write so a rejected value leaves project.toml byte-unchanged) — `internal/cmd/project.go:328`
 - `enumProblems` (validate re-checks the same table, catching the hand-edited or cloned file the setter never saw) — `internal/cmd/validate.go:166`
@@ -265,20 +265,20 @@ Give every deferred idea a destination instead of leaving it write-only: `/dross
 
 - `Deferred.Target` (schema) — `internal/phase/phase.go:253`
 - `Deferred.Dismissed` (dismissed-state flag) — `internal/phase/phase.go:258`
-- `Deferred` (dross deferred list/route/unroute/dismiss) — `internal/cmd/deferred.go:33`
-- `collectDeferred` (scan + filter) — `internal/cmd/deferred.go:44`
-- `deferredRoute` (stamp target on disk) — `internal/cmd/deferred.go:160`
-- `deferredDismiss` (retire to dismissed, someday-only) — `internal/cmd/deferred.go:199`
-- `deferredUnroute` (clear target → someday; idempotent, refuses dismissed) — `internal/cmd/deferred.go:253`
+- `Deferred` (dross deferred list/route/unroute/dismiss) — `internal/cmd/deferred.go:39`
+- `collectDeferred` (scan + filter) — `internal/cmd/deferred.go:51`
+- `deferredRoute` (stamp target on disk) — `internal/cmd/deferred.go:186`
+- `deferredDismiss` (retire to dismissed, someday-only) — `internal/cmd/deferred.go:230`
+- `deferredUnroute` (clear target → someday; idempotent, refuses dismissed) — `internal/cmd/deferred.go:283`
 - `deferredList --dismissed` (hide/surface dismissed) — `internal/cmd/deferred.go:74`
 - `Deferred.Survivor` (identity key of a routed surviving mutant; preserved across unroute) — `internal/phase/phase.go:265`
 - `deferredAdd` (`dross deferred add`, `--why` / `--target`, one-command filing) — `internal/cmd/deferred_add.go:64`
 - `deferredHome` (current-phase spec when loadable, else the `_project` store; no arm returns "nowhere to put it") — `internal/cmd/deferred_add.go:27`
 - `deferredStore` (reserved `_project` store + stable per-item id) — `internal/cmd/deferred_store.go:36`
-- `validDeferredTarget` (one target rule shared by route, add and validate) — `internal/cmd/deferred_target.go:56`
+- `validDeferredTarget` (one target rule shared by route, add and validate) — `internal/cmd/deferred_target.go:53`
 - `resolveDeferredSource` (route/unroute/dismiss resolve `_project` through the store helper) — `internal/cmd/deferred.go:334`
-- `mirrorDeferredAdd` (same-command board mirror; warns and keeps the local write on failure) — `internal/cmd/deferred_add.go:152`
-- `danglingTargets` (validate walks the store; reserved `phases/_project` dir flagged; rename repoints store entries) — `internal/cmd/validate.go:145`
+- `mirrorDeferredAdd` (same-command board mirror; warns and keeps the local write on failure) — `internal/cmd/deferred_add.go:153`
+- `danglingTargets` (validate walks the store; reserved `phases/_project` dir flagged; rename repoints store entries) — `internal/cmd/validate.go:191`
 - `TestHandoffParksNoHomelessFinding` (self-retiring guard against parking a finding instead of filing it) — `internal/cmd/deferred_homeless_repo_test.go:27`
 - `/dross-inbox` board-off fallback + dismiss funnel — `assets/prompts/inbox.md`
 - `resolveBacklogIssue` (routed items mirrored with a `dross/target:` label, resolved by identity label) — `internal/cmd/issue.go:569`
@@ -338,7 +338,7 @@ The propose-and-react contract for interactive commands — a terse builtin rule
 - per-decision-point checklist + `## Exempt` list + coverage convention — `docs/interaction-audit.md`
 - README first-class write-up — `README.md` `## Interaction`
 - `interactionCoverage` (fail-closed classifier + Exempt parser) — `internal/cmd/interaction_coverage.go:37`
-- `interactionCoverageWarnings` (dross doctor on-demand lint) — `internal/cmd/doctor.go:544`
+- `interactionCoverageWarnings` (dross doctor on-demand lint) — `internal/cmd/doctor.go:679`
 - `TestInteractionCoverageFailClosed` (coverage gate + convention guard) — `internal/cmd/interaction_coverage_test.go:15`
 - `TestSpecPromptWalksEveryGrayArea` (spec §3 walk-all gray-area guard) — `internal/cmd/spec_prompt_test.go:102`
 - `TestInteractionSnippetHasDeferOrAddPattern` (defer-or-add pattern in the playbook) — `internal/cmd/interaction_snippet_test.go`
@@ -357,18 +357,18 @@ _introduced 10-interaction-contract · extended 11-retrofit-core-loop · extende
 
 Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue board — driven solely by a dedicated `[board]` config block, independent of `[remote]`, so a repo ships code to one host and tracks issues on another. Backends sit behind a `BoardClient` interface that `forge.NewBoard` dispatches by provider: the provider-aware forge `*Client` (forgejo/gitea/gitlab), a sibling `YouTrackClient` (REST CRUD, bearer permanent-token, readable-id `PROJ-7` addressing, `?fields` projection), a `JiraClient` (Jira Cloud REST v3, HTTP Basic email:token, string `PROJ-123` keys, ADF bodies, transition-driven state, milestones as project versions), or a `GitHubClient` (repo issues with integer milestones — forge-shaped — plus an isolated Projects v2 `addProjectV2ItemById` add-to-board on create when a board is configured). board.json links every artefact by the tracker's readable **string** id, and backlog links key on the deferred item's **stable id** rather than its position — removing an earlier item no longer slides a survivor into the deleted item's issue and re-titles a live issue at different work; legacy positional keys migrate onto ids title-checked, and a shifted legacy key is deliberately not adopted. YouTrack adds milestone entities per `[board].milestone_mode` (version bundle / agile board / epic), lifecycle→State mapping via the default map + `[board].state_map` (unmapped warns and skips), and backlog sync of unscaffolded slugs + someday ideas attached per mode (Fix versions / Epic subtask / project-based board). The lifecycle vocabulary that both sides of that mapping speak has **one** home in `configenum.LifecycleStatuses` — planned / in-progress / verifying / shipped / complete — and the producer emits `planned` (locked `lifecycle_vocabulary`, renamed from `planning`), so a locked-but-unstarted plan sets tracker state instead of hitting the unmapped-transition skip. Two guards keep emitters and maps from drifting apart again: a **bidirectional** test fails when a status dross emits at a call site has no state-map entry *or* a state map keys on a status nothing emits (each forge map checked independently, never unioned), and `--status` on `dross issue phase-sync` is validated against the set — ahead of the `[board].enabled` short-circuit, so a bad value can't exit 0 as a silent no-op — then normalised back before use. `shipped` and `complete` are emitted rather than dead keys (locked `dead_map_keys` / `terminal_emit_sites`): ship sets `--status shipped` when the PR merges and `--status complete --close` at finalize, the two board moments ship already had, leaving `dross phase complete` with no board coupling. `dross doctor` validates a configured `[board]`; the inbox board source is gated on `[board].enabled`. The Jira path is **proven end-to-end against live Jira Cloud** (2026-07-25 v1.0 self-audit): the round-trip surfaced and fixed two bugs the httptest coverage had hidden — `board.auth_user` (required by `NewJira`) wasn't wired into `dross project set`, and `ListIssues` used Jira's removed `/rest/api/3/search` endpoint (HTTP 410), now migrated to `/search/jql`. **The tracker, not board.json, is the authority for the phase→issue mapping** (locked `mapping_authority`): `phase-sync` resolves an existing issue by querying for the dross marker label plus the phase id before it creates one, so a re-run — or a run on a machine whose recorded mapping died with the deleted phase branch — adopts the live issue instead of minting an orphan, and board.json is demoted to a cache that self-heals when stale or missing. An unmarked coincidental title match is *not* adopted, and a legacy issue predating the marker is adopted by summary. The marker only works if it actually lands, so YouTrack applies dross tags on both create and update with replace semantics. **Closing tells the truth**: `--status complete --close` writes the mapped resolved state and then *verifies the read-back*, reporting a failure instead of returning a bare nil when the issue stays unresolved or the status has no resolved state mapped (Jira with no Done transition fails the command rather than reporting success). Field names YouTrack writes are read from `[board.fields]` — see [Configuration](#configuration) — rather than hardcoded, so a project that renamed State, the issue-type field or the version bundle syncs without a code change.
 
-- `forge.BoardClient` (interface) + `forge.NewBoard` (provider dispatch) — `internal/forge/forge.go:151`
+- `forge.BoardClient` (interface) + `forge.NewBoard` (provider dispatch) — `internal/forge/forge.go:166`
 - `forge.YouTrackClient` + `NewYouTrack` — `internal/forge/youtrack.go:28`
-- `YouTrackClient.EnsureMilestoneEntity` / `SetState` — `internal/forge/youtrack.go:190`
+- `YouTrackClient.EnsureMilestoneEntity` / `SetState` — `internal/forge/youtrack.go:320`
 - `forge.JiraClient` + `NewJira` (REST v3, versions, transitions) — `internal/forge/jira.go:28`
-- `JiraClient.ListIssues` (current `/search/jql` endpoint; the legacy `/search` was removed) — `internal/forge/jira.go:184`
+- `JiraClient.ListIssues` (current `/search/jql` endpoint; the legacy `/search` was removed) — `internal/forge/jira.go:191`
 - `forge.GitHubClient` + `NewGitHubProjects` (repo issues + Projects v2 attach) — `internal/forge/github.go:28`
-- `board.Board` (string readable-id link registry) — `internal/board/board.go:29`
-- `openBoard` (resolves client solely from `[board]`) / `syncBacklog` — `internal/cmd/issue.go:79`
-- `pushBacklogItems` (id-keyed backlog links, title-checked legacy migration, reusable push seam) — `internal/cmd/issue.go:485`
+- `board.Board` (string readable-id link registry) — `internal/board/board.go:30`
+- `openBoard` (resolves client solely from `[board]`) / `syncBacklog` — `internal/cmd/issue.go:90`
+- `pushBacklogItems` (id-keyed backlog links, title-checked legacy migration, reusable push seam) — `internal/cmd/issue.go:602`
 - `board.*` dotted config incl. `auth_user` — `internal/cmd/project.go:193`
 - `configenum.LifecycleStatuses` (single lifecycle vocabulary: status label + both forge state maps) — `internal/configenum/configenum.go:118`
-- `issuePhaseSync` (`--status` validated against the set before the enabled short-circuit, then normalised) — `internal/cmd/issue.go:411`
+- `issuePhaseSync` (`--status` validated against the set before the enabled short-circuit, then normalised) — `internal/cmd/issue.go:718`
 - `TestStateMapsKeyExactlyTheEmittedStatuses` (bidirectional emitted-statuses ↔ state-map-keys gate) — `internal/cmd/board_lifecycle_divergence_test.go:242`
 - `TestShipPromptEmitsTerminalBoardStatuses` (ship emits `shipped` on merge, `complete` at finalize) — `internal/cmd/ship_prompt_test.go:304`
 - `TestYouTrackErrorSnippetTruncatesAndHints` (transport error paths + backlog/subtask calls driven through httptest fakes, not accepted as network seams) — `internal/forge/youtrack_test.go:411`
@@ -386,9 +386,9 @@ Facts that are true of *this* clone and must never ride cumulative history live 
 
 The first tenant is `.dross/local.toml`, read and written through `dross local get|set`. Because it is machine-authored and never cloned, it is where the [host allowlist](#api-host-allowlist)'s escape hatch lives: `allow_hosts` adds a host the derivation can't reach, and the read **refuses a `local.toml` that git reports as tracked** rather than trusting its contents — otherwise a hostile repo could ship its own authorization and the allowlist would be self-authorizing again. `init` and `onboard` seed the gitignore entry so the file starts untracked, and doctor reports a tracked one. Its own first tenant is `quick_base` — the branch a standalone quick task forked from. Ship and `phase complete` push a recorded quick base's unpushed `.dross/` chores on *that* branch rather than on an inferred one, closing the divergence where a quick committed to main mid-phase left local main unpushed and the next phase squash-merge could not fast-forward it. An unrecorded quick base, or one whose ref is gone, is left alone rather than guessed at, and a base equal to the phase's own base is a no-op.
 
-- `Local` (`dross local get|set`, gitignored `.dross/local.toml`) — `internal/cmd/local.go:34`
-- `readAllowHosts` (`allow_hosts` escape hatch; refuses a git-tracked local.toml instead of trusting it) — `internal/cmd/local.go:107`
-- `TestReadAllowHostsRefusesTrackedLocal` (the self-authorizing hole, pinned shut) — `internal/cmd/local_test.go:134`
+- `Local` (`dross local get|set`, gitignored `.dross/local.toml`) — `internal/cmd/local.go:37`
+- `readAllowHosts` (`allow_hosts` escape hatch; refuses a git-tracked local.toml instead of trusting it) — `internal/cmd/local.go:169`
+- `TestReadAllowHostsRefusesTrackedLocal` (the self-authorizing hole, pinned shut) — `internal/cmd/local_test.go:135`
 - `pushQuickBaseIfRecorded` (ship + complete push chores on the recorded quick base, never an inferred one) — `internal/cmd/basebranch.go:129`
 - `TestShipReconcilesRecordedQuickBase` (pins ship's call site so a recorded quick base can't be left unpushed) — `internal/cmd/ship_test.go:1115`
 - `ensureDrossGitignore` (state.json gitignored by init + onboard, out of this repo's index) — `internal/cmd/gitignore.go:79`
@@ -430,8 +430,8 @@ _introduced milestone-branch-model · extended state-json-branch-safety · exten
 
 `dross milestone progress` answers, in one deterministic call, the question `/dross-milestone` must resolve before it can act: is there an active milestone, is it finished, and if not what is left. Every arm exits 0 — including "planning" and "nothing done yet" — because a non-zero exit would make a prompt read a normal state as a broken command. Status is reported verbatim from the toml, never normalised or inferred, since the dispatch branches on it first. Doneness is measured off each phase's own durable status marker rather than the state history, which is capped at 50 entries and silently forgets older phases; a slug listed on the roadmap with no phase directory counts as not-done, so a milestone cannot close with unbuilt criteria still on it (locked `phases_done_test`). `--json` emits the report as a document for prompts to consume; the plain-text arm narrates the same data for humans and is pinned on both of its list guards in each direction.
 
-- `buildMilestoneProgress` (status + done/total + remaining/unscaffolded from per-phase durable markers) — `internal/cmd/milestone_progress.go:92`
-- `milestoneProgressReport` (the emitted document; `AllDone` is true only when every listed slug is done *and* there is at least one) — `internal/cmd/milestone_progress.go:25`
+- `buildMilestoneProgress` (status + done/total + remaining/unscaffolded from per-phase durable markers) — `internal/cmd/milestone_progress.go:93`
+- `milestoneProgressReport` (the emitted document; `AllDone` is true only when every listed slug is done *and* there is at least one) — `internal/cmd/milestone_progress.go:26`
 
 _introduced milestone-lifecycle-close · 7f2fd2d_
 
@@ -454,12 +454,12 @@ A phase's mutation score covers only the files that phase touched: a survivor in
 - `NewScope` (git ∪ changes.json union) — `internal/verify/scope.go:99`
 - `Scope.Origin` (in-hunk vs inherited tag) — `internal/verify/scope.go:225`
 - `phaseScope` (merge-base resolution, git file set + hunks, degraded fallback) — `internal/cmd/verifyscope.go:24`
-- `FilterReport` (split against scope, recompute counts, tag survivors) — `internal/verify/verify.go:135`
-- `IsTestdataPath` (one segment-scoped testdata rule shared by the drain and verify) — `internal/verify/verify.go:219`
-- `RunScoped` — `internal/verify/verify.go:327`
-- `MutationOutOfScope` (all-filtered run status) — `internal/verify/verify.go:50`
-- `printScopeSummary` (scoped file list + `(+N more)` overflow) — `internal/cmd/verify.go:488`
-- `TestFilterReportDropsTestdataEntirely` (fixtures leave through neither exit) — `internal/verify/verify_test.go:600`
+- `FilterReport` (split against scope, recompute counts, tag survivors) — `internal/verify/verify.go:145`
+- `IsTestdataPath` (one segment-scoped testdata rule shared by the drain and verify) — `internal/verify/verify.go:229`
+- `RunScoped` — `internal/verify/verify.go:337`
+- `MutationOutOfScope` (all-filtered run status) — `internal/verify/verify.go:51`
+- `printScopeSummary` (scoped file list + `(+N more)` overflow) — `internal/cmd/verify.go:578`
+- `TestFilterReportDropsTestdataEntirely` (fixtures leave through neither exit) — `internal/verify/verify_test.go:602`
 
 _introduced mutation-diff-scope · cd0b5f6 · extended survivor-drain · f508b72_
 
@@ -470,14 +470,14 @@ Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Sve
 - `Adapter` — `internal/mutation/adapter.go:122`
 - `Report` — `internal/mutation/adapter.go:18`
 - `FileStat` (per-file mutant counters backing subset rescoring) — `internal/mutation/adapter.go:50`
-- `Gremlins.Run` (per-package invocation + path re-prefix) — `internal/mutation/gremlins.go:130`
-- `Unmeasured` (typed per-package score exclusion: missing / unreadable / zero-covered) — `internal/mutation/gremlins.go:101`
-- `Stryker.Run` — `internal/mutation/stryker.go:48`
+- `Gremlins.Run` (per-package invocation + path re-prefix) — `internal/mutation/gremlins.go:139`
+- `Unmeasured` (typed per-package score exclusion: missing / unreadable / zero-covered) — `internal/mutation/gremlins.go:110`
+- `Stryker.Run` — `internal/mutation/stryker.go:61`
 - `TestStrykerRunDistinguishesMissingFromUnreadable` (report-read, parse and unknown-status seams killed) — `internal/mutation/stryker_test.go:440`
-- `Stryker.runArgs` (npx invocation + workdir knob) — `internal/mutation/stryker.go:113`
-- `strykerPin` (exact `@stryker-mutator/core@9.6.1`, shared by the argv and the install hint) — `internal/mutation/stryker.go:100`
-- `StrykerNet.rePrefixFiles` (absolute `FullPath` → repo-relative) — `internal/mutation/stryker_net.go:148`
-- `dockerPrefix` (exact-`docker` exec-prefix guard) — `internal/cmd/verify.go:280`
+- `Stryker.runArgs` (npx invocation + workdir knob) — `internal/mutation/stryker.go:156`
+- `strykerPin` (exact `@stryker-mutator/core@9.6.1`, shared by the argv and the install hint) — `internal/mutation/stryker.go:143`
+- `StrykerNet.rePrefixFiles` (absolute `FullPath` → repo-relative) — `internal/mutation/stryker_net.go:206`
+- `dockerPrefix` (exact-`docker` exec-prefix guard) — `internal/cmd/verify.go:370`
 
 _introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076 · extended config-trust-hardening · 266a84d · extended mutation-diff-scope · 16d4426 · extended survivor-drain · 87ba203_
 
@@ -485,7 +485,7 @@ _introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended 
 
 The branch a phase forked from is a recorded fact, not an inference. `forkPhaseBranch` writes the resolved base into the phase-scoped `changes.json` (`changes.SetBase`, beside the existing `pr` field) as soon as `checkout -b` succeeds, and ship overwrites it with the base the PR was actually opened against, riding the same commit and push as the PR record — so a phase that never ships still has a base, and the PR's real target wins if the two ever diverge (locked `base_write_timing`). `phase complete` reads it back — working tree, then the phase ref, then an explicit `--base` — and **refuses** when nothing is recorded, naming the phase and both candidate branches, instead of falling back to a base derived from `current_milestone`. That inference is what fast-forwarded a stale `milestone/<version>` for a phase actually forked from main; the locked `legacy_escape` keeps pre-record phases completable by having the user *type* the branch, a conscious act rather than a guess. The incident is pinned end to end by a fixture staging the exact trap — phase forked from main, stale milestone branch present locally, PR merged to main — asserting completion either lands on main or refuses, never fast-forwarding the milestone branch and never deleting the phase branch. Side effect worth knowing: recording the base at create time makes `.dross/phases/<id>/` tracked immediately, so checking out another branch now removes a fresh phase's directory.
 
-- `changes.SetBase` (phase-scoped forked-from record, beside `pr`) — `internal/changes/changes.go:175`
+- `changes.SetBase` (phase-scoped forked-from record, beside `pr`) — `internal/changes/changes.go:199`
 - `forkPhaseBranch` (create-time write, after `checkout -b` succeeds) — `internal/cmd/phase.go:875`
 - ship-time base overwrite (what the PR was actually opened against, on the PR-record commit) — `internal/cmd/ship.go:358`
 - `resolveCompleteBase` (tree → phase ref → `--base`; refuses rather than inferring) — `internal/cmd/phase.go:679`
@@ -510,7 +510,7 @@ Create, list, number, migrate, complete, and reorder/insert/rename phases on ded
 - array-order splice helpers (`InsertRelative`, `MoveRelative`, `RenameInArray`) — `internal/phase/phase.go`
 - slug identity helpers (`Dir`, `Ordered`, `DisplayNumber`, `UniqueSlug`) — `internal/phase/phase.go:34`
 - complete-path verify heal (records a resolved-but-unfinalized verdict before the branch switch; never invents a verdict) — `internal/cmd/phase.go:296`
-- `changes.SetStatus` (monotonic per-phase shipped/complete marker written into changes.json — durable where the 50-entry state history is not) — `internal/changes/changes.go:192`
+- `changes.SetStatus` (monotonic per-phase shipped/complete marker written into changes.json — durable where the 50-entry state history is not) — `internal/changes/changes.go:236`
 
 The completion statement it prints at the end of a run — landing branch, per-side teardown, commits-not-yet-on-main — is covered in [Branch topology reporting](#branch-topology-reporting).
 
@@ -522,7 +522,7 @@ _c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-compl
 
 Phase artefacts (plan.toml / spec.toml) are written atomically: saveTOML encodes into a temp sibling and os.Rename's it over the target only after a fully successful write, so a mid-write crash or a failed encode leaves the previous file byte-identical rather than truncated. This is the durability guarantee behind the task-lifecycle integrity checks — a rejected or interrupted mutation can never corrupt the plan.
 
-- `saveTOML` (atomic temp-file + rename write) — `internal/phase/phase.go:405`
+- `saveTOML` (atomic temp-file + rename write) — `internal/phase/phase.go:413`
 - `Plan.Save` / `Spec.Save` — `internal/phase/phase.go`
 
 _introduced task-lifecycle-commands · 367c723_
@@ -572,7 +572,7 @@ Decide what counts as a dross repo, and say so the same way everywhere. `state.j
 - `IncompleteRootError` — `internal/cmd/root.go:36`
 - `MissingRootFiles` — `internal/cmd/root.go:56`
 - `LocateRoot` (misses without erroring — doctor + ship-recover seam) — `internal/cmd/root.go:76`
-- `finalizeIncompleteRoot` (doctor's distinct verdict) / `incompleteRootHeading` — `internal/cmd/doctor.go:642`
+- `finalizeIncompleteRoot` (doctor's distinct verdict) / `incompleteRootHeading` — `internal/cmd/doctor.go:777`
 - `Onboard` (adopts an incomplete root in place) — `internal/cmd/onboard.go:26`
 - `TestRootHelperCallersAreAllowlisted` (AST allowlist over the swallow set) — `internal/cmd/incompleteroot_test.go:166`
 - `ensureState` (materializes a missing state.json from project.toml's version) — `internal/cmd/state.go:267`
@@ -675,7 +675,7 @@ Push the phase branch and open a provider-aware PR/MR (GitHub/Forgejo/GitLab/Bit
 - `gitlabPRStatus` / `gitlabOpenMRsTargeting` (GitLab PRStatus + open-MRs-by-target parity) — `internal/ship/gitlab.go:101`, `internal/ship/gitlab.go:104`
 - `forgejoPRStatus` / `forgejoOpenPRsTargeting` (Forgejo/Gitea PRStatus + open-PRs-by-base parity) — `internal/ship/forgejo.go:86`
 - `buildOpenOpts` / `buildCommentOpts` (thread remote auth_scheme/project_id/auth_user) — `internal/cmd/ship.go:43`
-- `changes.SetPR` (records opened PR number per-phase for the completion merge-gate) — `internal/changes/changes.go:160`
+- `changes.SetPR` (records opened PR number per-phase for the completion merge-gate) — `internal/changes/changes.go:184`
 - `ship.BuildPRBody` — `internal/ship/body.go:20`
 - verify-gate auto-heal (records a resolved-but-unrecorded verdict via `finalizeVerify` BEFORE the pass-only refusal — partial/fail recorded, then still refused) — `internal/cmd/ship.go:123`
 
@@ -755,8 +755,8 @@ Every surviving mutant a verify run reports carries exactly one state — in-dif
 - `verify.ApplyLifecycle` (stamps state onto in-scope and out-of-scope records alike) — `internal/verify/lifecycle.go:187`
 - `Survivor` (dross survivor accept/route/list) — `internal/cmd/survivor.go:25`
 - `survivorRetire` (CLI retirement path — no hand-editing of survivors.toml) — `internal/cmd/survivor.go:200`
-- `survivorDrain` (repo-wide undisposed gate; unmeasured package fatal, testdata excluded, self-routing refused) — `internal/cmd/survivor_drain.go:304`
-- `workTreeIdentifier` (verify resolves identity against the working tree) — `internal/cmd/verify.go:519`
+- `survivorDrain` (repo-wide undisposed gate; unmeasured package fatal, testdata excluded, self-routing refused) — `internal/cmd/survivor_drain.go:308`
+- `workTreeIdentifier` (verify resolves identity against the working tree) — `internal/cmd/verify.go:609`
 - `TestAttributionCeilingIsReal` (live fixture proving the gremlins NOT-COVERED ceiling the shared category rests on) — `internal/mutation/ceiling_test.go:175`
 - `TestRepoAcceptanceReasonsCiteRealTests` (every acceptance reason names a checkable justification) — `internal/survivor/reasons_repo_test.go:181`
 - `TestSurvivorDrainBacklogClosed` (CI gate: the routed backlog is empty and nothing was re-routed past the phase) — `internal/cmd/survivor_backlog_repo_test.go:237`
@@ -774,7 +774,7 @@ List, add, remove, edit, and reposition tasks inside a phase's plan.toml through
 - `saveIfValid` (validate-then-write guard) — `internal/cmd/task.go:396`
 - `Plan.AddTask` / `Plan.RemoveTask` / `Plan.EditTask` (pure in-memory mutators) — `internal/phase/plan_edit.go:143`
 - `Plan.MoveTask` (guarded reposition, anchor-wave adoption + dependent reflow) — `internal/phase/plan_edit.go:228`
-- `Plan.NextRunnable` (same-wave tie-break by plan-array position) — `internal/phase/phase.go:310`
+- `Plan.NextRunnable` (same-wave tie-break by plan-array position) — `internal/phase/phase.go:318`
 - `Plan.NextTaskID` / `deriveWave` (high-water id + dependency-derived wave) — `internal/phase/plan_edit.go:35`
 - `ValidatePlan` (pre-write integrity guard) — `internal/phase/plan_edit.go:82`
 
@@ -833,12 +833,12 @@ _introduced board-state-map-truth · extended state-json-branch-safety · 47f383
 
 Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. The mutation leg is scoped to the phase's own diff (see **Mutation diff scoping**), so the score and verdict rest only on files the phase touched, survivors are weighted by their in-hunk/inherited origin tag, and an all-filtered run resolves through the non-threshold branch as `out-of-scope` rather than a bare 0.00. The mutation verdict gates on an **absolute count** of undisposed in-scope survivors, not a score ratio: `UnclassifiedInScope` counts only survivors carrying no disposition, out-of-scope ones never reach it, and any single unclassified survivor inside the phase's own diff fails the phase — there is no tolerance band and the prompt carries no score cutoff. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
 
-- `Verify` (CLI) — `internal/cmd/verify.go:30`
-- `verify.Run` — `internal/verify/verify.go:316`
+- `Verify` (CLI) — `internal/cmd/verify.go:31`
+- `verify.Run` — `internal/verify/verify.go:326`
 - `VerifySummary.UnclassifiedInScope` (absolute undisposed-in-scope gate, not a ratio) — `internal/verify/verify.go:285`
 - `LanguageRun.Error` (record-and-continue adapter failure) — `internal/verify/verify.go:83`
-- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:237`
-- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:199`
+- `configuredAdapters` (`[mutation] adapters` allowlist) — `internal/cmd/verify.go:318`
+- `finalizeVerify` (idempotent finalize core — finalized marker + phase-stamped events) — `internal/cmd/verify.go:206`
 - verify.md §2 verdict rules (diff-scoping guarantee, out-of-scope status, origin-weighted survivors) — `assets/prompts/verify.md:34`
 - `TestVerifyPromptOffloadGuidance` (verify.md §2 size-gated offload — large criterion-mapping reads fan to read-only subagents; judgement + verdict stay main-loop) — `internal/cmd/verify_prompt_test.go:20`
 - survivor lifecycle wiring (loads the acceptance store + cross-phase routed map, persists key/state into tests.json, prints the four counts, NOTEs stale acceptances without touching the verdict — see **Survivor lifecycle**) — `internal/cmd/verify.go:122`
@@ -853,7 +853,7 @@ Read-only `/loop` heartbeat: `dross watch --json` surfaces board issues new-sinc
 - `suggestedCommand` (ranked verify→ship→inbox→status) — `internal/cmd/watch.go:115`
 - `watch.State.Diff` (new/carried seen-set delta) — `internal/watch/watch.go:85`
 - `watch.ClassifyDrift` (milestone-scoped phase drift) — `internal/watch/drift.go:42`
-- `collectInbound` (mark-free inbound filter, shared with `issue pull`) — `internal/cmd/issue.go:646`
+- `collectInbound` (mark-free inbound filter, shared with `issue pull`) — `internal/cmd/issue.go:1052`
 - `/dross-watch` prompt (non-interactive broadcast) — `assets/prompts/watch.md:1`
 
 _introduced dross-watch · 5694cf5_
