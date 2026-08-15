@@ -24,7 +24,7 @@
 
 [[category]]
   name = "exec-seam-guard"
-  reason = "The 'if stdin != \"\"' guard lives inside the process-construction seam every test replaces (launcherCommand / recordRemote). Executing it would mean spawning the real ssh, which is the one thing these tests exist to avoid, so the line is unreachable from the suite by design rather than by omission."
+  reason = "The 'if stdin != \"\"' guard lives inside the process-construction seam (launcherCommand) that every remote test replaces, so executing it would mean spawning the real ssh — the one thing those tests exist to avoid. Its effect is asserted instead of its line: TestRemoteEnvExportsPrecedeTheCommand and TestGremlinsRemoteRunOrderAndArgv both read the script back off the recorded stdin, which is only there because this branch attaches it, and TestRemoteNilCarriesNoScript pins the empty-stdin side."
 
 [[accepted]]
   key = "742de35850fac7e6"
