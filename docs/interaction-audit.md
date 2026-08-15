@@ -97,6 +97,7 @@ retrofitted under Setup & config in phase 12.)
 
 | Decision point | Current pattern | Conforms | Notes |
 |---|---|---|---|
+| Gray areas (§2G) | one turn per area, every area walked, no selection step | ✅ | `plan-gray-area-walkthrough`; mirrors spec §3 — zero areas is a stated outcome, and the user's off-ramp is the only early exit |
 | Panel disagreements | one propose-and-react turn per divergence, leads with judge's pick | ✅ | `panel_disagreement_walk`; no full-list wall |
 | Steer-or-proceed | single AskUserQuestion, leads with `proceed` | ✅ | |
 | Coverage gap resolution | add task / move to deferred | ✅ | |
