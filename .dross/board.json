@@ -8,6 +8,7 @@
     "config-value-truth": "DRO-25",
     "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
+    "guard-remedy-ordering": "DRO-27",
     "milestone-lifecycle-close": "DRO-13",
     "mutation-diff-scope": "DRO-9",
     "red-proof-reachability": "DRO-23",

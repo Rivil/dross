@@ -1,0 +1,52 @@
+[phase]
+  id = "guard-remedy-ordering"
+  title = "Guard remedy ordering"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "When the branch-switch state.json guard refuses a local branch that is merely BEHIND its remote — an ancestor of it — and the remote no longer carries the tracked copy, the refusal leads with the fast-forward as the fix. Today it offers only move-aside-and-restore or untrack-for-good, both of which are more work than catching up with a branch whose stale copy is already gone upstream."
+
+[[criteria]]
+  id = "c-2"
+  text = "The guard never recommends a fast-forward that would not actually clear the refusal. A remote that still carries the tracked copy, a branch with no remote, and a branch that has genuinely diverged each keep the existing remedies — a lead remedy that leaves the user exactly where they were is worse than the longer one that works."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross milestone prune` shows what it is about to delete and asks before deleting it, and `--dry-run` prints the same list while deleting nothing. Branch deletion is irreversible from the user's side and the command currently deletes the whole stale set with no preview."
+
+[[criteria]]
+  id = "c-4"
+  text = "A merged-but-uncompleted phase is cleared by one verb — `dross phase reconcile` — rather than by the user retyping a `dross phase complete <id>` line per phase. Status and watch suggest that single verb instead of printing the chore list, and neither mutates anything on a read-only call."
+
+[[criteria]]
+  id = "c-5"
+  text = "verify.md resolves 'the next phase' from the milestone's own `phases` array rather than from `dross phase list`, so a phase whose successors are not yet scaffolded is not narrated as the last in the milestone. That misreport happened live on 2026-08-13 (phase 9 of 14 announced as feature-complete) and sent the user to the wrong next command."
+
+[[decisions]]
+  key = "ff_lead_requires_a_clean_remote"
+  choice = "The fast-forward is offered as the LEAD remedy only when the remote-tracking ref both contains the local branch and carries no tracked state.json of its own. Otherwise the existing remedies stand, unreordered."
+  why = "A remedy is only the cheapest correct fix if it is correct. Fast-forwarding onto a remote that still tracks the file moves the refusal rather than clearing it — the user does the work, re-runs, and is refused again by the same guard for the same reason, which teaches them the guidance is guesswork. The two conditions are cheap to check and are exactly what makes the advice true."
+  locked = true
+
+[[decisions]]
+  key = "prune_confirms_by_default"
+  choice = "`dross milestone prune` prints the branches and asks for confirmation by default; `--dry-run` lists and exits; `--yes` skips the prompt for scripted use."
+  why = "Deleting a branch on origin is irreversible from the user's side, and the existing command does the whole set with no preview — the one shape where a wrong stale-detection result is unrecoverable. Confirm-by-default rather than dry-run-by-default because a prune that did nothing unless you passed a second flag is the ergonomics people route around, and --yes keeps it usable from a script."
+  locked = true
+
+[[decisions]]
+  key = "reconcile_is_explicit_and_read_only_elsewhere"
+  choice = "`dross phase reconcile` is a new explicit verb that batches the completions. `dross status` and `dross watch` only NAME it — they never complete a phase themselves."
+  why = "Same split the prune surface already makes: a read-only command that mutates on a glance is a trap, and completion writes records and deletes branches. Naming one verb also fixes the actual complaint — status leaking an N-line chore list the user has to hand-execute."
+  locked = true
+
+[[decisions]]
+  key = "next_phase_reads_the_milestone_array"
+  choice = "The 'next phase' narration resolves against the milestone toml's `phases` array, falling back to `dross phase list` only when there is no active milestone."
+  why = "`dross phase list` is a directory listing: it prints scaffolded phases, and a phase is scaffolded only once someone has started it. Using it as the ordering source makes every unstarted successor invisible, which is why a phase 9 of 14 was narrated as the last in its milestone. The milestone's array is the roadmap and is the only source that knows about work not yet begun."
+  locked = true
+
+[[deferred]]
+  text = "An upgrade note (CHANGELOG / README) telling an existing adopter what to do the first time the checkout refusal fires on a branch that still tracks .dross/state.json."
+  why = "Carried forward unrouted, on the reason it was first deferred with: doctor already names the exact fix at the moment it bites, and c-1 now makes the refusal itself lead with the cheapest one. A release note is distribution work for adopters this repo does not have. Left as someday rather than routed — inventing a target that names nothing is the lie this milestone keeps closing."
