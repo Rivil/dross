@@ -77,7 +77,7 @@ func Watch() *cobra.Command {
 				New:       diff.New,
 				Current:   diff.Current,
 				Drift:     drift,
-				Suggested: suggestedCommand(drift, len(diff.New)),
+				Suggested: suggestedCommand(drift, len(diff.New), reconcilableCount(root)),
 				BoardOK:   boardReached,
 			}
 
@@ -112,7 +112,7 @@ func Watch() *cobra.Command {
 // complete-but-unverified phase, then ship a verified-but-unshipped one) before
 // pulling in new board intake, and fall back to status when nothing presses.
 // Returns exactly one command, never empty.
-func suggestedCommand(drift []watch.PhaseDrift, newCount int) string {
+func suggestedCommand(drift []watch.PhaseDrift, newCount, reconcilable int) string {
 	var hasComplete, hasVerified bool
 	for _, d := range drift {
 		switch d.Kind {
@@ -127,6 +127,11 @@ func suggestedCommand(drift []watch.PhaseDrift, newCount int) string {
 		return "/dross-verify"
 	case hasVerified:
 		return "/dross-ship"
+	case reconcilable > 1:
+		// Finished work whose branches are still lying around. It outranks new
+		// board intake — cleanup that is already earned beats work not started
+		// — and it is named as ONE verb rather than leaked as a chore list.
+		return "dross phase reconcile"
 	case newCount > 0:
 		return "/dross-inbox"
 	default:

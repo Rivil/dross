@@ -23,6 +23,14 @@ func reconcileFixture(t *testing.T, ids ...string) string {
 	if err := runCmd(t, Init()); err != nil {
 		t.Fatalf("init: %v", err)
 	}
+	// A complete-enough project so status's earlier "finish setup first"
+	// branches do not short-circuit ahead of the reconcile hint.
+	mustRunSet(t, "project.name", "test-app")
+	mustRunSet(t, "runtime.mode", "native")
+	if err := runCmd(t, State(), "set", "current_milestone", "v1.0"); err != nil {
+		t.Fatalf("state set current_milestone: %v", err)
+	}
+
 	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")

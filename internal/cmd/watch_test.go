@@ -168,18 +168,25 @@ func TestSuggestPrecedence(t *testing.T) {
 		name     string
 		drift    []watch.PhaseDrift
 		newCount int
-		want     string
+		// reconcilable is how many phase branches are waiting on a completion.
+		// It ranks below advancing an in-flight phase and above new intake:
+		// cleanup that is already earned beats work not started.
+		reconcilable int
+		want         string
 	}{
-		{"complete beats new-issues", complete, 3, "/dross-verify"},
-		{"verified beats new-issues", verified, 3, "/dross-ship"},
-		{"complete beats verified", append(append([]watch.PhaseDrift{}, complete...), verified...), 0, "/dross-verify"},
-		{"new issues when no advance", nil, 2, "/dross-inbox"},
-		{"in-progress does not trigger", inProg, 0, "/dross-status"},
-		{"idle no-new", nil, 0, "/dross-status"},
+		{"complete beats new-issues", complete, 3, 0, "/dross-verify"},
+		{"verified beats new-issues", verified, 3, 0, "/dross-ship"},
+		{"complete beats verified", append(append([]watch.PhaseDrift{}, complete...), verified...), 0, 0, "/dross-verify"},
+		{"new issues when no advance", nil, 2, 0, "/dross-inbox"},
+		{"in-progress does not trigger", inProg, 0, 0, "/dross-status"},
+		{"idle no-new", nil, 0, 0, "/dross-status"},
+		{"reconcilable pile beats new-issues", nil, 3, 2, "dross phase reconcile"},
+		{"advancing a phase still wins", complete, 0, 5, "/dross-verify"},
+		{"one outstanding phase is not a pile", nil, 0, 1, "/dross-status"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := suggestedCommand(tc.drift, tc.newCount)
+			got := suggestedCommand(tc.drift, tc.newCount, tc.reconcilable)
 			if got == "" {
 				t.Fatal("suggestedCommand returned empty — must always return exactly one")
 			}
