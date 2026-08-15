@@ -12,6 +12,7 @@
     "mutation-diff-scope": "DRO-9",
     "red-proof-reachability": "DRO-23",
     "remote-mutation-runner": "DRO-24",
+    "remote-test-runner": "DRO-26",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10"
   },

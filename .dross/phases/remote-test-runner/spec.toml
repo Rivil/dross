@@ -1,0 +1,65 @@
+[phase]
+  id = "remote-test-runner"
+  title = "Remote test runner"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross test` exists and runs the repo's `runtime.test_command`, refusing without `dross trust` consent exactly as the mutation path does. Today nothing in dross ever executes that command — it is only sha256'd for consent, and the agent runs the suite itself via Bash — so this criterion is what creates the single execution site everything else in the phase points at."
+
+[[criteria]]
+  id = "c-2"
+  text = "With a granted remote host, `dross test` runs the suite on that host and no test process spawns on this machine; `dross test --local` forces the local run. The claim is offload, not latency: a run is correct if the local machine stays free, and no criterion here promises it is faster."
+
+[[criteria]]
+  id = "c-3"
+  text = "A package/path selector narrows the run — `dross test ./internal/cmd/...` — and reaches the remote unchanged, so a targeted re-run after a fix costs a package rather than the whole suite. The same selector means the same thing on both transports."
+
+[[criteria]]
+  id = "c-4"
+  text = "One grant serves both uses: the machine-local keys are `remote_host` / `remote_workdir`, `mutation_remote_host` / `mutation_remote_workdir` still resolve as deprecated aliases so an existing grant keeps working untouched, and `dross doctor` reports one Remote section covering mutation and tests rather than two."
+
+[[criteria]]
+  id = "c-5"
+  text = "A transport failure is never reported as a passing suite. An unreachable host, an incomplete sync or a stream that dies mid-run exits non-zero naming the transport as the cause, and is distinguishable in both exit code and message from the suite itself going red — the two mean opposite things to a caller deciding whether to commit."
+
+[[criteria]]
+  id = "c-6"
+  text = "The prompts that gate on the suite — execute.md, quick.md, verify.md — instruct running `dross test` rather than interpolating `<runtime.test_command>`, and a guard test fails if a prompt reintroduces the raw interpolation. The trust wording stays as it is: dross test refuses without consent, and no prompt tells an agent to run `dross trust` on the user's behalf."
+
+[[decisions]]
+  key = "remote_by_default"
+  choice = "With a grant present, `dross test` runs remotely. `--local` is the escape hatch, not the default."
+  why = "The whole point of granting a host is that runs leave the laptop; an opt-in flag would mean the grant sits unused except when someone remembers it. The escape exists because a remote is sometimes down or the tree is mid-edit, and a developer must always be able to say 'run it here'."
+  locked = true
+
+[[decisions]]
+  key = "offload_not_speed"
+  choice = "Success is 'no test process spawns locally', never 'the suite is faster'. No criterion promises a speedup."
+  why = "Measured before scoping: the suite is 1:57.6 wall against 132s CPU — 112% CPU on a 14-core laptop. It is serialized on shelling out to git, not CPU-bound, so the remote's 16 cores buy nearly nothing and rsync plus a remote compile will likely make wall-clock WORSE. That is an acceptable trade for a free laptop, and it is a lie if written as a performance criterion. Unlike the mutation runner, whose win came from 62 GB RAM and per-mutant parallel compile."
+
+[[decisions]]
+  key = "one_grant_two_uses"
+  choice = "Generalize the machine-local grant to `remote_host` / `remote_workdir`, keeping the `mutation_remote_*` names as deprecated aliases, and add `dross remote {grant,status,revoke}` with `dross mutation remote *` retained as an alias."
+  why = "Tests on one box and mutation on another is a configuration nobody actually wants, and a second grant verb would double the consent surface for the same trust decision — the thing the user authorized is 'run my code on that machine', not 'run one particular tool'. Aliases rather than a rename because an existing grant lives in an untracked local.toml the user would have to re-issue by hand, and the README documents the old verb."
+  locked = true
+
+[[decisions]]
+  key = "transport_vs_suite_failure"
+  choice = "A transport failure and a red suite are distinct outcomes: different exit codes and a message that names which happened. A transport failure never produces a result record."
+  why = "They mean opposite things to whoever is deciding whether to commit — a red suite is information about the code, an unreachable host is information about nothing. The existing `remote.Classify` already separates ErrTransport / ErrPartial / ErrRemoteCommand for exactly this reason; the failure mode being guarded against is a dead ssh reported as a clean empty pass, which is the false-green the repo's own rules exist to prevent."
+  locked = true
+
+[[decisions]]
+  key = "compose_remote_not_adapter"
+  choice = "Build on `internal/remote` (Target, SyncArgs, SSHArgs, Script, Classify) directly. Do not route through `internal/mutation/launcher.go`."
+  why = "The launcher is keyed by adapter name through the closed `remoteReportPaths` / `remoteRestores` tables and `newLauncher` refuses an adapter missing from them. A test run fetches no report back, so it does not fit that shape, and inventing a pseudo-adapter to reuse the launcher would mean adding a fake report path to satisfy a table."
+  locked = true
+
+[[deferred]]
+  text = "Run `runtime.test_watch` remotely — a long-lived remote watch session that re-runs on change."
+  why = "A watch is a session, not a command: it needs a persistent connection, change detection on the LOCAL tree, and a way to stop it. That is a different transport problem from a one-shot run, and nothing reads test_watch today anyway."
+
+[[deferred]]
+  text = "Incremental sync tuning — keep a warm remote tree, skip the rsync when nothing changed, or cache the Go build across runs."
+  why = "It is the obvious next lever on wall-clock, but it is an optimization on top of a transport that does not exist yet. Measure the naive version first; tuning before there is a baseline is guessing."
