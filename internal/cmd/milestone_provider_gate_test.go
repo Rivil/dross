@@ -135,7 +135,7 @@ func TestPruneAnnouncesProviderLookupSkip(t *testing.T) {
 	stubOpenPRs(t, nil, errors.New("gh not installed"))
 
 	var out string
-	if err := runCmdCapturing(t, &out, Milestone(), "prune"); err != nil {
+	if err := runCmdCapturing(t, &out, Milestone(), "prune", "--yes"); err != nil {
 		t.Fatalf("a failed lookup must not block a clean record scan: %v", err)
 	}
 	if !strings.Contains(out, "open-PR check skipped") || !strings.Contains(out, "gh not installed") {
@@ -154,7 +154,7 @@ func TestPruneAnnouncesSkipWithNoProvider(t *testing.T) {
 	rec := stubOpenPRs(t, []ship.BasePR{{Number: 7}}, nil)
 
 	var out string
-	if err := runCmdCapturing(t, &out, Milestone(), "prune"); err != nil {
+	if err := runCmdCapturing(t, &out, Milestone(), "prune", "--yes"); err != nil {
 		t.Fatalf("prune: %v", err)
 	}
 	if !strings.Contains(out, "open-PR check skipped") {
