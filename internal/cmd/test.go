@@ -266,23 +266,41 @@ func runTestRemotely(t remote.Target, repoDir, line string) error {
 	return nil
 }
 
-// remoteFailure turns a spawn failure into a tagged error. t-5 refines the
-// wording and the partial-transfer arm; what matters already is that a run
-// which never happened does not exit 0 and does not look like a red suite.
+// exitCoder is what both *exec.ExitError and a test double expose: the status
+// the spawned process ended with. Matched as an interface rather than as the
+// concrete type so this classification is reachable from a test without a live
+// host — a rule about network failures that can only be exercised over a
+// network is a rule nothing checks.
+type exitCoder interface{ ExitCode() int }
+
+// remoteFailure turns a spawn failure into a tagged error, keeping the two
+// outcomes apart all the way to the exit code.
+//
+// They mean opposite things to whoever is deciding whether to commit. A red
+// suite is information ABOUT THE CODE. An unreachable host is information about
+// nothing — the run did not happen, nothing was measured, and treating it as a
+// verdict is the false-green this whole seam exists to prevent.
+//
+// The message names which leg failed and on what host, because "command
+// failed" sends the reader to the source when the answer is that a machine is
+// down.
 func remoteFailure(bin, host string, err error) error {
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		classified := remote.Classify(bin, host, ee.ExitCode())
+	var ec exitCoder
+	if errors.As(err, &ec) {
+		classified := remote.Classify(bin, host, ec.ExitCode())
 		switch {
 		case errors.Is(classified, remote.ErrPartial):
-			return &ExitCodeError{Code: exitPartial, Err: classified}
+			// The connection held but the tree did not all arrive, so whatever
+			// ran, ran against an incomplete checkout. Not a verdict either.
+			return &ExitCodeError{Code: exitPartial, Err: fmt.Errorf("incomplete transfer to %s — the suite did not run against the full tree: %w", host, classified)}
 		case errors.Is(classified, remote.ErrRemoteCommand):
+			// The remote program spoke: this is the suite, and it is red.
 			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test suite failed on %s: %w", host, classified)}
 		default:
-			return &ExitCodeError{Code: exitTransport, Err: classified}
+			return &ExitCodeError{Code: exitTransport, Err: fmt.Errorf("could not reach %s — the suite did not run: %w", host, classified)}
 		}
 	}
 	// The local binary is missing or could not start: nothing ran on the
 	// remote, which is a transport failure by any useful definition.
-	return &ExitCodeError{Code: exitTransport, Err: fmt.Errorf("remote %s on %s: %w: %v", bin, host, remote.ErrTransport, err)}
+	return &ExitCodeError{Code: exitTransport, Err: fmt.Errorf("could not reach %s: remote %s did not start: %w: %v", host, bin, remote.ErrTransport, err)}
 }
