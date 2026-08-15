@@ -1,0 +1,6 @@
+{
+  "phase": "multilang-verify-signal",
+  "base": "milestone/v1.3",
+  "base_commit": "6de86cae0c08c13d42b2f07db26e41470519c8b8",
+  "tasks": {}
+}
