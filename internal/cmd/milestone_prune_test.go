@@ -78,7 +78,7 @@ func TestPruneDeletesOnlyStaleBranches(t *testing.T) {
 	mustGit(t, dir, "checkout", "-q", "main")
 
 	var out string
-	if err := runCmdCapturing(t, &out, Milestone(), "prune"); err != nil {
+	if err := runCmdCapturing(t, &out, Milestone(), "prune", "--yes"); err != nil {
 		t.Fatalf("prune: %v", err)
 	}
 
@@ -135,7 +135,7 @@ func TestPruneLocalOnlyBranchSkipsRemote(t *testing.T) {
 	seedCompleteMilestone(t, dir, "v1.0")
 
 	var out string
-	if err := runCmdCapturing(t, &out, Milestone(), "prune"); err != nil {
+	if err := runCmdCapturing(t, &out, Milestone(), "prune", "--yes"); err != nil {
 		t.Fatalf("a local-only stale branch should prune cleanly: %v", err)
 	}
 	if branchExists(t, dir, "milestone/v1.0") {
@@ -214,7 +214,7 @@ func TestPruneLeavesAnActiveMilestoneAlone(t *testing.T) {
 	seedActiveMilestone(t, dir, "v1.0")
 
 	var out string
-	if err := runCmdCapturing(t, &out, Milestone(), "prune"); err != nil {
+	if err := runCmdCapturing(t, &out, Milestone(), "prune", "--yes"); err != nil {
 		t.Fatalf("prune with nothing prunable should exit 0: %v", err)
 	}
 

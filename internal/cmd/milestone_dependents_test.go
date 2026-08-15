@@ -141,7 +141,7 @@ func TestPruneDeletesOnceDependentHasMerged(t *testing.T) {
 	mustGit(t, dir, "branch", "-D", "mergetmp")
 	mustGit(t, dir, "fetch", "-q", "origin")
 
-	if err := runCmd(t, Milestone(), "prune"); err != nil {
+	if err := runCmd(t, Milestone(), "prune", "--yes"); err != nil {
 		t.Fatalf("prune should proceed once the dependent has merged: %v", err)
 	}
 	if branchExists(t, dir, "milestone/v1.2") {

@@ -121,7 +121,7 @@ func guardLiveState(repoDir, ref string) error {
 	if gitNoOut(repoDir, gitRefArgs("cat-file", []string{"-e"}, ref+":"+rel)...) != nil {
 		return nil // the target carries no copy — the ordinary case
 	}
-	return fmt.Errorf(`refusing to switch to %s: it would overwrite your live %s.
+	return fmt.Errorf(`refusing to switch to %s: it would overwrite your live %s.%s
 
 %s carries a tracked copy of that file from before it was untracked, and git
 overwrites an ignored working-tree file without complaint. The live copy is
@@ -139,10 +139,62 @@ Or drop the stale copy from that branch for good:
 
     git checkout %s && git rm --cached %s && git commit -m "chore: untrack state.json"`,
 		ref, rel,
+		fastForwardRemedy(repoDir, ref, rel),
 		ref,
 		rel, rel,
 		rel,
 		ref,
 		rel, rel,
 		ref, rel)
+}
+
+// fastForwardRemedy returns the lead remedy — a fast-forward — for the one case
+// where it is both cheaper than the two below and actually sufficient: ref is a
+// local branch merely BEHIND its remote, and the remote no longer carries the
+// tracked copy.
+//
+// Both conditions, not either (locked ff_lead_requires_a_clean_remote). A
+// remedy is only the cheapest correct fix if it is CORRECT: fast-forwarding
+// onto a remote that still tracks the file moves the refusal rather than
+// clearing it, so the user does the work, re-runs, and is refused again by the
+// same guard for the same reason — which teaches them the guidance is guesswork.
+//
+// Returns "" for every other shape (no remote-tracking ref, diverged, remote
+// still carrying the file), leaving the existing remedies exactly as they were.
+// It is an addition and a reordering, never a replacement.
+func fastForwardRemedy(repoDir, ref, rel string) string {
+	// Only a local branch has a remote to catch up with. A ref that is already
+	// remote-tracking, a tag or a raw sha has nothing to fast-forward from.
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+ref)...) != nil {
+		return ""
+	}
+	remoteRef := "refs/remotes/origin/" + ref
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, remoteRef)...) != nil {
+		return ""
+	}
+	// Behind, not diverged: the local ref must be an ANCESTOR of the remote, or
+	// a fast-forward is not available and the lead line would be an instruction
+	// that errors.
+	behind, err := isAncestor(repoDir, ref, remoteRef)
+	if err != nil || !behind {
+		return ""
+	}
+	// Already up to date is not "behind" — nothing to suggest.
+	if same, err := isAncestor(repoDir, remoteRef, ref); err != nil || same {
+		return ""
+	}
+	// The remote must not carry the file itself, or catching up re-introduces
+	// exactly what is being refused.
+	if gitNoOut(repoDir, gitRefArgs("cat-file", []string{"-e"}, "origin/"+ref+":"+rel)...) == nil {
+		return ""
+	}
+	return fmt.Sprintf(`
+
+%s is only BEHIND origin/%s, and origin/%s no longer carries that file — so
+catching up is enough, and is the cheapest fix:
+
+    git fetch origin && git branch --force %s origin/%s
+
+The two remedies below still work, and are what you need if the fast-forward
+is not available to you.`, ref, ref, ref, ref, ref)
 }

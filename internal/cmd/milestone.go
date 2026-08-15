@@ -10,6 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/milestone"
@@ -50,11 +51,12 @@ func Milestone() *cobra.Command {
 // It never decides for itself what is stale: the set comes from
 // staleMilestoneBranches, and a branch that detector did not name is not touched.
 func milestonePrune() *cobra.Command {
-	return &cobra.Command{
+	var dryRun, yes bool
+	c := &cobra.Command{
 		Use:   "prune",
 		Short: "Delete milestone/* branches whose work is already on the main branch",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := FindRoot()
 			if err != nil {
 				return err
@@ -112,6 +114,30 @@ func milestonePrune() *cobra.Command {
 				}
 			}
 
+			// Show the whole set before touching any of it. Deleting a branch
+			// on origin is irreversible from the user's side, and prune used to
+			// do the lot with no preview — the one shape where a wrong
+			// stale-detection result cannot be walked back.
+			Printf("%d stale milestone branch(es) to delete:\n\n", len(stale))
+			for _, b := range stale {
+				where := "local"
+				if b.HasRemote {
+					where = "local + origin"
+				}
+				Printf("    %s (%s) — %s\n", b.Name, b.Reason, where)
+			}
+			Print("")
+
+			if dryRun {
+				Print("--dry-run: nothing deleted.")
+				return nil
+			}
+			if !yes {
+				if !confirmPrune(cmd) {
+					return fmt.Errorf("not confirmed — nothing deleted. Re-run and answer y, or pass --yes to skip the prompt")
+				}
+			}
+
 			for _, b := range stale {
 				if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, b.Name)...); err != nil {
 					return fmt.Errorf("delete local %s: %w\n%s", b.Name, err, out)
@@ -128,6 +154,39 @@ func milestonePrune() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&dryRun, "dry-run", false, "list what would be deleted and exit without deleting anything")
+	c.Flags().BoolVar(&yes, "yes", false, "skip the confirmation prompt (for scripted use)")
+	return c
+}
+
+// confirmPrune asks before an irreversible delete, and answers NO when stdin is
+// not a terminal.
+//
+// Refusing rather than proceeding on a non-interactive stdin is the whole point:
+// a prompt that is silently skipped when nobody is watching is not a
+// confirmation, it is a delay. A script that means it says so with --yes, which
+// is a deliberate act the way the flag name reads.
+func confirmPrune(cmd *cobra.Command) bool {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return false
+	}
+	fmt.Fprint(cmd.OutOrStdout(), "Delete these branches (local and on origin)? [y/N] ")
+	var resp string
+	_, _ = fmt.Fscanln(os.Stdin, &resp)
+	return isAffirmative(resp)
+}
+
+// isAffirmative is the answer parsing, split out from the prompt so it is
+// reachable from a test.
+//
+// The read itself needs a terminal, so everything after it — including which
+// answers mean yes — was unexecuted by the whole suite while sitting in front of
+// an irreversible delete. Splitting it is what makes the rule assertable rather
+// than merely plausible: only an explicit y/yes proceeds, and the default of a
+// bare Enter is NO.
+func isAffirmative(resp string) bool {
+	r := strings.ToLower(strings.TrimSpace(resp))
+	return r == "y" || r == "yes"
 }
 
 // milestoneComplete closes out a milestone in two steps. Without --finalize it
