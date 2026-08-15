@@ -27,6 +27,7 @@ import (
 	"github.com/Rivil/dross/internal/argfence"
 
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // Exit codes. They are a contract, not an implementation detail: a caller
@@ -166,18 +167,122 @@ func Test() *cobra.Command {
 				return err
 			}
 			line := testCommandLine(proj.Runtime.TestCommand, args)
-			return runTest(filepath.Dir(root), line, local)
+			return runTest(root, filepath.Dir(root), line, local)
 		},
 	}
 	c.Flags().BoolVar(&local, "local", false, "run on this machine even when a remote is granted")
 	return c
 }
 
-// runTest executes one test run. The transport choice lands here in t-4; for
-// now every run is local.
-func runTest(repoDir, line string, _ bool) error {
-	if err := spawnLocal(repoDir, line, os.Stdout, os.Stderr); err != nil {
-		return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test suite failed: %w", err)}
+// spawnRemote is the remote-execution seam: a fully-built argv plus the script
+// piped to its stdin, streamed the same way a local run is. Tests replace it to
+// record what would have been spawned without touching a network.
+//
+// It is separate from internal/remote's own Exec because that one CAPTURES
+// stdout — right for a probe, wrong for a suite whose output is the thing the
+// caller is reading. internal/remote stays the argv builder; execution and
+// streaming live here.
+var spawnRemote = runRemoteCommand
+
+// runRemoteCommand spawns a built remote argv, streaming output through.
+//
+// Written as Command(argv[0]) plus an explicit Args assignment rather than a
+// `...` spread, for the same reason internal/remote's buildCommand is: the
+// subprocess argv audit skips spreads, so the spread form would pass that gate
+// by accident. This form is evaluated, and accepted by a named entry with a
+// reason in subprocargs_audit_test.go.
+func runRemoteCommand(argv []string, stdin string, stdout, stderr io.Writer) error {
+	c := exec.Command(argv[0])
+	c.Args = argv
+	if stdin != "" {
+		c.Stdin = strings.NewReader(stdin)
+	}
+	c.Stdout = stdout
+	c.Stderr = stderr
+	return c.Run()
+}
+
+// testTarget resolves which machine this run happens on. A nil target means
+// here.
+//
+// Remote is the default whenever a grant exists (locked remote_by_default): the
+// point of granting a host is that runs leave the laptop, and an opt-in flag
+// would leave the grant unused except when someone remembered it. --local is
+// the escape for a remote that is down or a tree mid-edit.
+func testTarget(root, repoDir string, local bool) (*remote.Target, error) {
+	if local {
+		return nil, nil
+	}
+	return readRemoteGrant(root, repoDir)
+}
+
+// runTest executes one test run, here or on the granted host.
+func runTest(root, repoDir, line string, local bool) error {
+	target, err := testTarget(root, repoDir, local)
+	if err != nil {
+		return err
+	}
+	if target == nil {
+		if err := spawnLocal(repoDir, line, os.Stdout, os.Stderr); err != nil {
+			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test suite failed: %w", err)}
+		}
+		return nil
+	}
+	return runTestRemotely(*target, repoDir, line)
+}
+
+// runTestRemotely pushes the tree, then runs the suite over ssh.
+//
+// The order is the correctness property, not a sequence of steps: running
+// before the sync measures whatever the remote tree happened to hold, which is
+// the previous run's code. Both argv builders validate the target and return an
+// error INSTEAD of an argv, so an unsafe host never reaches a shell.
+func runTestRemotely(t remote.Target, repoDir, line string) error {
+	root, err := filepath.Abs(repoDir)
+	if err != nil {
+		return err
+	}
+	sync, err := remote.SyncArgs(t, root)
+	if err != nil {
+		return err
+	}
+	if err := spawnRemote(sync, "", os.Stdout, os.Stderr); err != nil {
+		return remoteFailure("rsync", t.Host, err)
+	}
+
+	ssh, err := remote.SSHArgs(t)
+	if err != nil {
+		return err
+	}
+	// The consented line runs under a shell on the far side too, so the
+	// selector and the command mean there exactly what they mean here.
+	script, err := remote.Script(t, []string{"sh", "-c", line})
+	if err != nil {
+		return err
+	}
+	if err := spawnRemote(ssh, script, os.Stdout, os.Stderr); err != nil {
+		return remoteFailure("ssh", t.Host, err)
 	}
 	return nil
+}
+
+// remoteFailure turns a spawn failure into a tagged error. t-5 refines the
+// wording and the partial-transfer arm; what matters already is that a run
+// which never happened does not exit 0 and does not look like a red suite.
+func remoteFailure(bin, host string, err error) error {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		classified := remote.Classify(bin, host, ee.ExitCode())
+		switch {
+		case errors.Is(classified, remote.ErrPartial):
+			return &ExitCodeError{Code: exitPartial, Err: classified}
+		case errors.Is(classified, remote.ErrRemoteCommand):
+			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test suite failed on %s: %w", host, classified)}
+		default:
+			return &ExitCodeError{Code: exitTransport, Err: classified}
+		}
+	}
+	// The local binary is missing or could not start: nothing ran on the
+	// remote, which is a transport failure by any useful definition.
+	return &ExitCodeError{Code: exitTransport, Err: fmt.Errorf("remote %s on %s: %w: %v", bin, host, remote.ErrTransport, err)}
 }
