@@ -203,10 +203,27 @@ func SSHArgs(t Target) ([]string, error) {
 // caller is responsible for refusing an unset name, because an empty value is
 // not the same as an absent one and the difference changes what gets measured.
 func Script(t Target, argv []string) (string, error) {
+	return ScriptAll(t, [][]string{argv})
+}
+
+// ScriptAll is Script for several commands that must run in the same workdir,
+// chained with `&&` so the first failure stops the rest and the exit code that
+// reaches ssh is that failure's.
+//
+// One script rather than one ssh call per command: the commands that need this
+// are a stale-report `rm` and the `mkdir` that recreates its directory, issued
+// once per package inside the run loop. Splitting them would double the ssh
+// round trips in that loop for no gain, and would let the pair interleave with
+// another package's.
+//
+// The `&&` chaining is load-bearing, not cosmetic. A `;` would run the mkdir
+// even when the rm failed, which is how a run ends up with a directory it
+// cannot trust and a report from a previous run still in it.
+func ScriptAll(t Target, cmds [][]string) (string, error) {
 	if err := t.Validate(); err != nil {
 		return "", err
 	}
-	if len(argv) == 0 {
+	if len(cmds) == 0 {
 		return "", fmt.Errorf("remote: empty command for host %q", t.Host)
 	}
 	var b strings.Builder
@@ -219,12 +236,17 @@ func Script(t Target, argv []string) (string, error) {
 	}
 	b.WriteString("cd ")
 	b.WriteString(shellQuote(t.Workdir))
-	b.WriteString(" && ")
-	for i, a := range argv {
-		if i > 0 {
-			b.WriteByte(' ')
+	for _, argv := range cmds {
+		if len(argv) == 0 {
+			return "", fmt.Errorf("remote: empty command for host %q", t.Host)
 		}
-		b.WriteString(shellQuote(a))
+		b.WriteString(" && ")
+		for i, a := range argv {
+			if i > 0 {
+				b.WriteByte(' ')
+			}
+			b.WriteString(shellQuote(a))
+		}
 	}
 	b.WriteByte('\n')
 	return b.String(), nil

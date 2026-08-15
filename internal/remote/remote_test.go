@@ -406,3 +406,77 @@ func TestExecRefusesAnUnsafeTargetBeforeSpawning(t *testing.T) {
 		t.Errorf("Exec spawned %v for a refused target", *calls)
 	}
 }
+
+// --- ScriptAll ---------------------------------------------------------------
+
+// TestScriptAllChainsWithAndNotSemicolon.
+//
+// The chaining operator is load-bearing. ScriptAll's caller pairs a stale-report
+// `rm` with the `mkdir` that recreates its directory; under `;` the mkdir would
+// run even when the rm failed, leaving a directory the run cannot trust with a
+// previous run's report still in it. Under `&&` the failure stops the chain and
+// its exit code is what reaches ssh.
+func TestScriptAllChainsWithAndNotSemicolon(t *testing.T) {
+	script, err := ScriptAll(target(), [][]string{
+		{"rm", "-rf", "reports/gremlins/x.json"},
+		{"mkdir", "-p", "reports/gremlins"},
+	})
+	if err != nil {
+		t.Fatalf("ScriptAll = %v", err)
+	}
+	want := "cd '/srv/x' && 'rm' '-rf' 'reports/gremlins/x.json' && 'mkdir' '-p' 'reports/gremlins'\n"
+	if script != want {
+		t.Errorf("script =\n%q\nwant\n%q", script, want)
+	}
+	if strings.Contains(script, ";") {
+		t.Errorf("commands are separated by `;` — a failed rm would not stop the mkdir: %q", script)
+	}
+}
+
+// TestScriptAllQuotesEveryWordOfEveryCommand: the quoting guarantee must not
+// weaken for the second and later commands in a chain.
+func TestScriptAllQuotesEveryWordOfEveryCommand(t *testing.T) {
+	script, err := ScriptAll(target(), [][]string{
+		{"rm", "-rf", "a b;c"},
+		{"mkdir", "-p", "$(id)"},
+	})
+	if err != nil {
+		t.Fatalf("ScriptAll = %v", err)
+	}
+	for _, want := range []string{`'a b;c'`, `'$(id)'`} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script does not quote %s: %q", want, script)
+		}
+	}
+}
+
+// TestScriptAllRejectsAnEmptyCommandAnywhereInTheChain. An empty argv would
+// emit a bare `&&` and produce a syntax error on the remote — at which point
+// the exit code says nothing about what the run was trying to do.
+func TestScriptAllRejectsAnEmptyCommandAnywhereInTheChain(t *testing.T) {
+	if _, err := ScriptAll(target(), nil); err == nil {
+		t.Error("an empty command list was accepted")
+	}
+	if _, err := ScriptAll(target(), [][]string{{"rm", "-rf", "x"}, {}}); err == nil {
+		t.Error("an empty command in the tail of the chain was accepted")
+	}
+}
+
+// TestScriptStillDelegatesToScriptAll: the single-command form keeps its exact
+// output, so every existing caller and its pinned argv are unaffected.
+func TestScriptStillDelegatesToScriptAll(t *testing.T) {
+	one, err := Script(target(), []string{"gremlins", "unleash"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, err := ScriptAll(target(), [][]string{{"gremlins", "unleash"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if one != all {
+		t.Errorf("Script and ScriptAll disagree:\n%q\n%q", one, all)
+	}
+	if one != "cd '/srv/x' && 'gremlins' 'unleash'\n" {
+		t.Errorf("the single-command script shape changed: %q", one)
+	}
+}

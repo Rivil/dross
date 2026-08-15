@@ -398,7 +398,25 @@ func (l *Launcher) clearReport(key, localPath string) error {
 	if err != nil {
 		return err
 	}
-	script, serr := remote.Script(t, []string{"rm", "-rf", rel})
+	// The mkdir is the other half of the rm, and it is what makes a remote run
+	// able to produce a report at all.
+	//
+	// reports/ is gitignored, and the locked `:- .gitignore` sync filter keeps
+	// ignored paths off the wire — deliberately, so node_modules and build
+	// output do not cross. The consequence is that the report DIRECTORY never
+	// arrives either. Gremlins does not create parent dirs for --output: it
+	// fails on the first mutant write with "impossible to write file" and
+	// leaves nothing behind. The fetch then exits 23, which is correctly read
+	// as UnmeasuredMissing, and every package reports "no report — gremlins
+	// gathered no covered mutants". A fully working remote run scores 0/0 and
+	// reads as nothing-to-measure.
+	//
+	// The local path has always done this (os.MkdirAll in gremlins.go); the
+	// remote had no equivalent.
+	script, serr := remote.ScriptAll(t, [][]string{
+		{"rm", "-rf", rel},
+		{"mkdir", "-p", path.Dir(rel)},
+	})
 	if serr != nil {
 		return serr
 	}

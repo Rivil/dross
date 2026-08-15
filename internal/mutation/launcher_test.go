@@ -490,3 +490,107 @@ func flagValue(t *testing.T, argv []string, flag string) string {
 	t.Fatalf("%s not present in %v", flag, argv)
 	return ""
 }
+
+// TestRemoteRunCreatesTheReportDirectory is the regression test for the bug
+// that made every remote run unmeasurable.
+//
+// reports/ is gitignored, and the locked `:- .gitignore` sync filter keeps
+// ignored paths off the wire — so the report DIRECTORY never reaches the
+// remote. Gremlins does not create parent dirs for --output; it fails on the
+// first mutant write with "impossible to write file" and leaves nothing behind.
+// The fetch then exits 23, which is read (correctly) as UnmeasuredMissing, and
+// the run reports "no report — gremlins gathered no covered mutants" for every
+// package. Nothing anywhere says the word "error": a fully working remote run
+// scores 0/0 and reads as nothing-to-measure.
+//
+// That is why this asserts the mkdir rather than trusting the tool: every layer
+// below already behaved correctly, and the result was still silence.
+func TestRemoteRunCreatesTheReportDirectory(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		run     func(t *testing.T, root string) error
+		wantDir string
+	}{
+		{
+			name: "gremlins",
+			run: func(t *testing.T, root string) error {
+				g := &Gremlins{ProjectRoot: root, Remote: helicon("/srv/dross")}
+				_, err := g.Run([]string{"internal/verify/verify.go"})
+				return err
+			},
+			wantDir: "reports/gremlins",
+		},
+		{
+			name: "stryker",
+			run: func(t *testing.T, root string) error {
+				s := &Stryker{ProjectRoot: root, PackageManager: "pnpm", Remote: helicon("/srv/dross")}
+				_, err := s.Run([]string{"src/a.ts"})
+				return err
+			},
+			wantDir: "reports/mutation",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			failLocalSpawns(t)
+			rec := recordRemote(t, func(argv []string) {
+				if isFetch(argv) {
+					_ = os.WriteFile(argv[3], []byte(fixtureGremlinsBareBasename), 0o644)
+				}
+			})
+			_ = tc.run(t, root)
+
+			want := "'mkdir' '-p' '" + tc.wantDir + "'"
+			if idx := indexOfScript(*rec, want); idx < 0 {
+				t.Fatalf("no remote command creates the report directory %q:\n%v",
+					tc.wantDir, remoteScripts(*rec))
+			}
+			// It must precede the tool, or the tool still has nowhere to write.
+			mk := indexOfScript(*rec, want)
+			tool := -1
+			for i, argv := range *rec {
+				s := remoteScript(argv)
+				if strings.Contains(s, "'gremlins'") || strings.Contains(s, "'npx'") {
+					tool = i
+					break
+				}
+			}
+			if tool < 0 {
+				t.Fatalf("the tool was never invoked:\n%v", remoteScripts(*rec))
+			}
+			if mk > tool {
+				t.Errorf("the report directory is created AFTER the tool runs (%d vs %d)", mk, tool)
+			}
+		})
+	}
+}
+
+// TestRemoteReportDirIsCreatedInTheSameCommandAsTheRm pins the shape rather
+// than only the effect: folding the mkdir into the rm's script keeps the
+// per-package remote leg count at push/rm/run/fetch. A separate ssh call would
+// double the round trips inside the package loop and would silently change the
+// ordering every other test in this file asserts.
+func TestRemoteReportDirIsCreatedInTheSameCommandAsTheRm(t *testing.T) {
+	root := t.TempDir()
+	failLocalSpawns(t)
+	rec := recordRemote(t, func(argv []string) {
+		if isFetch(argv) {
+			_ = os.WriteFile(argv[3], []byte(fixtureGremlinsBareBasename), 0o644)
+		}
+	})
+
+	g := &Gremlins{ProjectRoot: root, Remote: helicon("/srv/dross")}
+	if _, err := g.Run([]string{"a/x.go"}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got, want := kinds(*rec), []string{"push", "rm", "run", "fetch"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("the mkdir added a remote leg: %v, want %v", got, want)
+	}
+	script := remoteScript((*rec)[1])
+	if !strings.Contains(script, "'rm' '-rf'") || !strings.Contains(script, "'mkdir' '-p'") {
+		t.Errorf("the rm and the mkdir are not one command: %q", script)
+	}
+	if strings.Index(script, "'rm'") > strings.Index(script, "'mkdir'") {
+		t.Errorf("the mkdir precedes the rm, so the rm deletes what it just made: %q", script)
+	}
+}
