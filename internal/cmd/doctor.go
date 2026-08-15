@@ -1177,25 +1177,29 @@ func remoteMutationTools(p *project.Project) ([]string, map[string]string) {
 // which is how a check gets ignored.
 func checkRemoteMutation(root, repoDir string, p *project.Project) int {
 	issues := 0
-	Print("Remote mutation:")
+	// ONE section, not one per consumer. The grant is a single authorization —
+	// "run this repo's code on that machine" — and mutation runs and `dross
+	// test` both read it. Reporting it twice would invite the reader to think
+	// there are two grants to manage, and to withdraw one of them.
+	Print("Remote:")
 	target, err := readRemoteGrant(root, repoDir)
 	switch {
 	case err != nil:
 		Printf("  ✗ %v\n", err)
 		issues++
 	case target == nil:
-		Printf("  ⚠ no remote granted — mutation runs on this machine.\n")
-		Printf("    Grant one with `dross mutation remote grant <host> <workdir>`.\n")
+		Printf("  ⚠ no remote granted — mutation runs and `dross test` run on this machine.\n")
+		Printf("    Grant one with `dross remote grant <host> <workdir>`.\n")
 	default:
 		tools, needBy := remoteMutationTools(p)
 		ready, perr := remoteProbeFn(*target, tools)
 		if perr != nil {
 			Printf("  ✗ remote host %s is not usable: %v\n", target.Host, perr)
-			Printf("    Fix: check ssh access, or withdraw the grant with `dross mutation remote revoke`.\n")
+			Printf("    Fix: check ssh access, or withdraw the grant with `dross remote revoke`.\n")
 			issues++
 			break
 		}
-		Printf("  ✓ %s reachable — workdir %s, %d cores\n", target.Host, target.Workdir, ready.Cores)
+		Printf("  ✓ %s reachable — workdir %s, %d cores (mutation runs and `dross test`)\n", target.Host, target.Workdir, ready.Cores)
 		for _, missing := range ready.Missing {
 			// One line per missing tool, each naming the adapter that wanted
 			// it: "something is missing" sends the user looking, and the

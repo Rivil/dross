@@ -19,6 +19,8 @@ Three checks, in order: mutation efficacy (mechanical), criterion-to-test mappin
    ```
    Exit 0 means trusted; continue. Non-zero means untrusted or stale — **stop and show the user the exact `runtime.test_command` line** from project.toml, then let them run `dross trust`. Never run `dross trust` on their behalf: the gate exists so a human reads the line the repo supplied.
 
+   When you need to run the suite directly at any point in this command, use `dross test` rather than interpolating `runtime.test_command` — it is the one consent-gated execution site, and it uses the granted remote host when there is one (`--local` forces this machine). A **3** or **4** exit means the run did not happen; do not read it as a verdict.
+
 ## 1. Mechanical pass — `dross verify`
 
 Run:

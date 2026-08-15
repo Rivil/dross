@@ -130,15 +130,25 @@ without it:
 ```
 dross trust --check
 ```
-Exit 0 means trusted; run the command. Non-zero means it is untrusted or stale —
+Exit 0 means trusted; run the suite. Non-zero means it is untrusted or stale —
 **stop and show the user the exact `runtime.test_command` line**, then let them
 run `dross trust`. Never run `dross trust` on their behalf: the whole point of
 the gate is that a human reads the line the repo supplied.
 
-Run the test command:
+Run the suite through dross, not by interpolating the raw command:
 ```
-<runtime.test_command>
+dross test
 ```
+`dross test` runs `runtime.test_command` itself — gated on the same consent,
+streaming output as it arrives, and on the granted remote host when there is one
+(`dross remote status`), so a run leaves the laptop without you doing anything
+differently. Append a package/path selector to narrow a re-run after a fix
+(`dross test ./internal/cmd/...`), and pass `--local` to force the run onto this
+machine.
+
+Read the exit status, not just the output: **1** is a red suite, **3** is a host
+it could not reach and **4** is an incomplete transfer. The last two mean the
+suite did not run — they are never a reason to commit.
 
 Three outcomes:
 

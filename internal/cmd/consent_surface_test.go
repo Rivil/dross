@@ -121,23 +121,29 @@ func readPrompt(t *testing.T, name string) string {
 	return string(b)
 }
 
-// TestExecutePromptChecksConsent: a prompt that tells the agent to run
-// <runtime.test_command> must check consent FIRST. The ordering is the whole
-// assertion — a check placed after the run would be documentation, not a gate.
+// TestExecutePromptChecksConsent: a prompt that tells the agent to run the
+// suite must check consent FIRST. The ordering is the whole assertion — a check
+// placed after the run would be documentation, not a gate.
+//
+// The run is `dross test` now rather than an interpolated
+// <runtime.test_command> (remote-test-runner). The CLI enforces the same gate
+// itself, so the prompt's check is belt-and-braces — but the belt still has to
+// come first, or the guidance teaches the wrong order for every repo whose
+// agent reads it.
 func TestExecutePromptChecksConsent(t *testing.T) {
 	for _, name := range []string{"execute.md", "quick.md"} {
 		t.Run(name, func(t *testing.T) {
 			prompt := readPrompt(t, name)
-			run := strings.Index(prompt, "<runtime.test_command>\n```")
+			run := strings.Index(prompt, "dross test\n```")
 			if run < 0 {
-				t.Fatalf("%s no longer runs <runtime.test_command> — update this test if that is intended", name)
+				t.Fatalf("%s no longer runs the suite via `dross test` — update this test if that is intended", name)
 			}
 			check := strings.Index(prompt, "dross trust --check")
 			if check < 0 {
-				t.Fatalf("%s runs the repo's test command with no consent check", name)
+				t.Fatalf("%s runs the repo's suite with no consent check", name)
 			}
 			if check > run {
-				t.Errorf("%s checks consent AFTER running the test command — the check must precede the run", name)
+				t.Errorf("%s checks consent AFTER running the suite — the check must precede the run", name)
 			}
 		})
 	}
