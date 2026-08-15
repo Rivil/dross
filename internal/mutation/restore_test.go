@@ -237,8 +237,8 @@ func TestRemoteRestoreFailureIsFatalBeforeTheToolArgv(t *testing.T) {
 	failLocalSpawns(t)
 	var rec [][]string
 	orig := launcherCommand
-	launcherCommand = func(argv []string) *exec.Cmd {
-		cp := append([]string(nil), argv...)
+	launcherCommand = func(argv []string, stdin string) *exec.Cmd {
+		cp := append(append([]string(nil), argv...), stdin)
 		rec = append(rec, cp)
 		if strings.Contains(remoteScript(cp), "'pnpm'") {
 			return exec.Command("sh", "-c", "exit 1")

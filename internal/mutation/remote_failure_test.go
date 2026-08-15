@@ -41,8 +41,8 @@ func scriptRemote(t *testing.T, exits []remoteExit, onCmd func(argv []string)) *
 	t.Helper()
 	var rec [][]string
 	orig := launcherCommand
-	launcherCommand = func(argv []string) *exec.Cmd {
-		cp := append([]string(nil), argv...)
+	launcherCommand = func(argv []string, stdin string) *exec.Cmd {
+		cp := append(append([]string(nil), argv...), stdin)
 		rec = append(rec, cp)
 		if onCmd != nil {
 			onCmd(cp)

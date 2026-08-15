@@ -30,8 +30,11 @@ func recordRemote(t *testing.T, onCmd func(argv []string)) *[][]string {
 	t.Helper()
 	var rec [][]string
 	orig := launcherCommand
-	launcherCommand = func(argv []string) *exec.Cmd {
-		cp := append([]string(nil), argv...)
+	launcherCommand = func(argv []string, stdin string) *exec.Cmd {
+		// The piped script is recorded as a trailing element, so one [][]string
+		// still holds everything that crossed to the remote — argv AND stdin.
+		// Nothing reaches the host through a channel the recorder cannot see.
+		cp := append(append([]string(nil), argv...), stdin)
 		rec = append(rec, cp)
 		if onCmd != nil {
 			onCmd(cp)
@@ -69,12 +72,13 @@ func failLocalSpawns(t *testing.T) {
 // isFetch distinguishes the per-report pull from the one-shot push: FetchArgs
 // emits `rsync -a <host>:<path> <local>`, SyncArgs emits `rsync -az …`.
 func isFetch(argv []string) bool {
-	return len(argv) == 4 && argv[0] == "rsync" && argv[1] == "-a"
+	return argv[0] == "rsync" && argv[1] == "-a"
 }
 
 func isPush(argv []string) bool { return argv[0] == "rsync" && argv[1] == "-az" }
 
-// remoteScript returns the shell string an ssh argv carries, or "".
+// remoteScript returns the script piped to an ssh command's stdin, or "".
+// It is the recorder's trailing element — see recordRemote.
 func remoteScript(argv []string) string {
 	if argv[0] != "ssh" || len(argv) < 3 {
 		return ""
@@ -151,11 +155,13 @@ func TestGremlinsRemoteRunOrderAndArgv(t *testing.T) {
 	// The rsync source is the adapter's ProjectRoot as a VALUE, not merely
 	// something with a trailing slash: a push from any other local directory
 	// would measure a tree the user is not looking at.
+	// Indices are from the front: the recorder appends the (empty) stdin script
+	// as a trailing element, so counting back from the end would move.
 	push := (*rec)[0]
-	if src := push[len(push)-2]; src != root+"/" {
+	if src := push[5]; src != root+"/" {
 		t.Errorf("rsync source = %q, want %q (the adapter's ProjectRoot)", src, root+"/")
 	}
-	if dst := push[len(push)-1]; dst != "helicon:/srv/dross" {
+	if dst := push[6]; dst != "helicon:/srv/dross" {
 		t.Errorf("rsync destination = %q, want helicon:/srv/dross", dst)
 	}
 

@@ -175,8 +175,16 @@ var remoteReportPaths = map[string]func(key string) string{
 //
 // Local runs keep going through each adapter's own buildCmd seam, untouched, so
 // the existing argv-pinning tests keep measuring exactly what they measured.
-var launcherCommand = func(argv []string) *exec.Cmd {
-	return exec.Command(argv[0], argv[1:]...)
+// stdin, when non-empty, is the script the remote shell reads — it carries the
+// workdir, the tool argv and every environment value, none of which appear in
+// argv. The seam takes both so a test can assert on either, and so nothing can
+// reach the remote through a channel the recorder does not see.
+var launcherCommand = func(argv []string, stdin string) *exec.Cmd {
+	cmd := exec.Command(argv[0], argv[1:]...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	return cmd
 }
 
 // newLauncher validates the combination before anything can be spawned.
@@ -234,8 +242,8 @@ func (l *Launcher) reportRel(key string) (string, error) {
 // runRemote runs a fully-built remote argv, classifying the failure by exit
 // code rather than by stderr prose — stderr varies by ssh version, locale and
 // remote shell; the code does not.
-func (l *Launcher) runRemote(argv []string) error {
-	err := launcherCommand(argv).Run()
+func (l *Launcher) runRemote(argv []string, stdin string) error {
+	err := launcherCommand(argv, stdin).Run()
 	if err == nil {
 		return nil
 	}
@@ -265,7 +273,7 @@ func (l *Launcher) ensurePushed() error {
 	// Set before the exec, not after: a failed push must not be retried by the
 	// next step, which would turn one transport failure into one per package.
 	l.pushed = true
-	return l.runRemote(argv)
+	return l.runRemote(argv, "")
 }
 
 // toolCmd builds the command that runs the adapter's own argv.
@@ -288,11 +296,15 @@ func (l *Launcher) toolCmd(argv []string, local func([]string) *exec.Cmd) (*exec
 	if err != nil {
 		return nil, err
 	}
-	full, err := remote.SSHArgs(t, argv)
+	full, err := remote.SSHArgs(t)
 	if err != nil {
 		return nil, err
 	}
-	return launcherCommand(full), nil
+	script, err := remote.Script(t, argv)
+	if err != nil {
+		return nil, err
+	}
+	return launcherCommand(full, script), nil
 }
 
 // restoreArgv resolves this adapter's dependency-restore command, or nil when
@@ -338,11 +350,15 @@ func (l *Launcher) ensureRestored() error {
 	if terr != nil {
 		return terr
 	}
-	full, serr := remote.SSHArgs(t, argv)
+	full, serr := remote.SSHArgs(t)
 	if serr != nil {
 		return serr
 	}
-	if rerr := l.runRemote(full); rerr != nil {
+	script, scerr := remote.Script(t, argv)
+	if scerr != nil {
+		return scerr
+	}
+	if rerr := l.runRemote(full, script); rerr != nil {
 		return fmt.Errorf("remote dependency restore `%s` failed on %s: %w",
 			strings.Join(argv, " "), l.Target.Host, rerr)
 	}
@@ -378,11 +394,15 @@ func (l *Launcher) clearReport(key, localPath string) error {
 	if err != nil {
 		return err
 	}
-	argv, err := remote.SSHArgs(t, []string{"rm", "-rf", rel})
+	argv, err := remote.SSHArgs(t)
 	if err != nil {
 		return err
 	}
-	return l.runRemote(argv)
+	script, serr := remote.Script(t, []string{"rm", "-rf", rel})
+	if serr != nil {
+		return serr
+	}
+	return l.runRemote(argv, script)
 }
 
 // fetchReport copies the report the tool just wrote back to the local path the
@@ -411,7 +431,7 @@ func (l *Launcher) fetchReport(key, localDest string) error {
 	if err != nil {
 		return err
 	}
-	return l.runRemote(argv)
+	return l.runRemote(argv, "")
 }
 
 // remoteExitFatal decides whether a mutation tool's non-zero exit ends the run.

@@ -501,3 +501,149 @@ func repoRootForDocs(t *testing.T) string {
 	t.Fatal("could not locate the module root from the test working directory")
 	return ""
 }
+
+// --- mutation_remote_env (c-8) ---
+
+// TestRemoteEnvKeyIsSettableAndHoldsOnlyNames.
+//
+// mutation_remote_env IS in localKeys, unlike the two grant keys, and the
+// name/value split is why: names are not secrets, so the key needs none of the
+// grant verb's ceremony. The property that makes it safe is that dross stores
+// no value anywhere — asserted here by reading the file back after a resolve
+// and checking the VALUE is absent from it.
+func TestRemoteEnvKeyIsSettableAndHoldsOnlyNames(t *testing.T) {
+	root := chdirDross(t)
+	const secret = "postgres://user:hunter2@db.internal/app"
+	t.Setenv("DATABASE_URL", secret)
+	t.Setenv("NODE_ENV", "test")
+
+	if err := runCmd(t, Local(), "set", "mutation_remote_env", "DATABASE_URL,NODE_ENV"); err != nil {
+		t.Fatalf("local set mutation_remote_env: %v", err)
+	}
+	var out string
+	if err := runCmdCapturing(t, &out, Local(), "get", "mutation_remote_env"); err != nil {
+		t.Fatalf("local get: %v", err)
+	}
+	if strings.TrimSpace(out) != "DATABASE_URL,NODE_ENV" {
+		t.Errorf("did not round-trip: got %q", strings.TrimSpace(out))
+	}
+
+	env, err := resolveRemoteEnv("DATABASE_URL,NODE_ENV")
+	if err != nil {
+		t.Fatalf("resolveRemoteEnv: %v", err)
+	}
+	if len(env) != 2 || env[0].Name != "DATABASE_URL" || env[0].Value != secret {
+		t.Fatalf("resolveRemoteEnv = %+v", env)
+	}
+
+	b, err := os.ReadFile(filepath.Join(root, LocalFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), secret) || strings.Contains(string(b), "hunter2") {
+		t.Errorf("a VALUE was written to the store — it holds names only:\n%s", b)
+	}
+}
+
+// TestRemoteEnvRefusesAnUnsetName: an empty export is not an absent one. A
+// DATABASE_URL that is absent and one that is empty select different code paths
+// — different suites load — so an empty export would silently change WHAT gets
+// measured rather than failing.
+func TestRemoteEnvRefusesAnUnsetName(t *testing.T) {
+	chdirDross(t)
+	os.Unsetenv("DEFINITELY_NOT_SET_ANYWHERE")
+
+	env, err := resolveRemoteEnv("DEFINITELY_NOT_SET_ANYWHERE")
+	if err == nil {
+		t.Fatalf("an unset name was exported anyway: %+v", env)
+	}
+	if env != nil {
+		t.Errorf("a refusal still returned %+v", env)
+	}
+	if !strings.Contains(err.Error(), "DEFINITELY_NOT_SET_ANYWHERE") {
+		t.Errorf("the refusal does not name the variable: %v", err)
+	}
+
+	// An empty-but-SET name is fine: the user said it should cross, and empty is
+	// a value they chose.
+	t.Setenv("DEFINITELY_NOT_SET_ANYWHERE", "")
+	if _, err := resolveRemoteEnv("DEFINITELY_NOT_SET_ANYWHERE"); err != nil {
+		t.Errorf("a set-but-empty name was refused: %v", err)
+	}
+}
+
+// TestRemoteEnvForwardsOnlyAllowlistedNames: dross's own environment carries
+// GITHUB_TOKEN and YOUTRACK_TOKEN. "Send everything" would put dross's
+// credentials on the mutation host, so only names the user asked for cross.
+func TestRemoteEnvForwardsOnlyAllowlistedNames(t *testing.T) {
+	chdirDross(t)
+	t.Setenv("GITHUB_TOKEN", "ghp_secret")
+	t.Setenv("YOUTRACK_TOKEN", "yt_secret")
+	t.Setenv("NODE_ENV", "test")
+
+	env, err := resolveRemoteEnv("NODE_ENV")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(env) != 1 || env[0].Name != "NODE_ENV" {
+		t.Fatalf("resolveRemoteEnv = %+v, want only NODE_ENV", env)
+	}
+	for _, e := range env {
+		if strings.Contains(e.Name, "TOKEN") || strings.Contains(e.Value, "secret") {
+			t.Errorf("a non-allowlisted credential crossed: %+v", e)
+		}
+	}
+}
+
+// TestRemoteEnvTrimsAndIgnoresBlanks covers the comma-separated form a human
+// would actually type, including a trailing comma.
+func TestRemoteEnvTrimsAndIgnoresBlanks(t *testing.T) {
+	chdirDross(t)
+	t.Setenv("A_VAR", "1")
+	t.Setenv("B_VAR", "2")
+
+	env, err := resolveRemoteEnv(" A_VAR , B_VAR ,")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(env) != 2 || env[0].Name != "A_VAR" || env[1].Name != "B_VAR" {
+		t.Errorf("resolveRemoteEnv = %+v", env)
+	}
+	if env, err := resolveRemoteEnv(""); err != nil || env != nil {
+		t.Errorf("an unset allowlist = (%+v, %v), want (nil, nil) — env is optional", env, err)
+	}
+}
+
+// TestRemoteGrantCarriesTheResolvedEnv: the grant reader is where the names
+// become values, so every remote command in the run inherits the same
+// environment rather than each call site resolving it separately.
+func TestRemoteGrantCarriesTheResolvedEnv(t *testing.T) {
+	root := chdirDross(t)
+	t.Setenv("NODE_ENV", "test")
+
+	body := "mutation_remote_host = \"helicon\"\nmutation_remote_workdir = \"/srv/dross\"\nmutation_remote_env = \"NODE_ENV\"\n"
+	if err := os.WriteFile(filepath.Join(root, LocalFile), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	target, err := readRemoteGrant(root, filepath.Dir(root))
+	if err != nil {
+		t.Fatalf("readRemoteGrant: %v", err)
+	}
+	if target == nil {
+		t.Fatal("no grant")
+	}
+	if len(target.Env) != 1 || target.Env[0].Name != "NODE_ENV" || target.Env[0].Value != "test" {
+		t.Errorf("the grant did not carry the resolved env: %+v", target.Env)
+	}
+
+	// An unset allowlisted name refuses the whole grant, so a run cannot start
+	// with a half-populated environment.
+	body = strings.Replace(body, "NODE_ENV\"", "NODE_ENV,NOT_SET_ANYWHERE_AT_ALL\"", 1)
+	if err := os.WriteFile(filepath.Join(root, LocalFile), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readRemoteGrant(root, filepath.Dir(root)); err == nil {
+		t.Fatal("a grant naming an unset variable resolved anyway")
+	}
+}

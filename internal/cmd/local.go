@@ -105,6 +105,21 @@ type localStore struct {
 	// the repo.
 	MutationWorkers string `toml:"mutation_workers,omitempty"`
 	MutationTestCPU string `toml:"mutation_test_cpu,omitempty"`
+
+	// MutationRemoteEnv is a comma-separated allowlist of variable NAMES the
+	// remote mutation run needs. dross reads each value from its OWN process
+	// environment at run time and stores none of them — this key holds names,
+	// never name=value pairs.
+	//
+	// It IS in localKeys, and that is the point of the name/value split: names
+	// are not secrets, so the key needs none of the grant verb's ceremony, and
+	// dross never becomes a place a secret lives. Nothing here is worth
+	// stealing, which is the property that makes it safe to ship.
+	//
+	// An ALLOWLIST rather than forwarding the whole environment, because dross's
+	// own environment carries GITHUB_TOKEN and YOUTRACK_TOKEN and "send
+	// everything" would put them on the mutation host.
+	MutationRemoteEnv string `toml:"mutation_remote_env,omitempty"`
 }
 
 // localKeys maps each key to its accessors, keeping `local get` and
@@ -128,6 +143,10 @@ var localKeys = map[string]struct {
 	"mutation_test_cpu": {
 		get: func(l *localStore) string { return l.MutationTestCPU },
 		set: func(l *localStore, v string) { l.MutationTestCPU = v },
+	},
+	"mutation_remote_env": {
+		get: func(l *localStore) string { return l.MutationRemoteEnv },
+		set: func(l *localStore, v string) { l.MutationRemoteEnv = v },
 	},
 	// mutation_remote_host and mutation_remote_workdir are NOT here. See the
 	// struct fields — they are granted by `dross mutation remote grant`, which
@@ -219,11 +238,56 @@ func readRemoteGrant(root, repoDir string) (*remote.Target, error) {
 	if l.MutationRemoteHost == "" {
 		return nil, nil
 	}
-	t := &remote.Target{Host: l.MutationRemoteHost, Workdir: l.MutationRemoteWorkdir}
+	env, err := resolveRemoteEnv(l.MutationRemoteEnv)
+	if err != nil {
+		return nil, err
+	}
+	t := &remote.Target{Host: l.MutationRemoteHost, Workdir: l.MutationRemoteWorkdir, Env: env}
 	if err := t.Validate(); err != nil {
 		return nil, fmt.Errorf("%s/%s: %w", RootDirName, LocalFile, err)
 	}
 	return t, nil
+}
+
+// resolveRemoteEnv turns the mutation_remote_env NAME allowlist into the
+// name/value pairs the remote run needs, reading each value from dross's own
+// process environment.
+//
+// The allowlist is the security property: dross's environment carries
+// GITHUB_TOKEN and YOUTRACK_TOKEN, and forwarding everything would put dross's
+// own credentials on the mutation host. Only names the user asked for cross.
+//
+// An allowlisted name that is UNSET is an ERROR, not an empty export. The two
+// are not the same thing to the code being measured: a DATABASE_URL that is
+// absent and one that is empty select different code paths — different test
+// suites load — so an empty export silently changes WHAT gets measured rather
+// than failing.
+//
+// Reading from the process environment rather than parsing a .env file is the
+// locked remote_env_source decision. A parser would have to reproduce
+// docker-compose's quoting and expansion rules exactly or produce values that
+// differ from what the developer sees locally, and it would make dross a thing
+// that reads secret files.
+func resolveRemoteEnv(allowlist string) ([]remote.EnvVar, error) {
+	var out []remote.EnvVar
+	for _, name := range strings.Split(allowlist, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		value, ok := os.LookupEnv(name)
+		if !ok {
+			return nil, fmt.Errorf(
+				"%s/%s: mutation_remote_env names %s, but it is not set in this environment.\n\n"+
+					"dross stores no values — it reads each allowlisted name from its own environment at\n"+
+					"run time. An unset name is refused rather than exported empty, because empty and\n"+
+					"absent select different code paths and would change what the run measures.\n\n"+
+					"Export it before running, or drop it from `dross local set mutation_remote_env`.",
+				RootDirName, LocalFile, name)
+		}
+		out = append(out, remote.EnvVar{Name: name, Value: value})
+	}
+	return out, nil
 }
 
 // readMutationTuning returns the machine-local worker and test-cpu overrides.

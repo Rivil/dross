@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -71,50 +72,53 @@ func TestSyncArgsRefusesARelativeRoot(t *testing.T) {
 // --- SSHArgs ----------------------------------------------------------------
 
 func TestSSHArgsNeverSpawnsTheAdapterLocally(t *testing.T) {
-	argv, err := SSHArgs(target(), []string{"gremlins", "unleash", "./internal/cmd"})
+	argv, err := SSHArgs(target())
 	if err != nil {
 		t.Fatalf("SSHArgs = %v", err)
 	}
-	if argv[0] != "ssh" {
-		t.Fatalf("argv[0] = %q, want ssh — the adapter binary must never reach a local exec", argv[0])
+	// EXACTLY this, for every remote command in a run. The workdir, the adapter
+	// argv and every environment value live in the piped script — see Script.
+	// The ssh command string is the remote shell's argv and shows up in that
+	// host's process list, so nothing derived is allowed here.
+	want := []string{"ssh", host, "bash", "-s"}
+	if !reflect.DeepEqual(argv, want) {
+		t.Fatalf("argv = %v, want %v", argv, want)
 	}
-	if argv[1] != host {
-		t.Errorf("argv[1] = %q, want the host %q", argv[1], host)
+
+	script, err := Script(target(), []string{"gremlins", "unleash", "./internal/cmd"})
+	if err != nil {
+		t.Fatalf("Script = %v", err)
 	}
-	if len(argv) != 3 {
-		t.Fatalf("argv = %v, want exactly [ssh, host, command]", argv)
-	}
-	cmd := argv[2]
-	for _, want := range []string{"cd ", "/srv/x", "&&", "gremlins", "unleash", "./internal/cmd"} {
-		if !strings.Contains(cmd, want) {
-			t.Errorf("remote command %q is missing %q", cmd, want)
+	for _, w := range []string{"cd ", "/srv/x", "&&", "gremlins", "unleash", "./internal/cmd"} {
+		if !strings.Contains(script, w) {
+			t.Errorf("remote script %q is missing %q", script, w)
 		}
 	}
-	if strings.Index(cmd, "cd ") > strings.Index(cmd, "gremlins") {
-		t.Errorf("remote command runs the adapter before cd-ing into the workdir: %q", cmd)
+	if strings.Index(script, "cd ") > strings.Index(script, "gremlins") {
+		t.Errorf("remote script runs the adapter before cd-ing into the workdir: %q", script)
 	}
 	for _, a := range argv {
-		if a == "gremlins" {
-			t.Errorf("the adapter binary appears as its own argv element %v — it must be inside the remote command string", argv)
+		if strings.Contains(a, "gremlins") {
+			t.Errorf("the adapter binary reached argv %v — it must live in the piped script", argv)
 		}
 	}
 }
 
-func TestSSHArgsQuotesEveryRemoteWord(t *testing.T) {
-	// ssh hands its last argument to a remote shell. A package path carrying a
-	// space or a metacharacter that reached the shell unquoted would be split,
-	// or worse, executed.
-	argv, err := SSHArgs(target(), []string{"gremlins", "unleash", "./a b;c"})
+func TestScriptQuotesEveryRemoteWord(t *testing.T) {
+	// The script is read by a remote shell. A package path carrying a space or
+	// a metacharacter that reached the shell unquoted would be split, or worse,
+	// executed.
+	script, err := Script(target(), []string{"gremlins", "unleash", "./a b;c"})
 	if err != nil {
-		t.Fatalf("SSHArgs = %v", err)
+		t.Fatalf("Script = %v", err)
 	}
-	if !strings.Contains(argv[2], `'./a b;c'`) {
-		t.Errorf("remote command does not quote the derived word: %q", argv[2])
+	if !strings.Contains(script, `'./a b;c'`) {
+		t.Errorf("remote script does not quote the derived word: %q", script)
 	}
 }
 
-func TestSSHArgsRejectsAnEmptyCommand(t *testing.T) {
-	if _, err := SSHArgs(target(), nil); err == nil {
+func TestScriptRejectsAnEmptyCommand(t *testing.T) {
+	if _, err := Script(target(), nil); err == nil {
 		t.Fatal("an empty remote command was accepted")
 	}
 }
@@ -153,8 +157,11 @@ func TestValidateRefusesShellMetacharacters(t *testing.T) {
 			}
 			// And no argv is built — a caller that dropped the error must not
 			// be handed something runnable.
-			if argv, err := SSHArgs(tg, []string{"gremlins"}); err == nil || argv != nil {
+			if argv, err := SSHArgs(tg); err == nil || argv != nil {
 				t.Errorf("SSHArgs built %v for an unsafe workdir", argv)
+			}
+			if script, err := Script(tg, []string{"gremlins"}); err == nil || script != "" {
+				t.Errorf("Script built %q for an unsafe workdir", script)
 			}
 			if argv, err := SyncArgs(tg, "/local/repo"); err == nil || argv != nil {
 				t.Errorf("SyncArgs built %v for an unsafe workdir", argv)
@@ -170,7 +177,7 @@ func TestValidateRefusesAnOptionShapedHost(t *testing.T) {
 			if err := tg.Validate(); err == nil {
 				t.Fatalf("host %q was accepted", h)
 			}
-			if argv, err := SSHArgs(tg, []string{"gremlins"}); err == nil || argv != nil {
+			if argv, err := SSHArgs(tg); err == nil || argv != nil {
 				t.Errorf("SSHArgs built %v for host %q", argv, h)
 			}
 		})
@@ -303,9 +310,13 @@ func fakeExec(t *testing.T, reply func(argv []string) (string, int)) *[][]string
 	t.Helper()
 	var recorded [][]string
 	prev := commandFn
-	commandFn = func(argv []string) *exec.Cmd {
-		recorded = append(recorded, append([]string(nil), argv...))
-		out, code := reply(argv)
+	commandFn = func(argv []string, stdin string) *exec.Cmd {
+		// The piped script is recorded as a trailing element: for an ssh
+		// command the argv is now the same four elements every time, so the
+		// script is the only thing that says which command this is.
+		cp := append(append([]string(nil), argv...), stdin)
+		recorded = append(recorded, cp)
+		out, code := reply(cp)
 		script := fmt.Sprintf("printf %%s %s; exit %d", shellQuote(out), code)
 		return exec.Command("/bin/sh", "-c", script)
 	}

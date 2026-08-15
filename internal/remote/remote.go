@@ -60,7 +60,30 @@ type Target struct {
 	// first rather than silently substituting the LOCAL core count, which is
 	// the bug the remote_workers decision was written about.
 	Cores int
+	// Env is the environment the remote command needs, resolved from dross's
+	// OWN process environment by whoever built this target. It travels on the
+	// target because every remote command in a run needs the same environment,
+	// and threading it separately through each call site is how one of them
+	// ends up without it.
+	//
+	// dross stores none of these values. The machine-local config holds NAMES
+	// only; the values are read at run time and exist in memory for the length
+	// of one command.
+	Env []EnvVar
 }
+
+// EnvVar is one variable to export on the remote.
+type EnvVar struct {
+	Name  string
+	Value string
+}
+
+// envNameRe is what a variable name may be. An allowlist, for the same reason
+// hostRe is one: the script is handed to a remote shell, and a "name" like
+// `X; rm -rf /` would be a command. Names are not quoted on the way out — they
+// cannot be, since `export 'X'=v` is not an assignment — so the allowlist is
+// the only thing standing there.
+var envNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // Allowlists, not blocklists. A blocklist of shell metacharacters is a
 // classifier, and the character that matters is the one nobody thought of;
@@ -101,6 +124,11 @@ func (t Target) Validate() error {
 	if t.Workdir != path.Clean(t.Workdir) {
 		return fmt.Errorf("remote workdir %q is not in canonical form (want %q): %w", t.Workdir, path.Clean(t.Workdir), ErrUnsafeTarget)
 	}
+	for _, e := range t.Env {
+		if !envNameRe.MatchString(e.Name) {
+			return fmt.Errorf("remote environment name %q is not a plain variable name: %w", e.Name, ErrUnsafeTarget)
+		}
+	}
 	return nil
 }
 
@@ -136,20 +164,59 @@ func (t Target) In(sub string) (Target, error) {
 	return out, nil
 }
 
-// SSHArgs returns the local argv that runs argv on the target, in its workdir.
+// SSHArgs returns the local argv that opens a shell on the target.
 //
-// argv[0] of the RESULT is always "ssh" — the adapter's own binary never
-// reaches a local exec, which is what "the local machine spawns no compile or
-// test process" means in practice. The remote command is one shell string
-// because that is ssh's interface, so every element is quoted on the way in.
-func SSHArgs(t Target, argv []string) ([]string, error) {
+// It is the SAME argv for every remote command in a run — the workdir, the
+// adapter's argv and every environment value live in the script piped to that
+// shell's stdin (see Script), not here. That is the locked remote_env_transport
+// decision, and the shape is uniform rather than conditional on whether env is
+// configured: a safety property that holds only on the branch someone switched
+// on is one the untested branch loses.
+//
+// The ssh command string is the remote shell's argv, and shows up in that
+// host's process list — `ps` on the mutation host, readable by every user on
+// it. Stdin touches neither argv nor disk. Values still land in the remote
+// process's own environment, readable via /proc/<pid>/environ by that user or
+// root; that is unavoidable for any env mechanism, and not a reason to accept
+// the avoidable leaks.
+//
+// argv[0] is always "ssh" — the adapter's own binary never reaches a local
+// exec, which is what "the local machine spawns no compile or test process"
+// means in practice.
+func SSHArgs(t Target) ([]string, error) {
 	if err := t.Validate(); err != nil {
 		return nil, err
 	}
+	return []string{"ssh", t.Host, "bash", "-s"}, nil
+}
+
+// Script builds what is piped to that shell's stdin: the exports, then the cd,
+// then the command.
+//
+// Exports come FIRST, each on its own line, so the command runs with them
+// already set. Names are validated (see envNameRe) rather than quoted, because
+// `export 'X'=v` is not an assignment; values are single-quoted, which suspends
+// every expansion — a value containing `$(`, a backtick, a quote or a newline
+// crosses as those bytes and executes nothing.
+//
+// An env entry with an empty value is NOT emitted as an empty export: the
+// caller is responsible for refusing an unset name, because an empty value is
+// not the same as an absent one and the difference changes what gets measured.
+func Script(t Target, argv []string) (string, error) {
+	if err := t.Validate(); err != nil {
+		return "", err
+	}
 	if len(argv) == 0 {
-		return nil, fmt.Errorf("remote: empty command for host %q", t.Host)
+		return "", fmt.Errorf("remote: empty command for host %q", t.Host)
 	}
 	var b strings.Builder
+	for _, e := range t.Env {
+		b.WriteString("export ")
+		b.WriteString(e.Name)
+		b.WriteByte('=')
+		b.WriteString(shellQuote(e.Value))
+		b.WriteByte('\n')
+	}
 	b.WriteString("cd ")
 	b.WriteString(shellQuote(t.Workdir))
 	b.WriteString(" && ")
@@ -159,7 +226,8 @@ func SSHArgs(t Target, argv []string) ([]string, error) {
 		}
 		b.WriteString(shellQuote(a))
 	}
-	return []string{"ssh", t.Host, b.String()}, nil
+	b.WriteByte('\n')
+	return b.String(), nil
 }
 
 // SyncArgs returns the argv that pushes the local working tree to the target.
@@ -287,8 +355,13 @@ func Classify(bin, host string, code int) error {
 	return &ExitError{Bin: bin, Host: host, Code: code, kind: kind}
 }
 
-// commandFn builds the *exec.Cmd for a fully-built remote argv. It is a var so
-// tests can substitute a fake and pin the argv without a live host.
+// commandFn builds the *exec.Cmd for a fully-built remote argv plus the script
+// piped to its stdin. It is a var so tests can substitute a fake and pin both
+// without a live host.
+//
+// stdin is part of the seam rather than set by the caller afterwards, because
+// for an ssh command it now carries EVERYTHING that distinguishes one remote
+// invocation from another — the argv is the same four elements every time.
 var commandFn = buildCommand
 
 // buildCommand turns a built argv into a command.
@@ -300,15 +373,19 @@ var commandFn = buildCommand
 // accident. This form is evaluated by the audit and is accepted by a named
 // entry with a reason in internal/cmd/subprocargs_audit_test.go — accommodation
 // that someone had to write down, rather than a silence nobody chose.
-func buildCommand(argv []string) *exec.Cmd {
+func buildCommand(argv []string, stdin string) *exec.Cmd {
 	cmd := exec.Command(argv[0])
 	cmd.Args = argv
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
 	return cmd
 }
 
 // run executes a built argv and returns its stdout, classifying any failure.
-func run(host string, argv []string) (string, error) {
-	cmd := commandFn(argv)
+// stdin, when non-empty, is the script the remote shell reads.
+func run(host string, argv []string, stdin string) (string, error) {
+	cmd := commandFn(argv, stdin)
 	out, err := cmd.Output()
 	if err == nil {
 		return string(out), nil
@@ -325,11 +402,15 @@ func run(host string, argv []string) (string, error) {
 // Exec runs argv on the target and returns its stdout. It is the single place
 // a remote command is spawned from this package.
 func Exec(t Target, argv []string) (string, error) {
-	full, err := SSHArgs(t, argv)
+	full, err := SSHArgs(t)
 	if err != nil {
 		return "", err
 	}
-	return run(t.Host, full)
+	script, err := Script(t, argv)
+	if err != nil {
+		return "", err
+	}
+	return run(t.Host, full, script)
 }
 
 // Readiness is what a probe learned about a host.
