@@ -213,3 +213,37 @@ func TestNoGrantRunsLocally(t *testing.T) {
 		t.Errorf("a repo with no grant opened a connection: %v", rem.bins())
 	}
 }
+
+// TestRunRemoteCommandPipesTheScript exercises the real spawn function rather
+// than the seam every other test here replaces.
+//
+// Without it the `stdin != ""` guard is never executed by anything: negating it
+// would stop piping the script to ssh — the script being the ONLY thing that
+// distinguishes one remote invocation from another, since the argv is the same
+// four elements every time — and every test above would still pass, because
+// they all record the argv instead of running it.
+//
+// `sh -c cat` stands in for ssh: same shape (a command that reads its work from
+// stdin), no network.
+func TestRunRemoteCommandPipesTheScript(t *testing.T) {
+	var out strings.Builder
+	if err := runRemoteCommand([]string{"sh", "-c", "cat"}, "the script\n", &out, &out); err != nil {
+		t.Fatalf("runRemoteCommand: %v", err)
+	}
+	if got := out.String(); !strings.Contains(got, "the script") {
+		t.Errorf("the script was not piped to the command's stdin, got %q", got)
+	}
+}
+
+// TestRunRemoteCommandWithoutScriptReadsNoStdin is the other side of the same
+// guard: the sync leg passes no script and must not be left waiting on a
+// stdin nobody closes.
+func TestRunRemoteCommandWithoutScriptReadsNoStdin(t *testing.T) {
+	var out strings.Builder
+	if err := runRemoteCommand([]string{"sh", "-c", "cat; echo done"}, "", &out, &out); err != nil {
+		t.Fatalf("runRemoteCommand: %v", err)
+	}
+	if got := out.String(); !strings.Contains(got, "done") {
+		t.Errorf("a command with no script did not complete, got %q", got)
+	}
+}
