@@ -2,5 +2,90 @@
   "phase": "config-value-truth",
   "base": "milestone/v1.3",
   "base_commit": "92dc86a2bb1fa8441142f94b963bcb3d57ce947a",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/configenum/configenum.go",
+        "internal/configenum/configenum_test.go"
+      ],
+      "commit": "0275838",
+      "completed_at": "2026-08-15T13:49:21.013326Z",
+      "landmarks": [
+        {
+          "feature": "config value truth",
+          "symbol": "RuntimeModes",
+          "loc": "internal/configenum/configenum.go:123",
+          "what": "docker|native with hybrid deliberately absent — the value whose only effect was passing validation"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/project.go",
+        "internal/cmd/project_enum_test.go",
+        "internal/cmd/doctor_test.go",
+        "internal/cmd/project_test.go"
+      ],
+      "commit": "80d86e6",
+      "completed_at": "2026-08-15T15:23:18.949372Z",
+      "landmarks": [
+        {
+          "feature": "config value truth",
+          "symbol": "enumKeys",
+          "loc": "internal/cmd/project.go:314",
+          "what": "one table both gates read — project set refuses an out-of-set enum value before the write, so a refusal leaves project.toml byte-unchanged"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_enum_test.go"
+      ],
+      "commit": "9c2f22d",
+      "completed_at": "2026-08-15T15:29:16.219373Z",
+      "landmarks": [
+        {
+          "feature": "config value truth",
+          "symbol": "enumProblems",
+          "loc": "internal/cmd/validate.go:162",
+          "what": "validate re-checks the same enumKeys table the setter refuses on, so a hand-edited or cloned project.toml is caught and the two gates cannot drift"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/validate.go",
+        "assets/prompts/init.md",
+        "internal/project/project.go",
+        "internal/cmd/hybrid_removal_test.go"
+      ],
+      "commit": "71280fc",
+      "completed_at": "2026-08-15T15:32:34.918571Z",
+      "landmarks": [
+        {
+          "feature": "config value truth",
+          "symbol": "Runtime.Mode",
+          "loc": "internal/project/project.go:60",
+          "what": "hybrid is gone from the set, the validate message and the prompts — a repo that set it now fails validate naming docker and native instead of being silently reinterpreted"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/inert_config_test.go",
+        "assets/prompts/options.md"
+      ],
+      "commit": "0ce1862",
+      "completed_at": "2026-08-15T15:39:14.011497Z",
+      "landmarks": [
+        {
+          "feature": "config value truth",
+          "symbol": "TestNoSettableKeyIsInert",
+          "loc": "internal/cmd/inert_config_test.go:33",
+          "what": "guard parses the setter's own case list and fails any settable key nothing reads — 23 dispositioned with stated reasons, and options.md now names the keys dross records but does not act on"
+        }
+      ]
+    }
+  }
 }
