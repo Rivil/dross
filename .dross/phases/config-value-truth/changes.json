@@ -1,0 +1,6 @@
+{
+  "phase": "config-value-truth",
+  "base": "milestone/v1.3",
+  "base_commit": "92dc86a2bb1fa8441142f94b963bcb3d57ce947a",
+  "tasks": {}
+}

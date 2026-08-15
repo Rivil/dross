@@ -30,6 +30,12 @@
   locked = true
 
 [[decisions]]
+  key = "hybrid_goes"
+  choice = "runtime.mode drops \"hybrid\". The set becomes docker | native, and validate rejects hybrid with a message naming the two survivors."
+  why = "Nothing distinguishes it: the single consumer is `p.Runtime.Mode != \"docker\"` (internal/cmd/verify.go:371), so hybrid and native are the same program. Inventing a behaviour for it now would be designing a feature to justify a string, and the honest reading of `hybrid` — some services containerised, some not — is a per-service fact that [runtime.services] already carries. A repo that set hybrid gets a validate failure naming the choice rather than a silent reinterpretation, because those repos were running native semantics all along and deserve to be told."
+  locked = true
+
+[[decisions]]
   key = "inert_key_disposition"
   choice = "An inert key is resolved by giving it a reader or removing it from the settable surface — not by adding it to a permanent exemption list. The guard test's allowlist is for keys with a stated, recorded reason only."
   why = "A blanket exemption list turns the guard into a formality: the next inert key gets appended to it and the test keeps passing. This phase exists because seventeen keys were documented, settable and read by nothing, which is the same failure at a smaller scale."
