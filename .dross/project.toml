@@ -57,6 +57,9 @@
   enabled = true
   milestone_mode = "epic"
 
+[mutation]
+  adapters = ["gremlins"]
+
 [paths]
 
 [env]
