@@ -276,6 +276,56 @@ func (l *Launcher) fetchReport(key, localDest string) error {
 	return l.runRemote(argv)
 }
 
+// remoteExitFatal decides whether a mutation tool's non-zero exit ends the run.
+//
+// The distinction it draws is c-4's whole content, and today's adapters cannot
+// draw it: they tolerate ANY *exec.ExitError, on the reasoning that a mutation
+// tool exits non-zero when mutants survive — "ran, bad results". That reasoning
+// is sound locally and wrong over ssh, because ssh relays the remote program's
+// code through the SAME channel it reports its own failures on. Under the old
+// rule an unreachable host and an uninstalled remote toolchain both become
+// "gremlins wrote no report", which is UnmeasuredMissing — a non-fatal skip the
+// score excludes. The leg then reports clean because nothing ran.
+//
+//   - 255 is ssh's own reserved code, chosen precisely so a transport failure is
+//     distinguishable from whatever the remote program returned. Fatal.
+//   - 126/127 are the remote SHELL saying it could not execute the command:
+//     permission denied, or not found. The tool never ran, so any report present
+//     is from an earlier run. Fatal, and named — "install gremlins on helicon"
+//     is an action; "no report" is not.
+//   - Everything else is the remote PROGRAM speaking. gremlins exits 1 when
+//     mutants survive, and that is a successful measurement with bad results —
+//     tolerated exactly as it is locally.
+//
+// Local runs keep today's behaviour unchanged: nil for every ExitError.
+func (l *Launcher) remoteExitFatal(bin string, code int) error {
+	if !l.remoteRun() || code == 0 {
+		return nil
+	}
+	switch code {
+	case 255:
+		return fmt.Errorf("remote %s on %s: ssh exited 255 — the host is unreachable or the connection failed, so nothing was measured: %w",
+			bin, l.Target.Host, remote.ErrTransport)
+	case 126, 127:
+		return fmt.Errorf("%s not found on %s (the remote shell exited %d) — install it there; `dross doctor` reports remote toolchains before a run: %w",
+			bin, l.Target.Host, code, remote.ErrRemoteCommand)
+	}
+	return nil
+}
+
+// fetchFatal reports whether a failed report fetch ends the run.
+//
+// Only ErrPartial is survivable, and only because it is what rsync reports when
+// the source file is not there — which is the one remote failure that genuinely
+// means what a missing local report means: the tool wrote nothing, so nothing
+// was learned about this package. Everything else (a dead connection mid-copy, a
+// refused host) is a fetch that tells us nothing about whether a report exists,
+// and treating it as "no report" would score the package as unmeasured when it
+// may have been measured fine.
+func fetchFatal(err error) bool {
+	return err != nil && !errors.Is(err, remote.ErrPartial)
+}
+
 // launcherWorkers is the worker default, read from the machine the run actually
 // happens on.
 //

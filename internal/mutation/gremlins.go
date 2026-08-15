@@ -172,6 +172,11 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		return nil, fmt.Errorf("prepare gremlins report dir: %w", err)
 	}
 
+	// Cleared up front so a Run that returns an error leaves no trace of the
+	// PREVIOUS run's exclusions behind. A caller reading Unmeasured after a
+	// failed Run would otherwise be reading a different run's answer.
+	g.Unmeasured = nil
+
 	merged := &Report{Tool: g.Name()}
 	var unmeasured []Unmeasured
 	skip := func(pkg string, kind UnmeasuredKind, why string) {
@@ -215,16 +220,36 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 			// found, etc.) is fatal.
 			var exitErr *exec.ExitError
 			if !errors.As(err, &exitErr) {
+				if lr.remoteRun() {
+					// The LOCAL ssh could not be started, so nothing reached the
+					// remote. Naming gremlins here would send the user to check
+					// an installation that was never consulted.
+					return nil, fmt.Errorf("remote ssh for gremlins on %s could not be started: %w: %v\n  invocation: %s",
+						g.Remote.Host, remote.ErrTransport, err, invocation)
+				}
 				return nil, fmt.Errorf("gremlins invocation failed: %w\n  invocation: %s\n  (is gremlins installed? `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`)", err, invocation)
+			}
+			// Over ssh the SAME exit channel carries the remote program's code
+			// and ssh's own transport failures, so the tolerance above has to be
+			// narrowed by code or an unreachable host becomes a clean-looking
+			// skip. No-op locally.
+			if fatal := lr.remoteExitFatal("gremlins", exitErr.ExitCode()); fatal != nil {
+				return nil, fmt.Errorf("%w\n  invocation: %s", fatal, invocation)
 			}
 		}
 
 		// Fetched per package, immediately after its own run (the locked
 		// report_fetch decision), so "no report for this package" keeps meaning
-		// what it means locally. Which fetch failures are FATAL rather than
-		// merely empty is t-6's escalation; here an unfetched report is simply
-		// no report, which is what the read below already concludes.
+		// what it means locally.
+		//
+		// Only rsync's "source file is not there" survives as a skip — that one
+		// genuinely means the tool wrote nothing. A dead connection tells us
+		// nothing about whether a report exists, and calling it "no report"
+		// would mark a package unmeasured that may have measured fine.
 		if ferr := lr.fetchReport(pkg, reportAbs); ferr != nil {
+			if fetchFatal(ferr) {
+				return nil, fmt.Errorf("fetch gremlins report for %s: %w", pkg, ferr)
+			}
 			fmt.Fprintf(os.Stderr, "gremlins: fetch %s: %v\n", pkg, ferr)
 		}
 
