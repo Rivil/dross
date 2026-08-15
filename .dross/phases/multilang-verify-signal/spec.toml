@@ -1,0 +1,39 @@
+[phase]
+  id = "multilang-verify-signal"
+  title = "Multilang verify signal"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "A real TypeScript project runs mutation end to end through dross's Stryker adapter and produces a report with killed and survived mutants attributed to its files. Every existing Stryker test parses a canned JSON report; none has ever run the tool, so nothing proves the adapter's argv, config and report path actually fit together."
+
+[[criteria]]
+  id = "c-2"
+  text = "A phase touching only non-Go files never lands every file in Skipped. Dispatch is asserted per extension across the whole non-Go surface the adapters claim (.ts/.tsx/.js/.jsx/.mjs/.cjs/.svelte and .cs), so an extension quietly dropped from a Supports switch is caught by name rather than showing up as a silently unmeasured phase."
+
+[[criteria]]
+  id = "c-3"
+  text = "Analyzer coverage resolves to a real non-empty set for a non-Go stack: a TypeScript project gets its profile's dedicated analyzers (eslint, knip and the rest) plus the agnostic ones, and the same holds for every shipped profile that declares analyzers. An empty analyzer set for a detected language is a silent no-op audit and must fail the build."
+
+[[criteria]]
+  id = "c-4"
+  text = "The end-to-end leg says out loud when it did not run. When the Node toolchain is absent it skips with a message naming the exact tool and how to get it — never a silent pass — and `dross doctor` reports the same absence for a project whose stack needs it, so the gap is visible before a verify run reports an empty measurement."
+
+[[decisions]]
+  key = "fixture_is_a_real_project"
+  choice = "The end-to-end proof runs against a small committed TypeScript project under testdata — real source, real vitest test, real stryker config — not a mock or a hand-written report."
+  why = "The failure this criterion exists to catch is precisely the one a mock cannot see: the adapter's argv, the config file it writes, the report path it reads back and the tool's actual output format have to agree, and every existing test asserts one of those in isolation against a canned report. A fixture that Stryker genuinely mutates is the only thing that fails when they drift apart."
+
+[[decisions]]
+  key = "toolchain_gate_not_ci_install"
+  choice = "The end-to-end test runs when the Node toolchain is present and skips with a named reason when it is not. This phase does NOT add Node + Stryker to the CI workflow."
+  why = "Installing Stryker in CI pulls a large npm dependency tree into a workflow deliberately hardened against exactly that, and this repo's CI is pinned by digest with a readonly module proxy for the Go side. That trade deserves its own decision with the supply-chain checklist in front of it, not a step appended while doing something else. Skipping loudly is honest; the alternative on offer today is not running the check at all."
+
+[[decisions]]
+  key = "dispatch_is_asserted_per_extension"
+  choice = "The no-everything-Skipped guarantee is asserted as a table over every extension the adapters claim, checked against the adapters' own Supports methods, rather than by one representative .ts file."
+  why = "A representative file proves the adapter exists, not that the surface is intact. The realistic regression is one extension dropped from a switch — .mjs, .cjs, .svelte — and that failure presents as a phase quietly measuring less than it should, with a green verify and no line saying anything was missed."
+
+[[deferred]]
+  text = "Add Node + a pinned Stryker to the CI workflow so the end-to-end mutation leg runs on every PR rather than only where a developer has the toolchain."
+  why = "It is the obvious completion of c-1 and it is deliberately not in this phase: it is a supply-chain change to a workflow this repo hardened on purpose, and it needs the pinning/lockfile checklist applied deliberately rather than as a side effect. Left unrouted — no phase on the roadmap owns CI hardening, and naming a target that does not exist is the lie this milestone keeps closing."

@@ -1110,8 +1110,68 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 	Print("")
 
 	issues += checkRemoteMutation(root, repoDir, p)
+	checkMutationToolchain(p)
 
 	return issues
+}
+
+// checkMutationToolchain reports whether the LOCAL toolchain each configured
+// mutation adapter needs is actually present.
+//
+// The timing is the point. Without it a non-Go stack discovers the gap only
+// when a verify run comes back having measured nothing — and an empty
+// measurement does not announce itself: the phase scores over zero mutants and
+// no line says why. Doctor asks the same question before any of that.
+//
+// ADVISORY, never an issue, and it returns no count for that reason. Most repos
+// are single-stack: failing a Go-only clone for lacking Node would be a check
+// people learn to ignore, and a check people ignore protects nothing. It is
+// also scoped to the adapters this project actually configures — a warning
+// about a toolchain the project never needed is noise that trains the reader to
+// skim past the ones that matter.
+func checkMutationToolchain(p *project.Project) {
+	tools, needBy := remoteMutationTools(p)
+	var missing []string
+	for _, tool := range tools {
+		if _, err := execLookPath(tool); err != nil {
+			missing = append(missing, tool)
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	Print("Mutation toolchain:")
+	for _, tool := range missing {
+		Printf("  ⚠ %s is not installed — the %s adapter needs it to measure %s files here.\n",
+			tool, needBy[tool], mutationToolLanguage(needBy[tool]))
+		Printf("    Without it a verify run reports nothing measured rather than a bad score. Fix: %s\n", mutationToolInstall[tool])
+	}
+	Print("")
+}
+
+// execLookPath is the PATH lookup seam, so a test can drive both arms without
+// depending on what the developer happens to have installed.
+var execLookPath = exec.LookPath
+
+// mutationToolInstall is how to get each toolchain. A diagnostic that names a
+// gap without naming the fix sends the reader searching.
+var mutationToolInstall = map[string]string{
+	"gremlins": "go install github.com/go-gremlins/gremlins/cmd/gremlins@latest",
+	"npx":      "install Node 20+ (https://nodejs.org) — npx ships with it",
+	"dotnet":   "install the .NET SDK (https://dotnet.microsoft.com/download)",
+}
+
+// mutationToolLanguage names what goes unmeasured, so the warning says what it
+// costs rather than only what is absent.
+func mutationToolLanguage(adapter string) string {
+	switch adapter {
+	case "stryker":
+		return "TypeScript/JavaScript/Svelte"
+	case "stryker-net":
+		return "C#"
+	default:
+		return "Go"
+	}
 }
 
 // remoteAdapterTools maps each mutation adapter to the binary its run needs on

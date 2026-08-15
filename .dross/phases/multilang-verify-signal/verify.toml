@@ -1,0 +1,58 @@
+[verify]
+  phase = "multilang-verify-signal"
+  generated_at = 0001-01-01T00:00:00Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-15T23:13:52.768665Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.900523560209424
+  mutants_killed = 172
+  mutants_survived = 19
+  mutants_not_covered = 19
+  mutants_in_scope = 191
+  unclassified_in_scope = 0
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/mutation/stryker_e2e_test.go:TestStrykerRunsEndToEnd", "internal/mutation/ts_fixture_test.go:TestFixtureIsAWellFormedProject", "internal/mutation/ts_fixture_test.go:TestFixtureTestCoversTheSource"]
+  notes = "Observed green on this machine, not merely asserted: Stryker found 1 of 8 files to mutate, instrumented 28 mutants, ran the fixture's 6 vitest tests per mutant and wrote a report the adapter read back. That is the first run in this repo's history that exercised the argv, the config, the report path and the output format TOGETHER — every other Stryker test parses a canned report and would not notice two of them drifting apart. The assertions are chosen so a hollow run cannot pass: killed>0 proves it measured something, survived>0 proves the report distinguishes the outcomes rather than reporting everything as killed (the fixture keeps one deliberately uncovered function for exactly this), and the per-file check catches a report whose rows are empty — which would satisfy both counts while leaving diff scoping nothing to filter on. The fixture guards keep it a fixture: private, exactly-pinned deps, a json reporter with a filename, mutate globs that resolve to files that exist, and a test file that still imports the module."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/verify/dispatch_surface_test.go:TestEveryClaimedExtensionDispatches", "internal/verify/dispatch_surface_test.go:TestDispatchTableMatchesTheAdapters", "internal/verify/dispatch_surface_test.go:TestNonGoPhaseIsNotAllSkipped", "internal/verify/dispatch_surface_test.go:TestUnknownExtensionStillSkips"]
+  notes = "Asserted per extension across the whole claimed surface rather than by one representative file, because a representative .ts proves the adapter exists while the realistic regression is ONE entry dropped from a Supports switch — and that failure presents as a phase quietly measuring less with a green verify and no line saying anything was missed. The table is cross-checked against the adapters' own Supports in both directions, so the guard cannot fall behind the code it guards, and it fails an extension claimed by two adapters, where dispatch order silently decides the winner. TestNonGoPhaseIsNotAllSkipped runs the real grouping code over a .ts/.svelte/.js set and requires a language run carrying all three files. TestUnknownExtensionStillSkips is the control: without it everything here is satisfied by a dispatcher that matched everything."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/quality/multilang_test.go:TestTypeScriptGetsItsDedicatedAnalyzers", "internal/quality/multilang_test.go:TestEveryProfileWithAnalyzersContributesThem", "internal/quality/multilang_test.go:TestDedicatedAnalyzersDoNotDisplaceAgnostic", "internal/quality/multilang_test.go:TestUnknownLanguageStillGetsTheAgnosticSet"]
+  notes = "The analyzers are asserted BY NAME, not by a non-empty set, because non-empty is satisfied by the agnostic pair alone — which is exactly the state a TypeScript project would be in if its profile stopped contributing anything, with the audit still looking like it ran. The profile walk reads the shipped profiles themselves rather than a hand-typed roster, so a profile added tomorrow is covered on arrival, and it fatals if no shipped profile declares an analyzer, which would make the walk assert nothing. Additivity is pinned separately: losing scc/jscpd for a language that gained a specialist would narrow the audit while looking like an upgrade. The unknown-language floor is there so adopting dross into an unfamiliar repo cannot silently disable the audit."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/mutation/stryker_e2e_test.go:TestE2ESkipNamesTheMissingTool", "internal/mutation/stryker_e2e_test.go:TestE2ERunsWhenTheToolchainIsPresent", "internal/cmd/doctor_multilang_test.go:TestDoctorReportsMissingMutationToolchain", "internal/cmd/doctor_multilang_test.go:TestMissingToolchainIsAdvisory", "internal/cmd/doctor_multilang_test.go:TestGoOnlyProjectGetsNoNodeAdvisory"]
+  notes = "A skip nobody can act on is indistinguishable from a run that happened, so the skip reason is asserted to name both the missing tool and how to get it — driven by emptying PATH rather than by inspecting the string. TestE2ERunsWhenTheToolchainIsPresent guards the other direction, since a gate that always skipped would satisfy every assertion while never running the tool. Doctor's side is asserted on all three axes that make a warning useful: it names the tool, what goes unmeasured without it, and the install line; it does NOT move the exit code (proven by comparing doctor's verdict with and without the toolchain, since failing a Go-only clone for lacking Node is how a check gets ignored); and a gremlins-only project gets no line at all, because noise trains the reader to skim past the warnings that matter."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The phase's own TypeScript fixture files were reported as `skipped — no mutation adapter for .ts` by this repo's verify run. That is correct and is the c-2 behaviour working: dross's project.toml configures `[mutation].adapters = [\"gremlins\"]`, so Stryker is not dispatched here, and the files are named with a reason rather than silently ignored. The fixture is testdata for a Go project, not product code — its end-to-end measurement is TestStrykerRunsEndToEnd, which runs the adapter directly."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran LOCALLY: helicon has been unreachable since mid-session (ssh exit 255 — this machine's Proton Pass ssh-agent stopped serving the key). The grant was temporarily revoked to force the local path and has been restored. Scope and scoring are identical to a remote run; only the wall-clock differs (~50 min here)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "19 in-scope survivors, all accepted-with-reason and all the proven gremlins switch-case/closure attribution ceiling. unclassified_in_scope = 0, 0 in-diff. 82 out-of-scope survivors were filtered. Score 0.90 is over the 191 in-scope mutants; excluding the 19 uncoverable ones, efficacy on what the suite could reach is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Per the locked toolchain_gate_not_ci_install decision, the end-to-end leg is NOT wired into CI in this phase — installing Stryker there pulls a large npm tree into a workflow deliberately hardened against that, and the trade deserves the supply-chain checklist in front of it rather than a step appended while doing something else. It is recorded as an unrouted deferred item. Consequence, stated plainly: on CI and on any machine without the fixture's dependencies, TestStrykerRunsEndToEnd skips with a named reason rather than running."

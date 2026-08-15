@@ -1,0 +1,54 @@
+task_seq = 0
+
+[phase]
+  id = "multilang-verify-signal"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add a real TypeScript fixture project"
+  files = ["internal/mutation/testdata/ts-project/package.json", "internal/mutation/testdata/ts-project/vitest.config.ts", "internal/mutation/testdata/ts-project/stryker.conf.json", "internal/mutation/testdata/ts-project/src/tally.ts", "internal/mutation/testdata/ts-project/src/tally.test.ts", "internal/mutation/testdata/ts-project/README.md"]
+  description = "A small but genuine TS project: one source module with branches worth mutating,\na vitest test that covers them, and a stryker config pointing at both. Committed\nso the end-to-end run has something real to mutate rather than a fabricated\nreport.\n\nDeliberately tiny — the point is that the toolchain agrees end to end, not\ncoverage breadth. It must contain at least one mutant the tests KILL and one\nthey miss, so a report of either shape proves the pipeline rather than the\nfixture's quality.\n"
+  covers = ["c-1"]
+  test_contract = ["if the fixture stops being a runnable project, TestFixtureIsAWellFormedProject fails — it parses package.json and stryker.conf.json and asserts the config's mutate globs resolve to files that exist on disk", "if the fixture loses its covered branch, the same test fails on the source assertion — a fixture with nothing to kill would let a broken adapter report 0/0 and look fine", "if the fixture's test file stops referencing the module under test, TestFixtureTestCoversTheSource fails — an uncovered fixture makes every mutant survive and turns the e2e assertion into noise"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Run Stryker end to end against the fixture"
+  files = ["internal/mutation/stryker_e2e_test.go"]
+  description = "Drive the real Stryker adapter against the t-1 fixture and assert a parsed\nreport with mutants attributed to the fixture's files.\n\nGated on the Node toolchain being present (locked toolchain_gate_not_ci_install):\nabsent, the test SKIPS with a message naming the tool and the install command —\nnever a silent pass. Present, it runs the tool for real, which is the only thing\nthat proves the argv, the config, the report path and the output format agree.\n"
+  covers = ["c-1", "c-4"]
+  test_contract = ["if the adapter's argv, config or report path drift apart, TestStrykerRunsEndToEnd fails — it runs the real tool and requires a parsed report with at least one killed mutant attributed to a fixture file", "if the report comes back attributed to nothing, the same test fails on the per-file assertion — a report whose Files map is empty would otherwise satisfy a bare killed>0 check", "if the toolchain gate turns into a silent pass, TestE2ESkipNamesTheMissingTool fails — the skip path must name the tool and the install line, since a skip nobody reads is indistinguishable from a run that happened"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Assert dispatch across the whole non-Go surface"
+  files = ["internal/verify/dispatch_surface_test.go"]
+  description = "A table over every extension the adapters claim — .ts/.tsx/.js/.jsx/.mjs/.cjs/\n.svelte for Stryker, .cs for Stryker.NET, .go for gremlins — asserting each\ndispatches to its adapter and NOT to Skipped, and that a phase of only non-Go\nfiles produces a language run rather than an all-Skipped result.\n"
+  covers = ["c-2"]
+  test_contract = ["if an extension is dropped from a Supports switch, TestEveryClaimedExtensionDispatches fails naming that extension — the realistic regression is one entry lost, which otherwise shows up as a phase quietly measuring less with a green verify", "if a non-Go file set lands entirely in Skipped, TestNonGoPhaseIsNotAllSkipped fails — it runs the real dispatch over a .ts/.svelte set and asserts a language run exists with those files attached", "if the table stops covering what the adapters claim, TestDispatchTableMatchesTheAdapters fails — it cross-checks the table against each adapter's own Supports method, so the guard cannot fall behind the code it guards"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Assert analyzer coverage for non-Go stacks"
+  files = ["internal/quality/multilang_test.go"]
+  description = "AnalyzersFor(\"typescript\") must return the profile's dedicated analyzers plus\nthe agnostic ones — and the same for every shipped profile that declares\nanalyzer tools. An empty set for a detected language is a silent no-op audit.\n"
+  covers = ["c-3"]
+  test_contract = ["if the typescript profile's analyzers stop resolving, TestTypeScriptGetsItsDedicatedAnalyzers fails naming eslint — it asserts the dedicated tools by name, not merely a non-empty set", "if any shipped profile declaring analyzers resolves to only the agnostic set, TestEveryProfileWithAnalyzersContributesThem fails naming that profile — it walks the shipped profiles rather than a hand-typed list, so a new profile is covered on arrival", "if the agnostic analyzers stop applying to a language with a profile, TestDedicatedAnalyzersDoNotDisplaceAgnostic fails — dedicated tools are additive; losing scc/jscpd for TS would narrow the audit while looking like an upgrade"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Report the missing non-Go toolchain in doctor"
+  files = ["internal/cmd/doctor.go", "internal/cmd/doctor_multilang_test.go"]
+  description = "For a project whose stack needs a non-Go mutation toolchain, doctor reports\nwhether it is present — so the gap is visible BEFORE a verify run comes back\nwith an empty measurement and no line saying why.\n\nAdvisory, not an issue: a Go-only repo must not be failed for lacking Node, and\nmost repos are single-stack.\n"
+  covers = ["c-4"]
+  test_contract = ["if doctor stops reporting a missing non-Go mutation toolchain, TestDoctorReportsMissingMutationToolchain fails — a fixture whose stack declares typescript with no npx on PATH must name the tool and how to install it", "if the report becomes an exit-code issue, TestMissingToolchainIsAdvisory fails — failing a Go-only clone for lacking Node is how a check gets ignored", "if a Go-only project gets the line at all, TestGoOnlyProjectGetsNoNodeAdvisory fails — a warning about a toolchain the project never needed is noise that trains the reader to skim"]
+  status = "done"
