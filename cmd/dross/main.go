@@ -30,6 +30,7 @@ func newRoot() *cobra.Command {
 		cmd.State(),
 		cmd.Local(),
 		cmd.Trust(),
+		cmd.Test(),
 		cmd.Remote(),
 		cmd.Mutation(),
 		cmd.Rule(),
@@ -103,6 +104,9 @@ func main() {
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dross:", err)
-		os.Exit(1)
+		// Most failures exit 1, as they always have. `dross test` tags its
+		// errors with a code so a caller can tell a red suite from a run that
+		// never happened — see internal/cmd/test.go.
+		os.Exit(cmd.ExitCode(err))
 	}
 }

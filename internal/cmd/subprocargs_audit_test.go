@@ -53,10 +53,11 @@ import (
 //     ship/open.go's `ghCommand(args...)`, codex/ast_grep.go's
 //     `exec.Command("ast-grep", argv[1:]...)`, and the three mutation runners'
 //     `exec.Command(args[0], args[1:]...)` / `(full[0], full[1:]...)` in
-//     gremlins.go, stryker.go and stryker_net.go. Every one of them builds its
-//     argv through a fenced builder a few lines above — gitRefArgs/gitPathArgs,
-//     astGrepArgv, or an argfence.Fence call — which carries the guarantee this
-//     walk would otherwise check. A spread is invisible to an AST audit by
+//     gremlins.go, stryker.go and stryker_net.go, plus test.go's
+//     `exec.Command("sh", argv...)`. Every one of them builds its argv through a
+//     fenced builder a few lines above — gitRefArgs/gitPathArgs, astGrepArgv,
+//     shArgv, or an argfence.Fence call — which carries the guarantee this walk
+//     would otherwise check. A spread is invisible to an AST audit by
 //     construction; naming the shape here is more durable than line numbers that
 //     move.
 //
@@ -103,6 +104,10 @@ var valueTakingFlags = map[string]map[string]bool{
 	// through the operand that follows, which for ssh is the destination host.
 	"ssh":   {"-o": true, "-i": true, "-p": true, "-l": true, "-F": true},
 	"rsync": {"-e": true, "--filter": true, "--exclude": true, "--rsh": true},
+	// sh's -c takes the script as its value. The rest of sh's options are
+	// boolean, which is the safe direction to err in: a false positive is
+	// something someone looks at, a missed one is a vector.
+	"sh": {"-c": true, "-o": true},
 }
 
 // separatorTokens are the end-of-options tokens any tool in the table uses.
