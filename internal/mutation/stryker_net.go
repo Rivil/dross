@@ -94,6 +94,12 @@ func (s *StrykerNet) Run(files []string) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	// .NET's restore is `dotnet restore` regardless of any package manager, so
+	// this cannot refuse — resolved early anyway so every adapter's remote
+	// pre-flight has the same shape.
+	if _, err := lr.restoreArgv(); err != nil {
+		return nil, err
+	}
 	// The remote output dir is workdir-relative by construction. An absolute
 	// one names a path on THIS machine that has no meaning on the remote, and
 	// silently rooting it under the remote workdir would be dross deciding the
@@ -104,9 +110,24 @@ func (s *StrykerNet) Run(files []string) (*Report, error) {
 				"use a repo-relative output dir for a remote run", s.OutputDir, s.Remote.Host)
 	}
 
+	// --output takes the LOCAL absolute path for a local run and the
+	// workdir-relative one for a remote run. outputDir() joins ProjectRoot,
+	// which names a directory on THIS machine; handing that to the remote would
+	// make stryker write outside the synced tree, where the fetch does not look
+	// — a run that appears to succeed and produces no report.
+	argOut := outDir
+	if lr.remoteRun() {
+		argOut, err = lr.reportRel(s.OutputDir)
+		if err != nil {
+			return nil, err
+		}
+		if _, ferr := argfence.Fence("dotnet", "remote output dir", argOut); ferr != nil {
+			return nil, ferr
+		}
+	}
 	args := []string{"dotnet", "stryker",
 		"--reporter", "json",
-		"--output", outDir,
+		"--output", argOut,
 	}
 	// The WHOLE output tree is cleared, not one file: findReport walks it and
 	// picks the most recently modified mutation-report.json, so a surviving

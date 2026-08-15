@@ -39,6 +39,12 @@ type Stryker struct {
 	//
 	// A NAMED field rather than an embedded Launcher — see launcher.go.
 	Remote *remote.Target
+
+	// PackageManager is the project's own package manager
+	// (stack.package_manager), and is only consulted for a REMOTE run: it keys
+	// the lockfile-respecting install that has to happen on the host before
+	// stryker runs there. Unset is an error rather than a guess at npm.
+	PackageManager string
 }
 
 func (s *Stryker) Name() string { return "stryker" }
@@ -63,6 +69,13 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 	// the wrong package.
 	lr, err := newLauncher(s.Name(), s.Prefix, s.Remote, s.ProjectRoot, s.Workdir)
 	if err != nil {
+		return nil, err
+	}
+	lr.PackageManager = s.PackageManager
+	// Resolved BEFORE anything is spawned. An unset or unrecognised package
+	// manager is a refusal the user can act on; discovering it after the tree
+	// has been pushed is the same refusal with a wasted rsync in front of it.
+	if _, err := lr.restoreArgv(); err != nil {
 		return nil, err
 	}
 

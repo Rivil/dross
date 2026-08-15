@@ -328,7 +328,17 @@ func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.
 	// If docker volume layout diverges, this is where we'd surface config.
 	cwd, _ := os.Getwd()
 	all := []mutation.Adapter{
-		&mutation.Stryker{Prefix: mt.Prefix, ProjectRoot: cwd, Workdir: p.Mutation.Stryker.Workdir, Remote: mt.Target},
+		&mutation.Stryker{
+			Prefix:      mt.Prefix,
+			ProjectRoot: cwd,
+			Workdir:     p.Mutation.Stryker.Workdir,
+			Remote:      mt.Target,
+			// Only consulted for a remote run, where the host has to install
+			// dependencies before stryker can resolve anything. Passed rather
+			// than defaulted: installing with the wrong manager produces a tree
+			// stryker resolves differently.
+			PackageManager: p.Stack.PackageManager,
+		},
 		mt.gremlins(cwd, p),
 		&mutation.StrykerNet{Prefix: mt.Prefix, ProjectRoot: cwd, Remote: mt.Target},
 	}

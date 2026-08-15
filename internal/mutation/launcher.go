@@ -28,6 +28,8 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/Rivil/dross/internal/remote"
 )
@@ -60,11 +62,84 @@ type Launcher struct {
 	// cmd.Dir on the local ssh process says nothing about the remote cwd.
 	Workdir string
 
+	// PackageManager is the project's own package manager (stack.package_manager),
+	// which keys the Node restore. It is deliberately NOT defaulted: installing
+	// with the wrong manager produces a tree the tool resolves differently, and
+	// pnpm's symlinked layout is load-bearing — stryker.conf.json has to declare
+	// its plugins explicitly BECAUSE that layout defeats auto-discovery.
+	PackageManager string
+
 	// pushed records that the one-shot tree sync has happened, so the
 	// per-package loop cannot re-push between packages. rsync is the expensive
 	// step and a second push mid-run would also overwrite reports fetched from
 	// earlier packages.
 	pushed bool
+	// restored records the one-shot dependency restore, for the same reason.
+	restored bool
+}
+
+// remoteRestores is the CLOSED table of how each adapter restores its language's
+// dependencies on the remote, before the tool runs.
+//
+// A nil argv means the language needs none — Go builds from the synced source.
+// An adapter ABSENT from the table is an error rather than a skipped restore,
+// on the same reasoning as remoteReportPaths: the failure mode of a silent
+// no-op is a run that reports against a dependency-less tree, and every mutant
+// dying for the wrong reason looks like a very good test suite.
+var remoteRestores = map[string]func(pm string) ([]string, error){
+	"gremlins": func(string) ([]string, error) {
+		// The synced tree is the source; `go test` resolves modules itself.
+		return nil, nil
+	},
+	"stryker": nodeRestoreArgv,
+	"stryker-net": func(string) ([]string, error) {
+		return []string{"dotnet", "restore"}, nil
+	},
+}
+
+// nodeRestores maps a package manager to its LOCKFILE-RESPECTING install.
+//
+// The lockfile-respecting form, never the loose one. `npm install`, bare `pnpm
+// install` and `yarn install` without --immutable all resolve fresh versions
+// when the lockfile and manifest disagree — which measures a dependency tree
+// the lockfile does not describe, on a machine nobody is looking at.
+var nodeRestores = map[string][]string{
+	"pnpm": {"pnpm", "install", "--frozen-lockfile"},
+	"npm":  {"npm", "ci"},
+	"yarn": {"yarn", "install", "--immutable"},
+	"bun":  {"bun", "install", "--frozen-lockfile"},
+}
+
+// nodeRestoreArgv resolves the Node restore from the project's OWN package
+// manager. It refuses to guess.
+//
+// Guessing npm is not a harmless default. pnpm's symlinked node_modules layout
+// is load-bearing — a stryker.conf.json in a pnpm repo declares its plugins
+// explicitly precisely BECAUSE that layout defeats auto-discovery — so
+// installing with the wrong manager produces a tree stryker resolves
+// differently. And `npm ci` in a pnpm repo with no package-lock.json simply
+// fails, which is the concrete case that motivated this table.
+func nodeRestoreArgv(pm string) ([]string, error) {
+	if pm == "" {
+		return nil, fmt.Errorf(
+			"stack.package_manager is not set, so a remote run does not know how to restore " +
+				"dependencies. Set it (`dross project set stack.package_manager pnpm`) — dross will " +
+				"not guess, because installing with the wrong manager produces a tree stryker " +
+				"resolves differently")
+	}
+	argv, ok := nodeRestores[pm]
+	if !ok {
+		known := make([]string, 0, len(nodeRestores))
+		for name := range nodeRestores {
+			known = append(known, name)
+		}
+		sort.Strings(known)
+		return nil, fmt.Errorf(
+			"stack.package_manager = %q has no remote restore command (known: %s) — "+
+				"a skipped restore would report against a dependency-less tree",
+			pm, strings.Join(known, ", "))
+	}
+	return argv, nil
 }
 
 // remoteReportPaths is the CLOSED table of where each adapter's report lands on
@@ -122,6 +197,12 @@ func newLauncher(adapter, prefix string, target *remote.Target, projectRoot, wor
 				"mutation: adapter %q has no entry in the remote report table — a remote run "+
 					"would clear no stale report and fetch no new one, and would score whatever "+
 					"the last run left behind", adapter)
+		}
+		if _, ok := remoteRestores[adapter]; !ok {
+			return nil, fmt.Errorf(
+				"mutation: adapter %q has no entry in the remote restore table — a remote run "+
+					"would skip the dependency install and report against a tree that has none",
+				adapter)
 		}
 	}
 	return &Launcher{
@@ -200,6 +281,9 @@ func (l *Launcher) toolCmd(argv []string, local func([]string) *exec.Cmd) (*exec
 	if err := l.ensurePushed(); err != nil {
 		return nil, err
 	}
+	if err := l.ensureRestored(); err != nil {
+		return nil, err
+	}
 	t, err := l.toolTarget()
 	if err != nil {
 		return nil, err
@@ -209,6 +293,60 @@ func (l *Launcher) toolCmd(argv []string, local func([]string) *exec.Cmd) (*exec
 		return nil, err
 	}
 	return launcherCommand(full), nil
+}
+
+// restoreArgv resolves this adapter's dependency-restore command, or nil when
+// the language needs none.
+//
+// Pure and idempotent, so callers may resolve it EARLY — before anything is
+// spawned — to turn an unset or unrecognised package manager into a refusal
+// rather than a failure discovered after the tree has been pushed.
+func (l *Launcher) restoreArgv() ([]string, error) {
+	if !l.remoteRun() {
+		return nil, nil
+	}
+	fn, ok := remoteRestores[l.Adapter]
+	if !ok {
+		return nil, fmt.Errorf("mutation: adapter %q has no entry in the remote restore table", l.Adapter)
+	}
+	return fn(l.PackageManager)
+}
+
+// ensureRestored installs the language's dependencies on the remote, once,
+// immediately before the first tool command.
+//
+// It runs in the SAME joined directory the tool will — for a Stryker with
+// Workdir="web", both cd into <remote workdir>/web. Restoring at the repo root
+// is how a monorepo run installs against the wrong lockfile, or none.
+//
+// A failed restore is fatal and named. A restore that fell through would leave
+// the tool measuring a tree with no dependencies, where every mutant dies
+// because nothing imports — which scores as an excellent test suite.
+func (l *Launcher) ensureRestored() error {
+	if !l.remoteRun() || l.restored {
+		return nil
+	}
+	argv, err := l.restoreArgv()
+	if err != nil {
+		return err
+	}
+	l.restored = true
+	if len(argv) == 0 {
+		return nil
+	}
+	t, terr := l.toolTarget()
+	if terr != nil {
+		return terr
+	}
+	full, serr := remote.SSHArgs(t, argv)
+	if serr != nil {
+		return serr
+	}
+	if rerr := l.runRemote(full); rerr != nil {
+		return fmt.Errorf("remote dependency restore `%s` failed on %s: %w",
+			strings.Join(argv, " "), l.Target.Host, rerr)
+	}
+	return nil
 }
 
 // clearReport removes the report location on BOTH machines before the tool runs.

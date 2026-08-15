@@ -236,16 +236,18 @@ func TestStrykerRemoteRunCdsIntoTheJoinedWorkdir(t *testing.T) {
 		}
 	})
 
-	s := &Stryker{ProjectRoot: root, Workdir: "web", Remote: helicon("/srv/dross")}
+	s := &Stryker{ProjectRoot: root, Workdir: "web", PackageManager: "pnpm", Remote: helicon("/srv/dross")}
 	report, err := s.Run([]string{"web/src/a.ts"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
-	if got, want := kinds(*rec), []string{"push", "rm", "run", "fetch"}; !reflect.DeepEqual(got, want) {
+	// The middle "run" is the dependency restore, which a remote Node run needs
+	// before stryker can resolve anything — see restore_test.go.
+	if got, want := kinds(*rec), []string{"push", "rm", "run", "run", "fetch"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("recorded order = %v, want %v\nfull:\n%v", got, want, *rec)
 	}
-	for _, i := range []int{1, 2} {
+	for _, i := range []int{1, 2, 3} {
 		if script := remoteScript((*rec)[i]); !strings.HasPrefix(script, "cd '/srv/dross/web' && ") {
 			t.Errorf("command %d does not cd into the joined workdir: %q", i, script)
 		}
@@ -292,7 +294,8 @@ func TestStrykerNetRemoteRunClearsTheWholeOutputTree(t *testing.T) {
 	if _, serr := os.Stat(stale); !os.IsNotExist(serr) {
 		t.Errorf("the previous run's report survived, stat err = %v", serr)
 	}
-	if got, want := kinds(*rec), []string{"push", "rm", "run", "fetch"}; !reflect.DeepEqual(got, want) {
+	// The middle "run" is `dotnet restore` — see restore_test.go.
+	if got, want := kinds(*rec), []string{"push", "rm", "run", "run", "fetch"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("recorded order = %v, want %v\nfull:\n%v", got, want, *rec)
 	}
 	if script := remoteScript((*rec)[1]); !strings.Contains(script, "'rm' '-rf' 'StrykerOutput'") {
