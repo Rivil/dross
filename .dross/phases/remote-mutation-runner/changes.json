@@ -64,6 +64,22 @@
         }
       ]
     },
+    "t-12": {
+      "files": [
+        "assets/prompts/options.md",
+        "internal/cmd/options_docs_test.go"
+      ],
+      "commit": "4a252f1",
+      "completed_at": "2026-08-15T08:54:00.229832Z",
+      "landmarks": [
+        {
+          "feature": "settings surface",
+          "symbol": "TestOptionsCoversEveryLocalKey",
+          "loc": "internal/cmd/options_docs_test.go:29",
+          "what": "walks localKeys itself so a store key added without a prompt line fails the build"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/local.go",

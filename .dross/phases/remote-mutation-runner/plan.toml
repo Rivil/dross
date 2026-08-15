@@ -129,4 +129,4 @@ task_seq = 12
   description = "Extend /dross-options from project.toml's first seven sections to every dross-managed setting. Add sections for .dross/local.toml (quick_base, allow_hosts, mutation_workers, mutation_test_cpu, mutation_remote_env via dross local set), the consent verbs that own the keys local set refuses (dross trust, dross mutation remote grant/revoke — options invokes the verb and never writes the key itself), and dross hooks. Fill the project.toml drift: [board] (provider, base_url, auth_env, auth_user, project, github_project, enabled, milestone_mode, state_map, fields.*), [mutation] (adapters, gremlins.timeout_coefficient, stryker.workdir), remote.auth_user/auth_scheme/project_id, stack.profile, and [constraints]/[competition] read-only. Add internal/cmd/options_docs_test.go asserting options.md names every localKeys entry, both consent verbs, and each project.toml top-level section."
   covers = ["c-9"]
   depends_on = ["t-11"]
-  status = "pending"
+  status = "done"
