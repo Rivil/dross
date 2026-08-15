@@ -173,8 +173,20 @@ func confirmPrune(cmd *cobra.Command) bool {
 	fmt.Fprint(cmd.OutOrStdout(), "Delete these branches (local and on origin)? [y/N] ")
 	var resp string
 	_, _ = fmt.Fscanln(os.Stdin, &resp)
-	resp = strings.ToLower(strings.TrimSpace(resp))
-	return resp == "y" || resp == "yes"
+	return isAffirmative(resp)
+}
+
+// isAffirmative is the answer parsing, split out from the prompt so it is
+// reachable from a test.
+//
+// The read itself needs a terminal, so everything after it — including which
+// answers mean yes — was unexecuted by the whole suite while sitting in front of
+// an irreversible delete. Splitting it is what makes the rule assertable rather
+// than merely plausible: only an explicit y/yes proceeds, and the default of a
+// bare Enter is NO.
+func isAffirmative(resp string) bool {
+	r := strings.ToLower(strings.TrimSpace(resp))
+	return r == "y" || r == "yes"
 }
 
 // milestoneComplete closes out a milestone in two steps. Without --finalize it

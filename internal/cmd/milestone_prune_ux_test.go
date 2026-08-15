@@ -142,3 +142,21 @@ func TestPruneWithNothingStaleSaysSoBeforeAsking(t *testing.T) {
 		t.Errorf("prune did not report an empty set:\n%s", out)
 	}
 }
+
+// TestOnlyAnExplicitYesProceeds covers the answer parsing directly.
+//
+// The prompt's read needs a terminal, so everything after it was unexecuted by
+// the whole suite — sitting in front of an irreversible delete, which is the
+// one place "probably fine" is not good enough. A bare Enter must mean NO.
+func TestOnlyAnExplicitYesProceeds(t *testing.T) {
+	for _, yes := range []string{"y", "Y", "yes", "YES", " yes ", "Yes"} {
+		if !isAffirmative(yes) {
+			t.Errorf("%q should proceed", yes)
+		}
+	}
+	for _, no := range []string{"", " ", "n", "no", "N", "yep", "yeah", "sure", "yes please", "1", "true"} {
+		if isAffirmative(no) {
+			t.Errorf("%q must NOT proceed — only an explicit y/yes authorizes an irreversible delete", no)
+		}
+	}
+}
