@@ -1,7 +1,9 @@
 {
   "phase": "remote-test-runner",
+  "pr": 89,
   "base": "milestone/v1.3",
   "base_commit": "880b4de846c66472f9cfaa6160aacbe3cd387d9f",
+  "status": "shipped",
   "tasks": {
     "t-1": {
       "files": [
