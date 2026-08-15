@@ -149,9 +149,7 @@ func TestDoctorValidatesBoardBlock(t *testing.T) {
 			fields[k] = v
 		}
 		for k, v := range fields {
-			if err := runCmd(t, Project(), "set", k, v); err != nil {
-				t.Fatalf("project set %s: %v", k, err)
-			}
+			setProjectFieldEvenIfInvalid(t, dir, k, v)
 		}
 		if exportToken {
 			t.Setenv(tokenEnv, "secret")
@@ -894,6 +892,48 @@ func TestDoctorCover_PhaseHygieneBranches(t *testing.T) {
 // applies overrides, and runs doctor. An override with an empty value means
 // "leave this field unset" rather than "set it to the empty string", so the
 // optional-base_url cases can be expressed.
+
+// setProjectFieldEvenIfInvalid writes a project.toml field, falling back to a
+// direct load-set-save when `project set` refuses the value.
+//
+// The fallback is the point rather than a convenience. Since config-value-truth
+// gated the enum keys, an out-of-set value CANNOT be created through the CLI —
+// which is the whole reason doctor and validate still check the file. A repo
+// reaches that state by hand-editing project.toml, by cloning one, or by
+// carrying a value that predates the set becoming closed. These tests must
+// build exactly that state, and building it through the setter would now be
+// building a state that cannot exist.
+func setProjectFieldEvenIfInvalid(t *testing.T, dir, key, value string) {
+	t.Helper()
+	if err := runCmd(t, Project(), "set", key, value); err == nil {
+		return
+	}
+	path := filepath.Join(dir, ".dross", "project.toml")
+	p, err := project.Load(path)
+	if err != nil {
+		t.Fatalf("load project.toml to force %s: %v", key, err)
+	}
+	switch key {
+	case "board.provider":
+		p.Board.Provider = value
+	case "board.milestone_mode":
+		p.Board.MilestoneMode = value
+	case "remote.provider":
+		p.Remote.Provider = value
+	case "runtime.mode":
+		p.Runtime.Mode = value
+	case "repo.layout":
+		p.Repo.Layout = value
+	case "repo.commit_convention":
+		p.Repo.CommitConvention = value
+	default:
+		t.Fatalf("project set %s=%q was refused and there is no forced-write arm for it", key, value)
+	}
+	if err := p.Save(path); err != nil {
+		t.Fatalf("save forced %s: %v", key, err)
+	}
+}
+
 func runDoctorEnum(t *testing.T, overrides map[string]string) (string, error) {
 	t.Helper()
 	const tokenEnv = "DROSS_TEST_ENUM_TOKEN"
@@ -920,9 +960,7 @@ func runDoctorEnum(t *testing.T, overrides map[string]string) (string, error) {
 		fields[k] = v
 	}
 	for k, v := range fields {
-		if err := runCmd(t, Project(), "set", k, v); err != nil {
-			t.Fatalf("project set %s: %v", k, err)
-		}
+		setProjectFieldEvenIfInvalid(t, dir, k, v)
 	}
 	t.Setenv(tokenEnv, "secret")
 	var out string

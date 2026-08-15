@@ -31,6 +31,10 @@ For booleans: Yes / No. For CSVs: ask for comma-separated input. For secrets: se
 
 If you see a field in `dross project show` that isn't covered below, **stop** and tell the user — that's a schema-vs-prompt drift bug to fix, not something to silently invent prompts for.
 
+Some fields dross **records but does not yet act on** — the value is stored and shown, and no dross code path or prompt reads it. Say so when the user sets one, so they aren't told a value works when it only persists. The list is pinned by `inertKeyReasons` in `internal/cmd/inert_config_test.go`, which fails the build if a settable key goes unread without a stated reason, so it cannot quietly grow:
+
+Recorded only: `runtime.dev_command`, `runtime.stop_command`, `runtime.test_watch`, `runtime.lint_command`, `runtime.migrate_command`, `runtime.seed_command`, `runtime.shell_command`, `runtime.logs_command` (no verb runs them yet), `stack.languages`, `stack.frameworks`, `stack.type_checker`, `stack.linter`, `stack.formatter`, `stack.test_runner` (dross detects the stack from the filesystem), `paths.migrations`, `paths.schemas`, `paths.public`, `repo.layout`, `repo.workspaces`, `repo.root_run_dir`, `remote.public`, `goals.audience`, `env.secrets_location`.
+
 ## 1. Project identity
 
 Fields: `project.name`, `project.description`, `project.version`, `goals.audience`, `goals.core_value`, `goals.non_goals` (csv), `goals.differentiators` (csv).

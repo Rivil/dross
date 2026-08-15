@@ -117,6 +117,28 @@ var MilestoneStatuses = newSet("", "planning", "active", "complete")
 // --status is absent.
 var LifecycleStatuses = newSet("", "planned", "in-progress", "verifying", "shipped", "complete")
 
+// RuntimeModes is the set of [runtime].mode values.
+//
+// docker | native, and deliberately NOT hybrid. hybrid was accepted and
+// documented for as long as the field existed, and its only consumer was
+// `p.Runtime.Mode != "docker"` (internal/cmd/verify.go) — so hybrid and native
+// compiled to the same program and the string's entire effect was passing
+// validation. A per-service split is a fact [runtime.services] already carries;
+// it was never a third whole-project mode.
+//
+// Empty is rejected: an unset mode has no code default, and validate has always
+// reported it as a problem in its own right.
+var RuntimeModes = newSet("", "docker", "native")
+
+// RepoLayouts is the set of [repo].layout values. Empty falls back to single,
+// which is what the scaffold writes and what every single-module repo means.
+var RepoLayouts = newSet("single", "single", "monorepo")
+
+// CommitConventions is the set of [repo].commit_convention values. Empty falls
+// back to conventional, which is what init writes; freeform is the opt-out for
+// a repo whose history does not use type(scope): subjects.
+var CommitConventions = newSet("conventional", "conventional", "freeform")
+
 // MilestoneModes is the union of [board].milestone_mode values across the
 // trackers. Empty defaults to version in code. Not every provider accepts every
 // mode — see MilestoneModesFor.

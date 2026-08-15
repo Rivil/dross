@@ -1,4 +1,4 @@
-phases = ["mutation-diff-scope", "survivor-lifecycle", "survivor-drain", "milestone-lifecycle-close", "board-sync-truth", "red-proof-reachability", "remote-mutation-runner", "config-value-truth", "guard-remedy-ordering", "deferred-add-command", "multilang-verify-signal", "plan-gray-area-walkthrough", "mutation-score-truth", "phase-create-adoption", "board-task-mirror", "red-proof-repoint", "remote-toolchain-bootstrap"]
+phases = ["mutation-diff-scope", "survivor-lifecycle", "survivor-drain", "milestone-lifecycle-close", "board-sync-truth", "red-proof-reachability", "remote-mutation-runner", "config-value-truth", "remote-test-runner", "guard-remedy-ordering", "deferred-add-command", "multilang-verify-signal", "plan-gray-area-walkthrough", "mutation-score-truth", "phase-create-adoption", "board-task-mirror", "red-proof-repoint", "remote-toolchain-bootstrap"]
 
 [milestone]
   version = "v1.3"

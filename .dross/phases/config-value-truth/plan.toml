@@ -1,0 +1,54 @@
+task_seq = 5
+
+[phase]
+  id = "config-value-truth"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add the missing enum sets to configenum"
+  files = ["internal/configenum/configenum.go", "internal/configenum/configenum_test.go"]
+  description = "Three of the five enum-valued keys have no Set at all, which is why nothing can check\nthem: runtime.mode, repo.layout and repo.commit_convention. Add RuntimeModes,\nRepoLayouts and CommitConventions using the same newSet(default, values...) shape as\nShipProviders and MilestoneModes, so the existing Has/List/Values/Normalize behaviour\ncomes along unchanged.\n\nRuntimeModes is docker | native. hybrid is NOT in the set, per the locked hybrid_goes\ndecision — its only consumer treats it identically to native, so it is a third spelling\nof one behaviour.\n"
+  covers = ["c-5"]
+  test_contract = ["if hybrid is added back to RuntimeModes, TestRuntimeModesExcludesHybrid fails — the set is asserted to be exactly docker and native", "if a set's default is not itself a member, TestEveryEnumSetDefaultIsAMember fails across all sets, which is the invariant newSet's two-argument shape exists to hold", "if List() stops naming every value, TestEnumSetListNamesEveryValue fails — the refusal messages in t-2 and t-3 are built from List(), so a lossy List makes them unactionable"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Reject an out-of-set value at project set"
+  files = ["internal/cmd/project.go", "internal/cmd/project_enum_test.go"]
+  description = "`dross project set` accepts any string for the five enum keys and persists it —\nruntime.mode=banana round-trips today, and so do repo.layout=sideways,\nrepo.commit_convention=nonsense, remote.provider=notaforge and\nboard.milestone_mode=bogus. None of them is caught anywhere.\n\nGate the set path on the configenum Set for the key, refusing with a message that names\nthe key and lists the allowed values via Set.List(). The refusal must happen BEFORE the\nwrite: a rejected value that still landed in project.toml would be the same lie in a\nnew place.\n"
+  covers = ["c-1", "c-5"]
+  test_contract = ["if any of the five keys stops being gated, TestProjectSetRejectsOutOfSetValues fails — it is a table over all five and asserts a non-nil error for each", "if the refusal does not name the key or list the allowed values, the same test fails on the message assertions — an error that says only \"invalid value\" cannot be acted on", "if the value is written before the check, TestProjectSetRejectionWritesNothing fails — it reads project.toml back and asserts the field still holds its prior value", "if a VALID enum value starts being refused, TestProjectSetStillAcceptsEveryEnumMember fails — it sets every member of every set and expects success, which is what stops the gate from being a blanket refusal", "if a non-enum key (runtime.test_command) starts being gated, the same test fails — free-text keys must stay free text"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Fail validate on an out-of-set value already in the file"
+  files = ["internal/cmd/validate.go", "internal/cmd/validate_enum_test.go"]
+  description = "project.toml is tracked, hand-edited and cloned, so a value that never passed through\n`project set` is unchecked forever — which is most of them. Have validate walk the same\nfive keys against the same configenum sets and report each out-of-set value by key and\nvalue.\n\nTwo gates, one source of truth (locked enum_enforcement_point): set-time rejection is\nwhat a human sees while they still remember what they meant, and validate is what\ncatches the file nobody typed.\n"
+  covers = ["c-2", "c-5"]
+  test_contract = ["if validate stops checking any of the five keys, TestValidateFailsOnOutOfSetEnum fails — a hand-written project.toml carrying garbage in each field expects one problem per field", "if the problem does not name both the key and the offending value, the same test fails on the message assertion", "if an empty value is reported as out-of-set, TestValidateAcceptsEmptyEnumValues fails — empty means unset and every set's default covers it, so reddening on it would fail every partially-filled project", "if validate and project set disagree about what is allowed, TestValidateAndSetShareTheEnumSets fails — it drives a value through both and asserts they agree for every member and one non-member"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 3
+  title = "Remove hybrid from runtime.mode everywhere"
+  files = ["internal/cmd/validate.go", "assets/prompts/init.md", "internal/project/project.go", "internal/cmd/hybrid_removal_test.go"]
+  description = "Per the locked hybrid_goes decision, hybrid goes. Its single consumer is\n`p.Runtime.Mode != \"docker\"` (internal/cmd/verify.go:371), so hybrid and native are the\nsame program and the string only ever passed validation.\n\nRemove it from the validate message, the init.md setter line, and the struct comment on\nRuntime.Mode. A repo that had set hybrid now fails validate with a message naming\ndocker and native — deliberately, because that repo was running native semantics all\nalong and should be told rather than silently reinterpreted.\n"
+  covers = ["c-3"]
+  test_contract = ["if hybrid is still offered anywhere a user reads, TestNothingOffersHybrid fails — it greps the prompts, the validate message and the project.go field comment for the word", "if a project.toml carrying hybrid silently passes, TestHybridIsRejectedNotReinterpreted fails — it asserts a validate problem naming hybrid, and that the message names docker and native so the reader knows what to pick", "if hybrid is quietly rewritten to native on load, the same test fails — it reads the field back and expects the original string plus an error, never a silent migration"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 3
+  title = "Guard against inert settable keys and disposition the current ones"
+  files = ["internal/cmd/inert_config_test.go", "assets/prompts/options.md"]
+  description = "Seventeen settable project.toml keys are read by nothing: their only references are\ntheir own getter/setter in project.go and the field listings in init.md and options.md.\nPer the locked prompt_listing_is_not_consumption decision those listings do not count —\nthey exist for every settable key by construction, so counting them would make the\nguard pass for exactly the keys it must catch.\n\nAdd a test that enumerates the settable key set and fails any key with no reader. Each\ncurrently-inert key is then dispositioned: given a reader, removed from the settable\nsurface, or carried with an explicit recorded reason. The reason list is for stated\nexceptions only, never a dumping ground (locked inert_key_disposition) — the eight\nunread runtime commands are deferred as a someday item rather than exempted quietly,\nand options.md gains a line saying which keys dross records but does not yet act on, so\nthe user is not told a value works when it does not.\n"
+  covers = ["c-4"]
+  test_contract = ["if a new settable key is added with no reader and no recorded reason, TestNoSettableKeyIsInert fails — it walks the setter's own key list rather than a hand-typed one, so it cannot fall behind", "if the reason list grows an entry with no prose, TestInertKeyReasonsAreStated fails — a key may be exempt only with a stated why", "if init.md's setter line or options.md's field list starts counting as consumption, TestListingsDoNotCountAsConsumption fails — it plants a key mentioned only in those two places and expects the guard to still catch it"]
+  status = "done"

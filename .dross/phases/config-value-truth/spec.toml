@@ -1,0 +1,52 @@
+[phase]
+  id = "config-value-truth"
+  title = "Config value truth"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every enum-valued project.toml key rejects an out-of-set value at `dross project set` time, naming the key and listing what is allowed. Proven for all five: runtime.mode, repo.layout, repo.commit_convention, remote.provider, board.milestone_mode — each of which currently accepts `banana` and persists it."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross validate` fails on an enum-valued key already holding an out-of-set value, so a hand-edited or cloned project.toml is caught rather than only values that arrived through `project set`."
+
+[[criteria]]
+  id = "c-3"
+  text = "runtime.mode = \"hybrid\" either branches somewhere in the code or is gone from the enum, the validate message, the docs and the prompts. It does not survive as a third accepted value whose only effect is passing validation."
+
+[[criteria]]
+  id = "c-4"
+  text = "No settable project.toml key is inert: a test enumerates the settable key set and fails any key whose only references are its own getter/setter and the field listings in init.md/options.md. A key that must stay settable without a reader carries an explicit recorded reason rather than passing silently."
+
+[[criteria]]
+  id = "c-5"
+  text = "The enum sets have one definition: the set-time check, the validate check and any prompt listing all read internal/configenum rather than restating the values, so they cannot drift apart."
+
+[[decisions]]
+  key = "enum_enforcement_point"
+  choice = "Reject at `dross project set` AND re-check in `dross validate`, both reading internal/configenum."
+  why = "Set-time rejection is the one a human sees while they still remember what they meant. But it cannot be the only gate: project.toml is a tracked file people hand-edit and clone, and a value that never passed through the CLI would otherwise be unchecked forever. Two gates, one source of truth."
+  locked = true
+
+[[decisions]]
+  key = "hybrid_goes"
+  choice = "runtime.mode drops \"hybrid\". The set becomes docker | native, and validate rejects hybrid with a message naming the two survivors."
+  why = "Nothing distinguishes it: the single consumer is `p.Runtime.Mode != \"docker\"` (internal/cmd/verify.go:371), so hybrid and native are the same program. Inventing a behaviour for it now would be designing a feature to justify a string, and the honest reading of `hybrid` — some services containerised, some not — is a per-service fact that [runtime.services] already carries. A repo that set hybrid gets a validate failure naming the choice rather than a silent reinterpretation, because those repos were running native semantics all along and deserve to be told."
+  locked = true
+
+[[decisions]]
+  key = "inert_key_disposition"
+  choice = "An inert key is resolved by giving it a reader or removing it from the settable surface — not by adding it to a permanent exemption list. The guard test's allowlist is for keys with a stated, recorded reason only."
+  why = "A blanket exemption list turns the guard into a formality: the next inert key gets appended to it and the test keeps passing. This phase exists because seventeen keys were documented, settable and read by nothing, which is the same failure at a smaller scale."
+  locked = true
+
+[[decisions]]
+  key = "prompt_listing_is_not_consumption"
+  choice = "A key mentioned only by init.md's setter line or options.md's field list does NOT count as consumed. Consumption means code that reads the value, or a prompt that branches on it (as options.md does on env.gitignored)."
+  why = "Those two listings exist for every settable key by construction, so counting them as consumption would make the guard vacuous — it would pass for exactly the keys it is meant to catch."
+  locked = true
+
+[[deferred]]
+  text = "Give the unread runtime commands (dev/stop/e2e/migrate/seed/shell/logs) real verbs — a `dross run <name>` that executes them."
+  why = "Deciding what dross should DO with a dev_command is a feature question, not a truth question. This phase's job is that a value either works or is not offered; building the runner is its own phase. Left as someday rather than routed: no phase exists to carry it, and inventing a target that names nothing is the same lie this phase is about."
