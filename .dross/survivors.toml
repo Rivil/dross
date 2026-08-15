@@ -1069,3 +1069,21 @@
   line = 211
   reason = "ARITHMETIC_BASE mutates + to - on a string concatenation inside an error message; the mutant does not compile and is never viable. The branch it sits in is covered by TestRemoteRestoreTableIsClosed."
   accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "7838ed0a7daca324"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case docErr != nil:"
+  line = 540
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. These two arms (the replay doc cannot be read; the doc carries no base-commit line) are asserted line-for-line by TestRedProofUnreadableDocIsAnIssue and TestRedProofDocWithoutABaseCommitLineIsAnIssue, with TestRedProofDocAgreeingWithTheRecordIsClean pinning the green path they are distinguished from."
+  accepted_in = "red-proof-reachability"
+
+[[accepted]]
+  key = "b808ff3a5274aed1"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case docSHA == \"\":"
+  line = 543
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. These two arms (the replay doc cannot be read; the doc carries no base-commit line) are asserted line-for-line by TestRedProofUnreadableDocIsAnIssue and TestRedProofDocWithoutABaseCommitLineIsAnIssue, with TestRedProofDocAgreeingWithTheRecordIsClean pinning the green path they are distinguished from."
+  accepted_in = "red-proof-reachability"

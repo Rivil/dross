@@ -124,6 +124,22 @@
           "what": "falls back to the main branch when the recorded base branch no longer resolves, so doctor's repoint hint names a real commit for completed phases whose milestone branch is long gone"
         }
       ]
+    },
+    "t-8": {
+      "files": [
+        "internal/changes/changes_test.go",
+        "internal/cmd/redproof_test.go"
+      ],
+      "commit": "3ce6b12",
+      "completed_at": "2026-08-15T12:17:03.123563Z",
+      "landmarks": [
+        {
+          "feature": "red proof reachability",
+          "symbol": "TestRedProofUnreadableDocIsAnIssue",
+          "loc": "internal/cmd/redproof_test.go:311",
+          "what": "asserts the doctor lines for a pin whose replay doc is unreadable or carries no base-commit line, so a red proof nothing cross-checks cannot report as sound"
+        }
+      ]
     }
   }
 }

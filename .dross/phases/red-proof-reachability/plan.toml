@@ -1,4 +1,4 @@
-task_seq = 7
+task_seq = 8
 
 [phase]
   id = "red-proof-reachability"
@@ -75,4 +75,14 @@ task_seq = 7
   description = "Surfaced by t-6's mutation check: config-trust-hardening records base milestone/v1.2, a branch merged and deleted, so resolveForkPoint gives up and doctor's repoint hint degrades to (unresolved) for the live pin — the exact case c-2/c-3 exist for. When the recorded base resolves to no ref locally or on origin, fall back to the configured main branch (then origin/main): a phase's work always lands there eventually, and merge-base(origin/main, <recorded task commit>) returns a6ef729 for the live phase — the right answer."
   covers = ["c-2", "c-3"]
   depends_on = ["t-1", "t-5"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 6
+  title = "Test SetFork and doctor's red-proof doc cross-check arms"
+  files = ["internal/changes/changes_test.go", "internal/cmd/redproof_test.go"]
+  description = "Verify found three in-diff survivors that are real gaps, not the attribution ceiling. SetFork is referenced by no test at all, so its load-set-save (and the load error path at changes.go:221) is unmeasured — that is c-1's recording mechanism. And doctor's two doc-cross-check arms (doctor.go:540/543: the replay doc cannot be read, and the doc carries no 'base commit:' line) have no test asserting the doctor line each produces; redProofDocSHA is tested directly but the branches consuming it are not, which is c-3's distinct-outcomes claim."
+  covers = ["c-1", "c-3"]
+  depends_on = ["t-7"]
   status = "done"
