@@ -20,6 +20,7 @@
     "red-proof-repoint": "DRO-125",
     "remote-mutation-runner": "DRO-24",
     "remote-test-runner": "DRO-26",
+    "remote-toolchain-bootstrap": "DRO-129",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10"
   },

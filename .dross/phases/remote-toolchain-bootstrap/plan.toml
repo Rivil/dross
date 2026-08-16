@@ -1,0 +1,134 @@
+task_seq = 6
+
+[phase]
+  id = "remote-toolchain-bootstrap"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Preflight a remote, fall back only on transport"
+  files = ["internal/cmd/remote_preflight.go", "internal/cmd/remote_preflight_test.go"]
+  description = """
+preflightRemote(target, tools) -> (readiness, fallback bool, why string, err error) over the
+existing remoteProbeFn seam (doctor.go:1209) — the SAME seam doctor probes through, so a
+green doctor and a green preflight cannot disagree. A transport failure returns fallback
+with a reason naming the host; any other failure is an error. Decision layer only, no cobra
+and no callers — t-2 wires it.
+"""
+  covers = ["c-4", "c-5"]
+  test_contract = [
+    "if a transport failure aborts the run, TestPreflightFallsBackOnTransport fails — a probe seam returning remote.ErrTransport must yield fallback=true, a nil error, and a why-string naming the host",
+    "if a remote command failure is laundered into a local run, TestPreflightDoesNotFallBackOnRemoteFailure fails — remote.ErrRemoteCommand from the probe returns an error with fallback=false, per the locked fallback_policy: a host that ran something and failed has given an answer",
+    "if a reachable host with missing tools is treated as unreachable, TestPreflightMissingToolsIsNotFallback fails — the Readiness comes back with its Missing list, fallback=false and no error, so the caller reports the gap rather than silently running local",
+    "if the fallback is sticky, TestPreflightWritesNothing fails — local.toml is byte-identical after a fallback and `dross remote status` still reports the grant, so one flaky network minute cannot retire the remote",
+    "if the probe is bypassed, TestPreflightProbesThroughTheSharedSeam fails — replacing remoteProbeFn records exactly one invocation carrying the target and the requested tool list",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Wire preflight into dross test and the mutation run"
+  files = ["internal/cmd/test.go", "internal/cmd/verify.go", "internal/cmd/remote_preflight_wiring_test.go"]
+  description = """
+runTest (test.go:238) and verify's remote mutation wiring call preflightRemote BEFORE the
+tree is pushed. On fallback both run locally and say so on stdout; on a probe error both
+return it. Order is the correctness property: probing after the sync discovers an
+unreachable host having already paid for the transfer.
+"""
+  covers = ["c-4", "c-5"]
+  depends_on = ["t-1"]
+  test_contract = [
+    "if the tree is pushed before the host is probed, TestTestPreflightsBeforeSync fails — a recording probe seam and a recording spawn seam are asserted in that order, with zero rsync/ssh invocations ahead of the probe",
+    "if an unreachable host fails `dross test` instead of falling back, TestTestFallsBackToLocal fails — a transport-erroring probe runs the suite locally, exits 0, and stdout names the host AND says the run was local",
+    "if the fallback is silent, TestTestFallbackIsAnnounced fails — the local-fallback path must print the host and the reason; a run indistinguishable from an ordinary local one is the exact failure c-5 names",
+    "if the mutation path skips the preflight, TestVerifyPreflightsRemote fails — verify's remote wiring probes before the launcher syncs, asserted through the same recording seam",
+    "if --local starts probing, TestTestLocalFlagSkipsPreflight fails — `dross test --local` records zero probe invocations, since there is no host to preflight",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Record the measuring machine in verify.toml"
+  files = ["internal/verify/verify.go", "internal/cmd/verify.go", "internal/verify/measured_on_test.go"]
+  description = """
+VerifySummary gains MeasuredOn string `toml:"measured_on,omitempty"` — the host a mutation
+run executed on, "local" when it ran here, and the host-plus-fallback note when it fell
+back. Written by the verify wiring from the same target the run used, never from config.
+"""
+  covers = ["c-6"]
+  test_contract = [
+    "if a remote run is indistinguishable from a local one after the fact, TestSummaryRecordsMeasuredOn fails — a run against a granted host writes measured_on = that host, and a --local run writes \"local\"",
+    "if a fallback is recorded as a clean local run, TestSummaryRecordsFallback fails — a run that fell back must record BOTH that it ran locally and the host it could not reach, so the number is never read as a remote measurement",
+    "if the new field is made required, TestLegacyVerifyTomlLoads fails — a verify.toml written before the field loads with MeasuredOn == \"\" and re-saves without inventing a value",
+    "if measured_on is read from config rather than from the run, TestMeasuredOnComesFromTheRun fails — with a grant present but the run forced local, the field says local, not the granted host",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 1
+  title = "Guard tests against unvendored-CLI dependence"
+  files = ["internal/cmd/external_cli_audit_test.go"]
+  description = """
+An audit test in the subprocargs_audit_test.go / refguard idiom: walk the repo's _test.go
+sources and fail when a test reaches an unvendored external CLI (gh, glab, rsync, ssh,
+gremlins, npx, dotnet) other than through its package's overridable command seam or behind
+an exec.LookPath + t.Skip guard. Test-only; no source changes.
+"""
+  covers = ["c-7"]
+  test_contract = [
+    "if a test invokes an unvendored CLI directly, TestNoTestDependsOnUnvendoredCLI fails — an exec.Command(\"gh\", …) added to any _test.go is reported with its file:line and the seam it should have used",
+    "if the guard cannot itself fail, TestExternalCLIAuditCatchesABypass fails — the walker is run over a synthetic testdata source containing a direct invocation and must report exactly that one finding, so a guard that silently matches nothing is caught",
+    "if a LookPath+Skip guarded test is flagged, TestExternalCLIAuditAllowsGuardedUse fails — a synthetic source that guards on exec.LookPath and calls t.Skip naming the binary is asserted clean",
+    "if the allowlist becomes a way to opt out silently, TestExternalCLIAuditSeamsAreNamed fails — every permitted seam is asserted to be a real package-level var in the package that declares it, so a bypass cannot be waved through by adding a name to a list",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 1
+  title = "Plan a remote toolchain bootstrap"
+  files = ["internal/cmd/remote_bootstrap.go", "internal/cmd/remote_bootstrap_test.go"]
+  description = """
+planRemoteBootstrap(target, project) -> []bootstrapStep{Tool, Adapter, Runtime, Argv,
+Present, Refusal} over remoteProbeFn. Selects tools from the configured [mutation].adapters
+allowlist via remoteMutationTools (doctor.go:1214) so doctor and bootstrap cannot disagree
+about which adapters a repo has. A missing language runtime becomes a per-tool Refusal
+naming it, never an install (locked install_scope). Every Argv goes through the
+internal/remote seam (locked install_transport). Decision layer only.
+"""
+  covers = ["c-1", "c-2", "c-3"]
+  test_contract = [
+    "if bootstrap tries to install a language runtime, TestPlanRefusesMissingRuntime fails — a host lacking `go` yields a Refusal naming go for the gremlins step and NO argv, per the locked install_scope",
+    "if a present tool is reinstalled, TestPlanSkipsPresentTools fails — a tool the probe resolves is marked Present with no argv, so a second bootstrap over a provisioned host plans nothing",
+    "if the tool set drifts from doctor's, TestPlanUsesConfiguredAdapters fails — a [mutation].adapters allowlist of just gremlins plans only the go tool, and the planned set is asserted equal to remoteMutationTools' output for the same project",
+    "if an install argv is built as a shell string, subprocargs_audit_test flags it — every step's Argv is a []string carried through remote.Script, never an interpolated line",
+    "if a transport failure is reported as a host missing everything, TestPlanTransportFailureIsNotMissingTools fails — remote.ErrTransport from the probe returns an error naming the host, never a plan whose every step claims the tool is absent",
+    "if the plan understates what it would change, TestPlanStepsNameTheirTool fails — every non-Present step carries a non-empty Tool, the Adapter that wants it, and either an Argv or a Refusal, never both and never neither",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 2
+  title = "Add `dross remote bootstrap`; docs"
+  files = ["internal/cmd/remote_bootstrap_cmd.go", "internal/cmd/remote_grant.go", "README.md", "docs/dross.1", "internal/cmd/remote_bootstrap_cmd_test.go"]
+  description = """
+Cobra sibling of grant/revoke/status on the existing Remote() tree (locked
+bootstrap_surface): dry-run by default, --apply installs. Wires t-5's plan, printing per-step
+outcome. Refuses with no grant, naming `dross remote grant`. README's command table and the
+dross.1 remote block gain the verb, its dry-run default and --apply.
+"""
+  covers = ["c-1", "c-2", "c-3"]
+  depends_on = ["t-5"]
+  test_contract = [
+    "if dry-run changes the host, TestBootstrapDryRunInstallsNothing fails — over a host missing a tool, stdout names the tool, the adapter that wants it and the exact command, while the recording exec seam records zero install invocations",
+    "if --apply does not install, TestBootstrapApplyInstalls fails — the recorded invocations equal the planned argvs in order, and a following probe reporting the tools present makes doctor's Remote section report no missing tools (c-1 end to end, through redProof-style seam replacement rather than a live host)",
+    "if bootstrap runs without a grant, TestBootstrapRefusesUngranted fails — it exits non-zero naming `dross remote grant` and records zero invocations",
+    "if a runtime refusal is treated as a failure to install, TestBootstrapReportsRefusalDistinctly fails — a step refused for a missing runtime is reported with the runtime named and does NOT count as an install error, while the run still exits non-zero so the gap is not lost",
+    "if one step's failure aborts the rest, TestBootstrapContinuesPastFailure fails — over three steps whose middle one fails, the other two still run and the command exits non-zero",
+    "if the verb ships undocumented, TestDocsCoverRemoteBootstrap fails — walking the real Remote() cobra tree must find bootstrap, and README.md and docs/dross.1 must both mention it",
+  ]
+  status = "pending"
