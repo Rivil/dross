@@ -1,0 +1,6 @@
+{
+  "phase": "phase-create-adoption",
+  "base": "milestone/v1.3",
+  "base_commit": "8f10f04fe0486ad1052dfac202d3c62ddd75c073",
+  "tasks": {}
+}
