@@ -11,7 +11,7 @@ task_seq = 4
   description = "When SetState maps to a value the tracker's bundle does not hold, add it to the\nproject's OWN bundle rather than skipping. A shared bundle is other projects'\nconfiguration and is never written.\n\nJira and forge REST keep the warn-and-continue floor: their states come from a\nworkflow scheme, or do not exist.\n"
   covers = ["c-4"]
   test_contract = ["if a missing state is silently skipped again, TestMissingStateIsCreatedInThePrivateBundle fails — it serves a bundle without the value, then asserts the create call and the retried set both happened", "if the create targets a SHARED bundle, TestSharedBundleIsNeverWritten fails — writing one edits configuration other projects depend on, which is a change nobody in them asked for", "if a create failure becomes fatal, TestBundleCreateFailureWarnsAndContinues fails — a state that could not be created must not fail the whole sync, since the phase-level record is still worth writing", "if an already-present state triggers a create, TestPresentStateSkipsTheCreate fails — a write on every sync would churn the tracker's configuration for nothing"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -21,4 +21,4 @@ task_seq = 4
   description = "`dross issue task-sync <phase> [task-id] [--status <s>]` creates or updates one\nissue per plan task, relates it to the phase issue through IssueLinker, records\nthe mapping in board.json and drives the task's state.\n\nA backend with no linker warns ONCE per run and continues with the label\nrelationship (locked child_issues_not_subtasks + warn_once_per_run).\n"
   covers = ["c-1", "c-2", "c-3", "c-5"]
   test_contract = ["if a re-run duplicates issues, TestTaskSyncIsIdempotent fails — it syncs twice and asserts one issue per task and one board.json entry, which is the property that makes it safe in the execute loop", "if the phase relationship is dropped, TestTaskIssueIsRelatedToItsPhase fails — an unrelated task issue is a loose card nobody can trace back", "if a linker-less backend fails instead of degrading, TestNoLinkerWarnsOnceAndContinues fails — it asserts exactly one warning for a multi-task phase and that every task issue still exists", "if --status stops driving the state, TestTaskSyncDrivesTheState fails — the label is not the tracker's workflow field, which is the whole point of c-2", "if a task id is given and other tasks are touched, TestTaskSyncScopesToOneTask fails — the execute loop syncs one task at a time and must not rewrite the other seven on every commit"]
-  status = "in_progress"
+  status = "done"

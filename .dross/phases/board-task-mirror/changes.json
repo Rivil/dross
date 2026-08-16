@@ -2,5 +2,41 @@
   "phase": "board-task-mirror",
   "base": "milestone/v1.3",
   "base_commit": "25310ad183019284e52a519a7765fb98d9988985",
-  "tasks": {}
+  "tasks": {
+    "t-2": {
+      "files": [
+        "internal/forge/youtrack.go",
+        "internal/forge/youtrack_bundle_test.go"
+      ],
+      "commit": "bfa97c4",
+      "completed_at": "2026-08-16T04:41:43.935251Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "ensureStateValue",
+          "loc": "internal/forge/youtrack.go:517",
+          "what": "a State value the project lacks is added to its OWN bundle and the set retried — never to a bundle shared with other projects, and a refusal warns rather than failing the sync"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/issue_task.go",
+        "internal/cmd/issue.go",
+        "internal/board/board.go",
+        "internal/configenum/configenum.go",
+        "assets/prompts/execute.md"
+      ],
+      "commit": "c4b8b84",
+      "completed_at": "2026-08-16T04:36:48.781165Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "syncTasks",
+          "loc": "internal/cmd/issue_task.go:69",
+          "what": "every plan task gets its own issue related to its phase's, driven through the tracker's workflow field, with capability gaps warned once per run"
+        }
+      ]
+    }
+  }
 }
