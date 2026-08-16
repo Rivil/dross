@@ -236,11 +236,30 @@ func ScriptAll(t Target, cmds [][]string) (string, error) {
 	}
 	b.WriteString("cd ")
 	b.WriteString(shellQuote(t.Workdir))
-	for _, argv := range cmds {
+	for n, argv := range cmds {
 		if len(argv) == 0 {
 			return "", fmt.Errorf("remote: empty command for host %q", t.Host)
 		}
 		b.WriteString(" && ")
+		// The LAST command replaces the shell rather than being forked by it.
+		//
+		// This is not an optimisation. The shell reading this script was started
+		// as `bash -s`, so it reads its commands from stdin — and gremlins,
+		// forked by such a shell, dies at startup with
+		// `Failed to find executable : Is a directory`, exit 1, no report,
+		// before it prints a single line. The same binary on the same host with
+		// the same environment and the same argv runs clean the moment it is
+		// exec'd instead (as `bash -c` does implicitly for its final command).
+		// `go version` and `go test` forked by that shell are unaffected, so the
+		// trigger is specific to the tool, not to the toolchain.
+		//
+		// Exec'ing costs nothing anywhere else: the chain is `&&`-joined, so a
+		// prior failure has already short-circuited, and there is nothing left
+		// for the shell to do afterwards. The exit code that reaches ssh is the
+		// command's own either way.
+		if n == len(cmds)-1 {
+			b.WriteString("exec ")
+		}
 		for i, a := range argv {
 			if i > 0 {
 				b.WriteByte(' ')
