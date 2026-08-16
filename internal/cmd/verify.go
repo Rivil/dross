@@ -98,6 +98,11 @@ func Verify() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Stamped from the adapters the run actually used, not from the
+			// grant on disk: a --local run has a grant and ignores it, and a
+			// fallback has one it could not reach. Reading config here would
+			// label both as remote measurements.
+			t.MeasuredOn = measuredOnFromAdapters(adapters)
 			// Deleted paths stay in the record — they are part of what the
 			// phase did — but as a skip with an honest reason rather than as
 			// an argument to a mutation tool.
@@ -311,6 +316,35 @@ func resolveMutationTuning(p *project.Project, root string) (mutationTuning, err
 	target.Cores = ready.Cores
 	mt.Target = target
 	return mt, nil
+}
+
+// measuredOnFromAdapters reads a run's provenance off the adapters it is about
+// to use, rather than off the grant on disk.
+//
+// The distinction is the whole point of the field. A grant answers "is a host
+// authorized", which is not the same question as "where did these numbers come
+// from": a run can hold a grant it was told to ignore, or one it could not
+// reach. Only the adapters know which machine they were pointed at, so they are
+// what gets asked.
+//
+// A skipped mutation leg has no adapters at all and reports local — nothing ran
+// anywhere, and claiming a host would be worse than saying nothing.
+func measuredOnFromAdapters(adapters []mutation.Adapter) string {
+	for _, a := range adapters {
+		var target *remote.Target
+		switch v := a.(type) {
+		case *mutation.Gremlins:
+			target = v.Remote
+		case *mutation.Stryker:
+			target = v.Remote
+		case *mutation.StrykerNet:
+			target = v.Remote
+		}
+		if target != nil {
+			return verify.MeasuredOnHost(target.Host)
+		}
+	}
+	return verify.MeasuredLocally()
 }
 
 // configuredAdapters returns the list of mutation adapters appropriate
