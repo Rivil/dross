@@ -204,6 +204,28 @@ is refused unread, and a remote host in the tracked
 .I project.toml
 is refused by name.
 .TP
+.B dross remote bootstrap [--apply]
+Install the mutation toolchain the granted host is missing. Probes the host
+for the tools this repo's configured
+.B [mutation].adapters
+need, then installs the adapter
+.I packages
+it can into a runtime that already exists there \(em gremlins via a pinned
+.BR "go install" .
+It never installs a language runtime: a host missing
+.BR go ,
+.B node
+or
+.B dotnet
+is reported by name so its owner can install it, since that is version policy
+and PATH ownership rather than a decision a mutation run gets to make.
+Dry-run by default \(em it prints the exact command it would run for each
+missing tool and changes nothing; pass
+.B --apply
+to install. Re-running over a provisioned host does nothing, one tool's
+failure never aborts the rest, and a run carrying any refusal or failure exits
+non-zero.
+.TP
 .B dross mutation remote status
 Print the authorized host and workdir, or
 .BR "not granted" .

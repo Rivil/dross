@@ -84,7 +84,7 @@ func remoteGrantTree() *cobra.Command {
 			".dross/local.toml, so it never travels with the repo — a clone carries no\n" +
 			"grant, and a host named in the tracked project.toml is refused.",
 	}
-	c.AddCommand(remoteGrant(), remoteStatus(), remoteRevoke())
+	c.AddCommand(remoteGrant(), remoteStatus(), remoteRevoke(), remoteBootstrap())
 	return c
 }
 
