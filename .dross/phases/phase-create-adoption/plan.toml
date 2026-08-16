@@ -1,3 +1,5 @@
+task_seq = 0
+
 [phase]
   id = "phase-create-adoption"
 
@@ -6,45 +8,17 @@
   wave = 1
   title = "Resolve a create slug by adopt, refuse or coin"
   files = ["internal/phase/phase.go", "internal/phase/adopt_test.go"]
-  description = """
-Replace UniqueSlug's unconditional coining with a resolver that answers one of
-three things for a title: the slug is free, the slug names an UNSTARTED phase
-that should be adopted, or it names a started phase and the caller must refuse.
-
-Unstarted means no spec.toml, plan.toml or changes.json — the three files the
-loop writes as a phase begins. Emptiness of the directory is deliberately NOT
-the test: a stray file would make a placeholder look occupied and re-open the
-coining path this phase closes.
-"""
+  description = "Replace UniqueSlug's unconditional coining with a resolver that answers one of\nthree things for a title: the slug is free, the slug names an UNSTARTED phase\nthat should be adopted, or it names a started phase and the caller must refuse.\n\nUnstarted means no spec.toml, plan.toml or changes.json — the three files the\nloop writes as a phase begins. Emptiness of the directory is deliberately NOT\nthe test: a stray file would make a placeholder look occupied and re-open the\ncoining path this phase closes.\n"
   covers = ["c-1", "c-2"]
-  test_contract = [
-    "if a placeholder directory stops being adoptable, TestResolveAdoptsAnUnstartedPhase fails — a dir scaffolded by `deferred route --target` holds none of the three files and is exactly the shape that produced `<slug>-2`",
-    "if a started phase becomes adoptable, TestResolveRefusesAStartedPhase fails — it is asserted per file (spec.toml, plan.toml, changes.json) so losing any one from the occupied test still fails by name",
-    "if a stray unrelated file makes a placeholder look occupied, TestStrayFileDoesNotBlockAdoption fails — keying on emptiness rather than on the loop's own files is the wrong test in the other direction",
-    "if the resolver starts coining `<slug>-2` again, TestResolveNeverCoinsASuffix fails — the auto-coined slug is the bug, not a fallback for it",
-  ]
-  status = "pending"
+  test_contract = ["if a placeholder directory stops being adoptable, TestResolveAdoptsAnUnstartedPhase fails — a dir scaffolded by `deferred route --target` holds none of the three files and is exactly the shape that produced `<slug>-2`", "if a started phase becomes adoptable, TestResolveRefusesAStartedPhase fails — it is asserted per file (spec.toml, plan.toml, changes.json) so losing any one from the occupied test still fails by name", "if a stray unrelated file makes a placeholder look occupied, TestStrayFileDoesNotBlockAdoption fails — keying on emptiness rather than on the loop's own files is the wrong test in the other direction", "if the resolver starts coining `<slug>-2` again, TestResolveNeverCoinsASuffix fails — the auto-coined slug is the bug, not a fallback for it"]
+  status = "done"
 
 [[task]]
   id = "t-2"
   wave = 2
   title = "Adopt, refuse and report in phase create"
   files = ["internal/cmd/phase.go", "internal/cmd/phase_create_adopt_test.go"]
-  description = """
-Wire the resolver into `dross phase create`: adopt an unstarted directory
-(reporting that it did), refuse a started one by name, and keep the fresh path
-byte-identical to what it was.
-
-An adopted phase must keep its slot in the milestone's phases array — never
-re-appended to the tail, since that array is the ordering truth every ordinal
-and narration reads.
-"""
+  description = "Wire the resolver into `dross phase create`: adopt an unstarted directory\n(reporting that it did), refuse a started one by name, and keep the fresh path\nbyte-identical to what it was.\n\nAn adopted phase must keep its slot in the milestone's phases array — never\nre-appended to the tail, since that array is the ordering truth every ordinal\nand narration reads.\n"
   covers = ["c-1", "c-3", "c-4"]
-  test_contract = [
-    "if create coins a duplicate again, TestCreateAdoptsRatherThanCoining fails — it scaffolds a placeholder, creates with the same title, and asserts no `<slug>-2` directory exists and the milestone array holds the slug once",
-    "if an adopted phase moves to the tail, TestAdoptionKeepsItsMilestoneSlot fails — it places the placeholder mid-array and requires the index unchanged, because moving it renumbers every phase between",
-    "if adoption is silent, TestAdoptionIsReported fails — a user who expected a new phase and got an existing one must see it in the output, not infer it",
-    "if creating over a started phase stops refusing, TestCreateRefusesAStartedPhase fails — it also asserts no branch was cut and the array was not touched, since a refusal that half-acted is worse than either outcome",
-    "if the fresh-create path changes at all, TestFreshCreateIsUnchanged fails — adoption is additive; a phase whose slug is free must behave exactly as before",
-  ]
-  status = "pending"
+  test_contract = ["if create coins a duplicate again, TestCreateAdoptsRatherThanCoining fails — it scaffolds a placeholder, creates with the same title, and asserts no `<slug>-2` directory exists and the milestone array holds the slug once", "if an adopted phase moves to the tail, TestAdoptionKeepsItsMilestoneSlot fails — it places the placeholder mid-array and requires the index unchanged, because moving it renumbers every phase between", "if adoption is silent, TestAdoptionIsReported fails — a user who expected a new phase and got an existing one must see it in the output, not infer it", "if creating over a started phase stops refusing, TestCreateRefusesAStartedPhase fails — it also asserts no branch was cut and the array was not touched, since a refusal that half-acted is worse than either outcome", "if the fresh-create path changes at all, TestFreshCreateIsUnchanged fails — adoption is additive; a phase whose slug is free must behave exactly as before"]
+  status = "done"
