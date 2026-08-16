@@ -144,7 +144,7 @@ func Verify() *cobra.Command {
 			}
 
 			printVerifySummary(t, v)
-			printLifecycleSummary(lc)
+			printLifecycleSummary(lc, v.Summary.UnclassifiedInScope)
 			recordVerifyOutcome(t, v)
 			return nil
 		},
@@ -687,14 +687,29 @@ func appendStalenessNotes(v *verify.Verify, repoRoot string, store *survivor.Sto
 // how many survivors are this phase's own, how many have a destination, how
 // many are accepted, and how many still need a decision. The four counts sum to
 // the run's survivor total by construction.
-func printLifecycleSummary(lc *verify.Lifecycle) {
+//
+// gateCount is verify.toml's summary.unclassified_in_scope — the number the
+// verdict actually fails on — and it is PASSED IN rather than recomputed here.
+// That is the whole point of this signature: the two surfaces used to derive
+// the same fact separately and disagree about it, so a run with four
+// undispositioned in-diff survivors printed "0 unclassified" on screen while
+// the file next to it recorded unclassified_in_scope = 4. The line a human
+// reads said all-clear while the gate was open. Sharing the value makes that
+// disagreement unrepresentable.
+func printLifecycleSummary(lc *verify.Lifecycle, gateCount int) {
 	if lc == nil || lc.Total() == 0 {
 		return
 	}
-	Printf("  survivors: %d in-diff, %d routed, %d accepted, %d unclassified\n",
+	Printf("  survivors: %d in-diff, %d routed, %d accepted, %d out-of-diff unclassified\n",
 		len(lc.InDiff), len(lc.Routed), len(lc.Accepted), len(lc.Unclassified))
-	if n := len(lc.Unclassified); n > 0 {
-		Printf("    ↳ %d unclassified — `dross survivor accept <file>:<line> --op OP --reason ...` "+
-			"or `dross survivor route <file>:<line> --op OP --target <phase>`\n", n)
+	// The gate line, always printed when the lifecycle has anything to say —
+	// including when it is zero, because "the gate is clear" is the fact a
+	// reader is looking for and its absence is not the same statement.
+	if gateCount > 0 {
+		Printf("    ↳ %d undispositioned in scope — THE VERDICT GATE IS OPEN. "+
+			"Clear each with `dross survivor accept <file>:<line> --op OP --reason ...` "+
+			"or `dross survivor route <file>:<line> --op OP --target <phase>`\n", gateCount)
+	} else {
+		Print("    ↳ 0 undispositioned in scope — the verdict gate is clear")
 	}
 }
