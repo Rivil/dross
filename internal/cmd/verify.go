@@ -546,6 +546,7 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 		Printf("  skipped %s — %s\n", s.File, s.Reason)
 	}
 	printScopeSummary(t, v)
+	printOverallScore(v)
 	switch v.Summary.MutationStatus {
 	case verify.MutationOutOfScope:
 		Print("  mutation status: out-of-scope — the adapters found mutants, but every one of them " +
@@ -560,6 +561,39 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 			"Score is 0/0 — /dross-verify will base the verdict on criterion coverage alone.")
 	}
 	Printf("\nWrote tests.json + verify.toml (verdict=%s — /dross-verify will fill criterion mappings).\n", v.Verify.Verdict)
+}
+
+// printOverallScore states the number the phase is judged on, with what it was
+// computed over.
+//
+// A bare ratio is not a measurement anyone can act on: 0.90 over 10 mutants and
+// 0.90 over 400 are the same number and not the same evidence. And a survivor
+// the tooling cannot reach is a different fact from one the tests missed — so
+// the uncoverable count is named too, which is what makes "0.90" and "1.00 on
+// everything reachable" both visible at once.
+//
+// Both distinctions were being written into verify.toml notes BY HAND on every
+// run of this milestone. A convention that has to be re-typed each time is one
+// that belongs in the code.
+func printOverallScore(v *verify.Verify) {
+	if v.Summary.MutationStatus != verify.MutationMeasured {
+		// The other statuses print their own line explaining that the score is
+		// 0/0 and why. Adding a denominator to a number that means nothing
+		// would dress it up as a measurement.
+		return
+	}
+	Printf("  score: %.2f over %d in-scope mutant(s) — killed=%d survived=%d\n",
+		v.Summary.MutationScore, v.Summary.MutantsInScope,
+		v.Summary.MutantsKilled, v.Summary.MutantsSurvived)
+	// Only when there are any. A line that is always present stops being read,
+	// and "0 uncoverable" is not news.
+	if v.Summary.MutantsNotCovered > 0 {
+		reachable := v.Summary.MutantsInScope - v.Summary.MutantsNotCovered
+		Printf("    of which %d uncoverable by construction (gremlins attributes no coverage block to them) — "+
+			"efficacy over the %d reachable = %.2f\n",
+			v.Summary.MutantsNotCovered, reachable,
+			mutation.PooledScore(v.Summary.MutantsKilled, v.Summary.MutantsSurvived-v.Summary.MutantsNotCovered, 0))
+	}
 }
 
 // scopeFileListCap bounds how many scoped files are named before the line

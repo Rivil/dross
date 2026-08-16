@@ -33,6 +33,8 @@ This shells out to mutation tools (currently Stryker for TS/JS/Svelte; other lan
 - `.dross/phases/<id>/tests.json` — raw machine output, killed/survived counts per language, plus the `scope` block (what the run scoped to) and the `out_of_scope` list (survivors in files this phase never touched)
 - `.dross/phases/<id>/verify.toml` — skeleton verdict with `verdict = "pending"`, per-criterion `status = "unknown"`, and `[summary].mutation_status` of `measured | unmeasurable | skipped | out-of-scope` (use this — not the raw score — to decide whether the mutation leg gates at all in §3), plus `[summary].unclassified_in_scope`, the mutation leg's fail lever
 
+**Read the score with its denominator.** `dross verify` now prints it that way — `score: 0.90 over 191 in-scope mutant(s)`, plus a second line naming how many of those are uncoverable by construction and what the efficacy is over the rest. Carry both into your report: 0.90 over 10 mutants and 0.90 over 400 are the same number and not the same evidence, and a survivor the tooling cannot reach is a different fact from one the tests missed.
+
 **The score covers only this phase's changed files.** Mutation tools attribute at a coarser granularity than a phase does — gremlins mutates a whole Go package — so every report is filtered against the phase's change set before it reaches these files. A survivor in an untouched sibling is real, but it is not this phase's, and it is neither scored nor flagged here. `[summary].mutants_in_scope` is the denominator that filtering left: read it next to the score, because 0.50 over 2 mutants and 0.50 over 200 are the same number and not the same evidence.
 
 **Read both files before continuing.** They're the inputs for the LLM judgement step.

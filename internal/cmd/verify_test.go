@@ -411,8 +411,13 @@ func TestVerifyCover_SummaryNilMutation(t *testing.T) {
 	if !strings.Contains(out, "no mutation report") {
 		t.Errorf("expected 'no mutation report':\n%s", out)
 	}
-	if strings.Contains(out, "killed=") {
-		t.Errorf("detailed killed line must not print for nil mutation:\n%s", out)
+	// Scoped to the PER-LEG line, not to the substring anywhere in the output:
+	// mutation-score-truth added an overall `score: ... killed=N survived=N`
+	// line, which is a different statement and legitimately carries the word.
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "html (none)") && strings.Contains(line, "killed=") {
+			t.Errorf("the detailed per-leg line printed for a nil mutation report:\n%s", line)
+		}
 	}
 }
 
