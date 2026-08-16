@@ -1,0 +1,6 @@
+{
+  "phase": "mutation-score-truth",
+  "base": "milestone/v1.3",
+  "base_commit": "ab35249fa160d5e8ca33373b7add38f81b26d05a",
+  "tasks": {}
+}

@@ -1,0 +1,48 @@
+[phase]
+  id = "mutation-score-truth"
+  title = "Mutation score truth"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "One mutation-score formula, applied everywhere. Today three disagree: verify.toml takes the MEAN across language legs, telemetry POOLS killed/(killed+survived) with timeouts excluded, and Report.Score divides by killed+survived+timeout — while the struct doc claims a fourth thing. A two-leg run of 1/1 and 0/9 reports 0.50 or 0.10 depending on which surface you read."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross verify`'s stdout and the verify.toml it writes in the same run report survivors in ONE vocabulary. Today an in-diff survivor with no disposition is counted as unclassified_in_scope in the file while stdout prints it under `in-diff` and reports `0 unclassified` — so the line a user reads says all-clear while the gate that fails the phase is open."
+
+[[criteria]]
+  id = "c-3"
+  text = "Mutants that cannot change behaviour never reach the survivor list: an ARITHMETIC_BASE mutant on a string-concatenation or a const initializer is dropped by the adapter rather than reported as a survivor someone has to accept. They are already proven inert by test; leaving them in inflates the denominator and spends a human decision on a no-op."
+
+[[criteria]]
+  id = "c-4"
+  text = "`dross survivor list --stale` detects an orphaned acceptance whose source line still exists — an entry whose survivor is gone. Staleness is decided against the current survivor set, not against source existence alone, so the store can be pruned by the verb that exists for it rather than by hand-supplied keys."
+
+[[criteria]]
+  id = "c-5"
+  text = "The score a phase is judged on is reported with what it was computed over: the in-scope mutant count, and how many of those were uncoverable-by-construction. A bare ratio hides the difference between 0.90 over 10 mutants and 0.90 over 400, and between a suite that missed mutants and one facing the attribution ceiling."
+
+[[decisions]]
+  key = "pooled_with_timeouts_in_denominator"
+  choice = "The normative score is pooled across legs: killed / (killed + survived + timeout). Every surface computes it the same way, from one function."
+  why = "Pooling rather than the mean because a mean over legs of unequal size is not a property of the code — 1/1 and 0/9 is a 0.10 suite that the mean flatters to 0.50, and the smaller leg gets the louder vote. Timeouts in the denominator because a mutant that timed out was not killed: excluding it lets a suite that hangs on its hardest mutants score higher than one that fails them. The doc comment claiming otherwise is corrected rather than kept as a third opinion."
+
+[[decisions]]
+  key = "in_diff_is_unclassified"
+  choice = "An in-diff survivor with no disposition IS an unclassified survivor. stdout adopts the file's vocabulary — it reports the gate state directly rather than presenting in-diff and unclassified as disjoint buckets."
+  why = "The file is right and the line is the one that misleads: unclassified_in_scope is defined as an in-scope survivor carrying no disposition, which is exactly what an undispositioned in-diff survivor is. Printing them as separate buckets lets `0 unclassified` appear on screen while the verdict gate is open — an all-clear the same run contradicts in the file next to it."
+
+[[decisions]]
+  key = "drop_at_the_adapter"
+  choice = "Inapplicable mutants are dropped in the gremlins adapter, before the report is built — not filtered later in verify."
+  why = "A mutant dropped at the adapter never enters the denominator, the survivor list, the lifecycle or the accept store, so every downstream surface agrees without knowing about the exception. Filtering later would leave the score computed over mutants the survivor list no longer showed, which is a new disagreement in place of the one being closed."
+
+[[decisions]]
+  key = "score_reported_with_its_denominator"
+  choice = "Every surface that prints the score prints the in-scope mutant count beside it, and the uncoverable count when non-zero."
+  why = "A ratio without its denominator is not a measurement anyone can act on: 0.90 over 10 mutants and 0.90 over 400 are the same number and not the same evidence, and a survivor the tooling cannot kill is a different fact from one the tests missed. Both distinctions were already being written into verify.toml notes by hand, run after run, which is where a convention that belongs in the code shows itself."
+
+[[deferred]]
+  text = "Weight the pooled score by leg size when a repo genuinely has two large legs of different languages, rather than pooling raw counts."
+  why = "Pooling raw counts IS the weighting for now — a mutant is a mutant. A deliberate re-weighting is only interesting once a real multi-leg repo exists to calibrate against, and inventing the policy before then would be fitting a rule to no data."

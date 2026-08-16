@@ -12,6 +12,7 @@
     "milestone-lifecycle-close": "DRO-13",
     "multilang-verify-signal": "DRO-28",
     "mutation-diff-scope": "DRO-9",
+    "mutation-score-truth": "DRO-30",
     "plan-gray-area-walkthrough": "DRO-29",
     "red-proof-reachability": "DRO-23",
     "remote-mutation-runner": "DRO-24",
