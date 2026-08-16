@@ -327,10 +327,7 @@ func mergeInto(dst, src *Report) {
 	for name, s := range src.Files {
 		dst.addFile(name, s)
 	}
-	denom := dst.Killed + dst.Survived + dst.Timeout
-	if denom > 0 {
-		dst.Score = float64(dst.Killed) / float64(denom)
-	}
+	dst.Score = PooledScore(dst.Killed, dst.Survived, dst.Timeout)
 }
 
 // RePrefixGremlinsFiles rewrites a single package's gremlins report so its
@@ -573,9 +570,6 @@ func ParseGremlinsJSON(data []byte) (*Report, error) {
 			}
 		}
 	}
-	denom := r.Killed + r.Survived + r.Timeout
-	if denom > 0 {
-		r.Score = float64(r.Killed) / float64(denom)
-	}
+	r.Score = PooledScore(r.Killed, r.Survived, r.Timeout)
 	return r, nil
 }

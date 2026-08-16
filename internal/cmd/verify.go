@@ -442,28 +442,28 @@ func recordVerifyOutcome(t *verify.Tests, v *verify.Verify) {
 		files := 0
 		killed := 0
 		survived := 0
+		timeouts := 0
 		for _, lr := range t.Languages {
 			files += len(lr.Files)
 			if lr.Mutation != nil {
 				killed += lr.Mutation.Killed
 				survived += lr.Mutation.Survived
+				timeouts += lr.Mutation.Timeout
 			}
 		}
 		counts["files"] = files
 		counts["mutants_killed"] = killed
 		counts["mutants_survived"] = survived
 		// Both counts are already post-filter — Tests carries the in-scope
-		// reports — so the score below is the in-scope score, the same
-		// fraction verify.toml reports. They agree exactly on a single-leg,
-		// zero-timeout run; wider than that the two sides use different
-		// conventions (verify.toml means across legs, this pools; Report.Score
-		// puts timeouts in the denominator, this does not). Reconciling them
-		// changes the number every phase's thresholds apply to and is
-		// deliberately out of this phase's diff.
+		// reports — so this IS the in-scope score, and it is computed by the
+		// same mutation.PooledScore that writes verify.toml's number. The two
+		// used to diverge as soon as a run had two legs or a single timeout,
+		// which meant a phase's judgement depended on which surface you read.
 		counts["mutants_in_scope"] = v.Summary.MutantsInScope
 		counts["out_of_scope"] = len(t.OutOfScope)
-		if total := killed + survived; total > 0 {
-			nums["mutation_score"] = float64(killed) / float64(total)
+		counts["mutants_timeout"] = timeouts
+		if score := mutation.PooledScore(killed, survived, timeouts); score > 0 {
+			nums["mutation_score"] = score
 		}
 	} else {
 		counts["mutants_killed"] = v.Summary.MutantsKilled

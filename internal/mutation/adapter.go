@@ -16,12 +16,15 @@ import "errors"
 
 // Report is the normalised result format consumed by verify.
 type Report struct {
-	Tool      string // "stryker" | "gremlins" | ...
-	Killed    int    // mutants the tests caught — good
-	Survived  int    // mutants that escaped — theatrical tests (includes NotCovered)
-	Timeout   int
-	Errors    int
-	Score     float64 // killed / (killed + survived)
+	Tool     string // "stryker" | "gremlins" | ...
+	Killed   int    // mutants the tests caught — good
+	Survived int    // mutants that escaped — theatrical tests (includes NotCovered)
+	Timeout  int
+	Errors   int
+	// Score is killed / (killed + survived + timeout) — see PooledScore in
+	// score.go, which is the one place the formula lives. The comment here
+	// used to claim killed/(killed+survived), which no adapter computed.
+	Score     float64
 	Surviving []Mutant
 
 	// NotCovered is the subset of Survived where tests never executed the
