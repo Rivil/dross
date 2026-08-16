@@ -377,3 +377,103 @@ func TestReplayTrustNotInLocalKeys(t *testing.T) {
 		t.Error(".dross/local.toml is not gitignored — a consent grant could be committed")
 	}
 }
+
+// TestReplayTailKeepsTheTail: a refusal must carry the END of a long run — the
+// part that says why it failed — not the beginning that scrolled past. A
+// truncation that kept the head would report a passing preamble as the reason
+// a proof did not go red.
+func TestReplayTailKeepsTheTail(t *testing.T) {
+	const total = redProofReplayTailLines * 3
+	var b strings.Builder
+	for i := 1; i <= total; i++ {
+		fmt.Fprintf(&b, "line-%d\n", i)
+	}
+
+	got := strings.Split(lastLines(b.String(), redProofReplayTailLines), "\n")
+
+	if len(got) != redProofReplayTailLines {
+		t.Fatalf("returned %d lines, want %d", len(got), redProofReplayTailLines)
+	}
+	wantFirst := fmt.Sprintf("line-%d", total-redProofReplayTailLines+1)
+	if got[0] != wantFirst {
+		t.Errorf("first line is %q, want %q — the window is not anchored at the tail", got[0], wantFirst)
+	}
+	if wantLast := fmt.Sprintf("line-%d", total); got[len(got)-1] != wantLast {
+		t.Errorf("last line is %q, want %q — the end of the run was dropped", got[len(got)-1], wantLast)
+	}
+	for _, line := range got {
+		if line == "line-1" {
+			t.Error("the head of the run survived truncation")
+		}
+	}
+}
+
+// TestReplayTailShortInputUnchanged: at or under the budget nothing is
+// dropped. A truncation that fired early would silently eat short failures,
+// which are the ones a reader can actually act on.
+func TestReplayTailShortInputUnchanged(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", ""},
+		{"only newlines", "\n\n", ""},
+		{"one line", "boom\n", "boom"},
+		{"at the budget", strings.TrimSuffix(strings.Repeat("x\n", redProofReplayTailLines), "\n"), strings.TrimSuffix(strings.Repeat("x\n", redProofReplayTailLines), "\n")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := lastLines(tc.in, redProofReplayTailLines); got != tc.want {
+				t.Errorf("lastLines(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTrustReplayCheckSurfacesError: `--replay <id> --check` has three answers
+// and they are not interchangeable. A store it could not READ is not a grant
+// that was WITHHELD: reporting the first as the second would send an operator
+// to run a grant command that will not fix anything.
+func TestTrustReplayCheckSurfacesError(t *testing.T) {
+	const line = "exit 3"
+
+	t.Run("unconsented", func(t *testing.T) {
+		replayFixture(t, line)
+		err := runCmd(t, Trust(), "--replay", "proofy", "--check")
+		if err == nil {
+			t.Fatal("--check passed on a line this machine never granted")
+		}
+		if !errors.Is(err, ErrNoReplayConsent) {
+			t.Errorf("err = %v, want ErrNoReplayConsent", err)
+		}
+		if !strings.Contains(err.Error(), "dross trust --replay proofy") {
+			t.Errorf("the refusal does not name the grant command: %v", err)
+		}
+	})
+
+	t.Run("granted", func(t *testing.T) {
+		root, _, _ := replayFixture(t, line)
+		if err := GrantReplayConsent(root, line); err != nil {
+			t.Fatal(err)
+		}
+		if err := runCmd(t, Trust(), "--replay", "proofy", "--check"); err != nil {
+			t.Errorf("--check refused a granted line: %v", err)
+		}
+	})
+
+	t.Run("unreadable store", func(t *testing.T) {
+		root, _, _ := replayFixture(t, line)
+		mustWrite(t, localPath(root), "this is = = not toml\n")
+
+		err := runCmd(t, Trust(), "--replay", "proofy", "--check")
+		if err == nil {
+			t.Fatal("--check passed over a store it could not read")
+		}
+		if !strings.Contains(err.Error(), LocalFile) {
+			t.Errorf("the error does not name the store it failed to read: %v", err)
+		}
+		if strings.Contains(err.Error(), "Grant it with") {
+			t.Errorf("an unreadable store was reported as a withheld grant: %v", err)
+		}
+	})
+}
