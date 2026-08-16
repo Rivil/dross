@@ -133,3 +133,32 @@ func onlyAcceptedKey(t *testing.T, dir string) string {
 	}
 	return store.Accepted[0].Key
 }
+
+// TestOutOfScopeSurvivorsCountAsObserved is the case that matters most in a
+// real repo and the one the in-scope-only fixtures above cannot reach.
+//
+// A phase's run reports its own files' survivors in `languages[].mutation`, and
+// everything else — every survivor in a file that phase did not touch — in
+// `out_of_scope`. This repo's accept store is almost entirely the second kind:
+// dozens of attribution-ceiling acceptances that no single phase's in-scope list
+// will ever contain. If the observed-key scan skipped that list, every one of
+// them would be reported orphaned the moment anyone ran `survivor list --stale`,
+// and retiring them would re-inherit the whole drained backlog.
+func TestOutOfScopeSurvivorsCountAsObserved(t *testing.T) {
+	dir := orphanFixture(t)
+	key := onlyAcceptedKey(t, dir)
+
+	// The survivor appears ONLY in out_of_scope — no in-scope rows at all.
+	body := `{"phase":"01-orphan","languages":[{"name":"go","tool":"gremlins","files":["a.go"],` +
+		`"mutation":{"Tool":"gremlins","Killed":1,"Survived":0,"Surviving":[]}}],` +
+		`"out_of_scope":[{"File":"a.go","Line":3,"Op":"CONDITIONALS_BOUNDARY","Key":"` + key + `","Lifecycle":"accepted"}]}`
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "01-orphan", "tests.json"), body)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Survivor(), "list", "--stale"); err != nil {
+		t.Fatalf("survivor list --stale: %v", err)
+	}
+	if !strings.Contains(out, "(no stale acceptances)") {
+		t.Errorf("an acceptance whose survivor is in the out-of-scope list was reported orphaned — that is where nearly every acceptance in a real repo lives:\n%s", out)
+	}
+}
