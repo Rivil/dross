@@ -54,6 +54,12 @@
   locked = true
 
 [[decisions]]
+  key = "replay_consent_states"
+  choice = "c-8's recorded/not-recorded split is three states in practice. A replay that is recorded AND consented on this machine is run and must go red or the repoint is refused. A replay that is recorded but NOT consented is not run, and the repoint proceeds reporting the repair unverified — naming the grant command. No recorded replay at all is likewise repoint-as-unverified. A replay that could not be RUN (worktree add failed, spawn error, timeout) refuses the repoint: an error is not evidence the proof went red."
+  why = "The command lives in changes.json, a tracked file, so spawning it is code execution on clone — hence the consent gate. But refusing the repair when consent is merely absent would make c-1's single-command promise false on any fresh clone: a rotted pin would be unrepairable until the operator granted a command they may not want to run at all. Reporting unverified is the same honesty c-8 already requires of the unrecorded case."
+  locked = true
+
+[[decisions]]
   key = "repoint_commit"
   choice = "Repoint writes the files and reports what it changed; it does not commit. The caller commits."
   why = "The repair touches an ordinary tracked source doc under fixtures/, not only .dross/. A CLI verb auto-committing a prose rewrite lands an unreviewed diff in history; the invoking slash command commits the .dross/ side under the commit-hygiene rule like every other .dross write."

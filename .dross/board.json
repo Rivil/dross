@@ -17,6 +17,7 @@
     "phase-create-adoption": "DRO-31",
     "plan-gray-area-walkthrough": "DRO-29",
     "red-proof-reachability": "DRO-23",
+    "red-proof-repoint": "DRO-125",
     "remote-mutation-runner": "DRO-24",
     "remote-test-runner": "DRO-26",
     "survivor-drain": "DRO-12",
