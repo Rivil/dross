@@ -1,0 +1,85 @@
+[phase]
+  id = "board-task-mirror"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Extend the lifecycle vocabulary with task and UAT states"
+  files = ["internal/configenum/configenum.go", "internal/forge/youtrack.go", "internal/forge/jira.go", "internal/configenum/task_states_test.go"]
+  description = """
+Add task-in-progress, task-in-review and uat to LifecycleStatuses and to both
+default state maps. One vocabulary with one override point (locked
+task_states_extend_the_same_map), so the existing build-failing divergence guard
+covers the new keys the day they land.
+"""
+  covers = ["c-2", "c-3"]
+  test_contract = [
+    "if a new state is added to the set but not to a map, TestEveryLifecycleStatusHasAMapping fails naming it — that exact split (issue.go emitting `planning` while both maps keyed `planned`) is why the set exists",
+    "if uat collapses onto in-progress or shipped, TestUATIsItsOwnState fails — a phase awaiting a verdict is neither being worked nor delivered, and folding it into either is what stops a board reflecting where work is",
+    "if the task states resolve to the same value as the phase states, TestTaskStatesAreDistinctFromPhaseStates fails — a task moving would otherwise be indistinguishable from its phase moving",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Create a missing YouTrack state in a project-private bundle"
+  files = ["internal/forge/youtrack.go", "internal/forge/youtrack_bundle_test.go"]
+  description = """
+When SetState maps to a value the tracker's bundle does not hold, add it to the
+project's OWN bundle rather than skipping. A shared bundle is other projects'
+configuration and is never written.
+
+Jira and forge REST keep the warn-and-continue floor: their states come from a
+workflow scheme, or do not exist.
+"""
+  covers = ["c-4"]
+  test_contract = [
+    "if a missing state is silently skipped again, TestMissingStateIsCreatedInThePrivateBundle fails — it serves a bundle without the value, then asserts the create call and the retried set both happened",
+    "if the create targets a SHARED bundle, TestSharedBundleIsNeverWritten fails — writing one edits configuration other projects depend on, which is a change nobody in them asked for",
+    "if a create failure becomes fatal, TestBundleCreateFailureWarnsAndContinues fails — a state that could not be created must not fail the whole sync, since the phase-level record is still worth writing",
+    "if an already-present state triggers a create, TestPresentStateSkipsTheCreate fails — a write on every sync would churn the tracker's configuration for nothing",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Add dross issue task-sync with child issues"
+  files = ["internal/cmd/issue_task.go", "internal/cmd/issue.go", "internal/board/board.go", "internal/cmd/issue_task_test.go"]
+  description = """
+`dross issue task-sync <phase> [task-id] [--status <s>]` creates or updates one
+issue per plan task, relates it to the phase issue through IssueLinker, records
+the mapping in board.json and drives the task's state.
+
+A backend with no linker warns ONCE per run and continues with the label
+relationship (locked child_issues_not_subtasks + warn_once_per_run).
+"""
+  covers = ["c-1", "c-2", "c-5"]
+  test_contract = [
+    "if a re-run duplicates issues, TestTaskSyncIsIdempotent fails — it syncs twice and asserts one issue per task and one board.json entry, which is the property that makes it safe in the execute loop",
+    "if the phase relationship is dropped, TestTaskIssueIsRelatedToItsPhase fails — an unrelated task issue is a loose card nobody can trace back",
+    "if a linker-less backend fails instead of degrading, TestNoLinkerWarnsOnceAndContinues fails — it asserts exactly one warning for a multi-task phase and that every task issue still exists",
+    "if --status stops driving the state, TestTaskSyncDrivesTheState fails — the label is not the tracker's workflow field, which is the whole point of c-2",
+    "if a task id is given and other tasks are touched, TestTaskSyncScopesToOneTask fails — the execute loop syncs one task at a time and must not rewrite the other seven on every commit",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 3
+  title = "Drive task and UAT states from the loop prompts"
+  files = ["assets/prompts/execute.md", "assets/prompts/verify.md", "internal/cmd/prompt_task_mirror_test.go"]
+  description = """
+execute.md calls task-sync at the two edges it already has — picking a task and
+committing it — and verify.md moves the phase to uat. Both are no-ops when board
+sync is off, so the prompts call them unconditionally as they already do for
+phase-sync.
+"""
+  covers = ["c-2", "c-3"]
+  test_contract = [
+    "if execute stops syncing at pick or at commit, TestExecutePromptSyncsBothTaskEdges fails — it requires both calls and requires the pick one to precede the commit one, since a single call at the end would mirror only the outcome and never the work in flight",
+    "if verify stops moving the phase to uat, TestVerifyPromptMovesPhaseToUAT fails — without it the board shows a phase as still in progress while its verdict is being decided",
+    "if a prompt starts gating the call on board sync being on, TestTaskSyncIsCalledUnconditionally fails — the CLI is already a no-op when sync is off, and a prompt-side condition is a second place for that rule to drift",
+  ]
+  status = "pending"

@@ -1,0 +1,51 @@
+[phase]
+  id = "board-task-mirror"
+  title = "Board task mirror"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every plan task gets its own board issue, related to its phase's issue. `dross issue task-sync <phase> [task-id]` creates or updates them and records the mapping in board.json, so re-running is idempotent rather than duplicating. Today the board sees a phase and a rendered checklist; nothing on the tracker moves when one task of eight is picked up."
+
+[[criteria]]
+  id = "c-2"
+  text = "Execute drives the child issue's state: picking a task moves it to in-progress, committing it moves it to a review state. The transition goes through the tracker's own workflow field — YouTrack's State, Jira's transitions — not a dross label, so the tracker's board columns reflect it."
+
+[[criteria]]
+  id = "c-3"
+  text = "Verify moves the PHASE issue to a UAT state, distinct from in-progress and from shipped. A phase awaiting a verdict is neither being worked nor delivered, and collapsing it into either is what makes a board stop reflecting where work actually is."
+
+[[criteria]]
+  id = "c-4"
+  text = "A mapped state value the tracker does not have is CREATED where the tracker allows it — a YouTrack state added to a project-private bundle — rather than silently skipped. Where the tracker cannot (Jira states come from a workflow, forge REST has no state field), the run warns once naming the provider and the missing value, and continues."
+
+[[criteria]]
+  id = "c-5"
+  text = "Every provider gets a stated outcome rather than a silent one: a backend that can express child issues does, one that cannot warns once and continues with the phase-level sync intact. A task mirror that half-worked without saying so would be worse than none, because the board would look authoritative while being partial."
+
+[[decisions]]
+  key = "child_issues_not_subtasks"
+  choice = "A task's board issue is an ordinary issue carrying a task label and related to the phase issue through the existing IssueLinker capability — not a tracker-native subtask type."
+  why = "Subtask types are per-tracker and per-project configuration: YouTrack models them as a link type, Jira as an issue type that a project may not have enabled, GitHub has none. Building on IssueLinker means one code path everywhere and a capability gap that is already modelled — GitHub fails the interface assertion and falls back to the label, which is the behaviour the linker was written for. A native subtask would be four implementations and a new failure mode per tracker."
+  locked = true
+
+[[decisions]]
+  key = "task_states_extend_the_same_map"
+  choice = "Task and UAT states are new keys in the existing lifecycle vocabulary and its state maps (`task-in-progress`, `task-in-review`, `uat`), not a second mapping mechanism."
+  why = "There is already one vocabulary with one override point (`[board].state_map`) and a build-failing guard that keeps producers and maps in step. A second mechanism would double that surface and let the two drift — which is precisely the bug the LifecycleStatuses set was introduced to close, when issue.go emitted `planning` while both maps keyed `planned`."
+  locked = true
+
+[[decisions]]
+  key = "create_only_where_the_tracker_allows"
+  choice = "A missing state is created only on YouTrack, in a PROJECT-PRIVATE bundle. Jira and forge REST warn once and continue."
+  why = "Only YouTrack exposes state values as an editable bundle; Jira's states come from a workflow scheme that a project shares with others, so creating one would edit configuration well outside this repo's blast radius, and forge REST has no state field at all. Project-private rather than shared for the same reason: a shared bundle is other projects' configuration, and silently adding to it is a change nobody in those projects asked for."
+  locked = true
+
+[[decisions]]
+  key = "warn_once_per_run"
+  choice = "A capability gap warns ONCE per run, naming the provider and what was skipped — not once per task."
+  why = "An eight-task phase on a backend with no linker would print eight identical lines, which is how a warning becomes scrollback. Once, named, is readable; the count of affected tasks is in the same line if it matters."
+
+[[deferred]]
+  text = "Mirror task state back INTO dross — read the tracker's board and move a plan task when someone drags its card."
+  why = "The opposite direction, and a much larger contract: it makes the tracker a writer of plan.toml, which needs conflict rules dross has never needed. This phase is one-way on purpose."

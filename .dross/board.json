@@ -5,6 +5,7 @@
   },
   "phases": {
     "board-sync-truth": "DRO-19",
+    "board-task-mirror": "DRO-32",
     "config-value-truth": "DRO-25",
     "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
