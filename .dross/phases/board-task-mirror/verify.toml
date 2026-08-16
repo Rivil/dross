@@ -1,21 +1,21 @@
 [verify]
   phase = "board-task-mirror"
-  generated_at = 2026-08-16T08:19:13.704878Z
-  verdict = "partial"
+  generated_at = 2026-08-16T11:44:13.811053Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-08-16T09:07:45.99912Z
+  finalized_at = 2026-08-16T13:12:54.684526Z
 
 [summary]
   mutation_status = "measured"
-  mutation_score = 0.9978813559322034
-  mutants_killed = 471
-  mutants_survived = 1
-  mutants_not_covered = 1
-  mutants_in_scope = 472
+  mutation_score = 0.979047619047619
+  mutants_killed = 514
+  mutants_survived = 11
+  mutants_not_covered = 11
+  mutants_in_scope = 525
   unclassified_in_scope = 0
   criteria_total = 5
-  criteria_covered = 3
-  criteria_uncovered = 2
+  criteria_covered = 5
+  criteria_uncovered = 0
 
 [[criterion]]
   id = "c-1"
@@ -25,47 +25,43 @@
 
 [[criterion]]
   id = "c-2"
-  status = "weak"
-  tests = ["internal/cmd/issue_task_state_test.go:TestTaskSyncLinksAndMovesTheStateOnACapableTracker", "internal/cmd/issue_task_state_test.go:TestStateFailureFailsTheTaskSync", "internal/cmd/issue_task_state_test.go:TestJiraStateFailureFailsTheTaskSync", "internal/cmd/board_lifecycle_divergence_test.go:TestEmittedStatusesAreTheLifecycleSet", "internal/cmd/board_lifecycle_divergence_test.go:TestStateMapsKeyExactlyTheEmittedStatuses"]
-  notes = "The mechanism is covered — `--status task-in-progress` writes YouTrack's State custom field rather than a dross label, and a rejected write fails the sync on both provider branches. What is NOT covered is the criterion's edge placement: that PICKING a task emits task-in-progress and COMMITTING it emits task-in-review. The lifecycle guard derives the emit-set from a `--status <literal>` regex over assets/prompts/*.md, so it only proves both literals appear somewhere; transposing execute.md:76 and execute.md:226 would invert the criterion with no test failing."
+  status = "covered"
+  tests = ["internal/cmd/board_lifecycle_divergence_test.go:TestTaskEdgesPairTheBoardStatusWithThePlanStatus", "internal/cmd/issue_task_state_test.go:TestTaskSyncLinksAndMovesTheStateOnACapableTracker", "internal/cmd/issue_task_state_test.go:TestStateFailureFailsTheTaskSync", "internal/cmd/issue_task_state_test.go:TestJiraStateFailureFailsTheTaskSync", "internal/forge/state_map_test.go:TestStateMapsKeepTheLifecycleStatesDistinct", "internal/cmd/board_lifecycle_divergence_test.go:TestEmittedStatusesAreTheLifecycleSet", "internal/cmd/board_lifecycle_divergence_test.go:TestStateMapsKeyExactlyTheEmittedStatuses"]
+  notes = "Upgraded from weak. The mechanism was already covered — `--status task-in-progress` writes YouTrack's State custom field rather than a dross label, and a rejected write fails the sync on both provider branches. What was missing was the criterion's EDGE placement, and t-5 closes it: TestTaskEdgesPairTheBoardStatusWithThePlanStatus walks execute.md in order and pairs each `dross issue task-sync … --status` with the `dross task status` write above it, so in_progress must carry task-in-progress and done must carry task-in-review, with a missing or duplicated edge failing too. Mutation cannot reach a .md file, so the guard was proven by hand this run: transposing execute.md:76 and execute.md:226 turned it red on both edges, naming each line and the status it should have emitted; reverted and green. t-7 adds the column-level half — task-in-review and task-in-progress must not map to the same value on either provider."
 
 [[criterion]]
   id = "c-3"
   status = "covered"
-  tests = ["internal/cmd/board_lifecycle_divergence_test.go:TestEmittedStatusesAreTheLifecycleSet", "internal/cmd/board_lifecycle_divergence_test.go:TestStateMapsKeyExactlyTheEmittedStatuses", "internal/forge/youtrack_bundle_test.go:TestMissingStateIsCreatedInThePrivateBundle", "internal/cmd/issue_close_truth_test.go:TestPhaseSyncCloseWritesStateAndVerifies", "internal/cmd/issue_close_truth_test.go:TestPhaseSyncWithoutCloseKeepsTheLenientPath"]
-  notes = "Three independent breakages are caught. Dropping verify.md's `--status uat` fails the emit-set guard (a Set member nothing emits). Collapsing uat into in-progress's value fails the bundle test, which asserts the created value is UAT while In Progress is already stock in the fixture bundle. Removing the phase-level state write fails the close-truth tests over issue.go:893/902. Jira's side of the distinctness claim is unasserted — see the FLAG."
+  tests = ["internal/forge/state_map_test.go:TestStateMapsKeepTheLifecycleStatesDistinct", "internal/cmd/board_lifecycle_divergence_test.go:TestEmittedStatusesAreTheLifecycleSet", "internal/cmd/board_lifecycle_divergence_test.go:TestStateMapsKeyExactlyTheEmittedStatuses", "internal/forge/youtrack_bundle_test.go:TestMissingStateIsCreatedInThePrivateBundle", "internal/cmd/issue_close_truth_test.go:TestPhaseSyncCloseWritesStateAndVerifies", "internal/cmd/issue_close_truth_test.go:TestPhaseSyncWithoutCloseKeepsTheLenientPath"]
+  notes = "The provider gap in the previous run's FLAG is closed. t-7 asserts the distinctness RELATIONSHIP rather than either provider's strings — uat != in-progress and uat != shipped, over defaultJiraStateMap and defaultYouTrackStateMap independently, with a missing key failing rather than comparing two absent values as equal. Collapsing Jira's uat into \"In Progress\" now fails, which it did not before. The three pre-existing breakages still hold: dropping verify.md's `--status uat` fails the emit-set guard, the bundle test pins the created YouTrack value, and removing the phase-level state write fails the close-truth tests over issue.go:893/902."
 
 [[criterion]]
   id = "c-4"
-  status = "weak"
-  tests = ["internal/forge/youtrack_bundle_test.go:TestMissingStateIsCreatedInThePrivateBundle", "internal/forge/youtrack_bundle_test.go:TestSharedBundleIsNeverWritten", "internal/forge/youtrack_bundle_test.go:TestPresentStateSkipsTheCreate", "internal/forge/youtrack_bundle_test.go:TestBundleCreateFailureWarnsAndContinues", "internal/forge/youtrack_bundle_test.go:TestUnmappedStateStillSkipsWithoutTouchingTheBundle", "internal/forge/jira_test.go:TestJiraSetStateTransitions"]
-  notes = "The create clause is thoroughly covered — created in a project-private bundle and retried so the state actually lands, refused on a shared bundle, skipped when already present, and a refusal warns rather than failing the sync. The second clause is not: for forge REST the criterion asks for a once-per-run warning naming the provider and the missing value, and setBoardState's default arm (internal/cmd/issue_task.go:237) returns nil silently on the argument that the status label is the honest floor. Unimplemented as stated, and untested either way."
+  status = "covered"
+  tests = ["internal/cmd/issue_task_test.go:TestNoStateFieldWarnsOnceAndContinues", "internal/cmd/issue_task_test.go:TestNoStatusMeansNoStateWarning", "internal/forge/youtrack_bundle_test.go:TestMissingStateIsCreatedInThePrivateBundle", "internal/forge/youtrack_bundle_test.go:TestSharedBundleIsNeverWritten", "internal/forge/youtrack_bundle_test.go:TestPresentStateSkipsTheCreate", "internal/forge/youtrack_bundle_test.go:TestBundleCreateFailureWarnsAndContinues", "internal/forge/youtrack_bundle_test.go:TestUnmappedStateStillSkipsWithoutTouchingTheBundle", "internal/forge/jira_test.go:TestJiraSetStateTransitions"]
+  notes = "Upgraded from weak: the second clause was unimplemented, not merely untested, and t-6 implemented it. setBoardState's default arm (internal/cmd/issue_task.go:253) now warns through the run-scoped runWarnings.noState gate, naming the provider and the value that never reached a column, and the create clause is unchanged — created in a project-private bundle and retried, refused on a shared bundle, skipped when already present, a refusal warning rather than failing. Both arms of the new warning are driven: exactly one line for a two-task phase with the provider and status named, both issues still carrying the status label; and no line at all for a sync that passed no --status, which is what stops the fix degenerating into an unconditional print."
 
 [[criterion]]
   id = "c-5"
   status = "covered"
-  tests = ["internal/cmd/issue_task_test.go:TestNoLinkerWarnsOnceAndContinues", "internal/cmd/issue_task_state_test.go:TestLinkFailureWarnsOnceAndKeepsTheIssues", "internal/cmd/issue_task_state_test.go:TestTaskSyncLinksAndMovesTheStateOnACapableTracker", "internal/cmd/deferred_link_test.go:TestGitHubBoardRecordsNoLinkAttempts"]
-  notes = "Both capability gaps are driven and both are bounded to one line per run: the backend with no IssueLinker at all, and the backend that advertises the capability then rejects the call at runtime. In each case every task issue still exists and its mapping is still recorded, so the phase-level sync survives the gap. The capability check is pinned as an interface assertion rather than a provider-string switch, which is what stops a no-op stub silencing the whole arm."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-2: nothing pins WHICH execute edge emits which task status. The emit-set guard is a `--status <literal>` regex over the prompt files, so swapping execute.md:76 (pick) and execute.md:226 (commit) would invert the criterion and every test would still pass."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-4: the forge-REST arm of setBoardState (internal/cmd/issue_task.go:237) is silent, but the criterion asks for a once-per-run warning naming the provider and the missing value where the tracker has no state field. Either the code owes the warning or the criterion owes a rewrite — decide before shipping."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-3: only YouTrack's uat value is asserted distinct (TestMissingStateIsCreatedInThePrivateBundle pins \"UAT\"). Jira's defaultJiraStateMap[\"uat\"] = \"In Review\" is keyed but its value is unasserted, so collapsing it into \"In Progress\" would break the distinctness clause silently."
+  tests = ["internal/cmd/issue_task_test.go:TestNoLinkerWarnsOnceAndContinues", "internal/cmd/issue_task_test.go:TestNoStateFieldWarnsOnceAndContinues", "internal/cmd/issue_task_state_test.go:TestLinkFailureWarnsOnceAndKeepsTheIssues", "internal/cmd/issue_task_state_test.go:TestTaskSyncLinksAndMovesTheStateOnACapableTracker", "internal/cmd/deferred_link_test.go:TestGitHubBoardRecordsNoLinkAttempts"]
+  notes = "All three capability gaps are now driven and each is bounded to one line per run: the backend with no IssueLinker at all, the backend that advertises the capability then rejects the call at runtime, and — new this pass — the backend with no workflow state field. In each case every task issue still exists and its mapping is still recorded, so the phase-level sync survives the gap. The capability check is pinned as an interface assertion rather than a provider-string switch, which is what stops a no-op stub silencing the whole arm."
 
 [[finding]]
   severity = "NOTE"
-  text = "1 in-scope survivor, already accepted: internal/cmd/issue.go:188 (CONDITIONALS_NEGATION, origin=inherited) under the gremlins attribution-ceiling reason — go-cover attributes no block to a switch-case condition, so gremlins reports NOT COVERED for a line the suite provably executes. Adding tests cannot kill it. unclassified_in_scope = 0."
+  text = "The three FLAGs from the 2026-08-16 08:19 run are closed by the amendment pass, each with a test that fails on the specific breakage it named: t-5 (c-2 edge placement, proven by hand-transposing execute.md since .md carries no mutation adapter), t-6 (c-4's forge-REST warning — implemented, not just tested), t-7 (c-3 distinctness on both providers)."
 
 [[finding]]
   severity = "NOTE"
-  text = "88 out-of-scope survivors filtered (files this phase never touched), all carrying an accepted disposition. Score 1.00 over 472 in-scope mutants — killed=471, survived=1 — up from 0.98 over 472 with 8 undispositioned in-hunk survivors before this pass."
+  text = "11 in-scope survivors, all accepted and none in this phase's own hunks: internal/cmd/issue.go:188 and internal/remote/remote.go:401/403/407 under the gremlins switch-case attribution ceiling (go-cover attributes no block to a case condition, so a provably-executed line reports NOT COVERED and no test can kill it), plus internal/remote/remote.go:435, the stdin guard inside the process-construction seam every remote test replaces — executing it would mean spawning real ssh. unclassified_in_scope = 0."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Score 0.98 over 525 in-scope mutants — killed=514, survived=11, all 11 uncoverable by construction, so efficacy over the 514 reachable is 1.00. 88 out-of-scope survivors filtered (files this phase never touched), all carrying an accepted disposition."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The mutation leg did not run at first: `dross verify` pipes its script to `ssh helicon bash -s`, and gremlins forked by that stdin-reading shell died at startup (`Failed to find executable : Is a directory`, exit 1, no report), which surfaced as mutation_status=skipped and a 0/0 score. Fixed in 7eaa1f0 — remote.ScriptAll now exec's the last command of the chain, as `bash -c` does implicitly — and re-measured on helicon. The fix rides on this branch, so it is inside the phase's diff and was measured: all three mutants on its new branch (internal/remote/remote.go:260) were killed by the test it ships with."
 
 [[finding]]
   severity = "NOTE"
