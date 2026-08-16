@@ -1,0 +1,40 @@
+[phase]
+  id = "phase-create-adoption"
+  title = "Phase create adoption"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross phase create <title>` ADOPTS an existing unstarted phase directory of that slug instead of coining a duplicate. Today it creates `<slug>-2`, appends that to the milestone's phases array and cuts a branch for it — so the roadmap entry someone scaffolded by routing a deferred item, and the phase they then start, are two different phases with nearly the same name."
+
+[[criteria]]
+  id = "c-2"
+  text = "Creating over a phase that has real work — a spec.toml, a plan.toml or recorded changes — REFUSES by name rather than adopting or coining. Adopting would put a new title on someone's in-flight phase; coining `-2` is what this phase is removing. The refusal names the existing phase and what to do instead."
+
+[[criteria]]
+  id = "c-3"
+  text = "An adopted phase joins the milestone's `phases` array exactly once and keeps its existing position. A phase scaffolded as roadmap intent and then started must not move to the tail, because that array is the ordering truth every ordinal, version digit and next-phase narration reads."
+
+[[criteria]]
+  id = "c-4"
+  text = "Adoption is reported, not silent: create says it adopted an existing directory rather than printing the same `created <dir>` line it prints for a fresh one. A user who expected a new phase and got someone else's must be able to see that from the output."
+
+[[decisions]]
+  key = "unstarted_means_no_spec"
+  choice = "A phase directory is UNSTARTED — and therefore adoptable — when it holds no spec.toml, no plan.toml and no changes.json. Anything else is real work."
+  why = "Those three files are exactly what the loop writes as it starts a phase, and a directory holding none of them is a placeholder: the shape `deferred route --target` and `milestone add phases` leave behind. Keying on emptiness of the directory would be wrong in the other direction — a stray file (an editor swap, a README someone dropped in) would make a placeholder look occupied and re-open the duplicate-coining path this phase closes."
+
+[[decisions]]
+  key = "occupied_refuses_rather_than_coining"
+  choice = "Creating over a started phase is an error naming that phase, not an auto-coined `<slug>-2`."
+  why = "The auto-coined slug is the bug, not a fallback for it. It silently forks the roadmap — one entry for the phase that exists and one for the phase just made — and the two are told apart only by a trailing digit nobody chose. Refusing puts the decision back with the person who typed the title, who is the only one who knows whether they meant a second phase or the existing one; the message names both the collision and the way through."
+  locked = true
+
+[[decisions]]
+  key = "adoption_keeps_its_slot"
+  choice = "An adopted phase keeps its existing position in the milestone's phases array. It is never re-appended to the tail."
+  why = "The array is the single source of phase order — ordinals, the version patch digit and verify's next-phase narration all read it. A phase scaffolded as intent at slot 4 and started later belongs at slot 4; moving it to the tail would renumber every phase between and silently re-order a roadmap someone deliberately arranged."
+
+[[deferred]]
+  text = "`dross phase create --adopt <existing-slug>` to adopt a started phase deliberately, re-titling it."
+  why = "A different feature: this phase is about create not silently doing the wrong thing, and c-2's refusal is the honest floor. An explicit adopt verb is worth having once someone actually wants it — and `dross phase rename` already covers the re-title half."

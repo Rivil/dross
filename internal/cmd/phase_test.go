@@ -377,7 +377,10 @@ func TestPhaseCreateSlugIdentity(t *testing.T) {
 		t.Errorf("milestone array tail: got %v want last=my-feature", m.Phases)
 	}
 
-	// A second create of the same title collides → my-feature-2, first intact.
+	// A second create of the same title now REFUSES (phase-create-adoption).
+	// It used to coin my-feature-2, append that to the milestone array and cut
+	// a branch for it — so the phase someone meant and the phase they got were
+	// two entries apart by a digit nobody chose.
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "chore: phase 1 bookkeeping")
 	mustGit(t, dir, "checkout", "-q", "main")
@@ -386,11 +389,12 @@ func TestPhaseCreateSlugIdentity(t *testing.T) {
 	// immediately, so checking out main now takes the first phase's dir away
 	// with it — and there'd be no slug collision left to assert.
 	mustGit(t, dir, "merge", "-q", "--ff-only", "phase/my-feature")
-	if err := runCmd(t, Phase(), "create", "My Feature"); err != nil {
-		t.Fatalf("second create: %v", err)
+	err := runCmd(t, Phase(), "create", "My Feature")
+	if err == nil {
+		t.Fatal("a second create over a started phase must refuse, not coin a suffix")
 	}
-	if !isDir(filepath.Join(root, "phases", "my-feature-2")) {
-		t.Error("expected phases/my-feature-2 on collision")
+	if isDir(filepath.Join(root, "phases", "my-feature-2")) {
+		t.Error("the refusal still created phases/my-feature-2")
 	}
 	if !isDir(filepath.Join(root, "phases", "my-feature")) {
 		t.Error("first phase dir should be untouched by the collision")

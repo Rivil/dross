@@ -144,8 +144,22 @@ func phaseCreate() *cobra.Command {
 			}
 			repoDir := filepath.Dir(root)
 
-			id := phase.UniqueSlug(root, title)
+			id, disposition := phase.CreateSlug(root, title)
 			branchName := "phase/" + id
+
+			// Refused BEFORE anything is created, cut or written: a refusal
+			// that had already made a directory or a branch would leave the
+			// repo in a state neither outcome asked for, and the user would
+			// have to clean up after a command that declined to act.
+			if disposition == phase.SlugOccupied {
+				return fmt.Errorf("phase %s already exists and has been started (it holds a spec, plan or recorded changes).\n"+
+					"dross will not retitle work in flight, and it no longer invents %s-2 for you.\n\n"+
+					"  work on it:      dross phase checkout %s\n"+
+					"  rename it:       dross phase rename %s \"<new title>\"\n"+
+					"  or pick a title that does not slugify to %s",
+					id, id, id, id, id)
+			}
+			adopted := disposition == phase.SlugAdopt
 
 			hasGit := isDir(filepath.Join(repoDir, ".git"))
 
@@ -166,10 +180,10 @@ func phaseCreate() *cobra.Command {
 					_ = os.Remove(dir)
 					return err
 				}
-				Printf("created %s\n", dir)
+				Printf("%s %s\n", createdOrAdopted(adopted), dir)
 				Printf("checked out %s (rooted on %s)\n", branchName, branchBase)
 			} else {
-				Printf("created %s\n", dir)
+				Printf("%s %s\n", createdOrAdopted(adopted), dir)
 				if !hasGit {
 					Print("(no .git/ found — skipping phase branch creation)")
 				}
@@ -194,7 +208,10 @@ func phaseCreate() *cobra.Command {
 			// array — that array is the single source of phase order, so a new
 			// phase joins it at the tail. appendUnique keeps this idempotent
 			// when /dross-spec --new scaffolds a phase the milestone already
-			// listed as intent.
+			// listed as intent, and it is what keeps an ADOPTED phase in the
+			// slot the roadmap put it in: re-appending would move it to the
+			// tail and renumber every phase between, silently re-ordering an
+			// arrangement someone chose.
 			ordinal := 0
 			if s.CurrentMilestone != "" {
 				mPath := milestone.FilePath(root, s.CurrentMilestone)
@@ -1010,4 +1027,16 @@ func phaseShow() *cobra.Command {
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
 	return c
+}
+
+// createdOrAdopted is the verb `dross phase create` reports.
+//
+// Adoption is never silent. A user who typed a title expecting a new phase and
+// got an existing one has to be able to see that from the output — inferring it
+// from a directory that already had contents is not the same thing.
+func createdOrAdopted(adopted bool) string {
+	if adopted {
+		return "adopted existing"
+	}
+	return "created"
 }
