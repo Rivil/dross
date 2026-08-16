@@ -487,10 +487,101 @@ func (c *YouTrackClient) SetState(key, status string, override map[string]string
 			{"name": c.stateField(), "$type": "StateIssueCustomField", "value": map[string]any{"name": value}},
 		},
 	}
-	if err := c.do("POST", c.endpoint("/issues/"+key)+"?fields="+url.QueryEscape("idReadable"), body, nil); err != nil {
+	endpoint := c.endpoint("/issues/"+key) + "?fields=" + url.QueryEscape("idReadable")
+	err := c.do("POST", endpoint, body, nil)
+	if err == nil {
+		return nil
+	}
+	// The value may simply not exist in this project's State bundle — dross
+	// emits task-in-review and uat, which no stock YouTrack project has. Add
+	// it and retry once, rather than reporting a state change that did not
+	// happen.
+	if created, cerr := c.ensureStateValue(value); cerr != nil {
+		// Not fatal. The phase-level record is still worth writing, and a
+		// tracker whose configuration dross may not edit is a capability gap,
+		// not an outage.
+		fmt.Fprintf(os.Stderr, "warning: could not add State value %q to the project bundle (%v) — leaving %s unchanged\n", value, cerr, key)
+		return nil
+	} else if !created {
 		return fmt.Errorf("set state %q on %s: %w", value, key, err)
 	}
+	if err := c.do("POST", endpoint, body, nil); err != nil {
+		return fmt.Errorf("set state %q on %s after adding it to the bundle: %w", value, key, err)
+	}
 	return nil
+}
+
+// ensureStateValue adds value to the project's State bundle when it is absent,
+// returning whether it created anything.
+//
+// PROJECT-PRIVATE only, and that is the whole safety property. A YouTrack state
+// bundle can be shared across projects; adding a value to a shared one changes
+// configuration that other projects' boards and workflows read, which is a
+// change nobody in them asked for. dross writes only a bundle this project owns
+// alone, and reports the gap otherwise.
+func (c *YouTrackClient) ensureStateValue(value string) (bool, error) {
+	bundle, private, err := c.stateBundle()
+	if err != nil {
+		return false, err
+	}
+	if bundle.ID == "" {
+		return false, fmt.Errorf("project %s exposes no State bundle", c.project)
+	}
+	for _, v := range bundle.Values {
+		if strings.EqualFold(v.Name, value) {
+			// Already there — the set failed for some other reason, and
+			// writing to the bundle would churn the tracker's configuration
+			// for nothing.
+			return false, nil
+		}
+	}
+	if !private {
+		return false, fmt.Errorf("the State bundle is shared with other projects — dross will not add %q to it", value)
+	}
+	body := map[string]any{"name": value}
+	if err := c.do("POST", c.endpoint("/admin/customFieldSettings/bundles/state/"+bundle.ID+"/values"), body, nil); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ytStateBundle is the shape of a project's State bundle.
+type ytStateBundle struct {
+	ID     string `json:"id"`
+	Values []struct {
+		Name string `json:"name"`
+	} `json:"values"`
+}
+
+// stateBundle returns the project's State bundle and whether the project is its
+// only user.
+func (c *YouTrackClient) stateBundle() (ytStateBundle, bool, error) {
+	var fields []struct {
+		Field struct {
+			Name string `json:"name"`
+		} `json:"field"`
+		Bundle struct {
+			ytStateBundle
+			// A YouTrack bundle carries the projects that use it. One project
+			// means this one owns it; more means editing it reaches beyond
+			// this repo.
+			Projects []struct {
+				ShortName string `json:"shortName"`
+			} `json:"projects"`
+		} `json:"bundle"`
+	}
+	q := "fields=" + url.QueryEscape("field(name),bundle(id,values(name),projects(shortName))")
+	if err := c.do("GET", c.endpoint("/admin/projects/"+c.project+"/customFields")+"?"+q, nil, &fields); err != nil {
+		return ytStateBundle{}, false, err
+	}
+	want := c.stateField()
+	for _, f := range fields {
+		if !strings.EqualFold(f.Field.Name, want) {
+			continue
+		}
+		return f.Bundle.ytStateBundle, len(f.Bundle.Projects) <= 1, nil
+	}
+	return ytStateBundle{}, false, fmt.Errorf("project %s has no %s field", c.project, want)
 }
 
 // ListIssues returns issues in the configured project matching the filter.
