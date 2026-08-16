@@ -1,0 +1,64 @@
+[verify]
+  phase = "mutation-score-truth"
+  generated_at = 0001-01-01T00:00:00Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-16T03:14:40.401503Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9904458598726115
+  mutants_killed = 311
+  mutants_survived = 3
+  mutants_not_covered = 3
+  mutants_in_scope = 314
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/mutation/score_test.go:TestTwoUnequalLegsPoolRatherThanAverage", "internal/mutation/score_test.go:TestTimeoutCountsAgainstTheScore", "internal/mutation/score_test.go:TestEmptyRunScoresZeroNotNaN", "internal/verify/verify_test.go:TestEverySurfaceReportsTheSameScore"]
+  notes = "Each test is the specific shape one of the three old formulas got wrong, not a generic check of the new one. Legs of 1/1 and 0/9 pin the mean's failure — a suite that killed one mutant in ten, which the mean reported as 0.50 by giving the smaller leg the louder vote; the test asserts 0.10 AND separately that the answer is not 0.50, so a future averaging bug is named rather than merely mismatched. The timeout case asserts a survived mutant and a timed-out mutant score identically, which is the claim: both are mutants the suite did not kill. TestEverySurfaceReportsTheSameScore drives ONE Tests through the verify.toml path with two unequal legs AND a timeout — the shape where the three diverged; a single-leg zero-timeout run agreed by accident, which is why the disagreement survived so long. The zero case is not hypothetical: every prompt-only phase in this milestone produces a 0/0 run, and NaN would have propagated into verify.toml and every comparison after it."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/verify_vocabulary_test.go:TestStdoutAndVerifyTomlAgreeOnUnclassified", "internal/cmd/verify_vocabulary_test.go:TestStdoutSaysTheGateIsOpen", "internal/cmd/verify_vocabulary_test.go:TestAcceptedAndRoutedStayOutOfTheCount", "internal/cmd/verify_scoping_test.go:TestVerifyPrintsLifecycleCounts"]
+  notes = "Both surfaces are read from ONE run, which is the only way to test the bug: it was a single run deriving one fact by two routes and getting two answers. Comparing two separate runs would have proved nothing. The fix makes the disagreement unrepresentable rather than merely corrected — printLifecycleSummary now takes the gate count instead of recomputing it, so there is no second derivation left to drift. This phase's own verify run demonstrated it: the first pass printed `1 undispositioned in scope — THE VERDICT GATE IS OPEN`, where the old code would have printed `0 unclassified` beside a file recording unclassified_in_scope = 1. TestAcceptedAndRoutedStayOutOfTheCount guards the opposite over-correction, which would have failed every phase in this milestone — they carry 94 acceptances between them."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/mutation/inapplicable_test.go:TestInapplicableMutantsAreDropped", "internal/mutation/inapplicable_test.go:TestStringConcatMutantsAreNotDropped", "internal/mutation/inapplicable_test.go:TestRealArithmeticMutantsSurviveTheFilter", "internal/mutation/inapplicable_test.go:TestDroppedMutantsLeaveTheDenominator", "internal/mutation/inapplicable_test.go:TestUnreadableSourceDropsNothing"]
+  notes = "The criterion was NARROWED mid-phase against this repo's own evidence, and that is the substantive result. The routed idea asked to drop string-concatenation ARITHMETIC_BASE mutants alongside const-initializer ones; TestStringConcatArithmeticMutantIsNoOp already proved the swap does not compile AND that gremlins only builds mutants on covered lines — so a concat SURVIVOR is always a killable coverage gap, and dropping it would have silenced a real gap under the banner of removing a no-op. A locked decision records the refutation. What remains is guarded on both sides: the const case is dropped, and the concat and ordinary-arithmetic cases are asserted to SURVIVE the filter, so a filter keying on the operator alone fails by name. The counters and the per-file rows are asserted to move together, because a row left behind would make a file's numbers disagree with the report's — the same class of bug in a new place. An unreadable file drops nothing: the filter removes what it is certain about, and a guess in this direction is the same lie as the one it exists to fix."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/survivor_stale_test.go:TestStaleFindsAnOrphanedAcceptance", "internal/cmd/survivor_stale_test.go:TestLiveAcceptanceIsNotStale", "internal/cmd/survivor_stale_test.go:TestStaleWithoutASurvivorSetSaysSo", "internal/cmd/survivor_stale_test.go:TestEmptyRunIsAnAnswerNotAnAbsence", "internal/cmd/survivor_stale_test.go:TestOutOfScopeSurvivorsCountAsObserved"]
+  notes = "The fixture is built so the two EXISTING staleness reasons both report nothing — the file exists and the source text is intact — which is the only way to test the case source-existence checking structurally cannot see. nil and empty run-sets are asserted as different answers, and that distinction carries real weight: empty means a run happened and found no survivors, so every acceptance is orphaned; nil means nobody has run verify, and collapsing them would retire the whole store on a fresh clone. TestOutOfScopeSurvivorsCountAsObserved was added during verify to kill an in-diff survivor, and it is the arm that matters most here — this repo's 94 acceptances live almost entirely in out_of_scope, so had that branch been skipped, `survivor list --stale` would have called all of them orphaned and retiring them would have re-inherited the drained backlog."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/score_surface_test.go:TestScoreIsPrintedWithItsDenominator", "internal/cmd/score_surface_test.go:TestUncoverableCountIsSurfaced", "internal/cmd/score_surface_test.go:TestNoUncoverableLineWhenThereAreNone", "internal/cmd/score_surface_test.go:TestUnmeasuredRunsGetNoScoreLine", "internal/cmd/score_surface_test.go:TestPromptCarriesTheDenominatorGuidance"]
+  notes = "The denominator test drives TWO runs with the same ratio and very different sizes and requires them to read differently — asserting the line exists would not have caught the failure, which is that 0.90 over 10 and over 400 were indistinguishable. The uncoverable case uses this milestone's own recurring shape (172 killed, 19 survived, all 19 unreachable) and requires the 1.00-over-reachable figure, since reporting only the blended 0.90 makes an attribution ceiling read as a weak suite. Both suppression rules are pinned too: no uncoverable line when the count is zero (a line always present stops being read), and no score line at all for unmeasured runs (they print their own explanation, and giving a meaningless number a denominator dresses it up as a measurement). The prompt is asserted separately because the CLI printing it is half the job — the report a human reads is written from verify.md, which is why these facts were being typed into notes by hand on every run of this milestone."
+
+[[finding]]
+  severity = "NOTE"
+  text = "This phase's own verify run exercised what it built. The first pass printed `1 undispositioned in scope — THE VERDICT GATE IS OPEN`, which is precisely the line c-2 exists to produce: the old code would have printed `0 unclassified` beside a verify.toml recording unclassified_in_scope = 1. It also printed the new score line — `0.99 over 314 in-scope mutant(s)` plus the uncoverable breakdown — which had been hand-written into these notes on every prior run of this milestone."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The first run reported 1 in-diff survivor at survivor.go:356 — the out_of_scope arm of observedSurvivorKeys, unreached because every fixture wrote in-scope rows only. Killed with a test (commit ac01eab) rather than accepted; this run reports 0 in-diff. It was the arm that mattered most: nearly every acceptance in this repo is an out-of-scope survivor."
+
+[[finding]]
+  severity = "NOTE"
+  text = "3 in-scope survivors remain, all accepted-with-reason and all the proven gremlins attribution ceiling. unclassified_in_scope = 0. 107 out-of-scope survivors were filtered. Score 0.99 over 314 in-scope mutants; efficacy over the 311 reachable is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran locally: helicon has been unreachable since mid-session (ssh exit 255 — this machine's Proton Pass ssh-agent stopped serving the key). The grant was temporarily revoked to force the local path and restored afterwards. Each run costs ~60 minutes here against ~40 on the remote."
