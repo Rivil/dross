@@ -281,6 +281,12 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		// itself names files by bare basename. Re-prefix before merging so
 		// every path downstream is repo-relative.
 		RePrefixGremlinsFiles(rep, pkg)
+		// Drop what cannot be a real result BEFORE the merge, so an
+		// inapplicable mutant never reaches the denominator, the survivor
+		// list, the lifecycle or the accept store. Filtering it later would
+		// leave the score computed over mutants the survivor list no longer
+		// showed — the same disagreement in a new place.
+		DropInapplicable(rep, g.ProjectRoot)
 		if !hasCoverage(rep) {
 			// Report exists but every mutant is NOT COVERED — gremlins
 			// instrumented zero usable coverage here (a coverage-tool blind

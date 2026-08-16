@@ -2,5 +2,41 @@
   "phase": "mutation-score-truth",
   "base": "milestone/v1.3",
   "base_commit": "ab35249fa160d5e8ca33373b7add38f81b26d05a",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/mutation/score.go",
+        "internal/mutation/score_test.go",
+        "internal/mutation/adapter.go",
+        "internal/verify/verify.go",
+        "internal/cmd/verify.go"
+      ],
+      "commit": "5792cc6",
+      "completed_at": "2026-08-16T00:33:13.836669Z",
+      "landmarks": [
+        {
+          "feature": "verification",
+          "symbol": "PooledScore",
+          "loc": "internal/mutation/score.go:31",
+          "what": "one mutation-score formula for every surface — pooled across legs with timeouts in the denominator, replacing a mean that flattered a 0.10 suite to 0.50"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_vocabulary_test.go"
+      ],
+      "commit": "8995b8c",
+      "completed_at": "2026-08-16T00:37:43.028558Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "printLifecycleSummary",
+          "loc": "internal/cmd/verify.go:686",
+          "what": "stdout takes the gate count from the same summary verify.toml writes, so a run can no longer print an all-clear beside a file recording the gate open"
+        }
+      ]
+    }
+  }
 }

@@ -13,7 +13,7 @@
 
 [[criteria]]
   id = "c-3"
-  text = "Mutants that cannot change behaviour never reach the survivor list: an ARITHMETIC_BASE mutant on a string-concatenation or a const initializer is dropped by the adapter rather than reported as a survivor someone has to accept. They are already proven inert by test; leaving them in inflates the denominator and spends a human decision on a no-op."
+  text = "Mutants that cannot change behaviour never reach the survivor list: an ARITHMETIC_BASE mutant on a CONST INITIALIZER is dropped by the adapter rather than reported as a survivor someone has to accept. Leaving it in inflates the denominator and spends a human decision on a no-op. The string-concatenation half is deliberately NOT dropped — see the narrowed note below."
 
 [[criteria]]
   id = "c-4"
@@ -32,6 +32,12 @@
   key = "in_diff_is_unclassified"
   choice = "An in-diff survivor with no disposition IS an unclassified survivor. stdout adopts the file's vocabulary — it reports the gate state directly rather than presenting in-diff and unclassified as disjoint buckets."
   why = "The file is right and the line is the one that misleads: unclassified_in_scope is defined as an in-scope survivor carrying no disposition, which is exactly what an undispositioned in-diff survivor is. Printing them as separate buckets lets `0 unclassified` appear on screen while the verdict gate is open — an all-clear the same run contradicts in the file next to it."
+
+[[decisions]]
+  key = "concat_half_is_not_inapplicable"
+  choice = "Only the const-initializer half of the routed idea is implemented. An ARITHMETIC_BASE mutant on a string-concatenation line is NOT dropped."
+  why = "The routed item asked for both, and this repo's own evidence refutes half of it. TestStringConcatArithmeticMutantIsNoOp proves the `+`→`-` swap on string operands does not compile, and that gremlins only builds mutants on COVERED lines — so a covered concat line reports the mutant KILLED. A string-concat ARITHMETIC_BASE SURVIVOR is therefore always a coverage gap, killable by covering the line, and dropping it would silence a real gap under the banner of removing a no-op. The const half has no such escape: a const initializer has no coverage block at all, so its mutant can never be reached."
+  locked = true
 
 [[decisions]]
   key = "drop_at_the_adapter"
