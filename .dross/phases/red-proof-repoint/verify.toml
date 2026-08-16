@@ -1,0 +1,102 @@
+[verify]
+  phase = "red-proof-repoint"
+  generated_at = 2026-08-16T16:15:18.977108Z
+  verdict = "fail"
+  finalized = true
+  finalized_at = 2026-08-16T17:57:27.729565Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9520451339915373
+  mutants_killed = 675
+  mutants_survived = 34
+  mutants_not_covered = 34
+  mutants_in_scope = 709
+  unclassified_in_scope = 6
+  criteria_total = 8
+  criteria_covered = 8
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/redproof_repoint_cmd_test.go:TestRepointClearsDoctor", "internal/cmd/redproof_set_test.go:TestDoctorHintNamesRepoint"]
+  notes = "TestRepointClearsDoctor drives the whole loop: it asserts redProofChecks reports an issue for the rotted pin, runs one `repoint --apply`, and asserts the issue is gone — no hand-edit anywhere. TestDoctorHintNamesRepoint pins that doctor names this verb and no longer the hand-typed `red-proof set --sha` line."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/redproof_repoint_cmd_test.go:TestRepointUpdatesDoc", "internal/cmd/redproof_doc_test.go:TestRewriteDocReparses"]
+  notes = "TestRepointUpdatesDoc asserts redProofDocSHA(doc) == the newly recorded RedProof.SHA after --apply, and that the record no longer pins the rotted commit — the exact record/doc cross-check the criterion demands. TestRewriteDocReparses pins the same invariant one layer down (redProofSHA of the rewritten bytes returns the new SHA)."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/redproof_repoint_test.go:TestPlanRefusesUnreachableTarget", "internal/cmd/redproof_repoint_cmd_test.go:TestRepointRefusesUnreachable"]
+  notes = "Both layers refuse: the plan carries classifyReachability's own why-string, and the verb exits non-zero over a fork point pointing at a never-pushed commit while leaving both files byte-identical."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/redproof_repoint_cmd_test.go:TestRepointDryRunWritesNothing", "internal/cmd/redproof_repoint_cmd_test.go:TestRepointDryRunNoSpawn"]
+  notes = "The dry run is asserted to name the old SHA, the proposed fork point and BOTH file paths, then both files are compared by hash — including no base_commit cache write (TestPlanDoesNotCacheForkPoint pins the non-caching read). TestRepointDryRunNoSpawn additionally proves the dry run does not execute the recorded replay."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/redproof_repoint_cmd_test.go:TestRepointSoundPinNoOp", "internal/cmd/redproof_repoint_test.go:TestPlanSoundPinNothingToDo", "internal/cmd/redproof_repoint_cmd_test.go:TestRepointBlanketScopes"]
+  notes = "A sound pin reports nothing-to-do, exits 0 and leaves both files hash-identical even under --apply. TestRepointBlanketScopes proves the blanket scan repairs only the rotted phase while the sound phase's record and doc are unchanged; TestPlanIndeterminateIsNotRotted keeps shallow clones out of the rewrite path."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/redproof_doc_test.go:TestRewriteDocByteFaithful", "internal/cmd/redproof_doc_test.go:TestRewriteDocLeavesUnrelatedSHA", "internal/cmd/redproof_doc_test.go:TestRewriteDocNearMissPrefix", "internal/cmd/redproof_doc_test.go:TestRewriteDocPreservesWidth", "internal/cmd/redproof_doc_test.go:TestRewriteDocNoOccurrence"]
+  notes = "The strongest-assertion group in the phase. ByteFaithful compares the whole output against strings.ReplaceAll of the input over the live fixtures/hostile-config-c5/RUN.md — any reflow, fence normalisation or trailing-whitespace change fails it — and asserts all three pin spans moved. LeavesUnrelatedSHA proves the rewrite keys on the old pin's value rather than on any 40-hex run; NearMissPrefix pins full-prefix equality; PreservesWidth keeps abbreviated occurrences abbreviated; NoOccurrence makes a zero-count rewrite an error rather than a silent success."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/redproof_lifecycle_test.go:TestShipRepointsDoomedPin", "internal/cmd/redproof_lifecycle_test.go:TestDoomedPinIsNotRotted", "internal/cmd/redproof_lifecycle_test.go:TestCompleteWarnsAndFinishes"]
+  notes = "TestShipRepointsDoomedPin is the criterion end to end: ship (forge stubbed), then a simulated squash-merge that fast-forwards the base and deletes the phase branch local and remote, then classifyReachability == reachable, redProofChecks reports no issue, and the doc agrees with the record — with no repoint invoked by the test. TestDoomedPinIsNotRotted keeps the doomed and rotted predicates apart so c-5 is not collapsed. TestShipRepointCommitScope and TestShipRepointLeavesBaseClean pin the hook's commit to [changes.json, doc] on the phase branch with the base untouched."
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/redproof_repoint_cmd_test.go:TestRepointRefusesGreenReplay", "internal/cmd/redproof_repoint_cmd_test.go:TestRepointRefusesUnrunnableReplay", "internal/cmd/redproof_repoint_cmd_test.go:TestRepointUnverifiedWording", "internal/cmd/redproof_repoint_cmd_test.go:TestRepointUnconsentedReplayRepoints", "internal/cmd/redproof_replay_test.go:TestReplayRunsAtProposedCommit", "internal/cmd/redproof_replay_test.go:TestReplayRedVsGreen", "internal/cmd/redproof_set_test.go:TestRedProofSetRecordsReplay"]
+  notes = "All four states of the locked replay_consent_states decision are pinned by distinct tests: consented+green refuses (\"did NOT go red\", both files hash-unchanged), unrunnable refuses across worktree-add failure / spawn error / timeout (\"could not be run\"), unrecorded repoints printing \"unverified\" and asserted NOT to print any went-red claim, and unconsented repoints as unverified naming the grant command with zero spawns. TestReplayRunsAtProposedCommit proves the run happens in a detached worktree whose `git rev-parse HEAD` is the proposed commit and outside the repo work tree — a replay against the working tree would confirm a repoint the tree happens to satisfy."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/redproof_repoint_cmd.go:171 (CONDITIONALS_NEGATION) — `if p.Phase == phaseID` in pinsForPhase. The optional `<phase-id>` narrowing half of the locked repoint_target_selection decision has no test at all: every verb test drives the bare blanket form. Add a test that repoints one named phase and asserts the other phases' records are byte-identical."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/redproof_repoint_cmd.go:52 (CONDITIONALS_NEGATION) — the `phase %q records no red proof to repoint` error for a named phase that carries no pin. Same untested narrowing path as :171."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/trust.go:382 (CONDITIONALS_NEGATION) — the `if cerr != nil` branch of ReplayConsented inside trustReplay's --check path. No test drives a ReplayConsented error, so a consent check that failed to read local.toml could report whatever it liked."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/redproof_replay.go:132 (INVERT_NEGATIVES) — `lines = lines[len(lines)-n:]` in lastLines. No test feeds lastLines more than n lines, so the truncation branch is never executed; a refusal could carry the head of a long run instead of the tail that explains it."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/redproof_replay.go:132 (ARITHMETIC_BASE) — same untested truncation branch as the INVERT_NEGATIVES survivor above."
+
+[[finding]]
+  severity = "NOTE"
+  text = "internal/cmd/redproof_repoint_cmd.go:159 (CONDITIONALS_NEGATION) was accepted during this run under the gremlins-attribution-ceiling category: it is the `case err != nil:` arm of checkReplayBeforeRepoint's switch, provably exercised by TestRepointRefusesUnrunnableReplay's three sub-cases. go-cover attributes no block to a case-arm condition, so gremlins marks it NOT COVERED and no test can kill it. The acceptance landed after this run measured unclassified_in_scope = 6; the count drops to 5 on the next `dross verify`."
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 34 in-scope survivors are gremlins-NOT-COVERED mutants — the tool never ran them. Efficacy over the 675 mutants it could reach is 1.00; 28 of the 34 were already accepted or routed before this run."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/dross.1: no mutation adapter for .1"

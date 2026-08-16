@@ -1105,3 +1105,12 @@
   line = 130
   reason = "gremlins reports this line NOT COVERED although the suite provably executes it: a go test -coverprofile run over TestSuggestPrecedence reports count=1 for the block at watch.go:130.24, while gremlins marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the case CONDITION's own columns belong to no block, and gremlins only builds mutants on lines the profile shows as covered. TestSuggestPrecedence pins both the boundary and the negation directly — reconcilable=1 must NOT suggest the batch verb and reconcilable=2 must — so adding tests cannot kill these; the tests already exist and already run the line."
   accepted_in = "guard-remedy-ordering"
+
+[[accepted]]
+  key = "07659e3ec30d13f2"
+  file = "internal/cmd/redproof_repoint_cmd.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 159
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "red-proof-repoint"
