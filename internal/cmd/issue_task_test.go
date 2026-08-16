@@ -367,6 +367,93 @@ func TestNoLinkerWarnsOnceAndContinues(t *testing.T) {
 	}
 }
 
+// createdLabels returns the label names of every created issue, so a test can
+// assert what the tracker was actually told rather than what dross intended.
+func (f *fakeForge) createdLabels() [][]string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out [][]string
+	for _, c := range f.created {
+		out = append(out, f.labelNames(c))
+	}
+	return out
+}
+
+// TestNoStateFieldWarnsOnceAndContinues: forge REST models an issue as open or
+// closed and has no workflow field at all, so a `--status` can only ever reach
+// it as a dross label. That is the honest floor — but silently, it is a board
+// that looks authoritative while being partial, which is the failure c-5 names
+// and c-4's second clause asks to be stated out loud.
+//
+// The run must SAY it: once, naming the provider and the value that never
+// reached a column, and the issues must still be created and labelled.
+func TestNoStateFieldWarnsOnceAndContinues(t *testing.T) {
+	f := newFakeForge(t)
+	taskSyncRepo(t, f)
+
+	stderr := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := runCmd(t, Issue(), "task-sync", "01-auth", "--status", "task-in-progress"); err != nil {
+				t.Fatalf("task-sync: %v", err)
+			}
+		})
+	})
+
+	// One line, not one per task — the locked warn_once_per_run decision. The
+	// anchor is the phrase the user actually reads, so a reworded warning that
+	// stops naming the gap fails here rather than passing on a substring.
+	n := strings.Count(stderr, "has no workflow state field")
+	if n != 1 {
+		t.Errorf("the missing state field warned %d times for a 2-task phase, want exactly 1:\n%s", n, stderr)
+	}
+	// Naming the provider and the value is the criterion, not decoration: a
+	// bare "state not set" cannot tell you which of several configured
+	// trackers dropped it, or what it dropped.
+	for _, want := range []string{"forgejo", "task-in-progress"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("the warning does not name %q — c-4 asks for the provider and the missing value:\n%s", want, stderr)
+		}
+	}
+
+	// The floor itself still has to hold: the gap is announced, not fatal.
+	labelled := 0
+	for _, labels := range f.createdLabels() {
+		for _, l := range labels {
+			if l == statusLabel("task-in-progress") {
+				labelled++
+			}
+		}
+	}
+	if labelled != 2 {
+		t.Errorf("%d of 2 task issues carry %s — the warning replaces the state field, it does not replace the label",
+			labelled, statusLabel("task-in-progress"))
+	}
+}
+
+// TestNoStatusMeansNoStateWarning: a sync that never asked for a state has no
+// state to lose, so warning about the missing field would be noise on every
+// plain `dross issue task-sync <phase>`.
+//
+// This is the arm that stops the fix above from being "print it unconditionally
+// in the default branch", which would satisfy the once-per-run count while
+// making the warning meaningless.
+func TestNoStatusMeansNoStateWarning(t *testing.T) {
+	f := newFakeForge(t)
+	taskSyncRepo(t, f)
+
+	stderr := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := runCmd(t, Issue(), "task-sync", "01-auth"); err != nil {
+				t.Fatalf("task-sync: %v", err)
+			}
+		})
+	})
+
+	if strings.Contains(stderr, "has no workflow state field") {
+		t.Errorf("a sync with no --status warned about the state field it never tried to write:\n%s", stderr)
+	}
+}
+
 // TestTaskSyncRequiresAPhaseIssue: a task issue with no parent to relate to is
 // a loose card. Refusing names the command that fixes it rather than creating
 // orphans.

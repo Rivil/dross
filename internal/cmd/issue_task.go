@@ -41,8 +41,8 @@ With a task id, only that task is synced — which is what the execute loop
 does at each edge, so a commit does not rewrite the other seven issues.
 
 --status drives the tracker's own workflow field (YouTrack's State, a Jira
-transition), not a dross label. A backend that cannot relate issues warns
-once and continues with the label.
+transition), not a dross label. A backend that cannot relate issues, or has
+no workflow field at all, warns once per run and continues with the label.
 
 A no-op when board sync is off.`,
 		Args: cobra.RangeArgs(1, 2),
@@ -83,13 +83,13 @@ func syncTasks(ctx *boardCtx, phaseID, only, status string) error {
 	}
 
 	linker, canLink := ctx.client.(forge.IssueLinker)
-	warnedNoLink := false
+	warn := &runWarnings{}
 
 	for _, t := range plan.Task {
 		if only != "" && t.ID != only {
 			continue
 		}
-		key, err := syncOneTask(ctx, phaseID, parent, t, status)
+		key, err := syncOneTask(ctx, phaseID, parent, t, status, warn)
 		if err != nil {
 			return err
 		}
@@ -97,11 +97,8 @@ func syncTasks(ctx *boardCtx, phaseID, only, status string) error {
 			// ONCE per run, not once per task: an eight-task phase would
 			// otherwise print eight identical lines, which is how a warning
 			// becomes scrollback.
-			if !warnedNoLink {
-				fmt.Fprintf(os.Stderr, "warning: %s cannot relate issues — task issues carry %s and the phase label instead of a link\n",
-					ctx.proj.Board.Provider, taskLabel(phaseID, "<task>"))
-				warnedNoLink = true
-			}
+			warn.once(&warn.noLink, "%s cannot relate issues — task issues carry %s and the phase label instead of a link",
+				ctx.proj.Board.Provider, taskLabel(phaseID, "<task>"))
 			continue
 		}
 		if err := linker.LinkIssues(parent, key); err != nil {
@@ -109,17 +106,37 @@ func syncTasks(ctx *boardCtx, phaseID, only, status string) error {
 			// through the interface. Same floor: say it once, keep going —
 			// the issues themselves are the substance, and the link is how
 			// they are grouped.
-			if !warnedNoLink {
-				fmt.Fprintf(os.Stderr, "warning: could not relate task issues to %s (%v) — they carry the phase label instead\n", parent, err)
-				warnedNoLink = true
-			}
+			warn.once(&warn.noLink, "could not relate task issues to %s (%v) — they carry the phase label instead", parent, err)
 		}
 	}
 	return ctx.board.Save(ctx.boardPath)
 }
 
+// runWarnings holds the once-per-run gates for the capability gaps a task sync
+// can hit — a backend that cannot relate issues, and one with no workflow state
+// field at all.
+//
+// Run-scoped rather than package-scoped, deliberately: the locked
+// warn_once_per_run decision is about one RUN not repeating itself, and a
+// package-level flag would also silence the next invocation, which is a
+// different and much worse thing.
+type runWarnings struct {
+	noLink  bool
+	noState bool
+}
+
+// once prints a warning the first time its gate is unset, and sets it. The gate
+// is passed explicitly so each call site names which gap it is reporting.
+func (w *runWarnings) once(gate *bool, format string, args ...any) {
+	if *gate {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "warning: "+format+"\n", args...)
+	*gate = true
+}
+
 // syncOneTask creates or updates the issue for one task and returns its key.
-func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status string) (string, error) {
+func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status string, warn *runWarnings) (string, error) {
 	title := fmt.Sprintf("%s/%s — %s", phaseID, t.ID, t.Title)
 	body := renderTaskBody(phaseID, parent, t)
 	labels := []string{labelMarker, phaseLabel(phaseID), taskLabel(phaseID, t.ID)}
@@ -149,7 +166,7 @@ func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status str
 	// to itself; the state field is what the board's columns read, and moving
 	// it is the whole point of mirroring a task at all.
 	if status != "" {
-		if err := setBoardState(ctx, key, status); err != nil {
+		if err := setBoardState(ctx, key, status, warn); err != nil {
 			return "", err
 		}
 	}
@@ -223,7 +240,7 @@ func renderTaskBody(phaseID, parent string, t phase.Task) string {
 // One place, so the phase sync and the task sync cannot come to disagree about
 // how a state reaches a tracker — which is the class of bug this milestone has
 // spent several phases closing.
-func setBoardState(ctx *boardCtx, key, status string) error {
+func setBoardState(ctx *boardCtx, key, status string, warn *runWarnings) error {
 	switch c := ctx.client.(type) {
 	case *forge.YouTrackClient:
 		if err := c.SetState(key, status, ctx.proj.Board.StateMap); err != nil {
@@ -233,8 +250,15 @@ func setBoardState(ctx *boardCtx, key, status string) error {
 		if err := c.SetState(key, status, ctx.proj.Board.StateMap); err != nil {
 			return wrapBoard(err)
 		}
+	default:
+		// Every other backend has no state field: forge REST models an issue
+		// as open or closed and nothing else. The status label is already on
+		// the issue, which is the honest floor — but a floor that says nothing
+		// leaves the board looking authoritative while being partial, which is
+		// exactly the failure c-5 exists to prevent. Say it once per run,
+		// naming the provider and the value that never reached a column.
+		warn.once(&warn.noState, "%s has no workflow state field — %q is carried as a dross label only, so the tracker's columns will not move",
+			ctx.proj.Board.Provider, status)
 	}
-	// Every other backend has no state field. The status label is already on
-	// the issue, which is the honest floor rather than a silent no-op.
 	return nil
 }
