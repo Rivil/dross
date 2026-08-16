@@ -154,3 +154,40 @@ func TestLoadUnmarshalsNilMapsSafely(t *testing.T) {
 		t.Errorf("phase 01-x = %q,%v", n, ok)
 	}
 }
+
+// TestTaskKeyIsPhaseSlashTask pins the exact key shape. TaskKey exists so no
+// caller re-derives it slightly differently and orphans an existing mapping,
+// which only holds if the shape itself is asserted somewhere — and the shape is
+// what a stored board.json is already written in, so it cannot drift silently.
+func TestTaskKeyIsPhaseSlashTask(t *testing.T) {
+	if got := TaskKey("01-auth", "t-1"); got != "01-auth/t-1" {
+		t.Errorf("TaskKey = %q, want %q", got, "01-auth/t-1")
+	}
+	// Order matters: a key built the other way round would still look like a
+	// pair and still round-trip against itself, and would still be wrong.
+	if got := TaskKey("t-1", "01-auth"); got != "t-1/01-auth" {
+		t.Errorf("TaskKey = %q, want the phase first", got)
+	}
+}
+
+// TestTaskLookupsAreScopedToTheirPhase is why the key carries the phase at all:
+// task ids are unique only within a phase, so "t-1" of two phases must be two
+// mappings, not one that overwrites the other.
+func TestTaskLookupsAreScopedToTheirPhase(t *testing.T) {
+	b := New()
+	b.SetTask("01-auth", "t-1", "PROJ-1")
+	b.SetTask("02-api", "t-1", "PROJ-2")
+
+	if n, ok := b.TaskIssue("01-auth", "t-1"); !ok || n != "PROJ-1" {
+		t.Errorf("01-auth/t-1 = %q,%v, want PROJ-1", n, ok)
+	}
+	if n, ok := b.TaskIssue("02-api", "t-1"); !ok || n != "PROJ-2" {
+		t.Errorf("02-api/t-1 = %q,%v, want PROJ-2 — the phase is not in the key", n, ok)
+	}
+	if _, ok := b.TaskIssue("01-auth", "t-2"); ok {
+		t.Error("an unset task reported as linked")
+	}
+	if _, ok := b.Tasks["01-auth/t-1"]; !ok {
+		t.Errorf("stored keys = %v, want the phase/task shape on disk", b.Tasks)
+	}
+}

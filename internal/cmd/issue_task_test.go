@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -397,5 +398,113 @@ func TestTaskSyncIsANoOpWhenBoardSyncIsOff(t *testing.T) {
 	}
 	if len(f.createdTitles()) != 0 {
 		t.Errorf("a disabled board still created issues: %v", f.createdTitles())
+	}
+}
+
+// seedIssue puts an issue on the fake directly, tagged with the given labels —
+// the state of a tracker that already holds work dross did not create in this
+// run. Callers use it to build situations a sync cannot reach on its own.
+func (f *fakeForge) seedIssue(num int, labels ...string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := strconv.Itoa(num)
+	f.issues[key] = map[string]any{"number": num, "title": "seeded " + key, "body": "", "labels": namesToObjs(labels)}
+	for _, l := range labels {
+		f.byLabel[l] = append(f.byLabel[l], key)
+		// The tracker knows a label as an entity; a query naming one it has
+		// never heard of is dropped before it is sent, so a seeded issue whose
+		// labels are not in the index could never be found by label.
+		if _, ok := f.labelIDs[l]; !ok {
+			f.labelIDs[l] = len(f.labelIDs) + 1
+		}
+	}
+}
+
+// dropTaskCache rewrites board.json with the phase mapping only, which is the
+// state of a fresh clone: the tracker still holds the task issues, the local
+// cache does not know about them.
+func dropTaskCache(t *testing.T, dir string) {
+	t.Helper()
+	b := loadBoardFile(t, dir)
+	parent, ok := b.PhaseIssue("01-auth")
+	if !ok {
+		t.Fatal("the phase has no issue — the fixture is wrong")
+	}
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"phases":{"01-auth":`+strconv.Quote(parent)+`},"tasks":{},"quicks":{},"milestones":{},"backlog":{},"dismissed":[]}`)
+}
+
+// TestTaskResolvedByLabelIsSilentAndReused is the re-clone path: with no cache
+// entry, the label lookup finds the one existing issue. One match is the normal
+// case and must be silent — a warning here would fire on every fresh clone —
+// and it must update that issue rather than create a second.
+func TestTaskResolvedByLabelIsSilentAndReused(t *testing.T) {
+	f := newFakeForge(t)
+	dir := taskSyncRepo(t, f)
+
+	stderr := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := runCmd(t, Issue(), "task-sync", "01-auth", "t-1"); err != nil {
+				t.Fatalf("first task-sync: %v", err)
+			}
+		})
+	})
+	before := len(f.createdTitles())
+	dropTaskCache(t, dir)
+
+	stderr += captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := runCmd(t, Issue(), "task-sync", "01-auth", "t-1"); err != nil {
+				t.Fatalf("second task-sync: %v", err)
+			}
+		})
+	})
+
+	if strings.Contains(stderr, "leaving the rest") {
+		t.Errorf("a single label match warned about duplicates:\n%s", stderr)
+	}
+	if got := len(f.createdTitles()); got != before {
+		t.Errorf("created %d issues, want %d — the label lookup did not reuse the existing issue", got, before)
+	}
+	if n, ok := loadBoardFile(t, dir).TaskIssue("01-auth", "t-1"); !ok || n == "" {
+		t.Errorf("t-1 mapping = %q,%v — the re-resolved issue was not written back to the cache", n, ok)
+	}
+}
+
+// TestDuplicateTaskIssuesWarnAndUpdateTheFirst: two issues carrying one task's
+// label is a tracker dross cannot silently pick between. It names all of them,
+// updates the lowest-sorting one deterministically, and leaves the rest alone
+// rather than merging or deleting anything.
+func TestDuplicateTaskIssuesWarnAndUpdateTheFirst(t *testing.T) {
+	f := newFakeForge(t)
+	dir := taskSyncRepo(t, f)
+	label := taskLabel("01-auth", "t-1")
+	f.seedIssue(81, labelMarker, phaseLabel("01-auth"), label)
+	f.seedIssue(82, labelMarker, phaseLabel("01-auth"), label)
+
+	stderr := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := runCmd(t, Issue(), "task-sync", "01-auth", "t-1"); err != nil {
+				t.Fatalf("task-sync: %v", err)
+			}
+		})
+	})
+
+	if !strings.Contains(stderr, "2 issues carry") {
+		t.Errorf("stderr = %q, want the duplicate count named", stderr)
+	}
+	for _, key := range []string{"81", "82"} {
+		if !strings.Contains(stderr, key) {
+			t.Errorf("stderr = %q, want %s named so the duplicate can be found", stderr, key)
+		}
+	}
+	if _, ok := f.updated["81"]; !ok {
+		t.Errorf("updated = %v, want the lowest-sorting duplicate 81 updated", f.updated)
+	}
+	if _, ok := f.updated["82"]; ok {
+		t.Errorf("updated = %v, want 82 left alone", f.updated)
+	}
+	if n, _ := loadBoardFile(t, dir).TaskIssue("01-auth", "t-1"); n != "81" {
+		t.Errorf("cached mapping = %q, want 81 — the pick must be recorded, not re-decided every sync", n)
 	}
 }
