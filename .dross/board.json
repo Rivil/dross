@@ -64,6 +64,7 @@
     "someday:id:6606a4ae3d228907": "DRO-52",
     "someday:id:66f4a1fc8ec83883": "DRO-70",
     "someday:id:6e9a60c539934c23": "DRO-40",
+    "someday:id:6f43c4001c862759": "DRO-124",
     "someday:id:704efc036f0e88fe": "DRO-95",
     "someday:id:7300a61dfb556269": "DRO-118",
     "someday:id:7587f4c35d42ee82": "DRO-106",
@@ -121,6 +122,11 @@
     "someday:id:fd3b654f5740fd11": "DRO-75",
     "someday:id:fee0d326fde9b275": "DRO-64",
     "someday:id:ff40c2cbbd18e7dc": "DRO-94"
+  },
+  "tasks": {
+    "board-task-mirror/t-5": "DRO-121",
+    "board-task-mirror/t-6": "DRO-122",
+    "board-task-mirror/t-7": "DRO-123"
   },
   "last_pull": "0001-01-01T00:00:00Z"
 }

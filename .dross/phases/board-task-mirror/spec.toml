@@ -80,3 +80,8 @@
   text = "Provision the remote test host's non-Go toolchain, or make the suite honest about its absence: helicon has no `gh` on PATH, so internal/ship's TestPostGitHubCommentSurfacesFailures fails there and passes locally. Either install the CLIs the suite shells out to as part of the host's bootstrap, or have those tests skip on a host that lacks them — a remote red that says nothing about the code teaches the loop to ignore reds."
   why = "Measured 2026-08-16 while re-running the suite for board-task-mirror's survivor pass: `dross test` exited 1 on helicon solely on that one case; go test of the same package locally is green. A remote runner whose reds are environment-shaped is worse than no remote runner, because the failure looks exactly like a real one."
   target = "remote-toolchain-bootstrap"
+
+[[deferred]]
+  id = "6f43c4001c862759"
+  text = "Let `dross task add`/`task edit` set test_contract: neither command exposes the field, so a task added mid-phase is written with an empty contract and the only way to fill it is hand-editing plan.toml — which `dross task add` exists precisely to stop."
+  why = "Hit three times while amending board-task-mirror's verify FLAGs: every amendment task was added with no test_contract, so the plan records what the task touches but not what would fail if the task's claim broke — which is the field /dross-verify reads to map criteria to tests. dross task add/edit/move/remove was shipped to make hand-editing plan.toml unnecessary; this is the one field that still forces it."
