@@ -145,6 +145,40 @@ Read `panel/synthesis.md`. Print the merged plan, then drive the disagreements a
 
 Leave `panel/` in place — it's the audit trail for why the plan looks the way it does.
 
+## 2G. Gray areas — walk every one
+
+Before proposing the decomposition, surface the choices in it you are **genuinely unsure about** and walk the user through **every** one, one at a time. This is spec §3's treatment applied to the planner's own uncertainty: a wave split or a merged task you were 50/50 on is a decision, and presenting it inside a finished plan presents it as settled.
+
+### 2G.1 What qualifies
+
+A plan gray area is a **decomposition** choice you cannot confidently resolve on your own:
+
+- Task boundaries — one task or two? Does this split leave a task no test contract can pin?
+- Wave ordering — does t-3 genuinely need t-1's output, or is it wave 1 with a dependency you assumed?
+- Ownership — which task covers `c-2` when two could?
+- Where an assertion belongs — the contract exists, but in which task's tests?
+
+The discriminator is **your** uncertainty. If you're confident, decide it and move on — say which way you went in the §3 proposal.
+
+**Out of bounds in both directions, and both matter:**
+
+- **Upward — anything `spec.toml` already locked.** A `locked = true` decision is not reopened at plan time; that is re-litigating a settled question, which is the thing `locked` exists to prevent. If the plan genuinely cannot honour one, that is a conflict to surface (see the hard rules), not a gray area to walk.
+- **Downward — anything the executor resolves.** Code patterns, helper placement, which library call to use. The user has no basis to answer those yet, and asking stalls the plan on detail that resolves itself in the act of writing.
+
+### 2G.2 Walk them
+
+There is **no selection step.** Do not ask which areas to discuss, do not present them as a checklist with anything pre-ticked, and do not shorten the list for the user. Walk every identified area yourself, one per turn, in the propose-and-react shape `_interaction.md` defines:
+
+- One `AskUserQuestion` per area, leading with the option you'd pick, with 2–4 concrete alternatives. Go freeform where the choice is open-ended.
+- Keep each turn to the area in hand. A short "decided: wave split for t-3" before the next is enough — don't re-print the whole plan each time.
+- **User off-ramp.** If the user says "you decide the rest" at any point, stop walking, settle the remainder yourself, and **say which ones you settled and how** in the §3 proposal. Never self-truncate without that signal.
+
+### 2G.3 No areas is an answer
+
+If the decomposition is small, pattern-following, or you're confident on every call, **say so in one line and go straight to §3** — "no gray areas: five tasks, each one file, waves fall out of the dependencies". There is no minimum. A prompt that must produce areas will produce them, and the invented ones are indistinguishable from the real ones until the user has answered a few — which is exactly how a walk meant to catch real uncertainty teaches someone to click through it.
+
+Each resolved area feeds the decomposition directly; it is not recorded as a locked decision (those are spec's, and plan does not add to them).
+
 ## 3. Propose
 
 Print the draft plan in chat as a markdown table or list — not as toml. The user should be able to read it without parsing. Example:
@@ -249,7 +283,8 @@ When the plan is trivial or purely mechanical, append the hint under the `Next:`
 
 ## Hard rules
 
-- **Follow the interaction playbook (`_interaction.md`); plan.toml is never a review medium.** Drive the command as a conversation — walk panel disagreements (§2P.3) and the §3 proposal as one-decision-per-turn `AskUserQuestion` turns, and confirm the written `plan.toml` with a one-line summary (§5) rather than pasting it back.
+- **Follow the interaction playbook (`_interaction.md`); plan.toml is never a review medium.** Drive the command as a conversation — walk the §2G gray areas, the panel disagreements (§2P.3) and the §3 proposal as one-decision-per-turn `AskUserQuestion` turns, and confirm the written `plan.toml` with a one-line summary (§5) rather than pasting it back.
+- **Walk every gray area (§2G); never pre-filter them.** There is no selection step and no pre-ticked checklist — the user's explicit off-ramp is the only thing that ends the walk early, and what you settled for them gets said out loud in §3. Zero areas is a valid, stated outcome; manufacturing them to look thorough is the failure this section was written against.
 - **Pair-mode default.** Never write `plan.toml` before the user accepts the proposed decomposition. If the user wants autonomous mode, they'll say so explicitly.
 - **Subagents: read-only fan-out is fine; authoring `plan.toml` is not.** Per the `dross-agent-gate` builtin, you may fan out subagents for read-only work — research, pattern-mapping, independent review — when it sharpens the plan, and should when it widens coverage or saves wall-clock. What stays gated is the decomposition itself: never let an unattended agent author or finalize `plan.toml` — it's agreed with the user (pair mode) or by you (`--solo`). The `--panel` flow (§2P) and the §6 plan-review are the worked examples: independent agents draft or critique, the user steers the result. For a small, pattern-following plan, staying inline is still the right call — fan out when it earns its keep, not by default.
 - **Test contracts are mandatory.** A task without a `test_contract` is a task verify can't check. Refuse to write the plan with empty contracts unless the user explicitly accepts the gap.

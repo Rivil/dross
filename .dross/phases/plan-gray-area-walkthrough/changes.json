@@ -1,0 +1,40 @@
+{
+  "phase": "plan-gray-area-walkthrough",
+  "pr": 92,
+  "base": "milestone/v1.3",
+  "base_commit": "449012bb90d0738c884ad09b93eb854548a000a9",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "assets/prompts/plan.md"
+      ],
+      "commit": "5fc1df6",
+      "completed_at": "2026-08-15T23:22:27.853203Z",
+      "landmarks": [
+        {
+          "feature": "interaction contract",
+          "symbol": "plan.md §2G",
+          "loc": "assets/prompts/plan.md:148",
+          "what": "/dross-plan walks every decomposition choice it is unsure about one turn at a time, with no selection step, bounded away from spec's locked decisions above and executor detail below"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/prompt_gray_area_test.go",
+        "docs/interaction-audit.md"
+      ],
+      "commit": "27538ef",
+      "completed_at": "2026-08-15T23:22:39.250254Z",
+      "landmarks": [
+        {
+          "feature": "interaction contract",
+          "symbol": "TestPlanAndSpecWalkAgree",
+          "loc": "internal/cmd/prompt_gray_area_test.go:117",
+          "what": "plan's and spec's gray-area walks are pinned to the same no-selection-step and off-ramp rules, so one job cannot grow two interaction shapes"
+        }
+      ]
+    }
+  }
+}

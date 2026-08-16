@@ -1,0 +1,39 @@
+[phase]
+  id = "plan-gray-area-walkthrough"
+  title = "Plan gray area walkthrough"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "/dross-plan surfaces the decomposition choices it is genuinely unsure about and walks EVERY one, a single decision per turn — the same treatment /dross-spec's §3 already gives contract-shaping choices. Today the whole decomposition is one take-it-or-steer-it turn, so a wave split or a merged task the planner was 50/50 on is presented as settled."
+
+[[criteria]]
+  id = "c-2"
+  text = "There is no selection step and no multiSelect pre-filtering: the prompt does not ask which areas to discuss, does not present them as a checklist with some pre-ticked, and does not truncate the list for the user. A user off-ramp (\"you decide the rest\") is the only thing that ends the walk early, and taking it is recorded rather than silent."
+
+[[criteria]]
+  id = "c-3"
+  text = "A plan gray area is scoped to what a PLAN decides — task boundaries, wave ordering, where a test contract's assertion lives, whether one task or two — and explicitly not to what the spec already locked or what the executor resolves. A prompt that re-asked spec's questions at plan time would re-litigate settled decisions, and one that asked about code patterns would stall on choices the executor makes."
+
+[[criteria]]
+  id = "c-4"
+  text = "The walk is skipped honestly rather than manufactured: a small, pattern-following plan with no genuine uncertainty says so in one line and moves on. A prompt that must produce N areas will invent them, and invented questions are what teach a user to stop reading them."
+
+[[decisions]]
+  key = "mirror_spec_not_reinvent"
+  choice = "Plan's walk copies spec §3's structure — identify, then walk one at a time, with the same no-selection-step rule and the same user off-ramp — rather than inventing a second interaction shape."
+  why = "The two commands are read minutes apart by the same person, and a second shape for the same job is a second thing to learn and a second thing to drift. spec §3 was already argued through in the v0.6 gray-area-walkthrough phase; the parts that are genuinely different here are WHICH choices qualify, not how they are walked."
+
+[[decisions]]
+  key = "plan_areas_are_decomposition_choices"
+  choice = "A plan gray area is a decomposition choice: task boundaries, wave ordering, which task owns a criterion, where a test contract's assertion belongs. Not spec's contract questions, and not implementation detail."
+  why = "Without the boundary the walk drifts in both directions and is useless either way. Upward it re-asks what the spec locked, which is re-litigating a settled decision and is exactly what `locked = true` exists to prevent. Downward it asks about code patterns the executor resolves in the act of writing them, which stalls the plan on answers the user has no basis to give yet."
+
+[[decisions]]
+  key = "no_area_is_a_stated_outcome"
+  choice = "Zero gray areas is a valid, stated outcome — the prompt says so in one line and moves to the proposal. There is no minimum count."
+  why = "A prompt that must produce N areas will produce N areas, and the manufactured ones are indistinguishable from the real ones until the user has answered a few. That is how a walk designed to catch real uncertainty trains someone to click through it."
+
+[[deferred]]
+  text = "Give /dross-plan a `--panel`-free lightweight second opinion — a single cold reviewer over the finished decomposition, cheaper than the 3-lens panel but more than nothing."
+  why = "Adjacent but separate: this phase is about surfacing the planner's OWN uncertainty during decomposition, not about adding another reviewer after it. §6.1 already runs an independent plan review, so the gap is a cost tier rather than a missing check. Left as someday — no phase on the roadmap owns planner cost tiers."

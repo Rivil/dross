@@ -351,8 +351,10 @@ The propose-and-react contract for interactive commands — a terse builtin rule
 - subagent-offload audit (per-prompt disposition of heavy inline reads — offloads-already / offload-worthy / inline-only — fail-closed like the interaction audit; verify §2 and execute §1b carry size-gated read-only offload passages whose agent-gate boundary and conditional phrasing are test-pinned) — `docs/subagent-offload-audit.md`
 - `TestSubagentOffloadAuditCoversEveryPrompt` (offload-audit coverage gate) — `internal/cmd/subagent_offload_audit_test.go:41`
 - `TestVerifyPromptOffloadGuidance` / `TestExecutePromptOffloadGuidance` (offload passages pinned) — `internal/cmd/verify_prompt_test.go` / `internal/cmd/execute_prompt_test.go`
+- `plan.md` §2G (plan's gray-area walk: every area, one turn each, no selection step) — `assets/prompts/plan.md:148`
+- `TestPlanAndSpecWalkAgree` (plan's and spec's walks pinned to one shape) — `internal/cmd/prompt_gray_area_test.go:120`
 
-_introduced 10-interaction-contract · extended 11-retrofit-core-loop · extended 12-retrofit-setup-commands · extended 13-audit-and-readme · extended retrofit-readmostly-commands · extended gray-area-walkthrough · extended interaction-defer-or-add-framing · extended task-reordering · extended subagent-offload-audit · de83813_
+_introduced 10-interaction-contract · extended 11-retrofit-core-loop · extended 12-retrofit-setup-commands · extended 13-audit-and-readme · extended retrofit-readmostly-commands · extended gray-area-walkthrough · extended interaction-defer-or-add-framing · extended task-reordering · extended subagent-offload-audit · de83813 · extended plan-gray-area-walkthrough · 5fc1df6_
 
 ### Issue board sync
 
