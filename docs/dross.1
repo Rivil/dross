@@ -118,9 +118,20 @@ makes the next phase directory and checks out
 .IR phase/<id> ;
 .B complete
 finalizes after squash-merge (ff main, delete local branch).
-.B "red-proof set <phase-id> --sha <sha> --doc <path>"
+.B "red-proof set <phase-id> --sha <sha> --doc <path> [--replay <cmd>]"
 pins the commit a phase's red proof was captured at, plus the doc that
-replays it, so the pin is a validated record rather than a hand edit.
+replays it, so the pin is a validated record rather than a hand edit;
+.B --replay
+records the command that replays the proof.
+.B "red-proof repoint [phase-id] [--apply]"
+repairs pins whose commit origin can no longer reach, rewriting the record
+and every occurrence in the replay doc to the owning phase's fork point.
+Bare, it scans every pin and leaves sound ones alone; dry-run by default,
+.B --apply
+writes. Where a replay is recorded and consented
+.RB ( "dross trust --replay <phase-id>" )
+it is re-run at the proposed commit and the repair is refused unless the
+proof still goes red; otherwise the repair is reported unverified.
 .TP
 .B dross task \fR{\fBnext\fR|\fBshow\fR|\fBstatus\fR}
 Inspect and update tasks within a phase plan.

@@ -188,8 +188,10 @@ func TestDocsCoverRedProofVerb(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", file, err)
 		}
-		if !strings.Contains(string(b), "red-proof") {
-			t.Errorf("%s does not mention the `red-proof` phase subcommand", file)
+		for _, want := range []string{"red-proof", "repoint"} {
+			if !strings.Contains(string(b), want) {
+				t.Errorf("%s does not mention %q — a verb the docs do not list is a verb nobody runs, and the pin goes back to being hand-edited", file, want)
+			}
 		}
 	}
 
@@ -197,14 +199,14 @@ func TestDocsCoverRedProofVerb(t *testing.T) {
 	for _, sub := range Phase().Commands() {
 		if sub.Name() == "red-proof" {
 			found = true
-			var hasSet bool
+			leaves := map[string]bool{}
 			for _, leaf := range sub.Commands() {
-				if leaf.Name() == "set" {
-					hasSet = true
-				}
+				leaves[leaf.Name()] = true
 			}
-			if !hasSet {
-				t.Error("`phase red-proof` has no `set` subcommand — the docs narrate a command that does not resolve")
+			for _, want := range []string{"set", "repoint"} {
+				if !leaves[want] {
+					t.Errorf("`phase red-proof` has no `%s` subcommand — the docs narrate a command that does not resolve", want)
+				}
 			}
 		}
 	}
@@ -337,5 +339,66 @@ func TestRedProofSetRejectsLeadingDash(t *testing.T) {
 	}
 	if string(after) != string(before) {
 		t.Errorf("a refused replay still rewrote the record:\n%s", after)
+	}
+}
+
+// TestDoctorHintNamesRepoint: doctor's rotted-pin line must name the repair
+// verb, not the hand-typed `red-proof set --sha <fork>` line it used to print.
+// That line asked the operator to copy a SHA doctor had already computed and
+// then edit the replay doc themselves — which is how the c-5 pin came to be
+// hand-edited in the first place.
+func TestDoctorHintNamesRepoint(t *testing.T) {
+	f := rottedFixture(t)
+
+	lines, present := redProofChecks(f.root, f.repoDir)
+	if !present {
+		t.Fatal("doctor sees no pin at all")
+	}
+	var hint string
+	for _, l := range lines {
+		if l.level == doctorIssue && strings.Contains(l.text, "unreachable") {
+			hint = l.text
+		}
+	}
+	if hint == "" {
+		t.Fatalf("doctor reports no unreachable-pin line: %+v", lines)
+	}
+	if !strings.Contains(hint, "red-proof repoint") {
+		t.Errorf("the hint does not name the repoint verb:\n%s", hint)
+	}
+	for _, stale := range []string{"red-proof set", "--sha"} {
+		if strings.Contains(hint, stale) {
+			t.Errorf("the hint still narrates the hand-typed form (%q):\n%s", stale, hint)
+		}
+	}
+}
+
+// TestDoctorHintDegradesGracefully: with no fork point to resolve, the hint
+// must name the phase and NO command. A copy-pasteable line carrying a blank
+// SHA is worse than no line at all.
+func TestDoctorHintDegradesGracefully(t *testing.T) {
+	f := rottedFixture(t)
+	path := changes.FilePath(f.root, f.phase)
+	c, err := changes.Load(path, f.phase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Base = ""
+	c.BaseCommit = ""
+	if err := c.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	hint := redProofRepointHint(f.root, f.repoDir, f.pin(t))
+	if !strings.Contains(hint, f.phase) {
+		t.Errorf("the degraded hint does not name the phase:\n%s", hint)
+	}
+	// No repair command offered: with no fork point there is nothing for
+	// repoint to propose, so naming it would send the operator at a verb that
+	// can only refuse. The inherited resolver error still explains what to fix.
+	for _, stale := range []string{"red-proof repoint", "--apply", "--sha"} {
+		if strings.Contains(hint, stale) {
+			t.Errorf("the degraded hint still offers %q despite having no fork point:\n%s", stale, hint)
+		}
 	}
 }
