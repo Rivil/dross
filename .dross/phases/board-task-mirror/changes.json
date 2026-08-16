@@ -1,7 +1,9 @@
 {
   "phase": "board-task-mirror",
+  "pr": 95,
   "base": "milestone/v1.3",
   "base_commit": "25310ad183019284e52a519a7765fb98d9988985",
+  "status": "shipped",
   "tasks": {
     "t-2": {
       "files": [
