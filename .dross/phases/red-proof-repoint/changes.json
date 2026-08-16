@@ -123,6 +123,36 @@
           "what": "doctor's rotted-pin finding names the repoint verb instead of a hand-typed set command, and degrades to no command when there is no fork point"
         }
       ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/redproof_repoint_cmd_test.go"
+      ],
+      "commit": "a8977a5",
+      "completed_at": "2026-08-16T18:13:33.458687Z",
+      "landmarks": [
+        {
+          "feature": "red proof pin repair",
+          "symbol": "TestRepointNarrowsToNamedPhase",
+          "loc": "internal/cmd/redproof_repoint_cmd_test.go:249",
+          "what": "pins the argument-scoped half of repoint — naming one phase repairs only that phase and an unknown phase errors rather than passing quietly"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/redproof_replay_test.go"
+      ],
+      "commit": "7f7b613",
+      "completed_at": "2026-08-16T18:17:39.386801Z",
+      "landmarks": [
+        {
+          "feature": "red proof pin repair",
+          "symbol": "TestTrustReplayCheckSurfacesError",
+          "loc": "internal/cmd/redproof_replay_test.go:437",
+          "what": "keeps trust --replay --check's three answers apart — granted, withheld, and a store it could not read — so a broken store never reads as a missing grant"
+        }
+      ]
     }
   }
 }

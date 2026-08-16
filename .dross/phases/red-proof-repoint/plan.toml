@@ -1,4 +1,4 @@
-task_seq = 7
+task_seq = 9
 
 [phase]
   id = "red-proof-repoint"
@@ -75,4 +75,22 @@ task_seq = 7
   covers = ["c-1"]
   depends_on = ["t-5"]
   test_contract = ["if the hint drifts back to the hand-typed form, TestDoctorHintNamesRepoint fails — the unreachable-pin doctor line must contain \"red-proof repoint\" and no longer contain \"red-proof set\" or \"--sha\"", "if the hint narrates a command that does not resolve, TestDocsCoverRedProofVerb (redproof_set_test.go:182, extended) fails — walking the real Phase() cobra tree must find red-proof > repoint", "if the fallback path prints a copy-pasteable command with an empty SHA, TestDoctorHintDegradesGracefully fails — when phaseForkPoint errors the hint names the phase and no command line", "if the new verb ships undocumented, the docs-coverage test that already gates `red-proof` fails — README.md and docs/dross.1 must both mention `repoint`"]
+  status = "done"
+
+[[task]]
+  id = "t-8"
+  wave = 5
+  title = "Test the <phase-id> narrowing path"
+  files = ["internal/cmd/redproof_repoint_cmd_test.go"]
+  description = "Closes the two BLOCKING verify survivors at redproof_repoint_cmd.go:171 (pinsForPhase) and :52 (the no-pin error). The optional <phase-id> argument half of the locked repoint_target_selection decision ships with no test at all — every existing verb test drives the bare blanket form.\n\nTest contract:\n- if `repoint <phase-id> --apply` repairs a phase other than the one named, TestRepointNarrowsToNamedPhase fails — over two rotted phases only the named one moves; the other phase's changes.json and doc are byte-identical by hash and its RedProof.SHA still names its original pin\n- if a named phase that records no red proof is treated as nothing-to-do, TestRepointUnknownPhaseErrors fails — the run exits non-zero with an error naming the phase, and every discovered record is byte-identical afterwards"
+  covers = ["c-1", "c-5"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 5
+  title = "Test the replay tail truncation and the consent-check error branch"
+  files = ["internal/cmd/redproof_replay_test.go"]
+  description = "Closes the three remaining BLOCKING verify survivors: redproof_replay.go:132 (INVERT_NEGATIVES and ARITHMETIC_BASE on lastLines' truncation branch) and trust.go:382 (the ReplayConsented error branch inside trustReplay's --check path). Tests only — no source file changes.\n\nTest contract:\n- if lastLines stops returning the FINAL n lines, TestReplayTailKeepsTheTail fails — given more than n lines it must return exactly the last n, with the first line asserted absent and the last asserted present, so a refusal carries the part of a long run that explains it\n- if lastLines is fed at or under the budget, TestReplayTailShortInputUnchanged fails — input with <= n lines comes back byte-identical apart from the trailing-newline trim it already documents\n- if trustReplay --check swallows a ReplayConsented error, TestTrustReplayCheckSurfacesError fails — with the consent store unreadable the check returns THAT error rather than reporting the line unconsented, so a failed read can never be mistaken for a withheld grant"
+  covers = ["c-8"]
   status = "done"
