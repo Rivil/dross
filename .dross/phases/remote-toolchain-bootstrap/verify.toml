@@ -1,0 +1,64 @@
+[verify]
+  phase = "remote-toolchain-bootstrap"
+  generated_at = 2026-08-16T20:20:49.578818Z
+  verdict = "pending"
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.987012987012987
+  mutants_killed = 228
+  mutants_survived = 3
+  mutants_not_covered = 3
+  mutants_in_scope = 231
+  unclassified_in_scope = 3
+  criteria_total = 7
+  criteria_covered = 0
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-2"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-3"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-4"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-5"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-6"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-7"
+  status = "unknown"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/remote_bootstrap.go:122 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/remote_bootstrap_cmd.go:90 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/remote_bootstrap_cmd.go:110 (CONDITIONALS_NEGATION)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/dross.1: no mutation adapter for .1"

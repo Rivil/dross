@@ -107,6 +107,21 @@
           "what": "one command provisions a granted host — dry-run by default, installs adapter packages into runtimes that exist, and refuses a missing runtime by name instead of installing one"
         }
       ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/remote_bootstrap_cmd_test.go"
+      ],
+      "commit": "a2582c7",
+      "completed_at": "2026-08-16T21:46:56.238663Z",
+      "landmarks": [
+        {
+          "feature": "remote execution grant",
+          "symbol": "TestBootstrapDryRunClosingMessage",
+          "loc": "internal/cmd/remote_bootstrap_cmd_test.go:82",
+          "what": "pins the two dry-run closing messages apart — a gap --apply can close is not the same advice as one only the host's owner can"
+        }
+      ]
     }
   }
 }

@@ -1,4 +1,4 @@
-task_seq = 6
+task_seq = 7
 
 [phase]
   id = "remote-toolchain-bootstrap"
@@ -63,4 +63,13 @@ task_seq = 6
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-5"]
   test_contract = ["if dry-run changes the host, TestBootstrapDryRunInstallsNothing fails — over a host missing a tool, stdout names the tool, the adapter that wants it and the exact command, while the recording exec seam records zero install invocations", "if --apply does not install, TestBootstrapApplyInstalls fails — the recorded invocations equal the planned argvs in order, and a following probe reporting the tools present makes doctor's Remote section report no missing tools (c-1 end to end, through redProof-style seam replacement rather than a live host)", "if bootstrap runs without a grant, TestBootstrapRefusesUngranted fails — it exits non-zero naming `dross remote grant` and records zero invocations", "if a runtime refusal is treated as a failure to install, TestBootstrapReportsRefusalDistinctly fails — a step refused for a missing runtime is reported with the runtime named and does NOT count as an install error, while the run still exits non-zero so the gap is not lost", "if one step's failure aborts the rest, TestBootstrapContinuesPastFailure fails — over three steps whose middle one fails, the other two still run and the command exits non-zero", "if the verb ships undocumented, TestDocsCoverRemoteBootstrap fails — walking the real Remote() cobra tree must find bootstrap, and README.md and docs/dross.1 must both mention it"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Assert the two dry-run closing messages"
+  files = ["internal/cmd/remote_bootstrap_cmd_test.go"]
+  description = "Closes the one genuine BLOCKING survivor at remote_bootstrap_cmd.go:110 (`case !apply && refused == 0`). Verified a real gap, not the gremlins attribution ceiling: mutating the condition to `refused != 0` swaps the two dry-run closing messages and no test notices. The other two in-diff survivors ARE the ceiling — mutating them reddens 4-5 tests each.\n\nTest contract:\n- if the clean dry-run message stops distinguishing itself, TestBootstrapDryRunClosingMessage fails — a dry run with no refusals must tell the reader to re-run with --apply, and must NOT claim refusals need the host owner\n- if a dry run carrying a refusal offers --apply as the remedy, TestBootstrapDryRunWithRefusalClosingMessage fails — --apply cannot fix a missing language runtime, so that run must name the host owner instead and must not say re-run with --apply"
+  covers = ["c-2", "c-3"]
   status = "done"
