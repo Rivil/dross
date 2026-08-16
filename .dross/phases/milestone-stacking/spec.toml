@@ -58,11 +58,13 @@
   locked = true
 
 [[deferred]]
+  id = "2385fc70268180d1"
   text = "Auto-retarget instead of refuse: when a parent milestone branch is deleted, repoint the dependent child's open PR and its recorded base to main so the child heals itself, rather than refusing the delete."
   why = "c-4/c-6 make deletion safe by refusing; automatic repair is a different capability, and this milestone's pattern has been prevent-first, auto-heal later."
   target = "ship-complete-recovery-hardening"
 
 [[deferred]]
+  id = "7ea6759938b910a4"
   text = "`dross verify`'s gremlins mutation pass runs at Go package scope, not diff scope: mutating internal/cmd for this phase (only milestone.go/milestone_dependents.go/milestone_merged.go touched) also mutated ~25 unrelated sibling files and surfaced ~80 pre-existing NOT-COVERED survivors (issue.go, ship.go, doctor.go, hints.go, etc.) as this phase's findings. Scope mutation runs to the files a phase's changes.json actually touched, or at minimum filter tests.json/verify.toml findings to those files, so unrelated pre-existing gaps stop polluting every phase that happens to share a package."
   why = "Surfaced verifying milestone-stacking (2026-08-03): 87 of 1977 mutants survived, but only 7 (all in milestone_dependents.go's joinVersions/describePRs) were in files this phase touched — the other ~80 were noise from files nobody on this phase edited. Rule r-02 requires routing pre-existing out-of-scope findings rather than re-listing them; without a tooling fix, every future phase touching internal/cmd re-inherits the same pile."
   target = "mutation-diff-scope"

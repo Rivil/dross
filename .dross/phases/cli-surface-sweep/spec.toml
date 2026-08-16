@@ -70,6 +70,7 @@
   locked = true
 
 [[deferred]]
+  id = "93ce98de1002acab"
   text = "Apply `--json` uniformly to every `dross ... show` command (project, milestone and phase emit TOML today, so it is an output-format conversion rather than a flag)"
   why = "c-3 only needs `state show --json`, which already emits JSON; converting the TOML-emitting show commands is a materially larger change"
   target = "board-state-map-truth"

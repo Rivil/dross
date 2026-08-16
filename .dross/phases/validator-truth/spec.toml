@@ -64,26 +64,31 @@
   locked = true
 
 [[deferred]]
+  id = "ed3c65534e6dca2d"
   text = "issue.go emits lifecycle status \"planning\" while the YouTrack and Jira state maps key on \"planned\", so every freshly-planned phase silently fails to set tracker state (SetState warns and skips)"
   why = "A producer/consumer key mismatch with its own fix, not part of the config-enum work"
   target = "board-state-map-truth"
 
 [[deferred]]
+  id = "3a0d7d3147d7b585"
   text = "Task status accepts any string; a typo drops the task out of NextRunnable silently, removing it from the execution queue with no validator to catch it"
   why = "Task-lifecycle surface rather than a config enum"
   target = "cli-surface-sweep"
 
 [[deferred]]
+  id = "0ad901405561a187"
   text = "[board].github_project and [board].state_map have no dross project set path — they can only be hand-edited"
   why = "Belongs to the milestone's CLI-writable-config criterion"
   target = "cli-surface-sweep"
 
 [[deferred]]
+  id = "c2283c9cada13a63"
   text = "runtime.mode = \"hybrid\" is documented in the schema and settable, but nothing in the codebase branches on it"
   why = "Needs a decide-to-implement-or-remove call; no home yet"
   target = "config-value-truth"
 
 [[deferred]]
+  id = "7300a61dfb556269"
   text = "A typo in [mutation].adapters silently filters out every adapter, so all files land in Skipped with no warning"
   why = "Verify-side validation; no home yet"
   target = "mutation-diff-scope"

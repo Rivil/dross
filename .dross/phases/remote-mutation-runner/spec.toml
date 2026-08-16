@@ -94,6 +94,7 @@
   locked = true
 
 [[deferred]]
+  id = "ff40c2cbbd18e7dc"
   text = "A verb that installs the pinned remote toolchain (Go + gremlins, Node, .NET) on a new host."
   why = "Provisioning a machine is a different job from running a mutation test, and it is a one-time per-host cost — doctor naming what is missing is enough."
   target = "remote-toolchain-bootstrap"

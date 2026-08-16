@@ -62,11 +62,13 @@
   locked = true
 
 [[deferred]]
+  id = "7587f4c35d42ee82"
   text = "An upgrade note (CHANGELOG / README) telling an existing adopter what to do the first time the checkout refusal fires on a branch that still tracks .dross/state.json."
   why = "doctor already names the exact fix (`git rm --cached .dross/state.json`) per c-6, which covers diagnosis at the moment it bites; a release-note is distribution work, not safety work, and this repo has no external adopters to warn."
   target = "guard-remedy-ordering"
 
 [[deferred]]
+  id = "ea1e0c0348521c5b"
   text = "A checkout also wipes tracked .dross/phases/<newer-phase>/ dirs from the working tree; untracking state.json does not cover that clobber."
   why = "Milestone criterion 8 — detect a clobbered or incomplete .dross/ and repair it from git history — is exactly this input, and dross-repair is already on the v1.2 roadmap."
   target = "dross-repair"

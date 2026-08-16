@@ -47,6 +47,7 @@
   why = "An eight-task phase on a backend with no linker would print eight identical lines, which is how a warning becomes scrollback. Once, named, is readable; the count of affected tasks is in the same line if it matters."
 
 [[deferred]]
+  id = "d7f9593f2665816b"
   text = "Mirror task state back INTO dross — read the tracker's board and move a plan task when someone drags its card."
   why = "The opposite direction, and a much larger contract: it makes the tracker a writer of plan.toml, which needs conflict rules dross has never needed. This phase is one-way on purpose."
 
@@ -73,3 +74,9 @@
   text = "Pass TMPDIR to remote runs so the mutation harness's own scratch leaves RAM: gremlins copies the module per run via os.MkdirTemp, which honours TMPDIR rather than GOTMPDIR, so on helicon it still lands in a 32 G RAM-backed tmpfs while an LLM shares the box. The remote runner must export it in the ssh script alongside the per-profile cache vars."
   why = "helicon's GOCACHE/GOMODCACHE/GOTMPDIR were pointed at the 300 G /var/lib/buildcache volume on 2026-08-16 via go env -w, which covers the go toolchain but not the harness wrapping it. Deliberately not done inline: unlike go env -w it needs a code change in the runner."
   target = "cache-budget-prune"
+
+[[deferred]]
+  id = "84db6f7af8f57cef"
+  text = "Provision the remote test host's non-Go toolchain, or make the suite honest about its absence: helicon has no `gh` on PATH, so internal/ship's TestPostGitHubCommentSurfacesFailures fails there and passes locally. Either install the CLIs the suite shells out to as part of the host's bootstrap, or have those tests skip on a host that lacks them — a remote red that says nothing about the code teaches the loop to ignore reds."
+  why = "Measured 2026-08-16 while re-running the suite for board-task-mirror's survivor pass: `dross test` exited 1 on helicon solely on that one case; go test of the same package locally is green. A remote runner whose reds are environment-shaped is worse than no remote runner, because the failure looks exactly like a real one."
+  target = "remote-toolchain-bootstrap"

@@ -62,6 +62,7 @@
   locked = true
 
 [[deferred]]
+  id = "ae17cb02fa7db2fc"
   text = "Rework `dross milestone prune`'s own UX — confirmation, --dry-run, batch delete. This phase fixes only the detector doctor reads, not prune's interaction."
   why = "Guard-shaped ergonomics rather than lifecycle truth; belongs with the phase that owns guards leading with the cheapest correct fix."
   target = "guard-remedy-ordering"

@@ -56,11 +56,13 @@
   locked = true
 
 [[deferred]]
+  id = "1b82d94dacd3b963"
   text = "`dross phase create <title>` coins a duplicate slug (survivor-drain-2) when a phase directory of that name already exists — scaffolded earlier by `dross survivor route --target` — instead of adopting it. It also appends the duplicate to the milestone's phases array and cuts a branch for it."
   why = "Phase-lifecycle plumbing, unrelated to draining survivors. Hit during this command's own pre-flight and reverted by hand."
   target = "phase-create-adoption"
 
 [[deferred]]
+  id = "9fa4386fc04774d6"
   text = "Teach the gremlins adapter to drop ARITHMETIC_BASE mutants on string-concatenation and const-initializer lines so they never reach the survivor list at all."
   why = "Removing inapplicable mutants changes the reported mutation score — that is mutation-score-truth's contract to move, not the drain's."
   target = "mutation-score-truth"

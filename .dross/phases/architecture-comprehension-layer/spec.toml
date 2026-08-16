@@ -55,11 +55,13 @@
   locked = true
 
 [[deferred]]
+  id = "89b51ed2552d67bc"
   text = "Typed repeatable --landmark field on the task changes record."
   why = "Reuse the existing free-form --notes for now; add structure only if notes proves too lossy."
   target = "architecture-doc-enhancements"
 
 [[deferred]]
+  id = "b85eb8099f7b6714"
   text = "Idempotent refresh/merge of an already-existing ARCHITECTURE.md via the backfill trigger."
   why = "c-7 is scoped to first-creation; regenerating over an existing doc without clobbering comes later."
   target = "architecture-doc-enhancements"

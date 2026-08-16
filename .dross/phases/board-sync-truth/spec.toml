@@ -62,6 +62,7 @@
   locked = true
 
 [[deferred]]
+  id = "96f7d9744ec2a0d5"
   text = "Configurable tracker field names for Jira (status field, issue type, fixVersions) and GitHub Projects, matching what c-3 does for YouTrack."
   why = "c-3 is scoped to YouTrack because it is the only provider this repo actually runs against, so it is the only one where the fix is provable. The Jira and GitHub halves belong with the provider work itself."
   target = "additional-board-backends"

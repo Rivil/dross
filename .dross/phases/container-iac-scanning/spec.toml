@@ -38,6 +38,7 @@
   locked = true
 
 [[deferred]]
+  id = "c5c048e9871e7f7f"
   text = "Other IaC families: Kubernetes-manifest and CloudFormation marker profiles (each its own drop-in .toml)."
   why = "v0.6 non-goal — not exhaustive IaC coverage; the first-cut loadout is Terraform only."
   target = "deepen-container-iac-scanning"

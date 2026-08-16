@@ -48,16 +48,19 @@
   locked = true
 
 [[deferred]]
+  id = "8aa15f3752fc7827"
   text = "Retrofit of read-mostly commands (pause, resume, status)."
   why = "Out of the agreed 7-command setup/config set; revisit only if they grow interactive decision points."
   target = "retrofit-readmostly-commands"
 
 [[deferred]]
+  id = "12b2aa9d32f54d4d"
   text = "Documenting the interaction model in the README as a first-class loop behaviour."
   why = "Milestone criterion 4 — 13-audit-and-readme's job."
   dismissed = true
 
 [[deferred]]
+  id = "32a95d6a6943539b"
   text = "Full audit-checklist sweep across all interactive commands."
   why = "Phase 13; here only the 7 setup/config commands get checklist entries."
   dismissed = true

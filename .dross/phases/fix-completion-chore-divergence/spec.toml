@@ -48,11 +48,13 @@
   locked = true
 
 [[deferred]]
+  id = "2a662adc6c7edb5f"
   text = "Auto-heal an already-diverged main inside `dross phase complete` (reset to origin + restore .dross/)."
   why = "Overlaps existing `dross ship recover`; prevent-only is enough for v0.1."
   target = "ship-complete-recovery-hardening"
 
 [[deferred]]
+  id = "8517ca7569b82540"
   text = "Resuming work on a shipped-but-unmerged phase branch whose branch-local state.json already reads 'completed'."
   why = "main stays authoritative and abandoning the branch discards the stale state; only matters if work re-opens on the same branch."
   target = "ship-complete-recovery-hardening"

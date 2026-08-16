@@ -40,16 +40,19 @@
   locked = true
 
 [[deferred]]
+  id = "ee52693267d9cef5"
   text = "Signal-aware prioritization — ranking areas by staleness / never-run (the dropped c-5)."
   why = "Needs a signal source (last-run timestamps per area) that doesn't exist yet."
   target = "status-action-surfaces-v2"
 
 [[deferred]]
+  id = "3d9baeead7292172"
   text = "Config-driven `[[action_areas]]` catalog in project.toml."
   why = "YAGNI for a solo tool; revisit if stack profiles (07) need per-stack areas."
   target = "status-action-surfaces-v2"
 
 [[deferred]]
+  id = "2e734f46572de8ca"
   text = "A real tech-debt scanner behind the tech-debt area."
   why = "Phase 04 ships tech-debt as a placeholder/planned area only; the scanner is its own capability."
   target = "status-action-surfaces-v2"

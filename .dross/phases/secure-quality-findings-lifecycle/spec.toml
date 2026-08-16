@@ -54,16 +54,19 @@
   locked = true
 
 [[deferred]]
+  id = "44c1e11debcc3ee6"
   text = "Cross-run quality trend tracking / scoring over time."
   why = "Beyond track/resolve/dismiss — a scoring capability for a future quality-trends phase. Someday."
   target = "secure-quality-findings-followups"
 
 [[deferred]]
+  id = "a3485cb4d13bd717"
   text = "CodeQL integration (secure)."
   why = "Scanner coverage, unrelated to the findings lifecycle; belongs with scanner-coverage work. Someday."
   target = "secure-quality-findings-followups"
 
 [[deferred]]
+  id = "967609cbf63aac95"
   text = "Committed / public in-git audit trail (secure)."
   why = "Conflicts with the reaffirmed gitignored state-store decision (no pre-disclosure on a public repo); effectively declined unless that stance changes."
   target = "secure-quality-findings-followups"

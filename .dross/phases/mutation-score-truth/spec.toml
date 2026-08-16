@@ -50,5 +50,6 @@
   why = "A ratio without its denominator is not a measurement anyone can act on: 0.90 over 10 mutants and 0.90 over 400 are the same number and not the same evidence, and a survivor the tooling cannot kill is a different fact from one the tests missed. Both distinctions were already being written into verify.toml notes by hand, run after run, which is where a convention that belongs in the code shows itself."
 
 [[deferred]]
+  id = "4518ecf010f195bb"
   text = "Weight the pooled score by leg size when a repo genuinely has two large legs of different languages, rather than pooling raw counts."
   why = "Pooling raw counts IS the weighting for now — a mutant is a mutant. A deliberate re-weighting is only interesting once a real multi-leg repo exists to calibrate against, and inventing the policy before then would be fitting a rule to no data."
