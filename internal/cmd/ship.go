@@ -221,6 +221,18 @@ func Ship() *cobra.Command {
 				return nil
 			}
 
+			// c-7: repair any red-proof pin held up only by this phase's own
+			// remote-tracking branch, BEFORE the merge that deletes it. Run
+			// ahead of the clean-tree gate on purpose — the repair rewrites a
+			// tracked doc, so it commits its own two files rather than leaving
+			// dirt the gate would refuse, and the rewrite then rides this
+			// phase's PR where it is reviewed alongside the code.
+			if repointed, err := repointDoomedRedProofs(root, repoDir, phaseID); err != nil {
+				return err
+			} else if repointed {
+				narrate("repointed a red proof that this merge would have orphaned\n")
+			}
+
 			// Pre-stage gate: the tree must be clean before ship starts
 			// staging its own commits. Bookkeeping-only dirt under .dross/
 			// is auto-committed so it rides the push; any other dirt refuses

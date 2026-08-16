@@ -449,6 +449,15 @@ destructive reset of the local base branch; read the abort first.`,
 				return err
 			}
 
+			// c-7's second half, read HERE — still on the phase branch, with
+			// origin/phase/<id> still alive — because this is the last point
+			// where the pin's own record is guaranteed to be in the working
+			// tree and the doomed ref still exists to be judged against. A
+			// WARNING, never a refusal: the PR is already merged, and leaving
+			// a merged phase uncompletable over bookkeeping would push the
+			// operator back to hand-editing the record.
+			warnDoomedRedProofs(root, repoDir, phaseID)
+
 			// Switch to the reconcile branch only now — every refusal above
 			// (fetch failure, a code-ahead or unpushable base, an unmerged PR)
 			// returns with HEAD still on phase/<id> and no local ref moved, so
