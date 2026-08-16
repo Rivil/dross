@@ -241,6 +241,77 @@ func TestRepointSoundPinNoOp(t *testing.T) {
 	}
 }
 
+// TestRepointNarrowsToNamedPhase: the other half of the locked
+// repoint_target_selection decision. The blanket form is scoped by verdict;
+// the argument form is scoped by NAME, and a narrowing that selected the wrong
+// pin would repair a phase nobody asked about while leaving the named one
+// rotted — the same damage as no narrowing at all, dressed as a success.
+func TestRepointNarrowsToNamedPhase(t *testing.T) {
+	f := rottedFixture(t)
+	namedDoc, namedPinned := addRepointPhase(t, f, "other-phase", true)
+	namedRecord := changes.FilePath(f.root, "other-phase")
+
+	unnamedRecord := changes.FilePath(f.root, f.phase)
+	unnamedDoc := filepath.Join(f.repoDir, f.doc)
+	beforeRecord, beforeDoc := hashFile(t, unnamedRecord), hashFile(t, unnamedDoc)
+
+	if out, err := runRepoint(t, "other-phase", "--apply"); err != nil {
+		t.Fatalf("repoint other-phase --apply: %v\n%s", err, out)
+	}
+
+	// The named phase is repaired, record and doc together.
+	named, err := changes.Load(namedRecord, "other-phase")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if named.RedProof.SHA == namedPinned {
+		t.Error("the named phase was not repaired")
+	}
+	namedDocSHA, err := redProofDocSHA(f.repoDir, namedDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if namedDocSHA != named.RedProof.SHA {
+		t.Errorf("named phase doc pins %q, record pins %q", namedDocSHA, named.RedProof.SHA)
+	}
+
+	// The phase that was NOT named is equally rotted and must be untouched.
+	if hashFile(t, unnamedRecord) != beforeRecord {
+		t.Error("an unnamed phase's changes.json was rewritten")
+	}
+	if hashFile(t, unnamedDoc) != beforeDoc {
+		t.Error("an unnamed phase's doc was rewritten")
+	}
+	unnamed, err := changes.Load(unnamedRecord, f.phase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unnamed.RedProof.SHA != f.pinned {
+		t.Errorf("the unnamed phase's pin moved: %q, want %q", unnamed.RedProof.SHA, f.pinned)
+	}
+}
+
+// TestRepointUnknownPhaseErrors: naming a phase that records no red proof is a
+// mistake worth reporting, not a quiet success. Reading it as nothing-to-do
+// would tell an operator their pin was fine when the tool never looked at one.
+func TestRepointUnknownPhaseErrors(t *testing.T) {
+	f := rottedFixture(t)
+	recordPath := changes.FilePath(f.root, f.phase)
+	docPath := filepath.Join(f.repoDir, f.doc)
+	beforeRecord, beforeDoc := hashFile(t, recordPath), hashFile(t, docPath)
+
+	out, err := runRepoint(t, "nope-phase", "--apply")
+	if err == nil {
+		t.Fatalf("naming a phase with no recorded proof exited 0:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "nope-phase") {
+		t.Errorf("the error does not name the phase: %v", err)
+	}
+	if hashFile(t, recordPath) != beforeRecord || hashFile(t, docPath) != beforeDoc {
+		t.Error("a refused run still wrote a file")
+	}
+}
+
 // TestRepointBlanketScopes: the bare form repairs what is broken and touches
 // nothing else. Scoping by verdict rather than by argument is what makes the
 // blanket run safe (locked repoint_target_selection).
