@@ -1,0 +1,6 @@
+{
+  "phase": "red-proof-repoint",
+  "base": "milestone/v1.3",
+  "base_commit": "73f90609533ca5e8852a2b821ccf32b878683e42",
+  "tasks": {}
+}
