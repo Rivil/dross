@@ -2,5 +2,127 @@
   "phase": "red-proof-repoint",
   "base": "milestone/v1.3",
   "base_commit": "73f90609533ca5e8852a2b821ccf32b878683e42",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/redproof_doc.go",
+        "internal/cmd/redproof_doc_test.go"
+      ],
+      "commit": "697459e",
+      "completed_at": "2026-08-16T15:20:43.124343Z",
+      "landmarks": [
+        {
+          "feature": "red proof pin repair",
+          "symbol": "redProofRewriteDoc",
+          "loc": "internal/cmd/redproof_doc.go:35",
+          "what": "rewrites every occurrence of a red proof's old pinned SHA (full or abbreviated) to a new one, leaving every other byte untouched"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/redproof_repoint.go",
+        "internal/cmd/redproof_repoint_test.go"
+      ],
+      "commit": "5045bb9",
+      "completed_at": "2026-08-16T15:41:14.641988Z",
+      "landmarks": [
+        {
+          "feature": "red proof pin repair",
+          "symbol": "planRedProofRepoint",
+          "loc": "internal/cmd/redproof_repoint.go:73",
+          "what": "decides and performs a pin repair without cobra — dry-runnable plan, doc-then-record apply with rollback, and an excluded-ref mode for a branch about to be deleted"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/cmd/redproof_set.go",
+        "internal/cmd/redproof_set_test.go"
+      ],
+      "commit": "6b89176",
+      "completed_at": "2026-08-16T15:24:45.644341Z",
+      "landmarks": [
+        {
+          "feature": "red proof pin repair",
+          "symbol": "RedProof.Replay",
+          "loc": "internal/changes/changes.go:73",
+          "what": "a red proof can record the command that replays it, so a repoint can re-run the proof instead of hoping"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/redproof_replay.go",
+        "internal/cmd/redproof_replay_test.go",
+        "internal/cmd/test.go",
+        "internal/cmd/trust.go",
+        "internal/cmd/local.go"
+      ],
+      "commit": "9000270",
+      "completed_at": "2026-08-16T15:34:42.095822Z",
+      "landmarks": [
+        {
+          "feature": "red proof pin repair",
+          "symbol": "runRedProofReplay",
+          "loc": "internal/cmd/redproof_replay.go:63",
+          "what": "runs a recorded red proof in a detached worktree at a proposed commit, consent-gated on a fingerprint in the gitignored local.toml"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/redproof_repoint_cmd.go",
+        "internal/cmd/redproof_repoint_cmd_test.go",
+        "internal/cmd/redproof_set.go"
+      ],
+      "commit": "e1d3b49",
+      "completed_at": "2026-08-16T15:47:02.22387Z",
+      "landmarks": [
+        {
+          "feature": "red proof pin repair",
+          "symbol": "phaseRedProofRepoint",
+          "loc": "internal/cmd/redproof_repoint_cmd.go:26",
+          "what": "one command repairs every rotted red-proof pin — dry-run by default, replay-gated under --apply, honest about what it could not check"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/ship.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/redproof_lifecycle.go",
+        "internal/cmd/redproof_lifecycle_test.go"
+      ],
+      "commit": "9f054eb",
+      "completed_at": "2026-08-16T15:53:48.933782Z",
+      "landmarks": [
+        {
+          "feature": "red proof pin repair",
+          "symbol": "repointDoomedRedProofs",
+          "loc": "internal/cmd/redproof_lifecycle.go:66",
+          "what": "ship repairs a pin its own squash-merge would orphan before the merge happens, and complete warns rather than refusing"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "README.md",
+        "docs/dross.1",
+        "internal/cmd/redproof_set_test.go"
+      ],
+      "commit": "97bb8a8",
+      "completed_at": "2026-08-16T16:03:47.576864Z",
+      "landmarks": [
+        {
+          "feature": "red proof pin repair",
+          "symbol": "redProofRepointHint",
+          "loc": "internal/cmd/doctor.go:562",
+          "what": "doctor's rotted-pin finding names the repoint verb instead of a hand-typed set command, and degrades to no command when there is no fork point"
+        }
+      ]
+    }
+  }
 }

@@ -127,7 +127,8 @@
   "tasks": {
     "board-task-mirror/t-5": "DRO-121",
     "board-task-mirror/t-6": "DRO-122",
-    "board-task-mirror/t-7": "DRO-123"
+    "board-task-mirror/t-7": "DRO-123",
+    "red-proof-repoint/t-1": "DRO-126"
   },
   "last_pull": "0001-01-01T00:00:00Z"
 }
