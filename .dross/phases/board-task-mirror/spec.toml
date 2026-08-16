@@ -49,3 +49,21 @@
 [[deferred]]
   text = "Mirror task state back INTO dross — read the tracker's board and move a plan task when someone drags its card."
   why = "The opposite direction, and a much larger contract: it makes the tracker a writer of plan.toml, which needs conflict rules dross has never needed. This phase is one-way on purpose."
+
+[[deferred]]
+  id = "e7207129f4d8a7fc"
+  text = "Preflight the remote before every run that needs it: call remote.Probe() as a gate before a mutation or dross test run, and on transport failure fall back to the local path instead of failing the run outright — but record the fallback (which machine measured it) in verify.toml and announce it in the run output, so a local run is never indistinguishable from a remote one."
+  why = "helicon was unreachable for hours during board-task-mirror; the run failed transport-first and the only workaround was 'dross remote revoke' to force the local path. Probe() already exists at internal/remote/remote.go:475 but only doctor calls it."
+  target = "remote-toolchain-bootstrap"
+
+[[deferred]]
+  id = "2d0d009238884a83"
+  text = "Bound every stack's build/test cache instead of letting it grow unbounded: add a [cache] section to each profile in internal/stack/profiles/*.toml declaring the cache dir(s) and a prune command (go clean -cache, cargo target/, npm cache, etc), and prune after each mutation or test run only when the cache exceeds a configurable size ceiling — keeping incremental builds warm while capping the disk. Must apply to the remote host as well as local."
+  why = "The Go build cache reached 399 GB during v1.3 and filled the laptop to 100 percent, failing a verify run outright; go clean -cache recovered it. Go's own 5-day age trim did not keep up, so the bound must be size-based rather than age-based. Now more urgent remotely: helicon's root is 75 G with 57 G free and all mutation runs land there."
+  dismissed = true
+
+[[deferred]]
+  id = "5802ad3fe8f08d87"
+  text = "Give mutation runs a scratch build cache instead of letting them poison the shared one: point each run's toolchain cache env var at a dedicated dir (GOCACHE for go, CARGO_TARGET_DIR for rust, npm_config_cache for node, etc, declared per profile in internal/stack/profiles/*.toml) and wipe it when the run ends. Applies to the remote host as well as local. Stretch: pin gremlins' working directory so cross-run reuse becomes possible at all — needs an upstream flag or a patched build, and would cut run TIME as well as disk."
+  why = "Measured 2026-08-16: the Go cache held 64 GB, of which 61 GB was 2093 compiled archives averaging 30 MB and only 348 MB was the genuinely-shared stdlib/deps. Cause is that gremlins copies the module into a fresh temp dir (gremlins-PID/wd-RANDOM) every run, and Go keys the build cache on source file paths — so every run recompiles and re-stores EVERY dross package under new keys, including packages it never mutates, and nothing is ever reused across runs. gremlins unleash has no workdir flag (v0.6.0). Since cross-run reuse is already zero, a scratch-and-wipe cache costs no rebuild time while bounding the disk absolutely, and leaves the dev cache warm; a size ceiling on the SHARED cache was the wrong mechanism. Earlier symptom: the cache reached 399 GB and filled the laptop to 100 percent, failing a verify run outright."
+  target = "cache-budget-prune"
