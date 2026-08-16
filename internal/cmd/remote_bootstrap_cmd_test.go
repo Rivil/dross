@@ -72,6 +72,55 @@ func TestBootstrapDryRunInstallsNothing(t *testing.T) {
 	}
 }
 
+// TestBootstrapDryRunClosingMessage: a dry run that found only installable work
+// ends by offering the remedy that would do it.
+//
+// The two closing messages are not decoration — they are the difference between
+// "you can fix this yourself with one flag" and "this needs whoever owns the
+// host". A run that printed the wrong one would send the reader to --apply for a
+// gap --apply cannot close.
+func TestBootstrapDryRunClosingMessage(t *testing.T) {
+	bootstrapFixture(t, "gremlins")
+	probeMissing(t, "gremlins") // installable: go is present
+	rec := &execRecorder{}
+	rec.install(t)
+
+	out, err := runBootstrap(t)
+	if err != nil {
+		t.Fatalf("dry run: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "--apply") {
+		t.Errorf("a dry run with installable work does not offer --apply:\n%s", out)
+	}
+	if strings.Contains(out, "host's owner") {
+		t.Errorf("a dry run with no refusals blamed the host's owner:\n%s", out)
+	}
+}
+
+// TestBootstrapDryRunWithRefusalClosingMessage: the other arm. --apply cannot
+// install a language runtime, so a run whose gap is a runtime must not offer it
+// as the remedy.
+func TestBootstrapDryRunWithRefusalClosingMessage(t *testing.T) {
+	bootstrapFixture(t, "gremlins")
+	probeMissing(t, "gremlins", "go") // the runtime itself is missing
+	rec := &execRecorder{}
+	rec.install(t)
+
+	out, err := runBootstrap(t)
+	if err == nil {
+		t.Fatalf("a dry run carrying a refusal exited 0:\n%s", out)
+	}
+	if !strings.Contains(out, "host's owner") {
+		t.Errorf("a refusal-carrying dry run does not name who has to act:\n%s", out)
+	}
+	if strings.Contains(out, "Re-run with --apply") {
+		t.Errorf("a missing runtime was offered --apply as the fix, which cannot work:\n%s", out)
+	}
+	if len(rec.argvs) != 0 {
+		t.Errorf("a dry run reached the host: %v", rec.argvs)
+	}
+}
+
 // TestBootstrapApplyInstalls: c-1. --apply runs exactly what the dry run
 // promised, in order — a verb whose preview and action differ is worse than one
 // with no preview.
