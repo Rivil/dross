@@ -476,8 +476,8 @@ func TestProjectSetGatesStateMapKeys(t *testing.T) {
 	})
 
 	t.Run("a valid key still writes", func(t *testing.T) {
-		if err := runCmd(t, Project(), "set", "board.state_map.verifying", "In Review"); err != nil {
-			t.Fatalf("board.state_map.verifying: %v", err)
+		if err := runCmd(t, Project(), "set", "board.state_map.uat", "In Review"); err != nil {
+			t.Fatalf("board.state_map.uat: %v", err)
 		}
 		if body := mustRead(t, path); !strings.Contains(body, `In Review`) {
 			t.Errorf("entry not written:\n%s", body)

@@ -60,6 +60,7 @@
   locked = true
 
 [[deferred]]
+  id = "9a70b04cd1817f37"
   text = "watch reports open ship-PR check/CI status in the digest"
   why = "Needs provider PR-list plumbing beyond what's wired today; its own follow-up phase (slug watch-pr-ci-status)."
   target = "watch-pr-ci-status"

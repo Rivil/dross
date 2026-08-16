@@ -54,16 +54,19 @@
   locked = true
 
 [[deferred]]
+  id = "1bcd0f352182ecf9"
   text = "dross phase insert --after/--before <slug> — single-command insertion between existing phases."
   why = "Phase 15 — the lifecycle verbs build on the slug model this phase establishes."
   target = "phase-lifecycle-commands"
 
 [[deferred]]
+  id = "6e9a60c539934c23"
   text = "dross phase move (reorder within a milestone) and dross phase rename (change a slug)."
   why = "Phase 15."
   target = "phase-lifecycle-commands"
 
 [[deferred]]
+  id = "24da6d2754488290"
   text = "Cross-milestone phase moves (moving a phase from one milestone's array to another)."
   why = "Milestone v0.4 non-goal; deferred beyond this milestone."
   target = "phase-lifecycle-commands"

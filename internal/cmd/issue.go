@@ -38,7 +38,7 @@ const (
 
 	statusPlanned    = "planned"
 	statusInProgress = "in-progress"
-	statusVerifying  = "verifying"
+	statusUAT        = "uat"
 )
 
 func statusLabel(s string) string { return "dross/status:" + s }
@@ -64,6 +64,7 @@ func Issue() *cobra.Command {
 		issueMilestoneSync(),
 		issueBacklogSync(),
 		issuePhaseSync(),
+		issueTaskSync(),
 		issueQuick(),
 		issuePull(),
 		issueDismiss(),

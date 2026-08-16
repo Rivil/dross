@@ -39,9 +39,9 @@ This shells out to mutation tools (currently Stryker for TS/JS/Svelte; other lan
 
 **Read both files before continuing.** They're the inputs for the LLM judgement step.
 
-Mark the board issue as verifying (no-op unless `[remote].board_sync` is on — safe to always run):
+Move the board issue to the UAT state (no-op unless `[remote].board_sync` is on — safe to always run). A phase awaiting a verdict is neither being worked nor delivered, so it gets its own state rather than sharing in-progress or shipped:
 ```
-dross issue phase-sync <phase> --status verifying
+dross issue phase-sync <phase> --status uat
 ```
 
 If mutation testing fails to run (e.g. Stryker not installed), surface the error to the user and ask:

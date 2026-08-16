@@ -66,21 +66,25 @@
   locked = true
 
 [[deferred]]
+  id = "bbfec942cd67b785"
   text = "Dedicated dimension→tool quality catalogs for non-Go languages (JS/Python/Rust/etc.)"
   why = "Mechanism is multi-language now; populating dedicated per-language catalogs is later work (Go-first non-goal)."
   target = "multilang-analyzer-catalogs"
 
 [[deferred]]
+  id = "3e10687c24c50dd5"
   text = "Cross-run quality trend tracking / scoring over time"
   why = "Chose gitignored per-run artifacts; durable trend tracking is a deliberate later call."
   target = "secure-quality-findings-lifecycle"
 
 [[deferred]]
+  id = "d81c7a7a91cd0358"
   text = "Full `dross quality` findings-state / lifecycle CLI"
   why = "This phase ships only the thin slice (run-dir, tool detection, scaffold writer); richer findings-state tracking is a later phase."
   target = "secure-quality-findings-lifecycle"
 
 [[deferred]]
+  id = "615787b028769f79"
   text = "Auto-remediation (applying fixes directly)"
   why = "Hard milestone non-goal — dross-quality stays a read-only audit that emits a remediation phase; recorded as a boundary marker so no planner adds it."
   dismissed = true

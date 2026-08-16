@@ -419,9 +419,14 @@ func (c *JiraClient) ensureVersion(name, description string) (string, error) {
 var defaultJiraStateMap = map[string]string{
 	"planned":     "To Do",
 	"in-progress": "In Progress",
-	"verifying":   "In Progress",
 	"shipped":     "Done",
 	"complete":    "Done",
+	// Task-level and verdict states (board-task-mirror). Jira states come from
+	// the project's workflow scheme, which dross never edits — an unavailable
+	// transition warns and skips, as it already does.
+	"task-in-progress": "In Progress",
+	"task-in-review":   "In Review",
+	"uat":              "In Review",
 }
 
 // resolveJiraState maps a dross lifecycle status to a Jira status name: the

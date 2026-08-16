@@ -42,6 +42,7 @@
   locked = true
 
 [[deferred]]
+  id = "2d576654430ab9a2"
   text = "A repoint/heal verb — a --fix that rewrites a rotted red-proof pin to the phase's recorded fork point, instead of the hand-edit the c-5 pin needed."
   why = "Doctor naming the rotted pin and the fork-point SHA is enough for this phase; automating the edit is its own capability."
   target = "red-proof-repoint"

@@ -46,16 +46,19 @@
   locked = true
 
 [[deferred]]
+  id = "46744487f204b5cd"
   text = "Make dross itself drain pre-existing faults: promote project/hard/r-02 to a builtin rule, and give verify a survivor lifecycle — classify each mutant/finding as in-diff, routed, or accepted-with-reason, and stop re-emitting inert FLAGs run over run."
   why = "This phase's verify carried 77 survivors, 75 of them pre-existing and outside its diff, re-listed unchanged from earlier phases. r-02 (added this run) states the policy for this repo; the enforcement is a code change to the builtin rule catalog and verify's finding lifecycle, unrelated to completion-state truth."
   target = "survivor-lifecycle"
 
 [[deferred]]
+  id = "4fca23d8de86dd77"
   text = "Drain the standing 75 pre-existing mutation survivors (status.go, phase.go 307/309/735/737, ship.go, doctor.go, hints.go, env.go, gitignore.go, footer_coverage.go and the rest) accumulated before this phase."
   why = "Routed rather than fixed here: they sit outside completion-state-truth's diff and its six criteria. Held with the r-02 enforcement work so the rule and the first drain land together."
   dismissed = true
 
 [[deferred]]
+  id = "ae6631594447a24e"
   text = "Widen the narrated-command parity guard past backticked forms. TestNarratedCommandsResolveAgainstTheTree lifts `dross <verb> [<sub>]` only from backticked spans inside string literals, so an unbackticked narrated invocation escapes it — doctor.go:192 (\"    Fix: dross project set --unset board.state_map.%s\") and hooks.go:57-58 (\"dross pause --auto\", \"dross reentry\") are live examples today. A concatenation-split form (\"…`dross \" + \"checkout`…\") escapes it for the same reason, since each literal is inspected separately."
   why = "Routed, not fixed here: the backtick scope is exactly what t-13's task description and test contract specified, and all four contract items are met. The narrations c-1 actually depends on — milestone.go:98 and phase_checkout.go:88 — are backticked and covered, so no criterion is affected. The residual is about unrelated commands (project set, pause, reentry) and belongs with the command-reference parity work rather than as a fourth verify-driven scope addition to this phase."
   target = "config-value-truth"

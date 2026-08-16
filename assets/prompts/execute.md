@@ -73,7 +73,11 @@ If empty: jump to step 2. Otherwise mark in progress:
 
 ```
 dross task status <phase> $TASK_ID in_progress
+dross issue task-sync <phase> $TASK_ID --status task-in-progress
 ```
+The second line mirrors this task onto the board and moves its card. It is a
+no-op when board sync is off, so call it unconditionally — the same way the
+phase-sync above is called.
 
 Read the task with `dross task show <phase> $TASK_ID`. Display its full record to the user.
 
@@ -219,7 +223,11 @@ dross changes record <phase> <task-id> --files <task.files (csv)> --commit $SHA 
   --landmark "feature=<capability>, symbol=<Symbol>, loc=<file:line>, what=<one line what>"
 dross task status <phase> <task-id> done
 dross state touch "executed <task-id> (<task.title>)"
+dross issue task-sync <phase> <task-id> --status task-in-review
 ```
+The task's card moves to a review state as the commit lands — the work is
+done and is now waiting on the phase's verdict, which is a different thing
+from still being worked. No-op when board sync is off.
 
 Continue to the 1g post-commit gate.
 

@@ -435,7 +435,7 @@ func TestScriptAllChainsWithAndNotSemicolon(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ScriptAll = %v", err)
 	}
-	want := "cd '/srv/x' && 'rm' '-rf' 'reports/gremlins/x.json' && 'mkdir' '-p' 'reports/gremlins'\n"
+	want := "cd '/srv/x' && 'rm' '-rf' 'reports/gremlins/x.json' && exec 'mkdir' '-p' 'reports/gremlins'\n"
 	if script != want {
 		t.Errorf("script =\n%q\nwant\n%q", script, want)
 	}
@@ -487,7 +487,47 @@ func TestScriptStillDelegatesToScriptAll(t *testing.T) {
 	if one != all {
 		t.Errorf("Script and ScriptAll disagree:\n%q\n%q", one, all)
 	}
-	if one != "cd '/srv/x' && 'gremlins' 'unleash'\n" {
+	if one != "cd '/srv/x' && exec 'gremlins' 'unleash'\n" {
 		t.Errorf("the single-command script shape changed: %q", one)
+	}
+}
+
+// TestScriptExecsTheToolInsteadOfForkingIt.
+//
+// Measured on helicon 2026-08-16: gremlins forked by the `bash -s` shell this
+// script is piped to dies at startup — `Failed to find executable : Is a
+// directory`, exit 1, no report written — while the identical invocation runs
+// clean when the shell exec's it. `dross verify` read that as an unmeasured
+// package and the whole mutation leg went dark, which is a silent-partial of
+// exactly the kind the verify verdict is supposed to refuse.
+//
+// So the `exec` is a correctness property of the remote runner, not formatting:
+// pinned here, on both the single-command and the chained form, and pinned as
+// exec'ing the LAST command only — an `exec` on an earlier one would replace the
+// shell and the rest of the chain would never run at all.
+func TestScriptExecsTheToolInsteadOfForkingIt(t *testing.T) {
+	one, err := Script(target(), []string{"gremlins", "unleash"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(one, "exec 'gremlins'") {
+		t.Errorf("the tool is forked rather than exec'd: %q", one)
+	}
+
+	chain, err := ScriptAll(target(), [][]string{
+		{"rm", "-rf", "reports/gremlins/x.json"},
+		{"mkdir", "-p", "reports/gremlins"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(chain, "&& exec 'mkdir'") {
+		t.Errorf("the last command of a chain is forked rather than exec'd: %q", chain)
+	}
+	if strings.Contains(chain, "exec 'rm'") {
+		t.Errorf("an earlier command is exec'd — the rest of the chain would never run: %q", chain)
+	}
+	if strings.Count(chain, "exec ") != 1 {
+		t.Errorf("want exactly one exec in the chain, got %q", chain)
 	}
 }

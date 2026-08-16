@@ -44,6 +44,7 @@
   locked = true
 
 [[deferred]]
+  id = "fee0d326fde9b275"
   text = "An un-route command (clear a deferred item's `target` back to someday). `dross deferred route --target \"\"` currently errors, so dropping an already-routed item still needs hand-editing — the remaining hand-edit case once dismiss is someday-only."
   why = "Minor ergonomic gap surfaced while locking dismiss_scope; not needed to close v0.5 criterion #4."
   target = "deferred-unroute-command"

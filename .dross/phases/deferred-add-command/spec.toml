@@ -60,6 +60,7 @@
   locked = true
 
 [[deferred]]
+  id = "20d239bfa5341306"
   text = "Routed deferred items never reach the board — syncBacklog skips anything with a target, so a routed finding is invisible on the tracker. This phase makes the gap asymmetric rather than closing it: `deferred add --target X` mirrors its item once (c-6 is unconditional), but no later sync ever updates that issue, while the same item routed from an existing entry gets no issue at all. Board coverage of routed items is now verb-dependent, and add-created routed issues go stale on the first text edit."
   why = "Board honesty is board-sync-truth's remit, not this verb's. Recorded 2026-08-13 from the plan review, which found the asymmetry the D2 decision introduces."
   target = "board-sync-truth"

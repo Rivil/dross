@@ -52,6 +52,7 @@
   locked = true
 
 [[deferred]]
+  id = "b4794de89d962714"
   text = "dross deferred dismiss <source> <idx> (retire a done/wontfix deferred item to a 'dismissed' state, no hand-editing of specs) + relax /dross-inbox §0 so the deferred second-source still works when board_sync is off."
   why = "Two gaps surfaced dogfooding /dross-inbox after shipping this phase: there is no clean dismiss for deferred items (dismiss currently means hand-editing merged specs), and the §0 board-sync hard-stop blocks the local deferred source entirely on board-less repos."
   target = "deferred-triage-gaps"

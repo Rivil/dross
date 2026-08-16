@@ -40,6 +40,12 @@ type Board struct {
 	// "someday:02-auth#1") to its readable issue id, so backlog sync reconciles
 	// the same items instead of duplicating them.
 	Backlog map[string]string `json:"backlog,omitempty"`
+	// Tasks maps "<phase-id>/<task-id>" to the readable issue id mirroring
+	// that plan task. Keyed by the pair rather than by the bare task id
+	// because task ids are only unique WITHIN a phase — every phase has a
+	// t-1, and a bare key would make the second phase's t-1 overwrite the
+	// first's mapping and then re-title its issue.
+	Tasks map[string]string `json:"tasks,omitempty"`
 	// Dismissed holds inbound issue ids the user triaged away; they won't
 	// resurface in /dross-inbox.
 	Dismissed []string `json:"dismissed,omitempty"`
@@ -100,6 +106,9 @@ func (b *Board) ensureMaps() {
 	if b.Backlog == nil {
 		b.Backlog = map[string]string{}
 	}
+	if b.Tasks == nil {
+		b.Tasks = map[string]string{}
+	}
 }
 
 // --- links ---
@@ -134,6 +143,23 @@ func (b *Board) PhaseIssue(phaseID string) (string, bool) {
 // stale key would keep shadowing the live issue on every sync.
 func (b *Board) DeletePhase(phaseID string) {
 	delete(b.Phases, phaseID)
+}
+
+// TaskKey is the board key for one plan task. Exported so callers cannot
+// re-derive the "<phase>/<task>" shape slightly differently and orphan an
+// existing mapping.
+func TaskKey(phaseID, taskID string) string { return phaseID + "/" + taskID }
+
+// SetTask records the readable issue id for one plan task.
+func (b *Board) SetTask(phaseID, taskID, issue string) {
+	b.ensureMaps()
+	b.Tasks[TaskKey(phaseID, taskID)] = issue
+}
+
+// TaskIssue returns the stored issue id for a plan task and whether it's linked.
+func (b *Board) TaskIssue(phaseID, taskID string) (string, bool) {
+	n, ok := b.Tasks[TaskKey(phaseID, taskID)]
+	return n, ok
 }
 
 // SetQuick records the readable issue id for a quick-task ref.
