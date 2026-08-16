@@ -450,9 +450,15 @@ func (c *YouTrackClient) ensureEpic(name, description string) (string, error) {
 var defaultYouTrackStateMap = map[string]string{
 	"planned":     "Open",
 	"in-progress": "In Progress",
-	"verifying":   "In Progress",
 	"shipped":     "Fixed",
 	"complete":    "Verified",
+	// Task-level and verdict states (board-task-mirror). "In Review" and
+	// "UAT" are not in a stock YouTrack bundle; a missing value is created in
+	// the project's OWN bundle rather than skipped, so these are reachable on
+	// a fresh project.
+	"task-in-progress": "In Progress",
+	"task-in-review":   "In Review",
+	"uat":              "UAT",
 }
 
 // resolveYouTrackState maps a dross lifecycle status to a YouTrack State value:

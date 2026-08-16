@@ -115,7 +115,19 @@ var MilestoneStatuses = newSet("", "planning", "active", "complete")
 // Empty is rejected: a blank status maps to no board state, and it is never a
 // request to derive one — syncPhase already derives from the plan when
 // --status is absent.
-var LifecycleStatuses = newSet("", "planned", "in-progress", "verifying", "shipped", "complete")
+// "verifying" was retired by board-task-mirror: "uat" replaced it at its only
+// emitting call site, and a member nothing emits is a state-map key nothing
+// will ever reach — the precise thing the divergence guard forbids. A repo
+// whose [board].state_map still overrides "verifying" gets a stale-key issue
+// from `dross doctor`, which is the surface that exists for exactly this.
+//
+// The last three are TASK- and verdict-level states (board-task-mirror). They
+// extend this same set rather than starting a second vocabulary: there is one
+// override point ([board].state_map) and one build-failing divergence guard,
+// and a second mechanism would let the two drift — which is the exact bug this
+// set was introduced to close.
+var LifecycleStatuses = newSet("", "planned", "in-progress", "shipped", "complete",
+	"task-in-progress", "task-in-review", "uat")
 
 // RuntimeModes is the set of [runtime].mode values.
 //

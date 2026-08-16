@@ -233,7 +233,7 @@ wave = 1
 	}
 
 	// Second sync — link exists, so it PATCHes + PUTs labels, no new POST.
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", "verifying"); err != nil {
+	if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", "uat"); err != nil {
 		t.Fatalf("phase-sync update: %v", err)
 	}
 	if issuePosts != 1 {
@@ -1757,7 +1757,7 @@ func TestIssuePhaseSyncNormalizesStatusBeforeUse(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			_, _ = io.WriteString(w, `{"id":"1000","key":"PROJ-1"}`)
 		case r.URL.Path == "/rest/api/3/issue/PROJ-1/transitions" && r.Method == "GET":
-			_, _ = io.WriteString(w, `{"transitions":[{"id":"21","name":"In Progress","to":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}}]}`)
+			_, _ = io.WriteString(w, `{"transitions":[{"id":"21","name":"In Progress","to":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}},{"id":"31","name":"In Review","to":{"name":"In Review","statusCategory":{"key":"indeterminate"}}}]}`)
 		case r.URL.Path == "/rest/api/3/issue/PROJ-1/transitions" && r.Method == "POST":
 			transitionPosts++
 			w.WriteHeader(http.StatusNoContent)
@@ -1780,14 +1780,14 @@ func TestIssuePhaseSyncNormalizesStatusBeforeUse(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", " Verifying"); err != nil {
-				t.Fatalf(`--status " Verifying" must be accepted — the map lookup normalizes, so the validator must too: %v`, err)
+			if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", " UAT"); err != nil {
+				t.Fatalf(`--status " UAT" must be accepted — the map lookup normalizes, so the validator must too: %v`, err)
 			}
 		})
 	})
 
-	if got := labelsOf(createdFields); !containsStr(got, statusLabel(statusVerifying)) {
-		t.Errorf("labels = %v, want %q — the raw flag value reached statusLabel", got, statusLabel(statusVerifying))
+	if got := labelsOf(createdFields); !containsStr(got, statusLabel(statusUAT)) {
+		t.Errorf("labels = %v, want %q — the raw flag value reached statusLabel", got, statusLabel(statusUAT))
 	}
 	if transitionPosts != 1 {
 		t.Errorf("transition POSTs = %d, want 1 — the raw value missed the state map", transitionPosts)
@@ -1814,7 +1814,7 @@ func TestIssuePhaseSyncStillDerivesWithoutTheFlag(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			_, _ = io.WriteString(w, `{"id":"1000","key":"PROJ-1"}`)
 		case r.URL.Path == "/rest/api/3/issue/PROJ-1/transitions" && r.Method == "GET":
-			_, _ = io.WriteString(w, `{"transitions":[{"id":"21","name":"In Progress","to":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}}]}`)
+			_, _ = io.WriteString(w, `{"transitions":[{"id":"21","name":"In Progress","to":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}},{"id":"31","name":"In Review","to":{"name":"In Review","statusCategory":{"key":"indeterminate"}}}]}`)
 		case r.URL.Path == "/rest/api/3/issue/PROJ-1/transitions" && r.Method == "POST":
 			w.WriteHeader(http.StatusNoContent)
 		// The phase resolver's label-index read, tracker query and cache
@@ -1877,11 +1877,11 @@ func TestIssuePhaseSyncStatusFlagHelpNamesTheSet(t *testing.T) {
 // vocabulary to the Set both forge state maps key on.
 //
 // The membership loop is the load-bearing half: retyping any of these constants
-// to a value the Set does not carry — statusVerifying as "verify", say — fails
+// to a value the Set does not carry — statusUAT as "verify", say — fails
 // here rather than silently at sync time on a real board, which is how the
 // planning/planned drift survived as long as it did.
 func TestLifecycleVocabularyIsTheConfigenumSet(t *testing.T) {
-	for _, s := range []string{statusPlanned, statusInProgress, statusVerifying} {
+	for _, s := range []string{statusPlanned, statusInProgress, statusUAT} {
 		if !configenum.LifecycleStatuses.Has(s) {
 			t.Errorf("issue.go declares lifecycle literal %q, which is not a configenum.LifecycleStatuses member (%s)", s, configenum.LifecycleStatuses.List())
 		}

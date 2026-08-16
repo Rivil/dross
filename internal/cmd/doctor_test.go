@@ -240,7 +240,7 @@ func TestDoctorFlagsUnknownStateMapKey(t *testing.T) {
 		return out, err
 	}
 
-	clean, cleanErr := run(t, `verifying = "In Review"`)
+	clean, cleanErr := run(t, `uat = "In Review"`)
 	if cleanErr != nil {
 		t.Fatalf("a [board] block with only valid state_map keys must pass; out:\n%s", clean)
 	}
