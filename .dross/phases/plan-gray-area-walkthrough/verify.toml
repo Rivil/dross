@@ -1,0 +1,54 @@
+[verify]
+  phase = "plan-gray-area-walkthrough"
+  generated_at = 0001-01-01T00:00:00Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-16T00:22:47.960715Z
+
+[summary]
+  mutation_status = "out-of-scope"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  mutants_in_scope = 0
+  unclassified_in_scope = 0
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/prompt_gray_area_test.go:TestPlanPromptWalksGrayAreas", "internal/cmd/prompt_gray_area_test.go:TestPlanPromptGuardsReadTheShippedFile"]
+  notes = "POSITION is asserted, not just presence: the section must sit between the decomposition and the proposal, because a walk placed after the proposal is a post-mortem — the user reacts to a finished plan, which is the framing the criterion exists to fix. The section is located by heading and every other assertion is scoped to it, so a phrase found elsewhere in plan.md cannot satisfy a claim about the walk. TestPlanPromptGuardsReadTheShippedFile pins that these read the real assets/prompts/plan.md: a guard green against a fixture while the shipped prompt regressed reports health it is not measuring."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/prompt_gray_area_test.go:TestPlanWalkHasNoSelectionStep", "internal/cmd/prompt_gray_area_test.go:TestPlanAndSpecWalkAgree"]
+  notes = "The criterion names three distinct regressions and each is asserted separately: a selection step, a pre-ticked checklist, and silent truncation. multiSelect is allowed to APPEAR only when forbidden, since the prompt has to be able to name the thing it rules out. The off-ramp is required to exist and to be the only early exit — 'never self-truncate' is asserted by phrase, because a walk that quietly stops is indistinguishable from one that never ran. TestPlanAndSpecWalkAgree checks spec.md still carries each rule BEFORE comparing, so parity cannot pass by both files being wrong together."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/prompt_gray_area_test.go:TestPlanGrayAreasAreDecompositionScoped"]
+  notes = "Both halves of the boundary are required, and the test fails on either alone. With only 'what qualifies', the walk drifts up into spec's `locked = true` decisions — re-litigating exactly what locked exists to prevent. With only 'what does not', it has no positive definition and drifts down into code patterns the executor resolves in the act of writing, stalling the plan on answers the user has no basis to give. The qualifying examples are asserted by name (task boundaries, wave ordering) rather than by the presence of a paragraph."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/prompt_gray_area_test.go:TestPlanWalkMayBeEmpty"]
+  notes = "Two things are required, because either alone leaves the failure open: that there is no minimum count, and that the prompt says HOW to report having none. An unstated skip reads as a skipped step to the next reader, and a prompt that must produce areas will produce them — the invented ones being indistinguishable from the real ones until a few have been answered, which is how a walk meant to catch real uncertainty teaches someone to click through it."
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation_status = out-of-scope: the adapters ran and found mutants, but every one landed in a file this phase never touched. That is correct rather than a gap — the phase changed assets/prompts/plan.md, a docs table and one test file, and there is no product Go code in its diff to mutate. Per the non-threshold branch the verdict rests on criterion coverage alone, and the mutation leg neither passes nor fails the phase. 90 out-of-scope survivors were filtered; 0 in-diff, 0 unclassified."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The prompt change is guarded by grep assertions rather than by mutation, which is the only mechanism available for a markdown surface. They are written to fail on the specific regressions the criteria name — a selection step, a lost boundary half, a missing empty-outcome — rather than on the section merely existing."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran locally: helicon has been unreachable since mid-session (ssh exit 255 — this machine's Proton Pass ssh-agent stopped serving the key). The grant was temporarily revoked to force the local path and restored afterwards."
