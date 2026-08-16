@@ -295,13 +295,19 @@ func TestVerifyPrintsLifecycleCounts(t *testing.T) {
 	lifecycleRepo(t, "counts")
 
 	out := runVerifyCapturing(t, "01-counts")
-	if !strings.Contains(out, "survivors: 1 in-diff, 0 routed, 0 accepted, 1 unclassified") {
+	if !strings.Contains(out, "survivors: 1 in-diff, 0 routed, 0 accepted, 1 out-of-diff unclassified") {
 		t.Errorf("lifecycle summary line missing or wrong:\n%s", out)
 	}
 	// The unrouted, unaccepted out-of-scope survivor must NOT read as zero
 	// unclassified — that is the state the whole phase exists to surface.
-	if strings.Contains(out, "0 unclassified") {
+	if strings.Contains(out, "0 out-of-diff unclassified") {
 		t.Errorf("an unrouted out_of_scope survivor read as zero unclassified:\n%s", out)
+	}
+	// mutation-score-truth: the in-diff survivor is undispositioned, so the
+	// gate line must say the gate is OPEN. Before, this run printed
+	// "0 unclassified" while verify.toml recorded unclassified_in_scope = 1.
+	if !strings.Contains(out, "VERDICT GATE IS OPEN") {
+		t.Errorf("an undispositioned in-diff survivor did not open the gate on stdout:\n%s", out)
 	}
 }
 

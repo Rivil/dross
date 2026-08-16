@@ -191,7 +191,7 @@ A value read out of `.dross/project.toml` is untrusted input to git, not a trust
 - `argfence.PolicyFor` (per-tool policy table — separator vs reject — read by both the runtime call sites and the audit gate) — `internal/argfence/policy.go:120`
 - `validateGitRef` (pre-exec ref guard behind the four guarded switch helpers) — `internal/cmd/refguard.go:32`
 - `gitRefArgs` / `gitRefPathArgs` (separator-carrying argv builders) — `internal/cmd/gitargs.go:45`
-- `buildUnleashArgs` (mutation runners refuse a leading-dash derived value before exec, returning a nil report rather than an empty one) — `internal/mutation/gremlins.go:406`
+- `buildUnleashArgs` (mutation runners refuse a leading-dash derived value before exec, returning a nil report rather than an empty one) — `internal/mutation/gremlins.go:409`
 - `gitHubPRStatus` (`gh` argv: derived values behind the separator or in their flag's value slot, flags ahead of it) — `internal/ship/merged.go:59`
 - `astGrepArgv` (ast-grep file operand behind an end-of-options token; lang checked against the closed indexer set) — `internal/codex/ast_grep.go:187`
 - `TestSecurePromptFencesScannerOperands` (semgrep is agent-driven with no Go call site, so its operand fencing is guidance in `secure.md` gated by a prompt-content test) — `internal/cmd/secure_prompt_test.go:66`
@@ -462,8 +462,8 @@ A phase's mutation score covers only the files that phase touched: a survivor in
 - `IsTestdataPath` (one segment-scoped testdata rule shared by the drain and verify) — `internal/verify/verify.go:229`
 - `RunScoped` — `internal/verify/verify.go:337`
 - `MutationOutOfScope` (all-filtered run status) — `internal/verify/verify.go:51`
-- `printScopeSummary` (scoped file list + `(+N more)` overflow) — `internal/cmd/verify.go:578`
-- `TestFilterReportDropsTestdataEntirely` (fixtures leave through neither exit) — `internal/verify/verify_test.go:602`
+- `printScopeSummary` (scoped file list + `(+N more)` overflow) — `internal/cmd/verify.go:612`
+- `TestFilterReportDropsTestdataEntirely` (fixtures leave through neither exit) — `internal/verify/verify_test.go:592`
 
 _introduced mutation-diff-scope · cd0b5f6 · extended survivor-drain · f508b72_
 
@@ -471,9 +471,9 @@ _introduced mutation-diff-scope · cd0b5f6 · extended survivor-drain · f508b72
 
 Language-specific mutation tools normalised to one Report (Stryker for TS/JS/Svelte, Gremlins for Go invoked per-package). Every mutant is attributed to its own file via per-file `FileStat` counters on the Report, which is what lets a report be rescored over a subset of files — and each adapter re-prefixes its native path keys to repo-relative form first, so package-granular Gremlins and file-granular Stryker/Stryker.NET reports (whose `FullPath` keys are absolute) both match a phase's change set. Stryker is invoked as `npx @stryker-mutator/core` (not the deprecated bare `stryker`) at an **exact pinned version** rather than whatever the registry currently serves as latest — the same pin backs the argv and the install hint, so a compromised release can't be pulled into a verify run — with a `[mutation.stryker] workdir` monorepo knob that round-trips repo-relative paths. In docker runtime mode the exec prefix is derived from `runtime.test_command` by `dockerPrefix`, whose leading binary must be **exactly** `docker` (a field check, not `HasPrefix`) so a committed `dockerevil …` can't promote an arbitrary PATH binary into the adapter's argv under clone-and-run. A package that contributes nothing to the merged score is never silently absent: Gremlins records it as a typed `Unmeasured` entry that distinguishes a missing report from an unreadable one from a genuinely zero-covered package, which is what lets the survivor drain treat an unmeasured package as fatal rather than as zero debt. The Stryker adapter's own process seams — report missing vs unreadable, parse error, an unknown future mutant status, and the Stryker.NET build-cmd prefix — are pinned by tests rather than accepted as untestable network/process boundaries. Beyond those seams the Stryker adapter is now proven **end to end** against a committed TypeScript fixture: the real tool instruments the fixture, runs its vitest suite per mutant and writes a report the adapter reads back — the first check that exercises the argv, the config, the report path and the output format together, where every other Stryker test parses a canned report and would not notice two of them drifting apart. The fixture keeps one deliberately uncovered function so the run yields both killed and surviving mutants, which is what proves the report distinguishes them rather than reporting everything as killed. That leg is gated on the Node toolchain and skips with a message naming the tool and the install line when it is absent (locked `toolchain_gate_not_ci_install`: installing Stryker in CI pulls a large npm tree into a deliberately hardened workflow, so it is a decision of its own, not a step appended in passing). Dispatch is guarded separately and by extension — every extension the adapters claim must reach one, cross-checked against the adapters' own `Supports` in both directions — because the realistic regression is a single entry dropped from a switch, and that failure presents as a phase quietly measuring less with a green verify and no line saying anything was missed. `dross doctor` reports a missing local toolchain for the adapters a project actually configures, as an advisory: a Go-only clone is never failed for lacking Node, and a gremlins-only repo is never warned about it.
 
-- `Adapter` — `internal/mutation/adapter.go:122`
+- `Adapter` — `internal/mutation/adapter.go:125`
 - `Report` — `internal/mutation/adapter.go:18`
-- `FileStat` (per-file mutant counters backing subset rescoring) — `internal/mutation/adapter.go:50`
+- `FileStat` (per-file mutant counters backing subset rescoring) — `internal/mutation/adapter.go:53`
 - `Gremlins.Run` (per-package invocation + path re-prefix) — `internal/mutation/gremlins.go:139`
 - `Unmeasured` (typed per-package score exclusion: missing / unreadable / zero-covered) — `internal/mutation/gremlins.go:110`
 - `Stryker.Run` — `internal/mutation/stryker.go:61`
@@ -775,19 +775,21 @@ Every surviving mutant a verify run reports carries exactly one state — in-dif
 - `survivor.Accept` (reason-gated atomic read-modify-write) — `internal/survivor/store.go:289`
 - `survivor.Retire` (retire by key or `--stale`; orphaned categories dropped, all-or-nothing multi-key) — `internal/survivor/store.go:307`
 - `survivor.Derive` (coverage + operator-applicability evidence; ceiling dominates killability) — `internal/survivor/evidence.go:290`
-- `survivor.StaleAcceptances` (clock-free; file-gone vs text-gone vs unverifiable) — `internal/survivor/stale.go:55`
+- `survivor.StaleAcceptances` (clock-free; file-gone vs text-gone vs unverifiable) — `internal/survivor/stale.go:64`
 - `verify.Classify` (exactly one state per survivor, via a fakeable Identifier seam) — `internal/verify/lifecycle.go:108`
 - `verify.ApplyLifecycle` (stamps state onto in-scope and out-of-scope records alike) — `internal/verify/lifecycle.go:187`
-- `Survivor` (dross survivor accept/route/list) — `internal/cmd/survivor.go:25`
-- `survivorRetire` (CLI retirement path — no hand-editing of survivors.toml) — `internal/cmd/survivor.go:200`
+- `Survivor` (dross survivor accept/route/list) — `internal/cmd/survivor.go:26`
+- `survivorRetire` (CLI retirement path — no hand-editing of survivors.toml) — `internal/cmd/survivor.go:201`
 - `survivorDrain` (repo-wide undisposed gate; unmeasured package fatal, testdata excluded, self-routing refused) — `internal/cmd/survivor_drain.go:308`
-- `workTreeIdentifier` (verify resolves identity against the working tree) — `internal/cmd/verify.go:609`
+- `workTreeIdentifier` (verify resolves identity against the working tree) — `internal/cmd/verify.go:643`
 - `TestAttributionCeilingIsReal` (live fixture proving the gremlins NOT-COVERED ceiling the shared category rests on) — `internal/mutation/ceiling_test.go:175`
 - `TestRepoAcceptanceReasonsCiteRealTests` (every acceptance reason names a checkable justification) — `internal/survivor/reasons_repo_test.go:181`
 - `TestSurvivorDrainBacklogClosed` (CI gate: the routed backlog is empty and nothing was re-routed past the phase) — `internal/cmd/survivor_backlog_repo_test.go:237`
 - verify.md §2 four-state close-out table + the two drain verbs — `assets/prompts/verify.md:78`
+- `StaleAcceptancesAgainst` (staleness also asks whether the SURVIVOR is gone, not only the source line) — `internal/survivor/stale.go:78`
+- `printLifecycleSummary` (stdout takes the gate count from the same summary verify.toml writes) — `internal/cmd/verify.go:733`
 
-_introduced survivor-lifecycle · a6b366d · extended survivor-drain · 3a5fafd_
+_introduced survivor-lifecycle · a6b366d · extended survivor-drain · 3a5fafd · extended mutation-score-truth · 8995b8c_
 
 ### Task lifecycle
 
@@ -871,7 +873,7 @@ _introduced remote-test-runner · 3055f70_
 
 ### Verification
 
-Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. The mutation leg is scoped to the phase's own diff (see **Mutation diff scoping**), so the score and verdict rest only on files the phase touched, survivors are weighted by their in-hunk/inherited origin tag, and an all-filtered run resolves through the non-threshold branch as `out-of-scope` rather than a bare 0.00. The mutation verdict gates on an **absolute count** of undisposed in-scope survivors, not a score ratio: `UnclassifiedInScope` counts only survivors carrying no disposition, out-of-scope ones never reach it, and any single unclassified survivor inside the phase's own diff fails the phase — there is no tolerance band and the prompt carries no score cutoff. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. Verify's own wrap-up resolves "the next phase" from the **milestone's `phases` array**, not from `dross phase list`: that command is a directory listing of SCAFFOLDED phases, so using it made every unstarted successor invisible and narrated a phase 9 of 14 as the last in its milestone (2026-08-13), sending the user to the wrong next command. `phase list` remains the fallback only when no milestone is active. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
+Map acceptance criteria to tests and run mutation testing; decide pass/partial/fail. The mutation leg is scoped to the phase's own diff (see **Mutation diff scoping**), so the score and verdict rest only on files the phase touched, survivors are weighted by their in-hunk/inherited origin tag, and an all-filtered run resolves through the non-threshold branch as `out-of-scope` rather than a bare 0.00. One formula computes the score everywhere — `mutation.PooledScore`, killed/(killed+survived+timeout), pooled across language legs. Three used to disagree: verify.toml took the MEAN across legs, telemetry pooled with timeouts excluded, and the adapter doc claimed a fourth thing none of them did, so a phase's judgement depended on which surface you read. Pooling because a mean over legs of unequal size hands the smaller leg the louder vote (1/1 beside 0/9 is a 0.10 suite the mean called 0.50); timeouts in the denominator because a mutant that timed out was not killed, and excluding it let a suite that hangs on its hardest mutants outscore one that fails them. The score is printed **with the count it was computed over**, plus the uncoverable share when non-zero — 0.90 over 10 mutants and over 400 are the same number and not the same evidence, and a survivor the tooling cannot reach is a different fact from one the tests missed. The mutation verdict gates on an **absolute count** of undisposed in-scope survivors, not a score ratio: `UnclassifiedInScope` counts only survivors carrying no disposition, out-of-scope ones never reach it, and any single unclassified survivor inside the phase's own diff fails the phase — there is no tolerance band and the prompt carries no score cutoff. An adapter failure records `LanguageRun.Error` plus a FLAG finding and continues — other language legs' reports are never discarded — and a `[mutation] adapters` allowlist filters adapters by name, with filtered files falling to Skipped rather than silently passing. Verify's own wrap-up resolves "the next phase" from the **milestone's `phases` array**, not from `dross phase list`: that command is a directory listing of SCAFFOLDED phases, so using it made every unstarted successor invisible and narrated a phase 9 of 14 as the last in its milestone (2026-08-13), sending the user to the wrong next command. `phase list` remains the fallback only when no milestone is active. A resolved verdict is recorded to telemetry exactly once: `finalizeVerify` writes a `finalized = true` marker back into verify.toml as the idempotency guard (works under telemetry opt-out and log rotation; a re-run reports "already recorded", exit 0), stamps verify pending/outcome events with the phase id, and backs the auto-heal in the ship / phase-complete gates so a resolved-but-unrecorded verdict can't sit unfinalized.
 
 - `Verify` (CLI) — `internal/cmd/verify.go:31`
 - `verify.Run` — `internal/verify/verify.go:326`
@@ -882,8 +884,10 @@ Map acceptance criteria to tests and run mutation testing; decide pass/partial/f
 - verify.md §2 verdict rules (diff-scoping guarantee, out-of-scope status, origin-weighted survivors) — `assets/prompts/verify.md:34`
 - `TestVerifyPromptOffloadGuidance` (verify.md §2 size-gated offload — large criterion-mapping reads fan to read-only subagents; judgement + verdict stay main-loop) — `internal/cmd/verify_prompt_test.go:20`
 - survivor lifecycle wiring (loads the acceptance store + cross-phase routed map, persists key/state into tests.json, prints the four counts, NOTEs stale acceptances without touching the verdict — see **Survivor lifecycle**) — `internal/cmd/verify.go:122`
+- `mutation.PooledScore` (the one formula: pooled across legs, timeouts in the denominator) — `internal/mutation/score.go:31`
+- `printOverallScore` (score printed with its in-scope denominator and uncoverable share) — `internal/cmd/verify.go:578`
 
-_e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79 · extended mutation-diff-scope · cd0b5f6 · extended survivor-lifecycle · a6b366d · extended survivor-drain · e22b16b · extended guard-remedy-ordering · a07a56e_
+_e31bdbd · extended context-hygiene · extended verify-auto-finalize · extended subagent-offload-audit · 5c21b79 · extended mutation-diff-scope · cd0b5f6 · extended survivor-lifecycle · a6b366d · extended survivor-drain · e22b16b · extended guard-remedy-ordering · a07a56e · extended mutation-score-truth · 4fad274_
 
 ### Watch heartbeat (dross-watch)
 

@@ -18,6 +18,15 @@ const (
 	// acceptance was recorded against is nowhere in it, so the mutant it
 	// silenced can no longer be produced.
 	ReasonTextGone = "mutant no longer produced"
+	// ReasonSurvivorGone — the source text is still there, but the latest run
+	// produced no survivor with this key. The mutant is killed now, or the
+	// adapter stopped emitting it.
+	//
+	// This is the case the other two structurally cannot see: they ask whether
+	// the SOURCE still exists, and here it does. An acceptance in this state
+	// could previously only be retired by hand-supplied key, which meant the
+	// verb that exists to find stale entries could not find them.
+	ReasonSurvivorGone = "survivor no longer reported"
 )
 
 // Stale is one acceptance whose subject is gone, with why.
@@ -53,6 +62,20 @@ type Report struct {
 // The signature deliberately takes no clock, deadline or TTL. If one ever
 // appears here, the no_acceptance_ttl lock has been broken.
 func StaleAcceptances(root string, s *Store) Report {
+	return StaleAcceptancesAgainst(root, s, nil)
+}
+
+// StaleAcceptancesAgainst is StaleAcceptances plus the survivor-gone check.
+//
+// observed is the set of survivor keys the latest run actually reported. A NIL
+// observed skips that check entirely — with no run to compare against, every
+// acceptance would look orphaned, and retiring the store because nobody has run
+// verify lately is the worst possible reading of "stale". Callers say so out
+// loud rather than reporting a confident zero.
+//
+// An EMPTY (non-nil) observed is a real answer: a run happened and reported no
+// survivors at all, so every acceptance in the store is orphaned.
+func StaleAcceptancesAgainst(root string, s *Store, observed map[string]bool) Report {
 	var rep Report
 	if s == nil {
 		return rep
@@ -83,6 +106,13 @@ func StaleAcceptances(root string, s *Store) Report {
 		case c.err == nil:
 			if Occurrences(c.src, a.Text) == 0 {
 				rep.Stale = append(rep.Stale, Stale{Acceptance: a, Reason: ReasonTextGone})
+				continue
+			}
+			// The source is intact, so the two structural reasons above have
+			// nothing to say. Only the run can answer whether the survivor is
+			// still there.
+			if observed != nil && !observed[a.Key] {
+				rep.Stale = append(rep.Stale, Stale{Acceptance: a, Reason: ReasonSurvivorGone})
 			}
 		case errors.Is(c.err, os.ErrNotExist):
 			rep.Stale = append(rep.Stale, Stale{Acceptance: a, Reason: ReasonFileGone})

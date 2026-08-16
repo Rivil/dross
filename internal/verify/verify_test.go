@@ -328,20 +328,10 @@ func TestSplitFiles(t *testing.T) {
 	}
 }
 
-func TestCombineScore(t *testing.T) {
-	cases := []struct {
-		existing, next, want float64
-	}{
-		{0, 0.8, 0.8},
-		{0.6, 0, 0.6},
-		{0.6, 0.8, 0.7}, // mean
-	}
-	for _, tc := range cases {
-		if got := combineScore(tc.existing, tc.next); got != tc.want {
-			t.Errorf("combine(%v,%v) = %v want %v", tc.existing, tc.next, got, tc.want)
-		}
-	}
-}
+// TestCombineScore is gone with combineScore itself (mutation-score-truth):
+// the mean it computed was the bug, not the implementation. Pooling is asserted
+// in score_test.go, and the case that killed the mean — two legs of unequal
+// size — is the first row there.
 
 func TestTestsSaveLoadRoundTrip(t *testing.T) {
 	dir := t.TempDir()
@@ -1577,5 +1567,37 @@ func TestRemoteTransportFailurePreservesRecordAndContinue(t *testing.T) {
 	v := Skeleton(tests, []string{"c-1"})
 	if len(findingsBySeverity(v, "BLOCKING")) != 1 {
 		t.Errorf("want exactly the one BLOCKING for the unreachable leg: %+v", v.Findings)
+	}
+}
+
+// TestEverySurfaceReportsTheSameScore drives ONE multi-leg run through the
+// verify.toml path and requires it to agree with the pooled formula every other
+// surface now uses.
+//
+// The shape matters: two legs of unequal size plus a timeout is exactly where
+// the three old formulas diverged. A single-leg zero-timeout run agreed by
+// accident, which is why the disagreement survived so long.
+func TestEverySurfaceReportsTheSameScore(t *testing.T) {
+	tests := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{
+			{Name: "ts", Tool: "stryker", Files: []string{"a.ts"},
+				Mutation: &mutation.Report{Tool: "stryker", Killed: 1, Survived: 0}},
+			{Name: "go", Tool: "gremlins", Files: []string{"b.go"},
+				Mutation: &mutation.Report{Tool: "gremlins", Killed: 0, Survived: 8, Timeout: 1}},
+		},
+	}
+	v := Skeleton(tests, []string{"c-1"})
+
+	want := mutation.PooledScore(1, 8, 1)
+	if v.Summary.MutationScore != want {
+		t.Errorf("verify.toml score = %v, want the pooled %v", v.Summary.MutationScore, want)
+	}
+	// The mean over legs would have reported 0.50 here (1.00 and 0.00).
+	if v.Summary.MutationScore > 0.5 {
+		t.Errorf("score %v is above the mean's answer — the mean is back", v.Summary.MutationScore)
+	}
+	if v.Summary.MutantsInScope != 10 {
+		t.Errorf("in-scope mutants = %d, want 10 — the denominator must carry the timeout too", v.Summary.MutantsInScope)
 	}
 }

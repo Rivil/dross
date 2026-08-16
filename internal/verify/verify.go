@@ -481,14 +481,19 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 			MutationStatus: MutationSkipped, // upgraded below if any adapter ran
 		},
 	}
+	// Totals across legs, POOLED — the score is computed once from them rather
+	// than averaged leg by leg. A mean over legs of unequal size hands the
+	// smaller leg the louder vote: 1/1 beside 0/9 is a suite that killed one
+	// mutant in ten, and the mean called it 0.50.
+	var timeouts int
 	for _, lr := range t.Languages {
 		if lr.Mutation == nil {
 			continue
 		}
-		v.Summary.MutationScore = combineScore(v.Summary.MutationScore, lr.Mutation.Score)
 		v.Summary.MutantsKilled += lr.Mutation.Killed
 		v.Summary.MutantsSurvived += lr.Mutation.Survived
 		v.Summary.MutantsNotCovered += lr.Mutation.NotCovered
+		timeouts += lr.Mutation.Timeout
 		// Any adapter that produced a report bumps us off `skipped`. We
 		// downgrade to `unmeasurable` until we see a non-zero mutant
 		// count, then we promote to `measured`.
@@ -507,6 +512,7 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 	// measure, and as measured-0.00 would fail the phase for a neighbour's
 	// debt — both read as a settled result where the honest answer is that
 	// this run measured nothing about these changes.
+	v.Summary.MutationScore = mutation.PooledScore(v.Summary.MutantsKilled, v.Summary.MutantsSurvived, timeouts)
 	if v.Summary.MutantsInScope == 0 && len(t.OutOfScope) > 0 {
 		v.Summary.MutationStatus = MutationOutOfScope
 	}
@@ -635,19 +641,6 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		})
 	}
 	return v
-}
-
-// combineScore averages mutation scores across multiple language
-// runs in the simplest way: the mean. If we ever have weighting
-// requirements (e.g. weight by mutant count) this is the place.
-func combineScore(existing, next float64) float64 {
-	if existing == 0 {
-		return next
-	}
-	if next == 0 {
-		return existing
-	}
-	return (existing + next) / 2
 }
 
 // FilesFromChanges flattens changes.json's per-task file lists into

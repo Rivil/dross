@@ -13,6 +13,7 @@ import (
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/state"
 	"github.com/Rivil/dross/internal/survivor"
+	"github.com/Rivil/dross/internal/verify"
 )
 
 // Survivor manages the accepted-survivor registry and routes survivors to a
@@ -260,10 +261,22 @@ func survivorList() *cobra.Command {
 			}
 			entries := store.Accepted
 			if staleOnly {
-				stale := survivor.StaleAcceptances(filepath.Dir(root), store)
+				observed, runs := observedSurvivorKeys(root)
+				stale := survivor.StaleAcceptancesAgainst(filepath.Dir(root), store, observed)
 				entries = nil
 				for _, s := range stale.Stale {
 					entries = append(entries, s.Acceptance)
+				}
+				// Said out loud, before the list. With no run to compare
+				// against, an acceptance whose source is intact cannot be
+				// judged orphaned — and reporting a confident "(no stale
+				// acceptances)" would be the answer least distinguishable from
+				// having checked.
+				if observed == nil && !asJSON {
+					Print("note: no tests.json found — checked source existence only.")
+					Print("      An acceptance whose survivor is gone but whose source line remains cannot be seen without a run.")
+				} else if !asJSON {
+					Printf("checked against %d survivor(s) from %d run(s).\n", len(observed), runs)
 				}
 			}
 
@@ -297,4 +310,53 @@ func survivorList() *cobra.Command {
 	c.Flags().BoolVar(&staleOnly, "stale", false, "only acceptances whose subject no longer exists")
 	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
 	return c
+}
+
+// observedSurvivorKeys collects every survivor key the recorded runs reported,
+// so staleness can ask "is this acceptance's survivor still there?" rather than
+// only "does its source line still exist?".
+//
+// It returns nil — distinct from an empty map — when no run is on disk. The two
+// are opposite answers: an empty map says a run happened and found no
+// survivors, so every acceptance is orphaned; nil says nobody has run verify,
+// which is not evidence about anything. Collapsing them would retire the whole
+// store on a fresh clone.
+//
+// Every phase's tests.json is read, not just the current phase's: an acceptance
+// is repo-wide (that is what makes the drain work across phases), so judging it
+// against one phase's run would call it orphaned wherever it did not appear.
+func observedSurvivorKeys(root string) (map[string]bool, int) {
+	phases, err := phase.List(root)
+	if err != nil {
+		return nil, 0
+	}
+	var observed map[string]bool
+	runs := 0
+	for _, id := range phases {
+		testsPath, _ := verify.FilePaths(root, id)
+		t, err := verify.LoadTests(testsPath)
+		if err != nil || t == nil {
+			continue
+		}
+		runs++
+		if observed == nil {
+			observed = map[string]bool{}
+		}
+		for _, lr := range t.Languages {
+			if lr.Mutation == nil {
+				continue
+			}
+			for _, m := range lr.Mutation.Surviving {
+				if m.Key != "" {
+					observed[m.Key] = true
+				}
+			}
+		}
+		for _, m := range t.OutOfScope {
+			if m.Key != "" {
+				observed[m.Key] = true
+			}
+		}
+	}
+	return observed, runs
 }

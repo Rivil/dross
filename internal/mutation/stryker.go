@@ -308,9 +308,6 @@ func ParseStrykerJSON(data []byte) (*Report, error) {
 			}
 		}
 	}
-	denom := r.Killed + r.Survived + r.Timeout
-	if denom > 0 {
-		r.Score = float64(r.Killed) / float64(denom)
-	}
+	r.Score = PooledScore(r.Killed, r.Survived, r.Timeout)
 	return r, nil
 }

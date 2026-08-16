@@ -144,7 +144,7 @@ func Verify() *cobra.Command {
 			}
 
 			printVerifySummary(t, v)
-			printLifecycleSummary(lc)
+			printLifecycleSummary(lc, v.Summary.UnclassifiedInScope)
 			recordVerifyOutcome(t, v)
 			return nil
 		},
@@ -442,28 +442,28 @@ func recordVerifyOutcome(t *verify.Tests, v *verify.Verify) {
 		files := 0
 		killed := 0
 		survived := 0
+		timeouts := 0
 		for _, lr := range t.Languages {
 			files += len(lr.Files)
 			if lr.Mutation != nil {
 				killed += lr.Mutation.Killed
 				survived += lr.Mutation.Survived
+				timeouts += lr.Mutation.Timeout
 			}
 		}
 		counts["files"] = files
 		counts["mutants_killed"] = killed
 		counts["mutants_survived"] = survived
 		// Both counts are already post-filter — Tests carries the in-scope
-		// reports — so the score below is the in-scope score, the same
-		// fraction verify.toml reports. They agree exactly on a single-leg,
-		// zero-timeout run; wider than that the two sides use different
-		// conventions (verify.toml means across legs, this pools; Report.Score
-		// puts timeouts in the denominator, this does not). Reconciling them
-		// changes the number every phase's thresholds apply to and is
-		// deliberately out of this phase's diff.
+		// reports — so this IS the in-scope score, and it is computed by the
+		// same mutation.PooledScore that writes verify.toml's number. The two
+		// used to diverge as soon as a run had two legs or a single timeout,
+		// which meant a phase's judgement depended on which surface you read.
 		counts["mutants_in_scope"] = v.Summary.MutantsInScope
 		counts["out_of_scope"] = len(t.OutOfScope)
-		if total := killed + survived; total > 0 {
-			nums["mutation_score"] = float64(killed) / float64(total)
+		counts["mutants_timeout"] = timeouts
+		if score := mutation.PooledScore(killed, survived, timeouts); score > 0 {
+			nums["mutation_score"] = score
 		}
 	} else {
 		counts["mutants_killed"] = v.Summary.MutantsKilled
@@ -546,6 +546,7 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 		Printf("  skipped %s — %s\n", s.File, s.Reason)
 	}
 	printScopeSummary(t, v)
+	printOverallScore(v)
 	switch v.Summary.MutationStatus {
 	case verify.MutationOutOfScope:
 		Print("  mutation status: out-of-scope — the adapters found mutants, but every one of them " +
@@ -560,6 +561,39 @@ func printVerifySummary(t *verify.Tests, v *verify.Verify) {
 			"Score is 0/0 — /dross-verify will base the verdict on criterion coverage alone.")
 	}
 	Printf("\nWrote tests.json + verify.toml (verdict=%s — /dross-verify will fill criterion mappings).\n", v.Verify.Verdict)
+}
+
+// printOverallScore states the number the phase is judged on, with what it was
+// computed over.
+//
+// A bare ratio is not a measurement anyone can act on: 0.90 over 10 mutants and
+// 0.90 over 400 are the same number and not the same evidence. And a survivor
+// the tooling cannot reach is a different fact from one the tests missed — so
+// the uncoverable count is named too, which is what makes "0.90" and "1.00 on
+// everything reachable" both visible at once.
+//
+// Both distinctions were being written into verify.toml notes BY HAND on every
+// run of this milestone. A convention that has to be re-typed each time is one
+// that belongs in the code.
+func printOverallScore(v *verify.Verify) {
+	if v.Summary.MutationStatus != verify.MutationMeasured {
+		// The other statuses print their own line explaining that the score is
+		// 0/0 and why. Adding a denominator to a number that means nothing
+		// would dress it up as a measurement.
+		return
+	}
+	Printf("  score: %.2f over %d in-scope mutant(s) — killed=%d survived=%d\n",
+		v.Summary.MutationScore, v.Summary.MutantsInScope,
+		v.Summary.MutantsKilled, v.Summary.MutantsSurvived)
+	// Only when there are any. A line that is always present stops being read,
+	// and "0 uncoverable" is not news.
+	if v.Summary.MutantsNotCovered > 0 {
+		reachable := v.Summary.MutantsInScope - v.Summary.MutantsNotCovered
+		Printf("    of which %d uncoverable by construction (gremlins attributes no coverage block to them) — "+
+			"efficacy over the %d reachable = %.2f\n",
+			v.Summary.MutantsNotCovered, reachable,
+			mutation.PooledScore(v.Summary.MutantsKilled, v.Summary.MutantsSurvived-v.Summary.MutantsNotCovered, 0))
+	}
 }
 
 // scopeFileListCap bounds how many scoped files are named before the line
@@ -687,14 +721,29 @@ func appendStalenessNotes(v *verify.Verify, repoRoot string, store *survivor.Sto
 // how many survivors are this phase's own, how many have a destination, how
 // many are accepted, and how many still need a decision. The four counts sum to
 // the run's survivor total by construction.
-func printLifecycleSummary(lc *verify.Lifecycle) {
+//
+// gateCount is verify.toml's summary.unclassified_in_scope — the number the
+// verdict actually fails on — and it is PASSED IN rather than recomputed here.
+// That is the whole point of this signature: the two surfaces used to derive
+// the same fact separately and disagree about it, so a run with four
+// undispositioned in-diff survivors printed "0 unclassified" on screen while
+// the file next to it recorded unclassified_in_scope = 4. The line a human
+// reads said all-clear while the gate was open. Sharing the value makes that
+// disagreement unrepresentable.
+func printLifecycleSummary(lc *verify.Lifecycle, gateCount int) {
 	if lc == nil || lc.Total() == 0 {
 		return
 	}
-	Printf("  survivors: %d in-diff, %d routed, %d accepted, %d unclassified\n",
+	Printf("  survivors: %d in-diff, %d routed, %d accepted, %d out-of-diff unclassified\n",
 		len(lc.InDiff), len(lc.Routed), len(lc.Accepted), len(lc.Unclassified))
-	if n := len(lc.Unclassified); n > 0 {
-		Printf("    ↳ %d unclassified — `dross survivor accept <file>:<line> --op OP --reason ...` "+
-			"or `dross survivor route <file>:<line> --op OP --target <phase>`\n", n)
+	// The gate line, always printed when the lifecycle has anything to say —
+	// including when it is zero, because "the gate is clear" is the fact a
+	// reader is looking for and its absence is not the same statement.
+	if gateCount > 0 {
+		Printf("    ↳ %d undispositioned in scope — THE VERDICT GATE IS OPEN. "+
+			"Clear each with `dross survivor accept <file>:<line> --op OP --reason ...` "+
+			"or `dross survivor route <file>:<line> --op OP --target <phase>`\n", gateCount)
+	} else {
+		Print("    ↳ 0 undispositioned in scope — the verdict gate is clear")
 	}
 }

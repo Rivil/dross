@@ -1,0 +1,54 @@
+task_seq = 0
+
+[phase]
+  id = "mutation-score-truth"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "One pooled score function, used everywhere"
+  files = ["internal/verify/score.go", "internal/verify/verify.go", "internal/cmd/verify.go", "internal/mutation/adapter.go", "internal/verify/score_test.go"]
+  description = "Add one PooledScore(killed, survived, timeout) and route every surface through\nit: verify.toml (replacing combineScore's mean across legs), telemetry\n(replacing its own pooling that excluded timeouts) and Report.Score.\n\nCorrect adapter.go's struct doc, which claims a formula none of the three used.\n"
+  covers = ["c-1"]
+  test_contract = ["if the mean returns anywhere, TestTwoUnequalLegsPoolRatherThanAverage fails — legs of 1/1 and 0/9 must score 0.10, the value the mean flatters to 0.50 by giving the smaller leg the louder vote", "if timeouts leave the denominator, TestTimeoutCountsAgainstTheScore fails — a mutant that timed out was not killed, and excluding it lets a suite that hangs on its hardest mutants outscore one that fails them", "if the surfaces drift apart again, TestEverySurfaceReportsTheSameScore fails — it drives one multi-leg Tests through verify.toml and the telemetry path and requires the same number from both", "if a zero-mutant run stops returning 0, TestEmptyRunScoresZeroNotNaN fails — killed+survived+timeout of 0 must not divide by zero, and an out-of-scope run hits this on every prompt-only phase"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "One survivor vocabulary across stdout and verify.toml"
+  files = ["internal/cmd/verify.go", "internal/verify/verify.go", "internal/cmd/verify_vocabulary_test.go"]
+  description = "An in-diff survivor carrying no disposition IS unclassified. stdout stops\npresenting the two as disjoint buckets and reports the gate state directly, so\nthe line on screen cannot read all-clear while the file says the gate is open.\n"
+  covers = ["c-2"]
+  test_contract = ["if stdout and the file disagree on the count, TestStdoutAndVerifyTomlAgreeOnUnclassified fails — it runs one verify over a fixture with an undispositioned in-diff survivor and compares the printed number to summary.unclassified_in_scope", "if stdout prints an all-clear while the gate is open, TestStdoutSaysTheGateIsOpen fails — a run with an undispositioned in-diff survivor must not print `0 unclassified`", "if a dispositioned survivor starts counting against the gate, TestAcceptedAndRoutedStayOutOfTheCount fails — accepted and routed survivors are silent by decision, and folding them in would fail every phase that ever accepted one"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Drop inapplicable mutants in the gremlins adapter"
+  files = ["internal/mutation/gremlins.go", "internal/mutation/inapplicable_test.go"]
+  description = "An ARITHMETIC_BASE mutant on a string-concatenation or a const initializer\ncannot change behaviour — already proven inert by TestStringConcatArithmeticMutantIsNoOp\nand TestConstInitializerHasNoCoverageBlock. Drop them in the adapter, before the\nreport is built, so they never enter the denominator, the survivor list or the\naccept store.\n"
+  covers = ["c-3"]
+  test_contract = ["if an inapplicable mutant reaches the report, TestInapplicableMutantsAreDropped fails — it parses a gremlins report containing a string-concat ARITHMETIC_BASE row and requires it absent from both the survivor list and the counts", "if a real ARITHMETIC_BASE mutant is dropped with them, TestRealArithmeticMutantsSurviveTheFilter fails — the filter must key on the source line's shape, not on the operator alone, or it silences the mutants it exists to preserve", "if a string-concat ARITHMETIC_BASE is dropped, TestStringConcatMutantsAreNotDropped fails — this repo proved that survivor is a coverage gap, and dropping it would hide a real one behind a no-op exemption", "if the drop happens after the counts are computed, TestDroppedMutantsLeaveTheDenominator fails — a mutant filtered out of the list but left in the denominator is the disagreement this task closes, in a new place"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Detect an orphaned acceptance in survivor list --stale"
+  files = ["internal/cmd/survivor.go", "internal/cmd/survivor_stale_test.go"]
+  description = "Staleness currently asks whether the accepted line still exists in source. An\nacceptance whose LINE survives but whose SURVIVOR is gone — killed by a new\ntest, or dropped by t-3 — is invisible to it, so the entry can only be retired\nby hand-supplied key.\n\nCompare the store against the current survivor set as well.\n"
+  covers = ["c-4"]
+  test_contract = ["if an acceptance whose survivor is gone stays invisible, TestStaleFindsAnOrphanedAcceptance fails — its source line still exists, which is precisely the case source-existence checking cannot see", "if a live acceptance is reported stale, TestLiveAcceptanceIsNotStale fails — reporting a still-needed acceptance would push a user to delete the reason and re-inherit the survivor", "if staleness needs the survivor set and gets none, TestStaleWithoutASurvivorSetSaysSo fails — with no run to compare against it must report that it cannot tell, not silently report zero"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Report the score with its denominator"
+  files = ["internal/cmd/verify.go", "assets/prompts/verify.md", "internal/cmd/score_surface_test.go"]
+  description = "Every surface that prints the score prints the in-scope mutant count beside it,\nand the uncoverable count when non-zero — the two facts that have been written\ninto verify.toml notes by hand on every run of this milestone.\n"
+  covers = ["c-5"]
+  test_contract = ["if the score is printed bare, TestScoreIsPrintedWithItsDenominator fails — 0.90 over 10 mutants and over 400 are the same number and not the same evidence", "if the uncoverable count is dropped when non-zero, TestUncoverableCountIsSurfaced fails — a survivor the tooling cannot kill is a different fact from one the tests missed", "if the uncoverable line appears when the count is zero, TestNoUncoverableLineWhenThereAreNone fails — a line that is always there stops being read"]
+  status = "done"

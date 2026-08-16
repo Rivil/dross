@@ -281,6 +281,12 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		// itself names files by bare basename. Re-prefix before merging so
 		// every path downstream is repo-relative.
 		RePrefixGremlinsFiles(rep, pkg)
+		// Drop what cannot be a real result BEFORE the merge, so an
+		// inapplicable mutant never reaches the denominator, the survivor
+		// list, the lifecycle or the accept store. Filtering it later would
+		// leave the score computed over mutants the survivor list no longer
+		// showed — the same disagreement in a new place.
+		DropInapplicable(rep, g.ProjectRoot)
 		if !hasCoverage(rep) {
 			// Report exists but every mutant is NOT COVERED — gremlins
 			// instrumented zero usable coverage here (a coverage-tool blind
@@ -327,10 +333,7 @@ func mergeInto(dst, src *Report) {
 	for name, s := range src.Files {
 		dst.addFile(name, s)
 	}
-	denom := dst.Killed + dst.Survived + dst.Timeout
-	if denom > 0 {
-		dst.Score = float64(dst.Killed) / float64(denom)
-	}
+	dst.Score = PooledScore(dst.Killed, dst.Survived, dst.Timeout)
 }
 
 // RePrefixGremlinsFiles rewrites a single package's gremlins report so its
@@ -573,9 +576,6 @@ func ParseGremlinsJSON(data []byte) (*Report, error) {
 			}
 		}
 	}
-	denom := r.Killed + r.Survived + r.Timeout
-	if denom > 0 {
-		r.Score = float64(r.Killed) / float64(denom)
-	}
+	r.Score = PooledScore(r.Killed, r.Survived, r.Timeout)
 	return r, nil
 }
