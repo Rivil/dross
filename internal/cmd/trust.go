@@ -35,9 +35,11 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/project"
 )
 
@@ -148,6 +150,59 @@ func GrantConsent(root, testCmd string) error {
 	return l.save(path)
 }
 
+// --- red-proof replay consent ---
+
+// ErrNoReplayConsent is returned when a red proof's replay command has not been
+// consented to on this machine. Callers match it with errors.Is: a repoint
+// treats "no consent" as unverified-but-proceed, which is a different outcome
+// from "the replay could not be run".
+var ErrNoReplayConsent = errors.New("this machine has not consented to running this red proof's replay command")
+
+// ReplayConsented reports whether line's fingerprint is in local.toml's
+// trusted_replay_commands.
+//
+// Fingerprints, not lines, for the same reason the test command stores one: the
+// store must not become a second copy of a value changes.json already holds,
+// where a reader could not tell a consented command from a recorded one. An
+// unparseable store is not consent — it fails closed.
+func ReplayConsented(root, line string) (bool, error) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false, nil
+	}
+	l, err := loadLocal(localPath(root))
+	if err != nil {
+		return false, fmt.Errorf("%w: %v", ErrNoReplayConsent, err)
+	}
+	want := Fingerprint(line)
+	for _, got := range strings.Split(l.TrustedReplayCommands, ",") {
+		if strings.TrimSpace(got) == want {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// GrantReplayConsent adds line's fingerprint to the consented set, leaving any
+// already-granted replay lines in place: a repo has one replay per phase, and
+// granting one must not silently revoke another.
+func GrantReplayConsent(root, line string) error {
+	path := localPath(root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return err
+	}
+	want := Fingerprint(strings.TrimSpace(line))
+	var kept []string
+	for _, got := range strings.Split(l.TrustedReplayCommands, ",") {
+		if got = strings.TrimSpace(got); got != "" && got != want {
+			kept = append(kept, got)
+		}
+	}
+	l.TrustedReplayCommands = strings.Join(append(kept, want), ",")
+	return l.save(path)
+}
+
 // --- the gate ---
 
 // execGatedCommands is the CLOSED set of commands the consent gate covers,
@@ -244,17 +299,23 @@ func consentRefusal(state ConsentState, cerr error, testCmd string) error {
 // Trust registers `dross trust`.
 func Trust() *cobra.Command {
 	var check bool
+	var replayPhase string
 	c := &cobra.Command{
 		Use:   "trust",
 		Short: "Consent to dross running this repo's runtime.test_command on this machine",
 		Long: "Records consent for this repo's runtime.test_command in the gitignored\n" +
 			".dross/local.toml, as a hash of the command. A clone carries no consent, and\n" +
-			"editing the command revokes it — see `dross doctor` for the current state.",
+			"editing the command revokes it — see `dross doctor` for the current state.\n" +
+			"--replay <phase-id> grants the same consent for a phase's recorded red-proof\n" +
+			"replay command instead, which a repoint re-runs at the commit it proposes.",
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			root, err := FindRoot()
 			if err != nil {
 				return err
+			}
+			if replayPhase != "" {
+				return trustReplay(root, replayPhase, check)
 			}
 			proj, err := project.Load(filepath.Join(root, project.File))
 			if err != nil {
@@ -297,5 +358,57 @@ func Trust() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&check, "check", false, "exit 0 if consent is current, non-zero otherwise; prints nothing on success")
+	c.Flags().StringVar(&replayPhase, "replay", "", "grant consent for <phase-id>'s recorded red-proof replay command instead of runtime.test_command")
 	return c
+}
+
+// trustReplay is `dross trust --replay <phase-id>`: the grant for one phase's
+// recorded replay line.
+//
+// A flag rather than a positional, so the existing no-args test-command grant
+// path is untouched — `dross trust` still means the one thing it always meant,
+// and the replay grant is visibly a different request.
+func trustReplay(root, phaseID string, check bool) error {
+	repoDir := filepath.Dir(root)
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return err
+	}
+	line, err := recordedReplayLine(root, phaseID)
+	if err != nil {
+		return err
+	}
+	if check {
+		ok, cerr := ReplayConsented(root, line)
+		if cerr != nil {
+			return cerr
+		}
+		if !ok {
+			return fmt.Errorf("%w: %s\n\nGrant it with `dross trust --replay %s`", ErrNoReplayConsent, line, phaseID)
+		}
+		return nil
+	}
+	// Printed BEFORE the write, and in full. This line arrives from a TRACKED
+	// file the repo chose; a grant that did not show it would be consenting to
+	// whatever a clone happened to carry.
+	Printf("trusting %s's red-proof replay command on this machine:\n\n    %s\n\n", phaseID, line)
+	if err := GrantReplayConsent(root, line); err != nil {
+		return err
+	}
+	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+	Print("Editing the recorded replay revokes this; dross will ask again.")
+	return nil
+}
+
+// recordedReplayLine reads the replay command a phase's red proof records.
+// Absent is an error naming what to do: there is nothing to consent to, and a
+// silent success would leave the user believing a grant landed.
+func recordedReplayLine(root, phaseID string) (string, error) {
+	ch, err := changes.Load(changes.FilePath(root, phaseID), phaseID)
+	if err != nil {
+		return "", err
+	}
+	if ch.RedProof == nil || strings.TrimSpace(ch.RedProof.Replay) == "" {
+		return "", fmt.Errorf("phase %q records no red-proof replay command — record one with `dross phase red-proof set %s --sha <sha> --doc <doc> --replay \"<cmd>\"` first", phaseID, phaseID)
+	}
+	return strings.TrimSpace(ch.RedProof.Replay), nil
 }

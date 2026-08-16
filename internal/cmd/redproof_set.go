@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/argfence"
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/phase"
 )
@@ -24,19 +25,22 @@ func phaseRedProof() *cobra.Command {
 		Short: "Record the commit a phase's red proof is pinned to",
 	}
 	c.AddCommand(phaseRedProofSet())
+	c.AddCommand(phaseRedProofRepoint())
 	return c
 }
 
 func phaseRedProofSet() *cobra.Command {
-	var sha, doc string
+	var sha, doc, replay string
 	c := &cobra.Command{
 		Use:   "set <phase-id>",
 		Short: "Pin a phase's red proof to a commit and the doc that replays it",
 		Long: "Record the commit a phase's red proof was captured at, plus the\n" +
 			"repo-relative path of the doc whose `base commit:` line replays it.\n" +
-			"`dross doctor` then checks that commit is still reachable from origin.",
+			"`dross doctor` then checks that commit is still reachable from origin.\n" +
+			"--replay records the command that replays the proof, so a repoint can\n" +
+			"re-run it at the proposed commit instead of guessing.",
 		Args: cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			phaseID := args[0]
 			root, err := FindRoot()
 			if err != nil {
@@ -55,6 +59,10 @@ func phaseRedProofSet() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			cleanReplay, err := checkRedProofReplay(replay, cmd.Flags().Changed("replay"))
+			if err != nil {
+				return err
+			}
 
 			// Load-set-save, so the phase's base, fork point, PR, status and
 			// task records all survive: this verb pins a proof, it does not
@@ -64,16 +72,27 @@ func phaseRedProofSet() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ch.RedProof = &changes.RedProof{SHA: full, Doc: cleanDoc}
+			// A set that does not mention --replay leaves a recorded command
+			// alone. Re-pinning a proof and silently dropping the only thing
+			// that can verify the next repoint would be a quiet downgrade —
+			// the pin still checks out, but nothing can be checked against it.
+			if !cmd.Flags().Changed("replay") && ch.RedProof != nil {
+				cleanReplay = ch.RedProof.Replay
+			}
+			ch.RedProof = &changes.RedProof{SHA: full, Doc: cleanDoc, Replay: cleanReplay}
 			if err := ch.Save(path); err != nil {
 				return err
 			}
 			Printf("pinned %s's red proof to %s (%s)\n", phaseID, short(full), cleanDoc)
+			if cleanReplay != "" {
+				Printf("  replay: %s\n", cleanReplay)
+			}
 			return nil
 		},
 	}
 	c.Flags().StringVar(&sha, "sha", "", "the commit the red proof was captured at")
 	c.Flags().StringVar(&doc, "doc", "", "repo-relative path of the doc that replays the proof")
+	c.Flags().StringVar(&replay, "replay", "", "command that replays the proof, run at the proposed commit when the pin is repointed")
 	_ = c.MarkFlagRequired("sha")
 	_ = c.MarkFlagRequired("doc")
 	return c
@@ -96,6 +115,32 @@ func resolvePinnedCommit(repoDir, sha string) (string, error) {
 		return "", fmt.Errorf("%s does not resolve to a commit in this repo — pin the commit the proof was actually captured at", sha)
 	}
 	return full, nil
+}
+
+// checkRedProofReplay validates the replay command before it reaches the
+// record. Two refusals, both about what a repoint would later do with it:
+//
+//   - A blank command reads as "recorded" to the verified/unverified split but
+//     would be spawned as nothing, so a repoint would claim the proof was
+//     re-checked when it ran no proof at all.
+//   - A command beginning with "-" is refused because it is ultimately handed
+//     to `sh -c`, which honours no end-of-options token — argfence's reject
+//     side of the table, not its fence side.
+//
+// An absent --replay is not an empty one: it means "leave whatever is
+// recorded", which the caller handles.
+func checkRedProofReplay(replay string, provided bool) (string, error) {
+	if !provided {
+		return "", nil
+	}
+	clean := strings.TrimSpace(replay)
+	if clean == "" {
+		return "", fmt.Errorf("--replay is empty — a blank command would be recorded as a replay and then spawned as nothing; omit the flag if there is no replay")
+	}
+	if err := argfence.RejectLeadingDash("sh", "red-proof replay command", clean); err != nil {
+		return "", err
+	}
+	return clean, nil
 }
 
 // checkRedProofDoc refuses a doc path that does not resolve to a file inside

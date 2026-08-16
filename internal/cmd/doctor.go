@@ -557,17 +557,28 @@ func redProofPinLines(root, repoDir string, pin redProofPin) []doctorLine {
 	return lines
 }
 
-// redProofRepointHint names the commit a rotted pin should move to: the owning
-// phase's fork point, which is the last commit its work is guaranteed to sit on
-// top of. Naming the phase is what makes this possible — the doc names none, so
-// the c-5 pin had to be repointed by hand.
+// redProofRepointHint names the repair: the `red-proof repoint` verb, which
+// resolves the owning phase's fork point itself.
+//
+// It used to spell out a `red-proof set --sha <fork> --doc <doc>` line, which
+// asked the operator to copy a SHA doctor had already computed and left the
+// replay doc — carrying the same SHA in three places — for them to edit by
+// hand. Naming the verb instead is the locked repoint_surface decision: doctor
+// stays diagnostic and the repair lives in one typed command.
+//
+// The fork point is still resolved here, but only to say whether a repair is
+// available at all: when it cannot be resolved the hint names the phase and NO
+// command, because a copy-pasteable line with a blank SHA is worse than none.
 func redProofRepointHint(root, repoDir string, pin redProofPin) string {
 	fork, err := phaseForkPoint(repoDir, root, pin.Phase)
 	if err != nil {
 		return fmt.Sprintf("repoint it to a commit origin reaches (%s's fork point could not be resolved: %v)", pin.Phase, err)
 	}
-	return fmt.Sprintf("repoint it to %s's fork point %s — `dross phase red-proof set %s --sha %s --doc %s`",
-		pin.Phase, fork, pin.Phase, fork, pin.Doc)
+	// The fork point is still named — a diagnostic that says where a thing
+	// would go is more useful than one that only says a verb exists — but it
+	// is reported, not handed over as an argument to retype.
+	return fmt.Sprintf("repoint it to %s's fork point %s — `dross phase red-proof repoint %s --apply`",
+		pin.Phase, fork, pin.Phase)
 }
 
 // sameCommitSHA compares a doc's pin against a record's. Either side may be

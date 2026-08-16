@@ -1,0 +1,66 @@
+[phase]
+  id = "red-proof-repoint"
+  title = "red-proof-repoint"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "A rotted red-proof pin is repaired by a single command — it rewrites the pin to the owning phase's fork point and a following `dross doctor` reports the pin clean, with no hand-edit anywhere."
+
+[[criteria]]
+  id = "c-2"
+  text = "A repoint updates the replay doc's pinned commit as well as the recorded pin, so the record/doc cross-check passes afterwards — a repoint never trades an unreachable-pin issue for a prose-disagrees-with-record issue."
+
+[[criteria]]
+  id = "c-3"
+  text = "Repoint refuses to write a target the reachability check does not call reachable — moving a pin onto another commit origin cannot see is rejected with the reason, not recorded as a repair."
+
+[[criteria]]
+  id = "c-4"
+  text = "Repoint is dry-run by default — it reports the old pin, the proposed commit and every file it would touch, and writes only when an explicit apply flag is passed."
+
+[[criteria]]
+  id = "c-5"
+  text = "A pin the reachability check already calls sound is left untouched — repoint reports it as nothing-to-do and rewrites neither the record nor the doc."
+
+[[criteria]]
+  id = "c-6"
+  text = "The doc rewrite is byte-faithful — only the pinned commit's occurrences change; every other byte of the doc, including formatting and surrounding prose, is preserved."
+
+[[criteria]]
+  id = "c-7"
+  text = "The phase lifecycle repoints before the commit goes: a phase whose red proof is pinned to a commit on its own branch still has a reachable pin after that branch is squash-merged and deleted — doctor reports it clean without anyone running repoint by hand."
+
+[[criteria]]
+  id = "c-8"
+  text = "A red proof can record the command that replays it. Where one is recorded, repoint runs it in a detached worktree at the proposed commit and refuses the repoint unless it goes red; where none is recorded, repoint states the repair is unverified rather than implying it was checked."
+
+[[decisions]]
+  key = "doc_rewrite_scope"
+  choice = "Repoint replaces every literal occurrence of the OLD pinned SHA in the doc — full form or an abbreviated prefix of it — and nothing else. SHAs that are not the old pin are untouched."
+  why = "fixtures/hostile-config-c5/RUN.md carries the pin three times (`base commit:`, a `BASE=` shell var, and the `git worktree add --detach` recipe) and separately names an unrelated commit. Rewriting only the canonical line leaves the replay recipe pointing at a commit nobody can check out — doctor green, doc broken. Keying the replacement to the old pin's value is what keeps the unrelated SHA safe."
+  locked = true
+
+[[decisions]]
+  key = "repoint_surface"
+  choice = "`dross phase red-proof repoint` — a sibling of the existing `dross phase red-proof set`. Doctor stays diagnostic; its rotted-pin hint names the repoint verb instead of a `red-proof set` line."
+  why = "Writer verbs for the same noun belong together, and milestone.go already states the position that repairs get an explicitly-typed command rather than a `doctor --fix` that turns the diagnostic into a writer."
+  locked = true
+
+[[decisions]]
+  key = "repoint_target_selection"
+  choice = "Bare `repoint` scans every discovered pin and repairs the rotted ones; an optional `<phase-id>` argument narrows it to one."
+  why = "discoverRedProofPins already globs every phase's changes.json, and c-5 makes a sound pin a no-op — so a blanket run is safe by construction. Requiring a phase-id would mean reading doctor output first just to learn what to name."
+  locked = true
+
+[[decisions]]
+  key = "replay_consent_states"
+  choice = "c-8's recorded/not-recorded split is three states in practice. A replay that is recorded AND consented on this machine is run and must go red or the repoint is refused. A replay that is recorded but NOT consented is not run, and the repoint proceeds reporting the repair unverified — naming the grant command. No recorded replay at all is likewise repoint-as-unverified. A replay that could not be RUN (worktree add failed, spawn error, timeout) refuses the repoint: an error is not evidence the proof went red."
+  why = "The command lives in changes.json, a tracked file, so spawning it is code execution on clone — hence the consent gate. But refusing the repair when consent is merely absent would make c-1's single-command promise false on any fresh clone: a rotted pin would be unrepairable until the operator granted a command they may not want to run at all. Reporting unverified is the same honesty c-8 already requires of the unrecorded case."
+  locked = true
+
+[[decisions]]
+  key = "repoint_commit"
+  choice = "Repoint writes the files and reports what it changed; it does not commit. The caller commits."
+  why = "The repair touches an ordinary tracked source doc under fixtures/, not only .dross/. A CLI verb auto-committing a prose rewrite lands an unreviewed diff in history; the invoking slash command commits the .dross/ side under the commit-hygiene rule like every other .dross write."
+  locked = true

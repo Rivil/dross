@@ -14,6 +14,7 @@ package cmd
 // delegate.
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -86,15 +88,31 @@ var spawnLocal = runLocalCommand
 // straight through when Stdout is set, so this is buffer-free by construction
 // rather than by a flush discipline someone has to maintain.
 func runLocalCommand(dir, line string, stdout, stderr io.Writer) error {
+	return runLocalCommandCtx(context.Background(), dir, line, stdout, stderr)
+}
+
+// spawnLocalCtx is the same seam with a deadline. Tests replace it to record
+// the argv and the cwd without running anything; production never reassigns it.
+var spawnLocalCtx = runLocalCommandCtx
+
+// runLocalCommandCtx is runLocalCommand with a cancellable context, added for
+// the red-proof replay: an unbounded spawn there would turn a hung proof into a
+// hung repoint, and a repoint that never returns is worse than one that refuses.
+//
+// WaitDelay is what makes the kill actually terminate the call. Killing `sh`
+// leaves its children holding the pipe ends, so Wait would block on a copy that
+// never ends — the delay closes the descriptors and returns instead.
+func runLocalCommandCtx(ctx context.Context, dir, line string, stdout, stderr io.Writer) error {
 	argv, err := shArgv(line)
 	if err != nil {
 		return err
 	}
-	c := exec.Command("sh", argv...)
+	c := exec.CommandContext(ctx, "sh", argv...)
 	c.Dir = dir
 	c.Stdout = stdout
 	c.Stderr = stderr
 	c.Stdin = nil
+	c.WaitDelay = 5 * time.Second
 	return c.Run()
 }
 

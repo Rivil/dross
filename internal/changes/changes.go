@@ -68,6 +68,12 @@ type Changes struct {
 type RedProof struct {
 	SHA string `json:"sha"`
 	Doc string `json:"doc"`
+	// Replay is the command that replays the proof at the pinned commit, if
+	// one was recorded. It is what turns a repoint from a hopeful rewrite into
+	// a checked one: the repair can re-run this at the proposed commit and
+	// refuse unless the proof still goes red there. Optional — omitted, a
+	// repoint reports itself unverified rather than implying it was checked.
+	Replay string `json:"replay,omitempty"`
 }
 
 // The two values Status takes. Ordered: a phase reaches shipped first and

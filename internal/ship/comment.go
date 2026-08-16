@@ -68,9 +68,18 @@ func postGitHubComment(opts CommentOpts) error {
 	out, err := ghCommand("pr", "comment", "--body", opts.Body, "--", fmt.Sprint(opts.PRNumber)).CombinedOutput()
 	if err != nil {
 		// Surface the missing-gh case with the original install pointer
-		// rather than the raw exec error. Tests override ghCommand so
-		// the LookPath check we used to do here doesn't apply uniformly.
-		if _, perr := exec.LookPath("gh"); perr != nil {
+		// rather than the raw exec error — but key it on the LOOKUP having
+		// failed, not on gh being absent from PATH at the moment some other
+		// failure happened.
+		//
+		// This used to call exec.LookPath for every error, which cost two
+		// things. In production it reported any failure as "gh is not
+		// installed" whenever gh happened to be missing, hiding the real one.
+		// And it silently overrode the ghCommand seam a caller had stubbed, so
+		// the test asserting that gh's own output is surfaced passed on a
+		// machine with gh and reddened on one without — which is exactly how
+		// this was found.
+		if errors.Is(err, exec.ErrNotFound) {
 			return errors.New("github backend needs the `gh` CLI on PATH (https://cli.github.com)")
 		}
 		return fmt.Errorf("gh pr comment: %w\n%s", err, string(out))

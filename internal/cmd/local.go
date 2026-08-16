@@ -77,6 +77,22 @@ type localStore struct {
 	// which is the entire thing being defended against.
 	TrustedTestCommand string `toml:"trusted_test_command,omitempty"`
 
+	// TrustedReplayCommands is the comma-separated set of sha256 fingerprints
+	// for the red-proof replay commands this machine has consented to dross
+	// spawning — see redproof_replay.go for what runs them.
+	//
+	// A separate key rather than a reuse of TrustedTestCommand because the two
+	// are different grants: the test command is one line from project.toml, a
+	// replay line is one per phase and arrives from changes.json, which is
+	// TRACKED. A cloned repo can therefore propose the command; consenting to
+	// spawn it is code execution chosen by the repo, so it needs the same
+	// showing-before-writing ceremony the test command gets.
+	//
+	// ABSENT from localKeys, on the TrustedTestCommand precedent: `dross local
+	// set` must not be able to grant it. Only `dross trust --replay <phase-id>`
+	// writes it, and it prints the line first.
+	TrustedReplayCommands string `toml:"trusted_replay_commands,omitempty"`
+
 	// RemoteHost and RemoteWorkdir authorize dross to run this repo's code on
 	// another machine — the mutation adapters and, since remote-test-runner,
 	// the test suite.
