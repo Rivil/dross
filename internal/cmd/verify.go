@@ -90,9 +90,14 @@ func Verify() *cobra.Command {
 			// A refusal or an unreachable remote aborts HERE, before
 			// RunScoped — so neither tests.json nor verify.toml is written,
 			// and the run never falls back to a local-only adapter list.
-			adapters, err := configuredAdaptersFn(proj, root, skipMutation)
+			adapters, tuning, err := configuredAdaptersFn(proj, root, skipMutation)
 			if err != nil {
 				return err
+			}
+			if tuning.FellBackFrom != "" {
+				// Announced before the run, not buried in the artefact. The
+				// operator watching this decides whether to wait for the host.
+				Printf("remote: %s\n", tuning.FallbackWhy)
 			}
 			t, err := verify.RunScoped(phaseID, files, adapters, scope)
 			if err != nil {
@@ -102,7 +107,7 @@ func Verify() *cobra.Command {
 			// grant on disk: a --local run has a grant and ignores it, and a
 			// fallback has one it could not reach. Reading config here would
 			// label both as remote measurements.
-			t.MeasuredOn = measuredOnFromAdapters(adapters)
+			t.MeasuredOn = measuredOnOf(adapters, tuning)
 			// Deleted paths stay in the record — they are part of what the
 			// phase did — but as a skip with an honest reason rather than as
 			// an argument to a mutation tool.
@@ -261,6 +266,14 @@ type mutationTuning struct {
 	// which the adapters read as "apply your own default" — not as zero.
 	Workers int
 	TestCPU int
+	// FellBackFrom names the host this run meant to use and could not reach;
+	// FallbackWhy is the reason. Both empty on an ordinary run of either kind.
+	//
+	// They are carried rather than dropped because a fallback's numbers were
+	// measured HERE while a remote measurement was expected — and a record that
+	// says only "local" loses the fact that the expectation went unmet.
+	FellBackFrom string
+	FallbackWhy  string
 }
 
 // gremlins is the single Gremlins constructor. Both sites go through it, so a
@@ -306,14 +319,23 @@ func resolveMutationTuning(p *project.Project, root string) (mutationTuning, err
 		mt.Prefix = dockerPrefix(p)
 		return mt, nil
 	}
-	ready, perr := remoteProbeFn(*target, nil)
+	pf, perr := preflightRemote(*target, nil)
 	if perr != nil {
 		return mutationTuning{}, fmt.Errorf(
 			"remote mutation host %s is not usable: %w\n"+
 				"Nothing was measured. Check ssh access, run `dross doctor`, or withdraw the grant with `dross mutation remote revoke`.",
 			target.Host, perr)
 	}
-	target.Cores = ready.Cores
+	if pf.Fallback {
+		// A host we could not REACH gives no answer, and the local machine
+		// still can. Aborting here is what forced `dross remote revoke` as a
+		// workaround when helicon was unreachable for hours — the fallback is
+		// per-run and touches no config, so the next run probes again.
+		mt.Prefix = dockerPrefix(p)
+		mt.FellBackFrom, mt.FallbackWhy = target.Host, pf.Why
+		return mt, nil
+	}
+	target.Cores = pf.Ready.Cores
 	mt.Target = target
 	return mt, nil
 }
@@ -347,15 +369,31 @@ func measuredOnFromAdapters(adapters []mutation.Adapter) string {
 	return verify.MeasuredLocally()
 }
 
+// measuredOnOf resolves a run's provenance from the adapters it used and the
+// tuning that produced them.
+//
+// A fallback is the case the adapters alone cannot express: they are local, so
+// measuredOnFromAdapters would call it a plain local run and lose the fact that
+// a remote measurement was expected and did not happen. The tuning is the only
+// thing that still remembers.
+func measuredOnOf(adapters []mutation.Adapter, mt mutationTuning) string {
+	if mt.FellBackFrom != "" {
+		return verify.MeasuredAfterFallback(mt.FellBackFrom, mt.FallbackWhy)
+	}
+	return measuredOnFromAdapters(adapters)
+}
+
 // configuredAdapters returns the list of mutation adapters appropriate
-// for the project, with the runtime prefix or the granted remote applied.
-func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.Adapter, error) {
+// for the project, with the runtime prefix or the granted remote applied,
+// plus the tuning it resolved — the caller needs the latter to record where
+// the run's numbers actually came from.
+func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.Adapter, mutationTuning, error) {
 	if skip {
-		return nil, nil // verify still runs — files end up in Skipped
+		return nil, mutationTuning{}, nil // verify still runs — files end up in Skipped
 	}
 	mt, err := resolveMutationTuning(p, root)
 	if err != nil {
-		return nil, err
+		return nil, mutationTuning{}, err
 	}
 	// Project root for stryker is the runtime's cwd — host cwd for native,
 	// or the host cwd for docker (we read the report via bind-mounted fs).
@@ -377,7 +415,7 @@ func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.
 		&mutation.StrykerNet{Prefix: mt.Prefix, ProjectRoot: cwd, Remote: mt.Target},
 	}
 	if len(p.Mutation.Adapters) == 0 {
-		return all, nil
+		return all, mt, nil
 	}
 	// [mutation] adapters = [...] allowlist: files whose adapter is filtered
 	// out fall into verify's existing Skipped path downstream.
@@ -391,7 +429,7 @@ func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.
 			out = append(out, a)
 		}
 	}
-	return out, nil
+	return out, mt, nil
 }
 
 // dockerPrefix returns the runtime command prefix for docker mode.

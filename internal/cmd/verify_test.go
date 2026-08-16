@@ -614,7 +614,7 @@ func TestConfiguredAdaptersAllowlist(t *testing.T) {
 	// Takes the (adapters, error) pair whole: configuredAdapters can now refuse
 	// — an unreachable granted remote, a tracked local.toml — and a helper that
 	// dropped the error would let this test pass on an empty list.
-	names := func(as []mutation.Adapter, err error) []string {
+	names := func(as []mutation.Adapter, _ mutationTuning, err error) []string {
 		t.Helper()
 		if err != nil {
 			t.Fatalf("configuredAdapters: %v", err)
@@ -643,12 +643,12 @@ func TestConfiguredAdaptersAllowlist(t *testing.T) {
 		t.Errorf("allowlist [stryker gremlins] must keep both, got %v", got)
 	}
 
-	skipped, err := configuredAdapters(p, "", true)
+	skipped, _, err := configuredAdapters(p, "", true)
 	if err != nil {
 		t.Fatalf("--skip-mutation returned an error: %v", err)
 	}
 	if skipped != nil {
-		t.Errorf("--skip-mutation must still return nil regardless of allowlist, got %v", names(skipped, nil))
+		t.Errorf("--skip-mutation must still return nil regardless of allowlist, got %v", names(skipped, mutationTuning{}, nil))
 	}
 }
 
@@ -777,8 +777,8 @@ func (s *stubMutationAdapter) Run(files []string) (*mutation.Report, error) {
 func useStubAdapter(t *testing.T, a mutation.Adapter) {
 	t.Helper()
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, error) {
-		return []mutation.Adapter{a}, nil
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, mutationTuning, error) {
+		return []mutation.Adapter{a}, mutationTuning{}, nil
 	}
 	t.Cleanup(func() { configuredAdaptersFn = prev })
 }
