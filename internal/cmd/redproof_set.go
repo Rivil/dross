@@ -25,6 +25,7 @@ func phaseRedProof() *cobra.Command {
 		Short: "Record the commit a phase's red proof is pinned to",
 	}
 	c.AddCommand(phaseRedProofSet())
+	c.AddCommand(phaseRedProofRepoint())
 	return c
 }
 
