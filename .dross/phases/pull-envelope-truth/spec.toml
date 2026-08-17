@@ -1,0 +1,44 @@
+[phase]
+  id = "pull-envelope-truth"
+  title = "pull-envelope-truth"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross issue pull --json` emits its envelope and exits 0 for every failure, not only a failed fetch: a missing auth variable, an unreadable project.toml, an unknown provider, a refused board host and a corrupt board.json all arrive as a non-null `.error` a consumer can read."
+
+[[criteria]]
+  id = "c-2"
+  text = "The failure reaches the consumer intact — `.error` carries the same message the human-facing run prints, so a prompt reporting the board as unreachable can name the actual cause rather than 'something failed'."
+
+[[criteria]]
+  id = "c-3"
+  text = "Without `--json` nothing changes: a setup failure still exits non-zero with its message on stderr, because a human running the command wants the failure, and every other `issue` subcommand keeps exiting non-zero on the same conditions."
+
+[[criteria]]
+  id = "c-4"
+  text = "A failed pull still stamps nothing: no `--mark` write happens on any path that reports an error, so a failure can never be mistaken for a completed pull by the next run."
+
+[[decisions]]
+  key = "fix_at_the_rune_boundary"
+  choice = "Route openBoard's error into the envelope inside issuePull's RunE, not at the forge constructors or in openBoard itself."
+  why = "Seven of the eight openBoard callers are human-facing commands that legitimately exit non-zero on a missing token — phase-sync, task-sync, milestone-sync, deferred add. A fix at the shared helper would silently degrade all of them into no-ops, which is the class of silent failure this codebase keeps closing. The RunE boundary has zero blast radius outside this one command, and it is where the --json flag is already known."
+  locked = true
+
+[[decisions]]
+  key = "whole_class_not_one_case"
+  choice = "Every error openBoard can return goes into the envelope, rather than special-casing the missing-token one."
+  why = "The reported bug was the unset token, but the bypass is eight failures wide — a missing project.toml, a slug that is not a dross repo, a tracked local.toml refusal, an unknown provider, missing board config, a refused host, an unparseable repo URL, a corrupt board.json. Fixing the one that happened to be hit leaves the same crash waiting behind every other one, and a consumer cannot tell which it got."
+  locked = true
+
+[[decisions]]
+  key = "security_refusal_still_lands_in_the_envelope"
+  choice = "The tracked-local.toml refusal also travels in `.error` under --json rather than staying fatal."
+  why = "It is the one failure with a security character, so it was worth deciding rather than defaulting. Keeping it fatal would preserve exactly the crash this phase exists to remove, and a consumer that dies on a parse error reports nothing at all — strictly worse than a named refusal in a field the prompt already prints. The refusal keeps its own wording, so it reads as a refusal to fix and not an outage to wait out."
+  locked = true
+
+[[decisions]]
+  key = "error_strings_unchanged"
+  choice = "No error message text is reworded."
+  why = "The telemetry env_token bucket matches on the missing-token string, so a reworded message silently reclassifies a whole class of events and breaks its tests. The bug is where the error goes, not what it says."
+  locked = true

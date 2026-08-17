@@ -1,0 +1,25 @@
+task_seq = 2
+
+[phase]
+  id = "pull-envelope-truth"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Route every setup failure into the pull envelope"
+  files = ["internal/cmd/issue.go"]
+  description = "issuePull's RunE returns openBoard's error bare (issue.go:1107), before the --json flag\nis ever consulted (first read at :1110). Every failure openBoard can produce therefore\nleaves as exit 1 with non-JSON on stderr, against a contract status.md and inbox.md both\ndocument as 'exits 0 either way'.\n\nUnder --json, hand that error to emitPullEnvelope exactly as a fetch failure already is;\nwithout --json, print the same `board unreachable: %v` line the fetch path prints and\nreturn nil. The --mark save failure at :1138 goes the same way, so no reported failure\ncan leave a stamp behind.\n\nMessage text is untouched (locked error_strings_unchanged) — the telemetry env_token\nbucket matches on the missing-token string.\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  test_contract = ["if a missing auth variable still crashes --json, TestPullEnvelopeOnUnsetToken fails — it unsets the fixture's token and asserts exit 0 with a non-null .error naming the variable, which is the reported bug", "if only the token case is covered, TestPullEnvelopeOnSetupFailures fails — it drives the class (unknown provider, missing board config, corrupt board.json) and asserts every one arrives as a readable envelope, since fixing the instance leaves the same crash behind every sibling", "if the error text is swallowed or replaced, TestPullEnvelopeCarriesTheCause fails — .error must contain the underlying message, or a prompt can only report that something went wrong", "if human mode stops failing, TestPullHumanModeStillExitsNonZeroOnSetupFailure fails — a person running the command wants the failure, and the seven other openBoard callers keep exiting non-zero on the same conditions", "if a failed pull stamps last_pull, TestPullMarkDoesNotStampAFailedSetup fails — board.json must be byte-identical after a --mark run that reported an error, which is what makes re-running pick up where it left off"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Prove the contract the prompts actually promise"
+  files = ["internal/cmd/pull_envelope_test.go", "assets/prompts/status.md", "assets/prompts/inbox.md"]
+  description = "Every existing envelope test reaches its failure AFTER a successful openBoard, which is\nwhy the whole setup-failure class was invisible. The fixture cannot even express the bug:\nyoutrackBoardRepo sets MOCK_TOKEN unconditionally, so add a variant that does not.\n\nThe prompts describe the envelope as covering a failed FETCH; status.md's 'exits 0 either\nway' reads as unconditional but inbox.md's wording does not. Say setup failures too, so\nthe documented contract and the enforced one agree.\n"
+  covers = ["c-1", "c-2", "c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["if the fixture regains an unconditional token, TestPullEnvelopeOnUnsetToken fails — a board repo whose auth_env names an unset variable is the only fixture that can reproduce the bug at all", "if the prompts keep promising a contract the command does not honour, TestPromptsDescribeTheEnvelopeContract fails — it asserts both prompt files say a setup failure lands in .error, since the prompts are what a consumer reads before trusting exit 0"]
+  status = "done"
