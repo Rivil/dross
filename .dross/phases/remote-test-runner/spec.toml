@@ -60,7 +60,7 @@
   id = "704efc036f0e88fe"
   text = "Run `runtime.test_watch` remotely — a long-lived remote watch session that re-runs on change."
   why = "A watch is a session, not a command: it needs a persistent connection, change detection on the LOCAL tree, and a way to stop it. That is a different transport problem from a one-shot run, and nothing reads test_watch today anyway."
-  target = "remote-test-watch"
+  dismissed = true
 
 [[deferred]]
   id = "069d6104904705e0"
