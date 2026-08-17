@@ -517,3 +517,34 @@ func trustFixture(t *testing.T) {
 		t.Fatalf("trustFixture: %v", err)
 	}
 }
+
+// liveRecordRoot copies the named phases' TRACKED changes.json records into a
+// throwaway .dross root and returns it.
+//
+// It exists for the handful of tests that deliberately assert against this
+// repo's own recorded data — a live red-proof pin, a one-off status backfill —
+// which a fixture invented from nothing cannot check. Handing a loader the live
+// .dross directory is what those tests used to do, and it is unauditable: the
+// callee may reach for state.json or any other gitignored path, which is
+// present here and absent in a fresh checkout, so the test passes locally for a
+// reason CI does not have (see hermetic_dross_read_test.go). Copying the exact
+// tracked files across keeps the real data and takes the ignored ones off the
+// table.
+func liveRecordRoot(t *testing.T, repo string, slugs ...string) string {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), ".dross")
+	for _, slug := range slugs {
+		body, err := os.ReadFile(filepath.Join(repo, ".dross", "phases", slug, "changes.json"))
+		if err != nil {
+			t.Fatalf("read live record for %s: %v", slug, err)
+		}
+		dst := filepath.Join(root, "phases", slug, "changes.json")
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dst, err)
+		}
+		if err := os.WriteFile(dst, body, 0o644); err != nil {
+			t.Fatalf("write %s: %v", dst, err)
+		}
+	}
+	return root
+}
