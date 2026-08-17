@@ -240,6 +240,24 @@ func runTest(root, repoDir, line string, local bool) error {
 	if err != nil {
 		return err
 	}
+	if target != nil {
+		// BEFORE the sync, not after. Probing after the tree is pushed
+		// discovers an unreachable host having already paid for the transfer,
+		// and — worse — a transport failure at that point is indistinguishable
+		// from the suite itself dying.
+		pf, perr := preflightRemote(*target, nil)
+		if perr != nil {
+			return perr
+		}
+		if pf.Fallback {
+			// Announced, never silent. A fallback the output does not mention
+			// leaves a local result indistinguishable from a remote one, which
+			// is the state that made `dross remote revoke` the workaround when
+			// helicon was down.
+			Printf("remote: %s\n", pf.Why)
+			target = nil
+		}
+	}
 	if target == nil {
 		if err := spawnLocal(repoDir, line, os.Stdout, os.Stderr); err != nil {
 			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test suite failed: %w", err)}

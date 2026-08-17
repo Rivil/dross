@@ -20,6 +20,7 @@
     "red-proof-repoint": "DRO-125",
     "remote-mutation-runner": "DRO-24",
     "remote-test-runner": "DRO-26",
+    "remote-toolchain-bootstrap": "DRO-129",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10"
   },
@@ -130,7 +131,9 @@
     "board-task-mirror/t-7": "DRO-123",
     "red-proof-repoint/t-1": "DRO-126",
     "red-proof-repoint/t-8": "DRO-127",
-    "red-proof-repoint/t-9": "DRO-128"
+    "red-proof-repoint/t-9": "DRO-128",
+    "remote-toolchain-bootstrap/t-1": "DRO-130",
+    "remote-toolchain-bootstrap/t-3": "DRO-131"
   },
   "last_pull": "0001-01-01T00:00:00Z"
 }

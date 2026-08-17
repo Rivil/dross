@@ -283,9 +283,9 @@ const gatedTestCommand = "go test -count=1 ./..."
 func refuseAdapters(t *testing.T) {
 	t.Helper()
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(p *project.Project, root string, skip bool) ([]mutation.Adapter, error) {
+	configuredAdaptersFn = func(p *project.Project, root string, skip bool) ([]mutation.Adapter, mutationTuning, error) {
 		t.Fatal("verify reached configuredAdapters despite refusing — the refusal spawned the mutation tools it was declining to authorize")
-		return nil, nil
+		return nil, mutationTuning{}, nil
 	}
 	t.Cleanup(func() { configuredAdaptersFn = prev })
 }

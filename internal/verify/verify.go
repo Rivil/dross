@@ -70,6 +70,48 @@ type Tests struct {
 	// — without it, a scope that silently narrowed is indistinguishable from
 	// a phase that genuinely had little to measure.
 	Scope *Scope `json:"scope,omitempty"`
+
+	// MeasuredOn names the machine the mutation run executed on. See
+	// MeasuredLocally / MeasuredOnHost / MeasuredAfterFallback for the shapes
+	// it takes; Skeleton copies it onto the summary so it survives into
+	// verify.toml. Empty on a record written before the field existed.
+	MeasuredOn string `json:"measured_on,omitempty"`
+}
+
+// The measurement-provenance strings live here, in one place, because they are
+// read by a human comparing two runs and written by a caller that knows only
+// the target. A caller composing its own phrasing would drift from the one the
+// last run wrote, and the field's whole job is to make two runs comparable.
+const measuredLocal = "local"
+
+// MeasuredLocally is the provenance of a run that never involved a host.
+func MeasuredLocally() string { return measuredLocal }
+
+// MeasuredOnHost is the provenance of a run that executed on host.
+func MeasuredOnHost(host string) string {
+	if strings.TrimSpace(host) == "" {
+		return measuredLocal
+	}
+	return host
+}
+
+// MeasuredAfterFallback is the provenance of a run that meant to use host,
+// could not reach it, and measured here instead.
+//
+// It names BOTH machines deliberately. Recording it as a plain local run would
+// lose the fact that a remote measurement was expected and did not happen,
+// which is the state board-task-mirror hit: helicon was down for hours, the
+// workaround was to revoke the grant, and nothing in the resulting numbers said
+// they came from a different machine than the run before.
+func MeasuredAfterFallback(host, why string) string {
+	if strings.TrimSpace(host) == "" {
+		return measuredLocal
+	}
+	s := measuredLocal + " (fell back from " + host
+	if w := strings.TrimSpace(why); w != "" {
+		s += ": " + w
+	}
+	return s + ")"
 }
 
 type LanguageRun struct {
@@ -261,7 +303,16 @@ type VerifySummary struct {
 	// before the score: when status != measured the score is a 0/0
 	// artifact, not a signal, and the verdict must be derived from
 	// criterion coverage alone.
-	MutationStatus  string  `toml:"mutation_status"`
+	MutationStatus string `toml:"mutation_status"`
+	// MeasuredOn names the machine that produced these numbers — a host for a
+	// remote run, "local" for one that ran here, and both when a run meant for
+	// a host fell back. Omitted when empty so a verify.toml written before the
+	// field round-trips unchanged.
+	//
+	// Without it a local score and a remote one are indistinguishable after the
+	// fact, and the two are not interchangeable evidence: they run different
+	// toolchain versions on different core counts.
+	MeasuredOn      string  `toml:"measured_on,omitempty"`
 	MutationScore   float64 `toml:"mutation_score"`
 	MutantsKilled   int     `toml:"mutants_killed"`
 	MutantsSurvived int     `toml:"mutants_survived"`
@@ -479,6 +530,11 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		Summary: VerifySummary{
 			CriteriaTotal:  len(criteriaIDs),
 			MutationStatus: MutationSkipped, // upgraded below if any adapter ran
+			// Carried through from the run rather than re-derived from config:
+			// what matters is where the numbers actually came from, which a
+			// grant on disk does not answer (a --local run has one and ignores
+			// it, and a fallback has one it could not use).
+			MeasuredOn: t.MeasuredOn,
 		},
 	}
 	// Totals across legs, POOLED — the score is computed once from them rather

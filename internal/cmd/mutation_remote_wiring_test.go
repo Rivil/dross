@@ -95,7 +95,7 @@ func TestGrantReachesEveryAdapter(t *testing.T) {
 	}, false)
 	stubProbe(t, 32, nil)
 
-	adapters, err := configuredAdapters(loadWiringProject(t, root), root, false)
+	adapters, _, err := configuredAdapters(loadWiringProject(t, root), root, false)
 	if err != nil {
 		t.Fatalf("configuredAdapters: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestBothSitesBuildTheSameGremlins(t *testing.T) {
 	stubProbe(t, 32, nil)
 
 	p := loadWiringProject(t, root)
-	adapters, err := configuredAdapters(p, root, false)
+	adapters, _, err := configuredAdapters(p, root, false)
 	if err != nil {
 		t.Fatalf("configuredAdapters: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestTuningUnsetStaysZeroSoAdaptersApplyTheirOwnDefault(t *testing.T) {
 	root := wiringFixture(t, nil, false)
 	p := loadWiringProject(t, root)
 
-	adapters, err := configuredAdapters(p, root, false)
+	adapters, _, err := configuredAdapters(p, root, false)
 	if err != nil {
 		t.Fatalf("configuredAdapters: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestUnsetWorkersWithARemoteHalvesTheProbedCores(t *testing.T) {
 	}, false)
 	calls := stubProbe(t, 32, nil)
 
-	adapters, err := configuredAdapters(loadWiringProject(t, root), root, false)
+	adapters, _, err := configuredAdapters(loadWiringProject(t, root), root, false)
 	if err != nil {
 		t.Fatalf("configuredAdapters: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestGrantDropsTheDockerPrefixAtBothSites(t *testing.T) {
 		t.Fatal("the fixture is not in docker mode — this test would prove nothing")
 	}
 
-	adapters, err := configuredAdapters(p, root, false)
+	adapters, _, err := configuredAdapters(p, root, false)
 	if err != nil {
 		t.Fatalf("a docker-mode repo with a grant was refused: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestMutualExclusionStaysUnreachableFromBothSites(t *testing.T) {
 		stubProbe(t, 8, nil)
 
 		p := loadWiringProject(t, root)
-		adapters, err := configuredAdapters(p, root, false)
+		adapters, _, err := configuredAdapters(p, root, false)
 		if err != nil {
 			t.Fatalf("docker=%v: %v", docker, err)
 		}
@@ -326,7 +326,7 @@ func TestNoGrantKeepsTheDockerPrefixUnchanged(t *testing.T) {
 		t.Fatal("the fixture is not in docker mode")
 	}
 
-	adapters, err := configuredAdapters(p, root, false)
+	adapters, _, err := configuredAdapters(p, root, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,16 +350,22 @@ func TestNoGrantKeepsTheDockerPrefixUnchanged(t *testing.T) {
 // and written artefacts describing a measurement that did not happen. Asserted
 // on the artefacts rather than on the error alone: an error returned after
 // tests.json was written would read identically from the caller's side.
+//
+// The failure driven here is a REMOTE COMMAND failure, not a transport one.
+// remote-toolchain-bootstrap's locked fallback_policy split the two: a host that
+// could not be REACHED now falls back to a local run and records that it did
+// (TestVerifyFallsBackToLocal), while a host that ran the probe and failed it
+// has given an answer and still aborts — which is what this pins.
 func TestProbeFailureAbortsVerifyBeforeAnyAdapterRuns(t *testing.T) {
 	root := wiringFixture(t, map[string]string{
 		"mutation_remote_host":    "helicon",
 		"mutation_remote_workdir": "/srv/dross",
 	}, false)
-	stubProbe(t, 0, remote.Classify("ssh", "helicon", 255))
+	stubProbe(t, 0, remote.Classify("getconf", "helicon", 127))
 
-	adapters, err := configuredAdapters(loadWiringProject(t, root), root, false)
+	adapters, _, err := configuredAdapters(loadWiringProject(t, root), root, false)
 	if err == nil {
-		t.Fatal("an unreachable granted host produced a usable adapter list")
+		t.Fatal("a failing remote probe produced a usable adapter list")
 	}
 	if adapters != nil {
 		t.Errorf("a refused resolution still returned %d adapters — a local-only fallback list", len(adapters))
@@ -380,7 +386,7 @@ func TestTrackedLocalRefusalAbortsTheWiring(t *testing.T) {
 	mustGit(t, filepath.Dir(root), "add", "-f", RootDirName+"/"+LocalFile)
 	stubProbe(t, 8, nil)
 
-	adapters, err := configuredAdapters(loadWiringProject(t, root), root, false)
+	adapters, _, err := configuredAdapters(loadWiringProject(t, root), root, false)
 	if err == nil {
 		t.Fatal("a tracked local.toml was read rather than refused")
 	}
@@ -402,7 +408,7 @@ func TestSkipMutationNeedsNoRemote(t *testing.T) {
 	}, false)
 	calls := stubProbe(t, 0, remote.Classify("ssh", "helicon", 255))
 
-	adapters, err := configuredAdapters(loadWiringProject(t, root), root, true)
+	adapters, _, err := configuredAdapters(loadWiringProject(t, root), root, true)
 	if err != nil {
 		t.Fatalf("--skip-mutation was blocked by an unreachable remote: %v", err)
 	}

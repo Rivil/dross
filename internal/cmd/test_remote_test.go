@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // remoteRecorder replaces the remote-spawn seam and records every argv and
@@ -48,10 +50,19 @@ func installRemoteRecorder(t *testing.T, err error) *remoteRecorder {
 
 // grantedTestFixture is a consented repo with a remote granted, which is the
 // state every test here is about.
+//
+// The probe seam is stubbed REACHABLE by default. The run now preflights the
+// host before pushing anything, so a fixture that left the seam live would send
+// a real ssh at a host named "helicon" and fall back to local — turning every
+// test here into a local run. A test that wants an unreachable host replaces
+// the seam after calling this.
 func grantedTestFixture(t *testing.T, testCmd string) string {
 	t.Helper()
 	testFixture(t, testCmd)
 	trustFixture(t)
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8}, nil
+	})
 	root, err := FindRoot()
 	if err != nil {
 		t.Fatal(err)

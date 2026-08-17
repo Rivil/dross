@@ -1114,3 +1114,30 @@
   line = 159
   category = "gremlins-attribution-ceiling"
   accepted_in = "red-proof-repoint"
+
+[[accepted]]
+  key = "30dcd7db2eecf398"
+  file = "internal/cmd/remote_bootstrap.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.argv == nil:"
+  line = 122
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "remote-toolchain-bootstrap"
+
+[[accepted]]
+  key = "cf7d3f9891cb9046"
+  file = "internal/cmd/remote_bootstrap_cmd.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.Refusal != \"\":"
+  line = 90
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "remote-toolchain-bootstrap"
+
+[[accepted]]
+  key = "6467e5accd9da8c2"
+  file = "internal/cmd/remote_bootstrap_cmd.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !apply && refused == 0:"
+  line = 110
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "remote-toolchain-bootstrap"
