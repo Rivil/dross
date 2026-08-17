@@ -1,0 +1,68 @@
+[phase]
+  id = "runtime-command-runner"
+  title = "runtime-command-runner"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross run <name>` executes the command configured in that runtime slot, streaming its output as it arrives, for every slot project.toml can carry — so no [runtime] key is a value that nothing reads."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross run` with no name lists the slots, each with its configured command line or a clear 'not set', so a user can see what is runnable without opening project.toml."
+
+[[criteria]]
+  id = "c-3"
+  text = "A slot with no command configured is refused, naming the exact `dross project set` line that would fix it — never a silent exit 0, which is the 'the tool said OK and nothing happened' failure the config-value-truth phase existed to remove."
+
+[[criteria]]
+  id = "c-4"
+  text = "Running a slot requires consent for THAT slot's command: a grant covering the test command does not authorize the dev command, and changing a consented command revokes its own consent."
+
+[[criteria]]
+  id = "c-5"
+  text = "A command that never exits on its own — a dev server, a log tail, a watch, a shell — runs in the foreground and ends cleanly on Ctrl-C, reporting success rather than reporting the interrupt as a failed command."
+
+[[criteria]]
+  id = "c-6"
+  text = "An interactive slot gets a usable terminal: `dross run shell` reaches the user's stdin, rather than being handed a closed one like a batch command."
+
+[[criteria]]
+  id = "c-7"
+  text = "The inert-key guard covers every settable key, including the ones whose names contain digits — the key-parsing regex no longer silently drops `runtime.e2e_command`, `stack.e2e_runner`, `paths.e2e` and `paths.i18n` from the set it checks."
+
+[[decisions]]
+  key = "own_consent_namespace"
+  choice = "Run grants live in their own per-command fingerprint set (`trusted_run_commands`), granted with `dross trust --run <name>`. The existing test-command grant is never reused."
+  why = "Consent is bound to a specific command string on purpose: a grant that covered 'whatever [runtime] happens to say' would let a dev_command arriving in a pull inherit trust for a line nobody read, which is precisely the attack the binding exists to stop. A per-command set is the shape `trusted_replay_commands` already uses, and granting one slot must not revoke another."
+  locked = true
+
+[[decisions]]
+  key = "signal_exit_is_success"
+  choice = "A slot interrupted by SIGINT/SIGTERM exits 0, not with the command-failed code."
+  why = "Ctrl-C is how you stop a dev server or a log tail — it is the command working as intended, and the only way to end it. Reporting that as a red command would make the ordinary case look like a failure and make the exit code useless for the slots that do terminate."
+  locked = true
+
+[[decisions]]
+  key = "interactive_slots_get_stdin"
+  choice = "`shell` (and only the slots declared interactive) inherit os.Stdin; every other slot keeps the closed stdin `dross test` uses."
+  why = "A shell with no stdin is not a shell. But handing stdin to a batch command is how a migration silently waits forever for a prompt nobody sees, so it is granted per-slot rather than universally."
+  locked = true
+
+[[decisions]]
+  key = "local_only_for_now"
+  choice = "`dross run` executes locally. It does not inherit `dross test`'s remote-by-default behaviour."
+  why = "The slots that motivated this are dev, shell and logs, and a dev server on a remote host is not reachable from the laptop's browser — `runtime.services.*.url` describes localhost. Silently running them elsewhere would be the wrong default in the exact cases the verb exists for. Remote execution is the remote-* phases' subject and can be added behind an explicit flag when it has a case."
+  locked = true
+
+[[decisions]]
+  key = "services_stays_unread"
+  choice = "`runtime.services` is not consulted, and no health-polling is built."
+  why = "The criterion is that every runtime COMMAND is executable. services is a description of endpoints, not a command, and polling one would need a readiness policy — how long, how often, what counts as healthy — that nothing has asked for yet. Building it would be inventing a contract to fill a struct field."
+  locked = true
+
+[[decisions]]
+  key = "fix_the_guard_regex_here"
+  choice = "The digit-blind key regex in the inert-config guard is fixed in this phase."
+  why = "It matches `[a-z_]+`, so any key containing a digit never entered the set the guard checks — `runtime.e2e_command` was invisible to the very test that exists to catch unread keys, which is why it was never listed as inert despite being one. This phase gives e2e_command a reader, so leaving the hole would mean shipping the fix for a key while the guard that should have found it stays broken."
+  locked = true
