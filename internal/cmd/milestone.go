@@ -196,6 +196,7 @@ func isAffirmative(resp string) bool {
 // deletes milestone/<version> local+remote, mirroring `dross phase complete`.
 func milestoneComplete() *cobra.Command {
 	var finalize bool
+	var forceUnverified bool
 	c := &cobra.Command{
 		Use:   "complete [version]",
 		Short: "Open the milestone->main PR, or (--finalize) ff main and delete the milestone branch after merge",
@@ -244,6 +245,16 @@ func milestoneComplete() *cobra.Command {
 				return err
 			}
 
+			// Every phase must have verified before the integration PR
+			// carries it into the base branch. Gated on open rather than on
+			// --finalize: finalize runs after the merge, where a refusal
+			// strands a landed milestone instead of preventing anything.
+			if !forceUnverified {
+				if err := milestoneVerifyGate(root, version, target); err != nil {
+					return err
+				}
+			}
+
 			hosts, herr := remotePolicy(root, repoDir, p)
 			if herr != nil {
 				return herr
@@ -277,6 +288,8 @@ func milestoneComplete() *cobra.Command {
 	}
 	c.Flags().BoolVar(&finalize, "finalize", false,
 		"after the milestone PR merges: ff main from origin and delete milestone/<version> local+remote")
+	c.Flags().BoolVar(&forceUnverified, "force-unverified", false,
+		"skip the 'every phase in the milestone must verify pass' gate")
 	return c
 }
 
