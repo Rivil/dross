@@ -74,6 +74,25 @@
           "what": "reads the toolchain cache vars off the stack profile — recorded id first, detection when none is recorded — so the runner holds no per-language table and the feature is not inert on repos predating stack.profile"
         }
       ]
+    },
+    "t-5": {
+      "files": [
+        "internal/mutation/launcher.go",
+        "internal/mutation/launcher_scratch_test.go",
+        "internal/mutation/scratch.go",
+        "internal/mutation/scratch_test.go",
+        "internal/cmd/techdebt_test.go"
+      ],
+      "commit": "1b777e4",
+      "completed_at": "2026-08-17T02:40:14.218235Z",
+      "landmarks": [
+        {
+          "feature": "mutation testing adapters",
+          "symbol": "scratchDirFor",
+          "loc": "internal/mutation/scratch.go:132",
+          "what": "the scratch sits beside the tree on its own volume — inside it made every temp dir a child of the repo and reddened nine root-discovery tests on the host alone"
+        }
+      ]
     }
   }
 }

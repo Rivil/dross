@@ -1,4 +1,4 @@
-task_seq = 4
+task_seq = 5
 
 [phase]
   id = "cache-budget-prune"
@@ -43,4 +43,13 @@ task_seq = 4
   covers = ["c-4", "c-6"]
   depends_on = ["t-1", "t-2"]
   test_contract = ["if the vars do not reach the adapters, TestAdaptersCarryProfileCacheVars fails — a Go repo's configured adapters are asserted to carry GOCACHE, resolved from the profile rather than from a constant in the cmd package", "if a profile declaring none still injects one, TestNoProfileCacheVarsIsEmpty fails — a repo whose detected profile has no mutation_cache yields adapters carrying an empty var list", "if an unreadable or absent profile fails the run, TestMissingProfileDoesNotBreakVerify fails — a repo whose stack does not resolve must still produce adapters, with no scratch, rather than erroring: disk hygiene must never be able to stop a verify", "if the same phase measures differently with the feature on, TestScratchDoesNotChangeTheReport fails — the same fixture run with and without cache vars produces identical killed/survived counts (c-6)"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 3
+  title = "Create and wipe the remote scratch; drop a stray artifact"
+  files = ["internal/mutation/launcher.go", "internal/mutation/launcher_scratch_test.go", "internal/mutation/scratch.go", "internal/mutation/scratch_test.go"]
+  description = "Two defects found by running the real verify rather than by the unit tests.\n\n1. The remote run exported TMPDIR at a directory nothing created, so gremlins died with \"impossible to create the workdir: stat /home/rivil/dross/.dross-cache: no such file or directory\" before measuring anything. The remote scratch must be created before the tool runs and removed when the run ends — c-2 says every exit path, and the remote side had no wipe at all.\n\n2. internal/mutation/a/b/archive.a (64 KB of x) is tracked. It came from hand-mutating newScratch during t-2 verification: the mutant left s.Dir empty, so the test wrote to a path relative to the package dir, and `git add internal/mutation/` swept it in. Remove it and stop the test writing anywhere when Dir is empty.\n\nTest contract:\n- if the remote scratch is exported but never created, TestRemoteScriptCreatesScratchDir fails — the script sent to the host must mkdir -p the directory before the tool argv runs, in that order, since gremlins os.MkdirTemp against a missing TMPDIR aborts the run\n- if a remote run leaves its scratch on the host, TestRemoteCloseWipesScratch fails — Close must issue a removal for the remote directory, asserted through the recorded remote argv, and must be idempotent\n- if the removal targets a path outside the granted workdir, TestRemoteWipeRefusesForeignPath fails — a directory that is not the workdir-derived scratch is refused rather than removed\n- if a scratch with no directory still writes, TestScratchWipeTestWritesNowhereWhenDirIsEmpty fails — the wipe test must assert Dir is non-empty before writing, so a mutant cannot make it litter the source tree"
+  covers = ["c-2", "c-5"]
   status = "done"
