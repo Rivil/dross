@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -170,4 +172,215 @@ func projectWithProvider(provider string) *project.Project {
 	p.Board.Provider = provider
 	p.Board.Enabled = true
 	return p
+}
+
+// pullFixture is a repo with a phase plan and a board.json ledger, ready for
+// reportTaskMoves to write into.
+func pullFixture(t *testing.T, planBody string) (*boardCtx, *phase.Plan, string) {
+	t.Helper()
+	dir := t.TempDir()
+	chdir(t, dir)
+	scaffoldPhaseWithPlan(t, "p1", planBody) // runs Init itself
+	plan, _, planPath, err := loadPhasePlanAndSpec("p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	bd := board.New()
+	ctx := &boardCtx{
+		board:     bd,
+		proj:      projectWithProvider("youtrack"),
+		root:      root,
+		boardPath: filepath.Join(root, board.File),
+	}
+	return ctx, plan, planPath
+}
+
+const pullPlan = `[phase]
+id = "p1"
+[[task]]
+id = "t-1"
+wave = 1
+title = "first"
+status = "in_progress"
+[[task]]
+id = "t-2"
+wave = 1
+title = "second"
+status = "in_progress"
+`
+
+// TestReportAppliesABoardMove is the write path: --apply must change plan.toml
+// AND advance the ledger, or the next run re-applies the same move forever.
+func TestReportAppliesABoardMove(t *testing.T) {
+	ctx, plan, planPath := pullFixture(t, pullPlan)
+	moves := []taskMoveVerdict{{
+		TaskID: "t-1", Issue: "PROJ-1", Kind: taskBoardMoved,
+		PlanStatus: phase.StatusInProgress, BoardState: statusTaskInReview,
+		NewStatus: phase.StatusDone,
+	}}
+	out := captureStdout(t, func() {
+		if err := reportTaskMoves(ctx, "p1", plan, planPath, moves, true); err != nil {
+			t.Fatalf("apply: %v", err)
+		}
+	})
+	if got := planTask(t, planPath, "t-1").Status; got != phase.StatusDone {
+		t.Errorf("plan status = %q, want done — the board move was not written", got)
+	}
+	link, ok := ctx.board.TaskLinkFor("p1", "t-1")
+	if !ok || link.PlanStatus != phase.StatusDone || link.BoardState != statusTaskInReview {
+		t.Errorf("ledger not advanced: %+v — the next run would re-apply this move", link)
+	}
+	if !strings.Contains(out, "applied 1") {
+		t.Errorf("the write must be reported: %s", out)
+	}
+}
+
+// TestReportDryRunWritesNothing: the default must never surprise anyone with a
+// plan.toml mutation.
+func TestReportDryRunWritesNothing(t *testing.T) {
+	ctx, plan, planPath := pullFixture(t, pullPlan)
+	before := mustRead(t, planPath)
+	moves := []taskMoveVerdict{{
+		TaskID: "t-1", Issue: "PROJ-1", Kind: taskBoardMoved,
+		PlanStatus: phase.StatusInProgress, BoardState: statusTaskInReview,
+		NewStatus: phase.StatusDone,
+	}}
+	out := captureStdout(t, func() {
+		if err := reportTaskMoves(ctx, "p1", plan, planPath, moves, false); err != nil {
+			t.Fatalf("dry run: %v", err)
+		}
+	})
+	assertPlanUnchanged(t, planPath, before)
+	if !strings.Contains(out, "would move") || !strings.Contains(out, "--apply") {
+		t.Errorf("a dry run must say what it would do and how to do it: %s", out)
+	}
+}
+
+// TestReportConflictExitsNonZeroAfterApplyingTheRest: a contested task must not
+// hide the clean moves around it.
+func TestReportConflictExitsNonZeroAfterApplyingTheRest(t *testing.T) {
+	ctx, plan, planPath := pullFixture(t, pullPlan)
+	moves := []taskMoveVerdict{
+		{TaskID: "t-1", Issue: "PROJ-1", Kind: taskBoardMoved,
+			PlanStatus: phase.StatusInProgress, BoardState: statusTaskInReview, NewStatus: phase.StatusDone},
+		{TaskID: "t-2", Issue: "PROJ-2", Kind: taskConflict,
+			PlanStatus: phase.StatusDone, BoardState: statusTaskInProgress,
+			WasPlan: phase.StatusInProgress, WasBoard: statusTaskInReview},
+	}
+	var err error
+	out := captureStdout(t, func() {
+		err = reportTaskMoves(ctx, "p1", plan, planPath, moves, true)
+	})
+	if err == nil {
+		t.Fatal("a conflict must exit non-zero")
+	}
+	if !strings.Contains(err.Error(), "both sides") {
+		t.Errorf("unexpected error: %v", err)
+	}
+	// The clean move still landed.
+	if got := planTask(t, planPath, "t-1").Status; got != phase.StatusDone {
+		t.Errorf("t-1 = %q — the conflict on t-2 suppressed an unrelated clean move", got)
+	}
+	// And the refusal named both values.
+	if !strings.Contains(out, "CONFLICT") || !strings.Contains(out, statusTaskInProgress) {
+		t.Errorf("the conflict must name what each side holds: %s", out)
+	}
+}
+
+func TestReportNothingToDo(t *testing.T) {
+	ctx, plan, planPath := pullFixture(t, pullPlan)
+	out := captureStdout(t, func() {
+		if err := reportTaskMoves(ctx, "p1", plan, planPath, []taskMoveVerdict{
+			{TaskID: "t-1", Kind: taskUnchanged},
+		}, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(out, "no task moves") {
+		t.Errorf("an unchanged board must say so plainly: %s", out)
+	}
+}
+
+// TestReportNarratesPlanMovedAndUnsynced: both are reported rather than
+// silently skipped — a task the tool declined to touch must say why.
+func TestReportNarratesPlanMovedAndUnsynced(t *testing.T) {
+	ctx, plan, planPath := pullFixture(t, pullPlan)
+	out := captureStdout(t, func() {
+		if err := reportTaskMoves(ctx, "p1", plan, planPath, []taskMoveVerdict{
+			{TaskID: "t-1", Kind: taskPlanMoved},
+			{TaskID: "t-2", Kind: taskUnsynced},
+		}, false); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(out, "task-sync p1 t-1") {
+		t.Errorf("a plan-side move must name the command that pushes it: %s", out)
+	}
+	if !strings.Contains(out, "no agreement point") {
+		t.Errorf("an unsynced task must explain why it was skipped: %s", out)
+	}
+}
+
+// TestCollectTaskMovesSkipsUnmirroredTasks: a task with no issue is task-sync's
+// job, and asking the board about it would be a round trip for nothing.
+func TestCollectTaskMovesSkipsUnmirroredTasks(t *testing.T) {
+	ctx, plan, _ := pullFixture(t, pullPlan)
+	ctx.client = &pullFakeClient{t: t, issues: map[string]*forge.Issue{
+		"PROJ-1": {Key: "PROJ-1", Labels: statusLabels(statusTaskInReview)},
+	}}
+	ctx.board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, statusTaskInProgress)
+	// t-2 deliberately has no mapping.
+	moves, err := collectTaskMoves(ctx, "p1", plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(moves) != 1 || moves[0].TaskID != "t-1" {
+		t.Fatalf("moves = %+v, want only the mirrored task", moves)
+	}
+	if moves[0].Kind != taskBoardMoved {
+		t.Errorf("kind = %v, want taskBoardMoved", moves[0].Kind)
+	}
+}
+
+// TestCollectTaskMovesSurfacesABoardFailure: a board that cannot be read must
+// fail the run rather than report an empty set of moves.
+func TestCollectTaskMovesSurfacesABoardFailure(t *testing.T) {
+	ctx, plan, _ := pullFixture(t, pullPlan)
+	ctx.client = &pullFakeClient{t: t, err: errors.New("500 from the tracker")}
+	ctx.board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, statusTaskInProgress)
+	if _, err := collectTaskMoves(ctx, "p1", plan); err == nil {
+		t.Fatal("an unreadable board must not read as 'no moves'")
+	}
+}
+
+// pullFakeClient is a BoardClient that answers GetIssue and nothing else — the
+// only method the inbound path uses.
+type pullFakeClient struct {
+	t      *testing.T
+	issues map[string]*forge.Issue
+	err    error
+}
+
+func (f *pullFakeClient) GetIssue(key string) (*forge.Issue, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if iss, ok := f.issues[key]; ok {
+		return iss, nil
+	}
+	return nil, errors.New("no such issue: " + key)
+}
+func (f *pullFakeClient) EnsureMilestone(string, string) (string, error) { return "", nil }
+func (f *pullFakeClient) CreateIssue(forge.IssueInput) (*forge.Issue, error) {
+	f.t.Fatal("task-pull must not create issues")
+	return nil, nil
+}
+func (f *pullFakeClient) UpdateIssue(string, forge.IssuePatch) (*forge.Issue, error) {
+	f.t.Fatal("task-pull must not write to the board — it is the inbound direction")
+	return nil, nil
+}
+func (f *pullFakeClient) CloseIssue(string) error { return nil }
+func (f *pullFakeClient) ListIssues(forge.IssueFilter) ([]forge.Issue, error) {
+	return nil, nil
 }

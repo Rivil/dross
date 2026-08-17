@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -242,5 +244,106 @@ func TestEveryRuntimeCommandHasASlot(t *testing.T) {
 		if !covered[field] {
 			t.Errorf("%s has no `dross run` slot — it is a configurable value nothing runs", field)
 		}
+	}
+}
+
+// TestRunSlotOutcomeSignalIsSuccess: Ctrl-C is how you stop a dev server or a
+// log tail, so an interrupted slot must report success. Reporting it as a red
+// command would make the ordinary case look like a failure and the exit code
+// useless for the slots that do terminate.
+func TestRunSlotOutcomeSignalIsSuccess(t *testing.T) {
+	slot, _ := findRunSlot("dev")
+	out := captureStdout(t, func() {
+		if err := runSlotOutcome(slot, errors.New("signal: interrupt"), context.Canceled); err != nil {
+			t.Errorf("an interrupted long-running slot must exit 0, got %v", err)
+		}
+	})
+	if !strings.Contains(out, "stopped") {
+		t.Errorf("stopping must be narrated, got %q", out)
+	}
+}
+
+// TestRunSlotOutcomeRealFailureIsRed: a command that failed on its own must NOT
+// be laundered into success by the same arm.
+func TestRunSlotOutcomeRealFailureIsRed(t *testing.T) {
+	slot, _ := findRunSlot("migrate")
+	err := runSlotOutcome(slot, errors.New("exit status 1"), nil)
+	if err == nil {
+		t.Fatal("a failed command must be reported as failed")
+	}
+	var ec *ExitCodeError
+	if !errors.As(err, &ec) || ec.Code != 1 {
+		t.Errorf("err = %v, want an ExitCodeError with code 1", err)
+	}
+	if !strings.Contains(err.Error(), "migrate") {
+		t.Errorf("the failure must name the slot: %v", err)
+	}
+}
+
+func TestRunSlotOutcomeSuccess(t *testing.T) {
+	slot, _ := findRunSlot("build")
+	if err := runSlotOutcome(slot, nil, nil); err != nil {
+		t.Errorf("a clean run must be nil, got %v", err)
+	}
+}
+
+// TestRunSlotCommandActuallyRuns exercises the real spawn — every other run
+// test stubs it, which is how the spawn path had no coverage at all.
+func TestRunSlotCommandActuallyRuns(t *testing.T) {
+	dir := t.TempDir()
+	if err := runSlotCommand(context.Background(), dir, "true", nil); err != nil {
+		t.Errorf("a trivial command must succeed: %v", err)
+	}
+	if err := runSlotCommand(context.Background(), dir, "exit 3", nil); err == nil {
+		t.Error("a non-zero command must surface as an error")
+	}
+}
+
+// TestRunSlotCommandRefusesALeadingDash: sh reads options before -c and honours
+// no end-of-options token, so a line starting with a dash would be taken as a
+// shell option rather than the script.
+func TestRunSlotCommandRefusesALeadingDash(t *testing.T) {
+	err := runSlotCommand(context.Background(), t.TempDir(), "-i", nil)
+	if err == nil {
+		t.Fatal("a leading-dash command line must be refused, not passed to sh")
+	}
+}
+
+// TestTrustRunRejectsUnknownAndUnset covers the two refusals on the grant path.
+func TestTrustRunRejectsUnknownAndUnset(t *testing.T) {
+	dir := runRepo(t, nil)
+	root := filepath.Join(dir, ".dross")
+
+	if err := trustRun(root, "deploy", false); err == nil {
+		t.Error("an unknown slot must be refused")
+	} else if !strings.Contains(err.Error(), "migrate") {
+		t.Errorf("the refusal must list the known slots: %v", err)
+	}
+
+	err := trustRun(root, "seed", false)
+	if err == nil {
+		t.Fatal("trusting an unset command must be refused — there is nothing to bind to")
+	}
+	if !strings.Contains(err.Error(), "runtime.seed_command") {
+		t.Errorf("the refusal must name the key to set: %v", err)
+	}
+}
+
+// TestTrustRunCheckReportsState: --check must be silent on success and explain
+// on failure, like the test-command form it mirrors.
+func TestTrustRunCheckReportsState(t *testing.T) {
+	dir := runRepo(t, map[string]string{"runtime.dev_command": "npm run dev"})
+	root := filepath.Join(dir, ".dross")
+
+	if err := trustRun(root, "dev", true); err == nil {
+		t.Fatal("--check must fail before consent is granted")
+	}
+	captureStdout(t, func() {
+		if err := trustRun(root, "dev", false); err != nil {
+			t.Fatalf("grant: %v", err)
+		}
+	})
+	if err := trustRun(root, "dev", true); err != nil {
+		t.Errorf("--check must pass once granted: %v", err)
 	}
 }
