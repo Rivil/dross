@@ -174,7 +174,7 @@ func TestBothSitesBuildTheSameGremlins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveMutationTuning: %v", err)
 	}
-	fromDrain := mt.gremlins(fromVerify.ProjectRoot, p)
+	fromDrain := mt.gremlins(fromVerify.ProjectRoot, p, nil)
 
 	if !reflect.DeepEqual(fromVerify, fromDrain) {
 		t.Errorf("the two construction sites disagree:\n verify: %+v\n drain:  %+v", fromVerify, fromDrain)
@@ -277,7 +277,7 @@ func TestGrantDropsTheDockerPrefixAtBothSites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g := mt.gremlins(filepath.Dir(root), p)
+	g := mt.gremlins(filepath.Dir(root), p, nil)
 	if g.Prefix != "" || g.Remote == nil {
 		t.Errorf("the drain site disagrees: Prefix=%q Remote=%+v", g.Prefix, g.Remote)
 	}

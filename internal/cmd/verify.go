@@ -14,6 +14,7 @@ import (
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
+	"github.com/Rivil/dross/internal/stack"
 	"github.com/Rivil/dross/internal/survivor"
 	"github.com/Rivil/dross/internal/telemetry"
 	"github.com/Rivil/dross/internal/verify"
@@ -278,8 +279,9 @@ type mutationTuning struct {
 
 // gremlins is the single Gremlins constructor. Both sites go through it, so a
 // knob can only be added in one place.
-func (mt mutationTuning) gremlins(projectRoot string, p *project.Project) *mutation.Gremlins {
+func (mt mutationTuning) gremlins(projectRoot string, p *project.Project, cacheVars []string) *mutation.Gremlins {
 	return &mutation.Gremlins{
+		CacheVars:          cacheVars,
 		Prefix:             mt.Prefix,
 		ProjectRoot:        projectRoot,
 		TimeoutCoefficient: p.Mutation.Gremlins.TimeoutCoefficient,
@@ -383,6 +385,42 @@ func measuredOnOf(adapters []mutation.Adapter, mt mutationTuning) string {
 	return measuredOnFromAdapters(adapters)
 }
 
+// profileCacheVars reads the toolchain cache variables the detected stack
+// profile declares, so the mutation runner never holds a per-language table of
+// its own (the locked cache_var_source decision).
+//
+// Every failure path returns nil rather than an error, deliberately. This is
+// disk hygiene: a repo whose stack does not resolve, or whose user profile
+// directory is unreadable, must still be verifiable. Failing a verify because
+// the build cache could not be redirected would trade a bounded disk problem
+// for an unusable command.
+func profileCacheVars(p *project.Project, repoDir string) []string {
+	if p == nil {
+		return nil
+	}
+	profiles, err := stack.LoadAll()
+	if err != nil {
+		return nil
+	}
+	// The recorded id wins when there is one. Falling back to DETECTION when
+	// there is not is what keeps this from being dead config: stack.profile is
+	// newer than most project.toml files — dross's own does not carry it — and
+	// a feature that silently does nothing for every repo onboarded before the
+	// field existed is indistinguishable from one that was never wired up.
+	id := strings.TrimSpace(p.Stack.Profile)
+	if id == "" && repoDir != "" {
+		id = stack.Detect(repoDir, profiles)
+	}
+	if id == "" || id == stack.Unsupported {
+		return nil
+	}
+	sp := stack.ByID(profiles, id)
+	if sp == nil {
+		return nil
+	}
+	return sp.MutationCache.Vars
+}
+
 // configuredAdapters returns the list of mutation adapters appropriate
 // for the project, with the runtime prefix or the granted remote applied,
 // plus the tuning it resolved — the caller needs the latter to record where
@@ -399,20 +437,22 @@ func configuredAdapters(p *project.Project, root string, skip bool) ([]mutation.
 	// or the host cwd for docker (we read the report via bind-mounted fs).
 	// If docker volume layout diverges, this is where we'd surface config.
 	cwd, _ := os.Getwd()
+	cacheVars := profileCacheVars(p, filepath.Dir(root))
 	all := []mutation.Adapter{
 		&mutation.Stryker{
 			Prefix:      mt.Prefix,
 			ProjectRoot: cwd,
 			Workdir:     p.Mutation.Stryker.Workdir,
 			Remote:      mt.Target,
+			CacheVars:   cacheVars,
 			// Only consulted for a remote run, where the host has to install
 			// dependencies before stryker can resolve anything. Passed rather
 			// than defaulted: installing with the wrong manager produces a tree
 			// stryker resolves differently.
 			PackageManager: p.Stack.PackageManager,
 		},
-		mt.gremlins(cwd, p),
-		&mutation.StrykerNet{Prefix: mt.Prefix, ProjectRoot: cwd, Remote: mt.Target},
+		mt.gremlins(cwd, p, cacheVars),
+		&mutation.StrykerNet{Prefix: mt.Prefix, ProjectRoot: cwd, Remote: mt.Target, CacheVars: cacheVars},
 	}
 	if len(p.Mutation.Adapters) == 0 {
 		return all, mt, nil
