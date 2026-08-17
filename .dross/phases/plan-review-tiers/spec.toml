@@ -1,0 +1,28 @@
+[phase]
+  id = "plan-review-tiers"
+  title = "plan-review-tiers"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "The plan prompt states the review ladder it already has — no review, one independent cold reviewer (the default), and the three-lens panel — with what each costs and when to reach for it, so a user choosing between them is not guessing."
+
+[[criteria]]
+  id = "c-2"
+  text = "The default tier is stated as the default: a plan gets an independent second opinion unless the user opts out, which is the opposite of what someone reaching for --panel would assume from the flag's existence."
+
+[[criteria]]
+  id = "c-3"
+  text = "The ladder cannot silently lose a rung — a guard fails if the prompt stops describing all three tiers, so removing or renaming one has to be a deliberate edit rather than a quiet drift."
+
+[[decisions]]
+  key = "the_tier_already_exists"
+  choice = "No new review tier is built. The phase documents and guards the ladder that is already implemented."
+  why = "The deferred item asked for 'a --panel-free lightweight second opinion — a single cold reviewer over the finished decomposition'. §6.1 of plan.md already runs exactly that, by default, in its own cold subagent, and has since the plan-quality-loops work. Building a second one would add a rung identical to the existing default. The item's own deferral reason said the gap was a cost tier rather than a missing check; the finding is that even the cost tier is present and merely undocumented."
+  locked = true
+
+[[decisions]]
+  key = "guard_the_rungs_not_the_prose"
+  choice = "The guard asserts each tier's trigger is described in plan.md, not that the wording matches a fixed string."
+  why = "Prose will be reworded and a guard pinned to phrasing would fail on every edit until someone deleted it — the failure mode that makes guards get removed. Asserting the three triggers appear keeps the check meaningful while leaving the explanation free to improve."
+  locked = true
