@@ -1,0 +1,40 @@
+[phase]
+  id = "ci-mutation-leg"
+  title = "ci-mutation-leg"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "The TypeScript mutation leg runs on every pull request, on a runner where no developer installed anything — a PR that breaks dross's Stryker adapter fails CI."
+
+[[criteria]]
+  id = "c-2"
+  text = "A leg that cannot run fails the job instead of skipping it: if Node or the fixture's dependencies are missing in CI, the run is red, because a skipped test reports the same green as one that measured something."
+
+[[criteria]]
+  id = "c-3"
+  text = "The workflow adding it passes the supply-chain checklist it is being added to: the action is SHA-pinned, the Node version is an exact patch, the install is lockfile-scoped with install scripts disabled, and an advisory at high or above fails the build."
+
+[[decisions]]
+  key = "skip_is_failure_in_ci"
+  choice = "A DROSS_REQUIRE_E2E environment variable turns the test's own skip conditions into a hard failure, and the CI job sets it."
+  why = "The test skips when npx or the fixture's node_modules are absent, which is right on a developer's machine and catastrophic in CI: the job would go green having measured nothing, and the coverage this phase exists to add would silently stop existing the first time the setup drifted. In CI a missing toolchain is a broken workflow, not a machine that happens to lack it."
+  locked = true
+
+[[decisions]]
+  key = "ignore_scripts_verified_not_assumed"
+  choice = "npm ci --ignore-scripts, after checking that these particular dependencies survive it."
+  why = "Install scripts are npm's largest execution vector and run with the runner's privileges, so the default is denied. But denying them blindly breaks any dependency that fetches a binary in a postinstall. The two packages here that declare install scripts are esbuild — which since 0.18 ships per-platform binaries as optional dependencies rather than downloading one — and fsevents, which is macOS-only. Proven by running the install and the full end-to-end mutation run locally under --ignore-scripts before writing the job."
+  locked = true
+
+[[decisions]]
+  key = "audit_includes_dev_dependencies"
+  choice = "npm audit --audit-level=high, WITHOUT --omit=dev."
+  why = "The usual advice pairs the audit with --omit=dev because production dependencies are what ship. Here every dependency is a devDependency, so --omit=dev would audit an empty set and pass by construction — a gate that checks nothing, which is worse than no gate because it looks like one."
+  locked = true
+
+[[decisions]]
+  key = "upgrade_rather_than_allowlist"
+  choice = "The fixture's vitest pin moves from 3.2.4 to 3.2.7 so the audit gate passes on real grounds."
+  why = "3.2.4 carries a critical advisory (GHSA-5xrq-8626-4rwp, arbitrary file read/execute via the Vitest UI server). The fixture never starts that server, so an allowlist would have been arguable — and that is exactly the argument that turns a hard gate into a soft one. The checklist says no allowlist and no `|| true`: a finding fails the build and the dependency gets upgraded. Verified the end-to-end mutation run still passes on 3.2.7."
+  locked = true

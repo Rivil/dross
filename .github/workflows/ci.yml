@@ -64,6 +64,59 @@ jobs:
       - name: govulncheck
         run: govulncheck ./...
 
+  # The non-Go mutation leg. Until this job existed, dross's TypeScript adapter
+  # was only ever exercised where a developer happened to have Node installed —
+  # everywhere else TestStrykerRunsEndToEnd skipped, and a skipped test reports
+  # the same green as one that ran. So the adapter that scores every JS/TS repo
+  # dross verifies had no gate on any pull request.
+  mutation-ts:
+    runs-on: ubuntu-latest
+    env:
+      GOFLAGS: -mod=readonly
+      GOPROXY: https://proxy.golang.org,direct
+      GOSUMDB: sum.golang.org
+      # Turns the test's own skip into a failure. Without it this job is
+      # theatre: a runner that lost Node would go green having measured
+      # nothing, which is the exact vacuous-pass this repo keeps removing.
+      DROSS_REQUIRE_E2E: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
+        with:
+          go-version: '1.25.13'
+          cache: true
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          # Exact patch, not '24' or '24.x' — same reasoning as the Go pin
+          # above. A floating version means the largest dependency in this job
+          # is the one thing it did not pin.
+          node-version: '24.19.0'
+          cache: 'npm'
+          cache-dependency-path: internal/mutation/testdata/ts-project/package-lock.json
+
+      # --ignore-scripts: install scripts are npm's biggest execution vector,
+      # and this tree runs them as root-equivalent on the runner. Verified safe
+      # for these deps — esbuild 0.28 ships per-platform binaries as optional
+      # dependencies rather than fetching one in a postinstall, and fsevents is
+      # macOS-only. `ci`, never `install`: it fails if the lockfile has drifted
+      # instead of quietly resolving something else.
+      - name: npm ci (fixture)
+        working-directory: internal/mutation/testdata/ts-project
+        run: npm ci --ignore-scripts
+
+      # No allowlist and no `|| true`: a high-or-critical advisory fails the
+      # build and the dependency gets upgraded. --omit=dev is deliberately NOT
+      # passed — every dependency here is a devDependency, so omitting them
+      # would audit nothing and pass by construction.
+      - name: npm audit (fixture)
+        working-directory: internal/mutation/testdata/ts-project
+        run: npm audit --audit-level=high
+
+      - name: stryker end-to-end mutation run
+        run: go test -count=1 -run TestStrykerRunsEndToEnd ./internal/mutation/
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:

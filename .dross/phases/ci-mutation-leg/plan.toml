@@ -1,0 +1,25 @@
+task_seq = 2
+
+[phase]
+  id = "ci-mutation-leg"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Make a skipped e2e a failure when required"
+  files = ["internal/mutation/stryker_e2e_test.go"]
+  description = "DROSS_REQUIRE_E2E turns e2eSkipReason's conditions into t.Fatalf. Without it the CI job\nis theatre — a runner missing Node reports the same green as one that ran the mutation.\n"
+  covers = ["c-2"]
+  status = "done"
+  test_contract = ["if the guard stops firing, running with DROSS_SKIP_E2E=1 DROSS_REQUIRE_E2E=1 passes instead of failing — proven by hand this run: it fails, naming the reason the run could not proceed"]
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "The mutation-ts CI job, hardened"
+  files = [".github/workflows/ci.yml", "internal/mutation/testdata/ts-project/package.json", "internal/mutation/testdata/ts-project/package-lock.json"]
+  description = "SHA-pinned setup-node, exact Node patch, npm cache keyed on the fixture lockfile,\n`npm ci --ignore-scripts`, `npm audit --audit-level=high` with dev deps included, then\nthe e2e under DROSS_REQUIRE_E2E. vitest 3.2.4 -> 3.2.7 clears a critical advisory rather\nthan allowlisting it.\n"
+  covers = ["c-1", "c-3"]
+  depends_on = ["t-1"]
+  status = "done"
+  test_contract = ["if the audit gate is weakened or the dep regresses, `npm audit --audit-level=high` in the fixture exits non-zero — verified this run: 3.2.4 reported 1 critical, 3.2.7 reports only 2 moderate and exits 0", "if --ignore-scripts breaks the toolchain, TestStrykerRunsEndToEnd fails — verified this run: a clean `npm ci --ignore-scripts` install runs the full mutation e2e green in 2.03s", "if the workflow stops parsing, the job never runs at all — verified this run by parsing ci.yml and asserting three jobs with mutation-ts carrying its six steps"]
