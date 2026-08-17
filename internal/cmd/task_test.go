@@ -766,3 +766,153 @@ func TestTaskListUnknownPhaseErrorsBeforeHeader(t *testing.T) {
 		t.Errorf("table header printed before the load failed:\n%s", out)
 	}
 }
+
+// contractPlan is twoTaskPlan with t-1 already carrying a two-statement
+// contract — the fixture for the replace/append tests.
+const contractPlan = `[phase]
+id = "01-test"
+[[task]]
+id = "t-1"
+wave = 1
+title = "first"
+files = ["a.go"]
+covers = ["c-1"]
+test_contract = ["existing one", "existing two"]
+[[task]]
+id = "t-2"
+wave = 1
+title = "second"
+files = ["b.go"]
+covers = ["c-1"]
+`
+
+func planTask(t *testing.T, planPath, id string) phase.Task {
+	t.Helper()
+	plan, err := phase.LoadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := plan.FindTask(id)
+	if task == nil {
+		t.Fatalf("task %s missing from %s", id, planPath)
+	}
+	return *task
+}
+
+// TestTestContractKeepsCommas is the reason --test-contract is a StringArray
+// and not a StringSlice. A contract statement is prose — "if X breaks, TestY
+// fails" — so it contains commas by construction. Splitting one statement into
+// two produces a plan that still parses and still looks plausible in review,
+// which is the kind of corruption nobody catches by eye.
+func TestTestContractKeepsCommas(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	stmt := "if the unique constraint stops rejecting dupes, TestTagsAreUnique fails, which is the whole invariant"
+	if err := runCmd(t, Task(), "add", "01-test", "--title", "third", "--covers", "c-1", "--test-contract", stmt); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	got := planTask(t, planPath, "t-3").TestContract
+	if len(got) != 1 {
+		t.Fatalf("test_contract = %v (%d entries), want exactly 1 — the commas must not split it", got, len(got))
+	}
+	if got[0] != stmt {
+		t.Errorf("statement = %q, want it verbatim: %q", got[0], stmt)
+	}
+}
+
+func TestTestContractRepeats(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	want := []string{"first statement", "second statement", "third statement"}
+	if err := runCmd(t, Task(), "add", "01-test", "--title", "third", "--covers", "c-1",
+		"--test-contract", want[0], "--test-contract", want[1], "--test-contract", want[2]); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if got := planTask(t, planPath, "t-3").TestContract; !slices.Equal(got, want) {
+		t.Errorf("test_contract = %v, want %v in the order given", got, want)
+	}
+}
+
+func TestEditReplacesTestContract(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", contractPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	if err := runCmd(t, Task(), "edit", "01-test", "t-1", "--test-contract", "only this"); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	if got := planTask(t, planPath, "t-1").TestContract; !slices.Equal(got, []string{"only this"}) {
+		t.Errorf("test_contract = %v, want the list replaced wholesale", got)
+	}
+}
+
+// TestAddTestContractAppends covers the case the phase exists for: a plan
+// review adds a fourth statement to a task that already has three, and having
+// to retype the three is the hand-editing this command was built to remove.
+func TestAddTestContractAppends(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", contractPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	if err := runCmd(t, Task(), "edit", "01-test", "t-1", "--add-test-contract", "appended"); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	want := []string{"existing one", "existing two", "appended"}
+	if got := planTask(t, planPath, "t-1").TestContract; !slices.Equal(got, want) {
+		t.Errorf("test_contract = %v, want %v — the existing entries keep their order and come first", got, want)
+	}
+}
+
+// TestTestContractReplaceAndAppendConflict: the two flags disagree about the
+// result and either resolution silently drops something the user asked for, so
+// the pair is refused rather than reconciled.
+func TestTestContractReplaceAndAppendConflict(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", contractPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+	before := mustRead(t, planPath)
+
+	err := runCmd(t, Task(), "edit", "01-test", "t-1",
+		"--test-contract", "replacement", "--add-test-contract", "addition")
+	if err == nil {
+		t.Fatal("expected a refusal when both --test-contract and --add-test-contract are given")
+	}
+	assertPlanUnchanged(t, planPath, before)
+}
+
+// TestEditWithoutContractFlagsLeavesPlanByteIdentical pins the Changed() gate:
+// an edit that touches only the title must not rewrite the contract, or every
+// unrelated edit becomes a way to lose one.
+func TestEditWithoutContractFlagsLeavesPlanByteIdentical(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", contractPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	if err := runCmd(t, Task(), "edit", "01-test", "t-1", "--title", "renamed"); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	got := planTask(t, planPath, "t-1")
+	if got.Title != "renamed" {
+		t.Errorf("title = %q, want renamed", got.Title)
+	}
+	if want := []string{"existing one", "existing two"}; !slices.Equal(got.TestContract, want) {
+		t.Errorf("test_contract = %v, want it untouched (%v)", got.TestContract, want)
+	}
+}
+
+func TestEditSetsDescriptionFromFlag(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	if err := runCmd(t, Task(), "edit", "01-test", "t-1", "--description", "what it does"); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	if got := planTask(t, planPath, "t-1").Description; got != "what it does" {
+		t.Errorf("description = %q, want %q", got, "what it does")
+	}
+}

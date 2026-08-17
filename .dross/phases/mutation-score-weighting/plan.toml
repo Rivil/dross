@@ -1,0 +1,14 @@
+task_seq = 1
+
+[phase]
+  id = "mutation-score-weighting"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Persist each leg's own score in verify.toml"
+  files = ["internal/verify/verify.go", "internal/verify/verify_test.go", "assets/prompts/verify.md"]
+  description = "Add LegSummary and a repeated [[summary.leg]] table, populated in Skeleton from\nt.Languages. Pooling is untouched: raw counts across legs is already the size-weighted\nanswer, and re-deriving the headline from the legs' percentages is the bug score.go\nexists to prevent. A failed leg is recorded with its error rather than omitted.\nverify.md gains a preserve instruction, since finalize round-trips the struct and the\nprompt's hand-rewrite is the other way the table could be lost.\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  status = "done"
+  test_contract = ["if the breakdown stops being recorded, TestLegsRecordEachLegsOwnScore fails — the deliberately unequal pair (1/1 beside 0/9) must show WHICH leg carries the failure, which the pooled figure cannot", "if the headline is re-derived from the legs, TestLegsDoNotChangeThePooledScore fails — it asserts the score stays below the mean's 0.50, so a reintroduced mean turns it red", "if a dead leg is dropped, TestFailedLegIsRecordedNotDropped fails — a two-leg run where one leg died must not read afterwards as a clean single-leg run", "if the table does not survive finalize, TestLegsSurviveTheFinalizeRoundTrip fails — finalize does a full load-mutate-save, so a non-struct field would be silently dropped and the data would exist only until the verdict was set", "if the single-leg case is special-cased away, TestSingleLegStillRecordsItsLeg fails — most phases have one leg, and the field must be present exactly where it is most often read"]

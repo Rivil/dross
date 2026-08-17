@@ -1,0 +1,25 @@
+task_seq = 2
+
+[phase]
+  id = "remote-host-pool"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Authorize more than one host"
+  files = ["internal/cmd/local.go", "internal/cmd/remote_grant.go", "internal/cmd/remote_pool_test.go"]
+  description = "remote_pool: an array of host/workdir entries BESIDE the scalar grant, never replacing it.\nThe grant already carries two key generations kept because local.toml is untracked; a third\nthat superseded the scalars would silently stop resolving on every machine that already\ngranted a host. `dross remote grant --add` appends and is idempotent; revoke clears the\npool too.\n"
+  covers = ["c-1", "c-3", "c-4"]
+  status = "done"
+  test_contract = ["if --add replaces instead of appending, TestGrantAddKeepsTheExistingHost fails — it asserts the scalar grant stays candidate zero and the new host follows it", "if re-adding duplicates, TestGrantAddIsIdempotent fails — a duplicate entry means the same host is probed twice, paying a round trip to learn what it already knew", "if revoke leaves the pool behind, TestRevokeClearsThePool fails — the user would believe nothing is authorized while a run still has somewhere to go, which is worse than not revoking"]
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Select the first host that answers"
+  files = ["internal/cmd/remote_pool.go", "internal/cmd/test.go", "internal/cmd/verify.go"]
+  description = "selectRemoteTarget walks candidates in declared order, applying the existing single-host\nrule down the list: skip a host that cannot be REACHED, return anything else as the host's\nanswer. Every skip is printed. Wired into both dross test and the mutation tuning, where\none candidate reduces to exactly today's behaviour.\n"
+  covers = ["c-1", "c-2", "c-3", "c-5"]
+  depends_on = ["t-1"]
+  status = "done"
+  test_contract = ["if an unreachable first host no longer yields to the second, TestSelectSkipsUnreachableAndUsesTheNext fails — that is the feature, and it also asserts the swap is announced, since two runs measured on different machines are not interchangeable evidence", "if a host that answered with a failure is skipped, TestSelectDoesNotSkipARemoteCommandFailure fails — re-running elsewhere for a different answer is how a real failure gets laundered into a pass", "if selection keeps probing past a ready host, TestSelectStopsAtTheFirstReady fails — each extra probe is a round trip spent learning nothing", "if a single-host run changes at all, TestSelectSingleHostIsUnchanged fails — it asserts the cores come through AND that nothing extra is printed, which is what keeps an existing grant behaving as it did", "if an all-unreachable pool errors instead of falling back, TestSelectAllUnreachableFallsBackLocally fails — the local machine can still produce an answer, and aborting is what forced `remote revoke` as a workaround before"]

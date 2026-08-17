@@ -51,3 +51,4 @@
   id = "75fa307a41cebafe"
   text = "Give the unread runtime commands (dev/stop/e2e/migrate/seed/shell/logs) real verbs — a `dross run <name>` that executes them."
   why = "Deciding what dross should DO with a dev_command is a feature question, not a truth question. This phase's job is that a value either works or is not offered; building the runner is its own phase. Left as someday rather than routed: no phase exists to carry it, and inventing a target that names nothing is the same lie this phase is about."
+  target = "runtime-command-runner"

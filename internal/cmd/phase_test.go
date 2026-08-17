@@ -2874,9 +2874,12 @@ func TestShipRecordsShippedStatusAlongsidePR(t *testing.T) {
 // state history, so without the backfill `milestone progress` would report a
 // closed milestone's work as outstanding.
 func TestV13FinishedPhasesCarryBackfilledStatus(t *testing.T) {
-	root := filepath.Join(repoRootFromTest(t), ".dross")
+	repo := repoRootFromTest(t)
 	for _, slug := range []string{"mutation-diff-scope", "survivor-lifecycle", "survivor-drain"} {
-		ch, err := changes.Load(changes.FilePath(root, slug), slug)
+		// Named rather than composed from a bare .dross root: changes.json is
+		// tracked, so it is present in a fresh checkout and this assertion means
+		// the same thing everywhere (hermetic_dross_read_test.go).
+		ch, err := changes.Load(filepath.Join(repo, ".dross", "phases", slug, "changes.json"), slug)
 		if err != nil {
 			t.Errorf("%s: %v", slug, err)
 			continue

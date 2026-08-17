@@ -125,12 +125,13 @@ func ValidatePlan(plan *Plan, spec *Spec) error {
 // assigned by AddTask (id from the high-water counter, wave via deriveWave), so
 // they are not part of the input. A zero Wave means "derive from depends_on".
 type NewTask struct {
-	Title       string
-	Files       []string
-	Covers      []string
-	DependsOn   []string
-	Description string
-	Wave        int
+	Title        string
+	Files        []string
+	Covers       []string
+	DependsOn    []string
+	Description  string
+	TestContract []string
+	Wave         int
 }
 
 // AddTask builds a new task from nt, assigning it the next high-water id and a
@@ -154,14 +155,15 @@ func (p *Plan) AddTask(nt NewTask, anchor string, before bool) (*Task, error) {
 	}
 	id := p.NextTaskID()
 	t := Task{
-		ID:          id,
-		Wave:        deriveWave(nt.Wave, nt.DependsOn, p.Task),
-		Title:       nt.Title,
-		Files:       nt.Files,
-		Description: nt.Description,
-		Covers:      nt.Covers,
-		DependsOn:   nt.DependsOn,
-		Status:      StatusPending,
+		ID:           id,
+		Wave:         deriveWave(nt.Wave, nt.DependsOn, p.Task),
+		Title:        nt.Title,
+		Files:        nt.Files,
+		Description:  nt.Description,
+		Covers:       nt.Covers,
+		DependsOn:    nt.DependsOn,
+		TestContract: nt.TestContract,
+		Status:       StatusPending,
 	}
 	p.Task = slices.Insert(p.Task, pos, t)
 	p.TaskSeq = taskIDNum(id) // advance high-water past the consumed id
@@ -324,10 +326,12 @@ func (p *Plan) MoveTask(id, anchor string, before bool) error {
 // field. Status and Files are intentionally absent — status is owned by
 // `dross task status`, and edit does not repoint a task's files.
 type TaskEdit struct {
-	Title     *string
-	Covers    *[]string
-	DependsOn *[]string
-	Wave      *int
+	Title        *string
+	Description  *string
+	Covers       *[]string
+	DependsOn    *[]string
+	TestContract *[]string
+	Wave         *int
 }
 
 // EditTask applies a partial update to the task with the given id: only the
@@ -342,11 +346,17 @@ func (p *Plan) EditTask(id string, e TaskEdit) error {
 	if e.Title != nil {
 		t.Title = *e.Title
 	}
+	if e.Description != nil {
+		t.Description = *e.Description
+	}
 	if e.Covers != nil {
 		t.Covers = *e.Covers
 	}
 	if e.DependsOn != nil {
 		t.DependsOn = *e.DependsOn
+	}
+	if e.TestContract != nil {
+		t.TestContract = *e.TestContract
 	}
 	if e.Wave != nil {
 		t.Wave = *e.Wave

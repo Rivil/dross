@@ -890,11 +890,17 @@ _a1b9c23 · extended telemetry-bucket-graduation · extended verify-auto-finaliz
 
 Keep the repo's own test runs independent of the developer's machine, so a green suite means the code is green and not that the host happened to be configured favourably. The `internal/cmd` package pins `HOME` to a throwaway directory for the whole package via `TestMain`, so no test inherits `~/.claude/dross/defaults.toml` or a stray provider token — the failure mode this closes had `internal/cmd` reddening (and being skipped by the mutation run) purely from a host global default. A hostile-globals test reproduces the old failure deterministically rather than trusting the pin by inspection.
 
+The machine leaks in through the repo's own `.dross` as well as through the home directory, and that half went undocumented until it bit twice. A fresh checkout carries every **tracked** file under `.dross` (`project.toml`, `rules.toml`, `survivors.toml`, `changes.json`, `milestones/`, `phases/`) and none of the **gitignored** ones (`state.json`, `handoff.md`, `local.toml`, and the `security/`, `quality/`, `techdebt/` run artifacts). So a test reaching for an ignored path passes here off data no other machine has, and reddens — or silently skips — everywhere else: `TestProgressAgainstThisRepo` handed the live `.dross` to a loader whose doneness check falls back to `state.json` history, and `TestHandoffParksNoHomelessFinding` read `handoff.md` and `Skipf`'d in CI, so the guard it implemented never ran where it mattered. The rule that closes it: a test composing a repo-root walker with `.dross` must **name a tracked file in the same expression**. Naming an ignored one fails; naming nothing fails too, because what the callee then reaches cannot be audited from the source — which is precisely how the first bug read `state.json` without ever spelling it. The ignored set is parsed from `.gitignore` rather than hardcoded, so a newly ignored artifact directory is covered without touching the guard. Tests that genuinely assert against this repo's recorded data keep doing so through a copy of the tracked record, not a handle on the live tree.
+
 - `TestMain` (package-wide HOME pin) — `internal/cmd/hermetic_env_test.go:35`
 - `TestHermeticHome_HostileGlobalDefaultsDoNotRedden` (deterministic repro of the host-leak failure) — `internal/cmd/hermetic_env_test.go:145`
 - `snapshotLiveState` (force-stages state.json and restores the live copy across a fixture's branch switches, so squash-merge fixtures hold once the file is gitignored) — `internal/cmd/phase_test.go:145`
+- `drossReadViolations` (pure detector: a real-repo `.dross` read must name a tracked file) — `internal/cmd/hermetic_dross_read_test.go:81`
+- `TestNoTestReadsGitignoredDross` (walks every `*_test.go` in the module) — `internal/cmd/hermetic_dross_read_test.go:274`
+- `ignoredDrossNames` (ignored set derived from `.gitignore`, never hardcoded) — `internal/cmd/hermetic_dross_read_test.go:59`
+- `liveRecordRoot` (copies a tracked record into a throwaway root, so a live-data assertion never hands a loader the real tree) — `internal/cmd/cmd_test.go:533`
 
-_introduced board-state-map-truth · extended state-json-branch-safety · 47f383b_
+_introduced board-state-map-truth · extended state-json-branch-safety · extended test-hermeticity-guard · 47f383b_
 
 ### Test suite runner
 

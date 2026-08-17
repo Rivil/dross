@@ -1,0 +1,8 @@
+[phase]
+  id = "v14-mutation-pass"
+  title = "v14-mutation-pass"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every line of production code v1.4 added or changed is covered by a test that would fail if it broke — measured by mutation over the milestone's own diff against main, rather than per phase."

@@ -127,7 +127,14 @@ func runLocalCommandCtx(ctx context.Context, dir, line string, stdout, stderr io
 // runtime.test_command and is not a derived value today; the fence is what
 // keeps that true the first time a caller passes one.
 func shArgv(line string) ([]string, error) {
-	if err := argfence.RejectLeadingDash("sh", "runtime.test_command", line); err != nil {
+	return shArgvFor("runtime.test_command", line)
+}
+
+// shArgvFor is shArgv with the field label the refusal should name. `dross run`
+// spawns a different [runtime] key per slot, and a fence refusal that always
+// blamed test_command would point at the wrong line to edit.
+func shArgvFor(field, line string) ([]string, error) {
+	if err := argfence.RejectLeadingDash("sh", field, line); err != nil {
 		return nil, err
 	}
 	return []string{"-c", line}, nil
@@ -227,28 +234,33 @@ func runRemoteCommand(argv []string, stdin string, stdout, stderr io.Writer) err
 // point of granting a host is that runs leave the laptop, and an opt-in flag
 // would leave the grant unused except when someone remembered it. --local is
 // the escape for a remote that is down or a tree mid-edit.
-func testTarget(root, repoDir string, local bool) (*remote.Target, error) {
+func testTarget(root, repoDir string, local bool) ([]*remote.Target, error) {
 	if local {
 		return nil, nil
 	}
-	return readRemoteGrant(root, repoDir)
+	return readRemoteGrants(root, repoDir)
 }
 
 // runTest executes one test run, here or on the granted host.
 func runTest(root, repoDir, line string, local bool) error {
-	target, err := testTarget(root, repoDir, local)
+	targets, err := testTarget(root, repoDir, local)
 	if err != nil {
 		return err
 	}
-	if target != nil {
+	var target *remote.Target
+	if len(targets) > 0 {
 		// BEFORE the sync, not after. Probing after the tree is pushed
 		// discovers an unreachable host having already paid for the transfer,
 		// and — worse — a transport failure at that point is indistinguishable
 		// from the suite itself dying.
-		pf, perr := preflightRemote(*target, nil)
+		//
+		// With more than one candidate this walks them in order and takes the
+		// first that answers; with one it is exactly the previous behaviour.
+		chosen, pf, perr := selectRemoteTarget(targets, nil)
 		if perr != nil {
 			return perr
 		}
+		target = chosen
 		if pf.Fallback {
 			// Announced, never silent. A fallback the output does not mention
 			// leaves a local result indistinguishable from a remote one, which

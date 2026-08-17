@@ -308,7 +308,7 @@ func (mt mutationTuning) gremlins(projectRoot string, p *project.Project, cacheV
 // prefix is also exactly right: the point is to run on the remote's OWN
 // toolchain, and whether that toolchain is present is doctor's question.
 func resolveMutationTuning(p *project.Project, root string) (mutationTuning, error) {
-	target, err := readRemoteGrant(root, filepath.Dir(root))
+	targets, err := readRemoteGrants(root, filepath.Dir(root))
 	if err != nil {
 		return mutationTuning{}, err
 	}
@@ -317,24 +317,29 @@ func resolveMutationTuning(p *project.Project, root string) (mutationTuning, err
 		return mutationTuning{}, err
 	}
 	mt := mutationTuning{Workers: workers, TestCPU: testCPU}
-	if target == nil {
+	if len(targets) == 0 {
 		mt.Prefix = dockerPrefix(p)
 		return mt, nil
 	}
-	pf, perr := preflightRemote(*target, nil)
+	// Walks the authorized hosts in order and takes the first that answers.
+	// With one candidate this is exactly the previous behaviour.
+	target, pf, perr := selectRemoteTarget(targets, nil)
 	if perr != nil {
 		return mutationTuning{}, fmt.Errorf(
 			"remote mutation host %s is not usable: %w\n"+
 				"Nothing was measured. Check ssh access, run `dross doctor`, or withdraw the grant with `dross mutation remote revoke`.",
-			target.Host, perr)
+			targets[0].Host, perr)
 	}
-	if pf.Fallback {
+	if target == nil {
 		// A host we could not REACH gives no answer, and the local machine
 		// still can. Aborting here is what forced `dross remote revoke` as a
 		// workaround when helicon was unreachable for hours — the fallback is
 		// per-run and touches no config, so the next run probes again.
 		mt.Prefix = dockerPrefix(p)
-		mt.FellBackFrom, mt.FallbackWhy = target.Host, pf.Why
+		// The LAST candidate's reason: with one host it is that host's, and
+		// with several it is why the final attempt failed, after each earlier
+		// skip was already printed.
+		mt.FellBackFrom, mt.FallbackWhy = targets[len(targets)-1].Host, pf.Why
 		return mt, nil
 	}
 	target.Cores = pf.Ready.Cores

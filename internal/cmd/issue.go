@@ -39,6 +39,12 @@ const (
 	statusPlanned    = "planned"
 	statusInProgress = "in-progress"
 	statusUAT        = "uat"
+
+	// The task-level pair. Named here rather than left as bare literals in the
+	// prompts because board-task-inbound has to READ them back off an issue's
+	// dross/status label and convert to a plan status — see task_lifecycle.go.
+	statusTaskInProgress = "task-in-progress"
+	statusTaskInReview   = "task-in-review"
 )
 
 func statusLabel(s string) string { return "dross/status:" + s }
@@ -65,6 +71,7 @@ func Issue() *cobra.Command {
 		issueBacklogSync(),
 		issuePhaseSync(),
 		issueTaskSync(),
+		issueTaskPull(),
 		issueQuick(),
 		issuePull(),
 		issueDismiss(),
@@ -1095,6 +1102,34 @@ func emitPullEnvelope(issues []forge.Issue, boardErr error) error {
 	return nil
 }
 
+// reportBoardFailure delivers a pull failure the way the caller asked to
+// receive it.
+//
+// Under --json the answer is always the envelope with a non-null .error and a
+// zero exit, because that is the contract status.md and inbox.md publish and
+// the only shape a `jq .issues` consumer survives. A consumer that dies on a
+// parse error reports nothing at all, which is strictly worse than a named
+// failure in a field the prompt already prints — including for the tracked
+// local.toml refusal, whose own wording travels intact so it still reads as
+// something to fix rather than an outage to wait out.
+//
+// Human mode is deliberately NOT changed by this phase. A fetch failure stays a
+// printed no-op, because the workflow prompts call `dross issue …`
+// unconditionally on the promise that it is safe. A setup failure stays fatal
+// (humanFatal), because a person who typed the command wants to know their
+// token is unset, and the seven other openBoard callers exit non-zero on
+// exactly these conditions — only the machine-facing --json contract was broken.
+func reportBoardFailure(asJSON, humanFatal bool, boardErr error) error {
+	if asJSON {
+		return emitPullEnvelope(nil, boardErr)
+	}
+	if humanFatal {
+		return boardErr
+	}
+	Printf("board unreachable: %v\n", boardErr)
+	return nil
+}
+
 func issuePull() *cobra.Command {
 	var labels, state string
 	var asJSON, mark bool
@@ -1104,7 +1139,25 @@ func issuePull() *cobra.Command {
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ctx, enabled, err := openBoard()
 			if err != nil {
-				return err
+				// A SETUP failure is reported the same way a fetch failure is,
+				// for the same reason: --json promises an envelope and exit 0,
+				// so a consumer doing `jq .issues` dies on a parse error rather
+				// than reading .error and reporting the board as unreachable.
+				//
+				// This covers the whole class openBoard can raise — an unset
+				// auth variable, an unreadable project.toml, a directory that
+				// is not a dross repo, a tracked local.toml refusal, an unknown
+				// provider, missing board config, a refused host, a corrupt
+				// board.json — because fixing only the case that got reported
+				// leaves the identical crash waiting behind every sibling, and
+				// a consumer cannot tell which one it got.
+				//
+				// Deliberately NOT fixed at openBoard or the forge
+				// constructors: seven of the eight openBoard callers are
+				// human-facing commands that should keep exiting non-zero on
+				// exactly these conditions, and degrading them into silent
+				// no-ops is the fault this trades against.
+				return reportBoardFailure(asJSON, true, err)
 			}
 			if !enabled {
 				if asJSON {
@@ -1122,11 +1175,7 @@ func issuePull() *cobra.Command {
 				// prompts call `dross issue …` unconditionally on the promise
 				// that it is a safe no-op, so a non-zero exit would break
 				// that contract. The signal travels in the payload instead.
-				if asJSON {
-					return emitPullEnvelope(nil, boardErr)
-				}
-				Printf("board unreachable: %v\n", boardErr)
-				return nil
+				return reportBoardFailure(asJSON, false, boardErr)
 			}
 
 			// Read-only by default so /dross-status can poll without
@@ -1136,7 +1185,11 @@ func issuePull() *cobra.Command {
 			if mark {
 				ctx.board.MarkPulled()
 				if err := ctx.board.Save(ctx.boardPath); err != nil {
-					return err
+					// The pull itself succeeded, but the stamp did not, and a
+					// consumer told nothing would treat the next run's results
+					// as already-seen. Reported through the envelope like every
+					// other failure rather than raised past it.
+					return reportBoardFailure(asJSON, true, err)
 				}
 			}
 

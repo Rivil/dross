@@ -1,0 +1,35 @@
+[verify]
+  phase = "v14-mutation-pass"
+  generated_at = 2026-08-17T12:21:04.865808Z
+  verdict = "pending"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9960222752585521
+  mutants_killed = 1252
+  mutants_survived = 5
+  mutants_not_covered = 5
+  mutants_in_scope = 1257
+  unclassified_in_scope = 0
+  criteria_total = 1
+  criteria_covered = 0
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 1252
+    survived = 5
+    timeout = 0
+    in_scope = 1257
+    score = 0.9960222752585521
+    file_count = 20
+
+[[criterion]]
+  id = "c-1"
+  status = "unknown"
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation scope is degraded (source: changes-only) — changes.json records no base branch, so no git diff could be taken; git contributed no files; scope is changes.json only and misses anything unrecorded"

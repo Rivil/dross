@@ -203,6 +203,62 @@ func GrantReplayConsent(root, line string) error {
 	return l.save(path)
 }
 
+// RunConsented reports whether line's fingerprint is in local.toml's
+// trusted_run_commands.
+//
+// A separate set from the test command's grant on purpose: consent is bound to
+// a specific command string, and one that covered "whatever [runtime] says"
+// would let a dev_command arriving in a pull inherit trust for a line nobody
+// read. An unparseable store is not consent — it fails closed.
+func RunConsented(root, line string) (bool, error) {
+	return fingerprintInSet(root, line, func(l *localStore) string { return l.TrustedRunCommands })
+}
+
+// GrantRunConsent adds line's fingerprint to the run set, leaving the others in
+// place: a repo has many runtime slots, and consenting to `dross run dev` must
+// not silently revoke `dross run migrate`.
+func GrantRunConsent(root, line string) error {
+	path := localPath(root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return err
+	}
+	l.TrustedRunCommands = addFingerprint(l.TrustedRunCommands, strings.TrimSpace(line))
+	return l.save(path)
+}
+
+// fingerprintInSet is the shared read half of the comma-separated grant sets.
+func fingerprintInSet(root, line string, field func(*localStore) string) (bool, error) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false, nil
+	}
+	l, err := loadLocal(localPath(root))
+	if err != nil {
+		return false, err
+	}
+	want := Fingerprint(line)
+	for _, got := range strings.Split(field(l), ",") {
+		if strings.TrimSpace(got) == want {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// addFingerprint returns set with line's fingerprint present exactly once,
+// preserving every other member.
+func addFingerprint(set, line string) string {
+	want := Fingerprint(line)
+	var kept []string
+	for _, got := range strings.Split(set, ",") {
+		if got = strings.TrimSpace(got); got != "" && got != want {
+			kept = append(kept, got)
+		}
+	}
+	return strings.Join(append(kept, want), ",")
+}
+
 // --- the gate ---
 
 // execGatedCommands is the CLOSED set of commands the consent gate covers,
@@ -300,6 +356,7 @@ func consentRefusal(state ConsentState, cerr error, testCmd string) error {
 func Trust() *cobra.Command {
 	var check bool
 	var replayPhase string
+	var runSlotName string
 	c := &cobra.Command{
 		Use:   "trust",
 		Short: "Consent to dross running this repo's runtime.test_command on this machine",
@@ -316,6 +373,9 @@ func Trust() *cobra.Command {
 			}
 			if replayPhase != "" {
 				return trustReplay(root, replayPhase, check)
+			}
+			if runSlotName != "" {
+				return trustRun(root, runSlotName, check)
 			}
 			proj, err := project.Load(filepath.Join(root, project.File))
 			if err != nil {
@@ -359,7 +419,54 @@ func Trust() *cobra.Command {
 	}
 	c.Flags().BoolVar(&check, "check", false, "exit 0 if consent is current, non-zero otherwise; prints nothing on success")
 	c.Flags().StringVar(&replayPhase, "replay", "", "grant consent for <phase-id>'s recorded red-proof replay command instead of runtime.test_command")
+	c.Flags().StringVar(&runSlotName, "run", "", "grant consent for `dross run <name>`'s configured command instead of runtime.test_command")
 	return c
+}
+
+// trustRun grants consent for one [runtime] slot's command.
+//
+// Per slot, never per block: a grant covering "whatever [runtime] says" would
+// let a dev_command arriving in a pull inherit trust for a line nobody read,
+// which is the whole reason consent binds to a command string. Granting one
+// slot leaves every other grant in place.
+func trustRun(root, name string, check bool) error {
+	proj, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		return err
+	}
+	slot, ok := findRunSlot(name)
+	if !ok {
+		return fmt.Errorf("unknown runtime command %q; known: %s", name, strings.Join(runSlotNames(), ", "))
+	}
+	line := strings.TrimSpace(slot.Get(proj))
+	if line == "" {
+		return fmt.Errorf("nothing to trust: %s is not set.\n\n"+
+			"Set it first with `dross project set %s \"<command>\"`, then run this again —\n"+
+			"consent is bound to the command, so there is nothing to bind to yet",
+			slot.Field, slot.Field)
+	}
+	if check {
+		ok, err := RunConsented(root, line)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return nil
+		}
+		return runConsentRefusal(slot, line)
+	}
+	if err := refuseTrackedLocal(filepath.Dir(root)); err != nil {
+		return err
+	}
+	// Printed before the write, in full: a grant that did not show the command
+	// would be a rubber stamp on a line nobody read.
+	Printf("trusting `dross run %s` on this machine:\n\n    %s\n\n", slot.Name, line)
+	if err := GrantRunConsent(root, line); err != nil {
+		return err
+	}
+	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+	Printf("Editing %s revokes this; every other slot's grant is untouched.\n", slot.Field)
+	return nil
 }
 
 // trustReplay is `dross trust --replay <phase-id>`: the grant for one phase's

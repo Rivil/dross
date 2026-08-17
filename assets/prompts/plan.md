@@ -257,6 +257,16 @@ This creates (or updates) the phase issue with the acceptance criteria and a tas
 
 ### 6.1 Auto review (skip only on `--no-review`)
 
+**The review ladder — three rungs, and the middle one is the default.** Say which you are on if the user asks; don't make them infer it from the flags:
+
+| Rung | How you get it | Cost | Reach for it when |
+| --- | --- | --- | --- |
+| No independent read | `--no-review` | free | You are re-planning something you just reviewed, or the phase is a one-task edit. The plan gets no second opinion at all — say so rather than letting it pass unremarked. |
+| One cold reviewer | **the default — nothing to pass** | ~1 subagent | Every ordinary phase. A fresh subagent reads the artifacts with none of this conversation's context and reports BLOCKING / FLAG / NOTE. |
+| Three-lens panel + judge | `--panel` | ~4-5× a single-pass plan | A new subsystem, several plausible architectures, an expected graph of 4+ tasks. Note this rung is about **decomposition**, not critique: it drafts the plan three ways and merges them, and the cold reviewer below still runs afterwards. |
+
+The middle rung is easy to miss because only the other two have flags. A plan gets an independent second opinion **unless you opt out** — so `--panel` is not "the way to get review", it is the way to get a plan drafted from three angles first.
+
 Unless `--no-review` was passed, run the independent plan review now — don't wait to be asked. Read `~/.claude/dross/prompts/plan-review.md` and follow it from its §1 (the phase id is already resolved). It spawns its own cold subagent to read the artifacts, so the review context stays fully isolated from this conversation; you only relay findings.
 
 On the outcome:
@@ -287,5 +297,5 @@ When the plan is trivial or purely mechanical, append the hint under the `Next:`
 - **Walk every gray area (§2G); never pre-filter them.** There is no selection step and no pre-ticked checklist — the user's explicit off-ramp is the only thing that ends the walk early, and what you settled for them gets said out loud in §3. Zero areas is a valid, stated outcome; manufacturing them to look thorough is the failure this section was written against.
 - **Pair-mode default.** Never write `plan.toml` before the user accepts the proposed decomposition. If the user wants autonomous mode, they'll say so explicitly.
 - **Subagents: read-only fan-out is fine; authoring `plan.toml` is not.** Per the `dross-agent-gate` builtin, you may fan out subagents for read-only work — research, pattern-mapping, independent review — when it sharpens the plan, and should when it widens coverage or saves wall-clock. What stays gated is the decomposition itself: never let an unattended agent author or finalize `plan.toml` — it's agreed with the user (pair mode) or by you (`--solo`). The `--panel` flow (§2P) and the §6 plan-review are the worked examples: independent agents draft or critique, the user steers the result. For a small, pattern-following plan, staying inline is still the right call — fan out when it earns its keep, not by default.
-- **Test contracts are mandatory.** A task without a `test_contract` is a task verify can't check. Refuse to write the plan with empty contracts unless the user explicitly accepts the gap.
+- **Test contracts are mandatory.** A task without a `test_contract` is a task verify can't check. Refuse to write the plan with empty contracts unless the user explicitly accepts the gap. A task added after the plan is written carries its contract the same way — `dross task add --test-contract "<statement>"`, repeatable, and `dross task edit --add-test-contract "<statement>"` to append one to a task that already has some. Never hand-edit `plan.toml` to fill the field.
 - **Locked decisions from spec.toml are NON-NEGOTIABLE.** If the user proposes a task that contradicts one, surface the conflict and ask them to either revise the task or unlock the decision in `spec.toml` (with a `why`).

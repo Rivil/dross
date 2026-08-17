@@ -1,0 +1,36 @@
+task_seq = 3
+
+[phase]
+  id = "runtime-command-runner"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "A per-slot consent namespace"
+  files = ["internal/cmd/local.go", "internal/cmd/trust.go"]
+  description = "trusted_run_commands: a comma-separated fingerprint SET in the gitignored local.toml,\nmirroring trusted_replay_commands. Reusing the test grant would let a dev_command\narriving in a pull inherit trust for a line nobody read. `dross trust --run <name>`\nprints the line before writing.\n"
+  covers = ["c-4"]
+  status = "done"
+  test_contract = ["if the test grant starts authorizing other slots, TestRunRequiresItsOwnConsent fails — it trusts the test command and asserts a hostile dev_command is still refused, which is the attack the binding exists for", "if granting one slot revokes another, TestRunGrantsAreIndependent fails — a repo has many slots and the set must behave like a set", "if a rewritten command keeps its grant, TestRunConsentIsRevokedByEditing fails — one byte of drift must revoke, per the no-normalizer rule"]
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "dross run <name>"
+  files = ["internal/cmd/run.go", "internal/cmd/run_test.go", "cmd/dross/main.go", "internal/cmd/test.go"]
+  description = "A closed slot table, declared not inferred. Local only: a dev server on a remote host\nis not reachable from the laptop's browser. SIGINT is success for a long-running slot,\nstdin is granted per-slot (shell only), an unset slot is refused naming the fix, and\nflags after the slot name pass through to the wrapped command.\n"
+  covers = ["c-1", "c-2", "c-3", "c-5", "c-6"]
+  depends_on = ["t-1"]
+  status = "done"
+  test_contract = ["if a configured slot stops running, TestRunExecutesTheConfiguredSlot fails — the line reaching the spawn must be the configured command verbatim", "if an unset slot succeeds silently, TestRunRefusesUnsetSlot fails — it asserts the refusal names the `dross project set` line, since a quiet exit 0 is the failure config-value-truth removed", "if the suite gains a second execution site, TestRunRedirectsTheSuite fails — `dross run test` must point at `dross test` rather than becoming a second place to gate", "if stdin is handed to batch slots, TestInteractiveSlotsAreDeclared fails — only shell may claim it, because a migration with stdin can block forever on a prompt nobody sees", "if a runtime command key loses its verb, TestEveryRuntimeCommandHasASlot fails — that is the milestone criterion, and the guard enumerates the keys rather than trusting the table"]
+
+[[task]]
+  id = "t-3"
+  wave = 3
+  title = "Un-blind the inert-key guard"
+  files = ["internal/cmd/inert_config_test.go"]
+  description = "The key regex was [a-z_]+, so no key containing a digit ever entered the set the guard\nchecks — runtime.e2e_command was inert for its whole life and never listed. Fixing it to\n[a-z0-9_]+ surfaced four keys; e2e_command gains a reader here, the other three get\nstated reasons. The eight runtime entries are dropped now they have a verb.\n"
+  covers = ["c-7"]
+  depends_on = ["t-2"]
+  status = "done"
+  test_contract = ["if the regex goes digit-blind again, TestNoSettableKeyIsInert stops seeing paths.e2e, paths.i18n and stack.e2e_runner and its own vacuity check (fewer than 40 keys parsed) is the backstop", "if a key keeps an exemption after gaining a reader, TestNoSettableKeyIsInert fails in its second direction — the list only ever shrinks, which is what stopped the eight runtime entries ossifying"]

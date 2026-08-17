@@ -38,14 +38,6 @@ var inertKeyReasons = map[string]string{
 	// as an explicit [[deferred]] item in this phase's spec rather than
 	// invented here. They stay settable because the value is still true
 	// documentation of the repo that a human and an agent both read.
-	"runtime.dev_command":     "no verb runs it yet — deferred to a `dross run <name>` phase; carried as documentation an agent reads, not as behaviour",
-	"runtime.stop_command":    "no verb runs it yet — deferred to a `dross run <name>` phase; carried as documentation an agent reads, not as behaviour",
-	"runtime.test_watch":      "no verb runs it yet — deferred to a `dross run <name>` phase; carried as documentation an agent reads, not as behaviour",
-	"runtime.lint_command":    "no verb runs it yet — deferred to a `dross run <name>` phase; carried as documentation an agent reads, not as behaviour",
-	"runtime.migrate_command": "no verb runs it yet — deferred to a `dross run <name>` phase; carried as documentation an agent reads, not as behaviour",
-	"runtime.seed_command":    "no verb runs it yet — deferred to a `dross run <name>` phase; carried as documentation an agent reads, not as behaviour",
-	"runtime.shell_command":   "no verb runs it yet — deferred to a `dross run <name>` phase; carried as documentation an agent reads, not as behaviour",
-	"runtime.logs_command":    "no verb runs it yet — deferred to a `dross run <name>` phase; carried as documentation an agent reads, not as behaviour",
 
 	// The stack descriptors. dross detects the stack from the filesystem
 	// (internal/stack, internal/profile) and never consults these, so they
@@ -57,6 +49,7 @@ var inertKeyReasons = map[string]string{
 	"stack.linter":       "the command dross runs is runtime.lint_command; this names the tool for a reader and steers nothing",
 	"stack.formatter":    "the command dross runs is runtime.format_command; this names the tool for a reader and steers nothing",
 	"stack.test_runner":  "the command dross runs is runtime.test_command; this names the tool for a reader and steers nothing",
+	"stack.e2e_runner":   "the command dross runs is runtime.e2e_command; this names the tool for a reader and steers nothing",
 
 	// Paths dross has no code path for. paths.source and paths.tests ARE
 	// consumed (plan.md and verify.md branch on them); these three are the
@@ -74,6 +67,14 @@ var inertKeyReasons = map[string]string{
 	"remote.public":        "no dross code path branches on it — visibility is the forge's fact, and dross reads it from the API when it needs it",
 	"goals.audience":       "the prompts that read [goals] read core_value and non_goals; audience is captured for a human reading project.toml",
 	"env.secrets_location": "options.md branches on env.files and env.gitignored but not on this; it is prose for a reader",
+
+	// Path descriptors with no consumer. These three, plus stack.e2e_runner
+	// above, were inert for their whole lives and never listed — the key-parsing
+	// regex was digit-blind ([a-z_]+), so no key with a number in its name ever
+	// entered the set this guard checks. runtime-command-runner fixed the regex,
+	// which is what surfaced them.
+	"paths.e2e":  "no dross code path reads it — mutation scoping works from the phase's changed files, not from a declared directory; it records the layout for a reader",
+	"paths.i18n": "no dross code path reads it — nothing in dross is locale-aware; it records the layout for a reader",
 }
 
 // TestNoSettableKeyIsInert is the guard.
@@ -178,8 +179,13 @@ func TestListingsDoNotCountAsConsumption(t *testing.T) {
 // --- helpers -------------------------------------------------------------
 
 var (
-	setterCaseRE = regexp.MustCompile(`(?m)^\tcase "([a-z_]+\.[a-z_]+)":`)
-	getterCaseRE = regexp.MustCompile(`case "([a-z_]+\.[a-z_]+)":\s*\n\s*return [^\n]*?p\.([A-Z][A-Za-z0-9]*\.[A-Z][A-Za-z0-9]*)`)
+	// [a-z0-9_] and not [a-z_]: the digit-blind version silently dropped every
+	// key with a number in its name from the set this guard checks, so
+	// runtime.e2e_command, stack.e2e_runner, paths.e2e and paths.i18n were
+	// invisible to the very test that exists to catch unread keys —
+	// runtime.e2e_command was inert for its whole life and never listed as such.
+	setterCaseRE = regexp.MustCompile(`(?m)^\tcase "([a-z0-9_]+\.[a-z0-9_]+)":`)
+	getterCaseRE = regexp.MustCompile(`case "([a-z0-9_]+\.[a-z0-9_]+)":\s*\n\s*return [^\n]*?p\.([A-Z][A-Za-z0-9]*\.[A-Z][A-Za-z0-9]*)`)
 	// A listing is init.md's setter line, options.md's `Fields:` enumeration,
 	// or options.md's `Recorded only:` note. The first two exist for every
 	// settable key whether or not anything reads it; the third exists for

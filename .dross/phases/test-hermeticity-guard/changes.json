@@ -1,0 +1,7 @@
+{
+  "phase": "test-hermeticity-guard",
+  "base": "milestone/v1.4",
+  "base_commit": "719a492fde6f0440e3ab6a977433c3bdd452aa59",
+  "status": "complete",
+  "tasks": {}
+}

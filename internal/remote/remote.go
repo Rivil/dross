@@ -70,6 +70,18 @@ type Target struct {
 	// only; the values are read at run time and exist in memory for the length
 	// of one command.
 	Env []EnvVar
+	// ScratchBase optionally overrides the volume the run's throwaway build
+	// cache lands on. Empty means the caller derives it from Workdir.
+	//
+	// It rides on the target because it names a path on THIS host and nothing
+	// else can interpret it — and because the derived default was wrong on the
+	// reference host for three months: /home there is part of a 75 GB root LV
+	// while the 300 GB volume provisioned for the work sat elsewhere.
+	//
+	// Validated exactly like Workdir: this path reaches an `rm -rf` on a remote
+	// shell, so a value that is not a plain canonical absolute path is refused
+	// rather than quoted and hoped for.
+	ScratchBase string
 }
 
 // EnvVar is one variable to export on the remote.
@@ -120,6 +132,14 @@ func (t Target) Validate() error {
 	}
 	if !workdirRe.MatchString(t.Workdir) {
 		return fmt.Errorf("remote workdir %q is not a plain absolute path: %w", t.Workdir, ErrUnsafeTarget)
+	}
+	if t.ScratchBase != "" {
+		if !workdirRe.MatchString(t.ScratchBase) {
+			return fmt.Errorf("remote scratch base %q is not a plain absolute path: %w", t.ScratchBase, ErrUnsafeTarget)
+		}
+		if t.ScratchBase != path.Clean(t.ScratchBase) {
+			return fmt.Errorf("remote scratch base %q is not in canonical form (want %q): %w", t.ScratchBase, path.Clean(t.ScratchBase), ErrUnsafeTarget)
+		}
 	}
 	if t.Workdir != path.Clean(t.Workdir) {
 		return fmt.Errorf("remote workdir %q is not in canonical form (want %q): %w", t.Workdir, path.Clean(t.Workdir), ErrUnsafeTarget)

@@ -51,3 +51,4 @@
   id = "fd3b654f5740fd11"
   text = "An upgrade note (CHANGELOG / README) telling an existing adopter what to do the first time the checkout refusal fires on a branch that still tracks .dross/state.json."
   why = "Carried forward unrouted, on the reason it was first deferred with: doctor already names the exact fix at the moment it bites, and c-1 now makes the refusal itself lead with the cheapest one. A release note is distribution work for adopters this repo does not have. Left as someday rather than routed — inventing a target that names nothing is the lie this milestone keeps closing."
+  target = "adopter-upgrade-note"

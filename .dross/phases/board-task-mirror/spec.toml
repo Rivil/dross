@@ -50,6 +50,7 @@
   id = "d7f9593f2665816b"
   text = "Mirror task state back INTO dross — read the tracker's board and move a plan task when someone drags its card."
   why = "The opposite direction, and a much larger contract: it makes the tracker a writer of plan.toml, which needs conflict rules dross has never needed. This phase is one-way on purpose."
+  target = "board-task-inbound"
 
 [[deferred]]
   id = "e7207129f4d8a7fc"
@@ -85,3 +86,4 @@
   id = "6f43c4001c862759"
   text = "Let `dross task add`/`task edit` set test_contract: neither command exposes the field, so a task added mid-phase is written with an empty contract and the only way to fill it is hand-editing plan.toml — which `dross task add` exists precisely to stop."
   why = "Hit three times while amending board-task-mirror's verify FLAGs: every amendment task was added with no test_contract, so the plan records what the task touches but not what would fail if the task's claim broke — which is the field /dross-verify reads to map criteria to tests. dross task add/edit/move/remove was shipped to make hand-editing plan.toml unnecessary; this is the one field that still forces it."
+  target = "cli-surface-completeness"

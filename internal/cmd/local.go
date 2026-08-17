@@ -93,6 +93,23 @@ type localStore struct {
 	// writes it, and it prints the line first.
 	TrustedReplayCommands string `toml:"trusted_replay_commands,omitempty"`
 
+	// TrustedRunCommands is the comma-separated set of sha256 fingerprints for
+	// the [runtime] slot commands this machine has consented to `dross run`
+	// spawning.
+	//
+	// A third grant rather than a reuse of TrustedTestCommand, for the reason
+	// the binding exists at all: a grant covering "whatever [runtime] happens
+	// to say" would let a dev_command arriving in a pull inherit trust for a
+	// line nobody read. project.toml is TRACKED, so the repo proposes these
+	// commands; consenting to spawn one is code execution the repo chose.
+	//
+	// A SET, like the replay grant: a repo has many runtime slots and granting
+	// `dross run dev` must not silently revoke `dross run migrate`.
+	//
+	// ABSENT from localKeys on the same precedent — only `dross trust --run
+	// <name>` writes it, and it prints the line first.
+	TrustedRunCommands string `toml:"trusted_run_commands,omitempty"`
+
 	// RemoteHost and RemoteWorkdir authorize dross to run this repo's code on
 	// another machine — the mutation adapters and, since remote-test-runner,
 	// the test suite.
@@ -110,6 +127,38 @@ type localStore struct {
 	// project.Load refuses one by name (see the trap fields there).
 	RemoteHost    string `toml:"remote_host,omitempty"`
 	RemoteWorkdir string `toml:"remote_workdir,omitempty"`
+
+	// RemoteScratchBase puts the HOST's scratch build cache on a chosen
+	// volume, for when the granted workdir's parent is not the volume meant
+	// for this work.
+	//
+	// It IS in localKeys, unlike the grant beside it. It authorizes nothing —
+	// the host was already authorized, and this only says where on that host
+	// the cache goes — so the showing-before-writing ceremony that keeps
+	// remote_host out of the generic writer does not apply.
+	//
+	// It exists because the derived default was wrong on the reference host
+	// for three months: /home there is part of the 75 GB root LV while the
+	// 300 GB volume provisioned for this workload sat elsewhere, and a run
+	// filled root at 1.3 GB/min. The only lever was where the checkout lived,
+	// which couples cache placement to an unrelated decision.
+	RemoteScratchBase string `toml:"remote_scratch_base,omitempty"`
+
+	// RemotePool holds ADDITIONAL authorized hosts, tried in order after the
+	// pair above when that one cannot be reached.
+	//
+	// An array beside the scalars rather than a replacement for them. The grant
+	// already carries two generations of keys — the pair, and the deprecated
+	// mutation_* aliases kept because local.toml is untracked, so a rename
+	// silently stops resolving on every machine that already granted a host and
+	// presents as a local run the user believed was remote. A third generation
+	// that superseded the scalars would repeat exactly that, so the scalar pair
+	// stays authoritative as candidate zero and this only ever adds to it.
+	//
+	// ABSENT from localKeys for the same reason the scalars are: a generic
+	// key-writer would let an agent authorize a host without ever showing the
+	// user what for.
+	RemotePool []remoteCandidate `toml:"remote_pool,omitempty"`
 
 	// MutationRemoteHost and MutationRemoteWorkdir are the DEPRECATED aliases
 	// the same grant used to be written under, kept so an existing local.toml
@@ -175,6 +224,10 @@ var localKeys = map[string]struct {
 	"mutation_test_cpu": {
 		get: func(l *localStore) string { return l.MutationTestCPU },
 		set: func(l *localStore, v string) { l.MutationTestCPU = v },
+	},
+	"remote_scratch_base": {
+		get: func(l *localStore) string { return l.RemoteScratchBase },
+		set: func(l *localStore, v string) { l.RemoteScratchBase = v },
 	},
 	"mutation_remote_env": {
 		get: func(l *localStore) string { return l.MutationRemoteEnv },
@@ -278,6 +331,53 @@ func refuseTrackedLocal(repoDir string) error {
 // this file treats a decode failure as "no value"; a trust-bearing key cannot,
 // because "I could not read your config" must never resolve to a silent local
 // run the user thought was remote.
+// remoteCandidate is one authorized host in the pool.
+type remoteCandidate struct {
+	Host    string `toml:"host"`
+	Workdir string `toml:"workdir"`
+}
+
+// readRemoteGrants returns every authorized host in preference order: the
+// scalar grant first, then the pool.
+//
+// Order is the user's declared preference, so honouring it needs no policy of
+// our own.
+func readRemoteGrants(root, repoDir string) ([]*remote.Target, error) {
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return nil, err
+	}
+	l, err := loadLocal(localPath(root))
+	if err != nil {
+		return nil, err
+	}
+	env, err := resolveRemoteEnv(l.MutationRemoteEnv)
+	if err != nil {
+		return nil, err
+	}
+	var out []*remote.Target
+	add := func(host, workdir string) error {
+		if host == "" {
+			return nil
+		}
+		t := &remote.Target{Host: host, Workdir: workdir, Env: env, ScratchBase: l.RemoteScratchBase}
+		if err := t.Validate(); err != nil {
+			return fmt.Errorf("%s/%s: %w", RootDirName, LocalFile, err)
+		}
+		out = append(out, t)
+		return nil
+	}
+	host, workdir := l.effectiveRemote()
+	if err := add(host, workdir); err != nil {
+		return nil, err
+	}
+	for _, c := range l.RemotePool {
+		if err := add(c.Host, c.Workdir); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
 func readRemoteGrant(root, repoDir string) (*remote.Target, error) {
 	if err := refuseTrackedLocal(repoDir); err != nil {
 		return nil, err
@@ -294,7 +394,7 @@ func readRemoteGrant(root, repoDir string) (*remote.Target, error) {
 	if err != nil {
 		return nil, err
 	}
-	t := &remote.Target{Host: host, Workdir: workdir, Env: env}
+	t := &remote.Target{Host: host, Workdir: workdir, Env: env, ScratchBase: l.RemoteScratchBase}
 	if err := t.Validate(); err != nil {
 		return nil, fmt.Errorf("%s/%s: %w", RootDirName, LocalFile, err)
 	}

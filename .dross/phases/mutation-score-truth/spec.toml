@@ -53,3 +53,4 @@
   id = "4518ecf010f195bb"
   text = "Weight the pooled score by leg size when a repo genuinely has two large legs of different languages, rather than pooling raw counts."
   why = "Pooling raw counts IS the weighting for now — a mutant is a mutant. A deliberate re-weighting is only interesting once a real multi-leg repo exists to calibrate against, and inventing the policy before then would be fitting a rule to no data."
+  target = "mutation-score-weighting"

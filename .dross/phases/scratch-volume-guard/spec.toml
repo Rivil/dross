@@ -1,0 +1,49 @@
+[phase]
+  id = "scratch-volume-guard"
+  title = "scratch-volume-guard"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "A mutation run refuses to start when the volume its scratch cache would land on has less free space than the run plausibly needs, naming the path, the space actually free, and how to point the scratch somewhere else — instead of discovering it by filling the disk."
+
+[[criteria]]
+  id = "c-2"
+  text = "The scratch location is settable without moving the checkout: an operator can point it at a chosen volume directly, on this machine and on a remote host, rather than the placement being decided by wherever the tree happens to live."
+
+[[criteria]]
+  id = "c-3"
+  text = "The remote host is checked too, on the host's own filesystem — the volume that filled was the remote's, and a check that only ever measures the laptop would have missed the incident that motivated this."
+
+[[criteria]]
+  id = "c-4"
+  text = "A machine where free space cannot be determined runs as it does today rather than refusing — an unanswerable check must not become a reason a run cannot happen."
+
+[[criteria]]
+  id = "c-5"
+  text = "scratch.go no longer asserts that the tree's parent is the volume the operator chose for this work, because that was false on the host it names and stayed false for three months."
+
+[[decisions]]
+  key = "refuse_rather_than_warn"
+  choice = "Below the floor the run refuses. It does not warn and continue."
+  why = "A warning is what a run at 1.3 GB/min gives you no time to act on. The failure mode this closes is not a slow disk fill an operator watches — it is a host two minutes from wedged, serving other work off the same volume. An error message costs a re-run; the alternative cost a production host."
+
+[[decisions]]
+  key = "floor_is_a_declared_number_not_a_prediction"
+  choice = "A fixed default floor of 20 GB, overridable, and 0 disables the check."
+  why = "How much a campaign needs cannot be predicted — it depends on the package count and mutant yield. So this does not pretend to predict it. It is a floor derived from one measurement: the run that caused this consumed roughly 60 GB and filled at ~1.3 GB/min. 20 GB is 'clearly not enough to be safe' rather than 'enough', and it is stated as such so nobody reads it as a guarantee."
+
+[[decisions]]
+  key = "env_for_local_config_for_remote"
+  choice = "DROSS_SCRATCH_BASE sets this machine's scratch base. The remote's is a remote_scratch_base key in the gitignored local.toml, beside the grant."
+  why = "They name paths on two different machines, and one variable cannot mean both without the operator having to know which run is remote before setting it. The remote path also belongs with the rest of the remote grant — machine-local, untracked, and never travelling with the repo — which is where remote_host and remote_workdir already live."
+
+[[decisions]]
+  key = "unknown_is_not_a_refusal"
+  choice = "When free space cannot be read — an unsupported platform, a df that fails — the run proceeds."
+  why = "The check exists to stop a known outage, not to become a new way for a run not to happen. A guard that fails closed on its own inability to measure would turn every unsupported platform into a broken tool, and this repo has already had one guard that skipped in CI and reported the same green as a real pass — the reverse fault, from the same instinct."
+
+[[decisions]]
+  key = "placement_logic_unchanged"
+  choice = "Where the scratch goes by default is not changed: still beside the tree, still not the machine's temp, still not inside the tree."
+  why = "Both original constraints hold and were each proven the hard way — the default temp on the reference host is a RAM-backed tmpfs shared with a running LLM, and a scratch inside the tree let FindRoot walk up into the repo under test and reddened nine tests. Only the ASSERTION that the tree's parent is the deliberately chosen volume was wrong. An override fixes that without relitigating a placement that is right by default."

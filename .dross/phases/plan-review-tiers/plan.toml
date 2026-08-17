@@ -1,0 +1,14 @@
+task_seq = 1
+
+[phase]
+  id = "plan-review-tiers"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "State and guard the review ladder in plan.md"
+  files = ["assets/prompts/plan.md", "internal/cmd/plan_review_tiers_test.go"]
+  description = "Three rungs already exist — --no-review, the default single cold reviewer, and --panel.\nOnly two have flags, so the default was invisible and a backlog item asked for a tier\nthat already runs on every plan. Document the ladder with its costs and its trigger for\neach rung, say plainly that review is default-on, and say that --panel is a DECOMPOSITION\nrung rather than the way to obtain a review.\n"
+  covers = ["c-1", "c-2", "c-3"]
+  status = "done"
+  test_contract = ["if a rung stops being described, TestPlanPromptDescribesEveryReviewTier fails — it checks each rung's trigger (--no-review, the default, --panel) appears, since a ladder missing a rung is what routed this phase here", "if the panel/critique distinction is dropped, the same test fails on the 'decomposition' assertion — believing --panel is how you get a review is the specific confusion the deferred item recorded"]

@@ -549,6 +549,10 @@ func (r *jiraIssue) toIssue() *Issue {
 		Body:   adfToText(r.Fields.Description),
 		Labels: r.Fields.Labels,
 	}
+	// The tracker's own state name, kept alongside the normalised one. Jira has
+	// always parsed this off the wire and discarded it; an inbound sync needs
+	// exactly this value to tell which column a card was dragged to.
+	iss.WorkflowState = r.Fields.Status.Name
 	// Normalise Jira's status-category to dross's open/closed vocabulary.
 	// The done category is also the tracker's own resolved verdict, which is
 	// what a close read-back checks.

@@ -70,7 +70,9 @@
 [[deferred]]
   text = "Install the language runtimes themselves (go, node, dotnet) on a bare host, with pinned versions."
   why = "Host administration with real footprint — root, PATH ownership, version policy. install_scope deliberately draws the line at the runtime; naming what is missing is enough for a one-time per-host cost."
+  dismissed = true
 
 [[deferred]]
   text = "Bootstrap and run against more than one remote host — a pool, with per-host readiness and scheduling."
   why = "The grant is singular by design today. A pool is a scheduler, not a provisioner, and it is premature before one host is proven comfortable."
+  target = "remote-host-pool"

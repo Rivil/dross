@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // scratch is one run's private build cache: a directory the run compiles into
@@ -49,6 +50,12 @@ type scratch struct {
 func newScratch(base string, vars []string, reporter io.Writer) (*scratch, error) {
 	if len(vars) == 0 {
 		return &scratch{reporter: reporter}, nil
+	}
+	// BEFORE the mkdir, and before anything is written. A refusal that had
+	// already created directories would leave the volume it is protecting
+	// slightly worse off than when it declined to use it.
+	if err := checkScratchSpace(base); err != nil {
+		return nil, err
 	}
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return nil, fmt.Errorf("mutation: create scratch base %s: %w", base, err)
@@ -116,8 +123,19 @@ func remoteAssignments(dir string, vars []string) []string {
 //
 // Not the default temp, because that is whatever the machine happened to
 // configure — on helicon it is a 32 GB tmpfs in RAM shared with a running LLM,
-// where a build cache is an outage rather than a slowdown. The tree's own
-// parent is on the volume the operator deliberately chose for this work.
+// where a build cache is an outage rather than a slowdown.
+//
+// The tree's parent is the default because it is the best AVAILABLE guess, not
+// because it is known to be right. This used to claim the parent was "the
+// volume the operator deliberately chose for this work", and on the host it
+// names that was false for three months: /home there is part of the 75 GB root
+// LV, while the 300 GB volume provisioned for exactly this workload sat
+// elsewhere. A run filled root at 1.3 GB/min and came within about two minutes
+// of wedging a host serving unrelated services off the same volume — while
+// every guard watched the volume that was idle, because the two cache
+// variables dross does NOT override still pointed at it.
+//
+// So the guess stays, and ScratchBaseOverride exists for when it is wrong.
 //
 // Not inside the tree, which the first live run proved the hard way. The
 // exported TMPDIR is what gremlins copies the module through, so every
@@ -131,13 +149,42 @@ func remoteAssignments(dir string, vars []string) []string {
 // Keyed by the tree's base name so two repos on one machine do not share.
 func scratchDirFor(tree string) string {
 	tree = filepath.Clean(tree)
+	if base := ScratchBaseOverride(); base != "" {
+		return filepath.Join(base, ".dross-cache", filepath.Base(tree))
+	}
 	return filepath.Join(filepath.Dir(tree), ".dross-cache", filepath.Base(tree))
+}
+
+// ScratchBaseEnv is the variable an operator sets to put this machine's scratch
+// on a chosen volume without relocating the checkout.
+//
+// It exists because the only lever used to be where the tree happens to live,
+// which couples cache placement to an unrelated decision — and got that
+// placement wrong on the one host it was tested against.
+const ScratchBaseEnv = "DROSS_SCRATCH_BASE"
+
+// ScratchBaseOverride returns the configured base, or "" for the default.
+//
+// A relative value is IGNORED rather than resolved. The scratch is created and
+// later removed wholesale, and resolving a relative path against a working
+// directory that varies per adapter is how an rm -rf finds somewhere nobody
+// meant. An absolute path or nothing.
+func ScratchBaseOverride() string {
+	base := strings.TrimSpace(os.Getenv(ScratchBaseEnv))
+	if base == "" || !filepath.IsAbs(base) {
+		return ""
+	}
+	return filepath.Clean(base)
 }
 
 // remoteScratchDir is scratchDirFor for a path on another machine. Named
 // separately because the remote path is never created by this process and never
 // resolved against this filesystem.
 func remoteScratchDir(workdir string) string { return scratchDirFor(workdir) }
+
+// parentOf is filepath.Dir, named so scratch_space.go's walk reads as intent
+// rather than as path manipulation.
+func parentOf(path string) string { return filepath.Dir(path) }
 
 func (s *scratch) report(format string, args ...any) {
 	if s == nil || s.reporter == nil {

@@ -1,0 +1,35 @@
+task_seq = 4
+
+[phase]
+  id = "cli-surface-completeness"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Carry test_contract through the plan-edit layer"
+  files = ["internal/phase/plan_edit.go", "internal/phase/plan_edit_test.go"]
+  description = "The gap starts below the CLI: NewTask (plan_edit.go:127) has no TestContract field, so\nAddTask's Task literal (plan_edit.go:156) cannot set one, and TaskEdit (plan_edit.go:326)\nhas no pointer for it either. Add both, plus TaskEdit.Description — the same accidental\nomission on the same struct (locked files_stays_out_of_edit keeps Files out).\n\nPure data layer: no cobra wiring here, so a failure is attributable to the struct rather\nthan the flag parsing.\n"
+  covers = ["c-1", "c-2", "c-4"]
+  test_contract = ["if AddTask drops the contract, TestAddTaskCarriesTestContract fails — a NewTask carrying two statements must land both in plan.toml in order, since a contract written in the wrong order still reads as a different contract", "if EditTask stops replacing the list, TestEditTaskReplacesTestContract fails — a non-nil pointer must overwrite wholesale, matching how every other TaskEdit field behaves", "if a nil pointer starts clearing the field, TestEditTaskLeavesUnsetFieldsAlone fails — an edit that touches only the title must leave test_contract and description byte-identical, which is what makes partial edits safe", "if description becomes uneditable again, TestEditTaskSetsDescription fails — it is settable on add and was settable nowhere else, which is the accident this closes"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Expose --test-contract on task add and edit"
+  files = ["internal/cmd/task.go", "internal/cmd/task_test.go"]
+  description = "`task add --test-contract <line>` (repeatable) and, on edit, `--test-contract` to replace\nplus `--add-test-contract` to append (locked edit_replace_and_append). `task edit\n--description` lands with them.\n\nStringArrayVar, not StringSliceVar (locked contract_flag_type): statements are prose and\ncontain commas, so cobra must not split them. Carry the same explanatory comment\n--landmark carries (changes.go:73), since the repo is otherwise 5-to-1 StringSlice and a\nbare StringArray reads as a mistake.\n\nThe append arm composes old+new in the cmd layer and hands EditTask a replace pointer, so\nTaskEdit stays a pure replace struct.\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["if a statement containing a comma is split, TestTestContractKeepsCommas fails — one --test-contract carrying a comma must produce exactly ONE entry, which is the whole reason for StringArray over StringSlice and the corruption a reviewer would never spot", "if --test-contract stops being repeatable, TestTestContractRepeats fails — three flags must yield three entries in the order given", "if append starts clobbering, TestAddTestContractAppends fails — --add-test-contract on a task with two statements must yield three, keeping the original two first", "if replace and append are both given, TestTestContractReplaceAndAppendConflict fails — the combination is refused rather than silently resolved, since either interpretation loses data the user meant to keep", "if an unchanged flag rewrites the field, assertPlanUnchanged in TestEditWithoutContractFlagsLeavesPlanByteIdentical fails — the Changed() gate is what keeps an unrelated edit out of the contract"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 3
+  title = "phase create --adopt takes over a started slug"
+  files = ["internal/cmd/phase.go", "internal/cmd/phase_create_adopt_test.go"]
+  description = "The SlugOccupied refusal (phase.go:154) becomes conditional on a new --adopt boolean, and\nthe refusal text gains a fourth line naming the flag.\n\nAdoption must not damage what it adopts: an existing phase/<id> is checked out rather than\nfailing the fork refusal (phase.go:909), changes.SetFork is skipped when a fork point is\nalready recorded, CurrentPhaseStatus is preserved instead of being reset to \"created\", and\nthe trailing `Next: /dross-spec` line is dropped when a spec already exists. refuseIfShipped\ngates the whole thing (locked adopt_refuses_shipped).\n\nNarration reuses createdOrAdopted's existing \"adopted existing\" string — a third spelling\nwould break the assertion at phase_create_adopt_test.go:120.\n"
+  covers = ["c-5", "c-6"]
+  test_contract = ["if --adopt stops working on a started slug, TestAdoptTakesOverStartedPhase fails — a slug holding a spec.toml must be adopted rather than refused, which is the whole feature", "if the refusal weakens without the flag, TestCreateStillRefusesStartedSlugWithoutAdopt fails — the default must stay a refusal, since silently retitling work in flight is what phase-create-adoption removed", "if the refusal stops naming the way through, TestRefusalNamesAdoptFlag fails — an error that does not say how to proceed is the reason people hand-edit instead", "if adoption re-forks an existing branch, TestAdoptChecksOutExistingBranch fails — the fork refusal must not fire and the branch must be entered, since re-forking abandons the phase's commits", "if adoption rewrites the fork point, TestAdoptPreservesRecordedFork fails — changes.json's recorded base and tip must be byte-identical after adoption, because the fork point is what scopes the phase's mutation diff", "if adoption resets the phase's status, TestAdoptPreservesPhaseStatus fails — a phase with a plan must not read \"created\" afterwards, which is a lie about how far the work got", "if a phase live on the remote can be adopted, TestAdoptRefusesShippedPhase fails — refuseIfShipped must fire exactly as it does for rename, or --adopt becomes the way around that guard"]
+  status = "done"

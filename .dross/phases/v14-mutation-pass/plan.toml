@@ -1,0 +1,13 @@
+task_seq = 1
+
+[phase]
+  id = "v14-mutation-pass"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Mutation pass over the whole v1.4 diff"
+  files = ["internal/cmd/run.go"]
+  covers = ["c-1"]
+  status = "done"
+  test_contract = ["if the milestone's new code is under-tested, the surviving mutants name the exact lines — this is the deferred end-of-milestone pass, run once over the merged diff instead of per phase"]

@@ -147,7 +147,11 @@ func TestRedProofSetPreservesRecord(t *testing.T) {
 // one live pin must be discoverable, or every check built on discovery is
 // checking an empty set and passing.
 func TestDiscoverRedProofPinsFindsRecordedPin(t *testing.T) {
-	root := filepath.Join(repoRootForDocs(t), ".dross")
+	repo := repoRootForDocs(t)
+	// The live record, copied into a throwaway root: discovery still runs over
+	// this repo's REAL pin, but nothing hands a loader the live .dross where a
+	// gitignored file could answer instead (hermetic_dross_read_test.go).
+	root := liveRecordRoot(t, repo, "config-trust-hardening")
 
 	pins, err := discoverRedProofPins(root)
 	if err != nil {
@@ -261,8 +265,10 @@ func TestRedProofSetPreservesReplay(t *testing.T) {
 // unloadable, which is the loudest possible way to learn a schema change was
 // not additive.
 func TestRedProofLegacyRecordLoads(t *testing.T) {
-	root := filepath.Join(repoRootForDocs(t), ".dross")
-	path := changes.FilePath(root, "config-trust-hardening")
+	// Named rather than composed from a bare .dross root: changes.json is
+	// tracked, so a fresh checkout has it and this reads the same record
+	// everywhere (hermetic_dross_read_test.go).
+	path := filepath.Join(repoRootForDocs(t), ".dross", "phases", "config-trust-hardening", "changes.json")
 
 	c, err := changes.Load(path, "config-trust-hardening")
 	if err != nil {
