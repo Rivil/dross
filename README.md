@@ -155,6 +155,24 @@ dross update --force  # reinstall the latest regardless of version
 
 `dross update` fetches the latest GitHub release, verifies the tarball's SHA-256 against `checksums.txt` (refusing on mismatch), atomically replaces the running binary, then re-syncs the embedded slash commands + prompts.
 
+#### Upgrading a repo that still tracks `.dross/state.json`
+
+`state.json` holds machine-local position — current phase, version, activity history. It used to be tracked, and is now gitignored: a tracked copy gets dragged forward into every later tree by the squash, so one machine's position silently replays onto another's.
+
+If your repo has branches cut before that change, the first branch switch onto one of them will **refuse** rather than proceed:
+
+```
+refusing to switch to <branch>: it would overwrite your live .dross/state.json.
+```
+
+That is the guard working. git overwrites an *ignored* working-tree file without complaint, so dross stops instead of letting the switch replace your live copy. The refusal prints the remedies in cheapest-first order, and the cheapest one that applies is the one to take:
+
+- **Fast-forward** — offered when the branch is merely behind its remote and the remote no longer carries the tracked copy. Nothing to move aside.
+- **Move aside and restore** — copy the live file, switch, copy it back. Always works, changes nothing permanently.
+- **Untrack it for good** — `git rm --cached .dross/state.json` on that branch, and commit. This is the one that ends the problem: once no branch carries a tracked copy, the refusal can never fire again.
+
+`dross doctor` reports the same condition, with the same fix, before you hit it.
+
 ### Manual binary download
 
 GoReleaser publishes archives for `darwin/arm64` (primary), `darwin/amd64`, `linux/arm64`, `linux/amd64`, and `windows/arm64`+`windows/amd64` on every `v*` tag. Grab the matching archive from [releases](https://github.com/Rivil/dross/releases) — `.tar.gz` on macOS/Linux, `.zip` on Windows — extract, drop the `dross` binary (`dross.exe` on Windows) on your PATH, then run `dross install` to set up the slash commands and prompts.
@@ -307,7 +325,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Deferred-item routing — deferred ideas carry a `target` (a phase slug they should re-surface in) or stay "someday"; `dross deferred` lists and routes them, and `dross validate` refuses a dangling target
 - [x] Deferred-triage gaps — a `dismissed` state retires an item as wontfix/done (distinct from "someday" and "routed"), `dross deferred unroute`/`dismiss` complete the lifecycle, and the spec gray-area walkthrough routes scope-creep into deferred items instead of losing it
 
-### Milestone v0.6 — surface depth & loop hardening (active)
+### Milestone v0.6 — surface depth & loop hardening (complete)
 
 - [x] Multi-language analyzer catalogs + deepened container/IaC scanning — per-stack scanner/analyzer loadouts feeding `dross-secure` / `dross-quality`, with Dockerfile/compose/IaC surfaces (hadolint/trivy/checkov-class tools) wired in
 - [x] Secure/quality findings lifecycle — audit findings persist with a state machine (open → fixed/accepted/false-positive) across re-runs instead of re-surfacing every pass
@@ -317,7 +335,7 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Self-update & distribution — `dross update` fetches, verifies, and atomically swaps the running binary, then re-syncs commands/prompts
 - [x] Gray-area walkthrough — the spec locked-decisions step deep-dives phase-specific gray areas one at a time into `[[decisions]]` / `[[deferred]]`
 
-### Milestone v0.7 — branch topology & non-interactive ship (active)
+### Milestone v0.7 — branch topology & non-interactive ship (complete)
 
 - [x] `dross ship --auto` — a non-interactive fast-path (skips body preview / reviewers / merge gate) suitable for scripts and loops; `--json` emits `{url, number, result}`
 - [x] Milestone-branch model — phase PRs squash-merge into `milestone/<version>` when a milestone is active; the milestone itself lands in `main` as a merge commit (not a squash) so `main` keeps per-phase history, finalized by `dross milestone complete`
@@ -327,17 +345,46 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 
 - [x] Native statusline — `dross statusline` renders the Claude Code status line from status JSON on stdin (project, milestone, phase, progress), installed via `dross install`
 
-### Milestone v0.9 — backlog burn-down: trust, findings & integrations (active)
+### Milestone v0.9 — backlog burn-down: trust, findings & integrations (complete)
 
 - [x] Release trust & distribution — minisign-signed releases with verify-before-swap in `dross update` (public key embedded; signing key + password in CI secrets); Homebrew + Windows distribution paths
 - [x] Ship-time ARCHITECTURE.md autogen — `/dross-ship` self-heals an absent doc and folds each phase's landmarks into the matching feature entry in place
 - [x] `/dross-watch` — a read-only heartbeat: board inbound + phase-drift digest since the last tick, ending with one suggested next command (`watch-pr-ci-status` extends it to PR/CI state)
 - [x] Additional board backends + verify-merge-before-completion + PR-record-reaches-base — more issue-board providers, plus ship/verify ordering fixes so a phase can't complete before its merge lands and the PR record reaches the base branch
 
-### Milestone v0.10 — workflow ergonomics: task lifecycle & telemetry clarity (current)
+### Milestone v0.10 — workflow ergonomics: task lifecycle & telemetry clarity (complete)
 
 - [x] Task-lifecycle commands — `dross task {add,remove,edit}` edit `plan.toml` through guarded verbs: `add` appends or inserts (`--after`/`--before`) with a fresh per-plan high-water id (a freed id is never reissued), `remove` is dependency-safe with a `--force` strip, `edit` is a partial field update, and every mutation is gated by a pre-write integrity guard that leaves the file byte-unchanged on rejection
-- [ ] Task reordering, landmark comma-fix, telemetry bucket graduation + taxonomy overhaul, ship clean-tree, verify auto-finalize — remaining v0.10 backlog
+- [x] Task reordering, landmark comma-fix, telemetry bucket graduation + taxonomy overhaul, ship clean-tree, verify auto-finalize
+
+### Milestone v1.0 — hardening: every claim proven (complete)
+
+- [x] Self-audit pass — each documented guarantee re-checked against the code that is supposed to enforce it, with the gaps closed rather than noted
+- [x] Board sync proven against a live Jira Cloud instance rather than fixtures alone
+- [x] README truth pass — claims the tool does not honour removed instead of softened
+
+### Milestone v1.1 — friction pass: the logs stop repeating themselves (complete)
+
+- [x] Recurring friction surfaced by the telemetry log turned into fixes, so the same error stops being re-diagnosed by hand every session
+
+### Milestone v1.2 — branch-model truth: the base is a fact, not a guess (complete)
+
+- [x] A phase's base branch is recorded at fork time and read back verbatim, never re-derived from git topology — the divergence that previously needed manual recovery commits cannot recur
+
+### Milestone v1.3 — finish the tool: the standing backlog, drained (complete)
+
+- [x] Mutation scoping to the phase's own diff, plus a survivor lifecycle where every survivor is in-diff, routed, or accepted-with-reason and an accepted one is never re-emitted
+- [x] Milestone lifecycle closes itself — `dross milestone complete --finalize` owns the status flip and is idempotent
+- [x] Honest board sync, honest config: a board failure surfaces instead of counting as zero, and every documented config value either changes behaviour or is rejected
+- [x] Off-box mutation runs on a consented remote host, with per-run scratch build caches wiped on every exit path
+- [x] Board mirroring at task granularity, driving the tracker's own workflow field
+
+### Milestone v1.4 — the backlog burn: every parked idea, routed or killed (active)
+
+- [x] Test-suite hermeticity enforced, not just documented — a test reading the real repo's gitignored `.dross` fails locally instead of only in CI
+- [x] `dross task add/edit --test-contract` and `dross phase create --adopt` — nothing dross supports needs hand-editing an artefact
+- [x] Every `dross issue pull --json` failure reaches the envelope, setup failures included, instead of crashing a consumer
+- [ ] Remaining: runtime command runner, CI mutation leg, remote host bootstrap/pool/latency, board→dross inbound mirroring
 
 ## Telemetry
 

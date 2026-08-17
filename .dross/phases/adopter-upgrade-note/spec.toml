@@ -1,0 +1,34 @@
+[phase]
+  id = "adopter-upgrade-note"
+  title = "adopter-upgrade-note"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "An adopter who hits the state.json checkout refusal for the first time can find out what it means without reading the source: the docs state that state.json used to be tracked, why it stopped being, and the one-time fix — matching the remedies the refusal itself prints."
+
+[[criteria]]
+  id = "c-2"
+  text = "The README's roadmap says what is actually true: every milestone through v1.3 reads complete and v1.4 reads active, rather than v0.10 claiming to be current in a repo that has shipped four milestones since."
+
+[[criteria]]
+  id = "c-3"
+  text = "The roadmap cannot drift again silently — a milestone whose recorded status disagrees with the README fails the suite, naming both, so the next milestone to close cannot leave the claim behind."
+
+[[decisions]]
+  key = "note_lives_in_the_readme"
+  choice = "The upgrade note goes in README.md's Updating section, not a new CHANGELOG.md."
+  why = "There is no CHANGELOG and inventing one for a single entry creates a file that will be stale by the next release. Updating is where someone already goes when a version bump surprises them, and it is next to `dross update`, which is how the refusal arrives."
+  locked = true
+
+[[decisions]]
+  key = "guard_compares_recorded_status"
+  choice = "The drift guard compares the README against .dross/milestones/*.toml statuses, not against a hand-maintained list."
+  why = "The milestone tomls are the source of truth the CLI already reads, so a guard derived from them cannot disagree with the tool. A duplicated list in the test would just be a second thing to forget to update — the same failure the guard exists to catch."
+  locked = true
+
+[[decisions]]
+  key = "status_only_not_content"
+  choice = "The guard checks each milestone's presence and status claim, not that its bullet list describes the work."
+  why = "Prose content cannot be verified mechanically, and a guard that pretends to check it would be the vacuous-green shape this milestone keeps removing. Status is the part that is machine-checkable and the part that was actually wrong."
+  locked = true
