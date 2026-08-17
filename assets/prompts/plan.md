@@ -257,6 +257,16 @@ This creates (or updates) the phase issue with the acceptance criteria and a tas
 
 ### 6.1 Auto review (skip only on `--no-review`)
 
+**The review ladder — three rungs, and the middle one is the default.** Say which you are on if the user asks; don't make them infer it from the flags:
+
+| Rung | How you get it | Cost | Reach for it when |
+| --- | --- | --- | --- |
+| No independent read | `--no-review` | free | You are re-planning something you just reviewed, or the phase is a one-task edit. The plan gets no second opinion at all — say so rather than letting it pass unremarked. |
+| One cold reviewer | **the default — nothing to pass** | ~1 subagent | Every ordinary phase. A fresh subagent reads the artifacts with none of this conversation's context and reports BLOCKING / FLAG / NOTE. |
+| Three-lens panel + judge | `--panel` | ~4-5× a single-pass plan | A new subsystem, several plausible architectures, an expected graph of 4+ tasks. Note this rung is about **decomposition**, not critique: it drafts the plan three ways and merges them, and the cold reviewer below still runs afterwards. |
+
+The middle rung is easy to miss because only the other two have flags. A plan gets an independent second opinion **unless you opt out** — so `--panel` is not "the way to get review", it is the way to get a plan drafted from three angles first.
+
 Unless `--no-review` was passed, run the independent plan review now — don't wait to be asked. Read `~/.claude/dross/prompts/plan-review.md` and follow it from its §1 (the phase id is already resolved). It spawns its own cold subagent to read the artifacts, so the review context stays fully isolated from this conversation; you only relay findings.
 
 On the outcome:
