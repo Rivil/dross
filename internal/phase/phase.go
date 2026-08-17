@@ -166,6 +166,61 @@ func RenameInArray(arr []string, oldSlug, newSlug string) []string {
 
 // UniqueSlug slugifies title and, if a phase directory by that slug already
 // exists under root, appends "-2", "-3", … until it finds a free name.
+// SlugDisposition is what CreateSlug decided about a title.
+type SlugDisposition int
+
+const (
+	// SlugFree — no phase directory of this slug exists. Create it.
+	SlugFree SlugDisposition = iota
+	// SlugAdopt — a directory exists but holds none of the files the loop
+	// writes as a phase begins. It is a placeholder — the shape
+	// `deferred route --target` and `milestone add phases` leave behind — and
+	// the caller should adopt it rather than coin a near-identical slug.
+	SlugAdopt
+	// SlugOccupied — a directory exists and holds real work. The caller must
+	// refuse: adopting would retitle someone's in-flight phase, and coining
+	// `<slug>-2` is the behaviour this replaced.
+	SlugOccupied
+)
+
+// startedMarkers are the files the loop writes as a phase begins. A directory
+// holding none of them is a placeholder.
+//
+// Keyed on THESE files rather than on the directory being empty, and the
+// difference matters in both directions: emptiness would let a stray file (an
+// editor swap file, a README someone dropped in) make a placeholder look
+// occupied, which re-opens the duplicate-coining path — while a marker file
+// present is unambiguous evidence someone started the phase.
+var startedMarkers = []string{"spec.toml", "plan.toml", "changes.json"}
+
+// CreateSlug resolves a title to the slug `dross phase create` should use, and
+// what to do about it.
+//
+// It replaces UniqueSlug's unconditional coining. That coining is the bug this
+// exists to remove: `phase create "Survivor drain"` over an existing
+// survivor-drain/ produced survivor-drain-2, appended THAT to the milestone's
+// phases array and cut a branch for it — so the roadmap entry someone
+// scaffolded and the phase they then started were two different phases
+// separated by a trailing digit nobody chose.
+func CreateSlug(root, title string) (slug string, d SlugDisposition) {
+	slug = Slugify(title)
+	dir := filepath.Join(root, "phases", slug)
+	if !statDir(dir) {
+		return slug, SlugFree
+	}
+	for _, marker := range startedMarkers {
+		if _, err := os.Stat(filepath.Join(dir, marker)); err == nil {
+			return slug, SlugOccupied
+		}
+	}
+	return slug, SlugAdopt
+}
+
+// UniqueSlug slugifies title and coins a numbered suffix when the slug is
+// taken.
+//
+// Retained for the lifecycle verbs that genuinely need a free slug. `dross
+// phase create` does NOT use it any more — see CreateSlug for why.
 func UniqueSlug(root, title string) string {
 	base := Slugify(title)
 	if !statDir(filepath.Join(root, "phases", base)) {
@@ -246,6 +301,14 @@ type Decision struct {
 }
 
 type Deferred struct {
+	// ID is a stable internal identity for the item, assigned when it is filed
+	// (or backfilled on first board sync). It keys the item's issue-board
+	// backlog entry so a board link survives its neighbours being removed —
+	// positional keys re-point at whatever slid into the index. It is
+	// deliberately not an addressing handle: every CLI verb still addresses an
+	// item by `<source> <idx>` (the locked deferred_identity decision).
+	// omitempty so specs written before ids existed stay byte-clean.
+	ID   string `toml:"id,omitempty" json:"id,omitempty"`
 	Text string `toml:"text" json:"text"`
 	Why  string `toml:"why,omitempty" json:"why,omitempty"`
 	// Target routes the deferred item to a destination: a phase slug it should
@@ -256,6 +319,13 @@ type Deferred struct {
 	// "someday" (no target, not dismissed) and "routed" (target set); dismiss
 	// is someday-only, so a dismissed entry never carries a target.
 	Dismissed bool `toml:"dismissed,omitempty" json:"dismissed,omitempty"`
+	// Survivor carries the identity key of a routed surviving mutant
+	// (internal/survivor). The locked routed_state_source decision routes a
+	// survivor through this machinery rather than a parallel one, so a routed
+	// survivor re-surfaces on the destination phase's slate like any other
+	// parked item — and stays queryable as a survivor rather than dissolving
+	// into the prose of Text. Empty on ordinary deferred items.
+	Survivor string `toml:"survivor,omitempty" json:"survivor,omitempty"`
 }
 
 // Plan is the task graph for a phase.

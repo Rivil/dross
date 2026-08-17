@@ -136,3 +136,36 @@ func TestFromRemote(t *testing.T) {
 		t.Errorf("FromRemote:\ngot:  %+v\nwant: %+v", got, want)
 	}
 }
+
+// TestTelemetryEnabledUnsetIsOn pins the "unset = on" default and both explicit
+// settings. The nil check is the whole opt-out contract: inverted, a user who
+// never answered the prompt would be treated as having opted OUT, and dross
+// would silently stop recording — indistinguishable, from the outside, from
+// telemetry working.
+func TestTelemetryEnabledUnsetIsOn(t *testing.T) {
+	on, off := true, false
+	cases := []struct {
+		name string
+		in   *bool
+		want bool
+	}{
+		{"unset means on", nil, true},
+		{"explicitly on", &on, true},
+		{"explicitly off", &off, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := TelemetryDefaults{Enabled: tc.in}.TelemetryEnabled()
+			if got != tc.want {
+				t.Errorf("TelemetryEnabled() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	// The explicit-off case is what makes the nil check load-bearing: if the
+	// guard were dropped entirely, unset would dereference nil; if it were
+	// inverted, unset and explicit-off would agree. Neither can pass the table.
+	if (TelemetryDefaults{Enabled: &off}).TelemetryEnabled() == (TelemetryDefaults{}).TelemetryEnabled() {
+		t.Error("unset and explicitly-off must not agree — unset is on")
+	}
+}

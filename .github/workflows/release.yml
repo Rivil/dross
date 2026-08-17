@@ -71,7 +71,11 @@ jobs:
       - uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
         if: steps.tag.outputs.new_tag != ''
         with:
-          go-version: '1.25'
+          # Exact patch, matching ci.yml. This is the toolchain that builds the
+          # binaries users download, so it must not be the one unpinned input
+          # in an otherwise pinned pipeline — and it should never be older than
+          # the version CI gates on (go1.25.13 clears GO-2026-6218/6090/5972/5026).
+          go-version: '1.25.13'
           cache: true
 
       # goreleaser's `signs:` block shells out to the `minisign` CLI, which is not

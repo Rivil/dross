@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -323,5 +324,76 @@ func TestRuleShowDegradesOutsideRepo(t *testing.T) {
 
 	if err := runCmd(t, Rule(), "show"); err != nil {
 		t.Fatalf("rule show should exit 0 outside a dross repo, got %v", err)
+	}
+}
+
+// TestRuleShowEmitsSurvivorDrainInCleanRepo is c-6 at the CLI surface: in a repo
+// with no project rules configured, `dross rule show` still states the drain
+// policy — exactly once, and marked as a builtin rather than as a user rule.
+// The package-level test pins Render; this pins that the command the prompts
+// actually call reaches it.
+func TestRuleShowEmitsSurvivorDrainInCleanRepo(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	ruleCovFakeHome(t)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+
+	var showErr error
+	out := captureStdout(t, func() { showErr = runCmd(t, Rule(), "show") })
+	if showErr != nil {
+		t.Fatalf("rule show: %v", showErr)
+	}
+	if !strings.Contains(out, "[builtin/hard/dross-survivor-drain]") {
+		t.Errorf("rule show omits the drain builtin in a clean repo:\n%s", out)
+	}
+	if n := strings.Count(out, "Pre-existing faults are not furniture"); n != 1 {
+		t.Errorf("drain policy stated %d times, want exactly 1:\n%s", n, out)
+	}
+	for _, escape := range []string{"dross survivor accept --reason", "dross survivor route --target"} {
+		if !strings.Contains(out, escape) {
+			t.Errorf("rule show must name the escape %q:\n%s", escape, out)
+		}
+	}
+}
+
+// TestRuleCover_PromoteProjectSaveError covers the save-failure arm of promote.
+// Promotion is a two-file move — add to global, remove from project — and the
+// project save is the second write. If its failure were swallowed the rule
+// would exist in BOTH scopes, which the merge then resolves silently in favour
+// of the project copy: the promotion would look done and have changed nothing.
+func TestRuleCover_PromoteProjectSaveError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: a read-only directory would not stop the write")
+	}
+	dir := realTempDir(t)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", t.TempDir())
+
+	if err := runCmd(t, Rule(), "add", "project rules must be promotable", "--scope", "project"); err != nil {
+		t.Fatal(err)
+	}
+	set, path, err := loadScope("project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(set.Rules) != 1 {
+		t.Fatalf("fixture: project scope holds %d rules, want 1", len(set.Rules))
+	}
+	id := set.Rules[0].ID
+
+	// Make the rules file itself read-only: the load above already succeeded,
+	// so only the save can fail.
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+
+	if err := runCmd(t, Rule(), "promote", id); err == nil {
+		t.Error("promote with an unwritable project rules file exited 0 — the rule would live in both scopes")
 	}
 }

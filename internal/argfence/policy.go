@@ -88,6 +88,10 @@ var table = map[string]Rule{
 		Kind: Reject,
 		Why:  "no end-of-options token; a leading-dash package path is refused before exec",
 	},
+	"go": {
+		Kind: Reject,
+		Why:  "the go tool parses flags ahead of package patterns and has no end-of-options token, so a pattern beginning with a dash is read as a flag",
+	},
 	"npx": {
 		Kind: Reject,
 		Why:  "npx consumes leading-dash arguments itself before the wrapped binary sees them",
@@ -95,6 +99,18 @@ var table = map[string]Rule{
 	"dotnet": {
 		Kind: Reject,
 		Why:  "dotnet and stryker.net both parse options positionally with no end-of-options token",
+	},
+	"ssh": {
+		Kind: Reject,
+		Why:  "ssh reads options ahead of the destination and honours no end-of-options token, so a host beginning with a dash is an option — and `-o ProxyCommand=…` is arbitrary LOCAL execution, which makes this the worst binary in the table to get wrong",
+	},
+	"rsync": {
+		Kind: Reject,
+		Why:  "rsync parses options anywhere in the argv, so neither operand can be fenced; `-e …` is arbitrary local execution, the same shape as ssh's -o",
+	},
+	"sh": {
+		Kind: Reject,
+		Why:  "sh reads options before -c and honours no end-of-options token, so a command string beginning with a dash is read as a shell option (`-i`, `-x`) rather than as the script; the string itself is the consented runtime.test_command and is never a derived value, but the fence is what keeps that true if a caller ever passes one",
 	},
 }
 

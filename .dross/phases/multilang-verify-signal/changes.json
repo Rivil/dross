@@ -1,0 +1,91 @@
+{
+  "phase": "multilang-verify-signal",
+  "pr": 91,
+  "base": "milestone/v1.3",
+  "base_commit": "6de86cae0c08c13d42b2f07db26e41470519c8b8",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/mutation/testdata/ts-project/package.json",
+        "internal/mutation/testdata/ts-project/stryker.conf.json",
+        "internal/mutation/testdata/ts-project/src/tally.ts",
+        "internal/mutation/testdata/ts-project/src/tally.test.ts",
+        "internal/mutation/ts_fixture_test.go"
+      ],
+      "commit": "7a35db1",
+      "completed_at": "2026-08-15T22:01:48.89808Z",
+      "landmarks": [
+        {
+          "feature": "mutation testing adapters",
+          "symbol": "TestFixtureIsAWellFormedProject",
+          "loc": "internal/mutation/ts_fixture_test.go:19",
+          "what": "a committed real TypeScript project the Stryker adapter can be run against end to end, built to produce both killed and surviving mutants"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/mutation/stryker_e2e_test.go",
+        "internal/mutation/testdata/ts-project/.gitignore",
+        "internal/mutation/testdata/ts-project/package-lock.json"
+      ],
+      "commit": "b65605c",
+      "completed_at": "2026-08-15T22:09:41.732392Z",
+      "landmarks": [
+        {
+          "feature": "mutation testing adapters",
+          "symbol": "TestStrykerRunsEndToEnd",
+          "loc": "internal/mutation/stryker_e2e_test.go:48",
+          "what": "the Stryker adapter is finally proven against the real tool — 28 mutants instrumented, report parsed back, killed and survived both attributed to the mutated file"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/verify/dispatch_surface_test.go"
+      ],
+      "commit": "9ed8a28",
+      "completed_at": "2026-08-15T22:05:39.9242Z",
+      "landmarks": [
+        {
+          "feature": "verification",
+          "symbol": "TestEveryClaimedExtensionDispatches",
+          "loc": "internal/verify/dispatch_surface_test.go:42",
+          "what": "every extension the adapters claim is asserted to dispatch rather than land in Skipped, cross-checked against the adapters' own Supports so the guard cannot fall behind"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/quality/multilang_test.go"
+      ],
+      "commit": "67bd642",
+      "completed_at": "2026-08-15T22:05:39.947847Z",
+      "landmarks": [
+        {
+          "feature": "code-quality audit (dross-quality)",
+          "symbol": "TestEveryProfileWithAnalyzersContributesThem",
+          "loc": "internal/quality/multilang_test.go:50",
+          "what": "every shipped profile's declared analyzers must actually resolve for its language, asserted by name and walked from the profiles themselves"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_multilang_test.go"
+      ],
+      "commit": "a58de69",
+      "completed_at": "2026-08-15T22:13:27.025962Z",
+      "landmarks": [
+        {
+          "feature": "mutation testing adapters",
+          "symbol": "checkMutationToolchain",
+          "loc": "internal/cmd/doctor.go:1132",
+          "what": "doctor warns before a verify run when a configured adapter's local toolchain is missing — advisory, scoped to the adapters the project configures, naming what goes unmeasured and how to fix it"
+        }
+      ]
+    }
+  }
+}

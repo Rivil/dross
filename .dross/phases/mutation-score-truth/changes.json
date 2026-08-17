@@ -1,0 +1,95 @@
+{
+  "phase": "mutation-score-truth",
+  "pr": 93,
+  "base": "milestone/v1.3",
+  "base_commit": "ab35249fa160d5e8ca33373b7add38f81b26d05a",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/mutation/score.go",
+        "internal/mutation/score_test.go",
+        "internal/mutation/adapter.go",
+        "internal/verify/verify.go",
+        "internal/cmd/verify.go"
+      ],
+      "commit": "5792cc6",
+      "completed_at": "2026-08-16T00:33:13.836669Z",
+      "landmarks": [
+        {
+          "feature": "verification",
+          "symbol": "PooledScore",
+          "loc": "internal/mutation/score.go:31",
+          "what": "one mutation-score formula for every surface — pooled across legs with timeouts in the denominator, replacing a mean that flattered a 0.10 suite to 0.50"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_vocabulary_test.go"
+      ],
+      "commit": "8995b8c",
+      "completed_at": "2026-08-16T00:37:43.028558Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "printLifecycleSummary",
+          "loc": "internal/cmd/verify.go:686",
+          "what": "stdout takes the gate count from the same summary verify.toml writes, so a run can no longer print an all-clear beside a file recording the gate open"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/mutation/inapplicable.go",
+        "internal/mutation/inapplicable_test.go",
+        "internal/mutation/gremlins.go"
+      ],
+      "commit": "941e8c5",
+      "completed_at": "2026-08-16T00:42:35.74003Z",
+      "landmarks": [
+        {
+          "feature": "mutation testing adapters",
+          "symbol": "DropInapplicable",
+          "loc": "internal/mutation/inapplicable.go:43",
+          "what": "const-initializer ARITHMETIC_BASE mutants are dropped before the merge so they never cost a decision — narrowed to exclude string-concat, which the repo proved is a killable coverage gap"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/survivor/stale.go",
+        "internal/cmd/survivor.go",
+        "internal/cmd/survivor_stale_test.go"
+      ],
+      "commit": "410f47b",
+      "completed_at": "2026-08-16T00:46:56.897127Z",
+      "landmarks": [
+        {
+          "feature": "survivor lifecycle",
+          "symbol": "StaleAcceptancesAgainst",
+          "loc": "internal/survivor/stale.go:70",
+          "what": "staleness compares the accept store against the survivor keys real runs reported, so an orphaned acceptance whose source line still exists is finally visible — with nil and empty run-sets kept distinct"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/score_surface_test.go",
+        "assets/prompts/verify.md"
+      ],
+      "commit": "4fad274",
+      "completed_at": "2026-08-16T00:53:32.725866Z",
+      "landmarks": [
+        {
+          "feature": "verification",
+          "symbol": "printOverallScore",
+          "loc": "internal/cmd/verify.go:549",
+          "what": "the score prints with the in-scope count it was computed over and the uncoverable share, so an attribution ceiling stops reading as a weak suite"
+        }
+      ]
+    }
+  }
+}

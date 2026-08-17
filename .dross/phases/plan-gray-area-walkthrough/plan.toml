@@ -1,0 +1,24 @@
+task_seq = 0
+
+[phase]
+  id = "plan-gray-area-walkthrough"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add the gray-area walk to plan.md"
+  files = ["assets/prompts/plan.md"]
+  description = "Insert a gray-area section between decomposition (§2) and the proposal (§3),\nmirroring spec §3's structure: identify the decomposition choices the planner is\ngenuinely unsure about, then walk EVERY one, one decision per turn, with no\nselection step and the same user off-ramp.\n\nScoped to what a plan decides — task boundaries, wave ordering, which task owns\na criterion, where an assertion lives — and explicitly not to spec's locked\ncontract questions or to what the executor resolves. Zero areas is a stated\noutcome, not a failure.\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  test_contract = ["if the walk section disappears from plan.md, TestPlanPromptWalksGrayAreas fails — it requires a gray-area section positioned between the decomposition and the proposal, since a walk after the proposal is a post-mortem", "if the prompt reintroduces a selection step, TestPlanWalkHasNoSelectionStep fails — it rejects multiSelect and 'which areas' phrasing in that section, which is the specific regression the criterion names", "if the boundary is dropped, TestPlanGrayAreasAreDecompositionScoped fails — the section must name what qualifies (task boundaries, wave ordering) AND what does not (spec's locked decisions, executor detail), because without both halves the walk drifts in one direction or the other", "if zero-areas stops being a stated outcome, TestPlanWalkMayBeEmpty fails — a prompt with no permitted empty answer manufactures areas, and invented questions are what teach a user to stop reading them"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Guard the walk, and pin it against spec's"
+  files = ["internal/cmd/prompt_gray_area_test.go", "docs/interaction-audit.md"]
+  description = "The guards for t-1, plus a parity assertion: plan's walk and spec's must keep\nthe same no-selection-step and off-ramp rules, so the two cannot drift into two\ninteraction shapes for one job.\n\nAlso record the section in the interaction audit, which is fail-closed — an\ninteractive command section that is neither documented nor exempt fails the\nbuild.\n"
+  covers = ["c-1", "c-2", "c-3", "c-4"]
+  test_contract = ["if plan and spec drift apart on the walk rules, TestPlanAndSpecWalkAgree fails — it asserts both carry the no-selection-step rule and the off-ramp, which is what stops a second shape for one job", "if the interaction audit loses the section, the existing interaction_coverage_test fails — it is fail-closed, so an undocumented interactive section cannot ship", "if the guards stop reading the real prompt, TestPlanPromptGuardsReadTheShippedFile fails — it resolves assets/prompts/plan.md from the module root, so a guard passing against a fixture cannot go green while the shipped prompt regressed"]
+  status = "done"

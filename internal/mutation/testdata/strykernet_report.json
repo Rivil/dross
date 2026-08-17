@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "2",
+  "thresholds": {
+    "high": 80,
+    "low": 60
+  },
+  "projectRoot": "/home/dev/repo/src",
+  "files": {
+    "/home/dev/repo/src/Calculator/Calculator.cs": {
+      "language": "cs",
+      "source": "namespace Calculator;\n\npublic class Calculator\n{\n    public int Add(int a, int b) => a + b;\n\n    public bool IsPositive(int value)\n    {\n        if (value > 0)\n        {\n            return true;\n        }\n\n        return false;\n    }\n}\n",
+      "mutants": [
+        {
+          "id": "0",
+          "mutatorName": "Arithmetic operator",
+          "description": "Replaced arithmetic operator with -",
+          "replacement": "a - b",
+          "location": {
+            "start": { "line": 5, "column": 40 },
+            "end": { "line": 5, "column": 45 }
+          },
+          "status": "Killed",
+          "static": false,
+          "coveredBy": ["0"],
+          "killedBy": ["0"],
+          "testsCompleted": 1
+        },
+        {
+          "id": "1",
+          "mutatorName": "Equality operator",
+          "description": "Replaced equality operator with >=",
+          "replacement": "value >= 0",
+          "location": {
+            "start": { "line": 9, "column": 13 },
+            "end": { "line": 9, "column": 22 }
+          },
+          "status": "Survived",
+          "static": false,
+          "coveredBy": ["0"],
+          "testsCompleted": 1
+        }
+      ]
+    },
+    "/home/dev/repo/src/Calculator/Formatter.cs": {
+      "language": "cs",
+      "source": "namespace Calculator;\n\npublic static class Formatter\n{\n    public static string Describe(int value) => value > 0 ? \"positive\" : \"other\";\n}\n",
+      "mutants": [
+        {
+          "id": "2",
+          "mutatorName": "String mutation",
+          "description": "Replaced string with \"\"",
+          "replacement": "\"\"",
+          "location": {
+            "start": { "line": 5, "column": 62 },
+            "end": { "line": 5, "column": 72 }
+          },
+          "status": "NoCoverage",
+          "static": false
+        }
+      ]
+    }
+  }
+}

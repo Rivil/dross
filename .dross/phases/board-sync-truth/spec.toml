@@ -1,0 +1,68 @@
+[phase]
+  id = "board-sync-truth"
+  title = "board-sync-truth"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross issue pull --labels a,b` returns issues carrying either label (OR, not AND), and a label absent from the tracker does not error the request — on youtrack, jira and github."
+
+[[criteria]]
+  id = "c-2"
+  text = "A board fetch failure is distinguishable from an empty board: `dross issue pull` signals the failure machine-readably rather than exiting 0 with an empty array, and the /dross-status inbox line reports the board as unreachable instead of counting it as zero."
+
+[[criteria]]
+  id = "c-3"
+  text = "The tracker-native field names YouTrack sync writes — the state field, the issue-type field, and the milestone version bundle — are read from `[board]` config with today's literals as defaults, so a project that renamed them syncs without a code change."
+
+[[criteria]]
+  id = "c-4"
+  text = "Shipping a phase leaves exactly one board issue for it: `dross issue phase-sync` resolves an already-existing issue for the phase before creating one, so a re-run — or a run whose recorded mapping was lost with the deleted phase branch — adopts the live issue instead of minting an orphan."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross issue phase-sync <id> --status complete --close` leaves the issue resolved on the tracker when read back, and reports the failure instead of success when no resolved state is mapped for the status."
+
+[[criteria]]
+  id = "c-6"
+  text = "A deferred item with a `target` is mirrored to the board and stays current: backlog sync covers routed items, not only unrouted ones, so an item routed by `dross deferred route` gets an issue and a later text edit updates it."
+
+[[criteria]]
+  id = "c-7"
+  text = "A routed deferred item's board issue is linked to its target phase's issue where the provider can express a link; where it cannot — no link type, or the target phase has no issue yet — the item keeps its target label, the run warns and continues, and the link is established on a later sync once the target issue exists."
+
+[[decisions]]
+  key = "mapping_authority"
+  choice = "The tracker is the source of truth for the phase→issue mapping: resolve a phase's issue by querying for the dross marker label plus the phase id, and demote board.json to a cache that self-heals when stale or missing."
+  why = "board.json is git-tracked, so phase-sync writes it on phase/<id>, which `phase complete` then deletes — the mapping never reaches the base. A machine-local store survives the branch but leaves a second machine or CI with no mapping, reproducing the same duplicate. Querying costs one request and is correct everywhere."
+  locked = true
+
+[[decisions]]
+  key = "pull_failure_signal"
+  choice = "`dross issue pull --json` emits an envelope `{\"issues\": [...], \"error\": null|\"...\"}` and keeps exit 0 on a board failure."
+  why = "The workflow prompts call `dross issue …` unconditionally on the promise it is a safe no-op, so a non-zero exit breaks that contract. An envelope breaks the --json shape once, in one place, and can carry more diagnostics later."
+  locked = true
+
+[[decisions]]
+  key = "routed_repr"
+  choice = "A routed deferred item gets the same single backlog issue as an unrouted one, with a `dross/target:<slug>` label carrying the destination and updating when the route changes."
+  why = "Uniform across providers with no per-provider linking machinery required for the base case, and the board becomes filterable by destination. c-7 adds a real issue link on top where the provider supports it."
+  locked = true
+
+[[decisions]]
+  key = "unknown_label"
+  choice = "Query only the labels the tracker knows, return matches for those, and name the dropped labels on stderr."
+  why = "A partly-stale filter still does useful work, and silently dropping a typo'd label reads as 'nothing matched' — the same silent-zero fault c-2 exists to kill. Rejecting up front would make pull fatal on a stale filter and break the always-safe-to-run promise."
+  locked = true
+
+[[decisions]]
+  key = "field_config_shape"
+  choice = "Configurable field names live in a nested `[board.fields]` table, mirroring the existing `board.state_map`."
+  why = "Same precedent and same `dross project set` path as the state map; no new config idiom."
+  locked = true
+
+[[deferred]]
+  id = "96f7d9744ec2a0d5"
+  text = "Configurable tracker field names for Jira (status field, issue type, fixVersions) and GitHub Projects, matching what c-3 does for YouTrack."
+  why = "c-3 is scoped to YouTrack because it is the only provider this repo actually runs against, so it is the only one where the fix is provable. The Jira and GitHub halves belong with the provider work itself."
+  target = "additional-board-backends"

@@ -57,7 +57,11 @@ type LockedChoice struct {
 // Runtime is the pain-point-killer section. Capture exact commands
 // so Claude never guesses pnpm/npm/docker again.
 type Runtime struct {
-	Mode             string             `toml:"mode" json:"mode"` // docker | native | hybrid
+	// Mode is docker | native — see configenum.RuntimeModes, which is the
+	// set both gates read. "hybrid" was a third accepted spelling whose only
+	// consumer was `Mode != "docker"`, so it compiled to native; a per-service
+	// split is what Services below already carries.
+	Mode             string             `toml:"mode" json:"mode"`
 	DevCommand       string             `toml:"dev_command,omitempty" json:"dev_command,omitempty"`
 	StopCommand      string             `toml:"stop_command,omitempty" json:"stop_command,omitempty"`
 	TestCommand      string             `toml:"test_command,omitempty" json:"test_command,omitempty"`
@@ -121,6 +125,21 @@ type Board struct {
 	Enabled       bool              `toml:"enabled,omitempty" json:"enabled,omitempty"`               // board sync is on
 	MilestoneMode string            `toml:"milestone_mode,omitempty" json:"milestone_mode,omitempty"` // version (default) | agile | epic
 	StateMap      map[string]string `toml:"state_map,omitempty" json:"state_map,omitempty"`           // dross lifecycle state → tracker State value override
+	Fields        BoardFields       `toml:"fields,omitempty" json:"fields,omitempty"`                 // tracker-native field-name overrides
+}
+
+// BoardFields overrides the tracker-native field names board sync writes to.
+// Every key defaults to the literal the provider ships with, so an untouched
+// project syncs exactly as it did before — but a project that renamed a field
+// (or runs a non-English tracker UI) no longer needs a code change.
+//
+// Scoped to YouTrack today, which is the only provider this repo runs against
+// and therefore the only one where the fix is provable; the Jira and GitHub
+// halves are deferred to the provider work itself.
+type BoardFields struct {
+	State       string `toml:"state,omitempty" json:"state,omitempty"`               // youtrack: the State custom field (default "State")
+	Type        string `toml:"type,omitempty" json:"type,omitempty"`                 // youtrack: the issue-type custom field (default "Type")
+	FixVersions string `toml:"fix_versions,omitempty" json:"fix_versions,omitempty"` // youtrack: the version bundle field (default "Fix versions")
 }
 
 type Paths struct {
@@ -158,6 +177,55 @@ type Mutation struct {
 	Adapters []string         `toml:"adapters,omitempty" json:"adapters,omitempty"`
 	Gremlins MutationGremlins `toml:"gremlins,omitempty" json:"gremlins,omitempty"`
 	Stryker  MutationStryker  `toml:"stryker,omitempty" json:"stryker,omitempty"`
+
+	// RemoteHost and RemoteWorkdir are TRAP fields. They configure nothing.
+	// Their only purpose is to exist so that Load can refuse them by name.
+	//
+	// A remote host is authorization to rsync the working tree to another
+	// machine and execute the test suite there. project.toml is TRACKED, so a
+	// host committed here would be the repo authorizing itself — the same
+	// self-authorizing shape allow_hosts is kept out of project.toml to avoid.
+	// The grant belongs in the untracked machine-local store, written by
+	// `dross mutation remote grant`, which prints what it is authorizing first.
+	//
+	// The fields have to be DECLARED to be refused. toml.DecodeFile ignores
+	// keys with no matching field, silently — so without these, a committed
+	// remote_host would neither work nor complain, and the user would be left
+	// wondering why their remote never engaged. The trap turns silence into a
+	// refusal that names the fix.
+	//
+	// The json tags mirror the toml ones because TestTomlFieldsCarryMatchingJSONTags
+	// requires every field to, and there is no reason to carve an exception:
+	// Load refuses any non-empty value, so a Project that exists always has
+	// these empty and omitempty keeps them out of every serialization.
+	RemoteHost    string `toml:"remote_host,omitempty" json:"remote_host,omitempty"`
+	RemoteWorkdir string `toml:"remote_workdir,omitempty" json:"remote_workdir,omitempty"`
+}
+
+// refuseRemote rejects a remote configured in tracked project.toml.
+//
+// Either field alone is enough. Half a config is not a bypass: the point is
+// not that the pair would work, it is that project.toml is the wrong file to
+// express any of it in, and a partial attempt is a user who needs the same
+// message as a complete one.
+func (m Mutation) refuseRemote(path string) error {
+	for _, f := range []struct{ key, val string }{
+		{"mutation.remote_host", m.RemoteHost},
+		{"mutation.remote_workdir", m.RemoteWorkdir},
+	} {
+		if f.val == "" {
+			continue
+		}
+		return fmt.Errorf(
+			"refusing to load %s: it sets %s = %q.\n\n"+
+				"A remote mutation host is authorization to copy this working tree to\n"+
+				"another machine and run its test suite there. project.toml is tracked, so a\n"+
+				"host set here would let the repo authorize itself.\n\n"+
+				"Remove the key and grant the host on this machine instead:\n\n"+
+				"    dross mutation remote grant <host> <workdir>",
+			path, f.key, f.val)
+	}
+	return nil
 }
 
 // MutationStryker surfaces the stryker adapter's tunable settings.
@@ -196,6 +264,11 @@ func Load(path string) (*Project, error) {
 	var p Project
 	if _, err := toml.DecodeFile(path, &p); err != nil {
 		return nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+	// A nil Project alongside the error, not a partly-usable one: no caller
+	// can safely proceed on a config dross has just said it refuses to honour.
+	if err := p.Mutation.refuseRemote(path); err != nil {
+		return nil, err
 	}
 	return &p, nil
 }

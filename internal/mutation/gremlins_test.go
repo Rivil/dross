@@ -3,9 +3,11 @@ package mutation
 import (
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -52,6 +54,216 @@ const fixtureGremlins = `{
     }
   ]
 }`
+
+// fixtureGremlinsPerFile is the minimal shape the per-file attribution
+// contract is stated over: one file with a kill and a live one, another with
+// a single NOT COVERED mutant.
+const fixtureGremlinsPerFile = `{
+  "go_module": "example.com/go/module",
+  "files": [
+    {
+      "file_name": "file1.go",
+      "mutations": [
+        {"line":10,"column":3,"type":"CONDITIONALS_NEGATION","status":"KILLED"},
+        {"line":20,"column":8,"type":"ARITHMETIC_BASE","status":"LIVED"}
+      ]
+    },
+    {
+      "file_name": "file2.go",
+      "mutations": [
+        {"line":5,"column":1,"type":"INVERT_LOOPCTRL","status":"NOT COVERED"}
+      ]
+    }
+  ]
+}`
+
+// assertPerFileMatchesAggregate pins the drift invariant every adapter owes
+// diff scoping: each mutant counted in an aggregate is counted in exactly one
+// per-file row. An adapter that bumps a counter and forgets the row fails
+// here, at the parse, rather than three layers downstream as a mutant that
+// silently leaves the denominator when the report is split by file.
+func assertPerFileMatchesAggregate(t *testing.T, r *Report) {
+	t.Helper()
+	var sum FileStat
+	for _, s := range r.Files {
+		sum = sum.plus(s)
+	}
+	want := FileStat{
+		Killed:     r.Killed,
+		Survived:   r.Survived,
+		Timeout:    r.Timeout,
+		Errors:     r.Errors,
+		NotCovered: r.NotCovered,
+	}
+	if sum != want {
+		t.Errorf("per-file rows drift from aggregates:\n sum  %+v\n want %+v\n rows %+v", sum, want, r.Files)
+	}
+}
+
+// TestParseGremlinsJSONPerFileAttribution pins which file each status lands
+// in, and that adding the per-file table left the aggregates alone.
+func TestParseGremlinsJSONPerFileAttribution(t *testing.T) {
+	r, err := ParseGremlinsJSON([]byte(fixtureGremlinsPerFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]FileStat{
+		"file1.go": {Killed: 1, Survived: 1},
+		"file2.go": {Survived: 1, NotCovered: 1},
+	}
+	if !reflect.DeepEqual(r.Files, want) {
+		t.Errorf("per-file rows:\n got %+v\nwant %+v", r.Files, want)
+	}
+	if r.Killed != 1 || r.Survived != 2 || r.NotCovered != 1 {
+		t.Errorf("aggregates changed: killed=%d survived=%d notcovered=%d", r.Killed, r.Survived, r.NotCovered)
+	}
+	assertPerFileMatchesAggregate(t, r)
+}
+
+// TestParseGremlinsJSONPerFileNoDrift runs the drift invariant over the
+// fuller fixtures — including NOT VIABLE (uncounted) and the unknown-status
+// path, which must contribute to a row exactly when it contributes to a total.
+func TestParseGremlinsJSONPerFileNoDrift(t *testing.T) {
+	for name, payload := range map[string]string{
+		"normal output":      fixtureGremlins,
+		"timeout and future": fixtureGremlinsTimeoutAndUnknown,
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, err := ParseGremlinsJSON([]byte(payload))
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertPerFileMatchesAggregate(t, r)
+		})
+	}
+}
+
+// fakeGremlins swaps the process seam for one that drops payload at the
+// --output path instead of running gremlins, so Run's per-package loop can be
+// exercised end to end without the binary. Returns the restore func.
+func fakeGremlins(t *testing.T, payload []byte) func() {
+	t.Helper()
+	orig := gremlinsBuildCmd
+	gremlinsBuildCmd = func(g *Gremlins, args []string) *exec.Cmd {
+		for i, a := range args {
+			if a == "--output" && i+1 < len(args) {
+				if err := os.WriteFile(filepath.Join(g.ProjectRoot, args[i+1]), payload, 0o644); err != nil {
+					t.Fatalf("write fake gremlins report: %v", err)
+				}
+			}
+		}
+		return exec.Command("true")
+	}
+	return func() { gremlinsBuildCmd = orig }
+}
+
+// TestGremlinsRunRePrefixesPackagePaths pins the re-prefix at the only seam
+// that knows the package: Run's per-package loop. ParseGremlinsJSON takes
+// bytes and no package argument, so it cannot express this at all.
+//
+// The fixture is a real gremlins payload (copied to testdata/, tracked —
+// reports/ is gitignored runtime output) which names its files by bare
+// basename. Left un-prefixed, a repo-relative change set matches none of them
+// and the entire Go leg filters out as out-of-scope: a vacuous 0/0 that reads
+// like a clean run.
+func TestGremlinsRunRePrefixesPackagePaths(t *testing.T) {
+	payload, err := os.ReadFile(filepath.Join("testdata", "gremlins_pkg_report.json"))
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	// Guard the premise: if the fixture ever gets replaced with a
+	// repo-relative one, this test would pass without proving anything.
+	if !strings.Contains(string(payload), `"file_name":"argfence.go"`) {
+		t.Fatalf("fixture must carry bare basenames, got: %s", payload)
+	}
+	defer fakeGremlins(t, payload)()
+
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	rep, err := g.Run([]string{"internal/argfence/argfence.go"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(rep.Surviving) != 1 || rep.Surviving[0].File != "internal/argfence/policy.go" {
+		t.Errorf("surviving path not repo-relative: %+v", rep.Surviving)
+	}
+	want := map[string]FileStat{
+		"internal/argfence/policy.go":   {Survived: 1, NotCovered: 1},
+		"internal/argfence/argfence.go": {Killed: 2},
+	}
+	if !reflect.DeepEqual(rep.Files, want) {
+		t.Errorf("per-file keys not repo-relative:\n got %+v\nwant %+v", rep.Files, want)
+	}
+}
+
+// fixtureGremlinsBareBasename is a per-package payload naming a file that
+// exists under more than one directory — the collision the re-prefix prevents.
+const fixtureGremlinsBareBasename = `{
+  "go_module": "example.com/go/module",
+  "files": [
+    {
+      "file_name": "x.go",
+      "mutations": [
+        {"line":1,"column":1,"type":"CONDITIONALS_NEGATION","status":"KILLED"},
+        {"line":2,"column":1,"type":"ARITHMETIC_BASE","status":"LIVED"}
+      ]
+    }
+  ]
+}`
+
+// TestGremlinsRunKeepsPackagesDistinct: two packages each reporting a bare
+// `x.go` must land as two rows, not one summed entry — otherwise a survivor
+// in an untouched package's x.go would be indistinguishable from one in the
+// touched package's.
+func TestGremlinsRunKeepsPackagesDistinct(t *testing.T) {
+	defer fakeGremlins(t, []byte(fixtureGremlinsBareBasename))()
+
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	rep, err := g.Run([]string{"a/x.go", "b/x.go"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	want := map[string]FileStat{
+		"a/x.go": {Killed: 1, Survived: 1},
+		"b/x.go": {Killed: 1, Survived: 1},
+	}
+	if !reflect.DeepEqual(rep.Files, want) {
+		t.Errorf("packages collapsed into one row:\n got %+v\nwant %+v", rep.Files, want)
+	}
+	assertPerFileMatchesAggregate(t, rep)
+}
+
+// TestMergeIntoSumsRepeatedFile is the other half of the distinctness
+// contract: the same repo-relative path reported by two legs is ONE row.
+func TestMergeIntoSumsRepeatedFile(t *testing.T) {
+	dst := &Report{Tool: "gremlins"}
+	mergeInto(dst, &Report{Killed: 2, Files: map[string]FileStat{"internal/x/a.go": {Killed: 2}}})
+	mergeInto(dst, &Report{Survived: 1, Files: map[string]FileStat{"internal/x/a.go": {Survived: 1}}})
+	want := map[string]FileStat{"internal/x/a.go": {Killed: 2, Survived: 1}}
+	if !reflect.DeepEqual(dst.Files, want) {
+		t.Errorf("repeated file must sum into one row:\n got %+v\nwant %+v", dst.Files, want)
+	}
+	assertPerFileMatchesAggregate(t, dst)
+}
+
+// TestRePrefixGremlinsFilesIdempotent: the module root has no prefix to add,
+// and an already-prefixed path must not be prefixed twice.
+func TestRePrefixGremlinsFilesIdempotent(t *testing.T) {
+	root := &Report{Surviving: []Mutant{{File: "main.go"}}, Files: map[string]FileStat{"main.go": {Killed: 1}}}
+	RePrefixGremlinsFiles(root, ".")
+	if root.Surviving[0].File != "main.go" || root.Files["main.go"].Killed != 1 {
+		t.Errorf("module root must be a no-op: %+v %+v", root.Surviving, root.Files)
+	}
+
+	r := &Report{Surviving: []Mutant{{File: "a.go"}}, Files: map[string]FileStat{"a.go": {Killed: 1}}}
+	RePrefixGremlinsFiles(r, "./internal/x")
+	RePrefixGremlinsFiles(r, "./internal/x")
+	if r.Surviving[0].File != "internal/x/a.go" {
+		t.Errorf("double-prefixed surviving path: %q", r.Surviving[0].File)
+	}
+	if _, ok := r.Files["internal/x/a.go"]; !ok || len(r.Files) != 1 {
+		t.Errorf("double-prefixed per-file key: %+v", r.Files)
+	}
+}
 
 func TestParseGremlinsJSONCounts(t *testing.T) {
 	r, err := ParseGremlinsJSON([]byte(fixtureGremlins))
@@ -429,5 +641,203 @@ func TestGremlinsDispatch(t *testing.T) {
 	}
 	if got := Dispatch("project.godot", adapters); got != nil {
 		t.Errorf("expected nil for unsupported ext; got %v", got)
+	}
+}
+
+// fakeGremlinsPerPackage substitutes the process seam with one that writes a
+// DIFFERENT payload per package, keyed by the package path Run passes ("./a").
+// A package absent from the map gets no report at all — the missing-report case.
+// The single-payload fakeGremlins cannot express any of the skip kinds, because
+// every package would hit the same one.
+func fakeGremlinsPerPackage(t *testing.T, byPkg map[string]string) func() {
+	t.Helper()
+	orig := gremlinsBuildCmd
+	gremlinsBuildCmd = func(g *Gremlins, args []string) *exec.Cmd {
+		var out, pkg string
+		for i, a := range args {
+			if a == "--output" && i+1 < len(args) {
+				out = args[i+1]
+			}
+			if strings.HasPrefix(a, "./") || a == "." {
+				pkg = a
+			}
+		}
+		if payload, ok := byPkg[pkg]; ok && out != "" {
+			if err := os.WriteFile(filepath.Join(g.ProjectRoot, out), []byte(payload), 0o644); err != nil {
+				t.Fatalf("write fake gremlins report for %s: %v", pkg, err)
+			}
+		}
+		return exec.Command("true")
+	}
+	return func() { gremlinsBuildCmd = orig }
+}
+
+// gremlinsAllNotCovered is a parseable report whose every mutant is NOT COVERED
+// — the coverage blind spot. It parses, so the package IS measured; it just
+// contributes nothing usable to a score.
+const gremlinsAllNotCovered = `{
+  "go_module": "example.com/go/module",
+  "files": [
+    {
+      "file_name": "b.go",
+      "mutations": [
+        {"line":7,"column":1,"type":"CONDITIONALS_NEGATION","status":"NOT COVERED"},
+        {"line":9,"column":1,"type":"CONDITIONALS_BOUNDARY","status":"NOT COVERED"}
+      ]
+    }
+  ]
+}`
+
+// gremlinsCovered is an ordinary report with real killed and lived mutants.
+const gremlinsCovered = `{
+  "go_module": "example.com/go/module",
+  "files": [
+    {
+      "file_name": "c.go",
+      "mutations": [
+        {"line":3,"column":1,"type":"CONDITIONALS_NEGATION","status":"KILLED"},
+        {"line":5,"column":1,"type":"CONDITIONALS_NEGATION","status":"LIVED"}
+      ]
+    }
+  ]
+}`
+
+// unmeasuredFor returns the entry for pkg, or a zero value if the package was
+// not excluded at all.
+func unmeasuredFor(t *testing.T, g *Gremlins, pkg string) Unmeasured {
+	t.Helper()
+	for _, u := range g.Unmeasured {
+		if u.Package == pkg {
+			return u
+		}
+	}
+	return Unmeasured{}
+}
+
+// TestGremlinsUnmeasuredDistinguishesSkipKinds is c-4's collection half, and
+// the fact the drain gates on. "No report at all" and "a report with zero
+// covered mutants" both drop out of the score, but they mean opposite things:
+// the first is no evidence (fatal for a drain), the second is evidence of
+// survivors nobody has killed (classify them). Collapsing the two into one
+// prose line — which is all Run used to emit — makes an unmeasured package
+// indistinguishable from a clean one.
+func TestGremlinsUnmeasuredDistinguishesSkipKinds(t *testing.T) {
+	defer fakeGremlinsPerPackage(t, map[string]string{
+		"./a": "{not json at all",
+		"./b": gremlinsAllNotCovered,
+		"./c": gremlinsCovered,
+		// "./d" is absent: gremlins writes nothing for it.
+	})()
+
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	rep, err := g.Run([]string{"a/x.go", "b/x.go", "c/x.go", "d/x.go"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(g.Unmeasured) != 3 {
+		t.Fatalf("Unmeasured holds %d entries, want 3 (a, b, d):\n%+v", len(g.Unmeasured), g.Unmeasured)
+	}
+
+	// The malformed report: exact message, including every concatenation.
+	a := unmeasuredFor(t, g, "./a")
+	wantA := "./a (unreadable report: decode gremlins report: invalid character 'n' looking for beginning of object key string)"
+	if a.Message != wantA {
+		t.Errorf("malformed-report message:\n got %q\nwant %q", a.Message, wantA)
+	}
+	if a.Kind != UnmeasuredUnreadable {
+		t.Errorf("malformed report Kind = %q, want %q", a.Kind, UnmeasuredUnreadable)
+	}
+
+	// The zero-coverage report: exact message, and marked uncovered — NOT
+	// missing. The drain must classify this package's survivors, not fail on it.
+	b := unmeasuredFor(t, g, "./b")
+	wantB := "./b (zero covered mutants — coverage blind spot)"
+	if b.Message != wantB {
+		t.Errorf("zero-coverage message:\n got %q\nwant %q", b.Message, wantB)
+	}
+	if b.Kind != UnmeasuredUncovered {
+		t.Errorf("zero-coverage Kind = %q, want %q", b.Kind, UnmeasuredUncovered)
+	}
+
+	// The absent report: marked missing, distinguishable from ./b as DATA and
+	// not only by its prose.
+	d := unmeasuredFor(t, g, "./d")
+	if d.Kind != UnmeasuredMissing {
+		t.Errorf("absent report Kind = %q, want %q", d.Kind, UnmeasuredMissing)
+	}
+	if d.Kind == b.Kind {
+		t.Error("a package with no report is indistinguishable from one with zero covered mutants")
+	}
+
+	// The good package is excluded from neither, and its rows do reach the merge.
+	if got := unmeasuredFor(t, g, "./c"); got.Kind != "" {
+		t.Errorf("a readable, covered package was reported unmeasured: %+v", got)
+	}
+	if _, ok := rep.Files["c/c.go"]; !ok {
+		t.Errorf("the covered package's rows did not reach the merge: %+v", rep.Files)
+	}
+
+	// And the zero-coverage package contributes no rows to the MERGED report —
+	// the exclusion is scoring-only. Its raw report is still on disk for the
+	// drain to classify from.
+	if _, ok := rep.Files["b/b.go"]; ok {
+		t.Errorf("zero-coverage package leaked rows into the merged score: %+v", rep.Files)
+	}
+	raw := filepath.Join(g.ProjectRoot, "reports", "gremlins", "b.json")
+	if _, err := os.Stat(raw); err != nil {
+		t.Errorf("zero-coverage package's raw report must survive for the drain to read: %v", err)
+	}
+}
+
+// TestGremlinsUnmeasuredIsPerRun: the field describes the most recent Run, not
+// an accumulation. A stale entry from a prior run would make the drain fail on
+// a package that has since been measured.
+func TestGremlinsUnmeasuredIsPerRun(t *testing.T) {
+	restore := fakeGremlinsPerPackage(t, map[string]string{})
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	if _, err := g.Run([]string{"a/x.go"}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(g.Unmeasured) != 1 {
+		t.Fatalf("first run: Unmeasured = %+v, want 1 entry", g.Unmeasured)
+	}
+	restore()
+
+	defer fakeGremlinsPerPackage(t, map[string]string{"./a": gremlinsCovered})()
+	if _, err := g.Run([]string{"a/x.go"}); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	if len(g.Unmeasured) != 0 {
+		t.Errorf("a measured re-run left stale exclusions behind: %+v", g.Unmeasured)
+	}
+}
+
+// TestMissingReportIsSkipNotError: a missing report is a skip INSIDE the
+// adapter — Run returns a nil error and an empty report. Turning absence fatal
+// here would abort every verify whose repo has one uncoverable package; the
+// drain is where absence becomes fatal, because that is the caller that needs
+// evidence rather than a best-effort score.
+func TestMissingReportIsSkipNotError(t *testing.T) {
+	defer fakeGremlinsPerPackage(t, map[string]string{})()
+
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	rep, err := g.Run([]string{"a/x.go"})
+	if err != nil {
+		t.Fatalf("a missing report must not be an adapter error: %v", err)
+	}
+	if rep == nil {
+		t.Fatal("expected a non-nil (empty) report")
+	}
+	if len(rep.Surviving) != 0 || rep.Killed != 0 {
+		t.Errorf("expected an empty report, got %+v", rep)
+	}
+	if len(g.Unmeasured) != 1 || g.Unmeasured[0].Kind != UnmeasuredMissing {
+		t.Fatalf("the skip must be recorded as missing: %+v", g.Unmeasured)
+	}
+	// And the reason is still printed — the field supplements stderr, it does
+	// not replace it.
+	if got := g.Unmeasured[0].String(); got != g.Unmeasured[0].Message {
+		t.Errorf("String() = %q, want the printed message %q", got, g.Unmeasured[0].Message)
 	}
 }

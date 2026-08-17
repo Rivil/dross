@@ -1,0 +1,16 @@
+{
+  "name": "dross-ts-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Fixture project for dross's end-to-end Stryker mutation test. Not shipped.",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "9.6.1",
+    "@stryker-mutator/vitest-runner": "9.6.1",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

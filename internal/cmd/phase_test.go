@@ -377,7 +377,10 @@ func TestPhaseCreateSlugIdentity(t *testing.T) {
 		t.Errorf("milestone array tail: got %v want last=my-feature", m.Phases)
 	}
 
-	// A second create of the same title collides → my-feature-2, first intact.
+	// A second create of the same title now REFUSES (phase-create-adoption).
+	// It used to coin my-feature-2, append that to the milestone array and cut
+	// a branch for it — so the phase someone meant and the phase they got were
+	// two entries apart by a digit nobody chose.
 	mustGit(t, dir, "add", ".")
 	mustGit(t, dir, "commit", "-q", "-m", "chore: phase 1 bookkeeping")
 	mustGit(t, dir, "checkout", "-q", "main")
@@ -386,11 +389,12 @@ func TestPhaseCreateSlugIdentity(t *testing.T) {
 	// immediately, so checking out main now takes the first phase's dir away
 	// with it — and there'd be no slug collision left to assert.
 	mustGit(t, dir, "merge", "-q", "--ff-only", "phase/my-feature")
-	if err := runCmd(t, Phase(), "create", "My Feature"); err != nil {
-		t.Fatalf("second create: %v", err)
+	err := runCmd(t, Phase(), "create", "My Feature")
+	if err == nil {
+		t.Fatal("a second create over a started phase must refuse, not coin a suffix")
 	}
-	if !isDir(filepath.Join(root, "phases", "my-feature-2")) {
-		t.Error("expected phases/my-feature-2 on collision")
+	if isDir(filepath.Join(root, "phases", "my-feature-2")) {
+		t.Error("the refusal still created phases/my-feature-2")
 	}
 	if !isDir(filepath.Join(root, "phases", "my-feature")) {
 		t.Error("first phase dir should be untouched by the collision")
@@ -2792,5 +2796,93 @@ func TestPhaseCompleteHealIdempotent(t *testing.T) {
 	telemBody := mustRead(t, filepath.Join(home, ".claude/dross", "telemetry.jsonl"))
 	if got := strings.Count(telemBody, `"verdict":"pass"`); got != 1 {
 		t.Errorf("complete on finalized phase must not duplicate the outcome event, got %d:\n%s", got, telemBody)
+	}
+}
+
+// TestPhaseCompleteRecordsDurableStatus (c-4): the completion breadcrumb in
+// state history is capped at 50 entries and mutation-diff-scope's had already
+// scrolled out while the phase was plainly finished. The phase-scoped marker is
+// the one that survives.
+func TestPhaseCompleteRecordsDurableStatus(t *testing.T) {
+	dir, phaseID := completeFixture(t)
+	stubPRMerged(t, true)
+
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+
+	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), phaseID), phaseID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.Status != changes.StatusComplete {
+		t.Errorf("changes.json status = %q, want %q", ch.Status, changes.StatusComplete)
+	}
+}
+
+// TestPhaseCompleteDoesNotDemoteAnAlreadyCompleteRecord: complete is re-runnable
+// (the breadcrumb write is explicitly idempotent), so the status write has to be
+// too — and in particular a later ship must not walk it back to "shipped".
+func TestPhaseCompleteDoesNotDemoteAnAlreadyCompleteRecord(t *testing.T) {
+	dir, phaseID := completeFixture(t)
+	stubPRMerged(t, true)
+	root := filepath.Join(dir, ".dross")
+
+	if err := runCmd(t, Phase(), "complete"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	// A re-ship of the same phase dir afterwards.
+	if err := changes.SetStatus(root, phaseID, changes.StatusShipped); err != nil {
+		t.Fatal(err)
+	}
+
+	ch, err := changes.Load(changes.FilePath(root, phaseID), phaseID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.Status != changes.StatusComplete {
+		t.Errorf("status = %q, want %q — a completed phase was demoted", ch.Status, changes.StatusComplete)
+	}
+}
+
+// TestShipRecordsShippedStatusAlongsidePR: status rides the same write as the PR
+// number, so a record that carries a PR but no status is a half-written marker
+// and fails here.
+func TestShipRecordsShippedStatusAlongsidePR(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	shipMockFlow(t, dir)
+
+	if err := runCmd(t, Ship(), "--auto"); err != nil {
+		t.Fatalf("ship: %v", err)
+	}
+
+	ch, err := changes.Load(changes.FilePath(filepath.Join(dir, ".dross"), "x"), "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.Status != changes.StatusShipped {
+		t.Errorf("changes.json status = %q, want %q", ch.Status, changes.StatusShipped)
+	}
+	if ch.PR != 99 {
+		t.Errorf("PR = %d, want 99 — status must ride the same write as the PR number", ch.PR)
+	}
+}
+
+// TestV13FinishedPhasesCarryBackfilledStatus asserts the one-off backfill of
+// this repo's own records, per slug rather than by count. These three phases
+// finished before the field existed and their breadcrumbs have been evicted from
+// state history, so without the backfill `milestone progress` would report a
+// closed milestone's work as outstanding.
+func TestV13FinishedPhasesCarryBackfilledStatus(t *testing.T) {
+	root := filepath.Join(repoRootFromTest(t), ".dross")
+	for _, slug := range []string{"mutation-diff-scope", "survivor-lifecycle", "survivor-drain"} {
+		ch, err := changes.Load(changes.FilePath(root, slug), slug)
+		if err != nil {
+			t.Errorf("%s: %v", slug, err)
+			continue
+		}
+		if ch.Status != changes.StatusComplete {
+			t.Errorf("%s: status = %q, want %q", slug, ch.Status, changes.StatusComplete)
+		}
 	}
 }

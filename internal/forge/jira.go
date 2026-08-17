@@ -35,7 +35,10 @@ type JiraClient struct {
 	http *http.Client
 }
 
-var _ BoardClient = (*JiraClient)(nil)
+var (
+	_ BoardClient = (*JiraClient)(nil)
+	_ IssueLinker = (*JiraClient)(nil)
+)
 
 // defaultJiraIssueType is the issue type new dross issues are created as. Jira
 // projects always have a "Task" type in the default schemes.
@@ -179,9 +182,32 @@ func (c *JiraClient) CloseIssue(key string) error {
 }
 
 // ListIssues returns issues in the configured project matching the filter, via
-// a JQL search. State maps to statusCategory clauses and each label becomes a
-// `labels = ` clause.
+// a JQL search. State maps to statusCategory clauses and the labels fold into
+// one OR'd `labels IN (...)` clause.
+//
+// Labels the tracker does not know are dropped (and named on stderr) before the
+// JQL is built; if every requested label is unknown the call returns nothing
+// rather than degrading into an unfiltered whole-project query.
 func (c *JiraClient) ListIssues(f IssueFilter) ([]Issue, error) {
+	if len(f.Labels) > 0 {
+		known, err := c.listLabelNames()
+		if err != nil {
+			return nil, err
+		}
+		// Jira stores labels with spaces collapsed to underscores (see
+		// CreateIssue), so compare in that form or every spaced label reads
+		// as unknown.
+		requested := make([]string, len(f.Labels))
+		for i, l := range f.Labels {
+			requested[i] = strings.ReplaceAll(l, " ", "_")
+		}
+		kept, dropped := FilterKnownLabels(requested, known)
+		WarnDroppedLabels("jira", dropped)
+		if len(kept) == 0 {
+			return nil, nil
+		}
+		f.Labels = kept
+	}
 	q := url.Values{}
 	q.Set("jql", c.buildJQL(f))
 	q.Set("fields", "summary,description,status,labels")
@@ -201,8 +227,25 @@ func (c *JiraClient) ListIssues(f IssueFilter) ([]Issue, error) {
 	return out, nil
 }
 
+// listLabelNames reads Jira's label index — the label vocabulary a JQL query
+// may name. A failure refuses the query rather than degrading it: an
+// unfiltered search on a shared project is far worse than an error.
+func (c *JiraClient) listLabelNames() ([]string, error) {
+	var page struct {
+		Values []string `json:"values"`
+	}
+	if err := c.do("GET", c.endpoint("/label")+"?maxResults=1000", nil, &page); err != nil {
+		return nil, fmt.Errorf("list labels: %w", err)
+	}
+	return page.Values, nil
+}
+
 // buildJQL assembles a JQL query scoped to the project, folding in the
 // open/closed state (via statusCategory) and any label clauses.
+//
+// Labels are OR'd through a single `labels IN (...)` clause; AND-joining one
+// `labels = ` clause per label would only match issues carrying every label at
+// once. The project and statusCategory clauses stay AND-joined.
 func (c *JiraClient) buildJQL(f IssueFilter) string {
 	parts := []string{fmt.Sprintf("project = %q", c.project)}
 	switch f.State {
@@ -211,10 +254,98 @@ func (c *JiraClient) buildJQL(f IssueFilter) string {
 	case "closed":
 		parts = append(parts, "statusCategory = Done")
 	}
-	for _, l := range f.Labels {
-		parts = append(parts, fmt.Sprintf("labels = %q", strings.ReplaceAll(l, " ", "_")))
+	if len(f.Labels) > 0 {
+		quoted := make([]string, len(f.Labels))
+		for i, l := range f.Labels {
+			quoted[i] = fmt.Sprintf("%q", strings.ReplaceAll(l, " ", "_"))
+		}
+		parts = append(parts, "labels IN ("+strings.Join(quoted, ",")+")")
 	}
 	return strings.Join(parts, " AND ") + " ORDER BY created DESC"
+}
+
+// --- issue links ---
+
+// LinkIssues relates `from` to `to`. Jira has no "relates" primitive of its
+// own — the link types are instance configuration — so the type is discovered
+// rather than assumed, and an instance with none reports ErrNoLinkType so the
+// caller can fall back to a label instead of treating a capability gap as an
+// outage.
+//
+// Idempotency is explicit here (unlike YouTrack's set semantics): Jira happily
+// records the same relation twice, so an existing pair is detected on the
+// issue's own issuelinks and short-circuits before the POST.
+func (c *JiraClient) LinkIssues(from, to string) error {
+	linked, err := c.issueLinked(from, to)
+	if err != nil {
+		return err
+	}
+	if linked {
+		return nil
+	}
+	linkType, err := c.relatesLinkType()
+	if err != nil {
+		return err
+	}
+	body := map[string]any{
+		"type":         map[string]any{"name": linkType},
+		"inwardIssue":  map[string]any{"key": from},
+		"outwardIssue": map[string]any{"key": to},
+	}
+	if err := c.do("POST", c.endpoint("/issueLink"), body, nil); err != nil {
+		return fmt.Errorf("link %s to %s: %w", from, to, err)
+	}
+	return nil
+}
+
+// issueLinked reports whether `from` already carries a link naming `to`, in
+// either direction.
+func (c *JiraClient) issueLinked(from, to string) (bool, error) {
+	var raw struct {
+		Fields struct {
+			IssueLinks []struct {
+				InwardIssue  struct{ Key string } `json:"inwardIssue"`
+				OutwardIssue struct{ Key string } `json:"outwardIssue"`
+			} `json:"issuelinks"`
+		} `json:"fields"`
+	}
+	if err := c.do("GET", c.endpoint("/issue/"+from)+"?fields=issuelinks", nil, &raw); err != nil {
+		return false, fmt.Errorf("read links on %s: %w", from, err)
+	}
+	for _, l := range raw.Fields.IssueLinks {
+		if l.InwardIssue.Key == to || l.OutwardIssue.Key == to {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// relatesLinkType returns the name of a link type expressing a peer relation,
+// preferring one literally called "Relates" and otherwise taking the first the
+// instance offers. An instance with no link types at all — or one where the
+// endpoint is absent — yields ErrNoLinkType.
+func (c *JiraClient) relatesLinkType() (string, error) {
+	var raw struct {
+		IssueLinkTypes []struct {
+			Name string `json:"name"`
+		} `json:"issueLinkTypes"`
+	}
+	if err := c.do("GET", c.endpoint("/issueLinkType"), nil, &raw); err != nil {
+		// A 404 here is "this instance cannot express links", not an outage.
+		if strings.Contains(err.Error(), "HTTP 404") {
+			return "", ErrNoLinkType
+		}
+		return "", fmt.Errorf("list issue link types: %w", err)
+	}
+	if len(raw.IssueLinkTypes) == 0 {
+		return "", ErrNoLinkType
+	}
+	for _, t := range raw.IssueLinkTypes {
+		if strings.EqualFold(t.Name, "Relates") {
+			return t.Name, nil
+		}
+	}
+	return raw.IssueLinkTypes[0].Name, nil
 }
 
 // --- milestones (versions) ---
@@ -288,9 +419,14 @@ func (c *JiraClient) ensureVersion(name, description string) (string, error) {
 var defaultJiraStateMap = map[string]string{
 	"planned":     "To Do",
 	"in-progress": "In Progress",
-	"verifying":   "In Progress",
 	"shipped":     "Done",
 	"complete":    "Done",
+	// Task-level and verdict states (board-task-mirror). Jira states come from
+	// the project's workflow scheme, which dross never edits — an unavailable
+	// transition warns and skips, as it already does.
+	"task-in-progress": "In Progress",
+	"task-in-review":   "In Review",
+	"uat":              "In Review",
 }
 
 // resolveJiraState maps a dross lifecycle status to a Jira status name: the
@@ -414,8 +550,11 @@ func (r *jiraIssue) toIssue() *Issue {
 		Labels: r.Fields.Labels,
 	}
 	// Normalise Jira's status-category to dross's open/closed vocabulary.
+	// The done category is also the tracker's own resolved verdict, which is
+	// what a close read-back checks.
 	if strings.EqualFold(r.Fields.Status.StatusCategory.Key, "done") {
 		iss.State = "closed"
+		iss.Resolved = true
 	} else if r.Fields.Status.Name != "" {
 		iss.State = "open"
 	}

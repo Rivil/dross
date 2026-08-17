@@ -3,9 +3,3 @@
   text = "Prompt/command edits under assets/ are not live until 'make install' re-links them into ~/.claude; the installed dross binary can also be stale vs source (see 'make doctor'). After editing a prompt or Go code, run 'make install' before relying on the change."
   severity = "hard"
   created = "2026-06-19"
-
-[[rule]]
-  id = "r-02"
-  text = "Pre-existing faults are not furniture. When a verify or scan run reports a survivor, finding or FLAG that sits outside the current phase's diff, it must be routed the same run — into a remediation task, a deferred entry, or a scaffolded phase — never re-listed inertly for the next run to inherit. A finding that is genuinely unkillable (e.g. gremlins' switch-case / const-initializer NOT-COVERED attribution ceiling) is recorded as accepted with its reason and stops being reported. The standing backlog only ever shrinks."
-  severity = "hard"
-  created = "2026-08-02"

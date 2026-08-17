@@ -2,6 +2,7 @@ package configenum
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -199,6 +200,90 @@ func TestMilestoneStatusesMatchesDisk(t *testing.T) {
 	for _, v := range []string{"shipped", "archived", "", "   ", "done"} {
 		if MilestoneStatuses.Has(v) {
 			t.Errorf("Has(%q) = true, want false", v)
+		}
+	}
+}
+
+// --- config-value-truth: the three sets that did not exist ---------------------
+
+// TestRuntimeModesExcludesHybrid is the locked hybrid_goes decision as a test.
+//
+// hybrid's only consumer treated it identically to native, so it was a third
+// spelling of one behaviour that existed purely to pass validation. This fails
+// the moment someone adds it back "for compatibility" without giving it a
+// branch to justify the string.
+func TestRuntimeModesExcludesHybrid(t *testing.T) {
+	if RuntimeModes.Has("hybrid") {
+		t.Error("hybrid is back in RuntimeModes — it must branch somewhere or not be offered")
+	}
+	if got, want := RuntimeModes.Values(), []string{"docker", "native"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("RuntimeModes = %v, want %v", got, want)
+	}
+	// Empty stays rejected: an unset mode has no code default to fall back to.
+	if RuntimeModes.Has("") {
+		t.Error("an empty runtime.mode was accepted — it has no default")
+	}
+}
+
+// TestEveryEnumSetDefaultIsAMember pins the invariant newSet's two-argument
+// shape exists to hold: a default outside its own set makes Has("") accept a
+// value Has(def) rejects, so an unset field would validate while the same value
+// written explicitly would not.
+func TestEveryEnumSetDefaultIsAMember(t *testing.T) {
+	for name, s := range map[string]Set{
+		"BoardProviders":     BoardProviders,
+		"ForgeRESTProviders": ForgeRESTProviders,
+		"ShipProviders":      ShipProviders,
+		"AuthSchemes":        AuthSchemes,
+		"MilestoneStatuses":  MilestoneStatuses,
+		"LifecycleStatuses":  LifecycleStatuses,
+		"MilestoneModes":     MilestoneModes,
+		"RuntimeModes":       RuntimeModes,
+		"RepoLayouts":        RepoLayouts,
+		"CommitConventions":  CommitConventions,
+	} {
+		if s.def == "" {
+			continue // no default: empty is rejected, which is its own choice
+		}
+		if !s.Has(s.def) {
+			t.Errorf("%s: default %q is not a member of its own set %v", name, s.def, s.Values())
+		}
+	}
+}
+
+// TestEnumSetListNamesEveryValue: the refusals project set and validate emit are
+// built from List(), so a lossy List turns an actionable error ("want docker |
+// native") into one the reader cannot act on.
+func TestEnumSetListNamesEveryValue(t *testing.T) {
+	for name, s := range map[string]Set{
+		"RuntimeModes":      RuntimeModes,
+		"RepoLayouts":       RepoLayouts,
+		"CommitConventions": CommitConventions,
+	} {
+		list := s.List()
+		for _, v := range s.Values() {
+			if !strings.Contains(list, v) {
+				t.Errorf("%s.List() = %q, missing %q", name, list, v)
+			}
+		}
+	}
+}
+
+// TestNewSetsAcceptTheirMembers is the plain round-trip: every declared value is
+// accepted, and an obvious non-member is not.
+func TestNewSetsAcceptTheirMembers(t *testing.T) {
+	for name, s := range map[string]Set{
+		"RuntimeModes":      RuntimeModes,
+		"RepoLayouts":       RepoLayouts,
+		"CommitConventions": CommitConventions,
+	} {
+		for _, v := range s.Values() {
+			if !s.Has(v) {
+				t.Errorf("%s rejects its own member %q", name, v)
+			}
+		}
+		if s.Has("banana") {
+			t.Errorf("%s accepted banana", name)
 		}
 	}
 }

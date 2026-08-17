@@ -50,16 +50,19 @@
   locked = true
 
 [[deferred]]
+  id = "eb18c798fb88a7c4"
   text = "Auto-heal an already-diverged base inside dross phase complete (reset to origin + restore .dross/) rather than only making --recover safe."
   why = "c-4 makes recovery safe but not automatic; three deferred items already target ship-complete-recovery-hardening for this."
   target = "ship-complete-recovery-hardening"
 
 [[deferred]]
+  id = "6606a4ae3d228907"
   text = "Detect that a PR's base was retargeted on the forge after open, so the ship-time base record cannot go stale unnoticed."
   why = "Needs provider plumbing beyond this phase; provider-merge-parity later in v1.2 is the natural home."
   target = "provider-merge-parity"
 
 [[deferred]]
+  id = "77f61ea051b44f42"
   text = "Resuming work on a shipped-but-unmerged phase branch whose branch-local state.json already reads 'completed'."
   why = "Adjacent to base truth but a different failure mode; belongs with the recovery-hardening work."
   target = "ship-complete-recovery-hardening"

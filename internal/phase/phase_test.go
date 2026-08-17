@@ -541,3 +541,48 @@ func TestSaveTOMLAtomicFailurePreservesFile(t *testing.T) {
 		t.Errorf("live file was mutated on failed save:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }
+
+// TestDeferredSurvivorRoundTrip pins the optional Survivor key: a routed
+// survivor reads its key back, and an ordinary deferred entry must NOT emit a
+// `survivor =` key — dropping omitempty would rewrite every existing spec with
+// an empty one. Without persistence, a routed survivor's identity survives only
+// as prose in Text and the classifier can never match it again.
+func TestDeferredSurvivorRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "spec.toml")
+
+	const key = "a1b2c3d4e5f60718"
+	original := &Spec{
+		Phase:    SpecPhase{ID: "host-phase", Title: "Host"},
+		Criteria: []Criterion{{ID: "c-1", Text: "does a thing"}},
+		Deferred: []Deferred{
+			{Text: "routed survivor", Target: "target-phase", Survivor: key},
+			{Text: "ordinary idea"},
+		},
+	}
+	if err := original.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(raw), "survivor ="); got != 1 {
+		t.Errorf("expected exactly 1 `survivor =` line (the routed survivor only), got %d:\n%s", got, raw)
+	}
+
+	loaded, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Deferred[0].Survivor != key {
+		t.Errorf("survivor key not read back: %+v", loaded.Deferred[0])
+	}
+	if loaded.Deferred[0].Target != "target-phase" {
+		t.Errorf("survivor entry lost its target: %+v", loaded.Deferred[0])
+	}
+	if loaded.Deferred[1].Survivor != "" {
+		t.Errorf("ordinary entry should carry no survivor key, got %q", loaded.Deferred[1].Survivor)
+	}
+}

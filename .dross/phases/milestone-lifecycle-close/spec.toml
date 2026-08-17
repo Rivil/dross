@@ -1,0 +1,68 @@
+[phase]
+  id = "milestone-lifecycle-close"
+  title = "milestone-lifecycle-close"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross milestone complete --finalize` flips `[milestone].status` to `complete` as part of finalizing — a finalized milestone is never left `active` on disk."
+
+[[criteria]]
+  id = "c-2"
+  text = "Re-running `dross milestone complete --finalize` after a successful finalize reports already-finalized and exits 0, never the \"is not merged into origin/<main> yet\" refusal."
+
+[[criteria]]
+  id = "c-3"
+  text = "A missing branch ref is distinguished from an unmerged one: when `origin/milestone/<version>` does not exist, the message says the branch is gone rather than claiming it has not merged."
+
+[[criteria]]
+  id = "c-4"
+  text = "`/dross-milestone` dispatches on milestone status — scope when there is no active milestone, drive completion (gating merge-commit-not-squash) when all phases are done, report what is left otherwise."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross doctor`'s stale-milestone-branch check never reports an active milestone's branch as prunable — it gates on `[milestone].status != active`."
+
+[[criteria]]
+  id = "c-6"
+  text = "The stale-milestone-branch check measures merged-ness against `origin/<main>` rather than the local ref, so a local main unpushed-ahead of origin does not make a freshly-cut milestone branch look merged."
+
+[[criteria]]
+  id = "c-7"
+  text = "A wrong entry in a milestone list field (`phases`, `scope.success_criteria`, `scope.non_goals`) can be removed or replaced through the CLI without hand-editing the toml."
+
+[[decisions]]
+  key = "already_finalized_evidence"
+  choice = "`[milestone].status == \"complete\"` in the toml is the authoritative already-finalized marker — c-1 writes it, c-2 reads it."
+  why = "One mechanism serves both criteria and survives any git state; the branch is deleted local+remote by a successful finalize, so git ancestry cannot answer the question afterwards."
+  locked = true
+
+[[decisions]]
+  key = "stacked_child_status"
+  choice = "A stacked milestone merged into its parent branch (main not advanced) still flips to `complete`."
+  why = "Its own work is done and integrated; whether main has caught up is the parent's business. Keeps one rule and stops a child sitting active forever if the parent is never finalized."
+  locked = true
+
+[[decisions]]
+  key = "phases_done_test"
+  choice = "All phases done means every slug listed in the milestone's `phases` has a phase directory whose status is complete or shipped; an unscaffolded slug counts as not-done."
+  why = "Matches how /dross-status already counts progress, and stops a milestone closing with unbuilt criteria still on its roadmap."
+  locked = true
+
+[[decisions]]
+  key = "remove_addressing"
+  choice = "`dross milestone remove <version> <field> \"<exact value>\"` — addressed by exact value, mirroring `add`'s signature; a non-matching value is an error, never a silent no-op."
+  why = "Makes remove the inverse of add. Indices shift after every removal, so a two-step edit would silently hit the wrong entry."
+  locked = true
+
+[[decisions]]
+  key = "toml_less_branch_not_stale"
+  choice = "A `milestone/*` branch with no milestone toml is treated as not stale by the doctor check."
+  why = "The consumer is a destructive prune, so the unknown case fails closed."
+  locked = true
+
+[[deferred]]
+  id = "ae17cb02fa7db2fc"
+  text = "Rework `dross milestone prune`'s own UX — confirmation, --dry-run, batch delete. This phase fixes only the detector doctor reads, not prune's interaction."
+  why = "Guard-shaped ergonomics rather than lifecycle truth; belongs with the phase that owns guards leading with the cheapest correct fix."
+  target = "guard-remedy-ordering"

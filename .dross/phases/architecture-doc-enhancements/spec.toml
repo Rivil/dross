@@ -44,6 +44,7 @@
   locked = true
 
 [[deferred]]
+  id = "ccf2e24ffabb298f"
   text = "dross-ship auto-generates ARCHITECTURE.md (via the backfill engine) when it is absent, then merges landmarks — an older repo self-heals on its next ship."
   why = "Out of scope for a focused phase; someday-triaged via /dross-inbox."
   target = "ship-architecture-autogen"

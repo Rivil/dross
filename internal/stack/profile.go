@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -33,7 +34,35 @@ type Profile struct {
 	Runtime  RuntimeCommands  `toml:"runtime,omitempty" json:"runtime,omitempty"`
 	Tools    []Tool           `toml:"tools,omitempty" json:"tools,omitempty"`     // scanner/analyzer loadout
 	Loadout  Loadout          `toml:"loadout,omitempty" json:"loadout,omitempty"` // agent loadout (c-4)
+	// MutationCache names the environment variables that point this stack's
+	// toolchain at its build cache, so a mutation run can be given a scratch
+	// one instead of the developer's.
+	MutationCache MutationCache `toml:"mutation_cache,omitempty" json:"mutation_cache,omitempty"`
 }
+
+// MutationCache declares where a stack's toolchain keeps compiled output.
+//
+// It lives in the profile rather than in the mutation runner because profiles
+// are this repo's per-language extension point: a stack is added by dropping a
+// toml into ~/.claude/dross/profiles/, and a GOCACHE / CARGO_TARGET_DIR /
+// npm_config_cache table inside the runner would make adding rust a code change
+// instead of a file (the locked cache_var_source decision).
+//
+// A profile that declares none is not opted out of anything — there is simply
+// nothing to redirect, and its runs stay byte-identical to what they are today.
+type MutationCache struct {
+	// Vars are the variable NAMES, e.g. ["GOCACHE"]. Every one is pointed at
+	// the same scratch directory for the duration of a run.
+	Vars []string `toml:"vars,omitempty" json:"vars,omitempty"`
+}
+
+// envVarNameRe is what a declared name has to look like.
+//
+// The check is not cosmetic: these names reach an `export NAME=value` line in a
+// script piped to a remote shell, so a name carrying whitespace or an `=` would
+// either break the script or smuggle a second assignment into it. Refusing at
+// load keeps that impossible rather than relying on the quoting downstream.
+var envVarNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // Signals declare the filesystem evidence that selects this profile. Detect (see
 // detect.go) keys off these declared signals rather than a hardcoded language
@@ -213,6 +242,11 @@ func (p *Profile) Validate() error {
 	for i, t := range p.Tools {
 		if t.EffectiveBin("") == "" && len(t.BinByOS) == 0 {
 			return fmt.Errorf("tool[%d] (%q) has no bin", i, t.Name)
+		}
+	}
+	for i, v := range p.MutationCache.Vars {
+		if !envVarNameRe.MatchString(v) {
+			return fmt.Errorf("mutation_cache.vars[%d] (%q) is not a valid environment variable name", i, v)
 		}
 	}
 	return nil

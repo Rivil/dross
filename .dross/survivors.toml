@@ -1,0 +1,1143 @@
+[[category]]
+  name = "gremlins-attribution-ceiling"
+  reason = "gremlins reports these lines NOT COVERED although the test suite provably executes them. Proven by TestAttributionCeilingIsReal in internal/mutation/ceiling_test.go: a live `go test -coverprofile` run over the internal/mutation/testdata/ceiling fixture reports count>=1 on a switch-case condition line, while the gremlins report recorded for that same fixture marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block, and gremlins — which only builds mutants on lines the profile shows as covered — concludes the line never ran. These entries are switch-case conditions and closure bodies. Adding tests cannot kill them, because the tests already run them."
+
+[[category]]
+  name = "const-initializer-arithmetic"
+  reason = "A package-level declaration initializer — a const, or a var whose composite literal is built at init — is evaluated before any instrumented statement runs, so go-cover emits no coverage block for its line at all: not a block with count 0, no block. Gremlins only builds and runs mutants on lines the profile shows as covered, so such a line's mutant is never compiled, never run, and can never be killed by any test a caller could write. Proven by TestConstInitializerHasNoCoverageBlock in internal/mutation/ceiling_test.go (the fixture's const line sits in no block while its statement lines do) and by TestNoCoverageBlockIsNotACoverageGap in internal/survivor/evidence_test.go, which pins the distinction from an ordinary coverage gap — a gap is a block that never ran, and a test can close it. Distinct from the attribution ceiling: there the line runs and the tool disagrees; here the line is structurally uninstrumentable."
+
+[[category]]
+  name = "curated-table-tiebreak"
+  reason = "Unreachable given the curated data, not untested: CuratedMisreaches sorts by command path and only falls back to comparing tokens when two entries SHARE a path. All four curated entries have distinct command paths, so sort.Slice never invokes the tie-break. Pinned by TestCuratedMisreachPathsAreDistinct, which also asserts the primary path ordering — add a second entry under an existing path and that test fails, making the tie-break reachable and owing a real ordering test instead of this reason."
+
+[[category]]
+  name = "tty-secret-entry"
+  reason = "Unreachable without a TTY on stdin: `dross env set` reads the secret with term.ReadPassword(int(os.Stdin.Fd())), which fails outright when stdin is not a terminal, and the guard immediately above returns that error — so no line after it can run. term.ReadPassword is called directly on the real fd with no seam to inject a pty, and a Go test binary never has one. TestEnvCover_SetReadPasswordErrorsOnNonTTY pins the reachable half: the command fails cleanly rather than storing an empty or garbage secret. Remove or seam that read and these lines become reachable and owe tests rather than this reason."
+
+[[category]]
+  name = "self-replacing-binary-path"
+  reason = "Unreachable in a test by construction: this block runs only when updateOpts.targetPath is empty, and it resolves the target to os.Executable() — which, under `go test`, is the running test binary. update.AtomicReplace would then overwrite the test binary mid-run, so every test in update_test.go (TestUpdateAppliesAndResyncs and its siblings) must pass an explicit targetPath, and the default-resolution branch is skipped by all of them. The branch is real in production and untestable in-process; exercising it would destroy the process exercising it."
+
+[[category]]
+  name = "gremlins-switch-case-ceiling"
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. Classify's arms are asserted code-by-code in TestClassifyReadsTheCodeNotTheProse and TestClassifyKeepsTransportApartFromTheProgram."
+
+[[category]]
+  name = "exec-seam-guard"
+  reason = "The 'if stdin != \"\"' guard lives inside the process-construction seam (launcherCommand) that every remote test replaces, so executing it would mean spawning the real ssh — the one thing those tests exist to avoid. Its effect is asserted instead of its line: TestRemoteEnvExportsPrecedeTheCommand and TestGremlinsRemoteRunOrderAndArgv both read the script back off the recorded stdin, which is only there because this branch attaches it, and TestRemoteNilCarriesNoScript pins the empty-stdin side."
+
+[[accepted]]
+  key = "742de35850fac7e6"
+  file = "internal/cmd/survivor.go"
+  op = "ARITHMETIC_BASE"
+  text = "reason = \"(unresolved: \" + err.Error() + \")\""
+  line = 242
+  reason = "Defensive branch unreachable through the CLI: survivor list resolves reasons via Store.ReasonFor, which only errors when an acceptance has no reason and no resolvable category — and Load rejects both of those before list ever sees the store (TestLoadRejectsHandEditedReasonlessEntry, TestCategoryResolution). The guard is kept in case Load's validation ever loosens; it cannot be exercised while that validation holds."
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "9a54fa8954540cc3"
+  file = "internal/survivor/store.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a.Category != \"\" && a.Reason != \"\":"
+  line = 157
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "19964e8434d21f2d"
+  file = "internal/survivor/store.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a.Category != \"\":"
+  line = 160
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "41ca5be68bd0ad59"
+  file = "internal/survivor/store.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case a.Reason == \"\":"
+  line = 164
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "7d0099f5991ace2c"
+  file = "internal/survivor/stale.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case c.err == nil:"
+  line = 83
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "5b1df21097ad0a06"
+  file = "internal/phase/phase.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case r >= 'a' && r <= 'z', r >= '0' && r <= '9':"
+  line = 190
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "961ea2e0f678ec6f"
+  file = "internal/phase/phase.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r >= 'a' && r <= 'z', r >= '0' && r <= '9':"
+  line = 190
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "df5f8952de532770"
+  file = "internal/cmd/deferred.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case tgt == \"\":"
+  line = 143
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-lifecycle"
+
+[[accepted]]
+  key = "eafc28a069169896"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case gitCount > 0 && recordedCount > 0:"
+  line = 151
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "89b1d0ebd34a7589"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitCount > 0 && recordedCount > 0:"
+  line = 151
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "7be8190b55e43484"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case gitCount > 0:"
+  line = 153
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "d0df948dd0650e34"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitCount > 0:"
+  line = 153
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "a3b61f6ed11078be"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case recordedCount > 0:"
+  line = 155
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "dd6d55632a94d070"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case recordedCount > 0:"
+  line = 155
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "1ab0a93a037fdf79"
+  file = "internal/verify/scope.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case sawHeader && current == \"\" && strings.HasPrefix(line, \"@@\"):"
+  line = 260
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "2a2a99d0b72e16f2"
+  file = "internal/argfence/policy.go"
+  op = "ARITHMETIC_BASE"
+  text = "Separator Kind = iota + 1"
+  line = 33
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b719039db2db5888"
+  file = "internal/stack/detect.go"
+  op = "ARITHMETIC_BASE"
+  text = "const contentSniffCap = 64 * 1024"
+  line = 260
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "66efff73f31f61f5"
+  file = "internal/telemetry/telemetry.go"
+  op = "ARITHMETIC_BASE"
+  text = "const MaxBytes = 10 * 1024 * 1024"
+  line = 46
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "9604e7cd024a83d4"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case in.TodoActiveForm != \"\":"
+  line = 88
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "0d940d2aa751071e"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case in.DrossState != \"\":"
+  line = 90
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "739859daa4a5acd2"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case used < 50:"
+  line = 215
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "851955b8d36078ad"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case used < 50:"
+  line = 215
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "137f7dc085ef2070"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case used < 65:"
+  line = 217
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "6ed8fdb1f159e731"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case used < 65:"
+  line = 217
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "a9e78b47a4c45134"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case used < 80:"
+  line = 219
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "c86ad981d2ebec40"
+  file = "internal/statusline/render.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case used < 80:"
+  line = 219
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "16ecdd9d52d7d433"
+  file = "internal/statusline/settings.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case existing == command:"
+  line = 34
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "17c2421cae88f5a1"
+  file = "internal/statusline/settings.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case existing != \"\" && !force:"
+  line = 36
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "c8b6907a949e3232"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case found && best > 0:"
+  line = 190
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "8e6c2c29d520c5b5"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case found && best > 0:"
+  line = 190
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "3254c429b4bccbdd"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Applicable == Inapplicable:"
+  line = 317
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "4058fbc93372f246"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Coverage == CoverageUnknown:"
+  line = 319
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "afbf090a4284a6f6"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Coverage == CoverageNoBlock:"
+  line = 321
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "bdf050911ae90301"
+  file = "internal/survivor/evidence.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case e.Coverage == CoverageNotCovered:"
+  line = 324
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "6a14746cfac567ee"
+  file = "internal/architecture/links.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case trimmed == \"\":"
+  line = 121
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "88674c5a8297e6dd"
+  file = "internal/architecture/links.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case cur.OneLine == \"\" && len(cur.Links) == 0:"
+  line = 129
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "6b4bd3699dba97f2"
+  file = "internal/forge/forge.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case configenum.Normalize(c.authScheme) == \"basic\":"
+  line = 654
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "8050884712acc62f"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitURL == \"\" && p.Remote.URL == \"\":"
+  line = 93
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "de94300e7681c476"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitURL == \"\" && p.Remote.URL != \"\":"
+  line = 95
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "f2b8e6bc447a05eb"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case gitURL != \"\" && p.Remote.URL == \"\":"
+  line = 98
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "9f6d0e6b8fa5ab9b"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case b.BaseURL == \"\":"
+  line = 164
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "a3a6f65c557890b7"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 248
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b91bfa24fdf586c0"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(leaked) > 0:"
+  line = 251
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "89f2fa68e2d27733"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(leaked) > 0:"
+  line = 251
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "f1f5b5ca57ba6394"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case clobberErr != nil:"
+  line = 358
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e7956d86bc3d1b73"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(clobbered) == 0 && len(missingDirs) == 0:"
+  line = 362
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "ce81e615d18b28b1"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case p.Project.Version == \"\":"
+  line = 391
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b8ff967b67f96d9e"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case d > nearestMaxDistance || d > best:"
+  line = 86
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "8550041424bd9279"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d > nearestMaxDistance || d > best:"
+  line = 86
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "bb3a21ac111537ea"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case d < best:"
+  line = 88
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e51d801a8015aaf5"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d < best:"
+  line = 88
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "ef37177ea24e0368"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case missingDirsErr != nil:"
+  line = 360
+  reason = "Dead by construction, not untested: detectMissingPhaseDirs (internal/cmd/repair_phasedirs.go) returns a nil error on every path — a missing origin ref, an unreadable .dross/phases tree and an empty listing are all \"nothing known\" by design — so missingDirsErr is never non-nil and this arm cannot be reached by any fixture. Pinned by TestDetectMissingPhaseDirsNeverErrors, which fails the day the function reports a real error, at which point the arm becomes reachable and owes a test rather than this reason."
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "d52a461e0f28435b"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "return out[i][1] < out[j][1]"
+  line = 133
+  category = "curated-table-tiebreak"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "960198b17e257f5c"
+  file = "internal/cmd/hints.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "return out[i][1] < out[j][1]"
+  line = 133
+  category = "curated-table-tiebreak"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "2a845b586a6c46b8"
+  file = "internal/cmd/footer_coverage.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case footer == footerMalformed:"
+  line = 52
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b7c74e48a4862dab"
+  file = "internal/cmd/footer_coverage.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case footer == footerPresent && isExempt:"
+  line = 55
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b5ddcc58cdde21aa"
+  file = "internal/cmd/footer_coverage.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case footer == footerPresent:"
+  line = 58
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "50fe59a84e58fd2d"
+  file = "internal/cmd/footer_coverage.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case isExempt && strings.TrimSpace(reason) == \"\":"
+  line = 60
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e6e177e15d5ffcf2"
+  file = "internal/cmd/repair.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case loadErr != nil:"
+  line = 131
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "f57b2f9dd061303d"
+  file = "internal/cmd/repair.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case branchPhase != \"\" && existing.CurrentPhase != branchPhase:"
+  line = 133
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "c52f92cc35982cda"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if _, err := loadIfExists(specPath, func() (any, error) { s, err := phase.LoadSpec(specPath); spec = s; return s, err }); err != nil {"
+  line = 92
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "fa5ac88f46292d4a"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if _, err := loadIfExists(planPath, func() (any, error) { p, err := phase.LoadPlan(planPath); plan = p; return p, err }); err != nil {"
+  line = 96
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "a49c53b3ad283fc8"
+  file = "internal/cmd/statusline.go"
+  op = "ARITHMETIC_BASE"
+  text = "const stdinDeadline = 3 * time.Second"
+  line = 23
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "ba29537aba9784ed"
+  file = "internal/cmd/statusline.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "return resp == \"y\" || resp == \"yes\""
+  line = 189
+  reason = "Unreachable without a TTY on stdin: interactiveConfirm returns false at term.IsTerminal(os.Stdin.Fd()) before ever parsing an answer, and the guard calls term.IsTerminal directly on the real fd — there is no seam to inject a fake terminal, and a Go test binary never has one. TestInteractiveConfirmRefusesWithoutATTY pins the reachable half (no TTY means no consent, so a non-interactive install cannot clobber a foreign statusLine) and would fail if that guard were removed, at which point this line becomes reachable and owes a test rather than this reason."
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "28ece17d11f1de42"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "const drossLocalIgnorePath = \".dross/\" + LocalFile"
+  line = 17
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "48cac81a1a5e0bc7"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# dross machine-local position + version state — deliberately untracked: no\\n\" +"
+  line = 46
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "0f7ff16de78d0188"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# ordinary commit carries a copy, so nothing can replay one over the live file.\\n\" +"
+  line = 47
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "cac86369304b7dc1"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# (On refs cut before this line landed, dross itself refuses the switch — git\\n\" +"
+  line = 48
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "7c6fb95f3d81167c"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "comment: \"# dross machine-local config — host allowlist additions and the standalone-quick\\n\" +"
+  line = 64
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "68d51f164866815b"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# base branch. MUST stay untracked: a committed copy would let a cloned repo\\n\" +"
+  line = 65
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "f0f2e97a783fbeb1"
+  file = "internal/cmd/gitignore.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"# authorize its own API host, which is the loop the derived allowlist avoids.\\n\" +"
+  line = 66
+  category = "const-initializer-arithmetic"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "5cd804cb4301552d"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case d < time.Hour:"
+  line = 442
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "43f3ee380345b6b8"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d < time.Hour:"
+  line = 442
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "38470da216963a96"
+  file = "internal/cmd/status.go"
+  op = "ARITHMETIC_BASE"
+  text = "case d < 24*time.Hour:"
+  line = 444
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "cbe0c58e5d2cb069"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case d < 24*time.Hour:"
+  line = 444
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "7a36fb899b36807b"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d < 24*time.Hour:"
+  line = 444
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "f2ccf21f766939d9"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.area.available && s.area.command != \"\":"
+  line = 472
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b1b3323d3c458a3c"
+  file = "internal/cmd/status.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.area.command != \"\":"
+  line = 474
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "8facc7fea486a231"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil && res == nil:"
+  line = 550
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b391c1a5b1496088"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil && res != nil:"
+  line = 552
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "2fd95c208f2dd748"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case res != nil:"
+  line = 554
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "da9683b212e497f3"
+  file = "internal/cmd/ship.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if out, err := gitCombined(repoDir, \"commit\", \"-m\", shipMsg); err != nil {"
+  line = 264
+  reason = "Unreachable given the caller, not untested: ship runs autoCommitDrossDirt immediately above this guard, which does git add .dross and commits, and its pre-stage gate refuses any non-.dross dirt before anything is staged at all. The index is therefore empty on every path into the guard, so its commit branch cannot be reached. TestAutoCommitDrossDirtLeavesTheIndexEmpty pins that premise for both the dirty and clean cases and fails the day autoCommitDrossDirt stops draining the index, at which point the branch becomes reachable and owes a test rather than this reason."
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "96af9ac8d2c3b95e"
+  file = "internal/cmd/phase.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(args) == 1:"
+  line = 308
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "5fafdd3feef11dd4"
+  file = "internal/cmd/phase.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.CurrentPhase != \"\":"
+  line = 310
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "08b98041fe733176"
+  file = "internal/cmd/phase.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 768
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "4296aba7fc10199c"
+  file = "internal/cmd/phase_lifecycle.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case after != \"\" && before != \"\":"
+  line = 23
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "656a800e0c49e82b"
+  file = "internal/cmd/phase_lifecycle.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case after == \"\" && before == \"\":"
+  line = 25
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "6ae95da642b1e841"
+  file = "internal/cmd/phase_lifecycle.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case before != \"\":"
+  line = 27
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "928e3536acd36ece"
+  file = "internal/cmd/watch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case newCount > 0:"
+  line = 130
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "739beac06e8e62e1"
+  file = "internal/cmd/watch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case newCount > 0:"
+  line = 130
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "c84bb90c5fdb562c"
+  file = "internal/cmd/milestone_dependents.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case i == 0:"
+  line = 158
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "d0c1c73cf5c9f87e"
+  file = "internal/cmd/milestone_dependents.go"
+  op = "ARITHMETIC_BASE"
+  text = "case i == len(vs)-1:"
+  line = 160
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b36db01df5cbb210"
+  file = "internal/cmd/milestone_dependents.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case i == len(vs)-1:"
+  line = 160
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "90a89fcc0c93c7b9"
+  file = "internal/cmd/milestone_dependents.go"
+  op = "INVERT_NEGATIVES"
+  text = "case i == len(vs)-1:"
+  line = 160
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "570d2fdc4eb27db2"
+  file = "internal/cmd/project.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case unset && len(args) != 1:"
+  line = 81
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "919acc418a9a0821"
+  file = "internal/cmd/project.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !unset && len(args) != 2:"
+  line = 83
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e0a52d6f5c8d7569"
+  file = "internal/cmd/state.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 270
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "05f0338039800ccf"
+  file = "internal/cmd/env.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if len(value) == 0 {"
+  line = 105
+  category = "tty-secret-entry"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "2f4b2750232fddbd"
+  file = "internal/cmd/update.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if resolved, err := filepath.EvalSymlinks(exe); err == nil {"
+  line = 184
+  category = "self-replacing-binary-path"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "e1dbef123483111f"
+  file = "internal/cmd/env.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 109
+  category = "tty-secret-entry"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "32cfc0f3981611ef"
+  file = "internal/cmd/env.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if envMap == nil {"
+  line = 114
+  category = "tty-secret-entry"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "25a2bee296c5727a"
+  file = "internal/cmd/env.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "}); err != nil {"
+  line = 119
+  category = "tty-secret-entry"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "d20cbcdcf9d2e529"
+  file = "internal/cmd/env.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "}); err != nil {"
+  line = 148
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "67bbc496d8103359"
+  file = "internal/cmd/update.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 181
+  category = "self-replacing-binary-path"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "c8caaa5f181b2a1d"
+  file = "internal/cmd/hooks.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if err != nil {"
+  line = 100
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "b3bca090eb817d72"
+  file = "internal/cmd/issue.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case configenum.Normalize(p.Board.Provider) == \"\":"
+  line = 171
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "65e701d659c601c1"
+  file = "internal/cmd/root.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err == nil:"
+  line = 61
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "survivor-drain"
+
+[[accepted]]
+  key = "cfe3741c8c0ef9a8"
+  file = "internal/remote/remote.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case code == 255:"
+  line = 382
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "421a488234549be2"
+  file = "internal/remote/remote.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case bin == \"rsync\" && (code == 10 || code == 12 || code == 30 || code == 35):"
+  line = 384
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "394b2fc32d7aa079"
+  file = "internal/remote/remote.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case bin == \"rsync\" && (code == 23 || code == 24):"
+  line = 388
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "54e08c890d4694bd"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 249
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "414c717115f74a03"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 1049
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "cb3b8dac437177c3"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case target == nil:"
+  line = 1052
+  category = "gremlins-switch-case-ceiling"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "07bfd62e7fab1a96"
+  file = "internal/remote/remote.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if stdin != \"\" {"
+  line = 416
+  category = "exec-seam-guard"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "c11ab65da8683924"
+  file = "internal/mutation/launcher.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "if stdin != \"\" {"
+  line = 184
+  category = "exec-seam-guard"
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "19e564758c4f7296"
+  file = "internal/mutation/launcher.go"
+  op = "ARITHMETIC_BASE"
+  text = "\"mutation: adapter %q has no entry in the remote restore table — a remote run \"+"
+  line = 211
+  reason = "ARITHMETIC_BASE mutates + to - on a string concatenation inside an error message; the mutant does not compile and is never viable. The branch it sits in is covered by TestRemoteRestoreTableIsClosed."
+  accepted_in = "remote-mutation-runner"
+
+[[accepted]]
+  key = "7838ed0a7daca324"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case docErr != nil:"
+  line = 540
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. These two arms (the replay doc cannot be read; the doc carries no base-commit line) are asserted line-for-line by TestRedProofUnreadableDocIsAnIssue and TestRedProofDocWithoutABaseCommitLineIsAnIssue, with TestRedProofDocAgreeingWithTheRecordIsClean pinning the green path they are distinguished from."
+  accepted_in = "red-proof-reachability"
+
+[[accepted]]
+  key = "b808ff3a5274aed1"
+  file = "internal/cmd/doctor.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case docSHA == \"\":"
+  line = 543
+  reason = "gremlins reports a switch{} case-condition as NOT-COVERED even when a test exercises that arm — a go-cover attribution limit, not a test gap. These two arms (the replay doc cannot be read; the doc carries no base-commit line) are asserted line-for-line by TestRedProofUnreadableDocIsAnIssue and TestRedProofDocWithoutABaseCommitLineIsAnIssue, with TestRedProofDocAgreeingWithTheRecordIsClean pinning the green path they are distinguished from."
+  accepted_in = "red-proof-reachability"
+
+[[accepted]]
+  key = "08ec1d7666c48b32"
+  file = "internal/cmd/watch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case reconcilable > 1:"
+  line = 130
+  reason = "gremlins reports this line NOT COVERED although the suite provably executes it: a go test -coverprofile run over TestSuggestPrecedence reports count=1 for the block at watch.go:130.24, while gremlins marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the case CONDITION's own columns belong to no block, and gremlins only builds mutants on lines the profile shows as covered. TestSuggestPrecedence pins both the boundary and the negation directly — reconcilable=1 must NOT suggest the batch verb and reconcilable=2 must — so adding tests cannot kill these; the tests already exist and already run the line."
+  accepted_in = "guard-remedy-ordering"
+
+[[accepted]]
+  key = "5c88045d72401675"
+  file = "internal/cmd/watch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case reconcilable > 1:"
+  line = 130
+  reason = "gremlins reports this line NOT COVERED although the suite provably executes it: a go test -coverprofile run over TestSuggestPrecedence reports count=1 for the block at watch.go:130.24, while gremlins marks the same line NOT COVERED. go-cover's block for a case arm begins at the colon, so the case CONDITION's own columns belong to no block, and gremlins only builds mutants on lines the profile shows as covered. TestSuggestPrecedence pins both the boundary and the negation directly — reconcilable=1 must NOT suggest the batch verb and reconcilable=2 must — so adding tests cannot kill these; the tests already exist and already run the line."
+  accepted_in = "guard-remedy-ordering"
+
+[[accepted]]
+  key = "07659e3ec30d13f2"
+  file = "internal/cmd/redproof_repoint_cmd.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 159
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "red-proof-repoint"
+
+[[accepted]]
+  key = "30dcd7db2eecf398"
+  file = "internal/cmd/remote_bootstrap.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.argv == nil:"
+  line = 122
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "remote-toolchain-bootstrap"
+
+[[accepted]]
+  key = "cf7d3f9891cb9046"
+  file = "internal/cmd/remote_bootstrap_cmd.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.Refusal != \"\":"
+  line = 90
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "remote-toolchain-bootstrap"
+
+[[accepted]]
+  key = "6467e5accd9da8c2"
+  file = "internal/cmd/remote_bootstrap_cmd.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !apply && refused == 0:"
+  line = 110
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "remote-toolchain-bootstrap"

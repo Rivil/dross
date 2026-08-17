@@ -48,6 +48,7 @@
   locked = true
 
 [[deferred]]
+  id = "a7375e4e818abe9c"
   text = "Subagent offload audit: push verify/execute's heavy inline reading (mutation logs, big diffs) into subagents to keep the main context lean."
   why = "Polish relative to the footer/checkpoint/hook bundle; deserves its own pass."
   target = "subagent-offload-audit"

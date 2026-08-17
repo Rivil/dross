@@ -30,9 +30,58 @@ type Changes struct {
 	// complete` reconciles against, instead of re-deriving a base from
 	// current_milestone (which goes wrong the moment a stale milestone branch
 	// is sitting in the local repo). Phase-scoped for the same reason PR is.
-	Base  string                `json:"base,omitempty"`
-	Tasks map[string]TaskRecord `json:"tasks"`
+	Base string `json:"base,omitempty"`
+	// BaseCommit is the SHA Base pointed at when the phase branch was forked —
+	// the phase's fork point. Base alone names a moving target: by the time
+	// anything needs to know where the phase started, main has moved on. A red
+	// proof pinned to a commit needs a durable fork point to repoint to, and
+	// that is this field.
+	//
+	// Empty on every record written before the field existed; the fork point is
+	// then resolved on demand from Base plus the phase's own commits and cached
+	// back here (the locked fork_point_backfill decision — no migration
+	// command).
+	BaseCommit string `json:"base_commit,omitempty"`
+	// Status is how far this phase got: StatusShipped once its PR is open,
+	// StatusComplete once `dross phase complete` reconciled it. Empty on every
+	// record written before the field existed, which reads as "unknown", not
+	// "not done".
+	//
+	// It exists because the only durable evidence of a finished phase used to
+	// be the "completed <id>" breadcrumb in state.json's history — and that
+	// history is capped at 50 entries. mutation-diff-scope's breadcrumb had
+	// already been evicted while the phase was plainly done (verdict pass, PR
+	// 79 merged), so anything counting doneness from history alone was reading
+	// a window, not a record. This field is per-phase and never scrolls.
+	Status string `json:"status,omitempty"`
+	// RedProof pins the commit a phase's red proof was recorded at, plus the
+	// prose doc that replays it. Keyed to the phase (rather than living in the
+	// doc alone) so a checker can name the fork point to repoint a rotted pin
+	// to — the doc names no phase, and a SHA with no owner is a dead end.
+	RedProof *RedProof             `json:"red_proof,omitempty"`
+	Tasks    map[string]TaskRecord `json:"tasks"`
 }
+
+// RedProof is the machine half of a red proof: the pinned commit and the path
+// (repo-relative) of the doc whose `base commit:` line must agree with it. The
+// doc stays the human artefact; this is what a check reads.
+type RedProof struct {
+	SHA string `json:"sha"`
+	Doc string `json:"doc"`
+	// Replay is the command that replays the proof at the pinned commit, if
+	// one was recorded. It is what turns a repoint from a hopeful rewrite into
+	// a checked one: the repair can re-run this at the proposed commit and
+	// refuse unless the proof still goes red there. Optional — omitted, a
+	// repoint reports itself unverified rather than implying it was checked.
+	Replay string `json:"replay,omitempty"`
+}
+
+// The two values Status takes. Ordered: a phase reaches shipped first and
+// complete after, and SetStatus refuses to walk that backwards.
+const (
+	StatusShipped  = "shipped"
+	StatusComplete = "complete"
+)
 
 type TaskRecord struct {
 	Files       []string   `json:"files"`
@@ -160,6 +209,46 @@ func SetBase(root, phaseID, branch string) error {
 		return err
 	}
 	c.Base = branch
+	return c.Save(path)
+}
+
+// SetFork records the branch a phase was forked from AND the commit that
+// branch pointed at, in one load-set-save. Written at fork time by `dross phase
+// create`/`insert`, which is the only moment both facts are known without
+// re-deriving either.
+//
+// Separate from SetBase because ship rewrites the base alone (the branch the PR
+// was actually opened against) long after the fork — a ship-time SHA would be
+// main's tip today, not the phase's fork point, and silently overwriting the
+// fork point with it is the exact rot this field exists to survive.
+func SetFork(root, phaseID, branch, commit string) error {
+	path := FilePath(root, phaseID)
+	c, err := Load(path, phaseID)
+	if err != nil {
+		return err
+	}
+	c.Base = branch
+	c.BaseCommit = commit
+	return c.Save(path)
+}
+
+// SetStatus records how far the phase got, mirroring SetPR's load-set-save.
+//
+// It is monotonic: once a phase reads StatusComplete, a later StatusShipped
+// write is dropped rather than applied. Re-shipping a completed phase (a
+// follow-up PR against the same phase dir) is a real thing to do, and it must
+// not make a finished phase look unfinished to everything that reads this
+// marker.
+func SetStatus(root, phaseID, status string) error {
+	path := FilePath(root, phaseID)
+	c, err := Load(path, phaseID)
+	if err != nil {
+		return err
+	}
+	if c.Status == StatusComplete && status == StatusShipped {
+		return nil
+	}
+	c.Status = status
 	return c.Save(path)
 }
 

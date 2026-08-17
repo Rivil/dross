@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/argfence"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // DefaultTimeoutCoefficient is the dross-chosen override for gremlins'
@@ -62,7 +63,66 @@ type Gremlins struct {
 	// TestCPU caps the CPUs each mutant's test run may use (--test-cpu).
 	// Zero or negative falls back to DefaultTestCPU (1).
 	TestCPU int
+
+	// Remote delegates the run to another machine. Nil runs locally, and a
+	// local run is byte-identical to what it was before remoting existed.
+	//
+	// A NAMED field rather than an embedded Launcher: Go's keyed struct
+	// literals do not promote, so embedding would break every existing
+	// &Gremlins{Prefix: …} construction site. See launcher.go.
+	Remote *remote.Target
+	// CacheVars are the environment variable names this stack's toolchain reads
+	// for its build cache (stack profile mutation_cache.vars). A run is pointed
+	// at a scratch copy and the scratch is wiped when the run ends; empty leaves
+	// the run exactly as it was.
+	CacheVars []string
+
+	// Unmeasured records every package Run excluded from the merged score,
+	// with why. It is set by each Run, replacing whatever the previous Run
+	// left, so it always describes the most recent invocation.
+	//
+	// The reasons were previously a local slice printed to stderr and thrown
+	// away. A caller that has to decide whether "no survivors" means "clean"
+	// or "never measured" cannot read stderr — and the two are the opposite
+	// of each other, so the distinction has to survive the call.
+	Unmeasured []Unmeasured
 }
+
+// UnmeasuredKind is why a package contributed nothing to the merged score.
+// The kinds are deliberately distinguishable as data rather than by matching
+// on Message: a caller that greps prose breaks the moment the prose is
+// reworded, and these three call for opposite handling.
+type UnmeasuredKind string
+
+const (
+	// UnmeasuredMissing — gremlins wrote no report at all for the package,
+	// so nothing is known about it. Absence of survivors here is absence of
+	// evidence, and a drain must treat it as fatal rather than as clean.
+	UnmeasuredMissing UnmeasuredKind = "missing"
+
+	// UnmeasuredUnreadable — a report exists but could not be parsed. Like
+	// missing, it yields no rows: nothing was learned about the package.
+	UnmeasuredUnreadable UnmeasuredKind = "unreadable"
+
+	// UnmeasuredUncovered — the report parsed fine, but every mutant in it is
+	// NOT COVERED. The package IS measured; it just has no usable coverage,
+	// so its rows are real survivors to classify even though excluding them
+	// keeps a coverage blind spot from masquerading as a score.
+	UnmeasuredUncovered UnmeasuredKind = "uncovered"
+)
+
+// Unmeasured is one package left out of the merged score, and why.
+type Unmeasured struct {
+	// Package is the gremlins package path Run invoked, e.g. "./internal/cmd".
+	Package string
+	// Kind classifies the exclusion; see UnmeasuredKind.
+	Kind UnmeasuredKind
+	// Message is the human-readable line, "<package> (<why>)".
+	Message string
+}
+
+// String renders the entry as it is printed to stderr.
+func (u Unmeasured) String() string { return u.Message }
 
 func (g *Gremlins) Name() string { return "gremlins" }
 
@@ -85,6 +145,16 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 	if len(files) == 0 {
 		return &Report{Tool: g.Name()}, nil
 	}
+
+	// Built before anything is spawned: a refused combination (a prefix AND a
+	// remote, an unvalidatable target) must produce no *exec.Cmd at all.
+	// Gremlins runs at the repo root, so the launcher carries no workdir.
+	lr, err := newLauncher(g.Name(), g.Prefix, g.Remote, g.ProjectRoot, "", g.CacheVars)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() { _ = lr.Close() }()
 
 	pkgs := packagesFromFilesFn(files)
 
@@ -109,21 +179,39 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		return nil, fmt.Errorf("prepare gremlins report dir: %w", err)
 	}
 
+	// Cleared up front so a Run that returns an error leaves no trace of the
+	// PREVIOUS run's exclusions behind. A caller reading Unmeasured after a
+	// failed Run would otherwise be reading a different run's answer.
+	g.Unmeasured = nil
+
 	merged := &Report{Tool: g.Name()}
-	var unmeasured []string
+	var unmeasured []Unmeasured
+	skip := func(pkg string, kind UnmeasuredKind, why string) {
+		unmeasured = append(unmeasured, Unmeasured{Package: pkg, Kind: kind, Message: pkg + " (" + why + ")"})
+	}
 
 	for _, pkg := range pkgs {
-		reportRel := filepath.Join("reports", "gremlins", sanitizePkg(pkg)+".json")
-		reportAbs := filepath.Join(g.ProjectRoot, reportRel)
+		reportAbs := GremlinsReportPath(g.ProjectRoot, pkg)
+		reportRel := filepath.Join("reports", "gremlins", filepath.Base(reportAbs))
 		// A stale report from a prior run must not be re-read if gremlins
 		// writes nothing this time.
 		_ = os.Remove(reportAbs)
+		// The remote half of the same guarantee, and it is not optional: rsync
+		// --delete cannot clear the remote report because the locked
+		// `:- .gitignore` filter protects ignored paths, and reports/ is
+		// gitignored. No-op for a local run.
+		if err := lr.clearReport(pkg, reportAbs); err != nil {
+			return nil, err
+		}
 
 		args, err := g.buildUnleashArgs(reportRel, []string{pkg})
 		if err != nil {
 			return nil, err
 		}
-		cmd := gremlinsBuildCmd(g, args)
+		cmd, err := lr.toolCmd(args, func(a []string) *exec.Cmd { return gremlinsBuildCmd(g, a) })
+		if err != nil {
+			return nil, err
+		}
 		cmd.Stdout = os.Stderr // streamed; not captured (long-running)
 		cmd.Stderr = os.Stderr
 
@@ -132,6 +220,10 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 		invocation := strings.Join(cmd.Args, " ")
 		fmt.Fprintf(os.Stderr, "gremlins: %s\n", invocation)
 
+		// Remembered so the report-absent branch below can tell "gremlins found
+		// nothing to cover" (exit 0) from "gremlins failed before writing"
+		// (non-zero) — indistinguishable once the report is merely missing.
+		toolExit := 0
 		if err := cmd.Run(); err != nil {
 			// Gremlins exits non-zero when threshold flags fail or surviving
 			// mutants exist — both are "ran, bad results"; read the report
@@ -139,32 +231,82 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 			// found, etc.) is fatal.
 			var exitErr *exec.ExitError
 			if !errors.As(err, &exitErr) {
+				if lr.remoteRun() {
+					// The LOCAL ssh could not be started, so nothing reached the
+					// remote. Naming gremlins here would send the user to check
+					// an installation that was never consulted.
+					return nil, fmt.Errorf("remote ssh for gremlins on %s could not be started: %w: %v\n  invocation: %s",
+						g.Remote.Host, remote.ErrTransport, err, invocation)
+				}
 				return nil, fmt.Errorf("gremlins invocation failed: %w\n  invocation: %s\n  (is gremlins installed? `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`)", err, invocation)
 			}
+			// Over ssh the SAME exit channel carries the remote program's code
+			// and ssh's own transport failures, so the tolerance above has to be
+			// narrowed by code or an unreachable host becomes a clean-looking
+			// skip. No-op locally.
+			if fatal := lr.remoteExitFatal("gremlins", exitErr.ExitCode()); fatal != nil {
+				return nil, fmt.Errorf("%w\n  invocation: %s", fatal, invocation)
+			}
+			toolExit = exitErr.ExitCode()
+		}
+
+		// Fetched per package, immediately after its own run (the locked
+		// report_fetch decision), so "no report for this package" keeps meaning
+		// what it means locally.
+		//
+		// Only rsync's "source file is not there" survives as a skip — that one
+		// genuinely means the tool wrote nothing. A dead connection tells us
+		// nothing about whether a report exists, and calling it "no report"
+		// would mark a package unmeasured that may have measured fine.
+		if ferr := lr.fetchReport(pkg, reportAbs); ferr != nil {
+			if fetchFatal(ferr) {
+				return nil, fmt.Errorf("fetch gremlins report for %s: %w", pkg, ferr)
+			}
+			fmt.Fprintf(os.Stderr, "gremlins: fetch %s: %v\n", pkg, ferr)
 		}
 
 		b, err := os.ReadFile(reportAbs)
 		if err != nil {
+			// Absent report plus a non-zero exit is not a skip — the tool fell
+			// over before measuring, and calling that "no covered mutants"
+			// reports the package as fine to ignore.
+			if fatal := lr.reportlessExitFatal("gremlins", toolExit); fatal != nil {
+				return nil, fmt.Errorf("%w\n  invocation: %s", fatal, invocation)
+			}
 			// No report — gremlins gathered no covered mutants for this
-			// package and exited without writing. Exclude, don't fail.
-			unmeasured = append(unmeasured, pkg+" (no report — gremlins gathered no covered mutants)")
+			// package and exited without writing. Exclude, don't fail: only
+			// a caller that needs evidence (the drain) turns absence fatal.
+			skip(pkg, UnmeasuredMissing, "no report — gremlins gathered no covered mutants")
 			continue
 		}
 		rep, err := ParseGremlinsJSON(b)
 		if err != nil {
-			unmeasured = append(unmeasured, pkg+" (unreadable report: "+err.Error()+")")
+			skip(pkg, UnmeasuredUnreadable, "unreadable report: "+err.Error())
 			continue
 		}
+		// The package identity exists only here, in the loop — the payload
+		// itself names files by bare basename. Re-prefix before merging so
+		// every path downstream is repo-relative.
+		RePrefixGremlinsFiles(rep, pkg)
+		// Drop what cannot be a real result BEFORE the merge, so an
+		// inapplicable mutant never reaches the denominator, the survivor
+		// list, the lifecycle or the accept store. Filtering it later would
+		// leave the score computed over mutants the survivor list no longer
+		// showed — the same disagreement in a new place.
+		DropInapplicable(rep, g.ProjectRoot)
 		if !hasCoverage(rep) {
 			// Report exists but every mutant is NOT COVERED — gremlins
 			// instrumented zero usable coverage here (a coverage-tool blind
-			// spot, not a test-quality signal). Exclude from the score.
-			unmeasured = append(unmeasured, pkg+" (zero covered mutants — coverage blind spot)")
+			// spot, not a test-quality signal). Exclude from the SCORE only:
+			// the package was measured, and its rows are real survivors that
+			// still have to be killed or accepted.
+			skip(pkg, UnmeasuredUncovered, "zero covered mutants — coverage blind spot")
 			continue
 		}
 		mergeInto(merged, rep)
 	}
 
+	g.Unmeasured = unmeasured
 	for _, u := range unmeasured {
 		fmt.Fprintf(os.Stderr, "gremlins: skipped %s\n", u)
 	}
@@ -192,10 +334,65 @@ func mergeInto(dst, src *Report) {
 	dst.Errors += src.Errors
 	dst.NotCovered += src.NotCovered
 	dst.Surviving = append(dst.Surviving, src.Surviving...)
-	denom := dst.Killed + dst.Survived + dst.Timeout
-	if denom > 0 {
-		dst.Score = float64(dst.Killed) / float64(denom)
+	// Per-file rows accumulate by path, so two packages that each report a
+	// bare `x.go` stay distinct (they were re-prefixed before merging) while
+	// two reports naming the same repo-relative file sum into one row.
+	for name, s := range src.Files {
+		dst.addFile(name, s)
 	}
+	dst.Score = PooledScore(dst.Killed, dst.Survived, dst.Timeout)
+}
+
+// RePrefixGremlinsFiles rewrites a single package's gremlins report so its
+// paths are repo-relative, both in Surviving[].File and in the per-file rows.
+//
+// Gremlins names a file by its basename ("changes.go") and carries the package
+// identity only in the invocation — ParseGremlinsJSON takes bytes and no
+// package argument, so it cannot do this. Left un-prefixed, every Go mutant
+// fails to match a repo-relative change set and the whole leg filters out as
+// out-of-scope: a vacuous 0/0 that reads like a clean run.
+//
+// pkg is the package path Run invoked gremlins with ("./internal/changes", or
+// "." for the module root). Paths already carrying the prefix are left alone,
+// so applying this twice is a no-op.
+func RePrefixGremlinsFiles(r *Report, pkg string) {
+	dir := strings.TrimPrefix(filepath.ToSlash(pkg), "./")
+	if dir == "" || dir == "." {
+		return
+	}
+	prefix := dir + "/"
+	rename := func(p string) string {
+		p = filepath.ToSlash(p)
+		if strings.HasPrefix(p, prefix) {
+			return p
+		}
+		return prefix + p
+	}
+	for i := range r.Surviving {
+		r.Surviving[i].File = rename(r.Surviving[i].File)
+	}
+	if len(r.Files) == 0 {
+		return
+	}
+	files := make(map[string]FileStat, len(r.Files))
+	for name, s := range r.Files {
+		k := rename(name)
+		files[k] = files[k].plus(s)
+	}
+	r.Files = files
+}
+
+// GremlinsReportPath is where Run writes pkg's RAW per-package report, given
+// the same ProjectRoot the adapter ran with.
+//
+// Exported because a caller that must classify every survivor — rather than
+// score them — has to read those raw reports: Run's merged report deliberately
+// drops zero-coverage packages, so a caller reading the merge would see a
+// coverage blind spot as a package with nothing to answer for. Deriving the
+// path here rather than re-implementing the stem rule keeps the two from
+// drifting into disagreeing about which file to read.
+func GremlinsReportPath(projectRoot, pkg string) string {
+	return filepath.Join(projectRoot, "reports", "gremlins", sanitizePkg(pkg)+".json")
 }
 
 // sanitizePkg turns a gremlins package path into a filesystem-safe report
@@ -234,7 +431,9 @@ func (g *Gremlins) buildUnleashArgs(reportRel string, pkgs []string) ([]string, 
 	}
 	workers := g.Workers
 	if workers <= 0 {
-		workers = defaultWorkers()
+		// Derived from the machine the run happens ON. For a remote run that is
+		// the probed host, not this laptop — see launcherWorkers.
+		workers = launcherWorkers(g.Remote)
 	}
 	testCPU := g.TestCPU
 	if testCPU <= 0 {
@@ -355,10 +554,14 @@ func ParseGremlinsJSON(data []byte) (*Report, error) {
 			switch m.Status {
 			case "KILLED":
 				r.Killed++
+				r.addFile(f.Filename, FileStat{Killed: 1})
 			case "LIVED", "NOT COVERED":
 				r.Survived++
 				if m.Status == "NOT COVERED" {
 					r.NotCovered++
+					r.addFile(f.Filename, FileStat{Survived: 1, NotCovered: 1})
+				} else {
+					r.addFile(f.Filename, FileStat{Survived: 1})
 				}
 				r.Surviving = append(r.Surviving, Mutant{
 					File: f.Filename,
@@ -370,17 +573,16 @@ func ParseGremlinsJSON(data []byte) (*Report, error) {
 				})
 			case "TIMED OUT":
 				r.Timeout++
+				r.addFile(f.Filename, FileStat{Timeout: 1})
 			case "NOT VIABLE", "SKIPPED", "RUNNABLE", "":
 				// not counted
 			default:
 				// future statuses — surface as errors so they're visible
 				r.Errors++
+				r.addFile(f.Filename, FileStat{Errors: 1})
 			}
 		}
 	}
-	denom := r.Killed + r.Survived + r.Timeout
-	if denom > 0 {
-		r.Score = float64(r.Killed) / float64(denom)
-	}
+	r.Score = PooledScore(r.Killed, r.Survived, r.Timeout)
 	return r, nil
 }

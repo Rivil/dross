@@ -1,0 +1,64 @@
+[verify]
+  phase = "config-value-truth"
+  generated_at = 2026-08-15T15:39:37.239373Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-15T16:26:44.009611Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9272727272727272
+  mutants_killed = 51
+  mutants_survived = 4
+  mutants_not_covered = 4
+  mutants_in_scope = 55
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/project_enum_test.go:TestProjectSetRejectsOutOfSetValues", "internal/cmd/project_enum_test.go:TestProjectSetRejectionWritesNothing", "internal/cmd/project_enum_test.go:TestProjectSetStillAcceptsEveryEnumMember", "internal/cmd/project_enum_test.go:TestFreeTextKeysStayFreeText"]
+  notes = "The criterion names all five keys, and the covering test is a table over exactly those five — a key dropped from the gate fails it by name. Each subtest asserts three separate things about the refusal, so a weakened message fails independently of a weakened gate: the error names the key, quotes the offending value, and lists every member of the set. Ordering is pinned too — the fixture's prior value is re-read after the refusal, so a check that ran AFTER the write would fail even though it still returned an error. The two counter-tests are what stop a blanket refusal from passing: every declared member of every set must still go through, and four free-text keys (runtime.test_command among them) must stay ungated."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/validate_enum_test.go:TestValidateFailsOnOutOfSetEnum", "internal/cmd/validate_enum_test.go:TestValidateAcceptsEmptyEnumValues"]
+  notes = "The criterion is specifically about a value that never passed through `project set`, so the fixture cannot be built with the setter — forceEnumValue writes project.toml directly, which is the hand-edit/clone path the criterion names. One fixture per key, so the reported problem can only be that key's, and each asserts the message names the key, quotes the bad value and offers the allowed ones. The empty-value test is the guard against over-reach: every one of these keys is legitimately absent in a partially-filled project.toml, so reddening on empty would fail every project between init and the first options pass."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/hybrid_removal_test.go:TestNothingOffersHybrid", "internal/cmd/hybrid_removal_test.go:TestHybridIsRejectedNotReinterpreted", "internal/cmd/hybrid_removal_test.go:TestHybridIsNotSettable", "internal/configenum/configenum_test.go:TestRuntimeModesExcludesHybrid"]
+  notes = "The criterion's two halves are tested separately. Gone-from-the-surface: TestNothingOffersHybrid greps init.md, options.md and project.go for the pipe-separated offer, and asserts RuntimeModes.List() is exactly \"docker | native\" — which is what the validate message interpolates, so the message cannot drift back. Told-not-reinterpreted: a project.toml carrying hybrid must fail validate with a problem naming hybrid AND both survivors, and the field must still read back as \"hybrid\" afterwards — a silent rewrite to native would fail that last assertion even though validate errored."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/inert_config_test.go:TestNoSettableKeyIsInert", "internal/cmd/inert_config_test.go:TestInertKeyReasonsAreStated", "internal/cmd/inert_config_test.go:TestListingsDoNotCountAsConsumption"]
+  notes = "The guard parses writeDotted's own case labels and readDotted's field selectors out of project.go rather than carrying a hand-typed roster, and fatals if it parses fewer than 40 keys — so a parser that silently stopped matching cannot leave the guard passing vacuously. It fails in BOTH directions: an unread key with no recorded reason, and a recorded reason for a key that has since gained a reader, which is what makes the exemption list shrink rather than ossify. TestListingsDoNotCountAsConsumption pins the locked prompt_listing_is_not_consumption decision on the real line shapes — the init.md setter line, options.md's `Fields:` enumeration and the new `Recorded only:` note are all rejected as readers, while three real prompt branches are required NOT to be dismissed, so the filter cannot become a blanket one. 23 keys are currently inert and each carries a stated reason; the reason prose itself is length- and placeholder-checked."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/validate_enum_test.go:TestValidateAndSetShareTheEnumSets", "internal/cmd/project_enum_test.go:TestEnumKeysTableCoversEveryEnumTypedField", "internal/configenum/configenum_test.go:TestEnumSetListNamesEveryValue"]
+  notes = "One-definition is asserted as behaviour, not as code shape: every member of every set is driven through BOTH gates and they must agree, and a non-member must be refused by both. If validate ever restated its own list, a member the setter writes and validate rejects would make a project.toml dross itself wrote fail dross's own check — that is the failing assertion. The table-coverage test is the drift guard on enumKeys, which is the single table both gates read; an enum-typed field added without an entry is unchecked by both, which is precisely the state this phase found."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/init.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/options.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "4 in-scope survivors, all already accepted-with-reason and all origin=inherited: project.go:81, project.go:83 (the --unset arg-count switch) and validate.go:88, validate.go:92 (the loadIfExists closures). All four are the proven gremlins switch-case/closure attribution ceiling — go-cover attributes no block to those columns, so gremlins calls the line NOT COVERED although the suite runs it. None sits in a line this phase wrote. unclassified_in_scope = 0; nothing to drain."
+
+[[finding]]
+  severity = "NOTE"
+  text = "84 out-of-scope survivors were filtered — survivors in files this phase never touched. Score 0.93 is over the 55 in-scope mutants only; excluding the 4 uncoverable ones, efficacy on what the suite could reach is 1.00."

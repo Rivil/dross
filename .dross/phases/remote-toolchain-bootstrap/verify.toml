@@ -1,0 +1,81 @@
+[verify]
+  phase = "remote-toolchain-bootstrap"
+  generated_at = 2026-08-17T00:34:04.909777Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-17T01:58:01.75517Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.987012987012987
+  mutants_killed = 228
+  mutants_survived = 3
+  mutants_not_covered = 3
+  mutants_in_scope = 231
+  unclassified_in_scope = 0
+  criteria_total = 7
+  criteria_covered = 7
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/remote_bootstrap_cmd_test.go:TestBootstrapApplyInstalls", "internal/cmd/remote_bootstrap_cmd_test.go:TestBootstrapClearsDoctor", "internal/cmd/remote_bootstrap_cmd_test.go:TestBootstrapSkipsProvisionedHost"]
+  notes = "TestBootstrapClearsDoctor is the criterion end to end: doctor reports gremlins missing, one `remote bootstrap --apply` runs, and checkRemoteMutation then reports zero issues with nothing hand-edited. TestBootstrapApplyInstalls asserts the recorded invocations equal the planned argvs and that the spec is version-pinned rather than @latest. TestBootstrapSkipsProvisionedHost pins re-runnability, which is what makes --apply safe to repeat. Also exercised live: `dross remote bootstrap` against helicon reported gremlins already installed and exited 0."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/remote_bootstrap_cmd_test.go:TestBootstrapDryRunInstallsNothing", "internal/cmd/remote_bootstrap_cmd_test.go:TestBootstrapDryRunClosingMessage", "internal/cmd/remote_bootstrap_cmd_test.go:TestBootstrapDryRunWithRefusalClosingMessage"]
+  notes = "The dry run is asserted to name the tool, the adapter that wants it and the exact command, while the recording exec seam records ZERO invocations on the host — the assertion that matters for a verb whose job is changing another machine. The two closing-message tests (t-7) keep the remedies apart: a gap `--apply` can close must not be reported the same way as one only the host's owner can."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/remote_bootstrap_cmd_test.go:TestBootstrapRefusesUngranted", "internal/cmd/remote_bootstrap_cmd_test.go:TestBootstrapReportsRefusalDistinctly", "internal/cmd/remote_bootstrap_test.go:TestPlanRefusesMissingRuntime", "internal/cmd/remote_bootstrap_test.go:TestPlanRefusesRuntimeTools", "internal/cmd/remote_bootstrap_test.go:TestPlanUnknownToolFailsClosed"]
+  notes = "Both refusal kinds are pinned separately. No grant: exits non-zero naming `dross remote grant`, zero invocations. Missing runtime: the plan carries a Refusal naming go/node/dotnet and NO argv (the locked install_scope line), the verb reports it distinctly from an install failure, and the run still exits non-zero so the gap is not lost. TestPlanUnknownToolFailsClosed pins the default — a tool with no recipe is refused by name, never silently skipped."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/remote_preflight_wiring_test.go:TestTestPreflightsBeforeSync", "internal/cmd/remote_preflight_wiring_test.go:TestVerifyPreflightsRemote", "internal/cmd/remote_preflight_test.go:TestPreflightProbesThroughTheSharedSeam"]
+  notes = "Order is asserted directly: a single recorder captures the probe and the remote-spawn seams in sequence, and the first event must be the probe with zero rsync/ssh invocations ahead of it. Both consumers are covered — `dross test` and the mutation wiring — and TestPreflightProbesThroughTheSharedSeam pins that it goes through remoteProbeFn, the same seam doctor uses, so a green doctor and a green preflight cannot disagree."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/remote_preflight_wiring_test.go:TestTestFallsBackToLocal", "internal/cmd/remote_preflight_wiring_test.go:TestTestFallbackIsAnnounced", "internal/cmd/remote_preflight_wiring_test.go:TestVerifyFallsBackToLocal", "internal/cmd/remote_preflight_test.go:TestPreflightDoesNotFallBackOnRemoteFailure", "internal/cmd/remote_preflight_test.go:TestPreflightWritesNothing"]
+  notes = "A transport failure runs the suite locally and exits 0, with stdout naming both the host and that the run was local — the announcement is asserted, not just the behaviour. The locked fallback_policy's other half is pinned separately: ErrRemoteCommand, ErrPartial and an unclassified error each return an error with no fallback, so a host that ran and failed is never re-run locally into a pass. TestPreflightWritesNothing keeps the fallback non-sticky — local.toml is byte-identical afterwards and the grant still reads back."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/verify/measured_on_test.go:TestSummaryRecordsMeasuredOn", "internal/verify/measured_on_test.go:TestSummaryRecordsFallback", "internal/verify/measured_on_test.go:TestMeasuredOnRoundTripsThroughTests", "internal/cmd/verify_measured_on_test.go:TestMeasuredOnComesFromTheAdapters", "internal/cmd/verify_measured_on_test.go:TestMeasuredOnIgnoresTheGrant"]
+  notes = "The value travels tests.json → Skeleton → verify.toml, asserted as a round trip rather than at one layer. TestMeasuredOnComesFromTheAdapters pins that it is read off what the run USED, not off the grant on disk — TestMeasuredOnIgnoresTheGrant states that discriminator as its own case, since a repo holding a grant it did not use is exactly where a local score would otherwise wear a remote label. A fallback records both machines. Proven live: this phase's own verify.toml carries measured_on = \"helicon\" from a real remote run."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/external_cli_audit_test.go:TestNoTestDependsOnUnvendoredCLI", "internal/cmd/external_cli_audit_test.go:TestExternalCLIAuditCatchesABypass", "internal/cmd/external_cli_audit_test.go:TestExternalCLIAuditAllowsGuardedUse", "internal/cmd/external_cli_audit_test.go:TestExternalCLIAuditGuardsAreFunctionScoped", "internal/cmd/external_cli_audit_test.go:TestExternalCLIAuditSeamsAreNamed"]
+  notes = "An AST walk over every _test.go in internal/ and cmd/, permitting an unvendored CLI only through a stubbed seam or a function-scoped exec.LookPath + t.Skip. The guard's own failure path is pinned four ways — a direct call is caught, CommandContext does not escape it, a LookPath whose result is ignored is not a guard, and a guard on a DIFFERENT binary does not license the call. TestExternalCLIAuditGuardsAreFunctionScoped rules out the plausible-looking file-scoped variant that would silently stop working. Verified beyond the synthetic snippets: a real exec.Command(\"gh\", …) added to internal/ship/comment_test.go was reported with its file:line and the seam it should have used, then reverted."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Zero undispositioned in-scope survivors. All three in-diff survivors are gremlins-NOT-COVERED switch case-arm conditions — the attribution ceiling — and each was checked by hand rather than assumed: mutating remote_bootstrap.go:122 reddens 5 tests and remote_bootstrap_cmd.go:90 reddens 4, proving they are exercised. remote_bootstrap_cmd.go:110 reddened NOTHING, which made it a real gap hiding behind the ceiling; task t-7 added the two closing-message tests, after which the same mutation reddens both. All three are now accepted under the gremlins-attribution-ceiling category."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Score 0.99 over 231 in-scope mutants (killed=228, survived=3, all uncoverable by construction); efficacy over the 228 gremlins could reach is 1.00. 98 out-of-scope survivors filtered."
+
+[[finding]]
+  severity = "NOTE"
+  text = "This run's own artefacts demonstrate c-6: verify.toml carries measured_on = \"helicon\". An earlier run of this phase's verify wrote no such field because the installed dross binary predated task t-3 — the project rule r-01 case. Re-run after `make install`; the mutation numbers were unaffected, since gremlins builds from the source tree."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/dross.1: no mutation adapter for .1"

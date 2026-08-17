@@ -62,6 +62,7 @@
   locked = true
 
 [[deferred]]
+  id = "bd34f0c4f23160c8"
   text = "Audit the existing generic safety-net buckets (invalid, missing, git, network) for overlap, and review the order-dependence of the ClassifyError substring switch."
   why = "A distinct capability from graduating the tail, and the v0.10 roadmap already has telemetry-taxonomy-overhaul as its home."
   target = "telemetry-taxonomy-overhaul"

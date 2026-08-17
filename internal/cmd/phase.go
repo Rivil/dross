@@ -26,7 +26,7 @@ func Phase() *cobra.Command {
 		Use:   "phase",
 		Short: "Manage phase directories under .dross/phases/",
 	}
-	c.AddCommand(phaseList(), phaseCreate(), phaseCheckout(), phaseShow(), phaseComplete(), phaseNumber(), phaseMigrate(), phaseMove(), phaseInsert(), phaseRename())
+	c.AddCommand(phaseList(), phaseCreate(), phaseCheckout(), phaseShow(), phaseComplete(), phaseReconcile(), phaseNumber(), phaseMigrate(), phaseMove(), phaseInsert(), phaseRename(), phaseRedProof())
 	return c
 }
 
@@ -144,8 +144,22 @@ func phaseCreate() *cobra.Command {
 			}
 			repoDir := filepath.Dir(root)
 
-			id := phase.UniqueSlug(root, title)
+			id, disposition := phase.CreateSlug(root, title)
 			branchName := "phase/" + id
+
+			// Refused BEFORE anything is created, cut or written: a refusal
+			// that had already made a directory or a branch would leave the
+			// repo in a state neither outcome asked for, and the user would
+			// have to clean up after a command that declined to act.
+			if disposition == phase.SlugOccupied {
+				return fmt.Errorf("phase %s already exists and has been started (it holds a spec, plan or recorded changes).\n"+
+					"dross will not retitle work in flight, and it no longer invents %s-2 for you.\n\n"+
+					"  work on it:      dross phase checkout %s\n"+
+					"  rename it:       dross phase rename %s \"<new title>\"\n"+
+					"  or pick a title that does not slugify to %s",
+					id, id, id, id, id)
+			}
+			adopted := disposition == phase.SlugAdopt
 
 			hasGit := isDir(filepath.Join(repoDir, ".git"))
 
@@ -166,10 +180,10 @@ func phaseCreate() *cobra.Command {
 					_ = os.Remove(dir)
 					return err
 				}
-				Printf("created %s\n", dir)
+				Printf("%s %s\n", createdOrAdopted(adopted), dir)
 				Printf("checked out %s (rooted on %s)\n", branchName, branchBase)
 			} else {
-				Printf("created %s\n", dir)
+				Printf("%s %s\n", createdOrAdopted(adopted), dir)
 				if !hasGit {
 					Print("(no .git/ found — skipping phase branch creation)")
 				}
@@ -194,7 +208,10 @@ func phaseCreate() *cobra.Command {
 			// array — that array is the single source of phase order, so a new
 			// phase joins it at the tail. appendUnique keeps this idempotent
 			// when /dross-spec --new scaffolds a phase the milestone already
-			// listed as intent.
+			// listed as intent, and it is what keeps an ADOPTED phase in the
+			// slot the roadmap put it in: re-appending would move it to the
+			// tail and renumber every phase between, silently re-ordering an
+			// arrangement someone chose.
 			ordinal := 0
 			if s.CurrentMilestone != "" {
 				mPath := milestone.FilePath(root, s.CurrentMilestone)
@@ -432,6 +449,15 @@ destructive reset of the local base branch; read the abort first.`,
 				return err
 			}
 
+			// c-7's second half, read HERE — still on the phase branch, with
+			// origin/phase/<id> still alive — because this is the last point
+			// where the pin's own record is guaranteed to be in the working
+			// tree and the doomed ref still exists to be judged against. A
+			// WARNING, never a refusal: the PR is already merged, and leaving
+			// a merged phase uncompletable over bookkeeping would push the
+			// operator back to hand-editing the record.
+			warnDoomedRedProofs(root, repoDir, phaseID)
+
 			// Switch to the reconcile branch only now — every refusal above
 			// (fetch failure, a code-ahead or unpushable base, an unmerged PR)
 			// returns with HEAD still on phase/<id> and no local ref moved, so
@@ -559,6 +585,28 @@ destructive reset of the local base branch; read the abort first.`,
 			}
 			if err := cs.Save(filepath.Join(root, state.File)); err != nil {
 				return fmt.Errorf("save completion record: %w", err)
+			}
+			// The durable half of the same fact. The breadcrumb above scrolls
+			// out of a 50-entry history; this one is phase-scoped and stays.
+			//
+			// Unlike state.json, changes.json is tracked, so the write has to
+			// be committed here or complete would hand back a dirty tree and
+			// the zero-manual-git contract would be a manual `git commit`. Same
+			// auto-commit the entry gate at the top of this RunE uses; we are
+			// on the base branch by now, so the record lands there.
+			if err := changes.SetStatus(root, phaseID, changes.StatusComplete); err != nil {
+				return fmt.Errorf("record phase status: %w", err)
+			}
+			if _, err := autoCommitDrossDirt(repoDir, "recording phase completion"); err != nil {
+				return fmt.Errorf("commit completion record: %w", err)
+			}
+			// …and publish it, through the same .dross-only safety net that
+			// handles unpushed chores on the way in. Complete's contract is
+			// that the base ends level with origin; a local-only record commit
+			// would leave it one ahead, which is the divergence the whole
+			// reconcile path exists to prevent.
+			if _, err := pushBaseIfAheadDrossOnly(repoDir, reconcileBranch); err != nil {
+				return fmt.Errorf("publish completion record: %w", err)
 			}
 
 			// Delete the local phase branch (best-effort: only if it exists).
@@ -872,7 +920,17 @@ func forkPhaseBranch(repoDir, root, phaseID, branchName string) (base string, mi
 	// changes.json behind, because the caller's rollback is os.Remove(dir),
 	// which only removes an empty directory — a record written up front would
 	// leak the phase id on every retry.
-	if err := changes.SetBase(root, phaseID, base); err != nil {
+	//
+	// The base's tip is read here, at fork time, and stored with the branch
+	// name in one write. Read later it would be whatever the base has moved on
+	// to, which is not this phase's fork point. A rev-parse that fails is not
+	// fatal: the branch exists and the base is recorded, and the backfill
+	// resolver covers a missing fork point on demand.
+	tip, tipErr := gitTrim(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, base)...)
+	if tipErr != nil {
+		tip = ""
+	}
+	if err := changes.SetFork(root, phaseID, base, tip); err != nil {
 		return "", false, fmt.Errorf("record forked-from base for %s: %w", phaseID, err)
 	}
 	return base, milestoneActive, nil
@@ -978,4 +1036,16 @@ func phaseShow() *cobra.Command {
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
 	return c
+}
+
+// createdOrAdopted is the verb `dross phase create` reports.
+//
+// Adoption is never silent. A user who typed a title expecting a new phase and
+// got an existing one has to be able to see that from the output — inferring it
+// from a directory that already had contents is not the same thing.
+func createdOrAdopted(adopted bool) string {
+	if adopted {
+		return "adopted existing"
+	}
+	return "created"
 }

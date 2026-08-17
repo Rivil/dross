@@ -1,0 +1,195 @@
+{
+  "phase": "milestone-lifecycle-close",
+  "pr": 83,
+  "base": "milestone/v1.3",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/milestone_finalize_state.go",
+        "internal/cmd/milestone_finalize_state_test.go"
+      ],
+      "commit": "0f73fd1",
+      "completed_at": "2026-08-12T13:49:39.366043Z",
+      "landmarks": [
+        {
+          "feature": "milestone finalize lifecycle",
+          "symbol": "classifyFinalize",
+          "loc": "internal/cmd/milestone_finalize_state.go:78",
+          "what": "separates already-finalized / branch-gone / merged / unmerged so finalize stops answering all four with the unmerged refusal"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/milestone_progress_test.go"
+      ],
+      "commit": "6fa515d",
+      "completed_at": "2026-08-13T06:14:50.239758Z",
+      "landmarks": [
+        {
+          "feature": "milestone progress reporting",
+          "symbol": "TestProgressPlainOutputListsWhatIsLeft",
+          "loc": "internal/cmd/milestone_progress_test.go:209",
+          "what": "plain-text progress output pinned in both directions, closing the four in-hunk survivors on its guards"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/milestone_prune_test.go"
+      ],
+      "commit": "93350ba",
+      "completed_at": "2026-08-13T06:18:49.421709Z",
+      "landmarks": [
+        {
+          "feature": "milestone branch pruning",
+          "symbol": "TestPruneLeavesAnActiveMilestoneAlone",
+          "loc": "internal/cmd/milestone_prune_test.go:207",
+          "what": "prune's destructive end of the active-milestone gate pinned against a squash-merged branch"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/milestone_stale.go",
+        "internal/cmd/milestone_stale_test.go",
+        "internal/cmd/milestone_prune_test.go",
+        "internal/cmd/milestone_test.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "77568f9",
+      "completed_at": "2026-08-12T13:56:54.224623Z",
+      "landmarks": [
+        {
+          "feature": "stale milestone branch detection",
+          "symbol": "resolveMainCompareRef",
+          "loc": "internal/cmd/milestone_stale.go:113",
+          "what": "merged-ness is measured against origin/\u003cmain\u003e so an unpushed-ahead local main cannot make a live milestone branch look prunable"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/milestone_listedit.go",
+        "internal/cmd/milestone_listedit_test.go",
+        "internal/cmd/milestone.go",
+        "README.md"
+      ],
+      "commit": "5823ca1",
+      "completed_at": "2026-08-12T14:00:31.819272Z",
+      "landmarks": [
+        {
+          "feature": "milestone list-field editing",
+          "symbol": "milestoneRemove",
+          "loc": "internal/cmd/milestone_listedit.go:27",
+          "what": "remove/replace by exact value over phases and scope lists, order-preserving and failing loudly on a missing entry"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_finalize_test.go",
+        "README.md"
+      ],
+      "commit": "aa699ef",
+      "completed_at": "2026-08-12T14:15:01.455435Z",
+      "landmarks": [
+        {
+          "feature": "milestone finalize lifecycle",
+          "symbol": "milestoneFinalize",
+          "loc": "internal/cmd/milestone.go:264",
+          "what": "finalize records status=complete before teardown and is safe to re-run, with branch-gone and unmerged as separate answers"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/milestone_stale.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/milestone.go",
+        "internal/cmd/milestone_stale_test.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "ea4df10",
+      "completed_at": "2026-08-12T14:22:32.995521Z",
+      "landmarks": [
+        {
+          "feature": "stale milestone branch detection",
+          "symbol": "milestoneIsFinished",
+          "loc": "internal/cmd/milestone_stale.go:127",
+          "what": "only a milestone recorded complete can have a stale branch; active/planning/unknown all fail closed against the destructive prune"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/milestone_progress.go",
+        "internal/cmd/milestone_progress_test.go",
+        "internal/cmd/milestone.go",
+        "README.md"
+      ],
+      "commit": "7f2fd2d",
+      "completed_at": "2026-08-12T14:28:48.333488Z",
+      "landmarks": [
+        {
+          "feature": "milestone progress reporting",
+          "symbol": "buildMilestoneProgress",
+          "loc": "internal/cmd/milestone_progress.go:92",
+          "what": "status + done/total + remaining/unscaffolded from per-phase durable markers, so dispatch never counts doneness off a capped history"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "assets/prompts/milestone.md",
+        "internal/cmd/milestone_dispatch_prompt_test.go"
+      ],
+      "commit": "74b6ed9",
+      "completed_at": "2026-08-12T14:33:18.630969Z",
+      "landmarks": [
+        {
+          "feature": "milestone slash command dispatch",
+          "symbol": "milestone.md §0 Dispatch",
+          "loc": "assets/prompts/milestone.md:11",
+          "what": "/dross-milestone branches on milestone state — scope, drive completion, or report what is left — instead of always scoping"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/milestone_lifecycle_close_test.go"
+      ],
+      "commit": "24b533c",
+      "completed_at": "2026-08-12T14:36:26.634471Z",
+      "landmarks": [
+        {
+          "feature": "milestone finalize lifecycle",
+          "symbol": "TestMilestoneLifecycleCloseSeam",
+          "loc": "internal/cmd/milestone_lifecycle_close_test.go:21",
+          "what": "end-to-end pin on the status-flip/status-gate handoff, red when either half is reverted"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/changes/changes_test.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/ship.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "6b00db6",
+      "completed_at": "2026-08-12T14:09:37.233698Z",
+      "landmarks": [
+        {
+          "feature": "phase completion record",
+          "symbol": "changes.SetStatus",
+          "loc": "internal/changes/changes.go:196",
+          "what": "monotonic per-phase shipped/complete marker in changes.json, durable where the 50-entry state history is not"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,76 @@
+[phase]
+  id = "remote-toolchain-bootstrap"
+  title = "remote-toolchain-bootstrap"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "A granted remote host is provisioned by a single command: it installs the mutation adapters the configured `[mutation].adapters` require and are missing there, and a following `dross doctor` reports the Remote section with no missing tools — no hand-typed ssh anywhere."
+
+[[criteria]]
+  id = "c-2"
+  text = "Bootstrap is dry-run by default — it reports what the host already has, what it lacks, and the exact command it would run for each missing tool, and changes the host only when an explicit apply flag is passed."
+
+[[criteria]]
+  id = "c-3"
+  text = "Bootstrap refuses rather than guesses: with no remote grant it refuses naming the grant command, and where a tool's language runtime is absent on the host it refuses that tool naming the runtime the host owner must install, instead of installing a runtime itself."
+
+[[criteria]]
+  id = "c-4"
+  text = "A run that needs the remote preflights it: a mutation run and a `dross test` run probe the host before the working tree is pushed, so an unreachable host is reported as unreachable before any sync happens rather than part-way through the run."
+
+[[criteria]]
+  id = "c-5"
+  text = "A preflight that cannot reach the host falls back to running locally instead of failing the run outright, and the fallback is never invisible — the run output says the host was unreachable and that the result was measured locally."
+
+[[criteria]]
+  id = "c-6"
+  text = "A verify records which machine measured it: verify.toml carries the host the mutation run executed on, or that it ran locally, so a local result and a remote one are never indistinguishable after the fact."
+
+[[criteria]]
+  id = "c-7"
+  text = "No test's outcome depends on whether an unvendored external CLI is installed: a guard fails when a test drives such a CLI other than through its package's overridable command seam, and where a test genuinely needs the real binary it skips with a named reason instead of failing — so a red from a remote run always means the code, never the host's PATH."
+
+[[decisions]]
+  key = "bootstrap_surface"
+  choice = "`dross remote bootstrap` — a sibling of the existing grant / revoke / status verbs on the `dross remote` tree. Dry-run by default; `--apply` writes. Doctor stays diagnostic and keeps naming what is missing; it never installs."
+  why = "Writer verbs for the same noun belong together — the same position repoint_surface took in red-proof-repoint, and milestone.go already states that repairs get an explicitly-typed command rather than a `doctor --fix` that turns the diagnostic into a writer. The dry-run/--apply shape is then identical to `red-proof repoint`, so a user who has met one has met both."
+  locked = true
+
+[[decisions]]
+  key = "install_scope"
+  choice = "Bootstrap installs the mutation ADAPTERS dross requires — gremlins via `go install`, stryker via the project's npm-family package manager, stryker-net via `dotnet tool install` — and only those the configured `[mutation].adapters` allowlist actually selects. A missing language RUNTIME (go, node, dotnet) is a refusal naming it, never an install."
+  why = "Installing a language runtime on someone's machine is host administration: version pinning, PATH ownership, often root. Installing a language's own package into a runtime that already exists is not — it is the same `go install` the local developer already ran. Refusing on the runtime names exactly what the host owner must do and keeps a `curl | sh` off a machine dross was merely lent."
+  locked = true
+
+[[decisions]]
+  key = "install_transport"
+  choice = "Every probe and every install goes through the existing `internal/remote` Exec/Script seam and its argument fencing. Bootstrap adds no second transport, no shell string built by hand, and no interactive prompt on the far side."
+  why = "The ssh seam already carries the grant check, the argument quoting and the transport/remote-command error classification that `Classify` distinguishes. A provisioning path that opened its own connection would duplicate that security surface and would be the copy that drifts."
+  locked = true
+
+[[decisions]]
+  key = "fallback_policy"
+  choice = "Only a TRANSPORT failure falls back to local. A remote command that ran and failed does not: the run reports its result. The fallback is per-run and never sticky — it changes nothing in local.toml and the next run probes again."
+  why = "The remote exists to move load, not to change verdicts. If the host ran the suite and it went red, that is an answer and hiding it behind a local re-run is how a real failure gets laundered. If the host could not be reached there is no answer at all, and the local machine can still give one. Making the fallback sticky would silently retire the remote after one flaky network minute."
+  locked = true
+
+[[decisions]]
+  key = "provenance_record"
+  choice = "The machine that measured a run is recorded in verify.toml's `[summary]` and announced in the run output. A remote run names the host; a local run says local; a run that fell back says it fell back and why."
+  why = "board-task-mirror hit exactly this: helicon was unreachable for hours and the only workaround was `dross remote revoke` to force the local path, which left no trace that the numbers came from a different machine. An unlabelled score invites comparing yesterday's remote run to today's local one as if they were the same measurement."
+  locked = true
+
+[[decisions]]
+  key = "missing_cli_tests"
+  choice = "The property is enforced by a guard over the test sources, not by adding skips case by case: a test may reach an unvendored external CLI only through its package's overridable command seam, and any test that needs the real binary must guard on `exec.LookPath` and `t.Skip` with the binary named. Gating is on the binary's absence, never on a remote-run flag."
+  why = "The originating case is already closed — `postGitHubComment` keyed its missing-gh message on `exec.LookPath` for every error, which silently overrode the `ghCommand` seam a test had stubbed; commit 6a8818a keyed it on `exec.ErrNotFound` instead, and the full suite is now green on helicon, which has no gh (measured 2026-08-16). So the work left is not the fix but the guard: the bug was invisible until a host without the CLI ran the suite, and nothing stops the next one. A remote red that says nothing about the code teaches the loop to ignore reds. Gating on the binary rather than on a remote-run flag keeps the skip honest on a contributor's laptop too."
+  locked = true
+
+[[deferred]]
+  text = "Install the language runtimes themselves (go, node, dotnet) on a bare host, with pinned versions."
+  why = "Host administration with real footprint — root, PATH ownership, version policy. install_scope deliberately draws the line at the runtime; naming what is missing is enough for a one-time per-host cost."
+
+[[deferred]]
+  text = "Bootstrap and run against more than one remote host — a pool, with per-host readiness and scheduling."
+  why = "The grant is singular by design today. A pool is a scheduler, not a provisioner, and it is premature before one host is proven comfortable."

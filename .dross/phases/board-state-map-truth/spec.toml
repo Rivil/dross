@@ -62,6 +62,7 @@
   locked = true
 
 [[deferred]]
+  id = "014be4c1f424f656"
   text = "A deferred item pulled into a phase has no absorbed or closed state — `dross deferred dismiss` is someday-only, so an item routed to a phase and then adopted as a criterion stays listed as routed-and-open forever"
   why = "Deferred-lifecycle plumbing, not board-state-map truth"
   target = "deferred-triage-gaps"

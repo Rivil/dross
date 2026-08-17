@@ -58,7 +58,7 @@ ruled out. Write it so a cold reader (future you) re-enters the headspace fast.>
       phase-sync", not "continue the fix">
 
 ## Open loops
-- [ ] <decisions made but not yet applied, things to double-check, deferred bits>
+- [ ] <decisions made but not yet applied, things to double-check>
 - [ ] <"X test is flaky on cold cache — ignore, not my bug">
 
 ## Dirty
@@ -66,6 +66,15 @@ ruled out. Write it so a cold reader (future you) re-enters the headspace fast.>
 ```
 
 Keep it tight. A handoff that's a wall of text is as useless as none — favour a sharp `## Next` and a few real `## Open loops` over exhaustive prose.
+
+**A finding is not an open loop — file it.** If something you'd write under `## Open loops` is really a *finding* — a bug, a gap, a piece of work someone will need to do later — it belongs in the deferred backlog, not in a document that only this handoff's reader ever sees. File it instead:
+
+```
+dross deferred add "<the finding>" --why "<what makes it real>"
+dross deferred add "<the finding>" --target <phase-slug>    # when you know where it belongs
+```
+
+It lands in the current phase's spec (or the project-level store when there's no usable phase home — the verb never refuses for want of one), shows up in `dross deferred list`, and mirrors onto the issue board in the same command. Handing a finding to the next session as a bullet is how it goes homeless: `handoff.md` is gitignored and gets rewritten on the next pause. Keep `## Open loops` for things that are genuinely about *this* pause — a decision you haven't applied yet, a check to redo on resume.
 
 ## 2. Confirm + amend
 

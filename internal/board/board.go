@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -39,6 +40,12 @@ type Board struct {
 	// "someday:02-auth#1") to its readable issue id, so backlog sync reconciles
 	// the same items instead of duplicating them.
 	Backlog map[string]string `json:"backlog,omitempty"`
+	// Tasks maps "<phase-id>/<task-id>" to the readable issue id mirroring
+	// that plan task. Keyed by the pair rather than by the bare task id
+	// because task ids are only unique WITHIN a phase — every phase has a
+	// t-1, and a bare key would make the second phase's t-1 overwrite the
+	// first's mapping and then re-title its issue.
+	Tasks map[string]string `json:"tasks,omitempty"`
 	// Dismissed holds inbound issue ids the user triaged away; they won't
 	// resurface in /dross-inbox.
 	Dismissed []string `json:"dismissed,omitempty"`
@@ -99,6 +106,9 @@ func (b *Board) ensureMaps() {
 	if b.Backlog == nil {
 		b.Backlog = map[string]string{}
 	}
+	if b.Tasks == nil {
+		b.Tasks = map[string]string{}
+	}
 }
 
 // --- links ---
@@ -127,6 +137,31 @@ func (b *Board) PhaseIssue(phaseID string) (string, bool) {
 	return n, ok
 }
 
+// DeletePhase drops a phase's cached issue link, leaving the issue itself
+// alone. board.json is a cache, not the mapping's source of truth — the
+// tracker is — so an entry that no longer resolves has to be droppable, or a
+// stale key would keep shadowing the live issue on every sync.
+func (b *Board) DeletePhase(phaseID string) {
+	delete(b.Phases, phaseID)
+}
+
+// TaskKey is the board key for one plan task. Exported so callers cannot
+// re-derive the "<phase>/<task>" shape slightly differently and orphan an
+// existing mapping.
+func TaskKey(phaseID, taskID string) string { return phaseID + "/" + taskID }
+
+// SetTask records the readable issue id for one plan task.
+func (b *Board) SetTask(phaseID, taskID, issue string) {
+	b.ensureMaps()
+	b.Tasks[TaskKey(phaseID, taskID)] = issue
+}
+
+// TaskIssue returns the stored issue id for a plan task and whether it's linked.
+func (b *Board) TaskIssue(phaseID, taskID string) (string, bool) {
+	n, ok := b.Tasks[TaskKey(phaseID, taskID)]
+	return n, ok
+}
+
 // SetQuick records the readable issue id for a quick-task ref.
 func (b *Board) SetQuick(ref, issue string) {
 	b.ensureMaps()
@@ -150,6 +185,25 @@ func (b *Board) SetBacklog(key, issue string) {
 func (b *Board) BacklogID(key string) (string, bool) {
 	id, ok := b.Backlog[key]
 	return id, ok
+}
+
+// BacklogKeys returns the recorded backlog item keys in sorted order. It exists
+// for key migrations: a sync that re-keys its items needs to see what shape the
+// existing links are in, which BacklogID (a point lookup) can't tell it.
+func (b *Board) BacklogKeys() []string {
+	keys := make([]string, 0, len(b.Backlog))
+	for k := range b.Backlog {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// DeleteBacklog retires a backlog item key, leaving the issue itself alone. It
+// is the second half of a re-key: the link is re-recorded under the new key,
+// then the old key is dropped so the next sync doesn't consult it again.
+func (b *Board) DeleteBacklog(key string) {
+	delete(b.Backlog, key)
 }
 
 // --- inbound triage ---

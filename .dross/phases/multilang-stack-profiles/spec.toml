@@ -40,6 +40,7 @@
   locked = true
 
 [[deferred]]
+  id = "c3db639be8343ccb"
   text = "Upgrade the 7 detection-only stubs (ruby, rust, java, c, cpp, php, swift) to full profiles with analyzers, runtime commands, and loadout guidance."
   why = "Per-language analyzer work belongs to the next phase (multilang-analyzer-catalogs); this phase ships detection coverage only."
   target = "multilang-analyzer-catalogs"

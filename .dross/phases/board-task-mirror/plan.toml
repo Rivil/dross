@@ -1,0 +1,51 @@
+task_seq = 7
+
+[phase]
+  id = "board-task-mirror"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Create a missing YouTrack state in a project-private bundle"
+  files = ["internal/forge/youtrack.go", "internal/forge/youtrack_bundle_test.go"]
+  description = "When SetState maps to a value the tracker's bundle does not hold, add it to the\nproject's OWN bundle rather than skipping. A shared bundle is other projects'\nconfiguration and is never written.\n\nJira and forge REST keep the warn-and-continue floor: their states come from a\nworkflow scheme, or do not exist.\n"
+  covers = ["c-4"]
+  test_contract = ["if a missing state is silently skipped again, TestMissingStateIsCreatedInThePrivateBundle fails — it serves a bundle without the value, then asserts the create call and the retried set both happened", "if the create targets a SHARED bundle, TestSharedBundleIsNeverWritten fails — writing one edits configuration other projects depend on, which is a change nobody in them asked for", "if a create failure becomes fatal, TestBundleCreateFailureWarnsAndContinues fails — a state that could not be created must not fail the whole sync, since the phase-level record is still worth writing", "if an already-present state triggers a create, TestPresentStateSkipsTheCreate fails — a write on every sync would churn the tracker's configuration for nothing"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 1
+  title = "Task-sync command, its states, and the prompts that emit them"
+  files = ["internal/cmd/issue_task.go", "internal/cmd/issue.go", "internal/board/board.go", "internal/cmd/issue_task_test.go"]
+  description = "`dross issue task-sync <phase> [task-id] [--status <s>]` creates or updates one\nissue per plan task, relates it to the phase issue through IssueLinker, records\nthe mapping in board.json and drives the task's state.\n\nA backend with no linker warns ONCE per run and continues with the label\nrelationship (locked child_issues_not_subtasks + warn_once_per_run).\n"
+  covers = ["c-1", "c-2", "c-3", "c-5"]
+  test_contract = ["if a re-run duplicates issues, TestTaskSyncIsIdempotent fails — it syncs twice and asserts one issue per task and one board.json entry, which is the property that makes it safe in the execute loop", "if the phase relationship is dropped, TestTaskIssueIsRelatedToItsPhase fails — an unrelated task issue is a loose card nobody can trace back", "if a linker-less backend fails instead of degrading, TestNoLinkerWarnsOnceAndContinues fails — it asserts exactly one warning for a multi-task phase and that every task issue still exists", "if --status stops driving the state, TestTaskSyncDrivesTheState fails — the label is not the tracker's workflow field, which is the whole point of c-2", "if a task id is given and other tasks are touched, TestTaskSyncScopesToOneTask fails — the execute loop syncs one task at a time and must not rewrite the other seven on every commit"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 3
+  title = "Pin which execute edge emits which task status"
+  files = ["internal/cmd/board_lifecycle_divergence_test.go"]
+  description = "The emit-set guard is a `--status <literal>` regex over the prompt files, so it\nonly proves both task literals appear somewhere. Transposing execute.md:76 (pick)\nand execute.md:226 (commit) would invert c-2 with every test still passing.\n\nPin the EDGE, not just the literal: pair each task-sync call site with the\n`dross task status` write it sits beside, so in_progress must carry\ntask-in-progress and done must carry task-in-review."
+  covers = ["c-2"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  title = "Warn once when the backend has no state field at all"
+  files = ["internal/cmd/issue_task.go", "internal/cmd/issue_task_test.go"]
+  description = "setBoardState's default arm returns nil silently for every backend that is not\nYouTrack or Jira, on the argument that the status label is the honest floor.\nc-4 and the locked create_only_where_the_tracker_allows decision both say the run\nWARNS once, naming the provider and the value it could not set, and continues.\n\nGive the gap a voice at run scope — once per run, not once per task — so a\nforge-REST board is stated as partial rather than looking authoritative."
+  covers = ["c-4"]
+  status = "done"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Assert the UAT state is distinct on every provider"
+  files = ["internal/forge/state_map_test.go"]
+  description = "c-3 says the UAT state is distinct from in-progress and from shipped. Only\nYouTrack's value is asserted (the bundle test pins \"UAT\"); Jira's\ndefaultJiraStateMap[\"uat\"] = \"In Review\" is keyed but its value is unasserted,\nso collapsing it into \"In Progress\" would break the distinctness clause silently.\n\nAssert the distinctness itself, over both maps, rather than either provider's\nparticular string."
+  covers = ["c-3", "c-2"]
+  status = "done"

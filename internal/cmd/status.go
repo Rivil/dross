@@ -234,6 +234,15 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	if st.CurrentMilestone == "" {
 		return "/dross-milestone v0.1 — scope the first milestone before clarifying phases"
 	}
+	// A pile of merged-but-uncompleted phases outranks the current phase's own
+	// next step: they are finished work whose branches are still lying around,
+	// and until v1.3 the only way through was to hand-run one
+	// `dross phase complete <id>` per phase. Naming the batch verb is the point
+	// — ONE suggestion, not N. A single outstanding phase keeps the direct
+	// command, because naming a batch verb for one item is worse guidance.
+	if n := reconcilableCount(root); n > 1 {
+		return fmt.Sprintf("%d phase branches are waiting on a completion — `dross phase reconcile`", n)
+	}
 	if st.CurrentPhase == "" {
 		return "/dross-spec --new \"<title>\" — clarify the first phase"
 	}
@@ -648,4 +657,26 @@ func readVerifyVerdict(path string) string {
 		}
 	}
 	return ""
+}
+
+// reconcilableCount is the read-only half of `dross phase reconcile`: how many
+// phase branches are still sitting there with no completion record.
+//
+// It NEVER completes anything. status and the watch digest are commands a user
+// reaches for to find out where they stand, and one that mutated on a glance
+// would be a trap — the same read-only/destructive split the prune surface
+// already makes.
+//
+// A failure to read is reported as zero rather than propagated: a status line
+// is not worth failing a status call over.
+func reconcilableCount(root string) int {
+	st, err := state.Load(filepath.Join(root, state.File))
+	if err != nil {
+		return 0
+	}
+	ids, err := reconcilablePhases(root, filepath.Dir(root), st)
+	if err != nil {
+		return 0
+	}
+	return len(ids)
 }

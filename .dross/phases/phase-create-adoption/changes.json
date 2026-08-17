@@ -1,0 +1,41 @@
+{
+  "phase": "phase-create-adoption",
+  "pr": 94,
+  "base": "milestone/v1.3",
+  "base_commit": "8f10f04fe0486ad1052dfac202d3c62ddd75c073",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/adopt_test.go"
+      ],
+      "commit": "775671d",
+      "completed_at": "2026-08-16T03:23:21.141655Z",
+      "landmarks": [
+        {
+          "feature": "phase lifecycle",
+          "symbol": "CreateSlug",
+          "loc": "internal/phase/phase.go:169",
+          "what": "create resolves a title to adopt/refuse/free instead of silently coining \u003cslug\u003e-2, keyed on the loop's own marker files rather than directory emptiness"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_create_adopt_test.go"
+      ],
+      "commit": "8279f5b",
+      "completed_at": "2026-08-16T03:30:06.935951Z",
+      "landmarks": [
+        {
+          "feature": "phase lifecycle",
+          "symbol": "createdOrAdopted",
+          "loc": "internal/cmd/phase.go:1000",
+          "what": "phase create adopts an unstarted placeholder in its existing milestone slot, refuses a started phase before acting on anything, and reports which it did"
+        }
+      ]
+    }
+  }
+}

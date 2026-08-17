@@ -95,3 +95,26 @@ func TestInboxPromptDismissInvokesCLI(t *testing.T) {
 		t.Error("inbox.md dismiss funnel must invoke `dross deferred dismiss <source> <index>` so the choice persists")
 	}
 }
+
+// TestInboxPromptDoesNotCallSourceAPhase: `_project` is a deferred source that
+// is not a phase, so narration calling every entry's `source` its "originating
+// source phase" is now simply false — and it's the line a triager reads before
+// deciding what handle to pass to `route`.
+func TestInboxPromptDoesNotCallSourceAPhase(t *testing.T) {
+	content := inboxPromptContent(t)
+	if strings.Contains(content, "originating source phase") {
+		t.Error("inbox.md still calls every deferred entry's source a phase; the _project store is a source that is not a phase")
+	}
+	if !strings.Contains(content, "_project") && !strings.Contains(content, "project") {
+		t.Error("inbox.md does not mention the project-level store at all")
+	}
+}
+
+// TestInboxPromptDoesNotAttributeBacklogSolelyToSpec: /dross-spec is no longer
+// the only way an item reaches the someday backlog.
+func TestInboxPromptDoesNotAttributeBacklogSolelyToSpec(t *testing.T) {
+	content := inboxPromptContent(t)
+	if strings.Contains(content, "ideas punted during /dross-spec and never routed anywhere") {
+		t.Error("inbox.md still attributes the someday backlog solely to /dross-spec")
+	}
+}

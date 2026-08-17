@@ -1,0 +1,168 @@
+{
+  "phase": "deferred-add-command",
+  "pr": 84,
+  "base": "milestone/v1.3",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/cmd/deferred_store.go",
+        "internal/cmd/deferred_store_test.go",
+        "internal/cmd/deferred.go"
+      ],
+      "commit": "0e3364f",
+      "completed_at": "2026-08-13T09:22:07.654731Z",
+      "landmarks": [
+        {
+          "feature": "deferred backlog",
+          "symbol": "deferredStore",
+          "loc": "internal/cmd/deferred_store.go:36",
+          "what": "reserved _project store + stable per-item id give every deferred item a home and a non-positional identity"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/deferred_target.go",
+        "internal/cmd/deferred_target_test.go",
+        "internal/cmd/deferred.go",
+        "internal/cmd/validate.go"
+      ],
+      "commit": "387665d",
+      "completed_at": "2026-08-13T09:26:30.321531Z",
+      "landmarks": [
+        {
+          "feature": "deferred backlog",
+          "symbol": "validDeferredTarget",
+          "loc": "internal/cmd/deferred_target.go:56",
+          "what": "one shared target rule gates route/add and validate so no stamp path can mint an unreachable destination"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_backlog_id_test.go",
+        "internal/board/board.go"
+      ],
+      "commit": "bcc8d5a",
+      "completed_at": "2026-08-13T09:34:01.754345Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "pushBacklogItems",
+          "loc": "internal/cmd/issue.go:485",
+          "what": "backlog links key on the deferred item's stable id (legacy positional keys migrated title-checked) and the push loop becomes a reusable seam"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/deferred_add.go",
+        "internal/cmd/deferred_add_test.go",
+        "internal/cmd/deferred.go",
+        "README.md"
+      ],
+      "commit": "5e86a7b",
+      "completed_at": "2026-08-13T09:38:26.616242Z",
+      "landmarks": [
+        {
+          "feature": "deferred backlog",
+          "symbol": "deferredAdd",
+          "loc": "internal/cmd/deferred_add.go:64",
+          "what": "dross deferred add files a finding in one command with --why/--target, falling back to the project store rather than ever refusing for want of a home"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/deferred.go",
+        "internal/cmd/deferred_store_addressing_test.go"
+      ],
+      "commit": "7200bce",
+      "completed_at": "2026-08-13T09:41:57.55383Z",
+      "landmarks": [
+        {
+          "feature": "deferred backlog",
+          "symbol": "resolveDeferredSource",
+          "loc": "internal/cmd/deferred.go:334",
+          "what": "route/unroute/dismiss resolve their file through the store helper so _project idx is indistinguishable from a phase-sourced handle"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/deferred_add.go",
+        "internal/cmd/deferred_board_test.go"
+      ],
+      "commit": "4a75d05",
+      "completed_at": "2026-08-13T09:49:19.877066Z",
+      "landmarks": [
+        {
+          "feature": "deferred backlog",
+          "symbol": "mirrorDeferredAdd",
+          "loc": "internal/cmd/deferred_add.go:152",
+          "what": "deferred add mirrors its item onto the board in the same command, warning and leaving the local write standing on board failure"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        ".dross/handoff.md",
+        ".dross/phases/deferred-add-command/spec.toml",
+        "internal/cmd/deferred_add_test.go",
+        "internal/cmd/deferred_homeless_repo_test.go",
+        "internal/cmd/deferred_add.go",
+        "internal/cmd/deferred_board_test.go"
+      ],
+      "commit": "e72cbc9",
+      "completed_at": "2026-08-13T09:55:35.882805Z",
+      "landmarks": [
+        {
+          "feature": "deferred backlog",
+          "symbol": "TestHandoffParksNoHomelessFinding",
+          "loc": "internal/cmd/deferred_homeless_repo_test.go:27",
+          "what": "both homeless findings filed through the real verb onto the live board (DRO-15/DRO-16) with a self-retiring guard against parking a finding in handoff.md"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/validate.go",
+        "internal/cmd/deferred.go",
+        "internal/cmd/deferred_store_plumbing_test.go"
+      ],
+      "commit": "238f1dd",
+      "completed_at": "2026-08-13T09:45:50.12992Z",
+      "landmarks": [
+        {
+          "feature": "deferred backlog",
+          "symbol": "danglingTargets",
+          "loc": "internal/cmd/validate.go:145",
+          "what": "validate walks the project store for dangling targets and flags a reserved phases/_project dir; phase rename repoints store entries too"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "assets/prompts/pause.md",
+        "assets/prompts/inbox.md",
+        "assets/prompts/status.md",
+        "internal/cmd/pause_prompt_test.go",
+        "internal/cmd/inbox_prompt_test.go",
+        "internal/cmd/status_test.go"
+      ],
+      "commit": "fb07ed1",
+      "completed_at": "2026-08-13T09:59:05.120632Z",
+      "landmarks": [
+        {
+          "feature": "workflow prompts",
+          "symbol": "pause.md",
+          "loc": "assets/prompts/pause.md:68",
+          "what": "pause files findings with dross deferred add instead of parking them as Open-loops bullets; inbox/status narration stops calling every source a phase or crediting only /dross-spec"
+        }
+      ]
+    }
+  }
+}

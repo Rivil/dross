@@ -48,6 +48,7 @@
   locked = true
 
 [[deferred]]
+  id = "1e13b30ae7ff0666"
   text = "Authoritative PR-merged lookups for the non-GitHub providers (Forgejo/Gitea, GitLab) so they too gate completion on real merge status instead of the ancestry fallback."
   why = "Out of scope for the GitHub-repo bug fix; the fallback keeps them safe meanwhile."
   dismissed = true

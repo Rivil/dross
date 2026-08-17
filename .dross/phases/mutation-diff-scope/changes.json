@@ -1,0 +1,156 @@
+{
+  "phase": "mutation-diff-scope",
+  "pr": 79,
+  "base": "milestone/v1.3",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/mutation/adapter.go",
+        "internal/mutation/gremlins.go",
+        "internal/mutation/stryker.go",
+        "internal/mutation/gremlins_test.go",
+        "internal/mutation/stryker_test.go",
+        "internal/mutation/testdata/gremlins_pkg_report.json"
+      ],
+      "commit": "16d4426",
+      "completed_at": "2026-08-09T13:53:35.653455Z",
+      "landmarks": [
+        {
+          "feature": "mutation attribution",
+          "symbol": "FileStat",
+          "loc": "internal/mutation/adapter.go:50",
+          "what": "per-file mutant counters on Report plus a package-aware gremlins path re-prefix, so a report can be scored over a subset of files"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/verify/scope.go",
+        "internal/verify/scope_test.go"
+      ],
+      "commit": "090b123",
+      "completed_at": "2026-08-09T13:59:45.466874Z",
+      "landmarks": [
+        {
+          "feature": "mutation diff scoping",
+          "symbol": "Scope",
+          "loc": "internal/verify/scope.go:26",
+          "what": "pure scope model unioning git and changes.json views with hunk ranges and the in-hunk/inherited classifier"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/verifyscope.go",
+        "internal/cmd/verifyscope_test.go"
+      ],
+      "commit": "ead5f05",
+      "completed_at": "2026-08-09T14:04:43.54985Z",
+      "landmarks": [
+        {
+          "feature": "mutation diff scoping",
+          "symbol": "phaseScope",
+          "loc": "internal/cmd/verifyscope.go:24",
+          "what": "resolves the phase's merge-base and reads git's file set and hunks, degrading to changes.json with a recorded reason on any git failure"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/verify/verify_test.go"
+      ],
+      "commit": "05a7371",
+      "completed_at": "2026-08-09T14:10:15.685874Z",
+      "landmarks": [
+        {
+          "feature": "mutation diff scoping",
+          "symbol": "FilterReport",
+          "loc": "internal/verify/verify.go:107",
+          "what": "splits an adapter report against the scope, recomputing counts and score from in-scope per-file rows and tagging each kept survivor"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/verify/verify.go",
+        "internal/verify/verify_test.go"
+      ],
+      "commit": "c30d4f3",
+      "completed_at": "2026-08-09T14:21:40.54063Z",
+      "landmarks": [
+        {
+          "feature": "mutation diff scoping",
+          "symbol": "MutationOutOfScope",
+          "loc": "internal/verify/verify.go:50",
+          "what": "persists the scope block and filtered survivors in tests.json and gives an all-filtered run its own status plus a single count NOTE"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/verify_test.go"
+      ],
+      "commit": "39aebaa",
+      "completed_at": "2026-08-09T16:32:56.798301Z",
+      "landmarks": [
+        {
+          "feature": "mutation diff scoping",
+          "symbol": "TestVerifyCover_ScopeFileListTruncation",
+          "loc": "internal/cmd/verify_test.go:475",
+          "what": "pins the exact (+N more) overflow count and the at-cap boundary of printScopeSummary's file list"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "assets/prompts/verify.md",
+        "README.md",
+        "internal/cmd/verify_prompt_test.go"
+      ],
+      "commit": "5244ae5",
+      "completed_at": "2026-08-09T14:40:28.119897Z",
+      "landmarks": [
+        {
+          "feature": "verify prompt",
+          "symbol": "verify.md verdict rules",
+          "loc": "assets/prompts/verify.md:34",
+          "what": "prompt and README state the diff-scoping guarantee, add the out-of-scope status to the non-threshold branch, and weight survivors by origin tag"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/verify_scoping_test.go"
+      ],
+      "commit": "a577d08",
+      "completed_at": "2026-08-09T14:43:54.43604Z",
+      "landmarks": [
+        {
+          "feature": "mutation diff scoping",
+          "symbol": "TestScopingVacuousPassIsNotReachable",
+          "loc": "internal/cmd/verify_scoping_test.go:112",
+          "what": "end-to-end regression pinning that an untouched sibling never gates and that a mis-scoped run stays distinguishable from a clean one"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/mutation/stryker_net.go",
+        "internal/mutation/stryker_net_test.go",
+        "internal/mutation/testdata/strykernet_report.json"
+      ],
+      "commit": "5eafb55",
+      "completed_at": "2026-08-09T14:16:36.657478Z",
+      "landmarks": [
+        {
+          "feature": "mutation attribution",
+          "symbol": "StrykerNet.rePrefixFiles",
+          "loc": "internal/mutation/stryker_net.go:148",
+          "what": "strips Stryker.NET's absolute FullPath keys down to repo-relative paths so C# mutants match the phase's change set"
+        }
+      ]
+    }
+  }
+}

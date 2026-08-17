@@ -1,0 +1,54 @@
+[verify]
+  phase = "phase-create-adoption"
+  generated_at = 0001-01-01T00:00:00Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-16T04:10:32.184367Z
+
+[summary]
+  mutation_status = "measured"
+  mutation_score = 0.9266666666666666
+  mutants_killed = 139
+  mutants_survived = 11
+  mutants_not_covered = 11
+  mutants_in_scope = 150
+  unclassified_in_scope = 0
+  criteria_total = 4
+  criteria_covered = 4
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/phase/adopt_test.go:TestResolveAdoptsAnUnstartedPhase", "internal/phase/adopt_test.go:TestResolveNeverCoinsASuffix", "internal/cmd/phase_create_adopt_test.go:TestCreateAdoptsRatherThanCoining", "internal/cmd/phase_test.go:TestPhaseCreateSlugIdentity"]
+  notes = "Covered at both levels, and the CLI one reconstructs the reported incident rather than a paraphrase of it: a placeholder directory of the kind `deferred route --target` leaves behind, plus a create of the same title, asserting no `<slug>-2` directory exists, no branch was cut for one, and the milestone array holds the slug exactly once. Counting array entries by prefix rather than by exact match is deliberate — a coined `survivor-drain-2` is precisely what a `== \"survivor-drain\"` check would miss. TestResolveNeverCoinsASuffix closes the same door at the resolver across all three directory shapes, so the behaviour cannot come back through a path the CLI test does not drive."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/phase/adopt_test.go:TestResolveRefusesAStartedPhase", "internal/phase/adopt_test.go:TestStrayFileDoesNotBlockAdoption", "internal/cmd/phase_create_adopt_test.go:TestCreateRefusesAStartedPhase"]
+  notes = "The refusal is asserted to act on NOTHING — no branch cut, no array entry, no coined directory — because a refusal that half-acted leaves the repo in a state neither outcome asked for, and the user has to clean up after a command that declined to act. The started test runs per marker file (spec.toml, plan.toml, changes.json), so losing any one of the three from the rule fails by name instead of being masked by the other two. TestStrayFileDoesNotBlockAdoption guards the opposite error: keying on the directory being empty would let an editor swap file or a stray README make a placeholder look occupied, re-opening the coining path through a file nobody meant as a signal."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/phase_create_adopt_test.go:TestAdoptionKeepsItsMilestoneSlot"]
+  notes = "The placeholder is planted MID-array with two phases either side, and the whole array is compared afterwards — not just the adopted phase's index. That is the assertion that catches the real failure: re-appending to the tail does not merely move one entry, it renumbers every phase after the vacated slot, and the array is what ordinals, the version patch digit and verify's next-phase narration all read. A test checking only that the slug is still present would pass while the roadmap silently re-ordered."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/phase_create_adopt_test.go:TestAdoptionIsReported", "internal/cmd/phase_create_adopt_test.go:TestFreshCreateIsUnchanged"]
+  notes = "Both directions, because either alone is satisfiable by the wrong output: adoption must say so, and a FRESH create must NOT say it — a command that reported adoption every time would pass a one-sided check while telling every user their new phase was someone else's. TestFreshCreateIsUnchanged also pins the rest of the untouched path (branch cut, array append at the tail), since adoption is additive and a phase whose slug is free must behave exactly as before."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The gate was clear on the first verify pass — 0 in-diff survivors, nothing to drain. 11 in-scope survivors remain, all accepted-with-reason and all the proven gremlins attribution ceiling; efficacy over the 139 reachable mutants is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "phase_test.go's TestPhaseCreateSlugIdentity asserted the coining behaviour this phase removes. It is the declaration test for the change and now asserts the refusal — including that no coined directory is created — rather than being deleted."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation ran locally: helicon has been unreachable since mid-session (ssh exit 255 — this machine's Proton Pass ssh-agent stopped serving the key). The grant was temporarily revoked to force the local path and restored afterwards."

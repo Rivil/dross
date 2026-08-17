@@ -1,0 +1,90 @@
+{
+  "phase": "board-task-mirror",
+  "pr": 95,
+  "base": "milestone/v1.3",
+  "base_commit": "25310ad183019284e52a519a7765fb98d9988985",
+  "status": "complete",
+  "tasks": {
+    "t-2": {
+      "files": [
+        "internal/forge/youtrack.go",
+        "internal/forge/youtrack_bundle_test.go"
+      ],
+      "commit": "bfa97c4",
+      "completed_at": "2026-08-16T04:41:43.935251Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "ensureStateValue",
+          "loc": "internal/forge/youtrack.go:517",
+          "what": "a State value the project lacks is added to its OWN bundle and the set retried — never to a bundle shared with other projects, and a refusal warns rather than failing the sync"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/issue_task.go",
+        "internal/cmd/issue.go",
+        "internal/board/board.go",
+        "internal/configenum/configenum.go",
+        "assets/prompts/execute.md"
+      ],
+      "commit": "c4b8b84",
+      "completed_at": "2026-08-16T04:36:48.781165Z",
+      "landmarks": [
+        {
+          "feature": "issue board sync",
+          "symbol": "syncTasks",
+          "loc": "internal/cmd/issue_task.go:69",
+          "what": "every plan task gets its own issue related to its phase's, driven through the tracker's workflow field, with capability gaps warned once per run"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/board_lifecycle_divergence_test.go"
+      ],
+      "commit": "f619fb8",
+      "completed_at": "2026-08-16T09:32:50.530316Z",
+      "landmarks": [
+        {
+          "feature": "board lifecycle vocabulary",
+          "symbol": "TestTaskEdgesPairTheBoardStatusWithThePlanStatus",
+          "loc": "internal/cmd/board_lifecycle_divergence_test.go:333",
+          "what": "pairs each execute edge's board --status with the dross task status write beside it, so pick/commit cannot be transposed"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/issue_task.go",
+        "internal/cmd/issue_task_test.go"
+      ],
+      "commit": "842b602",
+      "completed_at": "2026-08-16T09:36:27.543998Z",
+      "landmarks": [
+        {
+          "feature": "board task mirror",
+          "symbol": "runWarnings",
+          "loc": "internal/cmd/issue_task.go:123",
+          "what": "run-scoped once-gates so a backend with no workflow state field names the provider and the value it could not set instead of skipping silently"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/forge/state_map_test.go"
+      ],
+      "commit": "5b14bbc",
+      "completed_at": "2026-08-16T09:38:48.450259Z",
+      "landmarks": [
+        {
+          "feature": "board lifecycle vocabulary",
+          "symbol": "TestStateMapsKeepTheLifecycleStatesDistinct",
+          "loc": "internal/forge/state_map_test.go:41",
+          "what": "asserts uat and task-in-review never share a column with in-progress or shipped on either provider's default map"
+        }
+      ]
+    }
+  }
+}

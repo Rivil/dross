@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Rivil/dross/internal/argfence"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // Stryker adapter for TS/JS/Svelte mutation testing via stryker-mutator.
@@ -32,6 +33,23 @@ type Stryker struct {
 	// stryker there, strips the prefix from --mutate paths, and re-prefixes
 	// report paths so tests.json stays repo-relative.
 	Workdir string
+
+	// Remote delegates the run to another machine. Nil runs locally, and a
+	// local run is byte-identical to what it was before remoting existed.
+	//
+	// A NAMED field rather than an embedded Launcher — see launcher.go.
+	Remote *remote.Target
+	// CacheVars are the environment variable names this stack's toolchain reads
+	// for its build cache (stack profile mutation_cache.vars). A run is pointed
+	// at a scratch copy and the scratch is wiped when the run ends; empty leaves
+	// the run exactly as it was.
+	CacheVars []string
+
+	// PackageManager is the project's own package manager
+	// (stack.package_manager), and is only consulted for a REMOTE run: it keys
+	// the lockfile-respecting install that has to happen on the host before
+	// stryker runs there. Unset is an error rather than a guess at npm.
+	PackageManager string
 }
 
 func (s *Stryker) Name() string { return "stryker" }
@@ -50,12 +68,41 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		return &Report{Tool: s.Name()}, nil
 	}
 
+	// Built before anything is spawned, and carrying Workdir: cmd.Dir on a
+	// LOCAL ssh process says nothing about the remote cwd, so the monorepo knob
+	// has to reach the remote as part of the command itself or stryker runs in
+	// the wrong package.
+	lr, err := newLauncher(s.Name(), s.Prefix, s.Remote, s.ProjectRoot, s.Workdir, s.CacheVars)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() { _ = lr.Close() }()
+	lr.PackageManager = s.PackageManager
+	// Resolved BEFORE anything is spawned. An unset or unrecognised package
+	// manager is a refusal the user can act on; discovering it after the tree
+	// has been pushed is the same refusal with a wasted rsync in front of it.
+	if _, err := lr.restoreArgv(); err != nil {
+		return nil, err
+	}
+
 	args, err := s.runArgs(files)
 	if err != nil {
 		return nil, err
 	}
-	cmd := strykerBuildCmd(s, args)
-	cmd.Dir = s.workDir()
+	reportPath := s.reportPath()
+	if err := lr.clearReport("", reportPath); err != nil {
+		return nil, err
+	}
+	cmd, err := lr.toolCmd(args, func(a []string) *exec.Cmd { return strykerBuildCmd(s, a) })
+	if err != nil {
+		return nil, err
+	}
+	if !lr.remoteRun() {
+		// Only meaningful locally. Remotely the workdir is the `cd` inside the
+		// ssh command, and setting it here would chdir the ssh client instead.
+		cmd.Dir = s.workDir()
+	}
 	cmd.Stdout = os.Stderr // streamed to user, not captured
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -68,7 +115,10 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		}
 	}
 
-	reportPath := s.reportPath()
+	if err := lr.fetchReport("", reportPath); err != nil {
+		fmt.Fprintf(os.Stderr, "stryker: fetch report: %v\n", err)
+	}
+
 	b, err := os.ReadFile(reportPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -147,7 +197,10 @@ func (s *Stryker) reportPath() string {
 }
 
 // rePrefixFiles restores repo-relative paths in a report parsed from a
-// workdir run, so tests.json speaks the same paths as changes.json.
+// workdir run, so tests.json speaks the same paths as changes.json — and so
+// diff scoping matches the same paths in the per-file rows it scores from.
+// Both surfaces must move together: a Surviving entry the scope matches whose
+// row key it doesn't would score the mutant out while still reporting it.
 func (s *Stryker) rePrefixFiles(r *Report) {
 	if s.Workdir == "" {
 		return
@@ -155,6 +208,15 @@ func (s *Stryker) rePrefixFiles(r *Report) {
 	for i := range r.Surviving {
 		r.Surviving[i].File = s.Workdir + "/" + r.Surviving[i].File
 	}
+	if len(r.Files) == 0 {
+		return
+	}
+	files := make(map[string]FileStat, len(r.Files))
+	for name, st := range r.Files {
+		k := s.Workdir + "/" + name
+		files[k] = files[k].plus(st)
+	}
+	r.Files = files
 }
 
 // buildCmd returns an exec.Cmd that respects s.Prefix.
@@ -228,8 +290,10 @@ func ParseStrykerJSON(data []byte) (*Report, error) {
 			switch m.Status {
 			case "Killed":
 				r.Killed++
+				r.addFile(path, FileStat{Killed: 1})
 			case "Survived", "NoCoverage":
 				r.Survived++
+				r.addFile(path, FileStat{Survived: 1})
 				r.Surviving = append(r.Surviving, Mutant{
 					File:    path,
 					Line:    m.Location.Start.Line,
@@ -238,19 +302,19 @@ func ParseStrykerJSON(data []byte) (*Report, error) {
 				})
 			case "Timeout":
 				r.Timeout++
+				r.addFile(path, FileStat{Timeout: 1})
 			case "RuntimeError", "CompileError":
 				r.Errors++
+				r.addFile(path, FileStat{Errors: 1})
 			case "Pending", "Ignored", "":
 				// not counted
 			default:
 				// future statuses — count as errors so they're visible
 				r.Errors++
+				r.addFile(path, FileStat{Errors: 1})
 			}
 		}
 	}
-	denom := r.Killed + r.Survived + r.Timeout
-	if denom > 0 {
-		r.Score = float64(r.Killed) / float64(denom)
-	}
+	r.Score = PooledScore(r.Killed, r.Survived, r.Timeout)
 	return r, nil
 }

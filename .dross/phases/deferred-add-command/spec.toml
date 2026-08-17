@@ -1,0 +1,77 @@
+[phase]
+  id = "deferred-add-command"
+  title = "deferred-add-command"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross deferred add \"<text>\"` creates a new deferred item, with an optional `--why`, and it appears in `dross deferred list` immediately."
+
+[[criteria]]
+  id = "c-2"
+  text = "An add made with no current phase still lands somewhere addressable — the command never refuses for want of a home."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross deferred add --target <slug>` files and routes the item in one command; omitting the flag leaves it unrouted as someday."
+
+[[criteria]]
+  id = "c-4"
+  text = "An added item is indistinguishable from a spec-authored one to `list`, `route`, `unroute` and `dismiss` — all four address it by the same `<phase> <idx>` handle."
+
+[[criteria]]
+  id = "c-5"
+  text = "The two homeless findings in handoff.md — the test-suite hermeticity gap, and the verify survivor-vocabulary mismatch routed to `mutation-score-truth` — are filed via the new verb and removed from handoff.md."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross deferred add` mirrors the new item onto the issue board in the same command; a board failure warns and leaves the local write standing."
+
+[[criteria]]
+  id = "c-7"
+  text = "`dross deferred route --target` rejects an unknown slug on the same rule as `add`, so no stamp path can create a silently unreachable destination."
+
+[[criteria]]
+  id = "c-8"
+  text = "A deferred item's board link survives the removal of an earlier item in the same phase — a later `backlog-sync` re-points no existing board issue at different text."
+
+[[decisions]]
+  key = "storage_home"
+  choice = "Write into the current phase's spec.toml when current_phase is set AND that spec is loadable; otherwise — no current phase, or a current phase whose spec.toml is missing or unreadable — into a project-level store surfaced under a reserved source slug. The fallback covers an unusable home, not merely an absent one, and never errors for want of a home."
+  why = "Preserves provenance for mid-phase punts so `list --milestone` keeps working, while guaranteeing a home when nothing is scaffolded. The unusable-home arm was made explicit on 2026-08-13 after the plan review found it living only in a task description: c-2 demands the command never refuse, so an unloadable current spec must fall back rather than error — deliberately unlike `survivor route`, which errors."
+  locked = true
+
+[[decisions]]
+  key = "target_validation"
+  choice = "A target is valid if a phase directory exists for the slug, or the slug appears in ANY milestone's phases array — the rule `dross validate` already enforces (validate.go:73-85), shared from one helper rather than reimplemented. Anything else errors, naming both ways to make it valid. Never auto-append an unknown slug to the roadmap."
+  why = "An unvalidated typo stamps a silently unreachable destination — the exact failure this phase exists to kill. Auto-adding would turn a typo into a permanent fake phase. Broadened from 'the current milestone' on 2026-08-13 after the plan review found validate.go already enforcing the wider rule: two rules for one concept is the worse hazard, and routing a finding to a phase parked in an earlier still-open milestone is legitimate — `watch-pr-ci-status` (v0.9 only) is routed that way in this repo today and would have been rejected by the narrow rule."
+  locked = true
+
+[[decisions]]
+  key = "board_push"
+  choice = "The local TOML write is authoritative; the board push is best-effort — it warns on board failure and no-ops when the board is disabled or no milestone is current."
+  why = "A network blip must never block filing a finding, which is the whole point of the verb."
+  locked = true
+
+[[decisions]]
+  key = "deferred_identity"
+  choice = "The stable id added to `[[deferred]]` is internal — it keys the board backlog entry only. Every CLI verb keeps `<phase> <idx>` addressing."
+  why = "Keeps c-4 and the installed /dross-spec prompt working unchanged; smallest blast radius for a schema change."
+  locked = true
+
+[[deferred]]
+  id = "20d239bfa5341306"
+  text = "Routed deferred items never reach the board — syncBacklog skips anything with a target, so a routed finding is invisible on the tracker. This phase makes the gap asymmetric rather than closing it: `deferred add --target X` mirrors its item once (c-6 is unconditional), but no later sync ever updates that issue, while the same item routed from an existing entry gets no issue at all. Board coverage of routed items is now verb-dependent, and add-created routed issues go stale on the first text edit."
+  why = "Board honesty is board-sync-truth's remit, not this verb's. Recorded 2026-08-13 from the plan review, which found the asymmetry the D2 decision introduces."
+  target = "board-sync-truth"
+
+[[deferred]]
+  id = "1ecc05633e1a85ed"
+  text = "Test-suite hermeticity gap: a test read the real repo's gitignored state.json and passed both the per-task gate and a full verify — only CI caught it. ARCHITECTURE.md carries a 'Test-suite hermeticity' entry, so the principle exists but nothing enforces it."
+  why = "Found by CI, not by dross. The gate that should have caught it is the one that let it through, so the enforcement gap is the finding — not the individual test."
+
+[[deferred]]
+  id = "e948eb6e07e8138b"
+  text = "dross verify stdout and verify.toml disagree on survivor vocabulary: stdout printed 'survivors: 4 in-diff, 0 routed, 71 accepted, 0 unclassified' while the verify.toml written by the same run set unclassified_in_scope = 4 — the same four survivors under two vocabularies, and the stdout line reads as an all-clear while the gate is open."
+  why = "Not reproduced on the 2026-08-13 re-run (0 in-diff survivors, both surfaces read 0 and agree) — unfixed, not disproven. Needs a run with in-diff survivors to confirm."
+  target = "mutation-score-truth"

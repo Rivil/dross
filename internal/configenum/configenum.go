@@ -115,7 +115,41 @@ var MilestoneStatuses = newSet("", "planning", "active", "complete")
 // Empty is rejected: a blank status maps to no board state, and it is never a
 // request to derive one — syncPhase already derives from the plan when
 // --status is absent.
-var LifecycleStatuses = newSet("", "planned", "in-progress", "verifying", "shipped", "complete")
+// "verifying" was retired by board-task-mirror: "uat" replaced it at its only
+// emitting call site, and a member nothing emits is a state-map key nothing
+// will ever reach — the precise thing the divergence guard forbids. A repo
+// whose [board].state_map still overrides "verifying" gets a stale-key issue
+// from `dross doctor`, which is the surface that exists for exactly this.
+//
+// The last three are TASK- and verdict-level states (board-task-mirror). They
+// extend this same set rather than starting a second vocabulary: there is one
+// override point ([board].state_map) and one build-failing divergence guard,
+// and a second mechanism would let the two drift — which is the exact bug this
+// set was introduced to close.
+var LifecycleStatuses = newSet("", "planned", "in-progress", "shipped", "complete",
+	"task-in-progress", "task-in-review", "uat")
+
+// RuntimeModes is the set of [runtime].mode values.
+//
+// docker | native, and deliberately NOT hybrid. hybrid was accepted and
+// documented for as long as the field existed, and its only consumer was
+// `p.Runtime.Mode != "docker"` (internal/cmd/verify.go) — so hybrid and native
+// compiled to the same program and the string's entire effect was passing
+// validation. A per-service split is a fact [runtime.services] already carries;
+// it was never a third whole-project mode.
+//
+// Empty is rejected: an unset mode has no code default, and validate has always
+// reported it as a problem in its own right.
+var RuntimeModes = newSet("", "docker", "native")
+
+// RepoLayouts is the set of [repo].layout values. Empty falls back to single,
+// which is what the scaffold writes and what every single-module repo means.
+var RepoLayouts = newSet("single", "single", "monorepo")
+
+// CommitConventions is the set of [repo].commit_convention values. Empty falls
+// back to conventional, which is what init writes; freeform is the opt-out for
+// a repo whose history does not use type(scope): subjects.
+var CommitConventions = newSet("conventional", "conventional", "freeform")
 
 // MilestoneModes is the union of [board].milestone_mode values across the
 // trackers. Empty defaults to version in code. Not every provider accepts every

@@ -1191,3 +1191,16 @@ verdict = "pending"
 		t.Errorf("pending verdict should be nagged:\n%s", out)
 	}
 }
+
+// TestStatusPromptDoesNotAttributeBacklogSolelyToSpec: the someday backlog is
+// fed by `dross deferred add` and survivor routing too, so status.md's inbox
+// nudge must stop naming /dross-spec as its only source.
+func TestStatusPromptDoesNotAttributeBacklogSolelyToSpec(t *testing.T) {
+	content := docText(t, "assets", "prompts", "status.md")
+	if strings.Contains(content, "ideas punted in /dross-spec and never routed") {
+		t.Error("status.md still attributes the someday backlog solely to /dross-spec")
+	}
+	if !strings.Contains(content, "dross deferred add") {
+		t.Error("status.md does not name `dross deferred add` as a source of someday items")
+	}
+}

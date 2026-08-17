@@ -10,6 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/milestone"
@@ -29,6 +30,9 @@ func Milestone() *cobra.Command {
 		milestoneGet(),
 		milestoneSet(),
 		milestoneAdd(),
+		milestoneRemove(),
+		milestoneReplace(),
+		milestoneProgressCmd(),
 		milestoneComplete(),
 		milestonePrune(),
 	)
@@ -47,11 +51,12 @@ func Milestone() *cobra.Command {
 // It never decides for itself what is stale: the set comes from
 // staleMilestoneBranches, and a branch that detector did not name is not touched.
 func milestonePrune() *cobra.Command {
-	return &cobra.Command{
+	var dryRun, yes bool
+	c := &cobra.Command{
 		Use:   "prune",
 		Short: "Delete milestone/* branches whose work is already on the main branch",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := FindRoot()
 			if err != nil {
 				return err
@@ -73,7 +78,7 @@ func milestonePrune() *cobra.Command {
 				return err
 			}
 
-			stale, err := staleMilestoneBranches(repoDir, mainBranch)
+			stale, err := staleMilestoneBranches(root, repoDir, mainBranch)
 			if err != nil {
 				return err
 			}
@@ -109,6 +114,30 @@ func milestonePrune() *cobra.Command {
 				}
 			}
 
+			// Show the whole set before touching any of it. Deleting a branch
+			// on origin is irreversible from the user's side, and prune used to
+			// do the lot with no preview — the one shape where a wrong
+			// stale-detection result cannot be walked back.
+			Printf("%d stale milestone branch(es) to delete:\n\n", len(stale))
+			for _, b := range stale {
+				where := "local"
+				if b.HasRemote {
+					where = "local + origin"
+				}
+				Printf("    %s (%s) — %s\n", b.Name, b.Reason, where)
+			}
+			Print("")
+
+			if dryRun {
+				Print("--dry-run: nothing deleted.")
+				return nil
+			}
+			if !yes {
+				if !confirmPrune(cmd) {
+					return fmt.Errorf("not confirmed — nothing deleted. Re-run and answer y, or pass --yes to skip the prompt")
+				}
+			}
+
 			for _, b := range stale {
 				if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, b.Name)...); err != nil {
 					return fmt.Errorf("delete local %s: %w\n%s", b.Name, err, out)
@@ -125,6 +154,39 @@ func milestonePrune() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&dryRun, "dry-run", false, "list what would be deleted and exit without deleting anything")
+	c.Flags().BoolVar(&yes, "yes", false, "skip the confirmation prompt (for scripted use)")
+	return c
+}
+
+// confirmPrune asks before an irreversible delete, and answers NO when stdin is
+// not a terminal.
+//
+// Refusing rather than proceeding on a non-interactive stdin is the whole point:
+// a prompt that is silently skipped when nobody is watching is not a
+// confirmation, it is a delay. A script that means it says so with --yes, which
+// is a deliberate act the way the flag name reads.
+func confirmPrune(cmd *cobra.Command) bool {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return false
+	}
+	fmt.Fprint(cmd.OutOrStdout(), "Delete these branches (local and on origin)? [y/N] ")
+	var resp string
+	_, _ = fmt.Fscanln(os.Stdin, &resp)
+	return isAffirmative(resp)
+}
+
+// isAffirmative is the answer parsing, split out from the prompt so it is
+// reachable from a test.
+//
+// The read itself needs a terminal, so everything after it — including which
+// answers mean yes — was unexecuted by the whole suite while sitting in front of
+// an irreversible delete. Splitting it is what makes the rule assertable rather
+// than merely plausible: only an explicit y/yes proceeds, and the default of a
+// bare Enter is NO.
+func isAffirmative(resp string) bool {
+	r := strings.ToLower(strings.TrimSpace(resp))
+	return r == "y" || r == "yes"
 }
 
 // milestoneComplete closes out a milestone in two steps. Without --finalize it
@@ -264,6 +326,16 @@ func milestonePRBase(root, repoDir, mainBranch, version, msBranch string) (strin
 // refuse forever for a child merged into its parent but not yet into main,
 // deadlocking the stacking model's second half.
 func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) error {
+	// Classify before anything else. An already-finalized milestone has
+	// nothing to fetch, guard or delete, and making it clear a dirty-tree gate
+	// just to be told there is nothing to do is a refusal wearing an answer's
+	// clothes. This first pass reads only the toml's status — no network.
+	if cls, err := classifyFinalize(root, repoDir, mainBranch, msBranch, version); err != nil {
+		return err
+	} else if cls.State == finalizeAlreadyDone {
+		return reportAlreadyFinalized(repoDir, msBranch, cls.Message)
+	}
+
 	status, err := gitTrim(repoDir, "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("git status: %w", err)
@@ -276,26 +348,23 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 		return fmt.Errorf("git fetch: %w\n%s", err, out)
 	}
 
-	// The branch this milestone was stacked on, when it is still a live target
-	// on origin. Everything else resolves to the main branch.
-	target := mainBranch
-	if m, err := milestone.Load(milestone.FilePath(root, version)); err == nil {
-		if b := m.BaseOr(mainBranch); b != mainBranch && b != msBranch && gitRefExists(repoDir, "refs/remotes/origin/"+b) {
-			target = b
-		}
+	// Classify again now that origin's refs are current. The first pass ran
+	// against a possibly-stale remote view, and "the PR merged since the last
+	// fetch" is the ordinary case this command is invoked in — answering from
+	// the pre-fetch refs would refuse a milestone that has in fact landed.
+	cls, err := classifyFinalize(root, repoDir, mainBranch, msBranch, version)
+	if err != nil {
+		return err
 	}
-
-	// Merge guard: refuse until origin actually contains the milestone —
-	// on main, or on the parent it was stacked on.
-	mergedIntoMain := gitNoOut(repoDir, "merge-base", "--is-ancestor", "origin/"+msBranch, "origin/"+mainBranch) == nil
-	mergedIntoTarget := mergedIntoMain
-	if !mergedIntoMain && target != mainBranch {
-		mergedIntoTarget = gitNoOut(repoDir, "merge-base", "--is-ancestor", "origin/"+msBranch, "origin/"+target) == nil
+	switch cls.State {
+	case finalizeAlreadyDone:
+		return reportAlreadyFinalized(repoDir, msBranch, cls.Message)
+	case finalizeBranchGone, finalizeUnmerged:
+		// Both refusals are the classifier's own text — there is no second
+		// copy of the merge guard here to drift out of step with it.
+		return errors.New(cls.Message)
 	}
-	if !mergedIntoTarget {
-		return fmt.Errorf("origin/%s is not merged into origin/%s yet — has the milestone PR merged? Refusing so the milestone branch isn't lost",
-			msBranch, target)
-	}
+	target, mergedIntoMain := cls.Target, cls.MergedIntoMain
 
 	// A stacked child that still depends on this branch outranks the cleanup:
 	// deleting out from under its open PR is irreversible from its side.
@@ -324,6 +393,21 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 		}
 	}
 
+	// Record completion BEFORE the teardown, mirroring `dross phase complete`
+	// (its state save precedes its branch deletes for the same reason). The
+	// deletes are the step that can fail halfway — a protected branch, a
+	// pre-receive hook, an offline origin — and they are also the step that
+	// erases git's own evidence that this milestone merged. Writing the marker
+	// afterwards would leave the one state nothing can recover from: branch
+	// gone, status still active, and every later run refusing with a merge
+	// question no ref can answer.
+	if m, err := milestone.Load(milestone.FilePath(root, version)); err == nil {
+		m.Milestone.Status = milestoneStatusComplete
+		if err := m.Save(milestone.FilePath(root, version)); err != nil {
+			return fmt.Errorf("record milestone %s complete: %w", version, err)
+		}
+	}
+
 	// Delete the local milestone branch (only if it exists).
 	if err := gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+msBranch)...); err == nil {
 		if out, err := gitCombined(repoDir, gitRefArgs("branch", []string{"-D"}, msBranch)...); err != nil {
@@ -347,6 +431,21 @@ func milestoneFinalize(root, repoDir, mainBranch, msBranch, version string) erro
 		// Claiming main advanced when it did not is exactly the false
 		// completion state this milestone exists to stop.
 		Printf("milestone %s finalized — merged into %s (%s not advanced), %s deleted\n", version, target, mainBranch, msBranch)
+	}
+	return nil
+}
+
+// reportAlreadyFinalized is the exit-0 arm: say so, and if a milestone branch
+// is still sitting in the repo, name it and hand over the verb that removes it.
+//
+// It deletes nothing. A re-run of finalize is a question ("is this done?"), and
+// the answer arriving with a side-effect is how a safe-to-repeat command turns
+// into one people are afraid to type. `dross milestone prune` is the typed,
+// destructive counterpart (locked prune_surface).
+func reportAlreadyFinalized(repoDir, msBranch, message string) error {
+	Printf("%s\n", message)
+	if gitRefExists(repoDir, "refs/heads/"+msBranch) {
+		Printf("leftover branch %s is still here — `dross milestone prune` removes branches whose milestone is done\n", msBranch)
 	}
 	return nil
 }

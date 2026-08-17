@@ -53,10 +53,11 @@ import (
 //     ship/open.go's `ghCommand(args...)`, codex/ast_grep.go's
 //     `exec.Command("ast-grep", argv[1:]...)`, and the three mutation runners'
 //     `exec.Command(args[0], args[1:]...)` / `(full[0], full[1:]...)` in
-//     gremlins.go, stryker.go and stryker_net.go. Every one of them builds its
-//     argv through a fenced builder a few lines above — gitRefArgs/gitPathArgs,
-//     astGrepArgv, or an argfence.Fence call — which carries the guarantee this
-//     walk would otherwise check. A spread is invisible to an AST audit by
+//     gremlins.go, stryker.go and stryker_net.go, plus test.go's
+//     `exec.Command("sh", argv...)`. Every one of them builds its argv through a
+//     fenced builder a few lines above — gitRefArgs/gitPathArgs, astGrepArgv,
+//     shArgv, or an argfence.Fence call — which carries the guarantee this walk
+//     would otherwise check. A spread is invisible to an AST audit by
 //     construction; naming the shape here is more durable than line numbers that
 //     move.
 //
@@ -94,6 +95,19 @@ var valueTakingFlags = map[string]map[string]bool{
 	},
 	"npx":    {"--mutate": true, "--reporters": true},
 	"dotnet": {"--output": true, "--reporter": true},
+	// `go list -f <template>`: the template is a constant format string at
+	// every call site, but the carve-out has to exist or the value reads as an
+	// unfenced positional.
+	"go": {"-f": true},
+	// ssh and rsync carry the remote mutation run. Only the flags dross itself
+	// would ever emit are listed — an over-broad set here silently waves
+	// through the operand that follows, which for ssh is the destination host.
+	"ssh":   {"-o": true, "-i": true, "-p": true, "-l": true, "-F": true},
+	"rsync": {"-e": true, "--filter": true, "--exclude": true, "--rsh": true},
+	// sh's -c takes the script as its value. The rest of sh's options are
+	// boolean, which is the safe direction to err in: a false positive is
+	// something someone looks at, a missed one is a vector.
+	"sh": {"-c": true, "-o": true},
 }
 
 // separatorTokens are the end-of-options tokens any tool in the table uses.
@@ -107,6 +121,10 @@ var separatorTokens = map[string]bool{"--": true, "--end-of-options": true}
 // moving. Anything not listed is a finding under the fail-closed rule.
 var acceptedNonLiteralBinaries = map[string]string{
 	"update.go:newBinary": "self-exec of the just-downloaded, signature-verified binary; argv is the single literal \"install\"",
+	"test.go:argv[…]": "dross test's remote spawn seam. argv is built by internal/remote's SSHArgs or SyncArgs, which return an error INSTEAD of an argv unless the target passes remote's host/workdir allowlist, so argv[0] is always the literal \"ssh\" or \"rsync\" and every operand is validated before the argv exists. " +
+		"Written as Command(argv[0]) + an Args assignment rather than the spread form for the same reason remote.go is: a spread is skipped by this walk, so the spread form would be accommodated by accident.",
+	"remote.go:argv[…]": "internal/remote's single exec seam. argv[0] is always the literal \"ssh\" or \"rsync\" chosen by SSHArgs/SyncArgs/FetchArgs, and every operand is validated against remote's host/workdir allowlist before the argv exists. " +
+		"It is written as Command(argv[0]) + an Args assignment rather than the usual Command(argv[0], argv[1:]...) spread ON PURPOSE: a spread is skipped by this walk, so the spread form would be accommodated by accident. This form is accommodated on the record.",
 }
 
 // gitCallFuncs are the helpers whose variadic tail IS a git argv.
@@ -464,7 +482,7 @@ func auditSnippet(t *testing.T, lines ...string) []auditFinding {
 		"func gitCombined(dir string, a ...string) (string, error) { return \"\", nil }\n" +
 		"func gitNoOut(dir string, a ...string) error { return nil }\n" +
 		"func gitTrim(dir string, a ...string) (string, error) { return \"\", nil }\n" +
-		"func snippet(repoDir, branch, base, ref, path, msg, pkg, dir, fields, num, file, lang, pattern, mutate, chosen string) {\n"
+		"func snippet(repoDir, branch, base, ref, path, msg, pkg, dir, fields, num, file, lang, pattern, mutate, chosen, host string) {\n"
 	f, err := parser.ParseFile(fset, "snippet.go", preamble+strings.Join(lines, "\n")+"\n}\n", 0)
 	if err != nil {
 		t.Fatalf("snippet does not parse: %v\n%s", err, strings.Join(lines, "\n"))
@@ -517,6 +535,14 @@ func TestAuditScansMutationAndShip(t *testing.T) {
 	} {
 		assertAuditCovers(t, rel)
 	}
+}
+
+// TestAuditScansRemotePackage: internal/remote is where dross spawns ssh and
+// rsync, the two binaries in the table that can execute an arbitrary LOCAL
+// command from a flag (-o ProxyCommand, -e). A scan root that stopped covering
+// it would leave the worst case unwatched.
+func TestAuditScansRemotePackage(t *testing.T) {
+	assertAuditCovers(t, filepath.Join("internal", "remote", "remote.go"))
 }
 
 func assertAuditCovers(t *testing.T, rel string) {

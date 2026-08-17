@@ -143,6 +143,21 @@ func readDotted(p *project.Project, path string) (string, bool) {
 	if key, ok := stateMapKey(path); ok {
 		return p.Board.StateMap[key], true
 	}
+	// board.fields.<name> addresses one field-name override. Like state_map,
+	// the path is always known; an unset override reads back empty, and a
+	// project.toml with no [board.fields] table reads the struct's zero value
+	// rather than panicking on an absent table.
+	if key, ok := boardFieldKey(path); ok {
+		switch key {
+		case "state":
+			return p.Board.Fields.State, true
+		case "type":
+			return p.Board.Fields.Type, true
+		case "fix_versions":
+			return p.Board.Fields.FixVersions, true
+		}
+		return "", false
+	}
 	switch path {
 	// project
 	case "project.name":
@@ -285,7 +300,48 @@ func readDotted(p *project.Project, path string) (string, bool) {
 	return "", false
 }
 
+// enumKeys maps every enum-valued project.toml key to the set that defines it.
+//
+// One table, read by BOTH gates: writeDotted below refuses an out-of-set value
+// at set time, and validate re-checks the file. Set-time rejection is what a
+// human sees while they still remember what they meant; validate is what
+// catches the file nobody typed, because project.toml is tracked, hand-edited
+// and cloned. A value that never passed through the CLI was otherwise unchecked
+// forever — which was most of them.
+//
+// Before this table all five accepted anything: `runtime.mode=banana`
+// round-tripped through set and get, and `dross validate` reported it clean.
+var enumKeys = map[string]configenum.Set{
+	"runtime.mode":           configenum.RuntimeModes,
+	"repo.layout":            configenum.RepoLayouts,
+	"repo.commit_convention": configenum.CommitConventions,
+	"remote.provider":        configenum.ShipProviders,
+	"board.milestone_mode":   configenum.MilestoneModes,
+}
+
+// checkEnumValue reports an out-of-set value for an enum-valued key.
+//
+// An EMPTY value is always allowed: it means "unset this", and every optional
+// key's absence is legitimate. Reddening on it would fail every partially
+// filled project.toml, which is every project.toml between init and the first
+// full options pass.
+func checkEnumValue(path, value string) error {
+	set, ok := enumKeys[path]
+	if !ok || strings.TrimSpace(value) == "" {
+		return nil
+	}
+	if !set.Has(value) {
+		return fmt.Errorf("invalid %s %q; expected %s", path, value, set.List())
+	}
+	return nil
+}
+
 func writeDotted(p *project.Project, path, value string) error {
+	// Checked before anything is written, so a refused value leaves
+	// project.toml byte-unchanged — the same shape as the state_map arm below.
+	if err := checkEnumValue(path, value); err != nil {
+		return err
+	}
 	splitCSV := func(s string) []string {
 		out := []string{}
 		for _, x := range strings.Split(s, ",") {
@@ -320,6 +376,23 @@ func writeDotted(p *project.Project, path, value string) error {
 			p.Board.StateMap = map[string]string{}
 		}
 		p.Board.StateMap[key] = value
+		return nil
+	}
+	// One field-name override at a time, same shape as state_map. An
+	// unrecognised key is rejected before anything is written — a typo'd
+	// override that silently never applies is the same silent-breakage the
+	// state_map arm above refuses.
+	if key, ok := boardFieldKey(path); ok {
+		switch key {
+		case "state":
+			p.Board.Fields.State = value
+		case "type":
+			p.Board.Fields.Type = value
+		case "fix_versions":
+			p.Board.Fields.FixVersions = value
+		default:
+			return fmt.Errorf("unknown [board].fields key %q; expected state, type or fix_versions", key)
+		}
 		return nil
 	}
 	switch path {
@@ -476,6 +549,22 @@ func writeDotted(p *project.Project, path, value string) error {
 // address, which is exactly the repair path doctor's new check depends on.
 func stateMapKey(path string) (string, bool) {
 	key, ok := strings.CutPrefix(path, "board.state_map.")
+	if !ok || key == "" || strings.Contains(key, ".") {
+		return "", false
+	}
+	return configenum.Normalize(key), true
+}
+
+// boardFieldKey recognises a `board.fields.<name>` path and returns the field
+// key, normalized the same way state_map keys are so write, read and unset all
+// address the same override. Bare `board.fields` is not an addressable leaf.
+//
+// Recognising the prefix (rather than only the three valid suffixes) is
+// deliberate: it lets writeDotted reject `board.fields.bogus` by name and list
+// what is accepted, instead of falling through to the generic
+// "unknown or unsettable field".
+func boardFieldKey(path string) (string, bool) {
+	key, ok := strings.CutPrefix(path, "board.fields.")
 	if !ok || key == "" || strings.Contains(key, ".") {
 		return "", false
 	}

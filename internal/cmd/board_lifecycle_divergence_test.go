@@ -272,6 +272,112 @@ func TestStateMapsKeyExactlyTheEmittedStatuses(t *testing.T) {
 	}
 }
 
+// taskStatusWriteRE matches the plan-side status write at an execute edge:
+// `dross task status <phase> <task-id> <plan-status>`.
+var taskStatusWriteRE = regexp.MustCompile(`dross task status\s+\S+\s+\S+\s+([a-z_]+)`)
+
+// taskSyncEdgeRE matches the board-side write at the same edge:
+// `dross issue task-sync <phase> <task-id> --status <lifecycle-status>`.
+//
+// The task-id argument is required by the pattern, and required not to be a
+// flag: a `task-sync <phase> --status …` with no task id syncs the whole phase
+// at once, which is not an edge and must not satisfy either half below.
+var taskSyncEdgeRE = regexp.MustCompile(`dross issue task-sync\s+\S+\s+([^-\s]\S*)\s+--status\s+([a-z][a-z-]*)`)
+
+// taskEdges is the pairing c-2 actually claims: picking a task moves its card
+// to in-progress, committing it moves the card to a review state. The key is
+// the plan status execute writes at that edge; the value is the lifecycle
+// status the board write beside it must carry.
+var taskEdges = map[string]string{
+	"in_progress": "task-in-progress",
+	"done":        "task-in-review",
+}
+
+// TestTaskEdgesPairTheBoardStatusWithThePlanStatus pins WHICH execute edge
+// emits which task status.
+//
+// TestEmittedStatusesAreTheLifecycleSet above is a `--status <literal>` regex
+// over every prompt, so it only ever proves that both task literals appear
+// somewhere in the corpus. Transposing execute.md's pick and commit call sites
+// would invert c-2 — a picked task's card would jump straight to review and a
+// committed one would go back to in-progress — and that guard, and every other
+// test, would still pass.
+//
+// The anchor is the `dross task status` write execute already makes at the same
+// edge. That write is what actually defines the edge (in_progress means picked,
+// done means committed), so tying the board status to the plan status beside it
+// pins the pairing to something that cannot be relabelled without changing what
+// the loop does.
+func TestTaskEdgesPairTheBoardStatusWithThePlanStatus(t *testing.T) {
+	root := repoRootFromTest(t)
+	path := filepath.Join(root, "assets", "prompts", "execute.md")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+
+	// Walk the prompt in order, recording both kinds of write as they appear.
+	// Order is the whole signal here: a board write belongs to the plan write
+	// most recently above it, which is how the two lines of one code fence
+	// relate.
+	type event struct {
+		line   int
+		plan   string // set on a `dross task status` write
+		board  string // set on a `dross issue task-sync … --status` write
+		taskID string
+	}
+	var events []event
+	for i, line := range strings.Split(string(b), "\n") {
+		if m := taskStatusWriteRE.FindStringSubmatch(line); m != nil {
+			events = append(events, event{line: i + 1, plan: m[1]})
+		}
+		if m := taskSyncEdgeRE.FindStringSubmatch(line); m != nil {
+			events = append(events, event{line: i + 1, board: m[2], taskID: m[1]})
+		}
+	}
+
+	// paired[planStatus] is the board status found at that edge, so a missing
+	// edge and a duplicated one are both visible below.
+	paired := map[string][]string{}
+	lastPlan := ""
+	lastPlanLine := 0
+	for _, e := range events {
+		if e.plan != "" {
+			lastPlan = e.plan
+			lastPlanLine = e.line
+			continue
+		}
+		if lastPlan == "" {
+			t.Errorf("%s:%d syncs %s to the board with --status %q, but no `dross task status` write precedes it — nothing says which edge this is",
+				path, e.line, e.taskID, e.board)
+			continue
+		}
+		want, known := taskEdges[lastPlan]
+		if !known {
+			t.Errorf("%s:%d writes plan status %q (line %d) and then board status %q, but %q is not an edge this guard knows — add it to taskEdges or the pairing is unchecked",
+				path, e.line, lastPlan, lastPlanLine, e.board, lastPlan)
+			continue
+		}
+		if e.board != want {
+			t.Errorf("%s:%d emits --status %q at the edge that writes plan status %q (line %d), want %q — picking a task must move its card to %s and committing it to %s",
+				path, e.line, e.board, lastPlan, lastPlanLine, want, taskEdges["in_progress"], taskEdges["done"])
+		}
+		paired[lastPlan] = append(paired[lastPlan], e.board)
+	}
+
+	for plan, want := range taskEdges {
+		switch got := paired[plan]; len(got) {
+		case 1: // the shape we want
+		case 0:
+			t.Errorf("no board write follows the `dross task status … %s` edge in %s — that edge stops moving the card, and %q would become a lifecycle status nothing emits",
+				plan, path, want)
+		default:
+			t.Errorf("%d board writes follow the `dross task status … %s` edge in %s (%s) — one edge, one card move",
+				len(got), plan, path, strings.Join(got, ", "))
+		}
+	}
+}
+
 // sortedSet renders a status->where map's keys for an error message.
 func sortedSet(m map[string]string) []string {
 	out := make([]string, 0, len(m))

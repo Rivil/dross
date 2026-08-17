@@ -1406,3 +1406,59 @@ func TestPromptsNeverStageStateJSONByPath(t *testing.T) {
 		}
 	}
 }
+
+// TestAutoCommitDrossDirtLeavesTheIndexEmpty is the evidence behind
+// ship.go:264's acceptance.
+//
+// Ship's staged-changes guard reads `git diff --cached --quiet` and commits
+// whatever is left staged — but by the time it runs, autoCommitDrossDirt has
+// already `git add .dross` and committed, and the pre-stage gate refuses any
+// non-.dross dirt before anything is staged at all. So the index is empty on
+// every path into that guard and its commit branch cannot be reached.
+//
+// This pins the premise rather than the conclusion: if autoCommitDrossDirt ever
+// stops draining the index, this fails and the branch becomes reachable — at
+// which point it owes a test, not a reason.
+func TestAutoCommitDrossDirtLeavesTheIndexEmpty(t *testing.T) {
+	cases := []struct {
+		name  string
+		dirty bool
+	}{
+		{"with .dross dirt to commit", true},
+		{"with nothing to commit", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			gitInit(t, dir, "")
+			chdir(t, dir)
+			if err := runCmd(t, Init()); err != nil {
+				t.Fatal(err)
+			}
+			mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+			gitCommit(t, dir, "baseline")
+
+			if tc.dirty {
+				mustWrite(t, filepath.Join(dir, ".dross", "handoff.md"), "# handoff\n")
+			}
+
+			committed, err := autoCommitDrossDirt(dir, "shipping")
+			if err != nil {
+				t.Fatalf("autoCommitDrossDirt: %v", err)
+			}
+			if committed != tc.dirty {
+				t.Errorf("committed = %v, want %v", committed, tc.dirty)
+			}
+
+			// The index must be empty afterwards — that is what makes ship's
+			// later staged-changes commit unreachable.
+			if err := gitNoOut(dir, "diff", "--cached", "--quiet"); err != nil {
+				staged, _ := gitCombined(dir, "diff", "--cached", "--name-only")
+				t.Errorf("the index is not empty after autoCommitDrossDirt (%v) — ship.go's "+
+					"staged-changes commit is now reachable and needs a test, not an acceptance. Staged:\n%s",
+					err, staged)
+			}
+		})
+	}
+}

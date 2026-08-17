@@ -283,9 +283,9 @@ const gatedTestCommand = "go test -count=1 ./..."
 func refuseAdapters(t *testing.T) {
 	t.Helper()
 	prev := configuredAdaptersFn
-	configuredAdaptersFn = func(p *project.Project, root string, skip bool) []mutation.Adapter {
+	configuredAdaptersFn = func(p *project.Project, root string, skip bool) ([]mutation.Adapter, mutationTuning, error) {
 		t.Fatal("verify reached configuredAdapters despite refusing — the refusal spawned the mutation tools it was declining to authorize")
-		return nil
+		return nil, mutationTuning{}, nil
 	}
 	t.Cleanup(func() { configuredAdaptersFn = prev })
 }
@@ -348,6 +348,7 @@ func TestExecGatedSetIsExplicit(t *testing.T) {
 		"state bump",
 		"task next",
 		"task status in_progress",
+		"test",
 		"verify",
 	}
 	got := append([]string(nil), execGatedCommands...)
@@ -358,7 +359,7 @@ func TestExecGatedSetIsExplicit(t *testing.T) {
 	// The declaration must match reality: every named command actually refuses.
 	// TestGatedCommandsRefuse drives exactly these five, so a name added here
 	// without a matching row (or a call site) shows up there.
-	if len(execGatedCommands) != 5 {
+	if len(execGatedCommands) != 6 {
 		t.Errorf("the gated set changed size — add or remove the matching row in TestGatedCommandsRefuse")
 	}
 }
@@ -499,5 +500,43 @@ func TestEmptyTestCommandDoesNotBypassGate(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "dross trust") {
 		t.Errorf("refusal does not name the remedy: %v", err)
+	}
+}
+
+// TestTrustWithoutATestCommandRefuses covers the nothing-to-trust branch.
+// Consent is bound to the exact test command (that is what TestFingerprint
+// pins), so with no command configured there is nothing to bind to — granting
+// anyway would record consent for the empty string and then silently satisfy
+// the gate for whatever command was set later.
+//
+// The message has to route the user to the fix; a bare refusal leaves them
+// re-running `dross trust` and getting the same wall.
+func TestTrustWithoutATestCommandRefuses(t *testing.T) {
+	dir := realTempDir(t)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	mustRunSet(t, "project.name", "test-app")
+	// runtime.test_command deliberately left unset.
+
+	err := runCmd(t, Trust())
+	if err == nil {
+		t.Fatal("`dross trust` with no runtime.test_command exited 0 — it recorded consent for nothing")
+	}
+	for _, want := range []string{
+		"nothing to trust",
+		"runtime.test_command",
+		"dross project set",
+		"consent is bound to the command",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal %q does not mention %q", err, want)
+		}
+	}
+
+	// And nothing was written: a refused trust must not leave a consent record.
+	if state, cerr := CheckConsent(filepath.Join(dir, ".dross"), dir, ""); cerr == nil {
+		t.Errorf("a refused trust granted consent anyway (state=%v)", state)
 	}
 }

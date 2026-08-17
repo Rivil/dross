@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/Rivil/dross/internal/milestone"
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/rules"
@@ -47,8 +48,12 @@ func Validate() *cobra.Command {
 					problems = append(problems, "project.toml: project.version is empty")
 				}
 				if p.Runtime.Mode == "" {
-					problems = append(problems, "project.toml: runtime.mode is empty (docker | native | hybrid)")
+					// Interpolated from the Set rather than typed out, so this
+					// message cannot name a value the code no longer accepts —
+					// which is exactly what it did while it offered hybrid.
+					problems = append(problems, fmt.Sprintf("project.toml: runtime.mode is empty (%s)", configenum.RuntimeModes.List()))
 				}
+				problems = append(problems, enumProblems(p)...)
 			}
 
 			// state.json
@@ -70,19 +75,10 @@ func Validate() *cobra.Command {
 			// Valid deferred-target slugs: any existing phase dir, or any slug
 			// parked in a milestone's phases array. A target outside this set is
 			// dangling — it would silently break the 1:1 re-surface it routes to.
-			validTargets := map[string]bool{}
-			for _, id := range phaseIDs {
-				validTargets[id] = true
-			}
-			if versions, err := milestone.List(root); err == nil {
-				for _, v := range versions {
-					if m, err := milestone.Load(milestone.FilePath(root, v)); err == nil {
-						for _, ph := range m.Phases {
-							validTargets[ph] = true
-						}
-					}
-				}
-			}
+			// The set is built by the same helper `deferred route --target` and
+			// `deferred add --target` gate on, so a target the CLI accepts can
+			// never be one validate calls dangling (locked target_validation).
+			validTargets := deferredTargetSet(root)
 
 			for _, id := range phaseIDs {
 				dir := phase.Dir(root, id)
@@ -113,11 +109,27 @@ func Validate() *cobra.Command {
 					}
 				}
 				if spec != nil {
-					for _, d := range spec.Deferred {
-						if d.Target != "" && !validTargets[d.Target] {
-							problems = append(problems, fmt.Sprintf("%s: deferred target %q names no phase dir or milestone.phases entry", specPath, d.Target))
-						}
-					}
+					problems = append(problems, danglingTargets(specPath, spec, validTargets)...)
+				}
+			}
+
+			// The reserved project-store slug must never be a phase directory:
+			// two sources would share the slug, making `_project 0` name two
+			// different items. `deferred list` skips it; validate says why.
+			for _, id := range phaseIDs {
+				if id == projectStoreSlug {
+					problems = append(problems, fmt.Sprintf("%s: %q is reserved for the project-level deferred store — rename the phase directory", filepath.Join("phases", id), projectStoreSlug))
+				}
+			}
+
+			// The project store carries routed items too, and is hand-editable
+			// like any spec, so it gets the same dangling-target walk.
+			storePath := filepath.Join(root, "deferred.toml")
+			if _, err := os.Stat(storePath); err == nil {
+				if store, err := phase.LoadSpec(storePath); err != nil {
+					problems = append(problems, fmt.Sprintf("%s: %v", storePath, err))
+				} else {
+					problems = append(problems, danglingTargets(storePath, store, validTargets)...)
 				}
 			}
 
@@ -131,6 +143,59 @@ func Validate() *cobra.Command {
 			return fmt.Errorf("%d problem(s) found", len(problems))
 		},
 	}
+}
+
+// enumProblems reports every enum-valued project.toml key holding a value its
+// set does not accept.
+//
+// This is the second of the two gates the enum_enforcement_point decision
+// requires, and it reads the SAME enumKeys table `project set` refuses on
+// (project.go) — not a restated list. Set-time rejection only ever sees values
+// a human typed at the CLI; project.toml is a tracked file that gets
+// hand-edited, cloned and carried forward across versions, so a value that
+// never passed through the setter would otherwise go unchecked forever. That
+// was most of them.
+//
+// An EMPTY value is never reported here. Empty means unset, every optional
+// key's absence is legitimate, and the one key where empty is itself a problem
+// (runtime.mode) is reported by its own check above — folding it in here would
+// report it twice and word it worse.
+//
+// Keys are walked in sorted order so a project.toml with several bad values
+// produces the same problem list every run.
+func enumProblems(p *project.Project) []string {
+	keys := make([]string, 0, len(enumKeys))
+	for k := range enumKeys {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var problems []string
+	for _, k := range keys {
+		v, ok := readDotted(p, k)
+		if !ok || strings.TrimSpace(v) == "" {
+			continue
+		}
+		if set := enumKeys[k]; !set.Has(v) {
+			// Both the key and the offending value, then what IS allowed.
+			// "invalid value" alone sends the reader to the source.
+			problems = append(problems, fmt.Sprintf("project.toml: %s = %q is not a valid value (%s)", k, v, set.List()))
+		}
+	}
+	return problems
+}
+
+// danglingTargets reports every [[deferred]] target in one source that names no
+// valid destination. Shared by the phase-spec walk and the project store so both
+// are judged by exactly the same rule and reported in the same shape.
+func danglingTargets(path string, spec *phase.Spec, valid map[string]bool) []string {
+	var problems []string
+	for _, d := range spec.Deferred {
+		if d.Target != "" && !valid[d.Target] {
+			problems = append(problems, fmt.Sprintf("%s: deferred target %q names no phase dir or milestone.phases entry", path, d.Target))
+		}
+	}
+	return problems
 }
 
 // loadIfExists skips missing files quietly.

@@ -234,3 +234,42 @@ func TestAnalyzersTrackProfile(t *testing.T) {
 		t.Error("agnostic analyzer scc must remain available")
 	}
 }
+
+// TestAppliesToMatchesLanguageOrAgnostic drives AppliesTo directly over all
+// three shapes. The catalog tests above reach it only through AnalyzersFor,
+// which never presents a dedicated analyzer with a non-matching language — so
+// the loop's match branch and its fall-through were never both exercised.
+//
+// A wrong answer here is silent: the run simply skips an analyzer, and the
+// report reads as clean because nobody looked.
+func TestAppliesToMatchesLanguageOrAgnostic(t *testing.T) {
+	agnostic := Analyzer{Name: "scc"}
+	dedicated := Analyzer{Name: "gocyclo", Languages: []string{"go", "rust"}}
+
+	cases := []struct {
+		name     string
+		analyzer Analyzer
+		lang     string
+		want     bool
+	}{
+		{"agnostic applies to anything", agnostic, "go", true},
+		{"agnostic applies to an unknown language", agnostic, "brainfuck", true},
+		{"dedicated applies to its first language", dedicated, "go", true},
+		{"dedicated applies to a later language", dedicated, "rust", true},
+		{"dedicated does not apply elsewhere", dedicated, "typescript", false},
+		{"dedicated does not apply to the empty language", dedicated, "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.analyzer.AppliesTo(tc.lang); got != tc.want {
+				t.Errorf("%s.AppliesTo(%q) = %v, want %v", tc.analyzer.Name, tc.lang, got, tc.want)
+			}
+		})
+	}
+
+	// The two arms must disagree for the same language, or the agnostic
+	// shortcut could be dropped without any of the rows failing.
+	if agnostic.AppliesTo("typescript") == dedicated.AppliesTo("typescript") {
+		t.Error("agnostic and dedicated analyzers agree on a non-listed language — the shortcut is unexercised")
+	}
+}

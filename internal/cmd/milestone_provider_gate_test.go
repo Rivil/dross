@@ -49,7 +49,7 @@ func configureRemoteAndCommit(t *testing.T, dir string) {
 // An open PR on the forge blocks the delete even when the record scan is clean
 // — that is the whole point of the second layer.
 func TestPruneRefusesOnOpenProviderPR(t *testing.T) {
-	dir := stackedDeleteFixture(t, true)
+	dir := stackedPruneFixture(t)
 	// Clear the record-scan dependent so only the provider gate can refuse.
 	writeMilestoneWithBase(t, dir, "v1.3", "main")
 	configureRemoteAndCommit(t, dir)
@@ -78,7 +78,7 @@ func TestPruneRefusesOnOpenProviderPR(t *testing.T) {
 // comma-join inside the loop and the len(prs)!=1 -> "PRs " prefix both need
 // two or more results to fire.
 func TestPruneRefusesNamingAllOpenProviderPRs(t *testing.T) {
-	dir := stackedDeleteFixture(t, true)
+	dir := stackedPruneFixture(t)
 	writeMilestoneWithBase(t, dir, "v1.3", "main")
 	configureRemoteAndCommit(t, dir)
 	stubOpenPRs(t, []ship.BasePR{
@@ -129,13 +129,13 @@ func TestFinalizeRefusesOnOpenProviderPR(t *testing.T) {
 // A lookup failure is announced and the command proceeds on the record scan —
 // a silent swallow would read as "the forge confirmed nothing depends on this".
 func TestPruneAnnouncesProviderLookupSkip(t *testing.T) {
-	dir := stackedDeleteFixture(t, true)
+	dir := stackedPruneFixture(t)
 	writeMilestoneWithBase(t, dir, "v1.3", "main")
 	configureRemoteAndCommit(t, dir)
 	stubOpenPRs(t, nil, errors.New("gh not installed"))
 
 	var out string
-	if err := runCmdCapturing(t, &out, Milestone(), "prune"); err != nil {
+	if err := runCmdCapturing(t, &out, Milestone(), "prune", "--yes"); err != nil {
 		t.Fatalf("a failed lookup must not block a clean record scan: %v", err)
 	}
 	if !strings.Contains(out, "open-PR check skipped") || !strings.Contains(out, "gh not installed") {
@@ -149,12 +149,12 @@ func TestPruneAnnouncesProviderLookupSkip(t *testing.T) {
 // No provider configured: same announced skip, and nothing is asked of a forge
 // that isn't there.
 func TestPruneAnnouncesSkipWithNoProvider(t *testing.T) {
-	dir := stackedDeleteFixture(t, true)
+	dir := stackedPruneFixture(t)
 	writeMilestoneWithBase(t, dir, "v1.3", "main")
 	rec := stubOpenPRs(t, []ship.BasePR{{Number: 7}}, nil)
 
 	var out string
-	if err := runCmdCapturing(t, &out, Milestone(), "prune"); err != nil {
+	if err := runCmdCapturing(t, &out, Milestone(), "prune", "--yes"); err != nil {
 		t.Fatalf("prune: %v", err)
 	}
 	if !strings.Contains(out, "open-PR check skipped") {

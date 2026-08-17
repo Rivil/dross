@@ -2,7 +2,10 @@ package mutation
 
 import (
 	"math"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -144,6 +147,70 @@ func TestParseStrykerJSONErrorClassification(t *testing.T) {
 	// Score is 0/0 → guarded to remain 0
 	if r.Score != 0 {
 		t.Errorf("score with no scoring mutants should be 0; got %v", r.Score)
+	}
+}
+
+// TestParseStrykerJSONPerFileAttribution pins the same per-file contract the
+// gremlins parser owes, on the file-granular adapter: every status lands in a
+// row keyed by the report's own path, and the aggregates are untouched.
+func TestParseStrykerJSONPerFileAttribution(t *testing.T) {
+	r, err := ParseStrykerJSON([]byte(fixtureSimple))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]FileStat{"src/api/tags.ts": {Killed: 3, Survived: 1, Timeout: 1}}
+	if !reflect.DeepEqual(r.Files, want) {
+		t.Errorf("per-file rows:\n got %+v\nwant %+v", r.Files, want)
+	}
+	if r.Killed != 3 || r.Survived != 1 || r.Timeout != 1 {
+		t.Errorf("aggregates changed: killed=%d survived=%d timeout=%d", r.Killed, r.Survived, r.Timeout)
+	}
+	assertPerFileMatchesAggregate(t, r)
+}
+
+// TestParseStrykerJSONPerFileNoDrift runs the drift invariant over the other
+// fixtures — NoCoverage (survived) and the error/ignored classification,
+// where Ignored and Pending must contribute to neither a total nor a row.
+func TestParseStrykerJSONPerFileNoDrift(t *testing.T) {
+	for name, payload := range map[string]string{
+		"no coverage":        fixtureNoCoverage,
+		"errors and ignored": fixtureErrorsAndIgnored,
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, err := ParseStrykerJSON([]byte(payload))
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertPerFileMatchesAggregate(t, r)
+		})
+	}
+}
+
+// TestStrykerRePrefixMovesPerFileKeys: the workdir prefix must be applied to
+// the per-file rows as well as to Surviving. If the two disagree, diff scoping
+// scores a mutant out (row key unmatched) while still reporting it as a
+// survivor (Surviving path matched) — worse than either error alone.
+func TestStrykerRePrefixMovesPerFileKeys(t *testing.T) {
+	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
+	r := &Report{
+		Surviving: []Mutant{{File: "src/a.ts", Line: 3}},
+		Files:     map[string]FileStat{"src/a.ts": {Survived: 1}},
+	}
+	s.rePrefixFiles(r)
+	if r.Surviving[0].File != "web/src/a.ts" {
+		t.Errorf("surviving path: %q want web/src/a.ts", r.Surviving[0].File)
+	}
+	want := map[string]FileStat{"web/src/a.ts": {Survived: 1}}
+	if !reflect.DeepEqual(r.Files, want) {
+		t.Errorf("per-file key must track Surviving:\n got %+v\nwant %+v", r.Files, want)
+	}
+
+	// Workdir unset: rows pass through untouched.
+	bare := &Stryker{ProjectRoot: "/repo"}
+	r2 := &Report{Files: map[string]FileStat{"src/a.ts": {Killed: 1}}}
+	bare.rePrefixFiles(r2)
+	if _, ok := r2.Files["src/a.ts"]; !ok || len(r2.Files) != 1 {
+		t.Errorf("no-workdir rePrefix must be a no-op: %+v", r2.Files)
 	}
 }
 
@@ -341,5 +408,137 @@ func TestStrykerHintUsesSamePin(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), strykerPin) {
 		t.Errorf("install hint does not carry %s: %v", strykerPin, err)
+	}
+}
+
+// fakeStryker swaps the process-construction seam for one that runs `true` and
+// lets the caller decide what — if anything — lands at the report path. Every
+// error seam in Run() is downstream of "what stryker left on disk", so that is
+// the only knob these tests need.
+func fakeStryker(t *testing.T, s *Stryker, place func(reportPath string)) func() {
+	t.Helper()
+	orig := strykerBuildCmd
+	strykerBuildCmd = func(_ *Stryker, _ []string) *exec.Cmd {
+		path := s.reportPath()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("prepare fake report dir: %v", err)
+		}
+		if place != nil {
+			place(path)
+		}
+		return exec.Command("true")
+	}
+	return func() { strykerBuildCmd = orig }
+}
+
+// TestStrykerRunDistinguishesMissingFromUnreadable pins both arms of the
+// report-read guard. "Stryker wrote nothing" is a config problem the message
+// must name the expected path for; anything else is an I/O failure that must
+// surface as-is. Collapsing them — which is what dropping the ErrNotExist
+// discrimination does — sends a user with a permissions problem to go audit
+// their stryker config.
+func TestStrykerRunDistinguishesMissingFromUnreadable(t *testing.T) {
+	t.Run("no report written", func(t *testing.T) {
+		s := &Stryker{ProjectRoot: t.TempDir()}
+		defer fakeStryker(t, s, nil)()
+
+		rep, err := s.Run([]string{"src/a.ts"})
+		if err == nil {
+			t.Fatal("Run with no report on disk returned nil error")
+		}
+		if rep != nil {
+			t.Errorf("Run returned a report alongside its error: %+v", rep)
+		}
+		if !strings.Contains(err.Error(), "did not write a report") {
+			t.Errorf("err = %q, want it to say the report was never written", err)
+		}
+		if !strings.Contains(err.Error(), s.reportPath()) {
+			t.Errorf("err = %q, want it to name the expected path %q", err, s.reportPath())
+		}
+	})
+
+	t.Run("report path is unreadable", func(t *testing.T) {
+		s := &Stryker{ProjectRoot: t.TempDir()}
+		// A directory where the report should be: ReadFile fails with
+		// something that is NOT fs.ErrNotExist.
+		defer fakeStryker(t, s, func(path string) {
+			if err := os.MkdirAll(path, 0o755); err != nil {
+				t.Fatalf("place directory at report path: %v", err)
+			}
+		})()
+
+		_, err := s.Run([]string{"src/a.ts"})
+		if err == nil {
+			t.Fatal("Run with an unreadable report returned nil error")
+		}
+		if !strings.HasPrefix(err.Error(), "read stryker report:") {
+			t.Errorf("err = %q, want it to begin \"read stryker report:\"", err)
+		}
+		if strings.Contains(err.Error(), "did not write a report") {
+			t.Error("an unreadable report was reported as a missing one")
+		}
+	})
+}
+
+// TestStrykerRunSurfacesParseError: a report stryker wrote but nobody can parse
+// must abort the run with the decode error and no report. Dropping the error
+// check after parsing hands the caller a nil *Report that the next line
+// dereferences.
+func TestStrykerRunSurfacesParseError(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	defer fakeStryker(t, s, func(path string) {
+		if err := os.WriteFile(path, []byte("this is not json"), 0o644); err != nil {
+			t.Fatalf("write malformed report: %v", err)
+		}
+	})()
+
+	rep, err := s.Run([]string{"src/a.ts"})
+	if err == nil {
+		t.Fatal("Run over a malformed report returned nil error")
+	}
+	if rep != nil {
+		t.Errorf("Run returned a report alongside its parse error: %+v", rep)
+	}
+	if !strings.Contains(err.Error(), "decode stryker report") {
+		t.Errorf("err = %q, want the ParseStrykerJSON error", err)
+	}
+}
+
+// TestStrykerRunUnknownStatusCountsAsError drives Run's whole happy path and
+// pins the default arm of the status switch. An unrecognised status is counted
+// as an error so a stryker release that renames a status is loud rather than
+// silently dropping mutants out of the denominator — and the count is asserted
+// as an exact equality, so flipping `r.Errors++` to `r.Errors--` yields -1.
+func TestStrykerRunUnknownStatusCountsAsError(t *testing.T) {
+	payload, err := os.ReadFile(filepath.Join("testdata", "stryker-unknown-status.json"))
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	// Guard the premise: a fixture whose status is later "fixed" to a known
+	// one would make this pass while exercising the wrong arm.
+	if !strings.Contains(string(payload), `"status": "Quantum"`) {
+		t.Fatalf("fixture must carry an unrecognised status:\n%s", payload)
+	}
+
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	defer fakeStryker(t, s, func(path string) {
+		if err := os.WriteFile(path, payload, 0o644); err != nil {
+			t.Fatalf("write fixture report: %v", err)
+		}
+	})()
+
+	rep, err := s.Run([]string{"src/a.ts"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if rep.Errors != 1 {
+		t.Errorf("Errors = %d, want exactly 1", rep.Errors)
+	}
+	if rep.Killed != 0 || rep.Survived != 0 || rep.Timeout != 0 {
+		t.Errorf("an unknown status must count ONLY as an error, got %+v", rep)
+	}
+	want := map[string]FileStat{"src/a.ts": {Errors: 1}}
+	if !reflect.DeepEqual(rep.Files, want) {
+		t.Errorf("per-file rows:\n got %+v\nwant %+v", rep.Files, want)
 	}
 }
