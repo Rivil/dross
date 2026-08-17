@@ -109,15 +109,35 @@ func remoteAssignments(dir string, vars []string) []string {
 	return out
 }
 
-// remoteScratchDir is where a remote run's scratch lives: under the granted
-// workdir, never the host's default temp.
+// scratchDirFor is where a run's scratch lives: BESIDE the tree, on the same
+// volume, never inside it and never in the machine's default temp.
 //
-// The workdir is the path the operator deliberately chose for this repo's work,
-// so its volume is the one they meant this to use. The host's temp is whatever
-// the host happened to configure — on helicon, RAM.
-func remoteScratchDir(workdir string) string {
-	return filepath.Join(workdir, ".dross-cache")
+// Two constraints, and only one placement satisfies both.
+//
+// Not the default temp, because that is whatever the machine happened to
+// configure — on helicon it is a 32 GB tmpfs in RAM shared with a running LLM,
+// where a build cache is an outage rather than a slowdown. The tree's own
+// parent is on the volume the operator deliberately chose for this work.
+//
+// Not inside the tree, which the first live run proved the hard way. The
+// exported TMPDIR is what gremlins copies the module through, so every
+// t.TempDir() in the suite became a child of the repo — and every test that
+// asserts dross cannot find a root from a scratch directory started finding
+// one, because FindRoot walked up into the very repo under test. Nine tests
+// went red on the host and green locally for a reason that had nothing to do
+// with the code. A cache inside the tree also lands in git status and in the
+// adapters' own file scans.
+//
+// Keyed by the tree's base name so two repos on one machine do not share.
+func scratchDirFor(tree string) string {
+	tree = filepath.Clean(tree)
+	return filepath.Join(filepath.Dir(tree), ".dross-cache", filepath.Base(tree))
 }
+
+// remoteScratchDir is scratchDirFor for a path on another machine. Named
+// separately because the remote path is never created by this process and never
+// resolved against this filesystem.
+func remoteScratchDir(workdir string) string { return scratchDirFor(workdir) }
 
 func (s *scratch) report(format string, args ...any) {
 	if s == nil || s.reporter == nil {

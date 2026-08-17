@@ -137,14 +137,18 @@ func TestRemoteScriptExportsTmpdir(t *testing.T) {
 	if tmpdir == "" {
 		t.Fatal("the remote run exports no TMPDIR — the harness's own copy stays on the host's default volume")
 	}
-	if !strings.HasPrefix(tmpdir, target.Workdir+"/") {
-		t.Errorf("TMPDIR = %q, want a path under the granted workdir", tmpdir)
+	if tmpdir != remoteScratchDir(target.Workdir) {
+		t.Errorf("TMPDIR = %q, want this run's scratch %q", tmpdir, remoteScratchDir(target.Workdir))
+	}
+	if strings.HasPrefix(tmpdir, target.Workdir+"/") {
+		t.Errorf("TMPDIR = %q is inside the tree — every t.TempDir() in the suite would become a child of the repo", tmpdir)
 	}
 }
 
-// TestRemoteScratchIsUnderWorkdir: never the host's temp. This is the locked
-// scratch_location decision stated as an assertion.
-func TestRemoteScratchIsUnderWorkdir(t *testing.T) {
+// TestRemoteScratchIsBesideWorkdir: on the volume the operator granted, never
+// the host's temp, and never inside the tree. This is the locked
+// scratch_location decision as the first live run corrected it.
+func TestRemoteScratchIsBesideWorkdir(t *testing.T) {
 	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
 	l := scratchLauncher(t, target, []string{"GOCACHE", "GOMODCACHE"})
 
@@ -157,8 +161,11 @@ func TestRemoteScratchIsUnderWorkdir(t *testing.T) {
 		switch e.Name {
 		case "GOCACHE", "GOMODCACHE", "TMPDIR":
 			seen++
-			if !strings.HasPrefix(e.Value, target.Workdir+"/") {
-				t.Errorf("%s = %q, which is not under the granted workdir", e.Name, e.Value)
+			if strings.HasPrefix(e.Value, target.Workdir+"/") {
+				t.Errorf("%s = %q is INSIDE the tree — the failure the first live run found", e.Name, e.Value)
+			}
+			if filepath.Dir(filepath.Dir(e.Value)) != filepath.Dir(target.Workdir) {
+				t.Errorf("%s = %q is not beside the granted workdir, so it may not share its volume", e.Name, e.Value)
 			}
 			if strings.HasPrefix(e.Value, "/tmp") || strings.HasPrefix(e.Value, "/var/tmp") {
 				t.Errorf("%s = %q landed in a host temp path — on helicon that is a 32 G tmpfs in RAM", e.Name, e.Value)
@@ -240,5 +247,197 @@ func TestScratchIsReusedWithinARun(t *testing.T) {
 	b, _ := envValue(second, "GOCACHE")
 	if a == "" || a != b {
 		t.Errorf("two packages in one run used different caches: %q vs %q", a, b)
+	}
+}
+
+// TestRemoteScriptCreatesScratchDir: exporting a path without creating it is not
+// a redirection, it is a broken run.
+//
+// This is the defect the real verify caught and the unit tests did not: gremlins
+// copies the module through os.MkdirTemp, which honours the exported TMPDIR and
+// fails outright against a directory that does not exist — "impossible to create
+// the workdir", and the run ends before measuring anything.
+func TestRemoteScriptCreatesScratchDir(t *testing.T) {
+	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	l := scratchLauncher(t, target, []string{"GOCACHE"})
+	rec := recordRemote(t, nil)
+
+	if _, err := l.toolCmd([]string{"gremlins", "unleash"}, localOf); err != nil {
+		t.Fatal(err)
+	}
+	if len(remoteScripts(*rec)) == 0 {
+		t.Fatal("no remote script was built")
+	}
+	script := remoteScripts(*rec)[0]
+	dir := remoteScratchDir(target.Workdir)
+
+	mk := strings.Index(script, "mkdir")
+	tool := strings.Index(script, "gremlins")
+	if mk < 0 {
+		t.Fatalf("the script never creates the scratch it exports:\n%s", script)
+	}
+	if tool >= 0 && mk > tool {
+		t.Errorf("mkdir runs AFTER the tool — TMPDIR is already missing by then:\n%s", script)
+	}
+	if !strings.Contains(script, dir) {
+		t.Errorf("the script does not create %q:\n%s", dir, script)
+	}
+}
+
+// TestRemoteRunWithNoCacheVarsCreatesNothing: the no-op case must not gain an
+// mkdir it never had.
+func TestRemoteRunWithNoCacheVarsCreatesNothing(t *testing.T) {
+	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	l := scratchLauncher(t, target, nil)
+	rec := recordRemote(t, nil)
+
+	if _, err := l.toolCmd([]string{"gremlins", "unleash"}, localOf); err != nil {
+		t.Fatal(err)
+	}
+	ss := remoteScripts(*rec)
+	if len(ss) > 0 && strings.Contains(ss[0], "mkdir") {
+		t.Errorf("a run with no declared cache var still creates a scratch:\n%s", ss[0])
+	}
+}
+
+// TestRemoteCloseWipesScratch: c-2 on the remote side. Without this the host
+// accumulates a build cache per repo forever — the same unbounded growth,
+// moved to a machine nobody is watching.
+func TestRemoteCloseWipesScratch(t *testing.T) {
+	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	root := t.TempDir()
+	l, err := newLauncher("gremlins", "", target, root, "", []string{"GOCACHE"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := recordRemote(t, nil)
+
+	if err := l.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	ss := remoteScripts(*rec)
+	if len(ss) == 0 {
+		t.Fatal("Close issued no remote command — the host keeps the scratch")
+	}
+	last := ss[len(ss)-1]
+	// The script quotes every argument, so the removal reads `'rm' '-rf' '...'`.
+	if !strings.Contains(last, "'rm'") || !strings.Contains(last, "'-rf'") {
+		t.Errorf("Close did not remove the remote scratch:\n%s", last)
+	}
+	if !strings.Contains(last, remoteScratchDir(target.Workdir)) {
+		t.Errorf("the removal does not name this run's scratch:\n%s", last)
+	}
+
+	// Idempotent: a deferred Close and an explicit one must not each pay for a
+	// round trip, nor error.
+	before := len(remoteScripts(*rec))
+	if err := l.Close(); err != nil {
+		t.Errorf("second Close: %v", err)
+	}
+	if now := len(remoteScripts(*rec)); now != before {
+		t.Errorf("a second Close issued another remote command (%d -> %d)", before, now)
+	}
+}
+
+// TestRemoteWipeRefusesForeignPath: an `rm -rf` is the one command worth being
+// paranoid about. It is built only from a path this code derived itself.
+func TestRemoteWipeRefusesForeignPath(t *testing.T) {
+	target := &remote.Target{Host: "helicon", Workdir: "/home/rivil/dross"}
+	root := t.TempDir()
+	l, err := newLauncher("gremlins", "", target, root, "", []string{"GOCACHE"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := recordRemote(t, nil)
+
+	// A workdir swapped underneath the launcher after the scratch was derived.
+	// Both guards must hold: the path no longer matches the derivation, and it
+	// is far too close to the filesystem root to remove.
+	l.Target = &remote.Target{Host: "helicon", Workdir: "/"}
+	if err := l.removeRemoteScratch(); err == nil {
+		t.Fatal("a scratch path outside the granted workdir was removed")
+	}
+	for _, s := range remoteScripts(*rec) {
+		if strings.Contains(s, "'rm'") {
+			t.Errorf("a removal was issued despite the refusal:\n%s", s)
+		}
+	}
+}
+
+// TestLocalCloseIssuesNoRemoteCommand: a local run has no host to talk to, and
+// an ssh round trip on every local Close would be a cost paid for nothing.
+func TestLocalCloseIssuesNoRemoteCommand(t *testing.T) {
+	l := scratchLauncher(t, nil, []string{"GOCACHE"})
+	rec := recordRemote(t, nil)
+
+	if _, err := l.toolCmd([]string{"gremlins"}, localOf); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if ss := remoteScripts(*rec); len(ss) != 0 {
+		t.Errorf("a local run issued %d remote command(s): %v", len(ss), ss)
+	}
+}
+
+// TestScratchIsNotInsideTheTree is the lesson from the first live run, pinned.
+//
+// A scratch inside the tree is not a smaller version of the right answer, it is
+// a different bug: the exported TMPDIR is what gremlins copies the module
+// through, so every t.TempDir() in the suite becomes a child of the repo, and
+// every test asserting dross cannot find a root from a temp directory starts
+// finding one. Nine tests went red on helicon and green locally for a reason
+// that had nothing to do with the code — the shape of red this repo has a whole
+// guard against.
+func TestScratchIsNotInsideTheTree(t *testing.T) {
+	for _, tree := range []string{"/home/rivil/dross", "/home/rivil/dross/", "/srv/work/repo"} {
+		t.Run(tree, func(t *testing.T) {
+			dir := scratchDirFor(tree)
+			clean := filepath.Clean(tree)
+			if strings.HasPrefix(dir, clean+string(filepath.Separator)) || dir == clean {
+				t.Errorf("scratch %q is inside the tree %q — FindRoot would walk up into the repo under test", dir, clean)
+			}
+			if filepath.Dir(filepath.Dir(dir)) != filepath.Dir(clean) {
+				t.Errorf("scratch %q is not beside the tree (parent %q) — it must share the volume the operator chose", dir, filepath.Dir(clean))
+			}
+			if !strings.Contains(dir, filepath.Base(clean)) {
+				t.Errorf("scratch %q is not keyed by the tree name; two repos on one machine would share it", dir)
+			}
+		})
+	}
+}
+
+// TestLocalScratchIsNotInsideTheProject: the same property for a local run,
+// where a cache inside the tree would also show up in git status and in the
+// adapters' own file scans.
+func TestLocalScratchIsNotInsideTheProject(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	l, err := newLauncher("gremlins", "", nil, root, "", []string{"GOCACHE"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+
+	cmd, err := l.toolCmd([]string{"gremlins"}, localOf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := envValue(cmd, "GOCACHE")
+	if got == "" {
+		t.Fatal("no scratch was assigned")
+	}
+	if strings.HasPrefix(got, root+string(filepath.Separator)) {
+		t.Errorf("the local scratch %q is inside the project tree %q", got, root)
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("the run left %v inside the project tree", entries)
 	}
 }

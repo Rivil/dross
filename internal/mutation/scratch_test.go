@@ -74,6 +74,13 @@ func TestScratchRemoveWipes(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := s.Dir
+	// Guarded: an empty Dir would make the join below relative to the package
+	// directory and litter the source tree. That is not hypothetical — it is
+	// what a hand-applied mutant of newScratch did during this phase, and the
+	// 64 KB file it wrote was committed before anyone noticed.
+	if dir == "" {
+		t.Fatal("newScratch returned no directory; refusing to write to a relative path")
+	}
 	nested := filepath.Join(dir, "a", "b")
 	if err := os.MkdirAll(nested, 0o755); err != nil {
 		t.Fatal(err)
@@ -170,15 +177,20 @@ func TestScratchNoVarsIsNoOp(t *testing.T) {
 	}
 }
 
-// TestRemoteScratchDirIsUnderWorkdir: a remote scratch belongs on the volume the
-// operator granted, not on whatever the host calls temp. helicon's /tmp is a
-// 32 GB tmpfs in RAM, shared with a running LLM.
-func TestRemoteScratchDirIsUnderWorkdir(t *testing.T) {
+// TestRemoteScratchDirIsBesideWorkdir: a remote scratch belongs on the volume
+// the operator granted — beside the tree, not inside it and not on whatever the
+// host calls temp. helicon's /tmp is a 32 GB tmpfs in RAM shared with a running
+// LLM; and a scratch INSIDE the tree makes every t.TempDir() a child of the
+// repo, which the first live run proved by reddening nine root-discovery tests.
+func TestRemoteScratchDirIsBesideWorkdir(t *testing.T) {
 	const workdir = "/home/rivil/dross"
 	dir := remoteScratchDir(workdir)
 
-	if !strings.HasPrefix(dir, workdir+"/") {
-		t.Errorf("remote scratch %q is not under the granted workdir %q", dir, workdir)
+	if strings.HasPrefix(dir, workdir+"/") || dir == workdir {
+		t.Errorf("remote scratch %q is inside the granted workdir %q", dir, workdir)
+	}
+	if filepath.Dir(filepath.Dir(dir)) != filepath.Dir(workdir) {
+		t.Errorf("remote scratch %q is not beside %q, so it may not share its volume", dir, workdir)
 	}
 	if strings.HasPrefix(dir, "/tmp") || strings.HasPrefix(dir, "/var/tmp") {
 		t.Errorf("remote scratch %q landed in a host temp path", dir)

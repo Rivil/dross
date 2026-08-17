@@ -74,6 +74,10 @@ type Launcher struct {
 	// its plugins explicitly BECAUSE that layout defeats auto-discovery.
 	PackageManager string
 
+	// remoteScratchGone records that Close already wiped the host side, so a
+	// deferred Close and an explicit one do not each pay for an ssh round trip.
+	remoteScratchGone bool
+
 	// scratch is this run's private build cache, created on first use and
 	// wiped by Close. Nil until something needs it.
 	scratch *scratch
@@ -268,10 +272,11 @@ func (l *Launcher) localCacheEnv() ([]string, error) {
 		return nil, nil
 	}
 	if l.scratch == nil {
-		// Beside the project rather than in os.TempDir(): the tree's own volume
-		// is the one the developer chose to work on, and on a machine whose
-		// temp is RAM-backed a build cache there is the failure this prevents.
-		s, err := newScratch(filepath.Join(l.ProjectRoot, ".dross-cache"), l.CacheVars, os.Stderr)
+		// Beside the project — not inside it, and not in os.TempDir(). See
+		// scratchDirFor: a cache inside the tree shows up in git status and in
+		// the adapters' file scans, and one in the machine's temp is the
+		// RAM-backed volume this exists to avoid.
+		s, err := newScratch(scratchDirFor(l.ProjectRoot), l.CacheVars, os.Stderr)
 		if err != nil {
 			return nil, err
 		}
@@ -287,6 +292,13 @@ func (l *Launcher) Close() error {
 	if l == nil {
 		return nil
 	}
+	if err := l.removeRemoteScratch(); err != nil {
+		// Same policy as the local wipe (locked wipe_policy): reported, never
+		// fatal. A completed measurement must not be lost to a cleanup error,
+		// and a leak nobody sees is what filled the disk in the first place.
+		fmt.Fprintf(os.Stderr, "mutation: could not remove the remote scratch build cache: %v\n", err)
+	}
+	l.remoteScratchGone = true
 	return l.scratch.Remove()
 }
 
@@ -375,11 +387,67 @@ func (l *Launcher) toolCmd(argv []string, local func([]string) *exec.Cmd) (*exec
 	if err != nil {
 		return nil, err
 	}
-	script, err := remote.Script(t, argv)
+	// mkdir FIRST, in the same script. The exported TMPDIR points here and
+	// gremlins copies the module through os.MkdirTemp, which fails outright
+	// against a directory that does not exist — "impossible to create the
+	// workdir" and the run ends before measuring anything. Exporting a path
+	// without creating it is not a redirection, it is a broken run.
+	cmds := [][]string{argv}
+	if dir := l.remoteScratch(); dir != "" {
+		cmds = [][]string{{"mkdir", "-p", dir}, argv}
+	}
+	script, err := remote.ScriptAll(t, cmds)
 	if err != nil {
 		return nil, err
 	}
 	return launcherCommand(full, script), nil
+}
+
+// remoteScratch is this run's scratch directory ON THE HOST, or "" when there
+// is nothing to redirect.
+func (l *Launcher) remoteScratch() string {
+	if !l.remoteRun() || len(l.CacheVars) == 0 {
+		return ""
+	}
+	return remoteScratchDir(l.Target.Workdir)
+}
+
+// removeRemoteScratch wipes the host-side scratch.
+//
+// The path is derived, never supplied, and is checked against that derivation
+// before an `rm -rf` is built from it: a removal command assembled from a value
+// this function did not compute is the one shape worth being paranoid about,
+// even though Target.Validate already constrains the workdir.
+func (l *Launcher) removeRemoteScratch() error {
+	dir := l.remoteScratch()
+	if dir == "" || l.remoteScratchGone {
+		return nil
+	}
+	// Two independent checks, because this builds an `rm -rf`. The first is the
+	// real one: the path must be exactly what scratchDirFor derives from the
+	// granted workdir, so a Target swapped underneath this launcher cannot aim
+	// the removal somewhere else. The second is a floor on depth — no removal
+	// of "/", "/home" or any two-segment path — which costs nothing and bounds
+	// the damage if the derivation itself is ever changed carelessly.
+	if dir != remoteScratchDir(l.Target.Workdir) {
+		return fmt.Errorf("mutation: refusing to remove %q — not this run's scratch for %q", dir, l.Target.Workdir)
+	}
+	if !filepath.IsAbs(dir) || len(strings.Split(strings.Trim(dir, "/"), "/")) < 3 {
+		return fmt.Errorf("mutation: refusing to remove %q — too close to the filesystem root", dir)
+	}
+	t, err := l.toolTarget()
+	if err != nil {
+		return err
+	}
+	full, err := remote.SSHArgs(t)
+	if err != nil {
+		return err
+	}
+	script, err := remote.Script(t, []string{"rm", "-rf", dir})
+	if err != nil {
+		return err
+	}
+	return l.runRemote(full, script)
 }
 
 // restoreArgv resolves this adapter's dependency-restore command, or nil when
