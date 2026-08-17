@@ -66,4 +66,4 @@
   id = "069d6104904705e0"
   text = "Incremental sync tuning — keep a warm remote tree, skip the rsync when nothing changed, or cache the Go build across runs."
   why = "It is the obvious next lever on wall-clock, but it is an optimization on top of a transport that does not exist yet. Measure the naive version first; tuning before there is a baseline is guessing."
-  target = "remote-run-latency"
+  dismissed = true
