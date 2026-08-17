@@ -39,6 +39,11 @@ type Stryker struct {
 	//
 	// A NAMED field rather than an embedded Launcher — see launcher.go.
 	Remote *remote.Target
+	// CacheVars are the environment variable names this stack's toolchain reads
+	// for its build cache (stack profile mutation_cache.vars). A run is pointed
+	// at a scratch copy and the scratch is wiped when the run ends; empty leaves
+	// the run exactly as it was.
+	CacheVars []string
 
 	// PackageManager is the project's own package manager
 	// (stack.package_manager), and is only consulted for a REMOTE run: it keys
@@ -67,10 +72,12 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 	// LOCAL ssh process says nothing about the remote cwd, so the monorepo knob
 	// has to reach the remote as part of the command itself or stryker runs in
 	// the wrong package.
-	lr, err := newLauncher(s.Name(), s.Prefix, s.Remote, s.ProjectRoot, s.Workdir)
+	lr, err := newLauncher(s.Name(), s.Prefix, s.Remote, s.ProjectRoot, s.Workdir, s.CacheVars)
 	if err != nil {
 		return nil, err
 	}
+
+	defer func() { _ = lr.Close() }()
 	lr.PackageManager = s.PackageManager
 	// Resolved BEFORE anything is spawned. An unset or unrecognised package
 	// manager is a refusal the user can act on; discovering it after the tree

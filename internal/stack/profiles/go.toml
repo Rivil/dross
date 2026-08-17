@@ -95,3 +95,12 @@ title = "Go"
     "TOML (BurntSushi) for all config/state; structs use toml tags and round-trip cleanly.",
     "Errors wrapped with fmt.Errorf(\"context: %w\", err); table-driven, data-first design.",
   ]
+
+# Where the Go toolchain keeps compiled output. A mutation run is pointed at a
+# scratch copy of this and the scratch is wiped when the run ends: gremlins
+# copies the module into a fresh temp dir every run and Go keys the build cache
+# on source file paths, so every run re-stores every package under new keys and
+# nothing is ever reused across runs. Measured 2026-08-16 at 61 GB of
+# single-use archives in a 64 GB cache.
+[mutation_cache]
+  vars = ["GOCACHE"]

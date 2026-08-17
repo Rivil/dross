@@ -144,7 +144,7 @@ func runGremlinsOverPackages(repoRoot string, pkgs []string) ([]mutation.Unmeasu
 	if err != nil {
 		return nil, err
 	}
-	g := mt.gremlins(repoRoot, p)
+	g := mt.gremlins(repoRoot, p, profileCacheVars(p, repoRoot))
 	// Gremlins derives its package set from the directories of the files it is
 	// handed, so one representative path per package is the whole input.
 	files := make([]string, 0, len(pkgs))

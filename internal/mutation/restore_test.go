@@ -265,7 +265,7 @@ func TestRemoteRestoreFailureIsFatalBeforeTheToolArgv(t *testing.T) {
 // TestRemoteRestoreTableIsClosed: an adapter absent from the table cannot run
 // remotely with no restore at all.
 func TestRemoteRestoreTableIsClosed(t *testing.T) {
-	_, err := newLauncher("mutant-4000", "", &remote.Target{Host: "h", Workdir: "/w"}, "/x", "")
+	_, err := newLauncher("mutant-4000", "", &remote.Target{Host: "h", Workdir: "/w"}, "/x", "", nil)
 	if err == nil {
 		t.Fatal("an adapter absent from the restore table was accepted")
 	}

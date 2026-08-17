@@ -401,7 +401,7 @@ func TestExistingKeyedLiteralsStillCompile(t *testing.T) {
 func TestLauncherRefusesPrefixAndTargetTogether(t *testing.T) {
 	rec := recordRemote(t, nil)
 
-	_, err := newLauncher("gremlins", "docker compose exec app", helicon("/srv/dross"), "/x", "")
+	_, err := newLauncher("gremlins", "docker compose exec app", helicon("/srv/dross"), "/x", "", nil)
 	if err == nil {
 		t.Fatal("a launcher with both a prefix and a remote was accepted")
 	}
@@ -423,7 +423,7 @@ func TestLauncherRefusesPrefixAndTargetTogether(t *testing.T) {
 // whatever the last run left locally. Either way the score is computed from
 // numbers nobody measured this time.
 func TestLauncherRefusesAdapterMissingFromTheReportTable(t *testing.T) {
-	_, err := newLauncher("mutant-4000", "", helicon("/srv/dross"), "/x", "")
+	_, err := newLauncher("mutant-4000", "", helicon("/srv/dross"), "/x", "", nil)
 	if err == nil {
 		t.Fatal("an adapter absent from the remote report table was accepted for a remote run")
 	}
@@ -433,7 +433,7 @@ func TestLauncherRefusesAdapterMissingFromTheReportTable(t *testing.T) {
 
 	// The same adapter runs LOCALLY without complaint: the table governs remote
 	// report handling, not adapter registration.
-	if _, err := newLauncher("mutant-4000", "", nil, "/x", ""); err != nil {
+	if _, err := newLauncher("mutant-4000", "", nil, "/x", "", nil); err != nil {
 		t.Errorf("a local run of an unknown adapter was refused: %v", err)
 	}
 

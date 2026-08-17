@@ -1,0 +1,60 @@
+[phase]
+  id = "cache-budget-prune"
+  title = "cache-budget-prune"
+  milestone = "v1.3"
+
+[[criteria]]
+  id = "c-1"
+  text = "A mutation run compiles into a scratch build cache of its own rather than the developer's shared one — the run's toolchain cache variable points at a directory created for that run."
+
+[[criteria]]
+  id = "c-2"
+  text = "The scratch cache is removed when the run ends, on every exit path — a clean finish, an adapter failure, and a run that errors part-way — so no mutation run can leave build artefacts behind on disk."
+
+[[criteria]]
+  id = "c-3"
+  text = "The shared developer cache is left exactly as the run found it: a mutation run adds no entry to it and removes none, so the next ordinary build is still warm."
+
+[[criteria]]
+  id = "c-4"
+  text = "Which variable carries the cache is declared by the stack profile, not hardcoded in the runner — a stack whose profile names one gets the scratch treatment with no code change, and a stack whose profile names none runs exactly as it does today."
+
+[[criteria]]
+  id = "c-5"
+  text = "A remote mutation run gets the same treatment: the script it sends exports the scratch cache variable and a TMPDIR under the granted workdir's volume, so neither the toolchain's cache nor the harness's own scratch lands wherever the host's defaults happen to point."
+
+[[criteria]]
+  id = "c-6"
+  text = "Nothing about this changes what a run measures — the same phase over the same code produces the same mutation report with the scratch cache in place as without it."
+
+[[decisions]]
+  key = "cache_var_source"
+  choice = "The cache variable names are declared per stack profile, in a new `[mutation_cache]` block in `internal/stack/profiles/*.toml` (e.g. `vars = [\"GOCACHE\"]` for go). The runner reads them; it holds no per-language table of its own. A profile that declares none is untouched."
+  why = "Profiles are already this repo's per-language extension point, droppable into ~/.claude/dross/profiles/ without a recompile. A GOCACHE/CARGO_TARGET_DIR/npm_config_cache map living in the mutation runner would put language knowledge in a file whose whole design is to have none, and would make adding rust a code change instead of a file."
+  locked = true
+
+[[decisions]]
+  key = "scratch_location"
+  choice = "The scratch cache lives under the volume the work already uses — a temp dir beside the run locally, and a directory under the granted workdir on a remote host. It is never placed in the remote's default temp location, and the remote script exports TMPDIR there too."
+  why = "Measured 2026-08-16: helicon's /tmp is a 32 GB RAM-backed tmpfs shared with a running LLM, and gremlins copies the whole module into os.MkdirTemp per run — which honours TMPDIR, not GOTMPDIR, so pointing the Go toolchain at the 300 GB build volume via `go env -w` covered the compiler and not the harness wrapping it. The granted workdir is the path the operator deliberately chose for this repo's work, so its volume is the right default; the host's temp is whatever the host happened to configure."
+  locked = true
+
+[[decisions]]
+  key = "wipe_policy"
+  choice = "The scratch is removed on every exit path, including a failed run. A wipe that itself fails is reported on stderr and never fails an otherwise-good run — the report is the product, and losing a completed measurement to a cleanup error would be worse than the leak it is cleaning up."
+  why = "Both halves are load-bearing. A leak that is silent is what produced a 399 GB cache and a laptop at 100% disk that failed a verify outright; a cleanup that could fail the run would trade a bounded disk problem for a lost result. Reporting is what keeps a repeated wipe failure visible instead of accumulating unnoticed."
+  locked = true
+
+[[decisions]]
+  key = "no_shared_ceiling"
+  choice = "dross imposes no size ceiling on the shared cache and prunes nothing in it. Bounding disk is done by scoping each run to a scratch that is thrown away, not by evicting entries from a cache the developer also uses."
+  why = "Measured, and it inverts the obvious fix. The Go cache held 64 GB of which 61 GB was 2,093 single-use archives averaging 30 MB, and only 348 MB was genuinely-shared stdlib and deps: gremlins copies the module into a fresh `gremlins-PID/wd-RANDOM` each run and Go keys the build cache on source file paths, so every run re-stores every package under new keys and nothing is ever reused across runs. Cross-run reuse being already zero is exactly why scratch-and-wipe costs no rebuild time — and why a ceiling on the shared cache would evict the developer's warm entries while doing nothing about the churn that filled it."
+  locked = true
+
+[[deferred]]
+  text = "Pin gremlins' working directory so cross-run cache reuse becomes possible at all, cutting run TIME as well as disk."
+  why = "`gremlins unleash` has no workdir flag as of v0.6.0, so it needs an upstream change or a patched build. Out of scope for a phase whose job is bounding disk, and the scratch-and-wipe approach is correct regardless of whether reuse later becomes possible."
+
+[[deferred]]
+  text = "Extend the scratch-cache treatment to the security and quality scanners, which also spawn toolchains with their own caches."
+  why = "Not measured as a problem yet. The mutation runner is where the 64 GB came from; widening on suspicion would add per-scanner plumbing for a cost nobody has observed."

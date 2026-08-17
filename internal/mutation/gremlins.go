@@ -71,6 +71,11 @@ type Gremlins struct {
 	// literals do not promote, so embedding would break every existing
 	// &Gremlins{Prefix: …} construction site. See launcher.go.
 	Remote *remote.Target
+	// CacheVars are the environment variable names this stack's toolchain reads
+	// for its build cache (stack profile mutation_cache.vars). A run is pointed
+	// at a scratch copy and the scratch is wiped when the run ends; empty leaves
+	// the run exactly as it was.
+	CacheVars []string
 
 	// Unmeasured records every package Run excluded from the merged score,
 	// with why. It is set by each Run, replacing whatever the previous Run
@@ -144,10 +149,12 @@ func (g *Gremlins) Run(files []string) (*Report, error) {
 	// Built before anything is spawned: a refused combination (a prefix AND a
 	// remote, an unvalidatable target) must produce no *exec.Cmd at all.
 	// Gremlins runs at the repo root, so the launcher carries no workdir.
-	lr, err := newLauncher(g.Name(), g.Prefix, g.Remote, g.ProjectRoot, "")
+	lr, err := newLauncher(g.Name(), g.Prefix, g.Remote, g.ProjectRoot, "", g.CacheVars)
 	if err != nil {
 		return nil, err
 	}
+
+	defer func() { _ = lr.Close() }()
 
 	pkgs := packagesFromFilesFn(files)
 

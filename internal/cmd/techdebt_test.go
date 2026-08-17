@@ -123,7 +123,12 @@ func TestTrackedFilesExcludesDrossDir(t *testing.T) {
 	}
 	sawCode := false
 	for _, p := range paths {
-		if strings.Contains(p, ".dross") {
+		// A SEGMENT match, not a substring one. `strings.Contains` here read any
+		// path merely containing the text as a leak, so a run whose temp
+		// directory sat under `.dross-cache` failed for its own working
+		// directory's name rather than for anything trackedFiles did — measured
+		// on helicon, 2026-08-17.
+		if hasPathSegment(p, RootDirName) {
 			t.Errorf(".dross path leaked into the scan set: %s", p)
 		}
 		if strings.HasSuffix(p, "code.go") {
@@ -132,5 +137,38 @@ func TestTrackedFilesExcludesDrossDir(t *testing.T) {
 	}
 	if !sawCode {
 		t.Error("tracked code file missing from scan set")
+	}
+}
+
+// hasPathSegment reports whether name appears as a whole element of p, under
+// either separator. `.dross-cache` is not `.dross`.
+func hasPathSegment(p, name string) bool {
+	for _, seg := range strings.Split(filepath.ToSlash(p), "/") {
+		if seg == name {
+			return true
+		}
+	}
+	return false
+}
+
+// TestTrackedFilesSegmentMatchIsNotSubstring pins the distinction the loose
+// version missed: `.dross-cache` is a different directory from `.dross`, and a
+// guard that cannot tell them apart fails for the shape of a path rather than
+// for anything the code did.
+func TestTrackedFilesSegmentMatchIsNotSubstring(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		{".dross/state.json", true},
+		{"repo/.dross/phases/p/plan.toml", true},
+		{"/home/rivil/.dross-cache/dross/code.go", false},
+		{"/home/rivil/.drossy/code.go", false},
+		{"src/dross/main.go", false},
+		{"code.go", false},
+	} {
+		if got := hasPathSegment(tc.path, RootDirName); got != tc.want {
+			t.Errorf("hasPathSegment(%q) = %v, want %v", tc.path, got, tc.want)
+		}
 	}
 }
