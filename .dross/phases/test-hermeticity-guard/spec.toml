@@ -1,0 +1,44 @@
+[phase]
+  id = "test-hermeticity-guard"
+  title = "test-hermeticity-guard"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "A test that reads a gitignored path under the real repo's .dross/ fails the suite locally, naming the offending test file and the path it reached for — the condition that previously only reddened in CI."
+
+[[criteria]]
+  id = "c-2"
+  text = "The guard derives the ignored set from .gitignore rather than hardcoding it, so a path newly added to .gitignore is covered without editing the guard, and a tracked .dross file stays legal to read."
+
+[[criteria]]
+  id = "c-3"
+  text = "The two live offenders are gone: the milestone-progress test no longer depends on the real repo's gitignored state.json, and the homeless-deferred test no longer skips itself in CI to dodge a gitignored handoff.md — both assert the same behaviour against a fixture instead."
+
+[[criteria]]
+  id = "c-4"
+  text = "ARCHITECTURE.md's Test-suite hermeticity entry states the repo's-own-.dross rule alongside the existing HOME rule, and names the guard, so the principle documented matches the principle enforced."
+
+[[decisions]]
+  key = "guard_mechanism"
+  choice = "A single source-scanning meta-test that walks *_test.go and fails on a real-repo .dross read of a gitignored path, rather than a resolver seam, a per-package TestMain opt-in, or a filesystem tripwire."
+  why = "It is the house shape — five meta-tests already do exactly this (external_cli_audit_test.go, subprocargs_audit_test.go, phase_lifecycle_test.go, phase_migrate_test.go, survivor/reasons_repo_test.go). It needs zero edits to the other 306 test files, fires locally by construction, and touches no production code. A resolver seam would have caught neither historical bug (both handed an absolute path straight to a loader, bypassing FindRoot); a per-package TestMain needs 33 new TestMains plus an allowlist edit in 54 files; a filesystem tripwire mutates the developer's live working tree and leaves it damaged if the run is killed."
+  locked = true
+
+[[decisions]]
+  key = "guard_scope"
+  choice = "Guard gitignored .dross paths only — tracked .dross files (project.toml, rules.toml, survivors.toml, changes.json, milestones/, phases/) stay legal to read from the real checkout."
+  why = "Gitignored is exactly the CI-divergence line: a fresh checkout has the tracked files and lacks the ignored ones, so a read of a tracked file cannot produce the local-green/CI-red split this phase exists to close. Guarding all real-checkout reads would red ~54 files that legitimately read assets/prompts and README, which is a different phase and mostly a false positive."
+  locked = true
+
+[[decisions]]
+  key = "offenders_fixed_not_allowlisted"
+  choice = "The two existing offenders are rewritten to use fixtures; no allowlist or opt-out marker is added to the guard."
+  why = "An allowlist is the thing nobody maintains, and both offenders are fixable — the milestone-progress case already has a hermetic sibling (TestProgressWithoutStateFile) proving the fixture approach works, and the homeless-deferred case currently Skipf's in CI, which is a test that does not run rather than a test that passes. A guard with a populated allowlist on day one teaches the next author that the allowlist is the way through."
+  locked = true
+
+[[decisions]]
+  key = "architecture_entry_extended"
+  choice = "Extend the existing Test-suite hermeticity entry rather than adding a new one."
+  why = "It is the same principle — a green suite must mean the code is green, not that the host was configured favourably. HOME leakage and repo's-own-.dross leakage are two instances of it, and splitting them into two entries would imply they are separate concerns to reason about."
+  locked = true

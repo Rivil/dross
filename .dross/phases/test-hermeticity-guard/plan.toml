@@ -1,0 +1,36 @@
+task_seq = 3
+
+[phase]
+  id = "test-hermeticity-guard"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Retire the two real-repo .dross reads"
+  files = ["internal/cmd/milestone_progress_test.go", "internal/cmd/deferred_homeless_repo_test.go"]
+  description = "TestProgressAgainstThisRepo (milestone_progress_test.go:192) hands the real .dross\ndirectory to buildMilestoneProgress, whose phaseIsDone falls back to gitignored\nstate.json — so it passed locally for a reason CI does not have. Rebuild it on the\nexisting progressRepo/scaffoldPhase fixture with three marker-complete phases, keeping\nthe same assertion shape (Done >= 3, none of the three read remaining).\n\nTestHandoffParksNoHomelessFinding (deferred_homeless_repo_test.go:27) reads gitignored\n.dross/handoff.md and Skipf's in CI — a test that does not run rather than one that\npasses. Point it at a fixture handoff instead, so the openLoopsSection + marker logic\nis exercised on every host. Land this BEFORE the guard so the suite is never red.\n"
+  covers = ["c-3"]
+  test_contract = ["if the milestone-progress test goes back to reading the real checkout, the t-2 guard fails — that is the enforcement, and t-1 is what makes the guard green on arrival", "if the rebuilt progress test stops distinguishing done from remaining, TestProgressAgainstThisRepo fails — three marker-complete phases must read done and an unfinished one must still read remaining, which is the assertion the real-repo version made", "if the homeless-finding test silently passes on a missing fixture, TestHandoffParksNoHomelessFinding fails — a fixture it writes itself can never be absent, so an unreadable handoff is now a hard error rather than a Skipf", "if the marker matching stops being case-insensitive, TestHandoffParksNoHomelessFinding fails — the markers are matched against a prose section a human wrote, and the original asserted case-insensitivity"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Guard: a real-repo .dross read must name a tracked file"
+  files = ["internal/cmd/hermetic_dross_read_test.go"]
+  description = "A source-scanning meta-test in the house shape (cf. external_cli_audit_test.go,\nsubprocargs_audit_test.go). It derives the ignored set from .gitignore rather than\nhardcoding it, then walks every *_test.go in the module.\n\nRule: a test file that composes a repo-root walker (repoRootFromTest, repoRoot,\nrepoRootForDocs, repoRootForHybridTest, moduleRoot, repoRootFromHere) with \".dross\"\nmust name a TRACKED file in the same expression. Naming a gitignored one fails.\nNaming nothing — handing the bare directory to a loader — also fails, because what it\nreaches cannot be audited from the source; that is exactly how the milestone-progress\nbug read state.json without ever spelling it.\n\nThe detector is a pure function over source text so its teeth are proven on synthetic\ninput rather than on whatever the tree happens to contain.\n"
+  covers = ["c-1", "c-2"]
+  depends_on = ["t-1"]
+  test_contract = ["if the detector stops catching a gitignored read, TestDetectsGitignoredDrossRead fails — synthetic source joining a repo-root walker with .dross and handoff.md must be reported, naming the file and the path, since that is the deferred-homeless shape", "if the detector stops catching a bare-directory read, TestDetectsUnauditableDrossDirRead fails — synthetic source joining a walker with .dross and nothing else must be reported, since that is the milestone-progress shape and a name-only guard misses it", "if the detector starts rejecting legitimate reads, TestPermitsTrackedDrossRead fails — synthetic source naming project.toml, rules.toml, changes.json or survivors.toml must pass, because a tracked file exists in a fresh checkout and cannot produce the local-green/CI-red split", "if the ignored set is hardcoded instead of read from .gitignore, TestIgnoredSetComesFromGitignore fails — a path added to a fixture .gitignore must become guarded with no edit to the detector, which is what keeps the guard true as .gitignore changes", "if the guard stops covering the real tree, TestNoTestReadsGitignoredDross fails — it walks every *_test.go in the module and is the assertion that would have caught both historical bugs", "if a test file outside internal/cmd is skipped, TestNoTestReadsGitignoredDross fails — the walk must cover all 33 test-bearing packages, since survivor and rules both read the real .dross too"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 3
+  title = "State the repo's-own-.dross rule in ARCHITECTURE.md"
+  files = ["ARCHITECTURE.md"]
+  description = "The Test-suite hermeticity entry (ARCHITECTURE.md:889) documents only HOME/global-config\nleakage. It does not mention reading the repo's own .dross at all — so the deferred item's\n'the principle exists but nothing enforces it' understated the gap: the principle did not\ncover this failure mode. Extend the same entry (locked architecture_entry_extended) with\nthe second rule and its anchor, and record the two retired offenders as the evidence.\n"
+  covers = ["c-4"]
+  depends_on = ["t-2"]
+  test_contract = ["if the entry stops naming the guard, TestArchitectureNamesHermeticGuard fails — the anchor list must carry the guard's symbol and file:line, which is the convention every other ARCHITECTURE entry follows and the only thing making the doc navigable", "if the doc claims enforcement that does not exist, the anchor line points at a symbol the guard test resolves — a stale anchor is the failure mode the entry format exists to prevent"]
+  status = "done"
