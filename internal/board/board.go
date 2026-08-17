@@ -40,12 +40,20 @@ type Board struct {
 	// "someday:02-auth#1") to its readable issue id, so backlog sync reconciles
 	// the same items instead of duplicating them.
 	Backlog map[string]string `json:"backlog,omitempty"`
-	// Tasks maps "<phase-id>/<task-id>" to the readable issue id mirroring
-	// that plan task. Keyed by the pair rather than by the bare task id
-	// because task ids are only unique WITHIN a phase — every phase has a
-	// t-1, and a bare key would make the second phase's t-1 overwrite the
-	// first's mapping and then re-title its issue.
-	Tasks map[string]string `json:"tasks,omitempty"`
+	// Tasks maps "<phase-id>/<task-id>" to the mirror record for that plan
+	// task. Keyed by the pair rather than by the bare task id because task ids
+	// are only unique WITHIN a phase — every phase has a t-1, and a bare key
+	// would make the second phase's t-1 overwrite the first's mapping and then
+	// re-title its issue.
+	//
+	// The record carries the last-synced PAIR, not just the issue id, and that
+	// is what makes an inbound sync possible at all: two current values cannot
+	// distinguish "the board moved" from "the plan moved" from "both moved".
+	// Recording what each side held when they last agreed makes all three
+	// distinguishable. It lives here, in a git-tracked file, so the agreement
+	// point travels with the branch and a second machine reaches the same
+	// verdict.
+	Tasks map[string]TaskLink `json:"tasks,omitempty"`
 	// Dismissed holds inbound issue ids the user triaged away; they won't
 	// resurface in /dross-inbox.
 	Dismissed []string `json:"dismissed,omitempty"`
@@ -80,6 +88,36 @@ func Load(path string) (*Board, error) {
 	return &bd, nil
 }
 
+// UnmarshalJSON accepts both shapes a tasks entry has ever had: the bare issue
+// id string every board.json written before board-task-inbound carries, and the
+// record written since.
+//
+// On the type rather than in Load, so no decoder can bypass it — board.json is
+// git-tracked, so an old file arrives by pulling a branch, not only by being on
+// disk, and a hard failure there would break `dross issue` for anyone who had
+// ever synced a task.
+//
+// A migrated entry carries an issue and NO agreement point, which is the honest
+// reading: the pair was never recorded, so nothing is known about what either
+// side held when they last agreed. The inbound path treats that as "not yet
+// synced with state" rather than inventing an agreement that never happened.
+func (l *TaskLink) UnmarshalJSON(data []byte) error {
+	var issue string
+	if err := json.Unmarshal(data, &issue); err == nil {
+		l.Issue = issue
+		l.PlanStatus = ""
+		l.BoardState = ""
+		return nil
+	}
+	type plain TaskLink // avoid recursing into this method
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*l = TaskLink(p)
+	return nil
+}
+
 // Save writes board.json (pretty-printed, overwrites).
 func (b *Board) Save(path string) error {
 	b.ensureMaps()
@@ -107,7 +145,7 @@ func (b *Board) ensureMaps() {
 		b.Backlog = map[string]string{}
 	}
 	if b.Tasks == nil {
-		b.Tasks = map[string]string{}
+		b.Tasks = map[string]TaskLink{}
 	}
 }
 
@@ -150,16 +188,53 @@ func (b *Board) DeletePhase(phaseID string) {
 // existing mapping.
 func TaskKey(phaseID, taskID string) string { return phaseID + "/" + taskID }
 
-// SetTask records the readable issue id for one plan task.
+// TaskLink is one plan task's mirror record.
+type TaskLink struct {
+	// Issue is the readable tracker id.
+	Issue string `json:"issue"`
+	// PlanStatus and BoardState are what each side held the last time dross
+	// synced this task — the agreement point every inbound comparison is made
+	// against. Empty means "never synced with a state", which reads as "no
+	// agreement recorded" rather than as an empty value either side holds.
+	PlanStatus string `json:"plan_status,omitempty"`
+	BoardState string `json:"board_state,omitempty"`
+}
+
+// SetTask records the readable issue id for one plan task, preserving any
+// agreement point already recorded for it. A re-resolve of the issue id must
+// not silently discard the snapshot — that would make the next inbound run
+// treat a moved card as a first sync and apply it without a conflict check.
 func (b *Board) SetTask(phaseID, taskID, issue string) {
 	b.ensureMaps()
-	b.Tasks[TaskKey(phaseID, taskID)] = issue
+	key := TaskKey(phaseID, taskID)
+	link := b.Tasks[key]
+	link.Issue = issue
+	b.Tasks[key] = link
+}
+
+// SetTaskSynced records the issue id AND the pair both sides held at this sync.
+func (b *Board) SetTaskSynced(phaseID, taskID, issue, planStatus, boardState string) {
+	b.ensureMaps()
+	b.Tasks[TaskKey(phaseID, taskID)] = TaskLink{
+		Issue:      issue,
+		PlanStatus: planStatus,
+		BoardState: boardState,
+	}
+}
+
+// TaskLinkFor returns the full mirror record for a plan task.
+func (b *Board) TaskLinkFor(phaseID, taskID string) (TaskLink, bool) {
+	l, ok := b.Tasks[TaskKey(phaseID, taskID)]
+	return l, ok
 }
 
 // TaskIssue returns the stored issue id for a plan task and whether it's linked.
 func (b *Board) TaskIssue(phaseID, taskID string) (string, bool) {
-	n, ok := b.Tasks[TaskKey(phaseID, taskID)]
-	return n, ok
+	l, ok := b.Tasks[TaskKey(phaseID, taskID)]
+	if !ok || l.Issue == "" {
+		return "", false
+	}
+	return l.Issue, true
 }
 
 // SetQuick records the readable issue id for a quick-task ref.
