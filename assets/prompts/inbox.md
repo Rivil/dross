@@ -27,7 +27,7 @@ dross issue pull --mark --json
 
 `.issues` holds the open board issues **not** already linked to a dross phase/quick and **not** previously dismissed. Default filter is none; pass `$ARGUMENTS` through, e.g. `dross issue pull --mark --labels bug,enhancement --json`, when the user wants to scope by label.
 
-**Check `.error` before reading `.issues`.** The command exits 0 even when the board fetch fails, so an empty `.issues` alone does not mean an empty board. When `.error` is non-null:
+**Check `.error` before reading `.issues`.** The command exits 0 for every failure — a failed fetch AND a failed setup (an unset auth variable, missing board config, an unknown provider, a corrupt board.json) — so an empty `.issues` alone does not mean an empty board. When `.error` is non-null:
 - Print one line naming it: `board unreachable: <error> — triaging local deferred items only`.
 - Skip the board source entirely for this run (it is not empty, it is unknown) and continue to the deferred ideas below.
 - Never report the board as clear, and never dismiss or triage anything on the strength of a failed pull. `--mark` does not stamp a pull that failed, so re-running once the board is back picks up where it left off.
