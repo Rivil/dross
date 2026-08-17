@@ -123,6 +123,8 @@ criteria_covered   = <count where status=covered>
 criteria_uncovered = <count where status=uncovered or weak>
 ```
 
+Leave every `[[summary.leg]]` table exactly as `dross verify` wrote it — one per language leg, carrying that leg's own killed/survived/timeout/score. **Never** recompute `mutation_score` from them: the pooled score sums raw counts across legs, which is already weighted by leg size, and averaging the legs' percentages hands a small leg the same vote as a large one. A leg carrying an `error` measured nothing; its zeroes are not a result. Read the legs when a pooled score looks fine but one leg is carrying the failure — that is what they are for.
+
 Compute `[verify].verdict`. **Read `mutation_status` first** — when status is not `measured`, the score is a 0/0 artifact and the mutation leg has nothing to say. This is the dogfood-surfaced bug from FeastAhead phase 04/05: Stryker scoped to `src/lib/utils` only, phase touched server/Svelte files, mutation_score landed at 0.0, verdict heuristic falsely flagged `fail` despite 5/5 criteria covered.
 
 **The mutation leg gates on a count, not a ratio.** `[summary].unclassified_in_scope` is the number of survivors inside this phase's own diff carrying no disposition — neither accepted with a reason nor routed to a destination. The bar is zero, with no tolerance band. `mutation_score` is still reported and still worth reading as evidence of how thorough the suite is, but it is **not** a verdict lever: a phase that adds a pile of killed mutants can bury a live one and still clear any cutoff, and a cutoff re-opens the arbitrary-number argument every phase.

@@ -1601,3 +1601,173 @@ func TestEverySurfaceReportsTheSameScore(t *testing.T) {
 		t.Errorf("in-scope mutants = %d, want 10 — the denominator must carry the timeout too", v.Summary.MutantsInScope)
 	}
 }
+
+// legByLanguage indexes a summary's per-leg breakdown.
+func legByLanguage(t *testing.T, v *Verify, lang string) LegSummary {
+	t.Helper()
+	for _, leg := range v.Summary.Legs {
+		if leg.Language == lang {
+			return leg
+		}
+	}
+	t.Fatalf("no leg recorded for %q, got %+v", lang, v.Summary.Legs)
+	return LegSummary{}
+}
+
+// TestLegsRecordEachLegsOwnScore is the visibility the pooled figure cannot
+// give. The two legs here are the deliberately unequal pair: a tiny perfect one
+// beside a large failing one. Pooled, that is correctly 0.10 — but nothing in
+// verify.toml used to say WHICH leg was carrying the failure, so a reader after
+// the fact could not tell a uniformly mediocre suite from a good one with a
+// broken corner.
+func TestLegsRecordEachLegsOwnScore(t *testing.T) {
+	tests := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{
+			{Name: "ts", Tool: "stryker", Files: []string{"a.ts"},
+				Mutation: &mutation.Report{Tool: "stryker", Killed: 1, Survived: 0}},
+			{Name: "go", Tool: "gremlins", Files: []string{"b.go", "c.go"},
+				Mutation: &mutation.Report{Tool: "gremlins", Killed: 0, Survived: 8, Timeout: 1}},
+		},
+	}
+	v := Skeleton(tests, []string{"c-1"})
+
+	if len(v.Summary.Legs) != 2 {
+		t.Fatalf("legs = %+v, want one per language run", v.Summary.Legs)
+	}
+	ts := legByLanguage(t, v, "ts")
+	if ts.Score != 1.0 || ts.Killed != 1 || ts.InScope != 1 {
+		t.Errorf("ts leg = %+v, want a perfect 1/1", ts)
+	}
+	if ts.Tool != "stryker" {
+		t.Errorf("ts leg tool = %q, want stryker — the tool is what makes the number reproducible", ts.Tool)
+	}
+	goLeg := legByLanguage(t, v, "go")
+	if goLeg.InScope != 9 {
+		t.Errorf("go leg in_scope = %d, want 9 — the leg's denominator carries its timeout too", goLeg.InScope)
+	}
+	if goLeg.Score != 0 {
+		t.Errorf("go leg score = %v, want 0 — it killed nothing", goLeg.Score)
+	}
+	if goLeg.FileCount != 2 {
+		t.Errorf("go leg file_count = %d, want 2", goLeg.FileCount)
+	}
+}
+
+// TestLegsDoNotChangeThePooledScore: the breakdown is additive. Pooling raw
+// counts is ALREADY weighted by leg size, and re-deriving the headline number
+// from the legs' percentages would be the regression this phase refuses to
+// make — see internal/mutation/score.go.
+func TestLegsDoNotChangeThePooledScore(t *testing.T) {
+	tests := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{
+			{Name: "ts", Tool: "stryker", Files: []string{"a.ts"},
+				Mutation: &mutation.Report{Tool: "stryker", Killed: 1, Survived: 0}},
+			{Name: "go", Tool: "gremlins", Files: []string{"b.go"},
+				Mutation: &mutation.Report{Tool: "gremlins", Killed: 0, Survived: 8, Timeout: 1}},
+		},
+	}
+	v := Skeleton(tests, []string{"c-1"})
+
+	if want := mutation.PooledScore(1, 8, 1); v.Summary.MutationScore != want {
+		t.Errorf("pooled score = %v, want %v — unchanged by the breakdown", v.Summary.MutationScore, want)
+	}
+	if v.Summary.MutationScore > 0.5 {
+		t.Errorf("score %v is at or above the mean's 0.50 — the mean is back", v.Summary.MutationScore)
+	}
+	if v.Summary.MutantsInScope != 10 || v.Summary.MutantsKilled != 1 || v.Summary.MutantsSurvived != 8 {
+		t.Errorf("pooled counts moved: %+v", v.Summary)
+	}
+}
+
+// TestFailedLegIsRecordedNotDropped: omitting a leg that died would make a
+// two-leg run read afterwards as a clean single-leg one — a strictly worse lie
+// than a low score.
+func TestFailedLegIsRecordedNotDropped(t *testing.T) {
+	tests := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{
+			{Name: "go", Tool: "gremlins", Files: []string{"b.go"},
+				Mutation: &mutation.Report{Tool: "gremlins", Killed: 4, Survived: 0}},
+			{Name: "ts", Tool: "stryker", Files: []string{"a.ts"},
+				Error: "stryker exited 1: config not found"},
+		},
+	}
+	v := Skeleton(tests, []string{"c-1"})
+
+	if len(v.Summary.Legs) != 2 {
+		t.Fatalf("legs = %+v, want the failed leg recorded too", v.Summary.Legs)
+	}
+	dead := legByLanguage(t, v, "ts")
+	if dead.Error == "" {
+		t.Error("the failed leg carries no error — it is indistinguishable from a leg that measured zero")
+	}
+	if dead.InScope != 0 || dead.Score != 0 {
+		t.Errorf("failed leg = %+v, want zeroed counts", dead)
+	}
+	// The healthy leg still pools normally.
+	if v.Summary.MutantsKilled != 4 {
+		t.Errorf("killed = %d, want the working leg's 4", v.Summary.MutantsKilled)
+	}
+}
+
+// TestLegsSurviveTheFinalizeRoundTrip: finalize loads verify.toml, sets the
+// verdict and writes the whole struct back, so a field that does not survive
+// that is worse than no field — it would be present in every fresh run and
+// missing from every finalized one.
+func TestLegsSurviveTheFinalizeRoundTrip(t *testing.T) {
+	tests := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{
+			{Name: "go", Tool: "gremlins", Files: []string{"b.go"},
+				Mutation: &mutation.Report{Tool: "gremlins", Killed: 3, Survived: 1}},
+			{Name: "ts", Tool: "stryker", Files: []string{"a.ts"}, Error: "boom"},
+		},
+	}
+	v := Skeleton(tests, []string{"c-1"})
+	path := filepath.Join(t.TempDir(), "verify.toml")
+	if err := v.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	reloaded, err := LoadVerify(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(reloaded.Summary.Legs) != len(v.Summary.Legs) {
+		t.Fatalf("legs after round-trip = %+v, want %+v", reloaded.Summary.Legs, v.Summary.Legs)
+	}
+	if !reflect.DeepEqual(reloaded.Summary.Legs, v.Summary.Legs) {
+		t.Errorf("legs changed across the round-trip:\n got %+v\nwant %+v", reloaded.Summary.Legs, v.Summary.Legs)
+	}
+	// And a second save (what finalize does) keeps them.
+	if err := reloaded.Save(path); err != nil {
+		t.Fatalf("re-save: %v", err)
+	}
+	again, err := LoadVerify(path)
+	if err != nil {
+		t.Fatalf("re-load: %v", err)
+	}
+	if !reflect.DeepEqual(again.Summary.Legs, v.Summary.Legs) {
+		t.Errorf("legs lost on the finalize re-write: %+v", again.Summary.Legs)
+	}
+}
+
+// TestSingleLegStillRecordsItsLeg: the common case must not be special-cased
+// away, or the field is absent exactly where most phases would read it.
+func TestSingleLegStillRecordsItsLeg(t *testing.T) {
+	tests := &Tests{
+		Phase: "p",
+		Languages: []LanguageRun{
+			{Name: "go", Tool: "gremlins", Files: []string{"b.go"},
+				Mutation: &mutation.Report{Tool: "gremlins", Killed: 3, Survived: 1}},
+		},
+	}
+	v := Skeleton(tests, []string{"c-1"})
+	if len(v.Summary.Legs) != 1 {
+		t.Fatalf("legs = %+v, want the single leg recorded", v.Summary.Legs)
+	}
+	if got := legByLanguage(t, v, "go"); got.Score != 0.75 {
+		t.Errorf("leg score = %v, want 0.75", got.Score)
+	}
+}
