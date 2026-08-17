@@ -1,0 +1,64 @@
+{
+  "phase": "v14-mutation-pass",
+  "generated_at": "2026-08-17T08:59:55.16046Z",
+  "languages": [
+    {
+      "name": "go",
+      "tool": "gremlins",
+      "files": [
+        "cmd/dross/main.go",
+        "internal/board/board.go",
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_task.go",
+        "internal/cmd/issue_task_pull.go",
+        "internal/cmd/local.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/remote_grant.go",
+        "internal/cmd/remote_pool.go",
+        "internal/cmd/run.go",
+        "internal/cmd/task.go",
+        "internal/cmd/task_lifecycle.go",
+        "internal/cmd/test.go",
+        "internal/cmd/trust.go",
+        "internal/cmd/verify.go",
+        "internal/forge/forge.go",
+        "internal/forge/jira.go",
+        "internal/forge/youtrack.go",
+        "internal/phase/plan_edit.go",
+        "internal/verify/verify.go"
+      ],
+      "error": "remote gremlins on helicon: ssh exited 255 — the host is unreachable or the connection failed, so nothing was measured: remote transport failed\n  invocation: ssh helicon bash -s",
+      "remote_transport": true
+    }
+  ],
+  "scope": {
+    "files": [
+      "cmd/dross/main.go",
+      "internal/board/board.go",
+      "internal/cmd/issue.go",
+      "internal/cmd/issue_task.go",
+      "internal/cmd/issue_task_pull.go",
+      "internal/cmd/local.go",
+      "internal/cmd/phase.go",
+      "internal/cmd/remote_grant.go",
+      "internal/cmd/remote_pool.go",
+      "internal/cmd/run.go",
+      "internal/cmd/task.go",
+      "internal/cmd/task_lifecycle.go",
+      "internal/cmd/test.go",
+      "internal/cmd/trust.go",
+      "internal/cmd/verify.go",
+      "internal/forge/forge.go",
+      "internal/forge/jira.go",
+      "internal/forge/youtrack.go",
+      "internal/phase/plan_edit.go",
+      "internal/verify/verify.go"
+    ],
+    "source": "changes-only",
+    "degraded": [
+      "changes.json records no base branch, so no git diff could be taken",
+      "git contributed no files; scope is changes.json only and misses anything unrecorded"
+    ]
+  },
+  "measured_on": "helicon"
+}

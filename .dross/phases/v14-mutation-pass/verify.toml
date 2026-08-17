@@ -1,0 +1,40 @@
+[verify]
+  phase = "v14-mutation-pass"
+  generated_at = 2026-08-17T08:59:55.16046Z
+  verdict = "pending"
+
+[summary]
+  mutation_status = "skipped"
+  measured_on = "helicon"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  mutants_in_scope = 0
+  unclassified_in_scope = 0
+  criteria_total = 1
+  criteria_covered = 0
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    error = "remote gremlins on helicon: ssh exited 255 — the host is unreachable or the connection failed, so nothing was measured: remote transport failed\n  invocation: ssh helicon bash -s"
+    killed = 0
+    survived = 0
+    timeout = 0
+    in_scope = 0
+    score = 0.0
+    file_count = 20
+
+[[criterion]]
+  id = "c-1"
+  status = "unknown"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "mutation adapter gremlins failed: remote gremlins on helicon: ssh exited 255 — the host is unreachable or the connection failed, so nothing was measured: remote transport failed\n  invocation: ssh helicon bash -s"
+
+[[finding]]
+  severity = "NOTE"
+  text = "mutation scope is degraded (source: changes-only) — changes.json records no base branch, so no git diff could be taken; git contributed no files; scope is changes.json only and misses anything unrecorded"
