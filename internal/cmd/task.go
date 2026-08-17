@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -225,7 +226,7 @@ func taskStatus() *cobra.Command {
 func taskAdd() *cobra.Command {
 	var title, description, after, before string
 	var wave int
-	var covers, dependsOn, files []string
+	var covers, dependsOn, files, testContract []string
 	c := &cobra.Command{
 		Use:   "add <phase-id>",
 		Short: "Append or insert a new task into a phase plan",
@@ -246,12 +247,13 @@ func taskAdd() *cobra.Command {
 				}
 			}
 			t, err := plan.AddTask(phase.NewTask{
-				Title:       title,
-				Files:       files,
-				Covers:      covers,
-				DependsOn:   dependsOn,
-				Description: description,
-				Wave:        wave,
+				Title:        title,
+				Files:        files,
+				Covers:       covers,
+				DependsOn:    dependsOn,
+				Description:  description,
+				TestContract: testContract,
+				Wave:         wave,
 			}, anchor, isBefore)
 			if err != nil {
 				return err
@@ -269,6 +271,13 @@ func taskAdd() *cobra.Command {
 	c.Flags().StringSliceVar(&covers, "covers", nil, "criterion ids this task covers (comma-separated)")
 	c.Flags().StringSliceVar(&dependsOn, "depends-on", nil, "task ids this task depends on (comma-separated)")
 	c.Flags().StringSliceVar(&files, "files", nil, "files this task touches (comma-separated)")
+	// StringArray (not StringSlice): a test contract entry is one prose
+	// statement — "if X breaks, TestY fails" — and those routinely contain
+	// commas. StringSlice would split one statement into two, quietly turning a
+	// contract into nonsense nobody reads closely enough to catch. Same reason
+	// --landmark is a StringArray (changes.go).
+	c.Flags().StringArrayVar(&testContract, "test-contract", nil,
+		`one "if X breaks, TestY fails" statement (repeatable; not split on commas)`)
 	c.Flags().StringVar(&after, "after", "", "insert immediately after this task id")
 	c.Flags().StringVar(&before, "before", "", "insert immediately before this task id")
 	return c
@@ -306,14 +315,20 @@ func taskRemove() *cobra.Command {
 // actually passed change the task, all other fields preserved. It deliberately
 // exposes no --status flag — `dross task status` stays the sole status owner.
 func taskEdit() *cobra.Command {
-	var title string
+	var title, description string
 	var wave int
-	var covers, dependsOn []string
+	var covers, dependsOn, testContract, addTestContract []string
 	c := &cobra.Command{
 		Use:   "edit <phase-id> <task-id>",
 		Short: "Update an existing task's fields (partial; status not editable)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Replace and append disagree about what the result should be, and
+			// either way of resolving the pair drops something the user asked
+			// for. Refuse instead of picking.
+			if cmd.Flags().Changed("test-contract") && cmd.Flags().Changed("add-test-contract") {
+				return errors.New("--test-contract replaces the whole contract and --add-test-contract appends to it; pass one, not both")
+			}
 			plan, spec, planPath, err := loadPhasePlanAndSpec(args[0])
 			if err != nil {
 				return err
@@ -323,6 +338,23 @@ func taskEdit() *cobra.Command {
 			var e phase.TaskEdit
 			if cmd.Flags().Changed("title") {
 				e.Title = &title
+			}
+			if cmd.Flags().Changed("description") {
+				e.Description = &description
+			}
+			if cmd.Flags().Changed("test-contract") {
+				e.TestContract = &testContract
+			}
+			if cmd.Flags().Changed("add-test-contract") {
+				// Composed here rather than in TaskEdit, which stays a pure
+				// replace struct: the existing entries come first, so appending
+				// never reorders a contract someone already reviewed.
+				cur := plan.FindTask(args[1])
+				if cur == nil {
+					return fmt.Errorf("task not found: %s", args[1])
+				}
+				merged := append(slices.Clone(cur.TestContract), addTestContract...)
+				e.TestContract = &merged
 			}
 			if cmd.Flags().Changed("covers") {
 				e.Covers = &covers
@@ -344,9 +376,16 @@ func taskEdit() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&title, "title", "", "new task title")
+	c.Flags().StringVar(&description, "description", "", "new task description")
 	c.Flags().IntVar(&wave, "wave", 0, "new wave")
 	c.Flags().StringSliceVar(&covers, "covers", nil, "replace covered criterion ids (comma-separated)")
 	c.Flags().StringSliceVar(&dependsOn, "depends-on", nil, "replace depends_on task ids (comma-separated)")
+	// StringArray for both, for the reason given on `task add --test-contract`:
+	// a contract statement is prose and must not be split on its commas.
+	c.Flags().StringArrayVar(&testContract, "test-contract", nil,
+		"replace the whole test contract (repeatable; not split on commas)")
+	c.Flags().StringArrayVar(&addTestContract, "add-test-contract", nil,
+		"append one statement to the existing test contract (repeatable; not split on commas)")
 	return c
 }
 

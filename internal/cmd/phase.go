@@ -132,6 +132,7 @@ func milestonePhaseOrder(root string) []string {
 // Spec/plan are written by /dross-spec and /dross-plan slash commands.
 func phaseCreate() *cobra.Command {
 	var noBranch bool
+	var adoptFlag bool
 	c := &cobra.Command{
 		Use:   "create <title>",
 		Short: "Create the next phase directory and switch to phase/<id>",
@@ -151,15 +152,28 @@ func phaseCreate() *cobra.Command {
 			// that had already made a directory or a branch would leave the
 			// repo in a state neither outcome asked for, and the user would
 			// have to clean up after a command that declined to act.
-			if disposition == phase.SlugOccupied {
+			if disposition == phase.SlugOccupied && !adoptFlag {
 				return fmt.Errorf("phase %s already exists and has been started (it holds a spec, plan or recorded changes).\n"+
 					"dross will not retitle work in flight, and it no longer invents %s-2 for you.\n\n"+
 					"  work on it:      dross phase checkout %s\n"+
 					"  rename it:       dross phase rename %s \"<new title>\"\n"+
+					"  take it over:    dross phase create \"<title>\" --adopt\n"+
 					"  or pick a title that does not slugify to %s",
 					id, id, id, id, id)
 			}
-			adopted := disposition == phase.SlugAdopt
+			// takingOver is the deliberate opt-in: the slug holds started work
+			// and the user said so. It is a strictly wider action than adopting
+			// an empty placeholder, so it inherits rename's guard — a phase
+			// whose branch is live on the remote is somebody's open PR, and
+			// taking it over here would be the way around a refusal rename
+			// already makes.
+			takingOver := disposition == phase.SlugOccupied
+			if takingOver {
+				if err := refuseIfShipped(repoDir, id); err != nil {
+					return err
+				}
+			}
+			adopted := disposition == phase.SlugAdopt || takingOver
 
 			hasGit := isDir(filepath.Join(repoDir, ".git"))
 
@@ -170,7 +184,22 @@ func phaseCreate() *cobra.Command {
 
 			var branchBase string
 			var milestoneActive bool
-			if hasGit && !noBranch {
+			enteredExisting := false
+			switch {
+			case hasGit && !noBranch && takingOver && localBranchExists(repoDir, branchName):
+				// The branch is where the adopted phase's commits live. Forking
+				// would refuse (branch exists) and re-forking would abandon
+				// them, so enter it instead. The recorded fork point is left
+				// exactly as it is: it scopes the phase's mutation diff, and
+				// rewriting it to today's tip would silently drop every commit
+				// the phase already made out of its own scope.
+				if err := checkoutBranch(repoDir, branchName); err != nil {
+					return err
+				}
+				enteredExisting = true
+				Printf("%s %s\n", createdOrAdopted(adopted), dir)
+				Printf("checked out %s (existing branch; recorded fork point left as it was)\n", branchName)
+			case hasGit && !noBranch:
 				// Fork phase/<id> off the resolved new-work base
 				// (milestone/<version> when active, else main). On any
 				// failure roll back the empty dir so a retry doesn't leak
@@ -182,7 +211,7 @@ func phaseCreate() *cobra.Command {
 				}
 				Printf("%s %s\n", createdOrAdopted(adopted), dir)
 				Printf("checked out %s (rooted on %s)\n", branchName, branchBase)
-			} else {
+			default:
 				Printf("%s %s\n", createdOrAdopted(adopted), dir)
 				if !hasGit {
 					Print("(no .git/ found — skipping phase branch creation)")
@@ -198,8 +227,19 @@ func phaseCreate() *cobra.Command {
 				return err
 			}
 			s.CurrentPhase = id
+			// "created" is a lie about a phase that already holds a plan, and
+			// the status carried in state belongs to whatever phase was current
+			// before — not to this one. Derive it from what the adopted phase
+			// actually has on disk instead of preserving or inventing one.
 			s.CurrentPhaseStatus = "created"
-			s.Touch(fmt.Sprintf("created %s", id))
+			action := fmt.Sprintf("created %s", id)
+			if takingOver {
+				if isFile(filepath.Join(dir, "plan.toml")) {
+					s.CurrentPhaseStatus = "planned"
+				}
+				action = fmt.Sprintf("adopted %s", id)
+			}
+			s.Touch(action)
 			if err := s.Save(filepath.Join(root, state.File)); err != nil {
 				return fmt.Errorf("save state: %w", err)
 			}
@@ -229,18 +269,37 @@ func phaseCreate() *cobra.Command {
 			// locked decision. Silent in the cutover case (a milestone is set
 			// but predates the branch model), where milestoneActive is false
 			// yet CurrentMilestone is not empty.
-			if hasGit && !noBranch && !milestoneActive && s.CurrentMilestone == "" {
+			if hasGit && !noBranch && !enteredExisting && !milestoneActive && s.CurrentMilestone == "" {
 				Printf("no milestone active — rooted on %s; scope one with `dross milestone <version>` for integration branching\n", branchBase)
 			}
 
-			Print("Next: /dross-spec to write spec.toml, then /dross-plan")
+			// Pointing an adopted phase at /dross-spec would send the user to
+			// rewrite a spec it already has.
+			switch {
+			case takingOver && isFile(filepath.Join(dir, "plan.toml")):
+				Print("Next: /dross-execute — this phase already has a plan")
+			case takingOver && isFile(filepath.Join(dir, "spec.toml")):
+				Print("Next: /dross-plan — this phase already has a spec")
+			default:
+				Print("Next: /dross-spec to write spec.toml, then /dross-plan")
+			}
 			RecordOutcomeEvent("phase_create", map[string]int{"ordinal": ordinal}, nil, nil)
 			return nil
 		},
 	}
 	c.Flags().BoolVar(&noBranch, "no-branch", false,
 		"skip creating/checking out the phase/<id> git branch (advanced)")
+	c.Flags().BoolVar(&adoptFlag, "adopt", false,
+		"take over a slug that has already been started (refused without this)")
 	return c
+}
+
+// localBranchExists reports whether refs/heads/<branch> is present. Adoption
+// needs the answer before deciding to enter a branch rather than fork one;
+// forkPhaseBranch asks the same question to refuse, which is the behaviour
+// --adopt is opting out of.
+func localBranchExists(repoDir, branch string) bool {
+	return gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify"}, "refs/heads/"+branch)...) == nil
 }
 
 // phaseComplete finalizes a phase after its PR has been squash-merged

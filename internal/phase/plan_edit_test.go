@@ -458,3 +458,68 @@ func TestDeriveWave(t *testing.T) {
 		})
 	}
 }
+
+// TestAddTaskCarriesTestContract pins the field that made `dross task add`
+// only half a replacement for hand-editing plan.toml: a task could be added
+// from the CLI but its test contract could not, so the one field /dross-verify
+// reads to map criteria to tests was reachable only by opening the file.
+func TestAddTaskCarriesTestContract(t *testing.T) {
+	p := &Plan{TaskSeq: 1, Task: []Task{{ID: "t-1", Wave: 1, Title: "one"}}}
+	contract := []string{"if A breaks, TestA fails", "if B breaks, TestB fails"}
+	got, err := p.AddTask(NewTask{Title: "new", TestContract: contract}, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.TestContract, contract) {
+		t.Errorf("test_contract = %v, want %v — order included: a contract read in a different order is a different contract", got.TestContract, contract)
+	}
+}
+
+func TestEditTaskReplacesTestContract(t *testing.T) {
+	p := &Plan{TaskSeq: 1, Task: []Task{{
+		ID: "t-1", Wave: 1, Title: "one",
+		TestContract: []string{"old one", "old two"},
+	}}}
+	want := []string{"fresh"}
+	if err := p.EditTask("t-1", TaskEdit{TestContract: ptr(want)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.FindTask("t-1").TestContract; !reflect.DeepEqual(got, want) {
+		t.Errorf("test_contract = %v, want %v — a non-nil pointer replaces wholesale, like every other TaskEdit field", got, want)
+	}
+}
+
+func TestEditTaskSetsDescription(t *testing.T) {
+	p := &Plan{TaskSeq: 1, Task: []Task{{ID: "t-1", Wave: 1, Title: "one"}}}
+	if err := p.EditTask("t-1", TaskEdit{Description: ptr("what it does")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.FindTask("t-1").Description; got != "what it does" {
+		t.Errorf("description = %q, want %q — settable on add and previously nowhere else", got, "what it does")
+	}
+}
+
+// TestEditTaskLeavesUnsetFieldsAlone is what makes a partial edit safe: an edit
+// that touches only the title must not disturb the two fields this phase added,
+// or every `task edit` becomes a way to silently drop a contract.
+func TestEditTaskLeavesUnsetFieldsAlone(t *testing.T) {
+	pre := Task{
+		ID: "t-1", Wave: 1, Title: "one",
+		Description:  "kept",
+		TestContract: []string{"kept one", "kept two"},
+	}
+	p := &Plan{TaskSeq: 1, Task: []Task{pre}}
+	if err := p.EditTask("t-1", TaskEdit{Title: ptr("renamed")}); err != nil {
+		t.Fatal(err)
+	}
+	got := p.FindTask("t-1")
+	if got.Title != "renamed" {
+		t.Errorf("title = %q, want renamed", got.Title)
+	}
+	if got.Description != pre.Description {
+		t.Errorf("description = %q, want it untouched (%q)", got.Description, pre.Description)
+	}
+	if !reflect.DeepEqual(got.TestContract, pre.TestContract) {
+		t.Errorf("test_contract = %v, want it untouched (%v)", got.TestContract, pre.TestContract)
+	}
+}

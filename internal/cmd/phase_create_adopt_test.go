@@ -187,3 +187,131 @@ func TestFreshCreateIsUnchanged(t *testing.T) {
 		t.Errorf("a fresh phase did not join the array at the tail: %v", m.Phases)
 	}
 }
+
+// startedRepo is adoptRepo plus the markers that make CreateSlug read the slug
+// as SlugOccupied rather than an empty placeholder — i.e. real work in flight.
+func startedRepo(t *testing.T, slug string) string {
+	t.Helper()
+	dir := adoptRepo(t, slug, nil, nil)
+	root := filepath.Join(dir, ".dross")
+	mustWrite(t, filepath.Join(root, "phases", slug, "spec.toml"),
+		"[phase]\n  id = \""+slug+"\"\n  title = \""+slug+"\"\n")
+	return dir
+}
+
+// TestCreateStillRefusesStartedSlugWithoutAdopt: the default stays a refusal.
+// Silently retitling work in flight is exactly what phase-create-adoption
+// removed, and --adopt must be an opt-in rather than a softening.
+func TestCreateStillRefusesStartedSlugWithoutAdopt(t *testing.T) {
+	startedRepo(t, "started-phase")
+	err := runCmd(t, Phase(), "create", "started phase")
+	if err == nil {
+		t.Fatal("expected a refusal for a slug that already holds a spec")
+	}
+	if !strings.Contains(err.Error(), "already exists and has been started") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestRefusalNamesAdoptFlag: an error that does not say how to proceed is the
+// reason people go back to hand-editing.
+func TestRefusalNamesAdoptFlag(t *testing.T) {
+	startedRepo(t, "started-phase")
+	err := runCmd(t, Phase(), "create", "started phase")
+	if err == nil {
+		t.Fatal("expected a refusal")
+	}
+	if !strings.Contains(err.Error(), "--adopt") {
+		t.Errorf("the refusal must name --adopt as the way through:\n%v", err)
+	}
+}
+
+func TestAdoptTakesOverStartedPhase(t *testing.T) {
+	dir := startedRepo(t, "started-phase")
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "create", "started phase", "--adopt"); err != nil {
+			t.Fatalf("create --adopt: %v", err)
+		}
+	})
+	if !strings.Contains(out, "adopted existing") {
+		t.Errorf("adoption must be narrated as such, got:\n%s", out)
+	}
+	// The spec it found is still the spec it has: adoption takes work over, it
+	// does not start it again.
+	body := mustRead(t, filepath.Join(dir, ".dross", "phases", "started-phase", "spec.toml"))
+	if !strings.Contains(body, "started-phase") {
+		t.Errorf("the adopted spec was rewritten: %s", body)
+	}
+}
+
+// TestAdoptChecksOutExistingBranch: the branch is where the adopted phase's
+// commits live. forkPhaseBranch refuses when it exists, and re-forking would
+// abandon them.
+func TestAdoptChecksOutExistingBranch(t *testing.T) {
+	dir := startedRepo(t, "started-phase")
+	mustGit(t, dir, "branch", "phase/started-phase")
+
+	if err := runCmd(t, Phase(), "create", "started phase", "--adopt"); err != nil {
+		t.Fatalf("create --adopt with an existing branch: %v", err)
+	}
+	got := strings.TrimSpace(gitOutT(t, dir, "rev-parse", "--abbrev-ref", "HEAD"))
+	if got != "phase/started-phase" {
+		t.Errorf("HEAD = %s, want phase/started-phase — adoption must enter the branch", got)
+	}
+}
+
+// TestAdoptPreservesRecordedFork: the fork point scopes the phase's mutation
+// diff. Rewriting it to today's tip drops every commit the phase already made
+// out of its own scope, which is a silent loss of coverage.
+func TestAdoptPreservesRecordedFork(t *testing.T) {
+	dir := startedRepo(t, "started-phase")
+	mustGit(t, dir, "branch", "phase/started-phase")
+	changesPath := filepath.Join(dir, ".dross", "phases", "started-phase", "changes.json")
+	mustWrite(t, changesPath, `{"phase":"started-phase","forked_from":{"base":"main","sha":"deadbeef"}}`)
+	before := mustRead(t, changesPath)
+
+	if err := runCmd(t, Phase(), "create", "started phase", "--adopt"); err != nil {
+		t.Fatalf("create --adopt: %v", err)
+	}
+	if after := mustRead(t, changesPath); after != before {
+		t.Errorf("the recorded fork point was rewritten:\n--- before ---\n%s\n--- after ---\n%s", before, after)
+	}
+}
+
+// TestAdoptPreservesPhaseStatus: a phase holding a plan must not read
+// "created" afterwards — that is a lie about how far the work got, and the
+// status carried in state belongs to whichever phase was current before.
+func TestAdoptPreservesPhaseStatus(t *testing.T) {
+	dir := startedRepo(t, "started-phase")
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "started-phase", "plan.toml"),
+		"task_seq = 1\n\n[phase]\n  id = \"started-phase\"\n")
+
+	if err := runCmd(t, Phase(), "create", "started phase", "--adopt"); err != nil {
+		t.Fatalf("create --adopt: %v", err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, State(), "get", "current_phase_status"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if got := strings.TrimSpace(out); got != "planned" {
+		t.Errorf("current_phase_status = %q, want planned — the phase has a plan", got)
+	}
+}
+
+// TestAdoptRefusesShippedPhase: taking over a phase whose branch is live on the
+// remote is the identical hazard `phase rename` refuses. Without this, --adopt
+// is the way around that guard.
+func TestAdoptRefusesShippedPhase(t *testing.T) {
+	dir := startedRepo(t, "started-phase")
+	mustGit(t, dir, "branch", "phase/started-phase")
+	mustGit(t, dir, "push", "-q", "origin", "phase/started-phase")
+
+	err := runCmd(t, Phase(), "create", "started phase", "--adopt")
+	if err == nil {
+		t.Fatal("expected a refusal for a phase with a live origin branch")
+	}
+	if !strings.Contains(err.Error(), "live origin branch") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
