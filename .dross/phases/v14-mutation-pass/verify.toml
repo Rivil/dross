@@ -1,34 +1,46 @@
 [verify]
   phase = "v14-mutation-pass"
-  generated_at = 2026-08-17T12:21:04.865808Z
-  verdict = "pending"
+  generated_at = 2026-08-17T15:09:03.738395Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-17T17:31:23.618242Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9960222752585521
-  mutants_killed = 1252
-  mutants_survived = 5
-  mutants_not_covered = 5
-  mutants_in_scope = 1257
+  mutation_score = 0.9888811674774148
+  mutants_killed = 1423
+  mutants_survived = 16
+  mutants_not_covered = 16
+  mutants_in_scope = 1439
   unclassified_in_scope = 0
   criteria_total = 1
-  criteria_covered = 0
+  criteria_covered = 1
   criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 1252
-    survived = 5
+    killed = 1423
+    survived = 16
     timeout = 0
-    in_scope = 1257
-    score = 0.9960222752585521
-    file_count = 20
+    in_scope = 1439
+    score = 0.9888811674774148
+    file_count = 26
 
 [[criterion]]
   id = "c-1"
-  status = "unknown"
+  status = "covered"
+  tests = ["mutation campaign over the milestone diff: 1439 in-scope mutants, 1423 killed, 16 survivors, 0 undispositioned", "internal/remote/remote_test.go:TestValidateRefusesAnUnsafeScratchBase", "internal/remote/remote_test.go:TestValidateAcceptsACanonicalScratchBase"]
+  notes = "Measured over all 26 production Go files in the milestone's own diff (2fe2183^1..2fe2183), not the 20 the first campaign recorded. The 16 survivors are all dispositioned in survivors.toml under the gremlins attribution ceiling and const-initializer categories; efficacy over the 1423 reachable mutants is 1.00. The one in-diff survivor this widened scope surfaced — remote.go:140, the path.Clean guard on Target.ScratchBase — was killed with a test rather than accepted, and the mutant was hand-applied and observed failing both new tests before the fix landed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The scope-degraded warning below is answered rather than outstanding: changes.json still records no base branch, so dross could take no git diff itself, but the file list was cross-checked by hand against `git diff --name-only 2fe2183^1 2fe2183 -- '*.go'` (excluding _test.go) and matches it exactly at 26 files. The first campaign's 20-file list did not, and the six it missed were scratch-volume-guard's entire diff — that phase landed after the campaign was recorded, which is how a milestone came to be closed on a measurement that never saw its last phase."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Scope is the v1.4 milestone diff, so the post-milestone commits on main (the milestone verify gate, the ship nil-verify fix, and this campaign's own test) are deliberately outside it and are NOT mutation-measured. They carry unit tests and the full suite is green, but no mutation number covers them."
 
 [[finding]]
   severity = "NOTE"
