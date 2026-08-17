@@ -39,3 +39,4 @@
   id = "3701d0add3074097"
   text = "`dross phase create --adopt <existing-slug>` to adopt a started phase deliberately, re-titling it."
   why = "A different feature: this phase is about create not silently doing the wrong thing, and c-2's refusal is the honest floor. An explicit adopt verb is worth having once someone actually wants it — and `dross phase rename` already covers the re-title half."
+  target = "cli-surface-completeness"

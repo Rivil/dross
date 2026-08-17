@@ -38,3 +38,4 @@
   id = "130a1cf4bc7049f2"
   text = "Give /dross-plan a `--panel`-free lightweight second opinion — a single cold reviewer over the finished decomposition, cheaper than the 3-lens panel but more than nothing."
   why = "Adjacent but separate: this phase is about surfacing the planner's OWN uncertainty during decomposition, not about adding another reviewer after it. §6.1 already runs an independent plan review, so the gap is a cost tier rather than a missing check. Left as someday — no phase on the roadmap owns planner cost tiers."
+  target = "plan-review-tiers"

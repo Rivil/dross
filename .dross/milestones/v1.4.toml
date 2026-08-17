@@ -1,0 +1,12 @@
+phases = ["test-hermeticity-guard", "cli-surface-completeness", "pull-envelope-truth", "mutation-score-weighting", "scanner-scratch-cache", "adopter-upgrade-note", "plan-review-tiers", "runtime-command-runner", "ci-mutation-leg", "remote-run-latency", "gremlins-workdir-pin", "remote-runtime-install", "remote-host-pool", "remote-test-watch", "board-task-inbound"]
+
+[milestone]
+  version = "v1.4"
+  title = "1.4 the backlog burn — every parked idea, routed or killed"
+  status = "active"
+  started = "2026-08-17"
+  base = "main"
+
+[scope]
+  success_criteria = ["`dross deferred list --someday` returns an empty list at milestone close: every idea routed into v1.4 is delivered or explicitly dismissed, and no phase in this milestone parks a new item as someday without routing it", "A mutation run reaches a bare host without hand-administration and picks between more than one: dross installs pinned language runtimes on a host that has none, selects a ready host from a configured set, and a re-run against an unchanged tree does no full resync — with the run's report identical to a local one", "The non-Go mutation leg runs on every PR in CI, on a pinned toolchain: a PR that breaks the JS/TS mutation run fails CI on a machine where no developer installed anything, and the workflow adding it passes the supply-chain checklist (pinned action SHAs, lockfile-scoped install, no lifecycle scripts)", "No dross output claims more than it knows: `dross issue pull --json` returns its envelope with a non-null .error on any failure including a missing auth variable, a pooled multi-language mutation score is weighted by leg size rather than raw-counted, and a test that reads the real repo's .dross tree fails locally instead of only in CI", "Nothing dross supports requires hand-editing a dross artefact or a config value that nothing reads: `dross task add`/`task edit` set test_contract, `dross phase create --adopt` takes over a started slug, and every runtime command in project.toml is executable via `dross run <name>`", "Dragging a task's card on the board moves that task in plan.toml on the next sync, and a task changed on both sides since the last sync is refused with both values named rather than silently resolved"]
+  non_goals = ["No new someday items: a phase in this milestone routes every idea it surfaces to a destination or dismisses it — parking nothing back into the list this milestone exists to empty"]

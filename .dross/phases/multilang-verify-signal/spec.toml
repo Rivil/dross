@@ -38,3 +38,4 @@
   id = "02f3322b2afeb896"
   text = "Add Node + a pinned Stryker to the CI workflow so the end-to-end mutation leg runs on every PR rather than only where a developer has the toolchain."
   why = "It is the obvious completion of c-1 and it is deliberately not in this phase: it is a supply-chain change to a workflow this repo hardened on purpose, and it needs the pinning/lockfile checklist applied deliberately rather than as a side effect. Left unrouted — no phase on the roadmap owns CI hardening, and naming a target that does not exist is the lie this milestone keeps closing."
+  target = "ci-mutation-leg"

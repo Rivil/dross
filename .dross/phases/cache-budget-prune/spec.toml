@@ -54,7 +54,9 @@
 [[deferred]]
   text = "Pin gremlins' working directory so cross-run cache reuse becomes possible at all, cutting run TIME as well as disk."
   why = "`gremlins unleash` has no workdir flag as of v0.6.0, so it needs an upstream change or a patched build. Out of scope for a phase whose job is bounding disk, and the scratch-and-wipe approach is correct regardless of whether reuse later becomes possible."
+  target = "gremlins-workdir-pin"
 
 [[deferred]]
   text = "Extend the scratch-cache treatment to the security and quality scanners, which also spawn toolchains with their own caches."
   why = "Not measured as a problem yet. The mutation runner is where the 64 GB came from; widening on suspicion would add per-scanner plumbing for a cost nobody has observed."
+  target = "scanner-scratch-cache"

@@ -69,6 +69,7 @@
   id = "1ecc05633e1a85ed"
   text = "Test-suite hermeticity gap: a test read the real repo's gitignored state.json and passed both the per-task gate and a full verify — only CI caught it. ARCHITECTURE.md carries a 'Test-suite hermeticity' entry, so the principle exists but nothing enforces it."
   why = "Found by CI, not by dross. The gate that should have caught it is the one that let it through, so the enforcement gap is the finding — not the individual test."
+  target = "test-hermeticity-guard"
 
 [[deferred]]
   id = "e948eb6e07e8138b"
