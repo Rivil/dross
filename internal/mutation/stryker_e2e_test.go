@@ -47,6 +47,15 @@ func e2eSkipReason() string {
 // real tool, through dross's own adapter.
 func TestStrykerRunsEndToEnd(t *testing.T) {
 	if reason := e2eSkipReason(); reason != "" {
+		// DROSS_REQUIRE_E2E is what makes the CI leg mean something. Without
+		// it, a runner missing Node skips — and a skipped leg reports the same
+		// green as a leg that ran, so the mutation coverage CI is supposed to
+		// guarantee would silently stop existing the first time the setup
+		// drifted. In CI the absence of the toolchain is a broken workflow, not
+		// a machine that happens to lack it.
+		if os.Getenv("DROSS_REQUIRE_E2E") != "" {
+			t.Fatalf("DROSS_REQUIRE_E2E is set but the end-to-end run cannot proceed: %s", reason)
+		}
 		t.Skip(reason)
 	}
 
