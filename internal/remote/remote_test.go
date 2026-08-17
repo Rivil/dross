@@ -181,6 +181,58 @@ func TestValidateRefusesShellMetacharacters(t *testing.T) {
 	}
 }
 
+// TestValidateRefusesAnUnsafeScratchBase covers the scratch base on the same
+// terms as the workdir, because it is handled on worse ones: the scratch base
+// reaches an `rm -rf` on the remote when a run cleans up after itself, so a
+// value that escapes its intended tree deletes somebody else's.
+//
+// The canonical-form case is the one that matters and the one that had no
+// test: /srv/../etc satisfies workdirRe (dots and slashes are in the class),
+// so the regexp above it lets it through and only the path.Clean comparison
+// stops it.
+func TestValidateRefusesAnUnsafeScratchBase(t *testing.T) {
+	for _, base := range []string{
+		"/scratch/x; rm -rf /",
+		"/scratch/$(whoami)",
+		"/scratch/`id`",
+		"/scratch/x\nrm -rf /",
+		"scratch/x",    // not absolute
+		"/srv/../etc",  // not canonical — reaches the path.Clean guard
+		"/scratch/x/",  // not canonical — trailing slash
+		"/scratch/./x", // not canonical — single-dot element
+		"/scratch//x",  // not canonical — doubled separator
+	} {
+		t.Run(base, func(t *testing.T) {
+			tg := Target{Host: host, Workdir: "/srv/x", ScratchBase: base}
+			err := tg.Validate()
+			if err == nil {
+				t.Fatalf("scratch base %q was accepted", base)
+			}
+			if !errors.Is(err, ErrUnsafeTarget) {
+				t.Errorf("refusal does not wrap ErrUnsafeTarget: %v", err)
+			}
+			if !strings.Contains(err.Error(), fmt.Sprintf("%q", base)) {
+				t.Errorf("refusal does not name the scratch base: %v", err)
+			}
+		})
+	}
+}
+
+// TestValidateAcceptsACanonicalScratchBase pins the other side of the same
+// guard. Without it, a refusal that rejected EVERY scratch base — the exact
+// shape of an inverted comparison — would satisfy the table above completely
+// while making the feature unusable.
+func TestValidateAcceptsACanonicalScratchBase(t *testing.T) {
+	for _, base := range []string{"/scratch", "/var/lib/buildcache/scratch", "/srv/x"} {
+		t.Run(base, func(t *testing.T) {
+			tg := Target{Host: host, Workdir: "/srv/x", ScratchBase: base}
+			if err := tg.Validate(); err != nil {
+				t.Fatalf("canonical scratch base %q was refused: %v", base, err)
+			}
+		})
+	}
+}
+
 func TestValidateRefusesAnOptionShapedHost(t *testing.T) {
 	for _, h := range []string{"-oProxyCommand=id", "-helicon", "", "helicon:/srv", "he licon", "host$(id)"} {
 		t.Run(h, func(t *testing.T) {
