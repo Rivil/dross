@@ -2,5 +2,6 @@
   "phase": "cli-surface-completeness",
   "base": "milestone/v1.4",
   "base_commit": "47a0fe0a0618ef1b04c4fc5ebc266ea80d43917f",
+  "status": "complete",
   "tasks": {}
 }
