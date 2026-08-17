@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -383,4 +386,101 @@ func (f *pullFakeClient) UpdateIssue(string, forge.IssuePatch) (*forge.Issue, er
 func (f *pullFakeClient) CloseIssue(string) error { return nil }
 func (f *pullFakeClient) ListIssues(forge.IssueFilter) ([]forge.Issue, error) {
 	return nil, nil
+}
+
+// TestCollectTaskMovesSortsByTaskID pins the ordering. Unsorted output makes
+// two runs of an unchanged board produce different text, which is the
+// difference between a diff you can read and one you re-read every time.
+func TestCollectTaskMovesSortsByTaskID(t *testing.T) {
+	ctx, plan, _ := pullFixture(t, pullPlan)
+	ctx.client = &pullFakeClient{t: t, issues: map[string]*forge.Issue{
+		"PROJ-1": {Key: "PROJ-1", Labels: statusLabels(statusTaskInProgress)},
+		"PROJ-2": {Key: "PROJ-2", Labels: statusLabels(statusTaskInProgress)},
+	}}
+	// Recorded t-2 first, so an unsorted collect would emit t-2 before t-1.
+	ctx.board.SetTaskSynced("p1", "t-2", "PROJ-2", phase.StatusInProgress, statusTaskInProgress)
+	ctx.board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, statusTaskInProgress)
+
+	moves, err := collectTaskMoves(ctx, "p1", plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(moves) != 2 {
+		t.Fatalf("moves = %+v, want both mirrored tasks", moves)
+	}
+	if moves[0].TaskID != "t-1" || moves[1].TaskID != "t-2" {
+		t.Errorf("order = %s,%s — want t-1 then t-2", moves[0].TaskID, moves[1].TaskID)
+	}
+}
+
+// TestTaskPullSurfacesAMissingPhase: a phase id that names nothing must fail,
+// not report an empty board.
+func TestTaskPullSurfacesAMissingPhase(t *testing.T) {
+	ctx, _, _ := pullFixture(t, pullPlan)
+	ctx.client = &pullFakeClient{t: t}
+	if err := taskPull(ctx, "no-such-phase", false); err == nil {
+		t.Fatal("an unknown phase must be refused, not read as 'no moves'")
+	}
+}
+
+// TestTaskPullSurfacesABoardFailure: the same at the taskPull boundary — an
+// unreadable board must reach the caller rather than being reported as clean.
+func TestTaskPullSurfacesABoardFailure(t *testing.T) {
+	ctx, _, _ := pullFixture(t, pullPlan)
+	ctx.client = &pullFakeClient{t: t, err: errors.New("502 from the tracker")}
+	ctx.board.SetTaskSynced("p1", "t-1", "PROJ-1", phase.StatusInProgress, statusTaskInProgress)
+	err := taskPull(ctx, "p1", false)
+	if err == nil {
+		t.Fatal("a board failure must fail the pull")
+	}
+	if !strings.Contains(err.Error(), "502") {
+		t.Errorf("the cause must survive to the caller: %v", err)
+	}
+}
+
+// TestTaskPullCommandNoOpsWhenBoardIsOff drives the command itself, which the
+// direct taskPull tests never reach: board sync off is a silent no-op, because
+// every workflow prompt calls `dross issue …` unconditionally on that promise.
+func TestTaskPullCommandNoOpsWhenBoardIsOff(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "task-pull", "p1"); err != nil {
+			t.Fatalf("board-off must be a no-op, got %v", err)
+		}
+	})
+	if !strings.Contains(out, "board sync is off") {
+		t.Errorf("the no-op must say why it did nothing: %s", out)
+	}
+}
+
+// TestTaskPullCommandNeedsAPhase: with no argument and no current_phase there
+// is nothing to resolve, and guessing would pull against the wrong plan.
+func TestTaskPullCommandNeedsAPhase(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `[]`)
+	}))
+	t.Cleanup(srv.Close)
+	youtrackBoardRepo(t, srv.URL)
+
+	if err := runCmd(t, Issue(), "task-pull"); err == nil {
+		t.Fatal("no phase id and no current_phase must be refused")
+	}
+}
+
+// TestTaskPullCommandSurfacesASetupFailure drives the openBoard error arm: a
+// board configured but unusable must fail loudly here, unlike `issue pull`
+// whose --json contract deliberately routes failures into its envelope.
+func TestTaskPullCommandSurfacesASetupFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	t.Cleanup(srv.Close)
+	youtrackBoardRepo(t, srv.URL)
+	mustRunSet(t, "board.provider", "not-a-real-tracker")
+
+	if err := runCmd(t, Issue(), "task-pull", "p1"); err == nil {
+		t.Fatal("an unusable board must fail the command")
+	}
 }
