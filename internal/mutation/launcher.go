@@ -62,12 +62,21 @@ type Launcher struct {
 	// cmd.Dir on the local ssh process says nothing about the remote cwd.
 	Workdir string
 
+	// CacheVars are the environment variable names this stack's toolchain reads
+	// for its build cache, declared by the stack profile (stack.MutationCache).
+	// Empty leaves the run exactly as it was before scratch caches existed.
+	CacheVars []string
+
 	// PackageManager is the project's own package manager (stack.package_manager),
 	// which keys the Node restore. It is deliberately NOT defaulted: installing
 	// with the wrong manager produces a tree the tool resolves differently, and
 	// pnpm's symlinked layout is load-bearing — stryker.conf.json has to declare
 	// its plugins explicitly BECAUSE that layout defeats auto-discovery.
 	PackageManager string
+
+	// scratch is this run's private build cache, created on first use and
+	// wiped by Close. Nil until something needs it.
+	scratch *scratch
 
 	// pushed records that the one-shot tree sync has happened, so the
 	// per-package loop cannot re-push between packages. rsync is the expensive
@@ -188,7 +197,7 @@ var launcherCommand = func(argv []string, stdin string) *exec.Cmd {
 }
 
 // newLauncher validates the combination before anything can be spawned.
-func newLauncher(adapter, prefix string, target *remote.Target, projectRoot, workdir string) (*Launcher, error) {
+func newLauncher(adapter, prefix string, target *remote.Target, projectRoot, workdir string, cacheVars []string) (*Launcher, error) {
 	if prefix != "" && target != nil {
 		return nil, fmt.Errorf(
 			"mutation: adapter %q has both a runtime prefix (%q) and a remote host (%q) — "+
@@ -219,6 +228,7 @@ func newLauncher(adapter, prefix string, target *remote.Target, projectRoot, wor
 		Adapter:     adapter,
 		ProjectRoot: projectRoot,
 		Workdir:     workdir,
+		CacheVars:   append([]string(nil), cacheVars...),
 	}, nil
 }
 
@@ -227,7 +237,57 @@ func (l *Launcher) remoteRun() bool { return l != nil && l.Target != nil }
 
 // toolTarget is the remote rooted at the directory the TOOL runs in.
 func (l *Launcher) toolTarget() (remote.Target, error) {
-	return l.Target.In(l.Workdir)
+	t, err := l.Target.In(l.Workdir)
+	if err != nil {
+		return t, err
+	}
+	// The remote scratch sits under the GRANTED WORKDIR, never the host's
+	// default temp (the locked scratch_location decision). helicon's /tmp is a
+	// 32 GB RAM-backed tmpfs shared with a running LLM, so a build cache there
+	// is an outage rather than a slowdown.
+	//
+	// TMPDIR rides along with the declared cache vars because gremlins copies
+	// the whole module via os.MkdirTemp, which honours TMPDIR and not GOTMPDIR
+	// — pointing the Go toolchain at a big volume covers the compiler and not
+	// the harness wrapping it.
+	if len(l.CacheVars) > 0 {
+		dir := remoteScratchDir(l.Target.Workdir)
+		for _, a := range remoteAssignments(dir, append(append([]string(nil), l.CacheVars...), "TMPDIR")) {
+			name, value, _ := strings.Cut(a, "=")
+			t.Env = append(t.Env, remote.EnvVar{Name: name, Value: value})
+		}
+	}
+	return t, nil
+}
+
+// localCacheEnv creates this run's scratch on first use and returns its
+// assignments. Nil when the stack declared no cache vars, so nothing about such
+// a run changes.
+func (l *Launcher) localCacheEnv() ([]string, error) {
+	if len(l.CacheVars) == 0 {
+		return nil, nil
+	}
+	if l.scratch == nil {
+		// Beside the project rather than in os.TempDir(): the tree's own volume
+		// is the one the developer chose to work on, and on a machine whose
+		// temp is RAM-backed a build cache there is the failure this prevents.
+		s, err := newScratch(filepath.Join(l.ProjectRoot, ".dross-cache"), l.CacheVars, os.Stderr)
+		if err != nil {
+			return nil, err
+		}
+		l.scratch = s
+	}
+	return l.scratch.Assignments(), nil
+}
+
+// Close wipes anything this launcher created. Every adapter defers it, so it
+// runs on a clean finish, an adapter failure and an early return alike; it is
+// idempotent because a deferred call must not fight an explicit one.
+func (l *Launcher) Close() error {
+	if l == nil {
+		return nil
+	}
+	return l.scratch.Remove()
 }
 
 // reportRel resolves the adapter's remote report path through the closed table.
@@ -284,7 +344,22 @@ func (l *Launcher) ensurePushed() error {
 // test process" means in practice.
 func (l *Launcher) toolCmd(argv []string, local func([]string) *exec.Cmd) (*exec.Cmd, error) {
 	if !l.remoteRun() {
-		return local(argv), nil
+		cmd := local(argv)
+		// The scratch is applied HERE rather than inside each adapter's own
+		// buildCmd seam, because this is the one construction point both
+		// transports pass through — an adapter that grew its own would be an
+		// adapter whose runs quietly kept using the shared cache.
+		assignments, err := l.localCacheEnv()
+		if err != nil {
+			return nil, err
+		}
+		if len(assignments) > 0 {
+			// os.Environ() first so the assignments WIN: exec resolves a
+			// repeated name to the last occurrence, which is what lets a
+			// scratch override an ambient GOCACHE the developer exported.
+			cmd.Env = append(append(os.Environ(), cmd.Env...), assignments...)
+		}
+		return cmd, nil
 	}
 	if err := l.ensurePushed(); err != nil {
 		return nil, err

@@ -48,6 +48,11 @@ type StrykerNet struct {
 	//
 	// A NAMED field rather than an embedded Launcher — see launcher.go.
 	Remote *remote.Target
+	// CacheVars are the environment variable names this stack's toolchain reads
+	// for its build cache (stack profile mutation_cache.vars). A run is pointed
+	// at a scratch copy and the scratch is wiped when the run ends; empty leaves
+	// the run exactly as it was.
+	CacheVars []string
 }
 
 // strykerNetRoot picks out the one top-level field ParseStrykerJSON ignores.
@@ -90,10 +95,12 @@ func (s *StrykerNet) Run(files []string) (*Report, error) {
 		return nil, err
 	}
 
-	lr, err := newLauncher(s.Name(), s.Prefix, s.Remote, s.ProjectRoot, "")
+	lr, err := newLauncher(s.Name(), s.Prefix, s.Remote, s.ProjectRoot, "", s.CacheVars)
 	if err != nil {
 		return nil, err
 	}
+
+	defer func() { _ = lr.Close() }()
 	// .NET's restore is `dotnet restore` regardless of any package manager, so
 	// this cannot refuse — resolved early anyway so every adapter's remote
 	// pre-flight has the same shape.
