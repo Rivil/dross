@@ -2276,7 +2276,11 @@ func TestDoctorReportsRedProofDocMismatch(t *testing.T) {
 // check people learn to ignore.
 func TestDoctorCleanRedProofsHaveNoFindings(t *testing.T) {
 	repo := repoRootForDocs(t)
-	lines, present := redProofChecks(filepath.Join(repo, ".dross"), repo)
+	// The live pin, copied into a throwaway root. The check still runs against
+	// this repo's REAL recorded proof and resolves its SHA in the real
+	// checkout — only the .dross it loads from is fixture, so no gitignored
+	// file can answer for it (hermetic_dross_read_test.go).
+	lines, present := redProofChecks(liveRecordRoot(t, repo, "config-trust-hardening"), repo)
 	if !present {
 		t.Fatal("this repo records no red-proof pin — the live pin is unchecked")
 	}
