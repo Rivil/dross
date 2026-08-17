@@ -93,6 +93,23 @@ type localStore struct {
 	// writes it, and it prints the line first.
 	TrustedReplayCommands string `toml:"trusted_replay_commands,omitempty"`
 
+	// TrustedRunCommands is the comma-separated set of sha256 fingerprints for
+	// the [runtime] slot commands this machine has consented to `dross run`
+	// spawning.
+	//
+	// A third grant rather than a reuse of TrustedTestCommand, for the reason
+	// the binding exists at all: a grant covering "whatever [runtime] happens
+	// to say" would let a dev_command arriving in a pull inherit trust for a
+	// line nobody read. project.toml is TRACKED, so the repo proposes these
+	// commands; consenting to spawn one is code execution the repo chose.
+	//
+	// A SET, like the replay grant: a repo has many runtime slots and granting
+	// `dross run dev` must not silently revoke `dross run migrate`.
+	//
+	// ABSENT from localKeys on the same precedent — only `dross trust --run
+	// <name>` writes it, and it prints the line first.
+	TrustedRunCommands string `toml:"trusted_run_commands,omitempty"`
+
 	// RemoteHost and RemoteWorkdir authorize dross to run this repo's code on
 	// another machine — the mutation adapters and, since remote-test-runner,
 	// the test suite.
