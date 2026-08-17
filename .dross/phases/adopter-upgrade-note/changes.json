@@ -2,5 +2,6 @@
   "phase": "adopter-upgrade-note",
   "base": "milestone/v1.4",
   "base_commit": "0dd5e93c4cb0af53f7e85df5bee1101ee6ab22dc",
+  "status": "complete",
   "tasks": {}
 }
