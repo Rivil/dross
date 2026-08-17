@@ -3,7 +3,7 @@ phases = ["test-hermeticity-guard", "cli-surface-completeness", "pull-envelope-t
 [milestone]
   version = "v1.4"
   title = "1.4 the backlog burn — every parked idea, routed or killed"
-  status = "active"
+  status = "complete"
   started = "2026-08-17"
   base = "main"
 

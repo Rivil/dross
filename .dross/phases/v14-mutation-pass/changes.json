@@ -25,6 +25,17 @@
         "internal/verify/verify.go"
       ],
       "completed_at": "2026-08-17T08:59:50.879521Z"
+    },
+    "t-2": {
+      "files": [
+        "internal/mutation/freespace_other.go",
+        "internal/mutation/freespace_unix.go",
+        "internal/mutation/launcher.go",
+        "internal/mutation/scratch.go",
+        "internal/mutation/scratch_space.go",
+        "internal/remote/remote.go"
+      ],
+      "completed_at": "2026-08-17T13:24:32.469990Z"
     }
   }
 }
