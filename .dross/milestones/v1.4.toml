@@ -1,4 +1,4 @@
-phases = ["test-hermeticity-guard", "cli-surface-completeness", "pull-envelope-truth", "mutation-score-weighting", "adopter-upgrade-note", "plan-review-tiers", "runtime-command-runner", "ci-mutation-leg", "remote-host-pool", "board-task-inbound"]
+phases = ["test-hermeticity-guard", "cli-surface-completeness", "pull-envelope-truth", "mutation-score-weighting", "adopter-upgrade-note", "plan-review-tiers", "runtime-command-runner", "ci-mutation-leg", "remote-host-pool", "board-task-inbound", "scratch-volume-guard"]
 
 [milestone]
   version = "v1.4"

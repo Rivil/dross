@@ -29,6 +29,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Rivil/dross/internal/remote"
@@ -77,6 +78,11 @@ type Launcher struct {
 	// remoteScratchGone records that Close already wiped the host side, so a
 	// deferred Close and an explicit one do not each pay for an ssh round trip.
 	remoteScratchGone bool
+
+	// remoteSpaceChecked makes the host-side free-space probe once-per-run: it
+	// is one ssh, and asking again before every package would pay a round trip
+	// to re-learn an answer that cannot have changed enough to matter.
+	remoteSpaceChecked bool
 
 	// scratch is this run's private build cache, created on first use and
 	// wiped by Close. Nil until something needs it.
@@ -338,6 +344,12 @@ func (l *Launcher) ensurePushed() error {
 	if !l.remoteRun() || l.pushed {
 		return nil
 	}
+	// Before the push, not after. Refusing here costs one df; refusing after
+	// the sync has already written the whole working tree onto the volume the
+	// check exists to protect.
+	if err := l.checkRemoteScratchSpace(); err != nil {
+		return err
+	}
 	argv, err := remote.SyncArgs(*l.Target, l.ProjectRoot)
 	if err != nil {
 		return err
@@ -409,7 +421,82 @@ func (l *Launcher) remoteScratch() string {
 	if !l.remoteRun() || len(l.CacheVars) == 0 {
 		return ""
 	}
+	if base := l.Target.ScratchBase; base != "" {
+		return path.Join(base, ".dross-cache", path.Base(path.Clean(l.Target.Workdir)))
+	}
 	return remoteScratchDir(l.Target.Workdir)
+}
+
+// checkRemoteScratchSpace refuses a remote run whose host-side scratch volume is
+// already too full, once per run.
+//
+// This is the half that matters most: the volume that filled was the HOST's,
+// and a check that only ever measured the laptop would have missed the incident
+// this exists for entirely. It asks the host, because only the host knows —
+// /home there turned out to be part of a 75 GB root LV while the 300 GB volume
+// provisioned for the work sat elsewhere, and nothing local could have seen
+// that.
+//
+// One cheap `df` before the first mutant, not a campaign. A df that fails for
+// any reason returns nil: an unanswerable check must not become a new way for a
+// run not to happen.
+func (l *Launcher) checkRemoteScratchSpace() error {
+	dir := l.remoteScratch()
+	if dir == "" || l.remoteSpaceChecked {
+		return nil
+	}
+	l.remoteSpaceChecked = true
+	floor := scratchMinFreeBytes()
+	if floor == 0 {
+		return nil
+	}
+	t, err := l.toolTarget()
+	if err != nil {
+		return nil //nolint:nilerr // an unanswerable check is not a refusal
+	}
+	// The base, not the leaf: the leaf does not exist yet, and df on a missing
+	// path answers nothing. Both are on the same volume.
+	base := path.Dir(dir)
+	out, err := remoteSpaceProbe(t, []string{"df", "-Pk", base})
+	if err != nil {
+		return nil //nolint:nilerr // see above
+	}
+	free, ok := parseDfAvailBytes(out)
+	if !ok || free >= floor {
+		return nil
+	}
+	return fmt.Errorf(
+		"mutation: refusing to start on %s — the scratch build cache would land on %s, which has %.1f GB free (floor %.0f GB).\n\n"+
+			"A mutation run writes tens of gigabytes there; one measured run used ~60 GB at ~1.3 GB/min and came within minutes of filling the host.\n\n"+
+			"  put the host's scratch elsewhere:  dross local set remote_scratch_base /path/on/a/bigger/volume\n"+
+			"  lower or disable the floor:        %s=<gb>   (0 disables)",
+		t.Host, base, float64(free)/bytesPerGB, float64(floor)/bytesPerGB, ScratchMinFreeEnv)
+}
+
+// remoteSpaceProbe is the seam the free-space check spawns through. remote.Exec
+// captures stdout, which is what a probe wants and what the streaming spawner
+// deliberately is not. Production never reassigns it.
+var remoteSpaceProbe = remote.Exec
+
+// parseDfAvailBytes reads the Available column out of `df -Pk` output.
+//
+// -P is the portable output format, which guarantees one line per filesystem
+// and stops a long device name wrapping onto its own line — the wrap is exactly
+// what makes ad-hoc df parsing wrong on the hosts where it matters.
+func parseDfAvailBytes(out string) (uint64, bool) {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 2 {
+		return 0, false
+	}
+	fields := strings.Fields(lines[len(lines)-1])
+	if len(fields) < 4 {
+		return 0, false
+	}
+	kib, err := strconv.ParseUint(fields[3], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return kib * 1024, true
 }
 
 // removeRemoteScratch wipes the host-side scratch.

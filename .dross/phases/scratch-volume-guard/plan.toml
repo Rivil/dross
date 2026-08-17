@@ -1,0 +1,25 @@
+task_seq = 2
+
+[phase]
+  id = "scratch-volume-guard"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Let an operator choose the scratch volume"
+  files = ["internal/mutation/scratch.go", "internal/remote/remote.go", "internal/cmd/local.go", "assets/prompts/options.md"]
+  description = "DROSS_SCRATCH_BASE for this machine; remote_scratch_base in local.toml, carried on\nremote.Target so it reaches every call site the target already does. Both validated as\nplain canonical absolute paths — the value reaches an rm -rf. Corrects scratch.go's\nassertion that the tree's parent is the volume the operator chose, which was false on the\nhost it names for three months.\n"
+  covers = ["c-2", "c-5"]
+  status = "done"
+  test_contract = ["if the override stops moving the cache, TestScratchBaseOverrideMovesTheCache fails — the only lever before was where the checkout lived, which is the coupling that caused the incident", "if a relative path is honoured, TestScratchBaseIgnoresARelativePath fails — the scratch is removed wholesale, and resolving a relative path against a per-adapter working directory is how an rm -rf finds somewhere nobody meant", "if the default placement moves, TestScratchBaseDefaultIsUnchanged fails — both original constraints still hold and only the premise about the parent volume was wrong", "if the remote override is ignored, TestRemoteScratchBaseMovesTheHostCache fails — the volume that filled was the host's"]
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Refuse to start on a volume that is already too full"
+  files = ["internal/mutation/scratch_space.go", "internal/mutation/freespace_unix.go", "internal/mutation/freespace_other.go", "internal/mutation/launcher.go", "internal/mutation/scratch_space_test.go"]
+  description = "statfs locally, one `df -Pk` on the host before the push. Below the floor the run refuses,\nnaming the path, the free space and the override. Unknown free space runs as today.\nDefault floor 20 GB, DROSS_SCRATCH_MIN_FREE_GB overrides, 0 disables.\n"
+  covers = ["c-1", "c-3", "c-4"]
+  depends_on = ["t-1"]
+  status = "done"
+  test_contract = ["if a full volume no longer refuses, TestScratchRefusesAFullVolume fails — it also asserts NOTHING was created, since a refusal that had already made directories leaves the volume it protects worse off", "if the refusal stops naming the path, the free space or the override, the same test fails — all three are needed to act on it", "if the host is not checked, TestRemoteScratchSpaceRefusesAFullHost fails — the volume that filled was the remote's and a laptop-only check would have missed the incident entirely", "if an unreadable df starts refusing runs, TestRemoteScratchSpaceUnknownIsNotARefusal fails — a guard that fails closed on its own inability to measure turns every unsupported platform into a broken tool", "if the probe is repeated per package, TestRemoteScratchSpaceAsksOnce fails — each extra is a round trip re-learning an answer that cannot have changed enough to matter", "if a typo disables the floor, TestScratchFloorTypoDoesNotDisable fails — an unparseable value is a slip, not consent to run unguarded"]
