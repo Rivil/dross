@@ -8,83 +8,39 @@ task_seq = 4
   wave = 1
   title = "Declare mutation cache vars in the stack profile"
   files = ["internal/stack/profile.go", "internal/stack/profiles/go.toml", "internal/stack/mutation_cache_test.go"]
-  description = """
-Profile gains `MutationCache MutationCache \\`toml:"mutation_cache,omitempty"\\`` carrying
-`vars = ["GOCACHE"]`, and go.toml declares it. Schema + data only — no runner reads it yet
-(t-3 does). A profile declaring none stays byte-identical in behaviour (locked
-cache_var_source).
-"""
+  description = "Profile gains `MutationCache MutationCache \\`toml:\"mutation_cache,omitempty\"\\`` carrying\n`vars = [\"GOCACHE\"]`, and go.toml declares it. Schema + data only — no runner reads it yet\n(t-3 does). A profile declaring none stays byte-identical in behaviour (locked\ncache_var_source).\n"
   covers = ["c-4"]
-  test_contract = [
-    "if the go profile stops declaring a cache var, TestGoProfileDeclaresMutationCache fails — the EMBEDDED go profile (not a fixture) must resolve GOCACHE, since a profile shipped without it silently reverts every Go repo to the shared cache",
-    "if the block is made required, TestProfileWithoutMutationCacheLoads fails — every other shipped profile must load with an empty MutationCache and re-encode without gaining the key",
-    "if a var name that is not a plausible environment variable is accepted, TestMutationCacheRejectsBadVarName fails — a name that is empty, contains '=' or contains whitespace is refused at load, because it reaches an `export` line on a remote shell",
-    "if the field stops round-tripping through toml, TestMutationCacheRoundTrips fails — a profile encoded and re-decoded must carry the same var list, in order",
-  ]
-  status = "pending"
+  test_contract = ["if the go profile stops declaring a cache var, TestGoProfileDeclaresMutationCache fails — the EMBEDDED go profile (not a fixture) must resolve GOCACHE, since a profile shipped without it silently reverts every Go repo to the shared cache", "if the block is made required, TestProfileWithoutMutationCacheLoads fails — every other shipped profile must load with an empty MutationCache and re-encode without gaining the key", "if a var name that is not a plausible environment variable is accepted, TestMutationCacheRejectsBadVarName fails — a name that is empty, contains '=' or contains whitespace is refused at load, because it reaches an `export` line on a remote shell", "if the field stops round-tripping through toml, TestMutationCacheRoundTrips fails — a profile encoded and re-decoded must carry the same var list, in order"]
+  status = "done"
 
 [[task]]
   id = "t-2"
   wave = 1
   title = "Scratch cache dir: create, expose, wipe"
   files = ["internal/mutation/scratch.go", "internal/mutation/scratch_test.go"]
-  description = """
-newScratch(base string, vars []string) -> (*scratch, error) makes one directory under base
-and reports the `NAME=<dir>` assignments for it; (*scratch).Remove() wipes it and is safe to
-call twice. Remove reports a failure to the caller's stderr writer and returns nil (locked
-wipe_policy) — a completed measurement is never lost to a cleanup error. No launcher wiring.
-"""
+  description = "newScratch(base string, vars []string) -> (*scratch, error) makes one directory under base\nand reports the `NAME=<dir>` assignments for it; (*scratch).Remove() wipes it and is safe to\ncall twice. Remove reports a failure to the caller's stderr writer and returns nil (locked\nwipe_policy) — a completed measurement is never lost to a cleanup error. No launcher wiring.\n"
   covers = ["c-1", "c-2", "c-3"]
-  test_contract = [
-    "if the scratch is not its own directory, TestScratchIsolatesFromShared fails — the dir is asserted to exist, to be empty at creation, and to sit under the given base rather than under os.TempDir()",
-    "if the assignments do not name every declared var, TestScratchAssignsEveryVar fails — vars [A,B] must yield exactly [A=<dir>, B=<dir>] in order, all pointing at the SAME dir",
-    "if a wipe leaves anything behind, TestScratchRemoveWipes fails — with a large file written inside, Remove leaves the dir absent by os.Stat",
-    "if a second Remove errors, TestScratchRemoveIsIdempotent fails — the deferred wipe and an explicit one must not fight, since every exit path calls it",
-    "if a failing wipe kills the run, TestScratchRemoveNeverFailsTheRun fails — with the dir made unremovable, Remove returns nil AND writes a line naming the path to the reporter, per the locked wipe_policy: silent is what produced a 399 GB cache, and fatal would lose a finished report",
-    "if an empty var list still creates a directory, TestScratchNoVarsIsNoOp fails — a profile declaring none must produce no scratch at all and no assignments, leaving today's behaviour byte-identical",
-  ]
-  status = "pending"
+  test_contract = ["if the scratch is not its own directory, TestScratchIsolatesFromShared fails — the dir is asserted to exist, to be empty at creation, and to sit under the given base rather than under os.TempDir()", "if the assignments do not name every declared var, TestScratchAssignsEveryVar fails — vars [A,B] must yield exactly [A=<dir>, B=<dir>] in order, all pointing at the SAME dir", "if a wipe leaves anything behind, TestScratchRemoveWipes fails — with a large file written inside, Remove leaves the dir absent by os.Stat", "if a second Remove errors, TestScratchRemoveIsIdempotent fails — the deferred wipe and an explicit one must not fight, since every exit path calls it", "if a failing wipe kills the run, TestScratchRemoveNeverFailsTheRun fails — with the dir made unremovable, Remove returns nil AND writes a line naming the path to the reporter, per the locked wipe_policy: silent is what produced a 399 GB cache, and fatal would lose a finished report", "if an empty var list still creates a directory, TestScratchNoVarsIsNoOp fails — a profile declaring none must produce no scratch at all and no assignments, leaving today's behaviour byte-identical"]
+  status = "done"
 
 [[task]]
   id = "t-3"
   wave = 2
   title = "Wire the scratch into local and remote runs"
   files = ["internal/mutation/launcher.go", "internal/mutation/launcher_scratch_test.go"]
-  description = """
-Launcher carries the scratch. toolCmd (launcher.go:285) — the single construction point for
-both transports — sets cmd.Env for a local run and appends the assignments to the remote
-Target.Env so remote.Script exports them. A remote run's scratch lives under the granted
-workdir and also exports TMPDIR there, so the harness's own os.MkdirTemp copy leaves the
-host's default temp (locked scratch_location). Wiped when the run ends.
-"""
+  description = "Launcher carries the scratch. toolCmd (launcher.go:285) — the single construction point for\nboth transports — sets cmd.Env for a local run and appends the assignments to the remote\nTarget.Env so remote.Script exports them. A remote run's scratch lives under the granted\nworkdir and also exports TMPDIR there, so the harness's own os.MkdirTemp copy leaves the\nhost's default temp (locked scratch_location). Wiped when the run ends.\n"
   covers = ["c-1", "c-2", "c-5", "c-6"]
   depends_on = ["t-2"]
-  test_contract = [
-    "if a local run inherits the shared cache, TestLocalRunUsesScratchCache fails — the built exec.Cmd's Env is asserted to carry GOCACHE=<scratch> and NOT the ambient value, while still carrying the rest of the environment",
-    "if the remote script does not export the cache var, TestRemoteScriptExportsScratch fails — the stdin script the seam records must carry an `export GOCACHE=` line pointing under the granted workdir, asserted through the existing launcherCommand recorder",
-    "if the remote scratch lands in the host's default temp, TestRemoteScratchIsUnderWorkdir fails — both the cache var and TMPDIR must resolve under the granted workdir, since helicon's /tmp is a 32 G RAM-backed tmpfs shared with an LLM",
-    "if TMPDIR is not exported, TestRemoteScriptExportsTmpdir fails — gremlins copies the module via os.MkdirTemp, which honours TMPDIR and not GOTMPDIR, so the Go env vars alone leave the harness's own scratch where it was",
-    "if the scratch survives the run, TestLauncherWipesScratchOnEveryPath fails — a clean run, an adapter that errors, and a run whose remote spawn fails each leave the dir absent",
-    "if a profile declaring no cache var changes anything, TestNoCacheVarsLeavesArgvUnchanged fails — argv, script and Env are asserted byte-identical to a run with the feature absent, which is what keeps c-6 true for every other stack",
-  ]
-  status = "pending"
+  test_contract = ["if a local run inherits the shared cache, TestLocalRunUsesScratchCache fails — the built exec.Cmd's Env is asserted to carry GOCACHE=<scratch> and NOT the ambient value, while still carrying the rest of the environment", "if the remote script does not export the cache var, TestRemoteScriptExportsScratch fails — the stdin script the seam records must carry an `export GOCACHE=` line pointing under the granted workdir, asserted through the existing launcherCommand recorder", "if the remote scratch lands in the host's default temp, TestRemoteScratchIsUnderWorkdir fails — both the cache var and TMPDIR must resolve under the granted workdir, since helicon's /tmp is a 32 G RAM-backed tmpfs shared with an LLM", "if TMPDIR is not exported, TestRemoteScriptExportsTmpdir fails — gremlins copies the module via os.MkdirTemp, which honours TMPDIR and not GOTMPDIR, so the Go env vars alone leave the harness's own scratch where it was", "if the scratch survives the run, TestLauncherWipesScratchOnEveryPath fails — a clean run, an adapter that errors, and a run whose remote spawn fails each leave the dir absent", "if a profile declaring no cache var changes anything, TestNoCacheVarsLeavesArgvUnchanged fails — argv, script and Env are asserted byte-identical to a run with the feature absent, which is what keeps c-6 true for every other stack"]
+  status = "done"
 
 [[task]]
   id = "t-4"
   wave = 2
   title = "Resolve the profile's vars into the adapters"
   files = ["internal/cmd/verify.go", "internal/cmd/verify_scratch_test.go"]
-  description = """
-configuredAdapters reads the detected stack profile's mutation_cache vars and hands them to
-each adapter, so the runner never holds a language table of its own. A repo whose profile
-declares none passes an empty list and runs as it does today.
-"""
+  description = "configuredAdapters reads the detected stack profile's mutation_cache vars and hands them to\neach adapter, so the runner never holds a language table of its own. A repo whose profile\ndeclares none passes an empty list and runs as it does today.\n"
   covers = ["c-4", "c-6"]
   depends_on = ["t-1", "t-2"]
-  test_contract = [
-    "if the vars do not reach the adapters, TestAdaptersCarryProfileCacheVars fails — a Go repo's configured adapters are asserted to carry GOCACHE, resolved from the profile rather than from a constant in the cmd package",
-    "if a profile declaring none still injects one, TestNoProfileCacheVarsIsEmpty fails — a repo whose detected profile has no mutation_cache yields adapters carrying an empty var list",
-    "if an unreadable or absent profile fails the run, TestMissingProfileDoesNotBreakVerify fails — a repo whose stack does not resolve must still produce adapters, with no scratch, rather than erroring: disk hygiene must never be able to stop a verify",
-    "if the same phase measures differently with the feature on, TestScratchDoesNotChangeTheReport fails — the same fixture run with and without cache vars produces identical killed/survived counts (c-6)",
-  ]
-  status = "pending"
+  test_contract = ["if the vars do not reach the adapters, TestAdaptersCarryProfileCacheVars fails — a Go repo's configured adapters are asserted to carry GOCACHE, resolved from the profile rather than from a constant in the cmd package", "if a profile declaring none still injects one, TestNoProfileCacheVarsIsEmpty fails — a repo whose detected profile has no mutation_cache yields adapters carrying an empty var list", "if an unreadable or absent profile fails the run, TestMissingProfileDoesNotBreakVerify fails — a repo whose stack does not resolve must still produce adapters, with no scratch, rather than erroring: disk hygiene must never be able to stop a verify", "if the same phase measures differently with the feature on, TestScratchDoesNotChangeTheReport fails — the same fixture run with and without cache vars produces identical killed/survived counts (c-6)"]
+  status = "done"

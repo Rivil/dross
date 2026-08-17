@@ -2,5 +2,78 @@
   "phase": "cache-budget-prune",
   "base": "milestone/v1.3",
   "base_commit": "7d06e6a2ae10f14320b36b40dc903df6074dfd64",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/stack/profile.go",
+        "internal/stack/profiles/go.toml",
+        "internal/stack/mutation_cache_test.go"
+      ],
+      "commit": "5d694bf",
+      "completed_at": "2026-08-17T02:08:06.857089Z",
+      "landmarks": [
+        {
+          "feature": "stack profiles",
+          "symbol": "MutationCache",
+          "loc": "internal/stack/profile.go:53",
+          "what": "a profile declares which env vars point its toolchain at a build cache, so a mutation run can be given a scratch one without the runner holding a per-language table"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/mutation/scratch.go",
+        "internal/mutation/scratch_test.go"
+      ],
+      "commit": "eb312a0",
+      "completed_at": "2026-08-17T02:10:58.955607Z",
+      "landmarks": [
+        {
+          "feature": "mutation testing adapters",
+          "symbol": "scratch",
+          "loc": "internal/mutation/scratch.go:26",
+          "what": "a run-private build cache under a caller-chosen volume, wiped on every exit path — a failed wipe is reported and never fails the run"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/mutation/launcher.go",
+        "internal/mutation/launcher_scratch_test.go",
+        "internal/mutation/gremlins.go",
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_net.go",
+        "internal/mutation/launcher_test.go",
+        "internal/mutation/restore_test.go"
+      ],
+      "commit": "c3bc910",
+      "completed_at": "2026-08-17T02:15:13.061578Z",
+      "landmarks": [
+        {
+          "feature": "mutation testing adapters",
+          "symbol": "Launcher.localCacheEnv",
+          "loc": "internal/mutation/launcher.go:266",
+          "what": "both transports redirect the toolchain cache at the one construction point they share — a local run overrides the ambient var, a remote run exports it plus TMPDIR under the granted workdir"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_scratch_test.go",
+        "internal/cmd/survivor_drain.go",
+        "internal/cmd/mutation_remote_wiring_test.go"
+      ],
+      "commit": "61670e6",
+      "completed_at": "2026-08-17T02:21:42.161916Z",
+      "landmarks": [
+        {
+          "feature": "mutation testing adapters",
+          "symbol": "profileCacheVars",
+          "loc": "internal/cmd/verify.go:397",
+          "what": "reads the toolchain cache vars off the stack profile — recorded id first, detection when none is recorded — so the runner holds no per-language table and the feature is not inert on repos predating stack.profile"
+        }
+      ]
+    }
+  }
 }

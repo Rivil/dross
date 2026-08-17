@@ -1,0 +1,93 @@
+[verify]
+  phase = "cache-budget-prune"
+  generated_at = 2026-08-17T02:19:25.4167Z
+  verdict = "pending"
+
+[summary]
+  mutation_status = "skipped"
+  measured_on = "local"
+  mutation_score = 0.0
+  mutants_killed = 0
+  mutants_survived = 0
+  mutants_not_covered = 0
+  mutants_in_scope = 0
+  unclassified_in_scope = 0
+  criteria_total = 6
+  criteria_covered = 0
+  criteria_uncovered = 0
+
+[[criterion]]
+  id = "c-1"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-2"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-3"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-4"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-5"
+  status = "unknown"
+
+[[criterion]]
+  id = "c-6"
+  status = "unknown"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/a/b/archive.a: no mutation adapter for .a"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/gremlins.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/launcher.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/launcher_scratch_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/launcher_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/restore_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/scratch.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/scratch_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/stryker.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/mutation/stryker_net.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/mutation_cache_test.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profile.go: no mutation adapter for .go"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/stack/profiles/go.toml: no mutation adapter for .toml"
