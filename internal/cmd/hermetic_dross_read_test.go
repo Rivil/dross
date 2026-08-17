@@ -321,3 +321,44 @@ func TestNoTestReadsGitignoredDross(t *testing.T) {
 		t.Error(p)
 	}
 }
+
+// TestArchitectureNamesHermeticGuard keeps the documented principle and the
+// enforced one from drifting apart. The deferred item that produced this phase
+// read "the principle exists but nothing enforces it" — it was worse than that:
+// the Test-suite hermeticity entry covered HOME leakage only and did not
+// mention the repo's own .dross at all. An entry that omits half the rule is how
+// the next author learns the wrong rule.
+//
+// `dross doctor` already reports an anchor whose line has moved; this asserts
+// the anchors are PRESENT, which a resolver cannot.
+func TestArchitectureNamesHermeticGuard(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "ARCHITECTURE.md"))
+	if err != nil {
+		t.Fatalf("read ARCHITECTURE.md: %v", err)
+	}
+	doc := string(body)
+	start := strings.Index(doc, "### Test-suite hermeticity")
+	if start < 0 {
+		t.Fatal("no Test-suite hermeticity entry")
+	}
+	entry := doc[start:]
+	if end := strings.Index(entry[1:], "\n### "); end >= 0 {
+		entry = entry[:end+1]
+	}
+
+	for _, want := range []string{
+		"drossReadViolations",
+		"TestNoTestReadsGitignoredDross",
+		"ignoredDrossNames",
+		"liveRecordRoot",
+	} {
+		if !strings.Contains(entry, want) {
+			t.Errorf("the hermeticity entry does not name %s — the enforcement is undocumented", want)
+		}
+	}
+	// The rule itself, not just the symbols: someone reading the entry has to
+	// learn what is and is not allowed.
+	if !strings.Contains(entry, "gitignored") || !strings.Contains(entry, "tracked") {
+		t.Error("the entry must state the tracked-vs-gitignored distinction the rule turns on")
+	}
+}
