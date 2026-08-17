@@ -30,6 +30,7 @@ func newRoot() *cobra.Command {
 		cmd.State(),
 		cmd.Local(),
 		cmd.Trust(),
+		cmd.Run(),
 		cmd.Test(),
 		cmd.Remote(),
 		cmd.Mutation(),

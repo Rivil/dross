@@ -127,7 +127,14 @@ func runLocalCommandCtx(ctx context.Context, dir, line string, stdout, stderr io
 // runtime.test_command and is not a derived value today; the fence is what
 // keeps that true the first time a caller passes one.
 func shArgv(line string) ([]string, error) {
-	if err := argfence.RejectLeadingDash("sh", "runtime.test_command", line); err != nil {
+	return shArgvFor("runtime.test_command", line)
+}
+
+// shArgvFor is shArgv with the field label the refusal should name. `dross run`
+// spawns a different [runtime] key per slot, and a fence refusal that always
+// blamed test_command would point at the wrong line to edit.
+func shArgvFor(field, line string) ([]string, error) {
+	if err := argfence.RejectLeadingDash("sh", field, line); err != nil {
 		return nil, err
 	}
 	return []string{"-c", line}, nil
