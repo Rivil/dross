@@ -1132,3 +1132,12 @@
   line = 90
   category = "gremlins-attribution-ceiling"
   accepted_in = "remote-toolchain-bootstrap"
+
+[[accepted]]
+  key = "6467e5accd9da8c2"
+  file = "internal/cmd/remote_bootstrap_cmd.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !apply && refused == 0:"
+  line = 110
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "remote-toolchain-bootstrap"
