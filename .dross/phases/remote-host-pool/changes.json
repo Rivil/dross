@@ -2,5 +2,6 @@
   "phase": "remote-host-pool",
   "base": "milestone/v1.4",
   "base_commit": "7e82544c14fa073d66c3f6994f5b54dba6a21620",
+  "status": "complete",
   "tasks": {}
 }
