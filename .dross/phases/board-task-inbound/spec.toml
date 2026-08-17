@@ -1,0 +1,64 @@
+[phase]
+  id = "board-task-inbound"
+  title = "board-task-inbound"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "Moving a task's card on the tracker moves that task's status in plan.toml: a sync that finds the board ahead of the plan, with the plan unchanged since the last sync, applies the board's value."
+
+[[criteria]]
+  id = "c-2"
+  text = "A task changed on BOTH sides since the last sync is refused, naming the plan's value and the board's value, and plan.toml is left byte-unchanged — never silently resolved in either direction."
+
+[[criteria]]
+  id = "c-3"
+  text = "Each task's last synced pair is persisted where both machines can see it, because two current values cannot distinguish 'the board moved' from 'the plan moved' from 'both moved' — the whole refusal rests on having recorded what each side held when they last agreed."
+
+[[criteria]]
+  id = "c-4"
+  text = "A board that cannot express a task's state is refused by name rather than silently reporting no changes: a provider with no workflow field can never satisfy this, and reporting 'nothing moved' for it would be the silent-zero fault in a new place."
+
+[[criteria]]
+  id = "c-5"
+  text = "The two status vocabularies are converted in one place in code — plan.toml's pending/in_progress/done/failed and the board's lifecycle labels — rather than being paired only by prose in a prompt, so the mapping is testable and cannot drift edge by edge."
+
+[[criteria]]
+  id = "c-6"
+  text = "Applying is opt-in: the default run reports what it would do and writes nothing, so a plan.toml mutation is never a surprise side effect of looking."
+
+[[decisions]]
+  key = "snapshot_not_timestamps"
+  choice = "Persist the last-synced pair (plan status, board state) per task in board.json. Do not attempt timestamp comparison."
+  why = "The acceptance bar is not computable from two current values: plan=done beside board=In Progress is identical whether the board moved, the plan moved, or both did. Recording what each side held when they last agreed makes all three distinguishable. Timestamps cannot substitute — no provider surfaces updated_at on an issue today, and comparing a laptop's clock against a SaaS tracker's is a race dressed as a fact."
+  locked = true
+
+[[decisions]]
+  key = "board_json_is_the_ledger"
+  choice = "Widen board.json's tasks map from issue-id strings to a record, with a migration that reads the old shape."
+  why = "board.json is git-tracked, so the ledger travels with the branch and a second machine sees the same agreement point — which a gitignored file could not do. The existing entries are bare strings, so the change breaks unmarshalling of every board.json in existence unless the loader accepts both; the backlog re-key is the precedent for how this repo does that."
+  locked = true
+
+[[decisions]]
+  key = "explicit_verb_not_folded_into_pull"
+  choice = "A new `dross issue task-pull [<phase-id>]`, not an extension of `dross issue pull`."
+  why = "`issue pull` is read-only by default and is polled by /dross-status and /dross-watch on the promise that calling it is always safe; making it a plan.toml writer breaks that contract. It also drops linked issues by design, which is precisely the set task-pull must read — folding them together would mean inverting the filter that command exists to apply. And they answer different questions: 'what did someone file' versus 'what did someone move'."
+  locked = true
+
+[[decisions]]
+  key = "refuse_where_the_provider_cannot_express_it"
+  choice = "Providers with no workflow field are refused by name. YouTrack is supported now; Jira gains support by surfacing the status it already parses and discards."
+  why = "Forgejo, Gitea and GitLab boards have only open/closed — there is no column to drag a card between, so the criterion is unsatisfiable there rather than merely unimplemented. GitHub's Projects v2 status is a single-select field behind a GraphQL path that does not exist in this codebase at all. Reporting 'no changes' for any of them would be the silent-zero fault this milestone has already fixed once."
+  locked = true
+
+[[decisions]]
+  key = "label_disambiguates_the_inverse"
+  choice = "The board's dross/status label is what identifies which lifecycle status a state means, rather than inverting the state map."
+  why = "Both provider state maps are non-injective — Jira sends in-progress and task-in-progress to the same In Progress, and shipped and complete to the same Done — so inverting them is ambiguous by construction. The label records exactly what dross last asserted, which is both unambiguous and already written on every synced task."
+  locked = true
+
+[[decisions]]
+  key = "apply_is_opt_in"
+  choice = "The default run reports; --apply writes."
+  why = "This is the first command in dross that lets a remote system write a local planning artefact. A dry run by default means the first thing anyone sees is the diff, and it matches the posture `dross remote bootstrap` already takes for the other command that acts on someone else's machine."
+  locked = true

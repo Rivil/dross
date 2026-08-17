@@ -39,6 +39,12 @@ const (
 	statusPlanned    = "planned"
 	statusInProgress = "in-progress"
 	statusUAT        = "uat"
+
+	// The task-level pair. Named here rather than left as bare literals in the
+	// prompts because board-task-inbound has to READ them back off an issue's
+	// dross/status label and convert to a plan status — see task_lifecycle.go.
+	statusTaskInProgress = "task-in-progress"
+	statusTaskInReview   = "task-in-review"
 )
 
 func statusLabel(s string) string { return "dross/status:" + s }
@@ -65,6 +71,7 @@ func Issue() *cobra.Command {
 		issueBacklogSync(),
 		issuePhaseSync(),
 		issueTaskSync(),
+		issueTaskPull(),
 		issueQuick(),
 		issuePull(),
 		issueDismiss(),

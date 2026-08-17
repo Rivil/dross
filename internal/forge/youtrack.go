@@ -820,6 +820,11 @@ func (r *youtrackIssue) toIssue(stateField string) *Issue {
 		// Skip array/scalar shapes that don't carry a single named value.
 		if json.Unmarshal(cf.Value, &v) == nil {
 			iss.State = v.Name
+			// YouTrack's State IS the workflow state, so the two agree here.
+			// Set both rather than letting callers special-case the provider:
+			// the field means "the column this card is in" on every backend
+			// that has one, and empty on every backend that does not.
+			iss.WorkflowState = v.Name
 			// OR rather than replace: either signal saying resolved is
 			// enough. A renamed State field costs us this arm, a project
 			// without the stamping workflow costs us the timestamp, and

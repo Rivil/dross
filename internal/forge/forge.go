@@ -223,6 +223,16 @@ type Issue struct {
 	Milestone string // milestone title, "" if none
 	URL       string // html_url
 
+	// WorkflowState is the tracker's OWN state name — the column a card sits
+	// in — as distinct from State, which is normalised to open/closed.
+	//
+	// Empty where the backend has no such concept: forgejo, gitea and gitlab
+	// boards are open/closed and nothing else, and GitHub's Projects v2 status
+	// is a single-select field behind a GraphQL path dross does not have. A
+	// caller that needs to know which column a card was dragged to must treat
+	// empty as "this board cannot answer", not as "it did not move".
+	WorkflowState string
+
 	// Resolved is the tracker's own verdict that this issue is done, read back
 	// from the tracker rather than inferred from what dross just wrote.
 	//

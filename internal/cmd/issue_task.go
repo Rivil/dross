@@ -160,7 +160,20 @@ func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status str
 			return "", wrapBoard(err)
 		}
 	}
-	ctx.board.SetTask(phaseID, t.ID, key)
+	// Record the AGREEMENT POINT, not just the mapping: what the plan held and
+	// what the board was told, at this moment. `dross issue task-pull` compares
+	// against this to tell a board move from a plan move from both — which two
+	// current values cannot distinguish.
+	//
+	// Only when a status was actually asserted. A sync run without --status
+	// wipes the dross/status label (the patch replaces the whole label set), so
+	// claiming an agreement on a value neither side now shows would make the
+	// next pull read a phantom move.
+	if status != "" {
+		ctx.board.SetTaskSynced(phaseID, t.ID, key, t.Status, status)
+	} else {
+		ctx.board.SetTask(phaseID, t.ID, key)
+	}
 
 	// The tracker's own field, not the label above. The label is dross talking
 	// to itself; the state field is what the board's columns read, and moving

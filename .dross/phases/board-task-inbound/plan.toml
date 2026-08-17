@@ -1,0 +1,35 @@
+task_seq = 3
+
+[phase]
+  id = "board-task-inbound"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "The sync ledger: board.json records the agreement point"
+  files = ["internal/board/board.go", "internal/board/tasklink_test.go", "internal/cmd/issue_task.go"]
+  description = "Widen tasks from issue-id strings to a TaskLink carrying the pair both sides held at the\nlast sync. UnmarshalJSON accepts both shapes, on the type so no decoder bypasses it —\nboard.json is git-tracked, so an old file arrives by pulling a branch. task-sync writes\nthe pair, but only when a status was actually asserted.\n"
+  covers = ["c-3"]
+  status = "done"
+  test_contract = ["if the migration breaks, TestTaskLinkReadsTheLegacyStringShape fails — every board.json ever written carries bare strings there, and a hard failure would break `dross issue` for anyone who has synced a task", "if a migrated link invents an agreement point, the same test fails — the pair was never recorded, so nothing is known, and pretending otherwise makes the first pull apply a phantom move", "if a re-resolve discards the snapshot, TestSetTaskPreservesTheAgreementPoint fails — the next pull would treat a moved card as a first sync and skip the conflict check"]
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "One place that converts the two status vocabularies"
+  files = ["internal/cmd/task_lifecycle.go", "internal/cmd/issue.go", "internal/forge/forge.go", "internal/forge/jira.go", "internal/forge/youtrack.go"]
+  description = "plan.toml speaks pending/in_progress/done/failed; the board speaks lifecycle statuses.\nNothing in Go converted them — the pairing lived only as adjacent lines in execute.md.\nThe inverse is built by inverting the forward map so the two cannot disagree. Also\nsurfaces WorkflowState on forge.Issue: Jira has always parsed the status name and thrown\nit away.\n"
+  covers = ["c-5"]
+  status = "done"
+  test_contract = ["if the mapping stops round-tripping, TestLifecycleMappingRoundTrips fails — in_progress and done must survive the trip to lifecycle and back, since an inbound sync reads one and writes the other", "if pending or failed gain a board status, the same test fails — pending would relabel every task on every sync to say nothing changed, and failed is a judgement about a run rather than a column"]
+
+[[task]]
+  id = "t-3"
+  wave = 3
+  title = "dross issue task-pull"
+  files = ["internal/cmd/issue_task_pull.go", "internal/cmd/issue_task_pull_test.go"]
+  description = "Compare three values per task — plan now, board now, and what they agreed — and classify:\nboard moved, plan moved, both (refuse naming each), unchanged, or no agreement recorded.\nDry by default. A provider with no workflow field is refused by name rather than reported\nas 'no changes'. A conflict does not abort the run; it exits non-zero at the end.\n"
+  covers = ["c-1", "c-2", "c-4", "c-6"]
+  depends_on = ["t-1", "t-2"]
+  status = "done"
+  test_contract = ["if a board move stops applying, TestClassifyBoardMoved fails — that is the feature", "if a both-sides change is silently resolved, TestClassifyConflict fails — it asserts the verdict carries both current values AND the agreement point, because the refusal has to name them", "if a local change is reverted from the board, TestClassifyPlanMoved fails — an outbound-pending task must not be mistaken for an inbound move", "if a link with no agreement point is applied, TestClassifyUnsyncedIsNotAMove fails — with nothing to compare against, applying is a guess", "if a provider that cannot express state reports 'no changes', TestTaskPullRefusesAProviderWithoutWorkflowState fails — that is the silent-zero fault in a new place, and this milestone already fixed it once"]
