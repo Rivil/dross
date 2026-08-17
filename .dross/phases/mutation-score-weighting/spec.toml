@@ -1,0 +1,44 @@
+[phase]
+  id = "mutation-score-weighting"
+  title = "mutation-score-weighting"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "verify.toml records what each language leg scored on its own — tool, killed, survived, timeout and score per leg — so a phase that measured two legs can be re-read afterwards without the per-leg numbers having been thrown away."
+
+[[criteria]]
+  id = "c-2"
+  text = "The pooled score is unchanged: the same run produces the same mutation_score, mutants_killed, mutants_survived and mutants_in_scope as before, because pooling raw counts is already the size-weighted answer and re-deriving it would be the regression, not the fix."
+
+[[criteria]]
+  id = "c-3"
+  text = "A leg that failed or measured nothing is recorded as such rather than omitted, so a two-leg phase where one leg died cannot read afterwards as a clean single-leg run."
+
+[[criteria]]
+  id = "c-4"
+  text = "The breakdown survives the finalize round-trip — reading verify.toml, setting the verdict and writing it back preserves every per-leg entry, because a field that only exists until finalize is worse than no field."
+
+[[decisions]]
+  key = "pooling_is_already_weighted"
+  choice = "The pooled score keeps summing raw counts across legs. No weighting scheme is introduced."
+  why = "The deferred item asked to 'weight the pooled score by leg size rather than pooling raw counts', but pooling raw counts IS weighting by leg size: (killed_A+killed_B)/(total_A+total_B) already gives a 500-mutant leg five times the pull of a 100-mutant one. The alternative the wording points at — averaging the legs' percentages — is the unweighted one, and score.go was written specifically to kill it: 'a mean over legs of unequal size hands the smaller leg the louder vote'. Implementing the item literally would reintroduce the bug the file exists to prevent."
+  locked = true
+
+[[decisions]]
+  key = "the_real_gap_is_the_artifact"
+  choice = "Fix what is actually missing: verify.toml persists no per-leg breakdown."
+  why = "The concern behind the item is real even though its proposed mechanism is inverted — a small leg scoring badly is invisible inside a big leg's good number. But the per-leg numbers are already computed by every adapter and already printed by the CLI at run time; they are only lost on the way to disk. Everything that re-reads a phase later — the verify prompt, the review lens, the PR body — sees the flat pooled figure and nothing else. Persisting the breakdown closes the visibility gap without inventing a policy that has no multi-leg repo to calibrate against."
+  locked = true
+
+[[decisions]]
+  key = "additive_optional_fields"
+  choice = "A repeated [[summary.leg]] table, omitempty, added to the existing structs rather than a new file or a schema version."
+  why = "verify.toml has no schema version and its loader ignores unknown keys, so additive optional fields are the established way to extend it — measured_on and mutants_not_covered both arrived this way. It must be a real struct field, not a free-form key: finalize does a full load-mutate-save round trip, so anything not in the structs is silently dropped."
+  locked = true
+
+[[decisions]]
+  key = "no_new_verdict_lever"
+  choice = "The breakdown is recorded and displayed; it gates nothing. No per-leg threshold, no new FLAG finding."
+  why = "The mutation gate is an absolute count of unclassified in-scope survivors, with a bar of zero and no tolerance band — deliberately, so there is no arbitrary number to argue about. A divergence FLAG would need exactly such a number, and would change what the verdict prompt reads on every multi-leg phase. Visibility is the ask; a gate is a different decision."
+  locked = true

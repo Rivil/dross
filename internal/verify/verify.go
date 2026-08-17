@@ -298,6 +298,26 @@ type VerifyMeta struct {
 	FinalizedAt time.Time `toml:"finalized_at,omitempty"`
 }
 
+// LegSummary is one language leg's own result, as measured.
+//
+// A leg that produced no report is recorded with its Error rather than omitted:
+// a two-leg phase where one leg died must not read afterwards as a clean
+// single-leg run, which is precisely what dropping it would look like.
+type LegSummary struct {
+	Language string `toml:"language"`
+	Tool     string `toml:"tool,omitempty"`
+	// Error is set when the leg failed. Its counts are then all zero, and its
+	// Score is meaningless — read this first, exactly as MutationStatus is read
+	// before the pooled score.
+	Error     string  `toml:"error,omitempty"`
+	Killed    int     `toml:"killed"`
+	Survived  int     `toml:"survived"`
+	Timeout   int     `toml:"timeout,omitempty"`
+	InScope   int     `toml:"in_scope"`
+	Score     float64 `toml:"score"`
+	FileCount int     `toml:"file_count,omitempty"`
+}
+
 type VerifySummary struct {
 	// MutationStatus is measured | unmeasurable | skipped. Read this
 	// before the score: when status != measured the score is a 0/0
@@ -312,10 +332,27 @@ type VerifySummary struct {
 	// Without it a local score and a remote one are indistinguishable after the
 	// fact, and the two are not interchangeable evidence: they run different
 	// toolchain versions on different core counts.
-	MeasuredOn      string  `toml:"measured_on,omitempty"`
-	MutationScore   float64 `toml:"mutation_score"`
-	MutantsKilled   int     `toml:"mutants_killed"`
-	MutantsSurvived int     `toml:"mutants_survived"`
+	MeasuredOn string `toml:"measured_on,omitempty"`
+	// Legs is what each language leg scored on its own.
+	//
+	// The pooled figures below are the verdict-relevant ones and stay exactly
+	// as they were — pooling raw counts across legs is already weighted by leg
+	// size, and averaging the legs' percentages (the thing "weighting" is
+	// usually reached for) is the unweighted answer this package rejects. See
+	// the comment at the top of internal/mutation/score.go.
+	//
+	// What the pooled number cannot show is a small leg scoring badly inside a
+	// large leg's good result. Every adapter already computes its own counts
+	// and the CLI already prints them at run time; they were simply lost on the
+	// way to disk, so anything re-reading a phase afterwards — the verify
+	// prompt, the review lens, the PR body — saw one flat figure. Recorded, not
+	// gated: the mutation gate is an absolute count of unclassified in-scope
+	// survivors, and a per-leg threshold would need an arbitrary number the
+	// gate was designed to avoid.
+	Legs            []LegSummary `toml:"leg,omitempty"`
+	MutationScore   float64      `toml:"mutation_score"`
+	MutantsKilled   int          `toml:"mutants_killed"`
+	MutantsSurvived int          `toml:"mutants_survived"`
 	// MutantsNotCovered is a subset of MutantsSurvived: mutants the test
 	// suite never even executed. Surfaced for /dross-verify so the LLM
 	// can distinguish weak assertions ("test ran, didn't catch") from
@@ -544,6 +581,15 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 	var timeouts int
 	for _, lr := range t.Languages {
 		if lr.Mutation == nil {
+			// Recorded, not skipped: a leg that failed is a leg that measured
+			// nothing, and leaving it out would make the run look like it only
+			// ever had the legs that worked.
+			v.Summary.Legs = append(v.Summary.Legs, LegSummary{
+				Language:  lr.Name,
+				Tool:      lr.Tool,
+				Error:     lr.Error,
+				FileCount: len(lr.Files),
+			})
 			continue
 		}
 		v.Summary.MutantsKilled += lr.Mutation.Killed
@@ -561,6 +607,19 @@ func Skeleton(t *Tests, criteriaIDs []string) *Verify {
 		if inScope > 0 {
 			v.Summary.MutationStatus = MutationMeasured
 		}
+		// The leg's own score, computed the same way the pooled one is, so the
+		// two are read on the same terms — timeouts in the denominator, and a
+		// leg that measured nothing scores 0 rather than NaN.
+		v.Summary.Legs = append(v.Summary.Legs, LegSummary{
+			Language:  lr.Name,
+			Tool:      lr.Tool,
+			Killed:    lr.Mutation.Killed,
+			Survived:  lr.Mutation.Survived,
+			Timeout:   lr.Mutation.Timeout,
+			InScope:   inScope,
+			Score:     mutation.PooledScore(lr.Mutation.Killed, lr.Mutation.Survived, lr.Mutation.Timeout),
+			FileCount: len(lr.Files),
+		})
 	}
 	// Every mutant the tools produced landed outside this phase's files. The
 	// adapters worked and found plenty; none of it is this phase's to answer
