@@ -3,7 +3,7 @@ phases = ["mutation-diff-scope", "survivor-lifecycle", "survivor-drain", "milest
 [milestone]
   version = "v1.3"
   title = "1.3 finish the tool — the standing backlog, drained"
-  status = "active"
+  status = "complete"
   started = "2026-08-09"
   base = "main"
 
