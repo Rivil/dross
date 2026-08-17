@@ -187,22 +187,38 @@ func TestProgressNoCurrentMilestoneExitsNonZero(t *testing.T) {
 	}
 }
 
-// TestProgressAgainstThisRepo runs against dross's own .dross: v1.3's three
-// finished phases must read done, on the strength of t-9's backfilled markers
-// rather than any breadcrumb.
-func TestProgressAgainstThisRepo(t *testing.T) {
-	root := filepath.Join(repoRootFromTest(t), ".dross")
-	rep, err := buildMilestoneProgress(root, "v1.3")
+// TestProgressCountsSeveralMarkerCompletePhases pins the many-phase case on a
+// fixture: three phases carrying durable changes.json markers must all read
+// done, on the strength of those markers rather than any breadcrumb, while an
+// unfinished fourth still reads remaining.
+//
+// This replaces a version that ran against dross's own .dross directory. That
+// one handed the real root to buildMilestoneProgress, whose phaseIsDone falls
+// back to state.json history — a gitignored, machine-local file. So it passed
+// locally off the fallback and depended on CI's fresh checkout to exercise the
+// markers it claimed to measure: green here for a reason CI does not have,
+// which is the split test-hermeticity-guard exists to close.
+func TestProgressCountsSeveralMarkerCompletePhases(t *testing.T) {
+	dir := progressRepo(t, "v1.3", "active", "one", "two", "three", "left")
+	for _, slug := range []string{"one", "two", "three"} {
+		scaffoldPhase(t, dir, slug, changes.StatusComplete)
+	}
+	scaffoldPhase(t, dir, "left", "")
+
+	rep, err := buildMilestoneProgress(filepath.Join(dir, ".dross"), "v1.3")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, slug := range []string{"mutation-diff-scope", "survivor-lifecycle", "survivor-drain"} {
+	for _, slug := range []string{"one", "two", "three"} {
 		if hasSlug(rep.Remaining, slug) {
-			t.Errorf("%s is finished but reads as remaining", slug)
+			t.Errorf("%s is marker-complete but reads as remaining", slug)
 		}
 	}
-	if rep.Done < 3 {
-		t.Errorf("done = %d, want at least the three finished v1.3 phases", rep.Done)
+	if rep.Done != 3 {
+		t.Errorf("done = %d, want the three marker-complete phases", rep.Done)
+	}
+	if !hasSlug(rep.Remaining, "left") {
+		t.Errorf("the unfinished phase should still read remaining: %v", rep.Remaining)
 	}
 }
 
@@ -212,10 +228,10 @@ func TestProgressAgainstThisRepo(t *testing.T) {
 // authoritative changes.json marker, so its absence has to degrade the fallback
 // to "nothing recorded" rather than fail the command outright.
 //
-// This is the same condition TestProgressAgainstThisRepo hits on CI. That test
-// claims to measure doneness off t-9's durable markers rather than a breadcrumb,
-// and CI is the only place that is really true — locally a state.json always
-// exists to fall back on.
+// A sibling test used to run this same shape against the real repo's .dross and
+// relied on that fallback to pass locally; it is now
+// TestProgressCountsSeveralMarkerCompletePhases, on a fixture. This test is the
+// one that pins the absence of state.json directly.
 func TestProgressWithoutStateFile(t *testing.T) {
 	dir := progressRepo(t, "v1.3", "active", "built", "left")
 	scaffoldPhase(t, dir, "built", changes.StatusComplete)
