@@ -225,15 +225,26 @@ var spawnRunSlot = func(repoDir string, slot runSlot, line string) error {
 	if slot.Interactive {
 		stdin = os.Stdin
 	}
-	err := runSlotCommand(ctx, repoDir, line, stdin)
-	if err != nil && ctx.Err() != nil {
-		// The context is cancelled only because we were signalled, so the
-		// command did not fail — it was stopped, which is how it ends.
+	return runSlotOutcome(slot, runSlotCommand(ctx, repoDir, line, stdin), ctx.Err())
+}
+
+// runSlotOutcome decides what a finished slot means.
+//
+// Separated from the spawn because the interesting case — "it failed BECAUSE we
+// signalled it" — is otherwise only reachable by delivering a real signal
+// mid-test, and a rule this load-bearing should be checkable directly rather
+// than through a race.
+//
+// ctxErr non-nil means the context was cancelled, and the only thing that
+// cancels it is a signal. So the command did not fail; it was stopped, which for
+// a dev server or a log tail is how it ends.
+func runSlotOutcome(slot runSlot, runErr, ctxErr error) error {
+	if runErr != nil && ctxErr != nil {
 		Printf("\n%s stopped\n", slot.Name)
 		return nil
 	}
-	if err != nil {
-		return &ExitCodeError{Code: 1, Err: fmt.Errorf("run %s: %w", slot.Name, err)}
+	if runErr != nil {
+		return &ExitCodeError{Code: 1, Err: fmt.Errorf("run %s: %w", slot.Name, runErr)}
 	}
 	return nil
 }

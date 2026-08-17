@@ -128,6 +128,22 @@ type localStore struct {
 	RemoteHost    string `toml:"remote_host,omitempty"`
 	RemoteWorkdir string `toml:"remote_workdir,omitempty"`
 
+	// RemoteScratchBase puts the HOST's scratch build cache on a chosen
+	// volume, for when the granted workdir's parent is not the volume meant
+	// for this work.
+	//
+	// It IS in localKeys, unlike the grant beside it. It authorizes nothing —
+	// the host was already authorized, and this only says where on that host
+	// the cache goes — so the showing-before-writing ceremony that keeps
+	// remote_host out of the generic writer does not apply.
+	//
+	// It exists because the derived default was wrong on the reference host
+	// for three months: /home there is part of the 75 GB root LV while the
+	// 300 GB volume provisioned for this workload sat elsewhere, and a run
+	// filled root at 1.3 GB/min. The only lever was where the checkout lived,
+	// which couples cache placement to an unrelated decision.
+	RemoteScratchBase string `toml:"remote_scratch_base,omitempty"`
+
 	// RemotePool holds ADDITIONAL authorized hosts, tried in order after the
 	// pair above when that one cannot be reached.
 	//
@@ -208,6 +224,10 @@ var localKeys = map[string]struct {
 	"mutation_test_cpu": {
 		get: func(l *localStore) string { return l.MutationTestCPU },
 		set: func(l *localStore, v string) { l.MutationTestCPU = v },
+	},
+	"remote_scratch_base": {
+		get: func(l *localStore) string { return l.RemoteScratchBase },
+		set: func(l *localStore, v string) { l.RemoteScratchBase = v },
 	},
 	"mutation_remote_env": {
 		get: func(l *localStore) string { return l.MutationRemoteEnv },
@@ -339,7 +359,7 @@ func readRemoteGrants(root, repoDir string) ([]*remote.Target, error) {
 		if host == "" {
 			return nil
 		}
-		t := &remote.Target{Host: host, Workdir: workdir, Env: env}
+		t := &remote.Target{Host: host, Workdir: workdir, Env: env, ScratchBase: l.RemoteScratchBase}
 		if err := t.Validate(); err != nil {
 			return fmt.Errorf("%s/%s: %w", RootDirName, LocalFile, err)
 		}
@@ -374,7 +394,7 @@ func readRemoteGrant(root, repoDir string) (*remote.Target, error) {
 	if err != nil {
 		return nil, err
 	}
-	t := &remote.Target{Host: host, Workdir: workdir, Env: env}
+	t := &remote.Target{Host: host, Workdir: workdir, Env: env, ScratchBase: l.RemoteScratchBase}
 	if err := t.Validate(); err != nil {
 		return nil, fmt.Errorf("%s/%s: %w", RootDirName, LocalFile, err)
 	}
