@@ -139,6 +139,14 @@ func Ship() *cobra.Command {
 				return fmt.Errorf("load verify for %s: %w\n\nNext: run /dross-verify to write verify.toml, then `dross verify finalize %s`, then re-run ship",
 					phaseID, err, phaseID)
 			}
+			// LoadVerify reports a MISSING file as (nil, nil) — not an error —
+			// so a phase that was never verified arrives here with vrf nil and
+			// every dereference below it is a crash rather than the refusal
+			// this path already knows how to word.
+			if vrf == nil {
+				return fmt.Errorf("no verify.toml for %s — the phase has not been verified\n\nNext: run /dross-verify to write it, then `dross verify finalize %s`, then re-run ship",
+					phaseID, phaseID)
+			}
 
 			// 3) Pre-flight gates.
 			if p.Remote.URL == "" || p.Remote.Provider == "" {

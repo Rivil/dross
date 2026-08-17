@@ -280,6 +280,30 @@ func TestShipRefusesUnverified(t *testing.T) {
 	}
 }
 
+// A phase that was never verified must be REFUSED, not crashed on.
+// verify.LoadVerify reports a missing file as (nil, nil) rather than an error,
+// so the err-only check above it fell through to a nil dereference — every
+// existing gate test writes a verify.toml first, so the one state a user hits
+// by simply forgetting to verify was the one state nothing covered.
+//
+// The advice is already written in the load path ("run /dross-verify"); this
+// pins that the user actually receives it.
+func TestShipRefusesAPhaseThatWasNeverVerified(t *testing.T) {
+	dir := shipFixture(t, "https://forge.example/me/p.git")
+	if err := os.Remove(filepath.Join(dir, ".dross", "phases", "x", "verify.toml")); err != nil {
+		t.Fatal(err)
+	}
+	gitCommit(t, dir, "test: drop verify.toml")
+
+	err := runCmd(t, Ship(), "--no-push")
+	if err == nil {
+		t.Fatal("a phase with no verify.toml shipped")
+	}
+	if !strings.Contains(err.Error(), "dross-verify") {
+		t.Errorf("refusal does not point at /dross-verify: %v", err)
+	}
+}
+
 func TestShipForceUnverifiedSkipsGate(t *testing.T) {
 	dir := shipFixture(t, "https://forge.example/me/p.git")
 	verifyPath := filepath.Join(dir, ".dross", "phases", "x", "verify.toml")
