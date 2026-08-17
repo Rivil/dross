@@ -384,6 +384,8 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Test-suite hermeticity enforced, not just documented — a test reading the real repo's gitignored `.dross` fails locally instead of only in CI
 - [x] `dross task add/edit --test-contract` and `dross phase create --adopt` — nothing dross supports needs hand-editing an artefact
 - [x] Every `dross issue pull --json` failure reaches the envelope, setup failures included, instead of crashing a consumer
+- [x] Per-leg mutation scores persisted in `verify.toml`, so a small leg scoring badly is no longer invisible inside a large leg's good pooled number
+- [x] Upgrade note for the `state.json` checkout refusal, and a roadmap guard that fails when a milestone's recorded status and the README disagree
 - [ ] Remaining: runtime command runner, CI mutation leg, remote host bootstrap/pool/latency, board→dross inbound mirroring
 
 ## Telemetry

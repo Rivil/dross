@@ -59,4 +59,4 @@
 [[deferred]]
   text = "Extend the scratch-cache treatment to the security and quality scanners, which also spawn toolchains with their own caches."
   why = "Not measured as a problem yet. The mutation runner is where the 64 GB came from; widening on suspicion would add per-scanner plumbing for a cost nobody has observed."
-  target = "scanner-scratch-cache"
+  dismissed = true
