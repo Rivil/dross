@@ -1,0 +1,48 @@
+[phase]
+  id = "remote-host-pool"
+  title = "remote-host-pool"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "More than one remote host can be authorized, and a run picks a ready one: with two granted hosts and the first unreachable, the work happens on the second rather than falling back to local."
+
+[[criteria]]
+  id = "c-2"
+  text = "Skipping a host is announced with the reason, so a run that quietly moved to the second machine is distinguishable from one that always used it — a silent host swap makes two runs' numbers incomparable without saying so."
+
+[[criteria]]
+  id = "c-3"
+  text = "A single-host grant behaves exactly as it does today: same probe, same fallback-to-local on a transport failure, same recorded provenance, and an existing local.toml keeps working with nothing re-issued by hand."
+
+[[criteria]]
+  id = "c-4"
+  text = "Authorizing a host still shows what is being authorized: adding one to the pool prints the host and workdir before writing, and revoking clears every entry rather than only the first."
+
+[[criteria]]
+  id = "c-5"
+  text = "The run still records WHICH machine produced its numbers, so a pooled run's provenance names the host that actually ran rather than the set it chose from."
+
+[[decisions]]
+  key = "ordered_candidates_not_a_scheduler"
+  choice = "The pool is an ordered candidate list; the first host that probes ready runs the whole job. No queueing, no load balancing, no per-host capacity model, no splitting one run across hosts."
+  why = "The criterion is 'selects a ready host from a configured set', which is selection, not scheduling. Splitting a run across hosts would also break provenance and the report merge: verify records one measuring machine, and two hosts with different core counts and toolchain versions do not produce interchangeable numbers. A scheduler is a different product and there is no second host busy enough to need one."
+  locked = true
+
+[[decisions]]
+  key = "scalar_grant_is_the_first_candidate"
+  choice = "The existing remote_host/remote_workdir pair stays, and is the first candidate. The pool is an additional array of entries after it."
+  why = "The grant already carries two generations of keys — the current pair and the deprecated mutation_* aliases — kept because local.toml is untracked, so a rename silently stops resolving on every machine that already granted a host, and the failure presents as a local run the user believed was remote. Making the pool a THIRD generation that supersedes the scalars would repeat exactly that. Treating the scalar as candidate zero means an existing grant keeps working untouched."
+  locked = true
+
+[[decisions]]
+  key = "probe_in_order_announce_skips"
+  choice = "Candidates are probed in declared order and every skip is printed with its reason."
+  why = "Order is the user's stated preference, so honouring it needs no policy. And a host swap must be visible: two runs measured on different machines are not comparable evidence, and a pool that silently moved would make that invisible at exactly the moment it matters."
+  locked = true
+
+[[decisions]]
+  key = "transport_failure_only"
+  choice = "A candidate is skipped on a transport failure. A reachable host that is missing tools is NOT skipped."
+  why = "It matches the existing single-host rule, where a transport failure falls back to local and anything else aborts. A missing toolchain is a configuration problem the user must see — silently moving to another host would hide it, and `dross remote bootstrap` exists precisely to fix it in place."
+  locked = true
