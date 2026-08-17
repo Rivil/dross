@@ -1,0 +1,58 @@
+[phase]
+  id = "cli-surface-completeness"
+  title = "cli-surface-completeness"
+  milestone = "v1.4"
+
+[[criteria]]
+  id = "c-1"
+  text = "A task added mid-phase can carry its test contract from the command line: `dross task add` accepts the contract statements and writes them to plan.toml, so filling the field never requires hand-editing the file `task add` exists to stop you hand-editing."
+
+[[criteria]]
+  id = "c-2"
+  text = "An existing task's contract is editable both ways: `dross task edit` can replace the whole list and can append one statement to it, because a plan-review round that adds a fourth line must not require retyping the first three."
+
+[[criteria]]
+  id = "c-3"
+  text = "A contract statement survives the round trip verbatim, commas included — a statement is one prose sentence, not a comma-separated list, and splitting one into two is a silent corruption of what the field means."
+
+[[criteria]]
+  id = "c-4"
+  text = "`dross task edit` can set a task's description, closing the other write-only field on the same command."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross phase create --adopt` takes over a slug that is already started instead of refusing it, and without the flag the refusal is unchanged and now names the flag as the way through."
+
+[[criteria]]
+  id = "c-6"
+  text = "Adoption does not lie about what it did or destroy what it found: an existing phase branch is checked out rather than re-forked, the recorded fork point is left as it is, the phase's status is not reset to 'created', and a phase whose branch is already live on the remote is refused exactly as `phase rename` refuses it."
+
+[[decisions]]
+  key = "contract_flag_type"
+  choice = "--test-contract is a StringArray (repeatable), not a StringSlice."
+  why = "Contract statements are prose and routinely contain commas — the real values in plan.toml prove it. StringSlice splits on commas, which would silently turn one statement into two. This is the same reason --landmark is the repo's one existing StringArray (changes.go:73), so the exception already has a precedent and a stated rationale to match."
+  locked = true
+
+[[decisions]]
+  key = "edit_replace_and_append"
+  choice = "`task edit --test-contract` replaces the whole list; a sibling `--add-test-contract` appends. Both repeatable."
+  why = "Every existing edit flag replaces (--covers and --depends-on say so in their usage strings), so --test-contract must replace or the command becomes inconsistent with itself. But append is the common case this phase exists for — a plan review adds one line to a task that already has three — and replace-only would force retyping the three, which is the hand-editing this closes. Cheaper to ship both than to pick the wrong one."
+  locked = true
+
+[[decisions]]
+  key = "adopt_is_boolean"
+  choice = "`dross phase create <title> --adopt` is a boolean, not `--adopt <slug>`."
+  why = "The slug is derived from the title, so `--adopt <slug>` would give the command two conflicting slug sources and require a rule for which wins. As a boolean it reads as exactly what it is: the existing refusal downgraded to an opt-in. Re-titling stays with `dross phase rename`, which already does it — a different title slugifies to a different slug, so there would be no collision to adopt in the first place."
+  locked = true
+
+[[decisions]]
+  key = "adopt_refuses_shipped"
+  choice = "--adopt runs the same refuseIfShipped guard that `phase rename` runs."
+  why = "Taking over a phase whose branch is live on the remote is the identical hazard rename already refuses — an open PR pointing at work someone is about to rewrite. Skipping the guard here would make --adopt the way around it."
+  locked = true
+
+[[decisions]]
+  key = "files_stays_out_of_edit"
+  choice = "--description is added to `task edit`; --files is deliberately not."
+  why = "The absence of --description looks accidental — it is settable on add and nowhere else. --files is different: plan_edit.go states that edit does not repoint a task's files, which is a decision, not a gap. Folding in the accident without overturning the decision."
+  locked = true
