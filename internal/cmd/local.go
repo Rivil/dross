@@ -128,6 +128,22 @@ type localStore struct {
 	RemoteHost    string `toml:"remote_host,omitempty"`
 	RemoteWorkdir string `toml:"remote_workdir,omitempty"`
 
+	// RemotePool holds ADDITIONAL authorized hosts, tried in order after the
+	// pair above when that one cannot be reached.
+	//
+	// An array beside the scalars rather than a replacement for them. The grant
+	// already carries two generations of keys — the pair, and the deprecated
+	// mutation_* aliases kept because local.toml is untracked, so a rename
+	// silently stops resolving on every machine that already granted a host and
+	// presents as a local run the user believed was remote. A third generation
+	// that superseded the scalars would repeat exactly that, so the scalar pair
+	// stays authoritative as candidate zero and this only ever adds to it.
+	//
+	// ABSENT from localKeys for the same reason the scalars are: a generic
+	// key-writer would let an agent authorize a host without ever showing the
+	// user what for.
+	RemotePool []remoteCandidate `toml:"remote_pool,omitempty"`
+
 	// MutationRemoteHost and MutationRemoteWorkdir are the DEPRECATED aliases
 	// the same grant used to be written under, kept so an existing local.toml
 	// keeps working with nothing re-issued by hand.
@@ -295,6 +311,53 @@ func refuseTrackedLocal(repoDir string) error {
 // this file treats a decode failure as "no value"; a trust-bearing key cannot,
 // because "I could not read your config" must never resolve to a silent local
 // run the user thought was remote.
+// remoteCandidate is one authorized host in the pool.
+type remoteCandidate struct {
+	Host    string `toml:"host"`
+	Workdir string `toml:"workdir"`
+}
+
+// readRemoteGrants returns every authorized host in preference order: the
+// scalar grant first, then the pool.
+//
+// Order is the user's declared preference, so honouring it needs no policy of
+// our own.
+func readRemoteGrants(root, repoDir string) ([]*remote.Target, error) {
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return nil, err
+	}
+	l, err := loadLocal(localPath(root))
+	if err != nil {
+		return nil, err
+	}
+	env, err := resolveRemoteEnv(l.MutationRemoteEnv)
+	if err != nil {
+		return nil, err
+	}
+	var out []*remote.Target
+	add := func(host, workdir string) error {
+		if host == "" {
+			return nil
+		}
+		t := &remote.Target{Host: host, Workdir: workdir, Env: env}
+		if err := t.Validate(); err != nil {
+			return fmt.Errorf("%s/%s: %w", RootDirName, LocalFile, err)
+		}
+		out = append(out, t)
+		return nil
+	}
+	host, workdir := l.effectiveRemote()
+	if err := add(host, workdir); err != nil {
+		return nil, err
+	}
+	for _, c := range l.RemotePool {
+		if err := add(c.Host, c.Workdir); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
 func readRemoteGrant(root, repoDir string) (*remote.Target, error) {
 	if err := refuseTrackedLocal(repoDir); err != nil {
 		return nil, err
