@@ -62,6 +62,34 @@ func writeRemoteGrant(root, host, workdir string) error {
 	l.RemoteWorkdir = workdir
 	l.MutationRemoteHost = ""
 	l.MutationRemoteWorkdir = ""
+	if host == "" && workdir == "" {
+		// A revoke clears the POOL too. Leaving additional authorized hosts
+		// behind would make "withdraw it" mean withdrawn-from-one-machine,
+		// which is worse than not revoking at all: the user believes nothing is
+		// authorized while a run still has somewhere to go.
+		l.RemotePool = nil
+	}
+	return l.save(path)
+}
+
+// appendRemoteGrant adds a host to the pool, leaving the scalar grant and every
+// other entry in place. Re-adding an identical entry is a no-op rather than a
+// duplicate, so a repeated grant does not make the same host get probed twice.
+var appendRemoteGrant = func(root, host, workdir string) error {
+	path := localPath(root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return err
+	}
+	if l.RemoteHost == host && l.RemoteWorkdir == workdir {
+		return nil
+	}
+	for _, c := range l.RemotePool {
+		if c.Host == host && c.Workdir == workdir {
+			return nil
+		}
+	}
+	l.RemotePool = append(l.RemotePool, remoteCandidate{Host: host, Workdir: workdir})
 	return l.save(path)
 }
 
@@ -89,7 +117,8 @@ func remoteGrantTree() *cobra.Command {
 }
 
 func remoteGrant() *cobra.Command {
-	return &cobra.Command{
+	var addToPool bool
+	c := &cobra.Command{
 		Use:   "grant <host> <workdir>",
 		Short: "Authorize remote runs to execute on <host> under <workdir>",
 		Long: "Records the host and workdir in the gitignored .dross/local.toml. Prints\n" +
@@ -127,15 +156,25 @@ func remoteGrant() *cobra.Command {
 					"code there, as you.\n\n",
 				t.Host, t.Workdir)
 
-			if err := grantRemoteWrite(root, t.Host, t.Workdir); err != nil {
+			write := grantRemoteWrite
+			if addToPool {
+				write = appendRemoteGrant
+			}
+			if err := write(root, t.Host, t.Workdir); err != nil {
 				return err
 			}
 
 			Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+			if addToPool {
+				Print("Added to the pool — the first authorized host that answers runs the job.")
+			}
 			Print("Withdraw it with `dross remote revoke`.")
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&addToPool, "add", false,
+		"authorize an ADDITIONAL host, keeping the existing grant; runs take the first that answers")
+	return c
 }
 
 func remoteStatus() *cobra.Command {
