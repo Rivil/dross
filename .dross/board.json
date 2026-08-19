@@ -1,7 +1,8 @@
 {
   "milestones": {
     "v1.2": "DRO-1",
-    "v1.3": "DRO-7"
+    "v1.3": "DRO-7",
+    "v1.5": "DRO-134"
   },
   "phases": {
     "board-sync-truth": "DRO-19",

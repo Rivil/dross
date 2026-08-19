@@ -1,0 +1,12 @@
+phases = ["completion-record-truth", "legacy-phase-backfill", "mirror-terminal-state", "board-mirror-reaper", "plan-gray-area-walkthrough"]
+
+[milestone]
+  version = "v1.5"
+  title = "1.5 signal truth — one answer to 'is this done', and a board that agrees with it"
+  status = "active"
+  started = "2026-08-19"
+  base = "main"
+
+[scope]
+  success_criteria = ["Every command that answers 'is this done' reads the same record: on a milestone whose phases carry changes.json but no verify.toml, `dross status`, `dross milestone progress` and `dross phase list` report the same count, and none of them derives doneness from a verify verdict", "A phase completed before changes.json carried `status` can be marked done through a supported verb, not a hand-authored file: the marker derives from branch-absence plus work-present-on-base, and the resulting count does not change after 50 further actions age the history window out", "`dross issue pull` returns only issues dross did not author: the 102 stranded mirrors on this repo are closed at source, and a freshly shipped phase's task cards leave task-in-review with no hand intervention", "`/dross-plan` presents no multiSelect pre-selection of gray areas and walks every area Claude cannot confidently resolve one turn each, with the v0.6 guard test extended to fail on plan.md if pre-selection returns"]
+  non_goals = ["No retroactive verify runs: v1.4's eleven phases are not re-verified to manufacture verify.toml verdicts — c-1 makes doneness readable without them, and running verify to satisfy a counter is the wrong fix", "No new board backends: mirror closure is provider-agnostic bookkeeping on the existing YouTrack backend — the GitHub and Jira providers parked in DRO-119/120 stay parked", "No deferred-lifecycle redesign: c-3 closes stale cards; it does not rework what routed / someday / dismissed mean or add the un-route verb (DRO-64)"]
