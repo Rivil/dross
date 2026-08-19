@@ -127,14 +127,38 @@
     "someday:id:ff40c2cbbd18e7dc": "DRO-94"
   },
   "tasks": {
-    "board-task-mirror/t-5": "DRO-121",
-    "board-task-mirror/t-6": "DRO-122",
-    "board-task-mirror/t-7": "DRO-123",
-    "red-proof-repoint/t-1": "DRO-126",
-    "red-proof-repoint/t-8": "DRO-127",
-    "red-proof-repoint/t-9": "DRO-128",
-    "remote-toolchain-bootstrap/t-1": "DRO-130",
-    "remote-toolchain-bootstrap/t-3": "DRO-131"
+    "board-task-mirror/t-5": {
+      "issue": "DRO-121"
+    },
+    "board-task-mirror/t-6": {
+      "issue": "DRO-122"
+    },
+    "board-task-mirror/t-7": {
+      "issue": "DRO-123"
+    },
+    "red-proof-repoint/t-1": {
+      "issue": "DRO-126"
+    },
+    "red-proof-repoint/t-8": {
+      "issue": "DRO-127"
+    },
+    "red-proof-repoint/t-9": {
+      "issue": "DRO-128"
+    },
+    "remote-toolchain-bootstrap/t-1": {
+      "issue": "DRO-130"
+    },
+    "remote-toolchain-bootstrap/t-3": {
+      "issue": "DRO-131"
+    }
   },
-  "last_pull": "0001-01-01T00:00:00Z"
+  "dismissed": [
+    "DRO-5",
+    "DRO-4",
+    "DRO-3",
+    "DRO-18",
+    "DRO-7",
+    "DRO-1"
+  ],
+  "last_pull": "2026-08-19T12:54:11.333974Z"
 }
