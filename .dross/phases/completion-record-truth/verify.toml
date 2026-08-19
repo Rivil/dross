@@ -1,0 +1,99 @@
+[verify]
+  phase = "completion-record-truth"
+  generated_at = 2026-08-19T18:01:54.220811Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-19T19:08:28.071006Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9389416553595658
+  mutants_killed = 692
+  mutants_survived = 45
+  mutants_not_covered = 45
+  mutants_in_scope = 737
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 692
+    survived = 45
+    timeout = 0
+    in_scope = 737
+    score = 0.9389416553595658
+    file_count = 22
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/completion_record_truth_test.go:TestThreeCommandsAgreeOnAFullMilestone", "internal/cmd/milestone_progress_test.go:TestProgressCountsSeveralMarkerCompletePhases"]
+  notes = "Eleven-phase v1.4-shaped fixture, every phase carrying changes.json status=complete and no verify.toml; askAllThree puts the same fixture to dross status, milestone progress --json and phase list --milestone and assertAllAgree fails naming any command not reporting 11/11. Confirmed against the real repo this run: `dross milestone progress v1.4` prints 11/11 and `dross phase list --milestone v1.4` closes with `11/11 done`. The status arm stays fixture-only by design — hermetic_dross_read_test.go bans handing the real .dross tree to a root walker."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/completion_record_truth_test.go:TestThreeCommandsAgreeOnRecordVersusVerdict", "internal/cmd/phase_test.go:TestPhaseListFooterIgnoresVerifyVerdict", "internal/cmd/status_test.go:TestStatusMilestoneIgnoresVerifyVerdict", "internal/cmd/milestone_progress_test.go:TestProgressShippedCountsDoneAndVerifiedDoesNot"]
+  notes = "The fixture is deliberately asymmetric — two phases done by record, one carrying verdict=\"pass\" and no completion record — so truth is 2/3 while a verdict-reader reports 1/3 over the opposite phase; a symmetric pair would let an inverted answer pass on the matching number. Attribution is pinned too, not just the count: the listing must not print `✓ verdict-no-record` and progress must carry that slug in remaining."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestPhaseListMarksDonePhases", "internal/cmd/phase_test.go:TestPhaseListMilestoneCountsUnscaffolded", "internal/cmd/phase_test.go:TestPhaseListOrdersByMilestoneArray"]
+  notes = "Byte-exact on the whole listing — \"✓ shipped-one\\n  still-going\\n1/2 done\\n\" — so the locked done_marker (✓ prefix, two spaces when not done, N/M footer) is pinned including which phase carries the mark. Shared-reader wiring verified in source: phase.go:94,108,147 call phaseDoneState/phaseDone, the same reader as status.go:164 and milestone_progress.go:118; the cross-command guard then proves the agreement behaviourally rather than by call-site inspection alone."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/phase_test.go:TestPhaseListPrintsASharedSlugOnce", "internal/cmd/doctor_test.go:TestDoctorNamesDuplicateRoadmapSlug", "internal/cmd/doctor_test.go:TestDoctorSilentWithoutDuplicateRoadmapSlugs", "internal/cmd/doctor_test.go:TestDuplicateRoadmapSlugsIgnoresRepeatWithinOneArray"]
+  notes = "Asserted at the command surface the criterion names, not only at phase.Ordered — the plan review's FLAG on this was acted on. The test counts occurrences AND pins the byte-exact listing so first-occurrence-in-milestone-order wins. Confirmed on the real repo this run: `dross phase list | grep -c plan-gray-area-walkthrough` returns 1, the slug the criterion cites as printing twice."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/completion_record_truth_test.go:TestThreeCommandsAgreeOnRecordVersusVerdict", "internal/cmd/completion_record_truth_test.go:TestThreeCommandsAgreeOnNothingDone"]
+  notes = "Falsified by observation this run rather than assumed: phaseIsDone was temporarily patched to return true on verify.toml verdict=\"pass\", and the guard went red naming all three commands (\"dross status reports 3/3, want 2/3\", same for milestone progress and phase list --milestone) plus the attribution arm (\"a passing verdict is not doneness\" over ✓ verdict-no-record) and the progress-remaining arm. Probe reverted; suite green again. Note the guard compares each command against a hardcoded truth rather than against each other, so it catches a regression in the SHARED reader — where all three move together and would still agree — as well as one command drifting alone."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation: 45 of 737 in-scope mutants survived, all 45 accepted and all origin=inherited — zero in-diff survivors, zero unclassified, so the drain gate is clear with nothing to route or accept this run. Every survivor is a switch-case condition line (doctor.go, hints.go, status.go humanizeAge, phase.go, internal/phase/phase.go slugify), the go-cover attribution ceiling recorded in .dross/survivors.toml and proven by TestAttributionCeilingIsReal. Spot-checked four of them in source and each is a `switch { case ... }` arm, none in this phase's new logic. Efficacy over the 692 reachable mutants is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Every file this phase touched generated mutants and killed all reachable ones: phasedone.go 7/7 (the new shared reader, zero not-covered), internal/phase/plan_edit.go 76/76, task.go 50/50, milestone_progress.go 15/15, phase.go 147 killed / 3 ceiling, status.go 123 / 7, doctor.go 181 / 19, hints.go 49 / 8, internal/phase/phase.go 44 / 8. No touched file was silently unmeasured."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The bare `dross phase list` footer reads 30/99 across every milestone, far below the per-milestone counts, because phases predating the changes.json status marker rely on the state.json history fallback whose 50-entry window has evicted their breadcrumbs. This is the locked history_fallback decision behaving as specified, not a regression: all three surfaces inherit the same quirk and still agree. Already routed — legacy-phase-backfill is a real entry on the v1.5 roadmap."
+
+[[finding]]
+  severity = "NOTE"
+  text = "t-6 (`dross task edit --files`) covers no criterion in this phase and says so in its own plan description; it was found at plan time and carried here rather than deferred. It is fully mutation-covered (plan_edit.go 76/76, task.go 50/50), so it adds no unverified surface."
+
+[[finding]]
+  severity = "NOTE"
+  text = "The deferred item — pointing the SessionStart re-entry line and `dross watch`'s drift digest at the shared reader — is routed to reentry-signal-truth, a real entry on the v1.5 roadmap. status.go's other three readVerifyVerdict call sites (283, 334, 632) are hint/idle/pending-verdict surfaces, not done counts, so no second doneness derivation is left inside `dross status`."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/milestone.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/spec.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/verify.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped docs/dross.1: no mutation adapter for .1"
