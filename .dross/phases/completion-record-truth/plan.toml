@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 6
 
 [phase]
   id = "completion-record-truth"
@@ -53,4 +53,13 @@ task_seq = 0
   description = "README.md:208 and docs/dross.1:115 enumerate the `list` verb in their brace lists but describe none of its behaviour — document the done marker, the N/M footer and the --milestone flag in both. Then repoint the three prompts that consume phase list output and go stale on t-2: spec.md's create flow intersects raw phase list lines against the milestone phases array (the marker prefix and the footer line break that parse); verify.md's next-phase step asserts phase list prints only scaffolded phases and forbids it for ordering (--milestone lists the full roadmap in roadmap order); milestone.md forbids deriving doneness from phase list, which after t-2 reads from the same reader as milestone progress. Per rule r-01 the prompt edits need `make install` before they are live."
   depends_on = ["t-2"]
   test_contract = ["if README.md or docs/dross.1 loses the --milestone flag, the done marker or the N/M footer from its phase-list prose, the doc grep test fails naming the file", "if the --milestone flag is renamed without updating both docs, the same test fails", "if assets/prompts/spec.md still tells the reader to intersect raw `dross phase list` output against the phases array, the prompt grep test fails — the corrected instruction must name --milestone or strip the marker/footer", "if assets/prompts/verify.md still claims phase list prints only scaffolded phases, or assets/prompts/milestone.md still forbids deriving doneness from it, the prompt grep test fails"]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 1
+  title = "Add --files to dross task edit"
+  files = ["internal/phase/plan_edit.go", "internal/phase/plan_edit_test.go", "internal/cmd/task.go", "internal/cmd/task_test.go"]
+  description = "plan_edit.go:326 records that Files is intentionally absent from TaskEdit (\"edit does not repoint a task's files\"), leaving files the one plan.toml field with no CLI edit surface — so changing it means hand-editing plan.toml, which the same subsystem advertises as never necessary. Add Files to TaskEdit + EditTask and a --files flag to `dross task edit`, replacing the whole list like --covers/--depends-on do, and rewrite that comment to state why the intent changed. Found at plan time on this phase; covers no criterion here."
+  test_contract = ["if TaskEdit stops carrying Files, `dross task edit <phase> <task> --files a.go,b.go` leaves the array untouched and the round-trip test reading plan.toml back fails", "if --files is passed with no value it must clear the array rather than being treated as unset, and the nil-vs-empty test distinguishing \"flag absent\" from \"--files=\" fails otherwise", "if the edit stops going through saveIfValid, a --files edit naming a task that breaks ValidatePlan is written to disk instead of refused"]
   status = "pending"
