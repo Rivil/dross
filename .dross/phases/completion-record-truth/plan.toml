@@ -11,7 +11,7 @@ task_seq = 6
   description = "Move phaseIsDone out of milestone_progress.go into its own file as the single\ndoneness reader, with an entry point that resolves scaffolded-ness itself.\nRewire renderMilestone (status.go:158) off readVerifyVerdict(...)==\"pass\" onto\nthat reader. Carry the changes.json complete/shipped authority and the\nstate.json history fallback across unchanged (locked history_fallback).\n"
   covers = ["c-1", "c-2"]
   test_contract = ["if renderMilestone counts verify verdicts again, a fixture phase with verify.toml verdict=\"pass\" and changes.json carrying no completion status makes the status bar read 1/1 instead of 0/1", "if the extracted reader drops the changes.json \"shipped\" arm, the existing TestProgressShippedCountsDoneAndVerifiedDoesNot (internal/cmd/milestone_progress_test.go:93) goes red — it is black-box over `dross milestone progress --json` and already routes through the reader", "if the status bar stops counting a status=\"shipped\" phase done, a status-surface fixture carrying only that record reads 0/1 instead of 1/1", "if the state.json `completed <slug>` history fallback is dropped from the shared reader, a fixture with no changes.json status but a matching breadcrumb stops counting done in status"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-3"
@@ -21,7 +21,7 @@ task_seq = 6
   description = "phase.Ordered sets `placed` but never reads it in the order loop, so a slug on\ntwo milestones' phases arrays is emitted twice. Skip an already-placed slug,\nfirst occurrence in milestone-version order winning. Add a doctor check naming\nany slug that appears on more than one roadmap, with the versions it appears\non — a warning, not an issue: doctor's exit code is unchanged.\n"
   covers = ["c-4"]
   test_contract = ["if Ordered stops honouring `placed`, an order array holding one slug twice emits it twice instead of once", "if the dedup keeps the last occurrence instead of the first, the ordering test asserting the slug sits at its earlier-milestone position fails", "if the doctor duplicate check is dropped, a two-milestone fixture sharing a slug no longer prints the slug and both versions", "if the duplicate check is raised from warning to issue, the doctor test asserting a nil error on that fixture fails", "if the dedup is bypassed by any path `dross phase list` actually renders through, a two-milestone fixture sharing one slug prints that slug twice — the criterion asserted at the command surface, not only at phase.Ordered"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-2"
@@ -32,7 +32,7 @@ task_seq = 6
   covers = ["c-1", "c-2", "c-3"]
   depends_on = ["t-1"]
   test_contract = ["if the done marker is dropped or applied to a not-done phase, the byte-exact line assertion (\"✓ <slug>\" vs \"  <slug>\") fails", "if the footer count comes from anywhere but the shared reader, a fixture whose phase has verdict=\"pass\" and no completion status is counted in the footer", "if --milestone drops unscaffolded roadmap slugs, a roadmap of 1 done + 1 unscaffolded reports 1/1 instead of 1/2", "if --milestone accepts an unknown version silently, the test asserting an error naming that version fails", "if the bare `dross phase list` stops listing phases from every milestone, the cross-milestone fixture loses its orphan and second-milestone entries", "if the rewrite relaxes TestPhaseListOrdersByMilestoneArray (internal/cmd/phase_test.go:407) into a substring check, the array-order proof is lost — reordering a milestone phases array must flip the order of the two rendered lines, marker prefix and footer included"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-4"
@@ -43,7 +43,7 @@ task_seq = 6
   covers = ["c-1", "c-2", "c-5"]
   depends_on = ["t-1", "t-2"]
   test_contract = ["if any of status, milestone progress or phase list --milestone derives its done count from verify.toml's verdict, the A/B fixture makes that command report 2/2 (or 1/2 counting B not A) while the others report 1/2, and the test fails", "if a v1.4-shaped fixture of 11 complete-no-verify phases stops reading 11/11 on any of the three commands, the test fails naming which command disagreed", "if phase B (verdict pass, no completion status) is reported done by any of the three, the test fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-5"
@@ -53,7 +53,7 @@ task_seq = 6
   description = "README.md:208 and docs/dross.1:115 enumerate the `list` verb in their brace lists but describe none of its behaviour — document the done marker, the N/M footer and the --milestone flag in both. Then repoint the three prompts that consume phase list output and go stale on t-2: spec.md's create flow intersects raw phase list lines against the milestone phases array (the marker prefix and the footer line break that parse); verify.md's next-phase step asserts phase list prints only scaffolded phases and forbids it for ordering (--milestone lists the full roadmap in roadmap order); milestone.md forbids deriving doneness from phase list, which after t-2 reads from the same reader as milestone progress. Per rule r-01 the prompt edits need `make install` before they are live."
   depends_on = ["t-2"]
   test_contract = ["if README.md or docs/dross.1 loses the --milestone flag, the done marker or the N/M footer from its phase-list prose, the doc grep test fails naming the file", "if the --milestone flag is renamed without updating both docs, the same test fails", "if assets/prompts/spec.md still tells the reader to intersect raw `dross phase list` output against the phases array, the prompt grep test fails — the corrected instruction must name --milestone or strip the marker/footer", "if assets/prompts/verify.md still claims phase list prints only scaffolded phases, or assets/prompts/milestone.md still forbids deriving doneness from it, the prompt grep test fails"]
-  status = "pending"
+  status = "done"
 
 [[task]]
   id = "t-6"
@@ -62,4 +62,4 @@ task_seq = 6
   files = ["internal/phase/plan_edit.go", "internal/phase/plan_edit_test.go", "internal/cmd/task.go", "internal/cmd/task_test.go"]
   description = "plan_edit.go:326 records that Files is intentionally absent from TaskEdit (\"edit does not repoint a task's files\"), leaving files the one plan.toml field with no CLI edit surface — so changing it means hand-editing plan.toml, which the same subsystem advertises as never necessary. Add Files to TaskEdit + EditTask and a --files flag to `dross task edit`, replacing the whole list like --covers/--depends-on do, and rewrite that comment to state why the intent changed. Found at plan time on this phase; covers no criterion here."
   test_contract = ["if TaskEdit stops carrying Files, `dross task edit <phase> <task> --files a.go,b.go` leaves the array untouched and the round-trip test reading plan.toml back fails", "if --files is passed with no value it must clear the array rather than being treated as unset, and the nil-vs-empty test distinguishing \"flag absent\" from \"--files=\" fails otherwise", "if the edit stops going through saveIfValid, a --files edit naming a task that breaks ValidatePlan is written to disk instead of refused"]
-  status = "pending"
+  status = "done"

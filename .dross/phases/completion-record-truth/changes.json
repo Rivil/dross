@@ -2,5 +2,119 @@
   "phase": "completion-record-truth",
   "base": "milestone/v1.5",
   "base_commit": "33e5a8d2562814e7f7324dd28d6eb4d19f6dd69b",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/phasedone.go",
+        "internal/cmd/milestone_progress.go",
+        "internal/cmd/milestone_progress_test.go",
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go"
+      ],
+      "commit": "beb597f",
+      "completed_at": "2026-08-19T15:55:17.936101Z",
+      "landmarks": [
+        {
+          "feature": "phase doneness",
+          "symbol": "phaseDone",
+          "loc": "internal/cmd/phasedone.go:25",
+          "what": "one reader answers 'is this phase done' for status, milestone progress and phase list — completion record, never a verify verdict"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "3e47594",
+      "completed_at": "2026-08-19T16:10:17.140002Z",
+      "landmarks": [
+        {
+          "feature": "phase listing",
+          "symbol": "listMilestoneRoadmap",
+          "loc": "internal/cmd/phase.go:130",
+          "what": "phase list marks done phases, prints an N/M footer, and --milestone scopes it to one roadmap including unscaffolded slugs"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/phase_test.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go",
+        "internal/cmd/phase_test.go"
+      ],
+      "commit": "db04753",
+      "completed_at": "2026-08-19T15:59:25.036438Z",
+      "landmarks": [
+        {
+          "feature": "phase listing",
+          "symbol": "Ordered",
+          "loc": "internal/phase/phase.go:84",
+          "what": "a slug on two milestone roadmaps lists once at its earlier position; doctor names it"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/completion_record_truth_test.go"
+      ],
+      "commit": "7556936",
+      "completed_at": "2026-08-19T16:13:41.562874Z",
+      "landmarks": [
+        {
+          "feature": "phase doneness",
+          "symbol": "askAllThree",
+          "loc": "internal/cmd/completion_record_truth_test.go:42",
+          "what": "one fixture asks status, milestone progress and phase list the same question and fails naming any command that answers differently"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "README.md",
+        "docs/dross.1",
+        "assets/prompts/spec.md",
+        "assets/prompts/verify.md",
+        "assets/prompts/milestone.md",
+        "internal/cmd/phase_test.go",
+        "internal/cmd/milestone_dispatch_prompt_test.go",
+        "internal/cmd/prompt_next_phase_test.go"
+      ],
+      "commit": "115ddad",
+      "completed_at": "2026-08-19T16:19:32.794995Z",
+      "landmarks": [
+        {
+          "feature": "phase listing",
+          "symbol": "TestPhaseListDocsDescribeTheListing",
+          "loc": "internal/cmd/phase_test.go:512",
+          "what": "README, man page and the three prompt consumers describe the marker, footer and --milestone, guarded by greps bound to the real flag name"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/phase/plan_edit.go",
+        "internal/phase/plan_edit_test.go",
+        "internal/cmd/task.go",
+        "internal/cmd/task_test.go",
+        "internal/cmd/hints.go",
+        "internal/cmd/hints_test.go",
+        "internal/cmd/flag_hint_test.go",
+        "cmd/dross/main_test.go"
+      ],
+      "commit": "7c3f7ff",
+      "completed_at": "2026-08-19T16:06:52.35652Z",
+      "landmarks": [
+        {
+          "feature": "plan editing",
+          "symbol": "TaskEdit.Files",
+          "loc": "internal/phase/plan_edit.go:329",
+          "what": "dross task edit --files repoints a task's file list; no plan.toml field is hand-edit-only now"
+        }
+      ]
+    }
+  }
 }
