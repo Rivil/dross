@@ -1,4 +1,4 @@
-phases = ["completion-record-truth", "legacy-phase-backfill", "mirror-terminal-state", "board-mirror-reaper", "plan-gray-area-walkthrough"]
+phases = ["completion-record-truth", "legacy-phase-backfill", "mirror-terminal-state", "board-mirror-reaper", "plan-gray-area-walkthrough", "reentry-signal-truth"]
 
 [milestone]
   version = "v1.5"
