@@ -1,0 +1,127 @@
+[phase]
+id = "completion-record-truth"
+
+[[task]]
+id            = "t-1"
+wave          = 1
+title         = "Extract shared doneness reader; point status at it"
+files         = [
+  "internal/cmd/phasedone.go",
+  "internal/cmd/milestone_progress.go",
+  "internal/cmd/status.go",
+  "internal/cmd/status_test.go",
+]
+description   = """
+Move phaseIsDone out of milestone_progress.go into its own file as the single
+doneness reader, with an entry point that resolves scaffolded-ness itself.
+Rewire renderMilestone (status.go:158) off readVerifyVerdict(...)=="pass" onto
+that reader. Carry the changes.json complete/shipped authority and the
+state.json history fallback across unchanged (locked history_fallback).
+"""
+covers        = ["c-1", "c-2"]
+test_contract = [
+  "if renderMilestone counts verify verdicts again, a fixture phase with verify.toml verdict=\"pass\" and changes.json carrying no completion status makes the status bar read 1/1 instead of 0/1",
+  "if the shared reader drops the changes.json \"shipped\" arm, a shipped-status fixture stops counting done in both status and milestone progress",
+  "if the state.json `completed <slug>` history fallback is dropped from the shared reader, a fixture with no changes.json status but a matching breadcrumb stops counting done in status",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-3"
+wave          = 1
+title         = "Dedup duplicate roadmap slugs; name them in doctor"
+files         = [
+  "internal/phase/phase.go",
+  "internal/phase/phase_test.go",
+  "internal/cmd/doctor.go",
+  "internal/cmd/doctor_test.go",
+]
+description   = """
+phase.Ordered sets `placed` but never reads it in the order loop, so a slug on
+two milestones' phases arrays is emitted twice. Skip an already-placed slug,
+first occurrence in milestone-version order winning. Add a doctor check naming
+any slug that appears on more than one roadmap, with the versions it appears
+on — a warning, not an issue: doctor's exit code is unchanged.
+"""
+covers        = ["c-4"]
+test_contract = [
+  "if Ordered stops honouring `placed`, an order array holding one slug twice emits it twice instead of once",
+  "if the dedup keeps the last occurrence instead of the first, the ordering test asserting the slug sits at its earlier-milestone position fails",
+  "if the doctor duplicate check is dropped, a two-milestone fixture sharing a slug no longer prints the slug and both versions",
+  "if the duplicate check is raised from warning to issue, the doctor test asserting a nil error on that fixture fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-2"
+wave          = 2
+depends_on    = ["t-1"]
+title         = "phase list: done marks, N/M footer, --milestone scope"
+files         = [
+  "internal/cmd/phase.go",
+  "internal/cmd/phase_test.go",
+]
+description   = """
+Render each phase with a "✓ " prefix when done and two spaces when not, and
+end the listing with an "N/M done" footer, both drawn from t-1's shared reader.
+Add --milestone <version>, which lists that milestone's phases array in roadmap
+order — including slugs with no phase directory, marked as not scaffolded — and
+reports that milestone's done/total. The bare command keeps its global
+cross-milestone listing (locked list_scope). No --json flag (locked done_marker).
+"""
+covers        = ["c-1", "c-2", "c-3"]
+test_contract = [
+  "if the done marker is dropped or applied to a not-done phase, the byte-exact line assertion (\"✓ <slug>\" vs \"  <slug>\") fails",
+  "if the footer count comes from anywhere but the shared reader, a fixture whose phase has verdict=\"pass\" and no completion status is counted in the footer",
+  "if --milestone drops unscaffolded roadmap slugs, a roadmap of 1 done + 1 unscaffolded reports 1/1 instead of 1/2",
+  "if --milestone accepts an unknown version silently, the test asserting an error naming that version fails",
+  "if the bare `dross phase list` stops listing phases from every milestone, the cross-milestone fixture loses its orphan and second-milestone entries",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-4"
+wave          = 3
+depends_on    = ["t-1", "t-2"]
+title         = "Cross-command guard: one fixture, three commands, one answer"
+files         = [
+  "internal/cmd/completion_record_truth_test.go",
+]
+description   = """
+One fixture repo, three commands, one answer. Phase A carries changes.json
+status=complete with no verify.toml; phase B carries verify.toml verdict="pass"
+with no completion status. dross status, dross milestone progress and dross
+phase list --milestone must all report the same count over it. This is the
+guard c-5 names: a command re-deriving doneness from the verdict inverts both
+phases and disagrees with the other two.
+"""
+covers        = ["c-1", "c-2", "c-5"]
+test_contract = [
+  "if any of status, milestone progress or phase list --milestone derives its done count from verify.toml's verdict, the A/B fixture makes that command report 2/2 (or 1/2 counting B not A) while the others report 1/2, and the test fails",
+  "if a v1.4-shaped fixture of 11 complete-no-verify phases stops reading 11/11 on any of the three commands, the test fails naming which command disagreed",
+  "if phase B (verdict pass, no completion status) is reported done by any of the three, the test fails",
+]
+status        = "pending"
+
+[[task]]
+id            = "t-5"
+wave          = 3
+depends_on    = ["t-2"]
+title         = "Document phase list and --milestone in README and man page"
+files         = [
+  "README.md",
+  "docs/dross.1",
+  "internal/cmd/phase_test.go",
+]
+description   = """
+`dross phase list` is documented in neither README.md nor docs/dross.1. Add its
+entry to both, covering the done marker, the N/M footer and the --milestone
+flag, with a grep test in the house style (see mutation_remote_test.go:86).
+Carries no criterion — added on the user's call at plan time.
+"""
+covers        = []
+test_contract = [
+  "if README.md or docs/dross.1 loses the `phase list` entry, the doc grep test fails naming the file",
+  "if the --milestone flag is renamed or removed without updating both docs, the same test fails",
+]
+status        = "pending"
