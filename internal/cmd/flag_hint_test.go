@@ -13,7 +13,7 @@ import (
 // way main.go installs them — one EnforceSubcommandKnown call on the root.
 func hintedTree() *cobra.Command {
 	root := &cobra.Command{Use: "dross", SilenceUsage: true, SilenceErrors: true}
-	root.AddCommand(Task(), Phase())
+	root.AddCommand(Task(), Phase(), Security())
 	EnforceSubcommandKnown(root)
 	return root
 }
@@ -63,11 +63,14 @@ func TestFlagHintReachesDepthThree(t *testing.T) {
 	if edit.FlagErrorFunc() == nil {
 		t.Error("no FlagErrorFunc resolved at depth 3 — the parent-walk did not reach it")
 	}
-	runErr := runCmd(t, root, "task", "edit", "01-p", "t-1", "--files", "a.go")
+	// A curated hint on another depth-3 command, run through the same root.
+	// This used to be `task edit --files`, which stopped being a mis-reach when
+	// that flag was added — the hint table lost the entry with it.
+	runErr := runCmd(t, root, "security", "run", "--new")
 	if runErr == nil {
-		t.Fatal("`task edit --files a.go` succeeded")
+		t.Fatal("`security run --new` succeeded")
 	}
-	if !strings.Contains(runErr.Error(), "dross task add") {
+	if !strings.Contains(runErr.Error(), "dross security run") {
 		t.Errorf("the depth-3 curated hint did not fire: %v", runErr)
 	}
 }

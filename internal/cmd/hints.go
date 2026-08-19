@@ -37,12 +37,6 @@ var curatedHints = map[string]Hint{
 		Fix:     `dross phase create "<title>"`,
 		Why:     "the title is a positional argument, not a flag",
 	},
-	hintKey("dross task edit", "--files"): {
-		Command: "dross task add",
-		Flags:   []string{"--files"},
-		Fix:     "dross task add <phase-id> --files a.go,b.go",
-		Why:     "`task edit` cannot change a task's files — they are set when the task is added",
-	},
 	hintKey("dross security run", "--new"): {
 		Command: "dross security run",
 		Fix:     "dross security run [path]",

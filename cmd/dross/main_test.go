@@ -311,8 +311,11 @@ func runRoot(t *testing.T, args ...string) error {
 
 // TestMisreachesAreSelfCorrecting is c-2's acceptance sentence, executed. This
 // is the only package that can see the real assembled tree rather than a
-// hand-built one, so it is the only place the four mis-reaches can be pinned
-// end to end.
+// hand-built one, so it is the only place the mis-reaches can be pinned end to
+// end.
+//
+// It covered four; `task edit --files` left the list when that flag was added
+// and the invocation stopped being a mis-reach.
 func TestMisreachesAreSelfCorrecting(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -321,7 +324,6 @@ func TestMisreachesAreSelfCorrecting(t *testing.T) {
 	}{
 		{"task done", []string{"task", "done", "t-1"}, "dross task status"},
 		{"phase create --title", []string{"phase", "create", "--title", "x"}, `dross phase create "<title>"`},
-		{"task edit --files", []string{"task", "edit", "01-p", "t-1", "--files", "a.go"}, "dross task add"},
 		{"security run --new", []string{"security", "run", "--new"}, "dross security run"},
 	}
 	for _, c := range cases {

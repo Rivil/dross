@@ -323,11 +323,19 @@ func (p *Plan) MoveTask(id, anchor string, before bool) error {
 
 // TaskEdit carries the fields EditTask may change. A nil pointer means "leave
 // unchanged"; a non-nil pointer (even to an empty value) replaces the current
-// field. Status and Files are intentionally absent — status is owned by
-// `dross task status`, and edit does not repoint a task's files.
+// field. Status is intentionally absent — it is owned by `dross task status`,
+// which enforces the lifecycle a free-form edit would let a caller skip.
+//
+// Files used to be absent too, on the reasoning that edit does not repoint a
+// task's files. That left files the one plan.toml field with no CLI edit
+// surface, so changing it meant hand-editing the file this subsystem exists to
+// make hand-editing unnecessary — and a task's file list is exactly the kind of
+// thing execution corrects. It replaces the whole list, like Covers and
+// DependsOn.
 type TaskEdit struct {
 	Title        *string
 	Description  *string
+	Files        *[]string
 	Covers       *[]string
 	DependsOn    *[]string
 	TestContract *[]string
@@ -348,6 +356,9 @@ func (p *Plan) EditTask(id string, e TaskEdit) error {
 	}
 	if e.Description != nil {
 		t.Description = *e.Description
+	}
+	if e.Files != nil {
+		t.Files = *e.Files
 	}
 	if e.Covers != nil {
 		t.Covers = *e.Covers

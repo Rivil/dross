@@ -8,7 +8,9 @@ import (
 	"testing"
 )
 
-func TestCuratedHintCoversTheFourMisreaches(t *testing.T) {
+// The table covered four mis-reaches; `dross task edit --files` left it when
+// that flag was added and the invocation started working.
+func TestCuratedHintCoversTheKnownMisreaches(t *testing.T) {
 	cases := []struct {
 		cmdPath, token string
 		wantIn         string
@@ -16,7 +18,6 @@ func TestCuratedHintCoversTheFourMisreaches(t *testing.T) {
 		// The semantic remap edit distance can never produce.
 		{"dross task", "done", "dross task status <phase-id> <task-id> done"},
 		{"dross phase create", "--title", "dross phase create"},
-		{"dross task edit", "--files", "dross task add"},
 		{"dross security run", "--new", "dross security run"},
 	}
 	for _, c := range cases {
@@ -28,6 +29,15 @@ func TestCuratedHintCoversTheFourMisreaches(t *testing.T) {
 		if !strings.Contains(h.Fix, c.wantIn) {
 			t.Errorf("CuratedHint(%q, %q).Fix = %q, want it to contain %q", c.cmdPath, c.token, h.Fix, c.wantIn)
 		}
+	}
+}
+
+// TestNoHintForTaskEditFiles: `dross task edit --files` is a working
+// invocation now, so a hint telling the user to reach for `task add` instead
+// would send them somewhere worse than where they already are.
+func TestNoHintForTaskEditFiles(t *testing.T) {
+	if h, ok := CuratedHint("dross task edit", "--files"); ok {
+		t.Errorf("--files is a real flag on `task edit`; stale hint still present: %+v", h)
 	}
 }
 
