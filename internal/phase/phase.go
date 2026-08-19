@@ -73,6 +73,14 @@ func StripLegacyPrefix(id string) string {
 // order; orphan dirs (on disk but in no array) are appended, sorted, never
 // dropped. A stale array entry (in the array but with no dir) is skipped —
 // there is nothing on disk to list for it.
+//
+// A slug appearing more than once in order is emitted once, at its FIRST
+// position. Callers concatenate every milestone's phases array in version
+// order, so a phase carried forward onto a later milestone's roadmap — a
+// legitimate re-scope — appears twice in the input; it is one directory and
+// must list as one line. The earlier position wins because that is where the
+// phase actually sits in the project's sequence. `dross doctor` names any such
+// slug, so the ambiguity stays findable rather than being silently smoothed.
 func Ordered(order, dirs []string) []string {
 	onDisk := make(map[string]bool, len(dirs))
 	for _, d := range dirs {
@@ -81,7 +89,7 @@ func Ordered(order, dirs []string) []string {
 	out := make([]string, 0, len(dirs))
 	placed := make(map[string]bool, len(dirs))
 	for _, o := range order {
-		if onDisk[o] {
+		if onDisk[o] && !placed[o] {
 			out = append(out, o)
 			placed[o] = true
 		}

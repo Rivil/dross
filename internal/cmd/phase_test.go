@@ -440,6 +440,45 @@ func TestPhaseListOrdersByMilestoneArray(t *testing.T) {
 	}
 }
 
+// TestPhaseListPrintsASharedSlugOnce is c-4 at the command surface, not just at
+// phase.Ordered: a phase carried forward onto a later milestone's roadmap is
+// listed once, at its earlier position. `dross phase list` printed
+// plan-gray-area-walkthrough twice on this repo, because milestonePhaseOrder
+// concatenates every milestone's array and Ordered emitted both occurrences.
+//
+// Asserted through the rendered output so a future path that bypasses Ordered
+// — a rewrite of the listing, a second order source — cannot re-open it.
+func TestPhaseListPrintsASharedSlugOnce(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	root := filepath.Join(dir, ".dross")
+	for _, name := range []string{"solo", "carried", "fresh"} {
+		if err := os.MkdirAll(filepath.Join(root, "phases", name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+		"phases = [\"solo\", \"carried\"]\n\n[milestone]\nversion = \"v0.4\"\n")
+	mustWrite(t, filepath.Join(root, "milestones", "v0.5.toml"),
+		"phases = [\"carried\", \"fresh\"]\n\n[milestone]\nversion = \"v0.5\"\n")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "list"); err != nil {
+			t.Fatalf("list: %v", err)
+		}
+	})
+	if n := strings.Count(out, "carried"); n != 1 {
+		t.Errorf("a slug on two roadmaps must list once, got %d occurrences:\n%s", n, out)
+	}
+	// And once, at the EARLIER milestone's position — between solo and fresh.
+	if got := out; got != "solo\ncarried\nfresh\n" {
+		t.Errorf("listing = %q, want the earlier milestone's position to win", got)
+	}
+}
+
 // TestPhaseNumber proves `dross phase number` reports a phase's 1-based ordinal
 // from the current milestone's array, recomputing after a reorder.
 func TestPhaseNumber(t *testing.T) {
