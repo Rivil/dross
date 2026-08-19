@@ -392,6 +392,13 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Several authorized mutation hosts with first-ready-wins selection, and a run that refuses a full scratch volume instead of quietly filling one
 - [x] Five parked ideas dismissed on measurement rather than deferred again — scanner scratch caches, gremlins workdir pinning, remote runtime installation, remote-run latency, remote test-watch
 
+### Milestone v1.5 — signal truth: one answer to "is this done", and a board that agrees with it (active)
+
+- [ ] One doneness reader behind `dross status`, `dross milestone progress` and `dross phase list` — the completion record, never a verify verdict
+- [ ] Phases finished before `changes.json` carried a status marked done through a supported verb, not a hand-authored file
+- [ ] `dross issue pull` returns only issues dross did not author, and a shipped phase's task cards leave task-in-review by themselves
+- [ ] `/dross-plan` walks every unresolved gray area one turn each, with no multiSelect pre-selection
+
 ## Telemetry
 
 Dross records local-only usage events at `~/.claude/dross/telemetry.jsonl`. The intent is single-developer self-observation — a dogfood log you can read back later to find where the tool gets in your way.
