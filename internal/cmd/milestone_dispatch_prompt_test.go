@@ -100,15 +100,20 @@ func TestMilestonePromptOutstandingArmOnlyReports(t *testing.T) {
 }
 
 // TestMilestonePromptDoesNotDeriveDonenessItself: the CLI owns the definition
-// of done. A prompt re-deriving it from `phase list` or a verify verdict would
-// drift from the locked phases_done_test rule the moment either changed.
+// of done. A prompt re-deriving it from a verify verdict or the shape of the
+// phases array would drift from the locked phases_done_test rule the moment
+// either changed.
+//
+// `dross phase list` left this forbidden list when it started reading doneness
+// through the shared reader (phasedone.go): it is now the same answer rendered
+// per phase, not a second derivation of it.
 func TestMilestonePromptDoesNotDeriveDoneness(t *testing.T) {
 	dispatch := section(t, milestonePromptText(t), "## 0. Pre-flight")
 	low := strings.ToLower(dispatch)
 	if !strings.Contains(low, "do not re-derive") && !strings.Contains(low, "don't re-derive") {
 		t.Error("the dispatch does not forbid re-deriving doneness")
 	}
-	for _, src := range []string{"phase list", "verify.toml"} {
+	for _, src := range []string{"verify.toml", "phases array"} {
 		if !strings.Contains(low, src) {
 			t.Errorf("the dispatch does not rule out %q as a doneness source", src)
 		}

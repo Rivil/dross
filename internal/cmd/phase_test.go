@@ -606,6 +606,75 @@ func TestPhaseListBareStaysCrossMilestone(t *testing.T) {
 	}
 }
 
+// TestPhaseListDocsDescribeTheListing: README.md and docs/dross.1 enumerated the
+// `list` verb in their brace lists and described none of its behaviour, so a
+// reader learned nothing about the done marker, the footer or the scope flag
+// from either. The flag name is read off the real command tree rather than
+// typed here, so renaming --milestone without touching both docs fails this.
+func TestPhaseListDocsDescribeTheListing(t *testing.T) {
+	list, _, err := Phase().Find([]string{"list"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := list.Flags().Lookup("milestone")
+	if f == nil {
+		t.Fatal("`dross phase list` has no --milestone flag; the docs below describe one")
+	}
+	flag := "--" + f.Name
+
+	docs := map[string][]string{
+		"README.md": {flag, "N/M done", "✓ ", "(not scaffolded)"},
+		// The man page spells the marker out rather than embedding a glyph: the
+		// rest of the page is plain ASCII roff.
+		filepath.Join("docs", "dross.1"): {flag, "N/M done", "check mark", "(not scaffolded)"},
+	}
+	for file, needles := range docs {
+		body := readRepoFile(t, file)
+		for _, want := range needles {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s does not describe %q in its `dross phase list` prose", file, want)
+			}
+		}
+	}
+}
+
+// TestPhaseListPromptConsumersAreCurrent: three prompts read this listing's
+// output or reason about what it can answer, and t-2 made each of them wrong.
+// A prompt that is wrong about a command is worse than one that is silent —
+// it sends the agent somewhere confidently.
+func TestPhaseListPromptConsumersAreCurrent(t *testing.T) {
+	spec := readRepoFile(t, filepath.Join("assets", "prompts", "spec.md"))
+	// The create flow used to intersect raw `dross phase list` lines against
+	// the phases array. Every line now carries a marker prefix and the listing
+	// ends with a footer, so that parse yields slugs that do not exist.
+	if strings.Contains(spec, "intersect against `dross phase list`") {
+		t.Error("spec.md still intersects raw `dross phase list` output against the phases array")
+	}
+	if !strings.Contains(spec, "--milestone") {
+		t.Error("spec.md's create flow should read the roadmap through `dross phase list --milestone`")
+	}
+
+	verify := readRepoFile(t, filepath.Join("assets", "prompts", "verify.md"))
+	// The claim was true of the bare listing and false of --milestone, which
+	// walks the whole roadmap including unscaffolded entries.
+	if strings.Contains(verify, "It is a directory listing — it prints only phases") {
+		t.Error("verify.md still claims `dross phase list` prints only scaffolded phases, unqualified")
+	}
+	if !strings.Contains(verify, "--milestone") {
+		t.Error("verify.md should name the --milestone reading it is now safe to use")
+	}
+
+	ms := readRepoFile(t, filepath.Join("assets", "prompts", "milestone.md"))
+	// phase list now reads doneness through the same reader as `milestone
+	// progress`, so forbidding it as a doneness source forbids agreement.
+	if strings.Contains(ms, "do NOT re-derive it from `dross phase list`") {
+		t.Error("milestone.md still forbids deriving doneness from `dross phase list`, which now shares the reader")
+	}
+	if !strings.Contains(ms, "verify.toml") {
+		t.Error("milestone.md must still rule out the verify verdict as a doneness source")
+	}
+}
+
 // TestPhaseNumber proves `dross phase number` reports a phase's 1-based ordinal
 // from the current milestone's array, recomputing after a reorder.
 func TestPhaseNumber(t *testing.T) {

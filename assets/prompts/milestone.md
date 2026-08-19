@@ -14,7 +14,7 @@ Drive the milestone lifecycle: scope a new one, close out a finished one, or rep
 dross milestone progress --json
 ```
 
-It emits `{version, status, done, total, all_done, remaining, unscaffolded}`. `remaining` is the slugs still outstanding; `unscaffolded` is the subset of those with no phase directory yet. Doneness comes from each phase's own record — do NOT re-derive it from `dross phase list`, from a phase's `verify.toml` verdict, or by eyeballing the phases array. A verified phase is not a delivered one.
+It emits `{version, status, done, total, all_done, remaining, unscaffolded}`. `remaining` is the slugs still outstanding; `unscaffolded` is the subset of those with no phase directory yet. Doneness comes from each phase's own record — do NOT re-derive it from a phase's `verify.toml` verdict, or by eyeballing the phases array. A verified phase is not a delivered one. `dross phase list --milestone <version>` reads the same record through the same reader, so it agrees with this command by construction and is a fine way to see *which* phases are outstanding; it is a second view of the same answer, not a second source of it.
 
 **Branch on `status` FIRST, then on `all_done`.** The two arms would otherwise both fire on a milestone that was just finalized — status `complete`, every phase done, `current_milestone` still pointing at it — and the run would try to complete an already-closed milestone instead of scoping the next one.
 

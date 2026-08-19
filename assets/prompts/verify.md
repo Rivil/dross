@@ -209,9 +209,11 @@ If verdict is `pass`:
 
 1. Resolve `<next-id>` from the **milestone's `phases` array** — `dross milestone show` (or `.dross/milestones/<version>.toml`) — taking the entry immediately after `<id>`. That array is the ordering truth: it lists the whole roadmap, including phases nobody has started.
 
-   **Do not use `dross phase list` for this.** It is a directory listing — it prints only phases that have been *scaffolded*, and a phase is scaffolded only once someone begins it. Using it as the ordering source makes every unstarted successor invisible, which is how verifying phase 9 of 14 announced the milestone feature-complete on 2026-08-13 and sent the user to the wrong next command.
+   **Do not use a bare `dross phase list` for this.** Bare, it is a directory listing of every phase in the repo — it prints only phases that have been *scaffolded*, and a phase is scaffolded only once someone begins it. Using it as the ordering source makes every unstarted successor invisible, which is how verifying phase 9 of 14 announced the milestone feature-complete on 2026-08-13 and sent the user to the wrong next command.
 
-   Only when there is no active milestone (`state.current_milestone` unset) fall back to `dross phase list`, which is then the only ordering there is.
+   `dross phase list --milestone <version>` is a different question and a safe second reading of the array: it walks that milestone's roadmap in array order, marks entries with no phase directory `(not scaffolded)`, and closes with an `N/M done` footer.
+
+   Only when there is no active milestone (`state.current_milestone` unset) fall back to the bare `dross phase list`, which is then the only ordering there is.
 
    `<id>` is the last phase in the milestone only when it is the last entry of that array.
 
@@ -224,7 +226,7 @@ Next:
       ↳ --draft            — open the PR in draft (work-in-progress, not ready for review)
       ↳ --no-push          — preview the PR body and diff without pushing
   /dross-spec <next-id>    — start the next phase
-  dross phase list         — see all phases
+  dross phase list         — see all phases (--milestone <version> for one roadmap)
 
 state is on disk — safe to /clear · fresh session: /dross-ship
 ```
