@@ -428,15 +428,17 @@ func TestPhaseListOrdersByMilestoneArray(t *testing.T) {
 		})
 	}
 
+	// Byte-exact, marker prefix and footer included: a substring check would
+	// pass on either order and lose the proof.
 	writeMilestone(`"gamma", "alpha"`)
-	if got := list(); got != "gamma\nalpha\n" {
-		t.Errorf("array order [gamma,alpha]: got %q want \"gamma\\nalpha\\n\"", got)
+	if got, want := list(), "  gamma\n  alpha\n0/2 done\n"; got != want {
+		t.Errorf("array order [gamma,alpha]: got %q want %q", got, want)
 	}
 	// Reverting to ReadDir+sort.Strings would print alphabetical here; the
 	// array order must win.
 	writeMilestone(`"alpha", "gamma"`)
-	if got := list(); got != "alpha\ngamma\n" {
-		t.Errorf("array order [alpha,gamma]: got %q want \"alpha\\ngamma\\n\"", got)
+	if got, want := list(), "  alpha\n  gamma\n0/2 done\n"; got != want {
+		t.Errorf("array order [alpha,gamma]: got %q want %q", got, want)
 	}
 }
 
@@ -474,8 +476,133 @@ func TestPhaseListPrintsASharedSlugOnce(t *testing.T) {
 		t.Errorf("a slug on two roadmaps must list once, got %d occurrences:\n%s", n, out)
 	}
 	// And once, at the EARLIER milestone's position — between solo and fresh.
-	if got := out; got != "solo\ncarried\nfresh\n" {
-		t.Errorf("listing = %q, want the earlier milestone's position to win", got)
+	if got, want := out, "  solo\n  carried\n  fresh\n0/3 done\n"; got != want {
+		t.Errorf("listing = %q, want %q — the earlier milestone's position must win", got, want)
+	}
+}
+
+// TestPhaseListMarksDonePhases: the marker is "✓ " on a done phase and two
+// spaces on one that is not, so the slugs stay column-aligned and the listing
+// scans vertically (locked done_marker). Byte-exact — a marker applied to the
+// wrong phase is the whole failure this listing exists to prevent.
+func TestPhaseListMarksDonePhases(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	recordPhaseStatus(t, "shipped-one", changes.StatusShipped)
+	recordPhaseStatus(t, "still-going", "")
+	mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+		"phases = [\"shipped-one\", \"still-going\"]\n\n[milestone]\nversion = \"v0.4\"\n")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "list"); err != nil {
+			t.Fatalf("list: %v", err)
+		}
+	})
+	if got, want := out, "✓ shipped-one\n  still-going\n1/2 done\n"; got != want {
+		t.Errorf("listing = %q, want %q", got, want)
+	}
+}
+
+// TestPhaseListFooterIgnoresVerifyVerdict is c-2 at the listing: the footer
+// counts what the shared reader counts. A phase with verdict="pass" and no
+// completion status is verified, not shipped — counting it here would make
+// `dross phase list` disagree with `dross status` over the same directory,
+// which is the split this phase closes.
+func TestPhaseListFooterIgnoresVerifyVerdict(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	recordPhaseStatus(t, "verified-only", "")
+	mustWrite(t, filepath.Join(root, "phases", "verified-only", "verify.toml"),
+		"[summary]\n  verdict = \"pass\"\n")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "list"); err != nil {
+			t.Fatalf("list: %v", err)
+		}
+	})
+	if got, want := out, "  verified-only\n0/1 done\n"; got != want {
+		t.Errorf("listing = %q, want %q — a verdict is not a completion record", got, want)
+	}
+}
+
+// TestPhaseListMilestoneCountsUnscaffolded: --milestone answers "what did this
+// milestone sign up for, and how much is done". A roadmap slug with no
+// directory is work that was listed and never built, so it is listed and it is
+// in the denominator — dropping it reports 1/1 on a half-built milestone.
+func TestPhaseListMilestoneCountsUnscaffolded(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	recordPhaseStatus(t, "built", changes.StatusComplete)
+	mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+		"phases = [\"built\", \"never-built\"]\n\n[milestone]\nversion = \"v0.4\"\n")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "list", "--milestone", "v0.4"); err != nil {
+			t.Fatalf("list --milestone: %v", err)
+		}
+	})
+	if got, want := out, "✓ built\n  never-built (not scaffolded)\n1/2 done\n"; got != want {
+		t.Errorf("listing = %q, want %q", got, want)
+	}
+}
+
+// TestPhaseListMilestoneRejectsUnknownVersion: a typo'd version must not read
+// as an empty milestone, which would report 0/0 and look like a finished
+// roadmap with nothing on it.
+func TestPhaseListMilestoneRejectsUnknownVersion(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	err := runCmd(t, Phase(), "list", "--milestone", "v9.9")
+	if err == nil {
+		t.Fatal("an unknown milestone version was accepted")
+	}
+	if !strings.Contains(err.Error(), "v9.9") {
+		t.Errorf("the error must name the version asked for, got: %v", err)
+	}
+}
+
+// TestPhaseListBareStaysCrossMilestone pins the locked list_scope decision: the
+// bare command keeps its global listing — every phase directory in the repo,
+// including orphans in no array and phases from other milestones. Scoping the
+// default to the current milestone would silently break every existing caller.
+func TestPhaseListBareStaysCrossMilestone(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	for _, slug := range []string{"old-one", "new-one", "orphan"} {
+		recordPhaseStatus(t, slug, "")
+	}
+	mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+		"phases = [\"old-one\"]\n\n[milestone]\nversion = \"v0.4\"\n")
+	mustWrite(t, filepath.Join(root, "milestones", "v0.5.toml"),
+		"phases = [\"new-one\"]\n\n[milestone]\nversion = \"v0.5\"\n")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "list"); err != nil {
+			t.Fatalf("list: %v", err)
+		}
+	})
+	// Array order first (v0.4 then v0.5), orphans appended.
+	if got, want := out, "  old-one\n  new-one\n  orphan\n0/3 done\n"; got != want {
+		t.Errorf("listing = %q, want %q — the bare listing is global", got, want)
 	}
 }
 
