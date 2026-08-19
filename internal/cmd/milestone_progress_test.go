@@ -297,6 +297,49 @@ func TestProgressPlainOutputOmitsEmptyLists(t *testing.T) {
 	}
 }
 
+// TestPhaseDoneResolvesScaffoldedness pins the shared reader's entry point
+// (phasedone.go): a caller holding only a slug gets the unscaffolded arm
+// resolved for it, so `dross status` and `dross phase list` cannot answer that
+// case differently from buildMilestoneProgress, which computes scaffolded-ness
+// for its own reporting and calls the inner phaseIsDone.
+func TestPhaseDoneResolvesScaffoldedness(t *testing.T) {
+	dir := progressRepo(t, "v1.3", "active", "built", "never-built")
+	scaffoldPhase(t, dir, "built", changes.StatusComplete)
+	// History insists the unbuilt slug is done. It has no directory, so it is
+	// not — and the entry point has to reach that on its own.
+	touchHistory(t, dir, "completed never-built")
+
+	root := filepath.Join(dir, ".dross")
+	s := phaseDoneState(root)
+	if !phaseDone(root, "built", s) {
+		t.Error("a scaffolded phase with a complete record must read done")
+	}
+	if phaseDone(root, "never-built", s) {
+		t.Error("an unscaffolded slug is never done, whatever history says")
+	}
+}
+
+// TestPhaseDoneStateSurvivesMissingStateFile: the reader's own state loader is
+// lenient by design. state.json is machine-local and gitignored, so a fresh
+// clone has none — and a doneness question must still be answerable there,
+// off the durable changes.json marker.
+func TestPhaseDoneStateSurvivesMissingStateFile(t *testing.T) {
+	dir := progressRepo(t, "v1.3", "active", "built")
+	scaffoldPhase(t, dir, "built", changes.StatusComplete)
+	root := filepath.Join(dir, ".dross")
+	if err := os.Remove(filepath.Join(root, state.File)); err != nil {
+		t.Fatalf("remove state.json: %v", err)
+	}
+
+	s := phaseDoneState(root)
+	if s == nil {
+		t.Fatal("phaseDoneState must never return nil")
+	}
+	if !phaseDone(root, "built", s) {
+		t.Error("the durable marker alone must carry a phase with no state.json")
+	}
+}
+
 func hasSlug(list []string, want string) bool {
 	for _, s := range list {
 		if s == want {

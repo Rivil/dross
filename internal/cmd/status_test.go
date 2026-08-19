@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/findings"
 	"github.com/Rivil/dross/internal/state"
 )
@@ -305,30 +306,123 @@ func TestStatusOmitsHandoffWhenAbsentOrEmpty(t *testing.T) {
 }
 
 // Milestone-level progress: status must surface how many of the milestone's
-// phases are verified (N/M phases), distinct from the current phase's task
-// count. Pins the bug where only per-phase task progress (2/2) was shown and
-// the milestone looked complete when phases remained.
+// phases are done (N/M phases), distinct from the current phase's task count.
+// Pins the bug where only per-phase task progress (2/2) was shown and the
+// milestone looked complete when phases remained.
+//
+// Doneness is the completion record, not the verify verdict — this fixture used
+// to be built out of verify.toml verdicts, which is exactly the reading
+// completion-record-truth removes.
 func TestStatusShowsMilestonePhaseProgress(t *testing.T) {
 	chdir(t, t.TempDir())
 	scaffoldPhaseWithSpecOnly(t, "01-a")
-	// A milestone toml listing five phases, two of which are verified.
+	// A milestone toml listing five phases, two of which carry a completion
+	// record — one complete, one shipped.
 	mustWrite(t, ".dross/milestones/v0.1.toml", `phases = ["01-a", "02-b", "03-c", "04-d", "05-e"]
 
 [milestone]
   version = "v0.1"
   title = "First release"
 `)
-	mustWrite(t, ".dross/phases/01-a/verify.toml", "verdict = \"pass\"\n")
-	mustWrite(t, ".dross/phases/02-b/verify.toml", "verdict = \"pass\"\n")
-	mustWrite(t, ".dross/phases/03-c/verify.toml", "verdict = \"partial\"\n")
+	recordPhaseStatus(t, "01-a", changes.StatusComplete)
+	recordPhaseStatus(t, "02-b", changes.StatusShipped)
+	recordPhaseStatus(t, "03-c", "")
 	out := captureStdout(t, func() {
 		runCmd(t, Status())
 	})
 	if !strings.Contains(out, "2/5 phases") {
-		t.Errorf("expected milestone phase progress '2/5 phases' (only 01-a and 02-b are pass):\n%s", out)
+		t.Errorf("expected milestone phase progress '2/5 phases' (only 01-a and 02-b carry a completion record):\n%s", out)
 	}
 	if !strings.Contains(out, "First release") {
 		t.Errorf("expected milestone title surfaced:\n%s", out)
+	}
+}
+
+// TestStatusMilestoneIgnoresVerifyVerdict is the c-2 case at the status
+// surface: a phase can pass verification and never ship, so a verdict of "pass"
+// over a record carrying no completion status is not doneness. The status bar
+// counted exactly that until this phase, which is why it read 0/11 on v1.4
+// while `dross milestone progress` read 11/11 over the same directories.
+func TestStatusMilestoneIgnoresVerifyVerdict(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "verified-only")
+	mustWrite(t, ".dross/milestones/v0.1.toml", `phases = ["verified-only"]
+
+[milestone]
+  version = "v0.1"
+`)
+	recordPhaseStatus(t, "verified-only", "")
+	mustWrite(t, ".dross/phases/verified-only/verify.toml", "[summary]\n  verdict = \"pass\"\n")
+
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "0/1 phases") {
+		t.Errorf("a verify verdict is not a completion record — want '0/1 phases':\n%s", out)
+	}
+}
+
+// TestStatusCountsShippedPhaseDone pins the other half of the same reader: the
+// changes.json "shipped" arm counts at the status surface too, on a fixture
+// carrying that record and nothing else.
+func TestStatusCountsShippedPhaseDone(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "shipped-one")
+	mustWrite(t, ".dross/milestones/v0.1.toml", `phases = ["shipped-one"]
+
+[milestone]
+  version = "v0.1"
+`)
+	recordPhaseStatus(t, "shipped-one", changes.StatusShipped)
+
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "1/1 phases") {
+		t.Errorf("a shipped record is doneness — want '1/1 phases':\n%s", out)
+	}
+}
+
+// TestStatusMilestoneHistoryFallbackCountsBreadcrumb pins the locked
+// history_fallback decision at the status surface: the shared reader carries
+// the state.json `completed <slug>` fallback across unchanged, so a phase whose
+// record predates the status field still counts done — and counts the same way
+// on all three surfaces.
+func TestStatusMilestoneHistoryFallbackCountsBreadcrumb(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	scaffoldPhaseWithSpecOnly(t, "old-phase")
+	mustWrite(t, ".dross/milestones/v0.1.toml", `phases = ["old-phase"]
+
+[milestone]
+  version = "v0.1"
+`)
+	recordPhaseStatus(t, "old-phase", "")
+	touchHistory(t, dir, "completed old-phase")
+
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "1/1 phases") {
+		t.Errorf("the history fallback must still close a pre-field record — want '1/1 phases':\n%s", out)
+	}
+}
+
+// recordPhaseStatus scaffolds .dross/phases/<slug>/ and gives it a changes.json.
+// An empty status writes the pre-field shape — a record with no status key at
+// all, which reads as "unknown", never as done.
+func recordPhaseStatus(t *testing.T, slug, status string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(".dross", "phases", slug), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if status == "" {
+		mustWrite(t, filepath.Join(".dross", "phases", slug, changes.File),
+			`{"phase":"`+slug+`","tasks":{}}`+"\n")
+		return
+	}
+	if err := changes.SetStatus(".dross", slug, status); err != nil {
+		t.Fatal(err)
 	}
 }
 
