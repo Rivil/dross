@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/Rivil/dross/internal/architecture"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/hostallow"
+	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
@@ -58,6 +60,7 @@ func Doctor() *cobra.Command {
 			// finalizeDoctor's tally, because a warning nobody counts is a
 			// warning nobody sees at the end of a long run.
 			redProofWarnings := 0
+			duplicateSlugWarnings := 0
 
 			// --- Foundational files ---
 			//
@@ -461,6 +464,25 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
+			// --- Duplicate roadmap slugs ---
+			//
+			// Carrying a phase forward onto a later milestone's roadmap is a
+			// legitimate re-scope, so `dross phase list` dedups it silently
+			// (phase.Ordered) rather than printing the directory twice. That
+			// makes the ambiguity invisible at the listing, which is why it is
+			// named here instead: doctor is where faults belong. Advisory —
+			// nothing is broken, so the exit code is unchanged.
+			if dups := duplicateRoadmapSlugs(root); len(dups) > 0 {
+				Print("Duplicate roadmap slugs:")
+				for _, d := range dups {
+					Printf("  ⚠ %s is on %d milestone roadmaps (%s) — listed once, at its %s position\n",
+						d.Slug, len(d.Versions), strings.Join(d.Versions, ", "), d.Versions[0])
+					duplicateSlugWarnings++
+				}
+				Print("    Advisory only — a re-scoped phase is legitimate; this never changes doctor's exit code.")
+				Print("")
+			}
+
 			// --- Cross-field combinations ---
 			//
 			// Collected above, reported here as one advisory block. Each value
@@ -475,7 +497,7 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues, len(warnings)+redProofWarnings)
+			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings)
 		},
 	}
 }
@@ -590,6 +612,51 @@ func sameCommitSHA(a, b string) bool {
 		return false
 	}
 	return strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
+}
+
+// duplicateRoadmapSlug is one slug and every milestone roadmap listing it.
+type duplicateRoadmapSlug struct {
+	Slug     string
+	Versions []string
+}
+
+// duplicateRoadmapSlugs names every slug on more than one milestone's phases
+// array, in the order those slugs are first listed, each with the versions
+// carrying it — the first of which is the position `dross phase list` renders
+// it at (phase.Ordered keeps the first occurrence).
+//
+// A milestone that fails to load is skipped, matching milestonePhaseOrder: this
+// is a finding, never a hard dependency.
+func duplicateRoadmapSlugs(root string) []duplicateRoadmapSlug {
+	versions, err := milestone.List(root)
+	if err != nil {
+		return nil
+	}
+	on := map[string][]string{}
+	var order []string
+	for _, v := range versions {
+		m, err := milestone.Load(milestone.FilePath(root, v))
+		if err != nil {
+			continue
+		}
+		for _, slug := range m.Phases {
+			if len(on[slug]) == 0 {
+				order = append(order, slug)
+			}
+			// A slug repeated inside ONE array is still one roadmap: what this
+			// reports is the same phase claimed by two milestones.
+			if !slices.Contains(on[slug], v) {
+				on[slug] = append(on[slug], v)
+			}
+		}
+	}
+	var out []duplicateRoadmapSlug
+	for _, slug := range order {
+		if len(on[slug]) > 1 {
+			out = append(out, duplicateRoadmapSlug{Slug: slug, Versions: on[slug]})
+		}
+	}
+	return out
 }
 
 // remoteCombinationWarnings reports [remote] pairings that are individually

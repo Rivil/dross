@@ -8,6 +8,7 @@
     "board-sync-truth": "DRO-19",
     "board-task-mirror": "DRO-32",
     "cache-budget-prune": "DRO-132",
+    "completion-record-truth": "DRO-135",
     "config-value-truth": "DRO-25",
     "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
@@ -136,6 +137,36 @@
     },
     "board-task-mirror/t-7": {
       "issue": "DRO-123"
+    },
+    "completion-record-truth/t-1": {
+      "issue": "DRO-136",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "completion-record-truth/t-2": {
+      "issue": "DRO-139",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "completion-record-truth/t-3": {
+      "issue": "DRO-137",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "completion-record-truth/t-4": {
+      "issue": "DRO-140",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "completion-record-truth/t-5": {
+      "issue": "DRO-141",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "completion-record-truth/t-6": {
+      "issue": "DRO-138",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "red-proof-repoint/t-1": {
       "issue": "DRO-126"

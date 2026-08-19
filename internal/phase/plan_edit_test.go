@@ -489,6 +489,43 @@ func TestEditTaskReplacesTestContract(t *testing.T) {
 	}
 }
 
+// TestEditTaskReplacesFiles: Files is a wholesale replace, like Covers and
+// DependsOn — never a merge with what the task already listed.
+func TestEditTaskReplacesFiles(t *testing.T) {
+	p := &Plan{TaskSeq: 1, Task: []Task{{
+		ID: "t-1", Wave: 1, Title: "one", Files: []string{"old.go", "stale.go"},
+	}}}
+	want := []string{"new.go"}
+	if err := p.EditTask("t-1", TaskEdit{Files: ptr(want)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.FindTask("t-1").Files; !reflect.DeepEqual(got, want) {
+		t.Errorf("files = %v, want %v", got, want)
+	}
+}
+
+// TestEditTaskFilesNilLeavesUntouched pins the pointer contract on the field
+// that just gained it: nil is "leave unchanged", and a pointer to an empty
+// slice is "clear it". Reading the two as one makes an unrelated --title edit
+// wipe a task's files.
+func TestEditTaskFilesNilLeavesUntouched(t *testing.T) {
+	p := &Plan{TaskSeq: 1, Task: []Task{{
+		ID: "t-1", Wave: 1, Title: "one", Files: []string{"keep.go"},
+	}}}
+	if err := p.EditTask("t-1", TaskEdit{Title: ptr("renamed")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.FindTask("t-1").Files; !reflect.DeepEqual(got, []string{"keep.go"}) {
+		t.Errorf("files = %v, want [keep.go] — a nil Files must not touch the array", got)
+	}
+	if err := p.EditTask("t-1", TaskEdit{Files: ptr([]string{})}); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.FindTask("t-1").Files; len(got) != 0 {
+		t.Errorf("files = %v, want empty — a pointer to an empty slice clears", got)
+	}
+}
+
 func TestEditTaskSetsDescription(t *testing.T) {
 	p := &Plan{TaskSeq: 1, Task: []Task{{ID: "t-1", Wave: 1, Title: "one"}}}
 	if err := p.EditTask("t-1", TaskEdit{Description: ptr("what it does")}); err != nil {

@@ -16,7 +16,7 @@ Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
      - **unset** → there's nothing for this command to do. `AskUserQuestion`: **"No phase in progress. Create a new phase?"** options: `new` / `cancel`. On `cancel`, stop and exit cleanly. On `new`, jump to the create flow below.
 
    **Create flow** (used by `--new`, the `new` answer above, or whenever scaffolding is needed):
-   - If `state.current_milestone` is set, read `.dross/milestones/<milestone>.toml`'s `phases = [...]` and intersect against `dross phase list`. Any roadmap entry without a `.dross/phases/<id>/` directory is an **unscaffolded roadmap phase**.
+   - If `state.current_milestone` is set, run `dross phase list --milestone <milestone>`: it walks that milestone's `phases` array in roadmap order and marks every entry with no phase directory `(not scaffolded)`. Those are the **unscaffolded roadmap phases**. Read the slug out of the line — every line carries a two-character status prefix (`✓ ` when done) and the listing ends with an `N/M done` footer, so neither the prefix nor the last line is a slug.
    - If there are unscaffolded entries, present them via `AskUserQuestion`: one option per entry (label `<id>`; description = the entry's one-line summary if a `Brief.md` at repo root contains a matching `### Phase <id>` section, otherwise the bare title). Last option is **"Describe a new phase"** (freeform).
    - If the user picks a roadmap entry, the title is the entry's slug (or its Brief.md title if present) — run `dross phase create "<title>"`.
    - If the user picks **Describe a new phase**, prompt for a freeform title, then run `dross phase create "<title>"`.

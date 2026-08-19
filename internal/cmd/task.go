@@ -317,7 +317,7 @@ func taskRemove() *cobra.Command {
 func taskEdit() *cobra.Command {
 	var title, description string
 	var wave int
-	var covers, dependsOn, testContract, addTestContract []string
+	var files, covers, dependsOn, testContract, addTestContract []string
 	c := &cobra.Command{
 		Use:   "edit <phase-id> <task-id>",
 		Short: "Update an existing task's fields (partial; status not editable)",
@@ -356,6 +356,9 @@ func taskEdit() *cobra.Command {
 				merged := append(slices.Clone(cur.TestContract), addTestContract...)
 				e.TestContract = &merged
 			}
+			if cmd.Flags().Changed("files") {
+				e.Files = &files
+			}
 			if cmd.Flags().Changed("covers") {
 				e.Covers = &covers
 			}
@@ -378,6 +381,7 @@ func taskEdit() *cobra.Command {
 	c.Flags().StringVar(&title, "title", "", "new task title")
 	c.Flags().StringVar(&description, "description", "", "new task description")
 	c.Flags().IntVar(&wave, "wave", 0, "new wave")
+	c.Flags().StringSliceVar(&files, "files", nil, "replace the files this task touches (comma-separated)")
 	c.Flags().StringSliceVar(&covers, "covers", nil, "replace covered criterion ids (comma-separated)")
 	c.Flags().StringSliceVar(&dependsOn, "depends-on", nil, "replace depends_on task ids (comma-separated)")
 	// StringArray for both, for the reason given on `task add --test-contract`:

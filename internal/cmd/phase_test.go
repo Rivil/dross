@@ -428,15 +428,250 @@ func TestPhaseListOrdersByMilestoneArray(t *testing.T) {
 		})
 	}
 
+	// Byte-exact, marker prefix and footer included: a substring check would
+	// pass on either order and lose the proof.
 	writeMilestone(`"gamma", "alpha"`)
-	if got := list(); got != "gamma\nalpha\n" {
-		t.Errorf("array order [gamma,alpha]: got %q want \"gamma\\nalpha\\n\"", got)
+	if got, want := list(), "  gamma\n  alpha\n0/2 done\n"; got != want {
+		t.Errorf("array order [gamma,alpha]: got %q want %q", got, want)
 	}
 	// Reverting to ReadDir+sort.Strings would print alphabetical here; the
 	// array order must win.
 	writeMilestone(`"alpha", "gamma"`)
-	if got := list(); got != "alpha\ngamma\n" {
-		t.Errorf("array order [alpha,gamma]: got %q want \"alpha\\ngamma\\n\"", got)
+	if got, want := list(), "  alpha\n  gamma\n0/2 done\n"; got != want {
+		t.Errorf("array order [alpha,gamma]: got %q want %q", got, want)
+	}
+}
+
+// TestPhaseListPrintsASharedSlugOnce is c-4 at the command surface, not just at
+// phase.Ordered: a phase carried forward onto a later milestone's roadmap is
+// listed once, at its earlier position. `dross phase list` printed
+// plan-gray-area-walkthrough twice on this repo, because milestonePhaseOrder
+// concatenates every milestone's array and Ordered emitted both occurrences.
+//
+// Asserted through the rendered output so a future path that bypasses Ordered
+// — a rewrite of the listing, a second order source — cannot re-open it.
+func TestPhaseListPrintsASharedSlugOnce(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	root := filepath.Join(dir, ".dross")
+	for _, name := range []string{"solo", "carried", "fresh"} {
+		if err := os.MkdirAll(filepath.Join(root, "phases", name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+		"phases = [\"solo\", \"carried\"]\n\n[milestone]\nversion = \"v0.4\"\n")
+	mustWrite(t, filepath.Join(root, "milestones", "v0.5.toml"),
+		"phases = [\"carried\", \"fresh\"]\n\n[milestone]\nversion = \"v0.5\"\n")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "list"); err != nil {
+			t.Fatalf("list: %v", err)
+		}
+	})
+	if n := strings.Count(out, "carried"); n != 1 {
+		t.Errorf("a slug on two roadmaps must list once, got %d occurrences:\n%s", n, out)
+	}
+	// And once, at the EARLIER milestone's position — between solo and fresh.
+	if got, want := out, "  solo\n  carried\n  fresh\n0/3 done\n"; got != want {
+		t.Errorf("listing = %q, want %q — the earlier milestone's position must win", got, want)
+	}
+}
+
+// TestPhaseListMarksDonePhases: the marker is "✓ " on a done phase and two
+// spaces on one that is not, so the slugs stay column-aligned and the listing
+// scans vertically (locked done_marker). Byte-exact — a marker applied to the
+// wrong phase is the whole failure this listing exists to prevent.
+func TestPhaseListMarksDonePhases(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	recordPhaseStatus(t, "shipped-one", changes.StatusShipped)
+	recordPhaseStatus(t, "still-going", "")
+	mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+		"phases = [\"shipped-one\", \"still-going\"]\n\n[milestone]\nversion = \"v0.4\"\n")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "list"); err != nil {
+			t.Fatalf("list: %v", err)
+		}
+	})
+	if got, want := out, "✓ shipped-one\n  still-going\n1/2 done\n"; got != want {
+		t.Errorf("listing = %q, want %q", got, want)
+	}
+}
+
+// TestPhaseListFooterIgnoresVerifyVerdict is c-2 at the listing: the footer
+// counts what the shared reader counts. A phase with verdict="pass" and no
+// completion status is verified, not shipped — counting it here would make
+// `dross phase list` disagree with `dross status` over the same directory,
+// which is the split this phase closes.
+func TestPhaseListFooterIgnoresVerifyVerdict(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	recordPhaseStatus(t, "verified-only", "")
+	mustWrite(t, filepath.Join(root, "phases", "verified-only", "verify.toml"),
+		"[summary]\n  verdict = \"pass\"\n")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "list"); err != nil {
+			t.Fatalf("list: %v", err)
+		}
+	})
+	if got, want := out, "  verified-only\n0/1 done\n"; got != want {
+		t.Errorf("listing = %q, want %q — a verdict is not a completion record", got, want)
+	}
+}
+
+// TestPhaseListMilestoneCountsUnscaffolded: --milestone answers "what did this
+// milestone sign up for, and how much is done". A roadmap slug with no
+// directory is work that was listed and never built, so it is listed and it is
+// in the denominator — dropping it reports 1/1 on a half-built milestone.
+func TestPhaseListMilestoneCountsUnscaffolded(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	recordPhaseStatus(t, "built", changes.StatusComplete)
+	mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+		"phases = [\"built\", \"never-built\"]\n\n[milestone]\nversion = \"v0.4\"\n")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "list", "--milestone", "v0.4"); err != nil {
+			t.Fatalf("list --milestone: %v", err)
+		}
+	})
+	if got, want := out, "✓ built\n  never-built (not scaffolded)\n1/2 done\n"; got != want {
+		t.Errorf("listing = %q, want %q", got, want)
+	}
+}
+
+// TestPhaseListMilestoneRejectsUnknownVersion: a typo'd version must not read
+// as an empty milestone, which would report 0/0 and look like a finished
+// roadmap with nothing on it.
+func TestPhaseListMilestoneRejectsUnknownVersion(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	err := runCmd(t, Phase(), "list", "--milestone", "v9.9")
+	if err == nil {
+		t.Fatal("an unknown milestone version was accepted")
+	}
+	if !strings.Contains(err.Error(), "v9.9") {
+		t.Errorf("the error must name the version asked for, got: %v", err)
+	}
+}
+
+// TestPhaseListBareStaysCrossMilestone pins the locked list_scope decision: the
+// bare command keeps its global listing — every phase directory in the repo,
+// including orphans in no array and phases from other milestones. Scoping the
+// default to the current milestone would silently break every existing caller.
+func TestPhaseListBareStaysCrossMilestone(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, ".dross")
+	for _, slug := range []string{"old-one", "new-one", "orphan"} {
+		recordPhaseStatus(t, slug, "")
+	}
+	mustWrite(t, filepath.Join(root, "milestones", "v0.4.toml"),
+		"phases = [\"old-one\"]\n\n[milestone]\nversion = \"v0.4\"\n")
+	mustWrite(t, filepath.Join(root, "milestones", "v0.5.toml"),
+		"phases = [\"new-one\"]\n\n[milestone]\nversion = \"v0.5\"\n")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Phase(), "list"); err != nil {
+			t.Fatalf("list: %v", err)
+		}
+	})
+	// Array order first (v0.4 then v0.5), orphans appended.
+	if got, want := out, "  old-one\n  new-one\n  orphan\n0/3 done\n"; got != want {
+		t.Errorf("listing = %q, want %q — the bare listing is global", got, want)
+	}
+}
+
+// TestPhaseListDocsDescribeTheListing: README.md and docs/dross.1 enumerated the
+// `list` verb in their brace lists and described none of its behaviour, so a
+// reader learned nothing about the done marker, the footer or the scope flag
+// from either. The flag name is read off the real command tree rather than
+// typed here, so renaming --milestone without touching both docs fails this.
+func TestPhaseListDocsDescribeTheListing(t *testing.T) {
+	list, _, err := Phase().Find([]string{"list"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := list.Flags().Lookup("milestone")
+	if f == nil {
+		t.Fatal("`dross phase list` has no --milestone flag; the docs below describe one")
+	}
+	flag := "--" + f.Name
+
+	docs := map[string][]string{
+		"README.md": {flag, "N/M done", "✓ ", "(not scaffolded)"},
+		// The man page spells the marker out rather than embedding a glyph: the
+		// rest of the page is plain ASCII roff.
+		filepath.Join("docs", "dross.1"): {flag, "N/M done", "check mark", "(not scaffolded)"},
+	}
+	for file, needles := range docs {
+		body := readRepoFile(t, file)
+		for _, want := range needles {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s does not describe %q in its `dross phase list` prose", file, want)
+			}
+		}
+	}
+}
+
+// TestPhaseListPromptConsumersAreCurrent: three prompts read this listing's
+// output or reason about what it can answer, and t-2 made each of them wrong.
+// A prompt that is wrong about a command is worse than one that is silent —
+// it sends the agent somewhere confidently.
+func TestPhaseListPromptConsumersAreCurrent(t *testing.T) {
+	spec := readRepoFile(t, filepath.Join("assets", "prompts", "spec.md"))
+	// The create flow used to intersect raw `dross phase list` lines against
+	// the phases array. Every line now carries a marker prefix and the listing
+	// ends with a footer, so that parse yields slugs that do not exist.
+	if strings.Contains(spec, "intersect against `dross phase list`") {
+		t.Error("spec.md still intersects raw `dross phase list` output against the phases array")
+	}
+	if !strings.Contains(spec, "--milestone") {
+		t.Error("spec.md's create flow should read the roadmap through `dross phase list --milestone`")
+	}
+
+	verify := readRepoFile(t, filepath.Join("assets", "prompts", "verify.md"))
+	// The claim was true of the bare listing and false of --milestone, which
+	// walks the whole roadmap including unscaffolded entries.
+	if strings.Contains(verify, "It is a directory listing — it prints only phases") {
+		t.Error("verify.md still claims `dross phase list` prints only scaffolded phases, unqualified")
+	}
+	if !strings.Contains(verify, "--milestone") {
+		t.Error("verify.md should name the --milestone reading it is now safe to use")
+	}
+
+	ms := readRepoFile(t, filepath.Join("assets", "prompts", "milestone.md"))
+	// phase list now reads doneness through the same reader as `milestone
+	// progress`, so forbidding it as a doneness source forbids agreement.
+	if strings.Contains(ms, "do NOT re-derive it from `dross phase list`") {
+		t.Error("milestone.md still forbids deriving doneness from `dross phase list`, which now shares the reader")
+	}
+	if !strings.Contains(ms, "verify.toml") {
+		t.Error("milestone.md must still rule out the verify verdict as a doneness source")
 	}
 }
 

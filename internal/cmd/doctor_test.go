@@ -525,6 +525,97 @@ func TestDoctorClobberScanErrorIsAdvisory(t *testing.T) {
 // Moved and Unresolved bullets warn — an OK link, a Skipped (unindexable) link,
 // and a no-line link stay silent — and a repo with no ARCHITECTURE.md yields no
 // section (present=false).
+// TestDoctorNamesDuplicateRoadmapSlug: `dross phase list` dedups a slug claimed
+// by two milestones silently, because carrying a phase forward is a legitimate
+// re-scope. Silent means invisible, so doctor names it — with both versions, so
+// the reader can tell which roadmap is stale — and the finding is advisory: the
+// exit code must not move.
+func TestDoctorNamesDuplicateRoadmapSlug(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v1.4.toml"), `phases = ["solo", "carried"]
+
+[milestone]
+  version = "v1.4"
+  status = "complete"
+`)
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v1.5.toml"), `phases = ["carried", "fresh"]
+
+[milestone]
+  version = "v1.5"
+  status = "active"
+`)
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Doctor()); err != nil {
+			t.Fatalf("a duplicate roadmap slug is a warning, not an issue: %v", err)
+		}
+	})
+	if !strings.Contains(out, "Duplicate roadmap slugs:") {
+		t.Errorf("expected the duplicate-slug section:\n%s", out)
+	}
+	if !strings.Contains(out, "carried") || !strings.Contains(out, "v1.4") || !strings.Contains(out, "v1.5") {
+		t.Errorf("the finding must name the slug and both versions:\n%s", out)
+	}
+	if strings.Contains(out, "solo is on") || strings.Contains(out, "fresh is on") {
+		t.Errorf("a slug on one roadmap is not a duplicate:\n%s", out)
+	}
+}
+
+// TestDoctorSilentWithoutDuplicateRoadmapSlugs: the section appears only when
+// there is something to say — a healthy repo gains no new noise.
+func TestDoctorSilentWithoutDuplicateRoadmapSlugs(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v1.4.toml"), `phases = ["one", "two"]
+
+[milestone]
+  version = "v1.4"
+  status = "complete"
+`)
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	out := captureStdout(t, func() {
+		_ = runCmd(t, Doctor())
+	})
+	if strings.Contains(out, "Duplicate roadmap slugs:") {
+		t.Errorf("no slug is on two roadmaps here:\n%s", out)
+	}
+}
+
+// TestDuplicateRoadmapSlugsIgnoresRepeatWithinOneArray: what the check reports
+// is two milestones claiming one phase. A slug listed twice inside a single
+// array is a malformed array, not a re-scope, and naming it here would report a
+// second milestone that does not exist.
+func TestDuplicateRoadmapSlugsIgnoresRepeatWithinOneArray(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	root := filepath.Join(dir, ".dross")
+	mustWrite(t, filepath.Join(root, "milestones", "v1.4.toml"), `phases = ["twice", "twice"]
+
+[milestone]
+  version = "v1.4"
+  status = "active"
+`)
+	if got := duplicateRoadmapSlugs(root); len(got) != 0 {
+		t.Errorf("duplicateRoadmapSlugs = %v, want none — one array is one roadmap", got)
+	}
+}
+
 func TestArchitectureLinkWarnings(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "foo.go"), "package foo\n\nfunc Bar() {}\n") // Bar at line 3

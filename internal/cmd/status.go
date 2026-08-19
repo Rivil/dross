@@ -56,7 +56,7 @@ func Status() *cobra.Command {
 			Printf("project:   %s  v%s\n", name, st.Version)
 
 			if st.CurrentMilestone != "" {
-				renderMilestone(root, st.CurrentMilestone)
+				renderMilestone(root, st.CurrentMilestone, st)
 			}
 
 			// Phase block
@@ -142,12 +142,18 @@ func Status() *cobra.Command {
 }
 
 // renderMilestone prints the milestone line, augmented with phase-level
-// progress — how many of the milestone's phases are verified (verdict="pass")
-// out of the total it lists. This is the milestone view (N/M phases), distinct
-// from the phase block below it (which shows the current phase's task count).
-// Falls back to the bare name when the milestone toml is missing or lists no
-// phases (e.g. a freshly-set current_milestone with no scoped toml yet).
-func renderMilestone(root, version string) {
+// progress — how many of the milestone's phases are done out of the total it
+// lists. This is the milestone view (N/M phases), distinct from the phase block
+// below it (which shows the current phase's task count). Falls back to the bare
+// name when the milestone toml is missing or lists no phases (e.g. a
+// freshly-set current_milestone with no scoped toml yet).
+//
+// Doneness comes from phaseDone (phasedone.go), the same reader `dross
+// milestone progress` and `dross phase list` use — never from verify.toml's
+// verdict. Counting verdicts here is what made the status bar disagree with
+// milestone progress across all of v1.4: eleven phases carrying completion
+// records and no verify.toml read 0/11 on this line while progress read 11/11.
+func renderMilestone(root, version string, s *state.State) {
 	m, err := milestone.Load(milestone.FilePath(root, version))
 	if err != nil || len(m.Phases) == 0 {
 		Printf("milestone: %s\n", version)
@@ -155,7 +161,7 @@ func renderMilestone(root, version string) {
 	}
 	done := 0
 	for _, id := range m.Phases {
-		if readVerifyVerdict(filepath.Join(phase.Dir(root, id), "verify.toml")) == "pass" {
+		if phaseDone(root, id, s) {
 			done++
 		}
 	}
