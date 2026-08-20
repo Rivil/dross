@@ -2,8 +2,15 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/Rivil/dross/internal/changes"
+	"github.com/Rivil/dross/internal/phase"
+	"github.com/Rivil/dross/internal/project"
 )
 
 // The evidence resolver behind `dross phase backfill`.
@@ -33,6 +40,23 @@ import (
 // directories from `07-stack-profiles` to `stack-profiles` long after those
 // phases shipped; their ship commits still carry the prefix.
 var backfillShipSubject = regexp.MustCompile(`^phase (?:[0-9]{2}-)?([a-z0-9][a-z0-9-]*):`)
+
+// backfillOrdinal is the two-digit phase ordinal `dross phase migrate` strips
+// from directory names.
+var backfillOrdinal = regexp.MustCompile(`^[0-9]{2}-`)
+
+// backfillSlugKey normalises a slug to the form the ship subject carries, so
+// both sides of the match are stripped the same way.
+//
+// The prefix survives in BOTH directions and the asymmetry is real on this
+// repo: most directories were migrated (`07-stack-profiles` → `stack-profiles`)
+// while their ship commits kept the prefix, and one — 14-stable-slug-phase-ids,
+// the phase that shipped the migration and could not migrate itself — kept the
+// prefix in the directory. Stripping only the subject closes the first group
+// and misses the second.
+func backfillSlugKey(slug string) string {
+	return backfillOrdinal.ReplaceAllString(slug, "")
+}
 
 // backfillVerdict is one slug's answer: backfillable with an evidence commit,
 // or not, with the reason it failed. A verdict is never silently absent — an
@@ -111,9 +135,132 @@ func resolveBackfill(repoDir, slug string, ships map[string]string) backfillVerd
 	if remote != "" {
 		return backfillVerdict{Slug: slug, Reason: "live branch " + branch + " on origin"}
 	}
-	sha, ok := ships[slug]
+	sha, ok := ships[backfillSlugKey(slug)]
 	if !ok {
 		return backfillVerdict{Slug: slug, Reason: "no ship commit on the base matching `phase [NN-]" + slug + ":`"}
 	}
 	return backfillVerdict{Slug: slug, OK: true, EvidenceSHA: sha}
+}
+
+// backfillCandidates is every phase directory whose changes.json carries no
+// status — the records this sweep exists to close.
+//
+// Deliberately the DIRECTORY set, not the union of the milestones' phases
+// arrays that doctor's residue check is scoped to (t-5). The two questions are
+// different: doctor asks "what did a milestone sign up for and not deliver",
+// which is roadmap-shaped; backfill asks "which records on disk are unmarked",
+// which is directory-shaped. A phase directory on no roadmap still has a record
+// that reads not-done everywhere, and leaving it out of the sweep would leave
+// exactly that record un-evidenced with nothing naming it either.
+func backfillCandidates(root string) ([]string, error) {
+	ids, err := phase.List(root)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, id := range ids {
+		c, err := changes.Load(changes.FilePath(root, id), id)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(c.Status) == "" {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
+// backfillPlan resolves every candidate, refusing any pair that normalises to
+// the same ship-subject slug.
+//
+// Two directories differing only by an ordinal prefix (`03-foo` and `foo`) both
+// match one ship commit, and one of them did not ship. There is no evidence
+// that says which, so neither is marked and both are named — an ambiguous
+// marker is worse than an unwritten one, because it reads exactly like a
+// verified one afterwards.
+func backfillPlan(repoDir string, candidates []string, ships map[string]string) []backfillVerdict {
+	byKey := map[string][]string{}
+	for _, slug := range candidates {
+		key := backfillSlugKey(slug)
+		byKey[key] = append(byKey[key], slug)
+	}
+	out := make([]backfillVerdict, 0, len(candidates))
+	for _, slug := range candidates {
+		if peers := byKey[backfillSlugKey(slug)]; len(peers) > 1 {
+			out = append(out, backfillVerdict{
+				Slug:   slug,
+				Reason: "ambiguous — " + strings.Join(peers, ", ") + " share one ship-subject slug",
+			})
+			continue
+		}
+		out = append(out, resolveBackfill(repoDir, slug, ships))
+	}
+	return out
+}
+
+// phaseBackfill registers `dross phase backfill`.
+//
+// Bare, it previews and writes nothing. --apply performs the write. A sweep
+// over 67 tracked records driven by a regex over commit subjects should be read
+// before it lands, and the preview doubles as the residue listing: every
+// candidate is printed with its verdict, backfillable ones carrying the
+// evidence commit and the rest carrying the reason they failed.
+func phaseBackfill() *cobra.Command {
+	var apply bool
+	c := &cobra.Command{
+		Use:   "backfill",
+		Short: "Mark legacy phases complete from ship-commit evidence (preview unless --apply)",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			root, err := FindRoot()
+			if err != nil {
+				return err
+			}
+			repoDir := filepath.Dir(root)
+			base := "main"
+			if p, err := project.Load(filepath.Join(root, project.File)); err == nil {
+				if b := strings.TrimSpace(p.Repo.GitMainBranch); b != "" {
+					base = b
+				}
+			}
+			candidates, err := backfillCandidates(root)
+			if err != nil {
+				return err
+			}
+			if len(candidates) == 0 {
+				Print("no status-less phase records — nothing to backfill")
+				return nil
+			}
+			ships, err := backfillShipCommits(repoDir, base)
+			if err != nil {
+				return err
+			}
+
+			marked, residue := 0, 0
+			for _, v := range backfillPlan(repoDir, candidates, ships) {
+				if !v.OK {
+					residue++
+					Printf("  %s  unbackfillable  %s\n", v.Slug, v.Reason)
+					continue
+				}
+				marked++
+				Printf("  %s  backfillable  %s\n", v.Slug, v.EvidenceSHA)
+				if apply {
+					if err := changes.SetBackfilled(root, v.Slug, v.EvidenceSHA); err != nil {
+						return err
+					}
+				}
+			}
+			Printf("%d backfillable, %d left unwritten (of %d status-less records on %s)\n",
+				marked, residue, len(candidates), base)
+			if apply {
+				Printf("wrote %d completion markers\n", marked)
+			} else {
+				Print("preview only — nothing written; re-run with --apply to write")
+			}
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&apply, "apply", false, "write the inferred completion markers (default: preview only)")
+	return c
 }

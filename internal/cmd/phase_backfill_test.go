@@ -1,9 +1,13 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/changes"
 )
 
 // backfillRepo builds a work repo with a real bare origin on disk, so
@@ -78,11 +82,18 @@ func TestBackfillAcceptsOptionalOrdinalPrefix(t *testing.T) {
 	if got := resolveBackfill(dir, "bar", ships); !got.OK || got.EvidenceSHA != bare {
 		t.Errorf("an unprefixed ship commit must still close its slug: %+v", got)
 	}
-	// The prefix is two digits, not any leading token: `phase 03-foo:` must not
-	// be readable as slug "03-foo" AND "foo" would be wrong to reach from
-	// `phase notanordinal-foo:`.
-	if got := resolveBackfill(dir, "03-foo", ships); got.OK {
-		t.Errorf("the ordinal is stripped, not kept as part of the slug: %+v", got)
+	// The prefix survives in both directions. Most directories were migrated
+	// (`07-stack-profiles` → `stack-profiles`) while their ship commits kept
+	// the ordinal; 14-stable-slug-phase-ids — the phase that shipped the
+	// migration and so could not migrate itself — kept the ordinal in the
+	// DIRECTORY. Normalising only one side closes one group and misses the
+	// other.
+	if got := resolveBackfill(dir, "03-foo", ships); !got.OK || got.EvidenceSHA != prefixed {
+		t.Errorf("an unmigrated directory name must match its own ship subject: %+v", got)
+	}
+	// The prefix is exactly two digits, not any leading token.
+	if got := resolveBackfill(dir, "xx-foo", ships); got.OK {
+		t.Errorf("a non-ordinal leading token must not be stripped: %+v", got)
 	}
 }
 
@@ -230,5 +241,225 @@ func TestBackfillFetchFailureIsHard(t *testing.T) {
 
 	if _, err := backfillShipCommits(dir, "main"); err == nil {
 		t.Fatal("a failed fetch must abort the scan — a stale base answers with the wrong list")
+	}
+}
+
+// backfillCmdFixture is backfillRepo plus an initialized .dross, chdir'd so the
+// command's FindRoot lands on it.
+func backfillCmdFixture(t *testing.T) string {
+	t.Helper()
+	dir := backfillRepo(t)
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// backfillPhaseDir creates .dross/phases/<slug>/. An empty status leaves the
+// pre-field shape; "none" leaves no changes.json at all, which Load also reads
+// as status-less.
+func backfillPhaseDir(t *testing.T, dir, slug, status string) {
+	t.Helper()
+	root := filepath.Join(dir, ".dross")
+	if err := os.MkdirAll(filepath.Join(root, "phases", slug), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	switch status {
+	case "none":
+		return
+	case "":
+		mustWrite(t, changes.FilePath(root, slug), `{"phase":"`+slug+`","tasks":{}}`+"\n")
+	default:
+		if err := changes.SetStatus(root, slug, status); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// snapshotRecords reads every changes.json under .dross/phases.
+func snapshotRecords(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	base := filepath.Join(dir, ".dross", "phases")
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		b, err := os.ReadFile(filepath.Join(base, e.Name(), changes.File))
+		if err != nil {
+			out[e.Name()] = "<absent>"
+			continue
+		}
+		out[e.Name()] = string(b)
+	}
+	return out
+}
+
+func mustBackfill(t *testing.T, args ...string) string {
+	t.Helper()
+	var out string
+	if err := runCmdCapturing(t, &out, Phase(), append([]string{"backfill"}, args...)...); err != nil {
+		t.Fatalf("phase backfill %v: %v\n%s", args, err, out)
+	}
+	return out
+}
+
+// TestBackfillPreviewWritesNothing is the write gate. A 67-record sweep driven
+// by a regex over commit subjects has to be readable before it lands, and "the
+// bare form is a preview" is only true if not one byte moves.
+func TestBackfillPreviewWritesNothing(t *testing.T) {
+	dir := backfillCmdFixture(t)
+	shipCommit(t, dir, "phase alpha: alpha (#1)")
+	backfillPhaseDir(t, dir, "alpha", "")
+	backfillPhaseDir(t, dir, "beta", "none")
+
+	before := snapshotRecords(t, dir)
+	out := mustBackfill(t)
+	if !strings.Contains(out, "preview only") {
+		t.Errorf("the bare form must say it wrote nothing:\n%s", out)
+	}
+	after := snapshotRecords(t, dir)
+	if !reflect.DeepEqual(before, after) {
+		t.Errorf("the preview mutated records:\nbefore %v\nafter  %v", before, after)
+	}
+}
+
+// TestBackfillApplyWritesStatusAndEvidence: the marker and its provenance land
+// together. A marker with no evidence SHA is an unauditable claim — the sweep
+// could not be re-run against better evidence, which is the whole reason the
+// provenance field exists.
+func TestBackfillApplyWritesStatusAndEvidence(t *testing.T) {
+	dir := backfillCmdFixture(t)
+	sha := shipCommit(t, dir, "phase alpha: alpha (#1)")
+	backfillPhaseDir(t, dir, "alpha", "")
+
+	mustBackfill(t, "--apply")
+
+	root := filepath.Join(dir, ".dross")
+	c, err := changes.Load(changes.FilePath(root, "alpha"), "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Status != changes.StatusComplete {
+		t.Errorf("status = %q, want %q", c.Status, changes.StatusComplete)
+	}
+	if c.BackfillEvidence == nil || c.BackfillEvidence.SHA != sha {
+		t.Errorf("evidence = %+v, want the ship commit %s", c.BackfillEvidence, sha)
+	}
+	if !phaseDone(root, "alpha") {
+		t.Error("a backfilled record must read done through the shared reader")
+	}
+}
+
+// TestBackfillApplyLeavesFailedEvidenceUntouched: a phase failing EITHER test —
+// live branch, or no ship commit — is left exactly as it was. This is the arm
+// that makes an unattended sweep safe: over-reach writes a done marker onto
+// unfinished work, and nothing downstream can tell it from a real one.
+func TestBackfillApplyLeavesFailedEvidenceUntouched(t *testing.T) {
+	dir := backfillCmdFixture(t)
+	shipCommit(t, dir, "phase inflight: inflight (#1)")
+	backfillPhaseDir(t, dir, "inflight", "")
+	mustGit(t, dir, "branch", "phase/inflight")
+	backfillPhaseDir(t, dir, "no-evidence", "")
+
+	before := snapshotRecords(t, dir)
+	mustBackfill(t, "--apply")
+	after := snapshotRecords(t, dir)
+
+	for _, slug := range []string{"inflight", "no-evidence"} {
+		if before[slug] != after[slug] {
+			t.Errorf("%s failed its evidence test but its record was rewritten:\n%s", slug, after[slug])
+		}
+		if phaseDone(filepath.Join(dir, ".dross"), slug) {
+			t.Errorf("%s was marked done with no evidence", slug)
+		}
+	}
+}
+
+// TestBackfillPreviewNamesEveryCandidateWithItsVerdict: the preview doubles as
+// the residue listing (the locked backfill_write_gate decision). Dropping the
+// unbackfillable rows would make a run that closed 67 of 69 records look like
+// one that closed everything.
+func TestBackfillPreviewNamesEveryCandidateWithItsVerdict(t *testing.T) {
+	dir := backfillCmdFixture(t)
+	sha := shipCommit(t, dir, "phase alpha: alpha (#1)")
+	shipCommit(t, dir, "phase inflight: inflight (#2)")
+	backfillPhaseDir(t, dir, "alpha", "")
+	backfillPhaseDir(t, dir, "inflight", "")
+	mustGit(t, dir, "branch", "phase/inflight")
+	backfillPhaseDir(t, dir, "no-evidence", "")
+
+	out := mustBackfill(t)
+	for _, want := range []string{
+		"alpha  backfillable  " + sha,
+		"inflight  unbackfillable",
+		"no-evidence  unbackfillable",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the preview is missing %q:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "phase/inflight") {
+		t.Errorf("an unbackfillable row must carry the reason it failed:\n%s", out)
+	}
+}
+
+// TestBackfillCandidatesAreDirectoriesNotRoadmapArrays: the sweep's candidate
+// set is every status-less phase DIRECTORY, while doctor's residue check is
+// scoped to the milestones' phases arrays. The two coincide on this repo today,
+// so nothing catches the divergence unless it is pinned — and a directory on no
+// roadmap would otherwise fall out of both surfaces at once.
+func TestBackfillCandidatesAreDirectoriesNotRoadmapArrays(t *testing.T) {
+	dir := backfillCmdFixture(t)
+	sha := shipCommit(t, dir, "phase orphan-dir: orphan-dir (#1)")
+	backfillPhaseDir(t, dir, "orphan-dir", "")
+	// No milestone toml at all, so no roadmap array names it.
+
+	out := mustBackfill(t)
+	if !strings.Contains(out, "orphan-dir  backfillable  "+sha) {
+		t.Errorf("a status-less directory on no roadmap must still be a candidate:\n%s", out)
+	}
+}
+
+// TestBackfillSkipsRecordsThatAlreadyHaveStatus: a record carrying an OBSERVED
+// marker is not a candidate. Re-running the sweep must be a no-op over it, not
+// a rewrite that replaces a `dross phase complete` verdict with an inferred one.
+func TestBackfillSkipsRecordsThatAlreadyHaveStatus(t *testing.T) {
+	dir := backfillCmdFixture(t)
+	shipCommit(t, dir, "phase shipped-already: shipped-already (#1)")
+	backfillPhaseDir(t, dir, "shipped-already", changes.StatusShipped)
+
+	before := snapshotRecords(t, dir)
+	out := mustBackfill(t, "--apply")
+	if strings.Contains(out, "shipped-already") {
+		t.Errorf("a record with a status is not a candidate:\n%s", out)
+	}
+	if after := snapshotRecords(t, dir); !reflect.DeepEqual(before, after) {
+		t.Errorf("the sweep rewrote an already-marked record:\n%v", after)
+	}
+}
+
+// TestBackfillRefusesAmbiguousOrdinalPair: `03-foo` and `foo` both match one
+// ship commit and only one of them shipped. No evidence says which, so neither
+// is marked — an ambiguous marker reads exactly like a verified one afterwards.
+func TestBackfillRefusesAmbiguousOrdinalPair(t *testing.T) {
+	dir := backfillCmdFixture(t)
+	shipCommit(t, dir, "phase 03-foo: foo (#1)")
+	backfillPhaseDir(t, dir, "03-foo", "")
+	backfillPhaseDir(t, dir, "foo", "")
+
+	out := mustBackfill(t, "--apply")
+	for _, slug := range []string{"03-foo", "foo"} {
+		if !strings.Contains(out, slug+"  unbackfillable") {
+			t.Errorf("%s should be refused as ambiguous:\n%s", slug, out)
+		}
+		if phaseDone(filepath.Join(dir, ".dross"), slug) {
+			t.Errorf("%s was marked off ambiguous evidence", slug)
+		}
+	}
+	if !strings.Contains(out, "ambiguous") {
+		t.Errorf("the reason must say the pair is ambiguous:\n%s", out)
 	}
 }
