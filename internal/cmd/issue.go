@@ -938,6 +938,11 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 // work is done; if the tracker did not record that, printing "(closed)" turns
 // a failed write into a false claim about the state of the work, which is what
 // c-5 exists to stop. So an unmapped status is an error, not a warning.
+// The verdict a close is verified against differs by backend, and the branch
+// below is by EXCLUSION — not YouTrack, not Jira — never a three-name allowlist
+// of the flat boards. GitHub is a fourth flat board: github.go's toIssue
+// populates State and never Resolved, so an allowlist would either demand
+// Resolved of it and strand every card, or refuse it by name.
 func closeBoardIssue(ctx *boardCtx, key, status string) error {
 	if status == "" {
 		status = "complete"
@@ -946,7 +951,40 @@ func closeBoardIssue(ctx *boardCtx, key, status string) error {
 		// CloseIssueAs writes the mapped state and verifies the read-back.
 		return wrapBoard(yt.CloseIssueAs(key, status, ctx.proj.Board.StateMap))
 	}
-	return wrapBoard(ctx.client.CloseIssue(key))
+	if jr, ok := ctx.client.(*forge.JiraClient); ok {
+		// Jira closes by workflow transition, so the mapped write goes through
+		// its existing SetState. SetState is deliberately lenient — an unmapped
+		// status or an unavailable transition warns and returns nil — which is
+		// right for a status label and wrong for a close, so the read-back
+		// below is what makes this path honest.
+		if err := jr.SetState(key, status, ctx.proj.Board.StateMap); err != nil {
+			return wrapBoard(err)
+		}
+		return verifyClosed(ctx, key, status, func(iss *forge.Issue) bool { return iss.Resolved })
+	}
+	// Every other provider: a plain close, verified on the open/closed state
+	// their toIssue populates. Requiring Resolved here would strand every flat
+	// board's cards, which the flat_board_close decision forbids; refusing them
+	// by name would strand them just as thoroughly.
+	if err := ctx.client.CloseIssue(key); err != nil {
+		return wrapBoard(err)
+	}
+	return verifyClosed(ctx, key, status, func(iss *forge.Issue) bool { return iss.State == "closed" })
+}
+
+// verifyClosed re-reads an issue and fails unless the tracker's own verdict
+// agrees it is done. Without it a write the workflow silently refused is
+// indistinguishable from a close, and dross prints "(closed)" over an issue the
+// tracker still holds open.
+func verifyClosed(ctx *boardCtx, key, status string, done func(*forge.Issue) bool) error {
+	iss, err := ctx.client.GetIssue(key)
+	if err != nil {
+		return wrapBoard(fmt.Errorf("close %s: read back: %w", key, err))
+	}
+	if iss == nil || !done(iss) {
+		return fmt.Errorf("close %s: wrote the close for status %q but the issue still reads unresolved — the workflow may not allow that transition", key, status)
+	}
+	return nil
 }
 
 // derivePhaseStatus maps plan progress onto a lifecycle label. Its return
@@ -1019,8 +1057,12 @@ func issueQuick() *cobra.Command {
 				if !ok {
 					return fmt.Errorf("no board issue linked to quick ref %q", ref)
 				}
-				if err := ctx.client.CloseIssue(key); err != nil {
-					return wrapBoard(err)
+				// Through closeBoardIssue, not CloseIssue: the quick lane
+				// gets the same mapped write and verified read-back as the
+				// phase lane, so it can no longer report a close over an
+				// issue the tracker still holds unresolved (c-4).
+				if err := closeBoardIssue(ctx, key, ""); err != nil {
+					return err
 				}
 				Printf("quick %s -> board %s (closed)\n", ref, key)
 				return nil

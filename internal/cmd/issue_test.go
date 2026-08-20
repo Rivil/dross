@@ -963,7 +963,14 @@ func TestIssueCover_phaseSyncCloseOnCreate(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/issues") && r.Method == "GET":
 			_, _ = w.Write([]byte(`[]`))
 		case strings.Contains(r.URL.Path, "/issues/") && r.Method == "GET":
-			_, _ = w.Write([]byte(`{"number":12,"labels":[{"name":"dross"}]}`))
+			// The state has to move with the PATCH: the close is verified by a
+			// read-back, so a fake that always answers "open" is modelling a
+			// tracker that refused the write.
+			state := "open"
+			if closed {
+				state = "closed"
+			}
+			_, _ = fmt.Fprintf(w, `{"number":12,"state":%q,"labels":[{"name":"dross"}]}`, state)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -1052,6 +1059,14 @@ func TestIssueCover_quickClose(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/issues/88") && r.Method == "PATCH":
 			patched = true
 			_, _ = w.Write([]byte(`{"number":88,"state":"closed"}`))
+		case strings.HasSuffix(r.URL.Path, "/issues/88") && r.Method == "GET":
+			// closeBoardIssue's read-back: the quick lane is verified now, so
+			// the fake has to answer for the state it just accepted.
+			state := "open"
+			if patched {
+				state = "closed"
+			}
+			_, _ = fmt.Fprintf(w, `{"number":88,"state":%q}`, state)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
