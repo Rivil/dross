@@ -1,0 +1,173 @@
+[phase]
+id = "legacy-phase-backfill"
+
+[[task]]
+id    = "t-1"
+wave  = 1
+title = "Delete history fallback from doneness reader"
+files = [
+  "internal/cmd/phasedone.go",
+  "internal/cmd/phase.go",
+  "internal/cmd/status.go",
+  "internal/cmd/milestone_progress.go",
+  "internal/cmd/milestone_progress_test.go",
+  "internal/cmd/backfill_durability_test.go",
+]
+description = """
+Remove historyCompletedPhase and its call site in phaseIsDone, so doneness
+reads changes.json alone. The *state.State argument then has no consumer:
+drop it from phaseDone/phaseIsDone and remove phaseDoneState, updating the
+three callers (phase.go, status.go, milestone_progress.go). Add the guard and
+durability tests.
+"""
+covers = ["c-3", "c-4"]
+test_contract = [
+  "if a history fallback returns to the doneness reader, a guard test asserting a phase with a 'completed <slug>' breadcrumb and no changes.json status reads not-done fails",
+  "if doneness still reads the capped history window, a test that writes a status=\"complete\" record then pushes 50 further state actions sees the phase flip to not-done and fails",
+  "if the doneness switch grows a third accepted value, a test asserting phaseIsDone matches only shipped and complete fails",
+]
+status = "pending"
+
+[[task]]
+id    = "t-2"
+wave  = 1
+title = "Record backfill evidence SHA on changes.json"
+files = [
+  "internal/changes/changes.go",
+  "internal/changes/changes_test.go",
+]
+description = """
+Add a provenance field naming the commit a backfilled status was inferred from,
+plus the setter that writes status and evidence together. Status itself stays a
+two-value field — no third state.
+
+The wire key must not be "commit", at any nesting depth: doctor's
+extractCommitSHAs (doctor.go:951) is a literal `"commit":` text scan over the
+raw body, and 67 backfilled ship SHAs entering that map would have
+phaseCommitsOnMain report them as leaked commits whenever local main is ahead
+of origin. Serialize as backfill_evidence with an inner "sha".
+"""
+covers = ["c-1"]
+test_contract = [
+  "if the evidence SHA is dropped on write or reload, a round-trip test asserting status=\"complete\" plus the evidence SHA survives Save/Load fails",
+  "if a third status constant is added to package changes, a test asserting the exported status set is exactly {StatusShipped, StatusComplete} fails",
+  "if the provenance serializes under a \"commit\" key at any depth, a test asserting the marshalled body of a backfilled record contains no `\"commit\":` substring fails",
+]
+status = "pending"
+
+[[task]]
+id    = "t-3"
+wave  = 1
+title = "Evidence resolver: refs plus anchored ship subject"
+files = [
+  "internal/cmd/phase_backfill.go",
+  "internal/cmd/phase_backfill_test.go",
+]
+description = """
+The pure verdict function: a slug is backfillable when no phase/<slug> ref
+exists locally or on origin AND main carries a commit whose subject matches
+^phase (NN-)?<slug>:. Returns the verdict plus the evidence commit SHA.
+
+The origin check shells `git ls-remote --heads origin phase/<slug>`, following
+phase.go:741 — not refs/remotes/origin/, which is stale until a fetch and
+therefore reports a live branch for every legacy phase whose branch the forge
+deleted at merge. A failed ls-remote (offline, origin unset, auth failure) is
+an error, never "no ref": absence must be proved, so the slug reports
+unbackfillable with the reason and the run does not silently mark it.
+
+The subject scan reads the same origin-side truth: origin/<base> after an
+explicit fetch, not local main, which lags origin/main after every
+squash-merge until fetched.
+"""
+covers = ["c-2"]
+test_contract = [
+  "if the subject match loses its anchor, a fixture with 'phase multilang-stack-profiles: ...' on main marks stack-profiles backfillable and the test fails",
+  "if the two-digit ordinal prefix stops being optional, a fixture whose only evidence is 'phase 03-foo: ...' reports foo unbackfillable and the test fails",
+  "if a live phase/<slug> ref stops disqualifying, a fixture with both a matching subject and a live branch (local, then origin-only) is marked backfillable and the test fails",
+  "if the origin check reads refs/remotes/origin/ instead of ls-remote, a fixture with a stale remote-tracking ref and no branch on origin reports the phase unbackfillable and the test fails",
+  "if a failed ls-remote is read as \"no ref\", a fixture with an unreachable origin marks a phase backfillable instead of reporting it unbackfillable with the query error, and the test fails",
+  "if the subject scan reads local main, a fixture whose ship commit is on origin/<base> but not on the local ref reports the phase unbackfillable and the test fails",
+]
+status = "pending"
+
+[[task]]
+id         = "t-4"
+wave       = 2
+depends_on = ["t-2", "t-3"]
+title      = "Add dross phase backfill with preview and --apply"
+files = [
+  "internal/cmd/phase_backfill.go",
+  "internal/cmd/phase.go",
+  "internal/cmd/phase_backfill_test.go",
+]
+description = """
+Wire the resolver into a phase subcommand. Bare run previews slug, verdict and
+evidence commit and writes nothing; --apply writes status plus the evidence SHA
+for each backfillable phase and leaves the rest untouched.
+
+The candidate set is every status-less phase directory under .dross/phases,
+not the roadmap arrays t-5 scopes doctor to. The two sets coincide on this repo
+today (v14-mutation-pass is on no roadmap and has no evidence either way), so
+nothing catches the divergence unless it is pinned.
+
+Both verdicts are printed: a backfillable line carries its evidence SHA, an
+unbackfillable one carries its verdict and reason and no SHA. That listing is
+what backfill_write_gate means by the preview doubling as c-5's residue.
+"""
+covers = ["c-1", "c-2"]
+test_contract = [
+  "if a bare run writes, a test asserting every changes.json is byte-identical after preview fails",
+  "if --apply writes a phase that failed either evidence test, a fixture with a live phase branch gains a status and the test fails",
+  "if --apply omits the evidence SHA, a test reading back status plus provenance from the written record fails",
+  "if a backfillable preview line stops naming its evidence, a test asserting that line carries slug, verdict and commit SHA fails",
+  "if unbackfillable phases are dropped from the preview, a fixture with a live phase branch is absent from the listing and the test fails",
+  "if the candidate set narrows to roadmap arrays, a fixture status-less phase directory on no milestone's phases array is absent from the preview and the test fails",
+]
+status = "pending"
+
+[[task]]
+id         = "t-5"
+wave       = 2
+depends_on = ["t-3"]
+title      = "Name unbackfillable roadmap phases in doctor"
+files = [
+  "internal/cmd/doctor.go",
+  "internal/cmd/doctor_backfill_test.go",
+]
+description = """
+A doctor section listing any phase on a milestone's phases array that carries
+no status and no backfill evidence. Advisory, following the duplicate-slug
+precedent. The locked rule is applied literally: an in-flight or unscaffolded
+roadmap phase qualifies and is named.
+"""
+covers = ["c-5"]
+test_contract = [
+  "if the residue check drops, a fixture roadmap phase with no status and no matching commit is absent from doctor output and the test fails",
+  "if the check stops scoping to roadmap arrays, a status-less phase directory on no milestone's phases array appears in doctor output and the test fails",
+  "if a backfillable phase is reported as residue, a fixture with a matching main commit and no live branch appears in the section and the test fails",
+  "if an in-flight or unscaffolded roadmap phase stops being named, a fixture with a live phase/<slug> branch and one with no phase directory are absent from the section and the test fails",
+]
+status = "pending"
+
+[[task]]
+id         = "t-6"
+wave       = 3
+depends_on = ["t-4"]
+title      = "Sweep this repo's phase records"
+files = [".dross/phases"]
+description = """
+Run `make install` first — the command being run is introduced by this phase,
+and rule r-01 makes the installed binary the thing that matters. Then read the
+preview from the freshly installed binary, run --apply, observe the suite green,
+and commit the written records.
+
+Roughly 67 of the 69 status-less phases are expected to be marked;
+legacy-phase-backfill and v14-mutation-pass should be left unwritten.
+"""
+covers = ["c-1"]
+test_contract = [
+  "if the sweep is incomplete or over-reaches, the set of status-less phase directories after --apply is not exactly {legacy-phase-backfill, v14-mutation-pass} and the check fails",
+  "if the sweep leaves a milestone under-counted, `dross milestone progress` for v0.1 through v1.2 reports a done count below the preview's marked-count for that milestone",
+  "if the rewritten records break a test that reads them back (liveRecordRoot copies config-trust-hardening into redproof_set and doctor tests), `go test -count=1 ./...` is red before the commit",
+]
+status = "pending"

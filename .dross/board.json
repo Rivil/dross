@@ -13,6 +13,7 @@
     "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
     "guard-remedy-ordering": "DRO-27",
+    "legacy-phase-backfill": "DRO-142",
     "milestone-lifecycle-close": "DRO-13",
     "multilang-verify-signal": "DRO-28",
     "mutation-diff-scope": "DRO-9",
