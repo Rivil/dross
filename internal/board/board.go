@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"regexp"
 	"sort"
 	"time"
 )
@@ -301,10 +302,33 @@ func (b *Board) IsDismissed(issue string) bool {
 	return false
 }
 
-// IsLinked reports whether an issue id is already tied to a phase or quick
-// task. Milestone ids are excluded on purpose — they live in a different id
-// space. Used by inbound triage to skip issues dross already owns.
+// milestoneIssueShape matches a readable issue key: a project prefix, a dash,
+// and a number (DRO-134). It is the shape gate on the Milestones namespace,
+// which is the one link slot that does not always hold an issue id.
+//
+// Package board cannot read [board].milestone_mode — it holds links, not
+// config — so the mode is inferred from the value itself. A YouTrack epic
+// stores its idReadable and matches; a YouTrack version bundle stores the
+// version NAME ("v1.5") and agile mode the board name, and neither does. The
+// REST forges and GitHub store a NUMERIC milestone id ("7") that shares an id
+// space with their own issue keys — issueResponse.toIssue sets
+// Key: strconv.Itoa(r.Number) — so matching it unconditionally would suppress
+// the human-filed issue #7 from the inbound feed.
+var milestoneIssueShape = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*-[0-9]+$`)
+
+// IsLinked reports whether an issue id is already mirrored by dross in ANY
+// namespace — phase, quick, backlog item, plan task, or (when it holds an
+// issue-shaped id) milestone. Used by inbound triage to skip issues dross
+// itself authored: a mirror that reaches the triage feed asks the user to
+// triage dross's own writing back into dross.
+//
+// An empty id never matches. board.json can hold an empty task issue id, and a
+// forge issue can arrive with an empty Key; without the guard those two would
+// meet and blank the entire feed.
 func (b *Board) IsLinked(issue string) bool {
+	if issue == "" {
+		return false
+	}
 	for _, n := range b.Phases {
 		if n == issue {
 			return true
@@ -312,6 +336,23 @@ func (b *Board) IsLinked(issue string) bool {
 	}
 	for _, n := range b.Quicks {
 		if n == issue {
+			return true
+		}
+	}
+	for _, n := range b.Backlog {
+		if n == issue {
+			return true
+		}
+	}
+	// Tasks are matched by .Issue, not by the record: the record also carries
+	// the agreement point, which is not an id.
+	for _, l := range b.Tasks {
+		if l.Issue == issue {
+			return true
+		}
+	}
+	for _, n := range b.Milestones {
+		if n == issue && milestoneIssueShape.MatchString(n) {
 			return true
 		}
 	}

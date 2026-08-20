@@ -963,7 +963,14 @@ func TestIssueCover_phaseSyncCloseOnCreate(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/issues") && r.Method == "GET":
 			_, _ = w.Write([]byte(`[]`))
 		case strings.Contains(r.URL.Path, "/issues/") && r.Method == "GET":
-			_, _ = w.Write([]byte(`{"number":12,"labels":[{"name":"dross"}]}`))
+			// The state has to move with the PATCH: the close is verified by a
+			// read-back, so a fake that always answers "open" is modelling a
+			// tracker that refused the write.
+			state := "open"
+			if closed {
+				state = "closed"
+			}
+			_, _ = fmt.Fprintf(w, `{"number":12,"state":%q,"labels":[{"name":"dross"}]}`, state)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -1052,6 +1059,14 @@ func TestIssueCover_quickClose(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/issues/88") && r.Method == "PATCH":
 			patched = true
 			_, _ = w.Write([]byte(`{"number":88,"state":"closed"}`))
+		case strings.HasSuffix(r.URL.Path, "/issues/88") && r.Method == "GET":
+			// closeBoardIssue's read-back: the quick lane is verified now, so
+			// the fake has to answer for the state it just accepted.
+			state := "open"
+			if patched {
+				state = "closed"
+			}
+			_, _ = fmt.Fprintf(w, `{"number":88,"state":%q}`, state)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
@@ -1894,5 +1909,200 @@ func TestLifecycleVocabularyIsTheConfigenumSet(t *testing.T) {
 	// state_map keys, doctor — silently accepts a blank status.
 	if configenum.LifecycleStatuses.Has("") {
 		t.Error("LifecycleStatuses accepts the empty string — it must be constructed with no default")
+	}
+}
+
+// --- inbound exclusion: every namespace, and the marker label (c-1) ---
+
+// youtrackPullFake serves a YouTrack issue list from a raw JSON body, with the
+// tag index the label filter consults. One helper so the exclusion tests differ
+// only in their board.json and their issue payload.
+func youtrackPullFake(t *testing.T, body string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/issueTags") {
+			_, _ = io.WriteString(w, `[{"name":"dross"}]`)
+			return
+		}
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// pullKeys runs `issue pull --json` and returns the inbound keys.
+func pullKeys(t *testing.T) []string {
+	t.Helper()
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Issue(), "pull", "--json"); err != nil {
+			t.Fatalf("pull: %v", err)
+		}
+	})
+	got := decodePull(t, out)
+	keys := make([]string, 0, len(got.Issues))
+	for _, iss := range got.Issues {
+		keys = append(keys, iss.Key)
+	}
+	return keys
+}
+
+// TestPullExcludesEveryNamespace proves c-1's first half: an issue dross
+// authored is out of the triage feed whichever board.json namespace records it,
+// not just phases and quicks. One subtest per namespace, so a namespace dropped
+// from IsLinked names itself in the failure.
+//
+// PROJ-9 deliberately carries NO tags in the payload: the marker clause must not
+// be able to cover for a missing namespace. That makes the milestones subtest
+// load-bearing rather than belt-and-braces — ensureEpic sets no marker label, so
+// an epic is excluded by the milestones walk or not at all.
+func TestPullExcludesEveryNamespace(t *testing.T) {
+	for _, tc := range []struct {
+		namespace string
+		boardJSON string
+	}{
+		{"phases", `{"phases":{"01-x":"PROJ-9"}}`},
+		{"quicks", `{"quicks":{"1.2.3.4":"PROJ-9"}}`},
+		{"backlog", `{"backlog":{"slug:future-x":"PROJ-9"}}`},
+		{"tasks", `{"tasks":{"01-x/t-1":{"issue":"PROJ-9"}}}`},
+		{"milestones", `{"milestones":{"v1.5":"PROJ-9"}}`},
+	} {
+		t.Run(tc.namespace, func(t *testing.T) {
+			srv := youtrackPullFake(t, `[
+				{"idReadable":"PROJ-9","summary":"a dross mirror"},
+				{"idReadable":"PROJ-21","summary":"a real bug"}
+			]`)
+			dir := youtrackBoardRepo(t, srv.URL)
+			mustWrite(t, filepath.Join(dir, ".dross", "board.json"), tc.boardJSON)
+
+			if got := pullKeys(t); len(got) != 1 || got[0] != "PROJ-21" {
+				t.Errorf("an issue linked only in %s reached the feed: got %v, want [PROJ-21]", tc.namespace, got)
+			}
+		})
+	}
+}
+
+// TestPullExcludesMarkerLabelledIssue proves c-1's second half and the
+// exclusion_basis lock's marker clause: board.json is branch-local, so a mirror
+// created on a phase branch that never merged is invisible to IsLinked. The
+// marker travels with the issue.
+//
+// The two issues are identical but for the label, so only the marker clause can
+// tell them apart.
+func TestPullExcludesMarkerLabelledIssue(t *testing.T) {
+	srv := youtrackPullFake(t, `[
+		{"idReadable":"PROJ-30","summary":"same summary","tags":[{"name":"dross"}]},
+		{"idReadable":"PROJ-31","summary":"same summary"}
+	]`)
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"), `{}`)
+
+	if got := pullKeys(t); len(got) != 1 || got[0] != "PROJ-31" {
+		t.Errorf("marker-labelled issue not excluded: got %v, want [PROJ-31]", got)
+	}
+}
+
+// TestPullKeepsAForgeIssueSharingTheMilestoneId is why the milestones walk is
+// shape-gated rather than unconditional. On the REST forges and GitHub a
+// milestone id is a bare number in the SAME id space as issue keys —
+// issueResponse.toIssue sets Key: strconv.Itoa(r.Number) — so milestone 7 and
+// human-filed issue #7 are the same string. Matching milestones unconditionally
+// would silently suppress the human's issue.
+func TestPullKeepsAForgeIssueSharingTheMilestoneId(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"number":7,"title":"a real bug","state":"open"}]`))
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := boardRepo(t, srv.URL, true)
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"), `{"milestones":{"v1.5":"7"}}`)
+
+	if got := pullKeys(t); len(got) != 1 || got[0] != "7" {
+		t.Errorf("forge issue #7 suppressed by milestone id 7: got %v, want [7]", got)
+	}
+}
+
+// TestEmptyIdNeverMatches pairs a board.json task entry holding an empty issue
+// id with a tracker issue whose key did not parse. If IsLinked("") returned true
+// the two would meet and blank the entire feed.
+func TestEmptyIdNeverMatches(t *testing.T) {
+	srv := youtrackPullFake(t, `[
+		{"idReadable":"","summary":"no key"},
+		{"idReadable":"PROJ-21","summary":"a real bug"}
+	]`)
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"tasks":{"01-x/t-1":{"issue":""}},"phases":{"02-y":""}}`)
+
+	got := pullKeys(t)
+	if len(got) != 2 {
+		t.Errorf("empty ids swallowed the feed: got %v, want both issues", got)
+	}
+}
+
+// TestPullAgainstThisReposBoardJSON pins the reduction to the real file rather
+// than to a count: every id .dross/board.json links, fed back as the tracker's
+// answer, must leave the inbound feed empty. A namespace dropped from IsLinked
+// puts that namespace's ~100 mirrors back in front of the user.
+func TestPullAgainstThisReposBoardJSON(t *testing.T) {
+	path, err := filepath.Abs(filepath.Join("..", "..", ".dross", "board.json"))
+	if err != nil {
+		t.Fatalf("abs: %v", err)
+	}
+	bd, err := board.Load(path)
+	if err != nil {
+		t.Fatalf("load %s: %v", path, err)
+	}
+
+	var linked []forge.Issue
+	add := func(id string) {
+		if id != "" {
+			linked = append(linked, forge.Issue{Key: id, Title: "a dross mirror"})
+		}
+	}
+	for _, id := range bd.Milestones {
+		add(id)
+	}
+	for _, id := range bd.Phases {
+		add(id)
+	}
+	for _, id := range bd.Quicks {
+		add(id)
+	}
+	for _, id := range bd.Backlog {
+		add(id)
+	}
+	for _, l := range bd.Tasks {
+		add(l.Issue)
+	}
+	if len(linked) == 0 {
+		t.Fatalf("%s links nothing — this test would pass vacuously", path)
+	}
+
+	ctx := &boardCtx{client: fakeInboundClient{issues: linked}, board: bd}
+	got, err := collectInbound(ctx, forge.IssueFilter{State: "all"})
+	if err != nil {
+		t.Fatalf("collectInbound: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("%d of this repo's own mirrors reached the triage feed: %v", len(got), got)
+	}
+}
+
+// TestCollectInboundKeepsDismissedAndHumanVerdicts guards the two filter
+// clauses that predate this phase: deleting either one fails here.
+func TestCollectInboundKeepsDismissedAndHumanVerdicts(t *testing.T) {
+	bd := board.New()
+	bd.Dismiss("PROJ-20")
+	ctx := &boardCtx{board: bd, client: fakeInboundClient{issues: []forge.Issue{
+		{Key: "PROJ-20", Title: "dismissed"},
+		{Key: "PROJ-21", Title: "a real bug", Labels: []string{"bug"}},
+	}}}
+
+	got, err := collectInbound(ctx, forge.IssueFilter{State: "open"})
+	if err != nil {
+		t.Fatalf("collectInbound: %v", err)
+	}
+	if len(got) != 1 || got[0].Key != "PROJ-21" {
+		t.Errorf("dismissed/human verdicts changed: got %v, want only PROJ-21", got)
 	}
 }

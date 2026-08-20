@@ -343,3 +343,36 @@ func TestShipPromptEmitsTerminalBoardStatuses(t *testing.T) {
 		}
 	}
 }
+
+// TestShipPromptClosesTaskCardsAfterPhaseComplete is c-2's emission half. A
+// terminal status nothing emits closes nothing: every task card sat in
+// task-in-review from its commit until forever, because the finalize steps had
+// no line that moved them on.
+//
+// Order is asserted, not just presence. The close belongs AFTER `dross phase
+// complete` — the cards are terminal because the phase finished, and emitting
+// it earlier would resolve them while the merge could still go sideways — and
+// before §7 Wrap, which is where the run stops doing things.
+func TestShipPromptClosesTaskCardsAfterPhaseComplete(t *testing.T) {
+	content := shipPromptContent(t)
+
+	const emit = "dross issue task-sync <phase-id> --status task-complete --close"
+	at := strings.Index(content, emit)
+	if at < 0 {
+		t.Fatalf("ship.md never emits %q — every task card would stay in task-in-review forever", emit)
+	}
+	complete := strings.Index(content, "dross phase complete <phase-id>")
+	if complete < 0 {
+		t.Fatal("ship.md no longer carries the `dross phase complete` step this emission is anchored to")
+	}
+	if at < complete {
+		t.Error("the task close is emitted BEFORE `dross phase complete`; the cards are terminal because the phase finished, not before it did")
+	}
+	wrap := strings.Index(content, "## 7. wrap")
+	if wrap < 0 {
+		t.Fatal("ship.md no longer has a §7 Wrap section to bound the finalize steps")
+	}
+	if at > wrap {
+		t.Error("the task close is emitted after the wrap section, where the run has already finished reporting")
+	}
+}

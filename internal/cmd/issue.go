@@ -235,7 +235,8 @@ func issueDisable() *cobra.Command {
 // --- milestone sync ---
 
 func issueMilestoneSync() *cobra.Command {
-	return &cobra.Command{
+	var doClose bool
+	c := &cobra.Command{
 		Use:   "milestone-sync <version>",
 		Short: "Ensure a board milestone exists for a dross milestone",
 		Args:  cobra.ExactArgs(1),
@@ -247,6 +248,13 @@ func issueMilestoneSync() *cobra.Command {
 			if !enabled {
 				return nil // no-op when board sync is off
 			}
+			// Gated BEFORE the ensure, so a board whose milestone entity has
+			// no close verb makes no tracker write at all on a --close run.
+			if doClose {
+				if err := checkMilestoneClosable(ctx); err != nil {
+					return err
+				}
+			}
 			id, err := ensureMilestoneLink(ctx, args[0])
 			if err != nil {
 				return err
@@ -257,10 +265,44 @@ func issueMilestoneSync() *cobra.Command {
 			if err := ctx.board.Save(ctx.boardPath); err != nil {
 				return err
 			}
+			if doClose {
+				if err := closeBoardIssue(ctx, id, ""); err != nil {
+					return err
+				}
+				Printf("milestone %s -> board %s (closed)\n", args[0], id)
+				return nil
+			}
 			Printf("milestone %s -> board %s\n", args[0], id)
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&doClose, "close", false, "resolve the milestone's epic (use at milestone finalize; epic mode only)")
+	return c
+}
+
+// checkMilestoneClosable refuses --close unless the tracker entity this repo's
+// milestones map to is an ISSUE. Only YouTrack's epic mode stores an issue's
+// idReadable in the milestones slot; a version bundle stores a version name, an
+// agile board a board name, and the REST forges and GitHub a numeric milestone
+// id — none of which a close verb can address.
+//
+// The forge case is not merely inert: a numeric milestone id shares an id space
+// with those backends' own issue keys, so an ungated close would resolve
+// milestone 7 to issue #7 and close a human's issue.
+func checkMilestoneClosable(ctx *boardCtx) error {
+	mode := configenum.Normalize(ctx.proj.Board.MilestoneMode)
+	if mode == "" {
+		mode = "version" // the documented code default
+	}
+	if _, ok := ctx.client.(*forge.YouTrackClient); !ok {
+		return fmt.Errorf("milestone-sync --close needs a milestone that is itself an issue; %s maps a milestone to a milestone entity, not an issue — nothing to close",
+			ctx.proj.Board.Provider)
+	}
+	if mode != "epic" {
+		return fmt.Errorf("milestone-sync --close needs a milestone that is itself an issue; [board].milestone_mode is %q, which maps a milestone to a %s entity — nothing to close (set milestone_mode = \"epic\")",
+			mode, mode)
+	}
+	return nil
 }
 
 // ensureMilestoneLink returns the board milestone id for a dross milestone
@@ -314,11 +356,16 @@ func milestoneBody(title, criteria string) string {
 // --- backlog sync ---
 
 func issueBacklogSync() *cobra.Command {
-	return &cobra.Command{
-		Use:   "backlog-sync <version>",
+	var fromPhase string
+	c := &cobra.Command{
+		Use:   "backlog-sync [version]",
 		Short: "Sync the milestone backlog (unscaffolded slugs + someday ideas) to the board",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.RangeArgs(0, 1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			version, run, err := resolveBacklogVersion(args, fromPhase)
+			if err != nil || !run {
+				return err
+			}
 			ctx, enabled, err := openBoard()
 			if err != nil {
 				return err
@@ -326,9 +373,43 @@ func issueBacklogSync() *cobra.Command {
 			if !enabled {
 				return nil
 			}
-			return syncBacklog(ctx, args[0])
+			return syncBacklog(ctx, version)
 		},
 	}
+	c.Flags().StringVar(&fromPhase, "phase", "", "resolve the version from this phase's spec.toml [phase].milestone (use at ship finalize)")
+	return c
+}
+
+// resolveBacklogVersion picks the milestone version to reconcile: the literal
+// positional argument, or the one the named phase's spec records.
+//
+// The --phase form exists because ship.md's finalize steps carry only a phase
+// id. Resolving the version in Go rather than asking the prompt to dig it out
+// of spec.toml keeps it greppable and testable; prose in a prompt is neither.
+//
+// run is false when there is nothing to do — a phase with no milestone — which
+// is a clean exit, not an error: a phase outside any milestone has no backlog
+// to reconcile.
+func resolveBacklogVersion(args []string, fromPhase string) (version string, run bool, err error) {
+	if (len(args) == 1) == (fromPhase != "") {
+		return "", false, fmt.Errorf("backlog-sync takes either a <version> argument or --phase <phase-id>, not both and not neither")
+	}
+	if len(args) == 1 {
+		return args[0], true, nil
+	}
+	root, err := FindRoot()
+	if err != nil {
+		return "", false, err
+	}
+	spec, err := phase.LoadSpec(filepath.Join(phase.Dir(root, fromPhase), "spec.toml"))
+	if err != nil {
+		return "", false, fmt.Errorf("resolve milestone for phase %s: %w", fromPhase, err)
+	}
+	if spec.Phase.Milestone == "" {
+		Printf("phase %s belongs to no milestone — no backlog to reconcile\n", fromPhase)
+		return "", false, nil
+	}
+	return spec.Phase.Milestone, true, nil
 }
 
 // backlogItem is one milestone-backlog entry to mirror onto the board.
@@ -508,8 +589,146 @@ func syncBacklog(ctx *boardCtx, version string) error {
 	if err != nil {
 		return err
 	}
-	Printf("backlog %s -> %d created, %d updated\n", version, created, updated)
+	closed, err := reconcileBacklog(ctx, items, deferredItems)
+	if err != nil {
+		return err
+	}
+	if err := ctx.board.Save(ctx.boardPath); err != nil {
+		return err
+	}
+	Printf("backlog %s -> %d created, %d updated, %d closed\n", version, created, updated, closed)
 	return nil
+}
+
+// backlogVerdict is what the reconcile pass concluded about one recorded
+// mirror. The third value is the load-bearing one: a key this milestone's live
+// set does not explain is NOT thereby resolved — it may belong to another
+// milestone, or to a slug someone renamed — and closing by set-difference alone
+// would resolve work nobody finished.
+type backlogVerdict int
+
+const (
+	backlogStillOpen backlogVerdict = iota
+	backlogResolved
+	backlogUnattributable
+)
+
+// reconcileBacklog is the inbound half of backlog sync: having pushed the live
+// set, it walks the recorded mirrors and resolves the ones whose artefact is
+// provably done. Without it a backlog issue stays Submitted forever — the slug
+// it stood for gets scaffolded into a real phase, that phase ships, and the
+// mirror still sits on the board describing work that finished months ago.
+//
+// It returns the number of mirrors closed. A close that fails is warned about
+// and its board.json key KEPT: an unlinked-but-open mirror is unreachable by
+// every later run, so dropping the link on failure would strand exactly the
+// issue the run was trying to close.
+func reconcileBacklog(ctx *boardCtx, live []backlogItem, deferred []deferredEntry) (int, error) {
+	liveByKey := make(map[string]backlogItem, len(live))
+	for _, it := range live {
+		liveByKey[it.key] = it
+	}
+	byDeferredKey := make(map[string]deferredEntry, len(deferred))
+	for _, d := range deferred {
+		if d.ID != "" {
+			byDeferredKey[deferredBacklogKey(d.ID)] = d
+		}
+		byDeferredKey[legacyDeferredBacklogKey(d.Source, d.Index)] = d
+	}
+
+	closed := 0
+	for _, key := range ctx.board.BacklogKeys() {
+		issue, ok := ctx.board.BacklogID(key)
+		if !ok || issue == "" {
+			continue
+		}
+		verdict := backlogVerdictFor(ctx, key, liveByKey, byDeferredKey)
+		switch verdict {
+		case backlogStillOpen:
+			continue
+		case backlogUnattributable:
+			// Named rather than swallowed: an unexplained mirror is a real
+			// loose end, and the survivor-drain habit is to surface it, not to
+			// guess at it.
+			fmt.Fprintf(os.Stderr, "warning: backlog mirror %s (%s) is not in this milestone's live set and cannot be shown resolved — leaving it open\n", issue, key)
+			continue
+		}
+		// Idempotence: a mirror the tracker already holds resolved is skipped
+		// rather than closed again. A routed item stays in the live set after
+		// its target ships, so without this the next run would close it a
+		// second time on every sync.
+		if done, err := boardIssueIsDone(ctx, issue); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not read %s back (%v) — leaving it open\n", issue, err)
+			continue
+		} else if done {
+			continue
+		}
+		if err := closeBoardIssue(ctx, issue, ""); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not close backlog mirror %s (%s): %v — the link is kept so the next run retries\n", issue, key, err)
+			continue
+		}
+		closed++
+		// The key is dropped only for a mirror that has LEFT the live set: a
+		// live routed item is still backlog, and dropping its link would make
+		// the next push mint a duplicate.
+		if _, stillLive := liveByKey[key]; !stillLive {
+			ctx.board.DeleteBacklog(key)
+		}
+	}
+	return closed, nil
+}
+
+// backlogVerdictFor decides one recorded mirror's fate. Every branch answers
+// the same question: can this mirror's artefact be SHOWN to have resolved?
+func backlogVerdictFor(ctx *boardCtx, key string, live map[string]backlogItem, deferred map[string]deferredEntry) backlogVerdict {
+	if it, ok := live[key]; ok {
+		// Still backlog — unless it is routed and its destination has landed,
+		// which is the one way a live item's work can already be done.
+		if it.target == "" {
+			return backlogStillOpen
+		}
+		target := lookupPhaseIssue(ctx, it.target)
+		if target == "" {
+			return backlogStillOpen
+		}
+		if done, err := boardIssueIsDone(ctx, target); err == nil && done {
+			return backlogResolved
+		}
+		return backlogStillOpen
+	}
+	if slug, ok := strings.CutPrefix(key, "slug:"); ok {
+		// A roadmap slug leaves the live set the moment it is scaffolded, and
+		// the phase directory is the proof. A slug that left the set WITHOUT a
+		// phase directory was renamed or belongs to another milestone — not
+		// resolved.
+		if _, err := os.Stat(phase.Dir(ctx.root, slug)); err == nil {
+			return backlogResolved
+		}
+		return backlogUnattributable
+	}
+	if d, ok := deferred[key]; ok {
+		// A dismissed idea is a decision, not a loose end: it left the live set
+		// because someone closed it out, so the mirror follows.
+		if d.Dismissed {
+			return backlogResolved
+		}
+		return backlogStillOpen
+	}
+	return backlogUnattributable
+}
+
+// boardIssueIsDone reads an issue back and reports the tracker's own verdict,
+// using the same split closeBoardIssue verifies on: YouTrack and Jira populate
+// Resolved, every other backend populates State.
+func boardIssueIsDone(ctx *boardCtx, key string) (bool, error) {
+	iss, err := ctx.client.GetIssue(key)
+	if err != nil {
+		return false, wrapBoard(err)
+	}
+	if iss == nil {
+		return false, nil
+	}
+	return iss.Resolved || iss.State == "closed", nil
 }
 
 // deferredBacklogItem renders one deferred entry as a board backlog item. It is
@@ -938,6 +1157,11 @@ func syncPhase(ctx *boardCtx, phaseID, status string, doClose bool) error {
 // work is done; if the tracker did not record that, printing "(closed)" turns
 // a failed write into a false claim about the state of the work, which is what
 // c-5 exists to stop. So an unmapped status is an error, not a warning.
+// The verdict a close is verified against differs by backend, and the branch
+// below is by EXCLUSION — not YouTrack, not Jira — never a three-name allowlist
+// of the flat boards. GitHub is a fourth flat board: github.go's toIssue
+// populates State and never Resolved, so an allowlist would either demand
+// Resolved of it and strand every card, or refuse it by name.
 func closeBoardIssue(ctx *boardCtx, key, status string) error {
 	if status == "" {
 		status = "complete"
@@ -946,7 +1170,40 @@ func closeBoardIssue(ctx *boardCtx, key, status string) error {
 		// CloseIssueAs writes the mapped state and verifies the read-back.
 		return wrapBoard(yt.CloseIssueAs(key, status, ctx.proj.Board.StateMap))
 	}
-	return wrapBoard(ctx.client.CloseIssue(key))
+	if jr, ok := ctx.client.(*forge.JiraClient); ok {
+		// Jira closes by workflow transition, so the mapped write goes through
+		// its existing SetState. SetState is deliberately lenient — an unmapped
+		// status or an unavailable transition warns and returns nil — which is
+		// right for a status label and wrong for a close, so the read-back
+		// below is what makes this path honest.
+		if err := jr.SetState(key, status, ctx.proj.Board.StateMap); err != nil {
+			return wrapBoard(err)
+		}
+		return verifyClosed(ctx, key, status, func(iss *forge.Issue) bool { return iss.Resolved })
+	}
+	// Every other provider: a plain close, verified on the open/closed state
+	// their toIssue populates. Requiring Resolved here would strand every flat
+	// board's cards, which the flat_board_close decision forbids; refusing them
+	// by name would strand them just as thoroughly.
+	if err := ctx.client.CloseIssue(key); err != nil {
+		return wrapBoard(err)
+	}
+	return verifyClosed(ctx, key, status, func(iss *forge.Issue) bool { return iss.State == "closed" })
+}
+
+// verifyClosed re-reads an issue and fails unless the tracker's own verdict
+// agrees it is done. Without it a write the workflow silently refused is
+// indistinguishable from a close, and dross prints "(closed)" over an issue the
+// tracker still holds open.
+func verifyClosed(ctx *boardCtx, key, status string, done func(*forge.Issue) bool) error {
+	iss, err := ctx.client.GetIssue(key)
+	if err != nil {
+		return wrapBoard(fmt.Errorf("close %s: read back: %w", key, err))
+	}
+	if iss == nil || !done(iss) {
+		return fmt.Errorf("close %s: wrote the close for status %q but the issue still reads unresolved — the workflow may not allow that transition", key, status)
+	}
+	return nil
 }
 
 // derivePhaseStatus maps plan progress onto a lifecycle label. Its return
@@ -1019,8 +1276,12 @@ func issueQuick() *cobra.Command {
 				if !ok {
 					return fmt.Errorf("no board issue linked to quick ref %q", ref)
 				}
-				if err := ctx.client.CloseIssue(key); err != nil {
-					return wrapBoard(err)
+				// Through closeBoardIssue, not CloseIssue: the quick lane
+				// gets the same mapped write and verified read-back as the
+				// phase lane, so it can no longer report a close over an
+				// issue the tracker still holds unresolved (c-4).
+				if err := closeBoardIssue(ctx, key, ""); err != nil {
+					return err
 				}
 				Printf("quick %s -> board %s (closed)\n", ref, key)
 				return nil
@@ -1052,7 +1313,8 @@ func issueQuick() *cobra.Command {
 // --- pull (inbound triage feed) ---
 
 // collectInbound returns the board's inbound triage feed: issues matching the
-// filter, minus those already linked to a phase/quick or dismissed. It is
+// filter, minus every issue dross authored — one linked in any board.json
+// namespace, one carrying the dross marker label — and minus those dismissed. It is
 // deliberately MARK-FREE — it never stamps last_pull — so read-only callers
 // (dross watch, dross status) share one filter path with `issue pull` and can
 // never re-introduce a board mutation. The filter's State scopes the feed;
@@ -1064,7 +1326,12 @@ func collectInbound(ctx *boardCtx, filter forge.IssueFilter) ([]forge.Issue, err
 	}
 	var inbound []forge.Issue
 	for _, iss := range issues {
-		if ctx.board.IsLinked(iss.Key) || ctx.board.IsDismissed(iss.Key) {
+		// hasMarker is the second exclusion basis (exclusion_basis lock):
+		// board.json is branch-local, so a mirror created on a phase branch
+		// that never merged is invisible to IsLinked, while the marker label
+		// travels with the issue itself. Hiding a human-filed issue somebody
+		// tagged `dross` is the cheaper error.
+		if ctx.board.IsLinked(iss.Key) || ctx.board.IsDismissed(iss.Key) || hasMarker(iss) {
 			continue
 		}
 		inbound = append(inbound, iss)

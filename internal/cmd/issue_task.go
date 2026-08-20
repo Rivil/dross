@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/board"
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/phase"
 )
@@ -32,6 +34,7 @@ func taskLabel(phaseID, taskID string) string { return "dross/task:" + phaseID +
 
 func issueTaskSync() *cobra.Command {
 	var status string
+	var doClose bool
 	c := &cobra.Command{
 		Use:   "task-sync <phase-id> [task-id]",
 		Short: "Mirror a phase's plan tasks as issues, one per task",
@@ -47,6 +50,31 @@ no workflow field at all, warns once per run and continues with the label.
 A no-op when board sync is off.`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(_ *cobra.Command, args []string) error {
+			// Validated ahead of openBoard, exactly as phase-sync does: the
+			// enabled check below returns nil, so a typo'd --status on a repo
+			// that has not opted into board sync would exit 0 as a silent
+			// no-op and only surface on the machine where sync is on. The
+			// asymmetry with phase-sync was harmless until `task-complete`
+			// existed; from here a mistyped terminal status is a card that
+			// never leaves the review column.
+			if status != "" {
+				if !configenum.LifecycleStatuses.Has(status) {
+					return fmt.Errorf("unknown --status %q; expected %s", status, configenum.LifecycleStatuses.List())
+				}
+				// Reassign the normalized form: status is passed raw to
+				// statusLabel and to the state-map lookups, so validating
+				// without normalizing would accept " Task-In-Review", emit the
+				// label "dross/status: Task-In-Review" and then miss the map.
+				status = configenum.Normalize(status)
+			}
+			// --close REQUIRES --status. closeBoardIssue defaults an empty
+			// status to `complete` — the PHASE lane's terminal state — and
+			// writing that onto task cards is the label collision the
+			// task_terminal_status decision exists to prevent.
+			if doClose && status == "" {
+				return fmt.Errorf("--close requires --status: without one the close would write the phase lane's terminal state onto every task card (expected %s)",
+					configenum.LifecycleStatuses.List())
+			}
 			ctx, enabled, err := openBoard()
 			if err != nil {
 				return err
@@ -59,15 +87,29 @@ A no-op when board sync is off.`,
 			if len(args) == 2 {
 				only = args[1]
 			}
-			return syncTasks(ctx, phaseID, only, status)
+			return syncTasks(ctx, phaseID, only, status, doClose)
 		},
 	}
-	c.Flags().StringVar(&status, "status", "", "lifecycle status to drive the task's state (task-in-progress | task-in-review)")
+	c.Flags().StringVar(&status, "status", "", "lifecycle status to drive the task's state ("+configenum.LifecycleStatuses.List()+")")
+	c.Flags().BoolVar(&doClose, "close", false, "resolve each synced task's issue (use at ship finalize; requires --status)")
 	return c
 }
 
+// taskCloseError is a close that the tracker refused for ONE card. It is a
+// distinct type so syncTasks can tell it apart from a create/update failure:
+// a refused close must not stop the remaining cards from reaching their
+// terminal state — one stuck card would otherwise strand every card after it,
+// which is the exact defect this phase exists to fix.
+type taskCloseError struct {
+	taskID string
+	err    error
+}
+
+func (e *taskCloseError) Error() string { return fmt.Sprintf("task %s: %v", e.taskID, e.err) }
+func (e *taskCloseError) Unwrap() error { return e.err }
+
 // syncTasks mirrors one phase's plan tasks.
-func syncTasks(ctx *boardCtx, phaseID, only, status string) error {
+func syncTasks(ctx *boardCtx, phaseID, only, status string, doClose bool) error {
 	dir := phase.Dir(ctx.root, phaseID)
 	plan, err := phase.LoadPlan(filepath.Join(dir, "plan.toml"))
 	if err != nil {
@@ -84,13 +126,21 @@ func syncTasks(ctx *boardCtx, phaseID, only, status string) error {
 
 	linker, canLink := ctx.client.(forge.IssueLinker)
 	warn := &runWarnings{}
+	var refused []string
 
 	for _, t := range plan.Task {
 		if only != "" && t.ID != only {
 			continue
 		}
-		key, err := syncOneTask(ctx, phaseID, parent, t, status, warn)
+		key, err := syncOneTask(ctx, phaseID, parent, t, status, doClose, warn)
 		if err != nil {
+			var closeErr *taskCloseError
+			if errors.As(err, &closeErr) {
+				// Record and keep going. The command still fails at the end,
+				// naming every card the tracker refused.
+				refused = append(refused, closeErr.Error())
+				continue
+			}
 			return err
 		}
 		if !canLink {
@@ -109,7 +159,16 @@ func syncTasks(ctx *boardCtx, phaseID, only, status string) error {
 			warn.once(&warn.noLink, "could not relate task issues to %s (%v) — they carry the phase label instead", parent, err)
 		}
 	}
-	return ctx.board.Save(ctx.boardPath)
+	// Saved before the verdict: the cards that DID close have their links (and,
+	// where they closed, their agreement points) recorded, so a partial run is
+	// resumable rather than repeated wholesale.
+	if err := ctx.board.Save(ctx.boardPath); err != nil {
+		return err
+	}
+	if len(refused) > 0 {
+		return fmt.Errorf("the tracker refused %d task close(s):\n  %s", len(refused), strings.Join(refused, "\n  "))
+	}
+	return nil
 }
 
 // runWarnings holds the once-per-run gates for the capability gaps a task sync
@@ -136,7 +195,7 @@ func (w *runWarnings) once(gate *bool, format string, args ...any) {
 }
 
 // syncOneTask creates or updates the issue for one task and returns its key.
-func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status string, warn *runWarnings) (string, error) {
+func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status string, doClose bool, warn *runWarnings) (string, error) {
 	title := fmt.Sprintf("%s/%s — %s", phaseID, t.ID, t.Title)
 	body := renderTaskBody(phaseID, parent, t)
 	labels := []string{labelMarker, phaseLabel(phaseID), taskLabel(phaseID, t.ID)}
@@ -160,10 +219,34 @@ func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status str
 			return "", wrapBoard(err)
 		}
 	}
+	// The tracker's own field, not the label above. The label is dross talking
+	// to itself; the state field is what the board's columns read, and moving
+	// it is the whole point of mirroring a task at all.
+	if status != "" {
+		if err := setBoardState(ctx, key, status, warn); err != nil {
+			return "", err
+		}
+	}
+	// The close goes through closeBoardIssue, so a task card is resolved the
+	// same verified way a phase card is — and on the flat boards it plainly
+	// closes rather than refusing by name, which would strand every task card
+	// on forgejo, gitea, gitlab and github forever.
+	if doClose {
+		if err := closeBoardIssue(ctx, key, status); err != nil {
+			// The LINK is still recorded — losing it would cost a label query
+			// on every later run — but no agreement point: the card did not
+			// reach the state the run was about to claim it had, and
+			// `task-pull` compares against that claim.
+			ctx.board.SetTask(phaseID, t.ID, key)
+			return key, &taskCloseError{taskID: t.ID, err: err}
+		}
+	}
+
 	// Record the AGREEMENT POINT, not just the mapping: what the plan held and
 	// what the board was told, at this moment. `dross issue task-pull` compares
 	// against this to tell a board move from a plan move from both — which two
-	// current values cannot distinguish.
+	// current values cannot distinguish. Recorded AFTER the state write and the
+	// close, so it only ever describes a card that actually got there.
 	//
 	// Only when a status was actually asserted. A sync run without --status
 	// wipes the dross/status label (the patch replaces the whole label set), so
@@ -173,15 +256,6 @@ func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status str
 		ctx.board.SetTaskSynced(phaseID, t.ID, key, t.Status, status)
 	} else {
 		ctx.board.SetTask(phaseID, t.ID, key)
-	}
-
-	// The tracker's own field, not the label above. The label is dross talking
-	// to itself; the state field is what the board's columns read, and moving
-	// it is the whole point of mirroring a task at all.
-	if status != "" {
-		if err := setBoardState(ctx, key, status, warn); err != nil {
-			return "", err
-		}
 	}
 	return key, nil
 }

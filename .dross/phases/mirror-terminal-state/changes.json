@@ -1,0 +1,133 @@
+{
+  "phase": "mirror-terminal-state",
+  "pr": 103,
+  "base": "milestone/v1.5",
+  "base_commit": "1f21811776808d128f277001c6cf651f4244417c",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/board/board.go",
+        "internal/cmd/issue.go",
+        "internal/board/board_test.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "1b22f6a",
+      "completed_at": "2026-08-20T11:25:39.383756Z",
+      "landmarks": [
+        {
+          "feature": "board mirror exclusion",
+          "symbol": "Board.IsLinked",
+          "loc": "internal/board/board.go:328",
+          "what": "inbound triage skips issues dross authored in any board.json namespace or carrying the dross marker label; milestone slot shape-gated so a numeric forge milestone id cannot suppress the same-numbered human issue"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_close_truth_test.go",
+        "internal/cmd/issue_quick_close_test.go",
+        "internal/cmd/issue_test.go"
+      ],
+      "commit": "8855a6a",
+      "completed_at": "2026-08-20T11:42:19.243973Z",
+      "landmarks": [
+        {
+          "feature": "verified board close",
+          "symbol": "closeBoardIssue",
+          "loc": "internal/cmd/issue.go:946",
+          "what": "one close path for every backend: mapped state write on YouTrack/Jira, plain close elsewhere, and a read-back on the tracker's own verdict so dross never prints (closed) over an issue the tracker still holds open"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/issue_task.go",
+        "internal/cmd/issue_task_close_test.go"
+      ],
+      "commit": "7285a0d",
+      "completed_at": "2026-08-20T11:48:05.660853Z",
+      "landmarks": [
+        {
+          "feature": "task card lifecycle",
+          "symbol": "syncOneTask",
+          "loc": "internal/cmd/issue_task.go:198",
+          "what": "task-sync validates and normalizes --status like phase-sync and gains --close (requires --status), routing each card through the verified close and recording its agreement point only after the tracker agrees"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/issue.go",
+        "assets/prompts/milestone.md",
+        "internal/cmd/issue_milestone_close_test.go"
+      ],
+      "commit": "29b1050",
+      "completed_at": "2026-08-20T11:52:02.047803Z",
+      "landmarks": [
+        {
+          "feature": "milestone epic lifecycle",
+          "symbol": "checkMilestoneClosable",
+          "loc": "internal/cmd/issue.go:292",
+          "what": "milestone-sync --close resolves the epic through the verified close path, refusing by name and writing nothing when the milestone entity is a version bundle, agile board or numeric forge milestone id; milestone.md emits it at finalize"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/issue.go",
+        "assets/prompts/ship.md",
+        "internal/cmd/issue_backlog_close_test.go"
+      ],
+      "commit": "40e4661",
+      "completed_at": "2026-08-20T11:58:47.071269Z",
+      "landmarks": [
+        {
+          "feature": "backlog mirror lifecycle",
+          "symbol": "reconcileBacklog",
+          "loc": "internal/cmd/issue.go:626",
+          "what": "backlog-sync closes the mirrors whose artefact resolved (scaffolded slug, dismissed idea, routed item whose target shipped), leaves and names anything it cannot attribute, keeps the link on a refused close, and gains the --phase form ship.md calls at finalize"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/configenum/configenum.go",
+        "internal/forge/youtrack.go",
+        "internal/forge/jira.go",
+        "internal/forge/state_map_test.go",
+        "internal/cmd/task_lifecycle.go",
+        "assets/prompts/ship.md",
+        "internal/cmd/ship_prompt_test.go",
+        "internal/cmd/task_lifecycle_test.go"
+      ],
+      "commit": "fa98f0e",
+      "completed_at": "2026-08-20T12:08:42.630367Z",
+      "landmarks": [
+        {
+          "feature": "task card lifecycle",
+          "symbol": "statusTaskComplete",
+          "loc": "internal/cmd/task_lifecycle.go:42",
+          "what": "the task lane gains its own terminal status mapped to YouTrack Verified and Jira Done, emitted once per phase from ship finalize; readable back off a card but never derived from a plan status"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/board/namespace_guard_test.go",
+        "internal/cmd/board_lifecycle_divergence_test.go"
+      ],
+      "commit": "dd76964",
+      "completed_at": "2026-08-20T12:14:22.39918Z",
+      "landmarks": [
+        {
+          "feature": "mirror lifecycle guards",
+          "symbol": "TestEveryBoardNamespaceIsFiltered",
+          "loc": "internal/board/namespace_guard_test.go:79",
+          "what": "reflection over board.Board's map fields fails a namespace that escapes the inbound filter, and the same enumeration drives a guard that every mirror lane has a terminal emission in the prompt corpus whose status is distinct from that lane's working states"
+        }
+      ]
+    }
+  }
+}

@@ -31,6 +31,8 @@ var distinctPairs = []struct {
 	{"uat", "in-progress", "a phase awaiting a verdict is not a phase still being worked (c-3)"},
 	{"uat", "shipped", "a phase awaiting a verdict is not a phase already delivered (c-3)"},
 	{"task-in-review", "task-in-progress", "a committed task is not a task still being written (c-2)"},
+	{"task-complete", "task-in-review", "a task whose phase has shipped is not a task still awaiting the phase's verdict (c-2)"},
+	{"task-complete", "task-in-progress", "a task whose phase has shipped is not a task still being written (c-2)"},
 }
 
 // TestStateMapsKeepTheLifecycleStatesDistinct gates both default maps.
@@ -78,5 +80,21 @@ func missingOf(a string, aok bool, b string, bok bool) string {
 		return a
 	default:
 		return b
+	}
+}
+
+// TestTerminalTaskStateResolves pins the two values the task lane's terminal
+// status maps to. The distinctness table above says what must NOT collide;
+// this says what the default actually is, so a rename shows up as a decision
+// rather than as a silently different column.
+//
+// Both are done-category states on their tracker, which is what makes the close
+// read-back in closeBoardIssue able to verify a task card at all.
+func TestTerminalTaskStateResolves(t *testing.T) {
+	if got, ok := resolveYouTrackState("task-complete", nil); !ok || got != "Verified" {
+		t.Errorf(`resolveYouTrackState("task-complete", nil) = %q,%v want "Verified",true`, got, ok)
+	}
+	if got, ok := resolveJiraState("task-complete", nil); !ok || got != "Done" {
+		t.Errorf(`resolveJiraState("task-complete", nil) = %q,%v want "Done",true`, got, ok)
 	}
 }
