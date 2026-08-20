@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"path/filepath"
 	"strings"
 
@@ -93,19 +92,10 @@ func buildMilestoneProgress(root, version string) (*milestoneProgressReport, err
 	if err != nil {
 		return nil, err
 	}
-	// state.json is machine-local and gitignored, so it is simply absent in a
-	// fresh clone (and on CI). It only ever feeds phaseIsDone's history
-	// fallback, never the authoritative changes.json marker — so its absence
-	// degrades the fallback to "nothing recorded" rather than failing the
-	// command. Erroring here made `dross milestone progress <version>` unusable
-	// on a checkout nobody had run a dross command in yet.
-	s, err := state.Load(filepath.Join(root, state.File))
-	if errors.Is(err, fs.ErrNotExist) {
-		s = &state.State{}
-	} else if err != nil {
-		return nil, err
-	}
-
+	// Doneness reads changes.json alone (phasedone.go), so state.json is not
+	// loaded here at all. It is machine-local and gitignored — absent in a
+	// fresh clone and on CI — and reading it was only ever feeding a history
+	// fallback that is now gone.
 	rep := &milestoneProgressReport{
 		Version:      version,
 		Status:       m.Milestone.Status,
@@ -115,7 +105,7 @@ func buildMilestoneProgress(root, version string) (*milestoneProgressReport, err
 	}
 	for _, slug := range m.Phases {
 		scaffolded := phaseDirExists(root, slug)
-		if phaseIsDone(root, slug, scaffolded, s) {
+		if phaseIsDone(root, slug, scaffolded) {
 			rep.Done++
 			continue
 		}

@@ -56,7 +56,7 @@ func Status() *cobra.Command {
 			Printf("project:   %s  v%s\n", name, st.Version)
 
 			if st.CurrentMilestone != "" {
-				renderMilestone(root, st.CurrentMilestone, st)
+				renderMilestone(root, st.CurrentMilestone)
 			}
 
 			// Phase block
@@ -153,7 +153,7 @@ func Status() *cobra.Command {
 // verdict. Counting verdicts here is what made the status bar disagree with
 // milestone progress across all of v1.4: eleven phases carrying completion
 // records and no verify.toml read 0/11 on this line while progress read 11/11.
-func renderMilestone(root, version string, s *state.State) {
+func renderMilestone(root, version string) {
 	m, err := milestone.Load(milestone.FilePath(root, version))
 	if err != nil || len(m.Phases) == 0 {
 		Printf("milestone: %s\n", version)
@@ -161,7 +161,7 @@ func renderMilestone(root, version string, s *state.State) {
 	}
 	done := 0
 	for _, id := range m.Phases {
-		if phaseDone(root, id, s) {
+		if phaseDone(root, id) {
 			done++
 		}
 	}
