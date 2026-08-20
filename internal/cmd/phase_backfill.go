@@ -87,9 +87,20 @@ func backfillShipCommits(repoDir, base string) (map[string]string, error) {
 		return nil, fmt.Errorf("git fetch origin: %w\n%s\n"+
 			"backfill reads origin/%s, not the local ref — refusing to scan a possibly stale base", err, out, base)
 	}
-	log, err := gitTrim(repoDir, gitRefArgs("log", []string{"--format=%H %s"}, "origin/"+base)...)
+	return backfillShipCommitsAtRef(repoDir, "origin/"+base)
+}
+
+// backfillShipCommitsAtRef is the scan without the fetch, against whatever ref
+// the caller decided to read.
+//
+// The sweep always calls it through backfillShipCommits, which fetches first —
+// a stale base under-marks. `dross doctor` calls it directly against a ref it
+// already has, because doctor is an offline diagnostic and must not open a
+// network connection to print an advisory line.
+func backfillShipCommitsAtRef(repoDir, ref string) (map[string]string, error) {
+	log, err := gitTrim(repoDir, gitRefArgs("log", []string{"--format=%H %s"}, ref)...)
 	if err != nil {
-		return nil, fmt.Errorf("git log origin/%s: %w", base, err)
+		return nil, fmt.Errorf("git log %s: %w", ref, err)
 	}
 	ships := map[string]string{}
 	for _, line := range strings.Split(log, "\n") {
