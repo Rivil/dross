@@ -70,10 +70,12 @@
   locked = true
 
 [[deferred]]
+  id = "b38eb66d043ad477"
   text = "Close the 115 mirrors already stranded on this board at source."
   why = "This phase installs the forward-going lifecycle; sweeping existing strandage is board-mirror-reaper's job."
   target = "board-mirror-reaper"
 
 [[deferred]]
+  id = "3ab9f3a197c6ec1e"
   text = "Wire `dross issue task-pull` into a prompt edge — nothing in assets/prompts calls it, so board-side task moves never travel back into plan.toml unless it is run by hand."
   why = "Inbound direction; a separate capability from mirror closure."
