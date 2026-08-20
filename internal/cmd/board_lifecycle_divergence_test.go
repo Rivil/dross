@@ -6,12 +6,14 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/board"
 	"github.com/Rivil/dross/internal/configenum"
 )
 
@@ -160,13 +162,28 @@ func derivePhaseStatusReturns(t *testing.T, path string) []string {
 // rather than exporting the map for the test's benefit. Same technique
 // enum_divergence_test.go uses on the dispatch switches.
 func stateMapKeys(t *testing.T, path, varName string) []string {
+	pairs := stateMapPairs(t, path, varName)
+	keys := make([]string, 0, len(pairs))
+	for k := range pairs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// stateMapPairs reads the same declaration as stateMapKeys but keeps the
+// VALUES too — which board state each status resolves to. The lane guards below
+// need them to ask whether two statuses land in the same column, and the maps
+// are unexported in package forge, so source is the only way to read them from
+// here.
+func stateMapPairs(t *testing.T, path, varName string) map[string]string {
 	t.Helper()
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, path, nil, 0)
 	if err != nil {
 		t.Fatalf("parse %s: %v", path, err)
 	}
-	var keys []string
+	pairs := map[string]string{}
 	found := false
 	for _, decl := range file.Decls {
 		gd, ok := decl.(*ast.GenDecl)
@@ -202,7 +219,17 @@ func stateMapKeys(t *testing.T, path, varName string) []string {
 						t.Errorf("%s: unquote %s: %v", varName, k.Value, err)
 						continue
 					}
-					keys = append(keys, s)
+					v, ok := kv.Value.(*ast.BasicLit)
+					if !ok || v.Kind != token.STRING {
+						t.Errorf("%s[%q] has a non-literal value %v — this guard can only read string literals", varName, s, kv.Value)
+						continue
+					}
+					state, err := strconv.Unquote(v.Value)
+					if err != nil {
+						t.Errorf("%s: unquote %s: %v", varName, v.Value, err)
+						continue
+					}
+					pairs[s] = state
 				}
 			}
 		}
@@ -210,7 +237,7 @@ func stateMapKeys(t *testing.T, path, varName string) []string {
 	if !found {
 		t.Fatalf("no %s in %s", varName, path)
 	}
-	return keys
+	return pairs
 }
 
 // TestEmittedStatusesAreTheLifecycleSet gates the producer side: what dross
@@ -386,4 +413,251 @@ func sortedSet(m map[string]string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// --- mirror-lane terminal-path guard (c-5) ---
+//
+// The divergence guards above ask whether an emitted status has a state-map
+// entry. This asks the question that was never asked: does every KIND of card
+// dross mirrors have a way to reach a terminal state at all?
+//
+// It did not. Task cards sat in task-in-review from their commit until forever,
+// epics stayed open behind finished milestones, and backlog mirrors accumulated
+// because no prompt called the verb that would have closed them. Each of those
+// was invisible for months because the missing thing was a missing LINE — and
+// nothing fails when a line is absent unless something goes looking for it.
+
+// mirrorLane says how one board.json namespace's cards reach a terminal state,
+// and which lifecycle statuses belong to that lane.
+type mirrorLane struct {
+	// prompt and emission are the terminal call site: which prompt must carry
+	// it, and the literal that must appear there. Matched against the RAW file
+	// rather than promptContent's normalised form — quick.md's line carries a
+	// shell variable, and the normaliser strips underscores, so a normalised
+	// match would silently depend on $NEW_VERSION becoming $newversion.
+	prompt   string
+	emission string
+	// terminal is the lifecycle status that emission carries; others are the
+	// lane's own non-terminal statuses. Empty terminal means the lane closes
+	// without a --status, which is not a gap: see backlog below.
+	terminal string
+	others   []string
+}
+
+// mirrorLanes is keyed by board.Board FIELD NAME, and the test below checks
+// that key set against reflection over the struct rather than trusting it. A
+// namespace added to Board with no entry here fails, which is the point: a new
+// kind of mirror must say how its cards end.
+var mirrorLanes = map[string]mirrorLane{
+	"Phases": {
+		prompt:   "ship.md",
+		emission: "dross issue phase-sync <phase-id> --status complete --close",
+		terminal: "complete",
+		others:   []string{"planned", "in-progress", "shipped", "uat"},
+	},
+	"Tasks": {
+		prompt:   "ship.md",
+		emission: "dross issue task-sync <phase-id> --status task-complete --close",
+		terminal: "task-complete",
+		others:   []string{"task-in-progress", "task-in-review"},
+	},
+	"Quicks": {
+		prompt:   "quick.md",
+		emission: "dross issue quick $NEW_VERSION --close",
+		terminal: "complete", // closeBoardIssue's default for a lane with no --status
+	},
+	"Milestones": {
+		prompt:   "milestone.md",
+		emission: "dross issue milestone-sync <version> --close",
+		terminal: "complete",
+	},
+	"Backlog": {
+		prompt: "ship.md",
+		// The backlog lane has no --close flag by design: backlog-sync owns the
+		// live set and reconciles both directions, closing the mirrors whose
+		// artefact resolved. Asserting a flag here would guard something that
+		// was never built.
+		emission: "dross issue backlog-sync",
+	},
+}
+
+// rawPrompt reads one prompt verbatim. promptContent normalises for prose
+// assertions; a command line has to be matched as written.
+func rawPrompt(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "assets", "prompts", name))
+	if err != nil {
+		t.Fatalf("read %s: %v", name, err)
+	}
+	return string(b)
+}
+
+// laneDistinctnessExemption records a terminal/non-terminal collision that
+// predates this guard, so it is visible rather than quietly excluded.
+//
+// The guard fails if an exemption stops being needed, so a fixed map cannot
+// leave a stale exemption behind claiming to protect something.
+type laneDistinctnessExemption struct {
+	lane, provider, terminal, other, why string
+}
+
+var laneDistinctnessExemptions = []laneDistinctnessExemption{
+	{
+		lane: "Phases", provider: "jira", terminal: "complete", other: "shipped",
+		why: "Jira's default scheme has one done-category status, so a merged-but-unfinalized phase and a finished one share \"Done\". Pre-existing flattening; a project that cares splits it via [board].state_map.",
+	},
+}
+
+// boardNamespaceFields enumerates board.Board's map-typed fields — the same
+// derivation internal/board's namespace guard uses, from the same struct, so
+// the two cannot disagree about how many mirror lanes exist.
+func boardNamespaceFields(t *testing.T) []string {
+	t.Helper()
+	typ := reflect.TypeOf(board.Board{})
+	var out []string
+	for i := 0; i < typ.NumField(); i++ {
+		if typ.Field(i).Type.Kind() == reflect.Map {
+			out = append(out, typ.Field(i).Name)
+		}
+	}
+	if len(out) == 0 {
+		t.Fatal("reflection found no map-typed fields on board.Board — every assertion below would be vacuous")
+	}
+	sort.Strings(out)
+	return out
+}
+
+// TestEveryMirrorLaneHasATerminalEmission is the guard. Every namespace dross
+// mirrors into must have a prompt line that ends its cards, and that line must
+// actually be in the corpus.
+func TestEveryMirrorLaneHasATerminalEmission(t *testing.T) {
+	fields := boardNamespaceFields(t)
+
+	for _, field := range fields {
+		lane, ok := mirrorLanes[field]
+		if !ok {
+			t.Errorf("board.Board has a %s namespace with no terminal emission recorded — every %s card dross creates would stay open forever; add it to mirrorLanes and give it a closing line in assets/prompts",
+				field, field)
+			continue
+		}
+		t.Run(field, func(t *testing.T) {
+			content := rawPrompt(t, lane.prompt)
+			if !strings.Contains(content, lane.emission) {
+				t.Errorf("%s no longer emits %q — %s cards would strand", lane.prompt, lane.emission, field)
+			}
+		})
+	}
+
+	// The reverse: an entry here for a namespace that no longer exists is a
+	// guard protecting nothing.
+	known := map[string]bool{}
+	for _, f := range fields {
+		known[f] = true
+	}
+	for field := range mirrorLanes {
+		if !known[field] {
+			t.Errorf("mirrorLanes describes %q, which is not a board.Board namespace any more — drop it rather than leaving a guard over nothing", field)
+		}
+	}
+}
+
+// TestLaneTerminalStatesAreDistinctWithinTheirLane checks the property that
+// actually matters on a board: a lane's terminal state must be a different
+// column from that lane's own working states, or "finished" is invisible.
+//
+// Per-lane rather than global, deliberately. A global assertion would compare
+// the phase lane's `complete` against the task lane's `task-in-review`, which
+// share nothing and need not differ — and it would drown the real signal in
+// pairs nobody cares about.
+func TestLaneTerminalStatesAreDistinctWithinTheirLane(t *testing.T) {
+	root := repoRootFromTest(t)
+	maps := map[string]map[string]string{}
+	for _, m := range []struct{ provider, path, varName string }{
+		{"jira", filepath.Join(root, "internal", "forge", "jira.go"), "defaultJiraStateMap"},
+		{"youtrack", filepath.Join(root, "internal", "forge", "youtrack.go"), "defaultYouTrackStateMap"},
+	} {
+		maps[m.provider] = stateMapPairs(t, m.path, m.varName)
+	}
+
+	exempt := map[string]string{} // "lane/provider/terminal/other" -> why
+	used := map[string]bool{}
+	for _, e := range laneDistinctnessExemptions {
+		exempt[e.lane+"/"+e.provider+"/"+e.terminal+"/"+e.other] = e.why
+	}
+
+	for _, field := range boardNamespaceFields(t) {
+		lane, ok := mirrorLanes[field]
+		if !ok || lane.terminal == "" || len(lane.others) == 0 {
+			continue // TestEveryMirrorLaneHasATerminalEmission owns the missing case
+		}
+		for provider, states := range maps {
+			terminalState, hasTerminal := states[lane.terminal]
+			if !hasTerminal {
+				t.Errorf("%s's %s map has no entry for the %s lane's terminal status %q — TestStateMapsKeyExactlyTheEmittedStatuses should have caught this",
+					provider, "default", field, lane.terminal)
+				continue
+			}
+			for _, other := range lane.others {
+				otherState, hasOther := states[other]
+				if !hasOther || otherState != terminalState {
+					continue
+				}
+				key := field + "/" + provider + "/" + lane.terminal + "/" + other
+				if why, ok := exempt[key]; ok {
+					used[key] = true
+					t.Logf("known: %s maps the %s lane's %q and %q both to %q — %s", provider, field, lane.terminal, other, terminalState, why)
+					continue
+				}
+				t.Errorf("%s maps the %s lane's terminal %q and its working state %q both to %q — a finished card would be indistinguishable from one still in flight",
+					provider, field, lane.terminal, other, terminalState)
+			}
+		}
+	}
+
+	for key, why := range exempt {
+		if !used[key] {
+			t.Errorf("the exemption for %s no longer describes a real collision (%s) — remove it rather than leaving a guard-hole open", key, why)
+		}
+	}
+}
+
+// closeEmissionRE matches a `--close` call site together with the `--status` it
+// carries, in either order.
+var closeEmissionRE = regexp.MustCompile(`--status\s+([a-z][a-z-]*)[^\n]*--close|--close[^\n]*--status\s+([a-z][a-z-]*)`)
+
+// TestCloseEmissionsCarryAValidStatus catches a terminal emission typo at guard
+// time rather than at ship time. `--status task-complet --close` would exit
+// non-zero on a real board — the wrong place to find out, since a ship's
+// finalize steps run one after another over a merged PR.
+func TestCloseEmissionsCarryAValidStatus(t *testing.T) {
+	root := repoRootFromTest(t)
+	promptDir := filepath.Join(root, "assets", "prompts")
+	entries, err := os.ReadDir(promptDir)
+	if err != nil {
+		t.Fatalf("read %s: %v", promptDir, err)
+	}
+	checked := 0
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(promptDir, e.Name()))
+		if err != nil {
+			t.Fatalf("read %s: %v", e.Name(), err)
+		}
+		for _, m := range closeEmissionRE.FindAllStringSubmatch(string(b), -1) {
+			status := m[1]
+			if status == "" {
+				status = m[2]
+			}
+			checked++
+			if !configenum.LifecycleStatuses.Has(status) {
+				t.Errorf("assets/prompts/%s closes a card with --status %q, which is not a lifecycle status (expected %s)",
+					e.Name(), status, configenum.LifecycleStatuses.List())
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no --close emission carrying a --status was found in the prompt corpus — every assertion above was vacuous")
+	}
 }
