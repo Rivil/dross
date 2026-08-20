@@ -1,6 +1,10 @@
 {
   "phase": "pr-record-reaches-base",
   "pr": 43,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "a9b889ac9e33df4b6479a04c576c2fdb1d783ec8"
+  },
   "tasks": {
     "t-1": {
       "files": [

@@ -1,5 +1,9 @@
 {
   "phase": "ship-auto-noninteractive",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "46828040d7a2ff7e3c42e1f967471ef4881339e1"
+  },
   "tasks": {
     "t-1": {
       "files": [

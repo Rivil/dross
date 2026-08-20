@@ -1,6 +1,10 @@
 {
   "phase": "telemetry-bucket-graduation",
   "pr": 56,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "341b2218f10b19bed96ad06bd191f75179602ee8"
+  },
   "tasks": {
     "t-1": {
       "files": [

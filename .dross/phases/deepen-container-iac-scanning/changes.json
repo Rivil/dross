@@ -1,5 +1,9 @@
 {
   "phase": "deepen-container-iac-scanning",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "db939cee9fcca3a171419fd5503f69863eb77838"
+  },
   "tasks": {
     "t-1": {
       "files": [

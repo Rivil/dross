@@ -1,6 +1,10 @@
 {
   "phase": "dross-watch",
   "pr": 50,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "60f6d6f114216dbc30e3e043b6e50dbb2f7111a9"
+  },
   "tasks": {
     "t-1": {
       "files": [

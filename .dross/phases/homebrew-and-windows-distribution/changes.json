@@ -1,6 +1,10 @@
 {
   "phase": "homebrew-and-windows-distribution",
   "pr": 46,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "f4f5fca14628ec4083592121d53fb2ef5b0c0cd7"
+  },
   "tasks": {
     "t-1": {
       "files": [

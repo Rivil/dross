@@ -1,5 +1,9 @@
 {
   "phase": "verify-merge-before-completion",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "5b3939ba6fc76055772aa4af6f08357c06cf7f60"
+  },
   "tasks": {
     "t-1": {
       "files": [

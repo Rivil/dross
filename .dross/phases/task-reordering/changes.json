@@ -1,6 +1,10 @@
 {
   "phase": "task-reordering",
   "pr": 53,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "db72f3482576d55a2b2f5ea02d2ae480aa52a2ad"
+  },
   "tasks": {
     "t-1": {
       "files": [

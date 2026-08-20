@@ -1,5 +1,9 @@
 {
   "phase": "deferred-item-routing",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "bc450331c144e74dc82bd7517dd54de665a564d5"
+  },
   "tasks": {
     "t-1": {
       "files": [

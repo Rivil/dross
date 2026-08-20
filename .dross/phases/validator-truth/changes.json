@@ -1,6 +1,10 @@
 {
   "phase": "validator-truth",
   "pr": 65,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "cae2eb26c7b843bd822e154f2d17cf81d2407036"
+  },
   "tasks": {
     "t-1": {
       "files": [

@@ -1,5 +1,9 @@
 {
   "phase": "11-retrofit-core-loop",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "374faf0d48604f40c2ec4ea317283c7c871cfaab"
+  },
   "tasks": {
     "t-1": {
       "files": [

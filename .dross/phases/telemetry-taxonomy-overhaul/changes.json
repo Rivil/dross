@@ -1,6 +1,10 @@
 {
   "phase": "telemetry-taxonomy-overhaul",
   "pr": 58,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "ca2f390a74ec9b2e4f7e0ac80cbf81e54f5ba771"
+  },
   "tasks": {
     "t-1": {
       "files": [

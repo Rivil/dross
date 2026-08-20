@@ -1,5 +1,9 @@
 {
   "phase": "secure-quality-findings-lifecycle",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "857f21eb25b20a395c60716e4b8275d770ba318e"
+  },
   "tasks": {
     "t-1": {
       "files": [

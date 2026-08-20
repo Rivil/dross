@@ -1,5 +1,9 @@
 {
   "phase": "interaction-defer-or-add-framing",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "6c6e350f0e31618cec15b45d4185de86515ace15"
+  },
   "tasks": {
     "t-1": {
       "files": [

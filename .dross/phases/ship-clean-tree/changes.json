@@ -1,6 +1,10 @@
 {
   "phase": "ship-clean-tree",
   "pr": 54,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "652cba7bc31b5f77cb495f1986ad7d7ae8aa74b5"
+  },
   "tasks": {
     "t-1": {
       "files": [

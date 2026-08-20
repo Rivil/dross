@@ -1,5 +1,9 @@
 {
   "phase": "03-fix-completion-chore-divergence",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "d58df63e106f73f9eba1087ca6e72ea448bf14e8"
+  },
   "tasks": {
     "t-1": {
       "files": [

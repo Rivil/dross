@@ -1,5 +1,9 @@
 {
   "phase": "05-dross-secure",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "6ca7f2e4dc16a84bb4299bcda20dd5d956256751"
+  },
   "tasks": {
     "t-1": {
       "files": [
