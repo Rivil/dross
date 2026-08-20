@@ -64,4 +64,4 @@ task_seq = 0
   covers = ["c-1"]
   depends_on = ["t-4"]
   test_contract = ["if the sweep is incomplete or over-reaches, the set of status-less phase directories after --apply is not exactly {legacy-phase-backfill, v14-mutation-pass} and the check fails", "if the sweep leaves a milestone under-counted, `dross milestone progress` for v0.1 through v1.2 reports a done count below the preview's marked-count for that milestone", "if the rewritten records break a test that reads them back (liveRecordRoot copies config-trust-hardening into redproof_set and doctor tests), `go test -count=1 ./...` is red before the commit"]
-  status = "in_progress"
+  status = "done"

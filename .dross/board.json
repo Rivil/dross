@@ -169,6 +169,36 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "legacy-phase-backfill/t-1": {
+      "issue": "DRO-143",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-2": {
+      "issue": "DRO-144",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-3": {
+      "issue": "DRO-145",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-4": {
+      "issue": "DRO-146",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-5": {
+      "issue": "DRO-147",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-6": {
+      "issue": "DRO-148",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "red-proof-repoint/t-1": {
       "issue": "DRO-126"
     },

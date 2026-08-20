@@ -89,6 +89,21 @@
           "what": "advisory section naming roadmap phases with no marker and no ship-commit evidence, resolved offline"
         }
       ]
+    },
+    "t-6": {
+      "files": [
+        ".dross/phases"
+      ],
+      "commit": "4e6413f",
+      "completed_at": "2026-08-20T07:27:40.793266Z",
+      "landmarks": [
+        {
+          "feature": "legacy phase backfill",
+          "symbol": "phase backfill --apply",
+          "loc": ".dross/phases:1",
+          "what": "67 legacy records swept to complete with evidence SHAs; v0.1-v1.2 now report true done counts"
+        }
+      ]
     }
   }
 }
