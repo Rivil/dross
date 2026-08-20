@@ -235,7 +235,8 @@ func issueDisable() *cobra.Command {
 // --- milestone sync ---
 
 func issueMilestoneSync() *cobra.Command {
-	return &cobra.Command{
+	var doClose bool
+	c := &cobra.Command{
 		Use:   "milestone-sync <version>",
 		Short: "Ensure a board milestone exists for a dross milestone",
 		Args:  cobra.ExactArgs(1),
@@ -247,6 +248,13 @@ func issueMilestoneSync() *cobra.Command {
 			if !enabled {
 				return nil // no-op when board sync is off
 			}
+			// Gated BEFORE the ensure, so a board whose milestone entity has
+			// no close verb makes no tracker write at all on a --close run.
+			if doClose {
+				if err := checkMilestoneClosable(ctx); err != nil {
+					return err
+				}
+			}
 			id, err := ensureMilestoneLink(ctx, args[0])
 			if err != nil {
 				return err
@@ -257,10 +265,44 @@ func issueMilestoneSync() *cobra.Command {
 			if err := ctx.board.Save(ctx.boardPath); err != nil {
 				return err
 			}
+			if doClose {
+				if err := closeBoardIssue(ctx, id, ""); err != nil {
+					return err
+				}
+				Printf("milestone %s -> board %s (closed)\n", args[0], id)
+				return nil
+			}
 			Printf("milestone %s -> board %s\n", args[0], id)
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&doClose, "close", false, "resolve the milestone's epic (use at milestone finalize; epic mode only)")
+	return c
+}
+
+// checkMilestoneClosable refuses --close unless the tracker entity this repo's
+// milestones map to is an ISSUE. Only YouTrack's epic mode stores an issue's
+// idReadable in the milestones slot; a version bundle stores a version name, an
+// agile board a board name, and the REST forges and GitHub a numeric milestone
+// id — none of which a close verb can address.
+//
+// The forge case is not merely inert: a numeric milestone id shares an id space
+// with those backends' own issue keys, so an ungated close would resolve
+// milestone 7 to issue #7 and close a human's issue.
+func checkMilestoneClosable(ctx *boardCtx) error {
+	mode := configenum.Normalize(ctx.proj.Board.MilestoneMode)
+	if mode == "" {
+		mode = "version" // the documented code default
+	}
+	if _, ok := ctx.client.(*forge.YouTrackClient); !ok {
+		return fmt.Errorf("milestone-sync --close needs a milestone that is itself an issue; %s maps a milestone to a milestone entity, not an issue — nothing to close",
+			ctx.proj.Board.Provider)
+	}
+	if mode != "epic" {
+		return fmt.Errorf("milestone-sync --close needs a milestone that is itself an issue; [board].milestone_mode is %q, which maps a milestone to a %s entity — nothing to close (set milestone_mode = \"epic\")",
+			mode, mode)
+	}
+	return nil
 }
 
 // ensureMilestoneLink returns the board milestone id for a dross milestone

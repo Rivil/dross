@@ -153,7 +153,15 @@ It targets the milestone's recorded base — main, or the parent it was stacked 
 dross milestone complete <version> --finalize
 ```
 
-This records `[milestone].status = complete` **before** it fast-forwards main and deletes `milestone/<version>` local + remote. Two consequences worth stating rather than discovering:
+Then resolve the milestone's board card, so the epic does not sit open forever behind a finished milestone:
+
+```
+dross issue milestone-sync <version> --close
+```
+
+A no-op when board sync is off. It refuses — without writing anything — on a board whose milestone is not itself an issue (a YouTrack version bundle or agile board, a forge/GitHub milestone id): there is no card to close there, and on the forges a milestone id and an issue number are the same string, so closing blind would resolve someone else's issue.
+
+`dross milestone complete --finalize` records `[milestone].status = complete` **before** it fast-forwards main and deletes `milestone/<version>` local + remote. Two consequences worth stating rather than discovering:
 
 - **Re-running `--finalize` is safe.** A second run reports the milestone already finalized and exits 0 — it is not an error state, and it is the right thing to do if the first run failed partway (a protected branch, an offline origin). If it names a leftover branch, `dross milestone prune` removes it.
 - **A branch that is simply gone is reported as gone**, not as unmerged. If that happens without a finalize having run, record the milestone with `dross milestone set <version> status complete`.
