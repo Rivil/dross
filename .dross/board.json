@@ -200,6 +200,41 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "mirror-terminal-state/t-1": {
+      "issue": "DRO-150",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mirror-terminal-state/t-2": {
+      "issue": "DRO-151",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mirror-terminal-state/t-3": {
+      "issue": "DRO-152",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mirror-terminal-state/t-4": {
+      "issue": "DRO-153",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mirror-terminal-state/t-5": {
+      "issue": "DRO-154",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mirror-terminal-state/t-6": {
+      "issue": "DRO-155",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mirror-terminal-state/t-7": {
+      "issue": "DRO-156",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "red-proof-repoint/t-1": {
       "issue": "DRO-126"
     },
