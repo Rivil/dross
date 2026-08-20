@@ -1052,7 +1052,8 @@ func issueQuick() *cobra.Command {
 // --- pull (inbound triage feed) ---
 
 // collectInbound returns the board's inbound triage feed: issues matching the
-// filter, minus those already linked to a phase/quick or dismissed. It is
+// filter, minus every issue dross authored — one linked in any board.json
+// namespace, one carrying the dross marker label — and minus those dismissed. It is
 // deliberately MARK-FREE — it never stamps last_pull — so read-only callers
 // (dross watch, dross status) share one filter path with `issue pull` and can
 // never re-introduce a board mutation. The filter's State scopes the feed;
@@ -1064,7 +1065,12 @@ func collectInbound(ctx *boardCtx, filter forge.IssueFilter) ([]forge.Issue, err
 	}
 	var inbound []forge.Issue
 	for _, iss := range issues {
-		if ctx.board.IsLinked(iss.Key) || ctx.board.IsDismissed(iss.Key) {
+		// hasMarker is the second exclusion basis (exclusion_basis lock):
+		// board.json is branch-local, so a mirror created on a phase branch
+		// that never merged is invisible to IsLinked, while the marker label
+		// travels with the issue itself. Hiding a human-filed issue somebody
+		// tagged `dross` is the cheaper error.
+		if ctx.board.IsLinked(iss.Key) || ctx.board.IsDismissed(iss.Key) || hasMarker(iss) {
 			continue
 		}
 		inbound = append(inbound, iss)
