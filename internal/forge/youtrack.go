@@ -458,7 +458,11 @@ var defaultYouTrackStateMap = map[string]string{
 	// a fresh project.
 	"task-in-progress": "In Progress",
 	"task-in-review":   "In Review",
-	"uat":              "UAT",
+	// The task lane's terminal state. It shares "Verified" with the phase
+	// lane's "complete" — the same column means the same thing on the board —
+	// while the dross/status label keeps the two lanes apart.
+	"task-complete": "Verified",
+	"uat":           "UAT",
 }
 
 // resolveYouTrackState maps a dross lifecycle status to a YouTrack State value:

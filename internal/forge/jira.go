@@ -426,7 +426,10 @@ var defaultJiraStateMap = map[string]string{
 	// transition warns and skips, as it already does.
 	"task-in-progress": "In Progress",
 	"task-in-review":   "In Review",
-	"uat":              "In Review",
+	// The task lane's terminal state — a done-category status, which is what
+	// the close read-back verifies against.
+	"task-complete": "Done",
+	"uat":           "In Review",
 }
 
 // resolveJiraState maps a dross lifecycle status to a Jira status name: the

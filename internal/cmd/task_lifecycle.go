@@ -34,15 +34,34 @@ var taskLifecycle = map[string]string{
 	phase.StatusDone:       statusTaskInReview,
 }
 
-// boardStatusToPlan is the inverse, over the subset the board can express.
+// statusTaskComplete is the TASK lane's terminal state, emitted once per phase
+// from ship.md's finalize step. It lives here rather than beside issue.go's
+// other status constants because it is the one status with no outbound edge at
+// all — nothing derives it from a plan status; it exists only to be read back
+// off a card — and task_lifecycle.go is where that asymmetry is expressed.
+const statusTaskComplete = "task-complete"
+
+// boardStatusToPlan is the board->plan direction. It is the inversion of
+// taskLifecycle PLUS one deliberately asymmetric entry, and the asymmetry is
+// the point rather than an oversight.
 //
-// Built by inverting taskLifecycle rather than written out, so the two cannot
-// disagree — a mapping declared twice is a mapping that drifts.
+// The inverted pairs are the per-task execute edges, which move in both
+// directions: dross writes the card when a task is picked or committed, and an
+// inbound pull reads a human's drag back into plan.toml.
+//
+// task-complete has no inverse pair. It is written once, at ship finalize, over
+// every card in the phase at once — never at a per-task edge — so there is no
+// plan status that should ever DERIVE it. lifecycleForPlanStatus("done") must
+// keep returning task-in-review, or committing a task would mark it as though
+// its whole phase had shipped. The reverse reading is still needed: a card
+// sitting in the terminal column reads back as a done task, not as an
+// unmirrored column an inbound sync has to guess at.
 var boardStatusToPlan = func() map[string]string {
-	inv := make(map[string]string, len(taskLifecycle))
+	inv := make(map[string]string, len(taskLifecycle)+1)
 	for planStatus, lifecycle := range taskLifecycle {
 		inv[lifecycle] = planStatus
 	}
+	inv[statusTaskComplete] = phase.StatusDone
 	return inv
 }()
 
