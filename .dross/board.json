@@ -13,6 +13,7 @@
     "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
     "guard-remedy-ordering": "DRO-27",
+    "legacy-phase-backfill": "DRO-142",
     "milestone-lifecycle-close": "DRO-13",
     "multilang-verify-signal": "DRO-28",
     "mutation-diff-scope": "DRO-9",
@@ -165,6 +166,36 @@
     },
     "completion-record-truth/t-6": {
       "issue": "DRO-138",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-1": {
+      "issue": "DRO-143",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-2": {
+      "issue": "DRO-144",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-3": {
+      "issue": "DRO-145",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-4": {
+      "issue": "DRO-146",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-5": {
+      "issue": "DRO-147",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-6": {
+      "issue": "DRO-148",
       "plan_status": "done",
       "board_state": "task-in-review"
     },

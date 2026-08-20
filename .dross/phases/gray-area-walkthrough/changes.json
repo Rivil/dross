@@ -1,5 +1,9 @@
 {
   "phase": "gray-area-walkthrough",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "afad326a9eb0c12fe4287d46b104eeb61525953c"
+  },
   "tasks": {
     "t-1": {
       "files": [

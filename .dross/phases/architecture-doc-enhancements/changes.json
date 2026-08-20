@@ -1,5 +1,9 @@
 {
   "phase": "architecture-doc-enhancements",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "2f7b9a930f64823e72dd564a99e764166984df5e"
+  },
   "tasks": {
     "t-1": {
       "files": [

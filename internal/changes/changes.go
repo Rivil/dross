@@ -54,6 +54,14 @@ type Changes struct {
 	// 79 merged), so anything counting doneness from history alone was reading
 	// a window, not a record. This field is per-phase and never scrolls.
 	Status string `json:"status,omitempty"`
+	// BackfillEvidence names the commit a backfilled status was inferred from.
+	// It is provenance, never a third status value: a record carrying it is
+	// StatusComplete like any other, so the doneness switch stays two-valued
+	// (phasedone.go). What it adds is auditability — a marker `dross phase
+	// backfill` inferred from a commit subject is distinguishable from one
+	// `dross phase complete` observed, so the sweep can be re-run against
+	// better evidence rather than trusted blind.
+	BackfillEvidence *BackfillEvidence `json:"backfill_evidence,omitempty"`
 	// RedProof pins the commit a phase's red proof was recorded at, plus the
 	// prose doc that replays it. Keyed to the phase (rather than living in the
 	// doc alone) so a checker can name the fork point to repoint a rotted pin
@@ -74,6 +82,18 @@ type RedProof struct {
 	// refuse unless the proof still goes red there. Optional — omitted, a
 	// repoint reports itself unverified rather than implying it was checked.
 	Replay string `json:"replay,omitempty"`
+}
+
+// BackfillEvidence is the commit a backfilled status was inferred from.
+//
+// The SHA deliberately does NOT serialize under a "commit" key, at any nesting
+// depth. doctor's extractCommitSHAs (doctor.go) is a literal `"commit":` text
+// scan over the raw changes.json body rather than a JSON parse, and every
+// backfilled ship SHA entering that map would have phaseCommitsOnMain report it
+// as a leaked phase commit whenever local main is ahead of origin. The wrapper
+// object plus an inner "sha" keeps 67 backfilled records out of that scan.
+type BackfillEvidence struct {
+	SHA string `json:"sha"`
 }
 
 // The two values Status takes. Ordered: a phase reaches shipped first and
@@ -249,6 +269,32 @@ func SetStatus(root, phaseID, status string) error {
 		return nil
 	}
 	c.Status = status
+	return c.Save(path)
+}
+
+// SetBackfilled records an inferred completion: StatusComplete plus the commit
+// the inference was drawn from, written together in one load-set-save so a
+// marker can never land without its provenance.
+//
+// It refuses a record that already carries a status. Backfill is a sweep over
+// status-less records; reaching one that is already marked means the candidate
+// set and the writer disagree, and overwriting quietly would destroy an
+// observed marker in favour of an inferred one.
+func SetBackfilled(root, phaseID, sha string) error {
+	sha = strings.TrimSpace(sha)
+	if sha == "" {
+		return fmt.Errorf("backfill %s: no evidence commit", phaseID)
+	}
+	path := FilePath(root, phaseID)
+	c, err := Load(path, phaseID)
+	if err != nil {
+		return err
+	}
+	if c.Status != "" {
+		return fmt.Errorf("backfill %s: record already has status %q — refusing to overwrite an observed marker", phaseID, c.Status)
+	}
+	c.Status = StatusComplete
+	c.BackfillEvidence = &BackfillEvidence{SHA: sha}
 	return c.Save(path)
 }
 

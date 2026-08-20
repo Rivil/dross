@@ -1,6 +1,10 @@
 {
   "phase": "cli-surface-sweep",
   "pr": 67,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "533b09943ea08caa002b34ce92aa3a492c02a905"
+  },
   "tasks": {
     "t-1": {
       "files": [

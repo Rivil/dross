@@ -2,6 +2,10 @@
   "phase": "milestone-stacking",
   "pr": 73,
   "base": "milestone/v1.2",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "44463ae529c64bc89f1ab90856d1b0e401a4180b"
+  },
   "tasks": {
     "t-1": {
       "files": [

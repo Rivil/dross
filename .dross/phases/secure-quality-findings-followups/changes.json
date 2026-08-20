@@ -1,6 +1,10 @@
 {
   "phase": "secure-quality-findings-followups",
   "pr": 45,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "e6309c6b6a8f8ecf898f6fb837f2237c04c9cfc5"
+  },
   "tasks": {
     "t-1": {
       "files": [

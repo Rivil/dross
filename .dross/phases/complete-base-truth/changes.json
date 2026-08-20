@@ -2,6 +2,10 @@
   "phase": "complete-base-truth",
   "pr": 70,
   "base": "milestone/v1.2",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "a8d6a5c8f367fdf80c93d9da36bedf232a523124"
+  },
   "tasks": {
     "t-1": {
       "files": [

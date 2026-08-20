@@ -2,6 +2,10 @@
   "phase": "exec-trust-followups",
   "pr": 77,
   "base": "milestone/v1.2",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "353555912ee5e9accbaf38c9cfddcbcebbc42c15"
+  },
   "tasks": {
     "t-1": {
       "files": [

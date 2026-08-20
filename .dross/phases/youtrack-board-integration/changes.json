@@ -1,5 +1,9 @@
 {
   "phase": "youtrack-board-integration",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "b95dc9190390b93928a286d1c481716b9e28b58f"
+  },
   "tasks": {
     "t-1": {
       "files": [

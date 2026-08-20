@@ -61,6 +61,7 @@ func Doctor() *cobra.Command {
 			// warning nobody sees at the end of a long run.
 			redProofWarnings := 0
 			duplicateSlugWarnings := 0
+			backfillResidueWarnings := 0
 
 			// --- Foundational files ---
 			//
@@ -483,6 +484,32 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
+			// --- Unbackfillable roadmap phases ---
+			//
+			// c-5: a phase a milestone signed up for, carrying no completion
+			// marker, that `dross phase backfill` cannot close from evidence.
+			// Doneness reads changes.json alone now (phasedone.go), so such a
+			// phase counts not-done forever with nothing saying why — it is
+			// indistinguishable at every surface from a phase that was never
+			// started. Named here rather than in the sweep's output, following
+			// the duplicate-slug precedent that doctor is where faults belong
+			// and that output which scrolls away is not standing visibility.
+			//
+			// Scoped to the milestones' phases arrays by the locked
+			// backfill_residue decision: a phase directory on no roadmap (the
+			// deliberate v14-mutation-pass scratch dir) would otherwise nag
+			// forever, and no accept-mechanism has to be invented to silence
+			// it. Advisory — nothing is broken, so the exit code is unchanged.
+			if residue := backfillResidue(root, repoDir, mainForStale); len(residue) > 0 {
+				Print("Unbackfillable roadmap phases:")
+				for _, r := range residue {
+					Printf("  ⚠ %s — %s. Fix: finish it, or close it by hand once it ships\n", r.Slug, r.Reason)
+					backfillResidueWarnings++
+				}
+				Print("    Advisory only — these never change doctor's exit code.")
+				Print("")
+			}
+
 			// --- Cross-field combinations ---
 			//
 			// Collected above, reported here as one advisory block. Each value
@@ -497,7 +524,7 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings)
+			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings)
 		},
 	}
 }
@@ -1393,4 +1420,76 @@ func gitVersionAtLeast(raw, floor string) bool {
 		return true // an unreadable version is a warning above, not a finding
 	}
 	return gMaj > fMaj || (gMaj == fMaj && gMin >= fMin)
+}
+
+// backfillResidueEntry is one roadmap phase backfill cannot close, with why.
+type backfillResidueEntry struct {
+	Slug   string
+	Reason string
+}
+
+// backfillResidue lists the phases on any milestone's phases array that carry
+// no completion marker AND cannot be closed from ship-commit evidence.
+//
+// The liveness half is deliberately OFFLINE: local refs plus the cached
+// refs/remotes/origin/ ones, never ls-remote. The sweep proves absence against
+// origin because it WRITES; doctor only reports, and reading a stale cache
+// errs toward naming a phase that is actually closeable — a line the next
+// `dross phase backfill` immediately corrects. Opening a network connection to
+// print an advisory would be the worse trade.
+//
+// An unscaffolded roadmap slug is residue too, and the locked backfill_residue
+// rule is applied literally: an in-flight or never-built phase is exactly the
+// case "listed and not delivered" describes, so it is named rather than
+// special-cased into silence.
+func backfillResidue(root, repoDir, base string) []backfillResidueEntry {
+	versions, err := milestone.List(root)
+	if err != nil {
+		return nil
+	}
+	ships := map[string]string{}
+	if compare, err := resolveMainCompareRef(repoDir, base); err == nil {
+		if found, err := backfillShipCommitsAtRef(repoDir, compare); err == nil {
+			ships = found
+		}
+	}
+	seen := map[string]bool{}
+	var out []backfillResidueEntry
+	for _, v := range versions {
+		m, err := milestone.Load(milestone.FilePath(root, v))
+		if err != nil {
+			continue
+		}
+		for _, slug := range m.Phases {
+			if seen[slug] {
+				continue
+			}
+			seen[slug] = true
+			if phaseDone(root, slug) {
+				continue
+			}
+			switch {
+			case !phaseDirExists(root, slug):
+				out = append(out, backfillResidueEntry{slug, "on " + v + "'s roadmap with no phase directory"})
+			case phaseBranchRefCached(repoDir, slug):
+				out = append(out, backfillResidueEntry{slug, "phase/" + slug + " still exists — in flight, not shipped"})
+			default:
+				if _, ok := ships[backfillSlugKey(slug)]; !ok {
+					out = append(out, backfillResidueEntry{slug, "no completion marker and no ship commit on " + base})
+				}
+			}
+		}
+	}
+	return out
+}
+
+// phaseBranchRefCached reports whether phase/<slug> exists as a local branch or
+// as a cached remote-tracking ref.
+func phaseBranchRefCached(repoDir, slug string) bool {
+	for _, ref := range []string{"refs/heads/phase/" + slug, "refs/remotes/origin/phase/" + slug} {
+		if gitRefExists(repoDir, ref) {
+			return true
+		}
+	}
+	return false
 }

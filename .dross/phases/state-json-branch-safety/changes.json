@@ -2,6 +2,10 @@
   "phase": "state-json-branch-safety",
   "pr": 71,
   "base": "milestone/v1.2",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "1d422dd98813fb8b1763f766b4cde3efd83e0926"
+  },
   "tasks": {
     "t-1": {
       "files": [

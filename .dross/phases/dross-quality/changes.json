@@ -1,5 +1,9 @@
 {
   "phase": "06-dross-quality",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "3a8303483cc6f6446b7ddfb8448ea17df7656502"
+  },
   "tasks": {
     "t-1": {
       "files": [

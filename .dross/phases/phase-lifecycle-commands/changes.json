@@ -1,5 +1,9 @@
 {
   "phase": "phase-lifecycle-commands",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "5fe306f6a632ac0656ff893f91bd3c418e4f59e6"
+  },
   "tasks": {
     "t-1": {
       "files": [

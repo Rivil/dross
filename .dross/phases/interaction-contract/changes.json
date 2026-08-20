@@ -1,5 +1,9 @@
 {
   "phase": "10-interaction-contract",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "bb9146e5d108987fe127211fde8f0ecbdd408cd5"
+  },
   "tasks": {
     "t-1": {
       "files": [

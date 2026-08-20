@@ -1,5 +1,9 @@
 {
   "phase": "ship-complete-recovery-hardening",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "281a655705393e8bbb10f1f39c84aa85e3e62e64"
+  },
   "tasks": {
     "t-1": {
       "files": [

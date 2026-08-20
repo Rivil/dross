@@ -1,6 +1,10 @@
 {
   "phase": "prove-or-demote-board-sync",
   "pr": 62,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "2e9b040993c1a0caf2a28089ea401f3b322eec09"
+  },
   "tasks": {
     "t-1": {
       "files": [

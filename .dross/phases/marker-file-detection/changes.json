@@ -1,5 +1,9 @@
 {
   "phase": "09-marker-file-detection",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "f42f5570e7f8f26aade5c336a6d28a0a8eab4262"
+  },
   "tasks": {
     "t-1": {
       "files": [

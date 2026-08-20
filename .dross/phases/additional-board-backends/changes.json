@@ -1,6 +1,10 @@
 {
   "phase": "additional-board-backends",
   "pr": 47,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "a62d43c3e0864bdcb75e8d8cd9fe89be372ea52c"
+  },
   "tasks": {
     "t-1": {
       "files": [

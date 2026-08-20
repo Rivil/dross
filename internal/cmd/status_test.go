@@ -383,12 +383,13 @@ func TestStatusCountsShippedPhaseDone(t *testing.T) {
 	}
 }
 
-// TestStatusMilestoneHistoryFallbackCountsBreadcrumb pins the locked
-// history_fallback decision at the status surface: the shared reader carries
-// the state.json `completed <slug>` fallback across unchanged, so a phase whose
-// record predates the status field still counts done — and counts the same way
-// on all three surfaces.
-func TestStatusMilestoneHistoryFallbackCountsBreadcrumb(t *testing.T) {
+// TestStatusMilestoneBreadcrumbDoesNotCount is the inverse of the test this
+// replaced. The state.json `completed <slug>` fallback is gone (c-4): history is
+// a capped 50-entry window, so a phase read done off a breadcrumb flips back to
+// not-done the moment the breadcrumb ages out. A pre-field record is closed by
+// `dross phase backfill` writing the durable marker, not by the reader guessing
+// — and the status surface has to agree with the other two.
+func TestStatusMilestoneBreadcrumbDoesNotCount(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 	scaffoldPhaseWithSpecOnly(t, "old-phase")
@@ -403,8 +404,8 @@ func TestStatusMilestoneHistoryFallbackCountsBreadcrumb(t *testing.T) {
 	out := captureStdout(t, func() {
 		runCmd(t, Status())
 	})
-	if !strings.Contains(out, "1/1 phases") {
-		t.Errorf("the history fallback must still close a pre-field record — want '1/1 phases':\n%s", out)
+	if !strings.Contains(out, "0/1 phases") {
+		t.Errorf("a breadcrumb is not a record — want '0/1 phases':\n%s", out)
 	}
 }
 

@@ -388,6 +388,18 @@ Mirror milestones, phases, quick tasks, and the milestone backlog onto an issue 
 _a073ab7 · extended gitlab-ship-provider · 27e1a4f · extended youtrack-board-integration · extended prove-or-demote-board-sync · 50290f0_
 _extended additional-board-backends (GitHub Projects + Jira) · 9d60ea2 · extended board-state-map-truth · 3272339 · extended survivor-drain · 975870f · extended deferred-add-command · bcc8d5a · extended board-sync-truth · a587471 · extended board-task-mirror · c4b8b84_
 
+### Legacy phase backfill
+
+Reconstruct the completion marker for phases that finished before the marker existed, so historical milestones report their true done counts instead of 0/N. `dross phase backfill` previews every status-less phase record with a verdict and a reason; `--apply` writes `complete` plus the evidence SHA it was derived from. A verdict is only `backfillable` on two independent proofs: the phase branch is **absent from origin** (a live local or origin `phase/<slug>` branch means in-flight, not shipped, and an unreachable origin is treated as unknown rather than absence, so a network failure can never read as a shipped phase), and `origin/<base>` carries a ship commit whose subject matches the whole slug — anchored, with an optional legacy `NN-` ordinal prefix, so `mutation-diff` never closes `mutation-diff-scope`. Everything else is reported unbackfillable with its reason and left untouched, including records whose existing status is a failure. `dross doctor` closes the loop with an advisory section naming the roadmap phases backfill cannot resolve — a slug with no phase directory, or one whose branch is still live — resolved entirely offline so it never changes doctor's exit code.
+
+- `resolveBackfill` (the verdict: proved origin branch-absence plus anchored ship-subject match on `origin/<base>`) — `internal/cmd/phase_backfill.go:137`
+- `phaseBackfill` (CLI: preview by default, `--apply` writes status + evidence SHA) — `internal/cmd/phase_backfill.go:219`
+- `backfillShipCommitsAtRef` / `backfillSlugKey` (ship-subject index off origin, whole-slug anchoring with optional `NN-` prefix) — `internal/cmd/phase_backfill.go:100`
+- `backfillCandidates` (candidates are phase directories with a status-less record, never roadmap arrays) — `internal/cmd/phase_backfill.go:166`
+- `backfillResidue` (doctor's offline advisory naming what backfill cannot close, and why) — `internal/cmd/doctor.go:1445`
+
+_introduced legacy-phase-backfill · 45fad76_
+
 ### Machine-local store
 
 Facts that are true of *this* clone and must never ride cumulative history live in gitignored files, not in the tracked tree. `.dross/state.json` is the second and larger tenant: it is removed from the index and gitignored (scaffolded that way by `init` and `onboard` via `ensureDrossGitignore`), so no checkout carries a copy that could replace the live one and its `history[]` is machine-local by design. Migration is untrack-going-forward only — no history rewrite — so old branches and tags keep their copies; `dross doctor` reports a still-tracked state.json with the literal fix, and [Branch-switch safety](#branch-switch-safety) covers the dross-side switches. The incident this closes (a stale long-lived branch checked out over live state, 12 history entries down to 2) is reproduced end to end by a regression test verified to fail against the reverted code, and a docs scan pins README, the man page, the prompts and `.gitignore` to describe the file as machine-local.
@@ -515,17 +527,16 @@ _introduced complete-base-truth · e1f72be_
 
 ### Phase doneness
 
-One reader answers "is this phase done?" for every surface that asks, so `dross status`, `dross milestone progress` and `dross phase list` cannot drift into three different answers over the same phase directory. The authority is the **completion record** — `changes.json`'s monotonic `complete`/`shipped` status marker, written by `dross ship` and `dross phase complete` — never a verify verdict: a phase can pass verification and never open a PR, so verified is not shipped, and counting verdicts is exactly the split v1.4 shipped with, where the status bar read 0/11 while milestone progress read 11/11 over the same eleven directories in the same second. An unscaffolded slug is never done whatever else says so, since a roadmap entry with no phase directory is work that was listed and never built. State history remains a **fallback only**, for records written before the marker existed, and it matches the `completed <slug>` action as a whole token rather than a substring — with both `mutation-diff` and `mutation-diff-scope` on a roadmap, one breadcrumb would otherwise close both. Missing or unreadable `state.json` degrades that fallback to "nothing recorded" instead of failing the caller, because the file is machine-local and gitignored and a fresh clone must still answer the question.
+One reader answers "is this phase done?" for every surface that asks, so `dross status`, `dross milestone progress` and `dross phase list` cannot drift into three different answers over the same phase directory. The authority is the **completion record** — `changes.json`'s monotonic `complete`/`shipped` status marker, written by `dross ship` and `dross phase complete` — never a verify verdict: a phase can pass verification and never open a PR, so verified is not shipped, and counting verdicts is exactly the split v1.4 shipped with, where the status bar read 0/11 while milestone progress read 11/11 over the same eleven directories in the same second. An unscaffolded slug is never done whatever else says so, since a roadmap entry with no phase directory is work that was listed and never built. The record is now the **only** arm: the 50-entry `state.json` history fallback is deleted, so doneness reads `changes.json` alone and gives the same answer on every machine and in a fresh clone, where a machine-local gitignored history reads empty. Deleting it is only safe because the marker is backfillable — [Legacy phase backfill](#legacy-phase-backfill) writes the missing markers onto pre-marker records from evidence, so no historical phase loses its answer with the fallback.
 
-- `phaseDone` (entry point; resolves scaffolded-ness itself so a caller holding only a slug never has to) — `internal/cmd/phasedone.go:23`
-- `phaseIsDone` (the locked `phases_done_test` answer: scaffolded AND its own record says finished) — `internal/cmd/phasedone.go:60`
-- `phaseDoneState` (lenient state load; absent state.json is "nothing recorded", not an error) — `internal/cmd/phasedone.go:32`
-- `historyCompletedPhase` (fallback arm, whole-token match rather than `strings.Contains`) — `internal/cmd/phasedone.go:88`
+- `phaseDone` (entry point; resolves scaffolded-ness itself so a caller holding only a slug never has to) — `internal/cmd/phasedone.go:21`
+- `phaseIsDone` (single-arm answer: scaffolded AND changes.json says finished — no state-history fallback) — `internal/cmd/phasedone.go:42`
+- `phaseDirExists` (scaffolded-ness; an unscaffolded slug is never done) — `internal/cmd/phasedone.go:58`
 - `askAllThree` (cross-command guard: one fixture put to all three commands, failing by name whichever disagrees) — `internal/cmd/completion_record_truth_test.go:43`
 
 The guard is deliberately asymmetric — two phases done by record against one carrying `verdict = "pass"` and no record — so truth is 2/3 while a verdict-reader reports 1/3 over the *opposite* phase; a symmetric fixture would let an inverted answer pass on the matching number, and `dross status` prints only a count. It compares each command against a fixed truth rather than against each other, so it also catches a regression in the shared reader itself, where all three would move together and still agree.
 
-_introduced completion-record-truth · beb597f_
+_introduced completion-record-truth · extended legacy-phase-backfill · 49c4e68_
 
 ### Phase lifecycle
 
@@ -549,14 +560,15 @@ Create, list, number, migrate, complete, and reorder/insert/rename phases on ded
 - array-order splice helpers (`InsertRelative`, `MoveRelative`, `RenameInArray`) — `internal/phase/phase.go`
 - slug identity helpers (`Dir`, `Ordered`, `DisplayNumber`, `UniqueSlug`) — `internal/phase/phase.go:34`
 - complete-path verify heal (records a resolved-but-unfinalized verdict before the branch switch; never invents a verdict) — `internal/cmd/phase.go:296`
-- `changes.SetStatus` (monotonic per-phase shipped/complete marker written into changes.json — durable where the 50-entry state history is not) — `internal/changes/changes.go:236`
+- `changes.SetStatus` (monotonic per-phase shipped/complete marker written into changes.json — now the sole record, the 50-entry state history having been dropped) — `internal/changes/changes.go:262`
+- `changes.SetBackfilled` (writes `complete` plus a `backfill_evidence` SHA together, so a reconstructed marker is provenanced rather than a third status) — `internal/changes/changes.go:283`
 - `phase.CreateSlug` (create resolves a title to free / adopt / occupied, never a coined suffix) — `internal/phase/phase.go:205`
 
 The completion statement it prints at the end of a run — landing branch, per-side teardown, commits-not-yet-on-main — is covered in [Branch topology reporting](#branch-topology-reporting).
 
-Completion is recorded in two places with different lifetimes. `state.json` carries the machine-local transition (cleared `current_phase` plus the `completed <id>` history entry) and rides no commit; `changes.json` carries a **monotonic per-phase status marker** that is committed with the phase. The second exists because the history is capped at 50 entries, so a phase completed long enough ago drops out of it entirely — any consumer asking "is this phase done?" off history alone (milestone progress counting, drift classification) would silently answer no. The marker only ever advances, so a re-run or an out-of-order write cannot walk a phase backwards.
+Completion is recorded in two places with different lifetimes. `state.json` carries the machine-local transition (cleared `current_phase` plus the `completed <id>` history entry) and rides no commit; `changes.json` carries a **monotonic per-phase status marker** that is committed with the phase. Only the marker answers "is this phase done?": the history is capped at 50 entries and machine-local, so a phase completed long enough ago — or on another machine — drops out of it entirely, and consumers no longer consult it at all. The marker only ever advances, so a re-run, a backfill or an out-of-order write cannot walk a phase backwards.
 
-_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · extended verify-auto-finalize · extended complete-base-truth · extended completion-state-truth · extended provider-merge-parity · extended milestone-lifecycle-close · 6b00db6 · extended guard-remedy-ordering · f1d3c2f · extended phase-create-adoption · 8279f5b · extended completion-record-truth · 3e47594_
+_c8b346e · extended 02-harden-ship-merge-complete-flow · extended 03-fix-completion-chore-divergence · extended 14-stable-slug-phase-ids · extended phase-lifecycle-commands · extended verify-merge-before-completion · extended ship-clean-tree · extended verify-auto-finalize · extended complete-base-truth · extended completion-state-truth · extended provider-merge-parity · extended milestone-lifecycle-close · 6b00db6 · extended guard-remedy-ordering · f1d3c2f · extended phase-create-adoption · 8279f5b · extended completion-record-truth · extended legacy-phase-backfill · c82cd02_
 
 ### Plan persistence
 

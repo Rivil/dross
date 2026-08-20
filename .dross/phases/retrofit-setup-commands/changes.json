@@ -1,5 +1,9 @@
 {
   "phase": "12-retrofit-setup-commands",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "52569dcadba9e3233e2531a790a0deeb7361502d"
+  },
   "tasks": {
     "t-1": {
       "files": [

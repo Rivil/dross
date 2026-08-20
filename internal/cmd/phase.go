@@ -26,7 +26,7 @@ func Phase() *cobra.Command {
 		Use:   "phase",
 		Short: "Manage phase directories under .dross/phases/",
 	}
-	c.AddCommand(phaseList(), phaseCreate(), phaseCheckout(), phaseShow(), phaseComplete(), phaseReconcile(), phaseNumber(), phaseMigrate(), phaseMove(), phaseInsert(), phaseRename(), phaseRedProof())
+	c.AddCommand(phaseList(), phaseCreate(), phaseCheckout(), phaseShow(), phaseComplete(), phaseReconcile(), phaseNumber(), phaseMigrate(), phaseMove(), phaseInsert(), phaseRename(), phaseRedProof(), phaseBackfill())
 	return c
 }
 
@@ -91,9 +91,8 @@ func phaseList() *cobra.Command {
 			// listing, `dross status` and `dross milestone progress` count the
 			// same phases done, off the completion record rather than a verify
 			// verdict.
-			s := phaseDoneState(root)
 			if milestoneVersion != "" {
-				return listMilestoneRoadmap(root, milestoneVersion, s)
+				return listMilestoneRoadmap(root, milestoneVersion)
 			}
 			ids, err := phase.List(root)
 			if err != nil {
@@ -105,7 +104,7 @@ func phaseList() *cobra.Command {
 			}
 			done := 0
 			for _, id := range phase.Ordered(milestonePhaseOrder(root), ids) {
-				if phaseDone(root, id, s) {
+				if phaseDone(root, id) {
 					done++
 					Printf("✓ %s\n", id)
 				} else {
@@ -132,7 +131,7 @@ func phaseList() *cobra.Command {
 // too — it is outstanding work, not an absence — and the footer's denominator
 // is the roadmap's length. Dropping the unscaffolded entries would report a
 // half-built milestone as finished.
-func listMilestoneRoadmap(root, version string, s *state.State) error {
+func listMilestoneRoadmap(root, version string) error {
 	m, err := milestone.Load(milestone.FilePath(root, version))
 	if err != nil {
 		return fmt.Errorf("unknown milestone %q: %w (run `dross milestone list` to see options)", version, err)
@@ -144,7 +143,7 @@ func listMilestoneRoadmap(root, version string, s *state.State) error {
 	done := 0
 	for _, slug := range m.Phases {
 		switch {
-		case phaseDone(root, slug, s):
+		case phaseDone(root, slug):
 			done++
 			Printf("✓ %s\n", slug)
 		case !phaseDirExists(root, slug):
