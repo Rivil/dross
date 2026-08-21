@@ -313,3 +313,194 @@ func TestResolvedUnclassifiableCardIsNotALooseEnd(t *testing.T) {
 		t.Error("a card the tracker already holds resolved is still reported as a loose end")
 	}
 }
+
+// orphanFor finds one discovered orphan by issue key. The verdict is asserted
+// explicitly at every call site because `found` carries BOTH stranded and
+// unattributable candidates — only reapStillOpen is dropped — so membership
+// alone would pass a card that regressed from "close it" to "nothing speaks
+// for it".
+func orphanFor(t *testing.T, found []candidate, key string) candidate {
+	t.Helper()
+	for _, c := range found {
+		if c.card.Key == key {
+			return c
+		}
+	}
+	var keys []string
+	for _, c := range found {
+		keys = append(keys, c.card.Key)
+	}
+	t.Fatalf("orphan %s is not in the plan; got %v", key, keys)
+	return candidate{}
+}
+
+// hasOrphan reports whether a key reached the plan at all, in either verdict.
+func hasOrphan(found []candidate, key string) bool {
+	for _, c := range found {
+		if c.card.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+// --- the dross/target: identity arm ---
+//
+// Discovery recovers three identity kinds and until now only `dross/phase:`
+// had a fixture. A `dross/target:` card names a DESTINATION PHASE, and it is
+// the shape DRO-33 was recovered by on the live board — a routed backlog item
+// whose board.json link died with its phase branch.
+
+// TestOrphanTargetFollowsItsDestinationRecord: the destination's completion
+// record decides, exactly as it does on the linked path. The card's own state
+// says nothing.
+func TestOrphanTargetFollowsItsDestinationRecord(t *testing.T) {
+	seed := func(t *testing.T, destStatus string) []candidate {
+		t.Helper()
+		f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
+			{key: "DRO-33", labels: []string{labelMarker, targetLabel("02-dest")}},
+		}}
+		dir, ctx := discoverRepo(t, f, emptyBoard)
+		writeChanges(t, dir, "02-dest", destStatus)
+
+		found, unclassifiable, err := discoverReap(ctx, reapLanes)
+		if err != nil {
+			t.Fatalf("discover: %v", err)
+		}
+		if len(unclassifiable) != 0 {
+			t.Errorf("a card carrying an identity label was reported unclassifiable: %v", cardKeys(unclassifiable))
+		}
+		return found
+	}
+
+	t.Run("destination complete strands the card", func(t *testing.T) {
+		c := orphanFor(t, seed(t, "complete"), "DRO-33")
+		if c.verdict != reapStranded {
+			t.Errorf("verdict = %v, want stranded", c.verdict)
+		}
+		if c.card.Lane != "Backlog" {
+			t.Errorf("lane = %q, want Backlog — a dross/target: card is a backlog mirror, not a phase one", c.card.Lane)
+		}
+		// The ROUTING is what has to survive into the plan line, not merely
+		// the slug: the underlying phase verdict already names the slug in its
+		// own record path, so asserting on "02-dest" alone would pass even if
+		// the routed-to framing were dropped and the reader lost the reason
+		// this backlog card is answerable to that phase at all.
+		if !strings.Contains(c.card.Why, "routed to 02-dest") {
+			t.Errorf("Why = %q, want it to say the item is routed to 02-dest — a plan line that cannot be audited is the thing c-2 forbids", c.card.Why)
+		}
+	})
+
+	t.Run("an unfinished destination leaves the card open", func(t *testing.T) {
+		if found := seed(t, ""); hasOrphan(found, "DRO-33") {
+			t.Error("a routed orphan reached the plan while its destination's record shows no completion")
+		}
+	})
+}
+
+// TestOrphanTargetOnAnUnscaffoldedRoadmapSlugIsStillOpen is the 6186cbf
+// distinction on the discovery side: an absent phase directory cannot tell
+// "renamed or lost" from "on a roadmap and not built yet". Conflating them
+// reported live work as an unexplained mirror on every run, and until now that
+// fix was proven only for the linked path.
+func TestOrphanTargetOnAnUnscaffoldedRoadmapSlugIsStillOpen(t *testing.T) {
+	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
+		{key: "DRO-33", labels: []string{labelMarker, targetLabel("not-built-yet")}},
+		{key: "DRO-34", labels: []string{labelMarker, targetLabel("vanished")}},
+	}}
+	dir, ctx := discoverRepo(t, f, emptyBoard)
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v9.0.toml"),
+		"phases = [\"not-built-yet\"]\n\n[milestone]\nversion = \"v9.0\"\nstatus = \"active\"\n")
+
+	found, unclassifiable, err := discoverReap(ctx, reapLanes)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if hasOrphan(found, "DRO-33") || hasKey(unclassifiable, "DRO-33") {
+		t.Error("a card routed to unbuilt roadmap work reached the plan — that is live backlog, correctly open")
+	}
+	// The other half, or the assertion above would pass on a discovery path
+	// that simply dropped every unscaffolded target.
+	c := orphanFor(t, found, "DRO-34")
+	if c.verdict != reapUnattributable {
+		t.Errorf("verdict = %v, want unattributable — a slug on no roadmap with no directory is unexplained, not open", c.verdict)
+	}
+}
+
+// --- the dross/deferred: identity arm ---
+//
+// A `dross/deferred:` card names an ITEM ID rather than a phase, so it
+// resolves through the deferred stores. DRO-95 and DRO-96 were recovered this
+// way on the live board.
+
+// TestOrphanDeferredResolvesByItemID: the item's own record decides. A
+// discovery path that never read the deferred stores would report both cards
+// identically.
+func TestOrphanDeferredResolvesByItemID(t *testing.T) {
+	seed := func(t *testing.T, entry string) ([]candidate, []reapCard) {
+		t.Helper()
+		f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
+			{key: "DRO-95", labels: []string{labelMarker, deferredLabel("abc123")}},
+		}}
+		dir, ctx := discoverRepo(t, f, emptyBoard)
+		writeSpec(t, dir, "01-src", "[phase]\nid=\"01-src\"\ntitle=\"Src\"\n\n"+entry)
+
+		found, unclassifiable, err := discoverReap(ctx, reapLanes)
+		if err != nil {
+			t.Fatalf("discover: %v", err)
+		}
+		return found, unclassifiable
+	}
+
+	t.Run("a dismissed item is a decision, so its mirror is stranded", func(t *testing.T) {
+		found, _ := seed(t, "[[deferred]]\n  id = \"abc123\"\n  text = \"an idea\"\n  dismissed = true\n")
+		c := orphanFor(t, found, "DRO-95")
+		if c.verdict != reapStranded {
+			t.Errorf("verdict = %v, want stranded", c.verdict)
+		}
+		if c.card.Lane != "Backlog" {
+			t.Errorf("lane = %q, want Backlog", c.card.Lane)
+		}
+	})
+
+	t.Run("a live item leaves its mirror open", func(t *testing.T) {
+		found, _ := seed(t, "[[deferred]]\n  id = \"abc123\"\n  text = \"an idea\"\n")
+		if hasOrphan(found, "DRO-95") {
+			t.Error("an undismissed, unrouted deferred item's mirror reached the plan")
+		}
+	})
+
+	t.Run("an id no store explains is named, not closed", func(t *testing.T) {
+		found, _ := seed(t, "[[deferred]]\n  id = \"other\"\n  text = \"a different idea\"\n")
+		c := orphanFor(t, found, "DRO-95")
+		if c.verdict != reapUnattributable {
+			t.Errorf("verdict = %v, want unattributable", c.verdict)
+		}
+		if !strings.Contains(c.card.Why, "abc123") {
+			t.Errorf("Why = %q, want the unexplained backlog key named", c.card.Why)
+		}
+	})
+}
+
+// TestOrphanTaskLabelNamingNoPhaseIsUnattributable: a task label carries
+// `<phase>/<task>` and the PHASE half is what holds the completion record. A
+// label with no phase half has nothing to read, and must be named rather than
+// dropped or resolved against an empty slug.
+func TestOrphanTaskLabelNamingNoPhaseIsUnattributable(t *testing.T) {
+	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
+		{key: "DRO-37", labels: []string{labelMarker, "dross/task:t-1"}},
+	}}
+	_, ctx := discoverRepo(t, f, emptyBoard)
+
+	found, _, err := discoverReap(ctx, reapLanes)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	c := orphanFor(t, found, "DRO-37")
+	if c.verdict != reapUnattributable {
+		t.Errorf("verdict = %v, want unattributable", c.verdict)
+	}
+	if !strings.Contains(c.card.Why, "t-1") {
+		t.Errorf("Why = %q, want the malformed label quoted back", c.card.Why)
+	}
+}
