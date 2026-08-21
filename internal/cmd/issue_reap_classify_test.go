@@ -364,3 +364,53 @@ func TestEveryPlanCardNamesItsJustifyingRecord(t *testing.T) {
 		}
 	}
 }
+
+// TestUnscaffoldedRoadmapSlugIsStillOpen: the phase directory alone cannot tell
+// "renamed or lost" from "on a roadmap and not built yet" — both are an absent
+// directory — and conflating them made the sweep report live backlog as an
+// unexplained mirror, permanently, on every run.
+//
+// Found on the live board: `slug:reentry-signal-truth` is v1.5's own roadmap and
+// was being named unattributable.
+func TestUnscaffoldedRoadmapSlugIsStillOpen(t *testing.T) {
+	f := &readOnlyYT{resolved: map[string]bool{}}
+	dir, ctx := reapRepo(t, f, `{"phases":{},"tasks":{},"quicks":{},"milestones":{},
+	  "backlog":{"slug:planned":"PROJ-50","slug:vanished":"PROJ-51"}}`)
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v9.0.toml"),
+		"phases = [\"planned\"]\n\n[milestone]\nversion = \"v9.0\"\nstatus = \"active\"\n")
+
+	plan, err := classifyReap(ctx, nil)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+	if hasKey(plan.Cards, "PROJ-50") || hasKey(plan.Unattributable, "PROJ-50") {
+		t.Errorf("a slug still on a roadmap reached the plan; cards=%v unattributable=%v",
+			cardKeys(plan.Cards), cardKeys(plan.Unattributable))
+	}
+	// The other half: a slug on NO roadmap really is unexplained.
+	if !hasKey(plan.Unattributable, "PROJ-51") {
+		t.Errorf("a slug on no roadmap and with no directory was dropped rather than named; unattributable=%v", cardKeys(plan.Unattributable))
+	}
+}
+
+// TestRoutedToAnUnscaffolvedRoadmapTargetIsStillOpen is the same distinction on
+// the routed path: a deferred item routed into a phase nobody has built yet is
+// live work, and its card is correctly open.
+func TestRoutedToAnUnscaffoldedRoadmapTargetIsStillOpen(t *testing.T) {
+	f := &readOnlyYT{resolved: map[string]bool{}}
+	dir, ctx := reapRepo(t, f, `{"phases":{},"tasks":{},"quicks":{},"milestones":{},
+	  "backlog":{"someday:id:abc123":"PROJ-60"}}`)
+	writeSpec(t, dir, "01-src", "[phase]\nid=\"01-src\"\ntitle=\"Src\"\n\n"+
+		"[[deferred]]\n  id = \"abc123\"\n  text = \"an idea\"\n  target = \"not-built-yet\"\n")
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v9.0.toml"),
+		"phases = [\"not-built-yet\"]\n\n[milestone]\nversion = \"v9.0\"\nstatus = \"active\"\n")
+
+	plan, err := classifyReap(ctx, nil)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+	if hasKey(plan.Cards, "PROJ-60") || hasKey(plan.Unattributable, "PROJ-60") {
+		t.Errorf("a routed item whose target is unbuilt roadmap work reached the plan; cards=%v unattributable=%v",
+			cardKeys(plan.Cards), cardKeys(plan.Unattributable))
+	}
+}

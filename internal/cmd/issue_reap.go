@@ -337,6 +337,29 @@ func classifyMilestoneMirrors(ctx *boardCtx, lane reapLane) []candidate {
 // version in hand, so a key is explained by whatever record owns it (a phase
 // directory for `slug:`, a deferred store entry for `someday:`) rather than by
 // membership in one milestone's live set.
+// roadmapSlugs is every phase slug named on any milestone's roadmap, whether or
+// not it has been scaffolded.
+//
+// It is what lets the backlog verdict tell "renamed or lost" apart from "on a
+// roadmap and not built yet". The phase directory alone cannot: both cases look
+// like an absent directory, and calling live backlog unattributable reports
+// planned work as an unexplained mirror — permanently, on every run.
+func roadmapSlugs(root string) (map[string]string, error) {
+	all, err := milestone.LoadAll(root)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for version, m := range all {
+		for _, slug := range m.Phases {
+			if _, seen := out[slug]; !seen {
+				out[slug] = version
+			}
+		}
+	}
+	return out, nil
+}
+
 func classifyBacklogMirrors(ctx *boardCtx, lane reapLane) ([]candidate, error) {
 	// collectDeferred, not ensureDeferredIDs: the latter stamps missing ids
 	// back into spec.toml, and a dry run must not write to disk either. An
@@ -352,6 +375,10 @@ func classifyBacklogMirrors(ctx *boardCtx, lane reapLane) ([]candidate, error) {
 		}
 		byKey[legacyDeferredBacklogKey(d.Source, d.Index)] = d
 	}
+	roadmap, err := roadmapSlugs(ctx.root)
+	if err != nil {
+		return nil, err
+	}
 
 	var out []candidate
 	for _, key := range ctx.board.BacklogKeys() {
@@ -359,22 +386,15 @@ func classifyBacklogMirrors(ctx *boardCtx, lane reapLane) ([]candidate, error) {
 		if !ok || issue == "" {
 			continue
 		}
-		v, why := reapBacklogVerdict(ctx, key, byKey)
+		v, why := reapBacklogVerdict(ctx, key, byKey, roadmap)
 		out = append(out, candidate{card: reapCard{Key: issue, Lane: lane.Name, Terminal: lane.Terminal, Why: why}, verdict: v})
 	}
 	return out, nil
 }
 
-func reapBacklogVerdict(ctx *boardCtx, key string, deferred map[string]deferredEntry) (reapVerdict, string) {
+func reapBacklogVerdict(ctx *boardCtx, key string, deferred map[string]deferredEntry, roadmap map[string]string) (reapVerdict, string) {
 	if slug, ok := strings.CutPrefix(key, "slug:"); ok {
-		// A roadmap slug leaves the backlog the moment it is scaffolded, and
-		// the phase directory is the proof — the same evidence backlog sync
-		// uses. A slug with no directory was renamed or belongs elsewhere; it
-		// is not thereby resolved.
-		if phaseDirExists(ctx.root, slug) {
-			return reapStranded, fmt.Sprintf("phases/%s/ exists — the slug was scaffolded", slug)
-		}
-		return reapUnattributable, fmt.Sprintf("no phase directory for slug %q — renamed, or another milestone's", slug)
+		return slugVerdict(ctx.root, slug, roadmap)
 	}
 	d, ok := deferred[key]
 	if !ok {
@@ -385,6 +405,17 @@ func reapBacklogVerdict(ctx *boardCtx, key string, deferred map[string]deferredE
 		return reapStranded, fmt.Sprintf("deferred item %s %d is dismissed", d.Source, d.Index)
 	}
 	if d.Target != "" {
+		if !phaseDirExists(ctx.root, d.Target) {
+			// The destination has not been built yet. A routed item whose
+			// target is still on a roadmap is live work, not a lost mirror.
+			v, why := slugVerdict(ctx.root, d.Target, roadmap)
+			if v == reapStranded {
+				// Unreachable in practice (slugVerdict only strands a
+				// scaffolded slug) but kept explicit rather than assumed.
+				return v, fmt.Sprintf("routed to %s; %s", d.Target, why)
+			}
+			return v, fmt.Sprintf("routed to %s: %s", d.Target, why)
+		}
 		v, why := phaseRecordVerdict(ctx.root, d.Target)
 		switch v {
 		case reapStranded:
@@ -394,6 +425,24 @@ func reapBacklogVerdict(ctx *boardCtx, key string, deferred map[string]deferredE
 		}
 	}
 	return reapStillOpen, ""
+}
+
+// slugVerdict decides a roadmap slug's mirror.
+//
+// Scaffolded is the resolution — the same evidence backlog sync uses. An
+// UNSCAFFOLDED slug splits in two, and conflating them is what made the sweep
+// report live work as an unexplained mirror: a slug still named on a
+// milestone's roadmap is backlog that has simply not been built yet and its
+// card is correctly open, while a slug on no roadmap at all was renamed or
+// deleted and nothing on disk can speak for it.
+func slugVerdict(root, slug string, roadmap map[string]string) (reapVerdict, string) {
+	if phaseDirExists(root, slug) {
+		return reapStranded, fmt.Sprintf("phases/%s/ exists — the slug was scaffolded", slug)
+	}
+	if version, ok := roadmap[slug]; ok {
+		return reapStillOpen, fmt.Sprintf("still on %s's roadmap and not scaffolded", version)
+	}
+	return reapUnattributable, fmt.Sprintf("slug %q is on no milestone roadmap and has no phase directory — renamed or deleted", slug)
 }
 
 // classifyQuickMirrors names every quick card and closes none.

@@ -168,7 +168,17 @@ func orphanVerdict(ctx *boardCtx, kind orphanKind, artefact string) (reapVerdict
 		}
 		return phaseRecordVerdict(ctx.root, slug)
 	case orphanTarget:
-		// A routed item resolves when its destination phase completed.
+		// A routed item resolves when its destination phase completed — and a
+		// destination still on a roadmap but unscaffolded is live work, not a
+		// lost mirror.
+		if !phaseDirExists(ctx.root, artefact) {
+			roadmap, err := roadmapSlugs(ctx.root)
+			if err != nil {
+				return reapUnattributable, fmt.Sprintf("could not read the milestone roadmaps: %v", err)
+			}
+			v, why := slugVerdict(ctx.root, artefact, roadmap)
+			return v, fmt.Sprintf("routed to %s: %s", artefact, why)
+		}
 		v, why := phaseRecordVerdict(ctx.root, artefact)
 		if v == reapStranded {
 			return v, fmt.Sprintf("routed to %s; %s", artefact, why)
@@ -195,7 +205,11 @@ func reapBacklogVerdictByID(ctx *boardCtx, id string) (reapVerdict, string) {
 			byKey[deferredBacklogKey(d.ID)] = d
 		}
 	}
-	return reapBacklogVerdict(ctx, deferredBacklogKey(id), byKey)
+	roadmap, err := roadmapSlugs(ctx.root)
+	if err != nil {
+		return reapUnattributable, fmt.Sprintf("could not read the milestone roadmaps: %v", err)
+	}
+	return reapBacklogVerdict(ctx, deferredBacklogKey(id), byKey, roadmap)
 }
 
 // hasLabel reports whether a label set contains name.
