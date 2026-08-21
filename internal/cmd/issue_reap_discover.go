@@ -121,6 +121,15 @@ func discoverReap(ctx *boardCtx, lanes []reapLane) (found []candidate, unclassif
 		}
 		kind, artefact, ok := orphanIdentity(iss.Labels)
 		if !ok {
+			// A card the tracker already holds resolved is not a loose end,
+			// whatever dross can or cannot attribute it to. Without this the
+			// unclassifiable list carries already-closed cards on every run
+			// forever, which is exactly the inert re-listing the
+			// survivor-drain habit exists to stop — and it would keep a
+			// post-sweep plan from ever reading clean.
+			if done, derr := boardIssueIsDone(ctx, iss.Key); derr == nil && done {
+				continue
+			}
 			unclassifiable = append(unclassifiable, reapCard{
 				Key: iss.Key,
 				Why: "carries the dross marker but no identity label — nothing on disk can be shown to speak for it",

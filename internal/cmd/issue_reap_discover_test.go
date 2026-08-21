@@ -20,6 +20,8 @@ type ytCard struct {
 // reason the classify fixture does: discovery is part of the read-only half.
 type discoverYT struct {
 	cards []ytCard
+	// resolved names the cards the tracker already holds done.
+	resolved map[string]bool
 	// queried records the label query dross actually sent, so a sweep that
 	// silently widened past the marker is visible.
 	queried string
@@ -70,7 +72,11 @@ func (f *discoverYT) render(c ytCard) string {
 	for _, l := range c.labels {
 		tags = append(tags, `{"id":"tid-`+l+`","name":"`+l+`"}`)
 	}
-	return `{"idReadable":"` + c.key + `","resolved":null,"tags":[` + strings.Join(tags, ",") + `]}`
+	resolved := "null"
+	if f.resolved[c.key] {
+		resolved = "1700000000000"
+	}
+	return `{"idReadable":"` + c.key + `","resolved":` + resolved + `,"tags":[` + strings.Join(tags, ",") + `]}`
 }
 
 func (f *discoverYT) tagNames() []string {
@@ -116,7 +122,7 @@ const emptyBoard = `{"phases":{},"tasks":{},"quicks":{},"milestones":{}}`
 // would pass on a board.json entry nobody noticed, and the marker sweep could
 // be deleted with the suite still green.
 func TestUnlinkedMirrorIsDiscovered(t *testing.T) {
-	f := &discoverYT{cards: []ytCard{
+	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
 		{key: "DRO-33", labels: []string{labelMarker, phaseLabel("01-lost")}},
 	}}
 	dir, ctx := discoverRepo(t, f, emptyBoard)
@@ -156,7 +162,7 @@ func TestUnlinkedMirrorIsDiscovered(t *testing.T) {
 // nothing on disk speaks for it, so it is named rather than dropped or guessed
 // at.
 func TestUnattributableMarkerCardIsNamedNotGuessed(t *testing.T) {
-	f := &discoverYT{cards: []ytCard{{key: "DRO-33", labels: []string{labelMarker}}}}
+	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{{key: "DRO-33", labels: []string{labelMarker}}}}
 	dir, ctx := discoverRepo(t, f, emptyBoard)
 	writeChanges(t, dir, "01-lost", "complete")
 
@@ -179,7 +185,7 @@ func TestUnattributableMarkerCardIsNamedNotGuessed(t *testing.T) {
 // mirrors; the record still says whether it is done. A live phase's orphaned
 // card stays open.
 func TestOrphanOfAnIncompletePhaseIsAbsent(t *testing.T) {
-	f := &discoverYT{cards: []ytCard{
+	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
 		{key: "DRO-36", labels: []string{labelMarker, phaseLabel("01-live")}},
 	}}
 	dir, ctx := discoverRepo(t, f, emptyBoard)
@@ -198,7 +204,7 @@ func TestOrphanOfAnIncompletePhaseIsAbsent(t *testing.T) {
 // own writing from everyone else's. A card without it is invisible to the
 // sweep in both directions — not closed, and not even named.
 func TestHumanFiledCardIsNeverInInventory(t *testing.T) {
-	f := &discoverYT{cards: []ytCard{
+	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
 		{key: "DRO-33", labels: []string{labelMarker, phaseLabel("01-lost")}},
 		{key: "DRO-77", labels: []string{"bug"}}, // a human's issue
 	}}
@@ -223,7 +229,7 @@ func TestHumanFiledCardIsNeverInInventory(t *testing.T) {
 // overlap by design, and the union must be deduped by issue key — otherwise a
 // card is planned twice and the run's counts lie.
 func TestMarkerCardAlreadyLinkedIsNotDoubleCounted(t *testing.T) {
-	f := &discoverYT{cards: []ytCard{
+	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
 		{key: "PROJ-1", labels: []string{labelMarker, phaseLabel("01-auth")}},
 	}}
 	dir, ctx := discoverRepo(t, f, phaseAndTaskBoard)
@@ -250,7 +256,7 @@ func TestMarkerCardAlreadyLinkedIsNotDoubleCounted(t *testing.T) {
 // TestDiscoveryRespectsTheNamespaceFilter: --namespace scopes both inventory
 // sources or it scopes neither usefully.
 func TestDiscoveryRespectsTheNamespaceFilter(t *testing.T) {
-	f := &discoverYT{cards: []ytCard{
+	f := &discoverYT{resolved: map[string]bool{}, cards: []ytCard{
 		{key: "DRO-33", labels: []string{labelMarker, phaseLabel("01-lost")}},
 		{key: "DRO-34", labels: []string{labelMarker, taskLabel("01-lost", "t-1")}},
 	}}
@@ -271,5 +277,39 @@ func TestDiscoveryRespectsTheNamespaceFilter(t *testing.T) {
 			got = append(got, c.card.Key)
 		}
 		t.Errorf("found %v, want only the task-lane orphan DRO-34", got)
+	}
+}
+
+// TestResolvedUnclassifiableCardIsNotALooseEnd: a card the tracker already
+// holds resolved is not a loose end, whatever dross can or cannot attribute it
+// to. Without the filter the unclassifiable list carries already-closed cards on
+// every run forever — the inert re-listing the survivor-drain habit exists to
+// stop — and a post-sweep plan could never read clean. Proven against three
+// such cards (DRO-36/37/38) on this repo's own board.
+func TestResolvedUnclassifiableCardIsNotALooseEnd(t *testing.T) {
+	open := &discoverYT{
+		cards:    []ytCard{{key: "DRO-36", labels: []string{labelMarker}}},
+		resolved: map[string]bool{},
+	}
+	_, ctx := discoverRepo(t, open, emptyBoard)
+	_, unclassifiable, err := discoverReap(ctx, reapLanes)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if !hasKey(unclassifiable, "DRO-36") {
+		t.Fatal("an OPEN unattributable card must still be named — the filter below would then prove nothing")
+	}
+
+	closed := &discoverYT{
+		cards:    []ytCard{{key: "DRO-36", labels: []string{labelMarker}}},
+		resolved: map[string]bool{"DRO-36": true},
+	}
+	_, ctx2 := discoverRepo(t, closed, emptyBoard)
+	_, unclassifiable2, err := discoverReap(ctx2, reapLanes)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if hasKey(unclassifiable2, "DRO-36") {
+		t.Error("a card the tracker already holds resolved is still reported as a loose end")
 	}
 }
