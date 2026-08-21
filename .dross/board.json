@@ -5,6 +5,7 @@
     "v1.5": "DRO-134"
   },
   "phases": {
+    "board-mirror-reaper": "DRO-163",
     "board-sync-truth": "DRO-19",
     "board-task-mirror": "DRO-32",
     "cache-budget-prune": "DRO-132",

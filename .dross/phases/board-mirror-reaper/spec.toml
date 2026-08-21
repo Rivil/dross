@@ -5,7 +5,7 @@
 
 [[criteria]]
   id = "c-1"
-  text = "A single sweep closes every stranded mirror class at source: after one run against this board the 90 stranded cards (20 task in `In Review`, 2 phase in `In Progress`, 2 milestone epics, 2 quicks, 64 backlog) report a resolved state, and the 8 correctly-open cards plus every human-filed issue are untouched."
+  text = "A single sweep closes every stranded mirror class at source: after one run against this board the 88 record-backed stranded cards (20 task in `In Review`, 2 phase in `In Progress`, 2 milestone epics, 64 backlog) report a resolved state; the 2 quicks have no completion record on disk and are named in the plan as unattributable for manual close rather than inferred closed; and the 8 correctly-open cards plus every human-filed issue are untouched."
 
 [[criteria]]
   id = "c-2"

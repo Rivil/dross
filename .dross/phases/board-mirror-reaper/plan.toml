@@ -1,0 +1,421 @@
+[phase]
+id = "board-mirror-reaper"
+
+[[task]]
+id    = "t-1"
+wave  = 1
+title = "Nest the five dross issue verbs"
+files = [
+  "internal/cmd/issue.go",
+  "internal/cmd/issue_task.go",
+  "internal/cmd/issue_task_pull.go",
+  "internal/cmd/deferred_add.go",
+  "internal/cmd/issue_verb_shape_test.go",
+  "internal/cmd/issue_test.go",
+  "internal/cmd/issue_task_test.go",
+  "internal/cmd/issue_task_close_test.go",
+  "internal/cmd/issue_task_state_test.go",
+  "internal/cmd/issue_task_pull_test.go",
+  "internal/cmd/issue_close_truth_test.go",
+  "internal/cmd/issue_backlog_close_test.go",
+  "internal/cmd/issue_backlog_id_test.go",
+  "internal/cmd/issue_milestone_close_test.go",
+  "internal/cmd/issue_phase_resolve_test.go",
+  "internal/cmd/deferred_link_test.go",
+  "internal/cmd/deferred_routed_sync_test.go",
+  "internal/cmd/deferred_board_test.go",
+  "internal/cmd/task_lifecycle_test.go",
+  "internal/cmd/token_leak_test.go",
+  "internal/configenum/configenum_test.go",
+]
+description = """
+Split each compound verb into a parent+child cobra pair — `phase sync`,
+`task sync`, `task pull`, `milestone sync`, `backlog sync`. Flags, args and
+RunE bodies move unchanged onto the child. No aliases. Prompts are not
+touched here (t-5).
+Atomic by necessity, not by omission: cobra rejects the old spelling the moment
+the tree changes, so every call site in the suite reddens in the same commit and
+there is no green intermediate to split at. The forge comment tidy rides with
+t-13, which is editing those files anyway.
+"""
+covers = ["c-8"]
+test_contract = [
+  "runCmd(t, Issue(), \"phase-sync\", \"01-auth\") returns EnforceSubcommandKnown's unknown-subcommand error and exits non-zero, while runCmd(t, Issue(), \"phase\", \"sync\", \"01-auth\") runs issue_test.go's existing body assertions unchanged",
+  "TestIssueVerbsAreNested walks Issue()'s whole command tree and fails on any Use whose first word contains a hyphen — restoring \"task-sync\" reddens it",
+  "TestNestedIssueVerbsResolve fails when Find([\"task\",\"sync\"]) or Find([\"backlog\",\"sync\"]) returns cobra's unknown-command error",
+  "TestIssueTaskPullReportsPlanMoved fails while the printed remedy still reads `dross issue task-sync`",
+  "TestNoHyphenatedIssueVerbInGoSource: a scan of internal/**/*.go for `dross issue [a-z]+-[a-z]+` reports zero hits — deferred_add.go's user-facing Printf naming `dross issue backlog-sync` fails here while the compiler stays green",
+]
+status = "pending"
+
+[[task]]
+id    = "t-2"
+wave  = 1
+title = "Record-derived reap classifier"
+files = [
+  "internal/cmd/issue_reap.go",
+  "internal/cmd/issue_reap_classify_test.go",
+]
+description = """
+classifyReap(ctx, namespaces) returns a verdict over on-disk records with no
+forge write and no card-state read for the verdict itself. Evidence per class:
+phaseDone(changes.json) for phase and task cards; milestone.toml status for
+epics; phase dir existence for `slug:` backlog keys; the target phase's
+changes.json for `[routed]`; deferred dismissal for `someday:`. Quicks have no
+completion record — version monotonicity proves another bump happened, not that
+the quick finished — so they classify unattributable and are never closed by the
+sweep; the plan lists them for the operator to close by hand.
+Verdicts reap / open / unattributable, deny by default. Reuses
+backlogVerdictFor. A card already in its class's terminal state classifies
+not-stranded, so a post-sweep dry run prints an honestly empty plan.
+reapCard carries {Key, Lane, Terminal, Why}; Why is the justifying record path.
+"""
+covers = ["c-3", "c-4"]
+test_contract = [
+  "TestPhaseCardIsClassifiedFromItsCompletionRecord: two fixtures with the card's board state held identical — a phase whose changes.json reads complete yields its phase card and its task cards, the same board state over a record with status removed yields zero; a classifier reading iss.State or the dross/status label fails here",
+  "TestEpicFollowsMilestoneStatusNotTheCard: an epic whose milestone.toml status is \"active\" classifies open, status \"complete\" yields it",
+  "TestSlugBacklogNeedsItsPhaseDir: a `slug:` key whose phase directory is absent classifies unattributable, not reap",
+  "a `[routed]` entry yields a card only when the target phase's changes.json reads complete",
+  "TestQuickIsNeverAutoClosed: a quick card whose ref is older than the current state.json version still classifies unattributable, not reap — a classifier that closes it on version ordering alone fails here; the card appears in the plan's unattributable list so it is not lost",
+  "TestAlreadyTerminalIsNotStranded: a card already sitting in its class's terminal state classifies not-stranded",
+  "the fake forge fails the test on any non-GET request issued during classify",
+]
+status = "pending"
+
+[[task]]
+id    = "t-3"
+wave  = 1
+title = "Reap journal: write, load, prior state"
+files = [
+  "internal/reaplog/reaplog.go",
+  "internal/reaplog/reaplog_test.go",
+  ".gitignore",
+]
+description = """
+.dross/reap-log.json: runs, each holding started-at plus per-card
+{issue, class, prior_state, prior_resolved, prior_labels, dropped_link,
+outcome}. Append-on-apply, Last() for the undo target. A missing file is an
+empty log, not an error. Standalone package — board.go's package doc commits
+to holding nothing but the cross-references, and a map on Board would register
+as a mirror namespace with t-7's guard.
+The ledger is machine-local and gitignored, with the reason stated inline the
+way the state.json and local.toml entries already are: it records one machine's
+writes to one tracker, so a tracked file would dirty the tree on every apply,
+ride ship's clean-tree auto-commit into the phase branch, and drag a stale undo
+target through the squash into every later tree.
+"""
+covers = ["c-9"]
+test_contract = [
+  "TestJournalRoundTripsPriorState: an entry that drops prior_state fails the marshal → load → compare",
+  "TestMissingJournalIsNotAnError: Load on an absent .dross/reap-log.json returns an empty log and a nil error, so a first --undo says there is nothing to undo instead of erroring",
+  "TestFailedCardIsNotUndoable: a card recorded with outcome=failed is excluded from Last().Closed()",
+  "TestReapLogIsNotABoardNamespace: reflection over board.Board finds no new map field, so t-7's guard does not demand a reap path for the ledger",
+  "TestReapLogIsGitignored: `git check-ignore .dross/reap-log.json` succeeds — a tracked ledger dirties the tree on every apply and ship's clean-tree auto-commit carries it into the squash",
+]
+status = "pending"
+
+[[task]]
+id         = "t-4"
+wave       = 2
+title      = "Discover unlinked mirrors by marker label"
+depends_on = ["t-2"]
+files = [
+  "internal/cmd/issue_reap_discover.go",
+  "internal/cmd/issue_reap_discover_test.go",
+]
+description = """
+Second classify source: ListIssues{Labels:[dross marker]} minus everything
+board.IsLinked already covers, then recover each orphan's lane from its own
+identity labels (dross/phase:<id>, dross/task:<phase>/<task>,
+dross/deferred:<id>, dross/target:<slug>, the quick label) and run it through
+the same record-derived verdict t-2 owns — discovery gets no verdict path of
+its own. An orphan with no recognisable identity label is reported
+unclassifiable and never closed.
+"""
+covers = ["c-7"]
+test_contract = [
+  "TestUnlinkedMirrorIsDiscovered: a marker-labelled card in no board.json namespace carrying dross/phase:<complete-slug> appears in the plan with lane Phases — the DRO-33/36/37/38/95/96 shape; deleting the marker sweep drops it",
+  "TestUnattributableMarkerCardIsNamedNotGuessed: deleting the dross/phase label from that same fixture moves the card to the unclassifiable list rather than dropping it silently",
+  "an orphan whose recovered phase is not complete is absent from the plan",
+  "TestHumanFiledCardIsNeverInInventory: a card carrying no marker label never reaches the plan or the unclassifiable list",
+  "a card present both in board.json and in the marker sweep appears exactly once, deduped by issue key",
+]
+status = "pending"
+
+[[task]]
+id         = "t-5"
+wave       = 2
+title      = "Repoint the prompt corpus to nested verbs"
+depends_on = ["t-1"]
+files = [
+  "assets/prompts/execute.md",
+  "assets/prompts/ship.md",
+  "assets/prompts/verify.md",
+  "assets/prompts/plan.md",
+  "assets/prompts/milestone.md",
+  "assets/prompts/inbox.md",
+  "internal/cmd/board_lifecycle_divergence_test.go",
+  "internal/cmd/ship_prompt_test.go",
+  "internal/cmd/issue_verb_shape_test.go",
+]
+description = """
+Rewrite every `dross issue <a>-<b>` invocation in the corpus; update
+taskSyncEdgeRE, mirrorLanes' emission literals, and ship_prompt_test's literal
+needles to the nested spelling.
+"""
+covers = ["c-8"]
+test_contract = [
+  "TestNoHyphenatedIssueVerbInThePromptCorpus: a regexp scan of assets/prompts/*.md for `dross issue [a-z]+-[a-z]+` reports zero hits",
+  "TestEveryPromptIssueInvocationResolves: each `dross issue …` line is walked against the real cobra tree via Issue().Find(args), failing by prompt and line — a prompt repointed to a verb t-1 never registered fails here, not on a live board; not a regexp allowlist of the five new spellings",
+  "TestTaskSyncEdgeRegexIsNotVacuous: taskSyncEdgeRE matching zero prompt lines is a failure — without it the rename silently empties board_lifecycle_divergence_test's emit-set and the lifecycle guard passes on nothing",
+  "TestEveryMirrorLaneHasATerminalEmission and TestShipPromptEmitsTerminalBoardStatuses still pass against the rewritten prompts, so a half-done rewrite fails",
+]
+status = "pending"
+
+[[task]]
+id         = "t-6"
+wave       = 2
+title      = "dross issue reap — dry-run plan and --namespace"
+depends_on = ["t-2"]
+files = [
+  "internal/cmd/issue_reap_cmd.go",
+  "internal/cmd/issue_reap_cmd_test.go",
+  "internal/cmd/issue.go",
+]
+description = """
+Register `reap` under `issue`. Inventory here is every board.json link, from
+t-2's classifier alone; t-8 is the first task that unions in t-4's marker sweep,
+so this task carries no intra-wave dependency. No flag prints the whole-board plan:
+one line per card — issue id, lane, justifying record — grouped by lane with
+per-lane and total counts. `--namespace` is repeatable and validated against
+board.Board's map-field set, not a literal list. `--apply` is declared here and
+wired in t-8.
+"""
+covers = ["c-1", "c-2"]
+test_contract = [
+  "TestReapWithoutApplyNeverWrites: the fake forge fails the test on any POST/PUT/PATCH/DELETE and records zero CreateIssue/UpdateIssue/CloseIssue/SetState calls; the run exits 0 and prints a plan",
+  "TestReapPlanNamesTheJustifyingRecord: each plan line carries issue key, lane, and the record (phase id / milestone / backlog key) that justified it — a line printing only the key fails",
+  "TestReapNamespaceFilterScopesThePlan: `--namespace tasks` over a fixture stranded in all five lanes prints only task cards with a matching footer; two --namespace flags print both lanes; an unknown `--namespace bogus` errors naming the valid set",
+  "TestReapWholeBoardCoversFiveLanes: with no flag the plan's lane set equals board.Board's map-field set",
+  "TestApplyIsDeclaredButNotWired: at t-6 `--apply` exits non-zero with a \"not implemented\" message and issues zero write requests — a flag that silently no-ops on a board-writing verb fails here",
+]
+status = "pending"
+
+[[task]]
+id         = "t-7"
+wave       = 3
+title      = "Guard every mirror class has a reap path"
+depends_on = ["t-2", "t-5"]
+files = [
+  "internal/cmd/board_lifecycle_divergence_test.go",
+  "internal/cmd/issue_reap.go",
+]
+description = """
+Add a reapClass/terminal column to the existing mirrorLanes registry rather
+than standing up a second lane table, and assert coverage end to end through
+the existing boardNamespaceFields and stateMapPairs helpers.
+"""
+covers = ["c-6"]
+test_contract = [
+  "TestEveryBoardNamespaceHasAReapPath: adding a map field to board.Board with no reap lane entry fails by field name in the same run that adds it; the reverse direction fails for a lane entry naming a namespace that no longer exists",
+  "TestEveryReapTerminalIsMapped: each lane's terminal is a configenum.LifecycleStatuses member with an entry in both defaultJiraStateMap and defaultYouTrackStateMap, failing by provider and status",
+  "the guard cannot pass vacuously — an empty lane registry or an empty reflection result is a t.Fatal, matching the existing helper's behaviour",
+]
+status = "pending"
+
+[[task]]
+id         = "t-8"
+wave       = 3
+title      = "Apply the sweep with journalling and failure isolation"
+depends_on = ["t-2", "t-3", "t-4", "t-6"]
+files = [
+  "internal/cmd/issue_reap_apply.go",
+  "internal/cmd/issue_reap_apply_test.go",
+  "internal/cmd/issue_reap_cmd.go",
+  "internal/cmd/issue_reap_cmd_test.go",
+]
+description = """
+`--apply` walks the classified plan, captures each card's pre-write state into
+the t-3 journal, then writes the lane terminal through closeBoardIssue (mapped
+write plus verified read-back), collecting a per-card failure instead of
+returning on the first — the taskCloseError shape issue_task.go already uses. This is where the inventory
+becomes whole-board: t-4's marker sweep is unioned into t-2's board.json links,
+deduped by issue id.
+Drops the board.json link only for lanes whose forward path drops it, recording
+the drop. Ends by printing every failure by issue id and exiting non-zero if
+any occurred. t-6's TestApplyIsDeclaredButNotWired is deleted here — it is a
+scaffolding assertion with an explicit retirement point, and leaving it would
+fail t-8's own commit gate.
+"""
+covers = ["c-1", "c-4", "c-5", "c-9"]
+test_contract = [
+  "TestReapApplyClosesEveryLane: one stranded card per lane ends Resolved on the fake forge, each written with its own lane terminal (task cards task-complete, phase cards complete) — one shared terminal fails",
+  "TestApplyContinuesPastAWriteFailure: the forge 500s on card 2 of 4; cards 3 and 4 are still attempted and Resolved, the run exits non-zero, and the closing report names the failing issue id exactly once",
+  "TestUnverifiedCloseIsNotCountedClosed: a close whose read-back still reads unresolved is reported failed, not counted closed",
+  "TestReapLogCapturesStateBeforeTheWrite: the journal entry records the state read before the close — a log written from the post-close read-back records the terminal state and makes undo a no-op, and that fixture fails",
+  "TestJournalRecordsOnlyRealCloses: the journal for a partially failed run holds only the cards that actually closed",
+  "TestSecondApplyIsANoOp: a second --apply over the same fixture classifies zero cards, issues zero write requests and exits 0",
+  "TestReapNeverTouchesCorrectlyOpenCards: cards whose record is not complete, and cards with no marker, are still open after apply",
+]
+status = "pending"
+
+[[task]]
+id         = "t-9"
+wave       = 3
+title      = "Report stranded mirrors in doctor"
+depends_on = ["t-6"]
+files = [
+  "internal/cmd/doctor.go",
+  "internal/cmd/doctor_test.go",
+]
+description = """
+Delivers half the locked prompt_edge decision (no criterion of its own). doctor
+gains an advisory "stranded board mirrors" section from the same read-only
+classifier, printing the count and the `dross issue reap --namespace <lane>`
+remedy. Read-only. Skipped when [board].enabled is false.
+"""
+covers = []
+test_contract = [
+  "TestDoctorReportsStrandedMirrors: 3 stranded cards make doctor print the advisory naming 3 and the remedy, with doctor's exit status unchanged; 0 stranded prints the clean line",
+  "TestDoctorNeverWritesToTheBoard: the fake forge fails the test on any non-GET during `dross doctor` — the detector may not become a silent sweep",
+  "TestDoctorSkipsStrandedCheckWhenBoardDisabled: no section and no HTTP request at all with [board].enabled = false",
+]
+status = "pending"
+
+[[task]]
+id         = "t-14"
+wave       = 3
+title      = "Report stranded mirrors in the watch digest"
+depends_on = ["t-6"]
+files = [
+  "internal/cmd/watch.go",
+  "internal/cmd/watch_test.go",
+  "assets/prompts/watch.md",
+]
+description = """
+The other half of the locked prompt_edge decision (no criterion of its own).
+The watch digest gains a stranded count from the read-only classifier and
+watch.md renders it as a drift signal. Read-only; degrades to omitting the line
+when the board is unreachable. watch.md names the remedy in prose without
+emitting it as a command — prompt_edge says no prompt emits reap.
+"""
+covers = []
+test_contract = [
+  "TestWatchDegradesWhenBoardUnreachable: an unreachable board still produces a digest, with stranded omitted rather than the tick failing",
+  "TestWatchDigestCarriesStrandedCount: 3 stranded cards put a stranded:3 line in the digest; 0 stranded omits it rather than printing a zero",
+  "TestNoPromptEmitsReap: a scan of assets/prompts/*.md for `dross issue reap` reports zero hits — the locked prompt_edge decision has no other guard, and t-5's resolve check would happily pass a prompt that emits reap because reap resolves against the cobra tree; doctor's Go-side remedy string is exempt because it is not a prompt",
+]
+status = "pending"
+
+[[task]]
+id         = "t-10"
+wave       = 4
+title      = "Reverse the last applied run with --undo"
+depends_on = ["t-3", "t-8", "t-13"]
+files = [
+  "internal/cmd/issue_reap_undo.go",
+  "internal/cmd/issue_reap_undo_test.go",
+  "internal/cmd/issue_reap_cmd.go",
+]
+description = """
+`dross issue reap --undo` reads the last applied run from the journal and
+writes each card back to its recorded prior state unconditionally via t-13's
+StateWriter, verifying the read-back the way the close does, and re-adds any
+board.json link the sweep dropped. Refuses --undo alongside --apply or
+--namespace. The StateWriter assertion happens at this call site: a backend
+that does not implement it (GitHub) makes --undo refuse by provider name and
+write nothing, the same shape the no-linker path already uses.
+"""
+covers = ["c-9"]
+test_contract = [
+  "TestUndoRestoresTheRecordedPriorState: after an apply of 3–4 cards, --undo returns each to the exact prior state string the journal recorded, per card, not one blanket state — hardcoding \"Open\" fails",
+  "TestUndoRestoresDroppedBoardLinks: a backlog key deleted at apply is present again in board.json after --undo",
+  "TestUndoRestoresACardMovedSinceTheSweep: a card whose current state no longer matches what the sweep wrote is still returned to its journalled prior state — a conflict check that skips it fails",
+  "TestUndoContinuesPastAFailure: a card whose restore is refused by the forge is named by issue id while the remaining cards are still restored",
+  "TestUndoReversesOnlyTheLastRun: after two applies, --undo restores the second run's cards and touches none from the first",
+  "TestUndoWithNoJournalIsClean: --undo with no reap-log.json writes nothing and says there is nothing to undo",
+  "TestUndoRefusesOnABackendWithoutStateWriter: with a GitHub client, --undo names the provider, exits non-zero and issues zero write requests — a best-effort reopen that lands an In-Review card in `open` and reports success fails here",
+]
+status = "pending"
+
+[[task]]
+id         = "t-11"
+wave       = 5
+title      = "Document reap and the nested verb tree"
+depends_on = ["t-5", "t-10"]
+files = [
+  "README.md",
+  "ARCHITECTURE.md",
+  "internal/cmd/issue_verb_shape_test.go",
+]
+description = """
+Update README's `dross issue {…}` capability row to the nested verb set plus
+reap, add the reap paragraph to ARCHITECTURE's board-sync section
+(classify-from-record, marker discovery, dry-run default, per-card failure
+isolation, undo ledger), and extend t-5's corpus guard to scan README.md and
+ARCHITECTURE.md.
+"""
+covers = ["c-8"]
+test_contract = [
+  "TestNoHyphenatedIssueVerbInTheDocs: the t-5 scan extended to README.md and ARCHITECTURE.md reports zero `dross issue [a-z]+-[a-z]+` hits — the stale `milestone-sync, phase-sync` list in README fails until rewritten",
+  "TestEveryDocumentedIssueVerbResolves: every `dross issue …` invocation quoted in README/ARCHITECTURE resolves against the real cobra tree, so a documented flag combination that does not exist fails",
+]
+status = "pending"
+
+[[task]]
+id         = "t-12"
+wave       = 5
+title      = "Prove the sweep against the live DRO board"
+depends_on = ["t-8", "t-10"]
+files = [
+  ".dross/phases/board-mirror-reaper/proof.md",
+]
+description = """
+First step is `make build && make install` — per rule r-01 the installed
+binary can be stale versus source, and every line of reap is Go written
+earlier in this phase. Then run the sweep against the live DRO board namespace
+by namespace: dry run, then --apply, recording per-lane before/after counts and
+the resolved state of each closed card in proof.md. Ends with a re-run showing
+an empty plan. t-10 is a dependency so a bad batch is reversible.
+"""
+covers = ["c-1"]
+test_contract = [
+  "proof.md records the `dross --version` output and the git commit of the binary that produced the live run — a proof whose recorded version predates this phase's commits is not evidence for c-1",
+  "proof.md records, per lane, the stranded count before the run and the resolved count after, accounting for the 88 record-backed cards c-1 names, plus the 2 quicks listed as unattributable and closed by hand, each named by issue id; a lane whose after-count is short of its before-count is a recorded failure, not a silent omission",
+  "proof.md records the 8 correctly-open cards by issue id as still unresolved after the run",
+  "proof.md names each of DRO-33/36/37/38/95/96 by issue id with the lane and justifying record the marker sweep recovered for it — c-7's concrete sentence, which t-4 only proves in shape against synthetic fixtures",
+  "the final re-run transcript in proof.md shows `dross issue reap` classifying zero cards and exiting 0",
+]
+status = "pending"
+
+[[task]]
+id    = "t-13"
+wave  = 1
+title = "StateWriter capability for raw state writes"
+files = [
+  "internal/forge/forge.go",
+  "internal/forge/youtrack.go",
+  "internal/forge/jira.go",
+  "internal/forge/github.go",
+  "internal/forge/state_map_test.go",
+]
+description = """
+Add a StateWriter capability interface — SetStateRaw(key, state string) error —
+alongside BoardClient rather than on it, matching the IssueLinker precedent
+documented at forge.go:184-191. It writes a literal tracker state instead of a
+mapped dross lifecycle status; today CloseIssueAs and SetState both map, and
+Client closes via UpdateIssue(IssuePatch{State}), so restoring an arbitrary
+prior column such as "In Review" is unimplementable. Implemented on
+YouTrackClient, JiraClient and Client. GitHubClient deliberately does NOT
+implement it: GitHub has no column model, so it must fail the assertion rather
+than satisfy it with a lossy reopen. Keeping it off BoardClient also leaves the
+two in-cmd fakes compiling untouched. No caller yet; t-10 consumes it.
+"""
+covers = ["c-9"]
+test_contract = [
+  "TestSetStateRawBypassesTheStateMap: SetStateRaw(key, \"In Review\") writes \"In Review\" verbatim on each implementing client — an implementation routing through defaultYouTrackStateMap or defaultJiraStateMap turns it into a mapped lifecycle status and fails",
+  "TestGitHubIsNotAStateWriter: a compile-time assertion that *GitHubClient does NOT satisfy StateWriter, and that YouTrackClient, JiraClient and Client do — a lossy reopen/close stub added to GitHub to make the assertion pass reddens this",
+  "TestStateWriterIsNotOnBoardClient: a BoardClient value has no SetStateRaw method, so the two in-cmd fakes still satisfy the interface without change",
+  "TestSetStateRawVerifiesReadBack: a write whose read-back still reports the old state returns an error naming the key rather than reporting success",
+]
+status = "pending"
