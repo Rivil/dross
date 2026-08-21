@@ -80,12 +80,32 @@ type reapLane struct {
 // map field names, which is what lets the namespace filter validate against
 // reflection over that struct rather than against a literal list that would
 // silently go stale.
+//
+// Every terminal here is asserted against the forward lifecycle's own terminal
+// for that lane, in board_lifecycle_divergence_test.go's mirrorLanes registry.
+// The locked reap_state decision is that a reaped card lands in the SAME state
+// the forward path writes — one coherent history per board, one state map to
+// trust — and two tables saying so independently would drift the first time one
+// changed.
 var reapLanes = []reapLane{
 	{Name: "Phases", Terminal: "complete"},
 	{Name: "Tasks", Terminal: statusTaskComplete},
 	{Name: "Milestones", Terminal: "complete"},
 	{Name: "Backlog", Terminal: "complete"},
 	{Name: "Quicks", Terminal: "complete"},
+}
+
+// reapLaneFor looks a lane up by its board.Board field name. The guard in
+// board_lifecycle_divergence_test.go drives it from reflection over that
+// struct, so a namespace added there with no entry here fails by field name in
+// the same run that adds it.
+func reapLaneFor(name string) (reapLane, bool) {
+	for _, l := range reapLanes {
+		if l.Name == name {
+			return l, true
+		}
+	}
+	return reapLane{}, false
 }
 
 func reapLaneNames() []string {
