@@ -137,7 +137,7 @@ func TestTokenReachesNoEmittedSurface(t *testing.T) {
 			// --- board leg: reads [board].auth_env ---
 			results = append(results, runLeaky(t, "issue pull", Issue(), "pull"))
 			writeSpec(t, mustCwd(t), "01-auth", "[phase]\nid=\"01-auth\"\ntitle=\"Auth\"\n")
-			results = append(results, runLeaky(t, "issue phase-sync", Issue(), "phase-sync", "01-auth"))
+			results = append(results, runLeaky(t, "issue phase-sync", Issue(), "phase", "sync", "01-auth"))
 
 			// --- ship / forge leg: reads [remote].auth_env ---
 			results = append(results, runLeaky(t, "ship comment",

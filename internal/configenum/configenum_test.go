@@ -123,7 +123,7 @@ func TestMilestoneModesForProvider(t *testing.T) {
 		t.Errorf("jira modes = %v, want %v — jira.go errors on anything but version", got, want)
 	}
 	if jira.Has("epic") {
-		t.Error("jira accepts epic; that combination fails at milestone-sync time")
+		t.Error("jira accepts epic; that combination fails at milestone sync time")
 	}
 	// Empty still means version, even on the narrowed jira set.
 	if !jira.Has("") {

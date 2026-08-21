@@ -67,17 +67,58 @@ func Issue() *cobra.Command {
 	c.AddCommand(
 		issueEnable(),
 		issueDisable(),
-		issueMilestoneSync(),
-		issueBacklogSync(),
-		issuePhaseSync(),
-		issueTaskSync(),
-		issueTaskPull(),
+		issueMilestone(),
+		issueBacklog(),
+		issuePhase(),
+		issueTask(),
 		issueQuick(),
 		issuePull(),
 		issueDismiss(),
 		issueLink(),
 		issueList(),
 	)
+	return c
+}
+
+// The five mirror verbs are nested subcommands — `issue phase sync`, `issue
+// task sync`, `issue task pull`, `issue milestone sync`, `issue backlog sync`
+// — not hyphenated compounds. The parent names the artefact class being
+// mirrored; the child names the direction. There are no aliases for the old
+// spellings: cobra's unknown-subcommand guard is the migration signal.
+
+func issuePhase() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "phase",
+		Short: "Mirror a phase onto the board",
+	}
+	c.AddCommand(issuePhaseSync())
+	return c
+}
+
+func issueTask() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "task",
+		Short: "Mirror plan tasks onto the board, and pull board moves back",
+	}
+	c.AddCommand(issueTaskSync(), issueTaskPull())
+	return c
+}
+
+func issueMilestone() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "milestone",
+		Short: "Mirror a milestone onto the board",
+	}
+	c.AddCommand(issueMilestoneSync())
+	return c
+}
+
+func issueBacklog() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "backlog",
+		Short: "Mirror the milestone backlog onto the board",
+	}
+	c.AddCommand(issueBacklogSync())
 	return c
 }
 
@@ -237,7 +278,7 @@ func issueDisable() *cobra.Command {
 func issueMilestoneSync() *cobra.Command {
 	var doClose bool
 	c := &cobra.Command{
-		Use:   "milestone-sync <version>",
+		Use:   "sync <version>",
 		Short: "Ensure a board milestone exists for a dross milestone",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -358,7 +399,7 @@ func milestoneBody(title, criteria string) string {
 func issueBacklogSync() *cobra.Command {
 	var fromPhase string
 	c := &cobra.Command{
-		Use:   "backlog-sync [version]",
+		Use:   "sync [version]",
 		Short: "Sync the milestone backlog (unscaffolded slugs + someday ideas) to the board",
 		Args:  cobra.RangeArgs(0, 1),
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -946,7 +987,7 @@ func issuePhaseSync() *cobra.Command {
 	var status string
 	var doClose bool
 	c := &cobra.Command{
-		Use:   "phase-sync <phase-id>",
+		Use:   "sync <phase-id>",
 		Short: "Create or update the board issue for a phase (idempotent)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {

@@ -304,12 +304,12 @@ func TestStateMapsKeyExactlyTheEmittedStatuses(t *testing.T) {
 var taskStatusWriteRE = regexp.MustCompile(`dross task status\s+\S+\s+\S+\s+([a-z_]+)`)
 
 // taskSyncEdgeRE matches the board-side write at the same edge:
-// `dross issue task-sync <phase> <task-id> --status <lifecycle-status>`.
+// `dross issue task sync <phase> <task-id> --status <lifecycle-status>`.
 //
 // The task-id argument is required by the pattern, and required not to be a
-// flag: a `task-sync <phase> --status …` with no task id syncs the whole phase
+// flag: a `task sync <phase> --status …` with no task id syncs the whole phase
 // at once, which is not an edge and must not satisfy either half below.
-var taskSyncEdgeRE = regexp.MustCompile(`dross issue task-sync\s+\S+\s+([^-\s]\S*)\s+--status\s+([a-z][a-z-]*)`)
+var taskSyncEdgeRE = regexp.MustCompile(`dross issue task sync\s+\S+\s+([^-\s]\S*)\s+--status\s+([a-z][a-z-]*)`)
 
 // taskEdges is the pairing c-2 actually claims: picking a task moves its card
 // to in-progress, committing it moves the card to a review state. The key is
@@ -451,13 +451,13 @@ type mirrorLane struct {
 var mirrorLanes = map[string]mirrorLane{
 	"Phases": {
 		prompt:   "ship.md",
-		emission: "dross issue phase-sync <phase-id> --status complete --close",
+		emission: "dross issue phase sync <phase-id> --status complete --close",
 		terminal: "complete",
 		others:   []string{"planned", "in-progress", "shipped", "uat"},
 	},
 	"Tasks": {
 		prompt:   "ship.md",
-		emission: "dross issue task-sync <phase-id> --status task-complete --close",
+		emission: "dross issue task sync <phase-id> --status task-complete --close",
 		terminal: "task-complete",
 		others:   []string{"task-in-progress", "task-in-review"},
 	},
@@ -468,16 +468,16 @@ var mirrorLanes = map[string]mirrorLane{
 	},
 	"Milestones": {
 		prompt:   "milestone.md",
-		emission: "dross issue milestone-sync <version> --close",
+		emission: "dross issue milestone sync <version> --close",
 		terminal: "complete",
 	},
 	"Backlog": {
 		prompt: "ship.md",
-		// The backlog lane has no --close flag by design: backlog-sync owns the
+		// The backlog lane has no --close flag by design: backlog sync owns the
 		// live set and reconciles both directions, closing the mirrors whose
 		// artefact resolved. Asserting a flag here would guard something that
 		// was never built.
-		emission: "dross issue backlog-sync",
+		emission: "dross issue backlog sync",
 	},
 }
 

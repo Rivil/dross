@@ -66,7 +66,7 @@ target = "host"
 [[deferred]]
 text = "someday idea"
 `)
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("backlog-sync: %v", err)
 	}
 	if len(f.creates) != 2 {
@@ -107,7 +107,7 @@ target = "host"
 	f.tags["PROJ-77"] = []string{"dross", "dross/deferred:abc123", "dross/target:host"}
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"), emptyBoardJSON)
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("backlog-sync: %v", err)
 	}
 	if len(f.creates) != 0 {
@@ -133,7 +133,7 @@ target = "host"
 	f.tags["PROJ-77"] = []string{"dross/deferred:abc123"} // no marker
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"), emptyBoardJSON)
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("backlog-sync: %v", err)
 	}
 	if len(f.creates) != 1 {
@@ -156,7 +156,7 @@ id = "abc123"
 text = "routed idea"
 target = "host"
 `)
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("first sync: %v", err)
 	}
 	key := issueCarrying(t, f, "routed idea")
@@ -170,7 +170,7 @@ target = "host"
 
 	before := len(f.creates)
 	f.patches = nil
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("second sync: %v", err)
 	}
 	if len(f.creates) != before {
@@ -195,7 +195,7 @@ id = "abc123"
 text = "routed idea"
 target = "host"
 `)
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("first sync: %v", err)
 	}
 	key := issueCarrying(t, f, "routed idea")
@@ -210,7 +210,7 @@ target = "host"
 	}
 	mustWrite(t, specPath, strings.ReplaceAll(string(body), `target = "host"`, `target = "other"`))
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("second sync: %v", err)
 	}
 	got := tagsOn(f, key)
@@ -232,7 +232,7 @@ text = "routed but dismissed"
 target = "host"
 dismissed = true
 `)
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("backlog-sync: %v", err)
 	}
 	for _, got := range f.creates {

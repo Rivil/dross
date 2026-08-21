@@ -16,7 +16,7 @@ import (
 	"github.com/Rivil/dross/internal/phase"
 )
 
-// `dross issue task-sync` — the board mirror at task granularity.
+// `dross issue task sync` — the board mirror at task granularity.
 //
 // Before it, the tracker saw a phase and a rendered checklist inside its body.
 // Nothing moved when one task of eight was picked up, so a board that claimed
@@ -36,7 +36,7 @@ func issueTaskSync() *cobra.Command {
 	var status string
 	var doClose bool
 	c := &cobra.Command{
-		Use:   "task-sync <phase-id> [task-id]",
+		Use:   "sync <phase-id> [task-id]",
 		Short: "Mirror a phase's plan tasks as issues, one per task",
 		Long: `Create or update one board issue per plan task, related to the phase's issue.
 
@@ -121,7 +121,7 @@ func syncTasks(ctx *boardCtx, phaseID, only, status string, doClose bool) error 
 	// a tracker round trip per task for an answer that cannot change mid-run.
 	parent, ok := ctx.board.PhaseIssue(phaseID)
 	if !ok {
-		return fmt.Errorf("phase %s has no board issue yet — run `dross issue phase-sync %s` first", phaseID, phaseID)
+		return fmt.Errorf("phase %s has no board issue yet — run `dross issue phase sync %s` first", phaseID, phaseID)
 	}
 
 	linker, canLink := ctx.client.(forge.IssueLinker)
@@ -243,7 +243,7 @@ func syncOneTask(ctx *boardCtx, phaseID, parent string, t phase.Task, status str
 	}
 
 	// Record the AGREEMENT POINT, not just the mapping: what the plan held and
-	// what the board was told, at this moment. `dross issue task-pull` compares
+	// what the board was told, at this moment. `dross issue task pull` compares
 	// against this to tell a board move from a plan move from both — which two
 	// current values cannot distinguish. Recorded AFTER the state write and the
 	// close, so it only ever describes a card that actually got there.

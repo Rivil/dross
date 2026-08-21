@@ -187,7 +187,7 @@ func TestDeferredAddSharesKeySpaceWithSync(t *testing.T) {
 	}
 
 	f.patches = nil
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("backlog-sync: %v", err)
 	}
 	if len(f.creates) != 1 {

@@ -110,7 +110,7 @@ dross state touch "scoped milestone <version>: <N> criteria, <M> phases"
 
 Mirror the milestone onto the issue board (no-op unless `[remote].board_sync` is on — safe to always run):
 ```
-dross issue milestone-sync <version>
+dross issue milestone sync <version>
 ```
 Phase issues created later by `/dross-plan` attach to this milestone automatically.
 
@@ -156,7 +156,7 @@ dross milestone complete <version> --finalize
 Then resolve the milestone's board card, so the epic does not sit open forever behind a finished milestone:
 
 ```
-dross issue milestone-sync <version> --close
+dross issue milestone sync <version> --close
 ```
 
 A no-op when board sync is off. It refuses — without writing anything — on a board whose milestone is not itself an issue (a YouTrack version bundle or agile board, a forge/GitHub milestone id): there is no card to close there, and on the forges a milestone id and an issue number are the same string, so closing blind would resolve someone else's issue.

@@ -57,7 +57,7 @@ func TestTerminalRunClearsTheReviewLabel(t *testing.T) {
 	dir := taskCloseRepo(t, "forgejo", f, "t-1", "t-2")
 
 	// The execute loop's state: every card mirrored and sitting in review.
-	if err := runCmd(t, Issue(), "task-sync", "01-auth", "--status", statusTaskInReview); err != nil {
+	if err := runCmd(t, Issue(), "task", "sync", "01-auth", "--status", statusTaskInReview); err != nil {
 		t.Fatalf("seed task-sync: %v", err)
 	}
 	for _, id := range []string{"t-1", "t-2"} {
@@ -70,7 +70,7 @@ func TestTerminalRunClearsTheReviewLabel(t *testing.T) {
 	// Ship finalize.
 	_ = captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := runCmd(t, Issue(), "task-sync", "01-auth", "--status", statusTaskComplete, "--close"); err != nil {
+			if err := runCmd(t, Issue(), "task", "sync", "01-auth", "--status", statusTaskComplete, "--close"); err != nil {
 				t.Fatalf("terminal task-sync: %v", err)
 			}
 		})

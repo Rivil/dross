@@ -13,7 +13,7 @@ import (
 	"github.com/Rivil/dross/internal/phase"
 )
 
-// `dross issue task-pull` is the inbound half of the task mirror: someone drags
+// `dross issue task pull` is the inbound half of the task mirror: someone drags
 // a card on the tracker, and the plan follows.
 //
 // Every other `dross issue` verb pushes. This one lets a remote system write a
@@ -64,7 +64,7 @@ type taskMoveVerdict struct {
 func issueTaskPull() *cobra.Command {
 	var apply bool
 	c := &cobra.Command{
-		Use:   "task-pull [phase-id]",
+		Use:   "pull [phase-id]",
 		Short: "Apply board task-state moves back into plan.toml",
 		Long: "Reads each mirrored task's issue and applies a move made on the board.\n\n" +
 			"Reports without writing unless --apply is passed. A task changed on both\n" +
@@ -101,7 +101,7 @@ func taskPull(ctx *boardCtx, phaseID string, apply bool) error {
 	if !providerHasWorkflowState(ctx.proj.Board.Provider) {
 		return fmt.Errorf("board provider %q has no workflow state — its issues are open/closed only, "+
 			"so there is no column for a card to move between.\n\n"+
-			"Task-state pull needs youtrack or jira. The outbound mirror (`dross issue task-sync`) "+
+			"Task-state pull needs youtrack or jira. The outbound mirror (`dross issue task sync`) "+
 			"still works here; only the inbound direction is unavailable.", ctx.proj.Board.Provider)
 	}
 
@@ -229,7 +229,7 @@ func reportTaskMoves(ctx *boardCtx, phaseID string, plan *phase.Plan, planPath s
 			Printf("  %s  CONFLICT: plan says %q, board says %q — both changed since they last agreed (%q/%q)\n",
 				m.TaskID, m.PlanStatus, m.BoardState, m.WasPlan, m.WasBoard)
 		case taskPlanMoved:
-			Printf("  %s  the plan moved; run `dross issue task-sync %s %s` to push it\n", m.TaskID, phaseID, m.TaskID)
+			Printf("  %s  the plan moved; run `dross issue task sync %s %s` to push it\n", m.TaskID, phaseID, m.TaskID)
 		case taskUnsynced:
 			Printf("  %s  no agreement point recorded — run task-sync once to establish one\n", m.TaskID)
 		}
