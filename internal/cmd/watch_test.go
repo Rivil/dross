@@ -196,3 +196,129 @@ func TestSuggestPrecedence(t *testing.T) {
 		})
 	}
 }
+
+// --- stranded mirrors in the digest ---
+//
+// The other half of the locked prompt_edge decision. The sweep is off every
+// prompt's hot path — a whole-board re-walk at ship would pay ninety API calls
+// to find nothing — so what keeps the debt visible is a count in the heartbeat.
+
+// strandedWatchRepo scaffolds a watch fixture whose board is stranded in the
+// phase and task lanes, against a read-only YouTrack fake.
+func strandedWatchRepo(t *testing.T, boardJSON string) string {
+	t.Helper()
+	f := &readOnlyYT{resolved: map[string]bool{}}
+	srv := httptest.NewServer(f.handler(t))
+	t.Cleanup(srv.Close)
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustRunSet(t, "board.milestone_mode", "epic")
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"), boardJSON)
+	driftPhase(t, dir, "01-x")
+	return dir
+}
+
+// TestWatchDigestCarriesStrandedCount: a non-zero count reaches both the JSON
+// and the human render; a zero is OMITTED rather than printed. A heartbeat on a
+// 15-minute loop that reports "stranded: 0" every tick trains the reader to
+// skip the line the one time it matters.
+func TestWatchDigestCarriesStrandedCount(t *testing.T) {
+	t.Run("three stranded cards are counted", func(t *testing.T) {
+		dir := strandedWatchRepo(t, `{
+		  "phases": {"01-auth": "PROJ-1"},
+		  "tasks": {"01-auth/t-1": {"issue": "PROJ-2"}, "01-auth/t-2": {"issue": "PROJ-3"}},
+		  "quicks": {}, "milestones": {}
+		}`)
+		writeChanges(t, dir, "01-auth", "complete")
+
+		if d := runWatchJSON(t); d.Stranded != 3 {
+			t.Errorf("stranded = %d, want 3", d.Stranded)
+		}
+		out := captureStdout(t, func() {
+			if err := runCmd(t, Watch()); err != nil {
+				t.Fatalf("watch: %v", err)
+			}
+		})
+		if !strings.Contains(out, "stranded: 3") {
+			t.Errorf("the human render omits the stranded line:\n%s", out)
+		}
+	})
+
+	t.Run("a clean board omits the line", func(t *testing.T) {
+		dir := strandedWatchRepo(t, `{"phases":{"01-auth":"PROJ-1"},"tasks":{},"quicks":{},"milestones":{}}`)
+		writeChanges(t, dir, "01-auth", "") // live phase — its card is correctly open
+
+		if d := runWatchJSON(t); d.Stranded != 0 {
+			t.Errorf("stranded = %d, want 0 on a clean board", d.Stranded)
+		}
+		raw := captureStdout(t, func() {
+			if err := runCmd(t, Watch(), "--json"); err != nil {
+				t.Fatalf("watch --json: %v", err)
+			}
+		})
+		if strings.Contains(raw, "stranded") {
+			t.Errorf("a zero count was emitted rather than omitted:\n%s", raw)
+		}
+		out := captureStdout(t, func() {
+			if err := runCmd(t, Watch()); err != nil {
+				t.Fatalf("watch: %v", err)
+			}
+		})
+		if strings.Contains(out, "stranded") {
+			t.Errorf("the human render printed a zero stranded line:\n%s", out)
+		}
+	})
+}
+
+// TestWatchDegradesWhenBoardUnreachable: the classifier is one more thing that
+// can fail on a tick, and watch runs on a timer. An unreachable board omits the
+// count rather than failing — and omits it rather than reporting zero, because
+// a zero there would read as "clean" when the honest answer is "unknown".
+func TestWatchDegradesWhenBoardUnreachable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	dir := youtrackBoardRepo(t, srv.URL)
+	mustRunSet(t, "board.milestone_mode", "epic")
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"phases":{"01-auth":"PROJ-1"},"tasks":{},"quicks":{},"milestones":{}}`)
+	writeChanges(t, dir, "01-auth", "complete")
+	driftPhase(t, dir, "01-x")
+	srv.Close()
+
+	d := runWatchJSON(t)
+	if d.BoardOK {
+		t.Error("board_ok must be false when the board is unreachable")
+	}
+	if d.Stranded != 0 {
+		t.Errorf("stranded = %d over an unreachable board — the count is unknown, not a number", d.Stranded)
+	}
+	if len(d.Drift) == 0 {
+		t.Error("the tick produced no digest at all — an unreachable board must degrade, not fail")
+	}
+}
+
+// TestNoPromptEmitsReap holds the locked prompt_edge decision, which has no
+// other guard. t-1's resolve check would happily pass a prompt that emitted
+// reap — reap resolves against the cobra tree like any other verb — so the
+// decision needs an assertion of its own. doctor's Go-side remedy string is
+// exempt: it is a diagnostic naming a fix for a human, not a prompt handing the
+// verb to a model.
+func TestNoPromptEmitsReap(t *testing.T) {
+	root := repoRootFromTest(t)
+	paths, err := filepath.Glob(filepath.Join(root, "assets", "prompts", "*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("globbed no prompts — the guard would pass vacuously")
+	}
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if strings.Contains(line, "dross issue reap") {
+				t.Errorf("%s:%d emits the mirror sweep: %s", filepath.Base(p), i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+}
