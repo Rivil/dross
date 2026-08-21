@@ -113,6 +113,51 @@
         }
       ]
     },
+    "t-15": {
+      "files": [
+        "internal/cmd/issue_reap_discover_test.go"
+      ],
+      "commit": "d9f6a9b",
+      "completed_at": "2026-08-21T12:22:09.119717Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "TestOrphanTargetFollowsItsDestinationRecord",
+          "loc": "internal/cmd/issue_reap_discover_test.go:265",
+          "what": "the marker sweep's dross/target: and dross/deferred: identity arms are held by tests that follow the destination's or the deferred item's own record, each assertion checking the verdict explicitly and each of the five previously-unreached conditions proven to redden the suite when flipped"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        "internal/cmd/issue_reap_apply_test.go"
+      ],
+      "commit": "d052592",
+      "completed_at": "2026-08-21T12:26:37.167052Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "TestApplyContinuesPastAPriorStateReadFailure",
+          "loc": "internal/cmd/issue_reap_apply_test.go:509",
+          "what": "the sweep's prior-state read failure is held by a fixture whose reads fail only after the plan is built, asserting the card is skipped unwritten and journalled failed while the rest of the sweep lands, and that the report carries the underlying read error rather than a blanket issue-not-found"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "internal/forge/state_map_test.go"
+      ],
+      "commit": "597cae4",
+      "completed_at": "2026-08-21T12:29:05.943043Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "TestSetStateRawVerifiesReadBack",
+          "loc": "internal/forge/state_map_test.go:233",
+          "what": "the read-back guard is now held on all three StateWriter backends including Jira, whose 204 is not evidence a workflow completed the transition, asserting the error names the status the issue actually reads rather than an empty column"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/issue_reap.go",

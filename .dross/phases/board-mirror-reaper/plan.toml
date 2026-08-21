@@ -1,4 +1,4 @@
-task_seq = 14
+task_seq = 17
 
 [phase]
   id = "board-mirror-reaper"
@@ -138,4 +138,34 @@ task_seq = 14
   description = "Add a StateWriter capability interface — SetStateRaw(key, state string) error —\nalongside BoardClient rather than on it, matching the IssueLinker precedent\ndocumented at forge.go:184-191. It writes a literal tracker state instead of a\nmapped dross lifecycle status; today CloseIssueAs and SetState both map, and\nClient closes via UpdateIssue(IssuePatch{State}), so restoring an arbitrary\nprior column such as \"In Review\" is unimplementable. Implemented on\nYouTrackClient, JiraClient and Client. GitHubClient deliberately does NOT\nimplement it: GitHub has no column model, so it must fail the assertion rather\nthan satisfy it with a lossy reopen. Keeping it off BoardClient also leaves the\ntwo in-cmd fakes compiling untouched. No caller yet; t-10 consumes it.\n"
   covers = ["c-9"]
   test_contract = ["TestSetStateRawBypassesTheStateMap: SetStateRaw(key, \"In Review\") writes \"In Review\" verbatim on each implementing client — an implementation routing through defaultYouTrackStateMap or defaultJiraStateMap turns it into a mapped lifecycle status and fails", "TestGitHubIsNotAStateWriter: a compile-time assertion that *GitHubClient does NOT satisfy StateWriter, and that YouTrackClient, JiraClient and Client do — a lossy reopen/close stub added to GitHub to make the assertion pass reddens this", "TestStateWriterIsNotOnBoardClient: a BoardClient value has no SetStateRaw method, so the two in-cmd fakes still satisfy the interface without change", "TestSetStateRawVerifiesReadBack: a write whose read-back still reports the old state returns an error naming the key rather than reporting success"]
+  status = "done"
+
+[[task]]
+  id = "t-15"
+  wave = 6
+  title = "Cover discoverReap's orphanTarget and orphanDeferred verdict arms"
+  files = ["internal/cmd/issue_reap_discover_test.go"]
+  description = "The marker sweep recovers identity from three label kinds and only dross/phase: has a fixture. No test builds a card carrying dross/target: or dross/deferred:, so both of those verdict arms are entered by nothing — five not_covered survivors sit inside them (issue_reap_discover.go:176,183,199,204,209). Those are the arms that classified DRO-33 (routed), DRO-95 and DRO-96 (someday) on the live board, so c-7 currently rests on proof.md rather than on a test."
+  covers = ["c-7"]
+  test_contract = ["TestOrphanTargetFollowsItsDestinationRecord: a marker card labelled dross/target:<slug> whose destination phase changes.json reads complete appears in the plan with lane Backlog and a Why naming the destination; the same card over an incomplete destination is absent — the DRO-33 shape", "TestOrphanTargetOnAnUnscaffoldedRoadmapSlugIsStillOpen: a dross/target: card whose destination has no phase directory but is still named in a milestone phases array is absent from the plan rather than reported unattributable — the 6186cbf fix, currently proven only for the linked path", "TestOrphanDeferredResolvesByItemID: a marker card labelled dross/deferred:<id> whose deferred item is dismissed appears in the plan, and one still open does not — the DRO-95/96 shape; a discovery path that ignored the deferred store would fail here", "TestOrphanTaskLabelNamingNoPhaseIsUnattributable: a dross/task: label with no phase half classifies unattributable with a reason naming the label, rather than panicking or dropping the card"]
+  status = "done"
+
+[[task]]
+  id = "t-16"
+  wave = 6
+  title = "Cover applyReap's read-prior-state failure arm"
+  files = ["internal/cmd/issue_reap_apply_test.go"]
+  description = "c-5 says a card that fails to write is recorded and the sweep continues. The write-failure half is well covered; the read half is not. applyReap reads each card prior state before the close, and when that read fails the card is recorded failed and skipped — but no test makes GetIssue fail, so the whole arm never runs (not_covered survivor at issue_reap_apply.go:123, the sub-branch that turns a nil issue with no error into an issue-not-found error)."
+  covers = ["c-5"]
+  test_contract = ["TestApplyContinuesPastAPriorStateReadFailure: the forge fails GetIssue for card 2 of 4; that card is reported by issue id exactly once, is never written, is journalled with outcome=failed, and cards 3 and 4 are still closed — the run exits non-zero", "TestMissingIssueIsAReadFailureNotASilentSkip: a GetIssue returning (nil, nil) — the card is gone from the tracker — is reported as a failure naming the key rather than being skipped silently or panicking on the nil deref"]
+  status = "done"
+
+[[task]]
+  id = "t-17"
+  wave = 6
+  title = "Cover JiraClient.SetStateRaw's read-back verification"
+  files = ["internal/forge/state_map_test.go"]
+  description = "TestSetStateRawVerifiesReadBack asserts the read-back guard for YouTrack and Forge but not for Jira, so the Jira arm that turns a transition the workflow did not take into an error never runs (not_covered survivor at internal/forge/jira.go:502, the nil-issue sub-branch of that error path). c-9 says a supported verb restores the cards; on a Jira board an undo that transitioned nothing would currently report success."
+  covers = ["c-9"]
+  test_contract = ["TestSetStateRawVerifiesReadBack gains a jira subtest: the transition POST succeeds but the issue still reads its old status, and SetStateRaw returns an error naming the key and both the wanted and the actual status — a Jira implementation that trusts the 204 fails here", "the same subtest covers the nil-issue read-back: GetIssue returning no issue after the transition is an error naming the key, not a nil deref and not a silent success"]
   status = "done"

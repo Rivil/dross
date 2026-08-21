@@ -99,6 +99,21 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "board-mirror-reaper/t-15": {
+      "issue": "DRO-177",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-mirror-reaper/t-16": {
+      "issue": "DRO-178",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "board-mirror-reaper/t-17": {
+      "issue": "DRO-179",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "board-mirror-reaper/t-2": {
       "issue": "DRO-165",
       "plan_status": "done",
