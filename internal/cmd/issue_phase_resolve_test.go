@@ -225,7 +225,7 @@ func TestPhaseSyncLabelsCarryPhaseIdentity(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		phaseSyncRepo(t, srv.URL, "01-auth", "Auth", emptyBoardJSON)
-		if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 			t.Fatalf("phase-sync: %v", err)
 		}
 		// t1 = dross, t2 = dross/phase:01-auth
@@ -242,7 +242,7 @@ func TestPhaseSyncLabelsCarryPhaseIdentity(t *testing.T) {
 
 		phaseSyncRepo(t, srv.URL, "01-auth", "Auth",
 			`{"phases":{"01-auth":"PROJ-7"},"quicks":{},"milestones":{},"dismissed":[]}`)
-		if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 			t.Fatalf("phase-sync: %v", err)
 		}
 		// The update path re-applies the full label set; the fake's replace
@@ -263,7 +263,7 @@ func TestPhaseSyncAdoptsLabelledIssueWithEmptyBoardJSON(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	dir := phaseSyncRepo(t, srv.URL, "01-auth", "Auth", emptyBoardJSON)
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 		t.Fatalf("phase-sync: %v", err)
 	}
 	if f.creates != 0 {
@@ -302,7 +302,7 @@ func TestPhaseSyncResolverQueryShape(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	phaseSyncRepo(t, srv.URL, "01-auth", "Auth", emptyBoardJSON)
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 		t.Fatalf("phase-sync: %v", err)
 	}
 	if len(queries) == 0 {
@@ -329,7 +329,7 @@ func TestPhaseSyncIgnoresAnUnmarkedMatch(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	phaseSyncRepo(t, srv.URL, "01-auth", "Auth", emptyBoardJSON)
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 		t.Fatalf("phase-sync: %v", err)
 	}
 	if f.creates != 1 {
@@ -351,7 +351,7 @@ func TestPhaseSyncHealsAStaleBoardJSON(t *testing.T) {
 
 	dir := phaseSyncRepo(t, srv.URL, "01-auth", "Auth",
 		`{"phases":{"01-auth":"PROJ-99"},"quicks":{},"milestones":{},"dismissed":[]}`)
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 		t.Fatalf("phase-sync: %v", err)
 	}
 	if f.creates != 0 {
@@ -379,7 +379,7 @@ func TestPhaseSyncAdoptsALegacyIssueBySummary(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		phaseSyncRepo(t, srv.URL, "01-auth", "Auth", emptyBoardJSON)
-		if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 			t.Fatalf("phase-sync: %v", err)
 		}
 		if f.creates != 0 {
@@ -399,7 +399,7 @@ func TestPhaseSyncAdoptsALegacyIssueBySummary(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		phaseSyncRepo(t, srv.URL, "01-auth", "Auth", emptyBoardJSON)
-		if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 			t.Fatalf("phase-sync: %v", err)
 		}
 		if f.creates != 1 {
@@ -421,7 +421,7 @@ func TestPhaseSyncWithDuplicateLabelledIssues(t *testing.T) {
 	phaseSyncRepo(t, srv.URL, "01-auth", "Auth", emptyBoardJSON)
 
 	warn := captureStderr(t, func() {
-		if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 			t.Fatalf("phase-sync: %v", err)
 		}
 	})
@@ -444,7 +444,7 @@ func TestPhaseSyncCreatesWhenNothingResolves(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	phaseSyncRepo(t, srv.URL, "01-auth", "Auth", emptyBoardJSON)
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 		t.Fatalf("phase-sync: %v", err)
 	}
 	if f.creates != 1 {
@@ -460,7 +460,7 @@ func TestPhaseSyncTwiceLeavesOneIssue(t *testing.T) {
 
 	phaseSyncRepo(t, srv.URL, "01-auth", "Auth", emptyBoardJSON)
 	for i := 0; i < 2; i++ {
-		if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 			t.Fatalf("phase-sync #%d: %v", i+1, err)
 		}
 	}

@@ -29,7 +29,7 @@ func TestEpicCloseResolvesForReal(t *testing.T) {
 	epicCloseRepo(t, srv.URL)
 
 	out := captureStdout(t, func() {
-		if err := runCmd(t, Issue(), "milestone-sync", "v1.5", "--close"); err != nil {
+		if err := runCmd(t, Issue(), "milestone", "sync", "v1.5", "--close"); err != nil {
 			t.Fatalf("milestone-sync --close: %v", err)
 		}
 	})
@@ -55,7 +55,7 @@ func TestEpicCloseFailsWhenUnresolved(t *testing.T) {
 	var err error
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			err = runCmd(t, Issue(), "milestone-sync", "v1.5", "--close")
+			err = runCmd(t, Issue(), "milestone", "sync", "v1.5", "--close")
 		})
 	})
 	if err == nil {
@@ -75,7 +75,7 @@ func TestMilestoneSyncWithoutCloseNeverWritesState(t *testing.T) {
 	t.Cleanup(srv.Close)
 	epicCloseRepo(t, srv.URL)
 
-	if err := runCmd(t, Issue(), "milestone-sync", "v1.5"); err != nil {
+	if err := runCmd(t, Issue(), "milestone", "sync", "v1.5"); err != nil {
 		t.Fatalf("milestone-sync: %v", err)
 	}
 	if len(f.stateWrites) != 0 {
@@ -138,7 +138,7 @@ func TestMilestoneCloseRefusesANonIssueEntity(t *testing.T) {
 			var err error
 			out := captureStdout(t, func() {
 				_ = captureStderr(t, func() {
-					err = runCmd(t, Issue(), "milestone-sync", "v1.5", "--close")
+					err = runCmd(t, Issue(), "milestone", "sync", "v1.5", "--close")
 				})
 			})
 			if err == nil {
@@ -160,7 +160,7 @@ func TestMilestoneCloseRefusesANonIssueEntity(t *testing.T) {
 func TestMilestonePromptClosesTheEpicAtFinalize(t *testing.T) {
 	content := promptContent(t, "milestone.md")
 
-	const emit = "dross issue milestone-sync <version> --close"
+	const emit = "dross issue milestone sync <version> --close"
 	at := strings.Index(content, emit)
 	if at < 0 {
 		t.Fatalf("milestone.md never emits %q — the epic would stay open after every finalize", emit)

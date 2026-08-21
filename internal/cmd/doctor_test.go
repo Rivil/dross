@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -2430,4 +2432,138 @@ func mustRedProofChecks(t *testing.T, dir string) []doctorLine {
 		t.Fatalf("%s records no red-proof pin", dir)
 	}
 	return lines
+}
+
+// --- stranded board mirrors ---
+//
+// The locked prompt_edge decision says no prompt emits `issue reap`: the
+// forward lifecycle already closes new work, so a sweep at ship would re-walk
+// the whole board for nothing. What keeps the debt visible instead is a
+// detector, and this is half of it.
+
+// strandedDoctorRepo scaffolds a git repo with a YouTrack board pointed at srv,
+// stranded in the phase and task lanes, and returns the repo dir.
+//
+// Git-inited with the fake's own URL as origin so the [remote] checks stay
+// clean: the assertion below is that the advisory does not change doctor's
+// exit status, which is only readable against a baseline of zero issues.
+func strandedDoctorRepo(t *testing.T, srvURL string, enabled bool) string {
+	t.Helper()
+	dir := t.TempDir()
+	gitInit(t, dir, srvURL)
+	chdir(t, dir)
+	t.Setenv("MOCK_TOKEN", "secret")
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	for k, v := range map[string]string{
+		"remote.url":           srvURL,
+		"remote.auth_env":      "MOCK_TOKEN",
+		"board.provider":       "youtrack",
+		"board.base_url":       srvURL,
+		"board.auth_env":       "MOCK_TOKEN",
+		"board.project":        "PROJ",
+		"board.milestone_mode": "epic",
+	} {
+		mustRunSet(t, k, v)
+	}
+	if enabled {
+		mustRunSet(t, "board.enabled", "true")
+	}
+	return dir
+}
+
+// TestDoctorReportsStrandedMirrors: the count doctor prints is the count the
+// sweep would act on, and printing it changes nothing about doctor's verdict —
+// a stranded card is drift on someone else's tracker, not a fault in this
+// repo's configuration.
+func TestDoctorReportsStrandedMirrors(t *testing.T) {
+	t.Run("stranded cards are named with a remedy", func(t *testing.T) {
+		f := &readOnlyYT{resolved: map[string]bool{}}
+		srv := httptest.NewServer(f.handler(t))
+		t.Cleanup(srv.Close)
+		dir := strandedDoctorRepo(t, srv.URL, true)
+		mustWrite(t, filepath.Join(dir, ".dross", "board.json"), `{
+		  "phases": {"01-auth": "PROJ-1"},
+		  "tasks": {"01-auth/t-1": {"issue": "PROJ-2"}, "01-auth/t-2": {"issue": "PROJ-3"}},
+		  "quicks": {}, "milestones": {}
+		}`)
+		writeChanges(t, dir, "01-auth", "complete")
+
+		var out string
+		err := runCmdCapturing(t, &out, Doctor())
+		if err != nil {
+			t.Fatalf("doctor: %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "3 stranded board mirror") {
+			t.Errorf("doctor does not name the stranded count:\n%s", out)
+		}
+		if !strings.Contains(out, "dross issue reap --namespace") {
+			t.Errorf("doctor names no remedy:\n%s", out)
+		}
+	})
+
+	t.Run("a clean board prints the clean line", func(t *testing.T) {
+		f := &readOnlyYT{resolved: map[string]bool{}}
+		srv := httptest.NewServer(f.handler(t))
+		t.Cleanup(srv.Close)
+		dir := strandedDoctorRepo(t, srv.URL, true)
+		mustWrite(t, filepath.Join(dir, ".dross", "board.json"), `{
+		  "phases": {"01-auth": "PROJ-1"}, "tasks": {}, "quicks": {}, "milestones": {}
+		}`)
+		writeChanges(t, dir, "01-auth", "") // live phase: its card is correctly open
+
+		var out string
+		err := runCmdCapturing(t, &out, Doctor())
+		if err != nil {
+			t.Fatalf("doctor: %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "no stranded mirrors") {
+			t.Errorf("doctor does not print the clean line:\n%s", out)
+		}
+		if strings.Contains(out, "stranded board mirror(s)") {
+			t.Errorf("doctor reported stranded cards on a clean board:\n%s", out)
+		}
+	})
+}
+
+// TestDoctorNeverWritesToTheBoard: the detector may not become a silent sweep.
+// Held at the wire — the fake fails the test on any non-GET.
+func TestDoctorNeverWritesToTheBoard(t *testing.T) {
+	f := &writingIsFatalYT{readOnlyYT: readOnlyYT{resolved: map[string]bool{}}}
+	srv := httptest.NewServer(f.handler(t))
+	t.Cleanup(srv.Close)
+	dir := strandedDoctorRepo(t, srv.URL, true)
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"phases":{"01-auth":"PROJ-1"},"tasks":{},"quicks":{},"milestones":{}}`)
+	writeChanges(t, dir, "01-auth", "complete")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
+	}
+	if f.writes != 0 {
+		t.Errorf("doctor issued %d write requests to the board", f.writes)
+	}
+}
+
+// TestDoctorSkipsStrandedCheckWhenBoardDisabled: a repo that never opted into
+// board sync must not have doctor reach for a network at all.
+func TestDoctorSkipsStrandedCheckWhenBoardDisabled(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("doctor called the board API with sync disabled: %s %s", r.Method, r.URL.Path)
+	}))
+	t.Cleanup(srv.Close)
+	dir := strandedDoctorRepo(t, srv.URL, false)
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"phases":{"01-auth":"PROJ-1"},"tasks":{},"quicks":{},"milestones":{}}`)
+	writeChanges(t, dir, "01-auth", "complete")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "Board mirrors:") {
+		t.Errorf("the stranded section ran with board sync off:\n%s", out)
+	}
 }

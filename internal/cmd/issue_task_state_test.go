@@ -268,7 +268,7 @@ func TestTaskSyncLinksAndMovesTheStateOnACapableTracker(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "task-sync", "01-auth", "t-1", "--status", "task-in-progress"); err != nil {
+			if err := runCmd(t, Issue(), "task", "sync", "01-auth", "t-1", "--status", "task-in-progress"); err != nil {
 				t.Fatalf("task-sync: %v", err)
 			}
 		})
@@ -309,7 +309,7 @@ func TestLinkFailureWarnsOnceAndKeepsTheIssues(t *testing.T) {
 	var err error
 	stderr := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			err = runCmd(t, Issue(), "task-sync", "01-auth")
+			err = runCmd(t, Issue(), "task", "sync", "01-auth")
 		})
 	})
 	if err != nil {
@@ -339,7 +339,7 @@ func TestStateFailureFailsTheTaskSync(t *testing.T) {
 	var err error
 	_ = captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			err = runCmd(t, Issue(), "task-sync", "01-auth", "t-1", "--status", "task-in-progress")
+			err = runCmd(t, Issue(), "task", "sync", "01-auth", "t-1", "--status", "task-in-progress")
 		})
 	})
 	if err == nil {
@@ -389,7 +389,7 @@ func TestJiraStateFailureFailsTheTaskSync(t *testing.T) {
 	var err error
 	_ = captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			err = runCmd(t, Issue(), "task-sync", "01-auth", "t-1", "--status", "task-in-progress")
+			err = runCmd(t, Issue(), "task", "sync", "01-auth", "t-1", "--status", "task-in-progress")
 		})
 	})
 	if err == nil {

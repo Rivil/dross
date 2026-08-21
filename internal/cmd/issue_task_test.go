@@ -229,7 +229,7 @@ func taskSyncRepo(t *testing.T, f *fakeForge) string {
   files = ["b.go"]
   status = "pending"
 `)
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 		t.Fatalf("phase-sync: %v", err)
 	}
 	return dir
@@ -252,7 +252,7 @@ func TestTaskSyncIsIdempotent(t *testing.T) {
 	dir := taskSyncRepo(t, f)
 
 	for i := 0; i < 2; i++ {
-		if err := runCmd(t, Issue(), "task-sync", "01-auth"); err != nil {
+		if err := runCmd(t, Issue(), "task", "sync", "01-auth"); err != nil {
 			t.Fatalf("task-sync run %d: %v", i+1, err)
 		}
 	}
@@ -283,7 +283,7 @@ func TestTaskSyncScopesToOneTask(t *testing.T) {
 	f := newFakeForge(t)
 	taskSyncRepo(t, f)
 
-	if err := runCmd(t, Issue(), "task-sync", "01-auth", "t-1"); err != nil {
+	if err := runCmd(t, Issue(), "task", "sync", "01-auth", "t-1"); err != nil {
 		t.Fatalf("task-sync: %v", err)
 	}
 
@@ -311,7 +311,7 @@ func TestTaskIssueIsRelatedToItsPhase(t *testing.T) {
 	f := newFakeForge(t)
 	dir := taskSyncRepo(t, f)
 
-	if err := runCmd(t, Issue(), "task-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "task", "sync", "01-auth"); err != nil {
 		t.Fatalf("task-sync: %v", err)
 	}
 
@@ -347,7 +347,7 @@ func TestNoLinkerWarnsOnceAndContinues(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "task-sync", "01-auth"); err != nil {
+			if err := runCmd(t, Issue(), "task", "sync", "01-auth"); err != nil {
 				t.Fatalf("task-sync: %v", err)
 			}
 		})
@@ -393,7 +393,7 @@ func TestNoStateFieldWarnsOnceAndContinues(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "task-sync", "01-auth", "--status", "task-in-progress"); err != nil {
+			if err := runCmd(t, Issue(), "task", "sync", "01-auth", "--status", "task-in-progress"); err != nil {
 				t.Fatalf("task-sync: %v", err)
 			}
 		})
@@ -432,7 +432,7 @@ func TestNoStateFieldWarnsOnceAndContinues(t *testing.T) {
 
 // TestNoStatusMeansNoStateWarning: a sync that never asked for a state has no
 // state to lose, so warning about the missing field would be noise on every
-// plain `dross issue task-sync <phase>`.
+// plain `dross issue task sync <phase>`.
 //
 // This is the arm that stops the fix above from being "print it unconditionally
 // in the default branch", which would satisfy the once-per-run count while
@@ -443,7 +443,7 @@ func TestNoStatusMeansNoStateWarning(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "task-sync", "01-auth"); err != nil {
+			if err := runCmd(t, Issue(), "task", "sync", "01-auth"); err != nil {
 				t.Fatalf("task-sync: %v", err)
 			}
 		})
@@ -463,11 +463,11 @@ func TestTaskSyncRequiresAPhaseIssue(t *testing.T) {
 	writeSpec(t, dir, "01-auth", "[phase]\n  id = \"01-auth\"\n  title = \"Auth\"\n")
 	writePlan(t, dir, "01-auth", "task_seq = 1\n\n[phase]\n  id = \"01-auth\"\n\n[[task]]\n  id = \"t-1\"\n  wave = 1\n  title = \"T\"\n  status = \"pending\"\n")
 
-	err := runCmd(t, Issue(), "task-sync", "01-auth")
+	err := runCmd(t, Issue(), "task", "sync", "01-auth")
 	if err == nil {
 		t.Fatal("task-sync created task issues with no phase issue to relate them to")
 	}
-	if !strings.Contains(err.Error(), "phase-sync") {
+	if !strings.Contains(err.Error(), "phase sync") {
 		t.Errorf("the refusal does not name the command that fixes it: %v", err)
 	}
 }
@@ -480,7 +480,7 @@ func TestTaskSyncIsANoOpWhenBoardSyncIsOff(t *testing.T) {
 	dir := boardRepo(t, f.srv.URL, false) // not enabled
 	writeSpec(t, dir, "01-auth", "[phase]\n  id = \"01-auth\"\n  title = \"Auth\"\n")
 
-	if err := runCmd(t, Issue(), "task-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "task", "sync", "01-auth"); err != nil {
 		t.Fatalf("task-sync with board sync off must be a silent no-op: %v", err)
 	}
 	if len(f.createdTitles()) != 0 {
@@ -531,7 +531,7 @@ func TestTaskResolvedByLabelIsSilentAndReused(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "task-sync", "01-auth", "t-1"); err != nil {
+			if err := runCmd(t, Issue(), "task", "sync", "01-auth", "t-1"); err != nil {
 				t.Fatalf("first task-sync: %v", err)
 			}
 		})
@@ -541,7 +541,7 @@ func TestTaskResolvedByLabelIsSilentAndReused(t *testing.T) {
 
 	stderr += captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "task-sync", "01-auth", "t-1"); err != nil {
+			if err := runCmd(t, Issue(), "task", "sync", "01-auth", "t-1"); err != nil {
 				t.Fatalf("second task-sync: %v", err)
 			}
 		})
@@ -571,7 +571,7 @@ func TestDuplicateTaskIssuesWarnAndUpdateTheFirst(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "task-sync", "01-auth", "t-1"); err != nil {
+			if err := runCmd(t, Issue(), "task", "sync", "01-auth", "t-1"); err != nil {
 				t.Fatalf("task-sync: %v", err)
 			}
 		})

@@ -80,7 +80,7 @@ func TestPhaseSyncCloseWritesStateAndVerifies(t *testing.T) {
 	phaseSyncRepo(t, srv.URL, "01-x", "X", emptyBoardJSON)
 
 	out := captureStdout(t, func() {
-		if err := runCmd(t, Issue(), "phase-sync", "01-x", "--status", "complete", "--close"); err != nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-x", "--status", "complete", "--close"); err != nil {
 			t.Fatalf("phase-sync --close: %v", err)
 		}
 	})
@@ -108,7 +108,7 @@ func TestPhaseSyncCloseWithUnmappedStatusFails(t *testing.T) {
 	var err error
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			err = runCmd(t, Issue(), "phase-sync", "01-x", "--status", "complete", "--close")
+			err = runCmd(t, Issue(), "phase", "sync", "01-x", "--status", "complete", "--close")
 		})
 	})
 	if err == nil {
@@ -134,7 +134,7 @@ func TestPhaseSyncCloseFailsWhenTheIssueStaysUnresolved(t *testing.T) {
 
 	var err error
 	out := captureStdout(t, func() {
-		err = runCmd(t, Issue(), "phase-sync", "01-x", "--status", "complete", "--close")
+		err = runCmd(t, Issue(), "phase", "sync", "01-x", "--status", "complete", "--close")
 	})
 	if err == nil {
 		t.Fatal("the issue read back unresolved and the command still succeeded")
@@ -159,7 +159,7 @@ func TestPhaseSyncCloseOnCreateTakesTheSamePath(t *testing.T) {
 	phaseSyncRepo(t, srv.URL, "01-x", "X", emptyBoardJSON)
 
 	out := captureStdout(t, func() {
-		if err := runCmd(t, Issue(), "phase-sync", "01-x", "--status", "complete", "--close"); err != nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-x", "--status", "complete", "--close"); err != nil {
 			t.Fatalf("phase-sync --close: %v", err)
 		}
 	})
@@ -188,7 +188,7 @@ func TestPhaseSyncWithoutCloseKeepsTheLenientPath(t *testing.T) {
 	var err error
 	warn := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			err = runCmd(t, Issue(), "phase-sync", "01-x", "--status", "complete")
+			err = runCmd(t, Issue(), "phase", "sync", "01-x", "--status", "complete")
 		})
 	})
 	if err != nil {
@@ -229,7 +229,7 @@ func TestJiraCloseWithoutDoneTransitionFailsTheCommand(t *testing.T) {
 	var err error
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			err = runCmd(t, Issue(), "phase-sync", "01-x", "--status", "complete", "--close")
+			err = runCmd(t, Issue(), "phase", "sync", "01-x", "--status", "complete", "--close")
 		})
 	})
 	if err == nil {
@@ -405,7 +405,7 @@ func TestJiraCloseLandingOutsideDoneFailsTheReadBack(t *testing.T) {
 	var err error
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			err = runCmd(t, Issue(), "phase-sync", "01-x", "--status", "complete", "--close")
+			err = runCmd(t, Issue(), "phase", "sync", "01-x", "--status", "complete", "--close")
 		})
 	})
 	if !transitioned {

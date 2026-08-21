@@ -251,7 +251,7 @@ dross state touch "plan locked: <id> (<task-count> tasks across <wave-count> wav
 
 Mirror the plan onto the issue board (no-op unless `[remote].board_sync` is on — safe to always run):
 ```
-dross issue phase-sync <id>
+dross issue phase sync <id>
 ```
 This creates (or updates) the phase issue with the acceptance criteria and a task checklist rendered from `plan.toml`, assigned to the milestone's board entry.
 

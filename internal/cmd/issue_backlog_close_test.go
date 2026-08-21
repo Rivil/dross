@@ -239,7 +239,7 @@ func TestBacklogClosesScaffoldedSlugOnly(t *testing.T) {
 	dir := backlogCloseRepo(t, f.srv.URL, []string{"grown-up", "still-waiting"}, "")
 
 	// First sync while both slugs are backlog.
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("first sync: %v", err)
 	}
 	grown := f.keyBySummary("[backlog] grown-up")
@@ -253,7 +253,7 @@ func TestBacklogClosesScaffoldedSlugOnly(t *testing.T) {
 
 	_ = captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+			if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 				t.Fatalf("reconcile sync: %v", err)
 			}
 		})
@@ -276,7 +276,7 @@ func TestBacklogClosesScaffoldedSlugOnly(t *testing.T) {
 	before := f.totalCloses()
 	_ = captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+			if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 				t.Fatalf("third sync: %v", err)
 			}
 		})
@@ -317,7 +317,7 @@ target = "destination"
 
 			_ = captureStdout(t, func() {
 				_ = captureStderr(t, func() {
-					if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+					if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 						t.Fatalf("backlog-sync: %v", err)
 					}
 				})
@@ -337,7 +337,7 @@ target = "destination"
 			// second run is the only place that distinction is visible.
 			_ = captureStdout(t, func() {
 				_ = captureStderr(t, func() {
-					if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+					if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 						t.Fatalf("second backlog-sync: %v", err)
 					}
 				})
@@ -358,7 +358,7 @@ func TestDismissedBacklogItemIsClosedAndUnlinked(t *testing.T) {
 [[deferred]]
 text = "an idea"
 `)
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("first sync: %v", err)
 	}
 	mirror := f.keyBySummary("[someday] an idea")
@@ -382,7 +382,7 @@ text = "an idea"
 
 	_ = captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+			if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 				t.Fatalf("reconcile sync: %v", err)
 			}
 		})
@@ -409,7 +409,7 @@ func TestUnattributableBacklogKeyIsNeverClosed(t *testing.T) {
 	var errOut string
 	_ = captureStdout(t, func() {
 		errOut = captureStderr(t, func() {
-			if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+			if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 				t.Fatalf("backlog-sync: %v", err)
 			}
 		})
@@ -431,7 +431,7 @@ func TestUnattributableBacklogKeyIsNeverClosed(t *testing.T) {
 func TestFailedBacklogCloseKeepsTheLink(t *testing.T) {
 	f := newBacklogCloseFake(t)
 	dir := backlogCloseRepo(t, f.srv.URL, []string{"grown-up"}, "")
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("first sync: %v", err)
 	}
 	mirror := f.keyBySummary("[backlog] grown-up")
@@ -443,7 +443,7 @@ func TestFailedBacklogCloseKeepsTheLink(t *testing.T) {
 	var errOut string
 	_ = captureStdout(t, func() {
 		errOut = captureStderr(t, func() {
-			if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+			if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 				t.Fatalf("a refused mirror close must not fail the sync: %v", err)
 			}
 		})
@@ -467,7 +467,7 @@ func TestBacklogSyncResolvesVersionFromThePhaseSpec(t *testing.T) {
 	t.Run("phase in a milestone", func(t *testing.T) {
 		f := newBacklogCloseFake(t)
 		backlogCloseRepo(t, f.srv.URL, []string{"still-waiting"}, "")
-		if err := runCmd(t, Issue(), "backlog-sync", "--phase", "host"); err != nil {
+		if err := runCmd(t, Issue(), "backlog", "sync", "--phase", "host"); err != nil {
 			t.Fatalf("backlog-sync --phase: %v", err)
 		}
 		if f.keyBySummary("[backlog] still-waiting") == "" {
@@ -485,7 +485,7 @@ func TestBacklogSyncResolvesVersionFromThePhaseSpec(t *testing.T) {
 		writeSpec(t, dir, "loner", "[phase]\nid = \"loner\"\ntitle = \"Loner\"\n")
 
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "backlog-sync", "--phase", "loner"); err != nil {
+			if err := runCmd(t, Issue(), "backlog", "sync", "--phase", "loner"); err != nil {
 				t.Fatalf("a phase outside any milestone should exit 0: %v", err)
 			}
 		})
@@ -494,7 +494,7 @@ func TestBacklogSyncResolvesVersionFromThePhaseSpec(t *testing.T) {
 	t.Run("neither form", func(t *testing.T) {
 		f := newBacklogCloseFake(t)
 		backlogCloseRepo(t, f.srv.URL, nil, "")
-		if err := runCmd(t, Issue(), "backlog-sync"); err == nil {
+		if err := runCmd(t, Issue(), "backlog", "sync"); err == nil {
 			t.Error("backlog-sync with no version and no --phase should be refused")
 		}
 	})
@@ -505,10 +505,10 @@ func TestBacklogSyncResolvesVersionFromThePhaseSpec(t *testing.T) {
 // capability no prompt edge invokes closes nothing.
 func TestShipPromptReconcilesTheBacklog(t *testing.T) {
 	content := shipPromptContent(t)
-	if !strings.Contains(content, "dross issue backlog-sync") {
-		t.Fatal("ship.md never calls backlog-sync — backlog mirrors would keep accumulating")
+	if !strings.Contains(content, "dross issue backlog sync") {
+		t.Fatal("ship.md never calls backlog sync — backlog mirrors would keep accumulating")
 	}
 	if !strings.Contains(content, "--phase <phase-id>") {
-		t.Error("ship.md's backlog-sync call must use the --phase form: the finalize steps carry only a phase id")
+		t.Error("ship.md's backlog sync call must use the --phase form: the finalize steps carry only a phase id")
 	}
 }

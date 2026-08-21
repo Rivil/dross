@@ -225,7 +225,7 @@ func taskCloseRepo(t *testing.T, provider string, f *taskCloseFake, taskIDs ...s
 	}
 	writePlan(t, dir, "01-auth", b.String())
 
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 		t.Fatalf("phase-sync: %v", err)
 	}
 	return dir
@@ -243,7 +243,7 @@ func TestTaskSyncValidatesStatusBeforeTouchingTheBoard(t *testing.T) {
 	taskCloseRepo(t, "forgejo", f, "t-1")
 	before := f.count()
 
-	err := runCmd(t, Issue(), "task-sync", "01-auth", "--status", "bogus")
+	err := runCmd(t, Issue(), "task", "sync", "01-auth", "--status", "bogus")
 	if err == nil {
 		t.Fatal("an unknown --status was accepted")
 	}
@@ -264,7 +264,7 @@ func TestTaskCloseRequiresAStatus(t *testing.T) {
 	taskCloseRepo(t, "forgejo", f, "t-1")
 	before := f.count()
 
-	err := runCmd(t, Issue(), "task-sync", "01-auth", "--close")
+	err := runCmd(t, Issue(), "task", "sync", "01-auth", "--close")
 	if err == nil {
 		t.Fatal("--close without --status was accepted; the phase lane's `complete` would reach the task cards")
 	}
@@ -284,7 +284,7 @@ func TestTaskSyncNormalizesStatus(t *testing.T) {
 	f := newTaskCloseFake(t)
 	dir := taskCloseRepo(t, "forgejo", f, "t-1")
 
-	if err := runCmd(t, Issue(), "task-sync", "01-auth", "--status", " Task-In-Review"); err != nil {
+	if err := runCmd(t, Issue(), "task", "sync", "01-auth", "--status", " Task-In-Review"); err != nil {
 		t.Fatalf("task-sync: %v", err)
 	}
 	bd := loadBoardFile(t, dir)
@@ -316,7 +316,7 @@ func TestFlatBoardTaskCloseClosesEveryCard(t *testing.T) {
 			var errOut string
 			out := captureStdout(t, func() {
 				errOut = captureStderr(t, func() {
-					if err := runCmd(t, Issue(), "task-sync", "01-auth", "--status", "uat", "--close"); err != nil {
+					if err := runCmd(t, Issue(), "task", "sync", "01-auth", "--status", "uat", "--close"); err != nil {
 						t.Fatalf("task-sync --close on %s: %v", provider, err)
 					}
 				})
@@ -357,7 +357,7 @@ func TestTaskClosePartialFailureNamesTheTaskAndKeepsGoing(t *testing.T) {
 	dir := taskCloseRepo(t, "forgejo", f, "t-1", "t-2", "t-3")
 
 	// Mirror the cards first so the refusal can be aimed at t-2's real issue.
-	if err := runCmd(t, Issue(), "task-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "task", "sync", "01-auth"); err != nil {
 		t.Fatalf("seed task-sync: %v", err)
 	}
 	bd := loadBoardFile(t, dir)
@@ -372,7 +372,7 @@ func TestTaskClosePartialFailureNamesTheTaskAndKeepsGoing(t *testing.T) {
 	var err error
 	_ = captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			err = runCmd(t, Issue(), "task-sync", "01-auth", "--status", "uat", "--close")
+			err = runCmd(t, Issue(), "task", "sync", "01-auth", "--status", "uat", "--close")
 		})
 	})
 	if err == nil {

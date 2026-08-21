@@ -139,7 +139,7 @@ func TestIssuePhaseSyncNoOpWhenDisabled(t *testing.T) {
 	dir := boardRepo(t, srv.URL, false) // disabled
 	writeSpec(t, dir, "01-auth", "[phase]\nid=\"01-auth\"\ntitle=\"Auth\"\n")
 
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 		t.Fatalf("phase-sync should no-op (nil) when disabled: %v", err)
 	}
 	// No board.json should have been written.
@@ -213,7 +213,7 @@ wave = 1
 
 	// First sync — creates the issue.
 	out := captureStdout(t, func() {
-		if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 			t.Fatalf("phase-sync create: %v", err)
 		}
 	})
@@ -233,7 +233,7 @@ wave = 1
 	}
 
 	// Second sync — link exists, so it PATCHes + PUTs labels, no new POST.
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", "uat"); err != nil {
+	if err := runCmd(t, Issue(), "phase", "sync", "01-auth", "--status", "uat"); err != nil {
 		t.Fatalf("phase-sync update: %v", err)
 	}
 	if issuePosts != 1 {
@@ -267,7 +267,7 @@ title = "First cut"
 [scope]
 success_criteria = ["ships"]
 `)
-	if err := runCmd(t, Issue(), "milestone-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "milestone", "sync", "v0.1"); err != nil {
 		t.Fatalf("milestone-sync: %v", err)
 	}
 	bj, err := readBoardJSON(dir)
@@ -388,7 +388,7 @@ wave = 1
 `)
 
 	// First sync — creates the issue.
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+	if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 		t.Fatalf("phase-sync create: %v", err)
 	}
 	if creates != 1 {
@@ -404,7 +404,7 @@ wave = 1
 	}
 
 	// Second sync — link exists, so it updates /api/issues/PROJ-7, no new create.
-	if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", "in-progress"); err != nil {
+	if err := runCmd(t, Issue(), "phase", "sync", "01-auth", "--status", "in-progress"); err != nil {
 		t.Fatalf("phase-sync update: %v", err)
 	}
 	if creates != 1 {
@@ -442,7 +442,7 @@ title = "First cut"
 [scope]
 success_criteria = ["ships"]
 `)
-	if err := runCmd(t, Issue(), "milestone-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "milestone", "sync", "v0.1"); err != nil {
 		t.Fatalf("milestone-sync: %v", err)
 	}
 	if !posted {
@@ -635,7 +635,7 @@ why = "later"
 `)
 
 	// First run: future-x (unscaffolded slug) + the someday idea → 2 creates.
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("backlog-sync: %v", err)
 	}
 	if creates != 2 {
@@ -652,7 +652,7 @@ why = "later"
 	}
 
 	// Second run: same items → 0 new creates, updated by readable-id link.
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("backlog-sync rerun: %v", err)
 	}
 	if creates != 2 {
@@ -736,7 +736,7 @@ text = "a future idea"
 why = "later"
 `)
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("backlog-sync: %v", err)
 	}
 	if itemCreates != 2 {
@@ -796,7 +796,7 @@ title = "First cut"
 success_criteria = ["ships"]
 `)
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("backlog-sync: %v", err)
 	}
 	if itemCreates != 1 {
@@ -922,7 +922,7 @@ milestone = "v0.1"
 `)
 
 	out := captureStdout(t, func() {
-		if err := runCmd(t, Issue(), "phase-sync", "01-m"); err != nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-m"); err != nil {
 			t.Fatalf("phase-sync: %v", err)
 		}
 	})
@@ -981,7 +981,7 @@ func TestIssueCover_phaseSyncCloseOnCreate(t *testing.T) {
 	writeSpec(t, dir, "01-c", "[phase]\nid=\"01-c\"\ntitle=\"Closable\"\n")
 
 	out := captureStdout(t, func() {
-		if err := runCmd(t, Issue(), "phase-sync", "01-c", "--close"); err != nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-c", "--close"); err != nil {
 			t.Fatalf("phase-sync --close: %v", err)
 		}
 	})
@@ -1491,7 +1491,7 @@ title = "First cut"
 [scope]
 success_criteria = ["ships"]
 `)
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("backlog-sync: %v", err)
 	}
 	if len(createBodies) == 0 {
@@ -1633,7 +1633,7 @@ status = "pending"
 
 	stderr := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+			if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 				t.Fatalf("phase-sync create: %v", err)
 			}
 		})
@@ -1652,7 +1652,7 @@ status = "pending"
 	// Second sync — the link exists, so the labels ride a PUT to the issue.
 	stderr = captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+			if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 				t.Fatalf("phase-sync update: %v", err)
 			}
 		})
@@ -1709,7 +1709,7 @@ func TestIssuePhaseSyncValidatesStatusAgainstTheLifecycleSet(t *testing.T) {
 		dir := boardRepo(t, srv.URL, true)
 		writeSpec(t, dir, "01-auth", "[phase]\nid=\"01-auth\"\ntitle=\"Auth\"\n")
 
-		err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", "planning")
+		err := runCmd(t, Issue(), "phase", "sync", "01-auth", "--status", "planning")
 		if err == nil {
 			t.Fatal(`--status planning must be rejected — it is the pre-rename value and maps to no board state`)
 		}
@@ -1730,7 +1730,7 @@ func TestIssuePhaseSyncValidatesStatusAgainstTheLifecycleSet(t *testing.T) {
 		dir := boardRepo(t, srv.URL, false) // disabled
 		writeSpec(t, dir, "01-auth", "[phase]\nid=\"01-auth\"\ntitle=\"Auth\"\n")
 
-		if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", "planning"); err == nil {
+		if err := runCmd(t, Issue(), "phase", "sync", "01-auth", "--status", "planning"); err == nil {
 			t.Error("a bad --status exited 0 because board sync is off — the check must run ahead of the enabled short-circuit, or the typo only ever surfaces on a machine that opted in")
 		}
 	})
@@ -1747,7 +1747,7 @@ func TestIssuePhaseSyncValidatesStatusAgainstTheLifecycleSet(t *testing.T) {
 		// ship.md emits these two; rejecting them would break the terminal
 		// board states the moment t-5 lands.
 		for _, s := range []string{"shipped", "complete"} {
-			if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", s); err != nil {
+			if err := runCmd(t, Issue(), "phase", "sync", "01-auth", "--status", s); err != nil {
 				t.Errorf("--status %s was rejected: %v", s, err)
 			}
 		}
@@ -1795,7 +1795,7 @@ func TestIssuePhaseSyncNormalizesStatusBeforeUse(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "phase-sync", "01-auth", "--status", " UAT"); err != nil {
+			if err := runCmd(t, Issue(), "phase", "sync", "01-auth", "--status", " UAT"); err != nil {
 				t.Fatalf(`--status " UAT" must be accepted — the map lookup normalizes, so the validator must too: %v`, err)
 			}
 		})
@@ -1861,7 +1861,7 @@ status = "done"
 
 	_ = captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "phase-sync", "01-auth"); err != nil {
+			if err := runCmd(t, Issue(), "phase", "sync", "01-auth"); err != nil {
 				t.Fatalf("phase-sync with no --status: %v", err)
 			}
 		})
