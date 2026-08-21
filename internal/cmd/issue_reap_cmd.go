@@ -24,7 +24,7 @@ import (
 // one test site, and a whole-board plan printable in a single pass.
 func issueReap() *cobra.Command {
 	var namespaces []string
-	var apply bool
+	var apply, undo bool
 	c := &cobra.Command{
 		Use:   "reap",
 		Short: "Close board mirrors the forward lifecycle left stranded",
@@ -46,6 +46,20 @@ explains is named as unattributable and left open.`,
 			if !enabled {
 				return nil // no-op when board sync is off
 			}
+			if undo {
+				// Refused rather than quietly ignored: --apply says "write the
+				// plan" and --namespace scopes one, and neither has any meaning
+				// for a reversal that replays a recorded run verbatim. Silently
+				// dropping them would let an operator believe they had scoped
+				// an undo they had not.
+				if apply {
+					return fmt.Errorf("--undo and --apply are opposite directions; pass one")
+				}
+				if len(namespaces) > 0 {
+					return fmt.Errorf("--undo replays the last recorded run verbatim and cannot be scoped by --namespace")
+				}
+				return undoReap(ctx)
+			}
 			plan, unclassifiable, err := reapInventory(ctx, namespaces)
 			if err != nil {
 				return err
@@ -60,6 +74,7 @@ explains is named as unattributable and left open.`,
 	c.Flags().StringArrayVar(&namespaces, "namespace", nil,
 		"limit the sweep to one mirror namespace (repeatable; default: every namespace)")
 	c.Flags().BoolVar(&apply, "apply", false, "write the plan to the board (default: dry run)")
+	c.Flags().BoolVar(&undo, "undo", false, "restore the cards the last applied run closed, to the exact state each held before it")
 	return c
 }
 

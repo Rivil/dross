@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Rivil/dross/internal/forge"
 	"github.com/Rivil/dross/internal/reaplog"
 )
 
@@ -128,7 +129,7 @@ func applyReap(ctx *boardCtx, plan *reapPlan) error {
 		entry := reaplog.Card{
 			Issue:         card.Key,
 			Class:         card.Lane,
-			PriorState:    prior.WorkflowState,
+			PriorState:    priorStateOf(prior),
 			PriorResolved: prior.Resolved,
 			PriorLabels:   prior.Labels,
 		}
@@ -169,6 +170,22 @@ func applyReap(ctx *boardCtx, plan *reapPlan) error {
 	// Named by issue id and non-zero: a sweep that half-worked and exited 0
 	// would be indistinguishable from one that worked.
 	return fmt.Errorf("%d of %d card(s) could not be closed", len(failures), len(plan.Cards))
+}
+
+// priorStateOf is the tracker-native state to journal for a card.
+//
+// WorkflowState is populated only by the backends that have a column model.
+// A forge or GitLab board has none — its whole state vocabulary is open/closed,
+// which lands in State — and those backends ARE StateWriters, so undo really
+// does run against them. Journalling WorkflowState alone would record an empty
+// string on every such card and make every restore write "" and fail its
+// read-back. The fallback keeps the ledger holding whatever that tracker's own
+// state string is, which is exactly what SetStateRaw writes back verbatim.
+func priorStateOf(iss *forge.Issue) string {
+	if iss.WorkflowState != "" {
+		return iss.WorkflowState
+	}
+	return iss.State
 }
 
 // dropBacklogLink removes the board.json backlog key pointing at this issue and
