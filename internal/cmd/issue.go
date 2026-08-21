@@ -72,6 +72,7 @@ func Issue() *cobra.Command {
 		issuePhase(),
 		issueTask(),
 		issueQuick(),
+		issueReap(),
 		issuePull(),
 		issueDismiss(),
 		issueLink(),
@@ -433,7 +434,7 @@ func issueBacklogSync() *cobra.Command {
 // to reconcile.
 func resolveBacklogVersion(args []string, fromPhase string) (version string, run bool, err error) {
 	if (len(args) == 1) == (fromPhase != "") {
-		return "", false, fmt.Errorf("backlog-sync takes either a <version> argument or --phase <phase-id>, not both and not neither")
+		return "", false, fmt.Errorf("`backlog sync` takes either a <version> argument or --phase <phase-id>, not both and not neither")
 	}
 	if len(args) == 1 {
 		return args[0], true, nil
