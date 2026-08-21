@@ -298,6 +298,34 @@ func (c *YouTrackClient) CloseIssueAs(key, status string, override map[string]st
 	return nil
 }
 
+// SetStateRaw writes a literal State value and verifies the read-back. Unlike
+// CloseIssueAs it does not consult the state map at all: the caller already
+// holds the tracker's own column name (an undo reads it out of the reap
+// ledger), and routing it through a map keyed by dross lifecycle statuses would
+// either fail to resolve or silently rewrite it as a different column.
+func (c *YouTrackClient) SetStateRaw(key, state string) error {
+	body := map[string]any{
+		"customFields": []map[string]any{
+			{"name": c.stateField(), "$type": "StateIssueCustomField", "value": map[string]any{"name": state}},
+		},
+	}
+	if err := c.do("POST", c.endpoint("/issues/"+key)+"?fields="+url.QueryEscape("idReadable"), body, nil); err != nil {
+		return fmt.Errorf("set state %s on %s: %w", state, key, err)
+	}
+	iss, err := c.GetIssue(key)
+	if err != nil {
+		return fmt.Errorf("set state on %s: read back: %w", key, err)
+	}
+	if iss == nil || iss.WorkflowState != state {
+		got := ""
+		if iss != nil {
+			got = iss.WorkflowState
+		}
+		return fmt.Errorf("set state on %s: wrote State %q but the issue still reads %q — the workflow may not allow that transition", key, state, got)
+	}
+	return nil
+}
+
 // EnsureMilestone is the forge-shaped milestone hook. YouTrack milestones are
 // entity-mode specific (version bundle / agile board / epic), wired in plan
 // t-6 (entity dispatch) and t-9 (milestone-sync). This placeholder satisfies

@@ -467,6 +467,46 @@ func (c *JiraClient) SetState(key, status string, override map[string]string) er
 	return nil
 }
 
+// SetStateRaw transitions the issue to the literal status name and verifies
+// the read-back.
+//
+// Deliberately stricter than SetState, which warns and returns nil when no
+// mapping or no transition is available. That leniency is right for a status
+// label — a cosmetic loss — and wrong here: an undo that silently transitioned
+// nothing and reported success would leave the board exactly as the sweep left
+// it while telling the operator it had been restored.
+func (c *JiraClient) SetStateRaw(key, state string) error {
+	trans, err := c.listTransitions(key)
+	if err != nil {
+		return err
+	}
+	id := ""
+	for _, t := range trans {
+		if strings.EqualFold(t.To.Name, state) {
+			id = t.ID
+			break
+		}
+	}
+	if id == "" {
+		return fmt.Errorf("set state on %s: no Jira transition to status %q is available", key, state)
+	}
+	if err := c.applyTransition(key, id); err != nil {
+		return err
+	}
+	iss, err := c.GetIssue(key)
+	if err != nil {
+		return fmt.Errorf("set state on %s: read back: %w", key, err)
+	}
+	if iss == nil || !strings.EqualFold(iss.WorkflowState, state) {
+		got := ""
+		if iss != nil {
+			got = iss.WorkflowState
+		}
+		return fmt.Errorf("set state on %s: transitioned to %q but the issue still reads %q", key, state, got)
+	}
+	return nil
+}
+
 // jiraTransition is the subset of a workflow transition dross reads.
 type jiraTransition struct {
 	ID string `json:"id"`

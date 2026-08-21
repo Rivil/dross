@@ -174,6 +174,15 @@ type BoardClient interface {
 
 var _ BoardClient = (*Client)(nil)
 
+// Every backend with a column model is a StateWriter; GitHubClient is not (see
+// github.go). Pinned as compile-time assertions so removing an implementation
+// fails the build rather than only the undo path at runtime.
+var (
+	_ StateWriter = (*Client)(nil)
+	_ StateWriter = (*YouTrackClient)(nil)
+	_ StateWriter = (*JiraClient)(nil)
+)
+
 // ErrNoLinkType means the tracker exposes no issue-link type to relate two
 // issues with. It is a capability gap, not an outage: the caller warns, keeps
 // whatever label carries the relationship instead, and continues. Callers must
@@ -193,6 +202,34 @@ type IssueLinker interface {
 	// LinkIssues relates `from` to `to`. Idempotent: re-linking an existing
 	// pair is a no-op, so it is safe on every re-sync.
 	LinkIssues(from, to string) error
+}
+
+// StateWriter is the optional capability of writing a LITERAL tracker state
+// onto an issue, bypassing the dross lifecycle state map.
+//
+// Every existing write is mapped: CloseIssueAs and SetState take a dross
+// lifecycle status and resolve it through defaultYouTrackStateMap /
+// defaultJiraStateMap, and the forge Client closes via
+// UpdateIssue(IssuePatch{State}). That is right for the forward lifecycle,
+// where dross knows which stage a card has reached — and useless for putting a
+// card BACK: restoring an arbitrary prior column such as "In Review" is
+// unimplementable through a map keyed by dross's own statuses.
+//
+// It sits alongside BoardClient rather than on it, following the IssueLinker
+// precedent above and for the same two reasons. GitHubClient deliberately does
+// NOT implement it: GitHub issues have no column model, so the honest answer is
+// to fail the interface assertion and let the caller refuse by provider name,
+// rather than satisfy the method with a lossy reopen that lands an "In Review"
+// card in `open` and reports success. And keeping it off BoardClient leaves
+// every existing fake — including the two in internal/cmd — satisfying the
+// interface unchanged.
+type StateWriter interface {
+	// SetStateRaw writes `state` verbatim as the issue's tracker-native state
+	// and verifies the read-back, erroring (naming the key) when the tracker
+	// still reports something else. A write the workflow silently refused is
+	// otherwise indistinguishable from a successful one — the same trap
+	// CloseIssueAs's read-back exists to close.
+	SetStateRaw(key, state string) error
 }
 
 // NewBoard returns the board client for the configured provider: the YouTrack
@@ -536,6 +573,33 @@ func (c *Client) CloseIssue(key string) error {
 	closed := "closed"
 	_, err := c.UpdateIssue(key, IssuePatch{State: &closed})
 	return err
+}
+
+// SetStateRaw writes a literal state onto a forge/GitLab issue and verifies the
+// read-back.
+//
+// These boards have no column model — their state vocabulary is "open" and
+// "closed" and nothing else — so `state` is passed through verbatim rather than
+// mapped. That is exactly what makes it correct here: a value read back out of
+// the reap ledger for one of these boards IS "open" or "closed", and anything
+// else the tracker will refuse, which the read-back then reports rather than
+// swallowing.
+func (c *Client) SetStateRaw(key, state string) error {
+	if _, err := c.UpdateIssue(key, IssuePatch{State: &state}); err != nil {
+		return fmt.Errorf("set state %s on %s: %w", state, key, err)
+	}
+	iss, err := c.GetIssue(key)
+	if err != nil {
+		return fmt.Errorf("set state on %s: read back: %w", key, err)
+	}
+	if iss == nil || iss.State != state {
+		got := ""
+		if iss != nil {
+			got = iss.State
+		}
+		return fmt.Errorf("set state on %s: wrote state %q but the issue still reads %q", key, state, got)
+	}
+	return nil
 }
 
 // GetIssue fetches a single issue by its readable id (GitLab: project-relative
