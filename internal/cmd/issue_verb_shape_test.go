@@ -226,3 +226,87 @@ func TestTaskSyncEdgeRegexIsNotVacuous(t *testing.T) {
 		t.Fatal("taskSyncEdgeRE matches no prompt line — the execute-edge lifecycle guard is running on an empty set")
 	}
 }
+
+// --- the docs ---
+//
+// README and ARCHITECTURE are read by someone deciding what to type. A stale
+// verb there is not cosmetic: it produces an unknown-command error for anyone
+// who copies it.
+
+// retiredIssueVerbRE matches a retired spelling by NAME, wherever it appears —
+// prose, a brace list, a symbol-index gloss. The `dross issue <a>-<b>` form the
+// source and prompt guards use is too narrow for the docs, where the capability
+// row spells the set as `dross issue {…,milestone-sync,…}`.
+var retiredIssueVerbRE = regexp.MustCompile(`\b(phase-sync|task-sync|task-pull|milestone-sync|backlog-sync)\b`)
+
+// docBraceListRE matches the capability-row form, `dross issue {a,b,c}`.
+var docBraceListRE = regexp.MustCompile(`dross issue \{([^}]*)\}`)
+
+func docFiles(t *testing.T) []string {
+	t.Helper()
+	root := repoRootFromTest(t)
+	return []string{filepath.Join(root, "README.md"), filepath.Join(root, "ARCHITECTURE.md")}
+}
+
+// TestNoHyphenatedIssueVerbInTheDocs: no retired spelling survives in either
+// document.
+func TestNoHyphenatedIssueVerbInTheDocs(t *testing.T) {
+	for _, p := range docFiles(t) {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if m := retiredIssueVerbRE.FindString(line); m != "" {
+				t.Errorf("%s:%d names the retired verb %q — anyone who copies it gets an unknown-command error", filepath.Base(p), i+1, m)
+			}
+		}
+	}
+}
+
+// TestEveryDocumentedIssueVerbResolves walks each documented invocation against
+// the real cobra tree, so a documented verb (or flag combination) that does not
+// exist fails here rather than in someone's terminal.
+func TestEveryDocumentedIssueVerbResolves(t *testing.T) {
+	checked := 0
+	check := func(t *testing.T, where string, line int, args []string) {
+		t.Helper()
+		if len(args) == 0 {
+			return
+		}
+		cmd, _, err := Issue().Find(args)
+		if err != nil {
+			t.Errorf("%s:%d `dross issue %s` does not resolve: %v", where, line, strings.Join(args, " "), err)
+			return
+		}
+		checked++
+		if cmd.RunE == nil && cmd.Run == nil {
+			t.Errorf("%s:%d `dross issue %s` resolves to %q, which is a parent with no handler", where, line, strings.Join(args, " "), cmd.CommandPath())
+		}
+	}
+
+	for _, p := range docFiles(t) {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		name := filepath.Base(p)
+		for i, line := range strings.Split(string(b), "\n") {
+			// The brace-list form first, and the plain form on the line with
+			// the braces stripped — otherwise `dross issue {enable,…}` would
+			// also be read as the bare invocation `dross issue`.
+			for _, m := range docBraceListRE.FindAllStringSubmatch(line, -1) {
+				for _, item := range strings.Split(m[1], ",") {
+					check(t, name, i+1, strings.Fields(item))
+				}
+			}
+			plain := docBraceListRE.ReplaceAllString(line, "")
+			for _, m := range promptIssueInvocationRE.FindAllStringSubmatch(plain, -1) {
+				check(t, name, i+1, strings.Fields(m[1]))
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("checked zero documented invocations — the guard would pass vacuously")
+	}
+}
