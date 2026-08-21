@@ -30,3 +30,9 @@ docs/dross.pdf
 
 # dross tech-debt run artifacts — local scan output; state.toml is the durable signal, run dirs are prunable
 .dross/techdebt/
+
+# dross reap ledger — machine-local record of one machine's writes to one
+# tracker, deliberately untracked: a tracked ledger dirties the tree on every
+# `issue reap --apply`, rides ship's clean-tree auto-commit into the phase
+# branch, and drags a stale undo target through the squash into every later tree.
+.dross/reap-log.json
