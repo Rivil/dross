@@ -52,6 +52,18 @@ func undoReap(ctx *boardCtx) error {
 			failures = append(failures, &reapFailure{key: card.Issue, err: err})
 			continue
 		}
+		// The sweep rewrote the card's `dross/status:` label alongside the
+		// close, so a restore that put back only the column would leave the
+		// card reading terminal to anything that trusts the label. The ledger
+		// recorded the full prior set for exactly this. Like the relabel on the
+		// way out, a failure here warns rather than failing the card: the
+		// column is the load-bearing restore and it has already succeeded.
+		if len(card.PriorLabels) > 0 {
+			labels := card.PriorLabels
+			if _, err := ctx.client.UpdateIssue(card.Issue, forge.IssuePatch{Labels: &labels}); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: restored %s but could not put its labels back: %v\n", card.Issue, wrapBoard(err))
+			}
+		}
 		if card.DroppedLink != "" {
 			restoreDroppedLink(ctx, card)
 		}

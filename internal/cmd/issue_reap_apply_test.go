@@ -28,6 +28,9 @@ type applyYT struct {
 	ignore map[string]bool
 
 	wrote map[string][]string // key -> every State value written to it
+	// refuseTags makes every tag write fail, to prove a refused relabel does
+	// not demote a verified close.
+	refuseTags bool
 }
 
 func newApplyYT() *applyYT {
@@ -39,6 +42,29 @@ func newApplyYT() *applyYT {
 		ignore:   map[string]bool{},
 		wrote:    map[string][]string{},
 	}
+}
+
+// knownTags is the tracker's tag index: every label any card carries, plus the
+// status labels the sweep writes.
+func (f *applyYT) knownTags() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(n string) {
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	add(labelMarker)
+	for _, ls := range f.labels {
+		for _, l := range ls {
+			add(l)
+		}
+	}
+	for _, lane := range reapLanes {
+		add(statusLabel(lane.Terminal))
+	}
+	return out
 }
 
 func (f *applyYT) seed(key, state string, labels ...string) {
@@ -53,7 +79,7 @@ func (f *applyYT) render(key string) string {
 	}
 	var tags []string
 	for _, l := range f.labels[key] {
-		tags = append(tags, `{"name":"`+l+`"}`)
+		tags = append(tags, `{"id":"tid-`+l+`","name":"`+l+`"}`)
 	}
 	return `{"idReadable":"` + key + `","resolved":` + resolved +
 		`,"tags":[` + strings.Join(tags, ",") + `]` +
@@ -64,12 +90,49 @@ func (f *applyYT) handler(t *testing.T) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.URL.Path == "/api/issueTags":
-			_, _ = io.WriteString(w, `[{"id":"tid-dross","name":"dross"}]`)
+		case r.URL.Path == "/api/issueTags" && r.Method == "GET":
+			var rows []string
+			for _, n := range f.knownTags() {
+				rows = append(rows, `{"id":"tid-`+n+`","name":"`+n+`"}`)
+			}
+			_, _ = io.WriteString(w, "["+strings.Join(rows, ",")+"]")
 		case r.URL.Path == "/api/issues" && r.Method == "GET":
 			_, _ = io.WriteString(w, `[]`)
 		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "GET":
 			_, _ = io.WriteString(w, f.render(strings.TrimPrefix(r.URL.Path, "/api/issues/")))
+		case r.URL.Path == "/api/issueTags" && r.Method == "POST":
+			_, _ = io.WriteString(w, `{"id":"tid-x"}`)
+		case strings.HasSuffix(r.URL.Path, "/tags") && r.Method == "POST":
+			if f.refuseTags {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = io.WriteString(w, `{"error":"no"}`)
+				return
+			}
+			key := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/issues/"), "/tags")
+			var tag struct {
+				ID string `json:"id"`
+			}
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &tag)
+			f.labels[key] = append(f.labels[key], strings.TrimPrefix(tag.ID, "tid-"))
+			_, _ = io.WriteString(w, `{}`)
+		case strings.Contains(r.URL.Path, "/tags/") && r.Method == "DELETE":
+			if f.refuseTags {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = io.WriteString(w, `{"error":"no"}`)
+				return
+			}
+			parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/api/issues/"), "/tags/", 2)
+			if len(parts) == 2 {
+				var kept []string
+				for _, l := range f.labels[parts[0]] {
+					if "tid-"+l != parts[1] && l != parts[1] {
+						kept = append(kept, l)
+					}
+				}
+				f.labels[parts[0]] = kept
+			}
+			_, _ = io.WriteString(w, `{}`)
 		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "POST":
 			key := strings.TrimPrefix(r.URL.Path, "/api/issues/")
 			var body struct {
@@ -369,5 +432,84 @@ func TestReapNeverTouchesCorrectlyOpenCards(t *testing.T) {
 	}
 	if !f.resolved["PROJ-1"] {
 		t.Error("the genuinely stranded card was not closed — the fixture proves nothing")
+	}
+}
+
+// TestReapedCardCarriesTheLaneTerminalLabel: the state write is only half of
+// what the forward path does. A card ship closes carries
+// `dross/status:<terminal>` too, and the locked reap_state decision is that a
+// reaped card lands where the forward path puts it — the point being that the
+// board reads as one history.
+//
+// Found on the live board: reaped task cards sat Verified under a stale
+// `dross/status:task-in-review`, permanently distinguishable from
+// forward-closed ones, and no later sweep would revisit them because a resolved
+// card is no longer stranded.
+func TestReapedCardCarriesTheLaneTerminalLabel(t *testing.T) {
+	f := newApplyYT()
+	applyRepo(t, f)
+	// The state the execute loop leaves a task card in.
+	f.labels["PROJ-2"] = []string{labelMarker, taskLabel("01-auth", "t-1"), statusLabel(statusTaskInReview)}
+	f.labels["PROJ-1"] = []string{labelMarker, phaseLabel("01-auth"), statusLabel(statusInProgress)}
+
+	_ = captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := runCmd(t, Issue(), "reap", "--apply"); err != nil {
+				t.Fatalf("reap --apply: %v", err)
+			}
+		})
+	})
+
+	for _, tc := range []struct{ key, want string }{
+		{"PROJ-2", statusLabel(statusTaskComplete)},
+		{"PROJ-1", statusLabel("complete")},
+	} {
+		if !slicesHas(f.labels[tc.key], tc.want) {
+			t.Errorf("%s labels = %v, want the lane terminal %q", tc.key, f.labels[tc.key], tc.want)
+		}
+		for _, l := range f.labels[tc.key] {
+			if strings.HasPrefix(l, "dross/status:") && l != tc.want {
+				t.Errorf("%s still carries the stale status label %q", tc.key, l)
+			}
+		}
+	}
+	// The identity labels the discovery sweep depends on must survive.
+	if !slicesHas(f.labels["PROJ-2"], taskLabel("01-auth", "t-1")) || !slicesHas(f.labels["PROJ-2"], labelMarker) {
+		t.Errorf("PROJ-2 lost an identity label: %v", f.labels["PROJ-2"])
+	}
+}
+
+// TestRelabelFailureDoesNotFailTheCard: the close is the load-bearing write and
+// it has already been verified. Downgrading a closed card to a failure over an
+// annotation would put it in the undo set and take it out of the closed count
+// for something the operator can see is done.
+func TestRelabelFailureDoesNotFailTheCard(t *testing.T) {
+	f := newApplyYT()
+	dir := applyRepo(t, f)
+	f.refuseTags = true
+
+	var err error
+	_ = captureStdout(t, func() {
+		errOut := captureStderr(t, func() {
+			err = runCmd(t, Issue(), "reap", "--apply")
+		})
+		if !strings.Contains(errOut, "could not update its status label") {
+			t.Errorf("the relabel failure was swallowed rather than warned about:\n%s", errOut)
+		}
+	})
+	if err != nil {
+		t.Fatalf("a refused relabel failed the run: %v", err)
+	}
+	if !f.resolved["PROJ-1"] {
+		t.Error("the card was not closed")
+	}
+	found := false
+	for _, c := range loadReapLog(t, dir).Last().Closed() {
+		if c.Issue == "PROJ-1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("a closed card was dropped from the undo set because its label write failed")
 	}
 }

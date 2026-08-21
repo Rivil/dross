@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Rivil/dross/internal/forge"
@@ -144,6 +145,22 @@ func applyReap(ctx *boardCtx, plan *reapPlan) error {
 			continue
 		}
 		entry.Outcome = reaplog.OutcomeClosed
+		// The state write is only half of what the forward path does. A card
+		// closed by ship also carries `dross/status:<terminal>`, and the locked
+		// reap_state decision is that a reaped card lands where the forward
+		// path puts it — the whole point being that the board reads as one
+		// history. Leaving the label at `task-in-review` under a Verified card
+		// would make a reaped card permanently distinguishable from a
+		// forward-closed one, and no later sweep would revisit it: once
+		// resolved, it is no longer stranded.
+		//
+		// A failed relabel does NOT fail the card. The close is the load-bearing
+		// write and it has already been verified; downgrading a closed card to
+		// a failure over an annotation would put it in the undo set and take it
+		// out of the closed count for something the operator can see is done.
+		if err := relabelReapedCard(ctx, card, prior.Labels); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: closed %s but could not update its status label: %v\n", card.Key, err)
+		}
 		if lanesDroppingTheirLink[card.Lane] {
 			entry.DroppedLink = dropBacklogLink(ctx, card.Key)
 		}
@@ -170,6 +187,32 @@ func applyReap(ctx *boardCtx, plan *reapPlan) error {
 	// Named by issue id and non-zero: a sweep that half-worked and exited 0
 	// would be indistinguishable from one that worked.
 	return fmt.Errorf("%d of %d card(s) could not be closed", len(failures), len(plan.Cards))
+}
+
+// relabelReapedCard rewrites the card's `dross/status:` label to the lane
+// terminal, leaving every other label — the marker and the identity labels the
+// discovery sweep depends on — untouched.
+func relabelReapedCard(ctx *boardCtx, card reapCard, prior []string) error {
+	want := statusLabel(card.Terminal)
+	labels := make([]string, 0, len(prior)+1)
+	already := false
+	for _, l := range prior {
+		if strings.HasPrefix(l, "dross/status:") {
+			if l == want {
+				already = true
+			}
+			continue
+		}
+		labels = append(labels, l)
+	}
+	if already && len(labels) == len(prior)-1 {
+		return nil // the only status label is already the right one
+	}
+	labels = append(labels, want)
+	if _, err := ctx.client.UpdateIssue(card.Key, forge.IssuePatch{Labels: &labels}); err != nil {
+		return wrapBoard(err)
+	}
+	return nil
 }
 
 // priorStateOf is the tracker-native state to journal for a card.
