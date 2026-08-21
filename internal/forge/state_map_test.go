@@ -241,6 +241,48 @@ func TestSetStateRawVerifiesReadBack(t *testing.T) {
 			t.Errorf("error %q does not name the issue key", err)
 		}
 	})
+
+	// Jira is the leg an undo most needs this on. Its transition API answers
+	// 204 for a transition a workflow condition then declines to complete, so
+	// the POST succeeding is not evidence the issue moved — and unlike the
+	// no-transition-available case, nothing upstream refuses first.
+	t.Run("jira", func(t *testing.T) {
+		const stuckAt = "Verified"
+		posted := false
+		c, _ := newTestJiraClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/transitions") && r.Method == "GET":
+				_, _ = io.WriteString(w, `{"transitions":[{"id":"31","to":{"name":"`+rawStateProbe+`"}}]}`)
+			case strings.HasSuffix(r.URL.Path, "/transitions") && r.Method == "POST":
+				posted = true
+				w.WriteHeader(http.StatusNoContent)
+			default:
+				// The read-back: the issue never left the column the sweep put
+				// it in.
+				_, _ = io.WriteString(w, `{"key":"PROJ-7","fields":{"status":{"name":"`+stuckAt+`"}}}`)
+			}
+		})
+
+		err := c.SetStateRaw("PROJ-7", rawStateProbe)
+		if !posted {
+			t.Fatal("no transition was attempted — the fixture proves nothing about the READ-BACK")
+		}
+		if err == nil {
+			t.Fatal("SetStateRaw reported success over a 204 the workflow did not honour — an undo would report every card restored while the board still holds the sweep's writes")
+		}
+		if !strings.Contains(err.Error(), "PROJ-7") {
+			t.Errorf("error %q does not name the issue key", err)
+		}
+		if !strings.Contains(err.Error(), rawStateProbe) {
+			t.Errorf("error %q does not name the status that was asked for", err)
+		}
+		// The status it ACTUALLY reads is what tells an operator whether the
+		// restore was declined or landed somewhere else entirely. An error that
+		// reports an empty column names a condition the tracker never showed.
+		if !strings.Contains(err.Error(), stuckAt) {
+			t.Errorf("error %q does not name the status the issue actually reads", err)
+		}
+	})
 }
 
 // TestJiraSetStateRawRefusesAnUnavailableTransition: SetState warns and returns
