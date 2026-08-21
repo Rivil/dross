@@ -31,16 +31,30 @@ type applyYT struct {
 	// refuseTags makes every tag write fail, to prove a refused relabel does
 	// not demote a verified close.
 	refuseTags bool
+
+	// failReadAfter names cards whose GET starts returning 500 once they have
+	// been read this many times, modelling a tracker that goes away mid-sweep.
+	//
+	// A counter rather than a flag, because the read that has to fail is the
+	// apply-time one. buildReapPlan reads every candidate first — a card
+	// unreadable THEN never reaches plan.Cards at all, it is filed
+	// unattributable, and applyReap's prior-state arm is never entered. Only a
+	// card that was readable when the plan was built and unreadable when the
+	// write came round exercises it.
+	failReadAfter map[string]int
+	reads         map[string]int
 }
 
 func newApplyYT() *applyYT {
 	return &applyYT{
-		state:    map[string]string{},
-		resolved: map[string]bool{},
-		labels:   map[string][]string{},
-		refuse:   map[string]bool{},
-		ignore:   map[string]bool{},
-		wrote:    map[string][]string{},
+		state:         map[string]string{},
+		resolved:      map[string]bool{},
+		labels:        map[string][]string{},
+		refuse:        map[string]bool{},
+		ignore:        map[string]bool{},
+		wrote:         map[string][]string{},
+		failReadAfter: map[string]int{},
+		reads:         map[string]int{},
 	}
 }
 
@@ -99,7 +113,14 @@ func (f *applyYT) handler(t *testing.T) http.HandlerFunc {
 		case r.URL.Path == "/api/issues" && r.Method == "GET":
 			_, _ = io.WriteString(w, `[]`)
 		case strings.HasPrefix(r.URL.Path, "/api/issues/") && r.Method == "GET":
-			_, _ = io.WriteString(w, f.render(strings.TrimPrefix(r.URL.Path, "/api/issues/")))
+			key := strings.TrimPrefix(r.URL.Path, "/api/issues/")
+			f.reads[key]++
+			if n, ok := f.failReadAfter[key]; ok && f.reads[key] > n {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = io.WriteString(w, `{"error":"gone"}`)
+				return
+			}
+			_, _ = io.WriteString(w, f.render(key))
 		case r.URL.Path == "/api/issueTags" && r.Method == "POST":
 			_, _ = io.WriteString(w, `{"id":"tid-x"}`)
 		case strings.HasSuffix(r.URL.Path, "/tags") && r.Method == "POST":
@@ -511,5 +532,93 @@ func TestRelabelFailureDoesNotFailTheCard(t *testing.T) {
 	}
 	if !found {
 		t.Error("a closed card was dropped from the undo set because its label write failed")
+	}
+}
+
+// TestApplyContinuesPastAPriorStateReadFailure is c-5's other half.
+//
+// The write-failure path is covered above; this is the READ. applyReap reads
+// each card's column before closing it, and a tracker that goes away between
+// the plan and the write leaves that read failing. The card must be reported
+// and skipped — never written blind, never journalled as closed — and the rest
+// of the sweep must still land.
+//
+// The failure report has to carry the UNDERLYING read error rather than a
+// generic one: "read prior state: issue not found" over a card that is on the
+// board and merely unreachable sends the operator looking for a deleted issue.
+func TestApplyContinuesPastAPriorStateReadFailure(t *testing.T) {
+	f := newApplyYT()
+	dir := applyRepo(t, f)
+	// One successful read — the one buildReapPlan makes — then the tracker
+	// stops answering for this card.
+	f.failReadAfter["PROJ-2"] = 1
+
+	var err error
+	var errOut string
+	_ = captureStdout(t, func() {
+		errOut = captureStderr(t, func() {
+			err = runCmd(t, Issue(), "reap", "--apply")
+		})
+	})
+	if err == nil {
+		t.Fatal("a run whose prior-state read failed exited 0 — a half-swept board must not look like a swept one")
+	}
+
+	lines := 0
+	for _, l := range strings.Split(errOut, "\n") {
+		if strings.Contains(l, "PROJ-2") {
+			lines++
+		}
+	}
+	if lines != 1 {
+		t.Errorf("the unreadable card gets %d report lines, want exactly one:\n%s", lines, errOut)
+	}
+	if !strings.Contains(errOut, "read prior state") {
+		t.Errorf("the report does not say the PRIOR-STATE read is what failed:\n%s", errOut)
+	}
+	// The mutant that matters: replacing the real error with a blanket
+	// "issue not found" still reports a failure, still names the key, and
+	// still exits non-zero. Only the cause distinguishes them.
+	if !strings.Contains(errOut, "get issue PROJ-2") {
+		t.Errorf("the report drops the underlying read error, so an unreachable card is indistinguishable from a deleted one:\n%s", errOut)
+	}
+
+	if len(f.wrote["PROJ-2"]) != 0 {
+		t.Errorf("a card whose prior state could not be read was written anyway: %v — undo would have nothing to restore it to", f.wrote["PROJ-2"])
+	}
+	if f.resolved["PROJ-2"] {
+		t.Error("the unreadable card was counted resolved")
+	}
+	for _, still := range []string{"PROJ-1", "PROJ-7", "PROJ-20"} {
+		if !f.resolved[still] {
+			t.Errorf("%s was never closed — one unreadable card stranded the rest of the sweep", still)
+		}
+	}
+
+	// Journalled failed, not closed: undo replays the closed set, and a card
+	// the sweep never moved must not be in it.
+	last := loadReapLog(t, dir).Last()
+	if last == nil {
+		t.Fatal("a partially failed run journalled nothing")
+	}
+	for _, c := range last.Closed() {
+		if c.Issue == "PROJ-2" {
+			t.Error("a card that was never written is in the undo set")
+		}
+	}
+	found := false
+	for _, c := range last.Cards {
+		if c.Issue == "PROJ-2" {
+			found = true
+			if c.Outcome != reaplog.OutcomeFailed {
+				t.Errorf("PROJ-2 journalled with outcome %q, want failed", c.Outcome)
+			}
+			if c.PriorState != "" {
+				t.Errorf("PROJ-2 journalled a prior state of %q off a read that failed", c.PriorState)
+			}
+		}
+	}
+	if !found {
+		t.Error("the unreadable card is absent from the journal entirely — the run's own record of what it attempted is incomplete")
 	}
 }
