@@ -222,6 +222,22 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
+			// --- stranded board mirrors ---
+			//
+			// Advisory, never an issue: a stranded card is drift on the
+			// tracker, not a fault in this repo's configuration, and failing
+			// doctor over someone else's board would make the exit status
+			// depend on network reachability.
+			//
+			// This is half of the locked prompt_edge decision. No prompt emits
+			// `issue reap` — the forward lifecycle already closes new work, so
+			// a sweep at ship would re-walk the whole board for nothing. What
+			// keeps the debt visible instead is a detector: doctor reports the
+			// count, and the sweep is run by hand when it is non-zero.
+			if p.Board.Enabled {
+				reportStrandedMirrors()
+			}
+
 			// --- .gitattributes ---
 			//
 			// Without `.dross/** linguist-generated=true`, planning artefacts
@@ -1492,4 +1508,45 @@ func phaseBranchRefCached(repoDir, slug string) bool {
 		}
 	}
 	return false
+}
+
+// reportStrandedMirrors prints doctor's read-only stranded-mirror advisory.
+//
+// It reuses the sweep's own classifier rather than approximating it, so the
+// number doctor prints is the number `dross issue reap` would act on. A second
+// counting path would drift, and a detector that disagrees with the thing it
+// points at is worse than no detector.
+func reportStrandedMirrors() {
+	Print("Board mirrors:")
+	ctx, enabled, err := openBoard()
+	if err != nil || !enabled {
+		// Unreachable or misconfigured: the [board] checks above already own
+		// config faults, and a network failure is not this section's to
+		// report as one.
+		Printf("  … could not read the board (%v)\n", err)
+		Print("")
+		return
+	}
+	plan, _, err := reapInventory(ctx, nil)
+	if err != nil {
+		Printf("  … could not classify board mirrors (%v)\n", err)
+		Print("")
+		return
+	}
+	if len(plan.Cards) == 0 {
+		Print("  ✓ no stranded mirrors — every card matches its record")
+		Print("")
+		return
+	}
+	byLane := map[string]int{}
+	for _, c := range plan.Cards {
+		byLane[c.Lane]++
+	}
+	Printf("  ! %d stranded board mirror(s) — cards whose artefact finished but whose card did not\n", len(plan.Cards))
+	for _, lane := range reapLanes {
+		if n := byLane[lane.Name]; n > 0 {
+			Printf("    %-12s %d    Fix: dross issue reap --namespace %s\n", lane.Name, n, lane.Name)
+		}
+	}
+	Print("")
 }
