@@ -1,31 +1,31 @@
 [verify]
   phase = "board-mirror-reaper"
-  generated_at = 2026-08-21T09:36:14.22521Z
-  verdict = "fail"
+  generated_at = 2026-08-21T12:47:16.118514Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-08-21T10:56:25.08399Z
+  finalized_at = 2026-08-21T14:07:23.810831Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9706422018348624
-  mutants_killed = 1058
-  mutants_survived = 32
-  mutants_not_covered = 32
+  mutation_score = 0.9770642201834863
+  mutants_killed = 1065
+  mutants_survived = 25
+  mutants_not_covered = 25
   mutants_in_scope = 1090
-  unclassified_in_scope = 7
+  unclassified_in_scope = 0
   criteria_total = 9
-  criteria_covered = 6
-  criteria_uncovered = 3
+  criteria_covered = 9
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 1058
-    survived = 32
+    killed = 1065
+    survived = 25
     timeout = 0
     in_scope = 1090
-    score = 0.9706422018348624
+    score = 0.9770642201834863
     file_count = 44
 
 [[criterion]]
@@ -54,9 +54,9 @@
 
 [[criterion]]
   id = "c-5"
-  status = "weak"
-  tests = ["internal/cmd/issue_reap_apply_test.go:TestApplyContinuesPastAWriteFailure", "internal/cmd/issue_reap_apply_test.go:TestUnverifiedCloseIsNotCountedClosed", "internal/cmd/issue_reap_apply_test.go:TestJournalRecordsOnlyRealCloses"]
-  notes = "The WRITE-failure half is strongly covered - card 2 of 4 refused, cards 3 and 4 still attempted, exactly one report line, non-zero exit. The READ-failure half is not: the surviving mutant at issue_reap_apply.go:123 is not_covered, so no test makes GetIssue fail before the write and the prior-state read arm never runs."
+  status = "covered"
+  tests = ["internal/cmd/issue_reap_apply_test.go:TestApplyContinuesPastAWriteFailure", "internal/cmd/issue_reap_apply_test.go:TestApplyContinuesPastAPriorStateReadFailure", "internal/cmd/issue_reap_apply_test.go:TestUnverifiedCloseIsNotCountedClosed", "internal/cmd/issue_reap_apply_test.go:TestJournalRecordsOnlyRealCloses"]
+  notes = "Both failure halves are now held. WRITE: card 2 of 4 refused, cards 3 and 4 still attempted, exactly one report line, non-zero exit. READ (t-16, closing the prior run's weak): the fixture fails GetIssue only on the apply-time read - a counter, not a flag, because a card unreadable at plan time never reaches plan.Cards at all - and asserts the report carries the UNDERLYING read error, the card is never written, and it is journalled failed so undo cannot replay it. The survivor at issue_reap_apply.go:123 is killed."
 
 [[criterion]]
   id = "c-6"
@@ -66,9 +66,9 @@
 
 [[criterion]]
   id = "c-7"
-  status = "weak"
-  tests = ["internal/cmd/issue_reap_discover_test.go:TestUnlinkedMirrorIsDiscovered", "internal/cmd/issue_reap_discover_test.go:TestUnattributableMarkerCardIsNamedNotGuessed", "internal/cmd/issue_reap_discover_test.go:TestHumanFiledCardIsNeverInInventory", "internal/cmd/issue_reap_discover_test.go:TestMarkerCardAlreadyLinkedIsNotDoubleCounted"]
-  notes = "The dross/phase: identity path and the bare-marker unclassifiable path are well covered, including the assertion that the issue query filters on the marker. But no test constructs a card carrying dross/target: or dross/deferred:, so discoverReap's orphanTarget and orphanDeferred arms are wholly unexercised - five not_covered survivors at issue_reap_discover.go:176,183,199,204,209 sit in exactly those arms. Those are the paths that classified DRO-33, DRO-95 and DRO-96 on the live board, so c-7's concrete sentence currently rests on proof.md's transcript rather than on a test."
+  status = "covered"
+  tests = ["internal/cmd/issue_reap_discover_test.go:TestUnlinkedMirrorIsDiscovered", "internal/cmd/issue_reap_discover_test.go:TestOrphanTargetFollowsItsDestinationRecord", "internal/cmd/issue_reap_discover_test.go:TestOrphanTargetOnAnUnscaffoldedRoadmapSlugIsStillOpen", "internal/cmd/issue_reap_discover_test.go:TestOrphanDeferredResolvesByItemID", "internal/cmd/issue_reap_discover_test.go:TestOrphanTaskLabelNamingNoPhaseIsUnattributable", "internal/cmd/issue_reap_discover_test.go:TestUnattributableMarkerCardIsNamedNotGuessed", "internal/cmd/issue_reap_discover_test.go:TestHumanFiledCardIsNeverInInventory", "internal/cmd/issue_reap_discover_test.go:TestMarkerCardAlreadyLinkedIsNotDoubleCounted"]
+  notes = "All three identity arms now have fixtures. t-15 closed the prior run's weak: dross/target: follows its destination's completion record (the DRO-33 shape) and distinguishes an unscaffolded roadmap slug - still live backlog - from a slug on no roadmap; dross/deferred: resolves by item id through the deferred store with dismissed, live and unexplained all separated (the DRO-95/96 shape); a task label with no phase half is named rather than resolved against an empty slug. Every assertion checks the verdict explicitly rather than membership, because `found` carries both stranded and unattributable. All five survivors at issue_reap_discover.go:176,183,199,204,209 are killed, so c-7's concrete sentence now rests on the suite, not only on proof.md."
 
 [[criterion]]
   id = "c-8"
@@ -78,37 +78,9 @@
 
 [[criterion]]
   id = "c-9"
-  status = "weak"
-  tests = ["internal/cmd/issue_reap_undo_test.go:TestUndoRestoresTheRecordedPriorState", "internal/cmd/issue_reap_undo_test.go:TestUndoRestoresDroppedBoardLinks", "internal/cmd/issue_reap_undo_test.go:TestUndoReversesOnlyTheLastRun", "internal/cmd/issue_reap_undo_test.go:TestUndoRefusesOnABackendWithoutStateWriter", "internal/reaplog/reaplog_test.go:TestJournalRoundTripsPriorState", "internal/forge/state_map_test.go:TestSetStateRawBypassesTheStateMap"]
-  notes = "Reversal is strongly covered on the YouTrack path - per-card prior columns (hardcoding Open fails), dropped links restored, last-run-only, GitHub refused by provider name with zero writes. The Jira leg is the gap: the not_covered survivor at internal/forge/jira.go:502 shows SetStateRaw's read-back-mismatch arm is never run for Jira, so an undo that silently failed to transition on a Jira board would not be caught."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/issue_reap_discover.go:176 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/issue_reap_discover.go:183 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/issue_reap_discover.go:199 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/issue_reap_discover.go:204 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/issue_reap_discover.go:209 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/issue_reap_apply.go:123 (CONDITIONALS_NEGATION)"
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/forge/jira.go:502 (CONDITIONALS_NEGATION)"
+  status = "covered"
+  tests = ["internal/cmd/issue_reap_undo_test.go:TestUndoRestoresTheRecordedPriorState", "internal/cmd/issue_reap_undo_test.go:TestUndoRestoresDroppedBoardLinks", "internal/cmd/issue_reap_undo_test.go:TestUndoReversesOnlyTheLastRun", "internal/cmd/issue_reap_undo_test.go:TestUndoRefusesOnABackendWithoutStateWriter", "internal/reaplog/reaplog_test.go:TestJournalRoundTripsPriorState", "internal/forge/state_map_test.go:TestSetStateRawVerifiesReadBack (youtrack, forge and jira subtests)"]
+  notes = "Reversal is covered on the YouTrack path - per-card prior columns (hardcoding Open fails), dropped links restored, last-run-only, GitHub refused by provider name with zero writes - and t-17 closed the Jira gap: the transition POST answers 204 while the issue still reads its old column, and SetStateRaw must error naming the key, the wanted status AND the status actually read. That last assertion is what separates the real branch from the mutant. The survivor at internal/forge/jira.go:502 is killed."
 
 [[finding]]
   severity = "NOTE"
@@ -147,25 +119,17 @@
   text = "skipped assets/prompts/watch.md: no mutation adapter for .md"
 
 [[finding]]
-  severity = "FLAG"
-  text = "c-7 downgraded to weak: no test builds a card carrying dross/target: or dross/deferred:, so discoverReap's orphanTarget and orphanDeferred verdict arms are unexercised (5 not_covered survivors at issue_reap_discover.go:176,183,199,204,209). Those arms classified DRO-33/95/96 on the live board, so the criterion's concrete claim rests on proof.md rather than on a test."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-5 downgraded to weak: applyReap's read-prior-state failure arm is untested (not_covered survivor at issue_reap_apply.go:123). The write-failure half is well covered; a GetIssue failure before the write is not."
-
-[[finding]]
-  severity = "FLAG"
-  text = "c-9 downgraded to weak: JiraClient.SetStateRaw's read-back-mismatch arm is untested (not_covered survivor at internal/forge/jira.go:502). TestSetStateRawVerifiesReadBack covers YouTrack and Forge only, so an undo that failed to transition on a Jira board would report success."
+  severity = "NOTE"
+  text = "The prior run's 7 in-diff survivors are all killed. Disposition chosen then was to kill rather than accept or route, and t-15/t-16/t-17 did exactly that: issue_reap_discover.go:176,183,199,204,209 (c-7), issue_reap_apply.go:123 (c-5), internal/forge/jira.go:502 (c-9). unclassified_in_scope is now 0 and the three criteria return from weak to covered."
 
 [[finding]]
   severity = "NOTE"
-  text = "Mutation efficacy over the 1058 reachable mutants is 1.00 - all 32 in-scope survivors are not_covered rather than killed-and-escaped. 25 of the 32 carry an existing acceptance (gremlins attribution ceiling); the 7 in-diff ones are genuine untested arms, not ceiling cases."
+  text = "All 25 remaining in-scope survivors are accepted, inherited-origin lines in files this phase edited around (19 doctor.go, 4 watch.go, 1 issue.go, 1 forge.go) - the gremlins attribution ceiling, already carrying reasons in .dross/survivors.toml. Efficacy over the 1065 reachable mutants is 1.00; the pooled 0.98 is that ceiling, not a test gap. 68 out-of-scope survivors were filtered before scoring."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Two named test-contract items were deliberately not written, each argued dead by construction in its commit body: the (nil, nil) GetIssue case on both the apply leg (t-16) and the Jira read-back (t-17). YouTrack, Jira, GitHub and Forge all build their Issue unconditionally, so no BoardClient can return a nil issue with a nil error; the branch each guards is reached through the read-failure and wrong-state paths, which are now held. A deviation from the plan's letter, recorded rather than silent."
 
 [[finding]]
   severity = "NOTE"
   text = "c-1's stated counts differ from the observed run and proof.md reconciles each delta by issue id: 87 record-backed rather than 88 (DRO-160 is routed into this phase and correctly open), 63 backlog rather than 64, and 10 pre-existing correctly-open cards rather than 8 plus 14 of this phase's own cards that did not exist when the spec was written. Not a shortfall - every lane's after-count matched its before-count."
-
-[[finding]]
-  severity = "NOTE"
-  text = "Disposition chosen by the user for the 7 in-diff survivors: kill them with tests in /dross-execute rather than route or accept. They are therefore still undispositioned in this run's ledger by design, and this verdict is fail on that count."
