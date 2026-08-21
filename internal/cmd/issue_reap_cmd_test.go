@@ -220,29 +220,6 @@ func TestReapNamespaceSetIsReadOffBoardNotTranscribed(t *testing.T) {
 	}
 }
 
-// TestApplyIsDeclaredButNotWired: --apply exists on the command surface here
-// but does nothing yet. A flag that SILENTLY no-ops on a board-writing verb is
-// the worst of the three options — the operator believes the sweep ran.
-func TestApplyIsDeclaredButNotWired(t *testing.T) {
-	f := &writingIsFatalYT{readOnlyYT: readOnlyYT{resolved: map[string]bool{}}}
-	dir := reapCmdRepoStrict(t, f, strandedBoard)
-	writeStrandedFixture(t, dir)
-
-	var err error
-	_ = captureStdout(t, func() {
-		err = runCmd(t, Issue(), "reap", "--apply")
-	})
-	if err == nil {
-		t.Fatal("--apply exited 0 while writing nothing — a silent no-op on a board-writing verb")
-	}
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("error %q does not say the flag is unimplemented", err)
-	}
-	if f.writes != 0 {
-		t.Errorf("%d write requests issued by an unwired --apply", f.writes)
-	}
-}
-
 // TestReapIsANoOpWhenBoardSyncIsOff: every `dross issue` verb is safe to call
 // unconditionally on a repo that never opted in.
 func TestReapIsANoOpWhenBoardSyncIsOff(t *testing.T) {

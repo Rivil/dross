@@ -46,16 +46,13 @@ explains is named as unattributable and left open.`,
 			if !enabled {
 				return nil // no-op when board sync is off
 			}
-			if err := validateReapNamespaces(namespaces); err != nil {
-				return err
-			}
-			plan, err := classifyReap(ctx, namespaces)
+			plan, unclassifiable, err := reapInventory(ctx, namespaces)
 			if err != nil {
 				return err
 			}
-			printReapPlan(plan)
+			printReapPlan(plan, unclassifiable)
 			if apply {
-				return fmt.Errorf("--apply is not implemented yet; the dry-run plan above is what this command can do so far")
+				return applyReap(ctx, plan)
 			}
 			return nil
 		},
@@ -72,7 +69,7 @@ explains is named as unattributable and left open.`,
 // id. A plan that only lists ids asks the reader to take ninety closes on
 // trust; a plan that names `phases/03-auth/changes.json status=complete` beside
 // each one can be argued with.
-func printReapPlan(plan *reapPlan) {
+func printReapPlan(plan *reapPlan, unclassifiable []reapCard) {
 	byLane := map[string][]reapCard{}
 	unattributableByLane := map[string][]reapCard{}
 	for _, c := range plan.Cards {
@@ -100,7 +97,17 @@ func printReapPlan(plan *reapPlan) {
 		}
 	}
 
-	if len(plan.Cards) == 0 && len(plan.Unattributable) == 0 {
+	if len(unclassifiable) > 0 {
+		// Cards dross wrote that carry no identity label. Not a human's issue
+		// to leave alone, and not something any record can speak for — so
+		// named, and never closed.
+		Printf("Unclassifiable (%d) -> never closed\n", len(unclassifiable))
+		for _, c := range unclassifiable {
+			Printf("  %-10s %s\n", c.Key, c.Why)
+		}
+	}
+
+	if len(plan.Cards) == 0 && len(plan.Unattributable) == 0 && len(unclassifiable) == 0 {
 		Print("no stranded mirrors — every card matches its record")
 		return
 	}
