@@ -1024,9 +1024,9 @@ func TestStatusNoShippedWithoutEitherSignal(t *testing.T) {
 }
 
 // TestStatusSilentAfterCompletion (c-6): once complete has run — current_phase
-// cleared, `completed <id>` in history — status says nothing about shipping or
-// staleness. The old warning keyed on that very breadcrumb, so keeping it fires
-// here on a phase that is finished.
+// cleared, the phase's record marked complete — status says nothing about
+// shipping or staleness. The old warning keyed on the same signal, so keeping
+// it fires here on a phase that is finished.
 func TestStatusSilentAfterCompletion(t *testing.T) {
 	dir := shippedBranchFixture(t)
 	path := filepath.Join(dir, ".dross", state.File)
@@ -1036,10 +1036,11 @@ func TestStatusSilentAfterCompletion(t *testing.T) {
 	}
 	st.CurrentPhase = ""
 	st.CurrentPhaseStatus = ""
-	st.Touch("completed x")
 	if err := st.Save(path); err != nil {
 		t.Fatal(err)
 	}
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
+		`{"phase":"x","pr":42,"base":"main","status":"complete","tasks":{}}`)
 
 	out := captureStdout(t, func() { runCmd(t, Status()) })
 
@@ -1425,4 +1426,56 @@ func TestPhaseMergeStateUncertaintyIsAlwaysUnknown(t *testing.T) {
 			t.Errorf("phaseMergeState with a base past the scan limit = %q, want %q", got, mergeUnknown)
 		}
 	})
+}
+
+// TestStatusShippedLineSilentOnACompleteRecordAfterTheBreadcrumbAges is c-3's
+// load-bearing case. The repo is visited FROM the old phase branch — the PR
+// record lives on that branch and outlives the completion, so the suppressor is
+// the only thing standing between a finished phase and a waiting-on-merge line.
+// state.json's history is a full 50-entry window that no longer names the
+// phase, which is the ordinary shape a couple of phases later.
+func TestStatusShippedLineSilentOnACompleteRecordAfterTheBreadcrumbAges(t *testing.T) {
+	dir := shippedBranchFixture(t)
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
+		`{"phase":"x","pr":42,"base":"main","status":"complete","tasks":{}}`)
+
+	path := filepath.Join(dir, ".dross", state.File)
+	st, err := state.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 50; i++ {
+		st.Touch(fmt.Sprintf("touched something %d", i))
+	}
+	if err := st.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range st.History {
+		if strings.Contains(a.Action, "completed x") {
+			t.Fatal("fixture must have aged the breadcrumb out of history")
+		}
+	}
+	if got := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); got != "phase/x" {
+		t.Fatalf("fixture must be visited from the phase branch, got %q", got)
+	}
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if strings.Contains(out, "shipped:") {
+		t.Errorf("a complete record with an aged-out breadcrumb is not waiting on a merge:\n%s", out)
+	}
+}
+
+// TestStatusShippedLineStillFiresOnAShippedRecord pins the narrowing. Between
+// the push and the merge the record reads `shipped`, and announcing that PR is
+// the entire job of this line. Widening the suppressor to phaseDone — which
+// counts shipped as done — silences the merge gate itself.
+func TestStatusShippedLineStillFiresOnAShippedRecord(t *testing.T) {
+	dir := shippedBranchFixture(t)
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
+		`{"phase":"x","pr":42,"base":"main","status":"shipped","tasks":{}}`)
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if !strings.Contains(out, "shipped:") {
+		t.Errorf("a shipped-not-complete phase is waiting on a merge and must be announced:\n%s", out)
+	}
 }

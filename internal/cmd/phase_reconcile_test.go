@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -44,6 +45,13 @@ func reconcileFixture(t *testing.T, ids ...string) string {
 		mustGit(t, dir, "branch", "phase/"+id)
 	}
 	return dir
+}
+
+// writeReconcileStatus gives a phase a changes.json carrying just a status.
+func writeReconcileStatus(t *testing.T, dir, id, status string) {
+	t.Helper()
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", id, "changes.json"),
+		fmt.Sprintf(`{"phase":%q,"status":%q,"tasks":{}}`, id, status))
 }
 
 // stubReconcileRuns replaces the per-phase completion with a recorder, so the
@@ -152,15 +160,7 @@ func TestReconcileWithNothingToDoExitsZero(t *testing.T) {
 // signal, so a phase that was completed by hand is not swept again.
 func TestReconcileSkipsAlreadyCompletedPhases(t *testing.T) {
 	dir := reconcileFixture(t, "alpha", "beta")
-	root := filepath.Join(dir, ".dross")
-	s, err := state.Load(filepath.Join(root, state.File))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s.Touch("completed alpha")
-	if err := s.Save(filepath.Join(root, state.File)); err != nil {
-		t.Fatal(err)
-	}
+	writeReconcileStatus(t, dir, "alpha", "complete")
 
 	ran := stubReconcileRuns(t, nil)
 	if err := runCmd(t, Phase(), "reconcile"); err != nil {
@@ -187,5 +187,61 @@ func TestReconcileIgnoresPhasesWithNoBranch(t *testing.T) {
 	}
 	if containsString(*ran, "alpha") {
 		t.Errorf("reconcile tried to complete a phase with no branch: %v", *ran)
+	}
+}
+
+// TestReconcileCountIgnoresAnAgedOutBreadcrumb is c-2's load-bearing case. The
+// phase is complete on its own record and its local branch is still lying
+// around, and state.json's history is a full 50-entry window that no longer
+// names it — the ordinary shape a couple of phases later. Counting from history
+// resurrects it as a branch "waiting on a completion" forever.
+func TestReconcileCountIgnoresAnAgedOutBreadcrumb(t *testing.T) {
+	dir := reconcileFixture(t, "alpha")
+	writeReconcileStatus(t, dir, "alpha", "complete")
+	root := filepath.Join(dir, ".dross")
+
+	s, err := state.Load(filepath.Join(root, state.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 50; i++ {
+		s.Touch(fmt.Sprintf("touched something %d", i))
+	}
+	if err := s.Save(filepath.Join(root, state.File)); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range s.History {
+		if strings.Contains(a.Action, "completed alpha") {
+			t.Fatal("fixture must have aged the breadcrumb out of history")
+		}
+	}
+	if mustGit(t, dir, "rev-parse", "--verify", "--quiet", "refs/heads/phase/alpha") == "" {
+		t.Fatal("fixture must keep the phase branch")
+	}
+
+	if n := reconcilableCount(root); n != 0 {
+		t.Errorf("reconcilableCount over a complete record with an aged-out breadcrumb = %d, want 0", n)
+	}
+
+	// Control: the breadcrumb alone must not close a phase out either.
+	writeReconcileStatus(t, dir, "alpha", "")
+	s.Touch("completed alpha")
+	if err := s.Save(filepath.Join(root, state.File)); err != nil {
+		t.Fatal(err)
+	}
+	if n := reconcilableCount(root); n != 1 {
+		t.Errorf("a `completed alpha` breadcrumb with no record must not suppress the count, got %d, want 1", n)
+	}
+}
+
+// TestReconcileCountStillCountsAShippedPhase pins the narrowing. `shipped` is a
+// phase mid-flight between the push and the merge — its branch is exactly what
+// reconcile exists to clear once the PR lands. Widening the suppressor to
+// phaseDone (which counts shipped as done) drops it from the count.
+func TestReconcileCountStillCountsAShippedPhase(t *testing.T) {
+	dir := reconcileFixture(t, "alpha")
+	writeReconcileStatus(t, dir, "alpha", "shipped")
+	if n := reconcilableCount(filepath.Join(dir, ".dross")); n != 1 {
+		t.Errorf("a shipped-not-complete phase must still be reconcilable, got %d, want 1", n)
 	}
 }

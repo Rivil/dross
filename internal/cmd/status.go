@@ -561,16 +561,19 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 	if !shippedStatus && sh.pr == 0 {
 		return none, false
 	}
-	// A recorded `completed <id>` closes the question: complete confirmed the
-	// merge and wrote it. The PR record above outlives that — it stays on the
-	// phase branch — so without this a completed phase visited from its old
-	// branch would still read as waiting. The breadcrumb is only a SUPPRESSOR
-	// here, never a trigger: as a trigger it was the unreachable arm this
-	// phase removed.
-	for _, a := range st.History {
-		if strings.Contains(a.Action, "completed "+phaseID) {
-			return none, false
-		}
+	// A completion record closes the question: complete confirmed the merge and
+	// wrote it. The PR record above outlives that — it stays on the phase
+	// branch — so without this a completed phase visited from its old branch
+	// would still read as waiting. It is only a SUPPRESSOR here, never a
+	// trigger.
+	//
+	// The record, not state.History's `completed <id>` breadcrumb: history is a
+	// capped 50-entry window, so the breadcrumb read went silent again fifty
+	// actions later and the line came back on a phase that finished long ago.
+	// Narrower than phaseDone on purpose — `shipped` is precisely the state
+	// this line exists to announce.
+	if changes.Complete(root, phaseID) {
+		return none, false
 	}
 
 	// No origin ref, no answer. Never a claim taken on a missing base.
@@ -773,11 +776,9 @@ func readVerifyVerdict(path string) string {
 // A failure to read is reported as zero rather than propagated: a status line
 // is not worth failing a status call over.
 func reconcilableCount(root string) int {
-	st, err := state.Load(filepath.Join(root, state.File))
-	if err != nil {
-		return 0
-	}
-	ids, err := reconcilablePhases(root, filepath.Dir(root), st)
+	// No state.Load: the candidate list reads each phase's own completion
+	// record now, and state.json carried nothing else this needed.
+	ids, err := reconcilablePhases(root, filepath.Dir(root))
 	if err != nil {
 		return 0
 	}
