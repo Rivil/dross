@@ -1,0 +1,79 @@
+[verify]
+  phase = "reentry-signal-truth"
+  generated_at = 2026-08-22T09:17:53.826117Z
+  verdict = "fail"
+  finalized = true
+  finalized_at = 2026-08-22T13:36:36.27267Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9621848739495799
+  mutants_killed = 229
+  mutants_survived = 9
+  mutants_not_covered = 9
+  mutants_in_scope = 238
+  unclassified_in_scope = 2
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 229
+    survived = 9
+    timeout = 0
+    in_scope = 238
+    score = 0.9621848739495799
+    file_count = 13
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/watch/drift_test.go:TestDriftCompletionRecordSurvivesAnAgedOutHistory", "internal/watch/drift_test.go:TestDriftShippedRecordStillDrifts", "internal/cmd/reentry_signal_truth_test.go:TestFourReentrySurfacesAgreeOnTheCompletionRecord"]
+  notes = "Asserts both directions on one classifier: a status=complete record with an aged-out history suppresses the drift entry, and the inverted control proves a bare `completed auth` breadcrumb with no record cannot suppress it. TestDriftShippedRecordStillDrifts pins the narrowing decided in reentry_predicate — widening the suppressor to phaseDone would silence a shipped-not-merged phase, and that test fails if anyone does."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/phase_reconcile_test.go:TestReconcileCountIgnoresAnAgedOutBreadcrumb", "internal/cmd/phase_reconcile_test.go:TestReconcileCountStillCountsAShippedPhase", "internal/cmd/status_reconcile_test.go:TestReconcilableCountDoesNotReadState"]
+  notes = "The fixture ages the breadcrumb out with 50 touches, asserts the phase branch still exists, and requires reconcilableCount == 0; the control re-adds the breadcrumb with the record removed and requires it back at 1, so history cannot close a phase out in either direction. TestReconcilableCountDoesNotReadState pins the source structurally."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/status_test.go:TestStatusShippedLineSilentOnACompleteRecordAfterTheBreadcrumbAges", "internal/cmd/status_test.go:TestStatusShippedLineStillFiresOnAShippedRecord"]
+  notes = "Runs the whole `dross status` command from HEAD on phase/x with the breadcrumb aged out, and asserts the literal `shipped:` line is absent. Its sibling pins that the same line still fires on a status=shipped record, which is the merge gate this narrowing must not silence."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/status_test.go:TestSuggestNextTerminalShapeShipsRatherThanDeclaringDoneness", "internal/cmd/status_test.go:TestSuggestNextUnfinalizedVerdictNamesFinalize", "internal/cmd/status_test.go:TestSuggestNextMergedPRAdvisesCompletion", "internal/cmd/status_test.go:TestSuggestNextOpenPRAdvisesTheMerge", "internal/cmd/status_test.go:TestStatusNamesOneVerbForAnUnfinalizedVerdict"]
+  notes = "terminalPhaseFixture builds the exact shape the criterion names — pass verdict, changes record with zero tasks and no completion status — and the test asserts the string `looks complete` is gone and /dross-ship is named instead. The merged/open arms and the unfinalized-verdict arm are each pinned separately, and TestStatusNamesOneVerbForAnUnfinalizedVerdict pins that the re-entry line and the `pending:` line four rows up name the same verb."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/reentry_signal_truth_test.go:TestFourReentrySurfacesAgreeOnTheCompletionRecord", "internal/cmd/reentry_signal_truth_test.go:assertReentryFixtureIsInverted"]
+  notes = "One git-backed fixture — status=complete record, 50-entry history with the breadcrumb aged out, verify.toml carrying no verdict, phase/closed still local and unmerged — asked of all four surfaces in one run, so a surface that reverts to history or the verdict disagrees with the other three and names itself. assertReentryFixtureIsInverted fails loudly if the fixture ever stops being inverted, which is what stops the four assertions passing vacuously. The guard is behavioral, not a source scan, so a fresh helper doing the same wrong thing is still caught."
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/status.go:310 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "BLOCKING"
+  text = "gremlins mutant survived: internal/cmd/status.go:310 (ARITHMETIC_BASE)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "Both BLOCKING survivors are the same line, internal/cmd/status.go:310 — the `CurrentPhaseStatus == \"shipped\"` fall-through in suggestNext. Origin is `inherited` (blame 250606a7, 2026-08-02), but this phase changed its reachability: the new phaseMergeState switch at 295-300 intercepts every shipped phase whose PR the oracle can observe, leaving 310 to hold only the mergeNoPR/mergeUnknown case — which is exactly what the comment this phase wrote at 304-308 claims it answers (\"no local branch, no origin ref, a base run far past the fork\"). Nothing in the suite reaches that combination. Not an attribution-ceiling artifact: lines 297 and 299 are the same string-concat shape and were both KILLED, so a covering test kills this one too."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Disposition decided with the user during this verify run: add a test to this phase rather than accept or route. Accept was declined because the line is reachable and killable — an acceptance would record a reason that is not true. Route was declined because `dross survivor route --target` requires an existing phase directory and reentry-signal-truth is the last phase in v1.5, so deferring would mean scaffolding a v1.6 stub to hold a single test."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation: score 0.96 over 238 in-scope mutants (killed=229, survived=9). All 9 survivors are NOT COVERED; 7 are already accepted under the gremlins-attribution-ceiling and const-initializer categories in .dross/survivors.toml. Efficacy over the 229 reachable mutants is 1.00. 85 out-of-scope survivors were filtered by the change-set scope — see `out_of_scope` in tests.json. Measured on helicon."
