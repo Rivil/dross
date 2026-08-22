@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/phase"
-	"github.com/Rivil/dross/internal/state"
 )
 
 // `dross phase reconcile` — clear every merged-but-uncompleted phase in one
@@ -31,7 +31,7 @@ func phaseReconcile() *cobra.Command {
 		Long: `Run ` + "`dross phase complete`" + ` for each phase that looks unfinished.
 
 A phase is a candidate when its phase/<id> branch still exists locally and
-state history carries no "completed <id>" record. Whether it is actually
+its changes.json carries no completion record. Whether it is actually
 finished is decided by the same merge gate a single completion uses — this
 verb only saves you typing the ids.
 
@@ -44,12 +44,8 @@ still complete. Exits 0 when there is nothing to do.`,
 				return err
 			}
 			repoDir := filepath.Dir(root)
-			s, err := state.Load(filepath.Join(root, state.File))
-			if err != nil {
-				return err
-			}
 
-			ids, err := reconcilablePhases(root, repoDir, s)
+			ids, err := reconcilablePhases(root, repoDir)
 			if err != nil {
 				return err
 			}
@@ -101,14 +97,22 @@ var runSubcommand = func(parent *cobra.Command, sub *cobra.Command, args ...stri
 // "has its PR merged?" here would duplicate the gate — and a second
 // implementation of a merge check is exactly how the two come to disagree.
 // `dross phase complete` answers that question, once, for real.
-func reconcilablePhases(root, repoDir string, s *state.State) ([]string, error) {
+//
+// The completion signal is the phase's own record, not a state.History
+// breadcrumb. History is a capped 50-entry window: fifty actions after a phase
+// completed, a breadcrumb read resurrects it here — a long-finished phase whose
+// local branch happens to still exist gets counted as waiting on a completion
+// forever. changes.Complete never scrolls. It is also deliberately narrower
+// than phaseDone, which counts `shipped` as done: a shipped-not-merged phase is
+// exactly what this list is for.
+func reconcilablePhases(root, repoDir string) ([]string, error) {
 	ids, err := phase.List(root)
 	if err != nil {
 		return nil, err
 	}
 	var out []string
 	for _, id := range ids {
-		if stateHasCompletedPhase(s, id) {
+		if changes.Complete(root, id) {
 			continue
 		}
 		if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/phase/"+id)...) != nil {
@@ -117,19 +121,4 @@ func reconcilablePhases(root, repoDir string, s *state.State) ([]string, error) 
 		out = append(out, id)
 	}
 	return out, nil
-}
-
-// stateHasCompletedPhase reports whether state history carries the
-// "completed <id>" record `dross phase complete` writes once a merge is
-// confirmed. Same string the watch drift classifier keys on.
-func stateHasCompletedPhase(s *state.State, id string) bool {
-	if s == nil {
-		return false
-	}
-	for _, a := range s.History {
-		if strings.Contains(a.Action, "completed "+id) {
-			return true
-		}
-	}
-	return false
 }

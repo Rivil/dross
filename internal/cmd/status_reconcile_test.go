@@ -90,16 +90,41 @@ func TestReadOnlySurfacesMutateNothing(t *testing.T) {
 	}
 }
 
-// TestReconcilableCountIgnoresUnreadableState: a status line is not worth
-// failing a status call over, so the count degrades to zero rather than
-// propagating a read error into a command the user runs to orient themselves.
-func TestReconcilableCountIgnoresUnreadableState(t *testing.T) {
+// TestReconcilableCountDoesNotReadState: the count is derived from each
+// phase's own completion record, so state.json is not an input at all — a
+// garbled one changes nothing.
+//
+// This inverts the assertion that stood here before. The count used to load
+// state.json for its `completed <id>` breadcrumbs and degrade to zero when that
+// load failed; the breadcrumb read is gone (a capped 50-entry window is not a
+// record), and with it the only reason status ever opened state.json on this
+// path. Zero-on-unreadable would now be a silent wrong answer rather than a
+// graceful one.
+func TestReconcilableCountDoesNotReadState(t *testing.T) {
 	dir := reconcileFixture(t, "alpha", "beta")
 	root := filepath.Join(dir, ".dross")
 	if err := os.WriteFile(filepath.Join(root, "state.json"), []byte("not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if got := reconcilableCount(root); got != 2 {
+		t.Errorf("reconcilableCount with an unreadable state = %d, want 2 — state.json is not an input", got)
+	}
+}
+
+// TestReconcilableCountIgnoresAnUnreadablePhaseList: a status line is not worth
+// failing a status call over, so the count still degrades to zero rather than
+// propagating a read error into a command the user runs to orient themselves.
+func TestReconcilableCountIgnoresAnUnreadablePhaseList(t *testing.T) {
+	dir := reconcileFixture(t, "alpha", "beta")
+	root := filepath.Join(dir, ".dross")
+	if err := os.RemoveAll(filepath.Join(root, "phases")); err != nil {
+		t.Fatal(err)
+	}
+	// A regular file where the phases directory belongs: listing it errors.
+	if err := os.WriteFile(filepath.Join(root, "phases"), []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if got := reconcilableCount(root); got != 0 {
-		t.Errorf("reconcilableCount on an unreadable state = %d, want 0", got)
+		t.Errorf("reconcilableCount over an unlistable phases dir = %d, want 0", got)
 	}
 }

@@ -1,6 +1,7 @@
 package watch
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -26,6 +27,35 @@ func writePhase(t *testing.T, root, id, plan, verify string) {
 			t.Fatalf("write verify: %v", err)
 		}
 	}
+}
+
+// writeChangesStatus writes root/phases/<id>/changes.json carrying just a
+// status. An empty status writes the pre-status shape (no status field), which
+// reads as "unknown", never as "done".
+func writeChangesStatus(t *testing.T, root, id, status string) {
+	t.Helper()
+	dir := filepath.Join(root, "phases", id)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", dir, err)
+	}
+	body := fmt.Sprintf(`{"phase":%q,"tasks":{}}`, id)
+	if status != "" {
+		body = fmt.Sprintf(`{"phase":%q,"status":%q,"tasks":{}}`, id, status)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "changes.json"), []byte(body), 0o644); err != nil {
+		t.Fatalf("write changes: %v", err)
+	}
+}
+
+// agedOutHistory is a full 50-entry state history that carries no `completed`
+// breadcrumb for any phase — what state.json looks like once fifty further
+// actions have scrolled a completion out of the capped window.
+func agedOutHistory() []state.Activity {
+	h := make([]state.Activity, 0, 50)
+	for i := 0; i < 50; i++ {
+		h = append(h, state.Activity{Action: fmt.Sprintf("touched something %d", i)})
+	}
+	return h
 }
 
 func driftKind(ds []PhaseDrift, id string) (string, bool) {
@@ -60,8 +90,9 @@ func TestClassifyDrift(t *testing.T) {
 	writePhase(t, root, "03-unverified-pending", planDone, "verdict = \"pending\"\n") // all done, verify pending
 	writePhase(t, root, "04-unshipped", planDone, "verdict = \"pass\"\n")             // verified, not completed
 	writePhase(t, root, "05-shipped", planDone, "verdict = \"pass\"\n")               // verified AND completed → omit
+	writeChangesStatus(t, root, "05-shipped", "complete")
 
-	st := &state.State{History: []state.Activity{{Action: "completed 05-shipped"}}}
+	st := &state.State{}
 
 	ds, err := ClassifyDrift(root, st)
 	if err != nil {
@@ -195,5 +226,56 @@ func TestClassifyDriftScopedToMilestone(t *testing.T) {
 	}
 	if kind, ok := driftKind(ds, "02-outofscope"); ok {
 		t.Errorf("out-of-scope phase must be filtered from drift, got %q", kind)
+	}
+}
+
+// TestDriftCompletionRecordSurvivesAnAgedOutHistory is c-1's load-bearing case.
+// The phase is verified-pass and plainly done, but state.json's history is a
+// full 50-entry window that no longer carries its `completed <slug>` breadcrumb
+// — exactly what a repo looks like a couple of phases later. A classifier
+// reading history resurrects it as verified-unshipped drift on every heartbeat;
+// one reading the phase's own record stays silent forever.
+func TestDriftCompletionRecordSurvivesAnAgedOutHistory(t *testing.T) {
+	root := t.TempDir()
+	writePhase(t, root, "auth", planDone, "verdict = \"pass\"\n")
+	writeChangesStatus(t, root, "auth", "complete")
+
+	st := &state.State{History: agedOutHistory()}
+	ds, err := ClassifyDrift(root, st)
+	if err != nil {
+		t.Fatalf("ClassifyDrift: %v", err)
+	}
+	if kind, ok := driftKind(ds, "auth"); ok {
+		t.Errorf("a complete record with an aged-out breadcrumb must not drift, got %q", kind)
+	}
+
+	// Control: the breadcrumb is present but the record is not — history must
+	// not be able to close a phase out either.
+	writeChangesStatus(t, root, "auth", "")
+	st = &state.State{History: []state.Activity{{Action: "completed auth"}}}
+	ds, err = ClassifyDrift(root, st)
+	if err != nil {
+		t.Fatalf("ClassifyDrift: %v", err)
+	}
+	if kind, ok := driftKind(ds, "auth"); !ok || kind != DriftVerifiedUnshipped {
+		t.Errorf("a `completed auth` breadcrumb with no record must not suppress drift, got %q ok=%v", kind, ok)
+	}
+}
+
+// TestDriftShippedRecordStillDrifts pins the narrowing. `shipped` is a phase
+// mid-flight between the push and the merge; with no open PR to point at there
+// is nothing waiting, so the digest must still name it. Widening the suppressor
+// to phaseDone (which counts shipped as done) silences exactly that.
+func TestDriftShippedRecordStillDrifts(t *testing.T) {
+	root := t.TempDir()
+	writePhase(t, root, "auth", planDone, "verdict = \"pass\"\n")
+	writeChangesStatus(t, root, "auth", "shipped")
+
+	ds, err := ClassifyDrift(root, &state.State{})
+	if err != nil {
+		t.Fatalf("ClassifyDrift: %v", err)
+	}
+	if kind, ok := driftKind(ds, "auth"); !ok || kind != DriftVerifiedUnshipped {
+		t.Errorf("a shipped record with no open PR should still drift, got %q ok=%v", kind, ok)
 	}
 }

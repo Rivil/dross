@@ -24,6 +24,7 @@
     "plan-gray-area-walkthrough": "DRO-29",
     "red-proof-reachability": "DRO-23",
     "red-proof-repoint": "DRO-125",
+    "reentry-signal-truth": "DRO-181",
     "remote-mutation-runner": "DRO-24",
     "remote-test-runner": "DRO-26",
     "remote-toolchain-bootstrap": "DRO-129",
@@ -52,6 +53,7 @@
     "someday:id:215d2ae2e7799d69": "DRO-102",
     "someday:id:2385fc70268180d1": "DRO-83",
     "someday:id:24da6d2754488290": "DRO-41",
+    "someday:id:29eda0e6b5c6ffba": "DRO-180",
     "someday:id:2a662adc6c7edb5f": "DRO-73",
     "someday:id:2d576654430ab9a2": "DRO-93",
     "someday:id:2e734f46572de8ca": "DRO-110",
@@ -323,6 +325,36 @@
     },
     "red-proof-repoint/t-9": {
       "issue": "DRO-128"
+    },
+    "reentry-signal-truth/t-1": {
+      "issue": "DRO-182",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "reentry-signal-truth/t-2": {
+      "issue": "DRO-183",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "reentry-signal-truth/t-3": {
+      "issue": "DRO-184",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "reentry-signal-truth/t-4": {
+      "issue": "DRO-185",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "reentry-signal-truth/t-5": {
+      "issue": "DRO-186",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "reentry-signal-truth/t-6": {
+      "issue": "DRO-187",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "remote-toolchain-bootstrap/t-1": {
       "issue": "DRO-130"

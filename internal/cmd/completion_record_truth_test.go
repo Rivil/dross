@@ -24,6 +24,14 @@ import (
 // the verdict inverts the A/B fixture below and disagrees with the other two.
 // A per-command test cannot catch that, because each one passes alone; only
 // asking all three the same question does.
+//
+// Its sibling is reentry_signal_truth_test.go, which runs the same shape over
+// the four RE-ENTRY surfaces — the watch drift classifier, the reconcile count,
+// status's shipped/waiting line and the SessionStart re-entry line. The two are
+// deliberately not merged: truthFixture here is git-free and askAllThree
+// asserts on an N/M count regex, and none of those four print a count or work
+// without a real branch and origin. So c-5's "one fixture" means one fixture per
+// surface family, not one file.
 
 // doneCount is one command's answer, kept with the command's name so a
 // disagreement can say who disagreed.

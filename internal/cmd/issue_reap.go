@@ -231,6 +231,10 @@ func resolveReapLanes(namespaces []string) ([]reapLane, error) {
 // classes of card are closed on the completion of the SAME artefact, so they
 // must not be able to disagree about it.
 //
+// The narrowing is changes.Complete's, not its own: the same predicate the
+// re-entry surfaces read, so a change to what "complete" means cannot leave the
+// reap lane answering the old question.
+//
 // It is narrower than phaseDone on purpose, and the narrowing is not a second
 // doneness answer: phaseDone answers "did this phase finish its run?", which
 // StatusShipped satisfies. The sweep asks a different question — "has this
@@ -247,7 +251,7 @@ func phaseRecordVerdict(root, slug string) (reapVerdict, string) {
 	if err != nil {
 		return reapUnattributable, fmt.Sprintf("phases/%s/changes.json is unreadable: %v", slug, err)
 	}
-	if c.Status == changes.StatusComplete {
+	if c.Complete() {
 		return reapStranded, fmt.Sprintf("phases/%s/changes.json status=%s", slug, c.Status)
 	}
 	return reapStillOpen, ""

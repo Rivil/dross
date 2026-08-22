@@ -1,0 +1,53 @@
+[phase]
+  id = "reentry-signal-truth"
+  title = "reentry-signal-truth"
+  milestone = "v1.5"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross watch`'s drift digest omits a phase whose changes.json records status=\"complete\", including after 50 further state actions age its `completed <id>` history breadcrumb out — today that phase reappears as verified-unshipped drift."
+
+[[criteria]]
+  id = "c-2"
+  text = "The `N phase branches are waiting on a completion — dross phase reconcile` suggestion counts a phase as outstanding only when its completion record says unfinished; an aged-out breadcrumb no longer resurrects a long-completed phase whose local branch still exists."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross status`'s shipped / waiting-on-merge line stays silent for a phase whose completion record says complete, even when the repo is visited from that phase's old branch after its breadcrumb has aged out."
+
+[[criteria]]
+  id = "c-4"
+  text = "A phase whose verify.toml records verdict=\"pass\" but whose changes.json carries no completion status gets an actionable next step on the SessionStart re-entry line, not `phase looks complete — start a new phase or move on`."
+
+[[criteria]]
+  id = "c-5"
+  text = "A guard test over one fixture fails if the watch drift classifier, the reconcile count, the shipped/waiting reader or the re-entry line derives doneness from verify.toml's verdict or from state.json history."
+
+[[decisions]]
+  key = "reentry_predicate"
+  choice = "The re-entry surfaces suppress on changes.json `status = \"complete\"` alone, not on phaseDone. phasedone.go's two-valued switch (shipped OR complete) is left untouched; the narrower read is documented as its sibling, with the reason inline."
+  why = "phaseDone counts `shipped` as done, which is right for milestone counting but wrong here — shipped-not-merged is exactly the mid-flight state these surfaces exist to announce, and reading phaseDone verbatim would silence the merge gate."
+  locked = true
+
+[[decisions]]
+  key = "stale_branch_signal"
+  choice = "A completed phase's leftover local `phase/<slug>` branch gets no replacement signal — not a new watch bucket, not a doctor check. It simply stops being reported."
+  why = "It is cosmetic tidy-up, and `dross phase reconcile` already lists branch-carrying phases that genuinely lack a completion; nagging about it on every heartbeat is the noise this phase is removing."
+  locked = true
+
+[[decisions]]
+  key = "reentry_terminal_hint"
+  choice = "The removed `phase looks complete` fall-through is replaced by a hint that names the verb which writes the missing record: `/dross-ship` when no completion record exists, `dross phase complete <id>` when a merged PR is already recorded."
+  why = "The hint and the doneness reader then agree on one truth source — the re-entry line points at whatever would make the record exist, instead of asserting a doneness the record does not carry."
+  locked = true
+
+[[decisions]]
+  key = "history_fallback_removal"
+  choice = "The three history reads (watch/drift.go, cmd/phase_reconcile.go, cmd/status.go) are replaced outright, not kept as a `record OR breadcrumb` fallback. phase.go's `completed <id>` check stays: it is the completion writer's idempotency guard, not a doneness read."
+  why = "c-5 forbids a state.json history read on these surfaces, and a capped 50-entry window is a breadcrumb, not a record — the same reasoning phasedone.go already carries."
+  locked = true
+
+[[deferred]]
+  id = "29eda0e6b5c6ffba"
+  text = "spineIdle (internal/cmd/status.go) still ends on readVerifyVerdict == \"pass\", so a verified-but-unshipped phase reads as an idle spine and surfaces the tech-debt/security/quality action areas over unshipped work."
+  why = "Surfaced during reentry-signal-truth planning; no criterion names it and it is a different output from the re-entry line. Someday — v1.6 input."
