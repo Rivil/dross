@@ -1,160 +1,57 @@
+task_seq = 0
+
 [phase]
-id = "reentry-signal-truth"
+  id = "reentry-signal-truth"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Add changes.Complete, point watch drift at it"
-files         = [
-  "internal/changes/changes.go",
-  "internal/changes/changes_test.go",
-  "internal/watch/drift.go",
-  "internal/watch/drift_test.go",
-  "internal/cmd/issue_reap.go",
-]
-description   = """
-Add a Complete(root, slug) predicate to internal/changes that is true only for
-status="complete" — the narrower sibling of cmd.phaseDone, documented as such
-per the reentry_predicate decision. Replace watch's stateHasCompleted history
-read in classifyPhase with it and delete the helper.
-Route phaseRecordVerdict (internal/cmd/issue_reap.go) through Complete too — it
-already implements the same narrowing inline, and two narrow readers of one
-field is the divergence this phase removes. Its unattributable/unreadable arms
-stay as they are.
-Fix the two comments the swap falsifies: DriftVerifiedUnshipped's doc and
-ClassifyDrift's 50-entry-cap scoping rationale.
-"""
-covers        = ["c-1"]
-test_contract = [
-  "if the digest reads the history breadcrumb again, a fixture with status=\"complete\" and a 50-entry history that no longer carries `completed <id>` reappears as verified-unshipped drift and the test fails",
-  "if Complete widens to accept status=\"shipped\", a fixture whose changes.json carries status=\"shipped\" with no open PR stops classifying as verified-unshipped drift and the test fails",
-  "if phaseRecordVerdict keeps its own inline status check, changing Complete's definition leaves the reap lane on the old answer and the shared-predicate test fails",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Add changes.Complete, point watch drift at it"
+  files = ["internal/changes/changes.go", "internal/changes/changes_test.go", "internal/watch/drift.go", "internal/watch/drift_test.go", "internal/cmd/issue_reap.go"]
+  description = "Add a Complete(root, slug) predicate to internal/changes that is true only for\nstatus=\"complete\" — the narrower sibling of cmd.phaseDone, documented as such\nper the reentry_predicate decision. Replace watch's stateHasCompleted history\nread in classifyPhase with it and delete the helper.\nRoute phaseRecordVerdict (internal/cmd/issue_reap.go) through Complete too — it\nalready implements the same narrowing inline, and two narrow readers of one\nfield is the divergence this phase removes. Its unattributable/unreadable arms\nstay as they are.\nFix the two comments the swap falsifies: DriftVerifiedUnshipped's doc and\nClassifyDrift's 50-entry-cap scoping rationale.\n"
+  covers = ["c-1"]
+  test_contract = ["if the digest reads the history breadcrumb again, a fixture with status=\"complete\" and a 50-entry history that no longer carries `completed <id>` reappears as verified-unshipped drift and the test fails", "if Complete widens to accept status=\"shipped\", a fixture whose changes.json carries status=\"shipped\" with no open PR stops classifying as verified-unshipped drift and the test fails", "if phaseRecordVerdict keeps its own inline status check, changing Complete's definition leaves the reap lane on the old answer and the shared-predicate test fails"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 1
-title         = "Add a three-valued phase merge oracle"
-files         = [
-  "internal/cmd/status.go",
-  "internal/cmd/status_test.go",
-]
-description   = """
-New helper answering merged-ness for a named phase id, not for HEAD: no-PR /
-open / merged / unknown. shippedUnmergedPhase cannot be inverted for this — its
-own doc says ok=false covers "not a phase branch, not shipped, no origin, or
-genuinely merged", and the SessionStart hook usually runs from main. Reuses the
-existing squash-aware ancestry check against the recorded base; stays
-network-free.
-Every uncertainty is `unknown`, never `open`: missing local refs/heads/phase/
-<slug> (dross phase complete deletes it, and a fresh clone never had it),
-missing origin/<base>, a base more than staleSquashScanLimit commits ahead, and
-every git error path.
-The doc comment carries two caveats: network-free means `merged` is "merged as
-of the last fetch" and `open` silently includes "merged but unfetched"; and why
-this deliberately stays separate from the merge check inside
-shippedUnmergedPhase rather than absorbing it.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "if the oracle keys on HEAD instead of the phase id, a fixture run from main reports unknown for a phase whose recorded PR is merged and the test fails",
-  "if the no-PR case is folded into any other, a phase with ch.PR == 0 reports merged or open instead of no-PR and the test fails",
-  "if unknown collapses into merged or open, a phase whose origin/<base> ref is absent reports something other than unknown and the test fails",
-  "if the deleted-branch path is not unknown, a phase whose refs/heads/phase/<slug> is gone reports open and the test fails",
-  "if the scan-limit path is not unknown, a base more than staleSquashScanLimit commits ahead of the phase branch reports open and the test fails",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 1
+  title = "Add a three-valued phase merge oracle"
+  files = ["internal/cmd/status.go", "internal/cmd/status_test.go"]
+  description = "New helper answering merged-ness for a named phase id, not for HEAD: no-PR /\nopen / merged / unknown. shippedUnmergedPhase cannot be inverted for this — its\nown doc says ok=false covers \"not a phase branch, not shipped, no origin, or\ngenuinely merged\", and the SessionStart hook usually runs from main. Reuses the\nexisting squash-aware ancestry check against the recorded base; stays\nnetwork-free.\nEvery uncertainty is `unknown`, never `open`: missing local refs/heads/phase/\n<slug> (dross phase complete deletes it, and a fresh clone never had it),\nmissing origin/<base>, a base more than staleSquashScanLimit commits ahead, and\nevery git error path.\nThe doc comment carries two caveats: network-free means `merged` is \"merged as\nof the last fetch\" and `open` silently includes \"merged but unfetched\"; and why\nthis deliberately stays separate from the merge check inside\nshippedUnmergedPhase rather than absorbing it.\n"
+  covers = ["c-4"]
+  test_contract = ["if the oracle keys on HEAD instead of the phase id, a fixture run from main reports unknown for a phase whose recorded PR is merged and the test fails", "if the no-PR case is folded into any other, a phase with ch.PR == 0 reports merged or open instead of no-PR and the test fails", "if unknown collapses into merged or open, a phase whose origin/<base> ref is absent reports something other than unknown and the test fails", "if the deleted-branch path is not unknown, a phase whose refs/heads/phase/<slug> is gone reports open and the test fails", "if the scan-limit path is not unknown, a base more than staleSquashScanLimit commits ahead of the phase branch reports open and the test fails"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Swap cmd's two breadcrumb reads for the record"
-files         = [
-  "internal/cmd/phase_reconcile.go",
-  "internal/cmd/status.go",
-  "internal/cmd/phase_reconcile_test.go",
-  "internal/cmd/status_test.go",
-]
-description   = """
-Replace stateHasCompletedPhase in reconcilablePhases and the `completed <id>`
-suppressor loop in shippedUnmergedPhase with changes.Complete, deleting both
-history helpers. phase.go's completion-writer idempotency check is left alone.
-Also: reconcilablePhases' *state.State parameter goes dead with the helper —
-remove it and reconcilableCount's state.Load that only fed it, or say why it
-stays.
-"""
-covers        = ["c-2", "c-3"]
-test_contract = [
-  "if reconcilablePhases reads history again, a complete-record phase whose branch still exists after its breadcrumb ages out is counted and the reconcile-count test fails",
-  "if the shipped reader reads history again, visiting a complete-record phase from its old branch prints the waiting-on-merge line and the test fails",
-  "if either swap widens to phaseDone, a shipped-not-merged phase stops being counted and stops being announced, failing the mid-flight fixture",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 2
+  title = "Swap cmd's two breadcrumb reads for the record"
+  files = ["internal/cmd/phase_reconcile.go", "internal/cmd/status.go", "internal/cmd/phase_reconcile_test.go", "internal/cmd/status_test.go"]
+  description = "Replace stateHasCompletedPhase in reconcilablePhases and the `completed <id>`\nsuppressor loop in shippedUnmergedPhase with changes.Complete, deleting both\nhistory helpers. phase.go's completion-writer idempotency check is left alone.\nAlso: reconcilablePhases' *state.State parameter goes dead with the helper —\nremove it and reconcilableCount's state.Load that only fed it, or say why it\nstays.\n"
+  covers = ["c-2", "c-3"]
+  depends_on = ["t-1"]
+  test_contract = ["if reconcilablePhases reads history again, a complete-record phase whose branch still exists after its breadcrumb ages out is counted and the reconcile-count test fails", "if the shipped reader reads history again, visiting a complete-record phase from its old branch prints the waiting-on-merge line and the test fails", "if either swap widens to phaseDone, a shipped-not-merged phase stops being counted and stops being announced, failing the mid-flight fixture"]
+  status = "done"
 
 [[task]]
-id            = "t-4"
-wave          = 2
-depends_on    = ["t-1", "t-2"]
-title         = "Rewrite suggestNext's terminal advice"
-files         = [
-  "internal/cmd/status.go",
-  "internal/cmd/status_test.go",
-  "internal/cmd/reentry_test.go",
-]
-description   = """
-Consult t-2's oracle BEFORE the verdict switch, not in the terminal region: with
-verdict=pass and recorded tasks, status.go:293-296 returns /dross-ship first, so
-a merged phase never reaches the terminal branch at all. merged →
-`dross phase complete <id>`; open → the existing "merge the open PR, then …"
-text; no-PR and unknown fall through to today's logic.
-Add an unfinalized-verdict arm OUTSIDE the `verdict != ""` guard, reusing
-pendingVerdicts' own predicate (v == "" || v == "pending"), routing to
-`dross verify finalize <id>` — the verb status already names four lines earlier,
-not /dross-verify, which would re-run mutation on an already-written verify.toml.
-Then remove the `phase looks complete` branch.
-The terminal-region contracts share one fixture family — a zero-task changes
-record, the only pass-verdict shape that reaches there — varying only PR and
-merge state.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "if the merged arm is dropped or never reached, a phase whose recorded PR is an ancestor of origin/<base> and carries no completion status is advised /dross-ship instead of `dross phase complete <id>` and the test fails",
-  "if the merged arm fires on anything but merged, a phase with no PR recorded and HEAD on main is advised `dross phase complete` rather than falling through and the test fails",
-  "if the open case is folded into the merged one, a phase with a recorded but unmerged PR is advised `dross phase complete` instead of \"merge the open PR, then …\" and the test fails",
-  "if the unfinalized arm is placed inside the `verdict != \"\"` guard, a phase whose verify.toml carries verdict=\"\" falls through instead of yielding `dross verify finalize <id>` and the test fails",
-  "if the unfinalized arm names /dross-verify, one `dross status` output names two different verbs for the same signal — its pending: line and its re-entry line — and the cross-surface test fails",
-  "if the terminal branch returns, a phase with verdict=\"pass\" and a changes record carrying zero tasks yields \"phase looks complete\" instead of /dross-ship and the test fails",
-  "if reentryLine and status's final line diverge, the test comparing the two byte-for-byte fails",
-]
-status        = "pending"
+  id = "t-4"
+  wave = 2
+  title = "Rewrite suggestNext's terminal advice"
+  files = ["internal/cmd/status.go", "internal/cmd/status_test.go", "internal/cmd/reentry_test.go"]
+  description = "Consult t-2's oracle BEFORE the verdict switch, not in the terminal region: with\nverdict=pass and recorded tasks, status.go:293-296 returns /dross-ship first, so\na merged phase never reaches the terminal branch at all. merged →\n`dross phase complete <id>`; open → the existing \"merge the open PR, then …\"\ntext; no-PR and unknown fall through to today's logic.\nAdd an unfinalized-verdict arm OUTSIDE the `verdict != \"\"` guard, reusing\npendingVerdicts' own predicate (v == \"\" || v == \"pending\"), routing to\n`dross verify finalize <id>` — the verb status already names four lines earlier,\nnot /dross-verify, which would re-run mutation on an already-written verify.toml.\nThen remove the `phase looks complete` branch.\nThe terminal-region contracts share one fixture family — a zero-task changes\nrecord, the only pass-verdict shape that reaches there — varying only PR and\nmerge state.\n"
+  covers = ["c-4"]
+  depends_on = ["t-1", "t-2"]
+  test_contract = ["if the merged arm is dropped or never reached, a phase whose recorded PR is an ancestor of origin/<base> and carries no completion status is advised /dross-ship instead of `dross phase complete <id>` and the test fails", "if the merged arm fires on anything but merged, a phase with no PR recorded and HEAD on main is advised `dross phase complete` rather than falling through and the test fails", "if the open case is folded into the merged one, a phase with a recorded but unmerged PR is advised `dross phase complete` instead of \"merge the open PR, then …\" and the test fails", "if the unfinalized arm is placed inside the `verdict != \"\"` guard, a phase whose verify.toml carries verdict=\"\" falls through instead of yielding `dross verify finalize <id>` and the test fails", "if the unfinalized arm names /dross-verify, one `dross status` output names two different verbs for the same signal — its pending: line and its re-entry line — and the cross-surface test fails", "if the terminal branch returns, a phase with verdict=\"pass\" and a changes record carrying zero tasks yields \"phase looks complete\" instead of /dross-ship and the test fails", "if reentryLine and status's final line diverge, the test comparing the two byte-for-byte fails"]
+  status = "done"
 
 [[task]]
-id            = "t-5"
-wave          = 3
-depends_on    = ["t-1", "t-3", "t-4"]
-title         = "Widen the doneness guard to the re-entry surfaces"
-files         = [
-  "internal/cmd/reentry_signal_truth_test.go",
-  "internal/cmd/completion_record_truth_test.go",
-]
-description   = """
-New git-backed guard covering the watch drift classifier, the reconcile count,
-the shipped/waiting reader and the re-entry line. The existing truthFixture is
-git-free and asserts on N/M count regexes, which none of these four print — copy
-reconcileFixture's shape instead and assert per-surface. The original
-three-command guard stays as it is, with a pointer to the new file; the header
-records that c-5's "one fixture" means one across these four surfaces, not a
-merge of the two guards.
-The guard is behavioral, not a source scan. Keep the fixture's reconcilable
-count at one: above one, suggestNext returns the reconcile suggestion ahead of
-every doneness-sensitive arm and the re-entry assertion stops testing what it
-names.
-"""
-covers        = ["c-5"]
-test_contract = [
-  "if any of the four surfaces is reverted to a state.History `completed <id>` read, the one fixture — complete record plus an aged-out history — makes that surface disagree with the other three and the guard fails",
-  "if any of the four is reverted to deriving doneness from verify.toml's verdict, the fixture's inverted verdict (record complete, verdict absent) makes that surface disagree and the guard fails",
-]
-status        = "pending"
+  id = "t-5"
+  wave = 3
+  title = "Widen the doneness guard to the re-entry surfaces"
+  files = ["internal/cmd/reentry_signal_truth_test.go", "internal/cmd/completion_record_truth_test.go"]
+  description = "New git-backed guard covering the watch drift classifier, the reconcile count,\nthe shipped/waiting reader and the re-entry line. The existing truthFixture is\ngit-free and asserts on N/M count regexes, which none of these four print — copy\nreconcileFixture's shape instead and assert per-surface. The original\nthree-command guard stays as it is, with a pointer to the new file; the header\nrecords that c-5's \"one fixture\" means one across these four surfaces, not a\nmerge of the two guards.\nThe guard is behavioral, not a source scan. Keep the fixture's reconcilable\ncount at one: above one, suggestNext returns the reconcile suggestion ahead of\nevery doneness-sensitive arm and the re-entry assertion stops testing what it\nnames.\n"
+  covers = ["c-5"]
+  depends_on = ["t-1", "t-3", "t-4"]
+  test_contract = ["if any of the four surfaces is reverted to a state.History `completed <id>` read, the one fixture — complete record plus an aged-out history — makes that surface disagree with the other three and the guard fails", "if any of the four is reverted to deriving doneness from verify.toml's verdict, the fixture's inverted verdict (record complete, verdict absent) makes that surface disagree and the guard fails"]
+  status = "done"

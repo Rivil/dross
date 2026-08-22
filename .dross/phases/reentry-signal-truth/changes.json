@@ -2,5 +2,93 @@
   "phase": "reentry-signal-truth",
   "base": "milestone/v1.5",
   "base_commit": "3854b8c1cab2d64358ead343283c91c3bf0334a0",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/changes/changes_test.go",
+        "internal/watch/drift.go",
+        "internal/watch/drift_test.go",
+        "internal/cmd/issue_reap.go"
+      ],
+      "commit": "f19cc07",
+      "completed_at": "2026-08-22T08:13:28.607042Z",
+      "landmarks": [
+        {
+          "feature": "phase doneness signal",
+          "symbol": "changes.Complete",
+          "loc": "internal/changes/changes.go:399",
+          "what": "durable status=complete predicate replacing watch's capped state-history breadcrumb read"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go"
+      ],
+      "commit": "a44221e",
+      "completed_at": "2026-08-22T08:20:12.200375Z",
+      "landmarks": [
+        {
+          "feature": "phase doneness signal",
+          "symbol": "phaseMergeState",
+          "loc": "internal/cmd/status.go:651",
+          "what": "network-free no-pr/open/merged/unknown merge oracle keyed on a phase id rather than HEAD"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase_reconcile.go",
+        "internal/cmd/phase_reconcile_test.go",
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go",
+        "internal/cmd/status_reconcile_test.go"
+      ],
+      "commit": "67ef2dc",
+      "completed_at": "2026-08-22T08:29:12.479964Z",
+      "landmarks": [
+        {
+          "feature": "phase doneness signal",
+          "symbol": "reconcilablePhases",
+          "loc": "internal/cmd/phase_reconcile.go:108",
+          "what": "reconcile count and status's waiting-on-merge line read the completion record instead of state.json's capped history"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/status.go",
+        "internal/cmd/status_test.go",
+        "internal/cmd/reentry_test.go"
+      ],
+      "commit": "6c89784",
+      "completed_at": "2026-08-22T08:37:18.00183Z",
+      "landmarks": [
+        {
+          "feature": "re-entry next-step hint",
+          "symbol": "suggestNext",
+          "loc": "internal/cmd/status.go:290",
+          "what": "terminal 'phase looks complete' replaced by merge-oracle routing to phase complete / merge-the-PR plus an unfinalized-verdict arm naming dross verify finalize"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/reentry_signal_truth_test.go",
+        "internal/cmd/completion_record_truth_test.go"
+      ],
+      "commit": "b66fd4e",
+      "completed_at": "2026-08-22T08:42:08.505465Z",
+      "landmarks": [
+        {
+          "feature": "phase doneness signal",
+          "symbol": "TestFourReentrySurfacesAgreeOnTheCompletionRecord",
+          "loc": "internal/cmd/reentry_signal_truth_test.go:160",
+          "what": "one git-backed fixture proves the drift classifier, reconcile count, shipped line and re-entry line all read the completion record, not history or verdict"
+        }
+      ]
+    }
+  }
 }

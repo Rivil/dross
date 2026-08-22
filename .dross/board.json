@@ -326,6 +326,31 @@
     "red-proof-repoint/t-9": {
       "issue": "DRO-128"
     },
+    "reentry-signal-truth/t-1": {
+      "issue": "DRO-182",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "reentry-signal-truth/t-2": {
+      "issue": "DRO-183",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "reentry-signal-truth/t-3": {
+      "issue": "DRO-184",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "reentry-signal-truth/t-4": {
+      "issue": "DRO-185",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "reentry-signal-truth/t-5": {
+      "issue": "DRO-186",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "remote-toolchain-bootstrap/t-1": {
       "issue": "DRO-130"
     },
