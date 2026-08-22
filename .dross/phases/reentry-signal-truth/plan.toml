@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 6
 
 [phase]
   id = "reentry-signal-truth"
@@ -54,4 +54,15 @@ task_seq = 0
   covers = ["c-5"]
   depends_on = ["t-1", "t-3", "t-4"]
   test_contract = ["if any of the four surfaces is reverted to a state.History `completed <id>` read, the one fixture — complete record plus an aged-out history — makes that surface disagree with the other three and the guard fails", "if any of the four is reverted to deriving doneness from verify.toml's verdict, the fixture's inverted verdict (record complete, verdict absent) makes that surface disagree and the guard fails"]
+  status = "done"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  title = "Cover suggestNext's shipped fall-through"
+  files = ["internal/cmd/status_test.go"]
+  description = "Amend for verify's BLOCKING survivor at internal/cmd/status.go:310 (ARITHMETIC_BASE,\ntwice). All nine survivors this run are NOT COVERED — no test executes the\n`CurrentPhaseStatus == \"shipped\"` return, so gremlins never ran the mutant.\n\nThis phase narrowed that line's reachability: t-4's phaseMergeState switch at\n295-300 intercepts every shipped phase whose PR the oracle can observe, leaving\n310 to hold only the mergeNoPR/mergeUnknown case the comment at 304-308 names.\nNothing in the suite reaches that combination.\n\nOne test over terminalPhaseFixture(t, \"auth\", 0) — pr=0 is mergeNoPR, so the\nswitch falls through — with current_phase_status set to shipped. No production\nchange."
+  covers = ["c-4"]
+  depends_on = ["t-4"]
+  test_contract = ["if the shipped fall-through at status.go:310 is deleted, a shipped phase with no recorded PR is advised /dross-ship instead of the merge, and the test fails", "if the arm is reached but its text is mutated, the line is now covered so gremlins runs the mutant and it dies at build time"]
   status = "done"

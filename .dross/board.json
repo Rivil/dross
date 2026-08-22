@@ -351,6 +351,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "reentry-signal-truth/t-6": {
+      "issue": "DRO-187",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "remote-toolchain-bootstrap/t-1": {
       "issue": "DRO-130"
     },
