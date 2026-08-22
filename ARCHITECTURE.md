@@ -94,7 +94,7 @@ Answers "where did this work land, and is that correct-by-design or stuck?" — 
 - `renderTopologyLine` (the one renderer both consumers share) — `internal/cmd/topology.go:98`
 - `describeTeardown` (per-side teardown phrasing; never claims an undone deletion) — `internal/cmd/phase.go:791`
 - `TestPhaseCompletePrintsTopologyStatement` (each clause of the completion statement asserted separately) — `internal/cmd/phase_test.go:2038`
-- `TestStatusTopologyLineAlways` (unconditional: mid-phase, between phases, no origin) — `internal/cmd/status_test.go:1102`
+- `TestStatusTopologyLineAlways` (unconditional: mid-phase, between phases, no origin) — `internal/cmd/status_test.go:1105`
 - `TestBranchTopologyWorkOverrideWins` (recorded base beats an inferable milestone branch) — `internal/cmd/topology_test.go:94`
 
 _introduced completion-state-truth · 1ecde33_
@@ -549,16 +549,20 @@ _introduced complete-base-truth · e1f72be_
 
 ### Phase doneness
 
-One reader answers "is this phase done?" for every surface that asks, so `dross status`, `dross milestone progress` and `dross phase list` cannot drift into three different answers over the same phase directory. The authority is the **completion record** — `changes.json`'s monotonic `complete`/`shipped` status marker, written by `dross ship` and `dross phase complete` — never a verify verdict: a phase can pass verification and never open a PR, so verified is not shipped, and counting verdicts is exactly the split v1.4 shipped with, where the status bar read 0/11 while milestone progress read 11/11 over the same eleven directories in the same second. An unscaffolded slug is never done whatever else says so, since a roadmap entry with no phase directory is work that was listed and never built. The record is now the **only** arm: the 50-entry `state.json` history fallback is deleted, so doneness reads `changes.json` alone and gives the same answer on every machine and in a fresh clone, where a machine-local gitignored history reads empty. Deleting it is only safe because the marker is backfillable — [Legacy phase backfill](#legacy-phase-backfill) writes the missing markers onto pre-marker records from evidence, so no historical phase loses its answer with the fallback.
+One reader answers "is this phase done?" for every surface that asks, so `dross status`, `dross milestone progress` and `dross phase list` cannot drift into three different answers over the same phase directory. The authority is the **completion record** — `changes.json`'s monotonic `complete`/`shipped` status marker, written by `dross ship` and `dross phase complete` — never a verify verdict: a phase can pass verification and never open a PR, so verified is not shipped, and counting verdicts is exactly the split v1.4 shipped with, where the status bar read 0/11 while milestone progress read 11/11 over the same eleven directories in the same second. An unscaffolded slug is never done whatever else says so, since a roadmap entry with no phase directory is work that was listed and never built. The record is now the **only** arm: the 50-entry `state.json` history fallback is deleted, so doneness reads `changes.json` alone and gives the same answer on every machine and in a fresh clone, where a machine-local gitignored history reads empty. Deleting it is only safe because the marker is backfillable — [Legacy phase backfill](#legacy-phase-backfill) writes the missing markers onto pre-marker records from evidence, so no historical phase loses its answer with the fallback. The same authority now reaches the four **re-entry** surfaces that had each kept a private copy of the question — `dross watch`'s drift digest, the `dross phase reconcile` count, status's shipped/waiting-on-merge line and the SessionStart re-entry hint. All four read the capped `completed <id>` history breadcrumb, so a long-finished phase came back the moment 50 further state actions aged that breadcrumb out; they read `changes.Complete` instead. That read is deliberately **narrower than `phaseDone`**: it suppresses on `complete` alone and never on `shipped`, because shipped-not-merged is precisely the mid-flight state these surfaces exist to announce — widening it would silence the merge gate. Completion's own idempotency guard in `phase.go` still reads the breadcrumb, and correctly so: it asks whether the write already happened, not whether the phase is done.
 
 - `phaseDone` (entry point; resolves scaffolded-ness itself so a caller holding only a slug never has to) — `internal/cmd/phasedone.go:21`
 - `phaseIsDone` (single-arm answer: scaffolded AND changes.json says finished — no state-history fallback) — `internal/cmd/phasedone.go:42`
 - `phaseDirExists` (scaffolded-ness; an unscaffolded slug is never done) — `internal/cmd/phasedone.go:58`
-- `askAllThree` (cross-command guard: one fixture put to all three commands, failing by name whichever disagrees) — `internal/cmd/completion_record_truth_test.go:43`
+- `askAllThree` (cross-command guard: one fixture put to all three commands, failing by name whichever disagrees) — `internal/cmd/completion_record_truth_test.go:51`
+- `changes.Complete` (record-only doneness predicate the four re-entry surfaces share; complete, never shipped) — `internal/changes/changes.go:365`
+- `reconcilablePhases` (reconcile count off the record; its `*state.State` parameter went dead with the breadcrumb read and was removed) — `internal/cmd/phase_reconcile.go:108`
+- `phaseMergeState` (network-free no-pr/open/merged/unknown merge oracle, keyed on a phase id rather than HEAD so it answers the same from main) — `internal/cmd/status.go:691`
+- `TestFourReentrySurfacesAgreeOnTheCompletionRecord` (one git-backed inverted fixture put to all four surfaces; whichever reverts to history or the verdict names itself) — `internal/cmd/reentry_signal_truth_test.go:160`
 
 The guard is deliberately asymmetric — two phases done by record against one carrying `verdict = "pass"` and no record — so truth is 2/3 while a verdict-reader reports 1/3 over the *opposite* phase; a symmetric fixture would let an inverted answer pass on the matching number, and `dross status` prints only a count. It compares each command against a fixed truth rather than against each other, so it also catches a regression in the shared reader itself, where all three would move together and still agree.
 
-_introduced completion-record-truth · extended legacy-phase-backfill · 49c4e68_
+_introduced completion-record-truth · extended legacy-phase-backfill · 49c4e68 · extended reentry-signal-truth · b66fd4e_
 
 ### Phase lifecycle
 
@@ -821,28 +825,33 @@ _introduced 07-stack-profiles · extended 08-language-profiles · extended 09-ma
 
 ### State & status
 
-Track current milestone/phase/version + activity in state.json; summarise "where am I" — including milestone phase-progress (N/M phases done, counted off the completion record via [Phase doneness](#phase-doneness) — not off verify verdicts, which measure a different thing) and an idle-gated non-spine action surface (security/quality/tech-debt) that ranks areas by run signal (never-run first, then most-stale) and shows each area's last-run state, surfaced only when the spec→ship spine has nothing runnable left. A shipped-but-unmerged phase is reported as **shipped, not stale**: status names the open PR and the base it is waiting on, read from the state.json breadcrumb or the changes.json PR record alone (either signal suffices; neither present means no claim). The older stale-completion warning is gone with the state it described — once `dross ship` leaves `current_phase` set, a shipped-but-unmerged phase whose state reads `completed` is unreachable, so warning about it was warning about an impossible state. Status also prints the branch-topology line unconditionally (see [Branch topology reporting](#branch-topology-reporting)), so "is this milestone branch correct-by-design or stuck?" has a standing answer rather than one that scrolled away. When more than one phase branch is waiting on a completion, status and the watch digest name `dross phase reconcile` **once** instead of leaking one `dross phase complete <id>` line per phase; a single outstanding phase keeps the direct command, because naming a batch verb for one item is worse guidance. Both surfaces stay strictly read-only — the count never completes anything and degrades to zero on an unreadable state rather than failing the command a user runs to orient themselves. In watch's precedence the pile ranks below advancing an in-flight phase and above new board intake: cleanup that is already earned beats work not started.
+Track current milestone/phase/version + activity in state.json; summarise "where am I" — including milestone phase-progress (N/M phases done, counted off the completion record via [Phase doneness](#phase-doneness) — not off verify verdicts, which measure a different thing) and an idle-gated non-spine action surface (security/quality/tech-debt) that ranks areas by run signal (never-run first, then most-stale) and shows each area's last-run state, surfaced only when the spec→ship spine has nothing runnable left. A shipped-but-unmerged phase is reported as **shipped, not stale**: status names the open PR and the base it is waiting on, read from the state.json breadcrumb or the changes.json PR record alone (either signal suffices; neither present means no claim). Its **suppressor** is the completion record rather than state.json's history, so visiting a long-finished phase from its leftover branch after the breadcrumb ages out no longer re-announces it as waiting on a merge (see [Phase doneness](#phase-doneness)). The older stale-completion warning is gone with the state it described — once `dross ship` leaves `current_phase` set, a shipped-but-unmerged phase whose state reads `completed` is unreachable, so warning about it was warning about an impossible state. Status also prints the branch-topology line unconditionally (see [Branch topology reporting](#branch-topology-reporting)), so "is this milestone branch correct-by-design or stuck?" has a standing answer rather than one that scrolled away. When more than one phase branch is waiting on a completion, status and the watch digest name `dross phase reconcile` **once** instead of leaking one `dross phase complete <id>` line per phase; a single outstanding phase keeps the direct command, because naming a batch verb for one item is worse guidance. Both surfaces stay strictly read-only — the count never completes anything and degrades to zero on an unreadable state rather than failing the command a user runs to orient themselves. In watch's precedence the pile ranks below advancing an in-flight phase and above new board intake: cleanup that is already earned beats work not started.
+
+The **last line** — status's next-step suggestion, byte-equal to the SessionStart re-entry line — always names a verb that would change something. The `phase looks complete — start a new phase or move on` fall-through is gone: it asserted a doneness no record carried and named nothing that would make the record exist. A three-valued merge oracle is consulted in its place, and deliberately **ahead of** the verdict switch — a pass verdict over recorded changes returns `/dross-ship` first, so a phase whose PR already landed would otherwise never reach any later branch. A merged PR routes to `dross phase complete <id>`, an open one to the merge, and no-PR/unknown falls through to the phase's own next step; a shipped phase whose merge the oracle cannot see for itself is told to merge, never to ship a second time. An **unfinalized verdict** gets its own arm sitting deliberately *outside* any `verdict != ""` guard, because an empty verdict is the commonest shape of the forget-to-finalize hole and such a guard drops it straight past. It names `dross verify finalize` — the verb the `pending:` line four rows up already names — off that line's own predicate, so one `dross status` run cannot name two verbs for one signal.
+
 
 - `state.State` — `internal/state/state.go:17`
 - `State` (CLI) — `internal/cmd/state.go:20`
 - `Status` — `internal/cmd/status.go:24`
-- `shippedUnmergedPhase` (reports a shipped phase and the base its PR waits on; replaced the stale-completion warning) — `internal/cmd/status.go:538`
-- `reconcilableCount` (read-only count behind the single-verb suggestion; never completes anything) — `internal/cmd/status.go:678`
-- `spineIdle` — `internal/cmd/status.go:309`
-- `rankAreas` — `internal/cmd/status.go:424`
-- `formatRunSignal` — `internal/cmd/status.go:443`
-- `renderActionAreas` — `internal/cmd/status.go:471`
+- `suggestNext` (the next-step line; merge oracle consulted ahead of the verdict switch, and no doneness asserted without a record) — `internal/cmd/status.go:236`
+- `TestSuggestNextShippedWithoutAnObservablePRWaitsOnTheMerge` (the shipped fall-through the oracle narrowed to the merge-unobservable case) — `internal/cmd/status_test.go:1689`
+- `shippedUnmergedPhase` (reports a shipped phase and the base its PR waits on; replaced the stale-completion warning) — `internal/cmd/status.go:575`
+- `reconcilableCount` (read-only count behind the single-verb suggestion; never completes anything) — `internal/cmd/status.go:815`
+- `spineIdle` — `internal/cmd/status.go:346`
+- `rankAreas` — `internal/cmd/status.go:461`
+- `formatRunSignal` — `internal/cmd/status.go:480`
+- `renderActionAreas` — `internal/cmd/status.go:508`
 - `stateTouch` (silent on a non-root, loud on a corrupt one) — `internal/cmd/state.go:123`
 - `stateGet` (1+ dotted paths via the shared `renderMultiGet`) — `internal/cmd/state.go:55`
 - `stateShow` (`--json` accepted; output byte-identical to bare `show`) — `internal/cmd/state.go:29`
-- `TestStatusShippedFromPRRecordAlone` (the changes.json PR fallback with the state.json breadcrumb absent — the shape every machine but the shipping one has) — `internal/cmd/status_test.go:991`
-- `TestStatusTopologyLineAlways` (topology line unconditional: mid-phase, between phases, no origin) — `internal/cmd/status_test.go:1102`
+- `TestStatusShippedFromPRRecordAlone` (the changes.json PR fallback with the state.json breadcrumb absent — the shape every machine but the shipping one has) — `internal/cmd/status_test.go:993`
+- `TestStatusTopologyLineAlways` (topology line unconditional: mid-phase, between phases, no origin) — `internal/cmd/status_test.go:1105`
 
 As hook targets, `dross status` and `dross state touch` exit 0 with no output in a repo that isn't a dross repo — see [Root resolution](#root-resolution) for what that means. The swallow is scoped to those two entry points, not pushed down into `loadState`: `dross state show` stays loud on a non-root, and a corrupt `state.json` is loud everywhere and names its path.
 
 State is readable through the same dotted-path grammar as project and milestone config — `dross state get` takes one or more paths through the shared `renderMultiGet`, and `dross state show --json` is accepted (it already emitted JSON, so the flag is a no-op on output rather than a format conversion). See [Configuration](#configuration) for the shared read/write shape.
 
-_c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · extended root-robustness · extended cli-surface-sweep · extended state-json-branch-safety · extended completion-state-truth · 1ecde33 · extended guard-remedy-ordering · a1fde85 · extended completion-record-truth · beb597f_
+_c8b346e · extended 04-status-action-surfaces · extended status-action-surfaces-v2 · extended ship-complete-recovery-hardening · extended root-robustness · extended cli-surface-sweep · extended state-json-branch-safety · extended completion-state-truth · 1ecde33 · extended guard-remedy-ordering · a1fde85 · extended completion-record-truth · beb597f · extended reentry-signal-truth · 6c89784_
 
 ### Status line (native)
 
@@ -910,7 +919,7 @@ Dependency-free, language-agnostic tech-debt scan: TODO/FIXME/HACK/XXX markers (
 - `Techdebt` (CLI) — `internal/cmd/techdebt.go:22`
 - `trackedFiles` (.dross-excluded scan set, both enumeration paths) — `internal/cmd/techdebt.go:68`
 - `findings.StampLastRun` — `internal/findings/state.go:121`
-- `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:391`
+- `actionCatalog` (status actions all slash commands) — `internal/cmd/status.go:428`
 - `/dross-techdebt` thin skill — `assets/prompts/techdebt.md`
 
 _introduced status-action-surfaces-v2 · extended task-reordering · extended self-audit · 01e2adb_
@@ -990,7 +999,7 @@ _e31bdbd · extended context-hygiene · extended verify-auto-finalize · extende
 
 ### Watch heartbeat (dross-watch)
 
-Read-only `/loop` heartbeat: `dross watch --json` surfaces board issues new-since-last-tick vs carried (an atomically-persisted seen-set diff keyed on id + open/closed state) plus the current milestone's drifting phases, and ends with exactly one ranked suggested command. A board that is off or unreachable degrades to a drift-only digest; the only thing a run ever writes is `.dross/watch.state.json`. The digest also carries the **stranded-mirror count** — cards whose artefact finished but whose lane never closed them — read from the reap sweep's own classifier rather than a second opinion, and omitted entirely when it is zero or the board was unreachable, so a quiet board stays quiet. The prompt names `dross issue reap` in prose as the remedy but emits no sweep command (locked `prompt_edge`): the heartbeat is a detector, and a 90-call whole-board walk is not something a `/loop` tick should trigger on its own.
+Read-only `/loop` heartbeat: `dross watch --json` surfaces board issues new-since-last-tick vs carried (an atomically-persisted seen-set diff keyed on id + open/closed state) plus the current milestone's drifting phases, and ends with exactly one ranked suggested command. A board that is off or unreachable degrades to a drift-only digest; the only thing a run ever writes is `.dross/watch.state.json`. The digest also carries the **stranded-mirror count** — cards whose artefact finished but whose lane never closed them — read from the reap sweep's own classifier rather than a second opinion, and omitted entirely when it is zero or the board was unreachable, so a quiet board stays quiet. The prompt names `dross issue reap` in prose as the remedy but emits no sweep command (locked `prompt_edge`): the heartbeat is a detector, and a 90-call whole-board walk is not something a `/loop` tick should trigger on its own. Drift itself is classified off the completion record via [Phase doneness](#phase-doneness), so a finished phase leaves the digest permanently instead of reappearing as verified-unshipped drift once its state-history breadcrumb ages out.
 
 - `Watch` (`dross watch --json`) — `internal/cmd/watch.go:37`
 - `watchDigest.Stranded` (stranded-mirror count, omitted when zero or the board is unreachable) — `internal/cmd/watch.go:31`
@@ -1000,4 +1009,4 @@ Read-only `/loop` heartbeat: `dross watch --json` surfaces board issues new-sinc
 - `collectInbound` (mark-free inbound filter, shared with `issue pull`) — `internal/cmd/issue.go:1364`
 - `/dross-watch` prompt (non-interactive broadcast) — `assets/prompts/watch.md:1`
 
-_introduced dross-watch · 5694cf5 · extended board-mirror-reaper · 757a576_
+_introduced dross-watch · 5694cf5 · extended board-mirror-reaper · 757a576 · extended reentry-signal-truth · f19cc07_
