@@ -276,29 +276,66 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	if !hasVerify {
 		return "/dross-verify — check criterion coverage and test efficacy"
 	}
-	// A shipped phase is waiting on a merge, not on another ship. Routed
-	// BEFORE the verdict switch below: that branch sees a pass verdict plus
-	// recorded changes and would advise `/dross-ship` on a phase whose PR is
-	// already open — advice printed directly under the `shipped:` line naming
-	// that PR. Ship leaves current_phase set now, so this state is reachable
-	// on every phase between the push and the merge.
+	// What the PR is doing outranks the verdict switch below. That switch sees
+	// a pass verdict plus recorded changes and returns `/dross-ship` first, so
+	// a phase whose PR has already landed never reaches any later branch — the
+	// reason this consult sits HERE and not at the end.
+	//
+	// The oracle is keyed on the phase id rather than HEAD, so it answers the
+	// same from main as from the phase branch. The SessionStart hook this line
+	// feeds usually runs from main.
+	//
+	// Skipped once the phase's own record says complete: there is then nothing
+	// left to write, and the phase's ordinary next step applies.
+	mainBranch := proj.Repo.GitMainBranch
+	if mainBranch == "" {
+		mainBranch = "main"
+	}
+	if !changes.Complete(root, st.CurrentPhase) {
+		switch phaseMergeState(root, filepath.Dir(root), st.CurrentPhase, mainBranch) {
+		case mergeMerged:
+			return "`dross phase complete " + st.CurrentPhase + "` — the PR is merged; this writes the completion record"
+		case mergeOpen:
+			return "merge the open PR, then `dross phase complete " + st.CurrentPhase + "` — it writes the completion record"
+		}
+		// mergeNoPR and mergeUnknown fall through: nothing was observed that
+		// outranks the phase's own next step.
+	}
+	// A shipped phase is waiting on a merge, not on another ship. Ship leaves
+	// current_phase set now, so this state is reachable on every phase between
+	// the push and the merge — and it is the answer whenever the oracle could
+	// not see the merge for itself (no local branch, no origin ref, a base run
+	// far past the fork).
 	if st.CurrentPhaseStatus == "shipped" {
 		return "merge the open PR, then `dross phase complete " + st.CurrentPhase + "` — it writes the completion record"
 	}
-	// Read verify verdict to refine the hint.
-	if verdict := readVerifyVerdict(filepath.Join(dir, "verify.toml")); verdict != "" {
-		switch verdict {
-		case "fail", "partial":
-			return "verify is " + verdict + " — /dross-execute " + st.CurrentPhase + " to amend, findings in " + filepath.Join(".dross/phases", st.CurrentPhase, "verify.toml")
-		case "pass":
-			// recorded changes = unshipped work → shipping is the next step
-			ch, _ := changes.Load(changes.FilePath(root, st.CurrentPhase), st.CurrentPhase)
-			if ch != nil && len(ch.Tasks) > 0 {
-				return "/dross-ship — open the PR and complete the phase"
-			}
-		}
+
+	verdict := readVerifyVerdict(filepath.Join(dir, "verify.toml"))
+	// An unfinalized verdict is its own step, and this arm sits OUTSIDE any
+	// `verdict != ""` guard on purpose: an empty verdict is the commonest shape
+	// of the forget-to-finalize hole, and a guard would drop it straight past
+	// here. The predicate is pendingVerdicts' own, so the `pending:` line four
+	// lines up and this line cannot disagree about which phases are unfinalized.
+	//
+	// It names `dross verify finalize`, the verb that line already names — NOT
+	// /dross-verify, which re-runs mutation over a verify.toml that is already
+	// written.
+	if verdict == "" || verdict == "pending" {
+		return "`dross verify finalize " + st.CurrentPhase + "` — verify.toml carries no verdict yet"
 	}
-	return "phase looks complete — start a new phase or move on"
+	if verdict == "fail" || verdict == "partial" {
+		return "verify is " + verdict + " — /dross-execute " + st.CurrentPhase + " to amend, findings in " + filepath.Join(".dross/phases", st.CurrentPhase, "verify.toml")
+	}
+	// Everything left is a finalized non-failing verdict on a phase with no
+	// merge to point at. Shipping is the step that writes the record whose
+	// absence got us here.
+	//
+	// This deliberately has no `phase looks complete` fall-through. That branch
+	// asserted a doneness no record carried: a verify verdict is not a
+	// completion, and a phase can pass verification and never open a PR. Naming
+	// the verb that would MAKE the record exist is the only honest answer, and
+	// it keeps this line and the doneness readers on one truth source.
+	return "/dross-ship — open the PR and complete the phase"
 }
 
 // spineIdle reports whether the spec→ship spine has no actionable step left —

@@ -10,6 +10,7 @@ import (
 
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -1477,5 +1478,197 @@ func TestStatusShippedLineStillFiresOnAShippedRecord(t *testing.T) {
 	out := captureStdout(t, func() { runCmd(t, Status()) })
 	if !strings.Contains(out, "shipped:") {
 		t.Errorf("a shipped-not-complete phase is waiting on a merge and must be announced:\n%s", out)
+	}
+}
+
+// --- suggestNext's terminal region (t-4) ------------------------------------
+
+// terminalPhaseFixture builds the one shape that reaches suggestNext's terminal
+// region: a scaffolded phase with every task done, a finalized pass verdict, and
+// a changes record carrying ZERO tasks and no completion status. The whole
+// family varies only `pr` and what has been merged.
+//
+// The phase artefacts are written last and left untracked, so they survive the
+// branch switches below and are present in the working tree from main — where
+// the SessionStart hook actually runs.
+func terminalPhaseFixture(t *testing.T, slug string, pr int) string {
+	t.Helper()
+	dir := t.TempDir()
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remote)
+	chdir(t, dir)
+
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustRunSet(t, "project.name", "test-app")
+	mustRunSet(t, "runtime.mode", "native")
+	mustRunSet(t, "repo.git_main_branch", "main")
+	if err := runCmd(t, State(), "set", "current_milestone", "v1.0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "set", "current_phase", slug); err != nil {
+		t.Fatal(err)
+	}
+
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	mustGit(t, dir, "checkout", "-q", "-b", "phase/"+slug)
+	mustWrite(t, filepath.Join(dir, slug+".txt"), "work\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat("+slug+"): work")
+	mustGit(t, dir, "checkout", "-q", "main")
+
+	pdir := filepath.Join(dir, ".dross", "phases", slug)
+	mustWrite(t, filepath.Join(pdir, "spec.toml"), "[phase]\n  id = \""+slug+"\"\n  title = \""+slug+"\"\n")
+	mustWrite(t, filepath.Join(pdir, "plan.toml"), `[phase]
+id = "`+slug+`"
+[[task]]
+id = "t-1"
+wave = 1
+title = "work"
+files = ["`+slug+`.txt"]
+covers = ["c-1"]
+status = "done"
+`)
+	mustWrite(t, filepath.Join(pdir, "verify.toml"), "[verify]\nphase = \""+slug+"\"\nverdict = \"pass\"\n")
+	writeOracleChanges(t, dir, slug, pr, "main")
+	return dir
+}
+
+func suggestFor(t *testing.T, dir string) string {
+	t.Helper()
+	root := filepath.Join(dir, ".dross")
+	proj, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Load(filepath.Join(root, state.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return suggestNext(root, proj, st)
+}
+
+// TestSuggestNextMergedPRAdvisesCompletion is c-4's load-bearing case. The PR
+// has landed and no completion record was ever written — the exact state that
+// used to print `phase looks complete — start a new phase or move on`, which
+// asserted a doneness no record carried and named no verb to fix it.
+//
+// It also proves the consult happens BEFORE the verdict switch: with a pass
+// verdict this phase would otherwise return /dross-ship first and never reach
+// any later branch.
+func TestSuggestNextMergedPRAdvisesCompletion(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 42)
+	mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "merge auth", "phase/auth")
+	mustGit(t, dir, "push", "-q", "origin", "main")
+
+	got := suggestFor(t, dir)
+	if !strings.Contains(got, "dross phase complete auth") {
+		t.Errorf("a merged PR with no completion record should name `dross phase complete auth`, got:\n%s", got)
+	}
+	if strings.Contains(got, "/dross-ship") {
+		t.Errorf("a merged PR must not be advised to ship again:\n%s", got)
+	}
+}
+
+// TestSuggestNextOpenPRAdvisesTheMerge: an open PR is waiting on a merge, not
+// on a completion and not on another ship. Folding it into the merged arm would
+// advise writing a completion record for work that has not landed.
+func TestSuggestNextOpenPRAdvisesTheMerge(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 42)
+
+	got := suggestFor(t, dir)
+	if !strings.Contains(got, "merge the open PR") {
+		t.Errorf("a recorded but unmerged PR should point at the merge, got:\n%s", got)
+	}
+}
+
+// TestSuggestNextNoPRFallsThrough: the merged arm must fire on `merged` and
+// nothing else. A phase that never opened a PR is not complete-able — the verb
+// that would make its record exist is /dross-ship.
+func TestSuggestNextNoPRFallsThrough(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 0)
+
+	got := suggestFor(t, dir)
+	if strings.Contains(got, "dross phase complete") {
+		t.Errorf("a phase with no recorded PR must not be advised to complete:\n%s", got)
+	}
+	if !strings.Contains(got, "/dross-ship") {
+		t.Errorf("a pass verdict with no PR should point at /dross-ship, got:\n%s", got)
+	}
+}
+
+// TestSuggestNextTerminalShapeShipsRatherThanDeclaringDoneness: the removed
+// `phase looks complete` branch was reachable exactly here — a pass verdict on a
+// changes record carrying zero tasks. Restoring it re-asserts a doneness the
+// record does not carry.
+func TestSuggestNextTerminalShapeShipsRatherThanDeclaringDoneness(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 0)
+	root := filepath.Join(dir, ".dross")
+	ch, err := changes.Load(changes.FilePath(root, "auth"), "auth")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ch.Tasks) != 0 || ch.Status != "" {
+		t.Fatalf("fixture must carry zero tasks and no status, got %d tasks status=%q", len(ch.Tasks), ch.Status)
+	}
+
+	got := suggestFor(t, dir)
+	if strings.Contains(got, "looks complete") {
+		t.Errorf("the terminal branch is back — it asserts a doneness no record carries:\n%s", got)
+	}
+	if !strings.Contains(got, "/dross-ship") {
+		t.Errorf("want /dross-ship, got:\n%s", got)
+	}
+}
+
+// TestSuggestNextUnfinalizedVerdictNamesFinalize: the arm sits OUTSIDE the
+// `verdict != ""` guard the old code had, because an EMPTY verdict is the
+// commonest shape of the forget-to-finalize hole — a guard drops it straight
+// past. And it names `dross verify finalize`, not /dross-verify, which would
+// re-run mutation over a verify.toml that is already written.
+func TestSuggestNextUnfinalizedVerdictNamesFinalize(t *testing.T) {
+	for _, verdict := range []string{"", "pending"} {
+		dir := terminalPhaseFixture(t, "auth", 0)
+		body := "[verify]\nphase = \"auth\"\n"
+		if verdict != "" {
+			body += "verdict = \"" + verdict + "\"\n"
+		} else {
+			body += "verdict = \"\"\n"
+		}
+		mustWrite(t, filepath.Join(dir, ".dross", "phases", "auth", "verify.toml"), body)
+
+		got := suggestFor(t, dir)
+		if !strings.Contains(got, "dross verify finalize auth") {
+			t.Errorf("verdict %q should point at `dross verify finalize auth`, got:\n%s", verdict, got)
+		}
+		if strings.Contains(got, "/dross-verify") {
+			t.Errorf("verdict %q named /dross-verify, which re-runs mutation over a written verify.toml:\n%s", verdict, got)
+		}
+	}
+}
+
+// TestStatusNamesOneVerbForAnUnfinalizedVerdict is the cross-surface contract:
+// one `dross status` run must not name two different verbs for the same signal.
+// The `pending:` line says `dross verify finalize`; the re-entry line four lines
+// down has to agree.
+func TestStatusNamesOneVerbForAnUnfinalizedVerdict(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 0)
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "auth", "verify.toml"),
+		"[verify]\nphase = \"auth\"\nverdict = \"\"\n")
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if !strings.Contains(out, "unfinalized verdict(s): auth") {
+		t.Fatalf("fixture must raise the pending line:\n%s", out)
+	}
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	last := lines[len(lines)-1]
+	if !strings.Contains(last, "dross verify finalize auth") {
+		t.Errorf("the re-entry line names a different verb than the pending: line:\n%s", out)
 	}
 }
