@@ -699,3 +699,57 @@ func TestBackfilledRecordCarriesNoCommitKey(t *testing.T) {
 		t.Errorf("the evidence must serialize as backfill_evidence with an inner sha:\n%s", body)
 	}
 }
+
+// TestCompleteIsExactlyStatusComplete pins the narrow predicate the re-entry
+// surfaces read. `shipped` is the load-bearing negative: it is a phase mid-flight
+// between the push and the merge, which is precisely what those surfaces exist
+// to announce — widening Complete to accept it silences the merge gate.
+func TestCompleteIsExactlyStatusComplete(t *testing.T) {
+	cases := []struct {
+		status string
+		want   bool
+	}{
+		{StatusComplete, true},
+		{StatusShipped, false},
+		{"", false},
+		{"COMPLETE", false},
+		{"completed", false},
+	}
+	for _, tc := range cases {
+		root := t.TempDir()
+		c := New("p")
+		c.Status = tc.status
+		if err := c.Save(FilePath(root, "p")); err != nil {
+			t.Fatal(err)
+		}
+		if got := Complete(root, "p"); got != tc.want {
+			t.Errorf("Complete with status %q = %v, want %v", tc.status, got, tc.want)
+		}
+		if got := c.Complete(); got != tc.want {
+			t.Errorf("(*Changes).Complete with status %q = %v, want %v", tc.status, got, tc.want)
+		}
+	}
+}
+
+// TestCompleteTreatsAbsenceAsNotDone: a missing record, an unreadable one and a
+// nil receiver are all "unknown", never "done". Absence of evidence closing a
+// phase out is how a surface goes silent about work that never finished.
+func TestCompleteTreatsAbsenceAsNotDone(t *testing.T) {
+	root := t.TempDir()
+	if Complete(root, "never-scaffolded") {
+		t.Error("a phase with no changes.json must not read complete")
+	}
+	if err := os.MkdirAll(filepath.Dir(FilePath(root, "garbled")), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(FilePath(root, "garbled"), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if Complete(root, "garbled") {
+		t.Error("an unreadable changes.json must not read complete")
+	}
+	var nilC *Changes
+	if nilC.Complete() {
+		t.Error("a nil record must not read complete")
+	}
+}

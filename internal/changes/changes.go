@@ -347,3 +347,33 @@ func (c *Changes) Record(taskID string, files []string, commit, notes string, la
 		Landmarks:   landmarks,
 	}
 }
+
+// Complete reports whether a phase's record says `dross phase complete`
+// reconciled it — status is exactly StatusComplete.
+//
+// It is the narrower sibling of cmd.phaseDone, and deliberately NOT the same
+// question. phaseDone asks "did this phase finish its run?", which StatusShipped
+// also answers; that is right for milestone counting. The re-entry surfaces
+// (watch's drift digest, the reconcile count, status's waiting-on-merge line,
+// the SessionStart line) ask "is this phase closed out?" — and a shipped record
+// is a phase mid-flight between the push and the merge, which is exactly the
+// state those surfaces exist to announce. Reading phaseDone there would silence
+// the merge gate, so the narrowing stays.
+//
+// A missing or unreadable record is not complete: absence of evidence is
+// "unknown", never "done" — the same reasoning phaseIsDone carries.
+func Complete(root, phaseID string) bool {
+	c, err := Load(FilePath(root, phaseID), phaseID)
+	if err != nil {
+		return false
+	}
+	return c.Complete()
+}
+
+// Complete is the predicate over an already-loaded record. Callers that need to
+// distinguish "unreadable" from "not complete" (the reap sweep does) load the
+// record themselves and ask it here, so there is one definition of complete
+// rather than one per reader.
+func (c *Changes) Complete() bool {
+	return c != nil && c.Status == StatusComplete
+}

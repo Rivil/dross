@@ -12,8 +12,8 @@ import (
 )
 
 // Drift buckets. These reuse the same phase-state signals `dross status`
-// computes (runnable/failed task, verify verdict, `completed <slug>` in
-// history), reimplemented in-package to avoid an internal/cmd import cycle
+// computes (runnable/failed task, verify verdict, the phase's completion
+// record), reimplemented in-package to avoid an internal/cmd import cycle
 // (per the locked drift_signals decision).
 const (
 	// DriftInProgress: the phase still has a runnable or failed task, or no
@@ -23,9 +23,9 @@ const (
 	// (verify.toml absent, or verdict empty/pending/partial/fail).
 	DriftCompleteUnverified = "complete_unverified"
 	// DriftVerifiedUnshipped: verify passed but the phase has neither been
-	// shipped nor completed — no `completed <slug>` in state history (written
-	// by `dross phase complete` after it confirms the merge) and no open PR
-	// awaiting one.
+	// shipped nor completed — its changes.json carries no `complete` status
+	// (written by `dross phase complete` after it confirms the merge) and it has
+	// no open PR awaiting one.
 	DriftVerifiedUnshipped = "verified_unshipped"
 )
 
@@ -38,17 +38,19 @@ type PhaseDrift struct {
 // ClassifyDrift walks every phase under root/phases and returns the ones still
 // in flight, bucketed. It reads only phase files + the passed state (no board
 // client), which is the drift-only path the board-off/unreachable digest leans
-// on. A phase that is completed (shipped) contributes no drift.
+// on. A phase whose completion record reads `complete` contributes no drift.
 func ClassifyDrift(root string, st *state.State) ([]PhaseDrift, error) {
 	ids, err := phase.List(root)
 	if err != nil {
 		return nil, err
 	}
 	// Scope to the current milestone's phases when one is set. A heartbeat
-	// surfaces in-flight work, not every phase ever — and scoping sidesteps the
-	// state.History 50-entry cap: a phase shipped many milestones ago has no
-	// `completed <slug>` record left, so unscoped it would misread as
-	// verified_unshipped forever. With no current milestone (or an unloadable
+	// surfaces in-flight work, not every phase ever. It used to be load-bearing
+	// for correctness too — doneness came from the state.History 50-entry
+	// window, so an old phase whose `completed <slug>` breadcrumb had aged out
+	// misread as verified_unshipped forever, and scoping hid it. classifyPhase
+	// now reads the phase's own completion record, which never scrolls, so this
+	// is relevance filtering alone. With no current milestone (or an unloadable
 	// one), fall back to every phase.
 	if scope := currentMilestonePhases(root, st); scope != nil {
 		ids = intersect(ids, scope)
@@ -93,7 +95,10 @@ func intersect(ids []string, scope map[string]bool) []string {
 // classifyPhase returns a phase's drift bucket and whether it drifts at all.
 func classifyPhase(root, id string, st *state.State) (string, bool) {
 	// A completed phase is closed out — never drift, regardless of verdict.
-	if stateHasCompleted(st, id) {
+	// The authority is the phase's own record, not a state.History breadcrumb:
+	// history is a capped window, so a breadcrumb read has a long-finished phase
+	// reappear in the digest fifty actions later.
+	if changes.Complete(root, id) {
 		return "", false
 	}
 	// A shipped phase with an open PR is waiting on a merge, not drifting.
@@ -119,21 +124,6 @@ func classifyPhase(root, id string, st *state.State) (string, bool) {
 		return DriftInProgress, true
 	}
 	return DriftCompleteUnverified, true
-}
-
-// stateHasCompleted reports whether state history carries a `completed <id>`
-// action — the record `dross phase complete` writes once the merge is
-// confirmed.
-func stateHasCompleted(st *state.State, id string) bool {
-	if st == nil {
-		return false
-	}
-	for _, a := range st.History {
-		if strings.Contains(a.Action, "completed "+id) {
-			return true
-		}
-	}
-	return false
 }
 
 // stateHasShipped reports whether id is the current phase and reads `shipped`.
