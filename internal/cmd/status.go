@@ -604,6 +604,103 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 	return sh, true
 }
 
+// The four answers phaseMergeState gives. They are a closed set: every path
+// that is not a positive observation lands on mergeUnknown, never on mergeOpen.
+const (
+	// mergeNoPR: the phase's record carries no PR number, so there is nothing
+	// to be merged or unmerged. Its own arm rather than a flavour of unknown —
+	// "never shipped" is a fact, not an uncertainty.
+	mergeNoPR = "no-pr"
+	// mergeOpen: the recorded PR's work is observably not on origin/<base>.
+	mergeOpen = "open"
+	// mergeMerged: the phase branch is an ancestor of origin/<base>, or its
+	// content landed there as a squash.
+	mergeMerged = "merged"
+	// mergeUnknown: not enough local evidence to say. Every git error, every
+	// missing ref, and a base that has run past the squash scan limit.
+	mergeUnknown = "unknown"
+)
+
+// phaseMergeState answers "has this NAMED phase's PR landed on its base?" from
+// local refs alone.
+//
+// It is keyed on a phase id, not on HEAD, which is why it cannot be expressed
+// as an inversion of shippedUnmergedPhase: that helper starts by reading HEAD
+// and bails unless it is on phase/<id>, and its ok=false lumps together "not a
+// phase branch, not shipped, no origin, or genuinely merged". The SessionStart
+// hook that consumes this usually runs from main, about a phase that is not
+// checked out — so both of those are disqualifying. The two deliberately stay
+// separate rather than one absorbing the other: shippedUnmergedPhase's merge
+// check is one clause of a HEAD-scoped question with its own suppressors, and
+// folding this in would either drag those suppressors onto the re-entry line or
+// strip them from the waiting-on-merge line.
+//
+// Two caveats follow from being network-free, and neither is a defect to fix
+// here — `dross status` runs on every session start and must not fetch:
+//
+//   - mergeMerged means "merged as of the last fetch". It cannot go stale in
+//     the dangerous direction (a merge does not un-merge), so this is safe.
+//   - mergeOpen silently includes "merged, but this clone has not fetched the
+//     base since". A caller acting on mergeOpen must be advising something that
+//     is harmless when the PR has in fact landed.
+//
+// Uncertainty is always mergeUnknown: an unreadable record, a missing local
+// refs/heads/phase/<slug> (which `dross phase complete` deletes, and a fresh
+// clone never had), a missing origin/<base>, a base more than
+// staleSquashScanLimit commits ahead of the branch, and every git error path.
+func phaseMergeState(root, repoDir, slug, mainBranch string) string {
+	ch, err := changes.Load(changes.FilePath(root, slug), slug)
+	if err != nil || ch == nil {
+		return mergeUnknown
+	}
+	if ch.PR == 0 {
+		return mergeNoPR
+	}
+	base := mainBranch
+	if ch.Base != "" {
+		base = ch.Base
+	}
+	branch := "phase/" + slug
+	// The local branch is the only thing there is to compare against. `dross
+	// phase complete` deletes it on the way out and a fresh clone never had it,
+	// so its absence is genuinely "no local evidence" — not "unmerged".
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+branch)...) != nil {
+		return mergeUnknown
+	}
+	baseRef := "origin/" + base
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
+		return mergeUnknown
+	}
+	merged, err := isAncestor(repoDir, branch, baseRef)
+	if err != nil {
+		return mergeUnknown
+	}
+	if merged {
+		return mergeMerged
+	}
+	// Squash-merged counts as merged: the content is on the base under a commit
+	// the base's history doesn't descend from, which ancestry cannot see. The
+	// scan is per-commit, so a base that has run far ahead of the fork is
+	// answered with silence rather than a slow status — see
+	// staleSquashScanLimit.
+	count, err := gitTrim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+branch)...)
+	if err != nil {
+		return mergeUnknown
+	}
+	n, convErr := strconv.Atoi(count)
+	if convErr != nil || n > staleSquashScanLimit {
+		return mergeUnknown
+	}
+	squash, err := resolveSquashCommit(repoDir, branch, baseRef)
+	if err != nil {
+		return mergeUnknown
+	}
+	if squash != "" {
+		return mergeMerged
+	}
+	return mergeOpen
+}
+
 func progressBar(done, total, width int) string {
 	if total == 0 {
 		return "[" + strings.Repeat("·", width) + "]"

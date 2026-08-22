@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1298,4 +1299,130 @@ func TestStatusPromptDoesNotAttributeBacklogSolelyToSpec(t *testing.T) {
 	if !strings.Contains(content, "dross deferred add") {
 		t.Error("status.md does not name `dross deferred add` as a source of someday items")
 	}
+}
+
+// --- phaseMergeState: the phase-id-keyed merge oracle (t-2) -----------------
+
+// mergeOracleFixture builds a real repo with a pushed `main` on a bare origin
+// and one `phase/<slug>` branch carrying a commit, then leaves HEAD on main —
+// where the SessionStart hook actually runs. Returns the repo dir; the dross
+// root is dir/.dross.
+func mergeOracleFixture(t *testing.T, slug string) string {
+	t.Helper()
+	dir := t.TempDir()
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remote)
+
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	mustGit(t, dir, "checkout", "-q", "-b", "phase/"+slug)
+	mustWrite(t, filepath.Join(dir, slug+".txt"), "work\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat("+slug+"): work")
+	mustGit(t, dir, "checkout", "-q", "main")
+	return dir
+}
+
+// writeOracleChanges writes the phase's changes.json with a PR number and base.
+func writeOracleChanges(t *testing.T, dir, slug string, pr int, base string) {
+	t.Helper()
+	body := fmt.Sprintf(`{"phase":%q,"pr":%d,"base":%q,"tasks":{}}`, slug, pr, base)
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", slug, "changes.json"), body)
+}
+
+func oracleState(t *testing.T, dir, slug string) string {
+	t.Helper()
+	return phaseMergeState(filepath.Join(dir, ".dross"), dir, slug, "main")
+}
+
+// TestPhaseMergeStateKeysOnThePhaseNotHEAD is the load-bearing case for the
+// oracle's reason to exist. HEAD is main throughout — a fresh session's normal
+// state — and the phase branch is not checked out. shippedUnmergedPhase reads
+// HEAD first and answers ok=false here; the oracle must still see the merge.
+func TestPhaseMergeStateKeysOnThePhaseNotHEAD(t *testing.T) {
+	dir := mergeOracleFixture(t, "auth")
+	writeOracleChanges(t, dir, "auth", 42, "main")
+	mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "merge auth", "phase/auth")
+	mustGit(t, dir, "push", "-q", "origin", "main")
+
+	if got := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); got != "main" {
+		t.Fatalf("fixture must run from main, got %q", got)
+	}
+	if got := oracleState(t, dir, "auth"); got != mergeMerged {
+		t.Errorf("phaseMergeState from main = %q, want %q", got, mergeMerged)
+	}
+}
+
+// TestPhaseMergeStateNoPRIsItsOwnAnswer: a phase that never opened a PR has
+// nothing to be merged or unmerged. Folding it into open would advise a merge
+// that does not exist; folding it into merged would claim one that never
+// happened. The fixture's branch is genuinely unmerged, so a no-PR case that
+// leaked into the ancestry logic would come back `open`.
+func TestPhaseMergeStateNoPRIsItsOwnAnswer(t *testing.T) {
+	dir := mergeOracleFixture(t, "auth")
+	writeOracleChanges(t, dir, "auth", 0, "main")
+	if got := oracleState(t, dir, "auth"); got != mergeNoPR {
+		t.Errorf("phaseMergeState with no recorded PR = %q, want %q", got, mergeNoPR)
+	}
+	// And a phase with no record at all is unknown, not no-PR: an unreadable
+	// record is missing evidence, never a fact about the PR.
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "garbled", "changes.json"), "{not json")
+	if got := oracleState(t, dir, "garbled"); got != mergeUnknown {
+		t.Errorf("phaseMergeState over an unreadable record = %q, want %q", got, mergeUnknown)
+	}
+}
+
+// TestPhaseMergeStateOpenNeedsAPositiveObservation pins the one arm that is a
+// claim rather than a fallback: open is reported only when the branch is really
+// not on origin/<base>.
+func TestPhaseMergeStateOpenNeedsAPositiveObservation(t *testing.T) {
+	dir := mergeOracleFixture(t, "auth")
+	writeOracleChanges(t, dir, "auth", 42, "main")
+	if got := oracleState(t, dir, "auth"); got != mergeOpen {
+		t.Errorf("phaseMergeState with an unmerged branch = %q, want %q", got, mergeOpen)
+	}
+}
+
+// TestPhaseMergeStateUncertaintyIsAlwaysUnknown walks every path that is not a
+// positive observation. Each of these collapsing into open would have the
+// re-entry line advise a merge on a phase it knows nothing about; collapsing
+// into merged would advise a completion for work that may never have landed.
+func TestPhaseMergeStateUncertaintyIsAlwaysUnknown(t *testing.T) {
+	t.Run("missing origin base ref", func(t *testing.T) {
+		dir := mergeOracleFixture(t, "auth")
+		// A base recorded as a milestone branch that was never pushed.
+		writeOracleChanges(t, dir, "auth", 42, "milestone/v9")
+		if got := oracleState(t, dir, "auth"); got != mergeUnknown {
+			t.Errorf("phaseMergeState with no origin/milestone/v9 = %q, want %q", got, mergeUnknown)
+		}
+	})
+
+	t.Run("deleted phase branch", func(t *testing.T) {
+		dir := mergeOracleFixture(t, "auth")
+		writeOracleChanges(t, dir, "auth", 42, "main")
+		// `dross phase complete` deletes the branch on the way out; a fresh
+		// clone never had it. Neither is evidence the PR is still open.
+		mustGit(t, dir, "branch", "-D", "phase/auth")
+		if got := oracleState(t, dir, "auth"); got != mergeUnknown {
+			t.Errorf("phaseMergeState with no local phase branch = %q, want %q", got, mergeUnknown)
+		}
+	})
+
+	t.Run("base past the squash scan limit", func(t *testing.T) {
+		dir := mergeOracleFixture(t, "auth")
+		writeOracleChanges(t, dir, "auth", 42, "main")
+		for i := 0; i <= staleSquashScanLimit; i++ {
+			mustWrite(t, filepath.Join(dir, fmt.Sprintf("m%d.txt", i)), "x\n")
+			mustGit(t, dir, "add", ".")
+			mustGit(t, dir, "commit", "-q", "-m", fmt.Sprintf("chore: main %d", i))
+		}
+		mustGit(t, dir, "push", "-q", "origin", "main")
+		if got := oracleState(t, dir, "auth"); got != mergeUnknown {
+			t.Errorf("phaseMergeState with a base past the scan limit = %q, want %q", got, mergeUnknown)
+		}
+	})
 }
