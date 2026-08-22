@@ -1,7 +1,9 @@
 {
   "phase": "reentry-signal-truth",
+  "pr": 105,
   "base": "milestone/v1.5",
   "base_commit": "3854b8c1cab2d64358ead343283c91c3bf0334a0",
+  "status": "shipped",
   "tasks": {
     "t-1": {
       "files": [
