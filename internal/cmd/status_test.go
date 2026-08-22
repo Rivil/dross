@@ -1672,3 +1672,37 @@ func TestStatusNamesOneVerbForAnUnfinalizedVerdict(t *testing.T) {
 		t.Errorf("the re-entry line names a different verb than the pending: line:\n%s", out)
 	}
 }
+
+// TestSuggestNextShippedWithoutAnObservablePRWaitsOnTheMerge covers the arm
+// this phase left holding one case and nothing else.
+//
+// The phaseMergeState switch above it intercepts every shipped phase whose PR
+// the oracle can observe, so the `CurrentPhaseStatus == "shipped"` return is
+// now reached only on mergeNoPR/mergeUnknown — the "no local branch, no origin
+// ref, a base run far past the fork" shape its comment names. Nothing in the
+// suite reached that combination, which is why gremlins scored the line NOT
+// COVERED and never ran its mutants.
+//
+// pr=0 is mergeNoPR, so the switch falls through by construction; the assert on
+// the oracle pins that, because a fixture that stopped falling through would
+// pass this test from the switch's own open arm and cover nothing.
+func TestSuggestNextShippedWithoutAnObservablePRWaitsOnTheMerge(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 0)
+	if got := oracleState(t, dir, "auth"); got != mergeNoPR {
+		t.Fatalf("fixture must fall through the merge switch to reach the shipped arm: oracle = %q, want %q", got, mergeNoPR)
+	}
+	if err := runCmd(t, State(), "set", "current_phase_status", "shipped"); err != nil {
+		t.Fatalf("set current_phase_status: %v", err)
+	}
+
+	got := suggestFor(t, dir)
+	if !strings.Contains(got, "merge the open PR") {
+		t.Errorf("a shipped phase is waiting on a merge, not on another ship, got:\n%s", got)
+	}
+	if !strings.Contains(got, "dross phase complete auth") {
+		t.Errorf("the merge is only half the step — the completion record is the other half, got:\n%s", got)
+	}
+	if strings.Contains(got, "/dross-ship") {
+		t.Errorf("shipped work must not be advised to ship again:\n%s", got)
+	}
+}
