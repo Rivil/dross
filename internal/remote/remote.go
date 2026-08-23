@@ -19,6 +19,7 @@ package remote
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
@@ -291,59 +292,171 @@ func ScriptAll(t Target, cmds [][]string) (string, error) {
 	return b.String(), nil
 }
 
-// SyncArgs returns the argv that pushes the local working tree to the target.
+// SyncArgs returns the argv that pushes the local working tree to the target,
+// together with a cleanup func the caller must call when the push is done.
 //
 // The flags are the locked sync_mechanism decision, and each carries weight:
 //
 //   - --delete keeps the remote tree honest about files git tracks. It does NOT
-//     make the remote tree fresh in general — the .gitignore filter protects
-//     ignored paths from deletion, and every report location is gitignored, so
-//     a stale remote REPORT survives this. Staleness of reports is the
-//     launcher's explicit rm, not this flag.
-//   - --filter=:- .gitignore is a per-directory merge rule: it reads each
-//     .gitignore as it descends, which keeps dependency dirs off the wire.
-//     Written without shell quotes because there is no shell here — the rule is
-//     one argv element and quoting it would make the quotes part of the rule.
-//   - --exclude=.git comes FIRST so it applies whatever the .gitignore files
-//     say; rsync evaluates filter rules in command-line order.
+//     make the remote tree fresh in general — excluded paths are protected from
+//     deletion, and every report location is gitignored, so a stale remote
+//     REPORT survives this. Staleness of reports is the launcher's explicit rm,
+//     not this flag.
+//   - the ignore rule keeps dependency dirs and build output off the wire. In
+//     a git work tree it is --exclude-from naming the repo's own ignored-path
+//     list, asked of git rather than approximated; elsewhere it stays the
+//     per-directory .gitignore merge. See ignoreRule for why the merge rule
+//     alone cannot do this job.
+//
+// .git IS synced, and the absence of --exclude=.git is the deliberate part.
+//
+// It was excluded originally to keep the wire small. That traded a few
+// megabytes for correctness: without .git the remote tree is not a git
+// repository, so every test that shells out to git fails there while passing
+// locally. On this repo that is six tests in internal/cmd
+// (TestStateJSONNotTracked, TestLocalStoreIsUntracked and friends, which assert
+// what git does and does not track) — enough to fail the package's coverage
+// pass, so gremlins writes no report and the package holding most of the code
+// goes unmeasured with nothing saying so.
+//
+// A remote run that measures a DIFFERENT tree than a local one is the thing
+// this whole seam exists to avoid, and 12M is not a reason to accept it. The
+// exclude list is what keeps node_modules and build output off the wire; that
+// was always the size lever.
 //
 // Uncommitted work is carried on purpose. Measuring the committed tree would
 // measure something the user is not looking at.
-func SyncArgs(t Target, localRoot string) ([]string, error) {
+//
+// This is the one argv builder in the package that is not pure — it shells out
+// to git and writes a temp file. That is the price of asking git the question
+// instead of guessing at the answer, and the cost is paid HERE rather than in a
+// separate exported step so that a caller cannot forget to pass the excludes
+// and silently get an unfiltered sync. The target is still validated before any
+// of it runs, so an unsafe host reaches neither git nor an argv.
+func SyncArgs(t Target, localRoot string) ([]string, func(), error) {
+	noop := func() {}
 	if err := t.Validate(); err != nil {
-		return nil, err
+		return nil, noop, err
 	}
 	src, err := localPath(localRoot, "local root")
 	if err != nil {
-		return nil, err
+		return nil, noop, err
+	}
+	ignore, cleanup, err := ignoreRule(src)
+	if err != nil {
+		return nil, noop, err
 	}
 	return []string{
 		"rsync",
 		"-az",
 		"--delete",
-		// .git IS synced, and the absence of `--exclude=.git` here is the
-		// deliberate part.
-		//
-		// It was excluded originally to keep the wire small. That traded a few
-		// megabytes for correctness: without .git the remote tree is not a git
-		// repository, so every test that shells out to git fails there while
-		// passing locally. On this repo that is six tests in internal/cmd
-		// (TestStateJSONNotTracked, TestLocalStoreIsUntracked and friends,
-		// which assert what git does and does not track) — enough to fail the
-		// package's coverage pass, so gremlins writes no report and the package
-		// holding most of the code goes unmeasured with nothing saying so.
-		//
-		// A remote run that measures a DIFFERENT tree than a local one is the
-		// thing this whole seam exists to avoid, and 12M is not a reason to
-		// accept it. The .gitignore filter below is what keeps node_modules and
-		// build output off the wire; that was always the size lever.
-		"--filter=:- .gitignore",
+		ignore,
 		// The trailing slash is load-bearing: without it rsync creates
 		// <workdir>/<basename>/ and every remote path in the run is off by one
 		// directory.
 		src + "/",
 		t.Host + ":" + t.Workdir,
-	}, nil
+	}, cleanup, nil
+}
+
+// ignoreRule returns the single rsync argv element that keeps ignored paths off
+// the wire, plus a cleanup func for any temp file it had to write.
+//
+// WHY NOT just --filter=:- .gitignore, which is the obvious way to do this and
+// is what this code did until it was measured:
+//
+// In rsync's per-directory merge, an ANCHORED rule (leading /) inside a
+// NON-ROOT .gitignore does not match, while unanchored rules in the very same
+// file do. So `/build/` in phone/.gitignore silently transfers the whole tree
+// while `.dart_tool/` beside it is correctly excluded — the file IS being read,
+// the rule just resolves against rsync's transfer root instead of the merge
+// file's own directory. git anchors it to the .gitignore's directory.
+//
+// The failure is silent and unbounded: on one repo it put 50,619 entries and
+// 5.2 GB of build output onto a remote root volume, and the only reason anyone
+// noticed was the disk filling. Every anchored rule in every non-root
+// .gitignore in every repo dross syncs was affected. The / filter modifier
+// (:-/ and dir-merge,-/) does NOT fix it; both were measured and still leak.
+//
+// So where there is a git work tree, ask git — it is the authority on what this
+// repo ignores, and the whole class of mismatch goes away. Where there is NOT
+// one, fall back to the per-directory merge: dross roots on .dross rather than
+// .git, so a non-git root is a supported case, and with no git to be
+// authoritative rsync's own reading of .gitignore is the only answer available.
+// That path is unchanged, so this fix regresses nothing.
+//
+// Note what deliberately still crosses in the git case: .git itself (SyncArgs
+// explains why that is load-bearing), tracked files that happen to match an
+// ignore rule (--others lists only untracked paths, and a tracked file is not
+// ignored), and uncommitted work.
+//
+// Residual gap, stated rather than left to be discovered: --directory collapses
+// a WHOLLY untracked directory into a single entry, so ignored files inside an
+// untracked, non-ignored directory are not listed and will cross. It is kept
+// because it prunes whole subtrees — the alternative lists every ignored file
+// individually (55,985 entries against 5,346 on one real repo) and makes rsync
+// match every pattern against every file. The gap fails toward sending too
+// much, never toward deleting, and it is strictly narrower than the anchoring
+// bug it replaces.
+//
+// The test for this MUST run against an empty destination. --itemize-changes
+// lists what would CHANGE, so a dry run against a populated target reports
+// nothing when the files are already identical — which reads as "the filter
+// works", and is how the broken rule survived measurement once already.
+func ignoreRule(root string) (string, func(), error) {
+	noop := func() {}
+	if !isGitWorkTree(root) {
+		return gitignoreMergeRule, noop, nil
+	}
+	// -z because git C-style-quotes paths with unusual characters otherwise,
+	// and a quoted path is not the path rsync needs to match.
+	out, err := exec.Command("git", "-C", root, "ls-files",
+		"--others", "--ignored", "--exclude-standard",
+		"--directory", "--no-empty-directory", "-z").Output()
+	if err != nil {
+		return "", noop, fmt.Errorf("listing ignored paths in %s: %w", root, err)
+	}
+	f, err := os.CreateTemp("", "dross-rsync-exclude-*")
+	if err != nil {
+		return "", noop, err
+	}
+	cleanup := func() { os.Remove(f.Name()) }
+	var b strings.Builder
+	for _, p := range strings.Split(string(out), "\x00") {
+		if p == "" {
+			continue
+		}
+		// Leading / anchors each pattern at the transfer root, which is the
+		// repo root — so a bare `build/` cannot match somewhere else. It also
+		// guarantees no line starts with # or ;, which rsync would read as a
+		// comment and drop.
+		b.WriteString("/")
+		b.WriteString(p)
+		b.WriteString("\n")
+	}
+	if _, err := f.WriteString(b.String()); err != nil {
+		f.Close()
+		cleanup()
+		return "", noop, err
+	}
+	if err := f.Close(); err != nil {
+		cleanup()
+		return "", noop, err
+	}
+	return "--exclude-from=" + f.Name(), cleanup, nil
+}
+
+// gitignoreMergeRule is the per-directory merge rule used only when there is no
+// git work tree to ask. Written without shell quotes because there is no shell
+// here — the rule is one argv element and quoting it would make the quotes part
+// of the rule, so rsync would look for a file literally named "'- .gitignore'".
+const gitignoreMergeRule = "--filter=:- .gitignore"
+
+// isGitWorkTree reports whether root is inside a git work tree. Used to choose
+// between asking git and falling back, so a plain directory is not an error.
+func isGitWorkTree(root string) bool {
+	out, err := exec.Command("git", "-C", root, "rev-parse", "--is-inside-work-tree").Output()
+	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
 
 // FetchArgs returns the argv that copies remoteRel — a path relative to the

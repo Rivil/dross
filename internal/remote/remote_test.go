@@ -3,7 +3,9 @@ package remote
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -29,10 +31,11 @@ func contains(argv []string, want string) bool {
 // --- SyncArgs ---------------------------------------------------------------
 
 func TestSyncArgsCarriesTheLockedFlags(t *testing.T) {
-	argv, err := SyncArgs(target(), "/local/repo")
+	argv, cleanup, err := SyncArgs(target(), "/local/repo")
 	if err != nil {
 		t.Fatalf("SyncArgs = %v", err)
 	}
+	defer cleanup()
 	if argv[0] != "rsync" {
 		t.Fatalf("argv[0] = %q, want rsync", argv[0])
 	}
@@ -75,7 +78,7 @@ func TestSyncArgsCarriesTheLockedFlags(t *testing.T) {
 func TestSyncArgsRefusesARelativeRoot(t *testing.T) {
 	// A relative root resolves against the caller's cwd, which for a mutation
 	// run is not knowably the repo root.
-	if _, err := SyncArgs(target(), "repo"); err == nil {
+	if _, _, err := SyncArgs(target(), "repo"); err == nil {
 		t.Fatal("a relative local root was accepted")
 	}
 }
@@ -174,7 +177,7 @@ func TestValidateRefusesShellMetacharacters(t *testing.T) {
 			if script, err := Script(tg, []string{"gremlins"}); err == nil || script != "" {
 				t.Errorf("Script built %q for an unsafe workdir", script)
 			}
-			if argv, err := SyncArgs(tg, "/local/repo"); err == nil || argv != nil {
+			if argv, _, err := SyncArgs(tg, "/local/repo"); err == nil || argv != nil {
 				t.Errorf("SyncArgs built %v for an unsafe workdir", argv)
 			}
 		})
@@ -581,5 +584,114 @@ func TestScriptExecsTheToolInsteadOfForkingIt(t *testing.T) {
 	}
 	if strings.Count(chain, "exec ") != 1 {
 		t.Errorf("want exactly one exec in the chain, got %q", chain)
+	}
+}
+
+// TestSyncArgsExcludesAnchoredRulesInNonRootGitignores is the regression lock
+// for the defect that --filter=:- .gitignore hid: an ANCHORED rule (leading /)
+// in a NON-ROOT .gitignore does not match under rsync's per-directory merge,
+// while an unanchored rule in the very same file does. On one repo that put
+// 50,619 entries and 5.2 GB of build output onto a remote root volume, and
+// nothing noticed but the disk.
+//
+// It asserts through REAL rsync rather than on the argv string, because the
+// argv was never the thing that was wrong — the rule was present and correct
+// looking, and simply did not match. And it syncs into an EMPTY destination on
+// purpose: --itemize-changes lists what would CHANGE, so a dry run against a
+// populated target reports nothing when the files are already identical, which
+// reads as a pass. That false pass is how the broken rule survived measurement
+// once already.
+func TestSyncArgsExcludesAnchoredRulesInNonRootGitignores(t *testing.T) {
+	if _, err := exec.LookPath("rsync"); err != nil {
+		t.Skip("rsync not installed")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	write := func(rel, body string) {
+		t.Helper()
+		p := filepath.Join(src, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The discriminating fixture: two rules in ONE non-root .gitignore, one
+	// anchored and one not. If both are excluded the anchoring is handled; if
+	// only .dart_tool is, the file is being read and the anchoring is not.
+	write("phone/.gitignore", "/build/\n.dart_tool/\n")
+	write("web/.gitignore", "build/\n")
+	write(".gitignore", "/.idea/\n")
+	write("phone/build/app/big.bin", "x")
+	write("phone/.dart_tool/d.bin", "x")
+	write("web/build/c.bin", "x")
+	write(".idea/e.bin", "x")
+	write("phone/keep.txt", "x")
+
+	// The tracked files matter: `git ls-files --directory` collapses a WHOLLY
+	// untracked directory into one entry, so in a repo with nothing committed
+	// no ignored child is ever listed. A real repo has tracked files beside the
+	// ignored ones, and the fixture has to as well or it tests nothing.
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"add", ".gitignore", "phone/.gitignore", "phone/keep.txt", "web/.gitignore"},
+		{"-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"},
+	} {
+		cmd := exec.Command("git", append([]string{"-C", src}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+
+	argv, cleanup, err := SyncArgs(target(), src)
+	if err != nil {
+		t.Fatalf("SyncArgs = %v", err)
+	}
+	defer cleanup()
+	if contains(argv, gitignoreMergeRule) {
+		t.Errorf("argv still carries the per-directory merge rule in a git work tree: %v", argv)
+	}
+
+	// Re-point the argv at a local destination so this exercises the real
+	// filtering without needing a host. Everything before the last two elements
+	// is what SyncArgs decided, which is the part under test.
+	run := append([]string{}, argv[1:len(argv)-2]...)
+	run = append(run, "--dry-run", "--itemize-changes", src+"/", dst+"/")
+	out, err := exec.Command(argv[0], run...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("rsync %v: %v: %s", run, err, out)
+	}
+	listing := string(out)
+
+	for _, absent := range []string{"phone/build", "phone/.dart_tool", "web/build", ".idea/"} {
+		if strings.Contains(listing, absent) {
+			t.Errorf("%s reached the wire:\n%s", absent, listing)
+		}
+	}
+	// .git must still cross. Without it the remote tree is not a git repository
+	// and every test that shells out to git fails there while passing locally.
+	for _, present := range []string{".git/", "phone/keep.txt"} {
+		if !strings.Contains(listing, present) {
+			t.Errorf("%s did NOT reach the wire, but must:\n%s", present, listing)
+		}
+	}
+}
+
+// TestSyncArgsFallsBackToTheMergeRuleWithoutGit locks the other half: dross
+// roots on .dross rather than .git, so a plain directory is a supported case
+// and must not become an error just because git cannot answer for it.
+func TestSyncArgsFallsBackToTheMergeRuleWithoutGit(t *testing.T) {
+	argv, cleanup, err := SyncArgs(target(), t.TempDir())
+	if err != nil {
+		t.Fatalf("SyncArgs = %v", err)
+	}
+	defer cleanup()
+	if !contains(argv, gitignoreMergeRule) {
+		t.Errorf("a non-git root lost its ignore rule entirely: %v", argv)
 	}
 }
