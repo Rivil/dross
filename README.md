@@ -392,12 +392,19 @@ Legend: ✅ working · 🚧 stub / partial · ⏳ not started
 - [x] Several authorized mutation hosts with first-ready-wins selection, and a run that refuses a full scratch volume instead of quietly filling one
 - [x] Five parked ideas dismissed on measurement rather than deferred again — scanner scratch caches, gremlins workdir pinning, remote runtime installation, remote-run latency, remote test-watch
 
-### Milestone v1.5 — signal truth: one answer to "is this done", and a board that agrees with it (active)
+### Milestone v1.5 — signal truth: one answer to "is this done", and a board that agrees with it (complete)
 
-- [ ] One doneness reader behind `dross status`, `dross milestone progress` and `dross phase list` — the completion record, never a verify verdict
-- [ ] Phases finished before `changes.json` carried a status marked done through a supported verb, not a hand-authored file
-- [ ] `dross issue pull` returns only issues dross did not author, and a shipped phase's task cards leave task-in-review by themselves
-- [ ] `/dross-plan` walks every unresolved gray area one turn each, with no multiSelect pre-selection
+- [x] One doneness reader behind `dross status`, `dross milestone progress` and `dross phase list` — the completion record, never a verify verdict
+- [x] Phases finished before `changes.json` carried a status marked done through a supported verb, not a hand-authored file
+- [x] `dross issue pull` returns only issues dross did not author, and a shipped phase's task cards leave task-in-review by themselves
+- [x] `/dross-plan` walks every unresolved gray area one turn each, with no multiSelect pre-selection
+
+### Milestone v1.6 — lane truth: the test gate runs what the task actually touched (active)
+
+- [ ] A task's pre-commit gate runs only the `[[runtime.test_lane]]` whose `match` globs its files, names the lane and command it ran, and never invokes the other lane's runner
+- [ ] A lane whose toolchain is absent on the granted remote runs locally, says so every time — naming the toolchain and host — and offers to install it there
+- [ ] Task paths are translated into each lane runner's selector form, and a selector matching nothing is reported as a miss rather than a failing gate
+- [ ] A lane may declare a `prepare` command between sync and test, so remote build prerequisites are dross's job rather than hidden in each repo's test command
 
 ## Telemetry
 
