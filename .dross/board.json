@@ -30,7 +30,8 @@
     "remote-test-runner": "DRO-26",
     "remote-toolchain-bootstrap": "DRO-129",
     "survivor-drain": "DRO-12",
-    "survivor-lifecycle": "DRO-10"
+    "survivor-lifecycle": "DRO-10",
+    "test-lane-config": "DRO-191"
   },
   "quicks": {
     "1.2.8.1": "DRO-6",

@@ -1,0 +1,257 @@
+[phase]
+id = "test-lane-config"
+
+[[task]]
+id    = "t-1"
+wave  = 1
+title = "Add test_lane schema and validate rule"
+files = [
+  "internal/project/project.go",
+  "internal/project/project_test.go",
+  "internal/cmd/validate.go",
+  "internal/cmd/validate_lane_test.go",
+]
+description = """
+Add project.TestLane{Name, Match, Command} with matching toml+json tags and a
+TestLane []TestLane field on Runtime under [[runtime.test_lane]]. validate.go
+appends one problem per lane missing name, match or command, plus a
+duplicate-lane-name problem and a non-compiling-glob problem; a nameless lane is
+identified by ordinal.
+"""
+covers = ["c-1"]
+test_contract = [
+  "a project.toml carrying one [[runtime.test_lane]] (name / match / command) round-trips through project.Load into a 1-element Runtime.TestLane — TestTestLaneDecodes fails on a zero-length slice if the toml tag or the field is dropped",
+  "a lane declaring name+match but no command makes `dross validate` exit non-zero with a problem line containing that lane's name — TestValidateNamesLaneMissingCommand fails if the per-field check is dropped or the message is generic",
+  "a lane with a name and command but an EMPTY match array is reported by name, not accepted as a lane that matches nothing",
+  "a lane with an empty name is reported as `runtime.test_lane[0]`, not as \"\" — TestValidateIdentifiesNamelessLaneByIndex",
+  "two lanes sharing one name are reported as a duplicate; deleting this check silently gives one grant in t-4's name-keyed map authority over two commands",
+  "a lane whose match entry does not compile (unclosed bracket, e.g. `internal/[cmd/**`) is reported by lane name and by the offending pattern — TestValidateRejectsUncompilableGlob fails if a broken glob is accepted, which would otherwise present as a permanently unmatched file set rather than as a broken lane",
+  "a repo with zero [[runtime.test_lane]] entries produces zero new validate problems — lanes are opt-in and the validator must not invent work for every existing repo",
+  "the existing TestTomlFieldsCarryMatchingJSONTags walk fails if TestLane's fields carry a toml tag without an identical json tag",
+]
+status = "pending"
+
+[[task]]
+id    = "t-2"
+wave  = 1
+title = "Add lane path matcher and selector"
+files = [
+  "internal/testlane/match.go",
+  "internal/testlane/match_test.go",
+]
+description = """
+Pure package over lane globs and paths: Select(globs [][]string, paths []string)
+returning matched lane indices, unmatched in-tree paths, and out-of-tree paths
+as a SEPARATE category. Hand-rolled ** over segment-wise filepath.Match — no
+doublestar dependency. Path normalization strips ./, forces forward slashes, and
+classifies absolute and ..-escaping paths as out-of-tree rather than merely
+unmatched; a trailing / means everything beneath.
+"""
+covers = ["c-2"]
+test_contract = [
+  "`internal/**/*.go` matches internal/cmd/test.go and internal/a/b/c.go, and does not match main.go, while `internal/*.go` matches only internal/x.go — TestDoubleStarCrossesDirectories fails if ** collapses to one segment",
+  "`docs/*.md` does not match docs/api/v1.md — TestSingleStarStopsAtSeparator",
+  "lane 0 = [internal/**], lane 1 = [**/*.go], path internal/cmd/test.go yields indices [0 1] exactly once each in declaration order — TestSelectIsOrderedAndDeduped fails on a duplicate or on array-position precedence",
+  "a path matching two globs inside the SAME lane yields that lane index once, not twice — a duplicate would spawn one lane's command twice",
+  "./internal/cmd/test.go and internal/cmd/test.go give the same answer, so an agent's ./-prefixed argv is not a silent miss",
+  "`docs/` matches docs/x.md and docs/sub/y.md",
+  "a pattern with no metacharacter matches only that exact path",
+  "/etc/passwd and ../outside/x.go are returned in the OUT-OF-TREE category, not in unmatched — TestOutOfTreePathsAreTheirOwnCategory fails if they collapse into unmatched, which would report a caller's absolute path as a lane-configuration problem",
+  "every in-tree path matching no lane is returned in unmatched — TestSelectReportsUnmatchedPaths fails if a miss is dropped",
+  "zero input paths returns zero indices, zero unmatched and zero out-of-tree: the selector states facts, t-5 decides that a nothing-matched run is a refusal",
+]
+status = "pending"
+
+[[task]]
+id         = "t-3"
+wave       = 2
+depends_on = ["t-1"]
+title      = "Add dross test lane add|list|remove"
+files = [
+  "internal/cmd/test_lane.go",
+  "internal/cmd/test_lane_test.go",
+  "internal/cmd/test.go",
+]
+description = """
+`lane` subcommand group nested under `dross test`. add <name> --match <glob>
+(repeatable) --command <line>, list, remove <name>; all three go through
+project.Load / (*Project).Save. This task owns ONLY the one-line
+c.AddCommand(testLane()) inside Test() — t-5 owns --files registration and the
+RunE body in the same file. Nesting deliberately shadows the positional
+selector namespace: cobra resolves args[0] against subcommands first, so
+`dross test lane` can no longer mean "run the suite against a package named
+lane". Accepted knowingly; a top-level `dross lane` is the escape hatch if it
+ever bites. `remove` also drops that lane's entry from trusted_lane_commands, so
+a re-added lane never inherits a grant issued before it was deleted.
+"""
+covers = ["c-9"]
+test_contract = [
+  "`dross test lane add go --match 'internal/**' --command 'go test ./...'` followed by a fresh project.Load yields exactly one lane with those three values — TestLaneAddPersists fails if the Save is skipped or a field is dropped on the way to disk",
+  "adding a second lane named `go` exits non-zero naming the existing lane and leaves project.toml with one lane — TestLaneAddRejectsDuplicateName",
+  "`dross test lane remove docs` with go and docs declared leaves go intact AND leaves the [runtime] scalars (test_command, mode) intact across the Load→Save round trip — TestLaneRemoveKeepsOtherLanes",
+  "`dross test lane remove nosuch` exits non-zero naming the unknown lane — TestLaneRemoveUnknownIsAnError fails if a no-op reports success",
+  "`dross test lane add go --match '*.go'` with no --command exits non-zero and leaves project.toml byte-for-byte unchanged",
+  "`dross test lane list` prints each lane's name, its match globs and its command line — TestLaneListShowsCommand fails if the command is omitted, which is the value consent binds to",
+  "`dross test lane list` on a lane-less repo prints that none are configured and exits 0 — a lane-less repo is legal (c-5), not an error",
+  "`dross test lane` reaches the subcommand rather than the suite runner — TestLaneVerbShadowsSelector pins the shadowing as intended, so a future reader does not read it as an accident",
+  "removing a granted lane and re-adding it with the SAME command line leaves it ungranted — TestLaneRemoveDropsItsGrant fails if trusted_lane_commands keeps the orphaned entry, which would let a months-old grant silently authorize a re-added lane",
+]
+status = "pending"
+
+[[task]]
+id         = "t-4"
+wave       = 2
+depends_on = ["t-1"]
+title      = "Store per-lane consent fingerprints"
+files = [
+  "internal/cmd/local.go",
+  "internal/cmd/trust.go",
+  "internal/cmd/doctor.go",
+  "internal/cmd/trust_lane_test.go",
+]
+description = """
+Add TrustedLaneCommands map[string]string (trusted_lane_commands, lane name →
+sha256 of that lane's command) to localStore, deliberately ABSENT from
+localKeys. LaneConsented(root, name, line) and GrantLaneConsent(root, name,
+line). `dross trust --lane <name>` prints the command line before it writes;
+--lane <name> --check reports granted / absent / stale. Doctor's Exec consent
+section gains a per-lane row on the same state machine, so a stale lane is
+visible before it refuses rather than at exit 6 mid-gate.
+"""
+covers = ["c-6"]
+test_contract = [
+  "editing ONE lane's command makes LaneConsented false for that lane and leaves every other lane's grant true — an aggregate hash over all lanes fails this, which is the locked lane_consent rationale",
+  "granting docs after go keeps go's fingerprint — TestTrustLaneAccumulates fails if the second grant replaces the first",
+  "`dross local set trusted_lane_commands <hash>` is rejected as an unknown key — TestLaneGrantKeyIsNotSettable fails if the key leaks into localKeys and the generic writer can grant consent",
+  "`dross trust --lane <name>` prints the exact command BEFORE the store is written, and leaves trusted_test_command and trusted_run_commands byte-unchanged",
+  "`dross trust --lane nosuch` exits non-zero naming the declared lanes rather than writing a fingerprint of the empty string",
+  "a git-tracked .dross/local.toml makes the lane grant refuse UNREAD via refuseTrackedLocal, exactly like every other grant in that file",
+  "renaming a lane leaves its old grant orphaned and the new name ungranted — the lookup misses and refuses, it never inherits",
+  "`dross trust --lane go --check` distinguishes granted from absent from stale, on the existing --check precedent",
+  "`dross doctor` in a repo with go granted and docs ungranted names both lanes with their own states under Exec consent — TestDoctorReportsEachLaneGrant fails if lanes are absent from doctor, which is the case where the first signal of a stale grant is a refused run mid-gate",
+]
+status = "pending"
+
+[[task]]
+id         = "t-5"
+wave       = 2
+depends_on = ["t-1", "t-2"]
+title      = "Resolve --files to lanes without spawning"
+files = [
+  "internal/cmd/test.go",
+  "internal/cmd/test_files_test.go",
+]
+description = """
+Add --files as a StringArray (repeated flag, never comma-split — a comma is
+legal in a path) and wire it to testlane.Select. This task deliberately spawns
+NO lane command: it resolves, reports unmatched and out-of-tree paths, defines
+exitNothingMeasured = 5, and keeps the lane-less path byte-identical. Combining
+--files with the existing positional selector is an error, since appending
+positionals to a lane line would break the byte-identity t-4's fingerprint
+depends on. An out-of-tree path is an argv fault, not a lane-config fault, so it
+refuses the whole run with exitBadFileSet = 2 whatever else is in the set —
+distinct from exit 5, which means the set was well-formed and matched nothing. Lane spawning arrives already gated in t-6 — splitting here is what
+keeps this commit from executing an unfingerprinted command out of project.toml.
+"""
+covers = ["c-2", "c-5", "c-8"]
+test_contract = [
+  "with a go lane and a docs lane declared, `dross test --files internal/cmd/test.go` records ZERO spawned command lines through spawnRecorder — TestResolveOnlyDoesNotSpawn fails if this task starts running lane commands before t-6's grant check exists",
+  "in a repo with zero [[runtime.test_lane]] entries, both `dross test` and `dross test --files internal/a.go` spawn exactly one command line equal byte-for-byte to runtime.test_command — TestNoLanesIsByteIdentical fails if --files appends a selector or trips the unmatched refusal",
+  "`dross test --files docs/x.md` with only a go lane returns an error whose text contains docs/x.md, exits 5, and records ZERO spawns — TestUnmatchedFileSetRefusesWithoutRunning",
+  "exit 5 is pairwise distinct from 1 (red suite), 3 (transport) and 4 (partial); a test asserts all four differ, so a caller cannot read \"nothing ran\" as \"your code is broken\"",
+  "`dross test --files /abs/path/internal/a.go` refuses with text naming the path as OUTSIDE THE REPO, not as a path that matched no lane, and exits 2 — TestAbsolutePathRefusalSaysOutOfTree fails if the two messages collapse or if the status is 5, either of which sends a caller to fix their lane config over an argv problem",
+  "`dross test --files internal/a.go /abs/x.go` refuses the WHOLE run at exit 2 and resolves nothing — TestOutOfTreePoisonsTheSet fails if the in-tree half is resolved anyway, which would let a half-specified file set report on a subset the caller did not ask for",
+  "`dross test --files internal/a.go ./internal/...` exits non-zero naming both --files and the positional selector — TestFilesAndSelectorIsAnError fails if positionals are silently ignored or appended",
+  "`dross test --files internal/a.go docs/x.md` with only a go lane reports docs/x.md as unmatched and exits 0 having resolved the go lane — TestPartialMissNamesTheRest (locked unmatched_files)",
+]
+status = "pending"
+
+[[task]]
+id         = "t-6"
+wave       = 3
+depends_on = ["t-4", "t-5"]
+title      = "Spawn matched lanes under their own grant"
+files = [
+  "internal/cmd/test.go",
+  "internal/cmd/doctor.go",
+  "internal/cmd/test_lane_consent_test.go",
+]
+description = """
+Spawn each matched lane's command line, in declaration order, only if that lane's
+own grant is valid. Print `lane <name>: <command>` before that lane's output.
+Route lane spawns through shArgvFor("runtime.test_lane[<name>]", line) so an
+argfence refusal blames the lane, not runtime.test_command. An ungranted or
+stale lane is skipped and named and forces exitLaneRefused = 6, while granted
+lanes still run; worst outcome wins. On the lane path this per-lane gate
+REPLACES requireExecConsent rather than stacking on it; bare `dross test` keeps
+requireExecConsent untouched. Also splits runTestRemotely so sync and ssh are
+separable — a multi-lane run syncs the tree once, then runs each lane. Doctor's
+ConsentNotApplicable branch becomes lane-aware: after this task an empty
+runtime.test_command no longer means the loop refuses, so the message must not
+keep saying it does.
+"""
+covers = ["c-3", "c-4", "c-6"]
+test_contract = [
+  "with a go lane and a docs lane declared and both granted, `dross test --files internal/cmd/test.go` records exactly one spawned command line, and the docs lane's command string appears in none of the recorded lines — TestFilesRunsOnlyMatchedLanes fails if the loop runs every lane",
+  "each lane's header (name + the exact command line) appears in stdout at a strictly lower index than that lane's own output sentinel — TestLaneHeaderPrecedesLaneOutput fails if the header is printed after the run, which is the case where a transcript cannot attribute a result",
+  "the line spawned for a lane is byte-identical to its configured command — no --files paths appended as a selector, so the fingerprint t-4 checks covers the line that actually ran",
+  "with go granted and docs ungranted, `dross test --files internal/a.go docs/x.md` spawns the go lane's command exactly once, spawns the docs lane's command zero times, names docs in the refusal text, and exits 6 — TestUngrantedLaneRefusesOnlyItself fails if the granted lane is blocked or the ungranted lane runs",
+  "editing the go lane's command after granting it produces a refusal whose text distinguishes STALE from NEVER-TRUSTED — TestStaleLaneRefusalIsDistinct fails if the two collapse, which is the rewritten-command case reported as a routine first run",
+  "a run where every matched lane is refused spawns nothing and exits non-zero — TestAllLanesRefusedIsNotGreen",
+  "with two matched lanes where the first goes red, the run still spawns the second and exits 1 — TestRedLaneFailsTheRunAndRunsTheRest fails if a green later lane masks the earlier red (locked multi_lane)",
+  "a red lane alongside a refused lane exits 1, not 6 — TestRedBeatsRefusedInExitPrecedence fails if a broken suite is reported as a consent problem",
+  "the full precedence order is asserted as one lattice, not pairwise: transport (3) > partial (4) > red (1) > refused (6) > nothing-measured (5) — TestExitPrecedenceIsTotal drives every co-occurring pair through one table, so \"worst outcome wins\" is pinned rather than inferred from three examples",
+  "a lanes-only repo with an empty runtime.test_command makes `dross doctor` report the loop as usable — TestDoctorConsentIsLaneAware fails if the ConsentNotApplicable branch still claims the loop commands refuse, which after this task is false in exactly the repo shape lanes serve",
+  "a lane command beginning with `-` produces an argfence refusal naming `runtime.test_lane[<name>]`, not runtime.test_command — TestLaneArgfenceBlamesTheLane fails if shArgv's hardcoded label is reused and the user is sent to edit the wrong key",
+  "a lanes-only repo with an EMPTY runtime.test_command still runs its granted lanes: the lane path must not reach ConsentNotApplicable, which would refuse every lane run in exactly the repo lanes are most wanted for",
+  "with a remote grant present and two lanes matched, the tree is synced ONCE, not once per lane, and a transport failure on any lane exits 3, never 1 — TestMultiLaneSyncsOnce fails if runTestRemotely is left fused and each lane re-syncs",
+]
+status = "pending"
+
+[[task]]
+id         = "t-7"
+wave       = 4
+depends_on = ["t-5", "t-6"]
+title      = "Point execute's pre-commit gate at --files"
+files = [
+  "assets/prompts/execute.md",
+  "internal/cmd/prompt_test_command_test.go",
+]
+description = """
+Rewrite execute.md's step-1e test-gate block to run `dross test --files
+<task.files from plan.toml>`, document the per-lane trust check and the two new
+exit codes, and say what to do when a run refuses. Add the grep-based drift
+guard beside the existing prompt guards.
+"""
+covers = ["c-7"]
+test_contract = [
+  "execute.md's step-1e gate contains `dross test --files` and names task.files as the source of the argument — TestExecutePromptPassesTaskFilesToTest fails if the gate reverts to a bare `dross test`",
+  "execute.md documents exit 5 (nothing measured) and 6 (lane refused) alongside the existing 1 / 3 / 4 meanings, all with \"did not run\" semantics — TestExecutePromptDocumentsUnmatchedExit fails if the new codes are undocumented, which is the case where an agent reads a non-zero exit and commits anyway",
+  "the existing TestPromptsRunDrossTest still passes — the rewrite must not reintroduce a bare <runtime.test_command> fence",
+  "the guard reads assets/prompts/execute.md directly, so it fails in CI regardless of whether `make install` re-linked the prompt locally (r-01)",
+]
+status = "pending"
+
+[[task]]
+id         = "t-8"
+wave       = 3
+depends_on = ["t-3", "t-4"]
+title      = "Document lane verbs and the lane grant"
+files = [
+  "README.md",
+  "assets/prompts/options.md",
+  "internal/cmd/options_docs_test.go",
+]
+description = """
+Add the lane surface to the two places a user discovers settings: a README
+command-table row for the lane verbs and `dross test --files`, and an options.md
+section naming `dross trust --lane` and trusted_lane_commands. Extend
+TestOptionsCoversTheConsentVerbs' want and forbidden lists.
+"""
+covers = ["c-6", "c-9"]
+test_contract = [
+  "options.md mentions `dross test lane add`, `dross trust --lane` and trusted_lane_commands — TestOptionsCoversTheConsentVerbs, with those three added to its want list, fails if the settings surface omits the new grant",
+  "options.md never tells the user to write the grant through the generic key-writer — the same test's forbidden list, extended with `local set trusted_lane_commands`, fails if it does",
+  "README documents `dross test --files` and the lane verbs — TestReadmeDocumentsTestLanes fails if the flag or verb is renamed without a doc update, on the TestDocsCoverAllowHosts precedent",
+]
+status = "pending"
