@@ -3,7 +3,7 @@ phases = ["completion-record-truth", "legacy-phase-backfill", "mirror-terminal-s
 [milestone]
   version = "v1.5"
   title = "1.5 signal truth — one answer to 'is this done', and a board that agrees with it"
-  status = "active"
+  status = "complete"
   started = "2026-08-19"
   base = "main"
 
