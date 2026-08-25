@@ -184,6 +184,70 @@ func TestTrustLaneUnknownNamesTheDeclaredLanes(t *testing.T) {
 	}
 }
 
+// assertNoLaneGrant fails if a refused `dross trust --lane` left a grant
+// behind. A refusal that still writes is worse than one that does not refuse
+// at all: the fingerprint would be taken over the empty string, so the entry
+// authorizes whatever a lane of that name is later given.
+func assertNoLaneGrant(t *testing.T, root string) {
+	t.Helper()
+	l, err := loadLocal(localPath(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l.TrustedLaneCommands) != 0 {
+		t.Errorf("a refused lane wrote a grant: %v", l.TrustedLaneCommands)
+	}
+}
+
+// TestTrustLaneOnALaneLessRepoSaysSo is the other half of the refusal above.
+// A repo that declares no lanes has no alternatives to list, so falling
+// through to the "declared: " form would print an empty list — which reads as
+// a lane whose name is the empty string. The message has to say the repo
+// declares none AND name the verb that declares one, because "none" without a
+// remedy sends the user to open project.toml.
+//
+// The one-lane case pins the boundary rather than the branch: "declares none"
+// is true only at zero. A repo holding a single lane that is told it has none
+// gets sent to declare a second one under a name it is already using.
+func TestTrustLaneOnALaneLessRepoSaysSo(t *testing.T) {
+	t.Run("no lanes", func(t *testing.T) {
+		dir := laneFixture(t)
+		root := filepath.Join(dir, RootDirName)
+
+		err := runCmd(t, Trust(), "--lane", "go")
+		if err == nil {
+			t.Fatal("trust --lane was accepted in a repo declaring no lanes")
+		}
+		for _, want := range []string{`"go"`, "declares none", "dross test lane add"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("refusal does not mention %q: %v", want, err)
+			}
+		}
+		assertNoLaneGrant(t, root)
+	})
+
+	t.Run("one lane", func(t *testing.T) {
+		dir := laneFixture(t)
+		appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test -count=1 ./..."`)
+		root := filepath.Join(dir, RootDirName)
+
+		err := runCmd(t, Trust(), "--lane", "nosuch")
+		if err == nil {
+			t.Fatal("trust --lane nosuch was accepted")
+		}
+		if strings.Contains(err.Error(), "declares none") {
+			t.Errorf("a repo declaring one lane was told it declares none: %v", err)
+		}
+		if !strings.Contains(err.Error(), "declared: go") {
+			t.Errorf("refusal does not name the one declared lane: %v", err)
+		}
+		assertNoLaneGrant(t, root)
+	})
+}
+
 // TestLaneGrantRefusesATrackedStore: a committed local.toml is a repo shipping
 // its own authorization, and the lane grant is exactly as trust-bearing as
 // every other key in that file. It shares refuseTrackedLocal rather than
