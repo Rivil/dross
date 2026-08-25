@@ -1,0 +1,12 @@
+phases = ["test-lane-config", "lane-selector-translation", "lane-prepare-step", "lane-remote-locality", "remote-toolchain-install"]
+
+[milestone]
+  version = "v1.6"
+  title = "1.6 lane truth — the test gate runs what the task actually touched"
+  status = "active"
+  started = "2026-08-25"
+  base = "main"
+
+[scope]
+  success_criteria = ["In a repo declaring two [[runtime.test_lane]] entries, a task's pre-commit gate runs only the lane whose match globs the task's files — the gate names the lane and command it ran, and a task confined to one lane produces zero invocations of the other lane's runner", "A lane whose toolchain is absent on the granted remote runs locally rather than failing, and dross reports the fallback every time — naming the missing toolchain and the host — then offers to install it on the remote and performs the install on acceptance", "A task whose changed files are source paths produces a scoped run that matches real tests: dross translates task paths into the lane runner's selector form, and a selector that matches nothing is reported as a selector miss, never as a failing gate", "A lane may declare a prepare command that runs after sync and before the lane's test command, so remote build prerequisites are restored by dross rather than hidden inside each repo's test command"]
+  non_goals = ["Not a provisioning system: the c-2 install offer provisions a named toolchain on the one granted host on request — it is not config management, not multi-host, and does not manage toolchain versions", "Lanes are declared, not inferred: no auto-detection of lanes from repo layout or lockfiles — the user writes [[runtime.test_lane]] explicitly", "No dross-owned test runner: dross dispatches a lane's command and shapes selectors for it, and never becomes a test framework or per-framework execution engine"]

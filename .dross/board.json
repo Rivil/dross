@@ -2,7 +2,8 @@
   "milestones": {
     "v1.2": "DRO-1",
     "v1.3": "DRO-7",
-    "v1.5": "DRO-134"
+    "v1.5": "DRO-134",
+    "v1.6": "DRO-188"
   },
   "phases": {
     "board-mirror-reaper": "DRO-163",
