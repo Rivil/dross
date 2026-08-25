@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -435,5 +436,80 @@ func TestRevokeLaneConsentDropsOnlyThatLane(t *testing.T) {
 	// for a state that already holds.
 	if err := RevokeLaneConsent(root, "nosuch"); err != nil {
 		t.Errorf("revoking an absent grant errored: %v", err)
+	}
+}
+
+// trackedLaneFixture builds a repo at the cwd whose .dross/local.toml is
+// git-tracked, which makes refuseTrackedLocal refuse EVERY lane. It is the only
+// route to ConsentRefused for a lane, and being repo-wide it refuses the
+// whole-suite grant too — so assertions over it have to isolate the lane half
+// rather than read a total.
+func trackedLaneFixture(t *testing.T, lanes string) {
+	t.Helper()
+	dir := t.TempDir()
+	gitInit(t, dir, "")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatal(err)
+	}
+	mustRunSet(t, "project.name", "test-app")
+	mustRunSet(t, "runtime.mode", "native")
+	appendLanes(t, dir, lanes)
+
+	if err := os.WriteFile(filepath.Join(dir, RootDirName, LocalFile), []byte("\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, dir, "add", "-f", RootDirName+"/"+LocalFile)
+}
+
+// doctorIssueCount reads the number doctor ACTED on rather than the ✗ marks it
+// printed. The two are different assertions: a branch that prints its finding
+// and forgets to count it produces exactly the transcript a working one does,
+// and only the exit code tells them apart.
+func doctorIssueCount(t *testing.T, out *string) int {
+	t.Helper()
+	err := runCmdCapturing(t, out, Doctor())
+	if err == nil {
+		t.Fatalf("doctor found no issues over a fixture whose every lane is refused:\n%s", *out)
+	}
+	var n int
+	if _, serr := fmt.Sscanf(err.Error(), "%d project-level issue(s) found", &n); serr != nil {
+		t.Fatalf("cannot read an issue count from doctor's error %q: %v", err, serr)
+	}
+	return n
+}
+
+// TestDoctorCountsEachRefusedLane: reportLaneConsent prints a ✗ per refused
+// lane AND increments doctor's issue count, and only the second half moves the
+// exit code. Without this the refused arm could stop counting and every visible
+// symptom would stay identical — doctor would print the refusals and then exit
+// 0, which is the shape that teaches people the transcript is advisory.
+//
+// Asserted as a DELTA between two fixtures differing only in lane count. A
+// tracked local.toml refuses the whole-suite grant as well, and doctor carries
+// a dozen other checks; an absolute count would pin all of them and break on
+// the next unrelated one. One extra refused lane must be worth exactly one
+// extra issue, which is false under both a dropped increment and a decrement.
+func TestDoctorCountsEachRefusedLane(t *testing.T) {
+	const oneLane = `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test -count=1 ./..."`
+
+	var oneOut, twoOut string
+	trackedLaneFixture(t, oneLane)
+	one := doctorIssueCount(t, &oneOut)
+
+	trackedLaneFixture(t, twoLanes)
+	two := doctorIssueCount(t, &twoOut)
+
+	if two != one+1 {
+		t.Errorf("doctor counted %d issues with two refused lanes and %d with one, want exactly one more — a refused lane printed a ✗ the exit code does not carry\n--- one lane ---\n%s\n--- two lanes ---\n%s",
+			two, one, oneOut, twoOut)
+	}
+	for _, want := range []string{`lane "go"`, `lane "docs"`, "tracked"} {
+		if !strings.Contains(twoOut, want) {
+			t.Errorf("doctor does not name %q in the refusal — a count of anonymous issues is not actionable:\n%s", want, twoOut)
+		}
 	}
 }
