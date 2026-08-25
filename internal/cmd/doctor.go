@@ -1228,11 +1228,57 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 		Printf("      %s\n", p.Runtime.TestCommand)
 		Printf("    Fix (only after reading that line): `dross trust`\n")
 	}
+	issues += reportLaneConsent(root, repoDir, p)
 	Print("")
 
 	issues += checkRemoteMutation(root, repoDir, p)
 	checkMutationToolchain(p)
 
+	return issues
+}
+
+// reportLaneConsent prints one row per declared [[runtime.test_lane]], on the
+// same state machine and the same severity split as the whole-suite grant above.
+//
+// It exists for the timing, not for the information. A lane grant that first
+// announces itself by refusing mid-gate is discovered at the worst possible
+// moment — after the code is written, while the agent is trying to commit — and
+// the refusal arrives per lane, so a repo with four lanes can surface four
+// separate surprises across four tasks. Doctor answers the same question in one
+// place, before any of it.
+//
+// A repo with no lanes prints nothing at all: the section would otherwise grow
+// a permanent "no lanes configured" line in every repo that never wanted them.
+func reportLaneConsent(root, repoDir string, p *project.Project) int {
+	issues := 0
+	for _, lane := range p.Runtime.TestLane {
+		state, cerr := LaneConsented(root, repoDir, lane.Name, lane.Command)
+		switch state {
+		case ConsentGranted:
+			Printf("  ✓ lane %q: trusted\n", lane.Name)
+		case ConsentStale:
+			// An issue, exactly as the whole-suite stale case is: something
+			// WAS trusted under this name and the command has since changed,
+			// which is the signature the binding exists to catch.
+			Printf("  ✗ lane %q: consent is stale — its command has CHANGED since it was trusted here:\n", lane.Name)
+			Printf("      %s\n", lane.Command)
+			Printf("    Fix (only after reading that line): `dross trust --lane %s`\n", lane.Name)
+			issues++
+		case ConsentRefused:
+			Printf("  ✗ lane %q: %v\n", lane.Name, cerr)
+			issues++
+		case ConsentNotApplicable:
+			Printf("  ⚠ lane %q declares no command, so it can never be trusted or run.\n", lane.Name)
+			Printf("    Fix: re-add it with a command, or `dross validate` for the full report.\n")
+		default:
+			// Advisory, like the whole-suite ABSENT case: this is the honest
+			// state of every fresh clone, and failing doctor on it would make
+			// a clean checkout look broken.
+			Printf("  ⚠ lane %q: not trusted on this machine:\n", lane.Name)
+			Printf("      %s\n", lane.Command)
+			Printf("    Fix (only after reading that line): `dross trust --lane %s`\n", lane.Name)
+		}
+	}
 	return issues
 }
 
