@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/Rivil/dross/internal/architecture"
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/hostallow"
+	"github.com/Rivil/dross/internal/milestone"
 	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
@@ -58,6 +60,8 @@ func Doctor() *cobra.Command {
 			// finalizeDoctor's tally, because a warning nobody counts is a
 			// warning nobody sees at the end of a long run.
 			redProofWarnings := 0
+			duplicateSlugWarnings := 0
+			backfillResidueWarnings := 0
 
 			// --- Foundational files ---
 			//
@@ -216,6 +220,22 @@ func Doctor() *cobra.Command {
 				}
 				issues += boardIssues
 				Print("")
+			}
+
+			// --- stranded board mirrors ---
+			//
+			// Advisory, never an issue: a stranded card is drift on the
+			// tracker, not a fault in this repo's configuration, and failing
+			// doctor over someone else's board would make the exit status
+			// depend on network reachability.
+			//
+			// This is half of the locked prompt_edge decision. No prompt emits
+			// `issue reap` — the forward lifecycle already closes new work, so
+			// a sweep at ship would re-walk the whole board for nothing. What
+			// keeps the debt visible instead is a detector: doctor reports the
+			// count, and the sweep is run by hand when it is non-zero.
+			if p.Board.Enabled {
+				reportStrandedMirrors()
 			}
 
 			// --- .gitattributes ---
@@ -461,6 +481,51 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
+			// --- Duplicate roadmap slugs ---
+			//
+			// Carrying a phase forward onto a later milestone's roadmap is a
+			// legitimate re-scope, so `dross phase list` dedups it silently
+			// (phase.Ordered) rather than printing the directory twice. That
+			// makes the ambiguity invisible at the listing, which is why it is
+			// named here instead: doctor is where faults belong. Advisory —
+			// nothing is broken, so the exit code is unchanged.
+			if dups := duplicateRoadmapSlugs(root); len(dups) > 0 {
+				Print("Duplicate roadmap slugs:")
+				for _, d := range dups {
+					Printf("  ⚠ %s is on %d milestone roadmaps (%s) — listed once, at its %s position\n",
+						d.Slug, len(d.Versions), strings.Join(d.Versions, ", "), d.Versions[0])
+					duplicateSlugWarnings++
+				}
+				Print("    Advisory only — a re-scoped phase is legitimate; this never changes doctor's exit code.")
+				Print("")
+			}
+
+			// --- Unbackfillable roadmap phases ---
+			//
+			// c-5: a phase a milestone signed up for, carrying no completion
+			// marker, that `dross phase backfill` cannot close from evidence.
+			// Doneness reads changes.json alone now (phasedone.go), so such a
+			// phase counts not-done forever with nothing saying why — it is
+			// indistinguishable at every surface from a phase that was never
+			// started. Named here rather than in the sweep's output, following
+			// the duplicate-slug precedent that doctor is where faults belong
+			// and that output which scrolls away is not standing visibility.
+			//
+			// Scoped to the milestones' phases arrays by the locked
+			// backfill_residue decision: a phase directory on no roadmap (the
+			// deliberate v14-mutation-pass scratch dir) would otherwise nag
+			// forever, and no accept-mechanism has to be invented to silence
+			// it. Advisory — nothing is broken, so the exit code is unchanged.
+			if residue := backfillResidue(root, repoDir, mainForStale); len(residue) > 0 {
+				Print("Unbackfillable roadmap phases:")
+				for _, r := range residue {
+					Printf("  ⚠ %s — %s. Fix: finish it, or close it by hand once it ships\n", r.Slug, r.Reason)
+					backfillResidueWarnings++
+				}
+				Print("    Advisory only — these never change doctor's exit code.")
+				Print("")
+			}
+
 			// --- Cross-field combinations ---
 			//
 			// Collected above, reported here as one advisory block. Each value
@@ -475,7 +540,7 @@ func Doctor() *cobra.Command {
 				Print("")
 			}
 
-			return finalizeDoctor(issues, len(warnings)+redProofWarnings)
+			return finalizeDoctor(issues, len(warnings)+redProofWarnings+duplicateSlugWarnings+backfillResidueWarnings)
 		},
 	}
 }
@@ -590,6 +655,51 @@ func sameCommitSHA(a, b string) bool {
 		return false
 	}
 	return strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
+}
+
+// duplicateRoadmapSlug is one slug and every milestone roadmap listing it.
+type duplicateRoadmapSlug struct {
+	Slug     string
+	Versions []string
+}
+
+// duplicateRoadmapSlugs names every slug on more than one milestone's phases
+// array, in the order those slugs are first listed, each with the versions
+// carrying it — the first of which is the position `dross phase list` renders
+// it at (phase.Ordered keeps the first occurrence).
+//
+// A milestone that fails to load is skipped, matching milestonePhaseOrder: this
+// is a finding, never a hard dependency.
+func duplicateRoadmapSlugs(root string) []duplicateRoadmapSlug {
+	versions, err := milestone.List(root)
+	if err != nil {
+		return nil
+	}
+	on := map[string][]string{}
+	var order []string
+	for _, v := range versions {
+		m, err := milestone.Load(milestone.FilePath(root, v))
+		if err != nil {
+			continue
+		}
+		for _, slug := range m.Phases {
+			if len(on[slug]) == 0 {
+				order = append(order, slug)
+			}
+			// A slug repeated inside ONE array is still one roadmap: what this
+			// reports is the same phase claimed by two milestones.
+			if !slices.Contains(on[slug], v) {
+				on[slug] = append(on[slug], v)
+			}
+		}
+	}
+	var out []duplicateRoadmapSlug
+	for _, slug := range order {
+		if len(on[slug]) > 1 {
+			out = append(out, duplicateRoadmapSlug{Slug: slug, Versions: on[slug]})
+		}
+	}
+	return out
 }
 
 // remoteCombinationWarnings reports [remote] pairings that are individually
@@ -1326,4 +1436,117 @@ func gitVersionAtLeast(raw, floor string) bool {
 		return true // an unreadable version is a warning above, not a finding
 	}
 	return gMaj > fMaj || (gMaj == fMaj && gMin >= fMin)
+}
+
+// backfillResidueEntry is one roadmap phase backfill cannot close, with why.
+type backfillResidueEntry struct {
+	Slug   string
+	Reason string
+}
+
+// backfillResidue lists the phases on any milestone's phases array that carry
+// no completion marker AND cannot be closed from ship-commit evidence.
+//
+// The liveness half is deliberately OFFLINE: local refs plus the cached
+// refs/remotes/origin/ ones, never ls-remote. The sweep proves absence against
+// origin because it WRITES; doctor only reports, and reading a stale cache
+// errs toward naming a phase that is actually closeable — a line the next
+// `dross phase backfill` immediately corrects. Opening a network connection to
+// print an advisory would be the worse trade.
+//
+// An unscaffolded roadmap slug is residue too, and the locked backfill_residue
+// rule is applied literally: an in-flight or never-built phase is exactly the
+// case "listed and not delivered" describes, so it is named rather than
+// special-cased into silence.
+func backfillResidue(root, repoDir, base string) []backfillResidueEntry {
+	versions, err := milestone.List(root)
+	if err != nil {
+		return nil
+	}
+	ships := map[string]string{}
+	if compare, err := resolveMainCompareRef(repoDir, base); err == nil {
+		if found, err := backfillShipCommitsAtRef(repoDir, compare); err == nil {
+			ships = found
+		}
+	}
+	seen := map[string]bool{}
+	var out []backfillResidueEntry
+	for _, v := range versions {
+		m, err := milestone.Load(milestone.FilePath(root, v))
+		if err != nil {
+			continue
+		}
+		for _, slug := range m.Phases {
+			if seen[slug] {
+				continue
+			}
+			seen[slug] = true
+			if phaseDone(root, slug) {
+				continue
+			}
+			switch {
+			case !phaseDirExists(root, slug):
+				out = append(out, backfillResidueEntry{slug, "on " + v + "'s roadmap with no phase directory"})
+			case phaseBranchRefCached(repoDir, slug):
+				out = append(out, backfillResidueEntry{slug, "phase/" + slug + " still exists — in flight, not shipped"})
+			default:
+				if _, ok := ships[backfillSlugKey(slug)]; !ok {
+					out = append(out, backfillResidueEntry{slug, "no completion marker and no ship commit on " + base})
+				}
+			}
+		}
+	}
+	return out
+}
+
+// phaseBranchRefCached reports whether phase/<slug> exists as a local branch or
+// as a cached remote-tracking ref.
+func phaseBranchRefCached(repoDir, slug string) bool {
+	for _, ref := range []string{"refs/heads/phase/" + slug, "refs/remotes/origin/phase/" + slug} {
+		if gitRefExists(repoDir, ref) {
+			return true
+		}
+	}
+	return false
+}
+
+// reportStrandedMirrors prints doctor's read-only stranded-mirror advisory.
+//
+// It reuses the sweep's own classifier rather than approximating it, so the
+// number doctor prints is the number `dross issue reap` would act on. A second
+// counting path would drift, and a detector that disagrees with the thing it
+// points at is worse than no detector.
+func reportStrandedMirrors() {
+	Print("Board mirrors:")
+	ctx, enabled, err := openBoard()
+	if err != nil || !enabled {
+		// Unreachable or misconfigured: the [board] checks above already own
+		// config faults, and a network failure is not this section's to
+		// report as one.
+		Printf("  … could not read the board (%v)\n", err)
+		Print("")
+		return
+	}
+	plan, _, err := reapInventory(ctx, nil)
+	if err != nil {
+		Printf("  … could not classify board mirrors (%v)\n", err)
+		Print("")
+		return
+	}
+	if len(plan.Cards) == 0 {
+		Print("  ✓ no stranded mirrors — every card matches its record")
+		Print("")
+		return
+	}
+	byLane := map[string]int{}
+	for _, c := range plan.Cards {
+		byLane[c.Lane]++
+	}
+	Printf("  ! %d stranded board mirror(s) — cards whose artefact finished but whose card did not\n", len(plan.Cards))
+	for _, lane := range reapLanes {
+		if n := byLane[lane.Name]; n > 0 {
+			Printf("    %-12s %d    Fix: dross issue reap --namespace %s\n", lane.Name, n, lane.Name)
+		}
+	}
+	Print("")
 }

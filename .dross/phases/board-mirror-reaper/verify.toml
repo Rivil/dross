@@ -1,0 +1,135 @@
+[verify]
+  phase = "board-mirror-reaper"
+  generated_at = 2026-08-21T12:47:16.118514Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-21T14:07:23.810831Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9770642201834863
+  mutants_killed = 1065
+  mutants_survived = 25
+  mutants_not_covered = 25
+  mutants_in_scope = 1090
+  unclassified_in_scope = 0
+  criteria_total = 9
+  criteria_covered = 9
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 1065
+    survived = 25
+    timeout = 0
+    in_scope = 1090
+    score = 0.9770642201834863
+    file_count = 44
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = [".dross/phases/board-mirror-reaper/proof.md (live DRO board: 87/87 closed across 4 lanes, per-lane before/after)", "internal/cmd/issue_reap_apply_test.go:TestReapApplyClosesEveryLane", "internal/cmd/issue_reap_apply_test.go:TestReapNeverTouchesCorrectlyOpenCards", "internal/cmd/issue_reap_classify_test.go:TestQuickIsNeverAutoClosed"]
+  notes = "One apply per lane closes every record-backed card and leaves the rest alone; the quicks are named unattributable, never inferred. proof.md carries the live run with the binary commit recorded."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/issue_reap_cmd_test.go:TestReapWithoutApplyNeverWrites", "internal/cmd/issue_reap_cmd_test.go:TestReapPlanNamesTheJustifyingRecord"]
+  notes = "Dry-run is held at the wire - the fake forge fails the test on any non-GET - and each plan line is asserted to carry its justifying record path, not just the card id."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/issue_reap_classify_test.go:TestPhaseCardIsClassifiedFromItsCompletionRecord", "internal/cmd/issue_reap_classify_test.go:TestShippedRecordIsNotYetComplete", "internal/cmd/issue_reap_classify_test.go:TestEpicFollowsMilestoneStatusNotTheCard", "internal/cmd/issue_reap_classify_test.go:TestSlugBacklogNeedsItsPhaseDir", "internal/cmd/issue_reap_classify_test.go:TestRoutedBacklogFollowsItsTargetRecord"]
+  notes = "The decisive fixture holds the card's own board state IDENTICAL across both arms and varies only the on-disk record, so a classifier reading iss.State or the dross/status label fails. The fake also fatals on any non-GET during classify."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/issue_reap_apply_test.go:TestSecondApplyIsANoOp", "internal/cmd/issue_reap_classify_test.go:TestAlreadyTerminalIsNotStranded", ".dross/phases/board-mirror-reaper/proof.md (final whole-board re-run: no stranded mirrors, exit 0)"]
+  notes = "A second apply classifies zero, issues zero writes and exits 0; the already-terminal filter is what makes the post-sweep plan honestly empty."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/issue_reap_apply_test.go:TestApplyContinuesPastAWriteFailure", "internal/cmd/issue_reap_apply_test.go:TestApplyContinuesPastAPriorStateReadFailure", "internal/cmd/issue_reap_apply_test.go:TestUnverifiedCloseIsNotCountedClosed", "internal/cmd/issue_reap_apply_test.go:TestJournalRecordsOnlyRealCloses"]
+  notes = "Both failure halves are now held. WRITE: card 2 of 4 refused, cards 3 and 4 still attempted, exactly one report line, non-zero exit. READ (t-16, closing the prior run's weak): the fixture fails GetIssue only on the apply-time read - a counter, not a flag, because a card unreadable at plan time never reaches plan.Cards at all - and asserts the report carries the UNDERLYING read error, the card is never written, and it is journalled failed so undo cannot replay it. The survivor at issue_reap_apply.go:123 is killed."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/board_lifecycle_divergence_test.go:TestEveryBoardNamespaceHasAReapPath", "internal/cmd/board_lifecycle_divergence_test.go:TestEveryReapTerminalIsMapped", "internal/cmd/board_lifecycle_divergence_test.go:TestReapTerminalMatchesTheForwardTerminal", "internal/reaplog/reaplog_test.go:TestReapLogIsNotABoardNamespace"]
+  notes = "Both directions are guarded off reflection over board.Board, each terminal is checked against both provider state maps by name, and every assertion has an explicit t.Fatal vacuity guard."
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/issue_reap_discover_test.go:TestUnlinkedMirrorIsDiscovered", "internal/cmd/issue_reap_discover_test.go:TestOrphanTargetFollowsItsDestinationRecord", "internal/cmd/issue_reap_discover_test.go:TestOrphanTargetOnAnUnscaffoldedRoadmapSlugIsStillOpen", "internal/cmd/issue_reap_discover_test.go:TestOrphanDeferredResolvesByItemID", "internal/cmd/issue_reap_discover_test.go:TestOrphanTaskLabelNamingNoPhaseIsUnattributable", "internal/cmd/issue_reap_discover_test.go:TestUnattributableMarkerCardIsNamedNotGuessed", "internal/cmd/issue_reap_discover_test.go:TestHumanFiledCardIsNeverInInventory", "internal/cmd/issue_reap_discover_test.go:TestMarkerCardAlreadyLinkedIsNotDoubleCounted"]
+  notes = "All three identity arms now have fixtures. t-15 closed the prior run's weak: dross/target: follows its destination's completion record (the DRO-33 shape) and distinguishes an unscaffolded roadmap slug - still live backlog - from a slug on no roadmap; dross/deferred: resolves by item id through the deferred store with dismissed, live and unexplained all separated (the DRO-95/96 shape); a task label with no phase half is named rather than resolved against an empty slug. Every assertion checks the verdict explicitly rather than membership, because `found` carries both stranded and unattributable. All five survivors at issue_reap_discover.go:176,183,199,204,209 are killed, so c-7's concrete sentence now rests on the suite, not only on proof.md."
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/issue_verb_shape_test.go:TestIssueVerbsAreNested", "internal/cmd/issue_verb_shape_test.go:TestOldCompoundIssueVerbIsRejected", "internal/cmd/issue_verb_shape_test.go:TestNoHyphenatedIssueVerbInGoSource", "internal/cmd/issue_verb_shape_test.go:TestEveryPromptIssueInvocationResolves", "internal/cmd/issue_verb_shape_test.go:TestEveryDocumentedIssueVerbResolves", "internal/cmd/issue_verb_shape_test.go:TestTaskSyncEdgeRegexIsNotVacuous"]
+  notes = "Guarded from both ends: the cobra tree refuses every retired spelling, and every prompt/doc invocation is resolved against that same tree with a leaf-has-a-handler check, not a regexp allowlist. Vacuity guards throughout."
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/issue_reap_undo_test.go:TestUndoRestoresTheRecordedPriorState", "internal/cmd/issue_reap_undo_test.go:TestUndoRestoresDroppedBoardLinks", "internal/cmd/issue_reap_undo_test.go:TestUndoReversesOnlyTheLastRun", "internal/cmd/issue_reap_undo_test.go:TestUndoRefusesOnABackendWithoutStateWriter", "internal/reaplog/reaplog_test.go:TestJournalRoundTripsPriorState", "internal/forge/state_map_test.go:TestSetStateRawVerifiesReadBack (youtrack, forge and jira subtests)"]
+  notes = "Reversal is covered on the YouTrack path - per-card prior columns (hardcoding Open fails), dropped links restored, last-run-only, GitHub refused by provider name with zero writes - and t-17 closed the Jira gap: the transition POST answers 204 while the issue still reads its old column, and SetStateRaw must error naming the key, the wanted status AND the status actually read. That last assertion is what separates the real branch from the mutant. The survivor at internal/forge/jira.go:502 is killed."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .gitignore: no mutation adapter for .gitignore"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped ARCHITECTURE.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped README.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/execute.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/milestone.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/plan.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/ship.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/verify.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/watch.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "The prior run's 7 in-diff survivors are all killed. Disposition chosen then was to kill rather than accept or route, and t-15/t-16/t-17 did exactly that: issue_reap_discover.go:176,183,199,204,209 (c-7), issue_reap_apply.go:123 (c-5), internal/forge/jira.go:502 (c-9). unclassified_in_scope is now 0 and the three criteria return from weak to covered."
+
+[[finding]]
+  severity = "NOTE"
+  text = "All 25 remaining in-scope survivors are accepted, inherited-origin lines in files this phase edited around (19 doctor.go, 4 watch.go, 1 issue.go, 1 forge.go) - the gremlins attribution ceiling, already carrying reasons in .dross/survivors.toml. Efficacy over the 1065 reachable mutants is 1.00; the pooled 0.98 is that ceiling, not a test gap. 68 out-of-scope survivors were filtered before scoring."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Two named test-contract items were deliberately not written, each argued dead by construction in its commit body: the (nil, nil) GetIssue case on both the apply leg (t-16) and the Jira read-back (t-17). YouTrack, Jira, GitHub and Forge all build their Issue unconditionally, so no BoardClient can return a nil issue with a nil error; the branch each guards is reached through the read-failure and wrong-state paths, which are now held. A deviation from the plan's letter, recorded rather than silent."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-1's stated counts differ from the observed run and proof.md reconciles each delta by issue id: 87 record-backed rather than 88 (DRO-160 is routed into this phase and correctly open), 63 backlog rather than 64, and 10 pre-existing correctly-open cards rather than 8 plus 14 of this phase's own cards that did not exist when the spec was written. Not a shortfall - every lane's after-count matched its before-count."

@@ -1,5 +1,9 @@
 {
   "phase": "07-stack-profiles",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "38fce29f2fea061c03475674da69ce8dbdc74b1a"
+  },
   "tasks": {
     "t-1": {
       "files": [

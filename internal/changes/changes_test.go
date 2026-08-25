@@ -2,9 +2,14 @@ package changes
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -584,5 +589,167 @@ func TestSetForkAndSetBaseDoNotClobberEachOther(t *testing.T) {
 	}
 	if got.Base != "main" {
 		t.Errorf("SetBase did not record the PR's base branch: %q", got.Base)
+	}
+}
+
+// TestSetBackfilledRoundTrips: the marker and its provenance are written
+// together and survive Save/Load. A backfilled record reads StatusComplete like
+// any other — the evidence SHA is the only thing distinguishing it from an
+// observed marker, so dropping it on write or reload makes the sweep
+// unauditable and un-rerunnable.
+func TestSetBackfilledRoundTrips(t *testing.T) {
+	root := t.TempDir()
+	if err := SetBackfilled(root, "old-phase", "deadbee"); err != nil {
+		t.Fatalf("SetBackfilled: %v", err)
+	}
+	got, err := Load(FilePath(root, "old-phase"), "old-phase")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusComplete {
+		t.Errorf("status = %q, want %q — backfill writes the normal marker, not a third value", got.Status, StatusComplete)
+	}
+	if got.BackfillEvidence == nil {
+		t.Fatal("the evidence was dropped: a marker landed with no provenance")
+	}
+	if got.BackfillEvidence.SHA != "deadbee" {
+		t.Errorf("evidence sha = %q, want %q", got.BackfillEvidence.SHA, "deadbee")
+	}
+}
+
+// TestSetBackfilledRefusesEmptyEvidenceAndExistingStatus: both arms would leave
+// a record claiming more than it can show. An empty SHA writes a marker with no
+// provenance at all; an existing status means the sweep reached a record it was
+// never meant to touch, and overwriting it replaces an observed marker with an
+// inferred one.
+func TestSetBackfilledRefusesEmptyEvidenceAndExistingStatus(t *testing.T) {
+	root := t.TempDir()
+	if err := SetBackfilled(root, "p", "   "); err == nil {
+		t.Error("a backfill with no evidence commit must be refused")
+	}
+	if c, err := Load(FilePath(root, "p"), "p"); err == nil && c.Status != "" {
+		t.Errorf("the refused write still landed a status %q", c.Status)
+	}
+
+	if err := SetStatus(root, "shipped-one", StatusShipped); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetBackfilled(root, "shipped-one", "cafe123"); err == nil {
+		t.Error("backfill must refuse a record that already carries a status")
+	}
+	got, err := Load(FilePath(root, "shipped-one"), "shipped-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusShipped || got.BackfillEvidence != nil {
+		t.Errorf("the refused backfill mutated the record: status=%q evidence=%+v", got.Status, got.BackfillEvidence)
+	}
+}
+
+// TestStatusSetIsExactlyTwoValues reads the package source for exported Status*
+// constants. Doneness is a two-value switch (phasedone.go) and the locked
+// backfill_provenance decision keeps it that way — a third constant here is how
+// "backfilled" would sneak in as a status rather than as provenance, widening
+// doneness at every surface at once.
+func TestStatusSetIsExactlyTwoValues(t *testing.T) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "changes.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found []string
+	ast.Inspect(f, func(n ast.Node) bool {
+		vs, ok := n.(*ast.ValueSpec)
+		if !ok {
+			return true
+		}
+		for _, name := range vs.Names {
+			if strings.HasPrefix(name.Name, "Status") && name.IsExported() {
+				found = append(found, name.Name)
+			}
+		}
+		return true
+	})
+	sort.Strings(found)
+	want := []string{"StatusComplete", "StatusShipped"}
+	if !reflect.DeepEqual(found, want) {
+		t.Errorf("exported status set = %v, want exactly %v", found, want)
+	}
+}
+
+// TestBackfilledRecordCarriesNoCommitKey is the doctor-collision guard. doctor's
+// extractCommitSHAs is a literal `"commit":` text scan over the raw body, not a
+// JSON parse, so a provenance SHA serialized under that key at ANY depth would
+// have phaseCommitsOnMain report 67 backfilled ship SHAs as leaked phase
+// commits whenever local main is ahead of origin.
+func TestBackfilledRecordCarriesNoCommitKey(t *testing.T) {
+	root := t.TempDir()
+	if err := SetBackfilled(root, "old-phase", "deadbeef1234"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(FilePath(root, "old-phase"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(b)
+	if strings.Contains(body, `"commit":`) {
+		t.Errorf("a backfilled record serializes provenance under a \"commit\" key — doctor's raw scan will read it as a leaked phase commit:\n%s", body)
+	}
+	if !strings.Contains(body, `"backfill_evidence"`) || !strings.Contains(body, `"sha"`) {
+		t.Errorf("the evidence must serialize as backfill_evidence with an inner sha:\n%s", body)
+	}
+}
+
+// TestCompleteIsExactlyStatusComplete pins the narrow predicate the re-entry
+// surfaces read. `shipped` is the load-bearing negative: it is a phase mid-flight
+// between the push and the merge, which is precisely what those surfaces exist
+// to announce — widening Complete to accept it silences the merge gate.
+func TestCompleteIsExactlyStatusComplete(t *testing.T) {
+	cases := []struct {
+		status string
+		want   bool
+	}{
+		{StatusComplete, true},
+		{StatusShipped, false},
+		{"", false},
+		{"COMPLETE", false},
+		{"completed", false},
+	}
+	for _, tc := range cases {
+		root := t.TempDir()
+		c := New("p")
+		c.Status = tc.status
+		if err := c.Save(FilePath(root, "p")); err != nil {
+			t.Fatal(err)
+		}
+		if got := Complete(root, "p"); got != tc.want {
+			t.Errorf("Complete with status %q = %v, want %v", tc.status, got, tc.want)
+		}
+		if got := c.Complete(); got != tc.want {
+			t.Errorf("(*Changes).Complete with status %q = %v, want %v", tc.status, got, tc.want)
+		}
+	}
+}
+
+// TestCompleteTreatsAbsenceAsNotDone: a missing record, an unreadable one and a
+// nil receiver are all "unknown", never "done". Absence of evidence closing a
+// phase out is how a surface goes silent about work that never finished.
+func TestCompleteTreatsAbsenceAsNotDone(t *testing.T) {
+	root := t.TempDir()
+	if Complete(root, "never-scaffolded") {
+		t.Error("a phase with no changes.json must not read complete")
+	}
+	if err := os.MkdirAll(filepath.Dir(FilePath(root, "garbled")), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(FilePath(root, "garbled"), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if Complete(root, "garbled") {
+		t.Error("an unreadable changes.json must not read complete")
+	}
+	var nilC *Changes
+	if nilC.Complete() {
+		t.Error("a nil record must not read complete")
 	}
 }

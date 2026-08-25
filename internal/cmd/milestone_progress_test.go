@@ -69,14 +69,9 @@ func TestProgressCountsDurableMarkerWithoutBreadcrumb(t *testing.T) {
 	scaffoldPhase(t, dir, "a", changes.StatusComplete)
 	scaffoldPhase(t, dir, "b", "")
 
-	// Precondition: no breadcrumb anywhere for "a".
-	s, err := state.Load(filepath.Join(dir, ".dross", state.File))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if historyCompletedPhase(s, "a") {
-		t.Fatal("precondition: this fixture must carry no completion breadcrumb")
-	}
+	// Precondition: no breadcrumb anywhere for "a" — the marker is the only
+	// evidence in this fixture.
+	touchHistory(t, dir, "scoped v1.3")
 
 	rep := progressJSON(t, "v1.3", "--json")
 	if rep.Done != 1 || rep.Total != 2 {
@@ -133,21 +128,22 @@ func TestProgressUnscaffoldedSlugIsNotDone(t *testing.T) {
 	}
 }
 
-// TestProgressHistoryFallbackMatchesWholeSlug: the fallback matches the action
-// token, not a substring. historyHasAction's strings.Contains would let one
-// "completed mutation-diff-scope" breadcrumb close `mutation-diff` too.
-func TestProgressHistoryFallbackMatchesWholeSlug(t *testing.T) {
+// TestProgressBreadcrumbAloneIsNotDone: a "completed <slug>" breadcrumb is not
+// a record. Both phases here carry one and neither carries a marker, so a
+// doneness reader that still consults history reports 2/2 instead of 0/2.
+func TestProgressBreadcrumbAloneIsNotDone(t *testing.T) {
 	dir := progressRepo(t, "v1.3", "active", "mutation-diff", "mutation-diff-scope")
 	scaffoldPhase(t, dir, "mutation-diff", "")
 	scaffoldPhase(t, dir, "mutation-diff-scope", "")
+	touchHistory(t, dir, "completed mutation-diff")
 	touchHistory(t, dir, "completed mutation-diff-scope")
 
 	rep := progressJSON(t, "v1.3", "--json")
-	if rep.Done != 1 {
-		t.Errorf("done = %d, want 1 — only the slug the breadcrumb names is done", rep.Done)
+	if rep.Done != 0 {
+		t.Errorf("done = %d, want 0 — a breadcrumb is a window, not a record", rep.Done)
 	}
-	if !hasSlug(rep.Remaining, "mutation-diff") {
-		t.Errorf("the shorter slug was closed by a longer slug's breadcrumb: remaining = %v", rep.Remaining)
+	if !hasSlug(rep.Remaining, "mutation-diff") || !hasSlug(rep.Remaining, "mutation-diff-scope") {
+		t.Errorf("both breadcrumb-only phases are outstanding: remaining = %v", rep.Remaining)
 	}
 }
 
@@ -294,6 +290,44 @@ func TestProgressPlainOutputOmitsEmptyLists(t *testing.T) {
 	}
 	if !strings.Contains(out, "dross milestone complete v2.0") {
 		t.Errorf("the all-done arm should hand over the next command:\n%s", out)
+	}
+}
+
+// TestPhaseDoneResolvesScaffoldedness pins the shared reader's entry point
+// (phasedone.go): a caller holding only a slug gets the unscaffolded arm
+// resolved for it, so `dross status` and `dross phase list` cannot answer that
+// case differently from buildMilestoneProgress, which computes scaffolded-ness
+// for its own reporting and calls the inner phaseIsDone.
+func TestPhaseDoneResolvesScaffoldedness(t *testing.T) {
+	dir := progressRepo(t, "v1.3", "active", "built", "never-built")
+	scaffoldPhase(t, dir, "built", changes.StatusComplete)
+	// History insists the unbuilt slug is done. It has no directory, so it is
+	// not — and the entry point has to reach that on its own.
+	touchHistory(t, dir, "completed never-built")
+
+	root := filepath.Join(dir, ".dross")
+	if !phaseDone(root, "built") {
+		t.Error("a scaffolded phase with a complete record must read done")
+	}
+	if phaseDone(root, "never-built") {
+		t.Error("an unscaffolded slug is never done, whatever history says")
+	}
+}
+
+// TestPhaseDoneSurvivesMissingStateFile: the reader never touches state.json at
+// all. It is machine-local and gitignored, so a fresh clone has none — and a
+// doneness question must still be answerable there, off the durable
+// changes.json marker.
+func TestPhaseDoneSurvivesMissingStateFile(t *testing.T) {
+	dir := progressRepo(t, "v1.3", "active", "built")
+	scaffoldPhase(t, dir, "built", changes.StatusComplete)
+	root := filepath.Join(dir, ".dross")
+	if err := os.Remove(filepath.Join(root, state.File)); err != nil {
+		t.Fatalf("remove state.json: %v", err)
+	}
+
+	if !phaseDone(root, "built") {
+		t.Error("the durable marker alone must carry a phase with no state.json")
 	}
 }
 

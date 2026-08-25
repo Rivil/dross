@@ -26,7 +26,7 @@ func Phase() *cobra.Command {
 		Use:   "phase",
 		Short: "Manage phase directories under .dross/phases/",
 	}
-	c.AddCommand(phaseList(), phaseCreate(), phaseCheckout(), phaseShow(), phaseComplete(), phaseReconcile(), phaseNumber(), phaseMigrate(), phaseMove(), phaseInsert(), phaseRename(), phaseRedProof())
+	c.AddCommand(phaseList(), phaseCreate(), phaseCheckout(), phaseShow(), phaseComplete(), phaseReconcile(), phaseNumber(), phaseMigrate(), phaseMove(), phaseInsert(), phaseRename(), phaseRedProof(), phaseBackfill())
 	return c
 }
 
@@ -78,13 +78,21 @@ func phaseNumber() *cobra.Command {
 }
 
 func phaseList() *cobra.Command {
-	return &cobra.Command{
+	var milestoneVersion string
+	c := &cobra.Command{
 		Use:   "list",
-		Short: "List phases",
+		Short: "List phases, marking the done ones",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			root, err := FindRoot()
 			if err != nil {
 				return err
+			}
+			// One doneness reader for the whole tool (phasedone.go): this
+			// listing, `dross status` and `dross milestone progress` count the
+			// same phases done, off the completion record rather than a verify
+			// verdict.
+			if milestoneVersion != "" {
+				return listMilestoneRoadmap(root, milestoneVersion)
 			}
 			ids, err := phase.List(root)
 			if err != nil {
@@ -94,12 +102,58 @@ func phaseList() *cobra.Command {
 				Print("(no phases)")
 				return nil
 			}
+			done := 0
 			for _, id := range phase.Ordered(milestonePhaseOrder(root), ids) {
-				Print(id)
+				if phaseDone(root, id) {
+					done++
+					Printf("✓ %s\n", id)
+				} else {
+					Printf("  %s\n", id)
+				}
 			}
+			// The denominator is phase.List's directory count, which is unique
+			// by construction — not the rendered line count, which comes
+			// through an order array a slug can appear on twice.
+			Printf("%d/%d done\n", done, len(ids))
 			return nil
 		},
 	}
+	c.Flags().StringVar(&milestoneVersion, "milestone", "",
+		"list this milestone's roadmap in array order, including slugs with no phase directory")
+	return c
+}
+
+// listMilestoneRoadmap renders one milestone's phases array in roadmap order.
+//
+// It is a different question from the bare listing, which is every phase
+// directory in the repo: this one is "what did this milestone sign up for, and
+// how much of it is done", so a slug on the array with no directory is listed
+// too — it is outstanding work, not an absence — and the footer's denominator
+// is the roadmap's length. Dropping the unscaffolded entries would report a
+// half-built milestone as finished.
+func listMilestoneRoadmap(root, version string) error {
+	m, err := milestone.Load(milestone.FilePath(root, version))
+	if err != nil {
+		return fmt.Errorf("unknown milestone %q: %w (run `dross milestone list` to see options)", version, err)
+	}
+	if len(m.Phases) == 0 {
+		Printf("(no phases on %s)\n", version)
+		return nil
+	}
+	done := 0
+	for _, slug := range m.Phases {
+		switch {
+		case phaseDone(root, slug):
+			done++
+			Printf("✓ %s\n", slug)
+		case !phaseDirExists(root, slug):
+			Printf("  %s (not scaffolded)\n", slug)
+		default:
+			Printf("  %s\n", slug)
+		}
+	}
+	Printf("%d/%d done\n", done, len(m.Phases))
+	return nil
 }
 
 // milestonePhaseOrder concatenates every milestone's phases array in

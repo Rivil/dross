@@ -352,6 +352,34 @@ func TestOrdered(t *testing.T) {
 	}
 }
 
+// TestOrderedDedupsSlugOnTwoRoadmaps: callers concatenate every milestone's
+// phases array, so a phase carried forward onto a later milestone appears twice
+// in `order` — one directory, which must list as one line, at the earlier
+// milestone's position. `placed` was already being written here and never read,
+// so `dross phase list` printed plan-gray-area-walkthrough twice.
+func TestOrderedDedupsSlugOnTwoRoadmaps(t *testing.T) {
+	// v1.4's array then v1.5's, concatenated: "carried" is on both.
+	order := []string{"early", "carried", "late", "carried"}
+	got := Ordered(order, []string{"early", "carried", "late"})
+	want := []string{"early", "carried", "late"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Ordered dedup: got %v want %v", got, want)
+	}
+}
+
+// TestOrderedKeepsFirstOccurrencePosition pins WHICH occurrence survives. Both
+// dedup directions emit each slug once; only the first-wins one puts a
+// re-scoped phase where it actually sits in the project's sequence.
+func TestOrderedKeepsFirstOccurrencePosition(t *testing.T) {
+	// "carried" is listed first on the earlier milestone, and again last on the
+	// later one. Last-wins would render it after "late".
+	got := Ordered([]string{"carried", "early", "late", "carried"}, []string{"early", "carried", "late"})
+	want := []string{"carried", "early", "late"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Ordered first-occurrence: got %v want %v — the earlier milestone's position must win", got, want)
+	}
+}
+
 func TestDisplayNumber(t *testing.T) {
 	order := []string{"alpha", "beta", "gamma"}
 	if got := DisplayNumber(order, "beta"); got != 2 {

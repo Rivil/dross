@@ -1,13 +1,16 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/findings"
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/state"
 )
 
@@ -305,30 +308,124 @@ func TestStatusOmitsHandoffWhenAbsentOrEmpty(t *testing.T) {
 }
 
 // Milestone-level progress: status must surface how many of the milestone's
-// phases are verified (N/M phases), distinct from the current phase's task
-// count. Pins the bug where only per-phase task progress (2/2) was shown and
-// the milestone looked complete when phases remained.
+// phases are done (N/M phases), distinct from the current phase's task count.
+// Pins the bug where only per-phase task progress (2/2) was shown and the
+// milestone looked complete when phases remained.
+//
+// Doneness is the completion record, not the verify verdict — this fixture used
+// to be built out of verify.toml verdicts, which is exactly the reading
+// completion-record-truth removes.
 func TestStatusShowsMilestonePhaseProgress(t *testing.T) {
 	chdir(t, t.TempDir())
 	scaffoldPhaseWithSpecOnly(t, "01-a")
-	// A milestone toml listing five phases, two of which are verified.
+	// A milestone toml listing five phases, two of which carry a completion
+	// record — one complete, one shipped.
 	mustWrite(t, ".dross/milestones/v0.1.toml", `phases = ["01-a", "02-b", "03-c", "04-d", "05-e"]
 
 [milestone]
   version = "v0.1"
   title = "First release"
 `)
-	mustWrite(t, ".dross/phases/01-a/verify.toml", "verdict = \"pass\"\n")
-	mustWrite(t, ".dross/phases/02-b/verify.toml", "verdict = \"pass\"\n")
-	mustWrite(t, ".dross/phases/03-c/verify.toml", "verdict = \"partial\"\n")
+	recordPhaseStatus(t, "01-a", changes.StatusComplete)
+	recordPhaseStatus(t, "02-b", changes.StatusShipped)
+	recordPhaseStatus(t, "03-c", "")
 	out := captureStdout(t, func() {
 		runCmd(t, Status())
 	})
 	if !strings.Contains(out, "2/5 phases") {
-		t.Errorf("expected milestone phase progress '2/5 phases' (only 01-a and 02-b are pass):\n%s", out)
+		t.Errorf("expected milestone phase progress '2/5 phases' (only 01-a and 02-b carry a completion record):\n%s", out)
 	}
 	if !strings.Contains(out, "First release") {
 		t.Errorf("expected milestone title surfaced:\n%s", out)
+	}
+}
+
+// TestStatusMilestoneIgnoresVerifyVerdict is the c-2 case at the status
+// surface: a phase can pass verification and never ship, so a verdict of "pass"
+// over a record carrying no completion status is not doneness. The status bar
+// counted exactly that until this phase, which is why it read 0/11 on v1.4
+// while `dross milestone progress` read 11/11 over the same directories.
+func TestStatusMilestoneIgnoresVerifyVerdict(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "verified-only")
+	mustWrite(t, ".dross/milestones/v0.1.toml", `phases = ["verified-only"]
+
+[milestone]
+  version = "v0.1"
+`)
+	recordPhaseStatus(t, "verified-only", "")
+	mustWrite(t, ".dross/phases/verified-only/verify.toml", "[summary]\n  verdict = \"pass\"\n")
+
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "0/1 phases") {
+		t.Errorf("a verify verdict is not a completion record — want '0/1 phases':\n%s", out)
+	}
+}
+
+// TestStatusCountsShippedPhaseDone pins the other half of the same reader: the
+// changes.json "shipped" arm counts at the status surface too, on a fixture
+// carrying that record and nothing else.
+func TestStatusCountsShippedPhaseDone(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithSpecOnly(t, "shipped-one")
+	mustWrite(t, ".dross/milestones/v0.1.toml", `phases = ["shipped-one"]
+
+[milestone]
+  version = "v0.1"
+`)
+	recordPhaseStatus(t, "shipped-one", changes.StatusShipped)
+
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "1/1 phases") {
+		t.Errorf("a shipped record is doneness — want '1/1 phases':\n%s", out)
+	}
+}
+
+// TestStatusMilestoneBreadcrumbDoesNotCount is the inverse of the test this
+// replaced. The state.json `completed <slug>` fallback is gone (c-4): history is
+// a capped 50-entry window, so a phase read done off a breadcrumb flips back to
+// not-done the moment the breadcrumb ages out. A pre-field record is closed by
+// `dross phase backfill` writing the durable marker, not by the reader guessing
+// — and the status surface has to agree with the other two.
+func TestStatusMilestoneBreadcrumbDoesNotCount(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	scaffoldPhaseWithSpecOnly(t, "old-phase")
+	mustWrite(t, ".dross/milestones/v0.1.toml", `phases = ["old-phase"]
+
+[milestone]
+  version = "v0.1"
+`)
+	recordPhaseStatus(t, "old-phase", "")
+	touchHistory(t, dir, "completed old-phase")
+
+	out := captureStdout(t, func() {
+		runCmd(t, Status())
+	})
+	if !strings.Contains(out, "0/1 phases") {
+		t.Errorf("a breadcrumb is not a record — want '0/1 phases':\n%s", out)
+	}
+}
+
+// recordPhaseStatus scaffolds .dross/phases/<slug>/ and gives it a changes.json.
+// An empty status writes the pre-field shape — a record with no status key at
+// all, which reads as "unknown", never as done.
+func recordPhaseStatus(t *testing.T, slug, status string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(".dross", "phases", slug), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if status == "" {
+		mustWrite(t, filepath.Join(".dross", "phases", slug, changes.File),
+			`{"phase":"`+slug+`","tasks":{}}`+"\n")
+		return
+	}
+	if err := changes.SetStatus(".dross", slug, status); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -928,9 +1025,9 @@ func TestStatusNoShippedWithoutEitherSignal(t *testing.T) {
 }
 
 // TestStatusSilentAfterCompletion (c-6): once complete has run — current_phase
-// cleared, `completed <id>` in history — status says nothing about shipping or
-// staleness. The old warning keyed on that very breadcrumb, so keeping it fires
-// here on a phase that is finished.
+// cleared, the phase's record marked complete — status says nothing about
+// shipping or staleness. The old warning keyed on the same signal, so keeping
+// it fires here on a phase that is finished.
 func TestStatusSilentAfterCompletion(t *testing.T) {
 	dir := shippedBranchFixture(t)
 	path := filepath.Join(dir, ".dross", state.File)
@@ -940,10 +1037,11 @@ func TestStatusSilentAfterCompletion(t *testing.T) {
 	}
 	st.CurrentPhase = ""
 	st.CurrentPhaseStatus = ""
-	st.Touch("completed x")
 	if err := st.Save(path); err != nil {
 		t.Fatal(err)
 	}
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
+		`{"phase":"x","pr":42,"base":"main","status":"complete","tasks":{}}`)
 
 	out := captureStdout(t, func() { runCmd(t, Status()) })
 
@@ -1202,5 +1300,409 @@ func TestStatusPromptDoesNotAttributeBacklogSolelyToSpec(t *testing.T) {
 	}
 	if !strings.Contains(content, "dross deferred add") {
 		t.Error("status.md does not name `dross deferred add` as a source of someday items")
+	}
+}
+
+// --- phaseMergeState: the phase-id-keyed merge oracle (t-2) -----------------
+
+// mergeOracleFixture builds a real repo with a pushed `main` on a bare origin
+// and one `phase/<slug>` branch carrying a commit, then leaves HEAD on main —
+// where the SessionStart hook actually runs. Returns the repo dir; the dross
+// root is dir/.dross.
+func mergeOracleFixture(t *testing.T, slug string) string {
+	t.Helper()
+	dir := t.TempDir()
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remote)
+
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	mustGit(t, dir, "checkout", "-q", "-b", "phase/"+slug)
+	mustWrite(t, filepath.Join(dir, slug+".txt"), "work\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat("+slug+"): work")
+	mustGit(t, dir, "checkout", "-q", "main")
+	return dir
+}
+
+// writeOracleChanges writes the phase's changes.json with a PR number and base.
+func writeOracleChanges(t *testing.T, dir, slug string, pr int, base string) {
+	t.Helper()
+	body := fmt.Sprintf(`{"phase":%q,"pr":%d,"base":%q,"tasks":{}}`, slug, pr, base)
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", slug, "changes.json"), body)
+}
+
+func oracleState(t *testing.T, dir, slug string) string {
+	t.Helper()
+	return phaseMergeState(filepath.Join(dir, ".dross"), dir, slug, "main")
+}
+
+// TestPhaseMergeStateKeysOnThePhaseNotHEAD is the load-bearing case for the
+// oracle's reason to exist. HEAD is main throughout — a fresh session's normal
+// state — and the phase branch is not checked out. shippedUnmergedPhase reads
+// HEAD first and answers ok=false here; the oracle must still see the merge.
+func TestPhaseMergeStateKeysOnThePhaseNotHEAD(t *testing.T) {
+	dir := mergeOracleFixture(t, "auth")
+	writeOracleChanges(t, dir, "auth", 42, "main")
+	mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "merge auth", "phase/auth")
+	mustGit(t, dir, "push", "-q", "origin", "main")
+
+	if got := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); got != "main" {
+		t.Fatalf("fixture must run from main, got %q", got)
+	}
+	if got := oracleState(t, dir, "auth"); got != mergeMerged {
+		t.Errorf("phaseMergeState from main = %q, want %q", got, mergeMerged)
+	}
+}
+
+// TestPhaseMergeStateNoPRIsItsOwnAnswer: a phase that never opened a PR has
+// nothing to be merged or unmerged. Folding it into open would advise a merge
+// that does not exist; folding it into merged would claim one that never
+// happened. The fixture's branch is genuinely unmerged, so a no-PR case that
+// leaked into the ancestry logic would come back `open`.
+func TestPhaseMergeStateNoPRIsItsOwnAnswer(t *testing.T) {
+	dir := mergeOracleFixture(t, "auth")
+	writeOracleChanges(t, dir, "auth", 0, "main")
+	if got := oracleState(t, dir, "auth"); got != mergeNoPR {
+		t.Errorf("phaseMergeState with no recorded PR = %q, want %q", got, mergeNoPR)
+	}
+	// And a phase with no record at all is unknown, not no-PR: an unreadable
+	// record is missing evidence, never a fact about the PR.
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "garbled", "changes.json"), "{not json")
+	if got := oracleState(t, dir, "garbled"); got != mergeUnknown {
+		t.Errorf("phaseMergeState over an unreadable record = %q, want %q", got, mergeUnknown)
+	}
+}
+
+// TestPhaseMergeStateOpenNeedsAPositiveObservation pins the one arm that is a
+// claim rather than a fallback: open is reported only when the branch is really
+// not on origin/<base>.
+func TestPhaseMergeStateOpenNeedsAPositiveObservation(t *testing.T) {
+	dir := mergeOracleFixture(t, "auth")
+	writeOracleChanges(t, dir, "auth", 42, "main")
+	if got := oracleState(t, dir, "auth"); got != mergeOpen {
+		t.Errorf("phaseMergeState with an unmerged branch = %q, want %q", got, mergeOpen)
+	}
+}
+
+// TestPhaseMergeStateUncertaintyIsAlwaysUnknown walks every path that is not a
+// positive observation. Each of these collapsing into open would have the
+// re-entry line advise a merge on a phase it knows nothing about; collapsing
+// into merged would advise a completion for work that may never have landed.
+func TestPhaseMergeStateUncertaintyIsAlwaysUnknown(t *testing.T) {
+	t.Run("missing origin base ref", func(t *testing.T) {
+		dir := mergeOracleFixture(t, "auth")
+		// A base recorded as a milestone branch that was never pushed.
+		writeOracleChanges(t, dir, "auth", 42, "milestone/v9")
+		if got := oracleState(t, dir, "auth"); got != mergeUnknown {
+			t.Errorf("phaseMergeState with no origin/milestone/v9 = %q, want %q", got, mergeUnknown)
+		}
+	})
+
+	t.Run("deleted phase branch", func(t *testing.T) {
+		dir := mergeOracleFixture(t, "auth")
+		writeOracleChanges(t, dir, "auth", 42, "main")
+		// `dross phase complete` deletes the branch on the way out; a fresh
+		// clone never had it. Neither is evidence the PR is still open.
+		mustGit(t, dir, "branch", "-D", "phase/auth")
+		if got := oracleState(t, dir, "auth"); got != mergeUnknown {
+			t.Errorf("phaseMergeState with no local phase branch = %q, want %q", got, mergeUnknown)
+		}
+	})
+
+	t.Run("base past the squash scan limit", func(t *testing.T) {
+		dir := mergeOracleFixture(t, "auth")
+		writeOracleChanges(t, dir, "auth", 42, "main")
+		for i := 0; i <= staleSquashScanLimit; i++ {
+			mustWrite(t, filepath.Join(dir, fmt.Sprintf("m%d.txt", i)), "x\n")
+			mustGit(t, dir, "add", ".")
+			mustGit(t, dir, "commit", "-q", "-m", fmt.Sprintf("chore: main %d", i))
+		}
+		mustGit(t, dir, "push", "-q", "origin", "main")
+		if got := oracleState(t, dir, "auth"); got != mergeUnknown {
+			t.Errorf("phaseMergeState with a base past the scan limit = %q, want %q", got, mergeUnknown)
+		}
+	})
+}
+
+// TestStatusShippedLineSilentOnACompleteRecordAfterTheBreadcrumbAges is c-3's
+// load-bearing case. The repo is visited FROM the old phase branch — the PR
+// record lives on that branch and outlives the completion, so the suppressor is
+// the only thing standing between a finished phase and a waiting-on-merge line.
+// state.json's history is a full 50-entry window that no longer names the
+// phase, which is the ordinary shape a couple of phases later.
+func TestStatusShippedLineSilentOnACompleteRecordAfterTheBreadcrumbAges(t *testing.T) {
+	dir := shippedBranchFixture(t)
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
+		`{"phase":"x","pr":42,"base":"main","status":"complete","tasks":{}}`)
+
+	path := filepath.Join(dir, ".dross", state.File)
+	st, err := state.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 50; i++ {
+		st.Touch(fmt.Sprintf("touched something %d", i))
+	}
+	if err := st.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range st.History {
+		if strings.Contains(a.Action, "completed x") {
+			t.Fatal("fixture must have aged the breadcrumb out of history")
+		}
+	}
+	if got := mustGit(t, dir, "symbolic-ref", "--short", "HEAD"); got != "phase/x" {
+		t.Fatalf("fixture must be visited from the phase branch, got %q", got)
+	}
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if strings.Contains(out, "shipped:") {
+		t.Errorf("a complete record with an aged-out breadcrumb is not waiting on a merge:\n%s", out)
+	}
+}
+
+// TestStatusShippedLineStillFiresOnAShippedRecord pins the narrowing. Between
+// the push and the merge the record reads `shipped`, and announcing that PR is
+// the entire job of this line. Widening the suppressor to phaseDone — which
+// counts shipped as done — silences the merge gate itself.
+func TestStatusShippedLineStillFiresOnAShippedRecord(t *testing.T) {
+	dir := shippedBranchFixture(t)
+	mustWrite(t, filepath.Join(dir, ".dross/phases/x/changes.json"),
+		`{"phase":"x","pr":42,"base":"main","status":"shipped","tasks":{}}`)
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if !strings.Contains(out, "shipped:") {
+		t.Errorf("a shipped-not-complete phase is waiting on a merge and must be announced:\n%s", out)
+	}
+}
+
+// --- suggestNext's terminal region (t-4) ------------------------------------
+
+// terminalPhaseFixture builds the one shape that reaches suggestNext's terminal
+// region: a scaffolded phase with every task done, a finalized pass verdict, and
+// a changes record carrying ZERO tasks and no completion status. The whole
+// family varies only `pr` and what has been merged.
+//
+// The phase artefacts are written last and left untracked, so they survive the
+// branch switches below and are present in the working tree from main — where
+// the SessionStart hook actually runs.
+func terminalPhaseFixture(t *testing.T, slug string, pr int) string {
+	t.Helper()
+	dir := t.TempDir()
+	remote := t.TempDir()
+	mustGit(t, remote, "init", "-q", "--bare", "-b", "main")
+	gitInit(t, dir, remote)
+	chdir(t, dir)
+
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustRunSet(t, "project.name", "test-app")
+	mustRunSet(t, "runtime.mode", "native")
+	mustRunSet(t, "repo.git_main_branch", "main")
+	if err := runCmd(t, State(), "set", "current_milestone", "v1.0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCmd(t, State(), "set", "current_phase", slug); err != nil {
+		t.Fatal(err)
+	}
+
+	mustWrite(t, filepath.Join(dir, "README.md"), "base\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+
+	mustGit(t, dir, "checkout", "-q", "-b", "phase/"+slug)
+	mustWrite(t, filepath.Join(dir, slug+".txt"), "work\n")
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "feat("+slug+"): work")
+	mustGit(t, dir, "checkout", "-q", "main")
+
+	pdir := filepath.Join(dir, ".dross", "phases", slug)
+	mustWrite(t, filepath.Join(pdir, "spec.toml"), "[phase]\n  id = \""+slug+"\"\n  title = \""+slug+"\"\n")
+	mustWrite(t, filepath.Join(pdir, "plan.toml"), `[phase]
+id = "`+slug+`"
+[[task]]
+id = "t-1"
+wave = 1
+title = "work"
+files = ["`+slug+`.txt"]
+covers = ["c-1"]
+status = "done"
+`)
+	mustWrite(t, filepath.Join(pdir, "verify.toml"), "[verify]\nphase = \""+slug+"\"\nverdict = \"pass\"\n")
+	writeOracleChanges(t, dir, slug, pr, "main")
+	return dir
+}
+
+func suggestFor(t *testing.T, dir string) string {
+	t.Helper()
+	root := filepath.Join(dir, ".dross")
+	proj, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.Load(filepath.Join(root, state.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return suggestNext(root, proj, st)
+}
+
+// TestSuggestNextMergedPRAdvisesCompletion is c-4's load-bearing case. The PR
+// has landed and no completion record was ever written — the exact state that
+// used to print `phase looks complete — start a new phase or move on`, which
+// asserted a doneness no record carried and named no verb to fix it.
+//
+// It also proves the consult happens BEFORE the verdict switch: with a pass
+// verdict this phase would otherwise return /dross-ship first and never reach
+// any later branch.
+func TestSuggestNextMergedPRAdvisesCompletion(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 42)
+	mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "merge auth", "phase/auth")
+	mustGit(t, dir, "push", "-q", "origin", "main")
+
+	got := suggestFor(t, dir)
+	if !strings.Contains(got, "dross phase complete auth") {
+		t.Errorf("a merged PR with no completion record should name `dross phase complete auth`, got:\n%s", got)
+	}
+	if strings.Contains(got, "/dross-ship") {
+		t.Errorf("a merged PR must not be advised to ship again:\n%s", got)
+	}
+}
+
+// TestSuggestNextOpenPRAdvisesTheMerge: an open PR is waiting on a merge, not
+// on a completion and not on another ship. Folding it into the merged arm would
+// advise writing a completion record for work that has not landed.
+func TestSuggestNextOpenPRAdvisesTheMerge(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 42)
+
+	got := suggestFor(t, dir)
+	if !strings.Contains(got, "merge the open PR") {
+		t.Errorf("a recorded but unmerged PR should point at the merge, got:\n%s", got)
+	}
+}
+
+// TestSuggestNextNoPRFallsThrough: the merged arm must fire on `merged` and
+// nothing else. A phase that never opened a PR is not complete-able — the verb
+// that would make its record exist is /dross-ship.
+func TestSuggestNextNoPRFallsThrough(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 0)
+
+	got := suggestFor(t, dir)
+	if strings.Contains(got, "dross phase complete") {
+		t.Errorf("a phase with no recorded PR must not be advised to complete:\n%s", got)
+	}
+	if !strings.Contains(got, "/dross-ship") {
+		t.Errorf("a pass verdict with no PR should point at /dross-ship, got:\n%s", got)
+	}
+}
+
+// TestSuggestNextTerminalShapeShipsRatherThanDeclaringDoneness: the removed
+// `phase looks complete` branch was reachable exactly here — a pass verdict on a
+// changes record carrying zero tasks. Restoring it re-asserts a doneness the
+// record does not carry.
+func TestSuggestNextTerminalShapeShipsRatherThanDeclaringDoneness(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 0)
+	root := filepath.Join(dir, ".dross")
+	ch, err := changes.Load(changes.FilePath(root, "auth"), "auth")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ch.Tasks) != 0 || ch.Status != "" {
+		t.Fatalf("fixture must carry zero tasks and no status, got %d tasks status=%q", len(ch.Tasks), ch.Status)
+	}
+
+	got := suggestFor(t, dir)
+	if strings.Contains(got, "looks complete") {
+		t.Errorf("the terminal branch is back — it asserts a doneness no record carries:\n%s", got)
+	}
+	if !strings.Contains(got, "/dross-ship") {
+		t.Errorf("want /dross-ship, got:\n%s", got)
+	}
+}
+
+// TestSuggestNextUnfinalizedVerdictNamesFinalize: the arm sits OUTSIDE the
+// `verdict != ""` guard the old code had, because an EMPTY verdict is the
+// commonest shape of the forget-to-finalize hole — a guard drops it straight
+// past. And it names `dross verify finalize`, not /dross-verify, which would
+// re-run mutation over a verify.toml that is already written.
+func TestSuggestNextUnfinalizedVerdictNamesFinalize(t *testing.T) {
+	for _, verdict := range []string{"", "pending"} {
+		dir := terminalPhaseFixture(t, "auth", 0)
+		body := "[verify]\nphase = \"auth\"\n"
+		if verdict != "" {
+			body += "verdict = \"" + verdict + "\"\n"
+		} else {
+			body += "verdict = \"\"\n"
+		}
+		mustWrite(t, filepath.Join(dir, ".dross", "phases", "auth", "verify.toml"), body)
+
+		got := suggestFor(t, dir)
+		if !strings.Contains(got, "dross verify finalize auth") {
+			t.Errorf("verdict %q should point at `dross verify finalize auth`, got:\n%s", verdict, got)
+		}
+		if strings.Contains(got, "/dross-verify") {
+			t.Errorf("verdict %q named /dross-verify, which re-runs mutation over a written verify.toml:\n%s", verdict, got)
+		}
+	}
+}
+
+// TestStatusNamesOneVerbForAnUnfinalizedVerdict is the cross-surface contract:
+// one `dross status` run must not name two different verbs for the same signal.
+// The `pending:` line says `dross verify finalize`; the re-entry line four lines
+// down has to agree.
+func TestStatusNamesOneVerbForAnUnfinalizedVerdict(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 0)
+	mustWrite(t, filepath.Join(dir, ".dross", "phases", "auth", "verify.toml"),
+		"[verify]\nphase = \"auth\"\nverdict = \"\"\n")
+
+	out := captureStdout(t, func() { runCmd(t, Status()) })
+	if !strings.Contains(out, "unfinalized verdict(s): auth") {
+		t.Fatalf("fixture must raise the pending line:\n%s", out)
+	}
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	last := lines[len(lines)-1]
+	if !strings.Contains(last, "dross verify finalize auth") {
+		t.Errorf("the re-entry line names a different verb than the pending: line:\n%s", out)
+	}
+}
+
+// TestSuggestNextShippedWithoutAnObservablePRWaitsOnTheMerge covers the arm
+// this phase left holding one case and nothing else.
+//
+// The phaseMergeState switch above it intercepts every shipped phase whose PR
+// the oracle can observe, so the `CurrentPhaseStatus == "shipped"` return is
+// now reached only on mergeNoPR/mergeUnknown — the "no local branch, no origin
+// ref, a base run far past the fork" shape its comment names. Nothing in the
+// suite reached that combination, which is why gremlins scored the line NOT
+// COVERED and never ran its mutants.
+//
+// pr=0 is mergeNoPR, so the switch falls through by construction; the assert on
+// the oracle pins that, because a fixture that stopped falling through would
+// pass this test from the switch's own open arm and cover nothing.
+func TestSuggestNextShippedWithoutAnObservablePRWaitsOnTheMerge(t *testing.T) {
+	dir := terminalPhaseFixture(t, "auth", 0)
+	if got := oracleState(t, dir, "auth"); got != mergeNoPR {
+		t.Fatalf("fixture must fall through the merge switch to reach the shipped arm: oracle = %q, want %q", got, mergeNoPR)
+	}
+	if err := runCmd(t, State(), "set", "current_phase_status", "shipped"); err != nil {
+		t.Fatalf("set current_phase_status: %v", err)
+	}
+
+	got := suggestFor(t, dir)
+	if !strings.Contains(got, "merge the open PR") {
+		t.Errorf("a shipped phase is waiting on a merge, not on another ship, got:\n%s", got)
+	}
+	if !strings.Contains(got, "dross phase complete auth") {
+		t.Errorf("the merge is only half the step — the completion record is the other half, got:\n%s", got)
+	}
+	if strings.Contains(got, "/dross-ship") {
+		t.Errorf("shipped work must not be advised to ship again:\n%s", got)
 	}
 }

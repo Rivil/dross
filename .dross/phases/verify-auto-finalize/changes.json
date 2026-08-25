@@ -1,6 +1,10 @@
 {
   "phase": "verify-auto-finalize",
   "pr": 57,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "9c4ec210a60a6d1eeee5121e7ad50a2101de4600"
+  },
   "tasks": {
     "t-1": {
       "files": [

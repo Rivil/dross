@@ -1,6 +1,10 @@
 {
   "phase": "readme-truth-pass",
   "pr": 63,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "ecf07168b917d79928d926b73940b066a4f54334"
+  },
   "tasks": {
     "t-1": {
       "files": [

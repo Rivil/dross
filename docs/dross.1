@@ -113,6 +113,24 @@ Manage milestones under
 appends to list fields (success_criteria, non_goals, phases).
 .TP
 .B dross phase \fR{\fBlist\fR|\fBshow\fR|\fBcreate\fR|\fBcomplete\fR|\fBred-proof\fR}
+.B list
+prints every phase in milestone-array order, prefixing a done phase with a
+check mark and two spaces where it is not done, and ending with an
+.B "N/M done"
+footer; doneness is the phase's own completion record, the same reading
+.B dross status
+and
+.B "dross milestone progress"
+use, never a
+.IR verify.toml
+verdict.
+.B "--milestone <version>"
+scopes the listing to that milestone's
+.I phases
+array in roadmap order, including slugs with no phase directory (marked
+.BR "(not scaffolded)" )
+and reports that milestone's done/total; an unknown version is an error
+naming it.
 .B create
 makes the next phase directory and checks out
 .IR phase/<id> ;

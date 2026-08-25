@@ -2,6 +2,10 @@
   "phase": "provider-merge-parity",
   "pr": 74,
   "base": "milestone/v1.2",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "7fed9e6099126e6bba22524ded120bfa7b14184b"
+  },
   "tasks": {
     "t-1": {
       "files": [

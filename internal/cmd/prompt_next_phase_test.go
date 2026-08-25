@@ -36,8 +36,10 @@ func TestVerifyPromptReadsTheMilestoneArray(t *testing.T) {
 	}
 	// The prompt must say WHY, or the next reader re-derives the bug from
 	// first principles — `phase list` is the obvious-looking source.
-	if !strings.Contains(section, "Do not use `dross phase list`") {
-		t.Errorf("the block does not warn off the directory listing:\n%s", section)
+	// Scoped to the BARE listing since `--milestone` walks the whole roadmap:
+	// warning off that reading too would forbid a correct ordering source.
+	if !strings.Contains(section, "Do not use a bare `dross phase list`") {
+		t.Errorf("the block does not warn off the bare directory listing:\n%s", section)
 	}
 	if !strings.Contains(section, "scaffolded") {
 		t.Errorf("the block does not explain that phase list only shows scaffolded phases:\n%s", section)
@@ -62,7 +64,7 @@ func TestVerifyPromptKeepsTheNoMilestoneFallback(t *testing.T) {
 	if !strings.Contains(section, "no active milestone") {
 		t.Errorf("the no-milestone case lost its fallback:\n%s", section)
 	}
-	if !strings.Contains(section, "fall back to `dross phase list`") {
+	if !strings.Contains(section, "fall back to the bare `dross phase list`") {
 		t.Errorf("the fallback does not name what to fall back to:\n%s", section)
 	}
 }

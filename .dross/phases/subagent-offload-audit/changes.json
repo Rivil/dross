@@ -1,6 +1,10 @@
 {
   "phase": "subagent-offload-audit",
   "pr": 59,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "4341c5da322a2840bc0ca80f710757b19d68d8f8"
+  },
   "tasks": {
     "t-1": {
       "files": [

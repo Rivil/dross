@@ -1,6 +1,10 @@
 {
   "phase": "release-trust-and-distribution",
   "pr": 44,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "c3a6c1f4538c05244b637f470b72e020e3dc9a17"
+  },
   "tasks": {
     "t-1": {
       "files": [

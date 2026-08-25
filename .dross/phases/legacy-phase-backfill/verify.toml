@@ -1,0 +1,71 @@
+[verify]
+  phase = "legacy-phase-backfill"
+  generated_at = 2026-08-20T07:29:51.933951Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-20T08:36:53.582911Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9492119089316988
+  mutants_killed = 542
+  mutants_survived = 29
+  mutants_not_covered = 29
+  mutants_in_scope = 571
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 542
+    survived = 29
+    timeout = 0
+    in_scope = 571
+    score = 0.9492119089316988
+    file_count = 13
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/phase_backfill_test.go:TestBackfillApplyWritesStatusAndEvidence", "internal/cmd/phase_backfill_test.go:TestBackfillCandidatesAreDirectoriesNotRoadmapArrays", "internal/cmd/phase_backfill_test.go:TestBackfillSkipsRecordsThatAlreadyHaveStatus", "internal/cmd/milestone_progress_test.go:TestProgressCountsSeveralMarkerCompletePhases"]
+  notes = "Apply-path write shape and candidate set are pinned by test; the live half was observed on this repo after commit 4e6413f: v0.1-v1.2 report 5/5, 2/2, 4/4, 2/2, 8/9, 9/9, 3/3, 4/4, 8/8, the status-less set is exactly {legacy-phase-backfill, v14-mutation-pass}, and the sweep diff adds only machine-written status + backfill_evidence keys. v0.9 8/9 is its true count (watch-pr-ci-status never scaffolded), not a sweep miss."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/phase_backfill_test.go:TestBackfillSubjectMatchIsAnchoredOnTheWholeSlug", "internal/cmd/phase_backfill_test.go:TestBackfillAcceptsOptionalOrdinalPrefix", "internal/cmd/phase_backfill_test.go:TestBackfillLiveLocalBranchDisqualifies", "internal/cmd/phase_backfill_test.go:TestBackfillLiveOriginBranchDisqualifies", "internal/cmd/phase_backfill_test.go:TestBackfillIgnoresStaleRemoteTrackingRef", "internal/cmd/phase_backfill_test.go:TestBackfillUnreachableOriginIsNotAbsence", "internal/cmd/phase_backfill_test.go:TestBackfillScansOriginNotLocalBase", "internal/cmd/phase_backfill_test.go:TestBackfillNoShipCommitIsUnbackfillable", "internal/cmd/phase_backfill_test.go:TestBackfillApplyLeavesFailedEvidenceUntouched"]
+  notes = "Every clause of the locked backfill_evidence rule has its own falsifying fixture: anchoring in both prefix directions, the optional two-digit ordinal on either side of the match, live branch locally and on origin, ls-remote vs the stale remote-tracking cache, an unreachable origin read as a reason rather than absence, and origin/<base> vs local base. phase_backfill.go carries zero surviving mutants."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/backfill_durability_test.go:TestDonenessSurvivesHistoryEviction"]
+  notes = "Writes a status=complete record, pushes exactly 50 further state actions, asserts the pre-churn window is provably evicted, then re-reads phaseDone and buildMilestoneProgress. A reader still consulting history flips to not-done and the test fails."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/backfill_durability_test.go:TestDonenessReaderDoesNotReadState", "internal/cmd/backfill_durability_test.go:TestDonenessIgnoresCompletionBreadcrumb", "internal/cmd/backfill_durability_test.go:TestDonenessAcceptsExactlyShippedAndComplete", "internal/changes/changes_test.go:TestStatusSetIsExactlyTwoValues"]
+  notes = "historyCompletedPhase is absent from the tree (grep over *.go). The source-level guard bans internal/state, state.State and s.History from phasedone.go, so the reader cannot regrow the parameter the fallback rode in on; the behavioural guard pins a breadcrumb-only phase to not-done at both the entry point and milestone progress."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/doctor_backfill_test.go:TestResidueNamesRoadmapPhaseWithNoEvidence", "internal/cmd/doctor_backfill_test.go:TestResidueIsScopedToRoadmapArrays", "internal/cmd/doctor_backfill_test.go:TestResidueExcludesBackfillablePhase", "internal/cmd/doctor_backfill_test.go:TestResidueNamesInFlightAndUnscaffolded", "internal/cmd/doctor_backfill_test.go:TestResidueExcludesMarkedPhases", "internal/cmd/doctor_backfill_test.go:TestResidueLivenessReadsCachedRemoteRef", "internal/cmd/doctor_backfill_test.go:TestDoctorPrintsResidueSectionAdvisory"]
+  notes = "Both directions are pinned: a status-less roadmap phase with no evidence is named, and a marked or backfillable one is not, with the scope held to milestone phases arrays per the locked backfill_residue decision. Observed live: dross doctor prints an \"Unbackfillable roadmap phases\" section naming watch-pr-ci-status, legacy-phase-backfill (branch live) and three unscaffolded v1.5 entries, advisory-only."
+
+[[finding]]
+  severity = "NOTE"
+  text = "29 in-scope survivors, all accepted and all origin=inherited: 19 in doctor.go, 7 in status.go, 3 in phase.go. Every one is the gremlins switch-case / const-initializer attribution ceiling proven by TestAttributionCeilingIsReal — gremlins reports NOT COVERED on lines go-cover records as executed. Efficacy over the 542 reachable mutants is 1.00."
+
+[[finding]]
+  severity = "NOTE"
+  text = "This phase's three new or rewritten Go units — phase_backfill.go, phasedone.go and changes.go — carry zero surviving mutants between them. No criterion is downgraded by the mutation cross-check."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-1's live half is an observation of this repo after the t-6 sweep, not a test: milestone counts, the status-less set and the sweep diff shape were read back from the working tree. The mechanism behind it (apply-path write shape, candidate set, marker-to-progress counting) is test-covered."

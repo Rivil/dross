@@ -1,5 +1,9 @@
 {
   "phase": "02-harden-ship-merge-complete-flow",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "6c05507ea7d4fdf3b36a392d83d7e5ef7939f9a0"
+  },
   "tasks": {
     "t-1": {
       "files": [

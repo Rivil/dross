@@ -126,8 +126,13 @@ var MilestoneStatuses = newSet("", "planning", "active", "complete")
 // override point ([board].state_map) and one build-failing divergence guard,
 // and a second mechanism would let the two drift — which is the exact bug this
 // set was introduced to close.
+// "task-complete" is the TASK lane's terminal state, and it is separate from
+// "complete" on purpose: the two lanes each carry their own `dross/status:`
+// label, so reusing the phase lane's value would put the phase issue's own
+// label onto every task card and make task_lifecycle.go's board->plan reading
+// ambiguous.
 var LifecycleStatuses = newSet("", "planned", "in-progress", "shipped", "complete",
-	"task-in-progress", "task-in-review", "uat")
+	"task-in-progress", "task-in-review", "task-complete", "uat")
 
 // RuntimeModes is the set of [runtime].mode values.
 //

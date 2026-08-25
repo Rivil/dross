@@ -1,6 +1,10 @@
 {
   "phase": "context-hygiene",
   "pr": 52,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "de8b0766ab8ac06b99aafa9ace48ead4f2824c3b"
+  },
   "tasks": {
     "quick-1": {
       "files": [

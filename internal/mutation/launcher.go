@@ -350,10 +350,13 @@ func (l *Launcher) ensurePushed() error {
 	if err := l.checkRemoteScratchSpace(); err != nil {
 		return err
 	}
-	argv, err := remote.SyncArgs(*l.Target, l.ProjectRoot)
+	argv, cleanup, err := remote.SyncArgs(*l.Target, l.ProjectRoot)
 	if err != nil {
 		return err
 	}
+	// The exclude list is a temp file rsync reads; it must outlive the spawn
+	// and not outlive this call.
+	defer cleanup()
 	// Set before the exec, not after: a failed push must not be retried by the
 	// next step, which would turn one transport failure into one per package.
 	l.pushed = true

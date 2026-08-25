@@ -28,7 +28,7 @@ func TestRoutedItemLinksToItsTargetPhaseIssue(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
 		`{"phases":{"host":"PROJ-9"},"quicks":{},"milestones":{},"backlog":{},"dismissed":[]}`)
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("backlog-sync: %v", err)
 	}
 	if len(f.links) != 1 {
@@ -49,7 +49,7 @@ func TestRoutedItemWithoutATargetIssueWarnsAndContinues(t *testing.T) {
 	var err error
 	warn := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			err = runCmd(t, Issue(), "backlog-sync", "v0.1")
+			err = runCmd(t, Issue(), "backlog", "sync", "v0.1")
 		})
 	})
 	if err != nil {
@@ -75,7 +75,7 @@ func TestRoutedItemLinksOnALaterSync(t *testing.T) {
 
 	_ = captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+			if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 				t.Fatalf("first sync: %v", err)
 			}
 		})
@@ -90,7 +90,7 @@ func TestRoutedItemLinksOnALaterSync(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
 		`{"phases":{"host":"PROJ-9"},"quicks":{},"milestones":{},"backlog":{},"dismissed":[]}`)
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("second sync: %v", err)
 	}
 	if len(f.links) != 1 || f.links[0].to != "PROJ-9" {
@@ -162,7 +162,7 @@ text = "works"
 	var err error
 	warn := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			err = runCmd(t, Issue(), "backlog-sync", "v0.1")
+			err = runCmd(t, Issue(), "backlog", "sync", "v0.1")
 		})
 	})
 	if err != nil {
@@ -200,7 +200,7 @@ func TestLinkOutageDoesNotFailTheBacklogSync(t *testing.T) {
 	var err error
 	_ = captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			err = runCmd(t, Issue(), "backlog-sync", "v0.1")
+			err = runCmd(t, Issue(), "backlog", "sync", "v0.1")
 		})
 	})
 	if err != nil {
@@ -266,7 +266,7 @@ text = "works"
 	var err error
 	warn := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			err = runCmd(t, Issue(), "backlog-sync", "v0.1")
+			err = runCmd(t, Issue(), "backlog", "sync", "v0.1")
 		})
 	})
 	if err != nil {

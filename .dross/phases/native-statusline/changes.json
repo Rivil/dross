@@ -1,5 +1,9 @@
 {
   "phase": "native-statusline",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "a9329db890b83668ef011f6e6f42290e39d76bfe"
+  },
   "tasks": {
     "t-1": {
       "files": [

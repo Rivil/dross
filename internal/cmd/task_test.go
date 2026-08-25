@@ -393,6 +393,86 @@ func TestTaskEditRejectsUnknownCriterion(t *testing.T) {
 	assertPlanUnchanged(t, planPath, before)
 }
 
+// TestTaskEditFilesRoundTrip: files was the one plan.toml field with no CLI
+// edit surface, so repointing a task meant hand-editing the file this
+// subsystem advertises as never needing a hand edit. --files replaces the whole
+// list, like --covers and --depends-on, and the proof reads plan.toml back off
+// disk rather than the in-memory plan.
+func TestTaskEditFilesRoundTrip(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan) // t-2: files = ["b.go"]
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	if err := runCmd(t, Task(), "edit", "01-test", "t-2", "--files", "x/one.go,x/two.go"); err != nil {
+		t.Fatalf("edit --files: %v", err)
+	}
+	plan, err := phase.LoadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t2 := plan.FindTask("t-2")
+	if !slices.Equal(t2.Files, []string{"x/one.go", "x/two.go"}) {
+		t.Errorf("files = %v, want [x/one.go x/two.go] — replaced, not merged", t2.Files)
+	}
+	// A partial update: nothing else moved.
+	if t2.Title != "second" || !slices.Equal(t2.Covers, []string{"c-1"}) {
+		t.Errorf("t-2 = %+v, want title/covers preserved", t2)
+	}
+	// And the other task is untouched.
+	if !slices.Equal(plan.FindTask("t-1").Files, []string{"a.go"}) {
+		t.Errorf("t-1 files = %v, want [a.go]", plan.FindTask("t-1").Files)
+	}
+}
+
+// TestTaskEditFilesDistinguishesAbsentFromEmpty: "--files=" is an instruction
+// to clear the list, and no --files at all is an instruction to leave it alone.
+// Collapsing the two either makes a task unclearable or silently wipes files on
+// every unrelated edit.
+func TestTaskEditFilesDistinguishesAbsentFromEmpty(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+
+	// Flag absent: files preserved.
+	if err := runCmd(t, Task(), "edit", "01-test", "t-2", "--title", "renamed"); err != nil {
+		t.Fatalf("edit --title: %v", err)
+	}
+	plan, err := phase.LoadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(plan.FindTask("t-2").Files, []string{"b.go"}) {
+		t.Errorf("files = %v, want [b.go] — an unset --files must not touch the array", plan.FindTask("t-2").Files)
+	}
+
+	// Flag present and empty: files cleared.
+	if err := runCmd(t, Task(), "edit", "01-test", "t-2", "--files", ""); err != nil {
+		t.Fatalf("edit --files=: %v", err)
+	}
+	plan, err = phase.LoadPlan(planPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.FindTask("t-2").Files) != 0 {
+		t.Errorf("files = %v, want empty — `--files=` clears the list", plan.FindTask("t-2").Files)
+	}
+}
+
+// TestTaskEditFilesGoesThroughSaveIfValid: the files edit is validated with the
+// rest of the command, not written ahead of it. An edit that also breaks the
+// plan is refused whole — plan.toml keeps its original files.
+func TestTaskEditFilesGoesThroughSaveIfValid(t *testing.T) {
+	chdir(t, t.TempDir())
+	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)
+	planPath := filepath.Join(".dross", "phases", "01-test", "plan.toml")
+	before := mustRead(t, planPath)
+
+	if err := runCmd(t, Task(), "edit", "01-test", "t-2", "--files", "x/one.go", "--covers", "c-99"); err == nil {
+		t.Fatal("expected the unknown criterion to refuse the whole edit")
+	}
+	assertPlanUnchanged(t, planPath, before)
+}
+
 func TestTaskEditHasNoStatusFlag(t *testing.T) {
 	chdir(t, t.TempDir())
 	scaffoldPhaseWithPlan(t, "01-test", twoTaskPlan)

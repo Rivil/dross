@@ -165,7 +165,7 @@ func TestTaskPullRefusesAProviderWithoutWorkflowState(t *testing.T) {
 	if !strings.Contains(err.Error(), "workflow state") {
 		t.Errorf("the refusal must say why: %v", err)
 	}
-	if !strings.Contains(err.Error(), "task-sync") {
+	if !strings.Contains(err.Error(), "task sync") {
 		t.Errorf("the refusal must say what still works: %v", err)
 	}
 }
@@ -317,7 +317,7 @@ func TestReportNarratesPlanMovedAndUnsynced(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if !strings.Contains(out, "task-sync p1 t-1") {
+	if !strings.Contains(out, "task sync p1 t-1") {
 		t.Errorf("a plan-side move must name the command that pushes it: %s", out)
 	}
 	if !strings.Contains(out, "no agreement point") {
@@ -448,7 +448,7 @@ func TestTaskPullCommandNoOpsWhenBoardIsOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := captureStdout(t, func() {
-		if err := runCmd(t, Issue(), "task-pull", "p1"); err != nil {
+		if err := runCmd(t, Issue(), "task", "pull", "p1"); err != nil {
 			t.Fatalf("board-off must be a no-op, got %v", err)
 		}
 	})
@@ -466,7 +466,7 @@ func TestTaskPullCommandNeedsAPhase(t *testing.T) {
 	t.Cleanup(srv.Close)
 	youtrackBoardRepo(t, srv.URL)
 
-	if err := runCmd(t, Issue(), "task-pull"); err == nil {
+	if err := runCmd(t, Issue(), "task", "pull"); err == nil {
 		t.Fatal("no phase id and no current_phase must be refused")
 	}
 }
@@ -480,7 +480,7 @@ func TestTaskPullCommandSurfacesASetupFailure(t *testing.T) {
 	youtrackBoardRepo(t, srv.URL)
 	mustRunSet(t, "board.provider", "not-a-real-tracker")
 
-	if err := runCmd(t, Issue(), "task-pull", "p1"); err == nil {
+	if err := runCmd(t, Issue(), "task", "pull", "p1"); err == nil {
 		t.Fatal("an unusable board must fail the command")
 	}
 }

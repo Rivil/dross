@@ -1,0 +1,48 @@
+[phase]
+  id = "legacy-phase-backfill"
+  title = "legacy-phase-backfill"
+  milestone = "v1.5"
+
+[[criteria]]
+  id = "c-1"
+  text = "After a single `dross phase backfill` run, milestones v0.1 through v1.2 — today each reporting 0/N phases done while marked complete — report their true done counts, with no changes.json hand-edited."
+
+[[criteria]]
+  id = "c-2"
+  text = "The marker is evidence-derived: a phase is marked only when no `phase/<slug>` ref exists locally or on origin AND the base branch carries a commit whose subject matches the anchored ship shape; a phase failing either test is left unwritten."
+
+[[criteria]]
+  id = "c-3"
+  text = "A backfilled phase's done count is unchanged after 50 further state actions age the history window out."
+
+[[criteria]]
+  id = "c-4"
+  text = "`historyCompletedPhase` is deleted and doneness reads changes.json alone; a guard test fails if a history fallback returns to the doneness reader."
+
+[[criteria]]
+  id = "c-5"
+  text = "A phase on a milestone's phases array that carries no status and could not be backfilled is named by `dross doctor`, not silently counted not-done."
+
+[[decisions]]
+  key = "backfill_evidence"
+  choice = "A phase is backfillable when both hold: no `phase/<slug>` ref exists locally or on origin, AND the base branch carries a commit whose subject matches `^phase (NN-)?<slug>:`. The optional two-digit prefix covers phases predating `dross phase migrate`."
+  why = "Measured over this repo: the anchored pattern matches 67 of the 69 status-less phases and misses exactly the two that should miss. Commit ancestry is dead — squash-merge means zero legacy task commits are ancestors of origin/main and 13 are garbage-collected. Anchoring is not theoretical: `phase multilang-stack-profiles:` contains `stack-profiles`, so a substring match would close the wrong phase."
+  locked = true
+
+[[decisions]]
+  key = "backfill_provenance"
+  choice = "Backfill writes the normal `status = \"complete\"` plus a sibling provenance field naming the evidence commit SHA. No new status value."
+  why = "The doneness reader stays a two-value switch, per the prior phase's warning against inventing a third state — while the record still distinguishes an inferred marker from one `dross phase complete` observed, so the sweep is auditable and re-runnable against better evidence."
+  locked = true
+
+[[decisions]]
+  key = "backfill_write_gate"
+  choice = "Bare `dross phase backfill` previews — slug, verdict and evidence commit — and writes nothing; `--apply` performs the write."
+  why = "A 67-file sweep over tracked records, driven by a regex over commit subjects, should be read before it lands. The preview doubles as c-5's residue listing."
+  locked = true
+
+[[decisions]]
+  key = "backfill_residue"
+  choice = "`dross doctor` names any phase on a milestone's phases array carrying no status and no backfill evidence. Phase directories in no milestone's phases array are out of scope for the check."
+  why = "Follows the duplicate_slug precedent that doctor is where faults belong, and gives the residue standing visibility rather than output that scrolls away. Scoping to roadmap phases keeps the deliberate scratch dir (v14-mutation-pass) from nagging forever, so no accept-mechanism has to be invented here."
+  locked = true

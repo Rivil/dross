@@ -1,0 +1,54 @@
+[phase]
+  id = "completion-record-truth"
+  title = "completion-record-truth"
+  milestone = "v1.5"
+
+[[criteria]]
+  id = "c-1"
+  text = "On milestone v1.4 — 11 phases carrying changes.json status=complete and no verify.toml — `dross status`, `dross milestone progress v1.4` and `dross phase list --milestone v1.4` each report 11 of 11 phases done."
+
+[[criteria]]
+  id = "c-2"
+  text = "A phase whose verify.toml records verdict=\"pass\" but whose changes.json carries no completion status is reported not-done by all three commands."
+
+[[criteria]]
+  id = "c-3"
+  text = "`dross phase list` marks each done phase and prints a done/total footer, drawn from the same doneness reader the other two commands use."
+
+[[criteria]]
+  id = "c-4"
+  text = "A slug listed in two milestones' phases arrays appears exactly once in `dross phase list` (today `plan-gray-area-walkthrough` prints twice)."
+
+[[criteria]]
+  id = "c-5"
+  text = "A guard test fails if any of the three commands' done count is derived from verify.toml's verdict."
+
+[[decisions]]
+  key = "list_scope"
+  choice = "`dross phase list` keeps its global cross-milestone listing as the default; `--milestone <version>` scopes it to that milestone's roadmap and reports that milestone's done/total."
+  why = "c-1 needs a denominator to compare against, but changing the bare command's output would break every existing caller of the global listing."
+  locked = true
+
+[[decisions]]
+  key = "done_marker"
+  choice = "Done phases render with a `✓ ` prefix (two spaces when not done) and the listing ends with an `N/M done` footer. No --json flag."
+  why = "Terse, scans vertically, and the footer is the single line c-1 asserts against; a JSON surface is unearned until something machine-reads it."
+  locked = true
+
+[[decisions]]
+  key = "history_fallback"
+  choice = "The shared reader carries phaseIsDone's state.json `completed <slug>` history fallback unchanged."
+  why = "All three surfaces then inherit the same quirk and still agree, and legacy-phase-backfill removes it from one place next instead of this phase inventing a third state."
+  locked = true
+
+[[decisions]]
+  key = "duplicate_slug"
+  choice = "`dross phase list` dedups a slug that appears on more than one milestone roadmap silently, first occurrence in milestone-version order winning; `dross doctor` gains a check naming any such slug."
+  why = "Carrying a slug forward to a later milestone is a legitimate re-scope, not a listing error — but the ambiguity should still be findable, and doctor is where faults belong."
+  locked = true
+
+[[deferred]]
+  id = "5c2c048407b679b5"
+  text = "Point the SessionStart `you are here` re-entry line and `dross watch`'s drift digest at the shared doneness reader — they still derive signal from verify verdicts."
+  why = "Milestone c-1 names three commands; widening to every surface belongs in its own phase."
+  target = "reentry-signal-truth"

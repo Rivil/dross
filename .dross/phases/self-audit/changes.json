@@ -1,6 +1,10 @@
 {
   "phase": "self-audit",
   "pr": 61,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "ac054015a67233fd706c01e93940039f6bf6bce9"
+  },
   "tasks": {
     "t-1": {
       "files": [

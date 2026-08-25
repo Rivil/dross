@@ -1,17 +1,22 @@
 {
   "milestones": {
     "v1.2": "DRO-1",
-    "v1.3": "DRO-7"
+    "v1.3": "DRO-7",
+    "v1.5": "DRO-134"
   },
   "phases": {
+    "board-mirror-reaper": "DRO-163",
     "board-sync-truth": "DRO-19",
     "board-task-mirror": "DRO-32",
     "cache-budget-prune": "DRO-132",
+    "completion-record-truth": "DRO-135",
     "config-value-truth": "DRO-25",
     "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
     "guard-remedy-ordering": "DRO-27",
+    "legacy-phase-backfill": "DRO-142",
     "milestone-lifecycle-close": "DRO-13",
+    "mirror-terminal-state": "DRO-149",
     "multilang-verify-signal": "DRO-28",
     "mutation-diff-scope": "DRO-9",
     "mutation-score-truth": "DRO-30",
@@ -19,6 +24,7 @@
     "plan-gray-area-walkthrough": "DRO-29",
     "red-proof-reachability": "DRO-23",
     "red-proof-repoint": "DRO-125",
+    "reentry-signal-truth": "DRO-181",
     "remote-mutation-runner": "DRO-24",
     "remote-test-runner": "DRO-26",
     "remote-toolchain-bootstrap": "DRO-129",
@@ -31,12 +37,9 @@
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
-    "slug:cache-budget-prune": "DRO-38",
-    "slug:red-proof-repoint": "DRO-36",
-    "slug:remote-toolchain-bootstrap": "DRO-37",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
-    "someday:id:069d6104904705e0": "DRO-96",
+    "someday:id:053bcdb6ddc5f57b": "DRO-162",
     "someday:id:06ca9b2e97abcb78": "DRO-87",
     "someday:id:0ad901405561a187": "DRO-116",
     "someday:id:0eb3dd31220aa3bc": "DRO-101",
@@ -49,12 +52,13 @@
     "someday:id:215d2ae2e7799d69": "DRO-102",
     "someday:id:2385fc70268180d1": "DRO-83",
     "someday:id:24da6d2754488290": "DRO-41",
+    "someday:id:29eda0e6b5c6ffba": "DRO-180",
     "someday:id:2a662adc6c7edb5f": "DRO-73",
-    "someday:id:2d0d009238884a83": "DRO-33",
     "someday:id:2d576654430ab9a2": "DRO-93",
     "someday:id:2e734f46572de8ca": "DRO-110",
     "someday:id:3701d0add3074097": "DRO-91",
     "someday:id:3a0d7d3147d7b585": "DRO-115",
+    "someday:id:3ab9f3a197c6ec1e": "DRO-161",
     "someday:id:3d97976a9b813c12": "DRO-69",
     "someday:id:3d9baeead7292172": "DRO-109",
     "someday:id:3e10687c24c50dd5": "DRO-66",
@@ -63,12 +67,12 @@
     "someday:id:46744487f204b5cd": "DRO-54",
     "someday:id:48b5edeb0556cd3a": "DRO-105",
     "someday:id:5802ad3fe8f08d87": "DRO-34",
+    "someday:id:5c2c048407b679b5": "DRO-159",
     "someday:id:64cd228356c9fce5": "DRO-76",
     "someday:id:6606a4ae3d228907": "DRO-52",
     "someday:id:66f4a1fc8ec83883": "DRO-70",
     "someday:id:6e9a60c539934c23": "DRO-40",
     "someday:id:6f43c4001c862759": "DRO-124",
-    "someday:id:704efc036f0e88fe": "DRO-95",
     "someday:id:7300a61dfb556269": "DRO-118",
     "someday:id:7587f4c35d42ee82": "DRO-106",
     "someday:id:75fa307a41cebafe": "DRO-59",
@@ -97,6 +101,7 @@
     "someday:id:ad762bc624279cdf": "DRO-104",
     "someday:id:ae17cb02fa7db2fc": "DRO-82",
     "someday:id:ae6631594447a24e": "DRO-55",
+    "someday:id:b38eb66d043ad477": "DRO-160",
     "someday:id:b4794de89d962714": "DRO-63",
     "someday:id:b85eb8099f7b6714": "DRO-43",
     "someday:id:bbfec942cd67b785": "DRO-65",
@@ -127,14 +132,243 @@
     "someday:id:ff40c2cbbd18e7dc": "DRO-94"
   },
   "tasks": {
-    "board-task-mirror/t-5": "DRO-121",
-    "board-task-mirror/t-6": "DRO-122",
-    "board-task-mirror/t-7": "DRO-123",
-    "red-proof-repoint/t-1": "DRO-126",
-    "red-proof-repoint/t-8": "DRO-127",
-    "red-proof-repoint/t-9": "DRO-128",
-    "remote-toolchain-bootstrap/t-1": "DRO-130",
-    "remote-toolchain-bootstrap/t-3": "DRO-131"
+    "board-mirror-reaper/t-1": {
+      "issue": "DRO-164",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-10": {
+      "issue": "DRO-174",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-11": {
+      "issue": "DRO-175",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-12": {
+      "issue": "DRO-176",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-13": {
+      "issue": "DRO-167",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-14": {
+      "issue": "DRO-173",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-15": {
+      "issue": "DRO-177",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-16": {
+      "issue": "DRO-178",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-17": {
+      "issue": "DRO-179",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-2": {
+      "issue": "DRO-165",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-3": {
+      "issue": "DRO-166",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-4": {
+      "issue": "DRO-168",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-6": {
+      "issue": "DRO-169",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-7": {
+      "issue": "DRO-170",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-8": {
+      "issue": "DRO-171",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-mirror-reaper/t-9": {
+      "issue": "DRO-172",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "board-task-mirror/t-5": {
+      "issue": "DRO-121"
+    },
+    "board-task-mirror/t-6": {
+      "issue": "DRO-122"
+    },
+    "board-task-mirror/t-7": {
+      "issue": "DRO-123"
+    },
+    "completion-record-truth/t-1": {
+      "issue": "DRO-136",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "completion-record-truth/t-2": {
+      "issue": "DRO-139",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "completion-record-truth/t-3": {
+      "issue": "DRO-137",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "completion-record-truth/t-4": {
+      "issue": "DRO-140",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "completion-record-truth/t-5": {
+      "issue": "DRO-141",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "completion-record-truth/t-6": {
+      "issue": "DRO-138",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-1": {
+      "issue": "DRO-143",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-2": {
+      "issue": "DRO-144",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-3": {
+      "issue": "DRO-145",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-4": {
+      "issue": "DRO-146",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-5": {
+      "issue": "DRO-147",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "legacy-phase-backfill/t-6": {
+      "issue": "DRO-148",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "mirror-terminal-state/t-1": {
+      "issue": "DRO-150",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "mirror-terminal-state/t-2": {
+      "issue": "DRO-151",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "mirror-terminal-state/t-3": {
+      "issue": "DRO-152",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "mirror-terminal-state/t-4": {
+      "issue": "DRO-153",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "mirror-terminal-state/t-5": {
+      "issue": "DRO-154",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "mirror-terminal-state/t-6": {
+      "issue": "DRO-155",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "mirror-terminal-state/t-7": {
+      "issue": "DRO-156",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "red-proof-repoint/t-1": {
+      "issue": "DRO-126"
+    },
+    "red-proof-repoint/t-8": {
+      "issue": "DRO-127"
+    },
+    "red-proof-repoint/t-9": {
+      "issue": "DRO-128"
+    },
+    "reentry-signal-truth/t-1": {
+      "issue": "DRO-182",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "reentry-signal-truth/t-2": {
+      "issue": "DRO-183",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "reentry-signal-truth/t-3": {
+      "issue": "DRO-184",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "reentry-signal-truth/t-4": {
+      "issue": "DRO-185",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "reentry-signal-truth/t-5": {
+      "issue": "DRO-186",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "reentry-signal-truth/t-6": {
+      "issue": "DRO-187",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "remote-toolchain-bootstrap/t-1": {
+      "issue": "DRO-130"
+    },
+    "remote-toolchain-bootstrap/t-3": {
+      "issue": "DRO-131"
+    }
   },
-  "last_pull": "0001-01-01T00:00:00Z"
+  "dismissed": [
+    "DRO-5",
+    "DRO-4",
+    "DRO-3",
+    "DRO-18",
+    "DRO-7",
+    "DRO-1"
+  ],
+  "last_pull": "2026-08-19T12:54:11.333974Z"
 }

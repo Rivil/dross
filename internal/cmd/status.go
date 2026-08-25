@@ -142,11 +142,17 @@ func Status() *cobra.Command {
 }
 
 // renderMilestone prints the milestone line, augmented with phase-level
-// progress — how many of the milestone's phases are verified (verdict="pass")
-// out of the total it lists. This is the milestone view (N/M phases), distinct
-// from the phase block below it (which shows the current phase's task count).
-// Falls back to the bare name when the milestone toml is missing or lists no
-// phases (e.g. a freshly-set current_milestone with no scoped toml yet).
+// progress — how many of the milestone's phases are done out of the total it
+// lists. This is the milestone view (N/M phases), distinct from the phase block
+// below it (which shows the current phase's task count). Falls back to the bare
+// name when the milestone toml is missing or lists no phases (e.g. a
+// freshly-set current_milestone with no scoped toml yet).
+//
+// Doneness comes from phaseDone (phasedone.go), the same reader `dross
+// milestone progress` and `dross phase list` use — never from verify.toml's
+// verdict. Counting verdicts here is what made the status bar disagree with
+// milestone progress across all of v1.4: eleven phases carrying completion
+// records and no verify.toml read 0/11 on this line while progress read 11/11.
 func renderMilestone(root, version string) {
 	m, err := milestone.Load(milestone.FilePath(root, version))
 	if err != nil || len(m.Phases) == 0 {
@@ -155,7 +161,7 @@ func renderMilestone(root, version string) {
 	}
 	done := 0
 	for _, id := range m.Phases {
-		if readVerifyVerdict(filepath.Join(phase.Dir(root, id), "verify.toml")) == "pass" {
+		if phaseDone(root, id) {
 			done++
 		}
 	}
@@ -270,29 +276,66 @@ func suggestNext(root string, proj *project.Project, st *state.State) string {
 	if !hasVerify {
 		return "/dross-verify — check criterion coverage and test efficacy"
 	}
-	// A shipped phase is waiting on a merge, not on another ship. Routed
-	// BEFORE the verdict switch below: that branch sees a pass verdict plus
-	// recorded changes and would advise `/dross-ship` on a phase whose PR is
-	// already open — advice printed directly under the `shipped:` line naming
-	// that PR. Ship leaves current_phase set now, so this state is reachable
-	// on every phase between the push and the merge.
+	// What the PR is doing outranks the verdict switch below. That switch sees
+	// a pass verdict plus recorded changes and returns `/dross-ship` first, so
+	// a phase whose PR has already landed never reaches any later branch — the
+	// reason this consult sits HERE and not at the end.
+	//
+	// The oracle is keyed on the phase id rather than HEAD, so it answers the
+	// same from main as from the phase branch. The SessionStart hook this line
+	// feeds usually runs from main.
+	//
+	// Skipped once the phase's own record says complete: there is then nothing
+	// left to write, and the phase's ordinary next step applies.
+	mainBranch := proj.Repo.GitMainBranch
+	if mainBranch == "" {
+		mainBranch = "main"
+	}
+	if !changes.Complete(root, st.CurrentPhase) {
+		switch phaseMergeState(root, filepath.Dir(root), st.CurrentPhase, mainBranch) {
+		case mergeMerged:
+			return "`dross phase complete " + st.CurrentPhase + "` — the PR is merged; this writes the completion record"
+		case mergeOpen:
+			return "merge the open PR, then `dross phase complete " + st.CurrentPhase + "` — it writes the completion record"
+		}
+		// mergeNoPR and mergeUnknown fall through: nothing was observed that
+		// outranks the phase's own next step.
+	}
+	// A shipped phase is waiting on a merge, not on another ship. Ship leaves
+	// current_phase set now, so this state is reachable on every phase between
+	// the push and the merge — and it is the answer whenever the oracle could
+	// not see the merge for itself (no local branch, no origin ref, a base run
+	// far past the fork).
 	if st.CurrentPhaseStatus == "shipped" {
 		return "merge the open PR, then `dross phase complete " + st.CurrentPhase + "` — it writes the completion record"
 	}
-	// Read verify verdict to refine the hint.
-	if verdict := readVerifyVerdict(filepath.Join(dir, "verify.toml")); verdict != "" {
-		switch verdict {
-		case "fail", "partial":
-			return "verify is " + verdict + " — /dross-execute " + st.CurrentPhase + " to amend, findings in " + filepath.Join(".dross/phases", st.CurrentPhase, "verify.toml")
-		case "pass":
-			// recorded changes = unshipped work → shipping is the next step
-			ch, _ := changes.Load(changes.FilePath(root, st.CurrentPhase), st.CurrentPhase)
-			if ch != nil && len(ch.Tasks) > 0 {
-				return "/dross-ship — open the PR and complete the phase"
-			}
-		}
+
+	verdict := readVerifyVerdict(filepath.Join(dir, "verify.toml"))
+	// An unfinalized verdict is its own step, and this arm sits OUTSIDE any
+	// `verdict != ""` guard on purpose: an empty verdict is the commonest shape
+	// of the forget-to-finalize hole, and a guard would drop it straight past
+	// here. The predicate is pendingVerdicts' own, so the `pending:` line four
+	// lines up and this line cannot disagree about which phases are unfinalized.
+	//
+	// It names `dross verify finalize`, the verb that line already names — NOT
+	// /dross-verify, which re-runs mutation over a verify.toml that is already
+	// written.
+	if verdict == "" || verdict == "pending" {
+		return "`dross verify finalize " + st.CurrentPhase + "` — verify.toml carries no verdict yet"
 	}
-	return "phase looks complete — start a new phase or move on"
+	if verdict == "fail" || verdict == "partial" {
+		return "verify is " + verdict + " — /dross-execute " + st.CurrentPhase + " to amend, findings in " + filepath.Join(".dross/phases", st.CurrentPhase, "verify.toml")
+	}
+	// Everything left is a finalized non-failing verdict on a phase with no
+	// merge to point at. Shipping is the step that writes the record whose
+	// absence got us here.
+	//
+	// This deliberately has no `phase looks complete` fall-through. That branch
+	// asserted a doneness no record carried: a verify verdict is not a
+	// completion, and a phase can pass verification and never open a PR. Naming
+	// the verb that would MAKE the record exist is the only honest answer, and
+	// it keeps this line and the doneness readers on one truth source.
+	return "/dross-ship — open the PR and complete the phase"
 }
 
 // spineIdle reports whether the spec→ship spine has no actionable step left —
@@ -555,16 +598,19 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 	if !shippedStatus && sh.pr == 0 {
 		return none, false
 	}
-	// A recorded `completed <id>` closes the question: complete confirmed the
-	// merge and wrote it. The PR record above outlives that — it stays on the
-	// phase branch — so without this a completed phase visited from its old
-	// branch would still read as waiting. The breadcrumb is only a SUPPRESSOR
-	// here, never a trigger: as a trigger it was the unreachable arm this
-	// phase removed.
-	for _, a := range st.History {
-		if strings.Contains(a.Action, "completed "+phaseID) {
-			return none, false
-		}
+	// A completion record closes the question: complete confirmed the merge and
+	// wrote it. The PR record above outlives that — it stays on the phase
+	// branch — so without this a completed phase visited from its old branch
+	// would still read as waiting. It is only a SUPPRESSOR here, never a
+	// trigger.
+	//
+	// The record, not state.History's `completed <id>` breadcrumb: history is a
+	// capped 50-entry window, so the breadcrumb read went silent again fifty
+	// actions later and the line came back on a phase that finished long ago.
+	// Narrower than phaseDone on purpose — `shipped` is precisely the state
+	// this line exists to announce.
+	if changes.Complete(root, phaseID) {
+		return none, false
 	}
 
 	// No origin ref, no answer. Never a claim taken on a missing base.
@@ -596,6 +642,103 @@ func shippedUnmergedPhase(root string, st *state.State, mainBranch string) (ship
 		return none, false
 	}
 	return sh, true
+}
+
+// The four answers phaseMergeState gives. They are a closed set: every path
+// that is not a positive observation lands on mergeUnknown, never on mergeOpen.
+const (
+	// mergeNoPR: the phase's record carries no PR number, so there is nothing
+	// to be merged or unmerged. Its own arm rather than a flavour of unknown —
+	// "never shipped" is a fact, not an uncertainty.
+	mergeNoPR = "no-pr"
+	// mergeOpen: the recorded PR's work is observably not on origin/<base>.
+	mergeOpen = "open"
+	// mergeMerged: the phase branch is an ancestor of origin/<base>, or its
+	// content landed there as a squash.
+	mergeMerged = "merged"
+	// mergeUnknown: not enough local evidence to say. Every git error, every
+	// missing ref, and a base that has run past the squash scan limit.
+	mergeUnknown = "unknown"
+)
+
+// phaseMergeState answers "has this NAMED phase's PR landed on its base?" from
+// local refs alone.
+//
+// It is keyed on a phase id, not on HEAD, which is why it cannot be expressed
+// as an inversion of shippedUnmergedPhase: that helper starts by reading HEAD
+// and bails unless it is on phase/<id>, and its ok=false lumps together "not a
+// phase branch, not shipped, no origin, or genuinely merged". The SessionStart
+// hook that consumes this usually runs from main, about a phase that is not
+// checked out — so both of those are disqualifying. The two deliberately stay
+// separate rather than one absorbing the other: shippedUnmergedPhase's merge
+// check is one clause of a HEAD-scoped question with its own suppressors, and
+// folding this in would either drag those suppressors onto the re-entry line or
+// strip them from the waiting-on-merge line.
+//
+// Two caveats follow from being network-free, and neither is a defect to fix
+// here — `dross status` runs on every session start and must not fetch:
+//
+//   - mergeMerged means "merged as of the last fetch". It cannot go stale in
+//     the dangerous direction (a merge does not un-merge), so this is safe.
+//   - mergeOpen silently includes "merged, but this clone has not fetched the
+//     base since". A caller acting on mergeOpen must be advising something that
+//     is harmless when the PR has in fact landed.
+//
+// Uncertainty is always mergeUnknown: an unreadable record, a missing local
+// refs/heads/phase/<slug> (which `dross phase complete` deletes, and a fresh
+// clone never had), a missing origin/<base>, a base more than
+// staleSquashScanLimit commits ahead of the branch, and every git error path.
+func phaseMergeState(root, repoDir, slug, mainBranch string) string {
+	ch, err := changes.Load(changes.FilePath(root, slug), slug)
+	if err != nil || ch == nil {
+		return mergeUnknown
+	}
+	if ch.PR == 0 {
+		return mergeNoPR
+	}
+	base := mainBranch
+	if ch.Base != "" {
+		base = ch.Base
+	}
+	branch := "phase/" + slug
+	// The local branch is the only thing there is to compare against. `dross
+	// phase complete` deletes it on the way out and a fresh clone never had it,
+	// so its absence is genuinely "no local evidence" — not "unmerged".
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, "refs/heads/"+branch)...) != nil {
+		return mergeUnknown
+	}
+	baseRef := "origin/" + base
+	if gitNoOut(repoDir, gitRefArgs("rev-parse", []string{"--verify", "--quiet"}, baseRef)...) != nil {
+		return mergeUnknown
+	}
+	merged, err := isAncestor(repoDir, branch, baseRef)
+	if err != nil {
+		return mergeUnknown
+	}
+	if merged {
+		return mergeMerged
+	}
+	// Squash-merged counts as merged: the content is on the base under a commit
+	// the base's history doesn't descend from, which ancestry cannot see. The
+	// scan is per-commit, so a base that has run far ahead of the fork is
+	// answered with silence rather than a slow status — see
+	// staleSquashScanLimit.
+	count, err := gitTrim(repoDir, gitRefArgs("rev-list", []string{"--count"}, baseRef, "^"+branch)...)
+	if err != nil {
+		return mergeUnknown
+	}
+	n, convErr := strconv.Atoi(count)
+	if convErr != nil || n > staleSquashScanLimit {
+		return mergeUnknown
+	}
+	squash, err := resolveSquashCommit(repoDir, branch, baseRef)
+	if err != nil {
+		return mergeUnknown
+	}
+	if squash != "" {
+		return mergeMerged
+	}
+	return mergeOpen
 }
 
 func progressBar(done, total, width int) string {
@@ -670,11 +813,9 @@ func readVerifyVerdict(path string) string {
 // A failure to read is reported as zero rather than propagated: a status line
 // is not worth failing a status call over.
 func reconcilableCount(root string) int {
-	st, err := state.Load(filepath.Join(root, state.File))
-	if err != nil {
-		return 0
-	}
-	ids, err := reconcilablePhases(root, filepath.Dir(root), st)
+	// No state.Load: the candidate list reads each phase's own completion
+	// record now, and state.json carried nothing else this needed.
+	ids, err := reconcilablePhases(root, filepath.Dir(root))
 	if err != nil {
 		return 0
 	}

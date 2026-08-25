@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -525,6 +527,97 @@ func TestDoctorClobberScanErrorIsAdvisory(t *testing.T) {
 // Moved and Unresolved bullets warn — an OK link, a Skipped (unindexable) link,
 // and a no-line link stay silent — and a repo with no ARCHITECTURE.md yields no
 // section (present=false).
+// TestDoctorNamesDuplicateRoadmapSlug: `dross phase list` dedups a slug claimed
+// by two milestones silently, because carrying a phase forward is a legitimate
+// re-scope. Silent means invisible, so doctor names it — with both versions, so
+// the reader can tell which roadmap is stale — and the finding is advisory: the
+// exit code must not move.
+func TestDoctorNamesDuplicateRoadmapSlug(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v1.4.toml"), `phases = ["solo", "carried"]
+
+[milestone]
+  version = "v1.4"
+  status = "complete"
+`)
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v1.5.toml"), `phases = ["carried", "fresh"]
+
+[milestone]
+  version = "v1.5"
+  status = "active"
+`)
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	out := captureStdout(t, func() {
+		if err := runCmd(t, Doctor()); err != nil {
+			t.Fatalf("a duplicate roadmap slug is a warning, not an issue: %v", err)
+		}
+	})
+	if !strings.Contains(out, "Duplicate roadmap slugs:") {
+		t.Errorf("expected the duplicate-slug section:\n%s", out)
+	}
+	if !strings.Contains(out, "carried") || !strings.Contains(out, "v1.4") || !strings.Contains(out, "v1.5") {
+		t.Errorf("the finding must name the slug and both versions:\n%s", out)
+	}
+	if strings.Contains(out, "solo is on") || strings.Contains(out, "fresh is on") {
+		t.Errorf("a slug on one roadmap is not a duplicate:\n%s", out)
+	}
+}
+
+// TestDoctorSilentWithoutDuplicateRoadmapSlugs: the section appears only when
+// there is something to say — a healthy repo gains no new noise.
+func TestDoctorSilentWithoutDuplicateRoadmapSlugs(t *testing.T) {
+	dir := t.TempDir()
+	gitInit(t, dir, "https://github.com/Rivil/dross.git")
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	mustWrite(t, filepath.Join(dir, ".dross", "milestones", "v1.4.toml"), `phases = ["one", "two"]
+
+[milestone]
+  version = "v1.4"
+  status = "complete"
+`)
+	mustGit(t, dir, "add", ".")
+	mustGit(t, dir, "commit", "-q", "-m", "chore: baseline")
+
+	out := captureStdout(t, func() {
+		_ = runCmd(t, Doctor())
+	})
+	if strings.Contains(out, "Duplicate roadmap slugs:") {
+		t.Errorf("no slug is on two roadmaps here:\n%s", out)
+	}
+}
+
+// TestDuplicateRoadmapSlugsIgnoresRepeatWithinOneArray: what the check reports
+// is two milestones claiming one phase. A slug listed twice inside a single
+// array is a malformed array, not a re-scope, and naming it here would report a
+// second milestone that does not exist.
+func TestDuplicateRoadmapSlugsIgnoresRepeatWithinOneArray(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	root := filepath.Join(dir, ".dross")
+	mustWrite(t, filepath.Join(root, "milestones", "v1.4.toml"), `phases = ["twice", "twice"]
+
+[milestone]
+  version = "v1.4"
+  status = "active"
+`)
+	if got := duplicateRoadmapSlugs(root); len(got) != 0 {
+		t.Errorf("duplicateRoadmapSlugs = %v, want none — one array is one roadmap", got)
+	}
+}
+
 func TestArchitectureLinkWarnings(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "foo.go"), "package foo\n\nfunc Bar() {}\n") // Bar at line 3
@@ -2339,4 +2432,138 @@ func mustRedProofChecks(t *testing.T, dir string) []doctorLine {
 		t.Fatalf("%s records no red-proof pin", dir)
 	}
 	return lines
+}
+
+// --- stranded board mirrors ---
+//
+// The locked prompt_edge decision says no prompt emits `issue reap`: the
+// forward lifecycle already closes new work, so a sweep at ship would re-walk
+// the whole board for nothing. What keeps the debt visible instead is a
+// detector, and this is half of it.
+
+// strandedDoctorRepo scaffolds a git repo with a YouTrack board pointed at srv,
+// stranded in the phase and task lanes, and returns the repo dir.
+//
+// Git-inited with the fake's own URL as origin so the [remote] checks stay
+// clean: the assertion below is that the advisory does not change doctor's
+// exit status, which is only readable against a baseline of zero issues.
+func strandedDoctorRepo(t *testing.T, srvURL string, enabled bool) string {
+	t.Helper()
+	dir := t.TempDir()
+	gitInit(t, dir, srvURL)
+	chdir(t, dir)
+	t.Setenv("MOCK_TOKEN", "secret")
+	if err := runCmd(t, Init()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	for k, v := range map[string]string{
+		"remote.url":           srvURL,
+		"remote.auth_env":      "MOCK_TOKEN",
+		"board.provider":       "youtrack",
+		"board.base_url":       srvURL,
+		"board.auth_env":       "MOCK_TOKEN",
+		"board.project":        "PROJ",
+		"board.milestone_mode": "epic",
+	} {
+		mustRunSet(t, k, v)
+	}
+	if enabled {
+		mustRunSet(t, "board.enabled", "true")
+	}
+	return dir
+}
+
+// TestDoctorReportsStrandedMirrors: the count doctor prints is the count the
+// sweep would act on, and printing it changes nothing about doctor's verdict —
+// a stranded card is drift on someone else's tracker, not a fault in this
+// repo's configuration.
+func TestDoctorReportsStrandedMirrors(t *testing.T) {
+	t.Run("stranded cards are named with a remedy", func(t *testing.T) {
+		f := &readOnlyYT{resolved: map[string]bool{}}
+		srv := httptest.NewServer(f.handler(t))
+		t.Cleanup(srv.Close)
+		dir := strandedDoctorRepo(t, srv.URL, true)
+		mustWrite(t, filepath.Join(dir, ".dross", "board.json"), `{
+		  "phases": {"01-auth": "PROJ-1"},
+		  "tasks": {"01-auth/t-1": {"issue": "PROJ-2"}, "01-auth/t-2": {"issue": "PROJ-3"}},
+		  "quicks": {}, "milestones": {}
+		}`)
+		writeChanges(t, dir, "01-auth", "complete")
+
+		var out string
+		err := runCmdCapturing(t, &out, Doctor())
+		if err != nil {
+			t.Fatalf("doctor: %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "3 stranded board mirror") {
+			t.Errorf("doctor does not name the stranded count:\n%s", out)
+		}
+		if !strings.Contains(out, "dross issue reap --namespace") {
+			t.Errorf("doctor names no remedy:\n%s", out)
+		}
+	})
+
+	t.Run("a clean board prints the clean line", func(t *testing.T) {
+		f := &readOnlyYT{resolved: map[string]bool{}}
+		srv := httptest.NewServer(f.handler(t))
+		t.Cleanup(srv.Close)
+		dir := strandedDoctorRepo(t, srv.URL, true)
+		mustWrite(t, filepath.Join(dir, ".dross", "board.json"), `{
+		  "phases": {"01-auth": "PROJ-1"}, "tasks": {}, "quicks": {}, "milestones": {}
+		}`)
+		writeChanges(t, dir, "01-auth", "") // live phase: its card is correctly open
+
+		var out string
+		err := runCmdCapturing(t, &out, Doctor())
+		if err != nil {
+			t.Fatalf("doctor: %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "no stranded mirrors") {
+			t.Errorf("doctor does not print the clean line:\n%s", out)
+		}
+		if strings.Contains(out, "stranded board mirror(s)") {
+			t.Errorf("doctor reported stranded cards on a clean board:\n%s", out)
+		}
+	})
+}
+
+// TestDoctorNeverWritesToTheBoard: the detector may not become a silent sweep.
+// Held at the wire — the fake fails the test on any non-GET.
+func TestDoctorNeverWritesToTheBoard(t *testing.T) {
+	f := &writingIsFatalYT{readOnlyYT: readOnlyYT{resolved: map[string]bool{}}}
+	srv := httptest.NewServer(f.handler(t))
+	t.Cleanup(srv.Close)
+	dir := strandedDoctorRepo(t, srv.URL, true)
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"phases":{"01-auth":"PROJ-1"},"tasks":{},"quicks":{},"milestones":{}}`)
+	writeChanges(t, dir, "01-auth", "complete")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
+	}
+	if f.writes != 0 {
+		t.Errorf("doctor issued %d write requests to the board", f.writes)
+	}
+}
+
+// TestDoctorSkipsStrandedCheckWhenBoardDisabled: a repo that never opted into
+// board sync must not have doctor reach for a network at all.
+func TestDoctorSkipsStrandedCheckWhenBoardDisabled(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("doctor called the board API with sync disabled: %s %s", r.Method, r.URL.Path)
+	}))
+	t.Cleanup(srv.Close)
+	dir := strandedDoctorRepo(t, srv.URL, false)
+	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
+		`{"phases":{"01-auth":"PROJ-1"},"tasks":{},"quicks":{},"milestones":{}}`)
+	writeChanges(t, dir, "01-auth", "complete")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Doctor()); err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "Board mirrors:") {
+		t.Errorf("the stranded section ran with board sync off:\n%s", out)
+	}
 }

@@ -14,7 +14,7 @@ Drive the milestone lifecycle: scope a new one, close out a finished one, or rep
 dross milestone progress --json
 ```
 
-It emits `{version, status, done, total, all_done, remaining, unscaffolded}`. `remaining` is the slugs still outstanding; `unscaffolded` is the subset of those with no phase directory yet. Doneness comes from each phase's own record — do NOT re-derive it from `dross phase list`, from a phase's `verify.toml` verdict, or by eyeballing the phases array. A verified phase is not a delivered one.
+It emits `{version, status, done, total, all_done, remaining, unscaffolded}`. `remaining` is the slugs still outstanding; `unscaffolded` is the subset of those with no phase directory yet. Doneness comes from each phase's own record — do NOT re-derive it from a phase's `verify.toml` verdict, or by eyeballing the phases array. A verified phase is not a delivered one. `dross phase list --milestone <version>` reads the same record through the same reader, so it agrees with this command by construction and is a fine way to see *which* phases are outstanding; it is a second view of the same answer, not a second source of it.
 
 **Branch on `status` FIRST, then on `all_done`.** The two arms would otherwise both fire on a milestone that was just finalized — status `complete`, every phase done, `current_milestone` still pointing at it — and the run would try to complete an already-closed milestone instead of scoping the next one.
 
@@ -110,7 +110,7 @@ dross state touch "scoped milestone <version>: <N> criteria, <M> phases"
 
 Mirror the milestone onto the issue board (no-op unless `[remote].board_sync` is on — safe to always run):
 ```
-dross issue milestone-sync <version>
+dross issue milestone sync <version>
 ```
 Phase issues created later by `/dross-plan` attach to this milestone automatically.
 
@@ -153,7 +153,15 @@ It targets the milestone's recorded base — main, or the parent it was stacked 
 dross milestone complete <version> --finalize
 ```
 
-This records `[milestone].status = complete` **before** it fast-forwards main and deletes `milestone/<version>` local + remote. Two consequences worth stating rather than discovering:
+Then resolve the milestone's board card, so the epic does not sit open forever behind a finished milestone:
+
+```
+dross issue milestone sync <version> --close
+```
+
+A no-op when board sync is off. It refuses — without writing anything — on a board whose milestone is not itself an issue (a YouTrack version bundle or agile board, a forge/GitHub milestone id): there is no card to close there, and on the forges a milestone id and an issue number are the same string, so closing blind would resolve someone else's issue.
+
+`dross milestone complete --finalize` records `[milestone].status = complete` **before** it fast-forwards main and deletes `milestone/<version>` local + remote. Two consequences worth stating rather than discovering:
 
 - **Re-running `--finalize` is safe.** A second run reports the milestone already finalized and exits 0 — it is not an error state, and it is the right thing to do if the first run failed partway (a protected branch, an offline origin). If it names a leftover branch, `dross milestone prune` removes it.
 - **A branch that is simply gone is reported as gone**, not as unmerged. If that happens without a finalize having run, record the milestone with `dross milestone set <version> status complete`.

@@ -1,5 +1,9 @@
 {
   "phase": "gitlab-ship-provider",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "daeaea986571a7bb00bb19b3ed656d5ed8970f79"
+  },
   "tasks": {
     "t-1": {
       "files": [

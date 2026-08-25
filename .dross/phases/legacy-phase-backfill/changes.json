@@ -1,0 +1,111 @@
+{
+  "phase": "legacy-phase-backfill",
+  "pr": 102,
+  "base": "milestone/v1.5",
+  "base_commit": "bbe02fdc072b4574c463b2460b2417507040e414",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/phasedone.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/status.go",
+        "internal/cmd/milestone_progress.go",
+        "internal/cmd/milestone_progress_test.go",
+        "internal/cmd/backfill_durability_test.go",
+        "internal/cmd/status_test.go"
+      ],
+      "commit": "49c4e68",
+      "completed_at": "2026-08-20T06:58:35.915921Z",
+      "landmarks": [
+        {
+          "feature": "phase doneness",
+          "symbol": "phaseIsDone",
+          "loc": "internal/cmd/phasedone.go:42",
+          "what": "doneness reads changes.json alone — the capped state-history fallback is deleted"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/changes/changes.go",
+        "internal/changes/changes_test.go"
+      ],
+      "commit": "c82cd02",
+      "completed_at": "2026-08-20T07:01:20.479766Z",
+      "landmarks": [
+        {
+          "feature": "phase completion records",
+          "symbol": "SetBackfilled",
+          "loc": "internal/changes/changes.go:245",
+          "what": "writes StatusComplete plus a backfill_evidence SHA together — provenance, not a third status"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase_backfill.go",
+        "internal/cmd/phase_backfill_test.go"
+      ],
+      "commit": "c5b2f4b",
+      "completed_at": "2026-08-20T07:06:11.155232Z",
+      "landmarks": [
+        {
+          "feature": "legacy phase backfill",
+          "symbol": "resolveBackfill",
+          "loc": "internal/cmd/phase_backfill.go:97",
+          "what": "verdict from proved branch-absence on origin plus an anchored ship-subject match on origin/\u003cbase\u003e"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/phase_backfill.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_backfill_test.go"
+      ],
+      "commit": "45fad76",
+      "completed_at": "2026-08-20T07:14:32.652948Z",
+      "landmarks": [
+        {
+          "feature": "legacy phase backfill",
+          "symbol": "phaseBackfill",
+          "loc": "internal/cmd/phase_backfill.go:198",
+          "what": "dross phase backfill previews every status-less record with its verdict; --apply writes status plus evidence SHA"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_backfill_test.go",
+        "internal/cmd/phase_backfill.go"
+      ],
+      "commit": "ae5ead7",
+      "completed_at": "2026-08-20T07:19:49.746908Z",
+      "landmarks": [
+        {
+          "feature": "doctor diagnostics",
+          "symbol": "backfillResidue",
+          "loc": "internal/cmd/doctor.go:1060",
+          "what": "advisory section naming roadmap phases with no marker and no ship-commit evidence, resolved offline"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        ".dross/phases"
+      ],
+      "commit": "4e6413f",
+      "completed_at": "2026-08-20T07:27:40.793266Z",
+      "landmarks": [
+        {
+          "feature": "legacy phase backfill",
+          "symbol": "phase backfill --apply",
+          "loc": ".dross/phases:1",
+          "what": "67 legacy records swept to complete with evidence SHAs; v0.1-v1.2 now report true done counts"
+        }
+      ]
+    }
+  }
+}

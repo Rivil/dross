@@ -1,5 +1,9 @@
 {
   "phase": "deferred-triage-gaps",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "592d26c0bdaa0081543a07a418f2aced0509f579"
+  },
   "tasks": {
     "t-1": {
       "files": [

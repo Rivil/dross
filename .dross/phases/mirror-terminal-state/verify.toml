@@ -1,0 +1,81 @@
+[verify]
+  phase = "mirror-terminal-state"
+  generated_at = 2026-08-20T12:57:09.155989Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-20T14:07:33.196024Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9980842911877394
+  mutants_killed = 521
+  mutants_survived = 1
+  mutants_not_covered = 1
+  mutants_in_scope = 522
+  unclassified_in_scope = 0
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 521
+    survived = 1
+    timeout = 0
+    in_scope = 522
+    score = 0.9980842911877394
+    file_count = 19
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/issue_test.go:TestPullExcludesEveryNamespace", "internal/cmd/issue_test.go:TestPullExcludesMarkerLabelledIssue", "internal/cmd/issue_test.go:TestPullKeepsAForgeIssueSharingTheMilestoneId", "internal/cmd/issue_test.go:TestPullAgainstThisReposBoardJSON", "internal/board/board_test.go:TestIsLinkedCoversEveryNamespace"]
+  notes = "Exclusion asserted per namespace, on the marker label, and against this repo's real .dross/board.json (with a fatal if the board links nothing, so it cannot pass vacuously). TestPullKeepsAForgeIssueSharingTheMilestoneId pins the shape gate so a numeric forge milestone id cannot suppress the same-numbered human issue."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/task_lifecycle_test.go:TestTerminalRunClearsTheReviewLabel", "internal/cmd/issue_task_close_test.go:TestFlatBoardTaskCloseClosesEveryCard", "internal/cmd/issue_task_close_test.go:TestTaskClosePartialFailureNamesTheTaskAndKeepsGoing", "internal/cmd/ship_prompt_test.go:TestShipPromptClosesTaskCardsAfterPhaseComplete", "internal/forge/state_map_test.go:TestTerminalTaskStateResolves"]
+  notes = "Both halves asserted: the run (every card loses dross/status:task-in-review, gains task-complete, closes exactly once, and reaches that point only because closeBoardIssue re-read the tracker's verdict) and the emission (ship.md carries the line, ordered after `dross phase complete` and before the wrap section)."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/issue_milestone_close_test.go:TestEpicCloseResolvesForReal", "internal/cmd/issue_milestone_close_test.go:TestEpicCloseFailsWhenUnresolved", "internal/cmd/issue_milestone_close_test.go:TestMilestoneSyncWithoutCloseNeverWritesState", "internal/cmd/issue_milestone_close_test.go:TestMilestoneCloseRefusesANonIssueEntity", "internal/cmd/issue_milestone_close_test.go:TestMilestonePromptClosesTheEpicAtFinalize"]
+  notes = "Resolved-state write plus read-back, the unresolved inversion, the entity gate (a fake that fails on ANY request, so the gate is pinned ahead of the ensure), and the milestone.md emission ordered after --finalize."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/issue_quick_close_test.go:TestQuickCloseHonoursStateMap", "internal/cmd/issue_quick_close_test.go:TestQuickCloseFailsWhenTheIssueStaysUnresolved", "internal/cmd/issue_close_truth_test.go:TestFlatBoardCloseVerifiesOnStateNotResolved", "internal/cmd/issue_close_truth_test.go:TestFlatBoardCloseFailsWhenTheIssueStaysOpen", "internal/cmd/issue_close_truth_test.go:TestJiraCloseLandingOutsideDoneFailsTheReadBack"]
+  notes = "The state-map override must both reach the tracker and REPLACE the built-in default (both directions asserted), and every backend has its unresolved inversion: no `(closed)` line and a non-zero exit when the read-back disagrees."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/board/namespace_guard_test.go:TestEveryBoardNamespaceIsFiltered", "internal/board/namespace_guard_test.go:TestNamespaceReflectionSkipsNonLinkFields", "internal/cmd/board_lifecycle_divergence_test.go:TestEveryMirrorLaneHasATerminalEmission", "internal/cmd/board_lifecycle_divergence_test.go:TestLaneTerminalStatesAreDistinctWithinTheirLane", "internal/cmd/board_lifecycle_divergence_test.go:TestCloseEmissionsCarryAValidStatus"]
+  notes = "Both guard halves derive their namespace list by reflection over board.Board from the same struct, so a namespace added to Board fails the day the field is added rather than when someone remembers a list. Each guard carries an anti-vacuity fatal (no map fields found / no --close emission found) and each reverse direction fails on a guard protecting something that no longer exists, including a stale distinctness exemption."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/issue_backlog_close_test.go:TestBacklogClosesScaffoldedSlugOnly", "internal/cmd/issue_backlog_close_test.go:TestRoutedBacklogClosesOnlyWhenTargetResolved", "internal/cmd/issue_backlog_close_test.go:TestDismissedBacklogItemIsClosedAndUnlinked", "internal/cmd/issue_backlog_close_test.go:TestUnattributableBacklogKeyIsNeverClosed", "internal/cmd/issue_backlog_close_test.go:TestFailedBacklogCloseKeepsTheLink", "internal/cmd/issue_backlog_close_test.go:TestShipPromptReconcilesTheBacklog"]
+  notes = "Each resolution route is asserted with its negative twin: the scaffolded slug closes while the unscaffolded one does not, the routed item closes only when its target resolved, and an unattributable key is named on stderr but never closed. Idempotence (a repeat reconcile issues zero further closes) and the refused-close-keeps-the-link recovery case are both pinned."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/milestone.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped assets/prompts/ship.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "the one in-scope survivor (internal/cmd/issue.go:195 CONDITIONALS_NEGATION, origin=inherited) is a switch{} case-condition in issueEnable — the gremlins go-cover attribution ceiling, already accepted in .dross/survivors.toml with a proof; it lies outside every hunk this phase touched and participates in no criterion"
+
+[[finding]]
+  severity = "NOTE"
+  text = "the two prompt edits this phase made (assets/prompts/ship.md, assets/prompts/milestone.md) carry no mutation adapter, so their terminal emissions are guarded by corpus tests instead: TestShipPromptClosesTaskCardsAfterPhaseComplete, TestMilestonePromptClosesTheEpicAtFinalize, TestShipPromptReconcilesTheBacklog and TestCloseEmissionsCarryAValidStatus all assert position and status validity, not mere presence"

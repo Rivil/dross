@@ -19,6 +19,16 @@ type watchDigest struct {
 	Drift     []watch.PhaseDrift `json:"drift"`
 	Suggested string             `json:"suggested_command"`
 	BoardOK   bool               `json:"board_ok"`
+	// Stranded is the count of board mirrors whose artefact finished but whose
+	// card did not — the other half of the locked prompt_edge decision, which
+	// keeps the sweep off every prompt's hot path and surfaces the debt as a
+	// drift signal instead.
+	//
+	// omitempty on purpose: zero is not a finding, and a digest printed on a
+	// loop should stay quiet about a board that is clean. It is also omitted
+	// when the board was not reached, where a zero would read as "clean"
+	// rather than "unknown".
+	Stranded int `json:"stranded,omitempty"`
 }
 
 // Watch is the read-only `dross watch` command: it surfaces what changed on the
@@ -42,6 +52,7 @@ func Watch() *cobra.Command {
 			var (
 				feed         []watch.Item
 				boardReached bool
+				stranded     int
 			)
 			if ctx, enabled, oerr := openBoard(); oerr == nil && enabled {
 				if issues, lerr := collectInbound(ctx, forge.IssueFilter{State: "open"}); lerr == nil {
@@ -49,6 +60,13 @@ func Watch() *cobra.Command {
 					for _, iss := range issues {
 						feed = append(feed, watch.Item{ID: iss.Key, State: iss.State, Title: iss.Title})
 					}
+				}
+				// Read-only, and degrading the same way the feed does: a
+				// classify that fails leaves the count at zero and the line
+				// unprinted rather than failing the tick. watch runs on a
+				// timer; it must never be the thing that breaks.
+				if plan, _, cerr := reapInventory(ctx, nil); cerr == nil {
+					stranded = len(plan.Cards)
 				}
 			}
 
@@ -79,6 +97,7 @@ func Watch() *cobra.Command {
 				Drift:     drift,
 				Suggested: suggestedCommand(drift, len(diff.New), reconcilableCount(root)),
 				BoardOK:   boardReached,
+				Stranded:  stranded,
 			}
 
 			// Persist the seen-set ONLY when the board was actually reached, so an
@@ -143,6 +162,9 @@ func renderWatchHuman(d watchDigest) {
 	Printf("watch — %d new, %d carried, %d phase(s) drifting\n", len(d.New), len(d.Current), len(d.Drift))
 	if !d.BoardOK {
 		Print("  board: off/unreachable — drift only\n")
+	}
+	if d.Stranded > 0 {
+		Printf("  stranded: %d board mirror(s) whose artefact finished\n", d.Stranded)
 	}
 	for _, it := range d.New {
 		Printf("  new:   %s %s\n", it.ID, it.Title)

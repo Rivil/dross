@@ -222,7 +222,7 @@ func TestBacklogSurvivesNeighbourRemoval(t *testing.T) {
 	f := newFakeBoard(t)
 	dir := twoSomedayRepo(t, f.srv.URL)
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("first sync: %v", err)
 	}
 	if len(f.creates) != 2 {
@@ -257,7 +257,7 @@ func TestBacklogSurvivesNeighbourRemoval(t *testing.T) {
 	}
 
 	f.patches = nil
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("second sync: %v", err)
 	}
 
@@ -313,7 +313,7 @@ text = "legacy idea"
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
 		`{"milestones":{"v0.1":"v0.1"},"backlog":{"someday:host#0":"PROJ-99"}}`)
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 	if len(f.creates) != 0 {
@@ -374,7 +374,7 @@ text = "survivor idea"
 	mustWrite(t, filepath.Join(dir, ".dross", "board.json"),
 		`{"milestones":{"v0.1":"v0.1"},"backlog":{"someday:host#0":"PROJ-99"}}`)
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 	if got := f.issues["PROJ-99"]; got != "[someday] deleted idea" {
@@ -394,7 +394,7 @@ func TestBacklogSyncBackfillsIDsIdempotently(t *testing.T) {
 	dir := twoSomedayRepo(t, f.srv.URL)
 	specPath := filepath.Join(dir, ".dross", "phases", "host", "spec.toml")
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("first sync: %v", err)
 	}
 	spec, err := phase.LoadSpec(specPath)
@@ -412,7 +412,7 @@ func TestBacklogSyncBackfillsIDsIdempotently(t *testing.T) {
 		t.Errorf("two items share id %q — their board links would silently merge", first)
 	}
 
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("second sync: %v", err)
 	}
 	spec, err = phase.LoadSpec(specPath)
@@ -461,7 +461,7 @@ target = "host"
 text = "dismissed idea"
 dismissed = true
 `)
-	if err := runCmd(t, Issue(), "backlog-sync", "v0.1"); err != nil {
+	if err := runCmd(t, Issue(), "backlog", "sync", "v0.1"); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 	if len(f.creates) != 1 {

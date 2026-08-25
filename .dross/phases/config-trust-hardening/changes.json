@@ -2,6 +2,10 @@
   "phase": "config-trust-hardening",
   "pr": 76,
   "base": "milestone/v1.2",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "8007d23b3876e13e752bee4429cff729792bc0a0"
+  },
   "red_proof": {
     "sha": "a6ef7295996db1d737be2ae2183f45e376ba3c19",
     "doc": "fixtures/hostile-config-c5/RUN.md"

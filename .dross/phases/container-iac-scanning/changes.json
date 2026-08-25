@@ -1,5 +1,9 @@
 {
   "phase": "container-iac-scanning",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "0fe75e60150e88f476761830b28e36df150459fa"
+  },
   "tasks": {
     "t-1": {
       "files": [

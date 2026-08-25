@@ -45,7 +45,7 @@ it stays correct even after a phase is inserted or reordered.
 
 Mark the board issue in-progress (no-op unless `[remote].board_sync` is on — safe to always run):
 ```
-dross issue phase-sync <id> --status in-progress
+dross issue phase sync <id> --status in-progress
 ```
 
 Load the stack loadout once and keep it in working context for the whole phase:
@@ -73,7 +73,7 @@ If empty: jump to step 2. Otherwise mark in progress:
 
 ```
 dross task status <phase> $TASK_ID in_progress
-dross issue task-sync <phase> $TASK_ID --status task-in-progress
+dross issue task sync <phase> $TASK_ID --status task-in-progress
 ```
 The second line mirrors this task onto the board and moves its card. It is a
 no-op when board sync is off, so call it unconditionally — the same way the
@@ -223,7 +223,7 @@ dross changes record <phase> <task-id> --files <task.files (csv)> --commit $SHA 
   --landmark "feature=<capability>, symbol=<Symbol>, loc=<file:line>, what=<one line what>"
 dross task status <phase> <task-id> done
 dross state touch "executed <task-id> (<task.title>)"
-dross issue task-sync <phase> <task-id> --status task-in-review
+dross issue task sync <phase> <task-id> --status task-in-review
 ```
 The task's card moves to a review state as the commit lands — the work is
 done and is now waiting on the phase's verdict, which is a different thing
@@ -280,7 +280,7 @@ git commit -m "chore(dross): execute <id> bookkeeping"
 
 Re-sync the board issue so its checklist reflects the completed tasks (no-op unless board sync is on):
 ```
-dross issue phase-sync <id>
+dross issue phase sync <id>
 ```
 
 If any tasks are `failed` or `pending`-but-blocked: do not mark the phase complete. Print:

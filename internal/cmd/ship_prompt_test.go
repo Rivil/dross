@@ -297,7 +297,7 @@ func TestShipPromptAutoBackfill(t *testing.T) {
 // TestShipPromptEmitsTerminalBoardStatuses proves c-6: ship moves the board
 // issue to a terminal lifecycle state rather than just closing it.
 //
-// The bare `phase-sync <phase-id> --close` this replaces is why "shipped" and
+// The bare `phase sync <phase-id> --close` this replaces is why "shipped" and
 // "complete" sat in both forge state maps as keys nothing ever resolved — dross
 // keyed them but never emitted them. Giving ship the two call sites is what
 // makes the bidirectional divergence gate satisfiable in both directions.
@@ -309,9 +309,9 @@ func TestShipPromptEmitsTerminalBoardStatuses(t *testing.T) {
 		at   int
 	}{
 		{"squash-merge bullet", strings.Index(content, "squash-merge via provider")},
-		{"--status shipped call", strings.Index(content, "phase-sync <phase-id> --status shipped")},
+		{"--status shipped call", strings.Index(content, "phase sync <phase-id> --status shipped")},
 		{"dross phase complete", strings.Index(content, "dross phase complete <phase-id>")},
-		{"--status complete --close call", strings.Index(content, "phase-sync <phase-id> --status complete --close")},
+		{"--status complete --close call", strings.Index(content, "phase sync <phase-id> --status complete --close")},
 	}
 	for _, m := range marks {
 		if m.at < 0 {
@@ -330,7 +330,7 @@ func TestShipPromptEmitsTerminalBoardStatuses(t *testing.T) {
 	}
 
 	// The pattern that produced the dead map entries.
-	if strings.Contains(content, "phase-sync <phase-id> --close") {
+	if strings.Contains(content, "phase sync <phase-id> --close") {
 		t.Error("ship.md still closes the board issue with a bare --close — that call emits no status, which is what left shipped and complete as state-map keys nothing resolves")
 	}
 
@@ -338,8 +338,41 @@ func TestShipPromptEmitsTerminalBoardStatuses(t *testing.T) {
 	// coupling. Both board moments are ship's own, so a command with zero board
 	// awareness today stays that way.
 	for i, line := range strings.Split(content, "\n") {
-		if strings.Contains(line, "dross phase complete") && strings.Contains(line, "phase-sync") {
-			t.Errorf("ship.md:%d couples `dross phase complete` with a phase-sync call: %s", i+1, strings.TrimSpace(line))
+		if strings.Contains(line, "dross phase complete") && strings.Contains(line, "phase sync") {
+			t.Errorf("ship.md:%d couples `dross phase complete` with a phase sync call: %s", i+1, strings.TrimSpace(line))
 		}
+	}
+}
+
+// TestShipPromptClosesTaskCardsAfterPhaseComplete is c-2's emission half. A
+// terminal status nothing emits closes nothing: every task card sat in
+// task-in-review from its commit until forever, because the finalize steps had
+// no line that moved them on.
+//
+// Order is asserted, not just presence. The close belongs AFTER `dross phase
+// complete` — the cards are terminal because the phase finished, and emitting
+// it earlier would resolve them while the merge could still go sideways — and
+// before §7 Wrap, which is where the run stops doing things.
+func TestShipPromptClosesTaskCardsAfterPhaseComplete(t *testing.T) {
+	content := shipPromptContent(t)
+
+	const emit = "dross issue task sync <phase-id> --status task-complete --close"
+	at := strings.Index(content, emit)
+	if at < 0 {
+		t.Fatalf("ship.md never emits %q — every task card would stay in task-in-review forever", emit)
+	}
+	complete := strings.Index(content, "dross phase complete <phase-id>")
+	if complete < 0 {
+		t.Fatal("ship.md no longer carries the `dross phase complete` step this emission is anchored to")
+	}
+	if at < complete {
+		t.Error("the task close is emitted BEFORE `dross phase complete`; the cards are terminal because the phase finished, not before it did")
+	}
+	wrap := strings.Index(content, "## 7. wrap")
+	if wrap < 0 {
+		t.Fatal("ship.md no longer has a §7 Wrap section to bound the finalize steps")
+	}
+	if at > wrap {
+		t.Error("the task close is emitted after the wrap section, where the run has already finished reporting")
 	}
 }

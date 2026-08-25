@@ -1,6 +1,10 @@
 {
   "phase": "board-state-map-truth",
   "pr": 68,
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "875d63449ad15aea5b52628ef9dea39eb1fa043a"
+  },
   "tasks": {
     "t-1": {
       "files": [

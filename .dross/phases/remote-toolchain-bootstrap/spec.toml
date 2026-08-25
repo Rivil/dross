@@ -68,11 +68,13 @@
   locked = true
 
 [[deferred]]
+  id = "6b5989f1811e20dc"
   text = "Install the language runtimes themselves (go, node, dotnet) on a bare host, with pinned versions."
   why = "Host administration with real footprint — root, PATH ownership, version policy. install_scope deliberately draws the line at the runtime; naming what is missing is enough for a one-time per-host cost."
   dismissed = true
 
 [[deferred]]
+  id = "053bcdb6ddc5f57b"
   text = "Bootstrap and run against more than one remote host — a pool, with per-host readiness and scheduling."
   why = "The grant is singular by design today. A pool is a scheduler, not a provisioner, and it is premature before one host is proven comfortable."
   target = "remote-host-pool"

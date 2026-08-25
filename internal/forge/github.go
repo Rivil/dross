@@ -38,6 +38,17 @@ type GitHubClient struct {
 
 var _ BoardClient = (*GitHubClient)(nil)
 
+// GitHubClient deliberately does NOT implement StateWriter, and must not be
+// given a SetStateRaw to make an assertion pass.
+//
+// GitHub issues have no column model: an issue is open or closed, and the
+// Projects v2 status that looks like a column is a single-select field behind a
+// GraphQL path dross does not have. The only thing a stub could do is map every
+// prior state onto open/closed — which would land a card that was in "In
+// Review" back in `open` and report success. Failing the interface assertion is
+// what lets the caller refuse by provider name and write nothing, the same
+// shape the IssueLinker fallback already uses.
+
 // NewGitHubProjects validates config, resolves the token from the environment,
 // and returns a ready client. owner/repo come from cfg.Project ("owner/repo").
 // A non-empty cfg.BoardID enables the Projects v2 add-to-board step on create.

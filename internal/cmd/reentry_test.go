@@ -206,3 +206,57 @@ func TestReentryLoudOnCorruptProject(t *testing.T) {
 		t.Errorf("error should name project.toml, got %v", err)
 	}
 }
+
+// TestReentryLineTerminalRegionMatchesStatus extends the byte-equality contract
+// to the region t-4 rewrote. TestStatusEndsWithReentryLine pins it on a
+// spec-only phase, which exits suggestNext long before the merge oracle, the
+// unfinalized-verdict arm or the removed terminal branch — so it would stay
+// green through a divergence in any of them.
+func TestReentryLineTerminalRegionMatchesStatus(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T) string
+	}{
+		{"merged PR, no completion record", func(t *testing.T) string {
+			dir := terminalPhaseFixture(t, "auth", 42)
+			mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "merge auth", "phase/auth")
+			mustGit(t, dir, "push", "-q", "origin", "main")
+			return dir
+		}},
+		{"open PR", func(t *testing.T) string {
+			return terminalPhaseFixture(t, "auth", 42)
+		}},
+		{"pass verdict, no PR", func(t *testing.T) string {
+			return terminalPhaseFixture(t, "auth", 0)
+		}},
+		{"unfinalized verdict", func(t *testing.T) string {
+			dir := terminalPhaseFixture(t, "auth", 0)
+			mustWrite(t, filepath.Join(dir, ".dross", "phases", "auth", "verify.toml"),
+				"[verify]\nphase = \"auth\"\nverdict = \"\"\n")
+			return dir
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup(t)
+
+			statusOut := captureStdout(t, func() {
+				if err := runCmd(t, Status()); err != nil {
+					t.Fatal(err)
+				}
+			})
+			reentryOut := captureStdout(t, func() {
+				if err := runCmd(t, Reentry()); err != nil {
+					t.Fatal(err)
+				}
+			})
+
+			statusLines := strings.Split(strings.TrimRight(statusOut, "\n"), "\n")
+			last := statusLines[len(statusLines)-1]
+			want := decodeReentry(t, reentryOut)
+			if last != want {
+				t.Errorf("status's last line != reentry envelope line:\nstatus last: %q\nreentry:     %q", last, want)
+			}
+		})
+	}
+}

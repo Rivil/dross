@@ -1,0 +1,82 @@
+[phase]
+  id = "board-mirror-reaper"
+  title = "board-mirror-reaper"
+  milestone = "v1.5"
+
+[[criteria]]
+  id = "c-1"
+  text = "A single sweep closes every stranded mirror class at source: after one run against this board the 88 record-backed stranded cards (20 task in `In Review`, 2 phase in `In Progress`, 2 milestone epics, 64 backlog) report a resolved state; the 2 quicks have no completion record on disk and are named in the plan as unattributable for manual close rather than inferred closed; and the 8 correctly-open cards plus every human-filed issue are untouched."
+
+[[criteria]]
+  id = "c-2"
+  text = "The sweep is dry-run by default: without `--apply` it prints the classified plan — card id, class, and the record that justifies closing it — and performs no write."
+
+[[criteria]]
+  id = "c-3"
+  text = "Every close decision is derived from the on-disk record, never from the card's own state: task and phase cards from the phase's completion record, epics from the milestone's status, `slug:` backlog entries from the phase directory existing, `[routed]` entries from the target phase's completion. A card whose artefact is not complete is never closed."
+
+[[criteria]]
+  id = "c-4"
+  text = "Re-running the sweep after a full apply is a no-op: it classifies zero cards as stranded, writes nothing, and exits clean."
+
+[[criteria]]
+  id = "c-5"
+  text = "A card that fails to write is recorded and the sweep continues to the next: the run ends by reporting each failure by issue id, rather than aborting partway and leaving the board half-swept."
+
+[[criteria]]
+  id = "c-6"
+  text = "A guard test fails when a mirror class gains no reap path — a new board.json namespace, or a lifecycle status with no terminal mapping, is caught in the suite rather than on a live board months later."
+
+[[criteria]]
+  id = "c-7"
+  text = "The sweep discovers dross-authored mirrors that no board.json namespace links, via the `dross` marker label, so a lost link cannot hide a stranded card: the 6 currently-unlinked mirrors (DRO-33/36/37/38/95/96) are classified, not skipped."
+
+[[criteria]]
+  id = "c-8"
+  text = "No `dross issue` verb is a hyphenated compound: `phase-sync`, `task-sync`, `task-pull`, `milestone-sync` and `backlog-sync` read as nested subcommands, every emission site in assets/prompts is repointed, and the prompt guard tests assert the new form."
+
+[[criteria]]
+  id = "c-9"
+  text = "A sweep is reversible: an applied run records what it closed, and a supported verb restores those cards to the state they held before the run."
+
+[[decisions]]
+  key = "verb_shape"
+  choice = "One new `dross issue reap` owning all five namespaces, rather than a `--reap` backfill mode on each existing sync verb."
+  why = "One classify-then-close pipeline, one test site, and a single whole-board plan printable in one pass; five entry points would have neither."
+  locked = true
+
+[[decisions]]
+  key = "verb_naming"
+  choice = "`dross issue` verbs are nested subcommands, never hyphenated compounds — `issue phase sync`, `issue task sync`, `issue task pull`, `issue milestone sync`, `issue backlog sync`. No back-compat aliases for the old spellings."
+  why = "Author's stated CLI style; aliases would be dead weight given project.toml's non-goal of formal semver until there are real users."
+  locked = true
+
+[[decisions]]
+  key = "reap_state"
+  choice = "A reaped card lands in the same terminal state the forward lifecycle writes for its class — no distinct sweep state, no per-card marker."
+  why = "Keeps the board one coherent history and the state map the single source of truth; a second state per class would double the mapping and the mapping is what mirror-terminal-state just made trustworthy."
+  locked = true
+
+[[decisions]]
+  key = "prompt_edge"
+  choice = "No prompt emits reap. `dross doctor` and /dross-watch report the stranded count as a drift signal; the sweep is run by hand when it is non-zero."
+  why = "The forward lifecycle already closes new work, so a sweep at ship would re-walk the whole board for nothing; a detector keeps the debt visible without paying 90 API calls per ship."
+  locked = true
+
+[[decisions]]
+  key = "scoping"
+  choice = "A repeatable `--namespace` filter; no flag means whole-board."
+  why = "Lets the first live run land in reviewable batches by class instead of 90 writes at once, and makes the idempotence check exercisable per class."
+  locked = true
+
+[[decisions]]
+  key = "write_flag"
+  choice = "`--apply` is the flag that turns the dry-run plan into writes."
+  why = "Matches the dry-run-by-default contract in c-2 and reads the same as the rest of the CLI's destructive-action gating."
+  locked = true
+
+[[decisions]]
+  key = "undo_shape"
+  choice = "`dross issue reap --undo` reverses the last recorded applied run."
+  why = "Keeps the reversal on the verb that caused it rather than adding an `unreap` sibling, and the last run is the only one anyone realistically wants back."
+  locked = true

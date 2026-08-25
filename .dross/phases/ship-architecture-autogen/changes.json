@@ -1,5 +1,9 @@
 {
   "phase": "ship-architecture-autogen",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "bf30269c59e4ff955495225883de13a1e926b5bd"
+  },
   "tasks": {
     "t-1": {
       "files": [

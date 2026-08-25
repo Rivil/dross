@@ -1,0 +1,67 @@
+[verify]
+  phase = "reentry-signal-truth"
+  generated_at = 2026-08-22T13:55:24.764082Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-08-22T15:13:16.217949Z
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9705882352941176
+  mutants_killed = 231
+  mutants_survived = 7
+  mutants_not_covered = 7
+  mutants_in_scope = 238
+  unclassified_in_scope = 0
+  criteria_total = 5
+  criteria_covered = 5
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 231
+    survived = 7
+    timeout = 0
+    in_scope = 238
+    score = 0.9705882352941176
+    file_count = 13
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/watch/drift_test.go:TestDriftCompletionRecordSurvivesAnAgedOutHistory", "internal/watch/drift_test.go:TestDriftShippedRecordStillDrifts", "internal/cmd/reentry_signal_truth_test.go:TestFourReentrySurfacesAgreeOnTheCompletionRecord"]
+  notes = "Asserts both directions on one classifier: a status=complete record with an aged-out history suppresses the drift entry, and the inverted control proves a bare `completed auth` breadcrumb with no record cannot suppress it. TestDriftShippedRecordStillDrifts pins the narrowing decided in reentry_predicate — widening the suppressor to phaseDone would silence a shipped-not-merged phase, and that test fails if anyone does."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/phase_reconcile_test.go:TestReconcileCountIgnoresAnAgedOutBreadcrumb", "internal/cmd/phase_reconcile_test.go:TestReconcileCountStillCountsAShippedPhase", "internal/cmd/status_reconcile_test.go:TestReconcilableCountDoesNotReadState"]
+  notes = "The fixture ages the breadcrumb out with 50 touches, asserts the phase branch still exists, and requires reconcilableCount == 0; the control re-adds the breadcrumb with the record removed and requires it back at 1, so history cannot close a phase out in either direction. TestReconcilableCountDoesNotReadState pins the source structurally."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/status_test.go:TestStatusShippedLineSilentOnACompleteRecordAfterTheBreadcrumbAges", "internal/cmd/status_test.go:TestStatusShippedLineStillFiresOnAShippedRecord"]
+  notes = "Runs the whole `dross status` command from HEAD on phase/x with the breadcrumb aged out, and asserts the literal `shipped:` line is absent. Its sibling pins that the same line still fires on a status=shipped record, which is the merge gate this narrowing must not silence."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/status_test.go:TestSuggestNextTerminalShapeShipsRatherThanDeclaringDoneness", "internal/cmd/status_test.go:TestSuggestNextUnfinalizedVerdictNamesFinalize", "internal/cmd/status_test.go:TestSuggestNextMergedPRAdvisesCompletion", "internal/cmd/status_test.go:TestSuggestNextOpenPRAdvisesTheMerge", "internal/cmd/status_test.go:TestSuggestNextShippedWithoutAnObservablePRWaitsOnTheMerge", "internal/cmd/status_test.go:TestStatusNamesOneVerbForAnUnfinalizedVerdict"]
+  notes = "terminalPhaseFixture builds the exact shape the criterion names — pass verdict, changes record with zero tasks and no completion status — and the test asserts the string `looks complete` is gone and /dross-ship is named instead. Every arm of the rewritten terminal region is now pinned separately: merged, open, unfinalized-verdict, and (added in the t-6 amend) the shipped fall-through the new merge switch narrowed to the mergeNoPR/mergeUnknown case. TestStatusNamesOneVerbForAnUnfinalizedVerdict pins that the re-entry line and the `pending:` line four rows up name the same verb."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/reentry_signal_truth_test.go:TestFourReentrySurfacesAgreeOnTheCompletionRecord", "internal/cmd/reentry_signal_truth_test.go:assertReentryFixtureIsInverted"]
+  notes = "One git-backed fixture — status=complete record, 50-entry history with the breadcrumb aged out, verify.toml carrying no verdict, phase/closed still local and unmerged — asked of all four surfaces in one run, so a surface that reverts to history or the verdict disagrees with the other three and names itself. assertReentryFixtureIsInverted fails loudly if the fixture ever stops being inverted, which is what stops the four assertions passing vacuously. The guard is behavioral, not a source scan, so a fresh helper doing the same wrong thing is still caught."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Amend closed the prior run's only BLOCKING finding. The two ARITHMETIC_BASE survivors on internal/cmd/status.go:310 — the `CurrentPhaseStatus == \"shipped\"` fall-through this phase narrowed to the mergeNoPR/mergeUnknown case — are killed. t-6 (commit c0dee63) added TestSuggestNextShippedWithoutAnObservablePRWaitsOnTheMerge, which drives terminalPhaseFixture with pr=0 (asserted to be mergeNoPR, so the merge switch falls through by construction) and current_phase_status=shipped. No production code changed. Red-proof observed before commit: with the arm disabled all three assertions fail and the suggestion reverts to /dross-ship."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Mutation: score 0.97 over 238 in-scope mutants (killed=231, survived=7) — up from 229/9 on the prior run, the delta being exactly the two killed survivors above. All 7 remaining are NOT COVERED, all origin=inherited, and all 7 are already accepted under the gremlins-attribution-ceiling category in .dross/survivors.toml: switch{} case-conditions in humanizeAge (status.go:494, 496) and the spine-signal formatter (status.go:524, 526). Neither function is named by any criterion, so no criterion is downgraded. unclassified_in_scope = 0. Efficacy over the 231 reachable mutants is 1.00. 85 out-of-scope survivors were filtered by the change-set scope — see `out_of_scope` in tests.json. Measured on helicon."

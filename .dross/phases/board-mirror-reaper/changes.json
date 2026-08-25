@@ -1,0 +1,280 @@
+{
+  "phase": "board-mirror-reaper",
+  "pr": 104,
+  "base": "milestone/v1.5",
+  "base_commit": "18401f71efffd48369fee3842158a052e016dd1e",
+  "status": "complete",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/issue.go",
+        "internal/cmd/issue_task.go",
+        "internal/cmd/issue_task_pull.go",
+        "internal/cmd/deferred_add.go",
+        "internal/cmd/issue_verb_shape_test.go",
+        "assets/prompts/ship.md",
+        "assets/prompts/execute.md",
+        "assets/prompts/verify.md",
+        "assets/prompts/plan.md",
+        "assets/prompts/milestone.md"
+      ],
+      "commit": "4a49a35",
+      "completed_at": "2026-08-21T07:54:58.248187Z",
+      "landmarks": [
+        {
+          "feature": "board mirror CLI surface",
+          "symbol": "issuePhase",
+          "loc": "internal/cmd/issue.go:89",
+          "what": "the five mirror verbs are nested parent+child subcommands (issue phase sync, task sync, task pull, milestone sync, backlog sync) with no aliases, guarded from both ends — the cobra tree refuses the retired spellings and every prompt-corpus invocation is resolved against that same tree"
+        }
+      ]
+    },
+    "t-10": {
+      "files": [
+        "internal/cmd/issue_reap_undo.go",
+        "internal/cmd/issue_reap_undo_test.go",
+        "internal/cmd/issue_reap_cmd.go",
+        "internal/cmd/issue_reap_apply.go"
+      ],
+      "commit": "d0b75d1",
+      "completed_at": "2026-08-21T08:39:50.362042Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "undoReap",
+          "loc": "internal/cmd/issue_reap_undo.go:25",
+          "what": "--undo replays the last journalled run backwards through forge.StateWriter, restoring each card's own recorded column unconditionally and re-adding dropped board.json links, refusing by provider name on a backend with no column model"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "README.md",
+        "ARCHITECTURE.md",
+        "internal/cmd/issue_verb_shape_test.go"
+      ],
+      "commit": "6b3c340",
+      "completed_at": "2026-08-21T08:43:37.009124Z",
+      "landmarks": [
+        {
+          "feature": "board mirror CLI surface",
+          "symbol": "TestEveryDocumentedIssueVerbResolves",
+          "loc": "internal/cmd/issue_verb_shape_test.go:270",
+          "what": "README and ARCHITECTURE document the nested verb tree and the reap sweep, guarded by a name-based retired-verb scan and a walk of every documented invocation (brace lists expanded) against the real cobra tree"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        ".dross/phases/board-mirror-reaper/proof.md"
+      ],
+      "commit": "121b121",
+      "completed_at": "2026-08-21T09:35:13.286426Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "proof.md",
+          "loc": ".dross/phases/board-mirror-reaper/proof.md:1",
+          "what": "live evidence from the DRO board — 87 record-backed cards closed across four lanes by a named binary commit, 24 accounted-for open cards, two quicks closed by hand, a clean whole-board re-run, and the three defects the live run surfaced"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/forge/forge.go",
+        "internal/forge/youtrack.go",
+        "internal/forge/jira.go",
+        "internal/forge/github.go",
+        "internal/forge/state_map_test.go"
+      ],
+      "commit": "265c14e",
+      "completed_at": "2026-08-21T08:10:00.373403Z",
+      "landmarks": [
+        {
+          "feature": "board client capabilities",
+          "symbol": "forge.StateWriter",
+          "loc": "internal/forge/forge.go:198",
+          "what": "optional capability alongside BoardClient writing a literal tracker column verbatim (no state map) with a verified read-back; implemented by YouTrack, Jira and the forge Client, deliberately unimplemented by GitHub which has no column model"
+        }
+      ]
+    },
+    "t-14": {
+      "files": [
+        "internal/cmd/watch.go",
+        "internal/cmd/watch_test.go",
+        "assets/prompts/watch.md"
+      ],
+      "commit": "757a576",
+      "completed_at": "2026-08-21T08:33:42.056964Z",
+      "landmarks": [
+        {
+          "feature": "stranded mirror detection",
+          "symbol": "watchDigest.Stranded",
+          "loc": "internal/cmd/watch.go:31",
+          "what": "the watch heartbeat carries a stranded-mirror count from the sweep's own classifier, omitted when zero or when the board was unreachable, and watch.md names the remedy in prose while emitting no sweep command"
+        }
+      ]
+    },
+    "t-15": {
+      "files": [
+        "internal/cmd/issue_reap_discover_test.go"
+      ],
+      "commit": "d9f6a9b",
+      "completed_at": "2026-08-21T12:22:09.119717Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "TestOrphanTargetFollowsItsDestinationRecord",
+          "loc": "internal/cmd/issue_reap_discover_test.go:265",
+          "what": "the marker sweep's dross/target: and dross/deferred: identity arms are held by tests that follow the destination's or the deferred item's own record, each assertion checking the verdict explicitly and each of the five previously-unreached conditions proven to redden the suite when flipped"
+        }
+      ]
+    },
+    "t-16": {
+      "files": [
+        "internal/cmd/issue_reap_apply_test.go"
+      ],
+      "commit": "d052592",
+      "completed_at": "2026-08-21T12:26:37.167052Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "TestApplyContinuesPastAPriorStateReadFailure",
+          "loc": "internal/cmd/issue_reap_apply_test.go:509",
+          "what": "the sweep's prior-state read failure is held by a fixture whose reads fail only after the plan is built, asserting the card is skipped unwritten and journalled failed while the rest of the sweep lands, and that the report carries the underlying read error rather than a blanket issue-not-found"
+        }
+      ]
+    },
+    "t-17": {
+      "files": [
+        "internal/forge/state_map_test.go"
+      ],
+      "commit": "597cae4",
+      "completed_at": "2026-08-21T12:29:05.943043Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "TestSetStateRawVerifiesReadBack",
+          "loc": "internal/forge/state_map_test.go:233",
+          "what": "the read-back guard is now held on all three StateWriter backends including Jira, whose 204 is not evidence a workflow completed the transition, asserting the error names the status the issue actually reads rather than an empty column"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/issue_reap.go",
+        "internal/cmd/issue_reap_classify_test.go"
+      ],
+      "commit": "813a82d",
+      "completed_at": "2026-08-21T08:02:48.534118Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "classifyReap",
+          "loc": "internal/cmd/issue_reap.go:110",
+          "what": "classifies every board.json mirror card from the on-disk record alone — completion records, milestone status, phase dirs and deferred entries — with three deny-by-default verdicts and a card read used only to drop cards already terminal"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/reaplog/reaplog.go",
+        "internal/reaplog/reaplog_test.go",
+        ".gitignore"
+      ],
+      "commit": "43fe3d9",
+      "completed_at": "2026-08-21T08:05:59.6826Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "reaplog.Card",
+          "loc": "internal/reaplog/reaplog.go:50",
+          "what": "gitignored .dross/reap-log.json ledger recording each applied sweep's per-card prior tracker column, labels and dropped board.json link, with failed closes excluded from the undo target"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/issue_reap_discover.go",
+        "internal/cmd/issue_reap_discover_test.go"
+      ],
+      "commit": "c7a56f3",
+      "completed_at": "2026-08-21T08:14:33.49616Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "discoverReap",
+          "loc": "internal/cmd/issue_reap_discover.go:113",
+          "what": "second inventory source finding dross-authored cards that no board.json namespace links, recovering each one's artefact from its identity label and routing it through the same record-derived verdict; marker re-checked locally so a human-filed card is never touched or named"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/issue_reap_cmd.go",
+        "internal/cmd/issue_reap_cmd_test.go",
+        "internal/cmd/issue.go"
+      ],
+      "commit": "efdff2c",
+      "completed_at": "2026-08-21T08:18:36.707631Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "issueReap",
+          "loc": "internal/cmd/issue_reap_cmd.go:21",
+          "what": "dross issue reap — dry-run by default, printing the classified whole-board plan with each card's justifying record, scoped by a repeatable --namespace validated against board.Board by reflection"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "internal/cmd/board_lifecycle_divergence_test.go",
+        "internal/cmd/issue_reap.go"
+      ],
+      "commit": "5f9b8f0",
+      "completed_at": "2026-08-21T08:21:56.902985Z",
+      "landmarks": [
+        {
+          "feature": "mirror lane coverage guards",
+          "symbol": "TestEveryBoardNamespaceHasAReapPath",
+          "loc": "internal/cmd/board_lifecycle_divergence_test.go:698",
+          "what": "reflection-driven guards that every board.Board namespace has a reap lane, that each lane's reap terminal equals its forward terminal, and that every terminal is mapped in both provider state maps"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        "internal/cmd/issue_reap_apply.go",
+        "internal/cmd/issue_reap_apply_test.go",
+        "internal/cmd/issue_reap_cmd.go",
+        "internal/cmd/issue_reap_cmd_test.go"
+      ],
+      "commit": "30060bc",
+      "completed_at": "2026-08-21T08:27:13.70574Z",
+      "landmarks": [
+        {
+          "feature": "board mirror reaping",
+          "symbol": "applyReap",
+          "loc": "internal/cmd/issue_reap_apply.go:108",
+          "what": "--apply writes each card's own lane terminal through the verified close, journalling the column read before the write, collecting per-card failures instead of aborting, and dropping a board.json link only where the forward path does"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_test.go"
+      ],
+      "commit": "127c984",
+      "completed_at": "2026-08-21T08:30:31.96265Z",
+      "landmarks": [
+        {
+          "feature": "stranded mirror detection",
+          "symbol": "reportStrandedMirrors",
+          "loc": "internal/cmd/doctor.go:1519",
+          "what": "doctor's read-only advisory counting stranded board mirrors per lane from the sweep's own classifier, with the per-namespace remedy; never affects exit status and never runs with board sync off"
+        }
+      ]
+    }
+  }
+}

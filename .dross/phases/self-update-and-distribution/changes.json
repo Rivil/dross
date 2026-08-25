@@ -1,5 +1,9 @@
 {
   "phase": "self-update-and-distribution",
+  "status": "complete",
+  "backfill_evidence": {
+    "sha": "eda97915c0ae17975d80385e3f74bb78f0d9bf1b"
+  },
   "tasks": {
     "t-1": {
       "files": [

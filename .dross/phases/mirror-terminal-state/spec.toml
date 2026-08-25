@@ -1,0 +1,81 @@
+[phase]
+  id = "mirror-terminal-state"
+  title = "mirror-terminal-state"
+  milestone = "v1.5"
+
+[[criteria]]
+  id = "c-1"
+  text = "`dross issue pull` returns only issues dross did not author: an issue linked in any board.json namespace (milestones, phases, quicks, backlog, tasks) or carrying the `dross` marker label is excluded from the feed. Against this repo's board.json the feed is DRO-133 alone, not 116."
+
+[[criteria]]
+  id = "c-2"
+  text = "After `dross ship` finalizes a phase, no task issue for that phase is left in `task-in-review`, and each is in a tracker state the provider reports as resolved."
+
+[[criteria]]
+  id = "c-3"
+  text = "A milestone epic reaches a resolved state when its milestone is finalized, instead of staying open with no verb able to close it."
+
+[[criteria]]
+  id = "c-4"
+  text = "`dross issue quick --close` writes the state map's terminal state and verifies the read-back — it never reports a close over an issue the tracker still holds unresolved."
+
+[[criteria]]
+  id = "c-5"
+  text = "A guard test fails when a new mirror namespace escapes the inbound filter, or when an emitted lifecycle status has no terminal path — the gap is caught in the suite, not months later on a live board."
+
+[[criteria]]
+  id = "c-6"
+  text = "A backlog mirror whose artefact has resolved — a `slug:` entry whose phase is now scaffolded, a `[routed]` entry whose target phase has shipped — reaches a resolved state at source instead of staying Submitted."
+
+[[decisions]]
+  key = "exclusion_basis"
+  choice = "`issue pull` skips an issue that any board.json namespace links OR that carries the `dross` marker label."
+  why = "board.json is branch-local — a mirror created on a phase branch that never merged is invisible to it — while the marker travels with the issue. Hiding a human-filed issue someone tagged `dross` is the cheaper error."
+  locked = true
+
+[[decisions]]
+  key = "task_terminal_status"
+  choice = "New `task-complete` key in configenum.LifecycleStatuses, mapped to YouTrack `Verified` and Jira `Done`."
+  why = "Keeps each lane's `dross/status:` label self-describing and keeps task_lifecycle.go's plan<->board inversion unambiguous; reusing `complete` would collide with the phase issue's own label."
+  locked = true
+
+[[decisions]]
+  key = "task_close_verb"
+  choice = "`dross issue task-sync <phase> --status task-complete --close`, emitted from ship.md's finalize step."
+  why = "Mirrors the phase path's flag shape, honours the locked terminal_emit_sites decision (ship emits; `phase complete` stays board-free), and stays greppable from ship_prompt_test.go."
+  locked = true
+
+[[decisions]]
+  key = "flat_board_close"
+  choice = "On Forgejo, Gitea and GitLab, `task-sync --close` writes no state and plainly closes the issue."
+  why = "Closing is universally supported; refusing by name the way task-pull does would strand every task card on those boards forever — the exact defect this phase exists to fix."
+  locked = true
+
+[[decisions]]
+  key = "epic_close"
+  choice = "`dross issue milestone-sync <version> --close`, emitted from milestone.md's finalize step."
+  why = "Same flag shape as the phase and task paths so all three terminal emissions read and are guarded alike, and it keeps the tracker write out of the git/state verb."
+  locked = true
+
+[[decisions]]
+  key = "backlog_close"
+  choice = "`dross issue backlog-sync` closes the mirrors for entries that dropped out of the live backlog set, and gains the prompt edge it lacks at ship finalize."
+  why = "It already owns the backlog set, so reconciling both directions keeps one owner and one test site. Without a prompt edge the verb never runs — nothing in assets/prompts calls it today."
+  locked = true
+
+[[decisions]]
+  key = "task_status_validation"
+  choice = "`task-sync --status` validates against configenum.LifecycleStatuses, as `phase-sync` already does."
+  why = "The existing asymmetry lets an unknown status onto a card silently; adding `task-complete` is when it starts to bite."
+  locked = true
+
+[[deferred]]
+  id = "b38eb66d043ad477"
+  text = "Close the 115 mirrors already stranded on this board at source."
+  why = "This phase installs the forward-going lifecycle; sweeping existing strandage is board-mirror-reaper's job."
+  target = "board-mirror-reaper"
+
+[[deferred]]
+  id = "3ab9f3a197c6ec1e"
+  text = "Wire `dross issue task-pull` into a prompt edge — nothing in assets/prompts calls it, so board-side task moves never travel back into plan.toml unless it is run by hand."
+  why = "Inbound direction; a separate capability from mirror closure."

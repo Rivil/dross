@@ -290,10 +290,13 @@ func runTestRemotely(t remote.Target, repoDir, line string) error {
 	if err != nil {
 		return err
 	}
-	sync, err := remote.SyncArgs(t, root)
+	sync, cleanup, err := remote.SyncArgs(t, root)
 	if err != nil {
 		return err
 	}
+	// The exclude list is a temp file rsync reads; it must outlive the spawn
+	// and not outlive this call.
+	defer cleanup()
 	if err := spawnRemote(sync, "", os.Stdout, os.Stderr); err != nil {
 		return remoteFailure("rsync", t.Host, err)
 	}
