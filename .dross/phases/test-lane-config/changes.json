@@ -21,6 +21,36 @@
         }
       ]
     },
+    "t-10": {
+      "files": [
+        "internal/cmd/trust_lane_test.go"
+      ],
+      "commit": "e545c21",
+      "completed_at": "2026-08-25T20:20:22.471354Z",
+      "landmarks": [
+        {
+          "feature": "test lane consent",
+          "symbol": "TestDoctorCountsEachRefusedLane",
+          "loc": "internal/cmd/trust_lane_test.go:266",
+          "what": "each refused lane is worth exactly one doctor issue, so the transcript and the exit code agree"
+        }
+      ]
+    },
+    "t-11": {
+      "files": [
+        "internal/cmd/survivor_backlog_repo_test.go"
+      ],
+      "commit": "46e8486",
+      "completed_at": "2026-08-25T17:34:52.312068Z",
+      "landmarks": [
+        {
+          "feature": "survivor backlog audit",
+          "symbol": "auditSurvivorBacklog",
+          "loc": "internal/cmd/survivor_backlog_repo_test.go:82",
+          "what": "forward routing into the active milestone counts as scheduled disposal; past it stays deferral"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/testlane/match.go",
@@ -137,6 +167,21 @@
           "symbol": "TestReadmeDocumentsTestLanes",
           "loc": "internal/cmd/options_docs_test.go:182",
           "what": "lane verbs, dross test --files and the per-lane grant documented in README and options.md behind drift guards"
+        }
+      ]
+    },
+    "t-9": {
+      "files": [
+        "internal/cmd/trust_lane_test.go"
+      ],
+      "commit": "1304383",
+      "completed_at": "2026-08-25T18:09:28.039331Z",
+      "landmarks": [
+        {
+          "feature": "test lane consent",
+          "symbol": "TestTrustLaneOnALaneLessRepoSaysSo",
+          "loc": "internal/cmd/trust_lane_test.go:202",
+          "what": "a lane-less repo's trust --lane refusal says so and names the verb that declares one"
         }
       ]
     }

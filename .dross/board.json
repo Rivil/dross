@@ -370,6 +370,16 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "test-lane-config/t-10": {
+      "issue": "DRO-202",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-lane-config/t-11": {
+      "issue": "DRO-201",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "test-lane-config/t-2": {
       "issue": "DRO-193",
       "plan_status": "done",
@@ -402,6 +412,11 @@
     },
     "test-lane-config/t-8": {
       "issue": "DRO-198",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "test-lane-config/t-9": {
+      "issue": "DRO-200",
       "plan_status": "done",
       "board_state": "task-in-review"
     }

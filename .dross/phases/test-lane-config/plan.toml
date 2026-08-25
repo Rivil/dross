@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 11
 
 [phase]
   id = "test-lane-config"
@@ -87,4 +87,34 @@ task_seq = 0
   covers = ["c-6", "c-9"]
   depends_on = ["t-3", "t-4"]
   test_contract = ["options.md mentions `dross test lane add`, `dross trust --lane` and trusted_lane_commands — TestOptionsCoversTheConsentVerbs, with those three added to its want list, fails if the settings surface omits the new grant", "options.md never tells the user to write the grant through the generic key-writer — the same test's forbidden list, extended with `local set trusted_lane_commands`, fails if it does", "README documents `dross test --files` and the lane verbs — TestReadmeDocumentsTestLanes fails if the flag or verb is renamed without a doc update, on the TestDocsCoverAllowHosts precedent"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 5
+  title = "Reconcile the survivor backlog guard with routed disposal"
+  files = ["internal/cmd/survivor_backlog_repo_test.go"]
+  description = "TestSurvivorDrainBacklogClosed is red at HEAD: this phase's verify routed two out-of-scope milestone.go survivors to the scaffolded phase milestone-push-failure-tests, which auditSurvivorBacklog flags as forward-routing. selfPhase (survivor-drain) sits in an earlier milestone, so every phase that will ever exist ranks forward — the guard bans routing ANY new survivor to a scheduled phase, while the builtin dross-survivor-drain rule explicitly sanctions routing to a scaffolded phase. Teach the guard that a target inside the ACTIVE milestone is scheduled disposal; routing beyond it stays banned."
+  covers = ["c-6"]
+  test_contract = ["a survivor-keyed entry routed forward to a phase in the ACTIVE milestone is not flagged — the new clean case fails if the guard keeps banning every forward target, which is the state that makes `dross survivor route --target` unusable for any survivor found after survivor-drain shipped", "a survivor-keyed entry routed forward to a phase in a LATER, non-active milestone is still flagged as re-routed forward — fails if the allowance widens from \"the active milestone\" to \"any ranked target\", which would retire the guard rather than scope it", "a repo with no active milestone flags forward routing exactly as before — the allowance is derived from a milestone whose status is active, so an empty active set fails closed rather than opening the gate", "TestSurvivorDrainBacklogClosed passes over this repo real specs with the two milestone-push-failure-tests routings in place"]
+  status = "done"
+
+[[task]]
+  id = "t-9"
+  wave = 5
+  title = "Kill the lane-less findLane refusal"
+  files = ["internal/cmd/trust_lane_test.go"]
+  description = "verify amend: internal/cmd/trust.go:388 survived (in-hunk). findLane's len(names)==0 branch — the 'this repo declares none' refusal — is never executed by a test; only the declared-lanes branch at :391 is."
+  covers = ["c-6"]
+  test_contract = ["`dross trust --lane nosuch` in a repo declaring ZERO lanes refuses with a message saying the repo declares none and naming `dross test lane add` as the fix — TestTrustLaneOnALaneLessRepoSaysSo fails if the branch is unreached or its message collapses into the generic \"declared:\" form", "a repo declaring exactly ONE lane names that lane rather than claiming none — fails if the len(names)==0 boundary shifts, which would tell a one-lane repo it has no lanes and send the user to declare a duplicate", "neither refusal writes a trusted_lane_commands entry — a fingerprint of the empty string would grant consent to a lane that does not exist"]
+  status = "done"
+
+[[task]]
+  id = "t-10"
+  wave = 5
+  title = "Count each refused lane in doctor's exit"
+  files = ["internal/cmd/trust_lane_test.go"]
+  description = "verify amend: internal/cmd/doctor.go:1280 survived (in-hunk). reportLaneConsent's ConsentRefused arm increments issues, but ConsentRefused is only ever asserted at the LaneConsented level (trust_lane_test.go:212) and never driven through Doctor(); TestDoctorStaleLaneMovesTheExitCode covers STALE only."
+  covers = ["c-6"]
+  test_contract = ["a repo whose .dross/local.toml is git-tracked refuses every lane, and `dross doctor` counts EACH refused lane as its own project-level issue: the same fixture carrying two lanes reports exactly ONE more issue than the one-lane fixture — TestDoctorCountsEachRefusedLane fails if the ConsentRefused arm stops incrementing or decrements instead, which is the case where a refused lane prints a ✗ that doctor exit code does not carry", "the refused lane is named in the output together with the reason it was refused — asserting the count alone would pass on a branch that counted the right number of anonymous issues"]
   status = "done"
