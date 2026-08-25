@@ -1,4 +1,4 @@
-phases = ["test-lane-config", "lane-selector-translation", "lane-prepare-step", "lane-remote-locality", "remote-toolchain-install"]
+phases = ["test-lane-config", "lane-selector-translation", "lane-prepare-step", "lane-remote-locality", "remote-toolchain-install", "milestone-push-failure-tests"]
 
 [milestone]
   version = "v1.6"
