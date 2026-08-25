@@ -76,6 +76,29 @@ type Runtime struct {
 	ShellCommand     string             `toml:"shell_command,omitempty" json:"shell_command,omitempty"`
 	LogsCommand      string             `toml:"logs_command,omitempty" json:"logs_command,omitempty"`
 	Services         map[string]Service `toml:"services,omitempty" json:"services,omitempty"`
+
+	// TestLane declares the optional [[runtime.test_lane]] blocks that let
+	// `dross test --files` run only the suites a file set actually touches.
+	//
+	// omitempty is load-bearing beyond tidiness: a repo that declares no lane
+	// must round-trip byte-identically to one written before lanes existed, so
+	// the whole feature stays opt-in and `dross test` keeps meaning
+	// TestCommand for every repo that has not asked for anything else.
+	TestLane []TestLane `toml:"test_lane,omitempty" json:"test_lane,omitempty"`
+}
+
+// TestLane is one named subset of the repo paired with the command that tests
+// it: Match is a list of globs, Command is the line to run when a supplied file
+// set hits any of them.
+//
+// All three fields are required and validate says so per-field — a lane with no
+// Command cannot be run, a lane with no Match can never be selected, and a lane
+// with no Name cannot be granted consent, since the machine-local grant store
+// is keyed by lane name.
+type TestLane struct {
+	Name    string   `toml:"name" json:"name"`
+	Match   []string `toml:"match" json:"match"`
+	Command string   `toml:"command" json:"command"`
 }
 
 type Service struct {

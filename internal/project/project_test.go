@@ -194,3 +194,81 @@ func TestSaveDefaultsAreOmittedAndOptionalsRemainEmpty(t *testing.T) {
 		t.Error("expected SquashMerge to default false")
 	}
 }
+
+// TestTestLaneDecodes pins the [[runtime.test_lane]] wire format against
+// hand-written toml rather than against a struct this package Saved: the
+// document is what a user edits and what `dross test lane add` has to produce,
+// so a decoder that only agrees with its own encoder proves nothing about it.
+//
+// A dropped toml tag or a missing field decodes to a zero-length slice with no
+// error at all — toml.Decode ignores keys it has no home for — so the
+// length assertion is the one that fails when the schema regresses.
+func TestTestLaneDecodes(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	if err := os.WriteFile(path, []byte(`
+[project]
+name = "x"
+version = "1.0.0.0"
+
+[runtime]
+mode = "native"
+test_command = "go test ./..."
+
+[[runtime.test_lane]]
+name = "go"
+match = ["internal/**/*.go", "main.go"]
+command = "go test -count=1 ./..."
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(p.Runtime.TestLane) != 1 {
+		t.Fatalf("want 1 lane, got %d — the toml tag or the Runtime field is missing", len(p.Runtime.TestLane))
+	}
+	lane := p.Runtime.TestLane[0]
+	if lane.Name != "go" {
+		t.Errorf("name = %q, want go", lane.Name)
+	}
+	if !reflect.DeepEqual(lane.Match, []string{"internal/**/*.go", "main.go"}) {
+		t.Errorf("match = %v, want both globs in order", lane.Match)
+	}
+	if lane.Command != "go test -count=1 ./..." {
+		t.Errorf("command = %q — this is the exact string consent fingerprints", lane.Command)
+	}
+	// Lanes are additive: declaring one must not disturb the scalar the
+	// lane-less path still runs.
+	if p.Runtime.TestCommand != "go test ./..." {
+		t.Errorf("test_command = %q, want it untouched by the lane block", p.Runtime.TestCommand)
+	}
+}
+
+// TestNoTestLaneIsAbsentFromTheDocument holds the opt-in half of the schema:
+// a project with no lane must not grow a test_lane key on Save. Without
+// omitempty the encoder writes an empty array into every project.toml dross
+// touches, which turns "this repo has no lanes" into a line the user has to
+// read and wonder about.
+func TestNoTestLaneIsAbsentFromTheDocument(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	p := &Project{Project: ProjectMeta{Name: "x", Version: "1.0.0.0"}, Runtime: Runtime{Mode: "native"}}
+	if err := p.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	if body := string(mustReadFile(t, path)); strings.Contains(body, "test_lane") {
+		t.Errorf("a lane-less project.toml mentions test_lane:\n%s", body)
+	}
+}
+
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
