@@ -61,7 +61,67 @@ const (
 	// declared lane, so the run would have measured nothing. Reported instead
 	// of exiting 0, which is the false-green c-8 exists to prevent.
 	exitNothingMeasured = 5
+	// exitLaneRefused: at least one matched lane's command is untrusted or
+	// stale on this machine, so that lane did not run. Distinct from a red
+	// suite: the lane's code was never measured, and a caller that read this
+	// as "your code is broken" would go looking for a bug that is not there.
+	exitLaneRefused = 6
 )
+
+// exitRank orders the outcomes of a multi-lane run so the WORST one decides
+// the run's status.
+//
+// The order is not severity-of-inconvenience, it is how badly each outcome
+// misleads a caller who is deciding whether to commit:
+//
+//	transport (3) > partial (4) > red (1) > refused (6) > nothing measured (5)
+//
+// Transport and partial outrank everything because they mean the tree that ran
+// was not the tree on disk — any verdict from that run, green or red, is about
+// something else. Red outranks refused because a failing test is a fact about
+// the code and an ungranted lane is a fact about this machine; reporting the
+// consent problem while a suite is broken would send the user to `dross trust`
+// and let them commit a red change once they got there. Nothing-measured is
+// last because it only ever co-occurs as the absence of the others.
+//
+// A zero rank is success; unknown codes rank above it so an outcome added later
+// cannot silently be swallowed by a green.
+func exitRank(code int) int {
+	switch code {
+	case 0:
+		return 0
+	case exitTransport:
+		return 5
+	case exitPartial:
+		return 4
+	case exitSuiteFailed:
+		return 3
+	case exitLaneRefused:
+		return 2
+	case exitNothingMeasured:
+		return 1
+	}
+	return 3
+}
+
+// worseOutcome keeps whichever of two lane results should decide the run.
+//
+// Worst-wins rather than first-wins or last-wins: with lanes running in
+// declaration order, first-wins would let a lane's position in project.toml
+// decide what the run reports, and last-wins would let a green lane declared
+// after a red one mask it.
+func worseOutcome(a, b error) error {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	if exitRank(ExitCode(b)) > exitRank(ExitCode(a)) {
+		return b
+	}
+	return a
+}
 
 // ExitCodeError carries the process exit status a failure should produce.
 // main.go reads it through ExitCode; anything without one exits 1 as before.
@@ -208,11 +268,6 @@ func Test() *cobra.Command {
 			if err := refuseFilesWithSelector(files, args); err != nil {
 				return err
 			}
-			// First, before any I/O: a refusal that had already spawned the
-			// suite would have done the thing it was refusing to authorize.
-			if err := requireExecConsent(); err != nil {
-				return err
-			}
 			root, err := FindRoot()
 			if err != nil {
 				return err
@@ -225,8 +280,21 @@ func Test() *cobra.Command {
 			// Lanes are opt-in, and this is where that is enforced (locked
 			// bare_test_run): with none declared, --files changes nothing and
 			// the command runs runtime.test_command exactly as it always did.
+			//
+			// On the lane path the per-lane grants REPLACE requireExecConsent
+			// rather than stacking on it. Stacking would make a lanes-only
+			// repo — no runtime.test_command at all, which is the shape lanes
+			// most exist to serve — refuse every lane run at a gate guarding a
+			// command it never spawns. Each lane's own command still passes
+			// through its own grant below, so nothing is ungated; the gate
+			// just moved to the line that actually runs.
 			if len(files) > 0 && len(proj.Runtime.TestLane) > 0 {
 				return runTestLanes(root, repoDir, proj, files, local)
+			}
+			// Before any spawn: a refusal that had already run the suite would
+			// have done the thing it was refusing to authorize.
+			if err := requireExecConsent(); err != nil {
+				return err
 			}
 			line := testCommandLine(proj.Runtime.TestCommand, args)
 			return runTest(root, repoDir, line, local)
@@ -305,8 +373,96 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	if len(sel.Unmatched) > 0 {
 		Printf("no lane matches: %s\n", strings.Join(sel.Unmatched, " "))
 	}
-	Printf("resolved %d lane(s): %s\n", len(sel.Lanes), strings.Join(selectedLaneNames(proj, sel.Lanes), ", "))
-	_ = local
+
+	matched := make([]project.TestLane, 0, len(sel.Lanes))
+	for _, i := range sel.Lanes {
+		matched = append(matched, proj.Runtime.TestLane[i])
+	}
+
+	// Fenced up front, every matched lane, before any of them runs. Checking
+	// inside the loop would discover a malformed lane line halfway through a
+	// multi-lane run, with earlier lanes already executed — and the fence
+	// exists precisely to stop a line from reaching a shell.
+	//
+	// shArgvFor rather than shArgv: the label is what the refusal tells the
+	// user to go and edit, and blaming runtime.test_command for a lane's
+	// command would send them to a line that is perfectly fine.
+	for _, lane := range matched {
+		if _, err := shArgvFor(laneField(lane.Name), lane.Command); err != nil {
+			return err
+		}
+	}
+
+	// Consent is resolved for EVERY matched lane before any of them spawns, so
+	// the transcript names every refusal up front rather than interleaving them
+	// with test output, where a refusal scrolls past under a passing suite.
+	var worst error
+	runnable := make([]project.TestLane, 0, len(matched))
+	for _, lane := range matched {
+		state, cerr := LaneConsented(root, repoDir, lane.Name, lane.Command)
+		if cerr != nil {
+			// Printed AND folded into the outcome. Returning it alone would
+			// lose it whenever another lane goes red and outranks it, and a
+			// consent problem the user never sees is one they never fix.
+			refusal := laneConsentRefusal(lane.Name, lane.Command, state, cerr)
+			Printf("%v\n\n", refusal)
+			worst = worseOutcome(worst, &ExitCodeError{Code: exitLaneRefused, Err: refusal})
+			continue
+		}
+		runnable = append(runnable, lane)
+	}
+	if len(runnable) == 0 {
+		// Nothing spawns, and the status is the refusal. A run where every
+		// lane was refused measured exactly as much as one that matched
+		// nothing, and must not read as green.
+		return worst
+	}
+
+	// The host is chosen ONCE for the whole run, and the tree is pushed once.
+	// Per-lane sync would re-push an unchanged tree for every lane, and — worse
+	// — would make a mid-run transport failure look like it belonged to
+	// whichever lane happened to be next.
+	target, err := resolveTestTarget(root, repoDir, local)
+	if err != nil {
+		return err
+	}
+	if target != nil {
+		if err := syncTreeTo(*target, repoDir); err != nil {
+			return err
+		}
+	}
+
+	for _, lane := range runnable {
+		// The header precedes the lane's own output, always. A transcript
+		// where the header trailed the run cannot attribute a failure to a
+		// runner, which is the entire point of printing it.
+		Printf("lane %s: %s\n", lane.Name, lane.Command)
+		worst = worseOutcome(worst, runOneLane(target, repoDir, lane))
+	}
+	return worst
+}
+
+// laneField is the project.toml key a lane's refusals name.
+func laneField(name string) string {
+	return fmt.Sprintf("runtime.test_lane[%s]", name)
+}
+
+// runOneLane runs a single lane's command, here or on the already-synced host.
+//
+// The line is passed through untouched — no selector appended, nothing quoted
+// onto the end — because it must be byte-identical to the string this lane's
+// consent fingerprint covers. A run that appended anything would be approving
+// one command and executing another.
+func runOneLane(target *remote.Target, repoDir string, lane project.TestLane) error {
+	if target == nil {
+		if err := spawnLocal(repoDir, lane.Command, os.Stdout, os.Stderr); err != nil {
+			return &ExitCodeError{Code: exitSuiteFailed, Err: fmt.Errorf("test lane %q failed: %w", lane.Name, err)}
+		}
+		return nil
+	}
+	if err := runRemoteLine(*target, lane.Command); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -320,14 +476,6 @@ func laneNames(proj *project.Project) []string {
 	return names
 }
 
-// selectedLaneNames maps resolved indices back to names for the transcript.
-func selectedLaneNames(proj *project.Project, idx []int) []string {
-	names := make([]string, 0, len(idx))
-	for _, i := range idx {
-		names = append(names, proj.Runtime.TestLane[i].Name)
-	}
-	return names
-}
 
 // spawnRemote is the remote-execution seam: a fully-built argv plus the script
 // piped to its stdin, streamed the same way a local run is. Tests replace it to
@@ -371,34 +519,49 @@ func testTarget(root, repoDir string, local bool) ([]*remote.Target, error) {
 	return readRemoteGrants(root, repoDir)
 }
 
-// runTest executes one test run, here or on the granted host.
-func runTest(root, repoDir, line string, local bool) error {
+// resolveTestTarget picks the machine a run happens on, announcing a fallback.
+//
+// Extracted from runTest so a multi-lane run can choose the host ONCE and then
+// push the tree once — with the choice fused into the run, every lane would
+// re-probe and re-sync, and a lane that landed mid-outage would be reported as
+// a different kind of failure from its neighbours.
+//
+// A nil target means here.
+func resolveTestTarget(root, repoDir string, local bool) (*remote.Target, error) {
 	targets, err := testTarget(root, repoDir, local)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var target *remote.Target
-	if len(targets) > 0 {
-		// BEFORE the sync, not after. Probing after the tree is pushed
-		// discovers an unreachable host having already paid for the transfer,
-		// and — worse — a transport failure at that point is indistinguishable
-		// from the suite itself dying.
-		//
-		// With more than one candidate this walks them in order and takes the
-		// first that answers; with one it is exactly the previous behaviour.
-		chosen, pf, perr := selectRemoteTarget(targets, nil)
-		if perr != nil {
-			return perr
-		}
-		target = chosen
-		if pf.Fallback {
-			// Announced, never silent. A fallback the output does not mention
-			// leaves a local result indistinguishable from a remote one, which
-			// is the state that made `dross remote revoke` the workaround when
-			// helicon was down.
-			Printf("remote: %s\n", pf.Why)
-			target = nil
-		}
+	if len(targets) == 0 {
+		return nil, nil
+	}
+	// BEFORE the sync, not after. Probing after the tree is pushed discovers
+	// an unreachable host having already paid for the transfer, and — worse —
+	// a transport failure at that point is indistinguishable from the suite
+	// itself dying.
+	//
+	// With more than one candidate this walks them in order and takes the
+	// first that answers; with one it is exactly the previous behaviour.
+	chosen, pf, perr := selectRemoteTarget(targets, nil)
+	if perr != nil {
+		return nil, perr
+	}
+	if pf.Fallback {
+		// Announced, never silent. A fallback the output does not mention
+		// leaves a local result indistinguishable from a remote one, which is
+		// the state that made `dross remote revoke` the workaround when
+		// helicon was down.
+		Printf("remote: %s\n", pf.Why)
+		return nil, nil
+	}
+	return chosen, nil
+}
+
+// runTest executes one test run, here or on the granted host.
+func runTest(root, repoDir, line string, local bool) error {
+	target, err := resolveTestTarget(root, repoDir, local)
+	if err != nil {
+		return err
 	}
 	if target == nil {
 		if err := spawnLocal(repoDir, line, os.Stdout, os.Stderr); err != nil {
@@ -413,9 +576,23 @@ func runTest(root, repoDir, line string, local bool) error {
 //
 // The order is the correctness property, not a sequence of steps: running
 // before the sync measures whatever the remote tree happened to hold, which is
-// the previous run's code. Both argv builders validate the target and return an
-// error INSTEAD of an argv, so an unsafe host never reaches a shell.
+// the previous run's code.
+//
+// The two legs are separate functions because a multi-lane run needs them
+// apart: one sync for the tree, then one ssh per lane. Fused, every lane would
+// re-push an unchanged checkout, and the wall-clock cost of lanes would scale
+// with the number of lanes rather than with the code they cover.
 func runTestRemotely(t remote.Target, repoDir, line string) error {
+	if err := syncTreeTo(t, repoDir); err != nil {
+		return err
+	}
+	return runRemoteLine(t, line)
+}
+
+// syncTreeTo pushes the working tree to the target. The argv builder validates
+// the target and returns an error INSTEAD of an argv, so an unsafe host never
+// reaches a shell.
+func syncTreeTo(t remote.Target, repoDir string) error {
 	root, err := filepath.Abs(repoDir)
 	if err != nil {
 		return err
@@ -430,7 +607,11 @@ func runTestRemotely(t remote.Target, repoDir, line string) error {
 	if err := spawnRemote(sync, "", os.Stdout, os.Stderr); err != nil {
 		return remoteFailure("rsync", t.Host, err)
 	}
+	return nil
+}
 
+// runRemoteLine runs one command line on the already-synced target.
+func runRemoteLine(t remote.Target, line string) error {
 	ssh, err := remote.SSHArgs(t)
 	if err != nil {
 		return err

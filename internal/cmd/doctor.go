@@ -1221,8 +1221,19 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 		Printf("  ✗ %v\n", cerr)
 		issues++
 	case ConsentNotApplicable:
-		Printf("  ⚠ no runtime.test_command is configured, so the loop commands refuse.\n")
-		Printf("    Fix: `dross project set runtime.test_command \"<cmd>\"`, then `dross trust`.\n")
+		// Lane-aware since lanes gained their own grants: in a lanes-only repo
+		// `dross test --files` runs the lanes under those grants and never
+		// reaches this gate, so the old wording — "the loop commands refuse" —
+		// is false in exactly the repo shape lanes exist to serve, and telling
+		// that user to configure a whole-suite command sends them to fix
+		// something that is not broken.
+		if len(p.Runtime.TestLane) > 0 {
+			Printf("  ⚠ no runtime.test_command is configured; `dross test --files` still runs the lanes below.\n")
+			Printf("    A bare `dross test` has nothing to run — set one only if you want a whole-suite command.\n")
+		} else {
+			Printf("  ⚠ no runtime.test_command is configured, so the loop commands refuse.\n")
+			Printf("    Fix: `dross project set runtime.test_command \"<cmd>\"`, then `dross trust`.\n")
+		}
 	default:
 		Printf("  ⚠ this machine has not trusted the configured test command:\n")
 		Printf("      %s\n", p.Runtime.TestCommand)

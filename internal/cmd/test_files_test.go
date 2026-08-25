@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/project"
 )
 
 // filesFixture is a trusted repo with a go lane and a docs lane declared.
@@ -23,6 +26,29 @@ func filesFixture(t *testing.T, lanes string) {
 	}
 }
 
+// grantAllLanes consents to every declared lane's command on this machine.
+//
+// Called only by tests whose subject is resolution or transport rather than
+// consent: the per-lane gate is real behaviour, so an ungranted fixture refuses
+// exactly as a fresh clone would, and a test about something else must get past
+// it deliberately rather than by accident.
+func grantAllLanes(t *testing.T) {
+	t.Helper()
+	root, err := FindRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lane := range p.Runtime.TestLane {
+		if err := GrantLaneConsent(root, lane.Name, lane.Command); err != nil {
+			t.Fatalf("grant lane %s: %v", lane.Name, err)
+		}
+	}
+}
+
 const goAndDocsLanes = `[[runtime.test_lane]]
 name = "go"
 match = ["internal/**", "main.go"]
@@ -32,22 +58,6 @@ command = "go test -count=1 ./..."
 name = "docs"
 match = ["docs/", "README.md"]
 command = "markdownlint docs"`
-
-// TestResolveOnlyDoesNotSpawn is the whole point of splitting this task from
-// the one that spawns lanes. Until the per-lane consent gate exists, running a
-// lane's command line would execute a string out of tracked project.toml that
-// no fingerprint covers — so this commit must resolve and stop.
-func TestResolveOnlyDoesNotSpawn(t *testing.T) {
-	filesFixture(t, goAndDocsLanes)
-	rec := installSpawnRecorder(t, nil)
-
-	if err := runCmd(t, Test(), "--files", "internal/cmd/test.go"); err != nil {
-		t.Fatalf("resolving a matched file set must succeed: %v", err)
-	}
-	if n := rec.count(); n != 0 {
-		t.Errorf("resolution spawned %d command(s) — lane spawning is gated behind the per-lane grant", n)
-	}
-}
 
 // TestNoLanesIsByteIdentical is c-5: a repo that never declared a lane behaves
 // exactly as it did before lanes existed, with or without --files. Byte
@@ -184,8 +194,8 @@ func TestOutOfTreePoisonsTheSet(t *testing.T) {
 	if got := ExitCode(err); got != exitBadFileSet {
 		t.Errorf("exit = %d, want %d", got, exitBadFileSet)
 	}
-	if strings.Contains(out, "resolved") {
-		t.Errorf("the in-tree half was resolved anyway:\n%s", out)
+	if strings.Contains(out, "lane ") {
+		t.Errorf("the in-tree half was resolved and run anyway:\n%s", out)
 	}
 }
 
@@ -238,6 +248,8 @@ func TestPartialMissNamesTheRest(t *testing.T) {
 name = "go"
 match = ["internal/**"]
 command = "go test -count=1 ./..."`)
+	grantAllLanes(t)
+	installSpawnRecorder(t, nil)
 
 	var out string
 	err := runCmdCapturing(t, &out, Test(), "--files", "internal/a.go", "--files", "docs/x.md")
@@ -261,6 +273,8 @@ func TestFilesIsRepeatableNotCommaSplit(t *testing.T) {
 name = "odd"
 match = ["a,b.go"]
 command = "true"`)
+	grantAllLanes(t)
+	installSpawnRecorder(t, nil)
 
 	var out string
 	if err := runCmdCapturing(t, &out, Test(), "--files", "a,b.go"); err != nil {
