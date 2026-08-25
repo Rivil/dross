@@ -177,6 +177,18 @@ func Test() *cobra.Command {
 			"Output streams as it arrives and the exit status reports the suite, not\n" +
 			"the runner.",
 		SilenceUsage: true,
+		// Stated explicitly because this command has a subcommand now.
+		// cobra's default arg policy refuses any positional on a command with
+		// subcommands whose first argument names none of them — so the
+		// selector, which is the whole point of the trailing arguments, would
+		// come back as `unknown command "./internal/..."`. Declaring the
+		// policy also makes the rule independent of where this command sits in
+		// a tree, which the default is not.
+		//
+		// It does not weaken the `lane` verb: cobra resolves args[0] against
+		// subcommands BEFORE any arg validation runs, so `dross test lane`
+		// still reaches the subcommand.
+		Args: cobra.ArbitraryArgs,
 		RunE: func(_ *cobra.Command, args []string) error {
 			// First, before any I/O: a refusal that had already spawned the
 			// suite would have done the thing it was refusing to authorize.
@@ -196,6 +208,7 @@ func Test() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&local, "local", false, "run on this machine even when a remote is granted")
+	c.AddCommand(testLane())
 	return c
 }
 
