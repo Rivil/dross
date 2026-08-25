@@ -52,6 +52,13 @@ func TestOptionsCoversTheConsentVerbs(t *testing.T) {
 		"dross trust",
 		"trusted_test_command",
 		"mutation_remote_host",
+		// The lane grant is the newest member of the same family, and the
+		// one a settings surface is most likely to miss: it is keyed per
+		// lane, so a user who never opens local.toml has no way to learn
+		// that renaming a lane silently untrusts it.
+		"dross test lane add",
+		"dross trust --lane",
+		"trusted_lane_commands",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("options.md does not mention %q", want)
@@ -63,6 +70,7 @@ func TestOptionsCoversTheConsentVerbs(t *testing.T) {
 		"local set mutation_remote_host",
 		"local set mutation_remote_workdir",
 		"local set trusted_test_command",
+		"local set trusted_lane_commands",
 	} {
 		if strings.Contains(prompt, forbidden) {
 			t.Errorf("options.md tells the user to write a consent key via the generic key-writer: %q", forbidden)
@@ -159,5 +167,34 @@ func TestOptionsSectionNumbersAreContiguous(t *testing.T) {
 	}
 	if seen < 17 {
 		t.Errorf("options.md has only %d numbered sections; the settings surface lost one", seen)
+	}
+}
+
+// TestReadmeDocumentsTestLanes is the documentation half of the lane surface,
+// on the TestDocsCoverAllowHosts precedent: a flag nobody can find is a flag
+// that does not exist.
+//
+// It names the two refusal exit codes as well as the verbs. Those are the
+// codes a caller reads when a run did NOT happen, and an agent that treats an
+// undocumented non-zero as a red suite is one commit away from the false-green
+// the whole exit contract exists to prevent.
+func TestReadmeDocumentsTestLanes(t *testing.T) {
+	root := repoRootForDocs(t)
+	b, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+	readme := string(b)
+	for _, want := range []string{
+		"dross test --files",
+		"dross test lane add",
+		"dross test lane remove",
+		"runtime.test_lane",
+		"dross trust --lane",
+		"matched no lane",
+	} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("README.md does not document %q", want)
+		}
 	}
 }
