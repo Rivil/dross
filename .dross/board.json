@@ -263,6 +263,41 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "lane-selector-translation/t-1": {
+      "issue": "DRO-211",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-translation/t-2": {
+      "issue": "DRO-212",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-translation/t-3": {
+      "issue": "DRO-213",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-translation/t-4": {
+      "issue": "DRO-214",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-translation/t-5": {
+      "issue": "DRO-215",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-translation/t-6": {
+      "issue": "DRO-216",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-translation/t-7": {
+      "issue": "DRO-217",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "legacy-phase-backfill/t-1": {
       "issue": "DRO-143",
       "plan_status": "done",
