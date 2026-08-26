@@ -610,6 +610,18 @@ func (l *Launcher) ensureRestored() error {
 // whatever the previous run left at the local path — scoring yesterday's
 // numbers as today's.
 func (l *Launcher) clearReport(key, localPath string) error {
+	// UNCONDITIONAL, and it did not used to be: this whole function returned
+	// early for a local run, so a local tool that wrote no report left the
+	// adapter reading whatever the PREVIOUS run had left at this path.
+	//
+	// Observed 2026-08-26 while proving the --mutate escaping fix: a run that
+	// instrumented zero files and died with "No tests were executed" returned
+	// a nil error and a Report parsed from a mutation.json two days old. The
+	// doc above already described this hazard for the local half of a REMOTE
+	// run; it is identical for a wholly local one, which had no such excuse.
+	if err := os.RemoveAll(localPath); err != nil {
+		return fmt.Errorf("clear local report %s: %w", localPath, err)
+	}
 	if !l.remoteRun() {
 		return nil
 	}
@@ -619,9 +631,6 @@ func (l *Launcher) clearReport(key, localPath string) error {
 	rel, err := l.reportRel(key)
 	if err != nil {
 		return err
-	}
-	if err := os.RemoveAll(localPath); err != nil {
-		return fmt.Errorf("clear local report %s: %w", localPath, err)
 	}
 	t, err := l.toolTarget()
 	if err != nil {
