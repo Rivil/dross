@@ -518,6 +518,16 @@ func (e *ExitError) Error() string {
 // than re-deriving the mapping from the code at every site.
 func (e *ExitError) Unwrap() error { return e.kind }
 
+// ExitCode exposes the remote program's own status under the same interface
+// *exec.ExitError satisfies locally.
+//
+// The class (Unwrap) answers "did this run at all"; the NUMBER answers "what
+// did the runner say", and a caller that declared what its runner's
+// collected-nothing code is needs the number. Without this method a run on a
+// granted host reaches errors.As with nothing to match, and the same runner
+// exiting the same way would be a miss locally and a red suite remotely.
+func (e *ExitError) ExitCode() int { return e.Code }
+
 // Classify maps an exit code onto the class its caller branches on.
 //
 // 255 is ssh's own "I could not do this" code — reserved by ssh precisely so a

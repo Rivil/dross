@@ -452,21 +452,22 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		}
 	}
 
+	// Misses are counted, never folded into worst. A lane that collected no
+	// tests is not a verdict about the code — it is the absence of one — and
+	// exitRank puts exitNothingMeasured above nil, so folding a single miss
+	// through worseOutcome would fail a run whose other lanes all passed.
+	misses := 0
 	for _, m := range runnable {
-		line, ok := laneRunLine(repoDir, m.lane, sel.Matched[m.index])
+		line, selector, ok := laneRunLine(repoDir, m.lane, sel.Matched[m.index])
 		if !ok {
 			// The lane declares a selector and every path that selected it
 			// has since been deleted, so there is nothing to scope the run
 			// to (locked missing_paths). It does not spawn: `go test
 			// ./gone/...` is a hard runner error, which would read as a
 			// failing gate for code the task deliberately removed.
-			//
-			// Provisionally the whole run's outcome, so this commit can never
-			// exit 0 having spawned nothing. t-6 refines it into a miss that
-			// is reported without failing the gate.
-			Printf("lane %s: every matched path is gone — nothing to run\n", m.lane.Name)
-			worst = worseOutcome(worst, &ExitCodeError{Code: exitNothingMeasured, Err: fmt.Errorf(
-				"test lane %q measured nothing: every path that matched it has been deleted", m.lane.Name)})
+			Printf("selector miss: lane %q — every path matching it is gone, so its %s selector scoped to nothing\n",
+				m.lane.Name, m.lane.Selector)
+			misses++
 			continue
 		}
 		// The header precedes the lane's own output, always. A transcript
@@ -478,9 +479,59 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		// showing lane.Command while a derived line ran would be a transcript
 		// that lies about what was measured.
 		Printf("lane %s: %s\n", m.lane.Name, line)
-		worst = worseOutcome(worst, runOneLane(target, repoDir, m.lane, line))
+		err := runOneLane(target, repoDir, m.lane, line)
+		if code, miss := selectorMissCode(err, m.lane.EmptyExit); miss {
+			Printf("selector miss: lane %q collected no tests for %s (exit %d)\n",
+				m.lane.Name, strings.Join(selector, " "), code)
+			misses++
+			continue
+		}
+		worst = worseOutcome(worst, err)
+	}
+
+	// Only when EVERY lane that got as far as a spawn decision was a miss. One
+	// miss beside a green lane is information; a run where nothing collected
+	// anything measured exactly as much as a run that matched no lane at all,
+	// and must not read as green.
+	//
+	// Folded through worseOutcome rather than returned, so it cannot outrank a
+	// consent refusal or a red lane that this run also produced — exitRank
+	// already puts nothing-measured last for precisely that reason.
+	if misses > 0 && misses == len(runnable) {
+		worst = worseOutcome(worst, &ExitCodeError{Code: exitNothingMeasured, Err: fmt.Errorf(
+			"refusing to report a run that measured nothing: every matched lane's selector collected no tests")})
 	}
 	return worst
+}
+
+// selectorMissCode reports whether a lane's failure was its runner saying "I
+// collected no tests", and which declared code said so.
+//
+// Two guards, both load-bearing. With no declared codes there is no miss at
+// all: without a declaration only the empty-selector filter can produce one
+// (locked empty_detection), so a lane that never opted in keeps every non-zero
+// status as the red suite it has always been. And only a suite failure is
+// eligible — a transport failure or an incomplete transfer carries an exit code
+// too, and a run that never happened must never be relabelled as one that found
+// nothing.
+//
+// The output is never read. Matching a runner's wording would make dross track
+// every framework's phrasing across every version of it, which is the inference
+// empty_detection exists to forbid.
+func selectorMissCode(err error, codes []int) (int, bool) {
+	if err == nil || len(codes) == 0 || ExitCode(err) != exitSuiteFailed {
+		return 0, false
+	}
+	var ec exitCoder
+	if !errors.As(err, &ec) {
+		return 0, false
+	}
+	for _, c := range codes {
+		if c == ec.ExitCode() {
+			return c, true
+		}
+	}
+	return 0, false
 }
 
 // matchedLane pairs a lane with its index in project.toml, which is the key
@@ -498,9 +549,13 @@ type matchedLane struct {
 // byte-for-byte, and the existence filter never touches it — every lane written
 // before this feature must behave exactly as it did, including when a caller
 // names a path that is not there.
-func laneRunLine(repoDir string, lane project.TestLane, paths []string) (string, bool) {
+//
+// The derived arguments come back alongside the line because the miss report
+// names them: "collected no tests" is only actionable if the reader can see
+// what it was looking in.
+func laneRunLine(repoDir string, lane project.TestLane, paths []string) (string, []string, bool) {
 	if lane.Selector == "" {
-		return lane.Command, true
+		return lane.Command, nil, true
 	}
 	// Filtered before translation (locked missing_paths): a task that deleted
 	// a file would otherwise derive a package that no longer exists, and
@@ -513,7 +568,7 @@ func laneRunLine(repoDir string, lane project.TestLane, paths []string) (string,
 		}
 	}
 	if len(live) == 0 {
-		return "", false
+		return "", nil, false
 	}
 	// The error was already raised by the up-front fence, against this exact
 	// style. Reaching it here would mean the fence was skipped, and spawning
@@ -521,9 +576,9 @@ func laneRunLine(repoDir string, lane project.TestLane, paths []string) (string,
 	// exists to replace — so the lane does not run.
 	args, err := testlane.Derive(lane.Selector, live)
 	if err != nil || len(args) == 0 {
-		return "", false
+		return "", nil, false
 	}
-	return testCommandLine(lane.Command, args), true
+	return testCommandLine(lane.Command, args), args, true
 }
 
 // laneField is the project.toml key a lane's refusals name.
