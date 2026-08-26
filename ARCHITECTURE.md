@@ -294,17 +294,23 @@ _introduced deferred-item-routing · 6509930 · extended deferred-triage-gaps ·
 
 A cloned `.dross/` proposes a command to run; it does not get to run it. Spawning the repo's `runtime.test_command` requires consent granted **on this machine**, stored as a closed key in the gitignored [`.dross/local.toml`](#machine-local-store) by an explicit `dross trust` — so a fresh clone carries no consent by construction, exactly as `allow_hosts` does (locked `exec_consent_gate`). Consent binds to `sha256(runtime.test_command)`, not to the repo (locked `consent_binding`): a test command rewritten by a later pull revokes it and re-prompts, which is the attack the gate exists for, and there is deliberately no blanket `--repo` escape hatch. Enforcement sits in the CLI rather than in prompt text — the half that can't be talked out of it — across a **closed** set of six loop commands, with the refusal proven to precede exec by a seam that fails the test if reached, and a refusal writes nothing (no `tests.json`, no `verify.toml`) so it can't read as a run that happened. `dross test` joined that set when it became the [test suite runner](#test-suite-runner): before it, the gate covered a command dross never actually spawned — the prompts told the agent to type it into Bash — so gating it is now gating the run rather than the step boundary around it. An empty `test_command` is a refusal, not a free pass, and "stale" is reported distinctly from "never trusted". The prompts carry the matching pre-flight (`dross trust --check`) and are pinned never to grant consent on the user's behalf. Accepted limit, stated rather than hidden: the CLI cannot stop an agent invoking `go test` directly — the gate covers dross's own loop commands.
 
-- `CheckConsent` (state resolution: granted / stale / absent; refuses unread when local.toml is git-tracked) — `internal/cmd/trust.go:117`
-- `Fingerprint` (consent bound to a hash of the consented command, not to the repo) — `internal/cmd/trust.go:101`
-- `execGatedCommands` (the CLOSED set of six gated loop commands) — `internal/cmd/trust.go:285`
-- `requireExecConsent` (the refusal, sited ahead of every spawn of the repo's test command) — `internal/cmd/trust.go:299`
-- `Trust` (`dross trust`, `--check`) — `internal/cmd/trust.go:356`
-- doctor's exec-consent section (granted / stale / absent reported pre-flight) — `internal/cmd/doctor.go:943`
+Once a repo declares [test lanes](#test-suite-runner) the grant becomes **per lane**: `local.toml` carries a fingerprint map keyed by lane name, written by `dross trust --lane <name>`, so a lane whose command line went stale refuses that lane alone and names it while every other lane runs unaffected (locked `lane_consent`). An aggregate hash over all lanes was rejected for exactly the failure it invites — a one-character edit to a docs lane would revoke the Go gate. The three states stay distinguishable at `--check`, since a rewritten command reported as a routine first run is the case the binding exists for; a lane declaring no command is *not applicable* rather than untrusted, because consent binds to a command line and there is none, so the fix is to edit the lane rather than to run `dross trust`; and a renamed lane inherits nothing, or a grant issued for `go` would silently authorize whatever `unit` runs. Doctor reports each lane's state up front rather than letting a stale grant surface mid-commit-gate — and each refused lane is worth exactly one issue, so the ✗ marks in the transcript and the exit code agree.
+
+- `CheckConsent` (state resolution: granted / stale / absent; refuses unread when local.toml is git-tracked) — `internal/cmd/trust.go:121`
+- `Fingerprint` (consent bound to a hash of the consented command, not to the repo) — `internal/cmd/trust.go:105`
+- `execGatedCommands` (the CLOSED set of six gated loop commands) — `internal/cmd/trust.go:417`
+- `requireExecConsent` (the refusal, sited ahead of every spawn of the repo's test command) — `internal/cmd/trust.go:431`
+- `Trust` (`dross trust`, `--check`, `--lane <name>`) — `internal/cmd/trust.go:488`
+- doctor's exec-consent section (granted / stale / absent reported pre-flight, whole-suite and per lane) — `internal/cmd/doctor.go:1211`
 - `TestVerifyRefusesWithoutConsent` (refusal proven to precede exec by a seam that `t.Fatal`s if reached) — `internal/cmd/trust_test.go:293`
 - `TestConsentStates` (four untrusted states as separate subtests, incl. a tracked local.toml) — `internal/cmd/trust_test.go:84`
 - `TestExecutePromptChecksConsent` / `TestPromptsNeverGrantConsentForTheUser` (prompt pre-flight asserted by index; prompts may not self-grant) — `internal/cmd/consent_surface_test.go:133`
+- `LaneConsented` (per-lane fingerprints in local.toml, keyed by lane name; commandless lane is not-applicable) — `internal/cmd/trust.go:280`
+- `findLane` (an unknown lane names what the repo does declare; a lane-less repo says so and names the verb that declares one) — `internal/cmd/trust.go:379`
+- `RevokeLaneConsent` (`dross test lane remove` drops only that lane's grant) — `internal/cmd/trust.go:328`
+- `TestDoctorCountsEachRefusedLane` (each refused lane raises exactly one doctor issue — no ✗ the exit code fails to carry) — `internal/cmd/trust_lane_test.go:493`
 
-_introduced exec-trust-followups · ca15bb2_
+_introduced exec-trust-followups · ca15bb2 · extended test-lane-config · 9ce037a_
 
 ### Findings lifecycle
 
@@ -615,10 +621,11 @@ Keeps the README's command table from lying about the CLI: `newRoot` is extracte
 - `TestReadmeDocumentsBaseTruthSurfaces` (needle guard: `dross local`, `quick_base`, `--base`/`--recover`) — `internal/cmd/readme_doc_test.go:43`
 - `TestNarratedCommandsResolveAgainstTheTree` (fourth sibling: `dross <cmd>` narrated from a Go string literal) — `cmd/dross/main_test.go:217`
 - `TestNarratedCommandsGuardCatchesBogusSubcommands` (the guard's own failure path — top-level resolution alone must not satisfy it) — `cmd/dross/main_test.go:268`
+- `TestReadmeDocumentsTestLanes` (needle guard: the lane verbs, `dross test --files` and the per-lane grant documented in README and options.md) — `internal/cmd/options_docs_test.go:181`
 
 The guard is now a family of four over every surface that can name a command: the README table, `ship.md`, the curated hint table, and — added last — the `dross …` invocations the CLI *prints at the user* from Go string literals. That fourth surface is where the family's own gap was found: a command can be unregistered from `newRoot` while an error message still tells the user to run it, and the resulting "unknown command" pushes them back to the raw git incantation the guard exists to retire. Mutation testing cannot catch it either (gremlins skips `./cmd/dross` as a zero-covered-mutant blind spot), so the guard is proven by hand-mutation: deleting `cmd.Checkout()` leaves the rest of the suite green and turns this one red. It reads **string literals only** — a stale name in a comment misleads a reader, but only a narration string reaches the user.
 
-_introduced readme-truth-pass · extended complete-base-truth · extended completion-state-truth · 1ecde33_
+_introduced readme-truth-pass · extended complete-base-truth · extended completion-state-truth · 1ecde33 · extended test-lane-config · d894a29_
 
 ### Red proof pins
 
@@ -885,12 +892,13 @@ Every surviving mutant a verify run reports carries exactly one state — in-dif
 - `workTreeIdentifier` (verify resolves identity against the working tree) — `internal/cmd/verify.go:760`
 - `TestAttributionCeilingIsReal` (live fixture proving the gremlins NOT-COVERED ceiling the shared category rests on) — `internal/mutation/ceiling_test.go:175`
 - `TestRepoAcceptanceReasonsCiteRealTests` (every acceptance reason names a checkable justification) — `internal/survivor/reasons_repo_test.go:181`
-- `TestSurvivorDrainBacklogClosed` (CI gate: the routed backlog is empty and nothing was re-routed past the phase) — `internal/cmd/survivor_backlog_repo_test.go:237`
+- `TestSurvivorDrainBacklogClosed` (CI gate: the routed backlog is empty and nothing was re-routed past the phase) — `internal/cmd/survivor_backlog_repo_test.go:314`
+- `auditSurvivorBacklog` (routing forward into the active milestone is scheduled disposal; routing past it stays deferral) — `internal/cmd/survivor_backlog_repo_test.go:82`
 - verify.md §2 four-state close-out table + the two drain verbs — `assets/prompts/verify.md:78`
 - `StaleAcceptancesAgainst` (staleness also asks whether the SURVIVOR is gone, not only the source line) — `internal/survivor/stale.go:78`
 - `printLifecycleSummary` (stdout takes the gate count from the same summary verify.toml writes) — `internal/cmd/verify.go:850`
 
-_introduced survivor-lifecycle · a6b366d · extended survivor-drain · 3a5fafd · extended mutation-score-truth · 8995b8c_
+_introduced survivor-lifecycle · a6b366d · extended survivor-drain · 3a5fafd · extended mutation-score-truth · 8995b8c · extended test-lane-config · 46e8486_
 
 ### Task lifecycle
 
@@ -970,14 +978,22 @@ _introduced board-state-map-truth · extended state-json-branch-safety · extend
 
 Stated limit, measured rather than assumed: this buys a **free laptop, not a faster run**. The suite is ~112% CPU — serialized on shelling out to git, not CPU-bound — so the remote's cores buy little and rsync plus a remote compile may make wall-clock worse. No criterion claims a speedup (locked `offload_not_speed`).
 
-- `Test` (`dross test [selector...]`, `--local`) — `internal/cmd/test.go:169`
-- `runTestRemotely` (sync strictly before run; selector reaches the remote unchanged) — `internal/cmd/test.go:288`
-- `remoteFailure` / `ExitCode` (transport, partial transfer and red suite stay distinct to the exit code) — `internal/cmd/test.go:335`
-- `runLocalCommand` (streams through `sh -c`; the line is fenced by `shArgv`) — `internal/cmd/test.go:90`
+**Lanes scope the run to what the task actually touched.** A `[[runtime.test_lane]]` entry names a lane over match globs and gives it its own command, and `dross test --files <paths>` runs only the lanes whose globs claim at least one of those paths — every matching lane, in declaration order, since array position must not become a hidden precedence and a cross-cutting task is genuinely tested on both sides (locked `multi_lane`). The caller supplies the file set (locked `lane_input`): dross never derives it from plan.toml state or the git diff, which keeps it a dispatcher, keeps it usable outside a phase, and makes the resolver testable without a plan. A path matching no lane is *named* rather than silently dropped, and a set matching nothing at all refuses — exit **5** for nothing-matched, **2** for an out-of-tree path — because the failure this exists to prevent is a run that measured nothing reading as green (locked `unmatched_files`). Bare `dross test` is untouched: it still runs `runtime.test_command` byte-identically, so lanes are opt-in and a lane-less repo behaves exactly as it did before (locked `bare_test_run`). Each lane prints its name and the exact command line ahead of its own output, so the transcript names the runner that produced each result, and the worst outcome across lanes wins the exit code. Lanes are declared through `dross test lane add|list|remove` — never by hand-editing project.toml — and removing one drops its [consent grant](#exec-consent-gate) with it.
+
+- `Test` (`dross test [selector...]`, `--files`, `--local`) — `internal/cmd/test.go:240`
+- `runTestRemotely` (sync strictly before run; selector reaches the remote unchanged) — `internal/cmd/test.go:585`
+- `remoteFailure` / `ExitCode` (transport, partial transfer and red suite stay distinct to the exit code) — `internal/cmd/test.go:649`
+- `runLocalCommand` (streams through `sh -c`; the line is fenced by `shArgv`) — `internal/cmd/test.go:161`
 - `TestTestStreamsOutput` (streaming proven by write timing, not by inspection) — `internal/cmd/test_test.go:216`
 - `TestPromptsRunDrossTest` (the prompts run it, and no prompt reintroduces the raw interpolation) — `internal/cmd/prompt_test_command_test.go:40`
+- `project.TestLane` (the `[[runtime.test_lane]]` schema; validate refuses a lane missing name, match or command and names the offender) — `internal/project/project.go:98`
+- `testlane.Select` (pure path-to-lane resolver: ordered deduped lanes, with unmatched and out-of-tree paths as separate categories) — `internal/testlane/match.go:58`
+- `runTestLanes` (`--files` resolution and the two refusals: out-of-tree exit 2, nothing-matched exit 5) — `internal/cmd/test.go:338`
+- `runOneLane` (declaration order, per-lane consent, header before output, worst outcome wins the exit code) — `internal/cmd/test.go:456`
+- `testLane` (`dross test lane add|list|remove`; a removed lane's grant goes with it) — `internal/cmd/test_lane.go:28`
+- `TestExecutePromptPassesTaskFilesToTest` (execute's pre-commit gate scopes itself to the task's own plan.toml files) — `internal/cmd/prompt_test_command_test.go:126`
 
-_introduced remote-test-runner · 3055f70_
+_introduced remote-test-runner · 3055f70 · extended test-lane-config · f01ece7_
 
 ### Verification
 
