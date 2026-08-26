@@ -1,0 +1,83 @@
+[phase]
+  id = "lane-selector-translation"
+  title = "lane-selector-translation"
+  milestone = "v1.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "A [[runtime.test_lane]] entry may declare how its matched paths become a selector; dross validate rejects an unrecognised selector style and names the offending lane."
+
+[[criteria]]
+  id = "c-2"
+  text = "When a lane declares a selector style, `dross test --files` runs that lane's command with a selector derived from the paths that matched it — a task touching one file produces a scoped run rather than the lane's whole suite — and the lane header prints the exact line that ran, selector included."
+
+[[criteria]]
+  id = "c-3"
+  text = "A lane declaring no selector style runs its command untouched and byte-identical to today, so selector translation is opt-in per lane."
+
+[[criteria]]
+  id = "c-4"
+  text = "A lane's selector is derived only from the paths that matched that lane — paths belonging to another lane, unmatched paths and out-of-tree paths never appear in it."
+
+[[criteria]]
+  id = "c-5"
+  text = "A lane whose selector collects no tests is reported as a selector miss naming the lane and the selector and does not fail the gate; a run where every matched lane was a selector miss still exits non-zero rather than reporting a green run that measured nothing."
+
+[[criteria]]
+  id = "c-6"
+  text = "A lane's consent grant still covers its declared command line — appending a derived selector neither invalidates an existing grant nor lets an ungranted lane run."
+
+[[criteria]]
+  id = "c-7"
+  text = "A lane's selector style is declared and inspected through the dross CLI — `dross test lane add` accepts it, `dross test lane list` prints it — never by hand-editing project.toml."
+
+[[decisions]]
+  key = "selector_styles"
+  choice = "A closed enum of selector shapes — `path` (each matched path), `dir` (its parent directory), `go-package` (./<dir>/...) — with the field omitted meaning no selector. No free-form template."
+  why = "A template is a second command language dross would have to fence and consent for; a closed set validates exactly, names its refusals, and reuses internal/configenum. The styles name selector shapes, not runners, so the milestone's no-per-framework-engine non-goal holds."
+  locked = true
+
+[[decisions]]
+  key = "selector_derivation"
+  choice = "Matched paths are deduplicated and sorted lexicographically before translation; each style maps deterministically and repeated directories collapse to one selector argument."
+  why = "The derived line lands in the transcript beside the consented command; a stable, order-independent line diffs cleanly and makes the tests exact rather than argv-order-dependent."
+  locked = true
+
+[[decisions]]
+  key = "selector_consent"
+  choice = "The per-lane grant continues to cover the lane's declared `command` only; the derived selector is appended and shell-quoted, exactly as testCommandLine already does for `dross test <selector>` against runtime.test_command."
+  why = "The precedent already exists on the non-lane path; selector arguments are machine-derived repo-relative paths, not user text. Re-fingerprinting per file set would refuse practically every scoped run."
+  locked = true
+
+[[decisions]]
+  key = "missing_paths"
+  choice = "A matched path that no longer exists on disk is dropped from the selector before spawn; if that empties a lane's selector, the lane is a selector miss and never spawns."
+  why = "`go test ./gone/...` is a hard runner error, so a task that deleted a file would read as a failing gate — the exact confusion c-5 exists to prevent."
+  locked = true
+
+[[decisions]]
+  key = "empty_detection"
+  choice = "A lane may declare the exit codes that mean 'collected no tests' (pytest's 5, for example); with none declared, only the missing_paths check can produce a selector miss. No matching against runner output."
+  why = "Keeps detection declarative and framework-agnostic, per the milestone's lanes-are-declared-not-inferred non-goal; scraping stdout would make dross track every runner's wording."
+  locked = true
+
+[[decisions]]
+  key = "lane_edit_surface"
+  choice = "Selector style and empty-exit codes are flags on `dross test lane add` and fields in `dross test lane list`; editing a lane stays remove-then-re-add."
+  why = "Matches the existing duplicate-name refusal and avoids inventing a lane edit verb inside a phase about selectors."
+  locked = true
+
+[[deferred]]
+  text = "A free-form selector template for runners the closed enum cannot shape (cargo module paths, ctest -R regexes)."
+  why = "Needs a fence and consent story of its own; the enum covers the author's stacks first."
+  target = "lane-selector-custom"
+
+[[deferred]]
+  text = "Auto-deriving a runner's 'collected nothing' exit codes from its command line."
+  why = "Inference, against the milestone's declared-not-inferred non-goal."
+  target = "lane-selector-custom"
+
+[[deferred]]
+  text = "Source-to-test path mapping (editing src/foo.ts running test/foo.test.ts) where the runner has no --related / --findRelatedTests of its own."
+  why = "That is a per-framework mapping engine — the milestone's third non-goal."
+  target = "lane-selector-custom"
