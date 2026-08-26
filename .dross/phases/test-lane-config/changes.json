@@ -1,7 +1,9 @@
 {
   "phase": "test-lane-config",
+  "pr": 107,
   "base": "milestone/v1.6",
   "base_commit": "76b14167a8436f420575a8c46852fd0b136bb8db",
+  "status": "shipped",
   "tasks": {
     "t-1": {
       "files": [
