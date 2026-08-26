@@ -41,8 +41,13 @@
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
+    "slug:lane-prepare-step": "DRO-204",
+    "slug:lane-remote-locality": "DRO-205",
+    "slug:lane-selector-translation": "DRO-203",
+    "slug:remote-toolchain-install": "DRO-206",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
+    "someday:id:0323e4284012842f": "DRO-208",
     "someday:id:053bcdb6ddc5f57b": "DRO-162",
     "someday:id:06ca9b2e97abcb78": "DRO-87",
     "someday:id:0ad901405561a187": "DRO-116",
@@ -97,6 +102,7 @@
     "someday:id:9ae1aad86e4bf770": "DRO-56",
     "someday:id:9fa4386fc04774d6": "DRO-112",
     "someday:id:a0c922d44af899fc": "DRO-78",
+    "someday:id:a1eca47a8213daa2": "DRO-207",
     "someday:id:a3485cb4d13bd717": "DRO-99",
     "someday:id:a3bc77dbd1f99621": "DRO-88",
     "someday:id:a466b845ac09e62e": "DRO-103",
@@ -368,57 +374,57 @@
     "test-lane-config/t-1": {
       "issue": "DRO-192",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-10": {
       "issue": "DRO-202",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-11": {
       "issue": "DRO-201",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-2": {
       "issue": "DRO-193",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-3": {
       "issue": "DRO-195",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-4": {
       "issue": "DRO-194",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-5": {
       "issue": "DRO-196",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-6": {
       "issue": "DRO-197",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-7": {
       "issue": "DRO-199",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-8": {
       "issue": "DRO-198",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-9": {
       "issue": "DRO-200",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     }
   },
   "dismissed": [
