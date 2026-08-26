@@ -224,6 +224,7 @@ func laneProblems(p *project.Project) []string {
 		if strings.TrimSpace(lane.Command) == "" {
 			problems = append(problems, fmt.Sprintf("project.toml: %s has no command — a lane with no command line has nothing to run and nothing to consent to", label))
 		}
+		problems = append(problems, laneSelectorProblems(label, lane)...)
 		for _, pattern := range lane.Match {
 			if err := checkGlob(pattern); err != nil {
 				// Named by pattern as well as by lane: a broken glob
@@ -233,6 +234,45 @@ func laneProblems(p *project.Project) []string {
 				problems = append(problems, fmt.Sprintf("project.toml: %s match pattern %q does not compile: %v", label, pattern, err))
 			}
 		}
+	}
+	return problems
+}
+
+// laneSelectorProblems reports the faults in one lane's opt-in selector fields.
+//
+// It is split out of laneProblems so the selector rules read as one paragraph:
+// a style dross cannot translate, an exit code that would mean the wrong thing,
+// and a code declared on a lane that can never produce it.
+func laneSelectorProblems(label string, lane project.TestLane) []string {
+	var problems []string
+	// The empty case is guarded here rather than left to Has: SelectorStyles
+	// has no code default, so Has("") is false, and an omitted selector is the
+	// pre-selector behaviour every existing lane already relies on.
+	if strings.TrimSpace(lane.Selector) != "" && !configenum.SelectorStyles.Has(lane.Selector) {
+		problems = append(problems, fmt.Sprintf("project.toml: %s selector = %q is not a selector style — expected %s", label, lane.Selector, configenum.SelectorStyles.List()))
+	}
+	for _, code := range lane.EmptyExit {
+		switch {
+		case code == 0:
+			// A lane claiming 0 means "collected nothing" would report every
+			// green run as a miss, which is the one outcome that must never
+			// be silently swallowed.
+			problems = append(problems, fmt.Sprintf("project.toml: %s empty_exit lists 0 — 0 is the runner's success code, so a lane declaring it would report every passing run as collecting no tests", label))
+		case code == 255:
+			// internal/remote spends 255 on ssh transport failure, so a lane
+			// claiming it would report an unreachable host as "no tests" —
+			// a run that never happened dressed up as a run that found none.
+			problems = append(problems, fmt.Sprintf("project.toml: %s empty_exit lists 255 — 255 is ssh's transport-failure code, so a lane declaring it would report an unreachable host as collecting no tests", label))
+		case code < 0 || code > 255:
+			problems = append(problems, fmt.Sprintf("project.toml: %s empty_exit lists %d — a process exit code is 0-255, so no runner can ever return it", label, code))
+		}
+	}
+	if len(lane.EmptyExit) > 0 && strings.TrimSpace(lane.Selector) == "" {
+		// Not a reading of the locked empty_detection decision but an addition
+		// to it: without a selector the lane always runs its whole suite, so
+		// the declared code can never fire and the user is left believing they
+		// configured something they did not.
+		problems = append(problems, fmt.Sprintf("project.toml: %s declares empty_exit with no selector — an unscoped lane runs its whole suite, so the code could never fire", label))
 	}
 	return problems
 }

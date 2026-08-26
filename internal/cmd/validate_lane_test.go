@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/configenum"
 )
 
 // laneFixture is a repo that validates clean, ready for a lane block to be
@@ -190,5 +192,154 @@ func TestValidateIgnoresARepoWithNoLanes(t *testing.T) {
 	}
 	if strings.Contains(out, "test_lane") {
 		t.Errorf("a lane-less repo must produce no lane problems, got:\n%s", out)
+	}
+}
+
+// TestValidateNamesLaneWithUnknownSelector: a selector style dross cannot
+// translate is a lane that would either spawn unscoped or not at all, and the
+// message has to name the lane so a project.toml carrying several does not send
+// the user reading all of them.
+func TestValidateNamesLaneWithUnknownSelector(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+selector = "packages"`)
+
+	out, err := validateOutput(t)
+	if err == nil {
+		t.Fatalf("validate accepted selector = \"packages\":\n%s", out)
+	}
+	if !strings.Contains(out, `runtime.test_lane "go"`) {
+		t.Errorf("the refusal must name the lane, got:\n%s", out)
+	}
+	// Rendered from the Set, never typed here as a literal: a style added to
+	// SelectorStyles must reach this message without anyone editing it.
+	if !strings.Contains(out, configenum.SelectorStyles.List()) {
+		t.Errorf("the refusal must name the accepted styles (%s), got:\n%s", configenum.SelectorStyles.List(), out)
+	}
+}
+
+// TestValidateAcceptsAbsentAndDeclaredSelectors: the omitted selector is the
+// pre-selector behaviour every existing lane relies on, so it must be as valid
+// as a declared one. Set.Has("") is false for SelectorStyles — it has no code
+// default — so an implementation that forwards straight to Has fails here.
+func TestValidateAcceptsAbsentAndDeclaredSelectors(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "docs"
+match = ["docs/"]
+command = "true"
+
+[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+selector = "go-package"`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Fatalf("validate rejected an absent and a declared selector: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "selector") {
+		t.Errorf("neither lane may produce a selector problem, got:\n%s", out)
+	}
+}
+
+// TestValidateNormalizesSelectorCase: the value goes through
+// configenum.Normalize like every other enumerated field, so a hand-edited
+// project.toml carrying GO-PACKAGE validates. A hand-rolled == comparison
+// against the literal fails here.
+func TestValidateNormalizesSelectorCase(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+selector = "GO-PACKAGE"`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Fatalf("validate rejected selector = \"GO-PACKAGE\": %v\n%s", err, out)
+	}
+}
+
+// TestValidateRejectsUnusableEmptyExitCodes: each of these codes already means
+// something else, so a lane declaring one would relabel a different outcome as
+// "no tests collected" — the exact confusion the miss verdict exists to
+// prevent.
+func TestValidateRejectsUnusableEmptyExitCodes(t *testing.T) {
+	cases := []struct {
+		name   string
+		code   string
+		needle string
+	}{
+		// 0 is the runner's success code: every green run would read as a miss.
+		{"success", "0", "success code"},
+		// remote.Classify spends 255 on ssh transport failure: an unreachable
+		// host would read as a lane that found no tests.
+		{"ssh-transport", "255", "transport-failure"},
+		// Outside the byte a process can exit with, so nothing can return it.
+		{"out-of-range", "300", "0-255"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := laneFixture(t)
+			appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+selector = "go-package"
+empty_exit = [`+tc.code+`]`)
+
+			out, err := validateOutput(t)
+			if err == nil {
+				t.Fatalf("validate accepted empty_exit = [%s]:\n%s", tc.code, out)
+			}
+			if !strings.Contains(out, `runtime.test_lane "go"`) {
+				t.Errorf("the refusal must name the lane, got:\n%s", out)
+			}
+			if !strings.Contains(out, tc.needle) {
+				t.Errorf("the refusal must say why %s is unusable (%q), got:\n%s", tc.code, tc.needle, out)
+			}
+		})
+	}
+}
+
+// TestValidateRejectsEmptyExitWithoutSelector: an unscoped lane runs its whole
+// suite, so a code declared on it can never fire. Accepting it silently would
+// leave the user believing they configured a miss they will never see.
+func TestValidateRejectsEmptyExitWithoutSelector(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+empty_exit = [5]`)
+
+	out, err := validateOutput(t)
+	if err == nil {
+		t.Fatalf("validate accepted empty_exit with no selector:\n%s", out)
+	}
+	if !strings.Contains(out, `runtime.test_lane "go"`) || !strings.Contains(out, "no selector") {
+		t.Errorf("the refusal must name the lane and the missing selector, got:\n%s", out)
+	}
+}
+
+// TestValidateAcceptsAUsableEmptyExitCode: 5 is pytest's "collected no tests",
+// declared on a scoped lane — the combination the feature exists for.
+func TestValidateAcceptsAUsableEmptyExitCode(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "py"
+match = ["**/*.py"]
+command = "pytest"
+selector = "path"
+empty_exit = [5]`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Fatalf("validate rejected a scoped lane declaring empty_exit = [5]: %v\n%s", err, out)
 	}
 }
