@@ -212,6 +212,10 @@ var enumScanSites = []scanSite{
 	// jira maps every milestone to a fixVersion, so its switch is legitimately
 	// two literals: the empty default arm and "version".
 	{"forge.JiraClient.EnsureMilestoneEntity", "internal/forge/jira.go", "EnsureMilestoneEntity", 2, true},
+	// The selector styles. minCases is 3 — path, dir and go-package; the ""
+	// arm is the no-selector lane and normalizedSet drops it, so it is not
+	// counted here either.
+	{"testlane.Derive", "internal/testlane/selector.go", "Derive", 3, true},
 }
 
 // scanFor extracts the named site's switch, failing the test rather than
@@ -364,6 +368,16 @@ func TestMilestoneModeDispatchMatchesConfigenum(t *testing.T) {
 	}
 	assertSetEqual(t, "forge.JiraClient.EnsureMilestoneEntity vs MilestoneModesFor(jira)",
 		jira, modes.Values())
+}
+
+// The selector styles are the one enum whose two sides are a config field and a
+// pure translation function, with no client object between them. A style added
+// to SelectorStyles that Derive cannot shape passes validate and then errors at
+// the run site; a case added to Derive that SelectorStyles does not carry is a
+// shape validate refuses to let anyone declare. Both directions fail here.
+func TestSelectorDispatchMatchesSelectorStyles(t *testing.T) {
+	assertSetEqual(t, "testlane.Derive",
+		scanFor(t, "testlane.Derive").cases, configenum.SelectorStyles.Values())
 }
 
 // Without this, every guard above could pass vacuously: an extraction that
