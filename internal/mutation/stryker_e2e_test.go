@@ -140,3 +140,106 @@ func keysOf[V any](m map[string]V) []string {
 	}
 	return out
 }
+
+// bracketFixturePath is the fixture whose DIRECTORY NAME is the whole point:
+// square brackets are glob metacharacters, so an unescaped --mutate entry
+// naming it matches nothing and the file is silently dropped from the run.
+//
+// Written workdir-relative and with forward slashes because that is the form
+// that lands in the argv and in Stryker's report keys.
+const bracketFixturePath = "src/[id]/handler.ts"
+
+// strykerDropWarning is @stryker-mutator/core's own text when a --mutate glob
+// resolves to no file at all (src/fs/project-reader.ts). It is the ONLY signal
+// the tool emits for a silently-dropped path — the run then reports a score
+// over whatever survived the drop and looks entirely healthy.
+const strykerDropWarning = "did not result in any files"
+
+// TestStrykerInstrumentsBracketPaths is c-3, and it is the acceptance signal
+// for the escaping fix — not the unit rows next door.
+//
+// The unit tests assert the argv dross BUILDS. Only this one asserts the argv
+// Stryker ACCEPTS: it drives the real adapter against a real bracket-shaped
+// path and requires BOTH halves of the criterion — the file appears in the
+// report with mutants, AND the run logs no drop warning for it. Either half
+// alone is satisfiable by a broken fix (a report can carry the file with zero
+// mutants; a warning can be absent because the pattern was never passed).
+func TestStrykerInstrumentsBracketPaths(t *testing.T) {
+	if reason := e2eSkipReason(); reason != "" {
+		// The same fatal branch TestStrykerRunsEndToEnd carries, and for the
+		// same reason: this is c-3's only acceptance signal, so a machine that
+		// silently skips it reports the same green as one that ran it. The
+		// check has to be inline — e2eSkipReason() returns prose and does not
+		// itself know whether skipping is allowed.
+		if os.Getenv("DROSS_REQUIRE_E2E") != "" {
+			t.Fatalf("DROSS_REQUIRE_E2E is set but the end-to-end run cannot proceed: %s", reason)
+		}
+		t.Skip(reason)
+	}
+
+	root, err := filepath.Abs(tsFixtureDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Stryker{ProjectRoot: root}
+
+	out, report, runErr := captureStderr(t, func() (*Report, error) {
+		return s.Run([]string{bracketFixturePath})
+	})
+	if runErr != nil {
+		t.Fatalf("the adapter could not run stryker against a bracket path: %v\n--- tool output ---\n%s", runErr, out)
+	}
+
+	// Half one: the file was actually instrumented. A report that parses but
+	// attributes nothing to this path is exactly what the unescaped form
+	// produces, and it is indistinguishable from success at the counts level.
+	var mutants int
+	var seen []string
+	for path, f := range report.Files {
+		seen = append(seen, path)
+		if filepath.ToSlash(path) == bracketFixturePath {
+			// NotCovered is a SUBSET of Survived (adapter.go), so it is
+			// deliberately not added in — the sum would double-count it.
+			mutants = f.Killed + f.Survived + f.Timeout + f.Errors
+		}
+	}
+	if mutants == 0 {
+		t.Errorf("no mutants are attributed to %q — the bracket path was dropped from the run; report files = %v", bracketFixturePath, seen)
+	}
+
+	// Half two: and Stryker did not tell us it was dropping it. c-3 requires
+	// both, because a fix that widened the glob (say, to src/**) would satisfy
+	// half one while the specific path still matched nothing.
+	if strings.Contains(out, strykerDropWarning) {
+		t.Errorf("stryker reported dropping a --mutate glob; the escaped form should resolve.\n--- tool output ---\n%s", out)
+	}
+}
+
+// captureStderr runs fn with os.Stderr redirected to a temp file and returns
+// what the tool wrote.
+//
+// The adapter streams the tool's stdout and stderr straight to os.Stderr and
+// captures neither (stryker.go), so reading the process global is the only way
+// to see the tool's own output from a test. Restored on the way out.
+func captureStderr(t *testing.T, fn func() (*Report, error)) (string, *Report, error) {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "stderr.log")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := os.Stderr
+	os.Stderr = f
+	report, runErr := fn()
+	os.Stderr = saved
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b), report, runErr
+}
