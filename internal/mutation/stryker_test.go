@@ -269,7 +269,7 @@ func TestDispatch(t *testing.T) {
 // Node — the invocation must use @stryker-mutator/core.
 func TestStrykerRunArgsScopedPackage(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo"}
-	args, err := s.runArgs([]string{"src/a.ts", "src/b.ts"})
+	args, _, err := s.runArgs([]string{"src/a.ts", "src/b.ts"})
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestStrykerRunArgsScopedPackage(t *testing.T) {
 func TestStrykerWorkdirMonorepo(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
 
-	args, err := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"})
+	args, _, err := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"})
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -366,7 +366,7 @@ func TestStrykerPinPatternRejectsLooseSpecs(t *testing.T) {
 // a developer machine — the shape of the 2025–2026 npm compromises.
 func TestStrykerRunArgsPinned(t *testing.T) {
 	s := &Stryker{ProjectRoot: t.TempDir()}
-	args, err := s.runArgs([]string{"src/api/tags.ts"})
+	args, _, err := s.runArgs([]string{"src/api/tags.ts"})
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -540,5 +540,148 @@ func TestStrykerRunUnknownStatusCountsAsError(t *testing.T) {
 	want := map[string]FileStat{"src/a.ts": {Errors: 1}}
 	if !reflect.DeepEqual(rep.Files, want) {
 		t.Errorf("per-file rows:\n got %+v\nwant %+v", rep.Files, want)
+	}
+}
+
+// TestStrykerMutateEscapesBracketPaths pins the escape form.
+//
+// Square brackets are the one metacharacter a real --mutate list carries all
+// the time: SvelteKit names every dynamic route segment with them. Handed to
+// Stryker raw, "[id]" is a minimatch character class, the path matches nothing,
+// and the file is dropped from the run with a warning nobody reads while the
+// score comes back looking complete.
+func TestStrykerMutateEscapesBracketPaths(t *testing.T) {
+	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
+
+	args, requested, err := s.runArgs([]string{"web/src/routes/recipes/[id]/+page.server.ts"})
+	if err != nil {
+		t.Fatalf("runArgs: %v", err)
+	}
+	joined := strings.Join(args, " ")
+
+	const want = "src/routes/recipes/[[]id[]]/@(+page.server.ts)"
+	if !strings.Contains(joined, "--mutate "+want) {
+		t.Errorf("--mutate is not the bracket-expression form:\n got %v\nwant it to contain %q", args, want)
+	}
+
+	// The obvious fix, asserted ABSENT. Stryker builds its FileMatcher with
+	// normalizeFileName(path.resolve(pattern)), and normalizeFileName is
+	// replace(/\\/g, "/") — so every backslash is a forward slash before
+	// minimatch sees the pattern and `\[id\]` matches nothing at all. A future
+	// reader "simplifying" the escape to backslashes would reintroduce the bug
+	// in a form that looks more correct than the fix.
+	if strings.Contains(joined, `\[`) || strings.Contains(joined, `\]`) {
+		t.Errorf("backslash escaping is wrong here — stryker normalises every \\ to / before matching: %v", args)
+	}
+
+	// The unescaped request list is what a report-key diff has to compare
+	// against: report keys come back in the REAL path form, so a caller handed
+	// only the argv would find every bracket path missing.
+	if len(requested) != 1 || requested[0] != "src/routes/recipes/[id]/+page.server.ts" {
+		t.Errorf("requested list must be trimmed but UNESCAPED, got %q", requested)
+	}
+}
+
+// TestStrykerEscapeIsSinglePass is the regression row for the implementation
+// shape, not the interface. Two sequential ReplaceAll calls (a "[" pass then a
+// "]" pass) look equivalent and are not: the second pass rewrites the "]" the
+// first pass just emitted. Nested brackets are where that shows up.
+func TestStrykerEscapeIsSinglePass(t *testing.T) {
+	cases := []struct{ in, want string }{
+		// The nesting case. A two-pass replace corrupts this one.
+		{"[[opt]]", "@([[][[]opt[]][]])"},
+		{"[id]", "@([[]id[]])"},
+		{"src/routes/(app)/[...catchall]/+page.ts", "src/routes/(app)/[[]...catchall[]]/@(+page.ts)"},
+		// Brackets in the FILENAME rather than a directory: the wrapper still
+		// goes around the last segment, so it contains the escaped brackets.
+		{"src/routes/[id].ts", "src/routes/@([[]id[]].ts)"},
+		// Parentheses are literal to minimatch — a SvelteKit group like
+		// (app) needs no escaping, and escaping it would be over-reach.
+		{"src/routes/(app)/+page.ts", "src/routes/(app)/+page.ts"},
+		// Untouched: the overwhelmingly common case must be byte-identical.
+		{"src/lib/utils/format.ts", "src/lib/utils/format.ts"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := escapeGlobMeta(tc.in); got != tc.want {
+			t.Errorf("escapeGlobMeta(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestStrykerPlainPathsAreUnchanged is the golden row that reds if the escape
+// over-reaches. Nearly every --mutate entry in a real run is bracket-free, and
+// a change to those is a change to every existing measurement.
+func TestStrykerPlainPathsAreUnchanged(t *testing.T) {
+	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
+	args, requested, err := s.runArgs([]string{"web/src/lib/utils/format.ts", "web/src/lib/server/tier.ts"})
+	if err != nil {
+		t.Fatalf("runArgs: %v", err)
+	}
+	const want = "--mutate src/lib/utils/format.ts,src/lib/server/tier.ts"
+	if !strings.Contains(strings.Join(args, " "), want) {
+		t.Errorf("plain paths must be emitted byte-identical to before escaping existed:\n got %v\nwant %q", args, want)
+	}
+	// And with no brackets anywhere, the two lists are the same strings.
+	if strings.Join(requested, ",") != "src/lib/utils/format.ts,src/lib/server/tier.ts" {
+		t.Errorf("requested list drifted from the argv on a bracket-free input: %q", requested)
+	}
+}
+
+// TestStrykerEscapeRunsAfterTheFence: the escape must not become a way past
+// argfence. It runs last, on the already-fenced list, so the fence still sees
+// the string it is meant to judge.
+//
+// The existing refusal rows in argv_test.go cover the leading-dash case itself;
+// this one pins the ORDER, which is what could silently change.
+func TestStrykerEscapeRunsAfterTheFence(t *testing.T) {
+	s := &Stryker{Workdir: "web"}
+
+	// A dash entry that only becomes one after the workdir trim is still
+	// refused — escaping happens after both, so it cannot rescue it.
+	if _, _, err := s.runArgs([]string{"web/-rf.ts"}); err == nil {
+		t.Error("escaping smuggled a leading-dash path past the fence")
+	}
+	// And a bracket path is not refused: escaping never introduces a dash, so
+	// the fence must have nothing to say about it.
+	if _, _, err := s.runArgs([]string{"web/src/routes/[id]/+page.ts"}); err != nil {
+		t.Errorf("a bracket path was refused by the fence: %v", err)
+	}
+}
+
+// TestStrykerEscapeSurvivesNpmArgQuoting pins the SECOND rewrite layer, and it
+// is the one a reader is most likely to undo as redundant.
+//
+// dross invokes stryker through npx, and npm runs the command via `sh -c`
+// after escaping each argument with @npmcli/promise-spawn's sh(), which quotes
+// only an argument matching /[\t\n\r "#$&'()*;<>?\\`|~]/. Brackets are absent
+// from that set, so a bracket-only path reaches the shell UNQUOTED and the
+// shell glob-expands it straight back to the real on-disk filename — undoing
+// the minimatch escape exactly when the file exists, which is the only case
+// that matters. Measured against npm 11.14.1 on 2026-08-26.
+//
+// The extglob wrapper is what defeats that: its parentheses ARE in npm's
+// quoting set. Assert the property (a character npm quotes on) rather than the
+// literal "@(", so the row survives a different but equally valid wrapper.
+func TestStrykerEscapeSurvivesNpmArgQuoting(t *testing.T) {
+	// npm's own trigger set, transcribed from promise-spawn/lib/escape.js.
+	const npmQuoteTriggers = "\t\n\r \"#$&'()*;<>?\\`|~"
+
+	for _, in := range []string{
+		"src/routes/recipes/[id]/+page.server.ts",
+		"src/routes/[id].ts",
+		"[id].ts",
+	} {
+		got := escapeGlobMeta(in)
+		if !strings.ContainsAny(got, npmQuoteTriggers) {
+			t.Errorf("escapeGlobMeta(%q) = %q — contains nothing npm quotes on, so `sh -c` will glob it back to the raw path and the escape is a no-op", in, got)
+		}
+	}
+
+	// And the guard on the other side: a bracket-free path must NOT acquire a
+	// wrapper just to satisfy the rule above. It needs no protection because
+	// neither layer misbehaves on it.
+	if got := escapeGlobMeta("src/lib/utils/format.ts"); got != "src/lib/utils/format.ts" {
+		t.Errorf("a bracket-free path was rewritten: %q", got)
 	}
 }
