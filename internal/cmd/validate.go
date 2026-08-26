@@ -54,6 +54,7 @@ func Validate() *cobra.Command {
 					problems = append(problems, fmt.Sprintf("project.toml: runtime.mode is empty (%s)", configenum.RuntimeModes.List()))
 				}
 				problems = append(problems, enumProblems(p)...)
+				problems = append(problems, laneProblems(p)...)
 			}
 
 			// state.json
@@ -183,6 +184,76 @@ func enumProblems(p *project.Project) []string {
 		}
 	}
 	return problems
+}
+
+// laneProblems reports every structural fault in the [[runtime.test_lane]]
+// blocks. A lane is three required parts and nothing about the toml decoder
+// enforces any of them: a missing key decodes to a zero value, so an
+// unvalidated lane is a lane that fails later, at the moment a gate wanted to
+// run something.
+//
+// Each fault is reported on its own line, against the lane it belongs to, so a
+// project.toml with several half-written lanes tells the user everything that
+// is wrong in one pass rather than one fault per run.
+//
+// Nothing is reported for a repo declaring no lane: lanes are opt-in (the
+// bare_test_run decision), and a validator that invented a problem for every
+// existing repo would make an opt-in feature mandatory by nagging.
+func laneProblems(p *project.Project) []string {
+	var problems []string
+	seen := map[string]bool{}
+	for i, lane := range p.Runtime.TestLane {
+		label := laneLabel(i, lane.Name)
+		if strings.TrimSpace(lane.Name) == "" {
+			// Reported by ordinal, never as the empty string: the consent
+			// store is keyed by lane name, so a nameless lane can never be
+			// granted, and `runtime.test_lane ""` would not tell the user
+			// which of several blocks to go and fix.
+			problems = append(problems, fmt.Sprintf("project.toml: %s has no name — a lane is granted consent by name, so every lane needs one", label))
+		} else if seen[lane.Name] {
+			// Two lanes under one name collapse to a single entry in the
+			// name-keyed grant store, so one lane's grant would silently
+			// authorize the other lane's command.
+			problems = append(problems, fmt.Sprintf("project.toml: %s is declared more than once — lane names key the machine-local consent store, so they must be unique", label))
+		} else {
+			seen[lane.Name] = true
+		}
+		if len(lane.Match) == 0 {
+			problems = append(problems, fmt.Sprintf("project.toml: %s has an empty match list — a lane matching no path can never be selected", label))
+		}
+		if strings.TrimSpace(lane.Command) == "" {
+			problems = append(problems, fmt.Sprintf("project.toml: %s has no command — a lane with no command line has nothing to run and nothing to consent to", label))
+		}
+		for _, pattern := range lane.Match {
+			if err := checkGlob(pattern); err != nil {
+				// Named by pattern as well as by lane: a broken glob
+				// otherwise presents as a file set that never matches, which
+				// reads as a file-set problem rather than a lane that cannot
+				// compile.
+				problems = append(problems, fmt.Sprintf("project.toml: %s match pattern %q does not compile: %v", label, pattern, err))
+			}
+		}
+	}
+	return problems
+}
+
+// laneLabel names a lane for a problem line: by name when it has one, by
+// ordinal when it does not, so every problem points at a specific block.
+func laneLabel(i int, name string) string {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Sprintf("runtime.test_lane[%d]", i)
+	}
+	return fmt.Sprintf("runtime.test_lane %q", name)
+}
+
+// checkGlob reports whether one lane pattern is syntactically well-formed.
+//
+// filepath.Match validates the WHOLE pattern even once the comparison has
+// failed, so matching against a throwaway name is a syntax check: only
+// ErrBadPattern comes back, a plain non-match returns nil.
+func checkGlob(pattern string) error {
+	_, err := filepath.Match(pattern, "x")
+	return err
 }
 
 // danglingTargets reports every [[deferred]] target in one source that names no

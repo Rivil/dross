@@ -115,3 +115,43 @@ func TestDoctorReportsOneRemoteSection(t *testing.T) {
 		t.Error("doctor's grant hint still names the deprecated verb")
 	}
 }
+
+// TestExecutePromptPassesTaskFilesToTest is c-7: the pre-commit gate has to
+// scope itself to the task's OWN declared files, not to the whole repo.
+//
+// It reads assets/prompts/execute.md directly rather than the installed copy
+// under ~/.claude. A prompt edit is not live until `make install` re-links it
+// (rule r-01), so a guard reading the installed symlink would pass on a
+// developer's machine and say nothing about what the repo actually ships.
+func TestExecutePromptPassesTaskFilesToTest(t *testing.T) {
+	body := promptBody(t, "execute.md")
+	if !strings.Contains(body, "dross test --files") {
+		t.Error("execute.md's test gate does not run `dross test --files` — the gate reverted to running the whole suite for every task")
+	}
+	if !strings.Contains(body, "task.files") {
+		t.Error("execute.md does not name task.files as the source of the --files argument — an agent left to choose the paths will reach for the git diff, which covers work the plan never declared")
+	}
+}
+
+// TestExecutePromptDocumentsUnmatchedExit: an agent that reads a non-zero exit
+// it has never been told about has two options, and one of them is to commit
+// anyway. Every code the gate can return must be named with its meaning.
+//
+// The "did not run" phrasing is asserted as well as the numbers, because the
+// numbers alone do not carry the distinction that matters: 1 is a verdict about
+// the code and the rest are the absence of one.
+func TestExecutePromptDocumentsUnmatchedExit(t *testing.T) {
+	body := promptBody(t, "execute.md")
+	for _, want := range []string{
+		"**1**", "**2**", "**3**", "**4**", "**5**", "**6**",
+		"nothing was measured",
+		"dross trust --lane",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("execute.md does not document %q in its exit-status list", want)
+		}
+	}
+	if !strings.Contains(body, "the run did not happen") {
+		t.Error("execute.md does not say the non-verdict exits mean the run did not happen — without it, a 5 or a 6 reads as a test failure and sends the agent hunting a bug in code that never executed")
+	}
+}

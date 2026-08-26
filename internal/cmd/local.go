@@ -110,6 +110,28 @@ type localStore struct {
 	// <name>` writes it, and it prints the line first.
 	TrustedRunCommands string `toml:"trusted_run_commands,omitempty"`
 
+	// TrustedLaneCommands maps a [[runtime.test_lane]] name to sha256 of that
+	// lane's command line — the per-lane half of the exec-consent gate.
+	//
+	// A MAP keyed by lane name, not a comma-separated fingerprint set like the
+	// replay and run grants beside it. The set shape answers "has this exact
+	// line been trusted?", which is enough when the lines are independent. A
+	// lane's grant has to answer a second question the set cannot: WHICH lane
+	// went stale. With an aggregate or an anonymous set, a one-character edit
+	// to a docs lane's command is indistinguishable from an edit to the Go
+	// lane's, so the gate can only refuse the whole run — and a docs typo that
+	// blocks the Go test gate is a gate people route around. Keyed by name,
+	// one stale lane refuses only itself (the locked lane_consent decision).
+	//
+	// The name is the key, so a RENAMED lane inherits nothing: the lookup
+	// misses and the new name is simply ungranted. That is the correct
+	// direction — a rename is an edit to the lane, and every edit re-prompts.
+	//
+	// ABSENT from localKeys, on the TrustedTestCommand precedent: `dross local
+	// set` must not be able to grant it. Only `dross trust --lane <name>`
+	// writes it, and it prints the command line first.
+	TrustedLaneCommands map[string]string `toml:"trusted_lane_commands,omitempty"`
+
 	// RemoteHost and RemoteWorkdir authorize dross to run this repo's code on
 	// another machine — the mutation adapters and, since remote-test-runner,
 	// the test suite.
@@ -236,7 +258,8 @@ var localKeys = map[string]struct {
 	// remote_host and remote_workdir — and their deprecated mutation_remote_*
 	// aliases — are NOT here. See the struct fields: they are granted by
 	// `dross remote grant`, which shows the user what it is authorizing, and by
-	// nothing else.
+	// nothing else. trusted_lane_commands is out for the same reason: only
+	// `dross trust --lane <name>` writes it, after printing the line.
 }
 
 // effectiveRemote returns the granted host and workdir, preferring the current

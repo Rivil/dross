@@ -92,6 +92,10 @@ var (
 	ErrStaleConsent = errors.New("the consented test command has changed since it was trusted")
 	// ErrNoTestCommand is returned when no runtime.test_command is configured.
 	ErrNoTestCommand = errors.New("no runtime.test_command is configured")
+	// ErrNoLaneCommand is returned for a lane declaring no command. Distinct
+	// from ErrNoTestCommand so a refusal can send the reader to the lane block
+	// rather than to runtime.test_command, which may be perfectly fine.
+	ErrNoLaneCommand = errors.New("this test lane declares no command")
 )
 
 // Fingerprint is the consent binding: hex sha256 of the command, byte for byte.
@@ -259,6 +263,134 @@ func addFingerprint(set, line string) string {
 	return strings.Join(append(kept, want), ",")
 }
 
+// --- per-lane consent ---
+
+// LaneConsented reports what this machine has said about ONE lane's command.
+//
+// It returns the same ConsentState ladder CheckConsent does, and for the same
+// reason: "you have never trusted this lane" and "this lane's command has
+// changed since you trusted it" are different situations calling for different
+// reactions, and collapsing them reports a rewritten command as a routine first
+// run. The states are per lane, so a repo where one lane went stale still has
+// four granted lanes and the refusal says which one to look at.
+//
+// repoDir travels alongside root, exactly as it does for CheckConsent, so the
+// tracked-store refusal is shared rather than restated: a committed local.toml
+// is a repo authorizing its own lane commands, and it is refused UNREAD.
+func LaneConsented(root, repoDir, name, line string) (ConsentState, error) {
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return ConsentRefused, err
+	}
+	if strings.TrimSpace(line) == "" {
+		return ConsentNotApplicable, fmt.Errorf("%w: %s", ErrNoLaneCommand, name)
+	}
+	l, err := loadLocal(localPath(root))
+	if err != nil {
+		// An unparseable store is not consent. Fail closed, and say why.
+		return ConsentAbsent, fmt.Errorf("%w: %v", ErrNoConsent, err)
+	}
+	got, ok := l.TrustedLaneCommands[name]
+	if !ok || got == "" {
+		return ConsentAbsent, ErrNoConsent
+	}
+	if got != Fingerprint(line) {
+		return ConsentStale, ErrStaleConsent
+	}
+	return ConsentGranted, nil
+}
+
+// GrantLaneConsent records consent for one lane, leaving every other lane's
+// grant exactly as it was.
+//
+// Per lane is the whole point of the map (see localStore.TrustedLaneCommands):
+// a grant that replaced the store would make trusting the docs lane revoke the
+// Go lane, so the user would re-consent to everything every time they touched
+// anything.
+func GrantLaneConsent(root, name, line string) error {
+	path := localPath(root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return err
+	}
+	if l.TrustedLaneCommands == nil {
+		l.TrustedLaneCommands = map[string]string{}
+	}
+	l.TrustedLaneCommands[name] = Fingerprint(line)
+	return l.save(path)
+}
+
+// RevokeLaneConsent drops one lane's grant. Removing a lane calls it, so a
+// name that is later re-added starts ungranted rather than inheriting a
+// fingerprint issued for whatever the deleted lane used to run.
+//
+// A missing entry is not an error: the caller is expressing "this lane has no
+// grant", and that is already true.
+func RevokeLaneConsent(root, name string) error {
+	path := localPath(root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return err
+	}
+	if _, ok := l.TrustedLaneCommands[name]; !ok {
+		return nil
+	}
+	delete(l.TrustedLaneCommands, name)
+	if len(l.TrustedLaneCommands) == 0 {
+		// Back to nil so omitempty keeps an empty table out of the file —
+		// a bare [trusted_lane_commands] header reads as a store that holds
+		// something.
+		l.TrustedLaneCommands = nil
+	}
+	return l.save(path)
+}
+
+// laneConsentRefusal turns one lane's consent state into the message the user
+// acts on, naming the lane and the exact line in every arm.
+//
+// The lane name is in the text of every arm on purpose: a run refusing over
+// several lanes produces several of these, and a message that only showed the
+// command would leave the reader matching command lines back to blocks by eye.
+func laneConsentRefusal(name, line string, state ConsentState, cerr error) error {
+	switch state {
+	case ConsentRefused, ConsentNotApplicable:
+		return cerr
+	case ConsentStale:
+		return fmt.Errorf(
+			"refusing to run test lane %q: its command has CHANGED since you trusted it —\n"+
+				"the recorded consent is stale.\n\n"+
+				"    %s\n\n"+
+				"Read the line above; if it is what you meant to run, re-consent:\n\n"+
+				"    dross trust --lane %s\n\n%w", name, line, name, cerr)
+	default:
+		return fmt.Errorf(
+			"refusing to run test lane %q: its command has not been trusted on this machine.\n\n"+
+				"    %s\n\n"+
+				"It comes from the repo's tracked project.toml, so a clone carries whatever\n"+
+				"its author wrote. Read the line above, then:\n\n"+
+				"    dross trust --lane %s\n\n%w", name, line, name, cerr)
+	}
+}
+
+// findLane returns the named lane, or an error listing the lanes that do exist.
+//
+// Listing them is what makes a typo self-correcting: the alternative is
+// "unknown lane", which sends the user to open project.toml to find out what
+// they should have typed.
+func findLane(p *project.Project, name string) (project.TestLane, error) {
+	var names []string
+	for _, lane := range p.Runtime.TestLane {
+		if lane.Name == name {
+			return lane, nil
+		}
+		names = append(names, lane.Name)
+	}
+	if len(names) == 0 {
+		return project.TestLane{}, fmt.Errorf("unknown test lane %q: this repo declares none.\n\n"+
+			"Declare one with `dross test lane add <name> --match <glob> --command \"<cmd>\"`", name)
+	}
+	return project.TestLane{}, fmt.Errorf("unknown test lane %q; declared: %s", name, strings.Join(names, ", "))
+}
+
 // --- the gate ---
 
 // execGatedCommands is the CLOSED set of commands the consent gate covers,
@@ -357,6 +489,7 @@ func Trust() *cobra.Command {
 	var check bool
 	var replayPhase string
 	var runSlotName string
+	var laneName string
 	c := &cobra.Command{
 		Use:   "trust",
 		Short: "Consent to dross running this repo's runtime.test_command on this machine",
@@ -376,6 +509,9 @@ func Trust() *cobra.Command {
 			}
 			if runSlotName != "" {
 				return trustRun(root, runSlotName, check)
+			}
+			if laneName != "" {
+				return trustLane(root, laneName, check)
 			}
 			proj, err := project.Load(filepath.Join(root, project.File))
 			if err != nil {
@@ -420,7 +556,53 @@ func Trust() *cobra.Command {
 	c.Flags().BoolVar(&check, "check", false, "exit 0 if consent is current, non-zero otherwise; prints nothing on success")
 	c.Flags().StringVar(&replayPhase, "replay", "", "grant consent for <phase-id>'s recorded red-proof replay command instead of runtime.test_command")
 	c.Flags().StringVar(&runSlotName, "run", "", "grant consent for `dross run <name>`'s configured command instead of runtime.test_command")
+	c.Flags().StringVar(&laneName, "lane", "", "grant consent for the named [[runtime.test_lane]]'s command instead of runtime.test_command")
 	return c
+}
+
+// trustLane is `dross trust --lane <name>`: the grant for ONE test lane.
+//
+// Per lane rather than per repo, because that is what makes lanes usable at
+// all: a repo with a Go lane and a docs lane whose grants moved together would
+// re-prompt for the Go suite every time the docs command changed a character.
+// Granting one lane leaves every other lane's grant, and the whole-suite grant,
+// exactly where they were.
+func trustLane(root, name string, check bool) error {
+	proj, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		return err
+	}
+	lane, err := findLane(proj, name)
+	if err != nil {
+		return err
+	}
+	repoDir := filepath.Dir(root)
+	if check {
+		state, cerr := LaneConsented(root, repoDir, lane.Name, lane.Command)
+		if cerr == nil {
+			return nil
+		}
+		return laneConsentRefusal(lane.Name, lane.Command, state, cerr)
+	}
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return err
+	}
+	if strings.TrimSpace(lane.Command) == "" {
+		return fmt.Errorf(
+			"nothing to trust: test lane %q declares no command.\n\n"+
+				"Consent is bound to a command line, so there is nothing to bind to yet —\n"+
+				"`dross validate` reports the same gap", name)
+	}
+	// Printed BEFORE the write, and in full. The line arrives from TRACKED
+	// project.toml, so a grant that did not show it would be consenting to
+	// whatever a clone happened to carry.
+	Printf("trusting test lane %q on this machine:\n\n    %s\n\n", lane.Name, lane.Command)
+	if err := GrantLaneConsent(root, lane.Name, lane.Command); err != nil {
+		return err
+	}
+	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+	Printf("Editing or renaming lane %q revokes this; every other lane's grant is untouched.\n", lane.Name)
+	return nil
 }
 
 // trustRun grants consent for one [runtime] slot's command.

@@ -171,6 +171,18 @@ After any grant change, run `dross doctor` and surface its `Remote mutation:` li
 
 Run `dross trust --check`. Exit 0 means trusted — say so and move on. Non-zero means missing or stale: show the user the **exact** `runtime.test_command` line from `project.toml` and tell them to run `dross trust` themselves. Never run it on their behalf — the gate exists so a human reads the line the repo supplied, and an agent granting it defeats the whole mechanism.
 
+**Test lanes and their grants.** A `[[runtime.test_lane]]` block is a name, a list of match globs and the command that tests the files they match; `dross test --files <paths>` then runs only the lanes a file set actually hits, which is what keeps a docs edit from paying for the whole suite. Lanes are opt-in — a repo that declares none runs `runtime.test_command` exactly as before.
+
+Declare them through the CLI, never by hand-editing `project.toml`:
+
+- **Show** → `dross test lane list` (prints each lane's globs *and* its command line)
+- **Add** → `dross test lane add <name> --match <glob> --command "<cmd>"` (`--match` is repeatable)
+- **Remove** → `dross test lane remove <name>`
+
+Each lane's command carries its **own** grant, keyed by lane name under `trusted_lane_commands`. That key is not writable through `dross local set` — same reason as `trusted_test_command` — so consent goes through `dross trust --lane <name>`, which prints the line before recording it. `dross trust --lane <name> --check` reports granted / absent / stale for one lane, and `dross doctor` lists every lane's state under `Exec consent:`.
+
+Per lane, not per repo, is the point: a one-character edit to a docs lane's command must not revoke the Go lane the pre-commit gate runs. Editing *or renaming* a lane revokes only that lane, and removing a lane drops its grant so a name re-added later starts untrusted rather than inheriting one.
+
 ## 15. Claude Code hooks
 
 `dross hooks ensure` idempotently wires the dross-owned `PreCompact` + `SessionStart` hooks into user-level `settings.json`. The `SessionStart` hook is what prints the "you are here / next command" re-entry line at the top of a fresh session.

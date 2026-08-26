@@ -64,7 +64,22 @@ func (p backlogProblem) String() string {
 // The rank covers every phase in every milestone, so an unrankable target is
 // one that cannot be shown to sit BEHIND survivor-drain — and "cannot be shown
 // to be behind" is the same risk as forward, just less legible.
-func auditSurvivorBacklog(entries []deferredEntry, rank map[string]int, self string) []backlogProblem {
+//
+// active carries the phases of the milestone currently being delivered, and is
+// the one forward direction that is disposal rather than deferral. selfPhase
+// shipped in an earlier milestone, so EVERY phase that will ever exist ranks
+// after it — without this the guard forbids routing any newly found survivor
+// to any scheduled phase at all, which is a stricter rule than the builtin
+// dross-survivor-drain one it enforces: that rule names routing to "a
+// remediation task or scaffolded phase" as a legitimate disposal.
+//
+// The allowance is deliberately keyed to MEMBERSHIP of the active milestone,
+// not to "the target outranks nothing" or "an active milestone exists". Debt
+// parked inside the milestone being delivered is bounded and scheduled; debt
+// pushed past it is the unbounded kind survivor-drain existed to clean up. It
+// follows that closing a milestone with such an entry still open turns the
+// guard red again — which is the intended pressure, not a regression.
+func auditSurvivorBacklog(entries []deferredEntry, rank map[string]int, active map[string]bool, self string) []backlogProblem {
 	var problems []backlogProblem
 	selfRank, selfRanked := rank[self]
 	for _, e := range entries {
@@ -86,6 +101,9 @@ func auditSurvivorBacklog(entries []deferredEntry, rank map[string]int, self str
 			continue
 		}
 		if selfRanked && targetRank > selfRank {
+			if active[e.Target] {
+				continue // scheduled inside the milestone being delivered: disposal, not deferral
+			}
 			problems = append(problems, backlogProblem{e.Source, e.Index,
 				"survivor re-routed forward to " + e.Target + " — deferral wearing disposal's clothes; the standing backlog only ever shrinks"})
 		}
@@ -142,17 +160,52 @@ func versionKey(v string) [2]int {
 	return out
 }
 
+// activeMilestonePhases returns the phases of the milestone currently being
+// delivered — the one forward destination auditSurvivorBacklog treats as
+// disposal.
+//
+// Derived from milestone status rather than from state.current_milestone: the
+// audit is a property of what the specs on disk say, and reading it from
+// mutable session state would let a `dross state set` widen the allowance
+// without touching a single milestone.
+//
+// No active milestone yields an empty set, so the allowance vanishes and the
+// guard behaves exactly as it did before it existed. That is the fail-closed
+// direction: a repo between milestones has nowhere legitimate to route to.
+func activeMilestonePhases(t *testing.T, root string) map[string]bool {
+	t.Helper()
+	all, err := milestone.LoadAll(root)
+	if err != nil {
+		t.Fatalf("load milestones: %v", err)
+	}
+	active := map[string]bool{}
+	for _, m := range all {
+		if m.Milestone.Status != "active" {
+			continue
+		}
+		for _, ph := range m.Phases {
+			active[ph] = true
+		}
+	}
+	return active
+}
+
 // TestSurvivorBacklogAuditCatchesItsFailureShapes checks the checker. The repo
 // audit below passes today by construction — the backlog was just emptied — so
 // without this, a checker that returned nil unconditionally would look exactly
 // as green as a working one, forever.
 func TestSurvivorBacklogAuditCatchesItsFailureShapes(t *testing.T) {
 	// survivor-drain sits at rank 2; earlier is behind, later is forward.
+	// active-phase and future-phase are both forward and differ only in
+	// membership of the active milestone, which is the whole distinction.
 	rank := map[string]int{
 		"survivor-lifecycle":   1,
 		selfPhase:              2,
 		"mutation-score-truth": 3,
+		"active-phase":         4,
+		"future-phase":         5,
 	}
+	active := map[string]bool{"active-phase": true}
 	const keyed = "survivor internal/cmd/status.go:88 (CONDITIONALS_NEGATION)"
 
 	caught := []struct {
@@ -176,6 +229,11 @@ func TestSurvivorBacklogAuditCatchesItsFailureShapes(t *testing.T) {
 			detail: "re-routed forward",
 		},
 		{
+			name:   "survivor routed past the active milestone",
+			entry:  deferredEntry{Source: "survivor-lifecycle", Index: 9, Text: keyed, Target: "future-phase"},
+			detail: "re-routed forward",
+		},
+		{
 			name:   "survivor routed to a phase in no milestone",
 			entry:  deferredEntry{Source: "survivor-lifecycle", Index: 5, Text: keyed, Target: "someday-maybe"},
 			detail: "no place in any milestone",
@@ -183,7 +241,7 @@ func TestSurvivorBacklogAuditCatchesItsFailureShapes(t *testing.T) {
 	}
 	for _, tc := range caught {
 		t.Run(tc.name, func(t *testing.T) {
-			problems := auditSurvivorBacklog([]deferredEntry{tc.entry}, rank, selfPhase)
+			problems := auditSurvivorBacklog([]deferredEntry{tc.entry}, rank, active, selfPhase)
 			if len(problems) != 1 {
 				t.Fatalf("got %d problems, want exactly 1: %v", len(problems), problems)
 			}
@@ -217,17 +275,36 @@ func TestSurvivorBacklogAuditCatchesItsFailureShapes(t *testing.T) {
 			entry: deferredEntry{Source: "survivor-lifecycle", Index: 6, Text: keyed, Target: selfPhase, Dismissed: true},
 		},
 		{
+			name:  "survivor routed into the milestone being delivered is scheduled disposal",
+			entry: deferredEntry{Source: selfPhase, Index: 8, Text: keyed, Target: "active-phase"},
+		},
+		{
 			name:  "an unrouted survivor is someday, not this phase's backlog",
 			entry: deferredEntry{Source: "survivor-lifecycle", Index: 7, Text: keyed},
 		},
 	}
 	for _, tc := range clean {
 		t.Run(tc.name, func(t *testing.T) {
-			if problems := auditSurvivorBacklog([]deferredEntry{tc.entry}, rank, selfPhase); len(problems) != 0 {
+			if problems := auditSurvivorBacklog([]deferredEntry{tc.entry}, rank, active, selfPhase); len(problems) != 0 {
 				t.Errorf("flagged a legitimate entry: %v", problems)
 			}
 		})
 	}
+
+	// The same entry the clean table just accepted, with no active milestone to
+	// belong to. Stated as a pair rather than as its own fixture because the
+	// only difference is the allowance itself: a repo between milestones has no
+	// scheduled destination, so forward is forward again.
+	t.Run("with no active milestone, forward is flagged as before", func(t *testing.T) {
+		e := deferredEntry{Source: selfPhase, Index: 8, Text: keyed, Target: "active-phase"}
+		problems := auditSurvivorBacklog([]deferredEntry{e}, rank, nil, selfPhase)
+		if len(problems) != 1 {
+			t.Fatalf("got %d problems, want exactly 1 — the allowance fired without an active milestone: %v", len(problems), problems)
+		}
+		if !strings.Contains(problems[0].Detail, "re-routed forward") {
+			t.Errorf("detail = %q, want it to mention %q", problems[0].Detail, "re-routed forward")
+		}
+	})
 }
 
 // TestSurvivorDrainBacklogClosed is the gate itself, over this repo's real
@@ -246,11 +323,12 @@ func TestSurvivorDrainBacklogClosed(t *testing.T) {
 	}
 
 	rank := milestonePhaseRank(t, root)
+	active := activeMilestonePhases(t, root)
 	if _, ok := rank[selfPhase]; !ok {
 		t.Fatalf("%s is in no milestone's phases array — the forward-routing half of this audit cannot be evaluated", selfPhase)
 	}
 
-	for _, p := range auditSurvivorBacklog(entries, rank, selfPhase) {
+	for _, p := range auditSurvivorBacklog(entries, rank, active, selfPhase) {
 		t.Errorf("%s", p)
 	}
 }
