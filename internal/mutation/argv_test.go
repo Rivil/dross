@@ -118,7 +118,7 @@ func TestStrykerRejectsDashEntries(t *testing.T) {
 		// It is the TRIMMED form that lands in the argv, so a path that looks
 		// harmless before the prefix strip must still be caught.
 		s := &Stryker{Workdir: "web"}
-		if _, err := s.runArgs([]string{"web/-rf.ts"}); err == nil {
+		if _, _, err := s.runArgs([]string{"web/-rf.ts"}); err == nil {
 			t.Fatal("a path that becomes a dash entry after the trim was accepted")
 		}
 	})
@@ -131,7 +131,7 @@ func TestStrykerRejectsDashEntries(t *testing.T) {
 	})
 
 	t.Run("ordinary paths still pass", func(t *testing.T) {
-		args, err := (&Stryker{}).runArgs([]string{"src/a.ts"})
+		args, _, err := (&Stryker{}).runArgs([]string{"src/a.ts"})
 		if err != nil {
 			t.Fatalf("src/a.ts was rejected: %v", err)
 		}
@@ -170,7 +170,7 @@ func TestRejectionNamesToolAndValue(t *testing.T) {
 			return err
 		}, "gremlins", "-rf", nil},
 		{"npx", func() error {
-			_, err := (&Stryker{}).runArgs([]string{"-mutate-me.ts"})
+			_, _, err := (&Stryker{}).runArgs([]string{"-mutate-me.ts"})
 			return err
 		}, "npx", "-mutate-me.ts", nil},
 		{"dotnet", func() error {

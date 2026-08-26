@@ -86,7 +86,10 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		return nil, err
 	}
 
-	args, err := s.runArgs(files)
+	// The second return is the trimmed, UNESCAPED request list — the form the
+	// report's file keys come back in. Not consumed yet; the drop check that
+	// diffs it against those keys lands next.
+	args, _, err := s.runArgs(files)
 	if err != nil {
 		return nil, err
 	}
@@ -160,23 +163,106 @@ const strykerPin = "@stryker-mutator/core@9.6.1"
 // a dash is refused rather than fenced. Both derived inputs are checked: the
 // Workdir, which comes straight from project.toml, and each --mutate entry
 // AFTER the prefix trim, because it is the trimmed form that lands in the argv.
-func (s *Stryker) runArgs(files []string) ([]string, error) {
+//
+// It returns the argv AND the trimmed, UNESCAPED request list. The second
+// value is what the report's file keys can be compared against: the keys come
+// back in the real path form, so a caller diffing them against the argv's
+// escaped form would find every bracket path "missing".
+//
+// ORDER IS LOAD-BEARING. The escape runs last — after the workdir trim and
+// after the argfence check, never instead of either. Escaping first would
+// leave the fence inspecting a string the argv no longer contains.
+func (s *Stryker) runArgs(files []string) (argv []string, requested []string, err error) {
 	if _, err := argfence.Fence("npx", "workdir", s.Workdir); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	mutate := make([]string, 0, len(files))
+	requested = make([]string, 0, len(files))
 	for _, f := range files {
 		if s.Workdir != "" {
 			f = strings.TrimPrefix(f, s.Workdir+"/")
 		}
-		mutate = append(mutate, f)
+		requested = append(requested, f)
 	}
-	if _, err := argfence.Fence("npx", "mutate path", mutate...); err != nil {
-		return nil, err
+	if _, err := argfence.Fence("npx", "mutate path", requested...); err != nil {
+		return nil, nil, err
+	}
+	mutate := make([]string, 0, len(requested))
+	for _, f := range requested {
+		mutate = append(mutate, escapeGlobMeta(f))
 	}
 	return []string{"npx", "--yes", strykerPin, "run",
 		"--mutate", strings.Join(mutate, ","),
-		"--reporters", "json"}, nil
+		"--reporters", "json"}, requested, nil
+}
+
+// escapeGlobMeta makes a literal path safe to hand Stryker as a --mutate glob.
+//
+// TWO layers rewrite this string on its way to the tool, and a fix for either
+// one alone does nothing. Both were measured against the installed toolchain on
+// 2026-08-26 rather than reasoned about.
+//
+// LAYER 1 — minimatch, inside Stryker. "[" opens a character class, so
+// src/routes/recipes/[id]/+page.server.ts is read as "one of i, d" and matches
+// nothing on disk. Stryker then drops the file from the run WITHOUT an error:
+// it logs "did not result in any files" and reports a score over whatever
+// remained, which looks exactly like a healthy run. Six real SvelteKit route
+// files vanished that way on 2026-08-26.
+//
+// The bracket-EXPRESSION form is the fix: "[[]" is a class containing only "[",
+// "[]]" one containing only "]". Backslash escaping is the obvious alternative
+// and it is WRONG — Stryker builds its FileMatcher with
+// normalizeFileName(path.resolve(pattern)) and normalizeFileName is
+// replace(/\\/g, "/"), so every backslash becomes a forward slash before
+// minimatch sees the pattern and "\\[id\\]" matches nothing either, silently.
+//
+// LAYER 2 — npm, before Stryker is even spawned. dross invokes stryker through
+// `npx`, and npm runs the command via `sh -c` after escaping each argument with
+// @npmcli/promise-spawn's sh(), which quotes only when the argument matches:
+//
+//	/[\t\n\r "#$&'()*;<>?\\`|~]/
+//
+// "[" and "]" are absent from that set. So a bracket-only path is handed to the
+// shell UNQUOTED, the shell glob-expands "[[]id[]]" back to the real on-disk
+// name "[id]", and Stryker receives exactly the raw form layer 1 was escaping
+// away. The cruelty is the condition: the shell only expands a glob that
+// MATCHES, so the escape is undone precisely when the file exists — the one
+// case that matters. (npm 11.14.1; "*" and "?" ARE in the set and pass through
+// untouched, which is why this shows up as a brackets-only defect.)
+//
+// So the last path segment is wrapped in an extglob, "@(name)". To minimatch
+// that is a no-op — "@(x)" matches exactly x — while the parentheses put the
+// argument inside npm's quoting set, so the shell never sees a glob at all.
+// Measured: the wrapped form reaches Stryker byte-identical, and matches the
+// target file while not matching an unrelated one.
+//
+// SINGLE PASS, deliberately. Two sequential ReplaceAll calls corrupt nested
+// brackets — the second pass rewrites the "]" the first pass just emitted, so
+// "[[opt]]" comes out mangled instead of "[[][[]opt[]][]]".
+//
+// A bracket-free path is returned byte-identical: neither layer misbehaves on
+// it, and rewriting it would change every existing measurement.
+func escapeGlobMeta(path string) string {
+	if !strings.ContainsAny(path, "[]") {
+		return path
+	}
+	var b strings.Builder
+	b.Grow(len(path) + 8)
+	for _, r := range path {
+		switch r {
+		case '[':
+			b.WriteString("[[]")
+		case ']':
+			b.WriteString("[]]")
+		default:
+			b.WriteRune(r)
+		}
+	}
+	escaped := b.String()
+
+	// Wrap the FINAL segment only. An extglob is matched within one path
+	// segment, so a wrapper spanning "/" would stop matching.
+	cut := strings.LastIndex(escaped, "/")
+	return escaped[:cut+1] + "@(" + escaped[cut+1:] + ")"
 }
 
 // strykerBuildCmd is the process-construction seam — see gremlinsBuildCmd.
