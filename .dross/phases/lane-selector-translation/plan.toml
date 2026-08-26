@@ -1,0 +1,221 @@
+[phase]
+id = "lane-selector-translation"
+
+[[task]]
+id    = "t-1"
+wave  = 1
+title = "Declare selector fields, enum and validate refusal"
+files = [
+  "internal/configenum/configenum.go",
+  "internal/project/project.go",
+  "internal/cmd/validate.go",
+  "internal/cmd/validate_lane_test.go",
+  "internal/project/project_test.go",
+]
+description = """
+Add configenum.SelectorStyles = newSet("", "path", "dir", "go-package"). Add
+Selector string (toml selector,omitempty) and EmptyExit []int (toml
+empty_exit,omitempty) to project.TestLane. Extend laneProblems with a style
+check, an empty-exit range check and an empty-exit-without-selector check, each
+naming the lane through the existing laneLabel.
+
+The empty-exit-without-selector refusal is a deliberate addition, not a reading
+of locked empty_detection: a code that can never fire is a user believing they
+configured something they did not. Stated here because it is a new refusal a
+user can hit.
+"""
+covers = ["c-1"]
+test_contract = [
+  "a lane with selector = \"packages\" produces a problem containing runtime.test_lane \"go\" and the accepted styles; the message is asserted to carry the lane NAME, so a refusal naming only the ordinal fails",
+  "the accepted set in that message is rendered from SelectorStyles.List(), never typed as a literal, so a style added to the Set cannot leave the refusal naming a stale set",
+  "a lane with Selector \"\" and a lane with \"go-package\" both yield ZERO problems — the empty case is guarded explicitly before the Has call, because Set.Has(\"\") is false for a Set with no code default",
+  "selector = \"GO-PACKAGE\" passes via configenum.Normalize; a hand-rolled == comparison fails",
+  "empty_exit = [0] raises a problem naming the lane: 0 is the runner's success code and a lane declaring it would report every green run as a miss",
+  "empty_exit = [255] raises a problem: remote.Classify already spends 255 on ssh transport failure, so a lane claiming it would report an unreachable host as \"no tests\"",
+  "empty_exit = [300] raises a problem, and empty_exit = [5] on a lane with NO selector raises a problem — a code that can never fire is a silent misconfiguration",
+  "project.Save on a TestLane with neither field set round-trips project.toml byte-identically to one written before this phase, asserted on the rendered bytes beside TestNoTestLaneIsAbsentFromTheDocument",
+  "project_test.go decodes hand-written toml carrying selector = \"go-package\" / empty_exit = [5] into Selector/EmptyExit",
+]
+status = "pending"
+
+[[task]]
+id    = "t-2"
+wave  = 1
+title = "Report which paths matched which lane"
+files = [
+  "internal/testlane/match.go",
+  "internal/testlane/match_test.go",
+]
+description = """
+Add Matched map[int][]string to Selection, populated in Select with the
+NORMALIZED path for each lane a path hits. Lanes []int is unchanged, so every
+existing caller and test is untouched. The package stays pure: no filesystem,
+no config.
+"""
+covers = ["c-4"]
+test_contract = [
+  "lanes go(internal/**) and docs(docs/) against [internal/a.go docs/x.md README.md /etc/passwd] give Matched[0] == [\"internal/a.go\"] and Matched[1] == [\"docs/x.md\"] exactly, with non-membership of README.md and /etc/passwd asserted in BOTH entries — an implementation that appends every in-tree path to every hit lane fails here rather than at the run site",
+  "./internal/a.go arrives in Matched as internal/a.go while Unmatched keeps the caller's spelling; a single shared slice breaks one of the two assertions",
+  "a lane with globs [internal/**, internal/cmd/*.go] against internal/cmd/test.go yields a one-element Matched[0] — the existing one-hit-settles-a-lane rule extended to paths",
+  "a path matched by two DIFFERENT lanes appears in both lanes' entries, matching Select's existing per-lane hit[i] behaviour",
+  "a lane no path hit has no Matched key at all (not a nil-valued one), so a `for i := range Matched` at the run site can never resurrect a lane Lanes excluded",
+]
+status = "pending"
+
+[[task]]
+id         = "t-3"
+wave       = 2
+depends_on = ["t-1"]
+title      = "Derive a selector from matched paths"
+files = [
+  "internal/testlane/selector.go",
+  "internal/testlane/selector_test.go",
+  "internal/cmd/enum_divergence_test.go",
+]
+description = """
+New pure Derive(style string, paths []string) ([]string, error): dedupe, sort
+lexicographically, then dispatch on configenum.Normalize(style) — path emits
+each path, dir each distinct parent, go-package ./<dir>/... . Empty style
+returns (nil, nil); an unrecognised style returns an error and NO args.
+Register the switch in enumScanSites with minCases = 3 (path, dir, go-package)
+and requiresNormalize true.
+"""
+covers = ["c-2"]
+test_contract = [
+  "Derive(\"dir\", [b/x.go a/y.go a/z.go]) and Derive(\"dir\", [a/z.go a/y.go b/x.go]) return the identical [\"a\",\"b\"] — argv order leaking into the selector fails the equality and the collapse assertion at once (locked selector_derivation)",
+  "three files in internal/cmd under go-package yield exactly [\"./internal/cmd/...\"], length asserted",
+  "go-package on main.go yields [\".\"] — a root-level file scopes to the root package, not the module; [\"./...\"] fails, because deriving the whole module from one file is the unscoped run c-2 forbids",
+  "dir on main.go yields [\".\"] and not the empty slice — path.Dir of a root-level path is \".\", and dropping it would leave a root-only file set deriving no selector at all",
+  "path on two distinct files gives two arguments; the same file twice gives one",
+  "a derived argument that would begin with \"-\" (a file named -x.go) is emitted as \"./-x.go\", so a matched path can never reach the runner as an option",
+  "Derive(\"\", paths) returns a nil slice and no error — the no-selector lane is a value in the same function, not a branch each caller has to remember",
+  "Derive(\"packages\", paths) returns an error naming the style and the accepted set, and returns NO args; a caller that ignored the error would otherwise spawn unscoped",
+  "TestSelectorDispatchMatchesSelectorStyles in enum_divergence_test.go (the TestMilestoneModeDispatchMatchesConfigenum pattern) fails when Derive's case literals and SelectorStyles diverge in EITHER direction; registered with requiresNormalize true, so a switch over strings.ToLower fails TestDispatchUsesConfigenumNormalize",
+]
+status = "pending"
+
+[[task]]
+id         = "t-4"
+wave       = 2
+depends_on = ["t-1"]
+title      = "Accept selector flags on lane add and list"
+files = [
+  "internal/cmd/test_lane.go",
+  "internal/cmd/test_lane_test.go",
+]
+description = """
+`dross test lane add` gains --selector <style> and repeatable --empty-exit
+<code>, both validated against configenum before the load-modify-save.
+`dross test lane list` prints selector: and empty-exit: for the lanes that
+declare them. Editing stays remove-then-re-add (locked lane_edit_surface).
+"""
+covers = ["c-7"]
+test_contract = [
+  "after `lane add go --match 'internal/**' --command 'go test' --selector go-package --empty-exit 5`, reloading project.toml gives Selector == \"go-package\" and EmptyExit == []int{5}, and `lane list` prints both labels",
+  "--selector packages is refused naming the accepted styles AND project.toml is asserted byte-identical afterwards, in the shape TestLaneAddWithoutCommandLeavesTheFileUnchanged already pins — a refusal that ran after the save passes an error-only test",
+  "the same refusal fires for --empty-exit 0, --empty-exit 255 and --empty-exit 300, so the CLI cannot write a lane `dross validate` would then reject",
+  "--empty-exit 5 with no --selector is refused before the write, the same rule validate enforces",
+  "a lane declaring neither prints NEITHER label — asserted as absence, so an opt-in field never looks like something every pre-existing lane must set",
+  "--selector ' GO-PACKAGE ' persists as go-package, so list and validate never disagree with what was typed",
+  "a lane declared through these flags survives a `lane remove` of a DIFFERENT lane unchanged (the existing rewrite path now carries two more fields)",
+]
+status = "pending"
+
+[[task]]
+id         = "t-5"
+wave       = 3
+depends_on = ["t-2", "t-3"]
+title      = "Append the derived selector to the lane run"
+files = [
+  "internal/cmd/test.go",
+  "internal/cmd/test_lane_selector_test.go",
+]
+description = """
+runTestLanes carries the lane INDEX alongside the lane through matched/runnable
+so sel.Matched[i] stays attached; per lane it drops matched paths that no longer
+exist under repoDir (locked missing_paths), derives with
+testlane.Derive(lane.Selector, ...), builds ONE line via the existing
+testCommandLine, prints that line in the header and passes the same string to
+runOneLane (local and remote). A lane whose filtered selector empties does not
+spawn and provisionally returns exitNothingMeasured, so this commit cannot exit
+0 having measured nothing; t-6 refines that into the miss verdict. Derive's error is raised in the existing
+up-front fence beside shArgvFor, before any lane spawns. Consent still resolves
+against lane.Command; runOneLane's "no selector appended" doc comment is
+rewritten, not left contradicting the code.
+"""
+covers = ["c-2", "c-3", "c-4", "c-6"]
+test_contract = [
+  "a go lane with command `go test -count=1` and selector go-package, run as --files internal/cmd/test.go, records exactly one spawn of `go test -count=1 './internal/cmd/...'` — a lane that ran its whole suite fails on the recorded line",
+  "the string printed by the `lane <name>: ` header is compared for EQUALITY against the recorded spawn line, not each against a literal; a header built from lane.Command while the derived line spawned fails here",
+  "the header index is asserted to precede the spawn sentinel, keeping the existing header-first property",
+  "a lane with NO selector spawns its command byte-for-byte with --files supplied, while a selector-declaring sibling is present in the same run; TestLaneLineIsByteIdentical must keep passing unmodified (c-3)",
+  "a file set of [internal/cmd/test.go docs/x.md README.md] records a go line containing ./internal/cmd/... and NOT docs, and a docs line (selector dir) containing neither internal nor README — c-4 asserted on argv, not on Selection",
+  "a lane granted for `go test -count=1` only still spawns, and the spawned line DIFFERS from the granted one: fingerprinting the derived line fails on the refusal, dropping the selector to keep the grant valid fails on the difference (c-6, locked selector_consent)",
+  "a lane granted BEFORE this phase runs green with a selector appended — appending must not re-fingerprint, or every existing grant goes stale on upgrade",
+  "an ungranted lane declaring a selector records ZERO spawns and exits 6, and the refusal names lane.Command, not the derived line",
+  "a matched path containing a space arrives single-quoted in the recorded line via shellQuoteArg",
+  "the remote path gets the derived line too: with spawnRemote recording, the ssh script for a selector-bearing lane contains the selector — asserted, because runRemoteLine is a second call site a local-only wiring silently skips",
+  "two matched paths, one deleted from the fixture: the spawned line carries only the survivor's package, and a lane whose every matched path was deleted records ZERO spawns rather than `go test ./gone/...` (locked missing_paths)",
+  "the existence filter applies ONLY to lanes with a selector: a lane with no style matched by a non-existent path still spawns, so every pre-selector fixture keeps its behaviour",
+  "a run whose only matched lane had every path deleted exits NON-ZERO at this commit, not 0 — the interim between the filter landing here and the miss verdict landing in t-6 must never report green having spawned nothing",
+]
+status = "pending"
+
+[[task]]
+id         = "t-6"
+wave       = 4
+depends_on = ["t-5"]
+title      = "Report selector misses without failing the gate"
+files = [
+  "internal/cmd/test.go",
+  "internal/remote/remote.go",
+  "internal/cmd/test_lane_miss_test.go",
+]
+description = """
+A lane is a selector MISS when its filtered selector emptied in t-5, or when it
+exits with a code listed in lane.EmptyExit. remote.ExitError gains ExitCode() so
+the existing exitCoder interface classifies both transports through one path.
+Misses are printed and counted separately from worst — they never enter
+worseOutcome — and become exitNothingMeasured only when EVERY lane that reached
+a spawn decision was a miss.
+"""
+covers = ["c-5"]
+test_contract = [
+  "go lane green, docs lane a miss → ExitCode(err) == 0, and the transcript names the docs lane AND its derived selector; folding the miss through worseOutcome fails on the exit code, because exitRank puts exitNothingMeasured above nil",
+  "both matched lanes miss → exit 5 and zero spawns; asserted on ExitCode(err), not on the message",
+  "a lane declaring empty_exit = [5] whose spawn returns exit 5 is a miss; the SAME lane exiting 1 is exitSuiteFailed with a `test lane \"go\" failed` message — one integer apart, opposite verdicts, and the empty-exit arm must not swallow a real red",
+  "a lane with NO empty_exit exiting 5 is a red suite: without a declaration only the empty-filter can produce a miss (locked empty_detection)",
+  "a remote lane exiting 5 through remoteFailure is classified as a miss — fails unless remote.ExitError.ExitCode() exists for errors.As to reach",
+  "a run with one miss and one RED lane exits exitSuiteFailed; a run with one miss and one consent-REFUSED lane exits exitLaneRefused — the existing exitRank order is preserved and a miss never outranks a real failure",
+  "stdout is never scraped: a lane printing \"collected 0 items\" and exiting 0 is reported as a PASS, since output matching is the mechanism empty_detection forbids",
+  "the printed miss line contains both the lane name and the derived selector text, per c-5's wording",
+]
+status = "pending"
+
+[[task]]
+id         = "t-7"
+wave       = 5
+depends_on = ["t-4", "t-6"]
+title      = "Document the selector surface"
+files = [
+  "README.md",
+  "ARCHITECTURE.md",
+  "assets/prompts/options.md",
+  "internal/cmd/options_docs_test.go",
+]
+description = """
+Extend README's lane row and exit-code contract, the test-suite-runner and
+exec-consent sections of ARCHITECTURE.md, and the test-lanes block of
+options.md with the selector styles, the empty-exit codes, the miss outcome and
+the unchanged grant story. Extend the existing needle guards to cover them.
+"""
+covers = ["c-7"]
+test_contract = [
+  "TestReadmeDocumentsTestLanes gains the needles --selector, go-package, --empty-exit and \"selector miss\"; a shipped flag with no README line fails it, the same rule that already holds for `dross test --files`",
+  "README's exit-status contract for 5 reads \"the file set matched no lane, or every matched lane's selector collected nothing\" — and keeps the existing \"matched no lane\" needle intact; an agent reading only the old wording would treat an all-miss run as an unexplained non-zero",
+  "TestOptionsCoversTheConsentVerbs gains --selector, so the settings surface cannot claim to reach every dross-managed setting while omitting the one field that changes what a consented lane spawns",
+  "options.md still routes editing through remove-then-re-add; a new assertion fails if it tells the reader to hand-edit runtime.test_lane",
+  "every `dross test lane add` example in options.md and README is parsed for flags the cobra command actually registers, so a doc advertising --selector-template fails",
+  "TestOptionsSectionNumbersAreContiguous keeps passing: the lane text grows in place, no new numbered section",
+]
+status = "pending"

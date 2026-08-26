@@ -81,3 +81,9 @@
   text = "Source-to-test path mapping (editing src/foo.ts running test/foo.test.ts) where the runner has no --related / --findRelatedTests of its own."
   why = "That is a per-framework mapping engine — the milestone's third non-goal."
   target = "lane-selector-custom"
+
+[[deferred]]
+  id = "41d3a87cd97fcb38"
+  text = "Warn on `dross test lane add` when a selector is declared on a command that already ends in a whole-tree token (`./...`) — appending a scoped selector to it runs the union, so the scoped run is silently the whole suite."
+  why = "Detecting it means pattern-matching runner syntax, which is a per-framework heuristic; the printed lane line already shows the user the exact command that ran."
+  target = "lane-selector-custom"
