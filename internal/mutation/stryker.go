@@ -1,9 +1,11 @@
 package mutation
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -86,10 +88,11 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		return nil, err
 	}
 
-	// The second return is the trimmed, UNESCAPED request list — the form the
-	// report's file keys come back in. Not consumed yet; the drop check that
-	// diffs it against those keys lands next.
-	args, _, err := s.runArgs(files)
+	// The trimmed, UNESCAPED request list — the form the report's file keys
+	// come back in, which is what checkInstrumented diffs against below. The
+	// argv carries the ESCAPED form; comparing THAT to report keys would find
+	// every bracket path "missing".
+	args, requested, err := s.runArgs(files)
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +109,13 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 		// ssh command, and setting it here would chdir the ssh client instead.
 		cmd.Dir = s.workDir()
 	}
-	cmd.Stdout = os.Stderr // streamed to user, not captured
-	cmd.Stderr = os.Stderr
+	// TEED, not captured. The user still sees the whole stream as it arrives;
+	// a bounded prefix is retained purely so a failure can quote the real cause
+	// instead of guessing at it.
+	head := &headBuffer{limit: strykerHeadBytes}
+	sink := io.MultiWriter(os.Stderr, head)
+	cmd.Stdout = sink
+	cmd.Stderr = sink
 	if err := cmd.Run(); err != nil {
 		// Stryker exits non-zero when surviving mutants exist —
 		// that's a successful run with bad results, not an adapter
@@ -125,7 +133,13 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 	b, err := os.ReadFile(reportPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("stryker did not write a report at %s — check stryker config", reportPath)
+			// NOT "check stryker config". That advice was wrong in every case
+			// it was actually hit: a dry run killed by a missing environment
+			// variable, a --mutate list that resolved to nothing, a crash in
+			// the instrumenter. The config was fine each time and the real
+			// cause was sitting at the HEAD of the output, which the user had
+			// just watched scroll past. Quote it.
+			return nil, fmt.Errorf("stryker did not write a report at %s.\n%s", reportPath, head.quote(strykerHeadLines))
 		}
 		return nil, fmt.Errorf("read stryker report: %w", err)
 	}
@@ -133,8 +147,137 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	// BEFORE rePrefixFiles, which rewrites the report's keys from
+	// workdir-relative to repo-relative. `requested` is the trimmed
+	// workdir-relative form, so the two only speak the same paths on this side
+	// of that call — one line later and every path would look dropped.
+	if err := s.checkInstrumented(b, requested, head); err != nil {
+		return nil, err
+	}
 	s.rePrefixFiles(report)
 	return report, nil
+}
+
+const (
+	// How much of the tool's output to retain, and how much of THAT to quote.
+	// Bounded so a runaway run cannot be held in memory, generous enough that
+	// a stack trace preceded by a banner still contains the cause.
+	strykerHeadBytes = 64 << 10
+	strykerHeadLines = 40
+)
+
+// headBuffer retains the first `limit` bytes written through it and silently
+// discards the rest, always reporting a full write so it can sit inside an
+// io.MultiWriter without truncating the stream its sibling is rendering.
+type headBuffer struct {
+	limit int
+	buf   bytes.Buffer
+}
+
+func (h *headBuffer) Write(p []byte) (int, error) {
+	if room := h.limit - h.buf.Len(); room > 0 {
+		if len(p) <= room {
+			h.buf.Write(p)
+		} else {
+			h.buf.Write(p[:room])
+		}
+	}
+	// len(p), never the amount kept: a short count is an io.ErrShortWrite to
+	// io.MultiWriter, which would abort the write to os.Stderr as well and
+	// truncate the live output the moment the cap was reached.
+	return len(p), nil
+}
+
+// quote renders at most n lines of the retained head, indented, for embedding
+// in an error.
+func (h *headBuffer) quote(n int) string {
+	text := strings.TrimRight(h.buf.String(), "\n")
+	if text == "" {
+		return "stryker produced no output at all — it may not have started."
+	}
+	lines := strings.Split(text, "\n")
+	truncated := false
+	if len(lines) > n {
+		lines, truncated = lines[:n], true
+	}
+	var b strings.Builder
+	b.WriteString("the head of stryker's output, which is where the cause is:\n\n")
+	for _, l := range lines {
+		b.WriteString("    ")
+		b.WriteString(l)
+		b.WriteString("\n")
+	}
+	if truncated {
+		b.WriteString("    … (output continues above)\n")
+	}
+	return b.String()
+}
+
+// strykerDropWarningText is Stryker's own wording when a --mutate glob resolves
+// to no file (@stryker-mutator/core, src/fs/project-reader.ts). Named here so
+// the constant and the error message that surfaces it cannot drift apart.
+const strykerDropWarningText = "did not result in any files"
+
+// checkInstrumented hard-fails the run when stryker did not instrument a file
+// it was asked to mutate (locked decision drop_behaviour).
+//
+// A PARTIAL SCORE IS WORSE THAN NO SCORE, because it looks complete. That is
+// not hypothetical: on 2026-08-26 six SvelteKit bracket route paths were
+// dropped from a --mutate list by a glob mismatch, and the run reported a
+// perfectly ordinary score over the files that survived the drop. Nobody
+// noticed, because nothing said anything.
+//
+// THE SIGNAL IS THE SET OF PATHS THE REPORT MENTIONS, not the set carrying
+// counted mutants, and that distinction is load-bearing. A file whose glob
+// matched but whose every mutant is Ignored — the `// Stryker disable all`
+// case — appears in the report's `files` object with a mutants array, yet
+// ParseStrykerJSON adds NO row for it (Ignored is not counted). Diffing
+// against report.Files would therefore hard-fail on a file that was
+// instrumented perfectly well, and such files are common enough to make the
+// check unusable. Reading the raw keys tells the two apart exactly.
+func (s *Stryker) checkInstrumented(data []byte, requested []string, head *headBuffer) error {
+	var raw strykerReport
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("decode stryker report: %w", err)
+	}
+	mentioned := make(map[string]struct{}, len(raw.Files))
+	for path := range raw.Files {
+		mentioned[filepath.ToSlash(path)] = struct{}{}
+	}
+
+	var dropped []string
+	for _, want := range requested {
+		want = filepath.ToSlash(want)
+		if _, ok := mentioned[want]; ok {
+			continue
+		}
+		// Suffix fallback: a report keyed on absolute paths still names the
+		// same file. A genuinely dropped path appears in no key at all, by
+		// suffix or otherwise, so this cannot mask the fault it is checking.
+		matched := false
+		for got := range mentioned {
+			if strings.HasSuffix(got, "/"+want) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			dropped = append(dropped, want)
+		}
+	}
+	if len(dropped) == 0 {
+		return nil
+	}
+
+	msg := fmt.Sprintf(
+		"stryker instrumented none of %d file(s) it was asked to mutate: %s.\n"+
+			"Refusing to report a score over the rest: a partial run looks exactly like a complete one,\n"+
+			"which is how six route files vanished from a run unnoticed on 2026-08-26.\n",
+		len(dropped), strings.Join(dropped, ", "))
+	if strings.Contains(head.buf.String(), strykerDropWarningText) {
+		msg += "stryker said so itself — look for \"" + strykerDropWarningText + "\" below.\n"
+	}
+	return fmt.Errorf("%s\n%s", msg, head.quote(strykerHeadLines))
 }
 
 // strykerPin is the exact @stryker-mutator/core version dross invokes.
