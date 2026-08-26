@@ -48,6 +48,17 @@ type Selection struct {
 	// OutOfTree are paths naming something outside the repo — absolute, or
 	// escaping upward through `..` — as the caller wrote them.
 	OutOfTree []string
+	// Matched records, per lane index, the paths that put that lane in Lanes,
+	// in NORMALIZED repo-relative form. It is keyed only for lanes Lanes also
+	// carries, so a caller ranging over it can never resurrect a lane the
+	// selection excluded.
+	//
+	// Normalized rather than caller-spelled, which is the opposite of
+	// Unmatched and OutOfTree and deliberate: those two are read by a human
+	// looking for the path they typed, while these are appended to a runner's
+	// command line, where `./internal/a.go` and `internal/a.go` must not
+	// derive two different selectors.
+	Matched map[int][]string
 }
 
 // Select resolves paths against lanes. globs[i] is lane i's match list.
@@ -79,6 +90,14 @@ func Select(globs [][]string, paths []string) Selection {
 				if matchGlob(g, norm) {
 					hit[i] = true
 					matched = true
+					if sel.Matched == nil {
+						sel.Matched = map[int][]string{}
+					}
+					// Appended inside the same one-hit break as hit[i], so
+					// the path is recorded once per LANE however many of
+					// that lane's globs would have caught it — the same
+					// rule that keeps the lane's command from running twice.
+					sel.Matched[i] = append(sel.Matched[i], norm)
 					// One hit settles this lane: a second glob in the
 					// same lane matching the same path must not enqueue
 					// the lane's command a second time.
