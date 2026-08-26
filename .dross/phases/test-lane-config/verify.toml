@@ -1,19 +1,19 @@
 [verify]
   phase = "test-lane-config"
-  generated_at = 2026-08-25T14:54:21.947668Z
-  verdict = "fail"
+  generated_at = 2026-08-26T05:26:34.277828Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-08-25T17:04:10.735211Z
+  finalized_at = 2026-08-26T06:49:28.911493Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9547244094488189
-  mutants_killed = 485
-  mutants_survived = 23
-  mutants_not_covered = 23
+  mutation_score = 0.9586614173228346
+  mutants_killed = 487
+  mutants_survived = 21
+  mutants_not_covered = 21
   mutants_in_scope = 508
-  unclassified_in_scope = 2
+  unclassified_in_scope = 0
   criteria_total = 9
   criteria_covered = 9
   criteria_uncovered = 0
@@ -21,12 +21,12 @@
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 485
-    survived = 23
+    killed = 487
+    survived = 21
     timeout = 0
     in_scope = 508
-    score = 0.9547244094488189
-    file_count = 18
+    score = 0.9586614173228346
+    file_count = 19
 
 [[criterion]]
   id = "c-1"
@@ -61,8 +61,8 @@
 [[criterion]]
   id = "c-6"
   status = "covered"
-  tests = ["internal/cmd/test_lane_consent_test.go:113:TestUngrantedLaneRefusesOnlyItself", "internal/cmd/test_lane_consent_test.go:138:TestStaleLaneRefusalIsDistinct", "internal/cmd/trust_lane_test.go:51:TestOneLaneGoesStaleAlone"]
-  notes = "Per-lane isolation, the distinct exit code, the lane being named, and the granted lane still running are each asserted separately. The two in-hunk survivors sit on adjacent branches (findLane's lane-less message, doctor's refused-lane issue count), not on this criterion's stated claim, so it is not downgraded — they are carried as BLOCKING findings instead."
+  tests = ["internal/cmd/test_lane_consent_test.go:113:TestUngrantedLaneRefusesOnlyItself", "internal/cmd/test_lane_consent_test.go:138:TestStaleLaneRefusalIsDistinct", "internal/cmd/trust_lane_test.go:52:TestOneLaneGoesStaleAlone", "internal/cmd/trust_lane_test.go:213:TestTrustLaneOnALaneLessRepoSaysSo", "internal/cmd/trust_lane_test.go:493:TestDoctorCountsEachRefusedLane"]
+  notes = "Per-lane isolation, the distinct exit code, the lane being named, and the granted lane still running are each asserted separately. The two in-hunk survivors that held this criterion at BLOCKING in the previous run (trust.go:388 findLane's lane-less message, doctor.go:1280 the refused-lane issue count) are killed by the two amend tests: the lane-less refusal asserts the message AND the one-lane boundary it is distinguished from, and the doctor test asserts two refused lanes raise exactly one more issue than one, so a ✗ the exit code does not carry fails."
 
 [[criterion]]
   id = "c-7"
@@ -83,14 +83,6 @@
   notes = "add/list/remove round-trip through disk, rejected adds are asserted to leave project.toml byte-identical, and removal is asserted to drop the lane's consent grant."
 
 [[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/trust.go:388 (ARITHMETIC_BASE, origin=in-hunk) — findLane's len(names)==0 branch ('this repo declares none') has no test asserting its message; TestTrustLaneUnknownNamesTheDeclaredLanes covers only the other branch at :391. Killable with one test."
-
-[[finding]]
-  severity = "BLOCKING"
-  text = "gremlins mutant survived: internal/cmd/doctor.go:1280 (INCREMENT_DECREMENT, origin=in-hunk) — issues++ in doctor's ConsentRefused lane branch is untested; ConsentRefused is asserted only at the LaneConsented level (trust_lane_test.go:212), never through Doctor(), and TestDoctorStaleLaneMovesTheExitCode covers STALE only. Killable with one test."
-
-[[finding]]
   severity = "NOTE"
   text = "skipped README.md: no mutation adapter for .md"
 
@@ -104,20 +96,24 @@
 
 [[finding]]
   severity = "NOTE"
-  text = "routed: internal/cmd/milestone.go:1030 (CONDITIONALS_NEGATION) → milestone-push-failure-tests [84d409d56631ed49]"
+  text = "out-of-scope mutant survived: internal/cmd/milestone.go:1030 (CONDITIONALS_NEGATION) — routed to milestone-push-failure-tests"
 
 [[finding]]
   severity = "NOTE"
-  text = "routed: internal/cmd/milestone.go:1054 (ARITHMETIC_BASE) → milestone-push-failure-tests [6efb661ce18f93d2]"
+  text = "out-of-scope mutant survived: internal/cmd/milestone.go:1054 (ARITHMETIC_BASE) — routed to milestone-push-failure-tests"
 
 [[finding]]
   severity = "NOTE"
-  text = "filtered 2 out-of-scope survivor(s) in files this phase did not touch — listed under `out_of_scope` in tests.json, not counted in the score. Both now routed (above)."
+  text = "filtered 73 out-of-scope survivor(s) in files this phase did not touch — 71 already accepted in .dross/survivors.toml, 2 routed to milestone-push-failure-tests. None unclassified; listed under `out_of_scope` in tests.json, not counted in the score."
 
 [[finding]]
   severity = "NOTE"
-  text = "23 of 508 in-scope mutants are NOT COVERED (uncoverable by construction — gremlins attributes no coverage block to them); efficacy over the 485 reachable is 1.00. 21 carry an existing acceptance in .dross/survivors.toml."
+  text = "21 of 508 in-scope mutants are NOT COVERED (uncoverable by construction — gremlins attributes no coverage block to them, the go-cover switch-case attribution ceiling proven by internal/mutation/ceiling_test.go); efficacy over the 487 reachable is 1.00. All 21 carry an existing acceptance in .dross/survivors.toml and all are origin=inherited — none sits in a hunk this phase wrote."
 
 [[finding]]
   severity = "NOTE"
-  text = "dross gap surfaced this run: `dross survivor route --target` refuses any phase without a scaffolded directory, so forward-looking debt cannot be routed to an unstarted phase. Worked around here by scaffolding milestone-push-failure-tests first."
+  text = "amend closed the previous run's two BLOCKING findings: survived fell 23 → 21 and in-diff survivors 2 → 0. No new survivor appeared in the 19 measured files."
+
+[[finding]]
+  severity = "NOTE"
+  text = "dross gap surfaced in the previous run and still open: `dross survivor route --target` refuses any phase without a scaffolded directory, so forward-looking debt cannot be routed to an unstarted phase. Worked around by scaffolding milestone-push-failure-tests first."
