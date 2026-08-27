@@ -1,0 +1,79 @@
+task_seq = 0
+
+[phase]
+  id = "lane-prepare-step"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Declare lane prepare field, flag, list row"
+  files = ["internal/project/project.go", "internal/cmd/test_lane.go", "internal/cmd/validate.go", "internal/cmd/test_lane_test.go", "internal/cmd/validate_lane_test.go", "internal/project/project_test.go"]
+  description = "Add Prepare string (toml prepare,omitempty / json prepare,omitempty) to\nproject.TestLane. `dross test lane add` gains --prepare <cmd>, normalizing a\nwhitespace-only value to absent before the load-modify-save. `dross test lane\nlist` prints a prepare row for the lanes that declare one. laneProblems gains a\nwhitespace-only prepare check, naming the lane through the existing laneLabel.\n\nThe whitespace-only validate rule is a deliberate addition, not a reading of a\nlocked decision: a hand-edited prepare = \"   \" survives project.Load non-empty,\nso it fingerprints as a prepare and reads as none. An empty-string prepare is\nNOT ruled on — omitempty makes it indistinguishable from an absent key after\nload, so that assert could never fail.\n"
+  covers = ["c-1"]
+  test_contract = ["Prepare carries BOTH toml:\"prepare,omitempty\" and json:\"prepare,omitempty\"; a toml-only tag fails the existing TestTomlFieldsCarryMatchingJSONTags in json_tag_parity_test.go", "after `lane add p --match a --command c --prepare \"make build\"`, reloading project.toml gives lane.Prepare == \"make build\" — a flag registered but never written into the block fails here", "a lane added WITHOUT --prepare writes no `prepare =` key at all, and a project.toml written before this phase round-trips BYTE-IDENTICALLY, asserted on the rendered bytes beside TestNoTestLaneIsAbsentFromTheDocument; a missing omitempty fails the byte compare rather than a later run", "`dross test lane list` prints \"prepare: make build\" for the declaring lane and NO prepare row for its neighbour, asserted as absence — an opt-in field must never look like something every pre-existing lane must set", "a lane added with a prepare starts UNGRANTED: the add output names `dross trust --lane p` and trusted_lane_commands holds no entry for p", "--prepare \"   \" normalizes to absent at the CLI (no `prepare =` key written), while a hand-edited prepare = \"   \" IS reported by `dross validate` naming that lane — whitespace-only is the one shape that is non-empty for the fingerprint and empty for the reader"]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 1
+  title = "Rank a prepare failure above a red suite"
+  files = ["internal/cmd/test.go", "internal/cmd/test_lane_consent_test.go", "internal/cmd/test_files_test.go"]
+  description = "Add exitPrepareFailed = 7 to the exit-code block with its doc comment, and place\nit in exitRank between exitPartial and exitSuiteFailed (locked\nprepare_failure). No consumer yet — t-5 wires the classification.\n"
+  covers = ["c-3"]
+  test_contract = ["TestExitPrecedenceIsTotal's order slice becomes {transport, partial, prepare, suiteFailed, laneRefused, nothingMeasured} and the table drives every co-occurring pair in BOTH argument positions through worseOutcome; any rank swap fails it in both directions", "exitRank(exitPrepareFailed) is strictly above exitRank(exitSuiteFailed) and strictly below exitRank(exitPartial), asserted on the ranks themselves — a code omitted from exitRank falls to the unknown default, which is literally `return 3`, exitSuiteFailed's own rank, and would tie silently", "exitPrepareFailed is ADDED to the hand-maintained codes map in TestExitCodesArePairwiseDistinct (test_files_test.go:138), and the entry exitLaneRefused omits today is added in the same edit — the map does not read the const block, so a code left out of it collides silently; assert the map's length equals the number of exit constants so the next omission fails instead of rotting", "a red lane in a repo declaring no prepare still exits 1 — the new code is unreachable without a prepare line"]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Fingerprint prepare into the lane grant"
+  files = ["internal/cmd/trust.go", "internal/cmd/test.go", "internal/cmd/doctor.go", "internal/cmd/trust_lane_test.go", "internal/cmd/doctor_test.go", "internal/cmd/test_lane_consent_test.go"]
+  description = "The lane consent fingerprint is taken over a LENGTH-FRAMED encoding of prepare\nplus command rather than a naive concatenation, keeping one grant per lane\n(locked prepare_consent). A lane declaring no prepare hashes exactly what it\nhashes today. `dross trust --lane` prints the prepare line and the command line\nbefore granting. `dross doctor` prints the prepare line under the command for a\ndeclaring lane.\n"
+  covers = ["c-4"]
+  depends_on = ["t-1"]
+  test_contract = ["the fingerprint of {prepare:\"a\", command:\"bc\"} differs from {prepare:\"ab\", command:\"c\"} — naive concatenation collides here, which is a lane re-split across its two fields keeping a grant issued for neither", "a lane declaring NO prepare fingerprints to Fingerprint(lane.Command) byte-for-byte, so a grant written into local.toml before this phase still reads ConsentGranted; framing applied unconditionally fails this and would stale every existing lane grant on every machine", "no (prepare, command) pair can forge a no-prepare lane's fingerprint: asserted by feeding the framed bytes back in as a bare command and requiring a MISS", "grant a lane, then append a prepare: LaneConsented returns ConsentStale (not Granted, not Absent) and `dross trust --lane go --check` exits non-zero carrying the \"has CHANGED since you trusted it\" wording", "`dross trust --lane go` prints the prepare line AND the command line, with the prepare's index BEFORE the \"recorded in .dross/local.toml\" line — a grant that wrote before printing both fails the ordering assert, and a refusal showing only the command lets a user re-grant a bootstrap they never read", "`dross doctor` prints a prepare row under the command for a declaring lane and NO prepare row for a lane declaring none", "doctor's STALE row for a lane whose prepare alone changed still names `dross trust --lane <name>` as the fix, so the state that refuses and the state doctor reports agree", "two-lane fixture where lane A's prepare ALONE went stale: the refusal text contains A's PREPARE line (not only its command), lane B's command still reaches the recorder, and the run exits 6 — laneConsentRefusal (trust.go:353) interpolates one line into every arm today, so a user refused over a changed bootstrap would read a command that did not change and re-grant a line they never saw"]
+  status = "pending"
+
+[[task]]
+  id = "t-4"
+  wave = 3
+  title = "Run each lane's prepare before its command"
+  files = ["internal/cmd/test.go", "internal/cmd/test_lane_prepare_test.go"]
+  description = "Per matched-and-granted lane, spawn the prepare after the tree sync and before\nthat lane's test command, on the same host and through the same transport as\nthe command (locked prepare_locality). No deduplication across lanes (locked\nprepare_scope). A lane skipped before spawn — selector miss or consent refusal\n— never runs its prepare (locked prepare_selector_miss). A prepare that would\nreach the runner as an option is refused in the existing up-front fence beside\nshArgvFor, before any lane spawns. Failure classification is t-5's.\n"
+  covers = ["c-2", "c-5"]
+  depends_on = ["t-1", "t-3"]
+  test_contract = ["remote fixture, one prepared lane: recorded remote spawns are rsync, then an ssh script carrying the prepare, then an ssh script carrying the command — a prepare hoisted above the sync fails the index assert", "two prepared lanes interleave PER LANE as [prep-go, go-cmd, prep-docs, docs-cmd]; a batched [prep-go, prep-docs, go-cmd, docs-cmd] fails", "two lanes declaring the IDENTICAL prepare line spawn it TWICE; a dedup cache fails on the recorded count (locked prepare_scope)", "transcript order asserted by BYTE OFFSET, not presence: index of the prepare line < index of the `lane go: <line>` header < index of that lane's first own output", "`--local` against a granted-remote fixture records exactly [prepare, command] on the local seam and NOTHING on the remote seam, and the recorded prepare string equals the one carried inside the remote script for the same fixture — a prepare wired only into the remote leg fails the local half, a rebuilt-per-transport line fails the equality (c-5)", "a lane whose selector filtered to nothing records NO prepare spawn, and neither does a consent-refused lane — the recorder holds neither its prepare nor its command (locked prepare_selector_miss)", "a prepare beginning with `-` is refused by the UP-FRONT fence sweep naming runtime.test_lane[go], with zero spawns of any kind; a fence moved inside the loop leaves the earlier lane already run on a two-lane fixture", "a lane declaring NO prepare records EXACTLY ONE spawn — its command — asserted on the recorder count on both the local and the remote seam; an unconditional spawn that turns an absent prepare into `sh -c \"\"` satisfies every other contract in this plan and fails only here (c-1's \"spawns exactly what it spawns today\")"]
+  status = "pending"
+
+[[task]]
+  id = "t-5"
+  wave = 4
+  title = "Fail a lane on its prepare, spare the rest"
+  files = ["internal/cmd/test.go", "internal/cmd/test_lane_prepare_test.go"]
+  description = "A prepare that fails skips its own lane's test command and yields\nexitPrepareFailed, folded through worseOutcome so the run's other matched lanes\nstill run. Classified on BOTH transports: runOneLane's local arm currently\nhardcodes exitSuiteFailed in `test lane %q failed`, and the remote-command arm\ntakes its code from remoteFailure. The re-tag sits inside the command-exit arms\nonly — the transport family (ssh 255, incomplete rsync) is untouched.\n"
+  covers = ["c-3"]
+  depends_on = ["t-2", "t-4"]
+  test_contract = ["the docs lane's prepare fails: docsCmd appears NOWHERE in the recorder, goCmd does, and the run exits 7 — a `return` instead of a `continue` fails the goCmd assert, a missing skip fails the docsCmd assert", "the go lane's suite goes red AND the docs lane's prepare fails: the run exits 7, not 1, proving the result was folded through worseOutcome rather than left to the last lane", "a run where EVERY lane's prepare failed exits 7, NOT 5: prepare failures must be counted apart from selector misses, or `misses == len(runnable)` returns exitNothingMeasured, which ranks LAST", "the failure message names the lane AND the prepare line and does not read as `test lane %q failed`; a shared wrapper fails the substring assert that the two kinds are distinguishable in the transcript", "classified on BOTH transports: a prepare failing under --local exits 7 rather than the exitSuiteFailed runOneLane's local arm hardcodes today, and a prepare failing over ssh with a remote-command exit status exits 7 rather than the exitSuiteFailed remoteFailure hands back for the command leg", "a TRANSPORT failure (ssh 255) during a prepare still exits 3 and an incomplete rsync still exits 4 — the re-tag must not swallow the transport family", "a failed remote prepare leaves NO ssh invocation carrying that lane's test line: the recorded scripts hold rsync and the prepare only"]
+  status = "pending"
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  title = "Add dross test lane edit --prepare"
+  files = ["internal/cmd/test_lane.go", "internal/cmd/test_lane_edit_test.go"]
+  description = "New `dross test lane edit <name> --prepare \"<cmd>\"` sets or clears a prepare in\nplace, keeping the lane's match globs, command and declaration order. Read from\ncobra's Changed so an omitted flag and an empty one cannot collapse. The changed\nlane goes STALE — its grant is kept, not revoked, so `dross trust --lane` says\nthe line CHANGED rather than that it was never trusted. Supersedes\nlane-selector-translation's lane_edit_surface for the prepare field only; match,\ncommand, selector and empty_exit stay remove-then-re-add.\n"
+  covers = ["c-6"]
+  depends_on = ["t-1", "t-3"]
+  test_contract = ["after `lane edit go --prepare \"make build\"` the reloaded lane's Match slice and Command are byte-identical and only Prepare differs, asserted as a whole-struct compare; a remove-then-append implementation reorders the block and fails the declaration-order assert against its neighbour lane", "--prepare \"\" clears the key (no `prepare =` line survives), while OMITTING --prepare entirely errors instead of rewriting the file — read from cobra's Changed, so \"not passed\" and \"passed empty\" cannot collapse into one clearing behaviour that silently drops an existing prepare", "after an edit that changed the fingerprint, local.toml STILL holds a trusted_lane_commands entry for that lane and `dross trust --lane go --check` fails with the \"has CHANGED\" wording, not the \"has not been trusted\" wording; calling RevokeLaneConsent fails both halves", "the edit prints `dross trust --lane go` when the fingerprint changed and prints no trust instruction on a no-op re-set of the same value; an unconditional message fails the no-op case", "`lane edit nope --prepare x` errors listing the declared lane names and leaves project.toml byte-identical"]
+  status = "pending"
+
+[[task]]
+  id = "t-7"
+  wave = 5
+  title = "Document prepare, exit 7, narrowed lane edit"
+  files = ["README.md", "assets/prompts/execute.md", "assets/prompts/options.md", "internal/cmd/options_docs_test.go", "internal/cmd/execute_prompt_test.go"]
+  description = "README's lane row gains --prepare and `dross test lane edit`, and its `dross\ntest` row names exit 7 in the stated precedence order. execute.md's exit-code\nlist gains 7 so an agent cannot read a failed bootstrap as a red suite.\noptions.md names `dross test lane edit --prepare` while KEEPING remove-then-re-add\nfor match, command, selector and empty_exit.\n"
+  covers = ["c-1", "c-3", "c-6"]
+  depends_on = ["t-2", "t-5", "t-6"]
+  test_contract = ["TestReadmeDocumentsTestLanes in options_docs_test.go gains --prepare and `dross test lane edit`; deleting either from README's lane row fails it", "README's `dross test` row names exit 7 and places it between partial and red in the stated precedence order; a 7 documented outside that position fails the ordering assert", "a new assertion in execute_prompt_test.go fails if execute.md carries no 7 entry, or if its \"2, 3, 4, 5 and 6 all mean the run did not happen\" line still omits 7 — an agent that reads 7 as a red suite goes hunting a bug in code that never ran", "TestOptionsDocumentsTheSelectorSurfaceCorrectly still passes: options.md KEEPS \"remove-then-re-add\" for match, command, selector and empty_exit while naming `dross test lane edit --prepare`, and every --flag in its `dross test lane add` examples is one testLaneAdd() registers — the gate cross-checks doc flags against the live cobra flag set"]
+  status = "pending"
