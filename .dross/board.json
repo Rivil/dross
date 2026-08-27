@@ -44,7 +44,7 @@
   "backlog": {
     "slug:lane-prepare-step": "DRO-204",
     "slug:lane-remote-locality": "DRO-205",
-    "slug:lane-selector-translation": "DRO-203",
+    "slug:lane-selector-custom": "DRO-218",
     "slug:remote-toolchain-install": "DRO-206",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
@@ -52,6 +52,7 @@
     "someday:id:053bcdb6ddc5f57b": "DRO-162",
     "someday:id:06ca9b2e97abcb78": "DRO-87",
     "someday:id:0ad901405561a187": "DRO-116",
+    "someday:id:0d1268f8311bb7e4": "DRO-221",
     "someday:id:0eb3dd31220aa3bc": "DRO-101",
     "someday:id:130a1cf4bc7049f2": "DRO-92",
     "someday:id:1708546d27dd3939": "DRO-81",
@@ -62,6 +63,7 @@
     "someday:id:215d2ae2e7799d69": "DRO-102",
     "someday:id:2385fc70268180d1": "DRO-83",
     "someday:id:24da6d2754488290": "DRO-41",
+    "someday:id:26a2f16243a1ffbe": "DRO-220",
     "someday:id:29eda0e6b5c6ffba": "DRO-180",
     "someday:id:2a662adc6c7edb5f": "DRO-73",
     "someday:id:2d576654430ab9a2": "DRO-93",
@@ -77,6 +79,7 @@
     "someday:id:4518ecf010f195bb": "DRO-90",
     "someday:id:46744487f204b5cd": "DRO-54",
     "someday:id:48b5edeb0556cd3a": "DRO-105",
+    "someday:id:5610b45525282bf4": "DRO-219",
     "someday:id:5802ad3fe8f08d87": "DRO-34",
     "someday:id:5c2c048407b679b5": "DRO-159",
     "someday:id:64cd228356c9fce5": "DRO-76",
@@ -266,37 +269,37 @@
     "lane-selector-translation/t-1": {
       "issue": "DRO-211",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-translation/t-2": {
       "issue": "DRO-212",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-translation/t-3": {
       "issue": "DRO-213",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-translation/t-4": {
       "issue": "DRO-214",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-translation/t-5": {
       "issue": "DRO-215",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-translation/t-6": {
       "issue": "DRO-216",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-translation/t-7": {
       "issue": "DRO-217",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "legacy-phase-backfill/t-1": {
       "issue": "DRO-143",

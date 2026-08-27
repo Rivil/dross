@@ -68,16 +68,19 @@
   locked = true
 
 [[deferred]]
+  id = "5610b45525282bf4"
   text = "A free-form selector template for runners the closed enum cannot shape (cargo module paths, ctest -R regexes)."
   why = "Needs a fence and consent story of its own; the enum covers the author's stacks first."
   target = "lane-selector-custom"
 
 [[deferred]]
+  id = "26a2f16243a1ffbe"
   text = "Auto-deriving a runner's 'collected nothing' exit codes from its command line."
   why = "Inference, against the milestone's declared-not-inferred non-goal."
   target = "lane-selector-custom"
 
 [[deferred]]
+  id = "0d1268f8311bb7e4"
   text = "Source-to-test path mapping (editing src/foo.ts running test/foo.test.ts) where the runner has no --related / --findRelatedTests of its own."
   why = "That is a per-framework mapping engine — the milestone's third non-goal."
   target = "lane-selector-custom"
