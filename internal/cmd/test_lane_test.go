@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -257,5 +258,135 @@ func TestLaneVerbShadowsSelector(t *testing.T) {
 	}
 	if n := rec.count(); n != 0 {
 		t.Errorf("`dross test lane` spawned %d command(s) — it reached the suite runner, not the subcommand", n)
+	}
+}
+
+// TestLaneAddPersistsSelectorFields: the two opt-in fields have to survive the
+// round trip to disk and come back out of `lane list`, or --selector would be a
+// flag the user can type and nothing would ever read.
+func TestLaneAddPersistsSelectorFields(t *testing.T) {
+	dir := laneFixture(t)
+	mustAddLane(t, "go", "--match", "internal/**", "--command", "go test",
+		"--selector", "go-package", "--empty-exit", "5")
+
+	lanes := loadLanes(t, dir)
+	if len(lanes) != 1 {
+		t.Fatalf("want 1 lane on disk, got %d", len(lanes))
+	}
+	if lanes[0].Selector != "go-package" {
+		t.Errorf("selector = %q, want go-package", lanes[0].Selector)
+	}
+	if !reflect.DeepEqual(lanes[0].EmptyExit, []int{5}) {
+		t.Errorf("empty_exit = %v, want [5]", lanes[0].EmptyExit)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "list"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "selector: go-package") {
+		t.Errorf("lane list hid the selector:\n%s", out)
+	}
+	if !strings.Contains(out, "empty-exit: 5") {
+		t.Errorf("lane list hid the empty-exit codes:\n%s", out)
+	}
+}
+
+// TestLaneAddRefusesBadSelectorFieldsBeforeTheWrite: every one of these is a
+// lane `dross validate` would reject, so the CLI must not be the thing that
+// writes it. Asserted on the FILE as well as the error, in the shape
+// TestLaneAddWithoutCommandLeavesTheFileUnchanged already pins — a refusal that
+// ran after the save would pass an error-only test while leaving the bad lane
+// on disk.
+func TestLaneAddRefusesBadSelectorFieldsBeforeTheWrite(t *testing.T) {
+	cases := []struct {
+		name   string
+		args   []string
+		needle string
+	}{
+		// A style dross cannot translate; the refusal names the set.
+		{"unknown-style", []string{"--selector", "packages"}, "path | dir | go-package"},
+		// 0 is the runner's success code.
+		{"success-code", []string{"--selector", "path", "--empty-exit", "0"}, "success code"},
+		// 255 is ssh's transport failure, spent by internal/remote.
+		{"ssh-code", []string{"--selector", "path", "--empty-exit", "255"}, "transport-failure"},
+		// Outside the byte a process exits with.
+		{"out-of-range", []string{"--selector", "path", "--empty-exit", "300"}, "0-255"},
+		// A code that can never fire, because the lane always runs whole.
+		{"code-without-selector", []string{"--empty-exit", "5"}, "no selector"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := laneFixture(t)
+			path := filepath.Join(dir, RootDirName, project.File)
+			before := mustRead(t, path)
+
+			args := append([]string{"lane", "add", "go", "--match", "internal/**", "--command", "go test"}, tc.args...)
+			err := runCmd(t, Test(), args...)
+			if err == nil {
+				t.Fatalf("lane add accepted %v", tc.args)
+			}
+			if !strings.Contains(err.Error(), tc.needle) {
+				t.Errorf("the refusal must say why (%q), got: %v", tc.needle, err)
+			}
+			if after := mustRead(t, path); after != before {
+				t.Errorf("a rejected add rewrote project.toml:\n--- before\n%s\n--- after\n%s", before, after)
+			}
+		})
+	}
+}
+
+// TestLaneAddNormalizesTheSelector: what lands on disk is the canonical
+// spelling, so list, validate and the run site never disagree with each other
+// over what the user typed.
+func TestLaneAddNormalizesTheSelector(t *testing.T) {
+	dir := laneFixture(t)
+	mustAddLane(t, "go", "--match", "internal/**", "--command", "go test",
+		"--selector", " GO-PACKAGE ")
+
+	if got := loadLanes(t, dir)[0].Selector; got != "go-package" {
+		t.Errorf("selector = %q, want the normalized go-package", got)
+	}
+}
+
+// TestLaneListOmitsUndeclaredSelectorFields asserts ABSENCE, which is the whole
+// opt-in claim: a lane written before this phase must not start listing fields
+// that read as something the user is expected to go and set.
+func TestLaneListOmitsUndeclaredSelectorFields(t *testing.T) {
+	laneFixture(t)
+	mustAddLane(t, "go", "--match", "internal/**", "--command", "go test")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "list"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "selector") {
+		t.Errorf("a lane declaring no selector listed one:\n%s", out)
+	}
+	if strings.Contains(out, "empty-exit") {
+		t.Errorf("a lane declaring no empty-exit codes listed them:\n%s", out)
+	}
+}
+
+// TestSelectorFieldsSurviveAnotherLanesRemoval: `lane remove` rewrites every
+// surviving lane through the encoder, so the two new fields ride that path too.
+// A field the rewrite dropped would leave a lane silently unscoped after an
+// unrelated edit.
+func TestSelectorFieldsSurviveAnotherLanesRemoval(t *testing.T) {
+	dir := laneFixture(t)
+	mustAddLane(t, "go", "--match", "internal/**", "--command", "go test",
+		"--selector", "go-package", "--empty-exit", "5")
+	mustAddLane(t, "docs", "--match", "docs/", "--command", "true")
+
+	if err := runCmd(t, Test(), "lane", "remove", "docs"); err != nil {
+		t.Fatal(err)
+	}
+	lanes := loadLanes(t, dir)
+	if len(lanes) != 1 {
+		t.Fatalf("want the go lane left, got %d", len(lanes))
+	}
+	if lanes[0].Selector != "go-package" || !reflect.DeepEqual(lanes[0].EmptyExit, []int{5}) {
+		t.Errorf("removing another lane dropped the survivor's selector fields: selector=%q empty_exit=%v",
+			lanes[0].Selector, lanes[0].EmptyExit)
 	}
 }

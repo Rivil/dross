@@ -179,6 +179,14 @@ Declare them through the CLI, never by hand-editing `project.toml`:
 - **Add** → `dross test lane add <name> --match <glob> --command "<cmd>"` (`--match` is repeatable)
 - **Remove** → `dross test lane remove <name>`
 
+There is no edit verb: changing a lane is remove-then-re-add, which is also what makes the grant story honest — the re-added lane starts untrusted.
+
+**Scoping a lane to the files that hit it.** `dross test lane add ... --selector <style>` makes the lane append its own matched paths to its command, in one of three shapes: `path` (each file), `dir` (each parent directory), `go-package` (`./<dir>/...`). A task touching one file then costs that package rather than the lane's whole suite. Omit it and the lane runs its command untouched, which is what every lane written before this did — it is opt-in per lane, and `dross test lane list` prints `selector:` only for the lanes that declare one.
+
+`--empty-exit <code>` (repeatable) names the exit status this lane's runner uses for "collected no tests" — pytest's `5`. That lane is then reported as a **selector miss** rather than a red suite, and does not fail the gate; a run where every matched lane missed still exits `5` rather than reporting green. It requires `--selector`: an unscoped lane runs its whole suite, so the code could never fire. Both flags are refused before anything is written if the style is unknown or the code is one that already means something else (`0` is success, `255` is ssh transport failure), so the CLI cannot write a lane `dross validate` would then reject.
+
+Appending a selector does **not** disturb consent: the grant covers the lane's declared `command`, so a lane trusted before it grew a selector keeps running, and an ungranted one still refuses.
+
 Each lane's command carries its **own** grant, keyed by lane name under `trusted_lane_commands`. That key is not writable through `dross local set` — same reason as `trusted_test_command` — so consent goes through `dross trust --lane <name>`, which prints the line before recording it. `dross trust --lane <name> --check` reports granted / absent / stale for one lane, and `dross doctor` lists every lane's state under `Exec consent:`.
 
 Per lane, not per repo, is the point: a one-character edit to a docs lane's command must not revoke the Go lane the pre-commit gate runs. Editing *or renaming* a lane revokes only that lane, and removing a lane drops its grant so a name re-added later starts untrusted rather than inheriting one.

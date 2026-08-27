@@ -187,3 +187,19 @@ func MilestoneModesFor(provider string) *Set {
 func BoardRequiresBaseURL(provider string) bool {
 	return Normalize(provider) != "github"
 }
+
+// SelectorStyles is the set of [[runtime.test_lane]] `selector` values: the
+// shape a lane's matched paths take when `dross test --files` appends them to
+// that lane's command.
+//
+// The members name selector SHAPES, not runners — `path` emits each matched
+// path, `dir` its parent directory, `go-package` the ./<dir>/... form Go's
+// tooling takes. A runner is configured by pointing its lane at whichever shape
+// it accepts, so dross never grows a per-framework translation engine.
+//
+// Empty is rejected by Has, and that is deliberate rather than an oversight: an
+// omitted selector means "append nothing", which is the pre-selector behaviour
+// every existing lane already has. Validators guard the empty case themselves
+// before consulting the Set, so a lane that declares no selector is valid while
+// a lane that declares a nonsense one is named and refused.
+var SelectorStyles = newSet("", "path", "dir", "go-package")

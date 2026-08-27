@@ -26,6 +26,10 @@
   name = "exec-seam-guard"
   reason = "The 'if stdin != \"\"' guard lives inside the process-construction seam (launcherCommand) that every remote test replaces, so executing it would mean spawning the real ssh — the one thing those tests exist to avoid. Its effect is asserted instead of its line: TestRemoteEnvExportsPrecedeTheCommand and TestGremlinsRemoteRunOrderAndArgv both read the script back off the recorded stdin, which is only there because this branch attaches it, and TestRemoteNilCarriesNoScript pins the empty-stdin side."
 
+[[category]]
+  name = "shadowed-range-boundary"
+  reason = "An equivalent mutant, not a coverage gap: this arm is `case code < 0 || code > 255` in laneSelectorProblems, and the two arms above it already match code == 0 and code == 255 exactly. CONDITIONALS_BOUNDARY can only widen `<` to `<=` or `>` to `>=`, and both widenings admit only the two values the earlier cases have already consumed — so no input reaches the mutated comparison and no assertion can distinguish the mutant from the original. Killing it would require deleting the explicit 0 and 255 arms, which exist to give each code its own refusal message (TestValidateRejectsUnusableEmptyExitCodes asserts the distinct needles \"success code\", \"transport-failure\" and \"0-255\" per code). The reachable half of this arm is covered: the out-of-range case drives 300 through dross validate and asserts the 0-255 refusal."
+
 [[accepted]]
   key = "742de35850fac7e6"
   file = "internal/cmd/survivor.go"
@@ -1141,3 +1145,39 @@
   line = 110
   category = "gremlins-attribution-ceiling"
   accepted_in = "remote-toolchain-bootstrap"
+
+[[accepted]]
+  key = "d978f429d092ab26"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case code == 0:"
+  line = 256
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "lane-selector-translation"
+
+[[accepted]]
+  key = "57293670addabbd3"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case code == 255:"
+  line = 261
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "lane-selector-translation"
+
+[[accepted]]
+  key = "c7f84a5caf3f19aa"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case code < 0 || code > 255:"
+  line = 266
+  category = "gremlins-attribution-ceiling"
+  accepted_in = "lane-selector-translation"
+
+[[accepted]]
+  key = "ee552310d9ef3bd7"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case code < 0 || code > 255:"
+  line = 266
+  category = "shadowed-range-boundary"
+  accepted_in = "lane-selector-translation"

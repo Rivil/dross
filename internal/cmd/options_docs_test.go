@@ -3,9 +3,12 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/spf13/pflag"
 )
 
 // optionsPrompt reads the /dross-options prompt, which is the only surface that
@@ -59,6 +62,10 @@ func TestOptionsCoversTheConsentVerbs(t *testing.T) {
 		"dross test lane add",
 		"dross trust --lane",
 		"trusted_lane_commands",
+		// --selector changes what a consented lane spawns, so a settings
+		// surface claiming to reach every dross-managed setting cannot omit
+		// the one field that does that.
+		"--selector",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("options.md does not mention %q", want)
@@ -191,10 +198,83 @@ func TestReadmeDocumentsTestLanes(t *testing.T) {
 		"dross test lane remove",
 		"runtime.test_lane",
 		"dross trust --lane",
+		// The pre-selector wording, kept intact: it is still one of the two
+		// ways a run measures nothing, and an agent reading only the new
+		// clause would have no name for the plain no-lane case.
 		"matched no lane",
+		// The selector surface. A shipped flag with no README line is a flag
+		// nobody can find, which is the same rule `dross test --files`
+		// already answers to.
+		"--selector",
+		"go-package",
+		"--empty-exit",
+		"selector miss",
 	} {
 		if !strings.Contains(readme, want) {
 			t.Errorf("README.md does not document %q", want)
+		}
+	}
+	// Exit 5 now has two causes, and an agent that only ever learned the first
+	// reads an all-miss run as an unexplained non-zero — which is exactly the
+	// state the exit contract exists to keep it out of.
+	if !strings.Contains(readme, "every matched lane's selector collected nothing") {
+		t.Error("README.md's exit-5 contract does not cover the all-miss run")
+	}
+}
+
+// TestOptionsDocumentsTheSelectorSurfaceCorrectly guards the two ways the
+// settings prompt could describe this surface wrongly: by sending the reader to
+// hand-edit project.toml, or by advertising a flag the command does not
+// register.
+func TestOptionsDocumentsTheSelectorSurfaceCorrectly(t *testing.T) {
+	prompt := optionsPrompt(t)
+
+	// Editing stays remove-then-re-add (locked lane_edit_surface). A prompt
+	// that told the reader to open project.toml would route around every
+	// refusal `dross test lane add` performs before the write.
+	if !strings.Contains(prompt, "remove-then-re-add") {
+		t.Error("options.md does not route lane edits through remove-then-re-add")
+	}
+	for _, forbidden := range []string{
+		"hand-edit runtime.test_lane",
+		"edit the [[runtime.test_lane]] block",
+		"edit runtime.test_lane",
+	} {
+		if strings.Contains(prompt, forbidden) {
+			t.Errorf("options.md tells the reader to hand-edit a lane: %q", forbidden)
+		}
+	}
+
+	// Every --flag advertised for `dross test lane add`, in options.md AND in
+	// the README, has to be one the cobra command actually registers. A doc
+	// naming --selector-template is a doc that sends the user to a refusal.
+	registered := map[string]bool{}
+	testLaneAdd().Flags().VisitAll(func(f *pflag.Flag) { registered[f.Name] = true })
+
+	root := repoRootForDocs(t)
+	readmeBytes, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	flagRe := regexp.MustCompile(`dross test lane add[^\n` + "`" + `]*`)
+	for _, doc := range []struct{ name, body string }{
+		{"options.md", prompt},
+		{"README.md", string(readmeBytes)},
+	} {
+		for _, example := range flagRe.FindAllString(doc.body, -1) {
+			for _, tok := range strings.Fields(example) {
+				if !strings.HasPrefix(tok, "--") {
+					continue
+				}
+				name := strings.TrimPrefix(strings.SplitN(tok, "=", 2)[0], "--")
+				name = strings.Trim(name, "`*_,.")
+				if name == "" {
+					continue
+				}
+				if !registered[name] {
+					t.Errorf("%s advertises `dross test lane add --%s`, which the command does not register (in %q)", doc.name, name, example)
+				}
+			}
 		}
 	}
 }

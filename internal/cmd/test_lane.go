@@ -17,10 +17,12 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/project"
 )
 
@@ -52,9 +54,27 @@ func loadProjectForLanes() (root string, p *project.Project, err error) {
 	return root, p, nil
 }
 
+// laneSelectorRefusal returns the CLI's refusal for a proposed lane's selector
+// fields, or nil when they are usable.
+//
+// It reads the SAME laneSelectorProblems `dross validate` reports through, and
+// that is the point rather than a convenience: the two surfaces cannot drift,
+// so the CLI can never write a lane validate would then turn round and reject.
+// The problems are quoted verbatim, project.toml prefix included, because they
+// are exactly what the user would read on the next validate run.
+func laneSelectorRefusal(name string, lane project.TestLane) error {
+	problems := laneSelectorProblems(laneLabel(0, name), lane)
+	if len(problems) == 0 {
+		return nil
+	}
+	return fmt.Errorf("lane %q would not validate:\n  %s", name, strings.Join(problems, "\n  "))
+}
+
 func testLaneAdd() *cobra.Command {
 	var match []string
 	var command string
+	var selector string
+	var emptyExit []int
 	c := &cobra.Command{
 		Use:   "add <name>",
 		Short: "Declare a test lane",
@@ -77,6 +97,19 @@ func testLaneAdd() *cobra.Command {
 			if strings.TrimSpace(command) == "" {
 				return fmt.Errorf("lane %q needs a --command — a lane with no command line has nothing to run and nothing to consent to", name)
 			}
+			// Normalized before it is checked and before it is written, so
+			// list, validate and the run site all read back the one spelling
+			// the user's typing resolved to.
+			proposed := project.TestLane{
+				Name:      name,
+				Match:     match,
+				Command:   strings.TrimSpace(command),
+				Selector:  configenum.Normalize(selector),
+				EmptyExit: emptyExit,
+			}
+			if err := laneSelectorRefusal(name, proposed); err != nil {
+				return err
+			}
 			root, p, err := loadProjectForLanes()
 			if err != nil {
 				return err
@@ -89,11 +122,7 @@ func testLaneAdd() *cobra.Command {
 						name, strings.Join(lane.Match, " "), lane.Command)
 				}
 			}
-			p.Runtime.TestLane = append(p.Runtime.TestLane, project.TestLane{
-				Name:    name,
-				Match:   match,
-				Command: strings.TrimSpace(command),
-			})
+			p.Runtime.TestLane = append(p.Runtime.TestLane, proposed)
 			if err := p.Save(filepath.Join(root, project.File)); err != nil {
 				return err
 			}
@@ -105,6 +134,8 @@ func testLaneAdd() *cobra.Command {
 	}
 	c.Flags().StringArrayVar(&match, "match", nil, "glob this lane matches (repeatable)")
 	c.Flags().StringVar(&command, "command", "", "the command line this lane runs")
+	c.Flags().StringVar(&selector, "selector", "", "shape the matched paths take when appended to the command ("+configenum.SelectorStyles.List()+"); omitted runs the command untouched")
+	c.Flags().IntSliceVar(&emptyExit, "empty-exit", nil, "exit code this lane's runner uses for \"collected no tests\" (repeatable); requires --selector")
 	return c
 }
 
@@ -133,6 +164,15 @@ func testLaneList() *cobra.Command {
 				// binds to, so a listing that hid it would leave the user
 				// unable to see what they are being asked to trust.
 				Printf("  command: %s\n", lane.Command)
+				// Printed only when declared. Both fields are opt-in, and a
+				// `selector: -` on every pre-existing lane would read as
+				// something the user is expected to go and set.
+				if lane.Selector != "" {
+					Printf("  selector: %s\n", lane.Selector)
+				}
+				if len(lane.EmptyExit) > 0 {
+					Printf("  empty-exit: %s\n", joinInts(lane.EmptyExit))
+				}
 			}
 			return nil
 		},
@@ -193,4 +233,13 @@ func testLaneRemove() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// joinInts renders the empty-exit codes for the listing.
+func joinInts(v []int) string {
+	out := make([]string, len(v))
+	for i, n := range v {
+		out[i] = strconv.Itoa(n)
+	}
+	return strings.Join(out, " ")
 }

@@ -217,3 +217,113 @@ func TestDuplicatePathsAreReportedOnce(t *testing.T) {
 		t.Errorf("Unmatched = %v, want the miss reported once", got.Unmatched)
 	}
 }
+
+// contains reports membership, so the Matched assertions can say "and NOT this
+// path" without spelling out a whole slice each time.
+func contains(hay []string, needle string) bool {
+	for _, s := range hay {
+		if s == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// TestMatchedRecordsOnlyThePathsThatHitTheLane is the c-4 property at its
+// source: a lane's selector is derived from ITS paths. An implementation that
+// appends every in-tree path to every hit lane still produces the right Lanes,
+// so it would pass every pre-existing test here and only surface as a go lane
+// spawning `go test ./docs/...` at the run site.
+func TestMatchedRecordsOnlyThePathsThatHitTheLane(t *testing.T) {
+	globs := [][]string{{"internal/**"}, {"docs/"}}
+	sel := Select(globs, []string{"internal/a.go", "docs/x.md", "README.md", "/etc/passwd"})
+
+	if !reflect.DeepEqual(sel.Matched[0], []string{"internal/a.go"}) {
+		t.Errorf("Matched[0] = %v, want exactly [internal/a.go]", sel.Matched[0])
+	}
+	if !reflect.DeepEqual(sel.Matched[1], []string{"docs/x.md"}) {
+		t.Errorf("Matched[1] = %v, want exactly [docs/x.md]", sel.Matched[1])
+	}
+	// Asserted in BOTH entries: the unmatched in-tree path and the
+	// out-of-tree one are the two shapes that must never reach a runner.
+	for lane, got := range sel.Matched {
+		if contains(got, "README.md") {
+			t.Errorf("lane %d carries README.md, which matched no lane: %v", lane, got)
+		}
+		if contains(got, "/etc/passwd") || contains(got, "etc/passwd") {
+			t.Errorf("lane %d carries an out-of-tree path: %v", lane, got)
+		}
+	}
+}
+
+// TestMatchedIsNormalizedWhileUnmatchedIsNot pins the deliberate split between
+// the two: a human reads Unmatched and must find the path they typed, while
+// Matched is appended to a command line where two spellings of one file must
+// not derive two selectors. A single shared slice breaks one assertion or the
+// other.
+func TestMatchedIsNormalizedWhileUnmatchedIsNot(t *testing.T) {
+	globs := [][]string{{"internal/**"}}
+	sel := Select(globs, []string{"./internal/a.go", "./README.md"})
+
+	if !reflect.DeepEqual(sel.Matched[0], []string{"internal/a.go"}) {
+		t.Errorf("Matched[0] = %v, want the normalized [internal/a.go]", sel.Matched[0])
+	}
+	if !reflect.DeepEqual(sel.Unmatched, []string{"./README.md"}) {
+		t.Errorf("Unmatched = %v, want the caller's own ./README.md", sel.Unmatched)
+	}
+}
+
+// TestMatchedRecordsAPathOncePerLane extends the existing one-hit-settles-a-lane
+// rule from lane indices to paths: two of a lane's globs catching the same file
+// must not put that file in the selector twice, the same way they never enqueue
+// the lane's command twice.
+func TestMatchedRecordsAPathOncePerLane(t *testing.T) {
+	globs := [][]string{{"internal/**", "internal/cmd/*.go"}}
+	sel := Select(globs, []string{"internal/cmd/test.go"})
+
+	if len(sel.Matched[0]) != 1 {
+		t.Fatalf("Matched[0] = %v, want one entry — both globs caught the same path", sel.Matched[0])
+	}
+}
+
+// TestAPathMatchedByTwoLanesAppearsInBoth mirrors Select's existing per-lane
+// hit[i] behaviour: two lanes claiming a file both run, so both derive a
+// selector carrying it. Recording it against only the first lane would leave
+// the second spawning its whole suite.
+func TestAPathMatchedByTwoLanesAppearsInBoth(t *testing.T) {
+	globs := [][]string{{"internal/**"}, {"**/*.go"}}
+	sel := Select(globs, []string{"internal/a.go"})
+
+	if !reflect.DeepEqual(sel.Lanes, []int{0, 1}) {
+		t.Fatalf("Lanes = %v, want both lanes selected", sel.Lanes)
+	}
+	if !contains(sel.Matched[0], "internal/a.go") || !contains(sel.Matched[1], "internal/a.go") {
+		t.Errorf("Matched = %v, want internal/a.go under both lanes", sel.Matched)
+	}
+}
+
+// TestAnUnhitLaneHasNoMatchedKeyAtAll: absence, not a nil value. The run site
+// ranges over lanes to build selectors, and a key present with an empty slice
+// would let a `for i := range Matched` resurrect a lane Lanes deliberately
+// excluded — a lane spawning its command over a file set that never touched it.
+func TestAnUnhitLaneHasNoMatchedKeyAtAll(t *testing.T) {
+	globs := [][]string{{"internal/**"}, {"docs/"}}
+	sel := Select(globs, []string{"internal/a.go"})
+
+	if _, ok := sel.Matched[1]; ok {
+		t.Errorf("lane 1 matched nothing but has a Matched key: %v", sel.Matched)
+	}
+	if len(sel.Matched) != 1 {
+		t.Errorf("Matched has %d keys, want only the one hit lane: %v", len(sel.Matched), sel.Matched)
+	}
+}
+
+// TestNoMatchLeavesMatchedNil: a file set that hit nothing must not allocate a
+// map, so the zero Selection's "nothing to run and nothing to report" stays
+// exactly that.
+func TestNoMatchLeavesMatchedNil(t *testing.T) {
+	sel := Select([][]string{{"internal/**"}}, []string{"README.md"})
+	if sel.Matched != nil {
+		t.Errorf("Matched = %v, want nil when no lane was hit", sel.Matched)
+	}
+}

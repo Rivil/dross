@@ -272,3 +272,105 @@ func mustReadFile(t *testing.T, path string) []byte {
 	}
 	return b
 }
+
+// TestTestLaneSelectorFieldsDecode: selector and empty_exit reach the struct
+// from a hand-written document, which is what a user edits and what `dross test
+// lane add` has to produce. A dropped toml tag decodes to the zero value with
+// no error at all, so these assertions are the only thing that fails when the
+// schema regresses.
+func TestTestLaneSelectorFieldsDecode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	if err := os.WriteFile(path, []byte(`
+[project]
+name = "x"
+version = "1.0.0.0"
+
+[runtime]
+mode = "native"
+
+[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test -count=1"
+selector = "go-package"
+empty_exit = [5]
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(p.Runtime.TestLane) != 1 {
+		t.Fatalf("want 1 lane, got %d", len(p.Runtime.TestLane))
+	}
+	lane := p.Runtime.TestLane[0]
+	if lane.Selector != "go-package" {
+		t.Errorf("selector = %q, want go-package — the toml tag or the field is missing", lane.Selector)
+	}
+	if !reflect.DeepEqual(lane.EmptyExit, []int{5}) {
+		t.Errorf("empty_exit = %v, want [5]", lane.EmptyExit)
+	}
+}
+
+// TestLaneWithoutSelectorFieldsRoundTripsUnchanged is the opt-in half of this
+// phase's schema, and the sibling of TestNoTestLaneIsAbsentFromTheDocument: a
+// lane that declares neither field must render exactly the bytes a project.toml
+// written before selectors existed carries. Without omitempty on both fields
+// every existing lane grows a `selector = ""` line on the next Save, which
+// turns an opt-in feature into one every repo has to read about.
+func TestLaneWithoutSelectorFieldsRoundTripsUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	p := &Project{
+		Project: ProjectMeta{Name: "x", Version: "1.0.0.0"},
+		Runtime: Runtime{
+			Mode:     "native",
+			TestLane: []TestLane{{Name: "go", Match: []string{"internal/**"}, Command: "go test"}},
+		},
+	}
+	if err := p.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	body := string(mustReadFile(t, path))
+	if strings.Contains(body, "selector") {
+		t.Errorf("a lane declaring no selector rendered a selector key:\n%s", body)
+	}
+	if strings.Contains(body, "empty_exit") {
+		t.Errorf("a lane declaring no empty exit codes rendered an empty_exit key:\n%s", body)
+	}
+}
+
+// TestDeclaredSelectorFieldsRender: the other direction — a lane that DOES
+// declare them must write them back, or `dross test lane add --selector` would
+// accept a flag that never reaches disk.
+func TestDeclaredSelectorFieldsRender(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	p := &Project{
+		Project: ProjectMeta{Name: "x", Version: "1.0.0.0"},
+		Runtime: Runtime{
+			Mode: "native",
+			TestLane: []TestLane{{
+				Name:      "go",
+				Match:     []string{"internal/**"},
+				Command:   "go test",
+				Selector:  "go-package",
+				EmptyExit: []int{5},
+			}},
+		},
+	}
+	if err := p.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	lane := reloaded.Runtime.TestLane[0]
+	if lane.Selector != "go-package" || !reflect.DeepEqual(lane.EmptyExit, []int{5}) {
+		t.Errorf("round-trip lost the selector fields: selector=%q empty_exit=%v", lane.Selector, lane.EmptyExit)
+	}
+}

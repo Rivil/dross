@@ -91,14 +91,34 @@ type Runtime struct {
 // it: Match is a list of globs, Command is the line to run when a supplied file
 // set hits any of them.
 //
-// All three fields are required and validate says so per-field — a lane with no
-// Command cannot be run, a lane with no Match can never be selected, and a lane
-// with no Name cannot be granted consent, since the machine-local grant store
-// is keyed by lane name.
+// Those three fields are required and validate says so per-field — a lane with
+// no Command cannot be run, a lane with no Match can never be selected, and a
+// lane with no Name cannot be granted consent, since the machine-local grant
+// store is keyed by lane name. Selector and EmptyExit are optional and opt-in;
+// see their own comments.
 type TestLane struct {
 	Name    string   `toml:"name" json:"name"`
 	Match   []string `toml:"match" json:"match"`
 	Command string   `toml:"command" json:"command"`
+
+	// Selector names the shape the lane's matched paths take when they are
+	// appended to Command — one of configenum.SelectorStyles. Omitted means
+	// append nothing, which is what every lane written before selectors
+	// existed means, so translation is opt-in per lane and a lane that says
+	// nothing keeps spawning Command byte-for-byte.
+	Selector string `toml:"selector,omitempty" json:"selector,omitempty"`
+
+	// EmptyExit lists the exit codes this lane's runner uses to say "I
+	// collected no tests" — pytest's 5, for example. dross reports those as a
+	// selector miss rather than a red suite. It is declared, never inferred:
+	// with no codes listed, only a selector that filtered down to nothing can
+	// produce a miss, and a runner's output is never scraped for wording.
+	//
+	// It is meaningless without Selector — an unscoped lane runs its whole
+	// suite and can only collect nothing if the repo has no tests at all — so
+	// validate refuses the combination rather than letting a user believe they
+	// configured a code that can never fire.
+	EmptyExit []int `toml:"empty_exit,omitempty" json:"empty_exit,omitempty"`
 }
 
 type Service struct {
