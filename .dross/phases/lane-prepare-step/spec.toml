@@ -1,0 +1,70 @@
+[phase]
+  id = "lane-prepare-step"
+  title = "lane-prepare-step"
+  milestone = "v1.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "A [[runtime.test_lane]] entry may declare a prepare command: `dross test lane add --prepare \"<cmd>\"` writes it into the lane's block and `dross test lane list` prints it; a lane declaring none spawns exactly what it spawns today."
+
+[[criteria]]
+  id = "c-2"
+  text = "When a lane with a prepare command runs, the prepare runs after the tree sync and before that lane's test command, on the same host as the test command, and the transcript names the prepare line before any of that lane's own output."
+
+[[criteria]]
+  id = "c-3"
+  text = "A prepare command that fails skips its own lane's test command and exits 7, distinct from a red suite — the run's other matched lanes still run, and a prepare failure outranks a red suite when the worst outcome is chosen."
+
+[[criteria]]
+  id = "c-4"
+  text = "A prepare line is covered by its lane's consent grant: a lane whose prepare is ungranted or edited refuses that lane only, naming the line it refused, and the other lanes still run."
+
+[[criteria]]
+  id = "c-5"
+  text = "A lane's prepare runs on the local transport too — the same lane produces the same prepare invocation under `--local` as it does on a granted remote host."
+
+[[criteria]]
+  id = "c-6"
+  text = "`dross test lane edit <name> --prepare \"<cmd>\"` sets or clears a prepare on an existing lane while keeping its match globs and command, and the changed lane re-prompts for consent rather than silently losing its grant."
+
+[[decisions]]
+  key = "prepare_failure"
+  choice = "A failed prepare exits with a new exitPrepareFailed = 7, ranked with the transport family above exitSuiteFailed; it skips only its own lane and the run's remaining lanes still spawn."
+  why = "A bootstrap that failed measured nothing about the code. Reusing exit 1 makes 'your prepare is broken' indistinguishable from 'your tests are broken', which is the false-green the exit taxonomy already exists to prevent."
+  locked = true
+
+[[decisions]]
+  key = "prepare_consent"
+  choice = "One fingerprint per lane, taken over an unambiguous encoding of prepare plus command rather than a naive concatenation; `dross trust --lane <name>` prints the prepare line and the command line before granting, and editing either re-prompts the lane."
+  why = "A refused prepare kills its lane anyway, so a second key buys no isolation the name-keyed grant does not already give. Keeps TrustedLaneCommands' shape unchanged."
+  locked = true
+
+[[decisions]]
+  key = "prepare_scope"
+  choice = "No deduplication: every lane that spawns runs its own prepare, even when two lanes declare an identical prepare line."
+  why = "Idempotence is the declared contract, so the repeat is the no-op the user promised. Dedup would make a lane's spawn set depend on which neighbours happened to match — the coupling the per-lane consent key was designed to avoid."
+  locked = true
+
+[[decisions]]
+  key = "prepare_locality"
+  choice = "A prepare runs on both transports — local spawn and granted remote alike — not remote-only."
+  why = "A lane that bootstrapped only on the remote would measure different things depending on where it landed, which is the rule the built lane line already follows."
+  locked = true
+
+[[decisions]]
+  key = "prepare_selector_miss"
+  choice = "A lane skipped before spawn — a selector miss, or a consent refusal — never runs its prepare."
+  why = "No spawn, no bootstrap. Preparing for a lane that will not run spends cold-host time on nothing and puts a line in the transcript for a run that never happened."
+  locked = true
+
+[[decisions]]
+  key = "lane_edit_surface"
+  choice = "Supersedes lane-selector-translation's lane_edit_surface decision for the prepare field only: `dross test lane edit <name> --prepare` exists, while match, command, selector and empty_exit stay remove-then-re-add."
+  why = "That lock's own why scoped it to a phase about selectors. Prepare changes the reason it held: remove-then-re-add drops the lane's consent grant, so the workaround silently discards trust the user granted. The narrow verb is the fix; the broader edit surface stays deferred."
+  locked = true
+
+[[deferred]]
+  id = "794b7474a9e2ac97"
+  text = "`dross test lane edit` over the rest of a lane's fields — match, command, selector and empty_exit — not just prepare."
+  why = "CLI ergonomics across every lane field rather than lane truth; v1.6's remaining phases are about the gate itself."
+  target = "lane-selector-custom"
