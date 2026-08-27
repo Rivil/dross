@@ -991,16 +991,19 @@ Stated limit, measured rather than assumed: this buys a **free laptop, not a fas
 - `TestTestStreamsOutput` (streaming proven by write timing, not by inspection) — `internal/cmd/test_test.go:216`
 - `TestPromptsRunDrossTest` (the prompts run it, and no prompt reintroduces the raw interpolation) — `internal/cmd/prompt_test_command_test.go:40`
 - `project.TestLane` (the `[[runtime.test_lane]]` schema; validate refuses a lane missing name, match or command and names the offender) — `internal/project/project.go:98`
+- `configenum.SelectorStyles` (closed enum of selector shapes backing `TestLane.Selector` / `EmptyExit`; validate's per-lane refusal renders the accepted set from the Set itself, so a new style reaches the message with no test edit) — `internal/configenum/configenum.go:205`
 - `testlane.Select` (pure path-to-lane resolver: ordered deduped lanes, with unmatched and out-of-tree paths as separate categories) — `internal/testlane/match.go:58`
 - `runTestLanes` (`--files` resolution and the two refusals: out-of-tree exit 2, nothing-matched exit 5) — `internal/cmd/test.go:338`
 - `runOneLane` (declaration order, per-lane consent, header before output, worst outcome wins the exit code) — `internal/cmd/test.go:456`
 - `testLane` (`dross test lane add|list|remove`, `--selector` / `--empty-exit`; a removed lane's grant goes with it) — `internal/cmd/test_lane.go:28`
+- `laneSelectorRefusal` (lane add validates the selector fields through validate's own rule set *before* the write, so the CLI can never persist a lane `dross validate` would reject) — `internal/cmd/test_lane.go:65`
 - `testlane.Derive` (pure translation of a lane's matched paths into path / dir / go-package arguments; order-independent and option-safe) — `internal/testlane/selector.go:34`
 - `laneRunLine` (one line per lane, built from its own live matched paths, printed in the header and spawned on both transports) — `internal/cmd/test.go:501`
 - `selectorMissCode` (a declared empty-exit code is a miss, one integer away is a red suite; output is never scraped) — `internal/cmd/test.go:521`
+- `TestOptionsDocumentsTheSelectorSurfaceCorrectly` (README / ARCHITECTURE.md / options.md carry the selector styles, empty-exit codes and miss outcome, guarded by needles plus a flag-parity check against the registered cobra flags) — `internal/cmd/options_docs_test.go:223`
 - `TestExecutePromptPassesTaskFilesToTest` (execute's pre-commit gate scopes itself to the task's own plan.toml files) — `internal/cmd/prompt_test_command_test.go:126`
 
-_introduced remote-test-runner · 3055f70 · extended test-lane-config · f01ece7_
+_introduced remote-test-runner · 3055f70 · extended test-lane-config · f01ece7 · extended lane-selector-translation · f7aeb0a_
 
 ### Verification
 
