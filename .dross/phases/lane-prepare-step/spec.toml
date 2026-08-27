@@ -68,3 +68,8 @@
   text = "`dross test lane edit` over the rest of a lane's fields — match, command, selector and empty_exit — not just prepare."
   why = "CLI ergonomics across every lane field rather than lane truth; v1.6's remaining phases are about the gate itself."
   target = "lane-selector-custom"
+
+[[deferred]]
+  id = "04936ce22b897b0c"
+  text = "ARCHITECTURE.md symbol drift: 63 stale symbol links as of 2026-08-27. The lane-selector-translation landmarks were merged in during its ship (558ea85), so the 'Test suite runner' entry is current — the drift is everywhere else in the document."
+  why = "The doc is the onboarding surface for cold readers and agents; stale symbol links send them to code that moved or no longer exists. Carried through two handoff rewrites without a home, and handoff.md is gitignored."
