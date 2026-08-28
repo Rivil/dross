@@ -51,3 +51,4 @@
   id = "29eda0e6b5c6ffba"
   text = "spineIdle (internal/cmd/status.go) still ends on readVerifyVerdict == \"pass\", so a verified-but-unshipped phase reads as an idle spine and surfaces the tech-debt/security/quality action areas over unshipped work."
   why = "Surfaced during reentry-signal-truth planning; no criterion names it and it is a different output from the re-entry line. Someday — v1.6 input."
+  dismissed = true

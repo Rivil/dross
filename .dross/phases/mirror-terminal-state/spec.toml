@@ -79,3 +79,4 @@
   id = "3ab9f3a197c6ec1e"
   text = "Wire `dross issue task-pull` into a prompt edge — nothing in assets/prompts calls it, so board-side task moves never travel back into plan.toml unless it is run by hand."
   why = "Inbound direction; a separate capability from mirror closure."
+  dismissed = true
