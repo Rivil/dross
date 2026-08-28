@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -141,6 +144,8 @@ func TestExitCodesArePairwiseDistinct(t *testing.T) {
 		"transport":        exitTransport,
 		"partial":          exitPartial,
 		"nothing measured": exitNothingMeasured,
+		"lane refused":     exitLaneRefused,
+		"prepare failed":   exitPrepareFailed,
 	}
 	seen := map[int]string{}
 	for name, code := range codes {
@@ -152,6 +157,43 @@ func TestExitCodesArePairwiseDistinct(t *testing.T) {
 		}
 		seen[code] = name
 	}
+	// The map above is hand-maintained and the compiler has no opinion about
+	// what is missing from it, so a code left out collides in silence — which
+	// is exactly what this test exists to catch. Counting the const block
+	// closes that: the next exit code added to test.go fails HERE, at the
+	// moment it is declared, rather than rotting until two codes overlap.
+	if declared := declaredExitCodes(t); len(codes) != declared {
+		t.Errorf("the distinctness map holds %d codes and test.go declares %d — add the missing one to the map above", len(codes), declared)
+	}
+}
+
+// declaredExitCodes counts the exit* constants declared in test.go by reading
+// the source, not by asking the package: untyped int constants leave nothing
+// behind at run time to enumerate.
+func declaredExitCodes(t *testing.T) int {
+	t.Helper()
+	f, err := parser.ParseFile(token.NewFileSet(), "test.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse test.go: %v", err)
+	}
+	n := 0
+	for _, decl := range f.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			for _, name := range spec.(*ast.ValueSpec).Names {
+				if strings.HasPrefix(name.Name, "exit") {
+					n++
+				}
+			}
+		}
+	}
+	if n == 0 {
+		t.Fatal("found no exit* constants in test.go — the parse walked the wrong file")
+	}
+	return n
 }
 
 // TestAbsolutePathRefusalSaysOutOfTree: the two refusals must not collapse. An

@@ -66,6 +66,12 @@ const (
 	// suite: the lane's code was never measured, and a caller that read this
 	// as "your code is broken" would go looking for a bug that is not there.
 	exitLaneRefused = 6
+	// exitPrepareFailed: a matched lane's prepare command failed, so that
+	// lane's test command never ran. Distinct from a red suite for the same
+	// reason exitLaneRefused is: a bootstrap that failed measured nothing
+	// about the code, and a caller that read this as "your tests are broken"
+	// would go hunting a bug in code that was never executed.
+	exitPrepareFailed = 7
 )
 
 // exitRank orders the outcomes of a multi-lane run so the WORST one decides
@@ -74,11 +80,14 @@ const (
 // The order is not severity-of-inconvenience, it is how badly each outcome
 // misleads a caller who is deciding whether to commit:
 //
-//	transport (3) > partial (4) > red (1) > refused (6) > nothing measured (5)
+//	transport (3) > partial (4) > prepare (7) > red (1) > refused (6) > nothing measured (5)
 //
 // Transport and partial outrank everything because they mean the tree that ran
 // was not the tree on disk — any verdict from that run, green or red, is about
-// something else. Red outranks refused because a failing test is a fact about
+// something else. A failed prepare sits just under them and above red for a
+// narrower version of the same reason: the lane it belongs to measured nothing,
+// so reporting a neighbour's red would tell the user their code is broken while
+// leaving the lane that never ran invisible. Red outranks refused because a failing test is a fact about
 // the code and an ungranted lane is a fact about this machine; reporting the
 // consent problem while a suite is broken would send the user to `dross trust`
 // and let them commit a red change once they got there. Nothing-measured is
@@ -91,8 +100,10 @@ func exitRank(code int) int {
 	case 0:
 		return 0
 	case exitTransport:
-		return 5
+		return 6
 	case exitPartial:
+		return 5
+	case exitPrepareFailed:
 		return 4
 	case exitSuiteFailed:
 		return 3

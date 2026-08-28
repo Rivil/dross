@@ -237,11 +237,11 @@ func TestRedBeatsRefusedInExitPrecedence(t *testing.T) {
 // rather than sampling three of them, so "worst outcome wins" is pinned as an
 // order instead of inferred from examples.
 //
-// The order — transport > partial > red > refused > nothing-measured — is about
-// how badly each outcome misleads a caller deciding whether to commit, not
-// about how annoying it is.
+// The order — transport > partial > prepare > red > refused > nothing-measured
+// — is about how badly each outcome misleads a caller deciding whether to
+// commit, not about how annoying it is.
 func TestExitPrecedenceIsTotal(t *testing.T) {
-	order := []int{exitTransport, exitPartial, exitSuiteFailed, exitLaneRefused, exitNothingMeasured}
+	order := []int{exitTransport, exitPartial, exitPrepareFailed, exitSuiteFailed, exitLaneRefused, exitNothingMeasured}
 	tagged := func(code int) error {
 		return &ExitCodeError{Code: code, Err: errors.New("outcome")}
 	}
@@ -267,6 +267,46 @@ func TestExitPrecedenceIsTotal(t *testing.T) {
 	}
 	if worseOutcome(nil, nil) != nil {
 		t.Error("two successes must stay a success")
+	}
+}
+
+// TestPrepareOutranksRedAndUnderranksPartial asserts the ranks THEMSELVES, not
+// just the pairwise verdicts above.
+//
+// exitRank's unknown-code default is literally `return 3` — exitSuiteFailed's
+// own rank. A code left out of the switch therefore does not rank low, it TIES
+// with a red suite, and worseOutcome resolves a tie to whichever error arrived
+// first. That is order-dependent and silent: the pairwise table can pass while
+// the rank is only accidentally right. Reading the ranks catches the omission
+// directly.
+func TestPrepareOutranksRedAndUnderranksPartial(t *testing.T) {
+	if exitRank(exitPrepareFailed) <= exitRank(exitSuiteFailed) {
+		t.Errorf("rank(prepare)=%d must be strictly above rank(red)=%d — a bootstrap that failed measured nothing about the code",
+			exitRank(exitPrepareFailed), exitRank(exitSuiteFailed))
+	}
+	if exitRank(exitPrepareFailed) >= exitRank(exitPartial) {
+		t.Errorf("rank(prepare)=%d must be strictly below rank(partial)=%d — an incomplete tree invalidates every lane, a failed prepare only its own",
+			exitRank(exitPrepareFailed), exitRank(exitPartial))
+	}
+}
+
+// TestRedLaneWithNoPrepareStillExitsOne: exit 7 must be unreachable in a repo
+// that declares no prepare. The new code is an addition to the taxonomy, not a
+// re-tagging of the failures already in it — a red suite is still a red suite
+// everywhere the feature is not in use, which is every repo written before
+// this phase.
+func TestRedLaneWithNoPrepareStillExitsOne(t *testing.T) {
+	filesFixture(t, goAndDocsLanes)
+	grantAllLanes(t)
+	installSpawnRecorder(t, errors.New("exit status 1"))
+
+	err := runCmd(t, Test(), "--files", "internal/a.go")
+	if err == nil {
+		t.Fatal("a red lane reported success")
+	}
+	if got := ExitCode(err); got != exitSuiteFailed {
+		t.Errorf("exit = %d, want %d (red suite) — a repo declaring no prepare can never produce %d",
+			got, exitSuiteFailed, exitPrepareFailed)
 	}
 }
 
