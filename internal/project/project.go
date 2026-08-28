@@ -120,6 +120,23 @@ type TestLane struct {
 	// nothing keeps spawning Command byte-for-byte.
 	Selector string `toml:"selector,omitempty" json:"selector,omitempty"`
 
+	// Toolchain overrides the binaries this lane needs on the host that runs
+	// it. Omitted — the normal case — means the list is DERIVED from the first
+	// token of Command and Prepare (testlane.Toolchain), so locality detection
+	// works on every lane already declared without an edit.
+	//
+	// The field is the escape hatch for the lines derivation gets wrong: an env
+	// prefix like `FOO=1 go test`, a wrapper script, a `mise exec`. It replaces
+	// the derived list wholesale rather than extending it, because appending
+	// would keep probing the very token the user overrode to say was not a
+	// binary.
+	//
+	// Every entry must be a bare binary name — validate refuses blanks,
+	// embedded whitespace, `=` and path separators — since each entry is asked
+	// of a host as `command -v <entry>` and an entry that can never resolve
+	// would pin the lane to a local run with no message pointing at the cause.
+	Toolchain []string `toml:"toolchain,omitempty" json:"toolchain,omitempty"`
+
 	// EmptyExit lists the exit codes this lane's runner uses to say "I
 	// collected no tests" — pytest's 5, for example. dross reports those as a
 	// selector miss rather than a red suite. It is declared, never inferred:
