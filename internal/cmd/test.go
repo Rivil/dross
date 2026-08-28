@@ -407,6 +407,16 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		if _, err := shArgvFor(laneField(m.lane.Name), m.lane.Command); err != nil {
 			return err
 		}
+		// The prepare goes through the SAME fence, in the SAME up-front sweep.
+		// A bootstrap line is a line reaching a shell exactly as a command is,
+		// and checking it inside the run loop would refuse a malformed prepare
+		// on the second lane with the first lane's suite already run — the one
+		// thing an up-front fence exists to make impossible.
+		if m.lane.Prepare != "" {
+			if _, err := shArgvFor(laneField(m.lane.Name), m.lane.Prepare); err != nil {
+				return err
+			}
+		}
 		// The style is checked here, in the same up-front sweep and against
 		// no paths, because it is a property of project.toml rather than of
 		// this file set. Discovering it inside the run loop would refuse a
@@ -489,6 +499,35 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		// the same string, not a second one built the same way. A header
 		// showing lane.Command while a derived line ran would be a transcript
 		// that lies about what was measured.
+		// The prepare runs FIRST, and is announced first — after the tree
+		// sync above and before this lane's own header, which is the order it
+		// actually happens in. A transcript that showed the bootstrap after
+		// the suite it bootstrapped could not be read as a sequence.
+		//
+		// Per lane, never batched and never deduplicated across lanes (locked
+		// prepare_scope): idempotence is the declared contract, so a repeat is
+		// the no-op the user promised, while a dedup cache would make a lane's
+		// spawn set depend on which neighbours happened to match.
+		if m.lane.Prepare != "" {
+			Printf("lane %s prepare: %s\n", m.lane.Name, m.lane.Prepare)
+			// Spawned through the same runOneLane, so it lands on the same
+			// host and the same transport as the command it precedes (locked
+			// prepare_locality). A lane that bootstrapped only on the remote
+			// would measure different things depending on where it landed.
+			//
+			// No selector is appended: the derived paths scope the suite, and
+			// a bootstrap handed this file set's paths would be a different
+			// command on every run.
+			if err := runOneLane(target, repoDir, m.lane, m.lane.Prepare); err != nil {
+				// The lane's own command does NOT run. A bootstrap that failed
+				// measured nothing about the code, and running the suite
+				// anyway would report the consequence as a verdict.
+				// `continue`, not `return`: the run's other lanes are
+				// unaffected. t-5 gives this its own exit code.
+				worst = worseOutcome(worst, err)
+				continue
+			}
+		}
 		Printf("lane %s: %s\n", m.lane.Name, line)
 		err := runOneLane(target, repoDir, m.lane, line)
 		if code, miss := selectorMissCode(err, m.lane.EmptyExit); miss {
