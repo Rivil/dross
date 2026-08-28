@@ -312,6 +312,31 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "lane-remote-locality/t-2": {
+      "issue": "DRO-237",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-remote-locality/t-3": {
+      "issue": "DRO-239",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-remote-locality/t-4": {
+      "issue": "DRO-238",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-remote-locality/t-5": {
+      "issue": "DRO-240",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-remote-locality/t-6": {
+      "issue": "DRO-241",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "lane-selector-translation/t-1": {
       "issue": "DRO-211",
       "plan_status": "done",
