@@ -139,13 +139,14 @@ func TestUnmatchedRefusalNamesTheDeclaredLanes(t *testing.T) {
 // read as "your code is broken" — or worse, the other way round.
 func TestExitCodesArePairwiseDistinct(t *testing.T) {
 	codes := map[string]int{
-		"suite failed":     exitSuiteFailed,
-		"bad file set":     exitBadFileSet,
-		"transport":        exitTransport,
-		"partial":          exitPartial,
-		"nothing measured": exitNothingMeasured,
-		"lane refused":     exitLaneRefused,
-		"prepare failed":   exitPrepareFailed,
+		"suite failed":      exitSuiteFailed,
+		"bad file set":      exitBadFileSet,
+		"transport":         exitTransport,
+		"partial":           exitPartial,
+		"nothing measured":  exitNothingMeasured,
+		"lane refused":      exitLaneRefused,
+		"prepare failed":    exitPrepareFailed,
+		"toolchain missing": exitToolchainMissing,
 	}
 	seen := map[int]string{}
 	for name, code := range codes {

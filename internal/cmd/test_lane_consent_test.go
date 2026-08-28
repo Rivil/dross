@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/remote"
 )
 
 // grantLane consents to one lane's currently-declared lines — its prepare
@@ -545,5 +547,227 @@ func TestStalePrepareRefusesOnlyItsOwnLaneAndNamesThePrepare(t *testing.T) {
 		if line == goCmd || strings.Contains(line, "curl evil.sh") {
 			t.Errorf("the refused lane ran anyway: %v", rec.lines)
 		}
+	}
+}
+
+// grantedLaneFixture is a trusted repo with lanes declared AND a remote
+// granted — the state every per-lane locality test is about.
+//
+// The probe seam is stubbed reachable while the grant is taken, because `dross
+// remote grant` probes the host it is being handed; a live seam would send a
+// real ssh at a machine named "helicon". Tests replace it afterwards with
+// whatever answer they are asserting about.
+func grantedLaneFixture(t *testing.T, lanes string) {
+	t.Helper()
+	filesFixture(t, lanes)
+	grantAllLanes(t)
+	fakeProbe(t, func(remote.Target, []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8}, nil
+	})
+	if err := runCmd(t, Remote(), "grant", "helicon", "/srv/dross"); err != nil {
+		t.Fatalf("dross remote grant: %v", err)
+	}
+}
+
+// runLog is one ordered record of everything a run did over the wire: the
+// toolchain probe and every remote spawn, in the order they happened.
+//
+// Ordering is the assertion, not presence. "The probe happened" is satisfied by
+// a run that probed after pushing the tree — which is the mid-run discovery c-4
+// exists to prevent, with the transfer already paid for.
+type runLog struct {
+	events []string
+	tools  [][]string
+	probes int
+}
+
+// probeSeam installs a recording probe returning missing as the host's gap.
+func (l *runLog) probeSeam(t *testing.T, missing []string, err error) {
+	t.Helper()
+	fakeProbe(t, func(_ remote.Target, tools []string) (remote.Readiness, error) {
+		l.events = append(l.events, "probe")
+		l.tools = append(l.tools, append([]string(nil), tools...))
+		l.probes++
+		if err != nil {
+			return remote.Readiness{}, err
+		}
+		return remote.Readiness{Cores: 8, Missing: missing}, nil
+	})
+}
+
+// spawnSeam installs a recording remote-spawn seam that names each leg.
+func (l *runLog) spawnSeam(t *testing.T) {
+	t.Helper()
+	orig := spawnRemote
+	t.Cleanup(func() { spawnRemote = orig })
+	spawnRemote = func(argv []string, _ string, _, _ io.Writer) error {
+		if len(argv) > 0 {
+			l.events = append(l.events, argv[0])
+		}
+		return nil
+	}
+}
+
+func (l *runLog) indexOf(event string) int {
+	for i, e := range l.events {
+		if e == event {
+			return i
+		}
+	}
+	return -1
+}
+
+// TestLaneRunProbesOnceWithTheUnion is c-4. One pass, for every matched lane,
+// before anything spawns — a second probe is a second ssh round trip, and a
+// per-lane probe is how a lane finds out mid-run.
+func TestLaneRunProbesOnceWithTheUnion(t *testing.T) {
+	grantedLaneFixture(t, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test -count=1 ./..."
+
+[[runtime.test_lane]]
+name = "web"
+match = ["web/**"]
+command = "pnpm test"`)
+	log := &runLog{}
+	log.probeSeam(t, nil, nil)
+	log.spawnSeam(t)
+	installSpawnRecorder(t, nil)
+
+	if err := runCmd(t, Test(), "--files", "internal/a.go", "--files", "web/app.ts"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	if log.probes != 1 {
+		t.Fatalf("the run probed %d times, want exactly 1 — each one is an ssh round trip", log.probes)
+	}
+	got := strings.Join(log.tools[0], " ")
+	for _, want := range []string{"go", "pnpm"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the probe did not ask for %q: %v", want, log.tools[0])
+		}
+	}
+}
+
+// TestLaneRunDedupesTheProbedUnion: two lanes needing `go` must cost one
+// `command -v go`. The probe asks the host once per entry, so a duplicated
+// union doubles the wire cost of every multi-lane Go run.
+func TestLaneRunDedupesTheProbedUnion(t *testing.T) {
+	grantedLaneFixture(t, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test -count=1 ./..."
+
+[[runtime.test_lane]]
+name = "cmd"
+match = ["main.go"]
+command = "go test -count=1 ./internal/cmd/..."`)
+	log := &runLog{}
+	log.probeSeam(t, nil, nil)
+	log.spawnSeam(t)
+	installSpawnRecorder(t, nil)
+
+	if err := runCmd(t, Test(), "--files", "internal/a.go", "--files", "main.go"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	n := 0
+	for _, tool := range log.tools[0] {
+		if tool == "go" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("the probe asked for go %d times, want 1: %v", n, log.tools[0])
+	}
+}
+
+// TestLaneProbePrecedesTheSync is c-4's second half, asserted BY INDEX. A probe
+// that merely happened is satisfied by one issued after the tree was pushed —
+// at which point a run where no lane can go remote has already paid for the
+// transfer it was supposed to avoid.
+func TestLaneProbePrecedesTheSync(t *testing.T) {
+	grantedLaneFixture(t, goAndDocsLanes)
+	log := &runLog{}
+	log.probeSeam(t, nil, nil)
+	log.spawnSeam(t)
+	installSpawnRecorder(t, nil)
+
+	if err := runCmd(t, Test(), "--files", "internal/a.go"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	probe, sync := log.indexOf("probe"), log.indexOf("rsync")
+	if probe < 0 {
+		t.Fatalf("the run never probed: %v", log.events)
+	}
+	if sync < 0 {
+		t.Fatalf("the run never synced: %v", log.events)
+	}
+	if probe > sync {
+		t.Errorf("the probe trails the transfer — the tree was pushed before the host was asked: %v", log.events)
+	}
+}
+
+// TestUnreachableHostKeepsItsOwnWording is the c-5 split at the command. A host
+// that never answered sends the whole run home with the transport line it has
+// always printed, and no lane may claim a binary is absent from a machine that
+// told us nothing.
+func TestUnreachableHostKeepsItsOwnWording(t *testing.T) {
+	grantedLaneFixture(t, goAndDocsLanes)
+	log := &runLog{}
+	log.probeSeam(t, nil, fmt.Errorf("dial: %w", remote.ErrTransport))
+	log.spawnSeam(t)
+	local := installSpawnRecorder(t, nil)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "--files", "internal/a.go"); err != nil {
+		t.Fatalf("an unreachable host must fall back, not fail: %v", err)
+	}
+	if !strings.Contains(out, "could not reach helicon") {
+		t.Errorf("the transport fallback lost its wording:\n%s", out)
+	}
+	if strings.Contains(out, "fallback:") {
+		t.Errorf("a lane blamed a toolchain on a host that was never reached:\n%s", out)
+	}
+	if local.count() != 1 {
+		t.Errorf("the run spawned %d local command(s), want 1 — the whole run comes home", local.count())
+	}
+}
+
+// TestLocalFlagNeverProbesForLanes: --local is the escape for a remote that is
+// down, so it must not wait on that remote to answer a toolchain question.
+func TestLocalFlagNeverProbesForLanes(t *testing.T) {
+	grantedLaneFixture(t, goAndDocsLanes)
+	log := &runLog{}
+	log.probeSeam(t, nil, nil)
+	log.spawnSeam(t)
+	installSpawnRecorder(t, nil)
+
+	if err := runCmd(t, Test(), "--local", "--files", "internal/a.go"); err != nil {
+		t.Fatalf("dross test --local --files: %v", err)
+	}
+	if log.probes != 0 {
+		t.Errorf("--local opened %d probe(s) at the granted host", log.probes)
+	}
+}
+
+// TestLaneLessRunProbesForNoTools: a repo that never declared a lane has no
+// toolchain to derive, so the probe asks exactly what it asked before this
+// feature existed. A widened question here would change the transcript of every
+// repo that is not using lanes at all.
+func TestLaneLessRunProbesForNoTools(t *testing.T) {
+	grantedTestFixture(t, "go test -count=1 ./...")
+	log := &runLog{}
+	log.probeSeam(t, nil, nil)
+	log.spawnSeam(t)
+	installSpawnRecorder(t, nil)
+
+	if err := runCmd(t, Test()); err != nil {
+		t.Fatalf("dross test: %v", err)
+	}
+	if log.probes != 1 {
+		t.Fatalf("the run probed %d times, want 1", log.probes)
+	}
+	if len(log.tools[0]) != 0 {
+		t.Errorf("a lane-less run asked the host for %v, want nothing", log.tools[0])
 	}
 }
