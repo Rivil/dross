@@ -15,6 +15,7 @@
     "deferred-add-command": "DRO-14",
     "exec-trust-followups": "DRO-2",
     "guard-remedy-ordering": "DRO-27",
+    "lane-prepare-step": "DRO-223",
     "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
     "milestone-lifecycle-close": "DRO-13",
@@ -49,6 +50,7 @@
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
     "someday:id:0323e4284012842f": "DRO-208",
+    "someday:id:04936ce22b897b0c": "DRO-224",
     "someday:id:053bcdb6ddc5f57b": "DRO-162",
     "someday:id:06ca9b2e97abcb78": "DRO-87",
     "someday:id:0ad901405561a187": "DRO-116",
@@ -91,6 +93,7 @@
     "someday:id:7587f4c35d42ee82": "DRO-106",
     "someday:id:75fa307a41cebafe": "DRO-59",
     "someday:id:77f61ea051b44f42": "DRO-53",
+    "someday:id:794b7474a9e2ac97": "DRO-222",
     "someday:id:7b308a04a43d8cb9": "DRO-22",
     "someday:id:7ea6759938b910a4": "DRO-84",
     "someday:id:84db6f7af8f57cef": "DRO-49",
@@ -263,6 +266,41 @@
     },
     "completion-record-truth/t-6": {
       "issue": "DRO-138",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-1": {
+      "issue": "DRO-225",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-2": {
+      "issue": "DRO-226",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-3": {
+      "issue": "DRO-227",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-4": {
+      "issue": "DRO-228",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-5": {
+      "issue": "DRO-230",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-6": {
+      "issue": "DRO-229",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-7": {
+      "issue": "DRO-231",
       "plan_status": "done",
       "board_state": "task-in-review"
     },

@@ -94,12 +94,24 @@ type Runtime struct {
 // Those three fields are required and validate says so per-field — a lane with
 // no Command cannot be run, a lane with no Match can never be selected, and a
 // lane with no Name cannot be granted consent, since the machine-local grant
-// store is keyed by lane name. Selector and EmptyExit are optional and opt-in;
-// see their own comments.
+// store is keyed by lane name. Prepare, Selector and EmptyExit are optional and
+// opt-in; see their own comments.
 type TestLane struct {
 	Name    string   `toml:"name" json:"name"`
 	Match   []string `toml:"match" json:"match"`
 	Command string   `toml:"command" json:"command"`
+
+	// Prepare is the optional bootstrap line this lane runs before its
+	// Command — the `make build` or `docker compose up -d` a cold host needs
+	// before the suite means anything. Omitted means the lane spawns exactly
+	// what it spawns today, so the field is opt-in per lane like Selector.
+	//
+	// It runs on the same host and through the same transport as Command, and
+	// it is covered by the SAME consent grant: the lane's fingerprint is taken
+	// over both lines together, so appending a prepare to a granted lane
+	// staleness-refuses it rather than smuggling an untrusted line past a
+	// grant issued for the command alone.
+	Prepare string `toml:"prepare,omitempty" json:"prepare,omitempty"`
 
 	// Selector names the shape the lane's matched paths take when they are
 	// appended to Command — one of configenum.SelectorStyles. Omitted means

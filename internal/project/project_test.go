@@ -374,3 +374,112 @@ func TestDeclaredSelectorFieldsRender(t *testing.T) {
 		t.Errorf("round-trip lost the selector fields: selector=%q empty_exit=%v", lane.Selector, lane.EmptyExit)
 	}
 }
+
+// TestTestLanePrepareDecodes: prepare has to reach the struct from a
+// hand-written document, which is both what a user edits and what `dross test
+// lane add --prepare` produces. A dropped toml tag decodes to the zero value
+// with no error at all, so the lane would silently run with no bootstrap on a
+// cold host — a red suite blamed on the code.
+func TestTestLanePrepareDecodes(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	if err := os.WriteFile(path, []byte(`
+[project]
+name = "x"
+version = "1.0.0.0"
+
+[runtime]
+mode = "native"
+
+[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test -count=1"
+prepare = "make build"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(p.Runtime.TestLane) != 1 {
+		t.Fatalf("want 1 lane, got %d", len(p.Runtime.TestLane))
+	}
+	if got := p.Runtime.TestLane[0].Prepare; got != "make build" {
+		t.Errorf("prepare = %q, want \"make build\" — the toml tag or the field is missing", got)
+	}
+}
+
+// TestLaneWithoutPrepareRoundTripsUnchanged is the opt-in half of this phase's
+// schema, and the sibling of TestNoTestLaneIsAbsentFromTheDocument: a lane
+// declaring no prepare must render exactly the bytes a project.toml written
+// before this phase carries. Without omitempty every existing lane grows a
+// `prepare = ""` line on the next Save — which both reads as something the
+// user has to go and set AND, worse, would change what the lane's consent
+// fingerprint is taken over on a document nobody edited.
+//
+// The byte compare is a full Save → Load → Save cycle, so a field that
+// rendered on the first pass and not the second (or the reverse) fails here
+// rather than at the moment a grant went stale for no reason.
+func TestLaneWithoutPrepareRoundTripsUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "project.toml")
+	p := &Project{
+		Project: ProjectMeta{Name: "x", Version: "1.0.0.0"},
+		Runtime: Runtime{
+			Mode:     "native",
+			TestLane: []TestLane{{Name: "go", Match: []string{"internal/**"}, Command: "go test"}},
+		},
+	}
+	if err := p.Save(first); err != nil {
+		t.Fatal(err)
+	}
+	before := string(mustReadFile(t, first))
+	if strings.Contains(before, "prepare") {
+		t.Errorf("a lane declaring no prepare rendered a prepare key:\n%s", before)
+	}
+
+	reloaded, err := Load(first)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	second := filepath.Join(dir, "again.toml")
+	if err := reloaded.Save(second); err != nil {
+		t.Fatal(err)
+	}
+	if after := string(mustReadFile(t, second)); after != before {
+		t.Errorf("a lane-with-no-prepare document did not round-trip byte-identically:\n--- before\n%s\n--- after\n%s", before, after)
+	}
+}
+
+// TestDeclaredPrepareRenders: the other direction — a lane that DOES declare a
+// prepare must write it back, or `dross test lane add --prepare` would accept a
+// flag that never reaches disk.
+func TestDeclaredPrepareRenders(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.toml")
+	p := &Project{
+		Project: ProjectMeta{Name: "x", Version: "1.0.0.0"},
+		Runtime: Runtime{
+			Mode: "native",
+			TestLane: []TestLane{{
+				Name:    "go",
+				Match:   []string{"internal/**"},
+				Command: "go test",
+				Prepare: "make build",
+			}},
+		},
+	}
+	if err := p.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got := reloaded.Runtime.TestLane[0].Prepare; got != "make build" {
+		t.Errorf("round-trip lost the prepare: %q", got)
+	}
+}

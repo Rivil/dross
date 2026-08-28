@@ -66,6 +66,12 @@ const (
 	// suite: the lane's code was never measured, and a caller that read this
 	// as "your code is broken" would go looking for a bug that is not there.
 	exitLaneRefused = 6
+	// exitPrepareFailed: a matched lane's prepare command failed, so that
+	// lane's test command never ran. Distinct from a red suite for the same
+	// reason exitLaneRefused is: a bootstrap that failed measured nothing
+	// about the code, and a caller that read this as "your tests are broken"
+	// would go hunting a bug in code that was never executed.
+	exitPrepareFailed = 7
 )
 
 // exitRank orders the outcomes of a multi-lane run so the WORST one decides
@@ -74,11 +80,14 @@ const (
 // The order is not severity-of-inconvenience, it is how badly each outcome
 // misleads a caller who is deciding whether to commit:
 //
-//	transport (3) > partial (4) > red (1) > refused (6) > nothing measured (5)
+//	transport (3) > partial (4) > prepare (7) > red (1) > refused (6) > nothing measured (5)
 //
 // Transport and partial outrank everything because they mean the tree that ran
 // was not the tree on disk — any verdict from that run, green or red, is about
-// something else. Red outranks refused because a failing test is a fact about
+// something else. A failed prepare sits just under them and above red for a
+// narrower version of the same reason: the lane it belongs to measured nothing,
+// so reporting a neighbour's red would tell the user their code is broken while
+// leaving the lane that never ran invisible. Red outranks refused because a failing test is a fact about
 // the code and an ungranted lane is a fact about this machine; reporting the
 // consent problem while a suite is broken would send the user to `dross trust`
 // and let them commit a red change once they got there. Nothing-measured is
@@ -91,8 +100,10 @@ func exitRank(code int) int {
 	case 0:
 		return 0
 	case exitTransport:
-		return 5
+		return 6
 	case exitPartial:
+		return 5
+	case exitPrepareFailed:
 		return 4
 	case exitSuiteFailed:
 		return 3
@@ -396,6 +407,16 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		if _, err := shArgvFor(laneField(m.lane.Name), m.lane.Command); err != nil {
 			return err
 		}
+		// The prepare goes through the SAME fence, in the SAME up-front sweep.
+		// A bootstrap line is a line reaching a shell exactly as a command is,
+		// and checking it inside the run loop would refuse a malformed prepare
+		// on the second lane with the first lane's suite already run — the one
+		// thing an up-front fence exists to make impossible.
+		if m.lane.Prepare != "" {
+			if _, err := shArgvFor(laneField(m.lane.Name), m.lane.Prepare); err != nil {
+				return err
+			}
+		}
 		// The style is checked here, in the same up-front sweep and against
 		// no paths, because it is a property of project.toml rather than of
 		// this file set. Discovering it inside the run loop would refuse a
@@ -419,12 +440,12 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		// `dross test <selector>` against runtime.test_command. Fingerprinting
 		// the derived line instead would go stale on every new file set and
 		// refuse practically every scoped run.
-		state, cerr := LaneConsented(root, repoDir, m.lane.Name, m.lane.Command)
+		state, cerr := LaneConsented(root, repoDir, m.lane.Name, laneConsentLine(m.lane))
 		if cerr != nil {
 			// Printed AND folded into the outcome. Returning it alone would
 			// lose it whenever another lane goes red and outranks it, and a
 			// consent problem the user never sees is one they never fix.
-			refusal := laneConsentRefusal(m.lane.Name, m.lane.Command, state, cerr)
+			refusal := laneConsentRefusal(m.lane, state, cerr)
 			Printf("%v\n\n", refusal)
 			worst = worseOutcome(worst, &ExitCodeError{Code: exitLaneRefused, Err: refusal})
 			continue
@@ -478,6 +499,40 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		// the same string, not a second one built the same way. A header
 		// showing lane.Command while a derived line ran would be a transcript
 		// that lies about what was measured.
+		// The prepare runs FIRST, and is announced first — after the tree
+		// sync above and before this lane's own header, which is the order it
+		// actually happens in. A transcript that showed the bootstrap after
+		// the suite it bootstrapped could not be read as a sequence.
+		//
+		// Per lane, never batched and never deduplicated across lanes (locked
+		// prepare_scope): idempotence is the declared contract, so a repeat is
+		// the no-op the user promised, while a dedup cache would make a lane's
+		// spawn set depend on which neighbours happened to match.
+		if m.lane.Prepare != "" {
+			Printf("lane %s prepare: %s\n", m.lane.Name, m.lane.Prepare)
+			// Spawned through the same seams as the command, so it lands on
+			// the same host and the same transport as the command it precedes
+			// (locked prepare_locality). A lane that bootstrapped only on the
+			// remote would measure different things depending on where it
+			// landed.
+			//
+			// No selector is appended: the derived paths scope the suite, and
+			// a bootstrap handed this file set's paths would be a different
+			// command on every run.
+			if err := runLanePrepare(target, repoDir, m.lane); err != nil {
+				// The lane's own command does NOT run. A bootstrap that failed
+				// measured nothing about the code, and running the suite
+				// anyway would report the consequence as a verdict.
+				//
+				// `continue`, not `return`: this lane is out, the run's other
+				// lanes are untouched. And NOT counted as a miss — a miss
+				// folds into exitNothingMeasured, which ranks LAST, so a run
+				// where every prepare failed would report as having measured
+				// nothing rather than as the bootstrap failure it is.
+				worst = worseOutcome(worst, err)
+				continue
+			}
+		}
 		Printf("lane %s: %s\n", m.lane.Name, line)
 		err := runOneLane(target, repoDir, m.lane, line)
 		if code, miss := selectorMissCode(err, m.lane.EmptyExit); miss {
@@ -609,6 +664,46 @@ func runOneLane(target *remote.Target, repoDir string, lane project.TestLane, li
 		return err
 	}
 	return nil
+}
+
+// runLanePrepare spawns one lane's bootstrap line through the same two
+// transports its command uses, and classifies a failure as exitPrepareFailed.
+//
+// The re-tag is what keeps a broken bootstrap from reading as broken code. Both
+// arms needed it, and for different reasons: the local arm hard-codes
+// exitSuiteFailed for anything spawnLocal returns, and the remote arm takes its
+// code from remoteFailure, which spends exitSuiteFailed on a command that came
+// back non-zero. Left alone, a prepare that failed would exit 1 on both — the
+// exact collision the exit taxonomy exists to prevent, and the one a caller
+// answers by going to look for a bug in code that never ran.
+func runLanePrepare(target *remote.Target, repoDir string, lane project.TestLane) error {
+	if target == nil {
+		if err := spawnLocal(repoDir, lane.Prepare, os.Stdout, os.Stderr); err != nil {
+			return prepareFailure(lane, err)
+		}
+		return nil
+	}
+	if err := runRemoteLine(*target, lane.Prepare); err != nil {
+		// Only a command-exit failure is re-tagged. An unreachable host and an
+		// incomplete transfer are facts about the run rather than about the
+		// prepare, and a transport failure relabelled as a bootstrap failure
+		// would send the reader to a `make build` line that is perfectly fine.
+		if ExitCode(err) != exitSuiteFailed {
+			return err
+		}
+		return prepareFailure(lane, err)
+	}
+	return nil
+}
+
+// prepareFailure is the message a failed bootstrap produces.
+//
+// It names the lane AND the line, and it does not read as `test lane %q
+// failed`: the two outcomes have to be distinguishable in a transcript, or the
+// distinct exit code buys nothing for the person actually reading it.
+func prepareFailure(lane project.TestLane, err error) error {
+	return &ExitCodeError{Code: exitPrepareFailed, Err: fmt.Errorf(
+		"test lane %q prepare failed, so its tests did not run — %s: %w", lane.Name, lane.Prepare, err)}
 }
 
 // laneNames is every declared lane's name, in declaration order, for a refusal

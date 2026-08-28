@@ -390,3 +390,141 @@ func TestSelectorFieldsSurviveAnotherLanesRemoval(t *testing.T) {
 			lanes[0].Selector, lanes[0].EmptyExit)
 	}
 }
+
+// laneBlock returns just the lines `lane list` printed for one lane: its
+// header and every indented line under it, up to the next lane's header.
+//
+// Per-lane rather than whole-output, because the absence assertions below are
+// about ONE lane. A `strings.Contains(out, "prepare")` over a listing that
+// also holds a prepared lane can never fail, so the assertion that an opt-in
+// field stays invisible would be vacuous exactly where it matters.
+func laneBlock(t *testing.T, out, name string) string {
+	t.Helper()
+	var block []string
+	collecting := false
+	for _, line := range strings.Split(out, "\n") {
+		switch {
+		case line == name:
+			collecting = true
+			block = append(block, line)
+		case collecting && strings.HasPrefix(line, " "):
+			block = append(block, line)
+		case collecting:
+			return strings.Join(block, "\n")
+		}
+	}
+	if !collecting {
+		t.Fatalf("lane %q has no block in the listing:\n%s", name, out)
+	}
+	return strings.Join(block, "\n")
+}
+
+// TestLaneAddPersistsPrepare: --prepare has to survive the round trip to disk
+// and come back out of `lane list`, or it would be a flag the user can type
+// and nothing would ever read — a cold host left unbootstrapped while the
+// config says otherwise.
+func TestLaneAddPersistsPrepare(t *testing.T) {
+	dir := laneFixture(t)
+	mustAddLane(t, "go", "--match", "internal/**", "--command", "go test", "--prepare", "make build")
+
+	lanes := loadLanes(t, dir)
+	if len(lanes) != 1 {
+		t.Fatalf("want 1 lane on disk, got %d", len(lanes))
+	}
+	if lanes[0].Prepare != "make build" {
+		t.Errorf("prepare = %q, want \"make build\" — the flag never reached the block", lanes[0].Prepare)
+	}
+	if lanes[0].Command != "go test" {
+		t.Errorf("command = %q — the prepare must not disturb the line consent binds to", lanes[0].Command)
+	}
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "list"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "prepare: make build") {
+		t.Errorf("lane list hid the prepare:\n%s", out)
+	}
+}
+
+// TestLaneListOmitsAnUndeclaredPrepare asserts ABSENCE against a NEIGHBOUR
+// that does declare one, which is the whole opt-in claim: a lane written
+// before this phase must not start listing a field that reads as something
+// the user is expected to go and set.
+func TestLaneListOmitsAnUndeclaredPrepare(t *testing.T) {
+	laneFixture(t)
+	mustAddLane(t, "go", "--match", "internal/**", "--command", "go test", "--prepare", "make build")
+	mustAddLane(t, "docs", "--match", "docs/", "--command", "markdownlint docs")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "list"); err != nil {
+		t.Fatal(err)
+	}
+	if got := laneBlock(t, out, "go"); !strings.Contains(got, "prepare: make build") {
+		t.Errorf("the declaring lane's block hid its prepare:\n%s", got)
+	}
+	if got := laneBlock(t, out, "docs"); strings.Contains(got, "prepare") {
+		t.Errorf("a lane declaring no prepare listed one:\n%s", got)
+	}
+}
+
+// TestLaneAddWithPrepareStartsUngranted: declaring a bootstrap line is not
+// consenting to run it, exactly as declaring a command is not. A prepare that
+// arrived pre-granted would be the one line in the pair nobody was ever shown.
+func TestLaneAddWithPrepareStartsUngranted(t *testing.T) {
+	dir := laneFixture(t)
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "add", "p",
+		"--match", "internal/**", "--command", "go test", "--prepare", "make build"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "dross trust --lane p") {
+		t.Errorf("the add did not point at the grant it still needs:\n%s", out)
+	}
+	l, err := loadLocal(localPath(filepath.Join(dir, RootDirName)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := l.TrustedLaneCommands["p"]; ok {
+		t.Errorf("adding a lane granted it: %v", l.TrustedLaneCommands)
+	}
+}
+
+// TestLaneAddNormalizesAWhitespaceOnlyPrepare: whitespace-only is the one
+// shape that disagrees with itself — non-empty for the consent fingerprint,
+// empty for every reader. The CLI resolves it to absent before the write, so
+// only a hand-edited project.toml can carry one (and `dross validate` reports
+// that; see TestValidateNamesLaneWithWhitespaceOnlyPrepare).
+func TestLaneAddNormalizesAWhitespaceOnlyPrepare(t *testing.T) {
+	dir := laneFixture(t)
+	mustAddLane(t, "go", "--match", "internal/**", "--command", "go test", "--prepare", "   ")
+
+	if got := loadLanes(t, dir)[0].Prepare; got != "" {
+		t.Errorf("prepare = %q, want it normalized to absent", got)
+	}
+	if body := mustRead(t, filepath.Join(dir, RootDirName, project.File)); strings.Contains(body, "prepare") {
+		t.Errorf("a whitespace-only prepare rendered a prepare key:\n%s", body)
+	}
+}
+
+// TestPrepareSurvivesAnotherLanesRemoval: `lane remove` rewrites every
+// surviving lane through the encoder, so prepare rides that path too. A field
+// the rewrite dropped would leave a lane silently unbootstrapped after an
+// unrelated edit — and, because consent covers both lines, silently re-grant
+// under a fingerprint the user never saw.
+func TestPrepareSurvivesAnotherLanesRemoval(t *testing.T) {
+	dir := laneFixture(t)
+	mustAddLane(t, "go", "--match", "internal/**", "--command", "go test", "--prepare", "make build")
+	mustAddLane(t, "docs", "--match", "docs/", "--command", "true")
+
+	if err := runCmd(t, Test(), "lane", "remove", "docs"); err != nil {
+		t.Fatal(err)
+	}
+	lanes := loadLanes(t, dir)
+	if len(lanes) != 1 {
+		t.Fatalf("want the go lane left, got %d", len(lanes))
+	}
+	if lanes[0].Prepare != "make build" {
+		t.Errorf("removing another lane dropped the survivor's prepare: %q", lanes[0].Prepare)
+	}
+}

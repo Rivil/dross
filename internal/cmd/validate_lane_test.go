@@ -343,3 +343,49 @@ empty_exit = [5]`)
 		t.Fatalf("validate rejected a scoped lane declaring empty_exit = [5]: %v\n%s", err, out)
 	}
 }
+
+// TestValidateNamesLaneWithWhitespaceOnlyPrepare: a `prepare = "   "` is the
+// one shape that disagrees with itself — it survives project.Load non-empty,
+// so the lane's consent fingerprint covers it and `dross trust --lane` prints
+// a blank line, while every reader that asks "does this lane declare a
+// prepare" trims it and says no. `dross test lane add --prepare` normalizes it
+// away, so only a hand-edited project.toml reaches here — which is the path
+// validate exists for.
+func TestValidateNamesLaneWithWhitespaceOnlyPrepare(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+prepare = "   "`)
+
+	out, err := validateOutput(t)
+	if err == nil {
+		t.Fatalf("validate accepted a whitespace-only prepare:\n%s", out)
+	}
+	if !strings.Contains(out, `"go"`) || !strings.Contains(out, "prepare") {
+		t.Errorf("problem must name the lane and the field, got:\n%s", out)
+	}
+}
+
+// TestValidateAcceptsAbsentAndDeclaredPrepares is the opt-in half: neither a
+// lane that omits prepare nor one that declares a real line is a problem, or
+// validate would invent a fault for every repo written before this phase.
+func TestValidateAcceptsAbsentAndDeclaredPrepares(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+
+[[runtime.test_lane]]
+name = "docs"
+match = ["docs/**"]
+command = "markdownlint docs"
+prepare = "make build"`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Errorf("validate rejected usable prepare fields:\n%s", out)
+	}
+}

@@ -1,0 +1,132 @@
+{
+  "phase": "lane-prepare-step",
+  "pr": 110,
+  "base": "milestone/v1.6",
+  "base_commit": "17fe90d9271729a6a76ecd97459fe589b52c51fd",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/project/project.go",
+        "internal/cmd/test_lane.go",
+        "internal/cmd/validate.go",
+        "internal/cmd/test_lane_test.go",
+        "internal/cmd/validate_lane_test.go",
+        "internal/project/project_test.go"
+      ],
+      "commit": "dd83c35",
+      "completed_at": "2026-08-28T06:11:25.819121Z",
+      "landmarks": [
+        {
+          "feature": "test lane declaration",
+          "symbol": "TestLane.Prepare",
+          "loc": "internal/project/project.go:114",
+          "what": "optional per-lane bootstrap line, opt-in via omitempty and written by `lane add --prepare`"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_lane_consent_test.go",
+        "internal/cmd/test_files_test.go"
+      ],
+      "commit": "09f6a9d",
+      "completed_at": "2026-08-28T06:15:06.036349Z",
+      "landmarks": [
+        {
+          "feature": "test suite runner",
+          "symbol": "exitPrepareFailed",
+          "loc": "internal/cmd/test.go:74",
+          "what": "exit 7 for a failed lane bootstrap, ranked between partial and a red suite"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/trust.go",
+        "internal/cmd/test.go",
+        "internal/cmd/doctor.go",
+        "internal/cmd/trust_lane_test.go",
+        "internal/cmd/test_lane_consent_test.go"
+      ],
+      "commit": "cd8585c",
+      "completed_at": "2026-08-28T06:22:50.621858Z",
+      "landmarks": [
+        {
+          "feature": "test lane consent",
+          "symbol": "laneConsentLine",
+          "loc": "internal/cmd/trust.go:298",
+          "what": "one grant per lane over a NUL-framed prepare+command, byte-identical for lanes declaring no prepare"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_lane_prepare_test.go"
+      ],
+      "commit": "c9cdc33",
+      "completed_at": "2026-08-28T06:27:49.150737Z",
+      "landmarks": [
+        {
+          "feature": "test suite runner",
+          "symbol": "runLanes prepare leg",
+          "loc": "internal/cmd/test.go:512",
+          "what": "per-lane bootstrap spawned after the sync and before that lane's command, same host and transport"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/test_lane_prepare_test.go"
+      ],
+      "commit": "f2e3564",
+      "completed_at": "2026-08-28T06:34:03.431822Z",
+      "landmarks": [
+        {
+          "feature": "test suite runner",
+          "symbol": "runLanePrepare",
+          "loc": "internal/cmd/test.go:679",
+          "what": "a failed bootstrap exits 7 and skips only its own lane, on both transports, leaving the transport family untouched"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_edit_test.go"
+      ],
+      "commit": "6dff4dd",
+      "completed_at": "2026-08-28T06:31:14.336655Z",
+      "landmarks": [
+        {
+          "feature": "test lane declaration",
+          "symbol": "testLaneEdit",
+          "loc": "internal/cmd/test_lane.go:214",
+          "what": "in-place prepare edit that keeps the lane's grant and stales it instead of revoking"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "README.md",
+        "assets/prompts/execute.md",
+        "assets/prompts/options.md",
+        "internal/cmd/options_docs_test.go",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "4c71b86",
+      "completed_at": "2026-08-28T06:37:22.400278Z",
+      "landmarks": [
+        {
+          "feature": "test suite runner",
+          "symbol": "TestExecutePromptDocumentsPrepareExit",
+          "loc": "internal/cmd/execute_prompt_test.go:143",
+          "what": "exit 7 and the prepare surface documented in README, execute.md and options.md, gated by tests"
+        }
+      ]
+    }
+  }
+}

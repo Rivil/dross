@@ -30,14 +30,14 @@ import (
 func testLane() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "lane",
-		Short: "Declare, list and remove [[runtime.test_lane]] entries",
+		Short: "Declare, list, edit and remove [[runtime.test_lane]] entries",
 		Long: "A test lane is a name, a list of match globs and the command that tests\n" +
 			"the files they match. `dross test --files <paths>` runs only the lanes a\n" +
 			"file set actually hits.\n\n" +
 			"Each lane's command carries its own consent grant — `dross trust --lane\n" +
 			"<name>` — so a lane that changes refuses only itself.",
 	}
-	c.AddCommand(testLaneAdd(), testLaneList(), testLaneRemove())
+	c.AddCommand(testLaneAdd(), testLaneList(), testLaneEdit(), testLaneRemove())
 	return c
 }
 
@@ -73,6 +73,7 @@ func laneSelectorRefusal(name string, lane project.TestLane) error {
 func testLaneAdd() *cobra.Command {
 	var match []string
 	var command string
+	var prepare string
 	var selector string
 	var emptyExit []int
 	c := &cobra.Command{
@@ -101,9 +102,15 @@ func testLaneAdd() *cobra.Command {
 			// list, validate and the run site all read back the one spelling
 			// the user's typing resolved to.
 			proposed := project.TestLane{
-				Name:      name,
-				Match:     match,
-				Command:   strings.TrimSpace(command),
+				Name:    name,
+				Match:   match,
+				Command: strings.TrimSpace(command),
+				// A whitespace-only prepare normalizes to absent HERE, before
+				// the write, rather than being carried and read as empty
+				// later: a `prepare = "   "` is non-empty for the consent
+				// fingerprint and empty for every reader, so the one shape
+				// that can disagree with itself never reaches disk.
+				Prepare:   strings.TrimSpace(prepare),
 				Selector:  configenum.Normalize(selector),
 				EmptyExit: emptyExit,
 			}
@@ -127,13 +134,20 @@ func testLaneAdd() *cobra.Command {
 				return err
 			}
 			Printf("lane %q added: %s\n", name, strings.Join(match, " "))
-			Printf("  %s\n\n", strings.TrimSpace(command))
+			// The prepare is printed above the command, in the order they
+			// run. Consent covers both lines, so a summary that showed only
+			// the command would name less than the grant authorizes.
+			if proposed.Prepare != "" {
+				Printf("  prepare: %s\n", proposed.Prepare)
+			}
+			Printf("  %s\n\n", proposed.Command)
 			Printf("It will not run until this machine trusts it:\n\n    dross trust --lane %s\n", name)
 			return nil
 		},
 	}
 	c.Flags().StringArrayVar(&match, "match", nil, "glob this lane matches (repeatable)")
 	c.Flags().StringVar(&command, "command", "", "the command line this lane runs")
+	c.Flags().StringVar(&prepare, "prepare", "", "optional bootstrap line run before this lane's command, on the same host; covered by the same consent grant")
 	c.Flags().StringVar(&selector, "selector", "", "shape the matched paths take when appended to the command ("+configenum.SelectorStyles.List()+"); omitted runs the command untouched")
 	c.Flags().IntSliceVar(&emptyExit, "empty-exit", nil, "exit code this lane's runner uses for \"collected no tests\" (repeatable); requires --selector")
 	return c
@@ -164,9 +178,12 @@ func testLaneList() *cobra.Command {
 				// binds to, so a listing that hid it would leave the user
 				// unable to see what they are being asked to trust.
 				Printf("  command: %s\n", lane.Command)
-				// Printed only when declared. Both fields are opt-in, and a
-				// `selector: -` on every pre-existing lane would read as
-				// something the user is expected to go and set.
+				// Printed only when declared. Every field below is opt-in,
+				// and a `selector: -` on every pre-existing lane would read
+				// as something the user is expected to go and set.
+				if lane.Prepare != "" {
+					Printf("  prepare: %s\n", lane.Prepare)
+				}
 				if lane.Selector != "" {
 					Printf("  selector: %s\n", lane.Selector)
 				}
@@ -177,6 +194,93 @@ func testLaneList() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// testLaneEdit is `dross test lane edit <name> --prepare "<cmd>"`: the ONE
+// field a lane can change in place.
+//
+// It supersedes lane-selector-translation's lane_edit_surface decision for
+// prepare alone. That lock's reasoning was that remove-then-re-add is an
+// adequate workaround, and prepare is where it stops being one: removing a lane
+// drops its consent grant, so the workaround silently discards trust the user
+// granted and re-adds the lane as if it had never been read. Match, command,
+// selector and empty_exit keep the remove-then-re-add path.
+//
+// The grant is KEPT, deliberately, even though the fingerprint no longer
+// matches. Revoking would report a lane the user has trusted before as one they
+// never have — collapsing STALE into ABSENT, which is the distinction the
+// consent ladder exists to preserve and the one that tells a rewrite apart from
+// a first run.
+func testLaneEdit() *cobra.Command {
+	var prepare string
+	c := &cobra.Command{
+		Use:   "edit <name> --prepare \"<cmd>\"",
+		Short: "Set or clear a declared lane's prepare line, keeping its grant",
+		Long: "Changes a lane's prepare in place, leaving its match globs, command and\n" +
+			"position in project.toml exactly as they were.\n\n" +
+			"The lane's consent grant is kept but goes STALE: `dross trust --lane\n" +
+			"<name>` will say the line CHANGED rather than that it was never trusted.\n\n" +
+			"Only prepare is editable. Changing a lane's match, command, selector or\n" +
+			"empty_exit is still remove-then-re-add.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Read from Changed, not from the value. An omitted --prepare and
+			// an explicitly empty one are different requests — "leave it
+			// alone" and "clear it" — and a check on emptiness alone would
+			// collapse them into one clearing behaviour, so `lane edit go`
+			// with no flag at all would silently drop an existing prepare.
+			if !cmd.Flags().Changed("prepare") {
+				return fmt.Errorf("nothing to change: `dross test lane edit %s` needs --prepare.\n\n"+
+					"Pass a command to set one, or --prepare \"\" to clear it. Every other lane\n"+
+					"field is changed by removing the lane and re-adding it", args[0])
+			}
+			name := args[0]
+			root, p, err := loadProjectForLanes()
+			if err != nil {
+				return err
+			}
+			idx := -1
+			var names []string
+			for i, lane := range p.Runtime.TestLane {
+				names = append(names, lane.Name)
+				if lane.Name == name {
+					idx = i
+				}
+			}
+			if idx < 0 {
+				// Refused BEFORE the save, so an unknown name leaves
+				// project.toml byte-for-byte unchanged rather than rewritten
+				// with the same content by a round trip.
+				if len(names) == 0 {
+					return fmt.Errorf("no lane %q: this repo declares none", name)
+				}
+				return fmt.Errorf("no lane %q; declared: %s", name, strings.Join(names, ", "))
+			}
+			// Mutated IN PLACE rather than removed and appended: the lane
+			// keeps its position, so an edit does not reorder the document and
+			// a diff shows the one line that changed.
+			before := laneConsentLine(p.Runtime.TestLane[idx])
+			p.Runtime.TestLane[idx].Prepare = strings.TrimSpace(prepare)
+			lane := p.Runtime.TestLane[idx]
+			if err := p.Save(filepath.Join(root, project.File)); err != nil {
+				return err
+			}
+			if lane.Prepare == "" {
+				Printf("lane %q now declares no prepare.\n", name)
+			} else {
+				Printf("lane %q prepare: %s\n", name, lane.Prepare)
+			}
+			// Only when the consent line actually moved. A trust instruction
+			// printed on a no-op re-set teaches the user that the message
+			// carries no information, and the next real one gets skimmed.
+			if laneConsentLine(lane) != before {
+				Printf("\nIts grant is now stale — the lane will refuse until you re-read it:\n\n    dross trust --lane %s\n", name)
+			}
+			return nil
+		},
+	}
+	c.Flags().StringVar(&prepare, "prepare", "", "the lane's bootstrap line; pass \"\" to clear it")
+	return c
 }
 
 func testLaneRemove() *cobra.Command {
