@@ -48,6 +48,32 @@ Mark the board issue in-progress (no-op unless `[remote].board_sync` is on — s
 dross issue phase sync <id> --status in-progress
 ```
 
+**Pull any board-side task moves back into the plan** (same no-op rule — safe to
+always run). The outbound direction is wired throughout this prompt (`dross issue
+task sync`, below); this is the inbound half, and without it a card someone moved
+on the board never reaches `plan.toml`, so `dross task next` picks from a stale
+plan:
+```
+dross issue task pull <phase>
+```
+This **reports without writing** — that is its default. Read the report, then:
+
+- **No moves** → say nothing and carry on.
+- **Moves reported** → surface them in one line each (task id, plan status → board
+  status) and ask whether to apply. On acceptance:
+  ```
+  dross issue task pull <phase> --apply
+  ```
+  Applying rewrites task statuses in `plan.toml`, which changes what `dross task
+  next` returns — so it is the user's call, not an automatic one.
+- **A task changed on both sides** → dross refuses it by name and prints both
+  values. It does not pick a winner and neither do you: surface the conflict and
+  let the user say which side is right.
+- **`--apply` refused for the provider** → boards that are open/closed only
+  (Forgejo, Gitea, GitLab) carry no workflow state to read, and the command says
+  so by name. That is a configuration fact, not an error — note it once and move
+  on to the task loop.
+
 Load the stack loadout once and keep it in working context for the whole phase:
 ```
 dross stack loadout

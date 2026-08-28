@@ -164,3 +164,21 @@ func TestExecutePromptDocumentsPrepareExit(t *testing.T) {
 		t.Error("execute.md's did-not-happen line still omits 7, so 7 reads as a verdict about the code")
 	}
 }
+
+// TestExecutePromptPullsBoardTaskMoves guards the inbound half of board task
+// sync. The outbound calls (`dross issue task sync`) have been wired since the
+// task loop existed, but nothing ever called `dross issue task pull`, so a card
+// moved on the board never reached plan.toml and `dross task next` picked from a
+// stale plan. Removing the edge again fails this.
+//
+// The `--apply` needle matters as much as the verb: the bare command only
+// reports, so an edge that never names `--apply` can surface drift but can never
+// close it. (r-01: the prompt edit is only live after `make install`.)
+func TestExecutePromptPullsBoardTaskMoves(t *testing.T) {
+	content := executePromptContent(t)
+	for _, needle := range []string{"dross issue task pull", "--apply"} {
+		if !strings.Contains(content, needle) {
+			t.Errorf("execute.md must wire the inbound board task pull: missing %q", needle)
+		}
+	}
+}
