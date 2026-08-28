@@ -33,7 +33,11 @@
 
 [[criteria]]
   id = "c-8"
-  text = "`dross doctor`'s Remote section reports each declared lane's toolchain against the granted host — naming the lane, its tools and which are missing — so a locality fallback is visible before a run hits it, and doctor and the run never disagree about what the host has."
+  text = "`dross doctor`'s Remote section reports each declared lane's toolchain against the granted host — naming the lane, its tools and which are missing — so a locality fallback is visible before a run hits it, and doctor and the run never disagree about what the effective granted host has."
+
+[[criteria]]
+  id = "c-9"
+  text = "A lane whose toolchain is absent from this machine does not spawn on a `--local` or ungranted run either — it names the missing binary and takes the toolchain exit code, so a missing tool is never reported as a red suite regardless of where the run was headed."
 
 [[decisions]]
   key = "toolchain_source"
@@ -61,4 +65,9 @@
 [[deferred]]
   text = "Routing a lane to whichever pool candidate already has its toolchain, instead of falling back to local."
   why = "Contradicts the locked transport_failure_only rule — a reachable host missing tools is deliberately not skipped. Revisiting that is a milestone-level decision, not this phase."
+  target = "lane-host-affinity"
+
+[[deferred]]
+  text = "Making doctor resolve its host the way the run does — doctor reads the scalar grant via readRemoteGrant while the run walks remote_pool via readRemoteGrants and selectRemoteTarget, so with a pool declared and the scalar host down they report different machines."
+  why = "The divergence pre-dates this phase and already applies to adapter tools; c-8 is narrowed to the effective granted host rather than widening this phase into changing doctor's host resolution."
   target = "lane-host-affinity"
