@@ -27,6 +27,11 @@ func filesFixture(t *testing.T, lanes string) {
 	if err := GrantConsent(dir+"/"+RootDirName, "go test ./..."); err != nil {
 		t.Fatal(err)
 	}
+	// This machine "has" every lane's toolchain. The fixture already stubs the
+	// spawn seam, so resolving binaries for real would make it half a machine —
+	// refusing a lane whose command it is simultaneously pretending to run.
+	// Tests whose subject IS the local-absence rule install their own.
+	installLaneLookPath(t)
 }
 
 // grantAllLanes consents to every declared lane's command on this machine.
