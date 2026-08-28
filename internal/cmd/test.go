@@ -430,12 +430,12 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		// `dross test <selector>` against runtime.test_command. Fingerprinting
 		// the derived line instead would go stale on every new file set and
 		// refuse practically every scoped run.
-		state, cerr := LaneConsented(root, repoDir, m.lane.Name, m.lane.Command)
+		state, cerr := LaneConsented(root, repoDir, m.lane.Name, laneConsentLine(m.lane))
 		if cerr != nil {
 			// Printed AND folded into the outcome. Returning it alone would
 			// lose it whenever another lane goes red and outranks it, and a
 			// consent problem the user never sees is one they never fix.
-			refusal := laneConsentRefusal(m.lane.Name, m.lane.Command, state, cerr)
+			refusal := laneConsentRefusal(m.lane, state, cerr)
 			Printf("%v\n\n", refusal)
 			worst = worseOutcome(worst, &ExitCodeError{Code: exitLaneRefused, Err: refusal})
 			continue

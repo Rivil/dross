@@ -1263,7 +1263,7 @@ func checkConfigTrust(root, repoDir string, p *project.Project) int {
 func reportLaneConsent(root, repoDir string, p *project.Project) int {
 	issues := 0
 	for _, lane := range p.Runtime.TestLane {
-		state, cerr := LaneConsented(root, repoDir, lane.Name, lane.Command)
+		state, cerr := LaneConsented(root, repoDir, lane.Name, laneConsentLine(lane))
 		switch state {
 		case ConsentGranted:
 			Printf("  ✓ lane %q: trusted\n", lane.Name)
@@ -1271,9 +1271,14 @@ func reportLaneConsent(root, repoDir string, p *project.Project) int {
 			// An issue, exactly as the whole-suite stale case is: something
 			// WAS trusted under this name and the command has since changed,
 			// which is the signature the binding exists to catch.
-			Printf("  ✗ lane %q: consent is stale — its command has CHANGED since it was trusted here:\n", lane.Name)
+			Printf("  ✗ lane %q: consent is stale — what it runs has CHANGED since it was trusted here:\n", lane.Name)
 			Printf("      %s\n", lane.Command)
-			Printf("    Fix (only after reading that line): `dross trust --lane %s`\n", lane.Name)
+			printLanePrepare(lane)
+			// Named as the fix in every arm that prints lines, prepare
+			// included: the state doctor reports and the state that refuses
+			// mid-run must agree on what closes it, or a stale prepare would
+			// send the reader looking for a second verb that does not exist.
+			Printf("    Fix (only after reading that): `dross trust --lane %s`\n", lane.Name)
 			issues++
 		case ConsentRefused:
 			Printf("  ✗ lane %q: %v\n", lane.Name, cerr)
@@ -1287,10 +1292,24 @@ func reportLaneConsent(root, repoDir string, p *project.Project) int {
 			// a clean checkout look broken.
 			Printf("  ⚠ lane %q: not trusted on this machine:\n", lane.Name)
 			Printf("      %s\n", lane.Command)
-			Printf("    Fix (only after reading that line): `dross trust --lane %s`\n", lane.Name)
+			printLanePrepare(lane)
+			Printf("    Fix (only after reading that): `dross trust --lane %s`\n", lane.Name)
 		}
 	}
 	return issues
+}
+
+// printLanePrepare prints one lane's bootstrap line under its command, and
+// nothing at all for a lane declaring none.
+//
+// Under rather than beside, and only when declared: the same grant covers both
+// lines, so a report that showed one of them would understate what the user is
+// being asked to trust — while a `prepare: -` row on every pre-existing lane
+// would read as something they are expected to go and set.
+func printLanePrepare(lane project.TestLane) {
+	if lane.Prepare != "" {
+		Printf("      prepare: %s\n", lane.Prepare)
+	}
 }
 
 // checkMutationToolchain reports whether the LOCAL toolchain each configured

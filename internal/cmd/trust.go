@@ -265,6 +265,59 @@ func addFingerprint(set, line string) string {
 
 // --- per-lane consent ---
 
+// laneFrame is the domain separator that keeps a prepared lane's consent line
+// out of the namespace a bare command occupies.
+//
+// A NUL cannot appear in an argv element, so no command line a user could
+// actually run can spell this prefix — which is what makes the "no pair can
+// forge a no-prepare lane's fingerprint" claim structural rather than
+// probabilistic.
+const laneFrame = "dross:lane-prepare:v1\x00"
+
+// laneConsentLine returns the exact byte string ONE lane's consent grant is
+// taken over — the value Fingerprint hashes and the store records.
+//
+// Three properties, each load-bearing:
+//
+//   - A lane declaring NO prepare returns its command UNCHANGED. Framing
+//     applied unconditionally would re-fingerprint every lane grant already
+//     written on every machine, staling them all over a document nobody
+//     edited.
+//   - A prepared lane's two lines are LENGTH-FRAMED, not concatenated. Naive
+//     concatenation collides {prepare:"a", command:"bc"} with {prepare:"ab",
+//     command:"c"} — a lane re-split across its two fields keeping a grant
+//     issued for neither.
+//   - The framed form is NUL-delimited and no unframed line may carry a NUL,
+//     so feeding those bytes back as a bare command misses rather than forging
+//     the pair's own fingerprint. The two namespaces are disjoint by
+//     construction, not by being hard to hit.
+//
+// A lane with no command returns the empty string whatever its prepare says:
+// consent binds to something runnable, and LaneConsented's ConsentNotApplicable
+// arm is keyed on exactly that emptiness.
+func laneConsentLine(lane project.TestLane) string {
+	if strings.TrimSpace(lane.Command) == "" {
+		return ""
+	}
+	// A NUL is what makes the frame unforgeable, and it only works if no
+	// UNFRAMED line can carry one: otherwise a lane declaring no prepare and a
+	// command spelled exactly like the frame would hash the frame itself, and
+	// the grant would transfer between two lanes sharing no line at all.
+	//
+	// Refusing costs nothing real. An argv element is NUL-terminated, so a
+	// command containing one cannot be exec'd under any shell — the lane is
+	// unrunnable, and binding consent to it would be binding to something that
+	// can never run. Empty here means exactly that, and LaneConsented turns it
+	// into the same ConsentNotApplicable a commandless lane gets.
+	if strings.ContainsRune(lane.Command, 0) || strings.ContainsRune(lane.Prepare, 0) {
+		return ""
+	}
+	if lane.Prepare == "" {
+		return lane.Command
+	}
+	return fmt.Sprintf("%s%d\x00%s\x00%d\x00%s", laneFrame, len(lane.Prepare), lane.Prepare, len(lane.Command), lane.Command)
+}
+
 // LaneConsented reports what this machine has said about ONE lane's command.
 //
 // It returns the same ConsentState ladder CheckConsent does, and for the same
@@ -350,24 +403,35 @@ func RevokeLaneConsent(root, name string) error {
 // The lane name is in the text of every arm on purpose: a run refusing over
 // several lanes produces several of these, and a message that only showed the
 // command would leave the reader matching command lines back to blocks by eye.
-func laneConsentRefusal(name, line string, state ConsentState, cerr error) error {
+func laneConsentRefusal(lane project.TestLane, state ConsentState, cerr error) error {
+	name := lane.Name
+	// EVERY line the grant covers, not just the command. One grant binds both,
+	// so a refusal showing only the command would let a user re-consent to a
+	// bootstrap they were never shown — and when the prepare is the line that
+	// changed, the message would display text that did not change while asking
+	// them to approve text they cannot see.
+	lines, what := "    "+lane.Command+"\n", "command"
+	if lane.Prepare != "" {
+		lines = "    prepare: " + lane.Prepare + "\n    command: " + lane.Command + "\n"
+		what = "prepare or command"
+	}
 	switch state {
 	case ConsentRefused, ConsentNotApplicable:
 		return cerr
 	case ConsentStale:
 		return fmt.Errorf(
-			"refusing to run test lane %q: its command has CHANGED since you trusted it —\n"+
+			"refusing to run test lane %q: its %s has CHANGED since you trusted it —\n"+
 				"the recorded consent is stale.\n\n"+
-				"    %s\n\n"+
-				"Read the line above; if it is what you meant to run, re-consent:\n\n"+
-				"    dross trust --lane %s\n\n%w", name, line, name, cerr)
+				"%s\n"+
+				"Read the lines above; if that is what you meant to run, re-consent:\n\n"+
+				"    dross trust --lane %s\n\n%w", name, what, lines, name, cerr)
 	default:
 		return fmt.Errorf(
-			"refusing to run test lane %q: its command has not been trusted on this machine.\n\n"+
-				"    %s\n\n"+
+			"refusing to run test lane %q: its %s has not been trusted on this machine.\n\n"+
+				"%s\n"+
 				"It comes from the repo's tracked project.toml, so a clone carries whatever\n"+
-				"its author wrote. Read the line above, then:\n\n"+
-				"    dross trust --lane %s\n\n%w", name, line, name, cerr)
+				"its author wrote. Read the lines above, then:\n\n"+
+				"    dross trust --lane %s\n\n%w", name, what, lines, name, cerr)
 	}
 }
 
@@ -578,11 +642,11 @@ func trustLane(root, name string, check bool) error {
 	}
 	repoDir := filepath.Dir(root)
 	if check {
-		state, cerr := LaneConsented(root, repoDir, lane.Name, lane.Command)
+		state, cerr := LaneConsented(root, repoDir, lane.Name, laneConsentLine(lane))
 		if cerr == nil {
 			return nil
 		}
-		return laneConsentRefusal(lane.Name, lane.Command, state, cerr)
+		return laneConsentRefusal(lane, state, cerr)
 	}
 	if err := refuseTrackedLocal(repoDir); err != nil {
 		return err
@@ -593,15 +657,20 @@ func trustLane(root, name string, check bool) error {
 				"Consent is bound to a command line, so there is nothing to bind to yet —\n"+
 				"`dross validate` reports the same gap", name)
 	}
-	// Printed BEFORE the write, and in full. The line arrives from TRACKED
-	// project.toml, so a grant that did not show it would be consenting to
-	// whatever a clone happened to carry.
-	Printf("trusting test lane %q on this machine:\n\n    %s\n\n", lane.Name, lane.Command)
-	if err := GrantLaneConsent(root, lane.Name, lane.Command); err != nil {
+	// Printed BEFORE the write, and in full — BOTH lines when the lane
+	// declares a prepare. They arrive from TRACKED project.toml, so a grant
+	// that did not show them would be consenting to whatever a clone happened
+	// to carry, and one grant covers the pair.
+	if lane.Prepare != "" {
+		Printf("trusting test lane %q on this machine — both lines:\n\n    prepare: %s\n    command: %s\n\n", lane.Name, lane.Prepare, lane.Command)
+	} else {
+		Printf("trusting test lane %q on this machine:\n\n    %s\n\n", lane.Name, lane.Command)
+	}
+	if err := GrantLaneConsent(root, lane.Name, laneConsentLine(lane)); err != nil {
 		return err
 	}
 	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
-	Printf("Editing or renaming lane %q revokes this; every other lane's grant is untouched.\n", lane.Name)
+	Printf("Editing or renaming lane %q — its prepare included — revokes this; every other lane's grant is untouched.\n", lane.Name)
 	return nil
 }
 

