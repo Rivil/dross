@@ -269,6 +269,41 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "lane-prepare-step/t-1": {
+      "issue": "DRO-225",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-2": {
+      "issue": "DRO-226",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-3": {
+      "issue": "DRO-227",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-4": {
+      "issue": "DRO-228",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-5": {
+      "issue": "DRO-230",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-6": {
+      "issue": "DRO-229",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-prepare-step/t-7": {
+      "issue": "DRO-231",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "lane-selector-translation/t-1": {
       "issue": "DRO-211",
       "plan_status": "done",
