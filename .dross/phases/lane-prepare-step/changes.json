@@ -1,7 +1,9 @@
 {
   "phase": "lane-prepare-step",
+  "pr": 110,
   "base": "milestone/v1.6",
   "base_commit": "17fe90d9271729a6a76ecd97459fe589b52c51fd",
+  "status": "shipped",
   "tasks": {
     "t-1": {
       "files": [
