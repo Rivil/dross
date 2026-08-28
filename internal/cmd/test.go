@@ -510,20 +510,25 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 		// spawn set depend on which neighbours happened to match.
 		if m.lane.Prepare != "" {
 			Printf("lane %s prepare: %s\n", m.lane.Name, m.lane.Prepare)
-			// Spawned through the same runOneLane, so it lands on the same
-			// host and the same transport as the command it precedes (locked
-			// prepare_locality). A lane that bootstrapped only on the remote
-			// would measure different things depending on where it landed.
+			// Spawned through the same seams as the command, so it lands on
+			// the same host and the same transport as the command it precedes
+			// (locked prepare_locality). A lane that bootstrapped only on the
+			// remote would measure different things depending on where it
+			// landed.
 			//
 			// No selector is appended: the derived paths scope the suite, and
 			// a bootstrap handed this file set's paths would be a different
 			// command on every run.
-			if err := runOneLane(target, repoDir, m.lane, m.lane.Prepare); err != nil {
+			if err := runLanePrepare(target, repoDir, m.lane); err != nil {
 				// The lane's own command does NOT run. A bootstrap that failed
 				// measured nothing about the code, and running the suite
 				// anyway would report the consequence as a verdict.
-				// `continue`, not `return`: the run's other lanes are
-				// unaffected. t-5 gives this its own exit code.
+				//
+				// `continue`, not `return`: this lane is out, the run's other
+				// lanes are untouched. And NOT counted as a miss — a miss
+				// folds into exitNothingMeasured, which ranks LAST, so a run
+				// where every prepare failed would report as having measured
+				// nothing rather than as the bootstrap failure it is.
 				worst = worseOutcome(worst, err)
 				continue
 			}
@@ -659,6 +664,46 @@ func runOneLane(target *remote.Target, repoDir string, lane project.TestLane, li
 		return err
 	}
 	return nil
+}
+
+// runLanePrepare spawns one lane's bootstrap line through the same two
+// transports its command uses, and classifies a failure as exitPrepareFailed.
+//
+// The re-tag is what keeps a broken bootstrap from reading as broken code. Both
+// arms needed it, and for different reasons: the local arm hard-codes
+// exitSuiteFailed for anything spawnLocal returns, and the remote arm takes its
+// code from remoteFailure, which spends exitSuiteFailed on a command that came
+// back non-zero. Left alone, a prepare that failed would exit 1 on both — the
+// exact collision the exit taxonomy exists to prevent, and the one a caller
+// answers by going to look for a bug in code that never ran.
+func runLanePrepare(target *remote.Target, repoDir string, lane project.TestLane) error {
+	if target == nil {
+		if err := spawnLocal(repoDir, lane.Prepare, os.Stdout, os.Stderr); err != nil {
+			return prepareFailure(lane, err)
+		}
+		return nil
+	}
+	if err := runRemoteLine(*target, lane.Prepare); err != nil {
+		// Only a command-exit failure is re-tagged. An unreachable host and an
+		// incomplete transfer are facts about the run rather than about the
+		// prepare, and a transport failure relabelled as a bootstrap failure
+		// would send the reader to a `make build` line that is perfectly fine.
+		if ExitCode(err) != exitSuiteFailed {
+			return err
+		}
+		return prepareFailure(lane, err)
+	}
+	return nil
+}
+
+// prepareFailure is the message a failed bootstrap produces.
+//
+// It names the lane AND the line, and it does not read as `test lane %q
+// failed`: the two outcomes have to be distinguishable in a transcript, or the
+// distinct exit code buys nothing for the person actually reading it.
+func prepareFailure(lane project.TestLane, err error) error {
+	return &ExitCodeError{Code: exitPrepareFailed, Err: fmt.Errorf(
+		"test lane %q prepare failed, so its tests did not run — %s: %w", lane.Name, lane.Prepare, err)}
 }
 
 // laneNames is every declared lane's name, in declaration order, for a refusal

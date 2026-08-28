@@ -387,3 +387,214 @@ func TestLaneWithNoPrepareSpawnsExactlyOnce(t *testing.T) {
 		}
 	})
 }
+
+// --- t-5: a failed prepare fails its own lane and spares the rest ---
+
+// TestFailedPrepareSkipsItsOwnLaneAndSparesTheRest is c-3's core claim, with
+// both halves asserted against the same recorder.
+//
+// A `return` instead of a `continue` kills the run and fails the goCmd assert;
+// a missing skip runs the suite the bootstrap was supposed to prepare and fails
+// the docsCmd assert. Only one implementation satisfies both.
+func TestFailedPrepareSkipsItsOwnLaneAndSparesTheRest(t *testing.T) {
+	filesFixture(t, preparedTwoLanes)
+	grantEveryLane(t)
+	rec := installPrepareFailure(t, "npm ci")
+
+	err := runCmd(t, Test(), "--files", "internal/a.go", "--files", "docs/x.md")
+	if err == nil {
+		t.Fatal("a failed prepare reported success")
+	}
+	if got := ExitCode(err); got != exitPrepareFailed {
+		t.Errorf("exit = %d, want %d — a bootstrap that failed measured nothing about the code", got, exitPrepareFailed)
+	}
+	for _, line := range rec.lines {
+		if line == "markdownlint docs" {
+			t.Errorf("the lane whose prepare failed still ran its suite: %v", rec.lines)
+		}
+	}
+	var ranGo bool
+	for _, line := range rec.lines {
+		if line == goCmd {
+			ranGo = true
+		}
+	}
+	if !ranGo {
+		t.Errorf("one lane's failed prepare stopped an unrelated lane: %v", rec.lines)
+	}
+	if !strings.Contains(err.Error(), "docs") || !strings.Contains(err.Error(), "npm ci") {
+		t.Errorf("the failure names neither the lane nor the line: %v", err)
+	}
+	if strings.Contains(err.Error(), `test lane "docs" failed`) {
+		t.Errorf("a failed bootstrap reads as a failed suite: %v", err)
+	}
+}
+
+// installPrepareFailure records every local spawn and fails exactly the named
+// line, so a test can make ONE lane's bootstrap fail while everything else
+// behaves normally.
+func installPrepareFailure(t *testing.T, failing string) *spawnRecorder {
+	t.Helper()
+	rec := &spawnRecorder{}
+	orig := spawnLocal
+	t.Cleanup(func() { spawnLocal = orig })
+	spawnLocal = func(dir, line string, stdout, stderr io.Writer) error {
+		if line == failing {
+			rec.mu.Lock()
+			rec.lines = append(rec.lines, line)
+			rec.mu.Unlock()
+			return fakeExit{code: 1}
+		}
+		return rec.spawn(dir, line, stdout, stderr)
+	}
+	return rec
+}
+
+// TestPrepareFailureOutranksARedSuite proves the result was FOLDED through
+// worseOutcome rather than left to whichever lane happened to run last.
+//
+// With the go lane red and the docs lane's bootstrap broken, an implementation
+// that returned the last lane's error reports 1 — and the user goes looking for
+// the bug in a lane that was never even bootstrapped.
+func TestPrepareFailureOutranksARedSuite(t *testing.T) {
+	filesFixture(t, preparedTwoLanes)
+	grantEveryLane(t)
+
+	orig := spawnLocal
+	t.Cleanup(func() { spawnLocal = orig })
+	spawnLocal = func(_, line string, _, _ io.Writer) error {
+		if line == goCmd || line == "npm ci" {
+			return fakeExit{code: 1}
+		}
+		return nil
+	}
+
+	err := runCmd(t, Test(), "--files", "internal/a.go", "--files", "docs/x.md")
+	if err == nil {
+		t.Fatal("a red lane beside a broken bootstrap reported success")
+	}
+	if got := ExitCode(err); got != exitPrepareFailed {
+		t.Errorf("exit = %d, want %d — a red suite must not mask a lane that never ran", got, exitPrepareFailed)
+	}
+}
+
+// TestEveryPrepareFailedIsNotNothingMeasured: prepare failures are counted
+// APART from selector misses.
+//
+// Folded in with the misses, `misses == len(runnable)` fires and the run
+// reports exitNothingMeasured — which ranks LAST, so a run where nothing was
+// bootstrapped would be reported as one that merely collected no tests. The
+// two send the reader to different files.
+func TestEveryPrepareFailedIsNotNothingMeasured(t *testing.T) {
+	filesFixture(t, preparedTwoLanes)
+	grantEveryLane(t)
+
+	orig := spawnLocal
+	t.Cleanup(func() { spawnLocal = orig })
+	spawnLocal = func(_, line string, _, _ io.Writer) error {
+		if line == "make build" || line == "npm ci" {
+			return fakeExit{code: 1}
+		}
+		return nil
+	}
+
+	err := runCmd(t, Test(), "--files", "internal/a.go", "--files", "docs/x.md")
+	if err == nil {
+		t.Fatal("a run where every bootstrap failed reported success")
+	}
+	if got := ExitCode(err); got != exitPrepareFailed {
+		t.Errorf("exit = %d, want %d, never %d (nothing measured)", got, exitPrepareFailed, exitNothingMeasured)
+	}
+}
+
+// TestPrepareFailureIsClassifiedOnBothTransports: runOneLane's local arm
+// hard-codes exitSuiteFailed and the remote arm takes its code from
+// remoteFailure, which spends exitSuiteFailed on a non-zero command. A re-tag
+// wired into only one of them ships a prepare failure still reporting 1 on the
+// other — which is the collision exit 7 was added to prevent.
+func TestPrepareFailureIsClassifiedOnBothTransports(t *testing.T) {
+	t.Run("local", func(t *testing.T) {
+		filesFixture(t, preparedGoLane)
+		grantEveryLane(t)
+		installPrepareFailure(t, "make build")
+
+		err := runCmd(t, Test(), "--local", "--files", "internal/a.go")
+		if got := ExitCode(err); got != exitPrepareFailed {
+			t.Errorf("exit = %d, want %d — the local arm still reports a bootstrap failure as a red suite", got, exitPrepareFailed)
+		}
+	})
+
+	t.Run("over ssh", func(t *testing.T) {
+		remoteLaneFixture(t, preparedGoLane)
+		rem := installRemoteRecorder(t, nil)
+		orig := spawnRemote
+		t.Cleanup(func() { spawnRemote = orig })
+		spawnRemote = func(argv []string, script string, stdout, stderr io.Writer) error {
+			if err := rem.spawn(argv, script, stdout, stderr); err != nil {
+				return err
+			}
+			if strings.Contains(script, "make build") {
+				return fakeExit{code: 1}
+			}
+			return nil
+		}
+
+		err := runCmd(t, Test(), "--files", "internal/a.go")
+		if got := ExitCode(err); got != exitPrepareFailed {
+			t.Fatalf("exit = %d, want %d — the remote arm reports a bootstrap failure as a red suite", got, exitPrepareFailed)
+		}
+		// And the suite it was preparing never reached the host.
+		for _, script := range remoteScripts(rem) {
+			if strings.Contains(script, "go test -count=1 ./...") {
+				t.Errorf("the lane's tests ran on a host whose bootstrap failed: %v", remoteScripts(rem))
+			}
+		}
+	})
+}
+
+// TestTransportFailureDuringAPrepareKeepsItsOwnCode: the re-tag must not
+// swallow the transport family.
+//
+// An unreachable host and an incomplete transfer are facts about the RUN, not
+// about the prepare. Relabelled as a bootstrap failure they would send the
+// reader to edit a `make build` line that is perfectly fine, while the machine
+// that is actually down goes unmentioned.
+func TestTransportFailureDuringAPrepareKeepsItsOwnCode(t *testing.T) {
+	t.Run("ssh 255 stays exit 3", func(t *testing.T) {
+		remoteLaneFixture(t, preparedGoLane)
+		orig := spawnRemote
+		t.Cleanup(func() { spawnRemote = orig })
+		spawnRemote = func(argv []string, _ string, _, _ io.Writer) error {
+			if len(argv) > 0 && strings.Contains(argv[0], "ssh") {
+				return fakeExit{code: 255}
+			}
+			return nil
+		}
+
+		err := runCmd(t, Test(), "--files", "internal/a.go")
+		if got := ExitCode(err); got != exitTransport {
+			t.Errorf("exit = %d, want %d (transport) — a host that died is not a broken bootstrap", got, exitTransport)
+		}
+	})
+
+	// The sync precedes every lane, so an incomplete transfer is reached
+	// before any prepare exists to blame — which is exactly the property
+	// worth pinning: whatever the re-tag does, it must not be able to reach
+	// backwards over the one failure that invalidates the whole tree.
+	t.Run("incomplete rsync stays exit 4", func(t *testing.T) {
+		remoteLaneFixture(t, preparedGoLane)
+		orig := spawnRemote
+		t.Cleanup(func() { spawnRemote = orig })
+		spawnRemote = func(argv []string, _ string, _, _ io.Writer) error {
+			if len(argv) > 0 && strings.Contains(argv[0], "rsync") {
+				return fakeExit{code: 23}
+			}
+			return nil
+		}
+
+		err := runCmd(t, Test(), "--files", "internal/a.go")
+		if got := ExitCode(err); got != exitPartial {
+			t.Errorf("exit = %d, want %d (partial) — an incomplete tree is not a broken bootstrap", got, exitPartial)
+		}
+	})
+}
