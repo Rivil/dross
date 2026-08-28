@@ -224,6 +224,17 @@ func laneProblems(p *project.Project) []string {
 		if strings.TrimSpace(lane.Command) == "" {
 			problems = append(problems, fmt.Sprintf("project.toml: %s has no command — a lane with no command line has nothing to run and nothing to consent to", label))
 		}
+		if lane.Prepare != "" && strings.TrimSpace(lane.Prepare) == "" {
+			// Not a reading of any locked decision but an addition: a
+			// whitespace-only prepare is the one shape that disagrees with
+			// itself. It survives project.Load non-empty, so the consent
+			// fingerprint covers it and `dross trust --lane` prints a blank
+			// line, while every reader that asks "does this lane declare a
+			// prepare" trims it and says no. `dross test lane add --prepare`
+			// normalizes it away, so only a hand-edited project.toml can
+			// carry one — which is exactly what validate is for.
+			problems = append(problems, fmt.Sprintf("project.toml: %s has a whitespace-only prepare — it reads as no prepare but fingerprints as one; drop the key or give it a command line", label))
+		}
 		problems = append(problems, laneSelectorProblems(label, lane)...)
 		for _, pattern := range lane.Match {
 			if err := checkGlob(pattern); err != nil {

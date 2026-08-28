@@ -73,6 +73,7 @@ func laneSelectorRefusal(name string, lane project.TestLane) error {
 func testLaneAdd() *cobra.Command {
 	var match []string
 	var command string
+	var prepare string
 	var selector string
 	var emptyExit []int
 	c := &cobra.Command{
@@ -101,9 +102,15 @@ func testLaneAdd() *cobra.Command {
 			// list, validate and the run site all read back the one spelling
 			// the user's typing resolved to.
 			proposed := project.TestLane{
-				Name:      name,
-				Match:     match,
-				Command:   strings.TrimSpace(command),
+				Name:    name,
+				Match:   match,
+				Command: strings.TrimSpace(command),
+				// A whitespace-only prepare normalizes to absent HERE, before
+				// the write, rather than being carried and read as empty
+				// later: a `prepare = "   "` is non-empty for the consent
+				// fingerprint and empty for every reader, so the one shape
+				// that can disagree with itself never reaches disk.
+				Prepare:   strings.TrimSpace(prepare),
 				Selector:  configenum.Normalize(selector),
 				EmptyExit: emptyExit,
 			}
@@ -127,13 +134,20 @@ func testLaneAdd() *cobra.Command {
 				return err
 			}
 			Printf("lane %q added: %s\n", name, strings.Join(match, " "))
-			Printf("  %s\n\n", strings.TrimSpace(command))
+			// The prepare is printed above the command, in the order they
+			// run. Consent covers both lines, so a summary that showed only
+			// the command would name less than the grant authorizes.
+			if proposed.Prepare != "" {
+				Printf("  prepare: %s\n", proposed.Prepare)
+			}
+			Printf("  %s\n\n", proposed.Command)
 			Printf("It will not run until this machine trusts it:\n\n    dross trust --lane %s\n", name)
 			return nil
 		},
 	}
 	c.Flags().StringArrayVar(&match, "match", nil, "glob this lane matches (repeatable)")
 	c.Flags().StringVar(&command, "command", "", "the command line this lane runs")
+	c.Flags().StringVar(&prepare, "prepare", "", "optional bootstrap line run before this lane's command, on the same host; covered by the same consent grant")
 	c.Flags().StringVar(&selector, "selector", "", "shape the matched paths take when appended to the command ("+configenum.SelectorStyles.List()+"); omitted runs the command untouched")
 	c.Flags().IntSliceVar(&emptyExit, "empty-exit", nil, "exit code this lane's runner uses for \"collected no tests\" (repeatable); requires --selector")
 	return c
@@ -164,9 +178,12 @@ func testLaneList() *cobra.Command {
 				// binds to, so a listing that hid it would leave the user
 				// unable to see what they are being asked to trust.
 				Printf("  command: %s\n", lane.Command)
-				// Printed only when declared. Both fields are opt-in, and a
-				// `selector: -` on every pre-existing lane would read as
-				// something the user is expected to go and set.
+				// Printed only when declared. Every field below is opt-in,
+				// and a `selector: -` on every pre-existing lane would read
+				// as something the user is expected to go and set.
+				if lane.Prepare != "" {
+					Printf("  prepare: %s\n", lane.Prepare)
+				}
 				if lane.Selector != "" {
 					Printf("  selector: %s\n", lane.Selector)
 				}
