@@ -177,9 +177,12 @@ Declare them through the CLI, never by hand-editing `project.toml`:
 
 - **Show** → `dross test lane list` (prints each lane's globs *and* its command line)
 - **Add** → `dross test lane add <name> --match <glob> --command "<cmd>"` (`--match` is repeatable)
+- **Edit a prepare** → `dross test lane edit <name> --prepare "<cmd>"` (pass `""` to clear it)
 - **Remove** → `dross test lane remove <name>`
 
-There is no edit verb: changing a lane is remove-then-re-add, which is also what makes the grant story honest — the re-added lane starts untrusted.
+`prepare` is the only field with an edit verb. Changing a lane's match, command, selector or empty_exit is still remove-then-re-add, which is also what makes the grant story honest — the re-added lane starts untrusted. Prepare is the exception because that honesty inverts there: `remove` drops the grant, so re-adding would report a lane the user HAS trusted as one they never have. `dross test lane edit --prepare` keeps the grant and stales it instead, so `dross trust --lane` says the line CHANGED.
+
+**Bootstrapping a lane before it runs.** `dross test lane add ... --prepare "<cmd>"` gives a lane a line that runs after the tree sync and before that lane's own command, on the same host and transport — `make build` on a cold remote, `docker compose up -d` before an integration lane. It is opt-in per lane, never deduplicated across lanes (idempotence is the declared contract, so two lanes sharing a prepare each run their own), and skipped entirely for a lane that will not spawn. A prepare that fails skips only its own lane's tests and exits `7`, which is not a red suite. The lane's single consent grant covers the prepare and the command together, so adding one stales the grant and `dross trust --lane <name>` prints both lines before writing.
 
 **Scoping a lane to the files that hit it.** `dross test lane add ... --selector <style>` makes the lane append its own matched paths to its command, in one of three shapes: `path` (each file), `dir` (each parent directory), `go-package` (`./<dir>/...`). A task touching one file then costs that package rather than the lane's whole suite. Omit it and the lane runs its command untouched, which is what every lane written before this did — it is opt-in per lane, and `dross test lane list` prints `selector:` only for the lanes that declare one.
 

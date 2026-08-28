@@ -209,6 +209,11 @@ func TestReadmeDocumentsTestLanes(t *testing.T) {
 		"go-package",
 		"--empty-exit",
 		"selector miss",
+		// The prepare surface. A bootstrap line is code the repo asks this
+		// machine to run before its tests, so a reader who cannot find it
+		// documented cannot know it exists to review.
+		"--prepare",
+		"dross test lane edit",
 	} {
 		if !strings.Contains(readme, want) {
 			t.Errorf("README.md does not document %q", want)
@@ -220,6 +225,27 @@ func TestReadmeDocumentsTestLanes(t *testing.T) {
 	if !strings.Contains(readme, "every matched lane's selector collected nothing") {
 		t.Error("README.md's exit-5 contract does not cover the all-miss run")
 	}
+	// Exit 7 is documented AND placed. The position is the contract: an agent
+	// that read 7 as ranking below a red suite would commit on a run where a
+	// lane never got as far as being measured.
+	if !strings.Contains(readme, "`7`") {
+		t.Fatal("README.md's `dross test` row does not name exit 7")
+	}
+	order := []string{"transport", "partial", "prepare", "red", "refused", "nothing-measured"}
+	at := -1
+	for _, name := range order {
+		i := strings.Index(readme, "> "+name)
+		if name == "transport" {
+			i = strings.Index(readme, "mislead: transport")
+		}
+		if i < 0 {
+			t.Fatalf("README.md's stated precedence order omits %q", name)
+		}
+		if i <= at {
+			t.Errorf("README.md states %q out of precedence order", name)
+		}
+		at = i
+	}
 }
 
 // TestOptionsDocumentsTheSelectorSurfaceCorrectly guards the two ways the
@@ -229,11 +255,23 @@ func TestReadmeDocumentsTestLanes(t *testing.T) {
 func TestOptionsDocumentsTheSelectorSurfaceCorrectly(t *testing.T) {
 	prompt := optionsPrompt(t)
 
-	// Editing stays remove-then-re-add (locked lane_edit_surface). A prompt
-	// that told the reader to open project.toml would route around every
-	// refusal `dross test lane add` performs before the write.
+	// Editing stays remove-then-re-add for every field but prepare (locked
+	// lane_edit_surface, narrowed by lane-prepare-step). A prompt that told
+	// the reader to open project.toml would route around every refusal
+	// `dross test lane add` performs before the write.
 	if !strings.Contains(prompt, "remove-then-re-add") {
 		t.Error("options.md does not route lane edits through remove-then-re-add")
+	}
+	// The one exception, named as one. A prompt that advertised the edit verb
+	// without saying it is prepare-only would send the reader to a refusal for
+	// every other field.
+	if !strings.Contains(prompt, "dross test lane edit") {
+		t.Error("options.md does not name `dross test lane edit --prepare`")
+	}
+	for _, field := range []string{"match", "command", "selector", "empty_exit"} {
+		if !strings.Contains(prompt, field) {
+			t.Errorf("options.md no longer says which fields stay remove-then-re-add: %q is missing", field)
+		}
 	}
 	for _, forbidden := range []string{
 		"hand-edit runtime.test_lane",
