@@ -307,6 +307,11 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "lane-remote-locality/t-1": {
+      "issue": "DRO-236",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "lane-selector-translation/t-1": {
       "issue": "DRO-211",
       "plan_status": "done",

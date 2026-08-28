@@ -2,5 +2,25 @@
   "phase": "lane-remote-locality",
   "base": "milestone/v1.6",
   "base_commit": "3751a2bc55716dd16970960d9aed08649dac2e62",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/project/project.go",
+        "internal/testlane/toolchain.go",
+        "internal/testlane/toolchain_test.go",
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_lane_test.go"
+      ],
+      "commit": "15219c6",
+      "completed_at": "2026-08-28T12:33:43.873256Z",
+      "landmarks": [
+        {
+          "feature": "test lane toolchain",
+          "symbol": "testlane.Toolchain",
+          "loc": "internal/testlane/toolchain.go:21",
+          "what": "derives a lane's required binaries from its command and prepare first tokens, overridable per lane and refused by validate when an entry can never resolve on PATH"
+        }
+      ]
+    }
+  }
 }
