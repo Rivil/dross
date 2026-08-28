@@ -219,3 +219,18 @@ func runnableLanes(matched []matchedLane) []project.TestLane {
 	}
 	return out
 }
+
+// plannedRemotely reports whether any lane is still going to the granted host.
+//
+// One is enough. The sync exists so a remote lane measures the tree on disk
+// rather than the previous run's, so skipping it for a run that still has one
+// remote lane would produce the worst outcome available: a green from code that
+// is not the code in hand.
+func plannedRemotely(plan []laneVerdict) bool {
+	for _, v := range plan {
+		if v.Site == siteRemote {
+			return true
+		}
+	}
+	return false
+}
