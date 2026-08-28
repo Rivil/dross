@@ -160,7 +160,11 @@ func TestExecutePromptDocumentsPrepareExit(t *testing.T) {
 	if !strings.Contains(content, "prepare") {
 		t.Error("execute.md's exit-code list never names the prepare command")
 	}
-	if !strings.Contains(content, "2, 3, 4, 5, 6 and 7 all mean the run did not happen") {
+	// The literal is pinned to the CURRENT list. The drift-proof version of
+	// this — every declared exit code, read out of test.go — is
+	// TestExecuteSummaryNamesEveryNonRedCode; this one stays because it is
+	// what names 7 specifically, and 7's whole point is not reading as a red.
+	if !strings.Contains(content, "2, 3, 4, 5, 6, 7 and 8 all mean the run did not happen") {
 		t.Error("execute.md's did-not-happen line still omits 7, so 7 reads as a verdict about the code")
 	}
 }
