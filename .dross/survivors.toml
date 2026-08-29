@@ -1181,3 +1181,30 @@
   line = 266
   category = "shadowed-range-boundary"
   accepted_in = "lane-selector-translation"
+
+[[accepted]]
+  key = "95057f14e22b9e4a"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case strings.TrimSpace(tool) == \"\":"
+  line = 309
+  reason = "Attribution ceiling, proven per-mutant rather than by category: this is a switch{} case condition in laneToolchainProblems, so go-cover attributes no block to its columns and gremlins never builds or runs the mutant (it is reported NOT COVERED, not executed-and-survived). Applying the mutation by hand and running go test ./internal/cmd -run Toolchain turns the suite red: TestValidateAcceptsAbsentAndDeclaredToolchains fails, because negating the blank-entry arm makes validate reject the legitimate toolchain = [\"mise\"] lane. The test that would catch this breakage already exists and already catches it."
+  accepted_in = "lane-remote-locality"
+
+[[accepted]]
+  key = "da63dd0716ff940c"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case len(strings.Fields(tool)) > 1:"
+  line = 311
+  reason = "Attribution ceiling, proven per-mutant rather than by category: this is a switch{} case condition in laneToolchainProblems, so go-cover attributes no block to its columns and gremlins never builds or runs the mutant (reported NOT COVERED, not executed-and-survived). Applying > 1 -> >= 1 by hand and running go test ./internal/cmd -run Toolchain turns the suite red in six tests, including TestValidateAcceptsAbsentAndDeclaredToolchains and TestLaneAddWritesToolchainInFlagOrder: widening the boundary makes every single-binary entry read as a command line, so validate rejects toolchains that lane add itself writes. Already caught by existing tests."
+  accepted_in = "lane-remote-locality"
+
+[[accepted]]
+  key = "aae374b2bffb7a5a"
+  file = "internal/cmd/validate.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(strings.Fields(tool)) > 1:"
+  line = 311
+  reason = "Attribution ceiling, proven per-mutant rather than by category: this is a switch{} case condition in laneToolchainProblems, so go-cover attributes no block to its columns and gremlins never builds or runs the mutant (reported NOT COVERED, not executed-and-survived). Applying > 1 -> <= 1 by hand and running go test ./internal/cmd -run Toolchain turns the suite red in eight tests, including TestValidateNamesLaneWithUnusableToolchainEntries (the command-line subtest stops being refused) and TestValidateAcceptsAbsentAndDeclaredToolchains (single-binary entries start being refused). Both directions of the arm are already asserted."
+  accepted_in = "lane-remote-locality"
