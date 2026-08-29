@@ -39,7 +39,7 @@ func testLane() *cobra.Command {
 			"<name>` — so a lane that changes refuses only itself. A lane's optional\n" +
 			"install line is granted apart from it, with `dross trust --lane-install`.",
 	}
-	c.AddCommand(testLaneAdd(), testLaneList(), testLaneEdit(), testLaneRemove())
+	c.AddCommand(testLaneAdd(), testLaneList(), testLaneEdit(), testLaneRemove(), testLaneInstall())
 	return c
 }
 
