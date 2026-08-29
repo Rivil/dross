@@ -493,3 +493,64 @@ command = "go test"`)
 		t.Errorf("a second save changed the file:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }
+
+// TestValidateNamesLaneWithWhitespaceOnlyInstall is the prepare rule one field
+// over, and it exists for the same reason: `install = "   "` survives
+// project.Load non-empty, so the install line's own consent fingerprint covers
+// it and the trust verb prints a blank line, while every reader that asks "does
+// this lane declare an install" trims it and says no. `dross test lane add
+// --install` normalizes it away, so only a hand-edited project.toml reaches
+// here — which is the path validate exists for.
+func TestValidateNamesLaneWithWhitespaceOnlyInstall(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+install = "   "`)
+
+	out, err := validateOutput(t)
+	if err == nil {
+		t.Fatalf("validate accepted a whitespace-only install:\n%s", out)
+	}
+	if !strings.Contains(out, `"go"`) || !strings.Contains(out, "install") {
+		t.Errorf("problem must name the lane and the field, got:\n%s", out)
+	}
+}
+
+// TestValidateAcceptsAbsentAndDeclaredInstalls is the opt-in half. A lane with
+// NO install key must add ZERO problems, or the rule would invent a fault for
+// every lane written before this phase — turning an opt-in field into a nag on
+// every repo that already declares lanes.
+func TestValidateAcceptsAbsentAndDeclaredInstalls(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+
+[[runtime.test_lane]]
+name = "docs"
+match = ["docs/**"]
+command = "markdownlint docs"
+install = "npm install -g markdownlint-cli"`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Errorf("validate rejected usable install fields:\n%s", out)
+	}
+
+	// Asserted at the rule's own layer too, not only through validate's exit
+	// status: a lane with no install key must contribute nothing at all, which
+	// an aggregate "no error" check would still pass if the problem were
+	// reported and something else swallowed it.
+	p, err := project.Load(filepath.Join(dir, ".dross", "project.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, problem := range laneProblems(p) {
+		if strings.Contains(problem, "install") {
+			t.Errorf("a lane declaring no install key was reported: %s", problem)
+		}
+	}
+}

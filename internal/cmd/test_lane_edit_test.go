@@ -205,3 +205,123 @@ func TestLaneEditNormalizesAWhitespaceOnlyPrepare(t *testing.T) {
 		t.Errorf("a whitespace-only prepare rendered a prepare key:\n%s", body)
 	}
 }
+
+// TestLaneEditInstallLeavesTheTestGrantAlone is c-7's non-staleness half,
+// proved at the cheapest layer there is: the consent line itself.
+//
+// install_consent is locked against exactly this regression. Folding Install
+// into laneConsentLine the way Prepare is folded in would staleness-refuse a
+// lane's ordinary test runs the moment an install line was added — a line that
+// has never executed breaking a gate that was passing the day before.
+func TestLaneEditInstallLeavesTheTestGrantAlone(t *testing.T) {
+	dir := twoLaneEditFixture(t)
+	root := filepath.Join(dir, RootDirName)
+	before := laneConsentLine(loadLanes(t, dir)[0])
+	if err := GrantLaneConsent(root, "go", before); err != nil {
+		t.Fatal(err)
+	}
+
+	mustEditLane(t, "go", "--install", "npm i -g pnpm")
+
+	lane := loadLanes(t, dir)[0]
+	if lane.Install != "npm i -g pnpm" {
+		t.Fatalf("install = %q, want it written", lane.Install)
+	}
+	if after := laneConsentLine(lane); after != before {
+		t.Errorf("the install line reached the lane's TEST consent line:\n before %q\n after  %q", before, after)
+	}
+	// The grant itself, not just the line it was taken over: --check is the
+	// gate a real run passes through, and it is what would start refusing.
+	if err := runCmd(t, Trust(), "--lane", "go", "--check"); err != nil {
+		t.Errorf("adding an install line staled the lane's test grant: %v", err)
+	}
+}
+
+// TestLaneEditInstallDistinguishesOmittedFromEmpty: the per-flag Changed guard,
+// one flag deeper than the command-level one. An unconditional write would let
+// `--toolchain go` silently drop an install line the user never mentioned.
+func TestLaneEditInstallDistinguishesOmittedFromEmpty(t *testing.T) {
+	dir := twoLaneEditFixture(t)
+	path := filepath.Join(dir, RootDirName, project.File)
+	mustEditLane(t, "go", "--install", "npm i -g pnpm")
+
+	t.Run("another flag leaves it intact", func(t *testing.T) {
+		mustEditLane(t, "go", "--toolchain", "go")
+		if got := loadLanes(t, dir)[0].Install; got != "npm i -g pnpm" {
+			t.Errorf("editing --toolchain changed the install line: %q", got)
+		}
+	})
+
+	t.Run("empty clears the key", func(t *testing.T) {
+		mustEditLane(t, "go", "--install", "")
+		if got := loadLanes(t, dir)[0].Install; got != "" {
+			t.Errorf("install = %q, want it cleared", got)
+		}
+		// Asserted on the key's ABSENCE, not on an empty string: omitempty is
+		// what keeps a cleared field from writing `install = ""` into every
+		// document that ever carried one.
+		if body := mustRead(t, path); strings.Contains(body, "install") {
+			t.Errorf("a cleared install left its key behind:\n%s", body)
+		}
+	})
+}
+
+// TestLaneEditInstallAloneIsNotTheNoOpRefusal: --install has to satisfy the
+// command-level "nothing to change" guard on its own, or the one flag this task
+// adds would be unreachable through the verb it was added to.
+func TestLaneEditInstallAloneIsNotTheNoOpRefusal(t *testing.T) {
+	dir := twoLaneEditFixture(t)
+
+	if err := runCmd(t, Test(), "lane", "edit", "go", "--install", "go install ./cmd/x"); err != nil {
+		t.Fatalf("`lane edit --install` alone was refused: %v", err)
+	}
+	if got := loadLanes(t, dir)[0].Install; got != "go install ./cmd/x" {
+		t.Errorf("install = %q, want it written", got)
+	}
+
+	// The refusal's own text still has to name the flag, or a user who passes
+	// nothing is told about two of the three fields they could have set.
+	err := runCmd(t, Test(), "lane", "edit", "go")
+	if err == nil {
+		t.Fatal("`lane edit` with no flag at all was accepted")
+	}
+	if !strings.Contains(err.Error(), "--install") {
+		t.Errorf("the refusal does not name --install: %v", err)
+	}
+}
+
+// TestLaneAddWritesAndListsTheInstallLine: the declaration surface's other
+// half. `edit` cannot set a field `add` never writes and `list` never shows —
+// the user would have no way to see what they declared short of reading
+// project.toml.
+func TestLaneAddWritesAndListsTheInstallLine(t *testing.T) {
+	dir := laneFixture(t)
+	mustAddLane(t, "x", "--match", "x/**", "--command", "go test ./x", "--install", "go install ./x")
+
+	if got := loadLanes(t, dir)[0].Install; got != "go install ./x" {
+		t.Errorf("install = %q, want it written", got)
+	}
+	if body := mustRead(t, filepath.Join(dir, RootDirName, project.File)); !strings.Contains(body, `install = "go install ./x"`) {
+		t.Errorf("the install key is missing from project.toml:\n%s", body)
+	}
+
+	var listed string
+	if err := runCmdCapturing(t, &listed, Test(), "lane", "list"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(listed, "go install ./x") {
+		t.Errorf("`lane list` does not print the install line:\n%s", listed)
+	}
+
+	// The opt-in half: a lane that declares none must not render an
+	// `install: -` row, which would read as a field every lane is expected to
+	// set.
+	mustAddLane(t, "y", "--match", "y/**", "--command", "go test ./y")
+	var plain string
+	if err := runCmdCapturing(t, &plain, Test(), "lane", "list"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(plain, "install:") != 1 {
+		t.Errorf("a lane declaring no install line still printed a row:\n%s", plain)
+	}
+}

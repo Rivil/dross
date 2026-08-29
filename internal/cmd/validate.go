@@ -235,6 +235,16 @@ func laneProblems(p *project.Project) []string {
 			// carry one — which is exactly what validate is for.
 			problems = append(problems, fmt.Sprintf("project.toml: %s has a whitespace-only prepare — it reads as no prepare but fingerprints as one; drop the key or give it a command line", label))
 		}
+		if lane.Install != "" && strings.TrimSpace(lane.Install) == "" {
+			// The prepare rule one field over, for the same shape and the same
+			// reason: a whitespace-only install survives project.Load
+			// non-empty, so its own consent fingerprint covers it and the
+			// trust verb prints a blank line, while every reader asking "does
+			// this lane declare an install" trims it and says no. `dross test
+			// lane add --install` normalizes it away, so only a hand-edited
+			// project.toml can carry one.
+			problems = append(problems, fmt.Sprintf("project.toml: %s has a whitespace-only install — it reads as no install but fingerprints as one; drop the key or give it a command line", label))
+		}
 		problems = append(problems, laneSelectorProblems(label, lane)...)
 		problems = append(problems, laneToolchainProblems(label, lane)...)
 		for _, pattern := range lane.Match {

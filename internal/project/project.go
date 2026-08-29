@@ -137,6 +137,27 @@ type TestLane struct {
 	// would pin the lane to a local run with no message pointing at the cause.
 	Toolchain []string `toml:"toolchain,omitempty" json:"toolchain,omitempty"`
 
+	// Install is the optional line that installs this lane's toolchain onto
+	// the machine that is missing it. Omitted — the normal case — means the
+	// lane installs from dross's built-in recipe for the tool, or is refused
+	// by name when there is none: an install command is never guessed at.
+	//
+	// Declared, it REPLACES the built-in recipe for this lane's tool rather
+	// than extending it, for the reason Toolchain replaces its derived list:
+	// appending would keep running the very recipe the user overrode to say
+	// was wrong. It is also the only route to installing something the
+	// built-in table deliberately refuses — a language runtime — because that
+	// choice then belongs to the person who owns the host rather than to
+	// dross.
+	//
+	// It carries its OWN consent grant, separate from the command+prepare
+	// grant the lane's test runs bind to. Folding it into that fingerprint the
+	// way Prepare is folded in would staleness-refuse a lane's ordinary test
+	// runs the moment an install line was added — a line that has never
+	// executed breaking a gate that was passing — and installing is a
+	// different act with a different blast radius than running a suite.
+	Install string `toml:"install,omitempty" json:"install,omitempty"`
+
 	// EmptyExit lists the exit codes this lane's runner uses to say "I
 	// collected no tests" — pytest's 5, for example. dross reports those as a
 	// selector miss rather than a red suite. It is declared, never inferred:
