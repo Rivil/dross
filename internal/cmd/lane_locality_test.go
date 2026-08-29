@@ -1,0 +1,296 @@
+package cmd
+
+import (
+	"errors"
+	"fmt"
+	"os/exec"
+	"strings"
+	"testing"
+
+	"github.com/Rivil/dross/internal/project"
+)
+
+// lanesFor builds the matchedLane slice laneLocality takes, with indexes in
+// declaration order — the shape runTestLanes hands it.
+func lanesFor(lanes ...project.TestLane) []matchedLane {
+	out := make([]matchedLane, 0, len(lanes))
+	for i, lane := range lanes {
+		out = append(out, matchedLane{index: i, lane: lane})
+	}
+	return out
+}
+
+// haveTools is a lookPath double: the named tools resolve, everything else does
+// not. Injected rather than calling exec.LookPath, so the local-absence rule is
+// exercised without the result depending on what happens to be installed on the
+// machine running the suite.
+func haveTools(tools ...string) func(string) (string, error) {
+	present := map[string]bool{}
+	for _, t := range tools {
+		present[t] = true
+	}
+	return func(bin string) (string, error) {
+		if present[bin] {
+			return "/usr/bin/" + bin, nil
+		}
+		return "", exec.ErrNotFound
+	}
+}
+
+// TestToolchainRankSitsBetweenPrepareAndRed is the one inequality the new code
+// exists to hold. Above red because the lane never spawned, so reporting a
+// neighbour's failing test would tell the user their code is broken while the
+// lane that measured nothing stayed invisible; below prepare because a broken
+// bootstrap is a fact about this repo's own line.
+func TestToolchainRankSitsBetweenPrepareAndRed(t *testing.T) {
+	if exitRank(exitToolchainMissing) <= exitRank(exitSuiteFailed) {
+		t.Errorf("toolchain-missing ranks %d, not above red's %d — a red lane would hide a lane that never ran",
+			exitRank(exitToolchainMissing), exitRank(exitSuiteFailed))
+	}
+	if exitRank(exitToolchainMissing) >= exitRank(exitPrepareFailed) {
+		t.Errorf("toolchain-missing ranks %d, not below prepare's %d",
+			exitRank(exitToolchainMissing), exitRank(exitPrepareFailed))
+	}
+}
+
+// TestExitTaxonomyOrderSurvivesTheInsertion walks the whole chain rather than
+// the new pair alone. Inserting a rank means renumbering the ones above it, and
+// a renumber that collapsed two existing outcomes into the same rank would make
+// worseOutcome's answer depend on argument order — which the new pair's own
+// assertion would never notice.
+func TestExitTaxonomyOrderSurvivesTheInsertion(t *testing.T) {
+	chain := []struct {
+		name string
+		code int
+	}{
+		{"transport", exitTransport},
+		{"partial", exitPartial},
+		{"prepare", exitPrepareFailed},
+		{"toolchain", exitToolchainMissing},
+		{"red", exitSuiteFailed},
+		{"refused", exitLaneRefused},
+		{"nothing measured", exitNothingMeasured},
+	}
+	for i := 0; i+1 < len(chain); i++ {
+		hi, lo := chain[i], chain[i+1]
+		if exitRank(hi.code) <= exitRank(lo.code) {
+			t.Errorf("%s (%d) ranks %d, want strictly above %s (%d) at %d",
+				hi.name, hi.code, exitRank(hi.code), lo.name, lo.code, exitRank(lo.code))
+		}
+	}
+	if exitRank(exitNothingMeasured) <= exitRank(0) {
+		t.Error("nothing-measured does not outrank success — a run that measured nothing would report green")
+	}
+}
+
+// TestWorseOutcomeKeepsTheLaneThatNeverRan: a lane that never spawned must not
+// be hidden behind a neighbour's red. Both orders are asserted, because a
+// worst-wins fold that got the comparison backwards passes one of them.
+func TestWorseOutcomeKeepsTheLaneThatNeverRan(t *testing.T) {
+	red := &ExitCodeError{Code: exitSuiteFailed, Err: errors.New("test lane \"go\" failed")}
+	gone := toolchainFailure(project.TestLane{Name: "web", Command: "pnpm test"}, "pnpm", "helicon")
+
+	for _, tc := range []struct {
+		name string
+		a, b error
+	}{
+		{"red first", red, gone},
+		{"toolchain first", gone, red},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ExitCode(worseOutcome(tc.a, tc.b)); got != exitToolchainMissing {
+				t.Errorf("worseOutcome kept exit %d, want %d — the lane that never ran was hidden",
+					got, exitToolchainMissing)
+			}
+		})
+	}
+}
+
+// TestToolchainFailureNamesBothHosts is locked local_absence's wording. A
+// message naming one side leaves the reader installing the binary on the
+// machine that already has it, and one worded as a suite failure sends them
+// looking for a bug in code no runner ever loaded.
+func TestToolchainFailureNamesBothHosts(t *testing.T) {
+	err := toolchainFailure(project.TestLane{Name: "web", Command: "pnpm test"}, "pnpm", "helicon")
+	msg := err.Error()
+
+	for _, want := range []string{"web", "pnpm", "helicon", "this machine", "neither"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the refusal does not name %q: %s", want, msg)
+		}
+	}
+	if strings.Contains(msg, "test suite failed") {
+		t.Errorf("a missing binary is worded as a red suite: %s", msg)
+	}
+	if got := ExitCode(err); got != exitToolchainMissing {
+		t.Errorf("exit = %d, want %d — a missing binary must not arrive as a failing gate", got, exitToolchainMissing)
+	}
+}
+
+// TestToolchainFailureWithoutARemoteNamesOnlyThisMachine: on a --local or
+// ungranted run there is no second host, and claiming "neither host" would
+// invent one the user never granted.
+func TestToolchainFailureWithoutARemoteNamesOnlyThisMachine(t *testing.T) {
+	msg := toolchainFailure(project.TestLane{Name: "web"}, "pnpm", "").Error()
+	if !strings.Contains(msg, "this machine") || !strings.Contains(msg, "pnpm") {
+		t.Errorf("the local refusal does not name the tool and this machine: %s", msg)
+	}
+	if strings.Contains(msg, "neither") {
+		t.Errorf("a run with no remote claims two hosts: %s", msg)
+	}
+}
+
+// TestLaneLocalityIsPerLane is c-3 at the decision itself: one probe answer,
+// two lanes, two different destinations. A per-run decision passes any test
+// that looks at one lane at a time.
+func TestLaneLocalityIsPerLane(t *testing.T) {
+	lanes := lanesFor(
+		project.TestLane{Name: "go", Command: "go test ./..."},
+		project.TestLane{Name: "web", Command: "pnpm test"},
+	)
+	got := laneLocality(lanes, "helicon", []string{"pnpm"}, haveTools("go", "pnpm"))
+
+	if got[0].Site != siteRemote {
+		t.Errorf("the go lane went %v, want remote — the host has go", got[0].Site)
+	}
+	if got[1].Site != siteLocal {
+		t.Errorf("the web lane went %v, want local — the host has no pnpm", got[1].Site)
+	}
+	if got[0].Announce != "" {
+		t.Errorf("a lane that went where the run went announced a fallback: %q", got[0].Announce)
+	}
+}
+
+// TestFallbackLineNamesLaneBinaryAndHost is c-2. All three in ONE line: a
+// transcript is read in fragments, and "running locally instead" without the
+// binary is a fact with no remedy attached.
+func TestFallbackLineNamesLaneBinaryAndHost(t *testing.T) {
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		"helicon", []string{"pnpm"}, haveTools("pnpm"))
+
+	line := got[0].Announce
+	if line == "" {
+		t.Fatal("a fallen-back lane announced nothing — it is indistinguishable from one that ran remotely")
+	}
+	if strings.Contains(strings.TrimSuffix(line, "\n"), "\n") {
+		t.Errorf("the announcement spans more than one line: %q", line)
+	}
+	for _, want := range []string{"web", "pnpm", "helicon"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("the announcement does not name %q: %q", want, line)
+		}
+	}
+}
+
+// TestPrepareToolSendsTheWholeLaneLocal is locked prepare_toolchain. The
+// prepare's tool and the command's tool are one requirement set — a lane whose
+// bootstrap ran on the remote for a suite that ran here would bootstrap the
+// wrong machine.
+func TestPrepareToolSendsTheWholeLaneLocal(t *testing.T) {
+	lane := project.TestLane{Name: "web", Command: "node run.js", Prepare: "pnpm install"}
+	got := laneLocality(lanesFor(lane), "helicon", []string{"pnpm"}, haveTools("node", "pnpm"))
+
+	if got[0].Site != siteLocal {
+		t.Errorf("a lane whose PREPARE tool is missing went %v, want local in full", got[0].Site)
+	}
+	if !strings.Contains(got[0].Announce, "pnpm") {
+		t.Errorf("the fallback does not name the prepare's binary: %q", got[0].Announce)
+	}
+}
+
+// TestNeitherHostRefusesRatherThanFallingBack is locked local_absence. Falling
+// back into a machine that also lacks the tool produces the failing gate c-1
+// exists to prevent, just on the other side of the wire.
+func TestNeitherHostRefusesRatherThanFallingBack(t *testing.T) {
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		"helicon", []string{"pnpm"}, haveTools())
+
+	if got[0].Site != siteRefused {
+		t.Fatalf("a lane no machine can run went %v, want refused", got[0].Site)
+	}
+	if code := ExitCode(got[0].Err); code != exitToolchainMissing {
+		t.Errorf("the refusal carries exit %d, want %d", code, exitToolchainMissing)
+	}
+	if !strings.Contains(got[0].Err.Error(), "neither") {
+		t.Errorf("the refusal does not say both hosts lack it: %v", got[0].Err)
+	}
+}
+
+// TestLocalRunStillConsultsLookPath is c-9. A missing binary is not a red suite
+// wherever the run was headed, so --local and an ungranted repo take the same
+// refusal rather than spawning `pnpm test` into a machine without pnpm.
+func TestLocalRunStillConsultsLookPath(t *testing.T) {
+	asked := []string{}
+	look := func(bin string) (string, error) {
+		asked = append(asked, bin)
+		return haveTools("go")(bin)
+	}
+	got := laneLocality(
+		lanesFor(
+			project.TestLane{Name: "go", Command: "go test ./..."},
+			project.TestLane{Name: "web", Command: "pnpm test"},
+		),
+		"", nil, look)
+
+	if len(asked) == 0 {
+		t.Fatal("a run with no remote consulted lookPath for nothing")
+	}
+	if got[0].Site != siteLocal {
+		t.Errorf("the go lane went %v, want local — this machine has go", got[0].Site)
+	}
+	if got[1].Site != siteRefused {
+		t.Fatalf("the web lane went %v, want refused — this machine has no pnpm", got[1].Site)
+	}
+	if code := ExitCode(got[1].Err); code != exitToolchainMissing {
+		t.Errorf("the local refusal carries exit %d, want %d — a missing tool must never read as a red suite",
+			code, exitToolchainMissing)
+	}
+	if got[0].Announce != "" || got[1].Announce != "" {
+		t.Errorf("a run that never had a remote announced a fallback: %q %q", got[0].Announce, got[1].Announce)
+	}
+}
+
+// TestUnreachableHostPrintsNoToolchainLine is the c-5 split at the decision. A
+// host that was never reached told us nothing about its toolchain: the run
+// arrives here with an empty host, and no lane may claim a binary is absent
+// from a machine that never answered.
+func TestUnreachableHostPrintsNoToolchainLine(t *testing.T) {
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		"", nil, haveTools("pnpm"))
+
+	if got[0].Site != siteLocal {
+		t.Errorf("the lane went %v, want local", got[0].Site)
+	}
+	if got[0].Announce != "" {
+		t.Errorf("a lane blamed a host that was never reached: %q", got[0].Announce)
+	}
+}
+
+// TestLaneToolUnionDedupes: the union is what the probe asks, one `command -v`
+// per entry over ssh. Two Go lanes asking `go` twice doubles the round trips a
+// run pays for before it has measured anything.
+func TestLaneToolUnionDedupes(t *testing.T) {
+	got := laneToolUnion([]project.TestLane{
+		{Name: "go", Command: "go test ./...", Prepare: "go build ./..."},
+		{Name: "cmd", Command: "go test ./internal/cmd/..."},
+		{Name: "web", Command: "pnpm test", Prepare: "make deps"},
+	})
+	want := []string{"go", "pnpm", "make"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("union = %v, want %v — deduped, command token before prepare token, in lane order", got, want)
+	}
+}
+
+// TestLaneToolUnionHonoursTheOverride: the union is what gets probed, so a lane
+// whose override says `mise` must not also cost a probe for the `go` it wraps.
+func TestLaneToolUnionHonoursTheOverride(t *testing.T) {
+	got := laneToolUnion([]project.TestLane{
+		{Name: "go", Command: "go test ./...", Toolchain: []string{"mise"}},
+	})
+	if fmt.Sprint(got) != fmt.Sprint([]string{"mise"}) {
+		t.Errorf("union = %v, want [mise] — the override replaces the derived token", got)
+	}
+}

@@ -1,0 +1,115 @@
+{
+  "phase": "lane-remote-locality",
+  "pr": 111,
+  "base": "milestone/v1.6",
+  "base_commit": "3751a2bc55716dd16970960d9aed08649dac2e62",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/project/project.go",
+        "internal/testlane/toolchain.go",
+        "internal/testlane/toolchain_test.go",
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_lane_test.go"
+      ],
+      "commit": "15219c6",
+      "completed_at": "2026-08-28T12:33:43.873256Z",
+      "landmarks": [
+        {
+          "feature": "test lane toolchain",
+          "symbol": "testlane.Toolchain",
+          "loc": "internal/testlane/toolchain.go:21",
+          "what": "derives a lane's required binaries from its command and prepare first tokens, overridable per lane and refused by validate when an entry can never resolve on PATH"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/lane_locality.go",
+        "internal/cmd/lane_locality_test.go",
+        "internal/cmd/test.go",
+        "internal/cmd/test_lane_consent_test.go",
+        "internal/cmd/test_files_test.go"
+      ],
+      "commit": "eccb734",
+      "completed_at": "2026-08-28T12:56:02.995833Z",
+      "landmarks": [
+        {
+          "feature": "remote test locality",
+          "symbol": "laneLocality",
+          "loc": "internal/cmd/lane_locality.go:98",
+          "what": "per-lane remote/local/refused decision from one preflight toolchain probe, with exit 8 for a lane neither host can run"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/test.go",
+        "internal/cmd/lane_locality_wiring_test.go",
+        "internal/cmd/test_files_test.go"
+      ],
+      "commit": "e68baec",
+      "completed_at": "2026-08-28T13:19:03.893781Z",
+      "landmarks": [
+        {
+          "feature": "remote test locality",
+          "symbol": "runTestLanes",
+          "loc": "internal/cmd/test.go:471",
+          "what": "per-lane target applied from the locality plan, sync skipped when no lane stays remote, toolchain refusals folded through worseOutcome"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/test_lane.go",
+        "internal/cmd/test_lane_toolchain_test.go"
+      ],
+      "commit": "1bcc20b",
+      "completed_at": "2026-08-28T13:02:35.425299Z",
+      "landmarks": [
+        {
+          "feature": "test lane declaration",
+          "symbol": "laneToolchainLine",
+          "loc": "internal/cmd/test_lane.go:107",
+          "what": "--toolchain on lane add/edit with clear-back-to-derived, and lane list showing every lane's effective toolchain marked derived or overridden"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/doctor.go",
+        "internal/cmd/doctor_lane_toolchain_test.go"
+      ],
+      "commit": "0e73bd7",
+      "completed_at": "2026-08-28T13:27:39.001292Z",
+      "landmarks": [
+        {
+          "feature": "project health checks",
+          "symbol": "reportLaneToolchains",
+          "loc": "internal/cmd/doctor.go:1466",
+          "what": "doctor's Remote section reports each lane's effective toolchain against the granted host from the same single probe the adapters use"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "README.md",
+        "assets/prompts/options.md",
+        "assets/prompts/execute.md",
+        "internal/cmd/lane_toolchain_docs_test.go",
+        "internal/cmd/execute_prompt_test.go"
+      ],
+      "commit": "2b6a732",
+      "completed_at": "2026-08-28T13:35:21.186349Z",
+      "landmarks": [
+        {
+          "feature": "command documentation",
+          "symbol": "declaredExitValues",
+          "loc": "internal/cmd/lane_toolchain_docs_test.go:170",
+          "what": "--toolchain, the per-lane fallback and exit 8 documented in README/options.md/execute.md, with the exit-code list asserted against test.go's const block"
+        }
+      ]
+    }
+  }
+}

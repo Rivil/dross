@@ -24,6 +24,7 @@ import (
 
 	"github.com/Rivil/dross/internal/configenum"
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/testlane"
 )
 
 // testLane registers the `lane` verb group.
@@ -70,11 +71,55 @@ func laneSelectorRefusal(name string, lane project.TestLane) error {
 	return fmt.Errorf("lane %q would not validate:\n  %s", name, strings.Join(problems, "\n  "))
 }
 
+// laneToolchainRefusal returns the CLI's refusal for a proposed lane's
+// toolchain override, or nil when every entry is usable.
+//
+// Quoted through the SAME laneToolchainProblems `dross validate` reports, for
+// the reason laneSelectorRefusal is: the CLI must never be able to write a lane
+// validate would then reject, and a second copy of the rules here would drift
+// until it could.
+func laneToolchainRefusal(name string, lane project.TestLane) error {
+	problems := laneToolchainProblems(laneLabel(0, name), lane)
+	if len(problems) == 0 {
+		return nil
+	}
+	return fmt.Errorf("lane %q would not validate:\n  %s", name, strings.Join(problems, "\n  "))
+}
+
+// clearsToolchain reports whether a --toolchain argv means "go back to
+// derived".
+//
+// `--toolchain ""` is the clear gesture, spelled exactly as `--prepare ""` is,
+// and only a lone blank counts. A blank BESIDE a real entry is a typo rather
+// than a request — clearing on it would silently discard the entry the user did
+// mean, so it falls through to laneToolchainProblems and is refused by name.
+func clearsToolchain(v []string) bool {
+	return len(v) == 0 || (len(v) == 1 && strings.TrimSpace(v[0]) == "")
+}
+
+// laneToolchainLine renders one lane's EFFECTIVE toolchain for the listing,
+// with where it came from.
+//
+// Printed for every lane rather than only for overridden ones (c-7). The
+// derived list is what the run actually probes, and a listing that showed only
+// declared overrides would leave the normal case — every lane written before
+// this phase — with no way to see its probe set short of reading project.toml
+// and re-deriving it by hand, which is the thing this flag exists to replace.
+func laneToolchainLine(lane project.TestLane) string {
+	origin := "derived"
+	if len(lane.Toolchain) > 0 {
+		origin = "overridden"
+	}
+	tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain)
+	return fmt.Sprintf("%s (%s)", strings.Join(tools, " "), origin)
+}
+
 func testLaneAdd() *cobra.Command {
 	var match []string
 	var command string
 	var prepare string
 	var selector string
+	var toolchain []string
 	var emptyExit []int
 	c := &cobra.Command{
 		Use:   "add <name>",
@@ -110,11 +155,19 @@ func testLaneAdd() *cobra.Command {
 				// later: a `prepare = "   "` is non-empty for the consent
 				// fingerprint and empty for every reader, so the one shape
 				// that can disagree with itself never reaches disk.
-				Prepare:   strings.TrimSpace(prepare),
-				Selector:  configenum.Normalize(selector),
+				Prepare:  strings.TrimSpace(prepare),
+				Selector: configenum.Normalize(selector),
+				// Verbatim, not trimmed and not filtered. A blank entry here is a
+				// mistake with no other reading — there is nothing to clear on a
+				// lane being declared — and dropping it silently would write an
+				// override the user cannot see they got wrong.
+				Toolchain: toolchain,
 				EmptyExit: emptyExit,
 			}
 			if err := laneSelectorRefusal(name, proposed); err != nil {
+				return err
+			}
+			if err := laneToolchainRefusal(name, proposed); err != nil {
 				return err
 			}
 			root, p, err := loadProjectForLanes()
@@ -140,7 +193,11 @@ func testLaneAdd() *cobra.Command {
 			if proposed.Prepare != "" {
 				Printf("  prepare: %s\n", proposed.Prepare)
 			}
-			Printf("  %s\n\n", proposed.Command)
+			Printf("  %s\n", proposed.Command)
+			// The probe set, always — derived or not. It is what decides which
+			// machine the lane runs on, and the moment to see it is the moment
+			// the lane is declared.
+			Printf("  toolchain: %s\n\n", laneToolchainLine(proposed))
 			Printf("It will not run until this machine trusts it:\n\n    dross trust --lane %s\n", name)
 			return nil
 		},
@@ -149,6 +206,7 @@ func testLaneAdd() *cobra.Command {
 	c.Flags().StringVar(&command, "command", "", "the command line this lane runs")
 	c.Flags().StringVar(&prepare, "prepare", "", "optional bootstrap line run before this lane's command, on the same host; covered by the same consent grant")
 	c.Flags().StringVar(&selector, "selector", "", "shape the matched paths take when appended to the command ("+configenum.SelectorStyles.List()+"); omitted runs the command untouched")
+	c.Flags().StringArrayVar(&toolchain, "toolchain", nil, "binary this lane needs on the host that runs it (repeatable); omitted derives it from the first token of --command and --prepare")
 	c.Flags().IntSliceVar(&emptyExit, "empty-exit", nil, "exit code this lane's runner uses for \"collected no tests\" (repeatable); requires --selector")
 	return c
 }
@@ -184,6 +242,11 @@ func testLaneList() *cobra.Command {
 				if lane.Prepare != "" {
 					Printf("  prepare: %s\n", lane.Prepare)
 				}
+				// Unconditional, unlike every opt-in field around it: a lane
+				// ALWAYS has an effective toolchain, because an omitted override
+				// derives one. Hiding it for the un-overridden case would hide it
+				// for exactly the lanes whose probe set nobody has looked at.
+				Printf("  toolchain: %s\n", laneToolchainLine(lane))
 				if lane.Selector != "" {
 					Printf("  selector: %s\n", lane.Selector)
 				}
@@ -196,15 +259,19 @@ func testLaneList() *cobra.Command {
 	}
 }
 
-// testLaneEdit is `dross test lane edit <name> --prepare "<cmd>"`: the ONE
-// field a lane can change in place.
+// testLaneEdit is `dross test lane edit <name>`: the fields a lane can change
+// in place.
 //
 // It supersedes lane-selector-translation's lane_edit_surface decision for
-// prepare alone. That lock's reasoning was that remove-then-re-add is an
-// adequate workaround, and prepare is where it stops being one: removing a lane
-// drops its consent grant, so the workaround silently discards trust the user
-// granted and re-adds the lane as if it had never been read. Match, command,
-// selector and empty_exit keep the remove-then-re-add path.
+// prepare and toolchain. That lock's reasoning was that remove-then-re-add is
+// an adequate workaround, and these two are where it stops being one: removing
+// a lane drops its consent grant, so the workaround silently discards trust the
+// user granted and re-adds the lane as if it had never been read. Match,
+// command, selector and empty_exit keep the remove-then-re-add path.
+//
+// Toolchain is the sharper case of the two: it is not part of the consent line
+// at all — it names binaries, not a command — so remove-then-re-add would drop
+// a grant in order to change a field the grant does not cover.
 //
 // The grant is KEPT, deliberately, even though the fingerprint no longer
 // matches. Revoking would report a lane the user has trusted before as one they
@@ -213,15 +280,19 @@ func testLaneList() *cobra.Command {
 // a first run.
 func testLaneEdit() *cobra.Command {
 	var prepare string
+	var toolchain []string
 	c := &cobra.Command{
-		Use:   "edit <name> --prepare \"<cmd>\"",
-		Short: "Set or clear a declared lane's prepare line, keeping its grant",
-		Long: "Changes a lane's prepare in place, leaving its match globs, command and\n" +
-			"position in project.toml exactly as they were.\n\n" +
-			"The lane's consent grant is kept but goes STALE: `dross trust --lane\n" +
-			"<name>` will say the line CHANGED rather than that it was never trusted.\n\n" +
-			"Only prepare is editable. Changing a lane's match, command, selector or\n" +
-			"empty_exit is still remove-then-re-add.",
+		Use:   "edit <name>",
+		Short: "Set or clear a declared lane's prepare line or toolchain, keeping its grant",
+		Long: "Changes a lane's --prepare or --toolchain in place, leaving its match\n" +
+			"globs, command and position in project.toml exactly as they were.\n\n" +
+			"--prepare changes the consent line, so the lane's grant is kept but goes\n" +
+			"STALE: `dross trust --lane <name>` will say the line CHANGED rather than\n" +
+			"that it was never trusted. --toolchain is not part of the consent line —\n" +
+			"it names binaries, not a command — so changing it leaves the grant alone.\n\n" +
+			"--toolchain is repeatable and REPLACES the derived list wholesale; pass\n" +
+			"--toolchain \"\" to go back to deriving it. Changing a lane's match,\n" +
+			"command, selector or empty_exit is still remove-then-re-add.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Read from Changed, not from the value. An omitted --prepare and
@@ -229,10 +300,14 @@ func testLaneEdit() *cobra.Command {
 			// alone" and "clear it" — and a check on emptiness alone would
 			// collapse them into one clearing behaviour, so `lane edit go`
 			// with no flag at all would silently drop an existing prepare.
-			if !cmd.Flags().Changed("prepare") {
-				return fmt.Errorf("nothing to change: `dross test lane edit %s` needs --prepare.\n\n"+
-					"Pass a command to set one, or --prepare \"\" to clear it. Every other lane\n"+
-					"field is changed by removing the lane and re-adding it", args[0])
+			setsPrepare := cmd.Flags().Changed("prepare")
+			setsToolchain := cmd.Flags().Changed("toolchain")
+			if !setsPrepare && !setsToolchain {
+				return fmt.Errorf("nothing to change: `dross test lane edit %s` needs --prepare or --toolchain.\n\n"+
+					"Pass a command to set a prepare, or --prepare \"\" to clear it; pass one or\n"+
+					"more --toolchain binaries to override the derived list, or --toolchain \"\"\n"+
+					"to go back to deriving it. Every other lane field is changed by removing\n"+
+					"the lane and re-adding it", args[0])
 			}
 			name := args[0]
 			root, p, err := loadProjectForLanes()
@@ -260,15 +335,45 @@ func testLaneEdit() *cobra.Command {
 			// keeps its position, so an edit does not reorder the document and
 			// a diff shows the one line that changed.
 			before := laneConsentLine(p.Runtime.TestLane[idx])
-			p.Runtime.TestLane[idx].Prepare = strings.TrimSpace(prepare)
+			// Each field is written only when its OWN flag was passed. An
+			// unconditional write would let `--toolchain go` clear a prepare the
+			// user never mentioned — the same omitted-means-clear collapse the
+			// Changed guard above exists to prevent, one flag deeper.
+			proposed := p.Runtime.TestLane[idx]
+			if setsPrepare {
+				proposed.Prepare = strings.TrimSpace(prepare)
+			}
+			if setsToolchain {
+				if clearsToolchain(toolchain) {
+					// nil rather than an empty slice, so omitempty leaves the key
+					// out and the lane returns to the derived shape it had before
+					// the override was ever written.
+					proposed.Toolchain = nil
+				} else {
+					proposed.Toolchain = toolchain
+				}
+			}
+			// Checked BEFORE the mutation lands, so a refused edit leaves
+			// project.toml byte-for-byte unchanged — and checked through the same
+			// problems validate reports, so the CLI cannot write a lane validate
+			// would then reject.
+			if err := laneToolchainRefusal(name, proposed); err != nil {
+				return err
+			}
+			p.Runtime.TestLane[idx] = proposed
 			lane := p.Runtime.TestLane[idx]
 			if err := p.Save(filepath.Join(root, project.File)); err != nil {
 				return err
 			}
-			if lane.Prepare == "" {
-				Printf("lane %q now declares no prepare.\n", name)
-			} else {
-				Printf("lane %q prepare: %s\n", name, lane.Prepare)
+			if setsPrepare {
+				if lane.Prepare == "" {
+					Printf("lane %q now declares no prepare.\n", name)
+				} else {
+					Printf("lane %q prepare: %s\n", name, lane.Prepare)
+				}
+			}
+			if setsToolchain {
+				Printf("lane %q toolchain: %s\n", name, laneToolchainLine(lane))
 			}
 			// Only when the consent line actually moved. A trust instruction
 			// printed on a no-op re-set teaches the user that the message
@@ -280,6 +385,7 @@ func testLaneEdit() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&prepare, "prepare", "", "the lane's bootstrap line; pass \"\" to clear it")
+	c.Flags().StringArrayVar(&toolchain, "toolchain", nil, "binary this lane needs on the host that runs it (repeatable); replaces the derived list, pass \"\" to go back to deriving it")
 	return c
 }
 

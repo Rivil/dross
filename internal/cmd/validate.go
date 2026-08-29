@@ -236,6 +236,7 @@ func laneProblems(p *project.Project) []string {
 			problems = append(problems, fmt.Sprintf("project.toml: %s has a whitespace-only prepare — it reads as no prepare but fingerprints as one; drop the key or give it a command line", label))
 		}
 		problems = append(problems, laneSelectorProblems(label, lane)...)
+		problems = append(problems, laneToolchainProblems(label, lane)...)
 		for _, pattern := range lane.Match {
 			if err := checkGlob(pattern); err != nil {
 				// Named by pattern as well as by lane: a broken glob
@@ -284,6 +285,45 @@ func laneSelectorProblems(label string, lane project.TestLane) []string {
 		// the declared code can never fire and the user is left believing they
 		// configured something they did not.
 		problems = append(problems, fmt.Sprintf("project.toml: %s declares empty_exit with no selector — an unscoped lane runs its whole suite, so the code could never fire", label))
+	}
+	return problems
+}
+
+// laneToolchainProblems reports the faults in one lane's opt-in toolchain
+// override.
+//
+// Every entry is asked of a host as `command -v <entry>`, so the rules here are
+// all one rule: an entry that could never resolve on any host would send its
+// lane local on every future run — or refuse to spawn it at all — with nothing
+// in the transcript pointing at the override as the cause. Refusing the shape
+// up front is the only place that failure is legible.
+//
+// Nothing is reported for a lane that omits the key. The list is derived then
+// (the locked toolchain_source decision), and a validator inventing a problem
+// for every lane written before this phase would make an opt-in field
+// mandatory by nagging.
+func laneToolchainProblems(label string, lane project.TestLane) []string {
+	var problems []string
+	for _, tool := range lane.Toolchain {
+		switch {
+		case strings.TrimSpace(tool) == "":
+			problems = append(problems, fmt.Sprintf("project.toml: %s toolchain lists a blank entry — every entry is probed as `command -v <tool>`, and no host answers to the empty string", label))
+		case len(strings.Fields(tool)) > 1:
+			// A whole command line rather than a binary: the shape a user
+			// reaches for when they copy the lane's command into the override.
+			problems = append(problems, fmt.Sprintf("project.toml: %s toolchain lists %q — an entry is one binary name, not a command line; list the binary alone", label, tool))
+		case strings.Contains(tool, "="):
+			// `FOO=1` is what first-token derivation produces for an
+			// env-prefixed command, and it is exactly what the override exists
+			// to REPLACE — carrying it into the override reproduces the fault.
+			problems = append(problems, fmt.Sprintf("project.toml: %s toolchain lists %q — that is an environment assignment, not a binary; name the binary the line actually runs", label, tool))
+		case strings.ContainsAny(tool, `/\`):
+			// A path resolves against a working directory, and the whole point
+			// of the probe is that it is asked of two different hosts whose
+			// trees do not have to agree. Only a name looked up on PATH means
+			// the same question on both.
+			problems = append(problems, fmt.Sprintf("project.toml: %s toolchain lists %q — an entry is looked up on PATH on whichever host runs the lane, so it must be a bare binary name, not a path", label, tool))
+		}
 	}
 	return problems
 }

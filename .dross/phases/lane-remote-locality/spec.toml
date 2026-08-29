@@ -1,0 +1,73 @@
+[phase]
+  id = "lane-remote-locality"
+  title = "lane-remote-locality"
+  milestone = "v1.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "A matched lane whose required toolchain is absent on the granted remote runs its command on the local machine instead, and the run's status reflects that lane's own suite result rather than a 'command not found' from the remote."
+
+[[criteria]]
+  id = "c-2"
+  text = "Every toolchain fallback is announced before the lane runs, naming the lane, the missing binary and the host — a lane that fell back is never indistinguishable in the transcript from one that ran remotely."
+
+[[criteria]]
+  id = "c-3"
+  text = "Locality is decided per lane, not per run: in one invocation where the remote has lane A's toolchain but not lane B's, A runs remotely and B runs locally, and both report their own suite result."
+
+[[criteria]]
+  id = "c-4"
+  text = "Every matched lane's toolchain is probed in one pass before the tree sync and before any lane spawns — no lane discovers a missing binary mid-run, and a run where no lane can go remote never pays for the transfer."
+
+[[criteria]]
+  id = "c-5"
+  text = "An unreachable host and a reachable host missing a lane's toolchain produce distinct reports: the transport fallback keeps its existing wording and sends the whole run local, while a toolchain fallback names the binary and moves only its own lane."
+
+[[criteria]]
+  id = "c-6"
+  text = "A toolchain fallback is per-run and never sticky: nothing is written to the grant store or project.toml, so a host that gains the binary goes back to running that lane remotely on the next invocation with no user action."
+
+[[criteria]]
+  id = "c-7"
+  text = "`dross test lane add` and `dross test lane edit` accept `--toolchain` (repeatable) to set a lane's override list, and `dross test lane list` shows each lane's effective toolchain — derived or overridden — so the probe set is inspectable without reading project.toml."
+
+[[criteria]]
+  id = "c-8"
+  text = "`dross doctor`'s Remote section reports each declared lane's toolchain against the granted host — naming the lane, its tools and which are missing — so a locality fallback is visible before a run hits it, and doctor and the run never disagree about what the effective granted host has."
+
+[[criteria]]
+  id = "c-9"
+  text = "A lane whose toolchain is absent from this machine does not spawn on a `--local` or ungranted run either — it names the missing binary and takes the toolchain exit code, so a missing tool is never reported as a red suite regardless of where the run was headed."
+
+[[decisions]]
+  key = "toolchain_source"
+  choice = "A lane's toolchain is derived from the first token of its command and prepare lines, with an optional `toolchain = [...]` field on the lane replacing that derived list."
+  why = "Derivation makes the feature work on every lane already declared, with no edits — a declared-only field would leave it dead until every lane was rewritten. The override is the escape hatch for env prefixes and wrapper scripts the first token gets wrong."
+  locked = true
+
+[[decisions]]
+  key = "local_absence"
+  choice = "Before falling back, the binary is probed on this machine too. Missing on both hosts means the lane does not spawn: it reports 'neither host has <tool>' and takes its own exit code."
+  why = "Falling back into a machine that also lacks the tool produces the failing gate c-1 exists to prevent, just on the other side — a missing toolchain must never be laundered into a red suite that reads as broken code."
+  locked = true
+
+[[decisions]]
+  key = "prepare_toolchain"
+  choice = "A lane's prepare tool and command tool form one requirement set; either missing on the remote sends the whole lane local."
+  why = "prepare_locality is already locked to 'same host as its command', so a split would contradict it — and a prepare that ran remotely for a suite running locally bootstraps the wrong machine."
+  locked = true
+
+[[deferred]]
+  text = "Offering to install a lane's missing toolchain on the granted remote, and performing it on acceptance — the second half of milestone c-2."
+  why = "This phase owns detection, fallback and reporting; the install offer is its own scoped roadmap phase."
+  target = "remote-toolchain-install"
+
+[[deferred]]
+  text = "Routing a lane to whichever pool candidate already has its toolchain, instead of falling back to local."
+  why = "Contradicts the locked transport_failure_only rule — a reachable host missing tools is deliberately not skipped. Revisiting that is a milestone-level decision, not this phase."
+  target = "lane-host-affinity"
+
+[[deferred]]
+  text = "Making doctor resolve its host the way the run does — doctor reads the scalar grant via readRemoteGrant while the run walks remote_pool via readRemoteGrants and selectRemoteTarget, so with a pool declared and the scalar host down they report different machines."
+  why = "The divergence pre-dates this phase and already applies to adapter tools; c-8 is narrowed to the effective granted host rather than widening this phase into changing doctor's host resolution."
+  target = "lane-host-affinity"

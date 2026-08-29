@@ -16,6 +16,7 @@
     "exec-trust-followups": "DRO-2",
     "guard-remedy-ordering": "DRO-27",
     "lane-prepare-step": "DRO-223",
+    "lane-remote-locality": "DRO-235",
     "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
     "milestone-lifecycle-close": "DRO-13",
@@ -305,6 +306,36 @@
       "issue": "DRO-231",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "lane-remote-locality/t-1": {
+      "issue": "DRO-236",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-remote-locality/t-2": {
+      "issue": "DRO-237",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-remote-locality/t-3": {
+      "issue": "DRO-239",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-remote-locality/t-4": {
+      "issue": "DRO-238",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-remote-locality/t-5": {
+      "issue": "DRO-240",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-remote-locality/t-6": {
+      "issue": "DRO-241",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "lane-selector-translation/t-1": {
       "issue": "DRO-211",

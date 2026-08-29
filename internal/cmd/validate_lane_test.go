@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Rivil/dross/internal/configenum"
+	"github.com/Rivil/dross/internal/project"
 )
 
 // laneFixture is a repo that validates clean, ready for a lane block to be
@@ -387,5 +389,107 @@ prepare = "make build"`)
 	out, err := validateOutput(t)
 	if err != nil {
 		t.Errorf("validate rejected usable prepare fields:\n%s", out)
+	}
+}
+
+// TestValidateNamesLaneWithUnusableToolchainEntries walks the four shapes an
+// override entry must not take. Each is asked of a host as `command -v <entry>`
+// and none of them can ever resolve, so an accepted entry pins its lane to a
+// local run — or refuses to spawn it — with nothing in the transcript pointing
+// at the override as the cause.
+func TestValidateNamesLaneWithUnusableToolchainEntries(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		entry string
+		why   string
+	}{
+		{"blank", `"", "go"`, "no host answers to the empty string"},
+		{"command line", `"go test"`, "an entry is one binary, not a command line"},
+		{"env assignment", `"FOO=1"`, "the override exists to replace this shape, not carry it"},
+		{"path", `"./x"`, "a path resolves against a working directory the two hosts need not share"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := laneFixture(t)
+			appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+toolchain = [`+tc.entry+`]`)
+
+			out, err := validateOutput(t)
+			if err == nil {
+				t.Fatalf("validate accepted a %s toolchain entry — %s:\n%s", tc.name, tc.why, out)
+			}
+			if !strings.Contains(out, `"go"`) || !strings.Contains(out, "toolchain") {
+				t.Errorf("problem must name the lane and the field, got:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestValidateAcceptsAbsentAndDeclaredToolchains is the opt-in half. A lane
+// omitting the key derives its toolchain (the locked toolchain_source
+// decision), so inventing a problem for it would make an opt-in field
+// mandatory by nagging every repo written before this phase.
+func TestValidateAcceptsAbsentAndDeclaredToolchains(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"
+
+[[runtime.test_lane]]
+name = "web"
+match = ["web/**"]
+command = "mise exec -- pnpm test"
+toolchain = ["mise"]`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Errorf("validate rejected a usable toolchain surface:\n%s", out)
+	}
+}
+
+// TestLaneWithNoToolchainRoundTripsByteIdentically pins the omitempty tag. The
+// field is new and every repo on disk predates it, so a Load/Save cycle must
+// leave a lane block byte-for-byte as it was — a `toolchain = []` written into
+// every existing project.toml would make an opt-in field visible everywhere it
+// was never asked for.
+func TestLaneWithNoToolchainRoundTripsByteIdentically(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test"`)
+
+	path := filepath.Join(dir, ".dross", "project.toml")
+	p, err := project.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(saved, []byte("toolchain")) {
+		t.Errorf("saving a lane that declares no toolchain wrote the key:\n%s", saved)
+	}
+
+	before := saved
+	if _, err := project.Load(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Errorf("a second save changed the file:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }

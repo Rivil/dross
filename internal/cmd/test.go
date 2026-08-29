@@ -72,6 +72,13 @@ const (
 	// about the code, and a caller that read this as "your tests are broken"
 	// would go hunting a bug in code that was never executed.
 	exitPrepareFailed = 7
+	// exitToolchainMissing: a matched lane's toolchain is absent from every
+	// machine that could have run it, so the lane did not spawn. Distinct from
+	// a red suite for the sharpest version of the reason exitPrepareFailed is:
+	// `pnpm: command not found` exits non-zero exactly like a failing test, and
+	// a caller that read it as one would go hunting a bug in code no runner
+	// ever loaded.
+	exitToolchainMissing = 8
 )
 
 // exitRank orders the outcomes of a multi-lane run so the WORST one decides
@@ -80,14 +87,18 @@ const (
 // The order is not severity-of-inconvenience, it is how badly each outcome
 // misleads a caller who is deciding whether to commit:
 //
-//	transport (3) > partial (4) > prepare (7) > red (1) > refused (6) > nothing measured (5)
+//	transport (3) > partial (4) > prepare (7) > toolchain (8) > red (1) > refused (6) > nothing measured (5)
 //
 // Transport and partial outrank everything because they mean the tree that ran
 // was not the tree on disk — any verdict from that run, green or red, is about
 // something else. A failed prepare sits just under them and above red for a
 // narrower version of the same reason: the lane it belongs to measured nothing,
 // so reporting a neighbour's red would tell the user their code is broken while
-// leaving the lane that never ran invisible. Red outranks refused because a failing test is a fact about
+// leaving the lane that never ran invisible. A missing toolchain sits directly
+// under prepare and above red for that same reason once more — the lane never
+// spawned — but below prepare, because a failed bootstrap is a fact about this
+// repo's own line while an absent binary is a fact about the machines it was
+// offered. Red outranks refused because a failing test is a fact about
 // the code and an ungranted lane is a fact about this machine; reporting the
 // consent problem while a suite is broken would send the user to `dross trust`
 // and let them commit a red change once they got there. Nothing-measured is
@@ -100,10 +111,12 @@ func exitRank(code int) int {
 	case 0:
 		return 0
 	case exitTransport:
-		return 6
+		return 7
 	case exitPartial:
-		return 5
+		return 6
 	case exitPrepareFailed:
+		return 5
+	case exitToolchainMissing:
 		return 4
 	case exitSuiteFailed:
 		return 3
@@ -156,6 +169,16 @@ func ExitCode(err error) int {
 	}
 	return 1
 }
+
+// laneLookPath is this machine's binary resolver, and the local half of the
+// per-lane locality decision.
+//
+// A seam for the same reason the spawn seams are: the rule it feeds — a lane
+// whose toolchain is absent here does not spawn — can only be exercised from a
+// test if the answer can be injected. Left as a direct exec.LookPath call, the
+// rule would be reachable only on a machine that happened to be missing the
+// binary, which is a rule nothing checks.
+var laneLookPath = exec.LookPath
 
 // spawnLocal is the local-execution seam. Tests replace it to record the argv
 // without running anything; production never reassigns it.
@@ -463,11 +486,31 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	// Per-lane sync would re-push an unchanged tree for every lane, and — worse
 	// — would make a mid-run transport failure look like it belonged to
 	// whichever lane happened to be next.
-	target, err := resolveTestTarget(root, repoDir, local)
+	//
+	// The tools go with it: the union of every runnable lane's toolchain,
+	// deduped, asked as part of THIS probe. Two lanes needing `go` cost one
+	// `command -v`, and no lane opens a connection of its own.
+	target, ready, err := resolveTestTarget(root, repoDir, local, laneToolUnion(runnableLanes(runnable)))
 	if err != nil {
 		return err
 	}
+
+	// Where each lane runs, decided from the probe above and from this
+	// machine, before anything spawns. host is empty whenever the run is local
+	// anyway — including after a transport fallback, which is what keeps a lane
+	// from blaming a toolchain on a host that never answered.
+	host := ""
 	if target != nil {
+		host = target.Host
+	}
+	plan := laneLocality(runnable, host, ready.Missing, laneLookPath)
+
+	// The tree is pushed only if something is actually going to run there. A
+	// run where every matched lane fell back has no use for the remote copy,
+	// and paying for the transfer anyway is the cost c-4 exists to avoid — but
+	// ONE remote-going lane is enough, because that lane measures the tree it
+	// finds and a stale one is the previous run's code.
+	if target != nil && plannedRemotely(plan) {
 		if err := syncTreeTo(*target, repoDir); err != nil {
 			return err
 		}
@@ -478,7 +521,33 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 	// exitRank puts exitNothingMeasured above nil, so folding a single miss
 	// through worseOutcome would fail a run whose other lanes all passed.
 	misses := 0
-	for _, m := range runnable {
+	for i, m := range runnable {
+		// The locality verdict is applied BEFORE anything else this lane does.
+		// A refused lane never reaches a selector question, and a fallback line
+		// printed after the prepare or the header would be a transcript that
+		// cannot be read as a sequence (c-2).
+		if plan[i].Site == siteRefused {
+			// Printed AND folded, exactly as a consent refusal is: returning it
+			// alone would lose it the moment another lane goes red, and a
+			// missing binary the user never sees is one they never install.
+			//
+			// NOT counted as a miss — a miss folds into exitNothingMeasured,
+			// which ranks last, so a lane that could not run anywhere would sink
+			// below the red it must outrank.
+			Printf("%v\n\n", plan[i].Err)
+			worst = worseOutcome(worst, plan[i].Err)
+			continue
+		}
+		if plan[i].Announce != "" {
+			Printf("%s\n", plan[i].Announce)
+		}
+		// nil is "here". Per lane, not per run: in one invocation a lane whose
+		// tools the host has goes over ssh while its neighbour runs locally,
+		// and both report their own suite result (c-3).
+		laneTarget := target
+		if plan[i].Site == siteLocal {
+			laneTarget = nil
+		}
 		line, selector, ok := laneRunLine(repoDir, m.lane, sel.Matched[m.index])
 		if !ok {
 			// The lane declares a selector and every path that selected it
@@ -519,7 +588,7 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 			// No selector is appended: the derived paths scope the suite, and
 			// a bootstrap handed this file set's paths would be a different
 			// command on every run.
-			if err := runLanePrepare(target, repoDir, m.lane); err != nil {
+			if err := runLanePrepare(laneTarget, repoDir, m.lane); err != nil {
 				// The lane's own command does NOT run. A bootstrap that failed
 				// measured nothing about the code, and running the suite
 				// anyway would report the consequence as a verdict.
@@ -534,7 +603,7 @@ func runTestLanes(root, repoDir string, proj *project.Project, files []string, l
 			}
 		}
 		Printf("lane %s: %s\n", m.lane.Name, line)
-		err := runOneLane(target, repoDir, m.lane, line)
+		err := runOneLane(laneTarget, repoDir, m.lane, line)
 		if code, miss := selectorMissCode(err, m.lane.EmptyExit); miss {
 			Printf("selector miss: lane %q collected no tests for %s (exit %d)\n",
 				m.lane.Name, strings.Join(selector, " "), code)
@@ -766,13 +835,27 @@ func testTarget(root, repoDir string, local bool) ([]*remote.Target, error) {
 // a different kind of failure from its neighbours.
 //
 // A nil target means here.
-func resolveTestTarget(root, repoDir string, local bool) (*remote.Target, error) {
+//
+// tools is every binary the run's lanes need, asked ONCE as part of the probe
+// this function already pays for. Riding the existing preflight rather than
+// opening a second connection is what keeps c-4 true: one pass, before the
+// sync, so no lane discovers a missing binary mid-run and a run where nothing
+// can go remote never pays for the transfer. A caller with no lanes passes nil
+// and the probe asks exactly what it asked before.
+//
+// The Readiness comes back alongside the target because Missing is the answer
+// the per-lane decision is made from — returning only the target would force
+// the caller to re-probe for it, which is the drift this signature exists to
+// prevent. It is zero-valued whenever the target is nil: a host that was never
+// reached told us nothing about its toolchain, and an empty Missing must never
+// be read as "it has everything".
+func resolveTestTarget(root, repoDir string, local bool, tools []string) (*remote.Target, remote.Readiness, error) {
 	targets, err := testTarget(root, repoDir, local)
 	if err != nil {
-		return nil, err
+		return nil, remote.Readiness{}, err
 	}
 	if len(targets) == 0 {
-		return nil, nil
+		return nil, remote.Readiness{}, nil
 	}
 	// BEFORE the sync, not after. Probing after the tree is pushed discovers
 	// an unreachable host having already paid for the transfer, and — worse —
@@ -781,24 +864,31 @@ func resolveTestTarget(root, repoDir string, local bool) (*remote.Target, error)
 	//
 	// With more than one candidate this walks them in order and takes the
 	// first that answers; with one it is exactly the previous behaviour.
-	chosen, pf, perr := selectRemoteTarget(targets, nil)
+	chosen, pf, perr := selectRemoteTarget(targets, tools)
 	if perr != nil {
-		return nil, perr
+		return nil, remote.Readiness{}, perr
 	}
 	if pf.Fallback {
 		// Announced, never silent. A fallback the output does not mention
 		// leaves a local result indistinguishable from a remote one, which is
 		// the state that made `dross remote revoke` the workaround when
 		// helicon was down.
+		//
+		// This is the TRANSPORT half of the c-5 split, and it keeps its wording
+		// unchanged: the whole run comes home, once, and no lane prints a
+		// toolchain line for a host that never answered.
 		Printf("remote: %s\n", pf.Why)
-		return nil, nil
+		return nil, remote.Readiness{}, nil
 	}
-	return chosen, nil
+	return chosen, pf.Ready, nil
 }
 
 // runTest executes one test run, here or on the granted host.
 func runTest(root, repoDir, line string, local bool) error {
-	target, err := resolveTestTarget(root, repoDir, local)
+	// nil tools: a whole-suite run has no lanes to derive a toolchain from, so
+	// the probe asks exactly what it asked before this feature existed and the
+	// lane-less transcript is unchanged.
+	target, _, err := resolveTestTarget(root, repoDir, local, nil)
 	if err != nil {
 		return err
 	}

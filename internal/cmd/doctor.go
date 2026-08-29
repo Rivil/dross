@@ -23,6 +23,7 @@ import (
 	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/state"
+	"github.com/Rivil/dross/internal/testlane"
 )
 
 // Doctor checks project-level health for the current dross repo.
@@ -1421,6 +1422,78 @@ func remoteMutationTools(p *project.Project) ([]string, map[string]string) {
 	return tools, needBy
 }
 
+// remoteProbeTools is everything doctor asks the host about, in ONE probe: the
+// mutation adapters' tools first, then every declared lane's toolchain.
+//
+// One probe rather than two is c-8's "never disagree" clause taken literally.
+// A second question asked separately is a second answer that can differ from
+// the first — and the failure it produces is the one doctor exists to prevent:
+// doctor passing on a host the run then falls back from.
+//
+// The lane half goes through laneToolUnion, which is the same derivation the
+// run uses. Doctor re-deriving it would be a copy, and a copy drifts.
+func remoteProbeTools(p *project.Project) ([]string, map[string]string) {
+	tools, needBy := remoteMutationTools(p)
+	seen := map[string]bool{}
+	for _, tool := range tools {
+		seen[tool] = true
+	}
+	for _, tool := range laneToolUnion(p.Runtime.TestLane) {
+		if seen[tool] {
+			continue
+		}
+		seen[tool] = true
+		tools = append(tools, tool)
+	}
+	return tools, needBy
+}
+
+// reportLaneToolchains prints one row per declared lane: its effective
+// toolchain, and which of it the host lacks.
+//
+// Nothing here is an ISSUE. A lane whose toolchain the host is missing still
+// runs — it runs here instead, and reports its own suite result — so failing
+// doctor on it would fail a repo that works, which is how a check gets ignored.
+// An adapter's missing tool still increments, because a mutation run has no
+// local fallback to take.
+//
+// A lane declaring no probable token at all is surfaced with the --toolchain
+// fix rather than left to look like a missing binary. The locked first-token
+// rule takes `FOO=1 go test` at its word, and a lane pinned to local by an env
+// prefix with nothing naming the cause is exactly the silent failure the
+// override exists to end.
+func reportLaneToolchains(host string, p *project.Project, missing []string) {
+	gone := map[string]bool{}
+	for _, tool := range missing {
+		gone[tool] = true
+	}
+	for _, lane := range p.Runtime.TestLane {
+		tools := testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain)
+		var gaps []string
+		for _, tool := range tools {
+			if gone[tool] {
+				gaps = append(gaps, tool)
+			}
+		}
+		if len(gaps) == 0 {
+			Printf("  ✓ lane %s toolchain on %s: %s\n", lane.Name, host, strings.Join(tools, " "))
+			continue
+		}
+		Printf("  ⚠ lane %s will run on this machine — %s has no %s (lane needs %s)\n",
+			lane.Name, host, strings.Join(gaps, " "), strings.Join(tools, " "))
+		for _, tool := range gaps {
+			// Decided by laneToolchainProblems, the same rules `dross validate`
+			// applies to a declared override, so the two surfaces cannot
+			// disagree about which tokens are probable at all.
+			if len(laneToolchainProblems("", project.TestLane{Toolchain: []string{tool}})) == 0 {
+				continue
+			}
+			Printf("    %q is not a binary name — it is the first token of the lane's own line, so no host will ever resolve it.\n", tool)
+			Printf("    Fix: `dross test lane edit %s --toolchain <binary>`\n", lane.Name)
+		}
+	}
+}
+
 // checkRemoteMutation reports whether a granted remote is actually usable, and
 // returns the number of issues found.
 //
@@ -1448,7 +1521,7 @@ func checkRemoteMutation(root, repoDir string, p *project.Project) int {
 		Printf("  ⚠ no remote granted — mutation runs and `dross test` run on this machine.\n")
 		Printf("    Grant one with `dross remote grant <host> <workdir>`.\n")
 	default:
-		tools, needBy := remoteMutationTools(p)
+		tools, needBy := remoteProbeTools(p)
 		ready, perr := remoteProbeFn(*target, tools)
 		if perr != nil {
 			Printf("  ✗ remote host %s is not usable: %v\n", target.Host, perr)
@@ -1461,9 +1534,19 @@ func checkRemoteMutation(root, repoDir string, p *project.Project) int {
 			// One line per missing tool, each naming the adapter that wanted
 			// it: "something is missing" sends the user looking, and the
 			// remedy differs per toolchain.
-			Printf("  ✗ %s is not installed on %s — the %s adapter needs it there.\n", missing, target.Host, needBy[missing])
+			//
+			// Gated on needBy, because the probe set now carries lane tools
+			// too. Without the gate a lane's missing binary would fall through
+			// here and print "the  adapter needs it there" with an empty name,
+			// and would count as an issue for a lane that still runs.
+			adapter, wanted := needBy[missing]
+			if !wanted {
+				continue
+			}
+			Printf("  ✗ %s is not installed on %s — the %s adapter needs it there.\n", missing, target.Host, adapter)
 			issues++
 		}
+		reportLaneToolchains(target.Host, p, ready.Missing)
 	}
 	Print("")
 	return issues
