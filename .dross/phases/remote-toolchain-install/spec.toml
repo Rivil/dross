@@ -64,6 +64,12 @@
   locked = true
 
 [[decisions]]
+  key = "install_local_override"
+  choice = "`dross test lane install` carries a `--local` flag that forces the install onto this machine whichever side the probe found the gap on. c-6's automatic side-selection stays the default; the flag is never needed to get the correct behaviour."
+  why = "`dross test` already spells \"do not go remote\" as `--local`, so the lane-scoped install verb reading differently would be the inconsistency. It is the escape hatch for a granted host that is up but is not the machine the user wants provisioned — provisioning this laptop ahead of a trip, say. It extends install_surface's flag set rather than contradicting it, and it is recorded because a flag that deliberately inverts a criterion's rule needs a stated case to be faithful to."
+  locked = true
+
+[[decisions]]
   key = "offer_scope"
   choice = "c-1's offer names the lane-scoped invocation for the one lane that fell back, not an unfiltered whole-host bootstrap."
   why = "The offer's blast radius should match what the transcript justified: one lane fell back, so the command on offer installs one lane's tool. Pointing at the whole-host bootstrap would provision tools for lanes and adapters this run never touched, on the strength of a single lane's fallback."

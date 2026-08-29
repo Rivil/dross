@@ -32,6 +32,7 @@
     "remote-mutation-runner": "DRO-24",
     "remote-test-runner": "DRO-26",
     "remote-toolchain-bootstrap": "DRO-129",
+    "remote-toolchain-install": "DRO-246",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
     "test-lane-config": "DRO-191"
