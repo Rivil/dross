@@ -154,10 +154,24 @@ func absentTools(tools []string, gone map[string]bool) []string {
 
 // laneFallbackLine announces one lane coming home, or nothing.
 //
-// It names the lane, the binary and the host in ONE line, because all three are
-// needed to act on it and a transcript is read in fragments: "running locally
-// instead" without the binary is a fact with no remedy attached, and without
-// the lane it cannot be attributed in a multi-lane run (c-2).
+// It names the lane, the binary, the host and the REMEDY in ONE line, because
+// all four are needed to act on it and a transcript is read in fragments:
+// "running locally instead" without the binary is a fact with no remedy
+// attached, and without the lane it cannot be attributed in a multi-lane run.
+//
+// The remedy is the LANE-SCOPED invocation, not the whole-host bootstrap
+// (locked offer_scope): one lane fell back, so the command on offer installs
+// one lane's tool. Pointing at `dross remote bootstrap` would provision tools
+// for lanes and adapters this run never touched on the strength of a single
+// lane's fallback. It is offered BARE, without --apply — the verb's own dry run
+// is what shows the user what it would do, and an offer that installed on sight
+// would make "let me see" impossible to ask.
+//
+// Printed whether or not the tool turns out to be installable. The verb answers
+// that question properly, with the tool named and the host's owner told what
+// they must do; gating the offer here would mean re-deriving the install
+// decision at a site that has not probed for it, and a fallback that mentioned
+// no next step at all is the state this replaces.
 //
 // Empty when there was no fallback — either no remote at all, or a remote that
 // had everything. A line printed for a lane that went where the run went would
@@ -166,8 +180,8 @@ func laneFallbackLine(lane project.TestLane, host string, absent []string) strin
 	if host == "" || len(absent) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("lane %s fallback: %s has no %s — running this lane here instead",
-		lane.Name, host, joinTools(absent))
+	return fmt.Sprintf("lane %s fallback: %s has no %s — running this lane here instead (install it: dross test lane install %s)",
+		lane.Name, host, joinTools(absent), lane.Name)
 }
 
 // joinTools renders a tool list for a message. Comma-separated rather than
