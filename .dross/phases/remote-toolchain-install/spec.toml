@@ -105,3 +105,8 @@
   why = "surviving mutant routed out of a verify run"
   target = "milestone-push-failure-tests"
   survivor = "b49d50d9aa57b170"
+
+[[deferred]]
+  id = "87d98c3c945fa02c"
+  text = "dross verify has no reclassify-only path: draining survivors forces a full re-run of the mutation leg (~1h40m on this repo) purely to recompute unclassified_in_scope from a static store against a report that already exists"
+  why = "verify.md instructs a re-run after every drain; at this repo's leg length that is unaffordable, so the honest path becomes hand-editing verify.toml's summary — which is what happened on remote-toolchain-install (2026-08-29). A --reclassify flag reusing the existing tests.json would make the prompt's own instruction followable."
