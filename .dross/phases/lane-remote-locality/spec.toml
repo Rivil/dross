@@ -58,16 +58,19 @@
   locked = true
 
 [[deferred]]
+  id = "8911d7673663ac5f"
   text = "Offering to install a lane's missing toolchain on the granted remote, and performing it on acceptance — the second half of milestone c-2."
   why = "This phase owns detection, fallback and reporting; the install offer is its own scoped roadmap phase."
   target = "remote-toolchain-install"
 
 [[deferred]]
+  id = "6953a18634519ce3"
   text = "Routing a lane to whichever pool candidate already has its toolchain, instead of falling back to local."
   why = "Contradicts the locked transport_failure_only rule — a reachable host missing tools is deliberately not skipped. Revisiting that is a milestone-level decision, not this phase."
   target = "lane-host-affinity"
 
 [[deferred]]
+  id = "1920efcbac52f0c0"
   text = "Making doctor resolve its host the way the run does — doctor reads the scalar grant via readRemoteGrant while the run walks remote_pool via readRemoteGrants and selectRemoteTarget, so with a pool declared and the scalar host down they report different machines."
   why = "The divergence pre-dates this phase and already applies to adapter tools; c-8 is narrowed to the effective granted host rather than widening this phase into changing doctor's host resolution."
   target = "lane-host-affinity"

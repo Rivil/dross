@@ -46,13 +46,12 @@
     "ship-body-routed-survivor-noise": "DRO-11"
   },
   "backlog": {
-    "slug:lane-remote-locality": "DRO-205",
+    "slug:lane-host-affinity": "DRO-242",
     "slug:lane-selector-custom": "DRO-218",
     "slug:remote-toolchain-install": "DRO-206",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
     "someday:id:0323e4284012842f": "DRO-208",
-    "someday:id:04936ce22b897b0c": "DRO-224",
     "someday:id:053bcdb6ddc5f57b": "DRO-162",
     "someday:id:06ca9b2e97abcb78": "DRO-87",
     "someday:id:0ad901405561a187": "DRO-116",
@@ -60,6 +59,7 @@
     "someday:id:0eb3dd31220aa3bc": "DRO-101",
     "someday:id:130a1cf4bc7049f2": "DRO-92",
     "someday:id:1708546d27dd3939": "DRO-81",
+    "someday:id:1920efcbac52f0c0": "DRO-245",
     "someday:id:1b82d94dacd3b963": "DRO-111",
     "someday:id:1bcd0f352182ecf9": "DRO-39",
     "someday:id:1ecc05633e1a85ed": "DRO-15",
@@ -74,7 +74,6 @@
     "someday:id:2e734f46572de8ca": "DRO-110",
     "someday:id:3701d0add3074097": "DRO-91",
     "someday:id:3a0d7d3147d7b585": "DRO-115",
-    "someday:id:3ab9f3a197c6ec1e": "DRO-161",
     "someday:id:3d97976a9b813c12": "DRO-69",
     "someday:id:3d9baeead7292172": "DRO-109",
     "someday:id:3e10687c24c50dd5": "DRO-66",
@@ -90,6 +89,7 @@
     "someday:id:64cd228356c9fce5": "DRO-76",
     "someday:id:6606a4ae3d228907": "DRO-52",
     "someday:id:66f4a1fc8ec83883": "DRO-70",
+    "someday:id:6953a18634519ce3": "DRO-244",
     "someday:id:6e9a60c539934c23": "DRO-40",
     "someday:id:6f43c4001c862759": "DRO-124",
     "someday:id:7300a61dfb556269": "DRO-118",
@@ -102,6 +102,7 @@
     "someday:id:84db6f7af8f57cef": "DRO-49",
     "someday:id:8517ca7569b82540": "DRO-74",
     "someday:id:85981310e87bb7cf": "DRO-68",
+    "someday:id:8911d7673663ac5f": "DRO-243",
     "someday:id:89b51ed2552d67bc": "DRO-42",
     "someday:id:8aa15f3752fc7827": "DRO-97",
     "someday:id:93ce98de1002acab": "DRO-50",
@@ -310,32 +311,32 @@
     "lane-remote-locality/t-1": {
       "issue": "DRO-236",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-remote-locality/t-2": {
       "issue": "DRO-237",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-remote-locality/t-3": {
       "issue": "DRO-239",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-remote-locality/t-4": {
       "issue": "DRO-238",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-remote-locality/t-5": {
       "issue": "DRO-240",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-remote-locality/t-6": {
       "issue": "DRO-241",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "lane-selector-translation/t-1": {
       "issue": "DRO-211",
