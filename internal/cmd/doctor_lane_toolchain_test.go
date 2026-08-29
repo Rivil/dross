@@ -21,9 +21,24 @@ import (
 )
 
 // doctorLaneFixture is doctorRemoteFixture with lanes appended.
+//
+// It also pins the PATH lookup, marking every adapter tool present on THIS
+// machine. These tests are about the Remote section, but checkMutationToolchain
+// walks the real PATH for the same adapters and prints its own advisory — so
+// without the pin, whether a developer happens to have gremlins installed
+// decides what doctor's output contains, and an assertion over that output
+// passes here and fails in CI (it did: TestDoctorLaneGapIsNotAnIssue, run
+// 33247017255). Present rather than absent because the local advisory is not
+// what any test in this file is asserting; silencing it leaves only the remote
+// section these tests exist to check.
 func doctorLaneFixture(t *testing.T, host string, adapters []string, lanes string) {
 	t.Helper()
 	doctorRemoteFixture(t, host, "/srv/dross", adapters)
+	present := map[string]bool{}
+	for _, tool := range remoteAdapterTools {
+		present[tool] = true
+	}
+	fakeLookPath(t, present)
 	if lanes == "" {
 		return
 	}
@@ -106,12 +121,17 @@ func TestDoctorLaneGapIsNotAnIssue(t *testing.T) {
 	if got != base+1 {
 		t.Errorf("an adapter's missing tool gave %d issue(s), want %d:\n%s", got, base+1, withAdapter)
 	}
-	if !strings.Contains(withAdapter, "gremlins adapter needs it") {
+	// "there" is load-bearing: the remote line ends "adapter needs it there.",
+	// while checkMutationToolchain's LOCAL advisory reads "adapter needs it to
+	// measure Go files here." A needle without it is satisfied by the local
+	// line on any machine lacking gremlins, so this would pass while the remote
+	// attribution it is testing was missing entirely.
+	if !strings.Contains(withAdapter, "gremlins adapter needs it there") {
 		t.Errorf("the adapter gap lost its attribution:\n%s", withAdapter)
 	}
 	// A tool the adapter loop never claimed must not fall through it with an
 	// empty name — the whole reason that loop is gated on needBy.
-	if strings.Contains(withGap, "adapter needs it") {
+	if strings.Contains(withGap, "adapter needs it there") {
 		t.Errorf("a lane's missing tool was attributed to an unnamed adapter:\n%s", withGap)
 	}
 }
