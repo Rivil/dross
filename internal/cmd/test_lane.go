@@ -36,7 +36,8 @@ func testLane() *cobra.Command {
 			"the files they match. `dross test --files <paths>` runs only the lanes a\n" +
 			"file set actually hits.\n\n" +
 			"Each lane's command carries its own consent grant — `dross trust --lane\n" +
-			"<name>` — so a lane that changes refuses only itself.",
+			"<name>` — so a lane that changes refuses only itself. A lane's optional\n" +
+			"install line is granted apart from it, with `dross trust --lane-install`.",
 	}
 	c.AddCommand(testLaneAdd(), testLaneList(), testLaneEdit(), testLaneRemove())
 	return c
@@ -128,7 +129,10 @@ func testLaneAdd() *cobra.Command {
 		Long: "Writes one [[runtime.test_lane]] block. --match is repeatable; a trailing\n" +
 			"slash means everything beneath a directory.\n\n" +
 			"The lane starts UNGRANTED: declaring a command is not consenting to run\n" +
-			"it. Follow with `dross trust --lane <name>`, which prints the line first.",
+			"it. Follow with `dross trust --lane <name>`, which prints the line first.\n\n" +
+			"--install declares how this lane's toolchain is installed, replacing dross's\n" +
+			"built-in recipe. It carries its OWN grant — `dross trust --lane-install\n" +
+			"<name>` — because installing changes a machine and running a suite does not.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			name := strings.TrimSpace(args[0])
@@ -213,6 +217,13 @@ func testLaneAdd() *cobra.Command {
 			}
 			Printf("\n")
 			Printf("It will not run until this machine trusts it:\n\n    dross trust --lane %s\n", name)
+			// A SECOND grant, named separately. The command grant does not
+			// cover the install line, so a user told only about `--lane` would
+			// declare an install line and find it refused with nothing having
+			// pointed at the verb that grants it.
+			if proposed.Install != "" {
+				Printf("\nIts install line is granted separately — installing is not running:\n\n    dross trust --lane-install %s\n", name)
+			}
 			return nil
 		},
 	}
@@ -410,6 +421,11 @@ func testLaneEdit() *cobra.Command {
 					Printf("lane %q now declares no install line.\n", name)
 				} else {
 					Printf("lane %q install: %s\n", name, lane.Install)
+					// Named here and not below: the install grant is its own,
+					// so this instruction is correct whether the line is new or
+					// rewritten, and it must not be confused with the `--lane`
+					// staleness message the command grant prints.
+					Printf("\nIts install grant is separate and now needs reading:\n\n    dross trust --lane-install %s\n", name)
 				}
 			}
 			// Only when the consent line actually moved. A trust instruction
@@ -477,7 +493,7 @@ func testLaneRemove() *cobra.Command {
 			if err := RevokeLaneConsent(root, name); err != nil {
 				return err
 			}
-			Printf("lane %q removed; its consent grant was dropped.\n", name)
+			Printf("lane %q removed; its consent grants — command and install — were dropped.\n", name)
 			return nil
 		},
 	}

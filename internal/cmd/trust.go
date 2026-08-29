@@ -390,15 +390,30 @@ func RevokeLaneConsent(root, name string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := l.TrustedLaneCommands[name]; !ok {
+	// BOTH grants, at this one site. A lane's name keys two stores now, and a
+	// removal that dropped only the command grant would leave an install grant
+	// behind under a name nothing declares — until someone re-added a lane
+	// under it, which would then start authorized to install whatever the
+	// deleted lane's line said.
+	//
+	// Checked as a pair rather than short-circuiting on the command grant: a
+	// lane may hold an install grant and no command grant at all, and an
+	// early return on the command map would skip it.
+	_, hadCommand := l.TrustedLaneCommands[name]
+	_, hadInstall := l.TrustedLaneInstalls[name]
+	if !hadCommand && !hadInstall {
 		return nil
 	}
 	delete(l.TrustedLaneCommands, name)
+	delete(l.TrustedLaneInstalls, name)
 	if len(l.TrustedLaneCommands) == 0 {
 		// Back to nil so omitempty keeps an empty table out of the file —
 		// a bare [trusted_lane_commands] header reads as a store that holds
 		// something.
 		l.TrustedLaneCommands = nil
+	}
+	if len(l.TrustedLaneInstalls) == 0 {
+		l.TrustedLaneInstalls = nil
 	}
 	return l.save(path)
 }
@@ -554,6 +569,84 @@ func laneConsentRefusal(lane project.TestLane, state ConsentState, cerr error) e
 // Listing them is what makes a typo self-correcting: the alternative is
 // "unknown lane", which sends the user to open project.toml to find out what
 // they should have typed.
+// trustLaneInstall is `dross trust --lane-install <name>`.
+//
+// A separate verb from --lane, not a widening of it, because the two grants
+// answer different questions (locked install_consent). Granting the right to
+// run a suite must not silently grant the right to change the machine it runs
+// on, and a single verb covering both would make that grant invisible.
+func trustLaneInstall(root, name string, check bool) error {
+	proj, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		return err
+	}
+	lane, err := findLane(proj, name)
+	if err != nil {
+		return err
+	}
+	repoDir := filepath.Dir(root)
+	if check {
+		state, cerr := LaneInstallConsented(root, repoDir, lane.Name, laneInstallConsentLine(lane))
+		if cerr == nil {
+			return nil
+		}
+		return laneInstallRefusal(lane, state, cerr)
+	}
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return err
+	}
+	if strings.TrimSpace(lane.Install) == "" {
+		return fmt.Errorf(
+			"nothing to trust: test lane %q declares no install line.\n\n"+
+				"Consent is bound to a line, so there is nothing to bind to yet. dross's\n"+
+				"own built-in install recipes need no grant — they are not lines this repo\n"+
+				"supplied. Add one with `dross test lane edit %s --install \"<cmd>\"`", name, name)
+	}
+	// Printed BEFORE the write, and in full. The line arrives from TRACKED
+	// project.toml, so a grant that did not show it would be consenting to
+	// whatever a clone happened to carry — and this one changes a machine.
+	Printf("trusting test lane %q's install line on this machine:\n\n    %s\n\n", lane.Name, lane.Install)
+	if err := GrantLaneInstallConsent(root, lane.Name, laneInstallConsentLine(lane)); err != nil {
+		return err
+	}
+	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, LocalFile)
+	Printf("This is separate from `dross trust --lane %s`: it authorizes INSTALLING lane %q's\n", lane.Name, lane.Name)
+	Print("toolchain, not running its suite. Editing or renaming the lane revokes it.")
+	return nil
+}
+
+// laneInstallRefusal turns one lane's INSTALL consent state into the message
+// the user acts on.
+//
+// Separate wording from laneConsentRefusal throughout, deliberately: a user
+// refused here has not been refused a test run, and a message reading like one
+// would send them to `dross trust --lane` — which would grant the wrong thing
+// and leave them refused again with no idea why.
+func laneInstallRefusal(lane project.TestLane, state ConsentState, cerr error) error {
+	name := lane.Name
+	line := "    " + lane.Install + "\n"
+	switch state {
+	case ConsentRefused, ConsentNotApplicable:
+		return cerr
+	case ConsentStale:
+		return fmt.Errorf(
+			"refusing to install test lane %q's toolchain: its install line has CHANGED\n"+
+				"since you trusted it — the recorded consent is stale.\n\n"+
+				"%s\n"+
+				"Read the line above; if that is what you meant to run, re-consent:\n\n"+
+				"    dross trust --lane-install %s\n\n%w", name, line, name, cerr)
+	default:
+		return fmt.Errorf(
+			"refusing to install test lane %q's toolchain: its install line has not been\n"+
+				"trusted on this machine.\n\n"+
+				"%s\n"+
+				"It comes from the repo's tracked project.toml, so a clone carries whatever\n"+
+				"its author wrote, and this line changes a machine rather than measuring this\n"+
+				"repo. Read it above, then:\n\n"+
+				"    dross trust --lane-install %s\n\n%w", name, line, name, cerr)
+	}
+}
+
 func findLane(p *project.Project, name string) (project.TestLane, error) {
 	var names []string
 	for _, lane := range p.Runtime.TestLane {
@@ -668,6 +761,7 @@ func Trust() *cobra.Command {
 	var replayPhase string
 	var runSlotName string
 	var laneName string
+	var laneInstallName string
 	c := &cobra.Command{
 		Use:   "trust",
 		Short: "Consent to dross running this repo's runtime.test_command on this machine",
@@ -690,6 +784,9 @@ func Trust() *cobra.Command {
 			}
 			if laneName != "" {
 				return trustLane(root, laneName, check)
+			}
+			if laneInstallName != "" {
+				return trustLaneInstall(root, laneInstallName, check)
 			}
 			proj, err := project.Load(filepath.Join(root, project.File))
 			if err != nil {
@@ -735,6 +832,7 @@ func Trust() *cobra.Command {
 	c.Flags().StringVar(&replayPhase, "replay", "", "grant consent for <phase-id>'s recorded red-proof replay command instead of runtime.test_command")
 	c.Flags().StringVar(&runSlotName, "run", "", "grant consent for `dross run <name>`'s configured command instead of runtime.test_command")
 	c.Flags().StringVar(&laneName, "lane", "", "grant consent for the named [[runtime.test_lane]]'s command instead of runtime.test_command")
+	c.Flags().StringVar(&laneInstallName, "lane-install", "", "grant consent for the named [[runtime.test_lane]]'s install line — a separate grant from --lane, because installing is a different act from running a suite")
 	return c
 }
 

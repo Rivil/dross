@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 )
 
@@ -225,10 +226,28 @@ func runInstallLocally(argv []string) (string, error) {
 // runLaneInstall executes one step on the side the caller chose: the granted
 // host when target is non-nil, this machine when it is nil.
 //
-// Both surfaces go through here so the side-selection they each make lands on
-// the same two seams. It performs no gating of its own — consent and the
-// dry-run default are the callers' to enforce, before this is ever reached.
-func runLaneInstall(target *remote.Target, s installStep) (string, error) {
+// Both surfaces go through here, so the consent gate is enforced ONCE for both
+// rather than restated at each — a second copy is a second place to forget it,
+// and the thing forgotten would be an unread line from a tracked file running
+// on someone's machine.
+//
+// The gate covers a DECLARED line only. dross's own built-in recipes are not
+// lines this repo supplied — they are dross's, the same way bootstrap's adapter
+// recipes are — so gating them would ask the user to consent to dross's own
+// code, which teaches them to approve without reading.
+//
+// The dry-run default stays the callers': whether to run at all is a decision
+// about the invocation, while whether this line MAY run is a decision about the
+// line, and only the second one belongs to a shared helper.
+func runLaneInstall(root, repoDir string, target *remote.Target, lane project.TestLane, s installStep) (string, error) {
+	if s.Line != "" {
+		state, cerr := LaneInstallConsented(root, repoDir, lane.Name, laneInstallConsentLine(lane))
+		if cerr != nil {
+			// Refused BEFORE the argv is even rendered, so an ungranted line
+			// never reaches a seam and never reaches a transport.
+			return "", laneInstallRefusal(lane, state, cerr)
+		}
+	}
 	argv, err := installArgv(s)
 	if err != nil {
 		return "", err
