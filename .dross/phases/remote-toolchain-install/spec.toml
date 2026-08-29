@@ -93,3 +93,15 @@
 [[deferred]]
   text = "A verb to uninstall or clean up what dross installed on a borrowed host."
   why = "No demand yet, and a removal path on someone else's machine is its own consent question."
+
+[[deferred]]
+  text = "survivor internal/cmd/lane_install.go:216 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "milestone-push-failure-tests"
+  survivor = "6413ac9e54ed7540"
+
+[[deferred]]
+  text = "survivor internal/cmd/lane_install.go:220 (CONDITIONALS_NEGATION)"
+  why = "surviving mutant routed out of a verify run"
+  target = "milestone-push-failure-tests"
+  survivor = "b49d50d9aa57b170"
