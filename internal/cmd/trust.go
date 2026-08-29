@@ -96,6 +96,12 @@ var (
 	// from ErrNoTestCommand so a refusal can send the reader to the lane block
 	// rather than to runtime.test_command, which may be perfectly fine.
 	ErrNoLaneCommand = errors.New("this test lane declares no command")
+	// ErrNoLaneInstall is returned for a lane declaring no install line.
+	// Distinct from ErrNoLaneCommand for the reason that one is distinct from
+	// ErrNoConsent: a lane with no install line has nothing to consent to and
+	// is not ungranted, and a caller that read the two as one would ask the
+	// user to trust a line that does not exist.
+	ErrNoLaneInstall = errors.New("this test lane declares no install line")
 )
 
 // Fingerprint is the consent binding: hex sha256 of the command, byte for byte.
@@ -393,6 +399,114 @@ func RevokeLaneConsent(root, name string) error {
 		// a bare [trusted_lane_commands] header reads as a store that holds
 		// something.
 		l.TrustedLaneCommands = nil
+	}
+	return l.save(path)
+}
+
+// --- per-lane INSTALL consent ---
+
+// laneInstallFrame is the domain separator for an install grant.
+//
+// Its own frame, disjoint from laneFrame and from the unframed namespace a bare
+// command occupies, so no command line a user could actually run can spell it —
+// a NUL cannot appear in an argv element. The grants live in separate maps, so
+// this is not the only thing keeping them apart; it is what makes "a command
+// cannot forge an install grant" structural rather than a property of how the
+// store happens to be keyed today.
+const laneInstallFrame = "dross:lane-install:v1\x00"
+
+// laneInstallConsentLine returns the exact byte string ONE lane's INSTALL grant
+// is taken over.
+//
+// Length-framed like laneConsentLine's prepared form rather than bare, so the
+// frame stays unambiguous if a second field is ever bound into it — a naive
+// join is what lets two fields re-split and keep a grant issued for neither.
+//
+// Empty means un-grantable, and there are two ways to be: a lane declaring no
+// install line has nothing to consent to, and a line carrying a NUL can never
+// be exec'd under any shell, so binding consent to it would bind to something
+// that can never run. LaneInstallConsented turns both into
+// ConsentNotApplicable.
+func laneInstallConsentLine(lane project.TestLane) string {
+	if strings.TrimSpace(lane.Install) == "" {
+		return ""
+	}
+	if strings.ContainsRune(lane.Install, 0) {
+		return ""
+	}
+	return fmt.Sprintf("%s%d\x00%s", laneInstallFrame, len(lane.Install), lane.Install)
+}
+
+// LaneInstallConsented reports what this machine has said about ONE lane's
+// install line.
+//
+// It answers INDEPENDENTLY of LaneConsented, which is the whole point of the
+// separate store (locked install_consent): adding an install line to a lane
+// that already runs green must leave its test grant reading Granted while this
+// reports Absent, so one edit yields two answers rather than one refusal of
+// something that never changed.
+//
+// Same ladder, same tracked-store refusal, for the reasons LaneConsented has
+// them: a rewritten install line and a never-trusted one need different
+// reactions, and a committed local.toml is a repo authorizing its own install
+// commands.
+func LaneInstallConsented(root, repoDir, name, line string) (ConsentState, error) {
+	if err := refuseTrackedLocal(repoDir); err != nil {
+		return ConsentRefused, err
+	}
+	if strings.TrimSpace(line) == "" {
+		return ConsentNotApplicable, fmt.Errorf("%w: %s", ErrNoLaneInstall, name)
+	}
+	l, err := loadLocal(localPath(root))
+	if err != nil {
+		// An unparseable store is not consent. Fail closed, and say why.
+		return ConsentAbsent, fmt.Errorf("%w: %v", ErrNoConsent, err)
+	}
+	got, ok := l.TrustedLaneInstalls[name]
+	if !ok || got == "" {
+		return ConsentAbsent, ErrNoConsent
+	}
+	if got != Fingerprint(line) {
+		return ConsentStale, ErrStaleConsent
+	}
+	return ConsentGranted, nil
+}
+
+// GrantLaneInstallConsent records install consent for one lane, leaving every
+// other lane's install grant — and every lane's TEST grant, this one included —
+// exactly as it was.
+func GrantLaneInstallConsent(root, name, line string) error {
+	path := localPath(root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return err
+	}
+	if l.TrustedLaneInstalls == nil {
+		l.TrustedLaneInstalls = map[string]string{}
+	}
+	l.TrustedLaneInstalls[name] = Fingerprint(line)
+	return l.save(path)
+}
+
+// RevokeLaneInstallConsent drops one lane's install grant.
+//
+// A missing entry is not an error, on RevokeLaneConsent's precedent: the caller
+// is expressing "this lane has no install grant", and that is already true.
+func RevokeLaneInstallConsent(root, name string) error {
+	path := localPath(root)
+	l, err := loadLocal(path)
+	if err != nil {
+		return err
+	}
+	if _, ok := l.TrustedLaneInstalls[name]; !ok {
+		return nil
+	}
+	delete(l.TrustedLaneInstalls, name)
+	if len(l.TrustedLaneInstalls) == 0 {
+		// Back to nil so omitempty keeps an empty table out of the file — a
+		// bare [trusted_lane_installs] header reads as a store that holds
+		// something.
+		l.TrustedLaneInstalls = nil
 	}
 	return l.save(path)
 }

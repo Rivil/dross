@@ -132,6 +132,27 @@ type localStore struct {
 	// writes it, and it prints the command line first.
 	TrustedLaneCommands map[string]string `toml:"trusted_lane_commands,omitempty"`
 
+	// TrustedLaneInstalls maps a [[runtime.test_lane]] name to sha256 of that
+	// lane's declared `install` line — consent to INSTALL that lane's toolchain,
+	// which is a different act from consent to run its suite.
+	//
+	// A second map rather than a second line folded into TrustedLaneCommands'
+	// fingerprint, and that separation is the locked install_consent decision.
+	// Folding it in the way `prepare` is folded in would staleness-refuse a
+	// lane's ordinary TEST runs the moment an install line was added — a line
+	// that has never executed breaking a gate that was passing the day before.
+	// The blast radius differs too: running a suite touches this repo's tree,
+	// while installing changes a machine for everything else that uses it.
+	//
+	// Keyed by lane name on the TrustedLaneCommands precedent, so one lane's
+	// rewritten install line refuses only itself, and a renamed lane inherits
+	// nothing.
+	//
+	// ABSENT from localKeys, for the reason every grant here is: `dross local
+	// set` must not be able to authorize an install. Only `dross trust
+	// --lane-install <name>` writes it, and it prints the line first.
+	TrustedLaneInstalls map[string]string `toml:"trusted_lane_installs,omitempty"`
+
 	// RemoteHost and RemoteWorkdir authorize dross to run this repo's code on
 	// another machine — the mutation adapters and, since remote-test-runner,
 	// the test suite.
@@ -259,7 +280,10 @@ var localKeys = map[string]struct {
 	// aliases — are NOT here. See the struct fields: they are granted by
 	// `dross remote grant`, which shows the user what it is authorizing, and by
 	// nothing else. trusted_lane_commands is out for the same reason: only
-	// `dross trust --lane <name>` writes it, after printing the line.
+	// `dross trust --lane <name>` writes it, after printing the line, and
+	// trusted_lane_installs is out on that same precedent — a key-writer that
+	// could grant it would authorize changing a machine without ever showing
+	// the user the line it was about to run there.
 }
 
 // effectiveRemote returns the granted host and workdir, preferring the current
