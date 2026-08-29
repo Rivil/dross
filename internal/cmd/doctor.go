@@ -1432,11 +1432,40 @@ func remoteMutationTools(p *project.Project) ([]string, map[string]string) {
 //
 // The lane half goes through laneToolUnion, which is the same derivation the
 // run uses. Doctor re-deriving it would be a copy, and a copy drifts.
-func remoteProbeTools(p *project.Project) ([]string, map[string]string) {
-	tools, needBy := remoteMutationTools(p)
+//
+// It returns TWO attributions over the one tool list — the adapter that wants a
+// tool, and the lane that does — because the callers need to say why the host
+// needs each one, and "adapter" and "lane" are different sentences with
+// different remedies. They are disjoint by construction: a tool an adapter
+// already claimed is never also attributed to a lane, so a tool wanted by both
+// gremlins and a Go lane is ONE entry in the probe and reports as the adapter's.
+// A tool wanted by two lanes belongs to the FIRST in lane order, matching the
+// list's own order — array position is already the tie-break everywhere lanes
+// are read.
+//
+// This exists so `dross remote bootstrap` can tag a lane's install step without
+// growing a private derivation of its own, which is exactly the drift its own
+// test forbids.
+func remoteProbeTools(p *project.Project) (tools []string, needBy, laneBy map[string]string) {
+	tools, needBy = remoteMutationTools(p)
 	seen := map[string]bool{}
 	for _, tool := range tools {
 		seen[tool] = true
+	}
+	laneBy = map[string]string{}
+	for _, lane := range p.Runtime.TestLane {
+		for _, tool := range testlane.Toolchain(lane.Command, lane.Prepare, lane.Toolchain) {
+			if seen[tool] {
+				// Claimed by an adapter. Left unattributed to any lane rather
+				// than double-tagged: one tool, one reason it is being asked
+				// for, or a caller printing both would report one gap twice.
+				continue
+			}
+			if _, taken := laneBy[tool]; taken {
+				continue
+			}
+			laneBy[tool] = lane.Name
+		}
 	}
 	for _, tool := range laneToolUnion(p.Runtime.TestLane) {
 		if seen[tool] {
@@ -1445,7 +1474,7 @@ func remoteProbeTools(p *project.Project) ([]string, map[string]string) {
 		seen[tool] = true
 		tools = append(tools, tool)
 	}
-	return tools, needBy
+	return tools, needBy, laneBy
 }
 
 // reportLaneToolchains prints one row per declared lane: its effective
@@ -1521,7 +1550,11 @@ func checkRemoteMutation(root, repoDir string, p *project.Project) int {
 		Printf("  ⚠ no remote granted — mutation runs and `dross test` run on this machine.\n")
 		Printf("    Grant one with `dross remote grant <host> <workdir>`.\n")
 	default:
-		tools, needBy := remoteProbeTools(p)
+		// The lane attribution is unused HERE: doctor reports lanes through
+		// reportLaneToolchains, which walks the lanes themselves and so already
+		// knows which lane each row is about. It is bootstrap that needs the
+		// map, from a step that only has a tool name.
+		tools, needBy, _ := remoteProbeTools(p)
 		ready, perr := remoteProbeFn(*target, tools)
 		if perr != nil {
 			Printf("  ✗ remote host %s is not usable: %v\n", target.Host, perr)

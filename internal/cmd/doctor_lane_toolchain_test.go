@@ -12,6 +12,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -322,4 +323,158 @@ func mustRoot(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+// loadDoctorFixtureProject reads back the project the fixture just wrote, so a
+// test can call remoteProbeTools directly rather than only through doctor.
+func loadDoctorFixtureProject(t *testing.T) *project.Project {
+	t.Helper()
+	root, err := FindRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// TestRemoteProbeToolsAttributesLaneTools: a step that carries only a tool name
+// cannot say why the host needs it. bootstrap tags its lane steps from this
+// map, and the alternative — bootstrap deriving the lanes itself — is the
+// private copy its own drift test forbids.
+//
+// The two-lane tie is decided by lane ORDER, matching the probe list's own
+// order: array position is already the tie-break everywhere lanes are read.
+func TestRemoteProbeToolsAttributesLaneTools(t *testing.T) {
+	doctorLaneFixture(t, "helicon", nil, `[[runtime.test_lane]]
+name = "web"
+match = ["web/**"]
+command = "pnpm test"
+
+[[runtime.test_lane]]
+name = "docs"
+match = ["docs/**"]
+command = "pnpm lint"
+
+[[runtime.test_lane]]
+name = "unit"
+match = ["internal/**"]
+command = "gotestsum ./..."`)
+
+	_, _, laneBy := remoteProbeTools(loadDoctorFixtureProject(t))
+
+	if got := laneBy["pnpm"]; got != "web" {
+		t.Errorf("pnpm attributed to %q, want the FIRST lane in order (web)", got)
+	}
+	if got := laneBy["gotestsum"]; got != "unit" {
+		t.Errorf("gotestsum attributed to %q, want unit", got)
+	}
+}
+
+// TestRemoteProbeToolsKeepsAdapterAttribution: the widening must not disturb
+// the map that was already there, and a tool an adapter claimed must NOT also
+// be tagged with a lane — one tool has one reason it is being asked for, and a
+// caller printing both would report one gap twice.
+func TestRemoteProbeToolsKeepsAdapterAttribution(t *testing.T) {
+	// The `mutants` lane spawns the adapter's OWN binary, which is the only way
+	// to reach the shared-tool case: `go` is gremlins' RUNTIME, probed
+	// separately, and never an entry in the adapter tool map.
+	doctorLaneFixture(t, "helicon", []string{"gremlins"}, doctorGoAndWebLanes+`
+
+[[runtime.test_lane]]
+name = "mutants"
+match = ["internal/mutation/**"]
+command = "gremlins unleash ./..."`)
+
+	_, needBy, laneBy := remoteProbeTools(loadDoctorFixtureProject(t))
+
+	if needBy["gremlins"] != "gremlins" {
+		t.Errorf("the adapter attribution changed: %v", needBy)
+	}
+	if _, tagged := laneBy["gremlins"]; tagged {
+		t.Errorf("a tool the adapter claimed was also attributed to lane %q", laneBy["gremlins"])
+	}
+	for tool, adapter := range needBy {
+		if lane, tagged := laneBy[tool]; tagged {
+			t.Errorf("%q carries both the %s adapter and lane %q", tool, adapter, lane)
+		}
+	}
+	if got := laneBy["pnpm"]; got != "web" {
+		t.Errorf("the lane-only tool lost its attribution: %q", got)
+	}
+	if got := laneBy["go"]; got != "go" {
+		t.Errorf("go attributed to %q — it is a lane's tool, not an adapter's (it is gremlins' runtime, probed apart)", got)
+	}
+}
+
+// TestRemoteProbeToolsListIsUnchanged: this task changes a SIGNATURE, not a
+// probe set. A widening that also reordered or grew the list would change what
+// every consumer asks the host, silently.
+func TestRemoteProbeToolsListIsUnchanged(t *testing.T) {
+	doctorLaneFixture(t, "helicon", []string{"gremlins"}, doctorGoAndWebLanes)
+	p := loadDoctorFixtureProject(t)
+
+	tools, _, _ := remoteProbeTools(p)
+
+	// Rebuilt here from the two derivations the function is defined in terms
+	// of, deduped adapter-first — which is exactly what the list meant before
+	// the third return value existed.
+	want, _ := remoteMutationTools(p)
+	seen := map[string]bool{}
+	for _, tool := range want {
+		seen[tool] = true
+	}
+	for _, tool := range laneToolUnion(p.Runtime.TestLane) {
+		if seen[tool] {
+			continue
+		}
+		seen[tool] = true
+		want = append(want, tool)
+	}
+	if !reflect.DeepEqual(tools, want) {
+		t.Errorf("the probe set moved:\n got  %v\n want %v", tools, want)
+	}
+	// And the dedupe itself, stated rather than implied by the compare.
+	counted := map[string]int{}
+	for _, tool := range tools {
+		counted[tool]++
+	}
+	for tool, n := range counted {
+		if n > 1 {
+			t.Errorf("%q appears %d times in the probe set: %v", tool, n, tools)
+		}
+	}
+}
+
+// TestDoctorRemoteSectionSurvivesTheWidening: doctor's own report must be
+// untouched. A signature change that also moved a line the user reads would be
+// this task doing something it did not claim to.
+func TestDoctorRemoteSectionSurvivesTheWidening(t *testing.T) {
+	doctorLaneFixture(t, "helicon", []string{"gremlins"}, doctorGoAndWebLanes)
+	fakeProbe(t, func(_ remote.Target, _ []string) (remote.Readiness, error) {
+		return remote.Readiness{Cores: 8, Missing: []string{"pnpm"}}, nil
+	})
+
+	var out string
+	doctorIssues(t, &out)
+
+	// Pinned as literal expectations rather than against a recomputed string:
+	// a golden derived from the same code under test cannot catch the code
+	// changing.
+	for _, want := range []string{
+		"✓ helicon reachable — workdir /srv/dross, 8 cores (mutation runs and `dross test`)",
+		"✓ lane go toolchain on helicon: go",
+		"⚠ lane web will run on this machine — helicon has no pnpm (lane needs pnpm)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the Remote section lost %q:\n%s", want, out)
+		}
+	}
+	// The lane attribution is a return value, not a report: it must not have
+	// leaked into what doctor prints.
+	if strings.Contains(out, "laneBy") {
+		t.Errorf("the new attribution leaked into doctor's output:\n%s", out)
+	}
 }
