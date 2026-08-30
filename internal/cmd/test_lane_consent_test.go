@@ -771,3 +771,199 @@ func TestLaneLessRunProbesForNoTools(t *testing.T) {
 		t.Errorf("a lane-less run asked the host for %v, want nothing", log.tools[0])
 	}
 }
+
+// --- selector template consent (c-2) ---
+
+// templateLane is the lane every assertion below mutates one field of. It
+// carries all four bound fields so a test can REMOVE one and see the
+// fingerprint move, which is the direction a naive concatenation survives.
+func templateLane() project.TestLane {
+	return project.TestLane{
+		Name:             "rust",
+		Match:            []string{"crates/**"},
+		Command:          "cargo test",
+		Prepare:          "cargo build",
+		Selector:         "dir",
+		SelectorTemplate: "--package {path}",
+		SelectorJoin:     "",
+	}
+}
+
+// TestAddingASelectorTemplateStalesTheGrant is c-2's core claim. The template
+// is arbitrary user text that lands on the spawned line, so a grant issued
+// before it existed must not authorize it — the same rule that already stales a
+// lane when a prepare appears.
+func TestAddingASelectorTemplateStalesTheGrant(t *testing.T) {
+	root, repoDir := laneGrantFixture(t)
+	before := project.TestLane{Name: "rust", Command: "cargo test", Selector: "dir"}
+	mustGrantLane(t, root, "rust", laneConsentLine(before))
+	if got := laneState(t, root, repoDir, "rust", laneConsentLine(before)); got != ConsentGranted {
+		t.Fatalf("the grant did not take: %v", got)
+	}
+
+	after := before
+	after.SelectorTemplate = "--package {path}"
+	if got := laneState(t, root, repoDir, "rust", laneConsentLine(after)); got != ConsentStale {
+		t.Errorf("adding a selector_template reported %v, want stale", got)
+	}
+}
+
+// TestChangingSelectorJoinAloneStalesTheGrant: the join is the difference
+// between `-R 'a|b'` and `-R 'a&b'` — a different line reaching the runner with
+// every other field identical. A fingerprint that did not move would run the
+// second under a grant read for the first.
+func TestChangingSelectorJoinAloneStalesTheGrant(t *testing.T) {
+	root, repoDir := laneGrantFixture(t)
+	before := project.TestLane{Name: "ctest", Command: "ctest", Selector: "path", SelectorTemplate: "-R {paths}", SelectorJoin: "|"}
+	mustGrantLane(t, root, "ctest", laneConsentLine(before))
+
+	after := before
+	after.SelectorJoin = "&"
+	if got := laneState(t, root, repoDir, "ctest", laneConsentLine(after)); got != ConsentStale {
+		t.Errorf("changing selector_join alone reported %v, want stale", got)
+	}
+
+	// And removing it entirely, which is the shape a naive "join only when
+	// non-empty" framing would collapse onto the no-join line.
+	dropped := before
+	dropped.SelectorJoin = ""
+	if got := laneState(t, root, repoDir, "ctest", laneConsentLine(dropped)); got != ConsentStale {
+		t.Errorf("dropping selector_join reported %v, want stale", got)
+	}
+}
+
+// TestLaneWithNoTemplateKeepsItsPrePhaseConsentLine is the grant-preservation
+// half, and it is the reason the new frame is gated rather than applied
+// unconditionally: framing every lane would re-fingerprint every lane grant
+// already written on every machine, staling them all over a document nobody
+// edited.
+//
+// Asserted against the literal pre-phase strings rather than against
+// laneConsentLine's own output, which would pass for any consistent rewrite.
+func TestLaneWithNoTemplateKeepsItsPrePhaseConsentLine(t *testing.T) {
+	bare := project.TestLane{Name: "go", Command: "go test ./..."}
+	if got := laneConsentLine(bare); got != "go test ./..." {
+		t.Errorf("a lane with no prepare and no template must fingerprint its bare command, got %q", got)
+	}
+
+	prepared := project.TestLane{Name: "go", Command: "go test ./...", Prepare: "make build"}
+	want := fmt.Sprintf("%s%d\x00%s\x00%d\x00%s", laneFrame, len("make build"), "make build", len("go test ./..."), "go test ./...")
+	if got := laneConsentLine(prepared); got != want {
+		t.Errorf("a prepared lane with no template must keep its pre-phase framed line:\n got %q\nwant %q", got, want)
+	}
+
+	// A selector alone never bound to consent and must not start: it names a
+	// shape, not a line, and every lane already declaring one would stale.
+	scoped := bare
+	scoped.Selector = "go-package"
+	if got := laneConsentLine(scoped); got != laneConsentLine(bare) {
+		t.Errorf("declaring a selector moved the consent line: %q", got)
+	}
+}
+
+// TestTemplateAndPrepareNamespacesAreDisjoint is c-2's failure mode stated
+// directly: if some prepared lane could be spelled to produce a templated
+// lane's framed string, one lane's grant would authorize a line the user read
+// nothing about.
+//
+// Both frames are searched over the same field content, so a collision would
+// have to come from the framing rather than from the fixtures happening to
+// differ.
+func TestTemplateAndPrepareNamespacesAreDisjoint(t *testing.T) {
+	// The field values are chosen to be adversarial rather than realistic:
+	// both frame prefixes appear as ordinary field CONTENT, and "1\x001"
+	// spells a length header, so a framing that could be spoofed from inside a
+	// field would collide here.
+	fields := []string{"", "a", "b", "--package {path}", laneFrame, laneTemplateFrame, "1\x001"}
+	commands := []string{"a", "b", laneFrame + "x", laneTemplateFrame + "x"}
+
+	seen := map[string]string{}
+	pairs := 0
+	for _, prepare := range fields {
+		for _, command := range commands {
+			for _, tmpl := range fields {
+				for _, join := range fields {
+					line := laneConsentLine(project.TestLane{
+						Name: "l", Command: command, Prepare: prepare,
+						SelectorTemplate: tmpl, SelectorJoin: join,
+					})
+					if line == "" {
+						// A NUL-carrying field is un-grantable by design and
+						// shares the empty line with every other such lane.
+						continue
+					}
+					key := fmt.Sprintf("prepare=%q command=%q template=%q join=%q", prepare, command, tmpl, join)
+					if prev, ok := seen[line]; ok {
+						t.Errorf("two lanes share one consent line:\n  %s\n  %s\n  line %q", prev, key, line)
+					}
+					seen[line] = key
+					pairs++
+				}
+			}
+		}
+	}
+	if pairs < 100 {
+		t.Fatalf("only %d grantable lanes were compared — the assertion is close to vacuous", pairs)
+	}
+}
+
+// TestNULInATemplateFieldYieldsTheEmptyLine: a NUL is what makes every frame
+// unforgeable, and that only holds while no field can carry one. A lane whose
+// template contains a NUL is unrunnable anyway — an argv element is
+// NUL-terminated — so binding consent to it would bind to something that can
+// never run.
+func TestNULInATemplateFieldYieldsTheEmptyLine(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		lane project.TestLane
+	}{
+		{"template", project.TestLane{Name: "l", Command: "cargo test", SelectorTemplate: "--package\x00{path}"}},
+		{"join", project.TestLane{Name: "l", Command: "ctest", SelectorTemplate: "-R {paths}", SelectorJoin: "\x00"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := laneConsentLine(tc.lane); got != "" {
+				t.Errorf("a NUL in %s produced a framed line %q, want the empty line", tc.name, got)
+			}
+		})
+	}
+}
+
+// TestAllThreeBoundFieldsFingerprintDistinctly: command, prepare and template
+// are length-framed together, so dropping any ONE of the three must move the
+// line. A naive join survives every single-field test and fails here, because
+// it is the shape that lets two fields re-split and keep a grant issued for
+// neither.
+func TestAllThreeBoundFieldsFingerprintDistinctly(t *testing.T) {
+	full := templateLane()
+	full.SelectorJoin = "|"
+	full.SelectorTemplate = "-R {paths}"
+
+	base := laneConsentLine(full)
+	if base == "" {
+		t.Fatal("the fully-populated lane produced no consent line")
+	}
+	for _, tc := range []struct {
+		name string
+		lane project.TestLane
+	}{
+		{"no command", func() project.TestLane { l := full; l.Command = ""; return l }()},
+		{"no prepare", func() project.TestLane { l := full; l.Prepare = ""; return l }()},
+		{"no template", func() project.TestLane { l := full; l.SelectorTemplate = ""; return l }()},
+		{"no join", func() project.TestLane { l := full; l.SelectorJoin = ""; return l }()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := laneConsentLine(tc.lane); got == base {
+				t.Errorf("dropping %s left the consent line unmoved", tc.name)
+			}
+		})
+	}
+
+	// Re-splitting the two command lines across their fields must not collide:
+	// {prepare:"a", command:"bc"} and {prepare:"ab", command:"c"} concatenate
+	// identically and length-frame differently.
+	split1 := project.TestLane{Name: "l", Prepare: "a", Command: "bc", SelectorTemplate: "{path}"}
+	split2 := project.TestLane{Name: "l", Prepare: "ab", Command: "c", SelectorTemplate: "{path}"}
+	if laneConsentLine(split1) == laneConsentLine(split2) {
+		t.Error("a lane re-split across prepare and command kept the same consent line")
+	}
+}
