@@ -260,11 +260,23 @@ func laneProblems(p *project.Project) []string {
 	return problems
 }
 
+// The two placeholders a selector_template may carry. They are named here
+// rather than spelled inline so validate's refusals and the expander that
+// honours them can never drift into recognising different tokens.
+//
+// templatePathToken is not a prefix hazard: "{path}" ends in its own brace, so
+// a strings.Contains for it never fires on "{paths}".
+const (
+	templatePathToken  = "{path}"
+	templatePathsToken = "{paths}"
+)
+
 // laneSelectorProblems reports the faults in one lane's opt-in selector fields.
 //
 // It is split out of laneProblems so the selector rules read as one paragraph:
 // a style dross cannot translate, an exit code that would mean the wrong thing,
-// and a code declared on a lane that can never produce it.
+// a code declared on a lane that can never produce it, a template with nothing
+// to place or nowhere to place it, and a join with nothing to join.
 func laneSelectorProblems(label string, lane project.TestLane) []string {
 	var problems []string
 	// The empty case is guarded here rather than left to Has: SelectorStyles
@@ -288,6 +300,29 @@ func laneSelectorProblems(label string, lane project.TestLane) []string {
 		case code < 0 || code > 255:
 			problems = append(problems, fmt.Sprintf("project.toml: %s empty_exit lists %d — a process exit code is 0-255, so no runner can ever return it", label, code))
 		}
+	}
+	// The template rules read as one paragraph with the selector ones because
+	// they are the same rule from two sides: a template places what a selector
+	// shapes, so neither is usable without the other, and a placeholder-less
+	// template scopes nothing while claiming to.
+	//
+	// Only the two known placeholders are looked for. An unrecognised `{...}`
+	// run is NOT a fault — a regex quantifier like `a{2,3}` is legitimate
+	// template text, and refusing it would fence a line the user has already
+	// read and granted.
+	if lane.SelectorTemplate != "" {
+		if strings.TrimSpace(lane.Selector) == "" {
+			problems = append(problems, fmt.Sprintf("project.toml: %s declares selector_template with no selector — the template says where the paths go, the selector says what shape they take, so a template alone has nothing to place", label))
+		}
+		if !strings.Contains(lane.SelectorTemplate, templatePathToken) && !strings.Contains(lane.SelectorTemplate, templatePathsToken) {
+			problems = append(problems, fmt.Sprintf("project.toml: %s selector_template = %q contains neither %s nor %s — a template with no placeholder substitutes nothing, so the lane would run unscoped", label, lane.SelectorTemplate, templatePathToken, templatePathsToken))
+		}
+	}
+	if lane.SelectorJoin != "" && !strings.Contains(lane.SelectorTemplate, templatePathsToken) {
+		// Reported against the lane rather than silently ignored: a join with
+		// no {paths} to collapse can never apply, so a user who declared one
+		// is believing they configured something they did not.
+		problems = append(problems, fmt.Sprintf("project.toml: %s declares selector_join with no %s in its selector_template — a join collapses a %s expansion into one argument, so there is nothing here for it to join", label, templatePathsToken, templatePathsToken))
 	}
 	if len(lane.EmptyExit) > 0 && strings.TrimSpace(lane.Selector) == "" {
 		// Not a reading of the locked empty_detection decision but an addition

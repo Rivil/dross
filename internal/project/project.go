@@ -120,6 +120,41 @@ type TestLane struct {
 	// nothing keeps spawning Command byte-for-byte.
 	Selector string `toml:"selector,omitempty" json:"selector,omitempty"`
 
+	// SelectorTemplate names WHERE this lane's matched paths land on its
+	// command line, for a runner whose shape the Selector enum cannot express:
+	// cargo wants `--package <p>` repeated per path, `ctest -R` wants one
+	// joined regex. Omitted — the normal case — means the derived paths are
+	// appended to Command exactly as they are today, so the field is opt-in
+	// per lane like Selector itself.
+	//
+	// It is orthogonal to Selector rather than a replacement for it: Selector
+	// still decides whether the substituted values are files, dirs or Go
+	// packages, and the template decides where they go. A template declared
+	// with no Selector is therefore refused — it would have nothing to place.
+	//
+	// Two placeholders are recognised. `{path}` repeats the WHOLE template
+	// once per derived path; `{paths}` substitutes them all into a single
+	// instance. A template containing neither is refused, since it would scope
+	// nothing while claiming to. Any other `{...}` run is ordinary template
+	// text — a regex quantifier like `a{2,3}` is legitimate here.
+	//
+	// Its content is fenced by consent alone, exactly as Command and Prepare
+	// are: it is folded into the lane's consent line, so adding or changing a
+	// template leaves the grant stale rather than running an unread line under
+	// a grant issued before it.
+	SelectorTemplate string `toml:"selector_template,omitempty" json:"selector_template,omitempty"`
+
+	// SelectorJoin collapses a `{paths}` expansion into ONE argv token,
+	// separated by this string — `selector_join = "|"` is what turns `-R
+	// {paths}` into `-R 'a|b'` for ctest. Omitted, `{paths}` expands to
+	// separate tokens, which is what a trailing path list wants.
+	//
+	// A regex alternation is unreachable without a separator, and an inline
+	// `{paths:|}` syntax would make the template a small language with its own
+	// parse errors to name — so it is a declared field. validate refuses it on
+	// a lane whose template has no `{paths}`, where it could never apply.
+	SelectorJoin string `toml:"selector_join,omitempty" json:"selector_join,omitempty"`
+
 	// Toolchain overrides the binaries this lane needs on the host that runs
 	// it. Omitted — the normal case — means the list is DERIVED from the first
 	// token of Command and Prepare (testlane.Toolchain), so locality detection
