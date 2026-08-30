@@ -403,14 +403,26 @@ func DetachScript(t Target, runDir string, argv []string, notBefore time.Time) (
 
 	var b strings.Builder
 	writePreamble(&b, t)
-	b.WriteString(" && mkdir -p " + q(runDir))
-	b.WriteString(" && printf '%s' " + q(initial) + " > " + statePath)
-	b.WriteString(" && setsid nohup bash -c " + q(inner.String()) +
-		" > " + logPath + " 2>&1 < /dev/null &")
-	// `$!` is the backgrounded pid, recorded so a cancel has something to
-	// signal. Read on the line after the `&`, which is the only place it is
-	// still the pid of that job.
-	b.WriteString("\nprintf '%s\\n' \"$!\" > " + pidPath + "\n")
+	// Each setup step is its own statement guarded by `|| exit 1`, NOT an `&&`
+	// chain ending in `&`.
+	//
+	// This is the shape a live dispatch against helicon proved necessary. In
+	// `a && b && setsid ... &` the `&` binds to the WHOLE list, so the entire
+	// chain — including the mutation run — ran in a background subshell whose
+	// stdout was still the ssh channel. ssh therefore did not return until the
+	// run finished, which is precisely the blocking this exists to remove, and
+	// the dispatch looked like a hang. `$!` was the subshell's pid too, so the
+	// recorded pid pointed at the wrong process and `--cancel` would have had
+	// nothing to signal.
+	b.WriteString(" || exit 1\n")
+	b.WriteString("mkdir -p " + q(runDir) + " || exit 1\n")
+	b.WriteString("printf '%s' " + q(initial) + " > " + statePath + " || exit 1\n")
+	b.WriteString("setsid nohup bash -c " + q(inner.String()) +
+		" > " + logPath + " 2>&1 < /dev/null &\n")
+	// `$!` is the detached job's pid, recorded so a cancel has a process group
+	// to signal. It is only that pid on the line immediately after the `&`, and
+	// only because the `&` now applies to that single command.
+	b.WriteString("printf '%s\\n' \"$!\" > " + pidPath + "\n")
 	return b.String(), nil
 }
 

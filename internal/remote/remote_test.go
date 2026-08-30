@@ -940,3 +940,64 @@ func TestStatusScriptReadsWithoutDisturbing(t *testing.T) {
 		}
 	}
 }
+
+// TestDetachScriptBackgroundsOnlyTheJob is the regression for the bug a live
+// dispatch against helicon found, and which every earlier assertion here
+// missed.
+//
+// The first draft built `cd … && mkdir … && printf … && setsid nohup bash -c … &`.
+// In POSIX shell the `&` binds to the ENTIRE `&&` list, not to the last command
+// in it, so the whole chain — the mutation run included — ran in a background
+// subshell that still held the ssh channel's stdout. ssh therefore blocked until
+// the run finished: the dispatch hung for the full length of the leg, which is
+// exactly the blocking --detach exists to remove, while the run itself was
+// detached and working perfectly on the host.
+//
+// The same bug misdirected `$!`: it named the subshell rather than the detached
+// job, so the recorded pid pointed at the wrong process and --cancel would have
+// had nothing to kill. The pid file on the hung dispatch came back EMPTY.
+//
+// Asserted structurally: no `&&` may appear before the backgrounding `&`, and
+// the `&` must terminate a line that starts with setsid. The old shape passed
+// every "contains setsid / contains &" check, so those cannot be the assertion.
+func TestDetachScriptBackgroundsOnlyTheJob(t *testing.T) {
+	script, err := DetachScript(target(), ".dross-runs/r1", []string{"gremlins", "unleash"}, time.Time{})
+	if err != nil {
+		t.Fatalf("DetachScript = %v", err)
+	}
+
+	var bgLine string
+	for _, line := range strings.Split(script, "\n") {
+		if strings.HasSuffix(strings.TrimSpace(line), "&") && !strings.HasSuffix(strings.TrimSpace(line), "&&") {
+			if bgLine != "" {
+				t.Fatalf("more than one backgrounded command:\n%s", script)
+			}
+			bgLine = strings.TrimSpace(line)
+		}
+	}
+	if bgLine == "" {
+		t.Fatalf("nothing is backgrounded:\n%s", script)
+	}
+	if !strings.HasPrefix(bgLine, "setsid ") {
+		t.Errorf("the backgrounded statement is not the detached job alone — `&` binds to the\n"+
+			"whole && list, so ssh will block until the run finishes:\n  %s", bgLine)
+	}
+	if strings.Contains(bgLine, "&&") {
+		t.Errorf("the backgrounded statement is an && chain, so the whole chain is\n"+
+			"backgrounded and holds the ssh channel open:\n  %s", bgLine)
+	}
+	// The setup steps must still be guarded: dropping && for newlines without
+	// replacing the guard would run the mutation even when mkdir failed.
+	for _, want := range []string{"|| exit 1"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("setup steps are unguarded — a failed mkdir would still start the run:\n%s", script)
+		}
+	}
+	// And the pid must be captured on its own line AFTER the background job,
+	// which is the only place $! names it.
+	lines := strings.Split(strings.TrimSpace(script), "\n")
+	last := strings.TrimSpace(lines[len(lines)-1])
+	if !strings.Contains(last, `"$!"`) || !strings.Contains(last, "/pid'") {
+		t.Errorf("the last statement does not record the detached job's pid:\n  %s", last)
+	}
+}
