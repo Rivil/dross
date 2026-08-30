@@ -316,3 +316,75 @@ func TestOptionsDocumentsTheSelectorSurfaceCorrectly(t *testing.T) {
 		}
 	}
 }
+
+// TestReadmeDocumentsDetachedRuns: a shipped verb with no README line is a verb
+// nobody can find, which is the rule `dross test --files` already answers to.
+//
+// The exit codes matter most. `verify results` reports five states through five
+// codes precisely so a caller can poll without parsing prose, and a contract
+// nobody wrote down is one every caller re-derives differently — the same
+// argument the `dross test` exit table already carries.
+func TestReadmeDocumentsDetachedRuns(t *testing.T) {
+	root := repoRootForDocs(t)
+	b, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+	readme := string(b)
+	for _, want := range []string{
+		"--detach",
+		"dross verify results",
+		"dross verify status",
+		"--cancel",
+		// The scheduling half. An --at with no documented meaning leaves the
+		// reader guessing whose clock it is on, which is the one thing that
+		// decides whether an off-hours run lands off-hours.
+		"--at",
+		"host's clock",
+		// The provenance rule the whole fetch rests on.
+		"recorded at dispatch",
+	} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("README.md does not document %q", want)
+		}
+	}
+	// The states are the contract a poller reads. Documented as a set, because
+	// a reader who learned only "finished" treats every other code as failure —
+	// including the two that mean the run is alive and fine.
+	for _, state := range []string{"scheduled", "running", "finished", "unreachable", "gone"} {
+		if !strings.Contains(readme, state) {
+			t.Errorf("README.md does not document the %q result state", state)
+		}
+	}
+}
+
+// TestVerifyPromptTeachesTheDetachedPath: the prompt is what an agent reads
+// before deciding how to run a two-hour leg. One that only describes the
+// attached form will keep holding a session for the length of the run, which is
+// the entire problem this phase exists to remove — the feature would ship and
+// never be used.
+func TestVerifyPromptTeachesTheDetachedPath(t *testing.T) {
+	root := repoRootForDocs(t)
+	b, err := os.ReadFile(filepath.Join(root, "assets", "prompts", "verify.md"))
+	if err != nil {
+		t.Fatalf("read assets/prompts/verify.md: %v", err)
+	}
+	prompt := string(b)
+	for _, want := range []string{
+		"--detach",
+		"dross verify results",
+		"dross verify status",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("assets/prompts/verify.md does not name %q", want)
+		}
+	}
+	// The exit codes that mean "no verdict was produced" must be called out,
+	// or an agent reads a still-running run as a failed one and sends the user
+	// to fix code that was never measured — the same false-red the `dross test`
+	// exit contract exists to prevent.
+	if !strings.Contains(prompt, "did not report") && !strings.Contains(prompt, "not a verdict") {
+		t.Error("assets/prompts/verify.md does not tell the agent that a non-finished " +
+			"result state is not a verdict about the code")
+	}
+}
