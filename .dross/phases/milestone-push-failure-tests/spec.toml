@@ -1,0 +1,46 @@
+[phase]
+  id = "milestone-push-failure-tests"
+  title = "milestone-push-failure-tests"
+  milestone = "v1.6"
+
+[[criteria]]
+  id = "c-1"
+  text = "A milestone-head push to a branch with no upstream that fails is a hard error: the call returns a non-nil error naming the branch, reports pushed=false, and no integration PR is opened."
+
+[[criteria]]
+  id = "c-2"
+  text = "When a push of local commits on the milestone branch fails, the error names the exact count of commits that would be lost at --finalize — asserted by value, so an off-by-one in that count fails the test rather than passing on a non-nil error."
+
+[[criteria]]
+  id = "c-3"
+  text = "A milestone branch both ahead of and behind origin is refused by name with both counts stated, and origin is left byte-unchanged — dross never force-pushes a shared integration branch on the user's behalf."
+
+[[criteria]]
+  id = "c-4"
+  text = "When a Stryker run aborts because the initial test run had failures, dross's error states that Stryker reports only the first offender and that the list is truncated by design, so the reader knows an unknown number remain rather than assuming one."
+
+[[criteria]]
+  id = "c-5"
+  text = "A `git fetch origin` failure during milestone-head push is a hard error naming the fetch as the cause, and nothing is pushed — dross never proceeds to an ahead/behind comparison it could not compute, nor reports the branch as not-ahead."
+
+[[criteria]]
+  id = "c-6"
+  text = "A milestone branch cleanly ahead of origin pushes successfully and reports pushed=true with the commit count it published, and origin's tip equals the local branch tip afterwards."
+
+[[decisions]]
+  key = "note_trigger"
+  choice = "c-4's truncation note is attached only when Stryker's abort matches its initial-test-run failure wording, held in a named constant beside `strykerDropWarningText`."
+  why = "Attaching it unconditionally would claim 'only the first failing test is shown' on aborts that have nothing to do with the initial test run — a bad --mutate glob, a missing runner, the dropped-file hard-fail — which is misleading in its own right. strykerDropWarningText already establishes the pattern of naming Stryker's own wording in a constant precisely so the constant and the message cannot drift apart; this is the second instance of the same idiom, not a new coupling."
+  locked = true
+
+[[decisions]]
+  key = "note_adapter_scope"
+  choice = "The truncation note is Stryker-only and lives in stryker.go; gremlins gets nothing."
+  why = "Gremlins does not abort on the first failing test, so the note would be false there. Adapter-specific runner behaviour belongs with that adapter, matching where strykerDropWarningText already sits."
+  locked = true
+
+[[decisions]]
+  key = "push_test_fixture"
+  choice = "c-1, c-3, c-5 and c-6 use real git fixtures with a bare local origin, inducing failure by repointing origin at a nonexistent path — no new seam or mock is introduced for pushMilestoneHeadIfAhead."
+  why = "The sibling pushBaseIfAheadDrossOnly is already tested exactly this way in basebranch_test.go (TestPushBaseUnreachableOriginHardError and friends). Copying the proven pattern keeps one testing idiom for both push guards; a seam introduced for only one of them would make the pair diverge."
+  locked = true
