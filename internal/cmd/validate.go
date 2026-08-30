@@ -35,6 +35,11 @@ func Validate() *cobra.Command {
 				return err
 			}
 			var problems []string
+			// Warnings are a SEPARATE list from problems, not a formatting
+			// choice applied to one: a warning describes a lane that is
+			// well-formed and probably not what the user meant, and folding it
+			// into problems would fail the gate over a judgement call.
+			var warnings []string
 
 			// project.toml
 			p, err := project.Load(filepath.Join(root, project.File))
@@ -55,6 +60,7 @@ func Validate() *cobra.Command {
 				}
 				problems = append(problems, enumProblems(p)...)
 				problems = append(problems, laneProblems(p)...)
+				warnings = append(warnings, laneWarnings(p)...)
 			}
 
 			// state.json
@@ -134,6 +140,14 @@ func Validate() *cobra.Command {
 				}
 			}
 
+			// Warnings print on EVERY run and never touch the exit status.
+			// Repetition is the point (the locked warning_surface decision):
+			// a message that appeared once at declaration time scrolls away
+			// the moment it appears, and a lane hand-edited into project.toml
+			// never saw that moment at all.
+			for _, w := range warnings {
+				Printf("⚠ %s\n", w)
+			}
 			if len(problems) == 0 {
 				Print("✓ all dross artefacts valid")
 				return nil
@@ -411,4 +425,61 @@ func loadIfExists(path string, load func() (any, error)) (any, error) {
 		return nil, nil
 	}
 	return load()
+}
+
+// wholeTreeTokens are the command-line spellings that mean "the entire tree".
+//
+// Both are Go's, which is not a limitation being papered over: they are the
+// tokens dross's own selector translation can produce, and a runner that spells
+// its whole-tree token differently is one whose lane is scoped by a template
+// rather than by the enum. A guessed list of every runner's spelling would warn
+// on lines it had no business reading.
+var wholeTreeTokens = []string{"./...", "."}
+
+// laneWarnings reports the lanes that are well-formed and probably not what the
+// user meant.
+//
+// Distinct from laneProblems and deliberately so: a warning never fails the
+// gate. It describes a lane that validates, runs, and produces a result the
+// user will read as scoped when it is not.
+func laneWarnings(p *project.Project) []string {
+	var warnings []string
+	for i, lane := range p.Runtime.TestLane {
+		if w := laneWholeTreeWarning(laneLabel(i, lane.Name), lane); w != "" {
+			warnings = append(warnings, w)
+		}
+	}
+	return warnings
+}
+
+// laneWholeTreeWarning reports a lane that scopes onto a command already ending
+// in a whole-tree token, or "" when there is nothing to say.
+//
+// The two do not compose the way they look like they do: `go test ./...
+// ./internal/cmd/...` runs the UNION, which is the whole tree. So the lane
+// spends the full suite on every scoped run while its transcript shows a
+// derived selector — a whole-suite run wearing a scoped lane's name, which is
+// the exact failure the selector feature exists to remove.
+//
+// It is a warning rather than a refusal because the lane is well-formed and the
+// combination is occasionally deliberate; the user is told, and the lane is
+// still written.
+//
+// One helper, called by validate and by both declaration verbs, so neither
+// surface can drift into warning about something the other does not.
+func laneWholeTreeWarning(label string, lane project.TestLane) string {
+	if strings.TrimSpace(lane.Selector) == "" && lane.SelectorTemplate == "" {
+		return ""
+	}
+	fields := strings.Fields(lane.Command)
+	if len(fields) == 0 {
+		return ""
+	}
+	last := fields[len(fields)-1]
+	for _, token := range wholeTreeTokens {
+		if last == token {
+			return fmt.Sprintf("project.toml: %s scopes onto a command ending in %s — appending a selector to a whole-tree token runs the union, so the scoped run would silently be the whole suite", label, token)
+		}
+	}
+	return ""
 }

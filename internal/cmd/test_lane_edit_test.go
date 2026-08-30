@@ -663,3 +663,50 @@ func TestLaneEditEchoesTheTemplate(t *testing.T) {
 		t.Errorf("`lane edit` did not echo the declared template and join:\n%s", out)
 	}
 }
+
+// TestLaneEditWarnsOnAScopedWholeTreeCommand is the edit-side half of c-4's
+// declaration-time surface. An edit is how a lane ACQUIRES the combination —
+// adding a selector to a whole-tree command, or rewriting a scoped command into
+// a whole-tree one — so a warning that only fired on `lane add` would miss the
+// path most likely to introduce it.
+func TestLaneEditWarnsOnAScopedWholeTreeCommand(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{"selector added to a whole-tree command", []string{"--selector", "go-package"}},
+		{"command rewritten to whole-tree", []string{"--selector", "dir", "--command", "go test ."}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := twoLaneEditFixture(t)
+			var out string
+			if err := runCmdCapturing(t, &out, Test(), append([]string{"lane", "edit", "go"}, tc.args...)...); err != nil {
+				t.Fatalf("`lane edit` refused a lane it should only warn about: %v", err)
+			}
+			// Written anyway: the warning is advisory, and a lane the user
+			// cannot save is a refusal by another name.
+			if got := loadLanes(t, dir)[0]; got.Selector == "" {
+				t.Fatalf("the edit was not written: %+v", got)
+			}
+			if !strings.Contains(out, "⚠") || !strings.Contains(out, `"go"`) {
+				t.Errorf("`lane edit` did not warn, or the warning does not name the lane:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestLaneEditDoesNotWarnWhenTheCommandStopsBeingWholeTree: the warning reads
+// the PROPOSED lane, not the one on disk, so an edit that fixes the very
+// combination it warns about must come back clean.
+func TestLaneEditDoesNotWarnWhenTheCommandStopsBeingWholeTree(t *testing.T) {
+	twoLaneEditFixture(t)
+	mustEditLane(t, "go", "--selector", "go-package")
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "edit", "go", "--command", "go test -count=1"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "⚠") {
+		t.Errorf("the warning fired on the edit that removed the whole-tree token:\n%s", out)
+	}
+}

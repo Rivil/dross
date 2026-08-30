@@ -528,3 +528,39 @@ func TestPrepareSurvivesAnotherLanesRemoval(t *testing.T) {
 		t.Errorf("removing another lane dropped the survivor's prepare: %q", lanes[0].Prepare)
 	}
 }
+
+// TestLaneAddWarnsOnAScopedWholeTreeCommandAndStillWrites is c-4 at declaration
+// time. The warning has to fire the moment the lane is declared — the one
+// moment the user is looking at it — and the lane has to be WRITTEN anyway: it
+// is well-formed, the combination is occasionally deliberate, and a refusal
+// would be the warning wearing a harder word than the locked decision gives it.
+func TestLaneAddWarnsOnAScopedWholeTreeCommandAndStillWrites(t *testing.T) {
+	dir := laneFixture(t)
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "add", "go",
+		"--match", "internal/**", "--command", "go test ./...", "--selector", "go-package"); err != nil {
+		t.Fatalf("`lane add` refused a lane it should only warn about: %v", err)
+	}
+	lanes := loadLanes(t, dir)
+	if len(lanes) != 1 || lanes[0].Command != "go test ./..." {
+		t.Fatalf("the lane was not written: %+v", lanes)
+	}
+	if !strings.Contains(out, "./...") || !strings.Contains(out, `"go"`) {
+		t.Errorf("`lane add` did not warn, or the warning names neither the lane nor the token:\n%s", out)
+	}
+}
+
+// TestLaneAddDoesNotWarnOnAScopedCommand is the declaration-time
+// false-positive half: warning on the normal scoped lane would train the
+// warning out of being read at exactly the surface it exists on.
+func TestLaneAddDoesNotWarnOnAScopedCommand(t *testing.T) {
+	laneFixture(t)
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "lane", "add", "go",
+		"--match", "internal/**", "--command", "go test -count=1", "--selector", "go-package"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "⚠") {
+		t.Errorf("a warning fired on a lane that scopes cleanly:\n%s", out)
+	}
+}

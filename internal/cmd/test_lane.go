@@ -297,6 +297,7 @@ func testLaneAdd() *cobra.Command {
 			if proposed.Install != "" {
 				Printf("\nIts install line is granted separately — installing is not running:\n\n    dross trust --lane-install %s\n", name)
 			}
+			printLaneWholeTreeWarning(name, proposed)
 			return nil
 		},
 	}
@@ -601,6 +602,7 @@ func testLaneEdit() *cobra.Command {
 			if laneConsentLine(lane) != before {
 				Printf("\nIts grant is now stale — the lane will refuse until you re-read it:\n\n    dross trust --lane %s\n", name)
 			}
+			printLaneWholeTreeWarning(name, lane)
 			return nil
 		},
 	}
@@ -679,6 +681,19 @@ func joinInts(v []int) string {
 		out[i] = strconv.Itoa(n)
 	}
 	return strings.Join(out, " ")
+}
+
+// printLaneWholeTreeWarning prints the c-4 whole-tree warning at declaration
+// time, and nothing when there is none.
+//
+// It reads the SAME laneWholeTreeWarning validate reports through, so the two
+// surfaces cannot drift into warning about different things. The lane is
+// already written by the time this runs: it is a warning, not a refusal, and
+// declaring it is a legitimate thing to do.
+func printLaneWholeTreeWarning(name string, lane project.TestLane) {
+	if w := laneWholeTreeWarning(laneLabel(0, name), lane); w != "" {
+		Printf("\n⚠ %s\n", w)
+	}
 }
 
 // printLaneTemplate echoes a lane's declared selector scoping, and prints

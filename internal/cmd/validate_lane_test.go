@@ -704,3 +704,121 @@ empty_exit = [5]`)
 		}
 	}
 }
+
+// --- the whole-tree warning (c-4) ---
+
+// TestValidateWarnsOnAScopedWholeTreeCommand: `go test ./...` plus a selector
+// appends the derived package to a token that already means everything, and
+// `go test ./... ./internal/...` runs the UNION. The lane spends the full suite
+// on every scoped run while its transcript shows a derived selector — a
+// whole-suite run wearing a scoped lane's name.
+func TestValidateWarnsOnAScopedWholeTreeCommand(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		command string
+		scoping string
+		token   string
+	}{
+		{"selector on ./...", "go test ./...", `selector = "go-package"`, "./..."},
+		{"selector on .", "go test .", `selector = "go-package"`, "."},
+		{"template on ./...", "go test ./...", "selector = \"dir\"\nselector_template = \"--package {path}\"", "./..."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := laneFixture(t)
+			appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "`+tc.command+`"
+`+tc.scoping)
+
+			out, err := validateOutput(t)
+			if err != nil {
+				t.Fatalf("the warning failed validate:\n%s", out)
+			}
+			if !strings.Contains(out, `"go"`) {
+				t.Errorf("the warning must name the lane, got:\n%s", out)
+			}
+			if !strings.Contains(out, tc.token) {
+				t.Errorf("the warning must name the token %q, got:\n%s", tc.token, out)
+			}
+		})
+	}
+}
+
+// TestTheWholeTreeWarningDoesNotFailValidate is the exit contract stated on its
+// own. A warning that failed the gate would be a refusal wearing a softer word,
+// and the locked decision is that the lane is still written and still valid.
+func TestTheWholeTreeWarningDoesNotFailValidate(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test ./..."
+selector = "go-package"`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Errorf("a warning changed validate's exit status: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "⚠") {
+		t.Errorf("no warning was printed at all — the exit assertion would be vacuous:\n%s", out)
+	}
+}
+
+// TestNoWarningForAScopedCommand is the false-positive half. A lane whose
+// command does NOT end in a whole-tree token is the normal scoped lane, and
+// warning on it would train the warning out of being read.
+func TestNoWarningForAScopedCommand(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test -count=1"
+selector = "go-package"
+
+[[runtime.test_lane]]
+name = "unscoped"
+match = ["docs/**"]
+command = "go test ./..."
+
+[[runtime.test_lane]]
+name = "dotted"
+match = ["cmd/**"]
+command = "go test ./cmd/..."
+selector = "dir"`)
+
+	out, err := validateOutput(t)
+	if err != nil {
+		t.Fatalf("validate rejected well-formed lanes:\n%s", out)
+	}
+	if strings.Contains(out, "⚠") {
+		t.Errorf("a warning fired on a lane that scopes cleanly, or on one that does not scope at all:\n%s", out)
+	}
+}
+
+// TestAWarningAlongsideAProblemStillFails: the two lists are separate, and the
+// warning tier must not swallow a real fault that happens to sit beside it.
+func TestAWarningAlongsideAProblemStillFails(t *testing.T) {
+	dir := laneFixture(t)
+	appendLanes(t, dir, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test ./..."
+selector = "go-package"
+
+[[runtime.test_lane]]
+name = "broken"
+match = ["docs/**"]
+command = ""`)
+
+	out, err := validateOutput(t)
+	if err == nil {
+		t.Fatalf("a real problem stopped failing validate once a warning was present:\n%s", out)
+	}
+	if !strings.Contains(out, "⚠") {
+		t.Errorf("the warning was dropped when a problem was present:\n%s", out)
+	}
+	if !strings.Contains(out, "✗") {
+		t.Errorf("the problem was not reported:\n%s", out)
+	}
+}
