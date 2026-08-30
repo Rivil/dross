@@ -243,3 +243,90 @@ func TestMilestonePushHeadFetchFailureIsHardError(t *testing.T) {
 		t.Errorf("origin %s moved from %s to %s on a failed fetch", branch, before, after)
 	}
 }
+
+// c-3: an ahead-AND-behind milestone branch is refused with BOTH counts stated
+// by value, and origin is left byte-unchanged.
+//
+// What this adds over TestMilestoneCompleteRefusesDivergedHead, which covers
+// the same refusal at command level: that test asserts only that the words
+// "ahead" and "behind" appear, so a swapped pair of counts is invisible to it.
+// This one asserts each number in its own position — and the fixture is
+// deliberately ASYMMETRIC (2 ahead, 1 behind) precisely so a swap is
+// detectable, which a 1/1 branch could never be. It also compares origin's own
+// rev-parse before and after, pinning that the refusal is a refusal and not a
+// force-push.
+func TestMilestonePushHeadDivergedRefusalStatesBothCounts(t *testing.T) {
+	dir, _, branch := milestonePushHeadFixture(t)
+	origin := originOf(t, dir)
+
+	// One commit on origin the local branch will never contain.
+	mustGit(t, dir, "checkout", "-q", "-b", "divergetmp", branch)
+	mustWrite(t, filepath.Join(dir, "theirs.txt"), "landed on origin\n")
+	mustGit(t, dir, "add", "theirs.txt")
+	mustGit(t, dir, "commit", "-q", "-m", "someone else's commit")
+	mustGit(t, dir, "push", "-q", "origin", "divergetmp:"+branch)
+	mustGit(t, dir, "checkout", "-q", branch)
+	mustGit(t, dir, "branch", "-D", "divergetmp")
+
+	// Two local commits, so the counts differ and a swap is visible.
+	for _, name := range []string{"mine1.txt", "mine2.txt"} {
+		mustWrite(t, filepath.Join(dir, name), "only local\n")
+		mustGit(t, dir, "add", name)
+		mustGit(t, dir, "commit", "-q", "-m", "my "+name)
+	}
+	mustGit(t, dir, "fetch", "-q", "origin")
+	before := mustGit(t, origin, "rev-parse", branch)
+
+	pushed, _, err := pushMilestoneHeadIfAhead(dir, branch)
+	if err == nil {
+		t.Fatalf("a diverged head must be refused (pushed=%v)", pushed)
+	}
+	if pushed {
+		t.Error("pushed=true reported for a refusal")
+	}
+	for _, want := range []string{
+		"ahead of origin/" + branch + " by 2 commit(s)",
+		"behind it by 1",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal %q does not carry %q — the counts must be right way round", err, want)
+		}
+	}
+	if after := mustGit(t, origin, "rev-parse", branch); after != before {
+		t.Errorf("origin %s moved from %s to %s — a refusal must never force-push a shared branch",
+			branch, before, after)
+	}
+}
+
+// c-6: the happy path of the same function — a branch cleanly ahead is pushed,
+// reports pushed=true with the count it published, and origin's tip ends up
+// equal to the local branch tip.
+//
+// What this adds over TestMilestoneCompletePushesLocalCommitsBeforeOpeningPR,
+// which observes the same push through `milestone complete`: the return values
+// are not visible from the command at all, so the commit count is asserted by
+// value here and nowhere else.
+func TestMilestonePushHeadCleanAheadPushesAndCounts(t *testing.T) {
+	dir, _, branch := milestonePushHeadFixture(t)
+	origin := originOf(t, dir)
+	for _, name := range []string{"one.txt", "two.txt"} {
+		mustWrite(t, filepath.Join(dir, name), "local only\n")
+		mustGit(t, dir, "add", name)
+		mustGit(t, dir, "commit", "-q", "-m", "local "+name)
+	}
+
+	pushed, commits, err := pushMilestoneHeadIfAhead(dir, branch)
+	if err != nil {
+		t.Fatalf("a cleanly-ahead branch must push: %v", err)
+	}
+	if !pushed {
+		t.Error("pushed=false reported for a branch that was pushed")
+	}
+	if commits != 2 {
+		t.Errorf("commits = %d, want 2 — the count of commits published", commits)
+	}
+	local := mustGit(t, dir, "rev-parse", branch)
+	if remote := mustGit(t, origin, "rev-parse", branch); remote != local {
+		t.Errorf("origin %s = %s; want %s — the local commits did not reach origin", branch, remote, local)
+	}
+}
