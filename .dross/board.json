@@ -411,7 +411,17 @@
     "milestone-push-failure-tests/t-1": {
       "issue": "DRO-264",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
+    },
+    "milestone-push-failure-tests/t-2": {
+      "issue": "DRO-266",
+      "plan_status": "done",
+      "board_state": "task-complete"
+    },
+    "milestone-push-failure-tests/t-3": {
+      "issue": "DRO-265",
+      "plan_status": "done",
+      "board_state": "task-complete"
     },
     "mirror-terminal-state/t-1": {
       "issue": "DRO-150",
