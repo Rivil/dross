@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -150,6 +151,7 @@ func Verify() *cobra.Command {
 		"with --detach, start the run at HH:MM (next occurrence) or an RFC3339 instant, on the host's clock")
 	c.AddCommand(verifyFinalize())
 	c.AddCommand(verifyResults())
+	c.AddCommand(verifyStatus())
 	return c
 }
 
@@ -520,6 +522,126 @@ func collectDetached(phaseID string) error {
 		return err
 	}
 	Printf("collected run %s from %s\n", rec.RunID, rec.Host)
+	return nil
+}
+
+// detachCancel tears a run down on its host. Swapped in tests.
+//
+// The kill targets the process GROUP (`kill -- -PID`), because setsid made the
+// detached job a group leader: signalling the pid alone would leave gremlins
+// and the `go test` processes it spawned running, holding the host's cores for
+// an hour after the user was told the run was cancelled.
+var detachCancel = func(t remote.Target, runDir, pidFile string) error {
+	line := "kill -- -$(cat " + shellQuoteArg(pidFile) + " 2>/dev/null) 2>/dev/null; " +
+		"rm -rf " + shellQuoteArg(runDir)
+	_, err := remote.Exec(t, []string{"bash", "-c", line})
+	return err
+}
+
+// verifyStatus registers `dross verify status`.
+func verifyStatus() *cobra.Command {
+	var cancel string
+	c := &cobra.Command{
+		Use:   "status",
+		Short: "List detached mutation runs this machine dispatched",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if cancel != "" {
+				return cancelDetached(cancel)
+			}
+			return printDetachedStatus()
+		},
+	}
+	c.Flags().StringVar(&cancel, "cancel", "",
+		"cancel the named phase's detached run: kill it on the host and drop the record")
+	return c
+}
+
+// printDetachedStatus lists what this machine has in flight.
+//
+// The recorded fields are printed WITHOUT asking the host, and the live state
+// is added only when the host answers. A status that needed the network would
+// be useless in the one situation it is most wanted — a laptop somewhere else,
+// wondering whether last night's run is worth waiting for.
+func printDetachedStatus() error {
+	root, err := FindRoot()
+	if err != nil {
+		return err
+	}
+	runs, err := readDetachedRuns(root, filepath.Dir(root))
+	if err != nil {
+		return err
+	}
+	if len(runs) == 0 {
+		Print("no detached runs dispatched from this machine.")
+		return nil
+	}
+	for _, r := range runs {
+		Printf("%s  %s on %s  dispatched %s\n", r.Phase, r.RunID, r.Host,
+			r.DispatchedAt.Format(time.RFC3339))
+		if r.Scheduled() {
+			Printf("  scheduled for %s (host clock)\n", r.ScheduledFor.Format(time.RFC3339))
+		}
+		st, serr := detachStatus(remote.Target{Host: r.Host, Workdir: r.Workdir}, r.RunDir)
+		switch {
+		case serr != nil:
+			// Recorded state, explicitly labelled as stale. Printing the
+			// recorded value unqualified would present a dispatch-time guess
+			// as an observation.
+			Printf("  state    %s (recorded — %s did not answer)\n", r.State, r.Host)
+		case !st.DirExists:
+			Printf("  state    gone (the run directory is no longer on %s)\n", r.Host)
+		case st.HasExit:
+			Printf("  state    finished (exit %d) — collect with `dross verify results %s`\n", st.ExitCode, r.Phase)
+		default:
+			Printf("  state    %s\n", st.State)
+		}
+	}
+	return nil
+}
+
+// cancelDetached kills a run on its host and drops the record.
+//
+// The record is cleared only after the host teardown is attempted, and the
+// teardown reaches the host it was DISPATCHED to for the same reason the fetch
+// does — cancelling on whichever host is preferred today would leave the real
+// run alive while reporting it stopped.
+func cancelDetached(phaseID string) error {
+	root, err := FindRoot()
+	if err != nil {
+		return err
+	}
+	repoDir := filepath.Dir(root)
+	rec, err := findDetachedRun(root, repoDir, phaseID)
+	if err != nil {
+		return err
+	}
+	if rec == nil {
+		// An error rather than a silent success: a mistyped phase id would
+		// otherwise report a cancellation that never happened, while the real
+		// run keeps burning the host's night.
+		return fmt.Errorf("phase %q has no detached run to cancel on this machine", phaseID)
+	}
+
+	target := remote.Target{Host: rec.Host, Workdir: rec.Workdir}
+	cerr := detachCancel(target, rec.RunDir, path.Join(rec.RunDir, "pid"))
+
+	removed, err := clearDetachedRun(root, repoDir, phaseID)
+	if err != nil {
+		return err
+	}
+	if !removed {
+		return fmt.Errorf("phase %q had a run recorded but it could not be cleared", phaseID)
+	}
+	if cerr != nil {
+		// The record is gone either way — keeping it would block a re-dispatch
+		// over a host that may simply be down — but the user is told plainly
+		// that something may still be running there.
+		return fmt.Errorf("dropped the record for %s, but could not reach %s to stop run %s: %w\n"+
+			"If that host comes back, %s may still be running there",
+			phaseID, rec.Host, rec.RunID, cerr, rec.RunID)
+	}
+	Printf("cancelled %s (%s on %s)\n", phaseID, rec.RunID, rec.Host)
 	return nil
 }
 
