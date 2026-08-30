@@ -1,6 +1,8 @@
 package mutation
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"os/exec"
@@ -269,7 +271,7 @@ func TestDispatch(t *testing.T) {
 // Node — the invocation must use @stryker-mutator/core.
 func TestStrykerRunArgsScopedPackage(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo"}
-	args, err := s.runArgs([]string{"src/a.ts", "src/b.ts"})
+	args, _, err := s.runArgs([]string{"src/a.ts", "src/b.ts"})
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -297,7 +299,7 @@ func TestStrykerRunArgsScopedPackage(t *testing.T) {
 func TestStrykerWorkdirMonorepo(t *testing.T) {
 	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
 
-	args, err := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"})
+	args, _, err := s.runArgs([]string{"web/src/a.ts", "web/src/b.svelte"})
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -366,7 +368,7 @@ func TestStrykerPinPatternRejectsLooseSpecs(t *testing.T) {
 // a developer machine — the shape of the 2025–2026 npm compromises.
 func TestStrykerRunArgsPinned(t *testing.T) {
 	s := &Stryker{ProjectRoot: t.TempDir()}
-	args, err := s.runArgs([]string{"src/api/tags.ts"})
+	args, _, err := s.runArgs([]string{"src/api/tags.ts"})
 	if err != nil {
 		t.Fatalf("runArgs: %v", err)
 	}
@@ -540,5 +542,440 @@ func TestStrykerRunUnknownStatusCountsAsError(t *testing.T) {
 	want := map[string]FileStat{"src/a.ts": {Errors: 1}}
 	if !reflect.DeepEqual(rep.Files, want) {
 		t.Errorf("per-file rows:\n got %+v\nwant %+v", rep.Files, want)
+	}
+}
+
+// TestStrykerMutateEscapesBracketPaths pins the escape form.
+//
+// Square brackets are the one metacharacter a real --mutate list carries all
+// the time: SvelteKit names every dynamic route segment with them. Handed to
+// Stryker raw, "[id]" is a minimatch character class, the path matches nothing,
+// and the file is dropped from the run with a warning nobody reads while the
+// score comes back looking complete.
+func TestStrykerMutateEscapesBracketPaths(t *testing.T) {
+	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
+
+	args, requested, err := s.runArgs([]string{"web/src/routes/recipes/[id]/+page.server.ts"})
+	if err != nil {
+		t.Fatalf("runArgs: %v", err)
+	}
+	joined := strings.Join(args, " ")
+
+	const want = "src/routes/recipes/[[]id[]]/@(+page.server.ts)"
+	if !strings.Contains(joined, "--mutate "+want) {
+		t.Errorf("--mutate is not the bracket-expression form:\n got %v\nwant it to contain %q", args, want)
+	}
+
+	// The obvious fix, asserted ABSENT. Stryker builds its FileMatcher with
+	// normalizeFileName(path.resolve(pattern)), and normalizeFileName is
+	// replace(/\\/g, "/") — so every backslash is a forward slash before
+	// minimatch sees the pattern and `\[id\]` matches nothing at all. A future
+	// reader "simplifying" the escape to backslashes would reintroduce the bug
+	// in a form that looks more correct than the fix.
+	if strings.Contains(joined, `\[`) || strings.Contains(joined, `\]`) {
+		t.Errorf("backslash escaping is wrong here — stryker normalises every \\ to / before matching: %v", args)
+	}
+
+	// The unescaped request list is what a report-key diff has to compare
+	// against: report keys come back in the REAL path form, so a caller handed
+	// only the argv would find every bracket path missing.
+	if len(requested) != 1 || requested[0] != "src/routes/recipes/[id]/+page.server.ts" {
+		t.Errorf("requested list must be trimmed but UNESCAPED, got %q", requested)
+	}
+}
+
+// TestStrykerEscapeIsSinglePass is the regression row for the implementation
+// shape, not the interface. Two sequential ReplaceAll calls (a "[" pass then a
+// "]" pass) look equivalent and are not: the second pass rewrites the "]" the
+// first pass just emitted. Nested brackets are where that shows up.
+func TestStrykerEscapeIsSinglePass(t *testing.T) {
+	cases := []struct{ in, want string }{
+		// The nesting case. A two-pass replace corrupts this one.
+		{"[[opt]]", "@([[][[]opt[]][]])"},
+		{"[id]", "@([[]id[]])"},
+		{"src/routes/(app)/[...catchall]/+page.ts", "src/routes/(app)/[[]...catchall[]]/@(+page.ts)"},
+		// Brackets in the FILENAME rather than a directory: the wrapper still
+		// goes around the last segment, so it contains the escaped brackets.
+		{"src/routes/[id].ts", "src/routes/@([[]id[]].ts)"},
+		// Parentheses are literal to minimatch — a SvelteKit group like
+		// (app) needs no escaping, and escaping it would be over-reach.
+		{"src/routes/(app)/+page.ts", "src/routes/(app)/+page.ts"},
+		// Untouched: the overwhelmingly common case must be byte-identical.
+		{"src/lib/utils/format.ts", "src/lib/utils/format.ts"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := escapeGlobMeta(tc.in); got != tc.want {
+			t.Errorf("escapeGlobMeta(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestStrykerPlainPathsAreUnchanged is the golden row that reds if the escape
+// over-reaches. Nearly every --mutate entry in a real run is bracket-free, and
+// a change to those is a change to every existing measurement.
+func TestStrykerPlainPathsAreUnchanged(t *testing.T) {
+	s := &Stryker{ProjectRoot: "/repo", Workdir: "web"}
+	args, requested, err := s.runArgs([]string{"web/src/lib/utils/format.ts", "web/src/lib/server/tier.ts"})
+	if err != nil {
+		t.Fatalf("runArgs: %v", err)
+	}
+	const want = "--mutate src/lib/utils/format.ts,src/lib/server/tier.ts"
+	if !strings.Contains(strings.Join(args, " "), want) {
+		t.Errorf("plain paths must be emitted byte-identical to before escaping existed:\n got %v\nwant %q", args, want)
+	}
+	// And with no brackets anywhere, the two lists are the same strings.
+	if strings.Join(requested, ",") != "src/lib/utils/format.ts,src/lib/server/tier.ts" {
+		t.Errorf("requested list drifted from the argv on a bracket-free input: %q", requested)
+	}
+}
+
+// TestStrykerEscapeRunsAfterTheFence: the escape must not become a way past
+// argfence. It runs last, on the already-fenced list, so the fence still sees
+// the string it is meant to judge.
+//
+// The existing refusal rows in argv_test.go cover the leading-dash case itself;
+// this one pins the ORDER, which is what could silently change.
+func TestStrykerEscapeRunsAfterTheFence(t *testing.T) {
+	s := &Stryker{Workdir: "web"}
+
+	// A dash entry that only becomes one after the workdir trim is still
+	// refused — escaping happens after both, so it cannot rescue it.
+	if _, _, err := s.runArgs([]string{"web/-rf.ts"}); err == nil {
+		t.Error("escaping smuggled a leading-dash path past the fence")
+	}
+	// And a bracket path is not refused: escaping never introduces a dash, so
+	// the fence must have nothing to say about it.
+	if _, _, err := s.runArgs([]string{"web/src/routes/[id]/+page.ts"}); err != nil {
+		t.Errorf("a bracket path was refused by the fence: %v", err)
+	}
+}
+
+// TestStrykerEscapeSurvivesNpmArgQuoting pins the SECOND rewrite layer, and it
+// is the one a reader is most likely to undo as redundant.
+//
+// dross invokes stryker through npx, and npm runs the command via `sh -c`
+// after escaping each argument with @npmcli/promise-spawn's sh(), which quotes
+// only an argument matching /[\t\n\r "#$&'()*;<>?\\`|~]/. Brackets are absent
+// from that set, so a bracket-only path reaches the shell UNQUOTED and the
+// shell glob-expands it straight back to the real on-disk filename — undoing
+// the minimatch escape exactly when the file exists, which is the only case
+// that matters. Measured against npm 11.14.1 on 2026-08-26.
+//
+// The extglob wrapper is what defeats that: its parentheses ARE in npm's
+// quoting set. Assert the property (a character npm quotes on) rather than the
+// literal "@(", so the row survives a different but equally valid wrapper.
+func TestStrykerEscapeSurvivesNpmArgQuoting(t *testing.T) {
+	// npm's own trigger set, transcribed from promise-spawn/lib/escape.js.
+	const npmQuoteTriggers = "\t\n\r \"#$&'()*;<>?\\`|~"
+
+	for _, in := range []string{
+		"src/routes/recipes/[id]/+page.server.ts",
+		"src/routes/[id].ts",
+		"[id].ts",
+	} {
+		got := escapeGlobMeta(in)
+		if !strings.ContainsAny(got, npmQuoteTriggers) {
+			t.Errorf("escapeGlobMeta(%q) = %q — contains nothing npm quotes on, so `sh -c` will glob it back to the raw path and the escape is a no-op", in, got)
+		}
+	}
+
+	// And the guard on the other side: a bracket-free path must NOT acquire a
+	// wrapper just to satisfy the rule above. It needs no protection because
+	// neither layer misbehaves on it.
+	if got := escapeGlobMeta("src/lib/utils/format.ts"); got != "src/lib/utils/format.ts" {
+		t.Errorf("a bracket-free path was rewritten: %q", got)
+	}
+}
+
+// ── head-of-output surfacing and the dropped-file hard fail (c-5) ────────────
+
+// noisyStryker swaps the process seam for one that prints `out` and exits with
+// `code`, optionally leaving a report behind. The head-buffer and drop-check
+// paths are both about what the TOOL said, which `true` cannot say.
+func noisyStryker(t *testing.T, s *Stryker, out string, code int, place func(string)) func() {
+	t.Helper()
+	orig := strykerBuildCmd
+	strykerBuildCmd = func(_ *Stryker, _ []string) *exec.Cmd {
+		path := s.reportPath()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("prepare fake report dir: %v", err)
+		}
+		if place != nil {
+			place(path)
+		}
+		return exec.Command("sh", "-c", fmt.Sprintf("cat <<'DROSSEOF'\n%s\nDROSSEOF\nexit %d", out, code))
+	}
+	return func() { strykerBuildCmd = orig }
+}
+
+// writeReport places a stryker report naming exactly `paths`, each with one
+// killed mutant.
+func writeReport(t *testing.T, path string, paths ...string) {
+	t.Helper()
+	files := map[string]any{}
+	for _, p := range paths {
+		files[p] = map[string]any{
+			"language": "typescript",
+			"source":   "export const x = 1;\n",
+			"mutants": []any{map[string]any{
+				"id": "1", "mutatorName": "BooleanLiteral", "status": "Killed",
+				"location": map[string]any{"start": map[string]any{"line": 1, "column": 1}},
+			}},
+		}
+	}
+	b, err := json.Marshal(map[string]any{"schemaVersion": "1.0", "files": files})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestStrykerReportlessErrorNamesHeadOfOutput: "check stryker config" was wrong
+// in every case it was actually hit — the config was fine and the cause was at
+// the head of the output the user had just watched scroll past. The commonest
+// instance, verbatim.
+func TestStrykerReportlessErrorNamesHeadOfOutput(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	const cause = "Missing required environment variable: DATABASE_URL"
+	defer noisyStryker(t, s, "INFO Stryker Starting\n"+cause, 1, nil)()
+
+	_, _, err := captureStderr(t, func() (*Report, error) { return s.Run([]string{"src/a.ts"}) })
+	if err == nil {
+		t.Fatal("a reportless failure returned nil error")
+	}
+	if !strings.Contains(err.Error(), cause) {
+		t.Errorf("the error does not quote the real cause:\n%v", err)
+	}
+	if strings.Contains(err.Error(), "check stryker config") {
+		t.Errorf("the misleading advice is still there:\n%v", err)
+	}
+}
+
+// TestStrykerHardFailsOnUninstrumentedFile is locked decision drop_behaviour.
+func TestStrykerHardFailsOnUninstrumentedFile(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	defer noisyStryker(t, s, "done", 0, func(p string) {
+		writeReport(t, p, "src/a.ts", "src/b.ts") // asked for three
+	})()
+
+	_, rep, err := captureStderr(t, func() (*Report, error) {
+		return s.Run([]string{"src/a.ts", "src/b.ts", "src/c.ts"})
+	})
+	if err == nil {
+		t.Fatal("a run that silently dropped a file returned nil error")
+	}
+	if !strings.Contains(err.Error(), "src/c.ts") {
+		t.Errorf("the error does not name the dropped file:\n%v", err)
+	}
+	for _, present := range []string{"src/a.ts", "src/b.ts"} {
+		if strings.Contains(err.Error(), present) {
+			t.Errorf("the error names %s, which WAS instrumented:\n%v", present, err)
+		}
+	}
+	// NIL, not empty. An empty *Report reads as a perfect score — the exact
+	// trap argv_test.go already guards on the refusal path.
+	if rep != nil {
+		t.Errorf("a hard fail still produced a Report: %+v", rep)
+	}
+}
+
+// TestStrykerDropWarningIsQuoted: stryker's own wording for the fault, carried
+// through verbatim so a user can search for it.
+func TestStrykerDropWarningIsQuoted(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	const warning = `Glob pattern "src/routes/x/[id]/y.ts" did not result in any files.`
+	defer noisyStryker(t, s, "WARN ProjectReader "+warning, 0, func(p string) {
+		writeReport(t, p, "src/a.ts")
+	})()
+
+	_, _, err := captureStderr(t, func() (*Report, error) {
+		return s.Run([]string{"src/a.ts", "src/routes/x/[id]/y.ts"})
+	})
+	if err == nil {
+		t.Fatal("a dropped glob returned nil error")
+	}
+	if !strings.Contains(err.Error(), warning) {
+		t.Errorf("stryker's own warning is not in the error:\n%v", err)
+	}
+}
+
+// TestStrykerBracketPathIsNotReadAsDropped is the specific way t-1's escaping
+// and this drop check break each other, asserted directly rather than left to
+// the end-to-end run.
+//
+// The argv carries the ESCAPED form while the report comes back keyed on the
+// REAL path. A check that diffed report keys against the argv would call every
+// bracket path dropped — and would do it on exactly the files the escaping fix
+// exists to instrument.
+func TestStrykerBracketPathIsNotReadAsDropped(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	defer noisyStryker(t, s, "done", 0, func(p string) {
+		writeReport(t, p, "src/routes/a/[id]/b.ts")
+	})()
+
+	_, rep, err := captureStderr(t, func() (*Report, error) {
+		return s.Run([]string{"src/routes/a/[id]/b.ts"})
+	})
+	if err != nil {
+		t.Fatalf("an instrumented bracket path was read as dropped: %v", err)
+	}
+	if rep == nil || len(rep.Files) == 0 {
+		t.Fatalf("no report came back for an instrumented bracket path: %+v", rep)
+	}
+}
+
+// TestStrykerIgnoredMutantsAreNotADrop: a file whose glob MATCHED but whose
+// every mutant is Ignored — the `// Stryker disable all` case — is instrumented
+// and must not hard-fail.
+//
+// This is why the check reads the report's raw keys rather than
+// ParseStrykerJSON's Files map: Ignored is not counted, so such a file gets no
+// row there and a naive diff cannot tell it from a glob that matched nothing.
+func TestStrykerIgnoredMutantsAreNotADrop(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	defer noisyStryker(t, s, "done", 0, func(p string) {
+		b, err := json.Marshal(map[string]any{
+			"schemaVersion": "1.0",
+			"files": map[string]any{
+				"src/disabled.ts": map[string]any{
+					"language": "typescript", "source": "export const x = 1;\n",
+					"mutants": []any{map[string]any{
+						"id": "1", "mutatorName": "BooleanLiteral", "status": "Ignored",
+						"location": map[string]any{"start": map[string]any{"line": 1, "column": 1}},
+					}},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	})()
+
+	_, rep, err := captureStderr(t, func() (*Report, error) {
+		return s.Run([]string{"src/disabled.ts"})
+	})
+	if err != nil {
+		t.Fatalf("an all-Ignored file was reported as dropped: %v", err)
+	}
+	if rep == nil {
+		t.Fatal("no report came back")
+	}
+	// And the premise holds: it really does carry no counted row, so a diff
+	// against report.Files WOULD have failed here.
+	if _, ok := rep.Files["src/disabled.ts"]; ok {
+		t.Error("premise broken — an all-Ignored file now has a counted row, so this row no longer proves what it claims")
+	}
+}
+
+// TestStrykerFullCoverageDoesNotHardFail: the strict check must not red a
+// healthy run.
+func TestStrykerFullCoverageDoesNotHardFail(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	defer noisyStryker(t, s, "done", 0, func(p string) {
+		writeReport(t, p, "src/a.ts", "src/b.ts")
+	})()
+
+	_, rep, err := captureStderr(t, func() (*Report, error) {
+		return s.Run([]string{"src/a.ts", "src/b.ts"})
+	})
+	if err != nil {
+		t.Fatalf("a complete run was hard-failed: %v", err)
+	}
+	if rep == nil || rep.Killed != 2 {
+		t.Errorf("want a report with 2 killed, got %+v", rep)
+	}
+}
+
+// TestStrykerDropCheckSpeaksWorkdirRelativePaths pins the diff to the correct
+// side of rePrefixFiles.
+//
+// `requested` is the TRIMMED, workdir-relative list (src/a.ts), while
+// rePrefixFiles rewrites the report's keys to repo-relative (web/src/a.ts).
+// Run the diff one line later and the two forms no longer agree — every path
+// looks dropped and every healthy monorepo run hard-fails.
+func TestStrykerDropCheckSpeaksWorkdirRelativePaths(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir(), Workdir: "web"}
+	defer noisyStryker(t, s, "done", 0, func(p string) {
+		writeReport(t, p, "src/a.ts") // workdir-relative, as stryker writes it
+	})()
+
+	_, rep, err := captureStderr(t, func() (*Report, error) {
+		return s.Run([]string{"web/src/a.ts"})
+	})
+	if err != nil {
+		t.Fatalf("a healthy monorepo run was hard-failed — the diff ran on the wrong side of rePrefixFiles: %v", err)
+	}
+	// And the report the caller gets is still repo-relative, so the check did
+	// not sidestep the re-prefixing it has to precede.
+	if _, ok := rep.Files["web/src/a.ts"]; !ok {
+		t.Errorf("report keys were not re-prefixed repo-relative: %v", keysOf(rep.Files))
+	}
+}
+
+// TestStrykerHeadBufferIsBoundedAndDoesNotSwallowTheStream: the retained head
+// is capped, but capping it must not truncate what the user watches.
+//
+// io.MultiWriter aborts on a short write, so a headBuffer reporting the number
+// of bytes it KEPT would silently cut os.Stderr off at the cap.
+func TestStrykerHeadBufferIsBoundedAndDoesNotSwallowTheStream(t *testing.T) {
+	const line = "0123456789012345678901234567890123456789012345678901234567890123456789012345678"
+	const lines = 30000 // ~2.4MB, comfortably past strykerHeadBytes
+
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	defer func() func() {
+		orig := strykerBuildCmd
+		strykerBuildCmd = func(_ *Stryker, _ []string) *exec.Cmd {
+			_ = os.MkdirAll(filepath.Dir(s.reportPath()), 0o755)
+			return exec.Command("sh", "-c",
+				fmt.Sprintf("i=0; while [ $i -lt %d ]; do echo '%s'; i=$((i+1)); done; exit 1", lines, line))
+		}
+		return func() { strykerBuildCmd = orig }
+	}()()
+
+	out, _, err := captureStderr(t, func() (*Report, error) { return s.Run([]string{"src/a.ts"}) })
+	if err == nil {
+		t.Fatal("expected the reportless failure")
+	}
+	if got, want := len(out), lines*(len(line)+1); got < want {
+		t.Errorf("the stream was truncated: os.Stderr got %d bytes, want the full %d", got, want)
+	}
+	if n := strings.Count(err.Error(), "\n"); n > strykerHeadLines+10 {
+		t.Errorf("the error quoted %d lines; it must quote at most ~%d", n, strykerHeadLines)
+	}
+}
+
+// TestStrykerLocalRunClearsAStaleReport: a local run that writes nothing must
+// be reportless, not answered with yesterday's numbers.
+//
+// clearReport used to return early for a local run, so a failing local run read
+// whatever the previous one left behind. Observed 2026-08-26: a run that
+// instrumented zero files and died in its dry run returned a nil error and a
+// report two days old.
+func TestStrykerLocalRunClearsAStaleReport(t *testing.T) {
+	s := &Stryker{ProjectRoot: t.TempDir()}
+	stale := s.reportPath()
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeReport(t, stale, "src/yesterday.ts")
+
+	// The tool runs, writes nothing this time, and fails.
+	defer noisyStryker(t, s, "ERROR Stryker No tests were executed.", 1, nil)()
+
+	_, rep, err := captureStderr(t, func() (*Report, error) { return s.Run([]string{"src/a.ts"}) })
+	if err == nil {
+		t.Fatal("a local run that wrote no report returned nil error — yesterday's report was read as today's")
+	}
+	if rep != nil {
+		t.Errorf("a stale report was returned: %+v", rep)
+	}
+	if _, statErr := os.Stat(stale); !os.IsNotExist(statErr) {
+		t.Errorf("yesterday's report survived a local run, stat err = %v", statErr)
 	}
 }
