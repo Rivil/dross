@@ -449,6 +449,57 @@ func (g *Gremlins) buildUnleashArgs(reportRel string, pkgs []string) ([]string, 
 	return append(args, fenced...), nil
 }
 
+// PackageStep is one package's share of a run: the report it writes, and the
+// argv that produces it.
+//
+// Reports are named per package because gremlins is invoked per package —
+// ReportRel is where THIS step's report lands, relative to the project root, so
+// a caller that never spawns the argv still knows what to collect afterwards.
+type PackageStep struct {
+	Package   string
+	ReportRel string
+	Argv      []string
+}
+
+// DetachSteps returns the per-package work a run would do, without spawning any
+// of it or touching the filesystem.
+//
+// It exists because a gremlins run is not one command. Run loops over packages,
+// clearing each stale report and invoking the tool once per package, and a
+// caller that wants that sequence to execute somewhere else — a host, detached,
+// outliving this process — needs the sequence as DATA rather than as the side
+// effects of a loop it cannot enter.
+//
+// Deriving it here rather than in the caller keeps ONE definition of what a run
+// is. A second derivation would drift the moment a flag is added to
+// buildUnleashArgs, and the detached run would then measure something slightly
+// different from the attached one while reporting through the same artefacts —
+// the exact indistinguishability c-2 promises, quietly broken.
+//
+// The same argfence guard Run applies is applied here, before any argv is
+// handed out: a refused package must not become a line in a script that runs
+// unattended for two hours.
+func (g *Gremlins) DetachSteps(files []string) ([]PackageStep, error) {
+	if len(files) == 0 {
+		return nil, nil
+	}
+	pkgs := packagesFromFilesFn(files)
+	if _, err := argfence.Fence("gremlins", "package", pkgs...); err != nil {
+		return nil, err
+	}
+	steps := make([]PackageStep, 0, len(pkgs))
+	for _, pkg := range pkgs {
+		reportAbs := GremlinsReportPath(g.ProjectRoot, pkg)
+		reportRel := filepath.Join("reports", "gremlins", filepath.Base(reportAbs))
+		args, err := g.buildUnleashArgs(reportRel, []string{pkg})
+		if err != nil {
+			return nil, err
+		}
+		steps = append(steps, PackageStep{Package: pkg, ReportRel: reportRel, Argv: args})
+	}
+	return steps, nil
+}
+
 // gremlinsBuildCmd is the process-construction seam. Rejection tests substitute
 // one that fails the test if it is called, so "refused BEFORE exec" is asserted
 // rather than assumed — a refusal that still spawned gremlins would otherwise

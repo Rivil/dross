@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -31,6 +32,8 @@ import (
 //     to fill in criterion-to-test mappings + final verdict.
 func Verify() *cobra.Command {
 	var skipMutation bool
+	var detach bool
+	var detachAt string
 	c := &cobra.Command{
 		Use:   "verify <phase-id>",
 		Short: "Run mutation testing per language and write tests.json + verify.toml skeleton",
@@ -95,6 +98,34 @@ func Verify() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			if detach {
+				// Refused rather than run locally. The whole point of the flag
+				// is that the run outlives this process, and a local run cannot
+				// — falling back would hold the session for the full leg while
+				// having been asked not to, which is the one outcome the flag
+				// exists to prevent.
+				if err := detachRequiresAHost(tuning); err != nil {
+					return err
+				}
+				notBefore, err := parseDetachAt(detachAt, time.Now())
+				if err != nil {
+					return err
+				}
+				g, err := gremlinsAdapter(adapters)
+				if err != nil {
+					return err
+				}
+				steps, err := g.DetachSteps(files)
+				if err != nil {
+					return err
+				}
+				if len(steps) == 0 {
+					return fmt.Errorf("nothing to mutate for phase %s — no Go packages in scope", phaseID)
+				}
+				return dispatchDetached(root, phaseID, steps, tuning.Target, notBefore)
+			}
+
 			if tuning.FellBackFrom != "" {
 				// Announced before the run, not buried in the artefact. The
 				// operator watching this decides whether to wait for the host.
@@ -113,8 +144,200 @@ func Verify() *cobra.Command {
 	}
 	c.Flags().BoolVar(&skipMutation, "skip-mutation", false,
 		"do not run mutation tests (record what would have been mutated, skip execution)")
+	c.Flags().BoolVar(&detach, "detach", false,
+		"start the run on the granted host and return immediately, collecting the result later")
+	c.Flags().StringVar(&detachAt, "at", "",
+		"with --detach, start the run at HH:MM (next occurrence) or an RFC3339 instant, on the host's clock")
 	c.AddCommand(verifyFinalize())
 	return c
+}
+
+// detachSpawn is the seam every detached dispatch goes through, swapped in
+// tests so "returned without waiting" is asserted rather than assumed.
+var detachSpawn = remote.ExecScript
+
+// detachSync is the tree push, held separately from the spawn so a test can
+// assert the ORDER: a run started against an unsynced tree measures whatever
+// the host had left over from last time and reports it as this phase's.
+var detachSync = func(t remote.Target, localRoot string) error {
+	argv, cleanup, err := remote.SyncArgs(t, localRoot)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	return runDetachArgv(argv)
+}
+
+var runDetachArgv = func(argv []string) error {
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
+	return cmd.Run()
+}
+
+// detachRequiresAHost refuses a detached run that has nowhere to detach to.
+//
+// A local fallback is exactly wrong here. Everywhere else in verify, falling
+// back to this machine is the right call — the numbers still get measured. With
+// --detach the user has said the one thing they will not accept is holding this
+// session for the length of the leg, and a local run does precisely that while
+// reporting success. Refusing is the only honest answer.
+func detachRequiresAHost(tuning mutationTuning) error {
+	if tuning.Target != nil {
+		return nil
+	}
+	why := "no remote host is granted"
+	if tuning.FellBackFrom != "" {
+		why = fmt.Sprintf("%s could not be reached: %s", tuning.FellBackFrom, tuning.FallbackWhy)
+	}
+	return fmt.Errorf("--detach needs a reachable granted host, but %s.\n"+
+		"Grant one with `dross remote grant`, or run without --detach", why)
+}
+
+// newRunID mints the identity a detached run is found by afterwards.
+//
+// Time-based and second-resolution: it is read by a human in `verify status`
+// hours later, so it has to be legible, and one dispatch per phase per second
+// is not a collision anyone can produce — the one-run-per-phase guard refuses
+// the second one regardless.
+func newRunID(now time.Time) string {
+	return "r-" + now.UTC().Format("20060102-150405")
+}
+
+// detachSequence renders the per-package steps as one shell line.
+//
+// Joined with `;` rather than `&&` deliberately, mirroring the attached loop:
+// a package whose mutation run fails does not stop the packages after it, and
+// its absent report is read as "nothing was learned about this package" — the
+// same reading the local path gives. `&&` would silently truncate the run at
+// the first failure and report the remainder as unmeasured.
+//
+// The stale report is removed immediately before its package runs, so a report
+// left by a previous dispatch can never be collected as this one's.
+func detachSequence(steps []mutation.PackageStep) string {
+	var parts []string
+	for _, s := range steps {
+		var b strings.Builder
+		b.WriteString("rm -f " + shellQuoteArg(s.ReportRel) + "; ")
+		for i, a := range s.Argv {
+			if i > 0 {
+				b.WriteByte(' ')
+			}
+			b.WriteString(shellQuoteArg(a))
+		}
+		parts = append(parts, b.String())
+	}
+	return "mkdir -p reports/gremlins; " + strings.Join(parts, "; ")
+}
+
+// dispatchDetached starts a phase's mutation run on the granted host and
+// returns without waiting for it.
+//
+// The ORDER here is the contract. The record is written LAST, after the host
+// has accepted the script: a record written first would name a run that never
+// started, and the one-run-per-phase guard would then refuse the retry that
+// would have fixed it. A dispatch that fails leaves nothing behind to clean up.
+func dispatchDetached(root, phaseID string, steps []mutation.PackageStep, target *remote.Target, notBefore time.Time) error {
+	repoDir := filepath.Dir(root)
+
+	// Checked before the push, which is the expensive part: a phase that
+	// already has a run in flight must not rsync a tree to a host first.
+	existing, err := findDetachedRun(root, repoDir, phaseID)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return fmt.Errorf(
+			"phase %q already has a detached run in flight: %s on %s (dispatched %s).\n"+
+				"Collect or cancel it before dispatching another",
+			phaseID, existing.RunID, existing.Host,
+			existing.DispatchedAt.Format(time.RFC3339))
+	}
+
+	runID := newRunID(time.Now())
+	runDir, err := remote.RunDir(runID)
+	if err != nil {
+		return err
+	}
+
+	if err := detachSync(*target, repoDir); err != nil {
+		return fmt.Errorf("push the tree to %s: %w", target.Host, err)
+	}
+
+	script, err := remote.DetachScript(*target, runDir,
+		[]string{"bash", "-c", detachSequence(steps)}, notBefore)
+	if err != nil {
+		return err
+	}
+	if _, err := detachSpawn(*target, script); err != nil {
+		return fmt.Errorf("start the detached run on %s: %w", target.Host, err)
+	}
+
+	state := "running"
+	if !notBefore.IsZero() {
+		state = "scheduled"
+	}
+	rec := detachedRun{
+		Phase:        phaseID,
+		RunID:        runID,
+		Host:         target.Host,
+		Workdir:      target.Workdir,
+		RunDir:       runDir,
+		DispatchedAt: time.Now().UTC(),
+		ScheduledFor: notBefore,
+		State:        state,
+	}
+	if err := recordDetachedRun(root, repoDir, rec); err != nil {
+		return err
+	}
+
+	Printf("detached: %s dispatched to %s as %s\n", phaseID, target.Host, runID)
+	if !notBefore.IsZero() {
+		Printf("  starts:  %s (host clock)\n", notBefore.Format(time.RFC3339))
+	}
+	return nil
+}
+
+// parseDetachAt reads --at.
+//
+// Accepts a full RFC3339 instant or a bare HH:MM, which resolves to the NEXT
+// occurrence of that time — 02:00 typed at 23:00 means tomorrow morning, which
+// is the only reading that is ever useful for an off-hours run. A bare time
+// that resolved to today would schedule a run four hours in the past and start
+// it immediately, which is the opposite of what was asked.
+func parseDetachAt(s string, now time.Time) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
+	if ts, err := time.Parse(time.RFC3339, s); err == nil {
+		return ts, nil
+	}
+	hm, err := time.Parse("15:04", s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf(
+			"--at %q is neither HH:MM nor an RFC3339 instant", s)
+	}
+	at := time.Date(now.Year(), now.Month(), now.Day(), hm.Hour(), hm.Minute(), 0, 0, now.Location())
+	if !at.After(now) {
+		at = at.AddDate(0, 0, 1)
+	}
+	return at, nil
+}
+
+// gremlinsAdapter picks the Go leg out of the configured adapters.
+//
+// Detach is gremlins-only for now, and says so by name rather than silently
+// dispatching a partial run: a phase whose changes are half TypeScript would
+// otherwise get a detached run measuring only its Go half, collected later as
+// though it were the whole thing.
+func gremlinsAdapter(adapters []mutation.Adapter) (*mutation.Gremlins, error) {
+	for _, a := range adapters {
+		if g, ok := a.(*mutation.Gremlins); ok {
+			return g, nil
+		}
+	}
+	return nil, fmt.Errorf(
+		"--detach currently supports the gremlins (Go) leg only, and this phase " +
+			"configured none.\nRun it attached, or narrow the phase to its Go files")
 }
 
 // finishVerify turns a completed mutation run into this phase's artefacts:

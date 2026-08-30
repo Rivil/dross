@@ -819,6 +819,25 @@ func Exec(t Target, argv []string) (string, error) {
 	return run(t.Host, full, script)
 }
 
+// ExecScript runs a script this package already built — DetachScript's or
+// StatusScript's — on the target, returning its output.
+//
+// Separate from Exec because Exec builds Script from an argv, and the detached
+// scripts are not one argv: they are a sequence with redirections and a
+// backgrounded job, which no argv can express. Both go down the same ssh
+// transport and classify failures the same way, so the difference is only in
+// who composed the text.
+func ExecScript(t Target, script string) (string, error) {
+	full, err := SSHArgs(t)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(script) == "" {
+		return "", fmt.Errorf("remote: empty script for host %q", t.Host)
+	}
+	return run(t.Host, full, script)
+}
+
 // Readiness is what a probe learned about a host.
 type Readiness struct {
 	// Cores is the host's online core count, read from the host itself.
