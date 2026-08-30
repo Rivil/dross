@@ -1269,7 +1269,7 @@
   op = "ARITHMETIC_BASE"
   text = "\"nothing to trust: test lane %q declares no install line.\\n\\n\"+"
   line = 600
-  reason = "ARITHMETIC_BASE on the + operators of a multi-line constant string literal in an error message. There is no runtime behaviour to observe: the concatenation is folded at compile time, so no assertion can distinguish the mutant. Same go-cover attribution family as the switch-case ceiling."
+  reason = "ARITHMETIC_BASE on the + operators of a multi-line constant string literal in an error message. The concatenation is folded at compile time, so no assertion can distinguish the mutant — but what the folded literal SAYS is pinned by TestTrustLaneInstallWithNoLineRefuses, which asserts the refusal names the lane and routes to `dross test lane edit`. Same go-cover attribution family as the switch-case ceiling."
   accepted_in = "remote-toolchain-install"
 
 [[accepted]]
@@ -1278,7 +1278,7 @@
   op = "ARITHMETIC_BASE"
   text = "\"Consent is bound to a line, so there is nothing to bind to yet. dross's\\n\"+"
   line = 601
-  reason = "ARITHMETIC_BASE on the + operators of a multi-line constant string literal in an error message. There is no runtime behaviour to observe: the concatenation is folded at compile time, so no assertion can distinguish the mutant. Same go-cover attribution family as the switch-case ceiling."
+  reason = "ARITHMETIC_BASE on the + operators of a multi-line constant string literal in an error message. The concatenation is folded at compile time, so no assertion can distinguish the mutant — but what the folded literal SAYS is pinned by TestTrustLaneInstallWithNoLineRefuses, which asserts the refusal names the lane and routes to `dross test lane edit`. Same go-cover attribution family as the switch-case ceiling."
   accepted_in = "remote-toolchain-install"
 
 [[accepted]]
@@ -1287,5 +1287,5 @@
   op = "ARITHMETIC_BASE"
   text = "\"own built-in install recipes need no grant — they are not lines this repo\\n\"+"
   line = 602
-  reason = "ARITHMETIC_BASE on the + operators of a multi-line constant string literal in an error message. There is no runtime behaviour to observe: the concatenation is folded at compile time, so no assertion can distinguish the mutant. Same go-cover attribution family as the switch-case ceiling."
+  reason = "ARITHMETIC_BASE on the + operators of a multi-line constant string literal in an error message. The concatenation is folded at compile time, so no assertion can distinguish the mutant — but what the folded literal SAYS is pinned by TestTrustLaneInstallWithNoLineRefuses, which asserts the refusal names the lane and routes to `dross test lane edit`. Same go-cover attribution family as the switch-case ceiling."
   accepted_in = "remote-toolchain-install"

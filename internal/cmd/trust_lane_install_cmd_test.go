@@ -259,3 +259,51 @@ func TestRemoveIsAtomicAcrossBothGrants(t *testing.T) {
 		t.Errorf("a re-added lane's install grant reads %v, want Absent", state)
 	}
 }
+
+// TestTrustLaneInstallWithNoLineRefuses pins trust.go's nothing-to-trust branch
+// for the lane-scoped install grant.
+//
+// Consent is bound to a LINE (install_consent, locked), so a lane that declares
+// none has nothing to bind to. Granting anyway would record consent for the
+// empty string and then silently satisfy the gate for whatever line was added
+// afterwards — the same failure TestTrustWithoutATestCommandRefuses guards on
+// the whole-suite grant, on a surface that never had its own test.
+//
+// The message is asserted as well as the refusal: it is the only thing telling
+// the user that the remedy is `dross test lane edit` rather than re-running the
+// grant, and it is the string whose compile-time concatenation the ARITHMETIC_BASE
+// acceptances at .dross/survivors.toml cite. Those acceptances are checkable
+// precisely because this test pins what the folded literal says.
+func TestTrustLaneInstallWithNoLineRefuses(t *testing.T) {
+	root, repoDir := laneInstallFixture(t)
+	docs := installLaneOf(t, repoDir, "docs")
+	if docs.Install != "" {
+		t.Fatal("the fixture's docs lane is meant to declare no install line")
+	}
+
+	err := runCmd(t, Trust(), "--lane-install", "docs")
+	if err == nil {
+		t.Fatal("`dross trust --lane-install docs` exited 0 on a lane with no install line — it granted consent for nothing")
+	}
+	for _, want := range []string{
+		"nothing to trust",
+		"docs",
+		"declares no install line",
+		"dross test lane edit",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal %q does not mention %q", err, want)
+		}
+	}
+
+	// A refused grant must record nothing. Read through loadLocal rather than
+	// the file: the fixture holds no grants, so local.toml legitimately does not
+	// exist yet, and "no file" is the strongest form of "nothing was written".
+	l, lerr := loadLocal(localPath(root))
+	if lerr != nil {
+		t.Fatal(lerr)
+	}
+	if len(l.TrustedLaneInstalls) != 0 {
+		t.Errorf("a refused install-trust recorded a grant: %v", l.TrustedLaneInstalls)
+	}
+}
