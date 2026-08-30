@@ -61,3 +61,9 @@
 [[deferred]]
   text = "Source-to-test path mapping (editing src/foo.ts running test/foo.test.ts) where the runner has no --related / --findRelatedTests of its own."
   why = "A per-framework mapping engine — the milestone's third non-goal. Unchanged since lane-selector-translation parked it. Someday, not this milestone."
+
+[[deferred]]
+  id = "62841da45ed858fe"
+  text = "`dross test lane list` prints a lane's selector_template and selector_join beside its selector."
+  why = "No criterion covers it and the add/edit output already echoes the template at declaration time; it belongs with the surface that renders a lane's scoping."
+  target = "lane-selector-preview"
