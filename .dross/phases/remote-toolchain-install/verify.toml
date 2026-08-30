@@ -1,32 +1,32 @@
 [verify]
   phase = "remote-toolchain-install"
-  generated_at = 2026-08-29T17:22:07.09288Z
-  verdict = "partial"
+  generated_at = 2026-08-30T07:32:31.339236Z
+  verdict = "pass"
   finalized = true
-  finalized_at = 2026-08-29T20:36:43.642928Z
+  finalized_at = 2026-08-30T09:13:03.543966Z
 
 [summary]
   mutation_status = "measured"
   measured_on = "helicon"
-  mutation_score = 0.9324116743471582
-  mutants_killed = 607
-  mutants_survived = 44
-  mutants_not_covered = 44
+  mutation_score = 0.9400921658986175
+  mutants_killed = 612
+  mutants_survived = 39
+  mutants_not_covered = 39
   mutants_in_scope = 651
   unclassified_in_scope = 0
   criteria_total = 9
-  criteria_covered = 8
-  criteria_uncovered = 1
+  criteria_covered = 9
+  criteria_uncovered = 0
 
   [[summary.leg]]
     language = "go"
     tool = "gremlins"
-    killed = 607
-    survived = 44
+    killed = 612
+    survived = 39
     timeout = 0
     in_scope = 651
-    score = 0.9324116743471582
-    file_count = 26
+    score = 0.9400921658986175
+    file_count = 27
 
 [[criterion]]
   id = "c-1"
@@ -60,15 +60,15 @@
 
 [[criterion]]
   id = "c-6"
-  status = "weak"
-  tests = ["internal/cmd/test_lane_install_test.go:65 TestInstallActsOnTheSideWithTheGap", "internal/cmd/test_lane_install_test.go:101 TestBothMachinesMissingInstallsOnTheHost", "internal/cmd/test_lane_install_test.go:186 TestLocalFlagForcesThisMachine", "internal/cmd/test_lane_install_test.go:119 TestFailedProbeInstallsNowhere"]
-  notes = "Side selection and the machine named are proved in both directions on seam call counts, which is the criterion stated exactly. But the local seam it selects is never executed: every test stubs localInstallFn, so runInstallLocally (lane_install.go:215) has no coverage at all - its empty-argv guard (:216) and error-wrap (:220) survived as in-hunk mutants. A local install broken in those two branches would satisfy every test here. Routed to milestone-push-failure-tests."
+  status = "covered"
+  tests = ["internal/cmd/test_lane_install_test.go:65 TestInstallActsOnTheSideWithTheGap", "internal/cmd/test_lane_install_test.go:101 TestBothMachinesMissingInstallsOnTheHost", "internal/cmd/test_lane_install_test.go:186 TestLocalFlagForcesThisMachine", "internal/cmd/test_lane_install_test.go:119 TestFailedProbeInstallsNowhere", "internal/cmd/lane_install_spawn_test.go:30 TestLocalInstallRefusesEmptyArgv", "internal/cmd/lane_install_spawn_test.go:51 TestLocalInstallWrapsFailureWithTheBinary", "internal/cmd/lane_install_spawn_test.go:71 TestLocalInstallCapturesOutputOnSuccess"]
+  notes = "Upgraded from weak (2026-08-29). Side selection and the machine named were already proved in both directions on seam call counts; the gap was that the local seam it selects was never executed — every fixture stubbed localInstallFn, leaving runInstallLocally with no coverage and its guard (:216) and error-wrap (:220) surviving as in-hunk mutants. lane_install_spawn_test.go now drives the real function: both mutants are killed in this run, and the success arm pins CombinedOutput so an always-failing implementation cannot satisfy the other two."
 
 [[criterion]]
   id = "c-7"
   status = "covered"
-  tests = ["internal/cmd/trust_lane_install_test.go:58 TestAddingAnInstallLineDoesNotStaleTheTestGrant", "internal/cmd/trust_lane_install_test.go:78 TestEditedInstallLineIsStaleNotAbsent", "internal/cmd/trust_lane_install_test.go:102 TestInstallFrameIsDisjointFromACommand", "internal/cmd/trust_lane_install_cmd_test.go:34 TestUngrantedDeclaredLineNeverReachesASeam", "internal/cmd/remote_bootstrap_lane_test.go:291 TestBootstrapIsNotAWayAroundTheInstallGate"]
-  notes = "The exact regression install_consent is locked against is asserted directly (one edit, two independent answers), the two frames proved non-forgeable, and the gate proved on BOTH surfaces with an empty exec recorder."
+  tests = ["internal/cmd/trust_lane_install_test.go:58 TestAddingAnInstallLineDoesNotStaleTheTestGrant", "internal/cmd/trust_lane_install_test.go:78 TestEditedInstallLineIsStaleNotAbsent", "internal/cmd/trust_lane_install_test.go:102 TestInstallFrameIsDisjointFromACommand", "internal/cmd/trust_lane_install_cmd_test.go:34 TestUngrantedDeclaredLineNeverReachesASeam", "internal/cmd/trust_lane_install_cmd_test.go:277 TestTrustLaneInstallWithNoLineRefuses", "internal/cmd/remote_bootstrap_lane_test.go:291 TestBootstrapIsNotAWayAroundTheInstallGate"]
+  notes = "The exact regression install_consent is locked against is asserted directly (one edit, two independent answers), the two frames proved non-forgeable, and the gate proved on BOTH surfaces with an empty exec recorder. TestTrustLaneInstallWithNoLineRefuses was added in the amend and pins the no-line refusal's own text — the three trust.go:600-602 mutants it made killable are dead in this run."
 
 [[criterion]]
   id = "c-8"
@@ -107,13 +107,17 @@
   text = "filtered 2 out-of-scope survivor(s) in files this phase did not touch — listed under `out_of_scope` in tests.json, not counted in the score"
 
 [[finding]]
-  severity = "FLAG"
-  text = "c-6 weak: runInstallLocally (internal/cmd/lane_install.go:215) is never executed by any test - localInstallFn is stubbed in every fixture. Its empty-argv guard (:216) and error-wrap (:220) survived as in-hunk mutants and are routed to milestone-push-failure-tests."
+  severity = "NOTE"
+  text = "the amend killed all 5 mutants the 2026-08-29 partial verdict rested on: internal/cmd/lane_install.go:216 and :220 (CONDITIONALS_NEGATION, the c-6 FLAG) and internal/cmd/trust.go:600-602 (ARITHMETIC_BASE, previously accepted as unkillable). Survivor set diffed against the prior run: 5 killed, 0 newly surviving, so nothing regressed to pay for them."
 
 [[finding]]
   severity = "NOTE"
-  text = "9 in-hunk survivors accepted as the gremlins go-cover attribution ceiling: 6 switch-case conditions (lane_install.go:155, test_lane_install.go:247, remote_bootstrap.go:173/217/219/230) and 3 ARITHMETIC_BASE mutants on the + operators of a constant multi-line error literal (trust.go:600-602). Proven unkillable by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go)."
+  text = "6 in-hunk survivors accepted as the gremlins go-cover attribution ceiling, all switch-case conditions: lane_install.go:155, test_lane_install.go:247, remote_bootstrap.go:173/217/219/230. Proven unkillable by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). Down from 9 — the three trust.go:600-602 ARITHMETIC_BASE acceptances became killable once the amend covered the line, and their acceptances have been retired from the store."
 
 [[finding]]
   severity = "NOTE"
-  text = "44 of 651 in-scope mutants are uncoverable by construction; efficacy over the 607 reachable is 1.00."
+  text = "39 of 651 in-scope mutants are uncoverable by construction (gremlins attributes no coverage block to them); efficacy over the 612 reachable is 1.00. All 39 carry an accepted disposition — 33 inherited, 6 in-hunk."
+
+[[finding]]
+  severity = "NOTE"
+  text = "14 stale acceptances remain in .dross/survivors.toml outside this phase's diff (internal/statusline, internal/architecture, internal/cmd/hooks.go, internal/telemetry). Left in place deliberately: an acceptance goes stale either because its mutant was killed or because its line moved, and retiring a moved-line entry re-opens it as unclassified on that package's next verify. Killed-vs-moved was not established for any of the 14. Inspect with `dross survivor list --stale`; clear with `dross survivor retire --stale` once checked."

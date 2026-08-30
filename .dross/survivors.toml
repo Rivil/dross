@@ -1262,30 +1262,3 @@
   line = 230
   reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
   accepted_in = "remote-toolchain-install"
-
-[[accepted]]
-  key = "48f18576057c835c"
-  file = "internal/cmd/trust.go"
-  op = "ARITHMETIC_BASE"
-  text = "\"nothing to trust: test lane %q declares no install line.\\n\\n\"+"
-  line = 600
-  reason = "ARITHMETIC_BASE on the + operators of a multi-line constant string literal in an error message. The concatenation is folded at compile time, so no assertion can distinguish the mutant — but what the folded literal SAYS is pinned by TestTrustLaneInstallWithNoLineRefuses, which asserts the refusal names the lane and routes to `dross test lane edit`. Same go-cover attribution family as the switch-case ceiling."
-  accepted_in = "remote-toolchain-install"
-
-[[accepted]]
-  key = "101331ff937ec963"
-  file = "internal/cmd/trust.go"
-  op = "ARITHMETIC_BASE"
-  text = "\"Consent is bound to a line, so there is nothing to bind to yet. dross's\\n\"+"
-  line = 601
-  reason = "ARITHMETIC_BASE on the + operators of a multi-line constant string literal in an error message. The concatenation is folded at compile time, so no assertion can distinguish the mutant — but what the folded literal SAYS is pinned by TestTrustLaneInstallWithNoLineRefuses, which asserts the refusal names the lane and routes to `dross test lane edit`. Same go-cover attribution family as the switch-case ceiling."
-  accepted_in = "remote-toolchain-install"
-
-[[accepted]]
-  key = "7dcaf82bff9bd6bd"
-  file = "internal/cmd/trust.go"
-  op = "ARITHMETIC_BASE"
-  text = "\"own built-in install recipes need no grant — they are not lines this repo\\n\"+"
-  line = 602
-  reason = "ARITHMETIC_BASE on the + operators of a multi-line constant string literal in an error message. The concatenation is folded at compile time, so no assertion can distinguish the mutant — but what the folded literal SAYS is pinned by TestTrustLaneInstallWithNoLineRefuses, which asserts the refusal names the lane and routes to `dross test lane edit`. Same go-cover attribution family as the switch-case ceiling."
-  accepted_in = "remote-toolchain-install"
