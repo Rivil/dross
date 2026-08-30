@@ -1,127 +1,35 @@
+task_seq = 0
+
 [phase]
-id = "milestone-push-failure-tests"
+  id = "milestone-push-failure-tests"
 
 [[task]]
-id            = "t-1"
-wave          = 1
-title         = "Pin push and fetch plumbing failures"
-files         = ["internal/cmd/milestone_push_head_test.go"]
-description   = """
-Add ONE new fixture variant — milestonePushHeadFixture with the milestone
-branch left unpushed, so the no-upstream arm is reachable. That is the only
-fixture work this task needs; do not widen milestonePushHeadFixture's return
-and do not write a hook installer.
-
-Package `cmd` already has both helpers: originOf(t, dir)
-(milestone_finalize_test.go:22) is `git remote get-url origin`, and
-rejectPushes(t, origin) (same file, :30) installs exactly the refusing
-pre-receive hook. rejectPushes is already the second copy of
-basebranch_test.go:302's script; a third is not wanted.
-
-Failure is induced two ways, matching the amended push_test_fixture decision:
-rejectPushes on the bare origin for the two push arms (c-1, c-2), and
-repointing origin at a nonexistent path for the fetch (c-5). rejectPushes must
-be called AFTER the fixture's own pushes, which it would otherwise refuse too.
-
-The c-1 test is one test making both observations on one fixture: it calls
-pushMilestoneHeadIfAhead directly for the error and pushed=false, then runs
-`milestone complete` on the same repo for cap.created==0. The no-PR assertion
-has to go through the command — from a bare function call cap.created is 0
-whatever happens, which asserts nothing. c-2 and c-5 are unit-level only.
-
-That assertion is load-bearing only because nothing in the open path pushes
-before milestone.go:261, so with the hook installed the head push is the first
-thing refused. Say so in the test's comment: if a push is ever added earlier in
-the open path, this test starts passing vacuously.
-"""
-covers        = ["c-1", "c-2", "c-5"]
-test_contract = [
-  "if the no-upstream `push -u` arm stops returning an error, or drops the branch name from its message, the c-1 test fails at its direct pushMilestoneHeadIfAhead call: it asserts a non-nil error containing msBranch and pushed==false",
-  "if a failed no-upstream push stops short-circuiting `milestone complete`, the c-1 test fails at its second observation: cap.created must be 0 after the command run on the same fixture, where a PR would otherwise be opened",
-  "if the ahead-push failure message stops carrying the commit count, or reports it off by one, the c-2 test fails: it asserts the literal phrase `push of 2 local commit(s)` for a branch two commits ahead — not the bare digit, which git's appended combined output would satisfy on its own",
-  "if the `git fetch origin` error is swallowed and the run proceeds to the ahead/behind rev-list, the c-5 test fails: it asserts a non-nil error naming the fetch as the cause, pushed==false, and that origin's own rev-parse of the branch is unmoved",
-]
-status        = "pending"
+  id = "t-1"
+  wave = 1
+  title = "Pin push and fetch plumbing failures"
+  files = ["internal/cmd/milestone_push_head_test.go"]
+  description = "Add ONE new fixture variant — milestonePushHeadFixture with the milestone\nbranch left unpushed, so the no-upstream arm is reachable. That is the only\nfixture work this task needs; do not widen milestonePushHeadFixture's return\nand do not write a hook installer.\n\nPackage `cmd` already has both helpers: originOf(t, dir)\n(milestone_finalize_test.go:22) is `git remote get-url origin`, and\nrejectPushes(t, origin) (same file, :30) installs exactly the refusing\npre-receive hook. rejectPushes is already the second copy of\nbasebranch_test.go:302's script; a third is not wanted.\n\nFailure is induced two ways, matching the amended push_test_fixture decision:\nrejectPushes on the bare origin for the two push arms (c-1, c-2), and\nrepointing origin at a nonexistent path for the fetch (c-5). rejectPushes must\nbe called AFTER the fixture's own pushes, which it would otherwise refuse too.\n\nThe c-1 test is one test making both observations on one fixture: it calls\npushMilestoneHeadIfAhead directly for the error and pushed=false, then runs\n`milestone complete` on the same repo for cap.created==0. The no-PR assertion\nhas to go through the command — from a bare function call cap.created is 0\nwhatever happens, which asserts nothing. c-2 and c-5 are unit-level only.\n\nThat assertion is load-bearing only because nothing in the open path pushes\nbefore milestone.go:261, so with the hook installed the head push is the first\nthing refused. Say so in the test's comment: if a push is ever added earlier in\nthe open path, this test starts passing vacuously.\n"
+  covers = ["c-1", "c-2", "c-5"]
+  test_contract = ["if the no-upstream `push -u` arm stops returning an error, or drops the branch name from its message, the c-1 test fails at its direct pushMilestoneHeadIfAhead call: it asserts a non-nil error containing msBranch and pushed==false", "if a failed no-upstream push stops short-circuiting `milestone complete`, the c-1 test fails at its second observation: cap.created must be 0 after the command run on the same fixture, where a PR would otherwise be opened", "if the ahead-push failure message stops carrying the commit count, or reports it off by one, the c-2 test fails: it asserts the literal phrase `push of 2 local commit(s)` for a branch two commits ahead — not the bare digit, which git's appended combined output would satisfy on its own", "if the `git fetch origin` error is swallowed and the run proceeds to the ahead/behind rev-list, the c-5 test fails: it asserts a non-nil error naming the fetch as the cause, pushed==false, and that origin's own rev-parse of the branch is unmoved"]
+  status = "done"
 
 [[task]]
-id            = "t-3"
-wave          = 1
-title         = "Name the truncation in a stryker abort"
-files         = ["internal/mutation/stryker.go", "internal/mutation/stryker_test.go"]
-description   = """
-Add a constant beside strykerDropWarningText holding Stryker's own header for
-the initial-test-run failure list, and append the truncation note to the "did
-not write a report" error only when the retained head matches it.
-
-No seam work is needed: noisyStryker(t, s, out, code, place) at
-stryker_test.go:696 — in the file this task edits — already prints arbitrary
-output and exits with a chosen code. noisyStryker(t, s, <header + a failing
-test>, 1, nil) is exactly the case here: sh exits 1, tolerated as an
-*exec.ExitError, so no report lands on disk and the run reaches the "did not
-write a report" branch with the header in the head buffer. Do not extend
-fakeStryker.
-
-The wording, byte-verified off two real aborts on @stryker-mutator/core@9.6.1
-(the value of strykerPin), trailing colon included:
-
-    One or more tests failed in the initial test run:
-
-Key on that line, NOT on the Stryker-level `There were failed tests in the
-initial test run.` Both appear in every abort, but dross tolerates any
-*exec.ExitError, so Stryker's ConfigError never reaches it as an error value —
-the abort surfaces as "did not write a report" and the only matchable thing is
-the tee'd head buffer. Both strings therefore arrive by the same route, and the
-tiebreaker is which fails safe: the line above is the truncated list's own
-header, so gating on it cannot claim a list was truncated when none was
-printed.
-
-The note exists because the truncation was observed, not inferred: two
-consecutive aborts on one config named one failing test each — the second
-offender had been failing throughout and was never mentioned in the first run.
-Record that in the constant's doc comment.
-
-Placement is the no-report error only; an initial-test-run abort never reaches
-checkInstrumented, the other head-quoting site. Per r-01, `make install` before
-trusting any manual check of the new message.
-"""
-covers        = ["c-4"]
-test_contract = [
-  "if the note is attached unconditionally, the negative test fails: a no-report abort whose output lacks the initial-test-run header must carry no truncation note",
-  "if the constant stops matching Stryker's real wording — a dropped trailing colon, a reworded line — the positive test fails: it drives the fake stryker with a HARDCODED literal copy of the 9.6.1 header, so the constant is never fed its own text and a change to it alone breaks this test",
-  "if the note is dropped, or stops saying an unknown number of failures remain, the note-content test fails: it drives the fake with the constant and requires the message to say stryker names only the first failing test and that the list is truncated by design",
-]
-status        = "pending"
+  id = "t-3"
+  wave = 1
+  title = "Name the truncation in a stryker abort"
+  files = ["internal/mutation/stryker.go", "internal/mutation/stryker_test.go"]
+  description = "Add a constant beside strykerDropWarningText holding Stryker's own header for\nthe initial-test-run failure list, and append the truncation note to the \"did\nnot write a report\" error only when the retained head matches it.\n\nNo seam work is needed: noisyStryker(t, s, out, code, place) at\nstryker_test.go:696 — in the file this task edits — already prints arbitrary\noutput and exits with a chosen code. noisyStryker(t, s, <header + a failing\ntest>, 1, nil) is exactly the case here: sh exits 1, tolerated as an\n*exec.ExitError, so no report lands on disk and the run reaches the \"did not\nwrite a report\" branch with the header in the head buffer. Do not extend\nfakeStryker.\n\nThe wording, byte-verified off two real aborts on @stryker-mutator/core@9.6.1\n(the value of strykerPin), trailing colon included:\n\n    One or more tests failed in the initial test run:\n\nKey on that line, NOT on the Stryker-level `There were failed tests in the\ninitial test run.` Both appear in every abort, but dross tolerates any\n*exec.ExitError, so Stryker's ConfigError never reaches it as an error value —\nthe abort surfaces as \"did not write a report\" and the only matchable thing is\nthe tee'd head buffer. Both strings therefore arrive by the same route, and the\ntiebreaker is which fails safe: the line above is the truncated list's own\nheader, so gating on it cannot claim a list was truncated when none was\nprinted.\n\nThe note exists because the truncation was observed, not inferred: two\nconsecutive aborts on one config named one failing test each — the second\noffender had been failing throughout and was never mentioned in the first run.\nRecord that in the constant's doc comment.\n\nPlacement is the no-report error only; an initial-test-run abort never reaches\ncheckInstrumented, the other head-quoting site. Per r-01, `make install` before\ntrusting any manual check of the new message.\n"
+  covers = ["c-4"]
+  test_contract = ["if the note is attached unconditionally, the negative test fails: a no-report abort whose output lacks the initial-test-run header must carry no truncation note", "if the constant stops matching Stryker's real wording — a dropped trailing colon, a reworded line — the positive test fails: it drives the fake stryker with a HARDCODED literal copy of the 9.6.1 header, so the constant is never fed its own text and a change to it alone breaks this test", "if the note is dropped, or stops saying an unknown number of failures remain, the note-content test fails: it drives the fake with the constant and requires the message to say stryker names only the first failing test and that the list is truncated by design"]
+  status = "done"
 
 [[task]]
-id            = "t-2"
-wave          = 2
-depends_on    = ["t-1"]
-title         = "Pin divergence counts and clean-ahead success"
-files         = ["internal/cmd/milestone_push_head_test.go"]
-description   = """
-Two unit-level tests calling pushMilestoneHeadIfAhead directly: one branch both
-ahead of and behind origin, one cleanly ahead. Both build on
-milestonePushHeadFixture exactly as it stands today.
-
-depends_on = t-1 is FILE-LEVEL, not output-level: this task needs nothing t-1
-produces, and both tasks write internal/cmd/milestone_push_head_test.go. Stated
-explicitly so it is not later "optimized" into wave 1 on the strength of a
-fixture dependency that does not exist. Wave 2 buys no parallelism here —
-t-1 || t-3 is the only concurrent pair.
-
-The divergence fixture is deliberately ASYMMETRIC — 2 ahead, 1 behind. A
-1-ahead/1-behind branch is the natural shape and the one the existing
-TestMilestoneCompleteRefusesDivergedHead builds, but it makes a swapped pair of
-counts invisible.
-
-The existing command-level tests are left untouched; each new test's comment
-should say what it adds over its sibling (counts by value, origin compared
-before and after) so the two don't later read as duplicates.
-"""
-covers        = ["c-3", "c-6"]
-test_contract = [
-  "if either count is dropped from the ahead-and-behind refusal, or the two are swapped, the divergence test fails: on a 2-ahead/1-behind branch it asserts both numbers by value in their correct positions alongside the branch name",
-  "if the refusal ever force-pushes instead of refusing, the divergence test fails: origin's own rev-parse of the branch is compared before and after and must be byte-identical",
-  "if the clean-ahead arm stops reporting pushed=true, or returns the wrong commit count, the success test fails: it asserts pushed==true, commits==2 by value, and that origin's tip equals the local branch tip",
-]
-status        = "pending"
+  id = "t-2"
+  wave = 2
+  title = "Pin divergence counts and clean-ahead success"
+  files = ["internal/cmd/milestone_push_head_test.go"]
+  description = "Two unit-level tests calling pushMilestoneHeadIfAhead directly: one branch both\nahead of and behind origin, one cleanly ahead. Both build on\nmilestonePushHeadFixture exactly as it stands today.\n\ndepends_on = t-1 is FILE-LEVEL, not output-level: this task needs nothing t-1\nproduces, and both tasks write internal/cmd/milestone_push_head_test.go. Stated\nexplicitly so it is not later \"optimized\" into wave 1 on the strength of a\nfixture dependency that does not exist. Wave 2 buys no parallelism here —\nt-1 || t-3 is the only concurrent pair.\n\nThe divergence fixture is deliberately ASYMMETRIC — 2 ahead, 1 behind. A\n1-ahead/1-behind branch is the natural shape and the one the existing\nTestMilestoneCompleteRefusesDivergedHead builds, but it makes a swapped pair of\ncounts invisible.\n\nThe existing command-level tests are left untouched; each new test's comment\nshould say what it adds over its sibling (counts by value, origin compared\nbefore and after) so the two don't later read as duplicates.\n"
+  covers = ["c-3", "c-6"]
+  depends_on = ["t-1"]
+  test_contract = ["if either count is dropped from the ahead-and-behind refusal, or the two are swapped, the divergence test fails: on a 2-ahead/1-behind branch it asserts both numbers by value in their correct positions alongside the branch name", "if the refusal ever force-pushes instead of refusing, the divergence test fails: origin's own rev-parse of the branch is compared before and after and must be byte-identical", "if the clean-ahead arm stops reporting pushed=true, or returns the wrong commit count, the success test fails: it asserts pushed==true, commits==2 by value, and that origin's tip equals the local branch tip"]
+  status = "done"

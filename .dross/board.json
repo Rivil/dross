@@ -408,6 +408,11 @@
       "plan_status": "done",
       "board_state": "task-in-review"
     },
+    "milestone-push-failure-tests/t-1": {
+      "issue": "DRO-264",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "mirror-terminal-state/t-1": {
       "issue": "DRO-150",
       "plan_status": "done",
