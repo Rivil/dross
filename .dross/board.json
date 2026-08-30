@@ -49,7 +49,6 @@
   "backlog": {
     "slug:lane-host-affinity": "DRO-242",
     "slug:lane-selector-custom": "DRO-218",
-    "slug:remote-toolchain-install": "DRO-206",
     "someday:id:014be4c1f424f656": "DRO-45",
     "someday:id:02f3322b2afeb896": "DRO-86",
     "someday:id:0323e4284012842f": "DRO-208",
@@ -64,6 +63,7 @@
     "someday:id:1b82d94dacd3b963": "DRO-111",
     "someday:id:1bcd0f352182ecf9": "DRO-39",
     "someday:id:1ecc05633e1a85ed": "DRO-15",
+    "someday:id:1f7da51167187ecb": "DRO-261",
     "someday:id:20d239bfa5341306": "DRO-62",
     "someday:id:215d2ae2e7799d69": "DRO-102",
     "someday:id:2385fc70268180d1": "DRO-83",
@@ -103,6 +103,7 @@
     "someday:id:84db6f7af8f57cef": "DRO-49",
     "someday:id:8517ca7569b82540": "DRO-74",
     "someday:id:85981310e87bb7cf": "DRO-68",
+    "someday:id:87008f463c24d5b1": "DRO-262",
     "someday:id:87d98c3c945fa02c": "DRO-257",
     "someday:id:8911d7673663ac5f": "DRO-243",
     "someday:id:89b51ed2552d67bc": "DRO-42",
@@ -125,6 +126,7 @@
     "someday:id:ad762bc624279cdf": "DRO-104",
     "someday:id:ae17cb02fa7db2fc": "DRO-82",
     "someday:id:ae6631594447a24e": "DRO-55",
+    "someday:id:b328f16cd8693b82": "DRO-260",
     "someday:id:b38eb66d043ad477": "DRO-160",
     "someday:id:b4794de89d962714": "DRO-63",
     "someday:id:b85eb8099f7b6714": "DRO-43",
@@ -488,62 +490,62 @@
     "remote-toolchain-install/t-1": {
       "issue": "DRO-247",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-toolchain-install/t-10": {
       "issue": "DRO-256",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-toolchain-install/t-11": {
       "issue": "DRO-258",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-toolchain-install/t-12": {
       "issue": "DRO-259",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-toolchain-install/t-2": {
       "issue": "DRO-248",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-toolchain-install/t-3": {
       "issue": "DRO-249",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-toolchain-install/t-4": {
       "issue": "DRO-250",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-toolchain-install/t-5": {
       "issue": "DRO-251",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-toolchain-install/t-6": {
       "issue": "DRO-252",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-toolchain-install/t-7": {
       "issue": "DRO-253",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-toolchain-install/t-8": {
       "issue": "DRO-254",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "remote-toolchain-install/t-9": {
       "issue": "DRO-255",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "test-lane-config/t-1": {
       "issue": "DRO-192",

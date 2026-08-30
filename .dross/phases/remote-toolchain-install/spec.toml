@@ -82,25 +82,30 @@
   locked = true
 
 [[deferred]]
+  id = "b328f16cd8693b82"
   text = "Pinning or otherwise managing the versions of lane toolchains dross installs — the install lands whatever its recipe resolves."
   why = "Explicit milestone non-goal: 'does not manage toolchain versions'."
 
 [[deferred]]
+  id = "1f7da51167187ecb"
   text = "Provisioning lane toolchains across more than the one granted host."
   why = "The grant is singular by design; a pool is a scheduler question, and lane-host-affinity already holds the two routed items about it."
   target = "lane-host-affinity"
 
 [[deferred]]
+  id = "87008f463c24d5b1"
   text = "A verb to uninstall or clean up what dross installed on a borrowed host."
   why = "No demand yet, and a removal path on someone else's machine is its own consent question."
 
 [[deferred]]
+  id = "617da14b27a353ca"
   text = "survivor internal/cmd/lane_install.go:216 (CONDITIONALS_NEGATION)"
   why = "surviving mutant routed out of a verify run"
   dismissed = true
   survivor = "6413ac9e54ed7540"
 
 [[deferred]]
+  id = "31ef6cd6fbd3d161"
   text = "survivor internal/cmd/lane_install.go:220 (CONDITIONALS_NEGATION)"
   why = "surviving mutant routed out of a verify run"
   dismissed = true
