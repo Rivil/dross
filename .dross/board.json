@@ -20,6 +20,7 @@
     "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
     "milestone-lifecycle-close": "DRO-13",
+    "milestone-push-failure-tests": "DRO-263",
     "mirror-terminal-state": "DRO-149",
     "multilang-verify-signal": "DRO-28",
     "mutation-diff-scope": "DRO-9",
