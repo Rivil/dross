@@ -24,14 +24,14 @@
         "internal/remote/remote.go",
         "internal/remote/remote_test.go"
       ],
-      "commit": "2c2169f",
-      "completed_at": "2026-08-30T19:42:22.871061Z",
+      "commit": "c7f9454",
+      "completed_at": "2026-08-30T21:31:49.19872Z",
       "landmarks": [
         {
           "feature": "detached mutation runs",
           "symbol": "remote.DetachScript",
           "loc": "internal/remote/remote.go:358",
-          "what": "spawns a mutation run under setsid+nohup so it outlives the ssh session, schedules it against the host's own clock in epoch seconds, and records the tool's exit code to a file whose presence separates a finished run from a died one"
+          "what": "backgrounds only the setsid job so ssh returns immediately — an \u0026\u0026 chain ending in \u0026 backgrounds the whole chain and holds the ssh channel for the full leg, which a live helicon dispatch proved"
         }
       ]
     },
