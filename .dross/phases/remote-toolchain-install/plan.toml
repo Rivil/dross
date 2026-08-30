@@ -1,4 +1,4 @@
-task_seq = 0
+task_seq = 12
 
 [phase]
   id = "remote-toolchain-install"
@@ -107,4 +107,26 @@ task_seq = 0
   covers = ["c-9"]
   depends_on = ["t-7", "t-8"]
   test_contract = ["if either surface caches an \"installed\" flag, a test asserting `.dross/local.toml` and `project.toml` are BYTE-IDENTICAL before and after an applied `dross test lane install --apply` AND an applied `dross remote bootstrap --apply` fails", "if routing needs a user gesture after an install, a test asserting that with the probe now reporting the tool PRESENT, laneLocality returns siteRemote for that lane with no grant read and no intervening command, fails", "if routing starts depending on consent state, a test asserting an install grant recorded for a DECLARED line is not consulted by the locality decision at all fails"]
+  status = "done"
+
+[[task]]
+  id = "t-11"
+  wave = 5
+  title = "Execute the local install seam in a test"
+  files = ["internal/cmd/lane_install_spawn_test.go"]
+  description = "runInstallLocally is stubbed by every fixture via localInstallFn, so its empty-argv guard and error-wrap have never executed. Drive the real function directly with POSIX utilities, mirroring the runRemoteCommand spawn-seam tests."
+  covers = ["c-6"]
+  depends_on = ["t-7"]
+  test_contract = ["if the empty-argv guard is removed, TestLocalInstallRefusesEmptyArgv fails", "if the error wrap drops argv[0] or swallows output, TestLocalInstallWrapsFailureWithTheBinary fails", "if CombinedOutput stops capturing, TestLocalInstallCapturesOutputOnSuccess fails"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 4
+  title = "Pin the lane-install nothing-to-trust refusal"
+  files = ["internal/cmd/trust_lane_install_cmd_test.go", ".dross/survivors.toml"]
+  description = "trust.go:598's refusal for a lane with no install line is asserted by no test, so the three ARITHMETIC_BASE acceptances on its message cannot cite one and TestRepoAcceptanceReasonsCiteRealTests fails. Pin the branch, then cite it in the reasons."
+  covers = ["c-7"]
+  depends_on = ["t-6"]
+  test_contract = ["if the nothing-to-trust refusal stops naming the lane or the edit remedy, TestTrustLaneInstallWithNoLineRefuses fails", "if a refused install-trust writes a grant anyway, TestTrustLaneInstallWithNoLineRefuses fails"]
   status = "done"

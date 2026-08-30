@@ -37,6 +37,37 @@
         }
       ]
     },
+    "t-11": {
+      "files": [
+        "internal/cmd/lane_install_spawn_test.go"
+      ],
+      "commit": "9b39c53",
+      "completed_at": "2026-08-30T07:27:36.396451Z",
+      "landmarks": [
+        {
+          "feature": "lane toolchain install",
+          "symbol": "runInstallLocally",
+          "loc": "internal/cmd/lane_install.go:215",
+          "what": "the local install spawn seam's own body is executed in tests — guard, capture and error wrap, not just the stubbed seam"
+        }
+      ]
+    },
+    "t-12": {
+      "files": [
+        "internal/cmd/trust_lane_install_cmd_test.go",
+        ".dross/survivors.toml"
+      ],
+      "commit": "dbd62ee",
+      "completed_at": "2026-08-30T07:26:44.634825Z",
+      "landmarks": [
+        {
+          "feature": "install consent",
+          "symbol": "TestTrustLaneInstallWithNoLineRefuses",
+          "loc": "internal/cmd/trust_lane_install_cmd_test.go:265",
+          "what": "pins the lane-install nothing-to-trust refusal so the const-concat acceptances cite a real test"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/cmd/lane_install.go",
