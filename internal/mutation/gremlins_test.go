@@ -1,6 +1,7 @@
 package mutation
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"os/exec"
@@ -839,5 +840,131 @@ func TestMissingReportIsSkipNotError(t *testing.T) {
 	// not replace it.
 	if got := g.Unmeasured[0].String(); got != g.Unmeasured[0].Message {
 		t.Errorf("String() = %q, want the printed message %q", got, g.Unmeasured[0].Message)
+	}
+}
+
+// TestCollectMatchesRunForTheSameReports is the equivalence that makes c-2 an
+// assertion instead of a claim.
+//
+// Run and Collect are two entry points to the same merge: Run reaches it after
+// spawning the tool and fetching each report, Collect reaches it hours later
+// against reports already on disk. They share every helper — ParseGremlinsJSON,
+// RePrefixGremlinsFiles, DropInapplicable, hasCoverage, mergeInto — but sharing
+// helpers is not the same as agreeing, and nothing else in the suite would fail
+// if one of them grew a step the other lacked.
+//
+// A detached verdict that differed from an attached one would be invisible:
+// both produce a plausible verify.toml, and the difference would only surface
+// as two runs of the same phase disagreeing for no stated reason.
+func TestCollectMatchesRunForTheSameReports(t *testing.T) {
+	root := t.TempDir()
+	restore := fakeGremlins(t, []byte(fixtureGremlins))
+	defer restore()
+
+	files := []string{"pkga/x.go", "pkgb/y.go"}
+
+	// Run spawns (faked) and leaves the per-package reports on disk.
+	viaRun := &Gremlins{ProjectRoot: root}
+	fromRun, err := viaRun.Run(files)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Collect reads exactly those reports, with no spawn at all.
+	viaCollect := &Gremlins{ProjectRoot: root}
+	steps, err := viaCollect.DetachSteps(files)
+	if err != nil {
+		t.Fatalf("DetachSteps: %v", err)
+	}
+	fromCollect, err := viaCollect.Collect(steps)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	for _, f := range []struct {
+		name      string
+		got, want int
+	}{
+		{"Killed", fromCollect.Killed, fromRun.Killed},
+		{"Survived", fromCollect.Survived, fromRun.Survived},
+		{"Timeout", fromCollect.Timeout, fromRun.Timeout},
+		{"NotCovered", fromCollect.NotCovered, fromRun.NotCovered},
+		{"Errors", fromCollect.Errors, fromRun.Errors},
+		{"len(Surviving)", len(fromCollect.Surviving), len(fromRun.Surviving)},
+	} {
+		if f.got != f.want {
+			t.Errorf("%s: Collect=%d Run=%d — the two paths disagree, so a detached "+
+				"verdict is not the attached one", f.name, f.got, f.want)
+		}
+	}
+	if fromCollect.Score != fromRun.Score {
+		t.Errorf("Score: Collect=%v Run=%v", fromCollect.Score, fromRun.Score)
+	}
+
+	// The survivor rows must match by identity, not merely in count: a path
+	// that re-prefixed differently would keep the count and change every path.
+	byKey := func(r *Report) map[string]int {
+		m := map[string]int{}
+		for _, s := range r.Surviving {
+			m[fmt.Sprintf("%s:%d:%s", s.File, s.Line, s.Op)]++
+		}
+		return m
+	}
+	if !reflect.DeepEqual(byKey(fromCollect), byKey(fromRun)) {
+		t.Errorf("surviving rows differ:\n Collect=%v\n Run=%v", byKey(fromCollect), byKey(fromRun))
+	}
+}
+
+// TestCollectSkipsAMissingReportRatherThanFailing mirrors Run's reading: a
+// package gremlins gathered no covered mutants for writes nothing, and that is
+// an exclusion, not an error. Failing here would turn every phase containing
+// one such package into an uncollectable detached run.
+func TestCollectSkipsAMissingReportRatherThanFailing(t *testing.T) {
+	root := t.TempDir()
+	g := &Gremlins{ProjectRoot: root}
+	steps, err := g.DetachSteps([]string{"pkga/x.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := g.Collect(steps)
+	if err != nil {
+		t.Fatalf("Collect failed on an absent report: %v", err)
+	}
+	if rep.Killed+rep.Survived != 0 {
+		t.Errorf("an absent report contributed counts: %+v", rep)
+	}
+	if len(g.Unmeasured) != 1 || g.Unmeasured[0].Kind != UnmeasuredMissing {
+		t.Errorf("the absent report was not recorded as unmeasured: %+v", g.Unmeasured)
+	}
+}
+
+// TestDetachStepsDerivesTheSamePackagesRunDoes: the detached dispatch and the
+// attached run must mutate the same set. A second derivation here would drift
+// the moment packagesFromFiles changed, and the detached run would quietly
+// measure a different set of packages while reporting through the same
+// artefacts.
+func TestDetachStepsDerivesTheSamePackagesRunDoes(t *testing.T) {
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	files := []string{"internal/cmd/a.go", "internal/cmd/b.go", "internal/remote/c.go"}
+
+	steps, err := g.DetachSteps(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, s := range steps {
+		got = append(got, s.Package)
+	}
+	want := packagesFromFiles(files)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("DetachSteps packages = %v, Run would use %v", got, want)
+	}
+	// And each step's report path must be the one Run writes, or a detached
+	// run's reports land where nothing collects them.
+	for _, s := range steps {
+		wantRel := filepath.Join("reports", "gremlins", filepath.Base(GremlinsReportPath(g.ProjectRoot, s.Package)))
+		if s.ReportRel != wantRel {
+			t.Errorf("step %s writes %q, Run reads %q", s.Package, s.ReportRel, wantRel)
+		}
 	}
 }

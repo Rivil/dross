@@ -145,10 +145,11 @@ func Verify() *cobra.Command {
 	c.Flags().BoolVar(&skipMutation, "skip-mutation", false,
 		"do not run mutation tests (record what would have been mutated, skip execution)")
 	c.Flags().BoolVar(&detach, "detach", false,
-		"start the run on the granted host and return immediately, collecting the result later")
+		"start the run on the granted host and return immediately; collect it later with `dross verify results <phase>`")
 	c.Flags().StringVar(&detachAt, "at", "",
 		"with --detach, start the run at HH:MM (next occurrence) or an RFC3339 instant, on the host's clock")
 	c.AddCommand(verifyFinalize())
+	c.AddCommand(verifyResults())
 	return c
 }
 
@@ -248,9 +249,9 @@ func dispatchDetached(root, phaseID string, steps []mutation.PackageStep, target
 	if existing != nil {
 		return fmt.Errorf(
 			"phase %q already has a detached run in flight: %s on %s (dispatched %s).\n"+
-				"Collect or cancel it before dispatching another",
+				"Collect it with `dross verify results %s`, or cancel it before dispatching another",
 			phaseID, existing.RunID, existing.Host,
-			existing.DispatchedAt.Format(time.RFC3339))
+			existing.DispatchedAt.Format(time.RFC3339), phaseID)
 	}
 
 	runID := newRunID(time.Now())
@@ -338,6 +339,188 @@ func gremlinsAdapter(adapters []mutation.Adapter) (*mutation.Gremlins, error) {
 	return nil, fmt.Errorf(
 		"--detach currently supports the gremlins (Go) leg only, and this phase " +
 			"configured none.\nRun it attached, or narrow the phase to its Go files")
+}
+
+// Exit codes for `dross verify results`, one per state.
+//
+// Distinct codes rather than prose, so a caller can poll without parsing
+// output — and so the two that mean "no verdict was produced" (still waiting,
+// could not reach the host) can never be mistaken by a script for the one that
+// means the artefacts are on disk.
+const (
+	exitResultsScheduled   = 10
+	exitResultsRunning     = 11
+	exitResultsFailed      = 12
+	exitResultsUnreachable = 13
+	exitResultsGone        = 14
+)
+
+// detachStatus reads a run's host-side state. Swapped in tests.
+var detachStatus = func(t remote.Target, runDir string) (remote.RunStatus, error) {
+	script, err := remote.StatusScript(t, runDir)
+	if err != nil {
+		return remote.RunStatus{}, err
+	}
+	out, err := remote.ExecScript(t, script)
+	if err != nil {
+		return remote.RunStatus{}, err
+	}
+	return remote.ParseStatus(out)
+}
+
+// detachFetchReports pulls the run's report directory back. Swapped in tests.
+var detachFetchReports = func(t remote.Target, localRoot string) error {
+	argv, err := remote.FetchArgs(t, "reports/gremlins/", filepath.Join(localRoot, "reports", "gremlins"))
+	if err != nil {
+		return err
+	}
+	return runDetachArgv(argv)
+}
+
+// verifyResults registers `dross verify results <phase>`.
+func verifyResults() *cobra.Command {
+	return &cobra.Command{
+		Use:   "results <phase-id>",
+		Short: "Collect a detached mutation run and write tests.json + verify.toml",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			return collectDetached(args[0])
+		},
+	}
+}
+
+// collectDetached is `verify results`: read the record, ask the host it names,
+// and — only when the run actually finished — turn its reports into this
+// phase's artefacts through the same pipeline an attached run uses.
+//
+// Nothing is written for any state but finished. A verify.toml produced from a
+// half-finished run would carry a score computed over the packages that
+// happened to be done, and it would look exactly like a complete one.
+func collectDetached(phaseID string) error {
+	root, err := FindRoot()
+	if err != nil {
+		return err
+	}
+	repoDir := filepath.Dir(root)
+
+	rec, err := findDetachedRun(root, repoDir, phaseID)
+	if err != nil {
+		return err
+	}
+	if rec == nil {
+		return fmt.Errorf("phase %q has no detached run recorded on this machine.\n"+
+			"Start one with `dross verify %s --detach`", phaseID, phaseID)
+	}
+
+	// The host comes from the RECORD, never from today's grant. That is c-5:
+	// a pool reordered, a grant edited, or a host that came back up between
+	// dispatch and now must not redirect this fetch to a machine that measured
+	// nothing — or, worse, one holding another run's report.
+	target := remote.Target{Host: rec.Host, Workdir: rec.Workdir}
+
+	st, err := detachStatus(target, rec.RunDir)
+	if err != nil {
+		// An unreachable host is not a verdict. The run may well be finishing
+		// perfectly well on a machine this laptop currently cannot see.
+		return &ExitCodeError{Code: exitResultsUnreachable, Err: fmt.Errorf(
+			"could not reach %s to read run %s — the run's state is unknown, not failed: %w",
+			rec.Host, rec.RunID, err)}
+	}
+	if !st.DirExists {
+		return &ExitCodeError{Code: exitResultsGone, Err: fmt.Errorf(
+			"run %s is gone from %s: its directory %s no longer exists.\n"+
+				"Nothing was collected. Clear the record and dispatch again",
+			rec.RunID, rec.Host, rec.RunDir)}
+	}
+	if !st.HasExit {
+		if rec.Scheduled() && st.State == "scheduled" {
+			return &ExitCodeError{Code: exitResultsScheduled, Err: fmt.Errorf(
+				"run %s on %s has not started yet — scheduled for %s",
+				rec.RunID, rec.Host, rec.ScheduledFor.Format(time.RFC3339))}
+		}
+		return &ExitCodeError{Code: exitResultsRunning, Err: fmt.Errorf(
+			"run %s on %s is still running (dispatched %s)",
+			rec.RunID, rec.Host, rec.DispatchedAt.Format(time.RFC3339))}
+	}
+
+	proj, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		return err
+	}
+	spec, err := phase.LoadSpec(filepath.Join(phase.Dir(root, phaseID), "spec.toml"))
+	if err != nil {
+		return fmt.Errorf("read spec: %w", err)
+	}
+	ch, err := changes.Load(changes.FilePath(root, phaseID), phaseID)
+	if err != nil {
+		return err
+	}
+
+	// The scope is REBUILT from the same inputs the attached path uses —
+	// changes.json plus the base — rather than carried across in the record.
+	// It is a pure function of what the phase did, so reconstructing it is
+	// exact, and it keeps the detached path from owning a second scoping
+	// implementation that could drift from the one the flag allowlist pins.
+	filesByTask := map[string][]string{}
+	for taskID, r := range ch.Tasks {
+		filesByTask[taskID] = r.Files
+	}
+	scope := phaseScope(repoDir, ch.Base, verify.FilesFromChanges(filesByTask))
+	files, gone := mutationCandidates(repoDir, scope.Files)
+
+	adapters, _, err := configuredAdaptersFn(proj, root, false)
+	if err != nil {
+		return err
+	}
+	g, err := gremlinsAdapter(adapters)
+	if err != nil {
+		return err
+	}
+	steps, err := g.DetachSteps(files)
+	if err != nil {
+		return err
+	}
+
+	if err := detachFetchReports(target, repoDir); err != nil {
+		return &ExitCodeError{Code: exitResultsUnreachable, Err: fmt.Errorf(
+			"could not fetch run %s's reports from %s: %w", rec.RunID, rec.Host, err)}
+	}
+
+	report, err := g.Collect(steps)
+	if err != nil {
+		return err
+	}
+	if report.Killed+report.Survived+report.Timeout == 0 && st.ExitCode != 0 {
+		// The tool exited non-zero and left nothing measurable. Calling that a
+		// clean run of zero mutants is the false-green the whole seam exists
+		// to prevent.
+		return &ExitCodeError{Code: exitResultsFailed, Err: fmt.Errorf(
+			"run %s on %s exited %d and produced no measurable report — nothing was collected",
+			rec.RunID, rec.Host, st.ExitCode)}
+	}
+
+	t := &verify.Tests{
+		Phase:       phaseID,
+		GeneratedAt: time.Now().UTC(),
+		Scope:       scope,
+	}
+	kept, dropped := verify.FilterReport(report, scope, "go")
+	t.OutOfScope = append(t.OutOfScope, dropped...)
+	t.Languages = append(t.Languages, verify.LanguageRun{
+		Name:     "go",
+		Tool:     "gremlins",
+		Files:    files,
+		Mutation: kept,
+	})
+
+	if err := finishVerify(root, phaseID, spec, t, verify.MeasuredOnHost(rec.Host), gone); err != nil {
+		return err
+	}
+	if _, err := clearDetachedRun(root, repoDir, phaseID); err != nil {
+		return err
+	}
+	Printf("collected run %s from %s\n", rec.RunID, rec.Host)
+	return nil
 }
 
 // finishVerify turns a completed mutation run into this phase's artefacts:

@@ -500,6 +500,56 @@ func (g *Gremlins) DetachSteps(files []string) ([]PackageStep, error) {
 	return steps, nil
 }
 
+// Collect merges per-package reports that are ALREADY on disk into one Report,
+// running nothing.
+//
+// It is the second half of Run — everything after each package's report has
+// landed — reachable on its own so a detached run collected hours later goes
+// through the same parse, the same re-prefixing, the same inapplicable filter,
+// the same coverage rule and the same merge as an attached one.
+//
+// It shares every one of those helpers with Run rather than restating them, and
+// TestCollectMatchesRunForTheSameReports pins that the two agree for identical
+// inputs. That equivalence is the guarantee: c-2 promises a detached verdict is
+// indistinguishable from an attached one, and the only way that stays true as
+// this code changes is for a test to fail when the two paths diverge.
+//
+// A missing report is a skip, exactly as it is in Run — gremlins gathered no
+// covered mutants for that package and wrote nothing. Whether the RUN as a
+// whole failed is a different question, answered by the recorded exit code
+// before Collect is ever called.
+func (g *Gremlins) Collect(steps []PackageStep) (*Report, error) {
+	merged := &Report{Tool: g.Name()}
+	var unmeasured []Unmeasured
+	skip := func(pkg string, kind UnmeasuredKind, why string) {
+		unmeasured = append(unmeasured, Unmeasured{Package: pkg, Kind: kind, Message: pkg + " (" + why + ")"})
+	}
+
+	for _, s := range steps {
+		reportAbs := GremlinsReportPath(g.ProjectRoot, s.Package)
+		b, err := os.ReadFile(reportAbs)
+		if err != nil {
+			skip(s.Package, UnmeasuredMissing, "no report — gremlins gathered no covered mutants")
+			continue
+		}
+		rep, err := ParseGremlinsJSON(b)
+		if err != nil {
+			skip(s.Package, UnmeasuredUnreadable, "unreadable report: "+err.Error())
+			continue
+		}
+		RePrefixGremlinsFiles(rep, s.Package)
+		DropInapplicable(rep, g.ProjectRoot)
+		if !hasCoverage(rep) {
+			skip(s.Package, UnmeasuredUncovered, "zero covered mutants — coverage blind spot")
+			continue
+		}
+		mergeInto(merged, rep)
+	}
+
+	g.Unmeasured = unmeasured
+	return merged, nil
+}
+
 // gremlinsBuildCmd is the process-construction seam. Rejection tests substitute
 // one that fails the test if it is called, so "refused BEFORE exec" is asserted
 // rather than assumed — a refusal that still spawned gremlins would otherwise
