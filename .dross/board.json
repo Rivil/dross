@@ -20,6 +20,7 @@
     "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
     "milestone-lifecycle-close": "DRO-13",
+    "milestone-push-failure-tests": "DRO-263",
     "mirror-terminal-state": "DRO-149",
     "multilang-verify-signal": "DRO-28",
     "mutation-diff-scope": "DRO-9",
@@ -404,6 +405,11 @@
     },
     "legacy-phase-backfill/t-6": {
       "issue": "DRO-148",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "milestone-push-failure-tests/t-1": {
+      "issue": "DRO-264",
       "plan_status": "done",
       "board_state": "task-in-review"
     },

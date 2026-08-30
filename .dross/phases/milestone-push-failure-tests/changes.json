@@ -1,0 +1,55 @@
+{
+  "phase": "milestone-push-failure-tests",
+  "pr": 113,
+  "base": "milestone/v1.6",
+  "base_commit": "8ad9d9d7db11b125f521b1612bf4ecfa35940808",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/milestone_push_head_test.go"
+      ],
+      "commit": "49c883c",
+      "completed_at": "2026-08-30T13:16:36.176689Z",
+      "landmarks": [
+        {
+          "feature": "milestone head push guard",
+          "symbol": "TestMilestonePushHeadNoUpstreamRefusedPushIsHardError",
+          "loc": "internal/cmd/milestone_push_head_test.go:156",
+          "what": "pins the no-upstream push refusal, the ahead-push commit count and the fetch failure as hard errors that open no PR"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/milestone_push_head_test.go"
+      ],
+      "commit": "cd30b16",
+      "completed_at": "2026-08-30T13:20:13.926963Z",
+      "landmarks": [
+        {
+          "feature": "milestone head push guard",
+          "symbol": "TestMilestonePushHeadDivergedRefusalStatesBothCounts",
+          "loc": "internal/cmd/milestone_push_head_test.go:258",
+          "what": "pins the ahead/behind counts by value on an asymmetric 2-ahead-1-behind branch with origin compared before and after, plus the clean-ahead push reporting pushed=true and its published count"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/mutation/stryker.go",
+        "internal/mutation/stryker_test.go"
+      ],
+      "commit": "4f53aa5",
+      "completed_at": "2026-08-30T13:18:40.817348Z",
+      "landmarks": [
+        {
+          "feature": "stryker failure diagnostics",
+          "symbol": "strykerInitialTestFailureText",
+          "loc": "internal/mutation/stryker.go:246",
+          "what": "no-report error now says stryker names only the first failing test and truncates the rest, attached only when the abort matches stryker's own initial-test-run header"
+        }
+      ]
+    }
+  }
+}
