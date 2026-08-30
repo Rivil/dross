@@ -258,16 +258,9 @@ func shArgvFor(field, line string) ([]string, error) {
 func testCommandLine(base string, selector []string) string {
 	line := strings.TrimSpace(base)
 	for _, s := range selector {
-		line += " " + shellQuoteArg(s)
+		line += " " + testlane.ShellQuote(s)
 	}
 	return line
-}
-
-// shellQuoteArg single-quotes an argument for `sh -c`, the same allowlist-free
-// approach internal/remote uses: wrap in single quotes and escape any embedded
-// single quote, which is total rather than a metacharacter blocklist.
-func shellQuoteArg(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // Test registers `dross test`.
