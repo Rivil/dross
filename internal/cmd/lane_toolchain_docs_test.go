@@ -62,7 +62,10 @@ func TestReadmeTestRowCarriesExitEight(t *testing.T) {
 // to local by a first token that is not a binary. Undocumented, the fix exists
 // and nobody finds it.
 func TestReadmeLaneRowNamesToolchain(t *testing.T) {
-	row := readmeRow(t, "dross test lane {add,list,edit,remove}")
+	// Matched on the verb-list PREFIX, not the whole brace group: the group
+	// grows as lanes gain verbs, and a literal match would make every new verb
+	// look like this row going missing.
+	row := readmeRow(t, "dross test lane {add,list,edit,remove")
 	if !strings.Contains(row, "--toolchain") {
 		t.Errorf("the `dross test lane` row does not name --toolchain:\n%s", row)
 	}

@@ -32,6 +32,7 @@
     "remote-mutation-runner": "DRO-24",
     "remote-test-runner": "DRO-26",
     "remote-toolchain-bootstrap": "DRO-129",
+    "remote-toolchain-install": "DRO-246",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
     "test-lane-config": "DRO-191"
@@ -102,6 +103,7 @@
     "someday:id:84db6f7af8f57cef": "DRO-49",
     "someday:id:8517ca7569b82540": "DRO-74",
     "someday:id:85981310e87bb7cf": "DRO-68",
+    "someday:id:87d98c3c945fa02c": "DRO-257",
     "someday:id:8911d7673663ac5f": "DRO-243",
     "someday:id:89b51ed2552d67bc": "DRO-42",
     "someday:id:8aa15f3752fc7827": "DRO-97",
@@ -482,6 +484,66 @@
     },
     "remote-toolchain-bootstrap/t-3": {
       "issue": "DRO-131"
+    },
+    "remote-toolchain-install/t-1": {
+      "issue": "DRO-247",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-toolchain-install/t-10": {
+      "issue": "DRO-256",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-toolchain-install/t-11": {
+      "issue": "DRO-258",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-toolchain-install/t-12": {
+      "issue": "DRO-259",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-toolchain-install/t-2": {
+      "issue": "DRO-248",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-toolchain-install/t-3": {
+      "issue": "DRO-249",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-toolchain-install/t-4": {
+      "issue": "DRO-250",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-toolchain-install/t-5": {
+      "issue": "DRO-251",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-toolchain-install/t-6": {
+      "issue": "DRO-252",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-toolchain-install/t-7": {
+      "issue": "DRO-253",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-toolchain-install/t-8": {
+      "issue": "DRO-254",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-toolchain-install/t-9": {
+      "issue": "DRO-255",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "test-lane-config/t-1": {
       "issue": "DRO-192",

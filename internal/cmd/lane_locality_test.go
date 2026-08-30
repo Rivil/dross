@@ -294,3 +294,76 @@ func TestLaneToolUnionHonoursTheOverride(t *testing.T) {
 		t.Errorf("union = %v, want [mise] — the override replaces the derived token", got)
 	}
 }
+
+// TestFallbackLineOffersTheLaneScopedInstall is c-1: the remedy reaches the
+// user at the moment the fallback is paid for, rather than sitting in a doc
+// they would have to already know to go and read.
+//
+// One Announce, carrying that lane's OWN name — in a multi-lane run an offer
+// attributable to no lane is an offer the reader cannot act on.
+func TestFallbackLineOffersTheLaneScopedInstall(t *testing.T) {
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		"helicon", []string{"pnpm"}, haveTools("pnpm"))
+
+	line := got[0].Announce
+	if line == "" {
+		t.Fatal("a fallen-back lane announced nothing")
+	}
+	if !strings.Contains(line, "helicon has no pnpm") {
+		t.Errorf("the fallback fact was lost: %q", line)
+	}
+	if !strings.Contains(line, "dross test lane install web") {
+		t.Errorf("the fallback names no remedy: %q", line)
+	}
+}
+
+// TestFallbackOfferIsLaneScopedNotWholeHost is locked offer_scope. The offer's
+// blast radius must match what the transcript justified: one lane fell back, so
+// the command on offer installs one lane's tool. `dross remote bootstrap` would
+// provision tools for lanes and adapters this run never touched.
+func TestFallbackOfferIsLaneScopedNotWholeHost(t *testing.T) {
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		"helicon", []string{"pnpm"}, haveTools("pnpm"))
+
+	if strings.Contains(got[0].Announce, "dross remote bootstrap") {
+		t.Errorf("the offer widened to the whole host: %q", got[0].Announce)
+	}
+}
+
+// TestFallbackOfferIsBare: --apply in the offer would install on sight for a
+// user who pasted the line, which is the one thing the dry-run default exists
+// to prevent. The verb's own dry run ends with the --apply hint, so the user
+// reads what it would do before authorizing it.
+func TestFallbackOfferIsBare(t *testing.T) {
+	got := laneLocality(
+		lanesFor(project.TestLane{Name: "web", Command: "pnpm test"}),
+		"helicon", []string{"pnpm"}, haveTools("pnpm"))
+
+	if strings.Contains(got[0].Announce, "--apply") {
+		t.Errorf("the offered verb carries --apply: %q", got[0].Announce)
+	}
+}
+
+// TestFallbackOfferKeepsTheSilentArmsSilent: the offer must not turn either
+// no-fallback case into a line. A lane that went where the run went, and a run
+// with no remote at all, both have nothing to remedy — and an offer printed
+// there teaches the reader that the line carries no information.
+func TestFallbackOfferKeepsTheSilentArmsSilent(t *testing.T) {
+	lanes := lanesFor(project.TestLane{Name: "web", Command: "pnpm test"})
+
+	t.Run("lane went remote", func(t *testing.T) {
+		got := laneLocality(lanes, "helicon", nil, haveTools("pnpm"))
+		if got[0].Announce != "" {
+			t.Errorf("a lane that went remote announced: %q", got[0].Announce)
+		}
+	})
+
+	t.Run("no remote granted", func(t *testing.T) {
+		got := laneLocality(lanes, "", nil, haveTools("pnpm"))
+		if got[0].Announce != "" {
+			t.Errorf("a run with no granted host announced: %q", got[0].Announce)
+		}
+	})
+}

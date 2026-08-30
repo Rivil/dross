@@ -1208,3 +1208,57 @@
   line = 311
   reason = "Attribution ceiling, proven per-mutant rather than by category: this is a switch{} case condition in laneToolchainProblems, so go-cover attributes no block to its columns and gremlins never builds or runs the mutant (reported NOT COVERED, not executed-and-survived). Applying > 1 -> <= 1 by hand and running go test ./internal/cmd -run Toolchain turns the suite red in eight tests, including TestValidateNamesLaneWithUnusableToolchainEntries (the command-line subtest stops being refused) and TestValidateAcceptsAbsentAndDeclaredToolchains (single-binary entries start being refused). Both directions of the arm are already asserted."
   accepted_in = "lane-remote-locality"
+
+[[accepted]]
+  key = "3a6b02474271a0b3"
+  file = "internal/cmd/lane_install.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.argv == nil:"
+  line = 155
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"
+
+[[accepted]]
+  key = "01c1a84fcf199fc2"
+  file = "internal/cmd/test_lane_install.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case s.Refusal != \"\":"
+  line = 247
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"
+
+[[accepted]]
+  key = "cd19e310c5a973a4"
+  file = "internal/cmd/remote_bootstrap.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case lane != \"\":"
+  line = 173
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"
+
+[[accepted]]
+  key = "1427e5d3fcc1800d"
+  file = "internal/cmd/remote_bootstrap.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case resolved.Refusal != \"\":"
+  line = 217
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"
+
+[[accepted]]
+  key = "a8d3d9876b2def80"
+  file = "internal/cmd/remote_bootstrap.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case resolved.Line != \"\":"
+  line = 219
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"
+
+[[accepted]]
+  key = "6e71b90a4ed4fec4"
+  file = "internal/cmd/remote_bootstrap.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case resolved.Runtime != \"\" && missing[resolved.Runtime]:"
+  line = 230
+  reason = "gremlins marks switch-case condition lines NOT COVERED even though the suite provably executes them — go-cover's block for a case arm begins at the colon, so the condition's own columns belong to no block. Proven by TestAttributionCeilingIsReal (internal/mutation/ceiling_test.go). No test can kill it."
+  accepted_in = "remote-toolchain-install"

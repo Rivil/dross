@@ -28,9 +28,11 @@ func remoteBootstrap() *cobra.Command {
 	var apply bool
 	c := &cobra.Command{
 		Use:   "bootstrap",
-		Short: "Install the mutation toolchain the granted host is missing",
+		Short: "Install the mutation and lane toolchains the granted host is missing",
 		Long: "Probes the granted host for the tools this repo's configured mutation\n" +
-			"adapters need, and installs the ones it can.\n\n" +
+			"adapters AND its declared test lanes need, and installs the ones it can.\n" +
+			"One probe, one plan, one vocabulary: a host's readiness for lanes and for\n" +
+			"mutation is never two separate answers.\n\n" +
 			"It installs adapter PACKAGES into a runtime that is already there —\n" +
 			"gremlins via `go install`, pinned. It never installs a language runtime:\n" +
 			"a host missing go, node or dotnet is reported by name so its owner can\n" +
@@ -63,7 +65,10 @@ func remoteBootstrap() *cobra.Command {
 				return err
 			}
 			if len(steps) == 0 {
-				Print("no mutation adapters configured — nothing to bootstrap")
+				// Names BOTH sources, because a repo can now be empty for two
+				// reasons and a message naming only adapters would tell a
+				// lanes-only repo it has no lanes.
+				Print("no mutation adapters and no test lanes configured — nothing to bootstrap")
 				return nil
 			}
 			return reportBootstrap(*target, steps, apply)
@@ -81,22 +86,30 @@ func remoteBootstrap() *cobra.Command {
 // non-zero so nothing reads the run as clean.
 func reportBootstrap(target remote.Target, steps []bootstrapStep, apply bool) error {
 	Printf("remote %s — %s\n", target.Host, bootstrapMode(apply))
-	installed, refused, failed := 0, 0, 0
+	installed, refused, failed, unreported := 0, 0, 0, 0
 
 	for _, s := range steps {
 		switch {
 		case s.Present:
-			Printf("  ✓ %s (%s) already installed\n", s.Tool, s.Adapter)
+			Printf("  ✓ %s (%s) already installed\n", s.Tool, s.origin())
 		case s.Refusal != "":
 			// A refusal is not an install failure, and the two must not be
 			// reported as one thing: the remedies are different and only one of
 			// them is dross's to perform.
-			Printf("  ✗ %s (%s) refused — %s\n", s.Tool, s.Adapter, s.Refusal)
+			Printf("  ✗ %s (%s) refused — %s\n", s.Tool, s.origin(), s.Refusal)
 			refused++
+		case s.Unknown:
+			// Printed, never counted (locked undeclared_exit). A declared lane
+			// with no recipe and no install line is a gap in THIS repo's
+			// configuration rather than a failure of the host, and exiting 1 on
+			// it would make every repo with lanes start failing a command that
+			// passed the day before.
+			Printf("  · %s (%s) — %s\n", s.Tool, s.origin(), s.Note)
+			unreported++
 		case !apply:
-			Printf("  → %s (%s) would install: %s\n", s.Tool, s.Adapter, shellPreview(s.Argv))
+			Printf("  → %s (%s) would install: %s\n", s.Tool, s.origin(), shellPreview(s.Argv))
 		default:
-			Printf("  → %s (%s) installing: %s\n", s.Tool, s.Adapter, shellPreview(s.Argv))
+			Printf("  → %s (%s) installing: %s\n", s.Tool, s.origin(), shellPreview(s.Argv))
 			if _, err := remoteExecFn(target, s.Argv); err != nil {
 				Printf("    ✗ %v\n", err)
 				failed++
@@ -113,6 +126,9 @@ func reportBootstrap(target remote.Target, steps []bootstrapStep, apply bool) er
 		Print("\nDry run — nothing was changed. The refusals above need the host's owner.")
 	default:
 		Printf("\n%d installed, %d refused, %d failed.\n", installed, refused, failed)
+	}
+	if unreported > 0 {
+		Printf("%d lane tool(s) have no install recipe and no install line — add one with `dross test lane edit <name> --install \"<cmd>\"`.\n", unreported)
 	}
 	if refused > 0 || failed > 0 {
 		return &ExitCodeError{Code: 1, Err: fmt.Errorf("%d tool(s) refused, %d failed — the host is not fully provisioned", refused, failed)}

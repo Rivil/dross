@@ -364,3 +364,31 @@ var (
 	_ func(string, string, io.Writer, io.Writer) error = spawnLocal
 	_ func(string) (string, error)                     = laneLookPath
 )
+
+// TestTheInstallOfferReachesTheTranscript: the offer is only worth anything if
+// it lands in the output the user is actually reading when the fallback is
+// paid for. laneFallbackLine's own tests prove the string; this proves the
+// string survives the run site — a decision assembled correctly and never
+// printed is c-1 unmet.
+func TestTheInstallOfferReachesTheTranscript(t *testing.T) {
+	grantedLaneFixture(t, goAndWebLanes)
+	installLaneLookPath(t)
+	log := &runLog{}
+	log.probeSeam(t, []string{"pnpm"}, nil)
+	log.spawnSeam(t)
+	installSpawnRecorder(t, nil)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "--files", "web/app.ts"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	if !strings.Contains(out, "dross test lane install web") {
+		t.Errorf("the fallback offered no remedy in the transcript:\n%s", out)
+	}
+	// The lane that did NOT fall back must not be offered an install: an offer
+	// attached to a lane that ran fine reads as a problem the user has to go
+	// and fix.
+	if strings.Contains(out, "dross test lane install go") {
+		t.Errorf("a lane that did not fall back was offered an install:\n%s", out)
+	}
+}

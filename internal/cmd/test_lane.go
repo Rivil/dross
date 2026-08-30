@@ -36,9 +36,10 @@ func testLane() *cobra.Command {
 			"the files they match. `dross test --files <paths>` runs only the lanes a\n" +
 			"file set actually hits.\n\n" +
 			"Each lane's command carries its own consent grant — `dross trust --lane\n" +
-			"<name>` — so a lane that changes refuses only itself.",
+			"<name>` — so a lane that changes refuses only itself. A lane's optional\n" +
+			"install line is granted apart from it, with `dross trust --lane-install`.",
 	}
-	c.AddCommand(testLaneAdd(), testLaneList(), testLaneEdit(), testLaneRemove())
+	c.AddCommand(testLaneAdd(), testLaneList(), testLaneEdit(), testLaneRemove(), testLaneInstall())
 	return c
 }
 
@@ -120,6 +121,7 @@ func testLaneAdd() *cobra.Command {
 	var prepare string
 	var selector string
 	var toolchain []string
+	var install string
 	var emptyExit []int
 	c := &cobra.Command{
 		Use:   "add <name>",
@@ -127,7 +129,10 @@ func testLaneAdd() *cobra.Command {
 		Long: "Writes one [[runtime.test_lane]] block. --match is repeatable; a trailing\n" +
 			"slash means everything beneath a directory.\n\n" +
 			"The lane starts UNGRANTED: declaring a command is not consenting to run\n" +
-			"it. Follow with `dross trust --lane <name>`, which prints the line first.",
+			"it. Follow with `dross trust --lane <name>`, which prints the line first.\n\n" +
+			"--install declares how this lane's toolchain is installed, replacing dross's\n" +
+			"built-in recipe. It carries its OWN grant — `dross trust --lane-install\n" +
+			"<name>` — because installing changes a machine and running a suite does not.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			name := strings.TrimSpace(args[0])
@@ -162,6 +167,12 @@ func testLaneAdd() *cobra.Command {
 				// lane being declared — and dropping it silently would write an
 				// override the user cannot see they got wrong.
 				Toolchain: toolchain,
+				// Normalized to absent exactly as Prepare is, and before the
+				// write for the same reason: an `install = "   "` is non-empty
+				// for its consent fingerprint and empty for every reader, so
+				// the one shape that can disagree with itself never reaches
+				// disk from this verb.
+				Install:   strings.TrimSpace(install),
 				EmptyExit: emptyExit,
 			}
 			if err := laneSelectorRefusal(name, proposed); err != nil {
@@ -197,8 +208,22 @@ func testLaneAdd() *cobra.Command {
 			// The probe set, always — derived or not. It is what decides which
 			// machine the lane runs on, and the moment to see it is the moment
 			// the lane is declared.
-			Printf("  toolchain: %s\n\n", laneToolchainLine(proposed))
+			Printf("  toolchain: %s\n", laneToolchainLine(proposed))
+			// Printed only when declared, unlike the toolchain above it: a
+			// lane always HAS an effective toolchain, and an `install: -` on
+			// every lane would read as a field the user is expected to set.
+			if proposed.Install != "" {
+				Printf("  install: %s\n", proposed.Install)
+			}
+			Printf("\n")
 			Printf("It will not run until this machine trusts it:\n\n    dross trust --lane %s\n", name)
+			// A SECOND grant, named separately. The command grant does not
+			// cover the install line, so a user told only about `--lane` would
+			// declare an install line and find it refused with nothing having
+			// pointed at the verb that grants it.
+			if proposed.Install != "" {
+				Printf("\nIts install line is granted separately — installing is not running:\n\n    dross trust --lane-install %s\n", name)
+			}
 			return nil
 		},
 	}
@@ -207,6 +232,7 @@ func testLaneAdd() *cobra.Command {
 	c.Flags().StringVar(&prepare, "prepare", "", "optional bootstrap line run before this lane's command, on the same host; covered by the same consent grant")
 	c.Flags().StringVar(&selector, "selector", "", "shape the matched paths take when appended to the command ("+configenum.SelectorStyles.List()+"); omitted runs the command untouched")
 	c.Flags().StringArrayVar(&toolchain, "toolchain", nil, "binary this lane needs on the host that runs it (repeatable); omitted derives it from the first token of --command and --prepare")
+	c.Flags().StringVar(&install, "install", "", "optional line that installs this lane's toolchain; replaces dross's built-in recipe and carries its own consent grant, separate from the lane's")
 	c.Flags().IntSliceVar(&emptyExit, "empty-exit", nil, "exit code this lane's runner uses for \"collected no tests\" (repeatable); requires --selector")
 	return c
 }
@@ -247,6 +273,9 @@ func testLaneList() *cobra.Command {
 				// derives one. Hiding it for the un-overridden case would hide it
 				// for exactly the lanes whose probe set nobody has looked at.
 				Printf("  toolchain: %s\n", laneToolchainLine(lane))
+				if lane.Install != "" {
+					Printf("  install: %s\n", lane.Install)
+				}
 				if lane.Selector != "" {
 					Printf("  selector: %s\n", lane.Selector)
 				}
@@ -281,18 +310,22 @@ func testLaneList() *cobra.Command {
 func testLaneEdit() *cobra.Command {
 	var prepare string
 	var toolchain []string
+	var install string
 	c := &cobra.Command{
 		Use:   "edit <name>",
-		Short: "Set or clear a declared lane's prepare line or toolchain, keeping its grant",
-		Long: "Changes a lane's --prepare or --toolchain in place, leaving its match\n" +
-			"globs, command and position in project.toml exactly as they were.\n\n" +
+		Short: "Set or clear a declared lane's prepare line, toolchain or install line, keeping its grant",
+		Long: "Changes a lane's --prepare, --toolchain or --install in place, leaving its\n" +
+			"match globs, command and position in project.toml exactly as they were.\n\n" +
 			"--prepare changes the consent line, so the lane's grant is kept but goes\n" +
 			"STALE: `dross trust --lane <name>` will say the line CHANGED rather than\n" +
 			"that it was never trusted. --toolchain is not part of the consent line —\n" +
-			"it names binaries, not a command — so changing it leaves the grant alone.\n\n" +
+			"it names binaries, not a command — so changing it leaves the grant alone.\n" +
+			"--install is not part of it either: it carries its OWN grant, so adding\n" +
+			"one to a lane that already runs green never refuses its test runs.\n\n" +
 			"--toolchain is repeatable and REPLACES the derived list wholesale; pass\n" +
-			"--toolchain \"\" to go back to deriving it. Changing a lane's match,\n" +
-			"command, selector or empty_exit is still remove-then-re-add.",
+			"--toolchain \"\" to go back to deriving it, and --install \"\" to drop the\n" +
+			"install line. Changing a lane's match, command, selector or empty_exit is\n" +
+			"still remove-then-re-add.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Read from Changed, not from the value. An omitted --prepare and
@@ -302,12 +335,14 @@ func testLaneEdit() *cobra.Command {
 			// with no flag at all would silently drop an existing prepare.
 			setsPrepare := cmd.Flags().Changed("prepare")
 			setsToolchain := cmd.Flags().Changed("toolchain")
-			if !setsPrepare && !setsToolchain {
-				return fmt.Errorf("nothing to change: `dross test lane edit %s` needs --prepare or --toolchain.\n\n"+
+			setsInstall := cmd.Flags().Changed("install")
+			if !setsPrepare && !setsToolchain && !setsInstall {
+				return fmt.Errorf("nothing to change: `dross test lane edit %s` needs --prepare, --toolchain or --install.\n\n"+
 					"Pass a command to set a prepare, or --prepare \"\" to clear it; pass one or\n"+
 					"more --toolchain binaries to override the derived list, or --toolchain \"\"\n"+
-					"to go back to deriving it. Every other lane field is changed by removing\n"+
-					"the lane and re-adding it", args[0])
+					"to go back to deriving it; pass an --install line to override dross's\n"+
+					"built-in install recipe, or --install \"\" to drop it. Every other lane\n"+
+					"field is changed by removing the lane and re-adding it", args[0])
 			}
 			name := args[0]
 			root, p, err := loadProjectForLanes()
@@ -353,6 +388,12 @@ func testLaneEdit() *cobra.Command {
 					proposed.Toolchain = toolchain
 				}
 			}
+			if setsInstall {
+				// Trimmed to absent on the `lane add` precedent, so both verbs
+				// write the one spelling for the same input — two that
+				// disagreed would put a lane on disk validate then rejects.
+				proposed.Install = strings.TrimSpace(install)
+			}
 			// Checked BEFORE the mutation lands, so a refused edit leaves
 			// project.toml byte-for-byte unchanged — and checked through the same
 			// problems validate reports, so the CLI cannot write a lane validate
@@ -375,6 +416,18 @@ func testLaneEdit() *cobra.Command {
 			if setsToolchain {
 				Printf("lane %q toolchain: %s\n", name, laneToolchainLine(lane))
 			}
+			if setsInstall {
+				if lane.Install == "" {
+					Printf("lane %q now declares no install line.\n", name)
+				} else {
+					Printf("lane %q install: %s\n", name, lane.Install)
+					// Named here and not below: the install grant is its own,
+					// so this instruction is correct whether the line is new or
+					// rewritten, and it must not be confused with the `--lane`
+					// staleness message the command grant prints.
+					Printf("\nIts install grant is separate and now needs reading:\n\n    dross trust --lane-install %s\n", name)
+				}
+			}
 			// Only when the consent line actually moved. A trust instruction
 			// printed on a no-op re-set teaches the user that the message
 			// carries no information, and the next real one gets skimmed.
@@ -386,6 +439,7 @@ func testLaneEdit() *cobra.Command {
 	}
 	c.Flags().StringVar(&prepare, "prepare", "", "the lane's bootstrap line; pass \"\" to clear it")
 	c.Flags().StringArrayVar(&toolchain, "toolchain", nil, "binary this lane needs on the host that runs it (repeatable); replaces the derived list, pass \"\" to go back to deriving it")
+	c.Flags().StringVar(&install, "install", "", "the line that installs this lane's toolchain; replaces dross's built-in recipe, pass \"\" to drop it")
 	return c
 }
 
@@ -439,7 +493,7 @@ func testLaneRemove() *cobra.Command {
 			if err := RevokeLaneConsent(root, name); err != nil {
 				return err
 			}
-			Printf("lane %q removed; its consent grant was dropped.\n", name)
+			Printf("lane %q removed; its consent grants — command and install — were dropped.\n", name)
 			return nil
 		},
 	}

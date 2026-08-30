@@ -3,9 +3,11 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 )
 
@@ -256,5 +258,38 @@ func TestDoctorRemoteSurfacesTheTrackedRefusal(t *testing.T) {
 	}
 	if !strings.Contains(out, "refusing to read") {
 		t.Errorf("doctor does not surface the refusal:\n%s", out)
+	}
+}
+
+// TestRemoteProbeToolsWithNoLanesIsUnchanged: the repo shape that has adapters
+// and no lanes at all is the one every dross install had before lanes existed,
+// and the widening must be invisible to it — an empty attribution map, not a
+// nil one a caller would have to guard, and a probe set identical to the
+// adapters' own.
+func TestRemoteProbeToolsWithNoLanesIsUnchanged(t *testing.T) {
+	doctorRemoteFixture(t, "helicon", "/srv/dross", []string{"gremlins"})
+	root, err := FindRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := project.Load(filepath.Join(root, project.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tools, needBy, laneBy := remoteProbeTools(p)
+
+	want, wantNeedBy := remoteMutationTools(p)
+	if !reflect.DeepEqual(tools, want) {
+		t.Errorf("the probe set changed for a lane-less repo:\n got  %v\n want %v", tools, want)
+	}
+	if !reflect.DeepEqual(needBy, wantNeedBy) {
+		t.Errorf("the adapter attribution changed:\n got  %v\n want %v", needBy, wantNeedBy)
+	}
+	if laneBy == nil {
+		t.Error("the lane attribution is nil — a caller would have to guard a map it can always read")
+	}
+	if len(laneBy) != 0 {
+		t.Errorf("a repo with no lanes attributed tools to one: %v", laneBy)
 	}
 }
