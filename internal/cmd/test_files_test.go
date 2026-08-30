@@ -348,3 +348,180 @@ func TestNothingMeasuredIsTaggedForTheExitMapper(t *testing.T) {
 		t.Errorf("Code = %d, want %d", ec.Code, exitNothingMeasured)
 	}
 }
+
+// --- selector templates at the run site (c-1, c-2) ---
+
+// templateLanes declares both placeholder shapes at once. One lane repeats its
+// template per path, the other joins them into a single argument — a run site
+// that expanded one shape for every lane would still pass a single-lane
+// fixture.
+const templateLanes = `[[runtime.test_lane]]
+name = "rust"
+match = ["crates/**"]
+command = "cargo test"
+selector = "dir"
+selector_template = "--package {path}"
+
+[[runtime.test_lane]]
+name = "ctest"
+match = ["tests/**"]
+command = "ctest"
+selector = "path"
+selector_template = "-R {paths}"
+selector_join = "|"`
+
+// TestTemplatedLaneSpawnsTheExpandedLine is c-1 at the run site: the whole
+// point of a template is a scoped line for a runner the closed selector enum
+// cannot shape. Asserted on the RECORDED line, so a lane that expanded a
+// template and then spawned its bare command fails here.
+func TestTemplatedLaneSpawnsTheExpandedLine(t *testing.T) {
+	filesFixture(t, templateLanes)
+	grantLane(t, "rust")
+	grantLane(t, "ctest")
+	touchFile(t, "crates/a/src/lib.rs")
+	touchFile(t, "crates/b/src/lib.rs")
+	rec := installSpawnRecorder(t, nil)
+
+	if err := runCmd(t, Test(), "--files", "crates/a/src/lib.rs", "--files", "crates/b/src/lib.rs"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	if rec.count() != 1 {
+		t.Fatalf("want exactly 1 spawn, got %d: %v", rec.count(), rec.lines)
+	}
+	want := "cargo test --package 'crates/a/src' --package 'crates/b/src'"
+	if rec.lines[0] != want {
+		t.Errorf("spawned %q, want %q", rec.lines[0], want)
+	}
+}
+
+// TestTemplatedLaneJoinsPathsIntoOneArgument is the other placeholder shape,
+// and the one that cannot be reached by appending: `-R` takes a single regex,
+// so a joined argument is the only line ctest can be scoped with.
+func TestTemplatedLaneJoinsPathsIntoOneArgument(t *testing.T) {
+	filesFixture(t, templateLanes)
+	grantLane(t, "rust")
+	grantLane(t, "ctest")
+	touchFile(t, "tests/a.cc")
+	touchFile(t, "tests/b.cc")
+	rec := installSpawnRecorder(t, nil)
+
+	if err := runCmd(t, Test(), "--files", "tests/a.cc", "--files", "tests/b.cc"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	if rec.count() != 1 {
+		t.Fatalf("want exactly 1 spawn, got %d: %v", rec.count(), rec.lines)
+	}
+	want := "ctest -R 'tests/a.cc|tests/b.cc'"
+	if rec.lines[0] != want {
+		t.Errorf("spawned %q, want %q", rec.lines[0], want)
+	}
+}
+
+// TestTemplatedLaneHeaderIsTheSpawnedLine compares the two strings against EACH
+// OTHER rather than each against a literal. A header built from lane.Command
+// while an expanded line spawned would satisfy two separate literal assertions
+// and still be a transcript that lies about what was measured.
+func TestTemplatedLaneHeaderIsTheSpawnedLine(t *testing.T) {
+	filesFixture(t, templateLanes)
+	grantLane(t, "rust")
+	grantLane(t, "ctest")
+	touchFile(t, "crates/a/src/lib.rs")
+	rec := installSpawnRecorder(t, nil)
+
+	var out string
+	if err := runCmdCapturing(t, &out, Test(), "--files", "crates/a/src/lib.rs"); err != nil {
+		t.Fatal(err)
+	}
+	if rec.count() != 1 {
+		t.Fatalf("want exactly 1 spawn, got %d: %v", rec.count(), rec.lines)
+	}
+	if !strings.Contains(out, "lane rust: "+rec.lines[0]+"\n") {
+		t.Errorf("the header does not carry the spawned line %q:\n%s", rec.lines[0], out)
+	}
+}
+
+// TestMalformedTemplateRefusesBeforeAnyLaneSpawns: a placeholder-less template
+// is discovered by the up-front fence, with NOTHING spawned. Found inside the
+// run loop instead, the go lane ahead of it would already have run — and worse,
+// honouring it there would spawn the lane's whole command under a scoped lane's
+// name, which is the silent whole-suite run the feature exists to replace.
+//
+// The malformed lane is deliberately SECOND: a fence checked in order would
+// pass a fixture where the bad lane came first regardless of where it ran.
+func TestMalformedTemplateRefusesBeforeAnyLaneSpawns(t *testing.T) {
+	filesFixture(t, `[[runtime.test_lane]]
+name = "go"
+match = ["internal/**"]
+command = "go test -count=1"
+selector = "go-package"
+
+[[runtime.test_lane]]
+name = "rust"
+match = ["crates/**"]
+command = "cargo test"
+selector = "dir"
+selector_template = "--package"`)
+	grantLane(t, "go")
+	grantLane(t, "rust")
+	touchFile(t, "internal/cmd/test.go")
+	touchFile(t, "crates/a/src/lib.rs")
+	rec := installSpawnRecorder(t, nil)
+
+	err := runCmd(t, Test(), "--files", "internal/cmd/test.go", "--files", "crates/a/src/lib.rs")
+	if err == nil {
+		t.Fatal("a placeholder-less template was accepted")
+	}
+	if rec.count() != 0 {
+		t.Errorf("the fence let %d lane(s) spawn first: %v", rec.count(), rec.lines)
+	}
+	if !strings.Contains(err.Error(), "rust") {
+		t.Errorf("the refusal must name the offending lane, got: %v", err)
+	}
+}
+
+// TestTemplatedPathCarryingAMetacharacterIsQuoted is c-2's injection half at
+// the run site rather than in the expander: the line reaches `sh -c`, so a
+// matched path spelled with a semicolon must arrive as one argument and can
+// never become a second command.
+func TestTemplatedPathCarryingAMetacharacterIsQuoted(t *testing.T) {
+	filesFixture(t, `[[runtime.test_lane]]
+name = "rust"
+match = ["crates/**"]
+command = "cargo test"
+selector = "path"
+selector_template = "--only {path}"`)
+	grantLane(t, "rust")
+	touchFile(t, "crates/a; touch pwned")
+	rec := installSpawnRecorder(t, nil)
+
+	if err := runCmd(t, Test(), "--files", "crates/a; touch pwned"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	if rec.count() != 1 {
+		t.Fatalf("want exactly 1 spawn, got %d: %v", rec.count(), rec.lines)
+	}
+	want := "cargo test --only 'crates/a; touch pwned'"
+	if rec.lines[0] != want {
+		t.Errorf("spawned %q, want %q — an unquoted path is a second command", rec.lines[0], want)
+	}
+}
+
+// TestLaneWithNoTemplateSpawnsItsCommandByteForByte is the opt-in half at the
+// run site. The templated branch must be unreachable for a lane that declares
+// nothing, or every lane written before this phase would have its consented
+// line rewritten under it.
+func TestLaneWithNoTemplateSpawnsItsCommandByteForByte(t *testing.T) {
+	filesFixture(t, goAndDocsLanes)
+	grantAllLanes(t)
+	rec := installSpawnRecorder(t, nil)
+
+	if err := runCmd(t, Test(), "--files", "internal/cmd/test.go"); err != nil {
+		t.Fatalf("dross test --files: %v", err)
+	}
+	if rec.count() != 1 {
+		t.Fatalf("want exactly 1 spawn, got %d: %v", rec.count(), rec.lines)
+	}
+	if rec.lines[0] != "go test -count=1 ./..." {
+		t.Errorf("spawned %q, want the lane's command byte-for-byte", rec.lines[0])
+	}
+}
