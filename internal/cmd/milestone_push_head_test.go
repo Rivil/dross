@@ -124,3 +124,122 @@ func TestMilestoneCompleteNoLocalHeadStillOpens(t *testing.T) {
 		t.Errorf("expected the PR to be opened, created=%d", cap.created)
 	}
 }
+
+// milestonePushHeadUnpushedFixture is milestonePushHeadFixture with the
+// milestone branch created locally but never pushed, so origin has no
+// refs/remotes/origin/<branch> and pushMilestoneHeadIfAhead reaches its
+// no-upstream `push -u` arm — unreachable from the pushed fixture.
+func milestonePushHeadUnpushedFixture(t *testing.T) (string, *msPRCapture, string) {
+	t.Helper()
+	dir, cap := milestoneOpenFixture(t)
+	branch := "milestone/v0.9"
+	mustGit(t, dir, "push", "-q", "-u", "origin", "main")
+	mustGit(t, dir, "branch", branch)
+	mustGit(t, dir, "checkout", "-q", branch)
+	mustGit(t, dir, "fetch", "-q", "origin")
+	return dir, cap, branch
+}
+
+// c-1: a milestone head with no upstream whose `push -u` is refused is a hard
+// error naming the branch, reports pushed=false, and opens no integration PR.
+//
+// Two observations on one fixture, because neither alone is the criterion: the
+// direct call is the only place pushed= is observable at all, and cap.created
+// is only meaningful through the command (from a bare function call it is 0
+// whatever happens, which asserts nothing).
+//
+// The cap.created==0 half is load-bearing ONLY because nothing in the open path
+// pushes before pushMilestoneHeadIfAhead (milestone.go:261), so with the
+// pre-receive hook installed the head push is the first thing origin refuses.
+// If a push is ever added earlier in the open path, this test starts passing
+// vacuously — the command would fail on that earlier push instead.
+func TestMilestonePushHeadNoUpstreamRefusedPushIsHardError(t *testing.T) {
+	dir, cap, branch := milestonePushHeadUnpushedFixture(t)
+	// AFTER the fixture's own pushes — the hook refuses everything, including
+	// the main push the fixture needs to succeed.
+	rejectPushes(t, originOf(t, dir))
+
+	pushed, _, err := pushMilestoneHeadIfAhead(dir, branch)
+	if err == nil {
+		t.Fatalf("a refused no-upstream push must be a hard error (pushed=%v)", pushed)
+	}
+	if pushed {
+		t.Error("pushed=true reported for a push git refused")
+	}
+	if !strings.Contains(err.Error(), branch) {
+		t.Errorf("error %q does not name the branch %q", err, branch)
+	}
+
+	cerr := runCmd(t, Milestone(), "complete", "v0.9")
+	if cerr == nil {
+		t.Fatal("`milestone complete` must fail when the head push is refused")
+	}
+	if !strings.Contains(cerr.Error(), branch) {
+		t.Errorf("complete failed for some other reason than the head push: %v", cerr)
+	}
+	if cap.created != 0 {
+		t.Errorf("no PR may be opened when the head push failed, created=%d", cap.created)
+	}
+}
+
+// c-2: the ahead-push failure names the exact number of commits that would be
+// lost at --finalize. Asserted as the literal phrase with the count in it, not
+// as a bare digit — git's combined output is appended to the message and would
+// satisfy a substring search for "2" on its own.
+func TestMilestonePushHeadRefusedAheadPushNamesCommitCount(t *testing.T) {
+	dir, _, branch := milestonePushHeadFixture(t)
+	for _, name := range []string{"one.txt", "two.txt"} {
+		mustWrite(t, filepath.Join(dir, name), "local only\n")
+		mustGit(t, dir, "add", name)
+		mustGit(t, dir, "commit", "-q", "-m", "local "+name)
+	}
+	rejectPushes(t, originOf(t, dir))
+
+	pushed, _, err := pushMilestoneHeadIfAhead(dir, branch)
+	if err == nil {
+		t.Fatalf("a refused ahead push must be a hard error (pushed=%v)", pushed)
+	}
+	if pushed {
+		t.Error("pushed=true reported for a push git refused")
+	}
+	if want := "push of 2 local commit(s)"; !strings.Contains(err.Error(), want) {
+		t.Errorf("error %q does not carry %q — the count of commits at risk", err, want)
+	}
+	if !strings.Contains(err.Error(), branch) {
+		t.Errorf("error %q does not name the branch %q", err, branch)
+	}
+}
+
+// c-5: a failed `git fetch origin` is a hard error naming the fetch, and
+// nothing is pushed. Without this the run would proceed to an ahead/behind
+// comparison computed against a stale refs/remotes/origin/<branch> — which,
+// for an already-published branch, reports "not ahead" and silently skips the
+// push the criterion exists to guarantee.
+func TestMilestonePushHeadFetchFailureIsHardError(t *testing.T) {
+	dir, _, branch := milestonePushHeadFixture(t)
+	origin := originOf(t, dir)
+	before := mustGit(t, origin, "rev-parse", branch)
+
+	mustWrite(t, filepath.Join(dir, "local.txt"), "local only\n")
+	mustGit(t, dir, "add", "local.txt")
+	mustGit(t, dir, "commit", "-q", "-m", "local work")
+
+	// Repoint origin at a path that does not exist, so the fetch fails before
+	// any comparison can be made. The real bare origin is still on disk and is
+	// what the assertions below read.
+	mustGit(t, dir, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
+
+	pushed, _, err := pushMilestoneHeadIfAhead(dir, branch)
+	if err == nil {
+		t.Fatalf("a failed fetch must be a hard error (pushed=%v)", pushed)
+	}
+	if pushed {
+		t.Error("pushed=true reported for a run that never got past the fetch")
+	}
+	if !strings.Contains(err.Error(), "fetch") {
+		t.Errorf("error %q does not name the fetch as the cause", err)
+	}
+	if after := mustGit(t, origin, "rev-parse", branch); after != before {
+		t.Errorf("origin %s moved from %s to %s on a failed fetch", branch, before, after)
+	}
+}
