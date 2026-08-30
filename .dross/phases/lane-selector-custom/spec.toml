@@ -67,3 +67,8 @@
   text = "`dross test lane list` prints a lane's selector_template and selector_join beside its selector."
   why = "No criterion covers it and the add/edit output already echoes the template at declaration time; it belongs with the surface that renders a lane's scoping."
   target = "lane-selector-preview"
+
+[[deferred]]
+  id = "fa50fb2ca56d687a"
+  text = "`dross verify --detach` starts the mutation leg ON the granted remote under a run id that outlives both the ssh connection and the session: the run is spawned detached host-side (not by a local nohup, which still needs the link held for ~1h40m and dies with it), `dross verify results <id>` reconstructs tests.json and the verify.toml skeleton from any later session or machine, and `--at <time>` / a queue the host drains lets a ~2h leg land off-hours. Suggested slug: remote-run-detach."
+  why = "The run outliving the session is the blocking half: a 1h40m leg currently pins a session that can do nothing else and cannot be /cleared, the harness reaps background tasks at ~1h48m, and a dropped link loses the whole run. Scheduling rides in the same phase (user decision 2026-08-30) because helicon is shared - cache-budget-prune notes an LLM on the same box - and an off-hours slot is a flag on the queue detach already has to build. Off-theme for v1.6 lane truth, so parked for v1.7 scoping rather than inserted."
