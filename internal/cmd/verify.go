@@ -108,62 +108,83 @@ func Verify() *cobra.Command {
 			// grant on disk: a --local run has a grant and ignores it, and a
 			// fallback has one it could not reach. Reading config here would
 			// label both as remote measurements.
-			t.MeasuredOn = measuredOnOf(adapters, tuning)
-			// Deleted paths stay in the record — they are part of what the
-			// phase did — but as a skip with an honest reason rather than as
-			// an argument to a mutation tool.
-			for _, f := range gone {
-				t.Skipped = append(t.Skipped, verify.SkippedFile{
-					File:   f,
-					Reason: "file no longer exists in the working tree",
-				})
-			}
-
-			// Lifecycle classification runs BEFORE tests.json is written, so
-			// the persisted record carries each survivor's key and state. The
-			// store is read from the repo root, never from the phase dir: an
-			// acceptance recorded during one phase has to keep suppressing in
-			// the next one, which is the whole point of c-3.
-			store, err := survivor.Load(survivor.Path(root))
-			if err != nil {
-				return err
-			}
-			accepted, err := acceptedReasons(store)
-			if err != nil {
-				return err
-			}
-			routed, err := routedSurvivors(root)
-			if err != nil {
-				return err
-			}
-			repoRoot := filepath.Dir(root)
-			lc := verify.ApplyLifecycle(t, accepted, routed, workTreeIdentifier{repoRoot: repoRoot})
-
-			testsPath, verifyPath := verify.FilePaths(root, phaseID)
-			if err := t.Save(testsPath); err != nil {
-				return err
-			}
-
-			ids := make([]string, 0, len(spec.Criteria))
-			for _, c := range spec.Criteria {
-				ids = append(ids, c.ID)
-			}
-			v := verify.Skeleton(t, ids)
-			appendStalenessNotes(v, repoRoot, store)
-			if err := v.Save(verifyPath); err != nil {
-				return err
-			}
-
-			printVerifySummary(t, v)
-			printLifecycleSummary(lc, v.Summary.UnclassifiedInScope)
-			recordVerifyOutcome(t, v)
-			return nil
+			return finishVerify(root, phaseID, spec, t, measuredOnOf(adapters, tuning), gone)
 		},
 	}
 	c.Flags().BoolVar(&skipMutation, "skip-mutation", false,
 		"do not run mutation tests (record what would have been mutated, skip execution)")
 	c.AddCommand(verifyFinalize())
 	return c
+}
+
+// finishVerify turns a completed mutation run into this phase's artefacts:
+// stamps where it was measured, records the files that no longer exist,
+// classifies every survivor's lifecycle, writes tests.json and the verify.toml
+// skeleton, and reports the run.
+//
+// It is a SEAM rather than a tidy-up. The attached run reaches it having just
+// blocked on RunScoped; a detached run reaches it hours later, in a different
+// session, holding a report fetched off a host. Everything after the mutants
+// stop moving must be identical for the two, because a detached verdict that
+// differed from an attached one in any of these steps would be a second-class
+// artefact the /dross-verify judgement step could not read the same way — and
+// the difference would be invisible, since both produce a plausible file.
+//
+// measuredOn is passed IN rather than derived here. The attached path knows it
+// from the adapters that actually ran; the detached path knows it from the
+// record written at dispatch, which is the host that measured the report — and
+// re-deriving it at fetch time would read today's grant rather than the machine
+// whose numbers these are.
+func finishVerify(root, phaseID string, spec *phase.Spec, t *verify.Tests, measuredOn string, gone []string) error {
+	t.MeasuredOn = measuredOn
+	// Deleted paths stay in the record — they are part of what the phase did —
+	// but as a skip with an honest reason rather than as an argument to a
+	// mutation tool.
+	for _, f := range gone {
+		t.Skipped = append(t.Skipped, verify.SkippedFile{
+			File:   f,
+			Reason: "file no longer exists in the working tree",
+		})
+	}
+
+	// Lifecycle classification runs BEFORE tests.json is written, so the
+	// persisted record carries each survivor's key and state. The store is read
+	// from the repo root, never from the phase dir: an acceptance recorded
+	// during one phase has to keep suppressing in the next one.
+	store, err := survivor.Load(survivor.Path(root))
+	if err != nil {
+		return err
+	}
+	accepted, err := acceptedReasons(store)
+	if err != nil {
+		return err
+	}
+	routed, err := routedSurvivors(root)
+	if err != nil {
+		return err
+	}
+	repoRoot := filepath.Dir(root)
+	lc := verify.ApplyLifecycle(t, accepted, routed, workTreeIdentifier{repoRoot: repoRoot})
+
+	testsPath, verifyPath := verify.FilePaths(root, phaseID)
+	if err := t.Save(testsPath); err != nil {
+		return err
+	}
+
+	ids := make([]string, 0, len(spec.Criteria))
+	for _, c := range spec.Criteria {
+		ids = append(ids, c.ID)
+	}
+	v := verify.Skeleton(t, ids)
+	appendStalenessNotes(v, repoRoot, store)
+	if err := v.Save(verifyPath); err != nil {
+		return err
+	}
+
+	printVerifySummary(t, v)
+	printLifecycleSummary(lc, v.Summary.UnclassifiedInScope)
+	recordVerifyOutcome(t, v)
+	return nil
 }
 
 // verifyFinalize records a telemetry outcome event with the resolved
