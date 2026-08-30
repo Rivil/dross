@@ -31,6 +31,7 @@
     "red-proof-repoint": "DRO-125",
     "reentry-signal-truth": "DRO-181",
     "remote-mutation-runner": "DRO-24",
+    "remote-run-detach": "DRO-277",
     "remote-test-runner": "DRO-26",
     "remote-toolchain-bootstrap": "DRO-129",
     "remote-toolchain-install": "DRO-246",
