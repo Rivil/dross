@@ -498,6 +498,21 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "remote-run-detach/t-1": {
+      "issue": "DRO-278",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-run-detach/t-2": {
+      "issue": "DRO-279",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "remote-run-detach/t-3": {
+      "issue": "DRO-280",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "remote-toolchain-bootstrap/t-1": {
       "issue": "DRO-130"
     },

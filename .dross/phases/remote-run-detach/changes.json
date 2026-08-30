@@ -2,5 +2,124 @@
   "phase": "remote-run-detach",
   "base": "milestone/v1.6",
   "base_commit": "94954f1d011cf8e3f0df577d3099c76bc1eedb50",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/cmd/local.go",
+        "internal/cmd/local_detached_test.go"
+      ],
+      "commit": "9dce0f1",
+      "completed_at": "2026-08-30T19:38:11.213712Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "detachedRun",
+          "loc": "internal/cmd/local.go:282",
+          "what": "a machine-local per-phase record of a dispatched-but-uncollected run — host, run dir and start time — kept out of localKeys so no generic key-writer can aim a later fetch at a host and path the user never saw"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/remote/remote.go",
+        "internal/remote/remote_test.go"
+      ],
+      "commit": "2c2169f",
+      "completed_at": "2026-08-30T19:42:22.871061Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "remote.DetachScript",
+          "loc": "internal/remote/remote.go:358",
+          "what": "spawns a mutation run under setsid+nohup so it outlives the ssh session, schedules it against the host's own clock in epoch seconds, and records the tool's exit code to a file whose presence separates a finished run from a died one"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_finish_test.go"
+      ],
+      "commit": "509735a",
+      "completed_at": "2026-08-30T19:45:39.153037Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "finishVerify",
+          "loc": "internal/cmd/verify.go:138",
+          "what": "the one seam turning a completed mutation run into tests.json plus the verify.toml skeleton, shared by the attached run and the detached fetch so a detached verdict is not a second-class artefact"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/mutation/gremlins.go",
+        "internal/remote/remote.go",
+        "internal/cmd/verify_detach_test.go",
+        "internal/cmd/verify_scoping_test.go"
+      ],
+      "commit": "ea65ab1",
+      "completed_at": "2026-08-30T19:53:28.211538Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "dispatchDetached",
+          "loc": "internal/cmd/verify.go:239",
+          "what": "pushes the tree then starts the whole per-package gremlins sequence on the granted host as one detached job, recording the run only once the host has accepted it so a failed dispatch strands nothing"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/mutation/gremlins.go",
+        "internal/mutation/gremlins_test.go",
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "9bd378e",
+      "completed_at": "2026-08-30T19:58:38.491206Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "collectDetached",
+          "loc": "internal/cmd/verify.go:295",
+          "what": "collects a detached run from the host recorded at dispatch and turns its reports into the phase's artefacts through the same pipeline an attached run uses, writing nothing for any state but finished"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/cmd/verify_status_test.go"
+      ],
+      "commit": "584b662",
+      "completed_at": "2026-08-30T20:01:16.875472Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "cancelDetached",
+          "loc": "internal/cmd/verify.go:400",
+          "what": "lists what this machine dispatched without needing the network and tears a run down on the host that holds it, killing the process group setsid created rather than the pid alone"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "README.md",
+        "assets/prompts/verify.md",
+        "internal/cmd/options_docs_test.go"
+      ],
+      "commit": "d3fc777",
+      "completed_at": "2026-08-30T20:03:28.960047Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "TestReadmeDocumentsDetachedRuns",
+          "loc": "internal/cmd/options_docs_test.go:333",
+          "what": "pins the detach surface as documented in both README and the verify prompt, including the five result states so an agent never reads a still-running run as a red suite"
+        }
+      ]
+    }
+  }
 }
