@@ -139,7 +139,15 @@ func (s *Stryker) Run(files []string) (*Report, error) {
 			// the instrumenter. The config was fine each time and the real
 			// cause was sitting at the HEAD of the output, which the user had
 			// just watched scroll past. Quote it.
-			return nil, fmt.Errorf("stryker did not write a report at %s.\n%s", reportPath, head.quote(strykerHeadLines))
+			msg := fmt.Sprintf("stryker did not write a report at %s.\n%s", reportPath, head.quote(strykerHeadLines))
+			// Attached only on an initial-test-run abort. Unconditionally it
+			// would claim a truncated failure list on aborts that never
+			// printed one — a bad --mutate glob, a missing runner, a crash in
+			// the instrumenter (locked decision note_trigger).
+			if strings.Contains(head.buf.String(), strykerInitialTestFailureText) {
+				msg += "\n" + strykerInitialTestTruncationNote
+			}
+			return nil, errors.New(msg)
 		}
 		return nil, fmt.Errorf("read stryker report: %w", err)
 	}
@@ -217,6 +225,33 @@ func (h *headBuffer) quote(n int) string {
 // to no file (@stryker-mutator/core, src/fs/project-reader.ts). Named here so
 // the constant and the error message that surfaces it cannot drift apart.
 const strykerDropWarningText = "did not result in any files"
+
+// strykerInitialTestFailureText is Stryker's own header for the list of tests
+// that failed during its initial test run, verbatim off @stryker-mutator/core
+// 9.6.1 (the value of strykerPin), trailing colon included. Named here for the
+// same reason as strykerDropWarningText: so the constant and the message that
+// depends on it cannot drift apart.
+//
+// It is keyed on rather than the Stryker-level "There were failed tests in the
+// initial test run." because it is the truncated list's OWN header — gating on
+// it cannot claim a list was truncated when none was printed. Both lines reach
+// dross by the same route anyway: dross tolerates any *exec.ExitError, so
+// Stryker's ConfigError never arrives as an error value and the tee'd head
+// buffer is the only matchable thing.
+//
+// The truncation behind strykerInitialTestTruncationNote was OBSERVED, not
+// inferred: two consecutive aborts on one unchanged config each named a single
+// failing test, and the second offender had been failing throughout the first
+// run without ever being mentioned.
+const strykerInitialTestFailureText = "One or more tests failed in the initial test run:"
+
+// strykerInitialTestTruncationNote is appended to the no-report error when the
+// retained head matches strykerInitialTestFailureText. Without it the reader
+// takes the one named test for the whole problem, fixes it, and is surprised
+// by the next abort.
+const strykerInitialTestTruncationNote = "stryker aborted on its initial test run and names ONLY the first failing test above — " +
+	"that list is truncated by design, so an unknown number of further failures remain. " +
+	"Fix the one it named, re-run, and expect it to name another.\n"
 
 // checkInstrumented hard-fails the run when stryker did not instrument a file
 // it was asked to mutate (locked decision drop_behaviour).
