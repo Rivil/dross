@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 const host = "helicon"
@@ -693,5 +694,249 @@ func TestSyncArgsFallsBackToTheMergeRuleWithoutGit(t *testing.T) {
 	defer cleanup()
 	if !contains(argv, gitignoreMergeRule) {
 		t.Errorf("a non-git root lost its ignore rule entirely: %v", argv)
+	}
+}
+
+// --- detached runs ----------------------------------------------------------
+
+// TestDetachScriptQuotesTheRunDirAndArgv is the injection assertion, and it
+// matters more here than for an attached run: the detached script is
+// constructed once and then runs unattended for hours, so a word that split is
+// not something anyone is watching a terminal to notice.
+//
+// Both operands are exercised. The run directory reaches the script four times
+// — mkdir, state, exit, log — and a quoting that covered the argv but not the
+// paths would pass an argv-only assertion.
+func TestDetachScriptQuotesTheRunDirAndArgv(t *testing.T) {
+	dir := ".dross-runs/r 1;touch pwned"
+	script, err := DetachScript(target(), dir, []string{"gremlins", "unleash", "./a b;c"}, time.Time{})
+	if err != nil {
+		t.Fatalf("DetachScript = %v", err)
+	}
+	for _, want := range []string{
+		`'.dross-runs/r 1;touch pwned'`,
+		`'.dross-runs/r 1;touch pwned/state'`,
+		`'./a b;c'`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script does not carry %s as one quoted word:\n%s", want, script)
+		}
+	}
+	// And the raw semicolon must never appear outside a quoted word: a bare
+	// one is a second command.
+	if strings.Contains(script, "touch pwned'\n") || strings.Contains(script, "; touch pwned") {
+		t.Errorf("the run directory escaped its quoting:\n%s", script)
+	}
+}
+
+// TestDetachScriptDetachesFromTheSession is c-1 at the script level. Without
+// setsid the run belongs to the ssh session and dies with the SIGHUP that
+// follows the connection closing — which is exactly the failure the phase
+// exists to remove, and it would only show up an hour later as a run that
+// never reported.
+func TestDetachScriptDetachesFromTheSession(t *testing.T) {
+	script, err := DetachScript(target(), ".dross-runs/r1", []string{"gremlins", "unleash"}, time.Time{})
+	if err != nil {
+		t.Fatalf("DetachScript = %v", err)
+	}
+	for _, want := range []string{"setsid", "nohup", "< /dev/null", "&"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script is missing %q — it would not survive the connection:\n%s", want, script)
+		}
+	}
+	// Output must go to the run directory, not back over a connection that
+	// will not be there to carry it.
+	if !strings.Contains(script, `'.dross-runs/r1/log'`) {
+		t.Errorf("script does not redirect output to the run directory:\n%s", script)
+	}
+}
+
+// TestDetachScriptEmitsNoSleepWithoutASchedule is the immediate-dispatch half.
+// A sleep emitted unconditionally would make every ordinary --detach wait on a
+// date comparison it has no reason to do, and a bug in that arithmetic would
+// delay runs nobody asked to schedule.
+func TestDetachScriptEmitsNoSleepWithoutASchedule(t *testing.T) {
+	script, err := DetachScript(target(), ".dross-runs/r1", []string{"gremlins"}, time.Time{})
+	if err != nil {
+		t.Fatalf("DetachScript = %v", err)
+	}
+	if strings.Contains(script, "sleep") {
+		t.Errorf("an unscheduled run emitted a sleep:\n%s", script)
+	}
+	if !strings.Contains(script, "printf '%s' 'running'") {
+		t.Errorf("an unscheduled run does not start in the running state:\n%s", script)
+	}
+}
+
+// TestScheduledRunSleepsAgainstTheHostClock pins the epoch-second form.
+//
+// A duration computed HERE would bake in this machine's clock at dispatch and
+// drift by the ssh round trip; worse, a notBefore that passed while the
+// dispatch was in flight would compute a negative sleep. The comparison is
+// emitted for the host to make, so both are impossible by construction.
+func TestScheduledRunSleepsAgainstTheHostClock(t *testing.T) {
+	at := time.Date(2026, 8, 31, 2, 0, 0, 0, time.UTC)
+	script, err := DetachScript(target(), ".dross-runs/r1", []string{"gremlins"}, at)
+	if err != nil {
+		t.Fatalf("DetachScript = %v", err)
+	}
+	if !strings.Contains(script, fmt.Sprintf("%d", at.Unix())) {
+		t.Errorf("the schedule is not carried as an epoch second (want %d):\n%s", at.Unix(), script)
+	}
+	if !strings.Contains(script, "date +%s") {
+		t.Errorf("the script does not consult the HOST clock:\n%s", script)
+	}
+	if !strings.Contains(script, "sleep") {
+		t.Errorf("a scheduled run emits no sleep:\n%s", script)
+	}
+	// It must start as scheduled, or `verify status` reports a run as running
+	// for the hours it is actually waiting.
+	if !strings.Contains(script, "printf '%s' 'scheduled'") {
+		t.Errorf("a scheduled run does not start in the scheduled state:\n%s", script)
+	}
+}
+
+// TestDetachScriptRecordsTheExitCode is the completion signal c-6 turns on. A
+// script that ran the tool but recorded nothing leaves "finished with
+// failures" and "died without finishing" as the same observation.
+func TestDetachScriptRecordsTheExitCode(t *testing.T) {
+	script, err := DetachScript(target(), ".dross-runs/r1", []string{"gremlins"}, time.Time{})
+	if err != nil {
+		t.Fatalf("DetachScript = %v", err)
+	}
+	// The exit write lives INSIDE the `bash -c` argument, so its path appears
+	// in the escaped form single-quoting produces ('\'' around each quote) —
+	// asserting the bare form here would be asserting that the inner script was
+	// never quoted at all.
+	if !strings.Contains(script, `> '\''.dross-runs/r1/exit'\''`) {
+		t.Errorf("the script does not record the tool's exit code:\n%s", script)
+	}
+	if !strings.Contains(script, `"$__c"`) {
+		t.Errorf("the recorded code is not the tool's own $?:\n%s", script)
+	}
+	// The pid write is in the OUTER script, after the `&`, which is the only
+	// place $! still names the backgrounded job.
+	if !strings.Contains(script, `> '.dross-runs/r1/pid'`) {
+		t.Errorf("the script does not record the pid a cancel would signal:\n%s", script)
+	}
+}
+
+// TestDetachScriptRefusesAnEmptyCommand mirrors Script's own refusal: a
+// detached run with nothing to run would create a directory, record a pid and
+// report finished having measured nothing.
+func TestDetachScriptRefusesAnEmptyCommand(t *testing.T) {
+	if _, err := DetachScript(target(), ".dross-runs/r1", nil, time.Time{}); err == nil {
+		t.Fatal("a detached run with an empty command was accepted")
+	}
+	if _, err := DetachScript(target(), "", []string{"gremlins"}, time.Time{}); err == nil {
+		t.Fatal("a detached run with no run directory was accepted")
+	}
+}
+
+// TestRunDirRefusesATraversingID is why the id is validated as a path SEGMENT
+// rather than merely quoted. The directory it names is removed recursively by a
+// cancel, so an id spelling `..` aims that removal at the workdir's parent —
+// and quoting stops the shell splitting the word while doing nothing about
+// where the path then points.
+func TestRunDirRefusesATraversingID(t *testing.T) {
+	for _, bad := range []string{"", ".", "..", "../escape", "a/b", "/abs"} {
+		if _, err := RunDir(bad); err == nil {
+			t.Errorf("RunDir accepted %q", bad)
+		}
+	}
+	got, err := RunDir("r-20260830-2201")
+	if err != nil {
+		t.Fatalf("RunDir rejected a well-formed id: %v", err)
+	}
+	if got != ".dross-runs/r-20260830-2201" {
+		t.Errorf("RunDir = %q", got)
+	}
+}
+
+// TestParseStatusSeparatesAbsentFromZero is the assertion c-6 rests on. An exit
+// code of 0 and no exit code at all are the two outcomes a fetch must never
+// merge: the first is a clean run to collect, the second is a run that died.
+// Any in-band sentinel would be a value some real run also produces.
+func TestParseStatusSeparatesAbsentFromZero(t *testing.T) {
+	zero, err := ParseStatus("dir=yes\nstate=finished\nexit=0\npid=42\n")
+	if err != nil {
+		t.Fatalf("ParseStatus = %v", err)
+	}
+	if !zero.HasExit || zero.ExitCode != 0 {
+		t.Errorf("a recorded 0 did not parse as one: %+v", zero)
+	}
+
+	absent, err := ParseStatus("dir=yes\nstate=running\nexit=\npid=42\n")
+	if err != nil {
+		t.Fatalf("ParseStatus = %v", err)
+	}
+	if absent.HasExit {
+		t.Errorf("an absent exit code parsed as a recorded one: %+v", absent)
+	}
+	if absent.ExitCode != zero.ExitCode {
+		t.Log("note: ExitCode alone cannot distinguish these — HasExit is the discriminator")
+	}
+}
+
+// TestParseStatusDistinguishesAMissingRunDirectory is the other half of c-6:
+// "the run has written nothing yet" and "the run directory is gone" are both
+// three empty values, and only the dir line tells them apart.
+func TestParseStatusDistinguishesAMissingRunDirectory(t *testing.T) {
+	gone, err := ParseStatus("dir=no\nstate=\nexit=\npid=\n")
+	if err != nil {
+		t.Fatalf("ParseStatus = %v", err)
+	}
+	if gone.DirExists {
+		t.Errorf("a removed run directory parsed as present: %+v", gone)
+	}
+	fresh, err := ParseStatus("dir=yes\nstate=\nexit=\npid=\n")
+	if err != nil {
+		t.Fatalf("ParseStatus = %v", err)
+	}
+	if !fresh.DirExists {
+		t.Errorf("a present-but-empty run directory parsed as gone: %+v", fresh)
+	}
+}
+
+// TestParseStatusIgnoresShellNoise: the remote login shell may print a banner
+// or a profile's greeting before anything dross wrote. A parser that refused
+// unknown lines would strand a finished run behind someone's .bashrc.
+func TestParseStatusIgnoresShellNoise(t *testing.T) {
+	got, err := ParseStatus("Welcome to helicon!\nLast login: Sun\ndir=yes\nstate=finished\nexit=1\npid=9\n")
+	if err != nil {
+		t.Fatalf("ParseStatus = %v", err)
+	}
+	if !got.HasExit || got.ExitCode != 1 || got.State != "finished" {
+		t.Errorf("banner text broke the parse: %+v", got)
+	}
+}
+
+// TestParseStatusRefusesOutputItRecognisesNothingIn is the other side of that
+// tolerance: ignoring unknown lines must not mean accepting output that
+// contains no status at all, which is what an ssh that failed before running
+// the script returns.
+func TestParseStatusRefusesOutputItRecognisesNothingIn(t *testing.T) {
+	if _, err := ParseStatus("ssh: connect to host helicon port 22: No route to host\n"); err == nil {
+		t.Fatal("output carrying no status lines parsed as a status")
+	}
+}
+
+// TestStatusScriptReadsWithoutDisturbing pins that the status read is
+// side-effect free. A status verb that created the directory it was asking
+// about would make "the run is gone" unobservable.
+func TestStatusScriptReadsWithoutDisturbing(t *testing.T) {
+	script, err := StatusScript(target(), ".dross-runs/r1")
+	if err != nil {
+		t.Fatalf("StatusScript = %v", err)
+	}
+	for _, forbidden := range []string{"mkdir", "rm ", "setsid", "> '.dross-runs"} {
+		if strings.Contains(script, forbidden) {
+			t.Errorf("the status script is not read-only, it contains %q:\n%s", forbidden, script)
+		}
+	}
+	for _, want := range []string{"dir=", "state=", "exit=", "pid="} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the status script does not report %q:\n%s", want, script)
+		}
 	}
 }
