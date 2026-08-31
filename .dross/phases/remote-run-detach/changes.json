@@ -51,6 +51,42 @@
         }
       ]
     },
+    "t-12": {
+      "files": [
+        "internal/mutation/gremlins.go",
+        "internal/mutation/gremlins_test.go"
+      ],
+      "commit": "daf7206",
+      "completed_at": "2026-08-31T18:05:30.508378Z",
+      "landmarks": [
+        {
+          "feature": "mutation testing adapters",
+          "symbol": "packagesFromFiles",
+          "loc": "internal/mutation/gremlins.go:597",
+          "what": "derives a gremlins package only for directories carrying a changed .go file, so a root README no longer expands to a whole-module run and a Go-less directory no longer gets a doomed invocation"
+        }
+      ]
+    },
+    "t-13": {
+      "files": [
+        "internal/cmd/verify.go",
+        "internal/mutation/gremlins.go",
+        "internal/mutation/launcher.go",
+        "internal/cmd/verify_results_test.go",
+        "internal/cmd/verify_detach_test.go",
+        "internal/mutation/gremlins_test.go"
+      ],
+      "commit": "3d93e42",
+      "completed_at": "2026-08-31T20:20:47.57743Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "ReportlessExit",
+          "loc": "internal/mutation/launcher.go:778",
+          "what": "one shared rule refusing a package that wrote no report and exited non-zero, applied by the attached loop and by a detached collect reading the per-package exit code the sequence now records"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/remote/remote.go",

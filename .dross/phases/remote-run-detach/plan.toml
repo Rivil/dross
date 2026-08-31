@@ -1,4 +1,4 @@
-task_seq = 11
+task_seq = 13
 
 [phase]
   id = "remote-run-detach"
@@ -115,4 +115,25 @@ task_seq = 11
   description = "detachCancel's command text is invisible to the suite because stubCancel replaces the whole seam. Extract the line as a pure cancelLine(runDir, pidFile) string and assert it directly, so dropping the process-group '-- -' fails a test instead of leaving gremlins holding the host's cores after a reported cancellation."
   covers = ["c-4"]
   test_contract = ["if cancelLine stops targeting the process group, TestCancelLineKillsTheProcessGroup fails", "if cancelLine stops removing the run directory, TestCancelLineRemovesTheRunDirectory fails", "if cancelLine stops quoting its paths, TestCancelLineQuotesItsPaths fails"]
+  status = "done"
+
+[[task]]
+  id = "t-12"
+  wave = 4
+  title = "Derive mutation packages only from Go directories"
+  files = ["internal/mutation/gremlins.go", "internal/mutation/gremlins_test.go"]
+  description = "packagesFromFiles maps every changed file's directory to a gremlins package, including directories that hold no Go. Two consequences, both live on this phase: README.md maps to '.', and gremlins appends /... to every package argument, so '.' becomes './...' and mutates the whole module (this phase's run produced a 196-file, 5444-mutant root.json and out-of-scope survivors from internal/statusline, internal/phase, internal/architecture and internal/forge); and assets/prompts/verify.md maps to './assets/prompts', where gremlins exits 1 and writes no report. Filter the derivation to directories containing at least one .go file. Shared by the attached and detached paths, so both get the fix."
+  covers = ["c-2"]
+  test_contract = ["if the derivation stops filtering Go-less directories, a test over a file set containing a root-level non-Go file and a Go-less subdirectory fails by deriving '.' and './assets/prompts'", "if the filter over-reaches and drops a directory that does contain Go, a test asserting a mixed file set still derives its Go package fails"]
+  status = "done"
+
+[[task]]
+  id = "t-13"
+  wave = 5
+  title = "Fail a detached collect on a package that failed before measuring"
+  files = ["internal/cmd/verify.go", "internal/mutation/gremlins.go", "internal/mutation/launcher.go", "internal/cmd/verify_results_test.go", "internal/cmd/verify_detach_test.go", "internal/mutation/gremlins_test.go"]
+  description = "The attached loop calls reportlessExitFatal per package (internal/mutation/gremlins.go:273): no report PLUS a non-zero tool exit fails the run, written after that exact shape reported a false clean 0.95 with a package silently unmeasured (internal/mutation/launcher.go:745). The detached path calls no equivalent — detachFetchReports warns and continues, and the only fatal check (internal/cmd/verify.go:530) needs every package to have measured nothing. It is structural: detachSequence joins packages with ';' and DetachScript records one exit code for the sequence, the last package's, so a package failing anywhere but last is invisible by construction. Have detachSequence write a per-package exit file beside each report, fetch it with the report, and apply the attached path's rule at collect."
+  covers = ["c-2"]
+  depends_on = ["t-12"]
+  test_contract = ["if the detached collect stops failing on a package that wrote no report and exited non-zero, a test driving a two-package collect where the first package failed and the second measured cleanly fails by writing artefacts instead of refusing", "if detachSequence stops writing a per-package exit file, a test asserting each step's rendered shell records its own exit code fails", "if the guard over-reaches, a test asserting a package that exited 0 with no report is still a benign skip fails"]
   status = "done"
