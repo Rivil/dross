@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Rivil/dross/internal/mutation"
+	"github.com/Rivil/dross/internal/project"
 	"github.com/Rivil/dross/internal/remote"
 	"github.com/Rivil/dross/internal/verify"
 )
@@ -301,4 +303,200 @@ func TestFetchPullsPerFileNotTheDirectory(t *testing.T) {
 			t.Errorf("fetch %d source %q is not a report file", i, src)
 		}
 	}
+}
+
+// collectPayload is a gremlins report naming two files: one the phase touched
+// and one it did not. The untouched file's survivor is what proves the detached
+// collect applies the same scope filtering an attached run does — without it,
+// a neighbour's survivor would gate this phase.
+const collectPayload = `{
+  "go_module": "example.com/x",
+  "mutants_total": 4,
+  "mutants_killed": 2,
+  "mutants_lived": 2,
+  "files": [
+    {"file_name": "a.go", "mutations": [
+      {"line": 3, "column": 1, "type": "CONDITIONALS_NEGATION", "status": "KILLED"},
+      {"line": 4, "column": 1, "type": "CONDITIONALS_BOUNDARY", "status": "LIVED"}
+    ]},
+    {"file_name": "b.go", "mutations": [
+      {"line": 3, "column": 1, "type": "CONDITIONALS_NEGATION", "status": "KILLED"},
+      {"line": 4, "column": 1, "type": "ARITHMETIC_BASE", "status": "LIVED"}
+    ]}
+  ]
+}`
+
+// collectRepo builds the full fixture a successful collect needs, which the
+// refusal tests never did: a real repo with a phase, a recorded change set, a
+// finished detached run, a real gremlins adapter, and a fetch that drops a
+// report where Collect will read it.
+func collectRepo(t *testing.T, phaseID string) string {
+	t.Helper()
+	dir := scopedVerifyRepo(t, phaseID)
+	phaseSpec(t, phaseID)
+	writeScopeFile(t, dir, "a.go", "package x\n\nfunc A() bool { return 1 > 0 }\n")
+	mustGit(t, dir, "commit", "-qam", "phase edits a.go")
+	if err := runCmd(t, Changes(), "record", phaseID, "t-1", "--files", "a.go"); err != nil {
+		t.Fatal(err)
+	}
+	mustSetBase(t, phaseID, "base")
+
+	// A REAL Gremlins: gremlinsAdapter type-asserts the concrete type, and
+	// Collect only reads files, so nothing is spawned.
+	prev := configuredAdaptersFn
+	configuredAdaptersFn = func(_ *project.Project, _ string, _ bool) ([]mutation.Adapter, mutationTuning, error) {
+		return []mutation.Adapter{&mutation.Gremlins{ProjectRoot: dir}}, mutationTuning{}, nil
+	}
+	t.Cleanup(func() { configuredAdaptersFn = prev })
+
+	root := filepath.Join(dir, RootDirName)
+	if err := recordDetachedRun(root, dir, detachedRun{
+		Phase: phaseID, RunID: "r-1", Host: "anachryon", Workdir: "/srv/x",
+		RunDir: ".dross-runs/r-1", DispatchedAt: time.Now().UTC(), State: "running",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "finished", HasExit: true, ExitCode: 0}, nil)
+
+	// The fetch drops the payload where Collect reads it, standing in for the
+	// rsync without needing a host.
+	origFetch := detachFetchReports
+	t.Cleanup(func() { detachFetchReports = origFetch })
+	detachFetchReports = func(_ remote.Target, localRoot string, steps []mutation.PackageStep) error {
+		for _, s := range steps {
+			p := filepath.Join(localRoot, s.ReportRel)
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(p, []byte(collectPayload), 0o644); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return dir
+}
+
+// TestCollectWritesTheSameArtefactsAnAttachedRunWould is c-2's actual claim,
+// and until now nothing asserted it.
+//
+// The refusal branches were covered; the success path — scope rebuild,
+// DetachSteps, fetch, Collect, FilterReport, Tests assembly, measuredOn — had
+// no test at all, which is why 36 in-hunk survivors landed in collectDetached.
+// Every property below is one an attached run guarantees, restated
+// independently here rather than read back from the code under test.
+func TestCollectWritesTheSameArtefactsAnAttachedRunWould(t *testing.T) {
+	const id = "collect"
+	dir := collectRepo(t, id)
+	root := filepath.Join(dir, RootDirName)
+
+	if err := collectDetached(id); err != nil {
+		t.Fatalf("collectDetached: %v", err)
+	}
+
+	testsPath, verifyPath := verify.FilePaths(root, id)
+	raw, err := os.ReadFile(testsPath)
+	if err != nil {
+		t.Fatalf("tests.json was not written: %v", err)
+	}
+	var got verify.Tests
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	// Provenance is the recorded host, not the grant on disk.
+	if got.MeasuredOn != "anachryon" {
+		t.Errorf("measured_on = %q, want the host recorded at dispatch", got.MeasuredOn)
+	}
+	// The scope is rebuilt from changes.json, so it must name the file the
+	// phase touched.
+	if got.Scope == nil || len(got.Scope.Files) == 0 {
+		t.Fatalf("no scope recorded — the rebuild from changes.json did not happen: %+v", got.Scope)
+	}
+	var sawA bool
+	for _, f := range got.Scope.Files {
+		if f == "a.go" {
+			sawA = true
+		}
+	}
+	if !sawA {
+		t.Errorf("scope does not carry the phase's own file: %v", got.Scope.Files)
+	}
+	// The leg is assembled and carries the fetched report's numbers.
+	if len(got.Languages) != 1 || got.Languages[0].Mutation == nil {
+		t.Fatalf("no go leg assembled: %+v", got.Languages)
+	}
+	m := got.Languages[0].Mutation
+	if m.Killed == 0 {
+		t.Errorf("the fetched report contributed no kills: %+v", m)
+	}
+	// b.go is the untouched sibling: its survivor must be filtered out of
+	// scope, exactly as the attached path filters it.
+	for _, s := range m.Surviving {
+		if strings.Contains(s.File, "b.go") {
+			t.Errorf("an untouched sibling's survivor stayed in scope: %+v", s)
+		}
+	}
+	if len(got.OutOfScope) == 0 {
+		t.Error("nothing was filtered out of scope — b.go's survivor should have been")
+	}
+
+	// verify.toml exists and is a skeleton for the spec's criteria.
+	vraw, err := os.ReadFile(verifyPath)
+	if err != nil {
+		t.Fatalf("verify.toml was not written: %v", err)
+	}
+	body := string(vraw)
+	if !strings.Contains(body, `verdict = "pending"`) {
+		t.Errorf("verify.toml is not a pending skeleton:\n%s", body)
+	}
+	if !strings.Contains(body, `"c-1"`) {
+		t.Errorf("verify.toml carries no block for the spec's criterion:\n%s", body)
+	}
+}
+
+// TestASuccessfulCollectClearsTheRecord: leaving it would report a phase as
+// having a run in flight forever, and block every future --detach on it.
+func TestASuccessfulCollectClearsTheRecord(t *testing.T) {
+	const id = "collect"
+	dir := collectRepo(t, id)
+	root := filepath.Join(dir, RootDirName)
+
+	if err := collectDetached(id); err != nil {
+		t.Fatalf("collectDetached: %v", err)
+	}
+	rec, err := findDetachedRun(root, dir, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec != nil {
+		t.Errorf("the record survived a successful collect: %+v", rec)
+	}
+	// And a second collect must say there is nothing to collect, rather than
+	// re-running against whatever is still on disk.
+	if err := collectDetached(id); err == nil {
+		t.Error("a second collect of an already-collected phase reported success")
+	}
+}
+
+// TestCollectRefusesARunThatProducedNothing is the false-green guard on the
+// success path: a tool that exited non-zero having written no measurable
+// report must not be recorded as a clean run of zero mutants.
+func TestCollectRefusesARunThatProducedNothing(t *testing.T) {
+	const id = "collect"
+	dir := collectRepo(t, id)
+	root := filepath.Join(dir, RootDirName)
+
+	// Finished, but non-zero, and the fetch brings back nothing.
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "finished", HasExit: true, ExitCode: 2}, nil)
+	detachFetchReports = func(_ remote.Target, _ string, _ []mutation.PackageStep) error { return nil }
+
+	err := collectDetached(id)
+	if err == nil {
+		t.Fatal("a run that exited 2 with no measurable report was collected as clean")
+	}
+	if got := exitCodeOf(err); got != exitResultsFailed {
+		t.Errorf("exit code = %d, want %d (failed)", got, exitResultsFailed)
+	}
+	assertNoArtefacts(t, root, id)
 }
