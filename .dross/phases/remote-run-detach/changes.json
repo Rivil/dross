@@ -87,6 +87,21 @@
         }
       ]
     },
+    "t-14": {
+      "files": [
+        "internal/cmd/verify_results_test.go"
+      ],
+      "commit": "04d0693",
+      "completed_at": "2026-08-31T22:13:08.024908Z",
+      "landmarks": [
+        {
+          "feature": "detached mutation runs",
+          "symbol": "fetchSpy",
+          "loc": "internal/cmd/verify_results_test.go:583",
+          "what": "runs the real detachFetchReports with only runDetachArgv stubbed, so the per-package exit-code fetch is asserted without a host"
+        }
+      ]
+    },
     "t-2": {
       "files": [
         "internal/remote/remote.go",

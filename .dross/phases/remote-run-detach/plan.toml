@@ -1,4 +1,4 @@
-task_seq = 13
+task_seq = 14
 
 [phase]
   id = "remote-run-detach"
@@ -136,4 +136,14 @@ task_seq = 13
   covers = ["c-2"]
   depends_on = ["t-12"]
   test_contract = ["if the detached collect stops failing on a package that wrote no report and exited non-zero, a test driving a two-package collect where the first package failed and the second measured cleanly fails by writing artefacts instead of refusing", "if detachSequence stops writing a per-package exit file, a test asserting each step's rendered shell records its own exit code fails", "if the guard over-reaches, a test asserting a package that exited 0 with no report is still a benign skip fails"]
+  status = "done"
+
+[[task]]
+  id = "t-14"
+  wave = 6
+  title = "Cover the real detachFetchReports body"
+  files = ["internal/cmd/verify_results_test.go"]
+  description = "Both in-diff survivors from run r-20260831-202210 (internal/cmd/verify.go:438 and :442, CONDITIONALS_NEGATION, in-hunk) sit inside detachFetchReports, which every collect test replaces wholesale — so the exit-file fetch added by t-13 has no test at all. Unlike the detachSync/detachStatus/detachCancel seams, this one bottoms out in runDetachArgv, a package-level var, so the REAL body can run with only the spawn stubbed: no ssh, no rsync, and the locked tests_spawn_no_ssh decision is untouched. Assert that each step's exit file is fetched alongside its report, that a stale local exit file is cleared first, that a step carrying no ExitRel fetches only its report, and that a failed exit fetch is tolerated the way a failed report fetch is."
+  covers = ["c-2"]
+  test_contract = ["if detachFetchReports stops fetching the per-package exit file, a test asserting the real body issues a fetch for each step's ExitRel fails", "if it stops clearing a stale local exit file before fetching, a test seeding one and asserting it is gone fails", "if a step carrying no ExitRel stops being skipped, a test asserting only the report is fetched for it fails"]
   status = "done"
