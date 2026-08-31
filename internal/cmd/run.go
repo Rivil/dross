@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/project"
+	"github.com/Rivil/dross/internal/testlane"
 )
 
 // `dross run <name>` is the verb the [runtime] block was always missing.
@@ -197,7 +198,7 @@ func runSlotNames() []string {
 func runCommandLine(base string, extra []string) string {
 	line := strings.TrimSpace(base)
 	for _, a := range extra {
-		line += " " + shellQuoteArg(a)
+		line += " " + testlane.ShellQuote(a)
 	}
 	return line
 }

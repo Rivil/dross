@@ -214,9 +214,26 @@ func TestReadmeDocumentsTestLanes(t *testing.T) {
 		// documented cannot know it exists to review.
 		"--prepare",
 		"dross test lane edit",
+		// The template surface. It reaches runners the closed selector enum
+		// cannot shape, and it is the one scoping field that changes the
+		// consent line — a reader who cannot find it documented cannot know
+		// why their granted lane went stale.
+		"--selector-template",
+		"--selector-join",
+		"{path}",
+		"{paths}",
 	} {
 		if !strings.Contains(readme, want) {
 			t.Errorf("README.md does not document %q", want)
+		}
+	}
+	// The c-4 warning, in the README as well as at the two surfaces that print
+	// it. It describes a lane that VALIDATES and still measures the whole
+	// suite, so a reader who never meets the wording has no name for the one
+	// failure a green scoped run can hide.
+	for _, want := range []string{"./...", "runs the union"} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("README.md does not document the whole-tree warning: %q missing", want)
 		}
 	}
 	// Exit 5 now has two causes, and an agent that only ever learned the first
@@ -252,26 +269,63 @@ func TestReadmeDocumentsTestLanes(t *testing.T) {
 // settings prompt could describe this surface wrongly: by sending the reader to
 // hand-edit project.toml, or by advertising a flag the command does not
 // register.
+//
+// The remove-then-re-add assertion is RE-POINTED rather than dropped. It used
+// to require the prompt to route match, command, selector and empty_exit
+// through remove-then-re-add; lane-selector-custom made all four editable in
+// place, so a doc still saying that sends the reader to a workaround that
+// DROPS the lane's grant. What the guard protects is unchanged — a doc must
+// never route a lane change around the CLI's refusals — so it now requires the
+// prompt to name the in-place field set, and still refuses any instruction to
+// open the [[runtime.test_lane]] block by hand.
 func TestOptionsDocumentsTheSelectorSurfaceCorrectly(t *testing.T) {
 	prompt := optionsPrompt(t)
 
-	// Editing stays remove-then-re-add for every field but prepare (locked
-	// lane_edit_surface, narrowed by lane-prepare-step). A prompt that told
-	// the reader to open project.toml would route around every refusal
-	// `dross test lane add` performs before the write.
+	// Only the lane's NAME is remove-then-re-add now, and the prompt has to
+	// say so: it keys the consent store, so it cannot move without the grant
+	// moving with it.
 	if !strings.Contains(prompt, "remove-then-re-add") {
-		t.Error("options.md does not route lane edits through remove-then-re-add")
+		t.Error("options.md no longer says which lane change is remove-then-re-add")
 	}
-	// The one exception, named as one. A prompt that advertised the edit verb
-	// without saying it is prepare-only would send the reader to a refusal for
-	// every other field.
 	if !strings.Contains(prompt, "dross test lane edit") {
-		t.Error("options.md does not name `dross test lane edit --prepare`")
+		t.Error("options.md does not name `dross test lane edit`")
 	}
-	for _, field := range []string{"match", "command", "selector", "empty_exit"} {
+	// Every field the edit verb writes must be named. A prompt that omitted
+	// one would leave the reader believing that field still needs the
+	// grant-dropping workaround.
+	for _, field := range []string{
+		"--match", "--command", "--prepare", "--selector",
+		"--selector-template", "--selector-join", "--empty-exit",
+		"--toolchain", "--install",
+	} {
 		if !strings.Contains(prompt, field) {
-			t.Errorf("options.md no longer says which fields stay remove-then-re-add: %q is missing", field)
+			t.Errorf("options.md does not name the in-place-editable field %q", field)
 		}
+	}
+	// The claim the phase falsified must be gone: a SENTENCE that routes one
+	// of those four fields through remove-then-re-add is the failure this
+	// guard was re-pointed to catch. Sentences, not lines — a markdown
+	// paragraph is one line, and this one legitimately says "a blank command"
+	// and "an empty match list" describing what the refusal gate catches.
+	//
+	// Word-bounded, so `trusted_lane_commands` is not read as the word
+	// "command": the key name has to appear in the very sentence that explains
+	// why the lane's NAME is the exception.
+	editable := regexp.MustCompile(`\b(match|command|selector|empty_exit)\b`)
+	namesTheException := false
+	for _, sentence := range strings.Split(prompt, ". ") {
+		if !strings.Contains(sentence, "remove-then-re-add") {
+			continue
+		}
+		if got := editable.FindString(sentence); got != "" {
+			t.Errorf("options.md still routes %s through remove-then-re-add: %q", got, sentence)
+		}
+		if regexp.MustCompile(`\bname\b`).MatchString(sentence) {
+			namesTheException = true
+		}
+	}
+	if !namesTheException {
+		t.Error("options.md does not say that the lane's NAME is the one field remove-then-re-add still applies to")
 	}
 	for _, forbidden := range []string{
 		"hand-edit runtime.test_lane",
@@ -283,36 +337,56 @@ func TestOptionsDocumentsTheSelectorSurfaceCorrectly(t *testing.T) {
 		}
 	}
 
-	// Every --flag advertised for `dross test lane add`, in options.md AND in
-	// the README, has to be one the cobra command actually registers. A doc
-	// naming --selector-template is a doc that sends the user to a refusal.
-	registered := map[string]bool{}
-	testLaneAdd().Flags().VisitAll(func(f *pflag.Flag) { registered[f.Name] = true })
+	// Every --flag advertised for a lane verb, in options.md AND in the
+	// README, has to be one the cobra command actually registers. A doc naming
+	// a flag that does not exist sends the user to a refusal.
+	//
+	// Both verbs are parsed, not just `lane add`: the edit verb now carries the
+	// larger flag set, so a guard reading only the add examples would leave the
+	// half most likely to drift unchecked.
+	addFlags := map[string]bool{}
+	testLaneAdd().Flags().VisitAll(func(f *pflag.Flag) { addFlags[f.Name] = true })
+	editFlags := map[string]bool{}
+	testLaneEdit().Flags().VisitAll(func(f *pflag.Flag) { editFlags[f.Name] = true })
 
 	root := repoRootForDocs(t)
 	readmeBytes, err := os.ReadFile(filepath.Join(root, "README.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	flagRe := regexp.MustCompile(`dross test lane add[^\n` + "`" + `]*`)
-	for _, doc := range []struct{ name, body string }{
+	docs := []struct{ name, body string }{
 		{"options.md", prompt},
 		{"README.md", string(readmeBytes)},
+	}
+	for _, verb := range []struct {
+		name       string
+		registered map[string]bool
+	}{
+		{"dross test lane add", addFlags},
+		{"dross test lane edit", editFlags},
 	} {
-		for _, example := range flagRe.FindAllString(doc.body, -1) {
-			for _, tok := range strings.Fields(example) {
-				if !strings.HasPrefix(tok, "--") {
-					continue
-				}
-				name := strings.TrimPrefix(strings.SplitN(tok, "=", 2)[0], "--")
-				name = strings.Trim(name, "`*_,.")
-				if name == "" {
-					continue
-				}
-				if !registered[name] {
-					t.Errorf("%s advertises `dross test lane add --%s`, which the command does not register (in %q)", doc.name, name, example)
+		flagRe := regexp.MustCompile(regexp.QuoteMeta(verb.name) + `[^\n` + "`" + `]*`)
+		checked := 0
+		for _, doc := range docs {
+			for _, example := range flagRe.FindAllString(doc.body, -1) {
+				for _, tok := range strings.Fields(example) {
+					if !strings.HasPrefix(tok, "--") {
+						continue
+					}
+					name := strings.TrimPrefix(strings.SplitN(tok, "=", 2)[0], "--")
+					name = strings.Trim(name, "`*_,.|")
+					if name == "" {
+						continue
+					}
+					checked++
+					if !verb.registered[name] {
+						t.Errorf("%s advertises `%s --%s`, which the command does not register (in %q)", doc.name, verb.name, name, example)
+					}
 				}
 			}
+		}
+		if checked == 0 {
+			t.Errorf("no `%s` flag example was found in either doc — the guard is vacuous for that verb", verb.name)
 		}
 	}
 }

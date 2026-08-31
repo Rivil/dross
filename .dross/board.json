@@ -17,6 +17,7 @@
     "guard-remedy-ordering": "DRO-27",
     "lane-prepare-step": "DRO-223",
     "lane-remote-locality": "DRO-235",
+    "lane-selector-custom": "DRO-268",
     "lane-selector-translation": "DRO-210",
     "legacy-phase-backfill": "DRO-142",
     "milestone-lifecycle-close": "DRO-13",
@@ -88,6 +89,7 @@
     "someday:id:5610b45525282bf4": "DRO-219",
     "someday:id:5802ad3fe8f08d87": "DRO-34",
     "someday:id:5c2c048407b679b5": "DRO-159",
+    "someday:id:62841da45ed858fe": "DRO-267",
     "someday:id:64cd228356c9fce5": "DRO-76",
     "someday:id:6606a4ae3d228907": "DRO-52",
     "someday:id:66f4a1fc8ec83883": "DRO-70",
@@ -154,6 +156,7 @@
     "someday:id:ee52693267d9cef5": "DRO-108",
     "someday:id:f0d699cce6b70445": "DRO-71",
     "someday:id:f93277521f881095": "DRO-89",
+    "someday:id:fa50fb2ca56d687a": "DRO-276",
     "someday:id:fd3b654f5740fd11": "DRO-75",
     "someday:id:fee0d326fde9b275": "DRO-64",
     "someday:id:ff40c2cbbd18e7dc": "DRO-94"
@@ -342,6 +345,41 @@
       "issue": "DRO-241",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "lane-selector-custom/t-1": {
+      "issue": "DRO-269",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-custom/t-2": {
+      "issue": "DRO-270",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-custom/t-3": {
+      "issue": "DRO-271",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-custom/t-4": {
+      "issue": "DRO-272",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-custom/t-5": {
+      "issue": "DRO-273",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-custom/t-6": {
+      "issue": "DRO-274",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "lane-selector-custom/t-7": {
+      "issue": "DRO-275",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "lane-selector-translation/t-1": {
       "issue": "DRO-211",
