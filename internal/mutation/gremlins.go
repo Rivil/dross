@@ -455,10 +455,25 @@ func (g *Gremlins) buildUnleashArgs(reportRel string, pkgs []string) ([]string, 
 // Reports are named per package because gremlins is invoked per package —
 // ReportRel is where THIS step's report lands, relative to the project root, so
 // a caller that never spawns the argv still knows what to collect afterwards.
+// ExitRel is where THIS step's exit code lands, beside its report. The
+// detached sequence records one code per package because the run as a whole
+// records only one — the last package's, since the steps are joined with `;`
+// so a failure does not truncate the rest. Without a per-package code, a
+// package that died before writing anything is indistinguishable at collect
+// time from one that simply had no covered mutants, which is the false-green
+// ReportlessExit exists to refuse.
 type PackageStep struct {
 	Package   string
 	ReportRel string
+	ExitRel   string
 	Argv      []string
+}
+
+// GremlinsExitPath is where a detached step records pkg's exit code, given the
+// project root. It sits beside the report and shares its per-package stem, so
+// the two are fetched, cleared and read as a pair.
+func GremlinsExitPath(projectRoot, pkg string) string {
+	return filepath.Join(projectRoot, "reports", "gremlins", sanitizePkg(pkg)+".exit")
 }
 
 // DetachSteps returns the per-package work a run would do, without spawning any
@@ -495,7 +510,8 @@ func (g *Gremlins) DetachSteps(files []string) ([]PackageStep, error) {
 		if err != nil {
 			return nil, err
 		}
-		steps = append(steps, PackageStep{Package: pkg, ReportRel: reportRel, Argv: args})
+		exitRel := filepath.Join("reports", "gremlins", filepath.Base(GremlinsExitPath(g.ProjectRoot, pkg)))
+		steps = append(steps, PackageStep{Package: pkg, ReportRel: reportRel, ExitRel: exitRel, Argv: args})
 	}
 	return steps, nil
 }
@@ -515,10 +531,16 @@ func (g *Gremlins) DetachSteps(files []string) ([]PackageStep, error) {
 // this code changes is for a test to fail when the two paths diverge.
 //
 // A missing report is a skip, exactly as it is in Run — gremlins gathered no
-// covered mutants for that package and wrote nothing. Whether the RUN as a
-// whole failed is a different question, answered by the recorded exit code
-// before Collect is ever called.
-func (g *Gremlins) Collect(steps []PackageStep) (*Report, error) {
+// covered mutants for that package and wrote nothing — UNLESS that package
+// recorded a non-zero exit, in which case it failed before measuring anything
+// and ReportlessExit refuses it. Run applies the same rule at the same point
+// (reportlessExitFatal), through the same constructor.
+//
+// host names the machine that MEASURED these reports, and it is a parameter
+// rather than something read off g.Remote deliberately: a detached collect must
+// name the host recorded at dispatch, not whatever today's grant resolves to.
+// Reaching for an ambient host here would quietly undo c-5.
+func (g *Gremlins) Collect(steps []PackageStep, host string) (*Report, error) {
 	merged := &Report{Tool: g.Name()}
 	var unmeasured []Unmeasured
 	skip := func(pkg string, kind UnmeasuredKind, why string) {
@@ -529,6 +551,22 @@ func (g *Gremlins) Collect(steps []PackageStep) (*Report, error) {
 		reportAbs := GremlinsReportPath(g.ProjectRoot, s.Package)
 		b, err := os.ReadFile(reportAbs)
 		if err != nil {
+			// No report. Whether that is benign turns on the code the package
+			// exited with, which is why the sequence records one PER PACKAGE:
+			// the run's own exit code is the last package's, so a package that
+			// failed anywhere but last is invisible in it by construction.
+			//
+			// An absent or unreadable exit file is NOT read as success — it
+			// means the step never got to record one (killed mid-package, host
+			// rebooted), and inventing a 0 there would restore the very
+			// false-green this guard removes. It stays a skip, as it was
+			// before there were exit files at all, and the run-level guard in
+			// collectDetached remains the backstop.
+			if code, ok := g.stepExit(s); ok {
+				if fatal := ReportlessExit("gremlins", host, code); fatal != nil {
+					return nil, fmt.Errorf("package %s: %w", s.Package, fatal)
+				}
+			}
 			skip(s.Package, UnmeasuredMissing, "no report — gremlins gathered no covered mutants")
 			continue
 		}
@@ -548,6 +586,29 @@ func (g *Gremlins) Collect(steps []PackageStep) (*Report, error) {
 
 	g.Unmeasured = unmeasured
 	return merged, nil
+}
+
+// stepExit reads the exit code a detached step recorded for its package.
+//
+// ok is false whenever no code can be trusted — the step predates exit files
+// and carries no ExitRel, the file is absent because the step never reached the
+// line that writes it, or its contents are not an integer. None of those is
+// evidence of success, and none is evidence of failure either: the caller keeps
+// its pre-existing skip in that case rather than inventing a verdict from a
+// file that is not there.
+func (g *Gremlins) stepExit(s PackageStep) (int, bool) {
+	if s.ExitRel == "" {
+		return 0, false
+	}
+	b, err := os.ReadFile(filepath.Join(g.ProjectRoot, s.ExitRel))
+	if err != nil {
+		return 0, false
+	}
+	code, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil {
+		return 0, false
+	}
+	return code, true
 }
 
 // gremlinsBuildCmd is the process-construction seam. Rejection tests substitute

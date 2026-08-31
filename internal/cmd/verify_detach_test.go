@@ -47,9 +47,11 @@ func detachTarget() *remote.Target {
 func detachStepsFixture() []mutation.PackageStep {
 	return []mutation.PackageStep{
 		{Package: "./internal/cmd", ReportRel: "reports/gremlins/internal_cmd.json",
-			Argv: []string{"gremlins", "unleash", "--output", "reports/gremlins/internal_cmd.json", "./internal/cmd"}},
+			ExitRel: "reports/gremlins/internal_cmd.exit",
+			Argv:    []string{"gremlins", "unleash", "--output", "reports/gremlins/internal_cmd.json", "./internal/cmd"}},
 		{Package: "./internal/remote", ReportRel: "reports/gremlins/internal_remote.json",
-			Argv: []string{"gremlins", "unleash", "--output", "reports/gremlins/internal_remote.json", "./internal/remote"}},
+			ExitRel: "reports/gremlins/internal_remote.exit",
+			Argv:    []string{"gremlins", "unleash", "--output", "reports/gremlins/internal_remote.json", "./internal/remote"}},
 	}
 }
 
@@ -266,6 +268,61 @@ func TestDetachSequenceSurvivesAFailingPackage(t *testing.T) {
 	seq := detachSequence(detachStepsFixture())
 	if strings.Contains(seq, "&&") {
 		t.Errorf("the sequence short-circuits on the first failing package:\n%s", seq)
+	}
+}
+
+// TestDetachSequenceRecordsEachPackagesOwnExitCode is what makes a failed
+// package distinguishable from an empty one at collect time.
+//
+// The run as a whole records ONE code, and because the steps are joined with
+// `;` (see the test above, which is deliberate and must stay), that code is the
+// LAST package's. A package that failed anywhere but last is therefore
+// invisible in it by construction — its absent report reads as "no covered
+// mutants", which is the false-green ReportlessExit exists to refuse. The
+// refusal needs a per-package code to refuse on, and this line is where it
+// comes from.
+func TestDetachSequenceRecordsEachPackagesOwnExitCode(t *testing.T) {
+	steps := detachStepsFixture()
+	seq := detachSequence(steps)
+
+	for _, s := range steps {
+		record := `printf '%s\n' "$?" > '` + s.ExitRel + `'`
+		if !strings.Contains(seq, record) {
+			t.Errorf("the sequence does not record %s's exit code:\n%s", s.Package, seq)
+		}
+		// `$?` is whatever ran last, so the record must sit immediately after
+		// this package's own argv — before the next step's `rm` overwrites it.
+		pkgAt := strings.Index(seq, "'"+s.Package+"'")
+		if pkgAt < 0 {
+			t.Fatalf("%s does not appear in the sequence:\n%s", s.Package, seq)
+		}
+		recordAt := strings.Index(seq, record)
+		if recordAt < pkgAt {
+			t.Errorf("%s's exit code is recorded BEFORE it runs:\n%s", s.Package, seq)
+		}
+		if between := seq[pkgAt:recordAt]; strings.Contains(between, "rm -f") {
+			t.Errorf("another command runs between %s and its exit record, so $? is not its code:\n%s",
+				s.Package, seq)
+		}
+	}
+
+	// Cleared with the report and for the same reason: a code left by a
+	// previous dispatch would be read as this run's, and this one decides
+	// whether an absent report is benign.
+	for _, s := range steps {
+		rm := "rm -f '" + s.ExitRel + "'"
+		if !strings.Contains(seq, rm) {
+			t.Errorf("the sequence does not clear %s's stale exit code:\n%s", s.ExitRel, seq)
+		}
+		if strings.Index(seq, rm) > strings.Index(seq, "'"+s.Package+"'") {
+			t.Errorf("%s is cleared AFTER its package runs:\n%s", s.ExitRel, seq)
+		}
+	}
+
+	// Two packages must not record into one file, or the second silently
+	// answers for the first.
+	if steps[0].ExitRel == steps[1].ExitRel {
+		t.Fatal("fixture is degenerate: both steps share an exit path")
 	}
 }
 

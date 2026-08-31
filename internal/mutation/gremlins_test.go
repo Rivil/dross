@@ -926,7 +926,7 @@ func TestCollectMatchesRunForTheSameReports(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DetachSteps: %v", err)
 	}
-	fromCollect, err := viaCollect.Collect(steps)
+	fromCollect, err := viaCollect.Collect(steps, "helicon")
 	if err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
@@ -976,7 +976,7 @@ func TestCollectSkipsAMissingReportRatherThanFailing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep, err := g.Collect(steps)
+	rep, err := g.Collect(steps, "helicon")
 	if err != nil {
 		t.Fatalf("Collect failed on an absent report: %v", err)
 	}
@@ -985,6 +985,198 @@ func TestCollectSkipsAMissingReportRatherThanFailing(t *testing.T) {
 	}
 	if len(g.Unmeasured) != 1 || g.Unmeasured[0].Kind != UnmeasuredMissing {
 		t.Errorf("the absent report was not recorded as unmeasured: %+v", g.Unmeasured)
+	}
+}
+
+// writeStepExit records code as the exit file for step s, the way the detached
+// sequence does on the host.
+func writeStepExit(t *testing.T, root string, s PackageStep, code string) {
+	t.Helper()
+	if s.ExitRel == "" {
+		t.Fatal("step carries no ExitRel — the detached sequence has nowhere to record a code")
+	}
+	p := filepath.Join(root, s.ExitRel)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(code+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// writeStepReport drops payload at step s's report path, creating the report
+// directory the way the host's `mkdir -p` does. Not folded into writeStepExit:
+// a test that writes only one of the pair is asserting something about the
+// other's absence.
+func writeStepReport(t *testing.T, root string, s PackageStep, payload string) {
+	t.Helper()
+	p := filepath.Join(root, s.ReportRel)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(payload), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCollectRefusesAPackageThatFailedBeforeMeasuring is the false-green this
+// whole seam exists to refuse, at the package level.
+//
+// The attached loop has refused this since reportlessExitFatal landed — written
+// after a real host failed `go test ./internal/cmd`, leaving gremlins unable to
+// gather coverage, exiting 1 and writing nothing, while the run reported a
+// clean 0.95 with the package holding most of the phase's code unmeasured. The
+// detached path reproduced it exactly, because a missing report was read as
+// "no covered mutants" with no code consulted.
+//
+// The second package measures cleanly, which is the point: the failure must
+// bite even when the rest of the run is fine. A guard that only fired when
+// EVERYTHING failed is the run-level one that was already there and already
+// insufficient.
+func TestCollectRefusesAPackageThatFailedBeforeMeasuring(t *testing.T) {
+	root := t.TempDir()
+	g := &Gremlins{ProjectRoot: root}
+	steps, err := g.DetachSteps([]string{"pkga/x.go", "pkgb/y.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 2 {
+		t.Fatalf("want two steps, got %d", len(steps))
+	}
+	// First failed before writing anything; second measured fine.
+	writeStepExit(t, root, steps[0], "1")
+	writeStepReport(t, root, steps[1], fixtureGremlins)
+	writeStepExit(t, root, steps[1], "0")
+
+	rep, err := g.Collect(steps, "helicon")
+	if err == nil {
+		t.Fatal("a package that exited 1 without writing a report was collected as merely unmeasured")
+	}
+	if rep != nil {
+		t.Errorf("a refused collect still returned a report: %+v", rep)
+	}
+	// The message has to name what failed and where, or the user cannot act:
+	// the package, the code, and the host that actually measured it.
+	for _, want := range []string{steps[0].Package, "exited 1", "helicon"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error does not mention %q: %v", want, err)
+		}
+	}
+}
+
+// TestCollectStillSkipsAZeroExitWithNoReport is the over-reach guard. Gremlins
+// exiting 0 without a report means it found no covered mutants — a real and
+// benign answer, and the state TestCollectSkipsAMissingReportRatherThanFailing
+// pins. Turning that into a failure would make every phase containing such a
+// package uncollectable.
+func TestCollectStillSkipsAZeroExitWithNoReport(t *testing.T) {
+	root := t.TempDir()
+	g := &Gremlins{ProjectRoot: root}
+	steps, err := g.DetachSteps([]string{"pkga/x.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeStepExit(t, root, steps[0], "0")
+
+	rep, err := g.Collect(steps, "helicon")
+	if err != nil {
+		t.Fatalf("a clean exit with no report should be a skip, not a failure: %v", err)
+	}
+	if rep.Killed+rep.Survived != 0 {
+		t.Errorf("an absent report contributed counts: %+v", rep)
+	}
+	if len(g.Unmeasured) != 1 || g.Unmeasured[0].Kind != UnmeasuredMissing {
+		t.Errorf("the absent report was not recorded as unmeasured: %+v", g.Unmeasured)
+	}
+}
+
+// TestCollectTreatsAnUnrecordedExitAsASkip covers the states where no code can
+// be trusted: the step never reached the line that writes one (killed
+// mid-package, host rebooted), or what it wrote is not a number.
+//
+// None of those is evidence of failure, and inventing a 0 would be evidence of
+// success the run never produced. They stay skips — the reading that held
+// before exit files existed — with the run-level guard as the backstop.
+func TestCollectTreatsAnUnrecordedExitAsASkip(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		code string // "" means write no file at all
+	}{
+		{name: "no exit file at all", code: ""},
+		{name: "an empty exit file", code: ""},
+		{name: "a non-numeric exit file", code: "killed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			g := &Gremlins{ProjectRoot: root}
+			steps, err := g.DetachSteps([]string{"pkga/x.go"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.name != "no exit file at all" {
+				writeStepExit(t, root, steps[0], tc.code)
+			}
+			if _, err := g.Collect(steps, "helicon"); err != nil {
+				t.Errorf("an unrecorded exit should stay a skip: %v", err)
+			}
+			if len(g.Unmeasured) != 1 || g.Unmeasured[0].Kind != UnmeasuredMissing {
+				t.Errorf("not recorded as unmeasured: %+v", g.Unmeasured)
+			}
+		})
+	}
+}
+
+// TestCollectToleratesAFailedExitWhenTheReportLanded: the rule is about a
+// package that failed BEFORE measuring anything. Gremlins exits non-zero
+// whenever mutants survive, which is a successful measurement with bad results
+// — refusing that would make every run with a survivor uncollectable.
+func TestCollectToleratesAFailedExitWhenTheReportLanded(t *testing.T) {
+	root := t.TempDir()
+	g := &Gremlins{ProjectRoot: root}
+	steps, err := g.DetachSteps([]string{"pkga/x.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeStepReport(t, root, steps[0], fixtureGremlins)
+	writeStepExit(t, root, steps[0], "1")
+
+	rep, err := g.Collect(steps, "helicon")
+	if err != nil {
+		t.Fatalf("a non-zero exit WITH a report is a measurement, not a failure: %v", err)
+	}
+	if rep.Killed == 0 {
+		t.Errorf("the report that landed was not merged: %+v", rep)
+	}
+}
+
+// TestDetachStepsRecordsAnExitPathBesideEachReport: the code and the report
+// share a stem and a directory, so they are cleared, fetched and read as a
+// pair. A step with no ExitRel is one the sequence cannot record a code for,
+// and every package that produced no report would then be indistinguishable
+// from one that failed.
+func TestDetachStepsRecordsAnExitPathBesideEachReport(t *testing.T) {
+	g := &Gremlins{ProjectRoot: t.TempDir()}
+	steps, err := g.DetachSteps([]string{"internal/cmd/a.go", "internal/remote/c.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range steps {
+		if s.ExitRel == "" {
+			t.Fatalf("step %s records no exit path", s.Package)
+		}
+		want := filepath.Join("reports", "gremlins", filepath.Base(GremlinsExitPath(g.ProjectRoot, s.Package)))
+		if s.ExitRel != want {
+			t.Errorf("step %s writes its code to %q, want %q", s.Package, s.ExitRel, want)
+		}
+		if filepath.Dir(s.ExitRel) != filepath.Dir(s.ReportRel) {
+			t.Errorf("step %s splits its code (%s) from its report (%s)", s.Package, s.ExitRel, s.ReportRel)
+		}
+		if strings.TrimSuffix(s.ExitRel, ".exit") != strings.TrimSuffix(s.ReportRel, ".json") {
+			t.Errorf("step %s's code and report do not share a stem: %s vs %s", s.Package, s.ExitRel, s.ReportRel)
+		}
+	}
+	if steps[0].ExitRel == steps[1].ExitRel {
+		t.Errorf("two packages record their codes to the same file: %s", steps[0].ExitRel)
 	}
 }
 
@@ -1045,7 +1237,7 @@ func TestCollectClassifiesAnUnreadableReport(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rep, err := g.Collect(steps)
+	rep, err := g.Collect(steps, "helicon")
 	if err != nil {
 		t.Fatalf("an unreadable report should be recorded, not fatal: %v", err)
 	}

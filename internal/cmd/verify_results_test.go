@@ -455,6 +455,118 @@ func TestCollectWritesTheSameArtefactsAnAttachedRunWould(t *testing.T) {
 	}
 }
 
+// TestCollectRefusesWhenOnePackageFailedBeforeMeasuring is the end-to-end
+// version of the false-green, and the shape the run-level guard cannot see.
+//
+// The run itself exits 0 — because the steps are joined with `;`, the recorded
+// code is the LAST package's, and the last package here succeeded. So
+// TestCollectRefusesARunThatProducedNothing's guard (every package empty AND a
+// non-zero run) is inert: the second package measured fine and the run looks
+// clean. Before the per-package exit file, this collected as a tidy score over
+// half the phase, with one line of warning output and nothing in the artefacts
+// to say a package had failed. That is exactly the incident reportlessExitFatal
+// was written for on the attached path.
+func TestCollectRefusesWhenOnePackageFailedBeforeMeasuring(t *testing.T) {
+	const id = "collect"
+	dir := collectRepo(t, id)
+	root := filepath.Join(dir, RootDirName)
+
+	// A second package, so the run has one that fails and one that does not.
+	writeScopeFile(t, dir, "sub/c.go", "package sub\n\nfunc C() bool { return 2 > 1 }\n")
+	mustGit(t, dir, "add", "sub/c.go")
+	mustGit(t, dir, "commit", "-qam", "phase edits sub/c.go")
+	if err := runCmd(t, Changes(), "record", id, "t-2", "--files", "sub/c.go"); err != nil {
+		t.Fatal(err)
+	}
+
+	// The run as a whole exited 0: the last package succeeded.
+	stubStatus(t, remote.RunStatus{DirExists: true, State: "finished", HasExit: true, ExitCode: 0}, nil)
+
+	var failed string
+	detachFetchReports = func(_ remote.Target, localRoot string, steps []mutation.PackageStep) error {
+		if len(steps) < 2 {
+			t.Fatalf("fixture did not produce two packages: %+v", steps)
+		}
+		for i, s := range steps {
+			write := func(rel, body string) error {
+				p := filepath.Join(localRoot, rel)
+				if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+					return err
+				}
+				return os.WriteFile(p, []byte(body), 0o644)
+			}
+			if i == 0 {
+				// Failed before writing anything: a code, no report.
+				failed = s.Package
+				if err := write(s.ExitRel, "1\n"); err != nil {
+					return err
+				}
+				continue
+			}
+			if err := write(s.ReportRel, collectPayload); err != nil {
+				return err
+			}
+			if err := write(s.ExitRel, "0\n"); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	err := collectDetached(id)
+	if err == nil {
+		t.Fatal("a package that failed before measuring was collected as a clean partial score")
+	}
+	// Naming the package is the difference between an actionable refusal and
+	// one the user can only respond to by re-running the whole leg.
+	if !strings.Contains(err.Error(), failed) {
+		t.Errorf("the refusal does not name the package that failed (%s): %v", failed, err)
+	}
+	// The host must be the one recorded at dispatch, not today's grant — the
+	// same pin c-5 makes on the report read.
+	if !strings.Contains(err.Error(), "anachryon") {
+		t.Errorf("the refusal does not name the host that measured the run: %v", err)
+	}
+	// And nothing may be written: a partial verify.toml looks exactly like a
+	// complete one to everything downstream.
+	assertNoArtefacts(t, root, id)
+}
+
+// TestCollectAcceptsARunWhereEveryPackageExitedClean is the over-reach guard on
+// the test above. The per-package code must refuse a FAILURE, not merely be
+// present: a run whose packages all exited 0 collects normally, and a package
+// that legitimately produced no report stays a benign skip.
+func TestCollectAcceptsARunWhereEveryPackageExitedClean(t *testing.T) {
+	const id = "collect"
+	dir := collectRepo(t, id)
+	root := filepath.Join(dir, RootDirName)
+
+	orig := detachFetchReports
+	detachFetchReports = func(tg remote.Target, localRoot string, steps []mutation.PackageStep) error {
+		if err := orig(tg, localRoot, steps); err != nil {
+			return err
+		}
+		for _, s := range steps {
+			p := filepath.Join(localRoot, s.ExitRel)
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(p, []byte("0\n"), 0o644); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if err := collectDetached(id); err != nil {
+		t.Fatalf("a run whose packages all exited clean was refused: %v", err)
+	}
+	testsPath, _ := verify.FilePaths(root, id)
+	if _, err := os.Stat(testsPath); err != nil {
+		t.Errorf("tests.json was not written for a clean run: %v", err)
+	}
+}
+
 // TestASuccessfulCollectClearsTheRecord: leaving it would report a phase as
 // having a run in flight forever, and block every future --detach on it.
 func TestASuccessfulCollectClearsTheRecord(t *testing.T) {

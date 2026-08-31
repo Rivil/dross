@@ -216,16 +216,32 @@ func newRunID(now time.Time) string {
 //
 // The stale report is removed immediately before its package runs, so a report
 // left by a previous dispatch can never be collected as this one's.
+// Each step records its OWN exit code, immediately after its argv and before
+// anything else can overwrite `$?`. The run as a whole records only one code —
+// the last package's, precisely because of the `;` above — so without a
+// per-package code a package that failed anywhere but last is invisible at
+// collect time, and its absent report reads as "nothing to measure here"
+// rather than "this failed before it measured anything". That is the
+// false-green ReportlessExit refuses, and it needs this line to have a code to
+// refuse on.
 func detachSequence(steps []mutation.PackageStep) string {
 	var parts []string
 	for _, s := range steps {
 		var b strings.Builder
 		b.WriteString("rm -f " + shellQuoteArg(s.ReportRel) + "; ")
+		if s.ExitRel != "" {
+			// Cleared with the report and for the same reason: a code left by
+			// a previous dispatch would be read as this run's.
+			b.WriteString("rm -f " + shellQuoteArg(s.ExitRel) + "; ")
+		}
 		for i, a := range s.Argv {
 			if i > 0 {
 				b.WriteByte(' ')
 			}
 			b.WriteString(shellQuoteArg(a))
+		}
+		if s.ExitRel != "" {
+			b.WriteString("; printf '%s\\n' \"$?\" > " + shellQuoteArg(s.ExitRel))
 		}
 		parts = append(parts, b.String())
 	}
@@ -409,6 +425,24 @@ var detachFetchReports = func(t remote.Target, localRoot string, steps []mutatio
 		if err := runDetachArgv(argv); err != nil {
 			Printf("collect: no report fetched for %s (%v)\n", s.Package, err)
 		}
+
+		// The exit code travels with the report, and its absence is tolerated
+		// the same way: a step killed before it recorded one leaves nothing to
+		// fetch. It is cleared first for the same reason the report is — a
+		// code left from a previous collect would be read as this run's, and
+		// this one decides whether an absent report is benign.
+		if s.ExitRel == "" {
+			continue
+		}
+		localExit := filepath.Join(localRoot, s.ExitRel)
+		if err := os.Remove(localExit); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("clear stale exit code %s: %w", s.ExitRel, err)
+		}
+		exitArgv, err := remote.FetchArgs(t, s.ExitRel, localExit)
+		if err != nil {
+			return err
+		}
+		_ = runDetachArgv(exitArgv)
 	}
 	return nil
 }
@@ -522,7 +556,10 @@ func collectDetached(phaseID string) error {
 			"could not fetch run %s's reports from %s: %w", rec.RunID, rec.Host, err)}
 	}
 
-	report, err := g.Collect(steps)
+	// rec.Host, not the grant: Collect names the machine that MEASURED these
+	// reports when it refuses one, and c-5 turns on that being the recorded
+	// host rather than whatever the pool resolves to now.
+	report, err := g.Collect(steps, rec.Host)
 	if err != nil {
 		return err
 	}
