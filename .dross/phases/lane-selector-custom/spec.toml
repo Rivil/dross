@@ -50,15 +50,18 @@
   locked = true
 
 [[deferred]]
+  id = "899390dd30b47c4e"
   text = "`dross test lane preview <name> --files a.go b.go` — render a lane's derived command line for a given file set without spawning anything."
   why = "c-1's validate rejection and the lane header's printed line already close the feedback loop, slower. A dry-run verb is its own surface with its own output contract."
   target = "lane-selector-preview"
 
 [[deferred]]
+  id = "010e057c10c922c6"
   text = "Auto-deriving a runner's 'collected nothing' exit codes from its command line."
   why = "Inference, against the milestone's declared-not-inferred non-goal — unchanged since lane-selector-translation parked it. Someday, not this milestone."
 
 [[deferred]]
+  id = "121f867fd1bffb0c"
   text = "Source-to-test path mapping (editing src/foo.ts running test/foo.test.ts) where the runner has no --related / --findRelatedTests of its own."
   why = "A per-framework mapping engine — the milestone's third non-goal. Unchanged since lane-selector-translation parked it. Someday, not this milestone."
 
