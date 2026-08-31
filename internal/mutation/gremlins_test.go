@@ -452,6 +452,56 @@ func TestPackagesFromFiles(t *testing.T) {
 			in:   nil,
 			want: nil,
 		},
+		// --- Go-less directories yield no package ---
+		//
+		// Gremlins appends `/...` to every package argument, so "." is not the
+		// root package — it is the whole module. A changed README.md deriving
+		// "." is what made a phase touching 15 files mutate all 196 of them.
+		{
+			name: "a root file that is not Go derives no root package",
+			in:   []string{"README.md"},
+			want: nil,
+		},
+		{
+			name: "a directory holding no Go is dropped",
+			in:   []string{"assets/prompts/verify.md"},
+			want: nil,
+		},
+		{
+			name: "the phase's own shape: Go-less dirs dropped, Go dirs kept",
+			in: []string{
+				"README.md",
+				"assets/prompts/verify.md",
+				"internal/cmd/verify.go",
+				"internal/remote/remote.go",
+			},
+			want: []string{"./internal/cmd", "./internal/remote"},
+		},
+		// The guard against over-reach: the filter is per FILE, but the
+		// decision is per DIRECTORY. A package must survive a non-Go file
+		// sitting beside its sources, whatever order they arrive in.
+		{
+			name: "a non-Go file beside Go does not drop its package",
+			in:   []string{"internal/cmd/verify.go", "internal/cmd/testdata.json"},
+			want: []string{"./internal/cmd"},
+		},
+		{
+			name: "the non-Go file arriving first does not drop it either",
+			in:   []string{"internal/cmd/testdata.json", "internal/cmd/verify.go"},
+			want: []string{"./internal/cmd"},
+		},
+		{
+			name: "a real root package is still derived from a root .go file",
+			in:   []string{"README.md", "main.go"},
+			want: []string{"."},
+		},
+		// A task that only adds tests still owes its package a run: those
+		// tests are precisely what kill its mutants.
+		{
+			name: "test sources count as Go",
+			in:   []string{"internal/cmd/verify_status_test.go"},
+			want: []string{"./internal/cmd"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

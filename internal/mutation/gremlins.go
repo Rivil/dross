@@ -578,6 +578,23 @@ func (g *Gremlins) buildCmd(args []string) *exec.Cmd {
 // coverage and report nothing. A file at the module root maps to ".".
 // The result is deduped and sorted for deterministic invocation order;
 // nil for no files.
+//
+// ONLY directories carrying at least one .go file in this list yield a
+// package. Every directory used to, and both failure modes were live on the
+// phase that added this: gremlins appends `/...` to every package argument, so
+// a changed README.md derived "." and mutated the WHOLE module — a 196-file,
+// 5444-mutant run whose survivors then had to be filtered back down to the 15
+// files the phase touched — while a changed assets/prompts/verify.md derived
+// "./assets/prompts", where gremlins exits 1 and writes no report at all.
+//
+// The filter reads the input list rather than the filesystem, which keeps this
+// pure and the seam's signature unchanged. It loses nothing: a survivor is
+// scored only when its file is in the phase's change set, so a directory whose
+// changed files are all non-Go can produce nothing but out-of-scope mutants.
+// Mutating it is waste by construction, not a coverage trade.
+//
+// Test sources count. A task that only adds _test.go files still owes its
+// package a run — those tests are what kill its mutants.
 func packagesFromFiles(files []string) []string {
 	if len(files) == 0 {
 		return nil
@@ -585,6 +602,9 @@ func packagesFromFiles(files []string) []string {
 	seen := map[string]bool{}
 	var pkgs []string
 	for _, f := range files {
+		if filepath.Ext(f) != ".go" {
+			continue
+		}
 		dir := filepath.ToSlash(filepath.Dir(f))
 		pkg := "."
 		if dir != "" && dir != "." {
